@@ -1,0 +1,5 @@
+skill_creation:
+  allowed: true
+  auto_approve: false
+  max_skills_per_colony: 50
+  require_wisdom_threshold: 0.8

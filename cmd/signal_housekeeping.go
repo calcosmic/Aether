@@ -97,14 +97,14 @@ func applySignalHousekeeping(pf *colony.PheromoneFile, state *colony.ColonyState
 			if !dryRun {
 				deactivateSignal(sig, nowRFC3339)
 			}
-		case computeEffectiveStrength(*sig, now) < 0.1:
-			result.DeactivatedByStrength++
+		case sig.Source == "worker:continue" && (phaseCompletionsSince(state, sig.CreatedAt) >= 3 || signalPredatesCurrentColony(state, sig.CreatedAt)):
+			result.ExpiredWorkerContinue++
 			result.Updated++
 			if !dryRun {
 				deactivateSignal(sig, nowRFC3339)
 			}
-		case sig.Source == "worker:continue" && (phaseCompletionsSince(state, sig.CreatedAt) >= 3 || signalPredatesCurrentColony(state, sig.CreatedAt)):
-			result.ExpiredWorkerContinue++
+		case computeEffectiveStrength(*sig, now) < 0.1:
+			result.DeactivatedByStrength++
 			result.Updated++
 			if !dryRun {
 				deactivateSignal(sig, nowRFC3339)

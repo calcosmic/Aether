@@ -283,6 +283,62 @@ func TestPlanEmitsLifecycleCeremonyEvents(t *testing.T) {
 	)
 }
 
+func TestPlanCeremonyPreservesPlannedAndSpawnedStatuses(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	emitPlanCeremonyDispatchSequence("unit-test", []codexPlanningDispatch{
+		{
+			Stage:  "scouting",
+			Wave:   1,
+			Caste:  "scout",
+			Name:   "Seek-70",
+			TaskID: "plan-scout",
+			Task:   "Survey the repo before planning",
+			Status: "planned",
+		},
+		{
+			Stage:  "routing",
+			Wave:   1,
+			Caste:  "route_setter",
+			Name:   "Route-70",
+			TaskID: "plan-route",
+			Task:   "Convert findings into phases",
+			Status: "spawned",
+		},
+	})
+
+	persisted := readPersistedCeremonyEvents(t)
+	spawnStatuses := map[string]string{}
+	var waveEnd events.CeremonyPayload
+	for _, evt := range persisted {
+		var payload events.CeremonyPayload
+		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+			t.Fatalf("unmarshal payload: %v", err)
+		}
+		switch evt.Topic {
+		case events.CeremonyTopicPlanSpawn:
+			spawnStatuses[payload.Name] = payload.Status
+		case events.CeremonyTopicPlanWaveEnd:
+			waveEnd = payload
+		}
+	}
+
+	if got := spawnStatuses["Seek-70"]; got != "planned" {
+		t.Fatalf("planned dispatch ceremony status = %q, want planned", got)
+	}
+	if got := spawnStatuses["Route-70"]; got != "spawned" {
+		t.Fatalf("spawned dispatch ceremony status = %q, want spawned", got)
+	}
+	if waveEnd.Completed != 0 {
+		t.Fatalf("wave completed count = %d, want 0 for non-terminal planning dispatches", waveEnd.Completed)
+	}
+	if waveEnd.Status == "completed" {
+		t.Fatalf("wave status = completed for non-terminal planning dispatches: %+v", waveEnd)
+	}
+}
+
 func TestColonizeEmitsLifecycleCeremonyEvents(t *testing.T) {
 	saveGlobals(t)
 	s, root := newTestStore(t)

@@ -473,6 +473,175 @@ func trimSpace(s string) string {
 	return s[start:end]
 }
 
+
+// --- learning-propose ---
+
+var learningProposeCmd = &cobra.Command{
+	Use:   "learning-propose",
+	Short: "Create a new learning hypothesis",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+
+		content := mustGetString(cmd, "content")
+		if content == "" {
+			outputError(1, "--content is required", nil)
+			return nil
+		}
+		evidence, _ := cmd.Flags().GetString("evidence")
+		phase, _ := cmd.Flags().GetInt("phase")
+
+		learnStore := learn.NewColonyStore(store)
+		entry := learn.Entry{
+			Content:    content,
+			Phase:      phase,
+			Status:     learn.StatusHypothesis,
+			Confidence: 0.5,
+		}
+		if evidence != "" {
+			entry.Evidence = learn.Evidence{
+				RunID:   "manual",
+				Scope:   "repo-local",
+				Workers: []learn.WorkerEvidence{{Name: "manual", Status: "proposed"}},
+			}
+		}
+		if err := learnStore.Add(entry); err != nil {
+			outputError(2, fmt.Sprintf("failed to create hypothesis: %v", err), nil)
+			return nil
+		}
+
+		outputOK(map[string]interface{}{
+			"created": true,
+			"id":      entry.ID,
+			"status":  learn.StatusHypothesis,
+		})
+		return nil
+	},
+}
+
+// --- learning-validate ---
+
+var learningValidateCmd = &cobra.Command{
+	Use:   "learning-validate",
+	Short: "Promote a hypothesis to validated",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+
+		id := mustGetString(cmd, "id")
+		if id == "" {
+			outputError(1, "--id is required", nil)
+			return nil
+		}
+
+		learnStore := learn.NewColonyStore(store)
+		entry, err := learnStore.Get(id)
+		if err != nil {
+			outputError(2, fmt.Sprintf("failed to read entry: %v", err), nil)
+			return nil
+		}
+		if entry == nil {
+			outputError(1, fmt.Sprintf("entry %q not found", id), nil)
+			return nil
+		}
+
+		entry.Status = learn.StatusValidated
+		if err := learnStore.Replace(id, *entry); err != nil {
+			outputError(2, fmt.Sprintf("failed to validate: %v", err), nil)
+			return nil
+		}
+
+		outputOK(map[string]interface{}{
+			"validated": true,
+			"id":        id,
+		})
+		return nil
+	},
+}
+
+// --- learning-disprove ---
+
+var learningDisproveCmd = &cobra.Command{
+	Use:   "learning-disprove",
+	Short: "Mark a hypothesis as disproven",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+
+		id := mustGetString(cmd, "id")
+		if id == "" {
+			outputError(1, "--id is required", nil)
+			return nil
+		}
+
+		learnStore := learn.NewColonyStore(store)
+		entry, err := learnStore.Get(id)
+		if err != nil {
+			outputError(2, fmt.Sprintf("failed to read entry: %v", err), nil)
+			return nil
+		}
+		if entry == nil {
+			outputError(1, fmt.Sprintf("entry %q not found", id), nil)
+			return nil
+		}
+
+		entry.Status = learn.StatusDisproven
+		if err := learnStore.Replace(id, *entry); err != nil {
+			outputError(2, fmt.Sprintf("failed to disprove: %v", err), nil)
+			return nil
+		}
+
+		outputOK(map[string]interface{}{
+			"disproven": true,
+			"id":        id,
+		})
+		return nil
+	},
+}
+
+// --- learning-list ---
+
+var learningListCmd = &cobra.Command{
+	Use:   "learning-list",
+	Short: "List learning entries with optional status filter",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+
+		status, _ := cmd.Flags().GetString("status")
+		learnStore := learn.NewColonyStore(store)
+		filter := learn.EntryFilter{}
+		if status != "" {
+			filter.Status = status
+		}
+
+		entries, err := learnStore.List(filter)
+		if err != nil {
+			outputError(2, fmt.Sprintf("failed to list entries: %v", err), nil)
+			return nil
+		}
+
+		outputOK(map[string]interface{}{
+			"entries":       entries,
+			"total":         len(entries),
+			"status_filter": status,
+		})
+		return nil
+	},
+}
+
 func init() {
 	learningApproveProposalsCmd.Flags().Bool("all", false, "Approve all pending proposals")
 	learningApproveProposalsCmd.Flags().String("ids", "", "Comma-separated list of proposal IDs")
@@ -495,6 +664,16 @@ func init() {
 
 	learningUndoPromotionsCmd.Flags().Int("count", 1, "Number of recent promotions to undo")
 
+	learningProposeCmd.Flags().String("content", "", "Hypothesis content (required)")
+	learningProposeCmd.Flags().String("evidence", "", "Supporting evidence")
+	learningProposeCmd.Flags().Int("phase", 0, "Associated phase ID")
+
+	learningValidateCmd.Flags().String("id", "", "Entry ID to validate (required)")
+
+	learningDisproveCmd.Flags().String("id", "", "Entry ID to disprove (required)")
+
+	learningListCmd.Flags().String("status", "", "Filter by status (hypothesis, validated, disproven)")
+
 	rootCmd.AddCommand(learningApproveProposalsCmd)
 	rootCmd.AddCommand(learningDeferProposalsCmd)
 	rootCmd.AddCommand(learningDisplayProposalsCmd)
@@ -503,4 +682,8 @@ func init() {
 	rootCmd.AddCommand(learningPromoteCmd)
 	rootCmd.AddCommand(learningSelectProposalsCmd)
 	rootCmd.AddCommand(learningUndoPromotionsCmd)
+	rootCmd.AddCommand(learningProposeCmd)
+	rootCmd.AddCommand(learningValidateCmd)
+	rootCmd.AddCommand(learningDisproveCmd)
+	rootCmd.AddCommand(learningListCmd)
 }

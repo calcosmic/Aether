@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -20,6 +21,35 @@ func resetProcessTestHooks(t *testing.T) {
 		terminateWorkerFunc = origTerminate
 		killWorkerFunc = origKill
 	})
+}
+
+func TestProcessTrackerConcurrentUpsertsPreserveEveryProvider(t *testing.T) {
+	root := t.TempDir()
+	const processCount = 32
+	var wg sync.WaitGroup
+	for i := 1; i <= processCount; i++ {
+		wg.Add(1)
+		go func(pid int) {
+			defer wg.Done()
+			if err := upsertTrackedProcess(root, TrackedProcess{
+				PID:           pid,
+				WorkerName:    "parallel-worker",
+				ProviderRunID: "provider-run",
+				Root:          root,
+			}); err != nil {
+				t.Errorf("upsert pid %d: %v", pid, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	processes, err := readTrackedProcesses(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(processes) != processCount {
+		t.Fatalf("persisted processes = %d, want %d: %+v", len(processes), processCount, processes)
+	}
 }
 
 func TestProcessTrackerTrackUntrackPersistsRegistry(t *testing.T) {
@@ -283,5 +313,48 @@ func TestProcessTrackerNilGuards(t *testing.T) {
 	_ = tracker.KillProcess(0)
 	if len(tracker.snapshot("")) != 0 {
 		t.Fatal("zero PID operations should not add to tracker")
+	}
+}
+
+func TestProcessTrackerKillRunTargetsOnlyMatchingExecutionBinding(t *testing.T) {
+	root := t.TempDir()
+	tracker := newProcessTracker()
+	originalExists := WorkerProcessExistsFunc()
+	originalCommand := WorkerProcessCommandFunc()
+	originalTerminate := TerminateWorkerFunc()
+	originalKill := KillWorkerFunc()
+	t.Cleanup(func() {
+		SetWorkerProcessExistsFunc(originalExists)
+		SetWorkerProcessCommandFunc(originalCommand)
+		SetWorkerTerminateFunc(originalTerminate)
+		SetWorkerKillFunc(originalKill)
+	})
+	alive := map[int]bool{101: true, 202: true}
+	var terminated []int
+	SetWorkerProcessExistsFunc(func(pid int) bool { return alive[pid] })
+	SetWorkerProcessCommandFunc(func(pid int) string { return "codex exec" })
+	SetWorkerTerminateFunc(func(pid int) error {
+		terminated = append(terminated, pid)
+		alive[pid] = false
+		return nil
+	})
+	SetWorkerKillFunc(func(pid int) error { return nil })
+	matching := &ExecutionBinding{RunID: "run-target"}
+	other := &ExecutionBinding{RunID: "run-other"}
+	if err := writeTrackedProcesses(root, []TrackedProcess{
+		{PID: 101, Root: root, Binding: matching},
+		{PID: 202, Root: root, Binding: other},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := tracker.KillRun(root, "run-target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Terminated) != 1 || result.Terminated[0] != 101 {
+		t.Fatalf("terminated = %v, want only 101", result.Terminated)
+	}
+	if len(terminated) != 1 || terminated[0] != 101 || !alive[202] {
+		t.Fatalf("termination crossed run boundary: terminated=%v alive=%v", terminated, alive)
 	}
 }

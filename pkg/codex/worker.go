@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -33,21 +34,25 @@ const envRealDispatch = "AETHER_CODEX_REAL_DISPATCH"
 // WorkerConfig specifies all parameters needed to invoke a single worker.
 // Field names match the documented codexWorkerConfig in doc.go.
 type WorkerConfig struct {
-	AgentName        string        // TOML agent name (e.g., "aether-builder")
-	AgentTOMLPath    string        // Absolute path to the agent's TOML file
-	Caste            string        // Worker caste (builder, watcher, scout, etc.)
-	WorkerName       string        // Deterministic ant name (e.g., "Hammer-23")
-	TaskID           string        // Task identifier from the build dispatch
-	TaskBrief        string        // The markdown task brief content
-	ContextCapsule   string        // The assembled compact colony-prime context
-	Root             string        // Repository root directory (working dir for subprocess)
-	Timeout          time.Duration // Per-worker timeout (default: 10 minutes)
-	SkillSection     string        // Skill guidance content injected into worker prompts
-	PheromoneSection string        // Pheromone signal content injected into worker prompts
-	HandoffSection   string        // Previous worker relay context injected into worker prompts
-	ConfigOverrides  []string      // Optional codex config overrides passed as -c key=value
-	ResponsePath     string        // Optional controller-managed response file path
-	CallbackURL      string        // Worker callback/messaging URL (separate from LLM provider URL)
+	AgentName         string            // TOML agent name (e.g., "aether-builder")
+	AgentTOMLPath     string            // Absolute path to the agent's TOML file
+	Caste             string            // Worker caste (builder, watcher, scout, etc.)
+	WorkerName        string            // Deterministic ant name (e.g., "Hammer-23")
+	TaskID            string            // Task identifier from the build dispatch
+	TaskBrief         string            // The markdown task brief content
+	ContextCapsule    string            // The assembled compact colony-prime context
+	Root              string            // Repository root directory (working dir for subprocess)
+	TrackingRoot      string            // Owning colony root for durable process registration
+	Timeout           time.Duration     // Per-worker timeout (default: 10 minutes)
+	SkillSection      string            // Skill guidance content injected into worker prompts
+	PheromoneSection  string            // Pheromone signal content injected into worker prompts
+	HandoffSection    string            // Previous worker relay context injected into worker prompts
+	ConfigOverrides   []string          // Optional codex config overrides passed as -c key=value
+	ResponsePath      string            // Optional controller-managed response file path
+	CallbackURL       string            // Worker callback/messaging URL (separate from LLM provider URL)
+	PermissionProfile PermissionProfile // Host-enforced filesystem and execution boundary
+	ExecutionBinding  *ExecutionBinding // Durable build-run identity, when dispatch is journal-bound
+	ProviderRunID     string            // Unique provider invocation within the bound build run
 }
 
 // effectiveTimeout returns the configured timeout or the default.
@@ -118,6 +123,7 @@ type WorkerProgressEvent struct {
 	Status     string
 	Message    string
 	OccurredAt time.Time
+	ProcessID  int
 }
 
 // WorkerProgressObserver receives worker execution progress events.
@@ -226,6 +232,15 @@ func (f *FakeInvoker) IsAvailable(ctx context.Context) bool {
 	return true
 }
 
+func (f *FakeInvoker) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	return AvailabilityStatus{
+		Platform:  PlatformFake,
+		Binary:    "fake",
+		Available: true,
+		Category:  AvailabilityCategoryAvailable,
+	}
+}
+
 // ValidateAgent always returns nil for FakeInvoker.
 func (f *FakeInvoker) ValidateAgent(path string) error {
 	return nil
@@ -247,33 +262,63 @@ func NewRealInvoker() *RealInvoker {
 	return &RealInvoker{binaryName: name}
 }
 
-func codexWritableDirs() []string {
-	var dirs []string
-	if dir := strings.TrimSpace(os.Getenv("CODEX_HOME")); dir != "" {
-		dirs = append(dirs, filepath.Clean(dir))
-	} else if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-		dirs = append(dirs, filepath.Join(home, ".codex"))
-	}
-
-	seen := make(map[string]struct{}, len(dirs))
-	out := make([]string, 0, len(dirs))
-	for _, dir := range dirs {
-		dir = strings.TrimSpace(dir)
-		if dir == "" {
-			continue
-		}
-		if _, ok := seen[dir]; ok {
-			continue
-		}
-		seen[dir] = struct{}{}
-		out = append(out, dir)
-	}
-	return out
-}
-
 // IsAvailable checks whether the codex dispatcher is runnable and authenticated.
 func (r *RealInvoker) IsAvailable(ctx context.Context) bool {
 	return r.Availability(ctx).Available
+}
+
+func (r *RealInvoker) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	status := r.Availability(ctx)
+	if !status.Available {
+		return status
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	args := []string{
+		"--sandbox", "read-only",
+		"--ask-for-approval", "never",
+		"exec",
+		"--json",
+		"--ephemeral",
+		"--skip-git-repo-check",
+	}
+	cmd := exec.CommandContext(probeCtx, r.binaryName, args...)
+	if strings.TrimSpace(root) != "" {
+		cmd.Dir = root
+	}
+	cmd.Stdin = strings.NewReader("Return exactly OK.\n")
+	configureWorkerCommand(cmd)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		raw := strings.TrimSpace(combinedWorkerOutput(stdout.String(), stderr.String()))
+		reason := strings.TrimSpace(sanitizeWorkerDiagnosticOutput(raw))
+		if reason == "" {
+			reason = sanitizeWorkerDiagnosticOutput(err.Error())
+		}
+		category := AvailabilityCategoryProviderConfig
+		if probeCtx.Err() == context.DeadlineExceeded {
+			reason = "codex provider/model preflight timed out before worker dispatch"
+			category = AvailabilityCategoryAuthProbeFailed
+		}
+		return AvailabilityStatus{
+			Platform:  PlatformCodex,
+			Binary:    status.Binary,
+			Available: false,
+			Category:  category,
+			Reason:    fmt.Sprintf("codex provider/model preflight failed before worker dispatch: %s", reason),
+		}
+	}
+	return AvailabilityStatus{
+		Platform:  PlatformCodex,
+		Binary:    status.Binary,
+		Available: true,
+		Category:  AvailabilityCategoryAvailable,
+	}
 }
 
 // ValidateAgent parses and validates a TOML agent file.
@@ -313,7 +358,13 @@ func (r *RealInvoker) Invoke(ctx context.Context, config WorkerConfig) (WorkerRe
 // InvokeWithProgress runs the codex CLI as a subprocess with timeout while
 // emitting proof-backed runtime progress.
 func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
+	observer = synchronizedWorkerProgressObserver(observer)
 	start := time.Now()
+	permission, permissionErr := ResolvePermissionDecision(PlatformCodex, config.Caste, config.PermissionProfile)
+	if permissionErr != nil {
+		return permissionDeniedWorkerResult(config, start, permissionErr)
+	}
+	config.PermissionProfile = permission.Profile
 
 	if status := r.Availability(ctx); !status.Available {
 		err := fmt.Errorf("worker startup failed: %s", strings.TrimSpace(status.Reason))
@@ -372,7 +423,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 			Error:      err,
 		}, fmt.Errorf("worker startup failed: assemble worker prompt: %w", err)
 	}
-	prompt = strings.TrimSpace(prompt + "\n\n" + renderResponseContract(config))
+	prompt = strings.TrimSpace(prompt + "\n\n" + RenderPermissionProfileSection(permission) + "\n\n" + renderResponseContract(config))
 
 	// Create a timeout context
 	timeout := config.effectiveTimeout()
@@ -403,9 +454,9 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	}
 	defer os.Remove(schemaPath)
 
-	// Build the command: codex --sandbox workspace-write --ask-for-approval never exec ...
+	// Build the command with the permission profile selected by the Go adapter.
 	args := []string{
-		"--sandbox", "workspace-write",
+		"--sandbox", codexSandboxForPermission(permission),
 		"--ask-for-approval", "never",
 		"exec",
 		"--json",
@@ -413,9 +464,6 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		"--skip-git-repo-check",
 		"--output-last-message", lastMessagePath,
 		"--output-schema", schemaPath,
-	}
-	for _, dir := range codexWritableDirs() {
-		args = append(args, "--add-dir", dir)
 	}
 	for _, override := range compactStrings(config.ConfigOverrides) {
 		args = append(args, "-c", override)
@@ -453,12 +501,21 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	}
 
 	GlobalProcessTracker().TrackProcess(cmd.Process.Pid, TrackedProcess{
-		WorkerName: config.WorkerName,
-		Caste:      config.Caste,
-		Platform:   "codex",
-		Root:       config.Root,
+		WorkerName:    config.WorkerName,
+		TaskID:        config.TaskID,
+		Caste:         config.Caste,
+		Platform:      "codex",
+		Root:          workerTrackingRoot(config),
+		ProviderRunID: config.ProviderRunID,
+		Binding:       config.ExecutionBinding,
 	})
 	defer GlobalProcessTracker().UntrackProcess(cmd.Process.Pid)
+	emitWorkerProgress(observer, WorkerProgressEvent{
+		Status:     "running",
+		Message:    "provider process started",
+		OccurredAt: time.Now().UTC(),
+		ProcessID:  cmd.Process.Pid,
+	})
 
 	waitCh := make(chan error, 1)
 	go func() {
@@ -485,6 +542,7 @@ waitLoop:
 
 	duration := time.Since(start)
 	rawOutput := combinedWorkerOutput(stdout.String(), stderr.String())
+	safeRawOutput := sanitizeWorkerDiagnosticOutput(rawOutput)
 
 	if ctx.Err() == context.DeadlineExceeded {
 		reportedTimeout := duration.Round(time.Millisecond)
@@ -497,7 +555,7 @@ waitLoop:
 			TaskID:     config.TaskID,
 			Status:     "timeout",
 			Duration:   duration,
-			RawOutput:  rawOutput,
+			RawOutput:  safeRawOutput,
 			Error:      fmt.Errorf("worker timeout after %v", reportedTimeout),
 		}, nil
 	}
@@ -509,7 +567,7 @@ waitLoop:
 			TaskID:     config.TaskID,
 			Status:     "failed",
 			Duration:   duration,
-			RawOutput:  rawOutput,
+			RawOutput:  safeRawOutput,
 			Error:      classifyWorkerExecutionError(waitErr, stderr.String(), running.Observed()),
 		}, nil
 	}
@@ -522,20 +580,46 @@ waitLoop:
 			TaskID:     config.TaskID,
 			Status:     "failed",
 			Duration:   duration,
-			RawOutput:  rawOutput,
+			RawOutput:  safeRawOutput,
 			Error:      classifyWorkerFinalMessageError("read final worker message", readErr, running.Observed()),
 		}, nil
 	}
 
 	claims, parseErr := ParseWorkerOutput(string(lastMessage))
 	if parseErr != nil {
+		// Before reporting "no JSON found", check if the raw output contains a
+		// provider error message (e.g., auth failure printed to stdout).
+		combinedOutput := rawOutput + "\n" + string(lastMessage)
+		if providerClass := classifyProviderError(combinedOutput); providerClass != "" {
+			msg := providerErrorMessage(providerClass)
+			if msg != "" {
+				return WorkerResult{
+					WorkerName: config.WorkerName,
+					Caste:      config.Caste,
+					TaskID:     config.TaskID,
+					Status:     "failed",
+					Duration:   duration,
+					RawOutput:  sanitizeWorkerDiagnosticOutput(strings.TrimSpace(combinedOutput)),
+					Error:      fmt.Errorf("provider error: %s: %s", providerClass, msg),
+				}, nil
+			}
+			return WorkerResult{
+				WorkerName: config.WorkerName,
+				Caste:      config.Caste,
+				TaskID:     config.TaskID,
+				Status:     "failed",
+				Duration:   duration,
+				RawOutput:  sanitizeWorkerDiagnosticOutput(strings.TrimSpace(combinedOutput)),
+				Error:      fmt.Errorf("provider error: %s", providerClass),
+			}, nil
+		}
 		return WorkerResult{
 			WorkerName: config.WorkerName,
 			Caste:      config.Caste,
 			TaskID:     config.TaskID,
 			Status:     "failed",
 			Duration:   duration,
-			RawOutput:  strings.TrimSpace(rawOutput + "\n" + string(lastMessage)),
+			RawOutput:  sanitizeWorkerDiagnosticOutput(strings.TrimSpace(combinedOutput)),
 			Error:      classifyWorkerFinalMessageError("parse worker output", parseErr, running.Observed()),
 		}, nil
 	}
@@ -557,8 +641,34 @@ waitLoop:
 		Spawns:        claims.Spawns,
 		Handoff:       claims.Handoff,
 		Duration:      duration,
-		RawOutput:     rawOutput,
+		RawOutput:     safeRawOutput,
 	}, nil
+}
+
+func workerTrackingRoot(config WorkerConfig) string {
+	if root := strings.TrimSpace(config.TrackingRoot); root != "" {
+		return root
+	}
+	return config.Root
+}
+
+func codexSandboxForPermission(decision PermissionDecision) string {
+	if decision.Profile.Name == PermissionRepositoryReadOnly {
+		return "read-only"
+	}
+	return "workspace-write"
+}
+
+func permissionDeniedWorkerResult(config WorkerConfig, startedAt time.Time, err error) (WorkerResult, error) {
+	wrapped := fmt.Errorf("worker startup failed: %w", err)
+	return WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "failed",
+		Duration:   time.Since(startedAt),
+		Error:      wrapped,
+	}, wrapped
 }
 
 // --- ParseWorkerOutput ---
@@ -1066,6 +1176,18 @@ func emitWorkerProgress(observer WorkerProgressObserver, event WorkerProgressEve
 	observer(event)
 }
 
+func synchronizedWorkerProgressObserver(observer WorkerProgressObserver) WorkerProgressObserver {
+	if observer == nil {
+		return nil
+	}
+	var mu sync.Mutex
+	return func(event WorkerProgressEvent) {
+		mu.Lock()
+		defer mu.Unlock()
+		observer(event)
+	}
+}
+
 func configureWorkerCommand(cmd *exec.Cmd) {
 	if cmd == nil {
 		return
@@ -1117,7 +1239,7 @@ func validateWorkerLaunchConfig(config WorkerConfig) error {
 func validateCallbackURL(url string) error {
 	trimmed := strings.TrimSpace(url)
 	if trimmed == "" {
-		return fmt.Errorf("Missing worker callback URL -- configure provider.callback_url before spawning workers")
+		return fmt.Errorf("missing worker callback URL -- configure provider.callback_url for worker messaging callbacks before spawning workers; this is separate from provider login credentials")
 	}
 	return validateCallbackURLScheme(trimmed)
 }
@@ -1151,8 +1273,88 @@ func combinedWorkerOutput(stdout, stderr string) string {
 	return strings.TrimSpace(strings.TrimSpace(stdout) + "\n" + strings.TrimSpace(stderr))
 }
 
+// classifyProviderError scans stderr/stdout text for known provider error patterns.
+// It returns a user-friendly classification string if a pattern matches, or ""
+// if the error is not recognized as a provider error.
+//
+// Categories:
+//   - auth failure: authentication, API key, 401, unauthorized
+//   - rate limited: rate limit, 429, too many requests, throttled
+//   - unavailable: model not found, model unavailable, 503, overloaded, service unavailable
+//   - context exceeded: context length, token limit, too long, maximum context
+func classifyProviderError(text string) string {
+	text = strings.ToLower(text)
+
+	// Auth failures
+	if strings.Contains(text, "authentication") ||
+		strings.Contains(text, "unauthorized") ||
+		strings.Contains(text, "api key") ||
+		strings.Contains(text, "401") ||
+		strings.Contains(text, "invalid key") ||
+		strings.Contains(text, "access denied") {
+		return "provider auth failure"
+	}
+
+	// Rate limits
+	if strings.Contains(text, "rate limit") ||
+		strings.Contains(text, "429") ||
+		strings.Contains(text, "too many requests") ||
+		strings.Contains(text, "throttled") ||
+		strings.Contains(text, "quota exceeded") {
+		return "rate limited"
+	}
+
+	// Provider unavailability
+	if strings.Contains(text, "model not found") ||
+		strings.Contains(text, "model unavailable") ||
+		strings.Contains(text, "unavailable") ||
+		strings.Contains(text, "503") ||
+		strings.Contains(text, "overloaded") ||
+		strings.Contains(text, "service unavailable") ||
+		strings.Contains(text, "temporary error") ||
+		strings.Contains(text, "internal server error") {
+		return "provider unavailable"
+	}
+
+	// Context length exceeded
+	if strings.Contains(text, "context length") ||
+		strings.Contains(text, "token limit") ||
+		strings.Contains(text, "maximum context") ||
+		strings.Contains(text, "too long for model") ||
+		strings.Contains(text, "exceeds maximum") {
+		return "context exceeded"
+	}
+
+	return ""
+}
+
+// providerErrorMessage returns a user-friendly message for a classified provider error.
+func providerErrorMessage(classification string) string {
+	switch classification {
+	case "provider auth failure":
+		return "Provider authentication failed. Check your API key and try again."
+	case "rate limited":
+		return "Rate limited by provider. Wait a moment and retry."
+	case "provider unavailable":
+		return "Provider temporarily unavailable. Try again later."
+	case "context exceeded":
+		return "Input too long for provider context window. Reduce prompt size and retry."
+	default:
+		return ""
+	}
+}
+
 func classifyWorkerExecutionError(err error, stderr string, runningObserved bool) error {
-	detail := strings.TrimSpace(stderr)
+	// First: check if this is a known provider error before generic classification
+	if providerClass := classifyProviderError(stderr); providerClass != "" {
+		msg := providerErrorMessage(providerClass)
+		if msg != "" {
+			return fmt.Errorf("provider error: %s: %s", providerClass, msg)
+		}
+		return fmt.Errorf("provider error: %s", providerClass)
+	}
+
+	detail := sanitizeWorkerDiagnosticOutput(stderr)
 	prefix := "codex exec failed"
 	if !runningObserved {
 		prefix = "worker startup failed"

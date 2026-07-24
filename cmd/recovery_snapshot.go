@@ -201,10 +201,13 @@ func nextCommandFromState(state colony.ColonyState) string {
 	if state.Paused {
 		return "aether resume"
 	}
+	if _, ok := activePlanFinalizeFailureFlag(store); ok {
+		return "aether flags --status active"
+	}
 	switch state.State {
 	case colony.StateEXECUTING, colony.StateBUILT:
 		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
-			return fmt.Sprintf("aether build %d", state.CurrentPhase)
+			return buildForceRedispatchCommand(state.CurrentPhase)
 		}
 		if state.CurrentPhase > 0 && state.BuildStartedAt != nil && time.Since(state.BuildStartedAt.UTC()) >= abandonedBuildThreshold {
 			if manifest := loadCodexContinueManifest(state.CurrentPhase); !manifest.Present {
@@ -216,7 +219,7 @@ func nextCommandFromState(state colony.ColonyState) string {
 		}
 		return "aether continue"
 	case colony.StateCOMPLETED:
-		return "aether entomb"
+		return "aether seal"
 	case colony.StateREADY:
 		if len(state.Plan.Phases) == 0 {
 			return "aether plan"

@@ -9,6 +9,8 @@ tools:
   grep: true
   glob: true
   task: true
+permission:
+  external_directory: deny
 color: "#9b59b6"
 ---
 
@@ -64,6 +66,33 @@ Before writing a single phase, state explicitly: "For this goal to be complete, 
 
 <return_format>
 ## Output Format
+
+When the task brief asks for `.aether/data/planning/phase-plan.json`, write that file in the runtime schema:
+
+```json
+{
+  "phases": [
+    {
+      "name": "Phase name",
+      "description": "Phase objective",
+      "tasks": [
+        {
+          "goal": "Concrete task outcome",
+          "constraints": [],
+          "hints": [],
+          "success_criteria": [],
+          "depends_on": ["1.1"]
+        }
+      ],
+      "success_criteria": []
+    }
+  ],
+  "confidence": {"knowledge": 0, "requirements": 0, "risks": 0, "dependencies": 0, "effort": 0, "overall": 0},
+  "gaps": []
+}
+```
+
+Aether assigns task ids by phase/task array order. Do not include explicit task id fields in `phase-plan.json`. The first task in phase 1 is `1.1`, the second is `1.2`, and the first task in phase 2 is `2.1`. `depends_on` must contain only those runtime ids. Never use task text, file paths, descriptions, or aliases such as `P1-T1`.
 
 Return structured JSON at plan completion:
 

@@ -170,6 +170,58 @@ func TestOrchestratorBoundaryGuidanceMatchesWorkflowWithoutManifestQuestions(t *
 	}
 }
 
+func TestOrchestratorBoundaryGuidanceIgnoresStaleScopedBoundaryDecision(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Build scoped guidance"
+	currentSession := "session_current_guidance"
+	oldSession := "session_old_guidance"
+	initializedAt := time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC)
+	if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		SessionID:     &currentSession,
+		InitializedAt: &initializedAt,
+		ColonyMode:    colony.ColonyModeOrchestrator,
+	}); err != nil {
+		t.Fatalf("seed colony state: %v", err)
+	}
+
+	source := orchestratorBoundaryClarificationSource("build", 2, "build-scope", true)
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
+		ID:          "pd_old_boundary",
+		Type:        clarificationDecisionType,
+		Description: formatClarificationDescription("What stale boundary should builders protect?", []string{"old scope"}),
+		Source:      source,
+		Resolved:    false,
+		CreatedAt:   "2026-05-11T10:00:00Z",
+		GoalHash:    pendingDecisionGoalHash(goal),
+		SessionID:   oldSession,
+	}}}); err != nil {
+		t.Fatalf("seed stale pending decisions: %v", err)
+	}
+
+	result := map[string]interface{}{"next": "aether continue"}
+	state := colony.ColonyState{ColonyMode: colony.ColonyModeOrchestrator}
+	addOrchestratorBoundaryGuidance(result, "build", state, "aether continue", []discussQuestion{{
+		ID:     "pd_old_boundary",
+		Source: source,
+	}})
+
+	if got := result["next"]; got != "aether continue" {
+		t.Fatalf("next = %v, want stale scoped boundary to be ignored", got)
+	}
+	guidance := result["orchestrator_boundary_guidance"].(orchestratorBoundaryGuidance)
+	if guidance.Active || guidance.PendingCount != 0 {
+		t.Fatalf("guidance = %#v, want inactive for stale scoped boundary", guidance)
+	}
+}
+
 func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -317,8 +369,14 @@ func TestPlanFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 			Tasks: []codexWorkerPlanTask{{
 				Goal:            "Route unresolved plan boundary questions through discuss",
 				SuccessCriteria: []string{"plan finalizer guidance is active"},
+				EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+					Criterion: "plan finalizer guidance is active", Checks: []string{"claims", "watcher"},
+				}},
 			}},
 			SuccessCriteria: []string{"Guidance is emitted"},
+			EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+				Criterion: "Guidance is emitted", Checks: []string{"claims", "watcher"},
+			}},
 		}},
 		Confidence: codexPlanConfidence{Knowledge: 90, Requirements: 90, Risks: 85, Dependencies: 85, Effort: 85, Overall: 87},
 	}

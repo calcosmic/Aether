@@ -237,7 +237,7 @@ func buildVisualRecoveryMenu(failedCmd string, errMsg string, options []Recovery
 	var b strings.Builder
 
 	b.WriteString(renderBanner("\U0001F504", "Recovery"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(errMsg)
 	b.WriteString("\n\n")
 	b.WriteString("Suggested next steps:\n")

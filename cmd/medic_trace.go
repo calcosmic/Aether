@@ -359,7 +359,7 @@ func renderTraceDiagnostic(diag TraceDiagnostic) string {
 	var b strings.Builder
 
 	b.WriteString(renderBanner(commandEmoji("medic"), "Trace Diagnostics"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	b.WriteString(renderStageMarker("Summary"))
 	b.WriteString(fmt.Sprintf("Run ID:     %s\n", diag.RunID))

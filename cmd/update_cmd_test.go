@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -333,7 +334,7 @@ func TestSyncPlatformHomeAssetsFromHubRefreshesGlobalPlatformHomes(t *testing.T)
 		t.Fatalf("write custom OpenCode home command: %v", err)
 	}
 
-	results, errors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channelStable)
+	results, errors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channelStable, false)
 	if len(errors) > 0 {
 		t.Fatalf("syncPlatformHomeAssetsFromHub errors: %v", errors)
 	}
@@ -365,6 +366,65 @@ func TestSyncPlatformHomeAssetsFromHubRefreshesGlobalPlatformHomes(t *testing.T)
 	}
 	if _, err := os.Stat(customOpenCodeHomeCommand); err != nil {
 		t.Fatalf("custom OpenCode home command should be preserved: %v", err)
+	}
+}
+
+func TestSyncTsHostFromHubCopiesBuiltHost(t *testing.T) {
+	hubDir := t.TempDir()
+	repoDir := t.TempDir()
+	writeBuiltTsHostFixtureAt(t, filepath.Join(hubDir, "system", "ts-host"))
+
+	if err := syncTsHostFromHub(hubDir, repoDir); err != nil {
+		t.Fatalf("syncTsHostFromHub failed: %v", err)
+	}
+	if err := ensureTsHostBuilt(repoDir); err != nil {
+		t.Fatalf("ensureTsHostBuilt failed for dependency-free fixture: %v", err)
+	}
+
+	for _, rel := range []string{"package.json", "package-lock.json", filepath.Join("dist", "host.js")} {
+		path := filepath.Join(repoDir, ".aether", "ts-host", rel)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected repo TS host artifact %s after update sync: %v", path, err)
+		}
+	}
+}
+
+func TestSyncTsHostFromHubRejectsPartialHost(t *testing.T) {
+	hubDir := t.TempDir()
+	repoDir := t.TempDir()
+	tsHostDir := filepath.Join(hubDir, "system", "ts-host")
+	if err := os.MkdirAll(tsHostDir, 0755); err != nil {
+		t.Fatalf("create partial TS host hub dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tsHostDir, "package.json"), []byte(`{"dependencies":{}}`), 0644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tsHostDir, "package-lock.json"), []byte(`{"lockfileVersion":3}`), 0644); err != nil {
+		t.Fatalf("write package-lock.json: %v", err)
+	}
+
+	err := syncTsHostFromHub(hubDir, repoDir)
+	if err == nil {
+		t.Fatal("expected partial TS host hub sync to fail")
+	}
+	if !strings.Contains(err.Error(), filepath.Join("dist", "host.js")) {
+		t.Fatalf("expected error to mention missing host.js, got: %v", err)
+	}
+}
+
+func writeBuiltTsHostFixtureAt(t *testing.T, tsHostDir string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(tsHostDir, "dist"), 0755); err != nil {
+		t.Fatalf("create TS host dist fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tsHostDir, "package.json"), []byte(`{"name":"@aether/test-ts-host","type":"module","dependencies":{}}`+"\n"), 0644); err != nil {
+		t.Fatalf("write TS host package.json fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tsHostDir, "package-lock.json"), []byte(`{"name":"@aether/test-ts-host","lockfileVersion":3,"packages":{"":{"dependencies":{}}}}`+"\n"), 0644); err != nil {
+		t.Fatalf("write TS host package-lock.json fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tsHostDir, "dist", "host.js"), []byte("export {};\n"), 0644); err != nil {
+		t.Fatalf("write TS host host.js fixture: %v", err)
 	}
 }
 

@@ -38,7 +38,7 @@ var continueFinalizeCmd = &cobra.Command{
 		verificationTimeout, verificationTimeoutExplicit, err := resolveContinueVerificationTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		if !verificationTimeoutExplicit {
 			verificationTimeout = 0
@@ -46,12 +46,12 @@ var continueFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalContinueCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout, noLearn)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		if blocked, _ := result["blocked"].(bool); blocked {
 			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)))
@@ -70,6 +70,9 @@ func loadExternalContinueCompletion(path string) (codexExternalContinueCompletio
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return codexExternalContinueCompletion{}, fmt.Errorf("flag --completion-file is required")
+	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return codexExternalContinueCompletion{}, err
 	}
 	var data []byte
 	var err error
@@ -134,6 +137,10 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := validateFinalizerManifestRoot("continue_manifest", plan.Root, root); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, err
 	}
+	now := time.Now().UTC()
+	if err := validateFinalizerManifestFreshness("continue_manifest", plan.GeneratedAt, now); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, err
+	}
 
 	state, phase, manifest, err := validateExternalContinueState(plan)
 	if err != nil {
@@ -143,7 +150,6 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, fmt.Errorf("%s", summary)
 	}
 
-	now := time.Now().UTC()
 	runHandle, err := beginRuntimeSpawnRun("continue", now)
 	if err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to initialize continue run: %w", err)
@@ -180,7 +186,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	}
 	// Per SAFE-03, SAFE-04: trace continue provenance against stored manifest data.
 	// Rejects claims that reference missing or stale worker results.
-	if err := traceContinueProvenance(manifest.Data.Dispatches); err != nil {
+	if err := traceContinueProvenanceForManifest(manifest); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
 	finalizeReviewDepth := colony.VerificationDepthLight
@@ -509,8 +515,8 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			"repo-local",
 		)
 
-		// Build learning content from phase summary
-		content := fmt.Sprintf("Phase %d completed successfully: %s", phase.ID, phase.Name)
+		// Build learning content from deep worker extraction
+		content := buildLearningContent(phase, workerFlow)
 
 		// Run privacy scan + classify (D-10, D-11, PRIV-03)
 		scanResult := privacyScan(content)
@@ -532,6 +538,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			Classification: classification,
 			Phase:          phase.ID,
 			Confidence:     evidence.Confidence,
+			Status:         learn.StatusHypothesis,
 		}
 		if err := learnStore.Add(entry); err != nil {
 			// Non-blocking: learning failure must not prevent phase advancement
@@ -613,7 +620,13 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 		if name == "" {
 			return nil, fmt.Errorf("external continue result missing name")
 		}
-		if _, exists := resultByName[name]; exists {
+		if existing, exists := resultByName[name]; exists {
+			if useIncoming, ok := preferCompletedResultOverTimeout(existing.Status, result.Status); ok {
+				if useIncoming {
+					resultByName[name] = result
+				}
+				continue
+			}
 			return nil, fmt.Errorf("duplicate external continue result for %s", name)
 		}
 		resultByName[name] = result
@@ -999,6 +1012,12 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 		"recovery":            assessment.Recovery,
 		"reconciled_tasks":    assessment.ReconciledTasks,
 		"blocking_issues":     blockers,
+		"plan_revision_option": planRevisionRecommendation(
+			colony.PlanRevisionVerificationFailure,
+			fmt.Sprintf("Verification or review blocked phase %d: %s", phase.ID, summary),
+			displayDataPath(verificationReportRel),
+			displayOptionalDataPath(reviewReportRel),
+		),
 	}
 	if review != nil {
 		result["review"] = *review
@@ -1249,4 +1268,65 @@ func writeCodexContinueWorkerOutcomeReports(root string, phase colony.Phase, wor
 		}
 	}
 	return nil
+}
+
+// buildLearningContent extracts structured learning content from worker flow steps.
+// It aggregates findings, reusable lessons, recommendations, weak spots, and edge cases
+// from completed workers into a multi-line content string.
+func buildLearningContent(phase colony.Phase, workerFlow []codexContinueWorkerFlowStep) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Phase %d: %s\n", phase.ID, phase.Name))
+
+	var completedWorkers []codexContinueWorkerFlowStep
+	for _, step := range workerFlow {
+		if step.Status == "completed" {
+			completedWorkers = append(completedWorkers, step)
+		}
+	}
+
+	if len(completedWorkers) == 0 {
+		b.WriteString("\nNo workers completed successfully.\n")
+		return b.String()
+	}
+
+	b.WriteString(fmt.Sprintf("\nWorkers completed: %d\n", len(completedWorkers)))
+
+	for _, step := range completedWorkers {
+		b.WriteString(fmt.Sprintf("\n--- %s (%s) ---\n", step.Name, step.Caste))
+		if step.Task != "" {
+			b.WriteString(fmt.Sprintf("Task: %s\n", step.Task))
+		}
+		if len(step.Findings) > 0 {
+			b.WriteString("Findings:\n")
+			for _, f := range step.Findings {
+				b.WriteString(fmt.Sprintf("  - %s\n", f.Description))
+			}
+		}
+		if len(step.ReusableLessons) > 0 {
+			b.WriteString("Reusable Lessons:\n")
+			for _, l := range step.ReusableLessons {
+				b.WriteString(fmt.Sprintf("  - %s\n", l))
+			}
+		}
+		if len(step.Recommendations) > 0 {
+			b.WriteString("Recommendations:\n")
+			for _, r := range step.Recommendations {
+				b.WriteString(fmt.Sprintf("  - %s\n", r))
+			}
+		}
+		if len(step.WeakSpots) > 0 {
+			b.WriteString("Weak Spots:\n")
+			for _, w := range step.WeakSpots {
+				b.WriteString(fmt.Sprintf("  - %s\n", w))
+			}
+		}
+		if len(step.EdgeCases) > 0 {
+			b.WriteString("Edge Cases:\n")
+			for _, e := range step.EdgeCases {
+				b.WriteString(fmt.Sprintf("  - %s\n", e))
+			}
+		}
+	}
+
+	return b.String()
 }

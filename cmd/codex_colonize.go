@@ -56,6 +56,7 @@ type codexWorkspaceFacts struct {
 	TypeSafetyGaps   []string
 	SecurityPatterns []string
 	Integrations     []string
+	SourceAnchors    []string
 }
 
 type codexColonizeOptions struct {
@@ -450,7 +451,7 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 	for _, entry := range entries {
 		if entry.IsDir() {
 			name := entry.Name()
-			if shouldSkipSurveyDir(name) {
+			if codegraph.ShouldSkipDir(name) {
 				continue
 			}
 			facts.TopLevelDirs = append(facts.TopLevelDirs, name)
@@ -510,6 +511,23 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 	if names["Makefile"] {
 		facts.Frameworks = appendUnique(facts.Frameworks, "make")
 	}
+	if detectMDSWorkspace(root) {
+		if facts.DetectedType == "unknown" {
+			facts.DetectedType = "max-for-live-mds"
+		}
+		for _, framework := range []string{"Max for Live", "MDS"} {
+			if !seenFramework[framework] {
+				facts.Frameworks = append(facts.Frameworks, framework)
+				seenFramework[framework] = true
+			}
+		}
+		for _, rel := range []string{filepath.Join("scripts", "mds")} {
+			if _, err := os.Stat(filepath.Join(root, rel)); err == nil && !seenDirs[rel] {
+				facts.TopLevelDirs = append(facts.TopLevelDirs, rel)
+				seenDirs[rel] = true
+			}
+		}
+	}
 
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -519,7 +537,7 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 			if path != root {
 				facts.DirectoryCount++
 			}
-			if shouldSkipSurveyDir(d.Name()) {
+			if codegraph.ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -568,6 +586,8 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 	sort.Strings(facts.Frameworks)
 	sort.Strings(facts.Languages)
 	sort.Strings(facts.Integrations)
+	sort.Strings(facts.TopLevelDirs)
+	facts.SourceAnchors = extractSourceAnchors(root, 50)
 	return facts, nil
 }
 
@@ -894,6 +914,60 @@ func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch) (map[s
 	return byOutput, nil
 }
 
+// extractSourceAnchors walks root and returns up to maxAnchors non-test,
+// non-config, non-noise source file paths sorted by path depth (shallowest
+// first) then alphabetically within the same depth.
+func extractSourceAnchors(root string, maxAnchors int) []string {
+	sourceExts := map[string]bool{
+		".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true,
+		".py": true, ".rb": true, ".java": true, ".rs": true, ".c": true, ".cpp": true,
+	}
+
+	var candidates []string
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != root && codegraph.ShouldSkipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		base := d.Name()
+		if codegraph.ShouldSkipFile(base) {
+			return nil
+		}
+		if isTestFile(base) || isConfigFile(base) {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(base))
+		if !sourceExts[ext] {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		candidates = append(candidates, filepath.ToSlash(rel))
+		return nil
+	})
+
+	sort.Slice(candidates, func(i, j int) bool {
+		di := strings.Count(candidates[i], "/")
+		dj := strings.Count(candidates[j], "/")
+		if di != dj {
+			return di < dj
+		}
+		return candidates[i] < candidates[j]
+	})
+
+	if len(candidates) > maxAnchors {
+		candidates = candidates[:maxAnchors]
+	}
+	return candidates
+}
+
 func writeSurveyCompatibilityJSON(surveyDir string, facts codexWorkspaceFacts) error {
 	summaries := map[string]map[string]interface{}{
 		"blueprint.json": {
@@ -917,6 +991,11 @@ func writeSurveyCompatibilityJSON(surveyDir string, facts codexWorkspaceFacts) e
 		"pathogens.json": {
 			"issues":  identifyPathogens(facts),
 			"summary": "Known technical concerns",
+		},
+		"anchors.json": {
+			"source_anchors": facts.SourceAnchors,
+			"anchor_count":   len(facts.SourceAnchors),
+			"summary":        "Repo-owned source files for plan grounding",
 		},
 	}
 
@@ -969,14 +1048,6 @@ func surveyDocsExist(surveyDir string) bool {
 		if _, err := os.Stat(filepath.Join(surveyDir, name)); err == nil {
 			return true
 		}
-	}
-	return false
-}
-
-func shouldSkipSurveyDir(name string) bool {
-	switch name {
-	case ".git", ".cache", "node_modules", "dist", "build", "vendor", ".aether", ".claude", ".codex", ".opencode":
-		return true
 	}
 	return false
 }

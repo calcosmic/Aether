@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-// expectedContracts lists the 16 lifecycle commands that must have contract documents.
+// expectedContracts lists the lifecycle commands that must have contract documents.
 var expectedContracts = []string{
 	"init", "discuss", "colonize", "plan", "build", "continue",
 	"seal", "entomb", "publish", "update", "recover", "status",
-	"resume", "watch", "patrol", "profile",
+	"history", "phase", "resume", "watch", "patrol", "profile",
 }
 
 // requiredSections lists the 4 section headers every contract must contain.
@@ -22,7 +22,7 @@ var requiredSections = []string{
 	"## Preconditions",
 }
 
-// TestLifecycleContracts verifies all 16 contract files exist in cmd/contracts/
+// TestLifecycleContracts verifies all expected contract files exist in cmd/contracts/
 // and that no extra .md files are present beyond the expected set.
 func TestLifecycleContracts(t *testing.T) {
 	contractsDir := filepath.Join("contracts")

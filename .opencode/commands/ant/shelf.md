@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/shelf.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-shelf
-description: "Show shelved Aether backlog items"
+description: "📚 Show shelved Aether backlog items"
 ---
 
 Use the Go `aether` CLI as the source of truth.

@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/queen-compose.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-queen-compose
-description: "Create or improve repo-local QUEEN.md project brain"
+description: "📝 Create or improve repo-local QUEEN.md project brain"
 ---
 
 You are the **Queen**. Create or improve the repo-local `.aether/QUEEN.md` project brain through the Aether runtime.

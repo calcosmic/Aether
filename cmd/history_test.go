@@ -240,4 +240,15 @@ func TestHistoryEmpty(t *testing.T) {
 	if !strings.Contains(output, "No events") {
 		t.Errorf("expected 'No events' for empty history, got: %s", output)
 	}
+	for _, forbidden := range []string{
+		"Worker Results",
+		"S P A W N   P L A N",
+		"Host platform should dispatch",
+		"finalizer",
+		"completed a real worker pass",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("history dashboard implied worker theatre via %q\n%s", forbidden, output)
+		}
+	}
 }

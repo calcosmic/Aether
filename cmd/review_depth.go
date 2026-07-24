@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -14,12 +15,123 @@ const (
 	ReviewDepthHeavy ReviewDepth = "heavy"
 )
 
-// heavyKeywords lists phase-name substrings that always trigger heavy review.
-var heavyKeywords = []string{
-	"security", "auth", "crypto", "secrets",
-	"permissions", "compliance", "audit",
-	"release", "deploy", "production", "ship", "launch",
+// reviewDepthPathOverride allows tests to point at a temporary policy file.
+// When empty, the default colony/policies/review-depth.yaml is used.
+var reviewDepthPathOverride string
+
+// reviewDepthPolicy mirrors the YAML structure for the review depth policy.
+type reviewDepthPolicy struct {
+	ReviewDepthVersion   string            `yaml:"review_depth_version"`
+	HeavyKeywords        []string          `yaml:"heavy_keywords"`
+	SecurityRiskKeywords []string          `yaml:"security_risk_keywords"`
+	BlastRadiusKeywords  []string          `yaml:"blast_radius_keywords"`
+	SmartDefaultReasons  map[string]string `yaml:"smart_default_reasons"`
 }
+
+var (
+	loadedReviewDepthPolicy     *reviewDepthPolicy
+	loadedReviewDepthPolicyOnce sync.Once
+)
+
+// loadReviewDepthPolicy loads the review depth policy from YAML.
+// It caches the result and falls back to nil on any error so callers can use
+// hardcoded defaults.
+func loadReviewDepthPolicy() *reviewDepthPolicy {
+	loadedReviewDepthPolicyOnce.Do(func() {
+		path := reviewDepthPathOverride
+		if path == "" {
+			path = policyPath("review-depth")
+		}
+		var policy reviewDepthPolicy
+		if err := loadYAMLPolicy(path, &policy); err == nil {
+			loadedReviewDepthPolicy = &policy
+		}
+	})
+	return loadedReviewDepthPolicy
+}
+
+// Fallback keyword slices (original hardcoded values).
+var (
+	heavyKeywordsFallback = []string{
+		"security", "auth", "crypto", "secrets",
+		"permissions", "compliance", "audit",
+		"release", "deploy", "production", "ship", "launch",
+	}
+	securityRiskKeywordsFallback = []string{
+		"security", "auth", "crypto", "secrets", "permissions",
+		"compliance", "audit", "token", "session", "password",
+	}
+	blastRadiusKeywordsFallback = []string{
+		"core runtime", "state mutation", "colony state", "state machine",
+		"phase transition", "dispatch", "build command", "continue command",
+		"verification depth", "planning depth",
+	}
+)
+
+// getHeavyKeywords returns the heavy keywords from policy if available,
+// otherwise the hardcoded fallback.
+func getHeavyKeywords() []string {
+	if p := loadReviewDepthPolicy(); p != nil && len(p.HeavyKeywords) > 0 {
+		return p.HeavyKeywords
+	}
+	return heavyKeywordsFallback
+}
+
+// getSecurityRiskKeywords returns the security risk keywords from policy if available,
+// otherwise the hardcoded fallback.
+func getSecurityRiskKeywords() []string {
+	if p := loadReviewDepthPolicy(); p != nil && len(p.SecurityRiskKeywords) > 0 {
+		return p.SecurityRiskKeywords
+	}
+	return securityRiskKeywordsFallback
+}
+
+// getBlastRadiusKeywords returns the blast radius keywords from policy if available,
+// otherwise the hardcoded fallback.
+func getBlastRadiusKeywords() []string {
+	if p := loadReviewDepthPolicy(); p != nil && len(p.BlastRadiusKeywords) > 0 {
+		return p.BlastRadiusKeywords
+	}
+	return blastRadiusKeywordsFallback
+}
+
+// Fallback smart default reason strings.
+const (
+	fallbackReasonHighRisk   = "auto: security risk"
+	fallbackReasonFinalPhase = "auto: final phase"
+	fallbackReasonMediumRisk = "auto: high blast radius"
+	fallbackReasonEarlyPhase = "auto: early phase"
+	fallbackReasonLatePhase  = "auto: late phase"
+	fallbackReasonStandard   = "auto: standard"
+)
+
+// getSmartDefaultReason returns the reason string for the given key from policy
+// if available, otherwise the hardcoded fallback.
+func getSmartDefaultReason(key string) string {
+	if p := loadReviewDepthPolicy(); p != nil {
+		if v, ok := p.SmartDefaultReasons[key]; ok && v != "" {
+			return v
+		}
+	}
+	switch key {
+	case "high_risk":
+		return fallbackReasonHighRisk
+	case "final_phase":
+		return fallbackReasonFinalPhase
+	case "medium_risk":
+		return fallbackReasonMediumRisk
+	case "early_phase":
+		return fallbackReasonEarlyPhase
+	case "late_phase":
+		return fallbackReasonLatePhase
+	default:
+		return fallbackReasonStandard
+	}
+}
+
+// heavyKeywords is kept as a package-level var for backward compatibility with
+// existing callers. It is initialized lazily via getHeavyKeywords().
+var heavyKeywords = heavyKeywordsFallback
 
 // resolveReviewDepth determines whether a phase gets light or heavy review.
 // Priority: explicit heavy flag > explicit light flag > final phase > keyword match > default.
@@ -49,7 +161,7 @@ func resolveReviewDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFla
 // Matching is case-insensitive and uses substring matching.
 func phaseHasHeavyKeywords(name string) bool {
 	lower := strings.ToLower(name)
-	for _, kw := range heavyKeywords {
+	for _, kw := range getHeavyKeywords() {
 		if strings.Contains(lower, kw) {
 			return true
 		}
@@ -116,17 +228,10 @@ func resolveEffectiveContinueDepth(phase colony.Phase, totalPhases int, lightFla
 // --- Smart depth default functions (Phase 85) ---
 
 // securityRiskKeywords lists substrings that trigger "high" risk classification.
-var securityRiskKeywords = []string{
-	"security", "auth", "crypto", "secrets", "permissions",
-	"compliance", "audit", "token", "session", "password",
-}
+var securityRiskKeywords = securityRiskKeywordsFallback
 
 // blastRadiusKeywords lists substrings that trigger "medium" risk classification.
-var blastRadiusKeywords = []string{
-	"core runtime", "state mutation", "colony state", "state machine",
-	"phase transition", "dispatch", "build command", "continue command",
-	"verification depth", "planning depth",
-}
+var blastRadiusKeywords = blastRadiusKeywordsFallback
 
 // phasePositionLevel classifies a phase by its position within the plan.
 // Returns "final", "early", "late", or "intermediate".
@@ -177,10 +282,10 @@ func matchesAnyKeyword(text string, keywords []string) bool {
 // to avoid false positives from common words like "session", "token", "password".
 func phaseRiskLevel(phase colony.Phase) string {
 	nameLower := strings.ToLower(phase.Name)
-	if matchesAnyKeyword(nameLower, securityRiskKeywords) {
+	if matchesAnyKeyword(nameLower, getSecurityRiskKeywords()) {
 		return "high"
 	}
-	if matchesAnyKeyword(nameLower, blastRadiusKeywords) {
+	if matchesAnyKeyword(nameLower, getBlastRadiusKeywords()) {
 		return "medium"
 	}
 	return "low"

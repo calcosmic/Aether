@@ -3,6 +3,11 @@ description: "📜 Show colony event history"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether history $ARGUMENTS"
+ceremony_contract:
+  class: "dashboard"
+  authority: "Go owns event parsing and visual history rendering."
+  wrapper_role: "Display stored event facts only; do not infer worker dispatch or verification."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not claim history output spawned, completed, blocked, or verified workers."
   - "If docs and runtime disagree, runtime wins."

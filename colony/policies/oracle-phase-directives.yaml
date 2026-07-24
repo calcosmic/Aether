@@ -1,0 +1,8 @@
+# Oracle Phase Directives
+# Loaded by cmd/oracle_loop.go — do not hardcode these strings in Go.
+
+survey: "Your task is to survey the landscape. Identify key concepts, existing solutions, and open questions. Do not form conclusions yet."
+verify: "Your task is to verify previous findings. Test assumptions, look for contradictions, and assess confidence levels."
+investigate: "Your task is to investigate specific questions. Deep-dive into the most promising areas identified in the survey."
+synthesize: "Your task is to synthesize all findings into a coherent report. Connect dots, resolve contradictions, and formulate recommendations."
+default: "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings."

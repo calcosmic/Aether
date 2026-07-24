@@ -52,7 +52,7 @@ the hub, and keep target repos focused on their own state.
 | Go runtime | `cmd/`, `pkg/` | `aether` binary |
 | Claude agents | `.claude/agents/ant/*.md` | global Claude agent directory |
 | Claude commands | `.claude/commands/ant/*.md` | global Claude command directory |
-| OpenCode agents | `.opencode/agents/*.md` | global OpenCode agent directories: `~/.opencode/agent/` and legacy `~/.config/opencode/agents/` |
+| OpenCode agents | `.opencode/agents/*.md` (27 castes plus `aether-worker-router`) | global OpenCode agent directories: `~/.opencode/agent/` and legacy `~/.config/opencode/agents/` |
 | OpenCode commands | `.opencode/commands/ant/*.md` | global OpenCode command directories: `~/.opencode/command/` and legacy `~/.config/opencode/commands/ant/` |
 | Codex agents | `.codex/agents/aether-*.toml` | global Codex agent directory and hub `system/codex/` |
 | Shipped skills | `.aether/skills/**/SKILL.md` with `source: shipped` | hub `system/skills/` only |
@@ -110,6 +110,14 @@ source chain for those commands is:
    shipped skill bodies.
 5. `aether command-guide <command> --platform <platform>` for runtime-readable
    orchestration guidance.
+6. `.aether/ts-host/src/command-registry.ts` and `.aether/ts-host/src/host.ts`
+   for the implemented TypeScript host command spine.
 
 When changing intelligent behavior for `init`, `oracle`, `plan`, `build`,
 `continue`, `seal`, or `discuss`, update those artifacts together.
+
+Classic command parity is tracked by
+`.aether/commands/classic-command-parity.json` and explained in
+`.aether/docs/classic-command-parity-matrix.md`. Treat the JSON as a tested
+contract artifact for wrapper/runtime alignment, not as an execution source of
+truth.

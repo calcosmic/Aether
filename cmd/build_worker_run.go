@@ -1,0 +1,397 @@
+package cmd
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/codex"
+)
+
+const (
+	buildWorkerDispatching = "dispatching"
+	buildWorkerCompleted   = "completed"
+	buildWorkerFailed      = "failed"
+	buildWorkerBlocked     = "blocked"
+	buildWorkerTimeout     = "timeout"
+	buildWorkerCancelled   = "cancelled"
+)
+
+type buildAttemptWorkerRun struct {
+	ProviderRunID string                `json:"provider_run_id"`
+	WorkerName    string                `json:"worker_name"`
+	TaskID        string                `json:"task_id"`
+	Caste         string                `json:"caste"`
+	Platform      codex.Platform        `json:"platform"`
+	Status        string                `json:"status"`
+	ProcessID     int                   `json:"process_id,omitempty"`
+	StartedAt     string                `json:"started_at"`
+	UpdatedAt     string                `json:"updated_at"`
+	CompletedAt   string                `json:"completed_at,omitempty"`
+	ResultSHA256  string                `json:"result_sha256,omitempty"`
+	Result        *internalWorkerResult `json:"result,omitempty"`
+	Error         string                `json:"error,omitempty"`
+}
+
+func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, request internalWorkerDispatchRequest, providerRunID string, platform codex.Platform) (*buildAttemptWorkerRun, error) {
+	attemptRel, record, ok := loadLatestBuildAttempt(phase)
+	if !ok {
+		return nil, fmt.Errorf("build worker execution binding has no durable attempt")
+	}
+	if err := validateBuildExecutionBinding(record, binding, record.ManifestSHA256, false); err != nil {
+		return nil, err
+	}
+	if !buildAttemptHasDispatch(record, request) {
+		return nil, fmt.Errorf("worker %s task %s is not authorized by build attempt %s", request.WorkerName, request.TaskID, record.ID)
+	}
+
+	now := time.Now().UTC()
+	var cached *buildAttemptWorkerRun
+	var updated buildAttemptRecord
+	if err := store.UpdateJSONAtomically(attemptRel, &updated, func() error {
+		if err := validateBuildExecutionBinding(updated, binding, updated.ManifestSHA256, false); err != nil {
+			return err
+		}
+		if updated.Status != buildAttemptAwaiting && updated.Status != buildAttemptDispatching {
+			return fmt.Errorf("build attempt %s is %s and cannot dispatch workers", updated.ID, updated.Status)
+		}
+		if !buildAttemptHasDispatch(updated, request) {
+			return fmt.Errorf("worker %s task %s is not authorized by build attempt %s", request.WorkerName, request.TaskID, updated.ID)
+		}
+		for i := len(updated.WorkerRuns) - 1; i >= 0; i-- {
+			existing := &updated.WorkerRuns[i]
+			if existing.WorkerName != strings.TrimSpace(request.WorkerName) || existing.TaskID != effectiveInternalWorkerTaskID(request) {
+				continue
+			}
+			if existing.Status == buildWorkerCompleted && existing.Result != nil && existing.ResultSHA256 != "" {
+				copyRun := *existing
+				copyResult := *existing.Result
+				copyRun.Result = &copyResult
+				cached = &copyRun
+				return nil
+			}
+			if existing.Status == buildWorkerDispatching && buildWorkerRunStillActive(*existing, now) {
+				return fmt.Errorf("worker %s task %s is already active in provider run %s", existing.WorkerName, existing.TaskID, existing.ProviderRunID)
+			}
+			if existing.Status == buildWorkerDispatching {
+				existing.Status = buildWorkerCancelled
+				existing.Error = "provider process ended without a terminal result"
+				existing.CompletedAt = now.Format(time.RFC3339Nano)
+				existing.UpdatedAt = existing.CompletedAt
+			}
+			break
+		}
+		if cached != nil {
+			return nil
+		}
+		started := now.Format(time.RFC3339Nano)
+		updated.WorkerRuns = append(updated.WorkerRuns, buildAttemptWorkerRun{
+			ProviderRunID: strings.TrimSpace(providerRunID),
+			WorkerName:    strings.TrimSpace(request.WorkerName),
+			TaskID:        effectiveInternalWorkerTaskID(request),
+			Caste:         strings.TrimSpace(request.Caste),
+			Platform:      platform,
+			Status:        buildWorkerDispatching,
+			StartedAt:     started,
+			UpdatedAt:     started,
+		})
+		updated.Status = buildAttemptDispatching
+		updated.UpdatedAt = started
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("record build worker dispatch: %w", err)
+	}
+	return cached, nil
+}
+
+func recordBuildAttemptWorkerProcess(phase int, binding codex.ExecutionBinding, providerRunID string, pid int) error {
+	if pid <= 0 {
+		return nil
+	}
+	attemptRel, current, ok := loadLatestBuildAttempt(phase)
+	if !ok {
+		return fmt.Errorf("build worker execution binding has no durable attempt")
+	}
+	if err := validateBuildExecutionBinding(current, binding, current.ManifestSHA256, false); err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var record buildAttemptRecord
+	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
+		if record.ID != binding.AttemptID || record.RunID != binding.RunID {
+			return fmt.Errorf("execution binding does not match the current build attempt")
+		}
+		for i := range record.WorkerRuns {
+			if record.WorkerRuns[i].ProviderRunID == strings.TrimSpace(providerRunID) {
+				record.WorkerRuns[i].ProcessID = pid
+				record.WorkerRuns[i].UpdatedAt = now
+				return nil
+			}
+		}
+		return fmt.Errorf("provider run %s is not registered", providerRunID)
+	}); err != nil {
+		return fmt.Errorf("record build worker process: %w", err)
+	}
+	return nil
+}
+
+func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding, providerRunID string, result *internalWorkerResult) error {
+	if result == nil {
+		return fmt.Errorf("terminal worker result is required")
+	}
+	digest, err := jsonSHA256(result)
+	if err != nil {
+		return fmt.Errorf("hash terminal worker result: %w", err)
+	}
+	status := strings.ToLower(strings.TrimSpace(result.Status))
+	switch status {
+	case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+	default:
+		return fmt.Errorf("terminal worker status %q is invalid", result.Status)
+	}
+	result.Status = status
+	attemptRel, current, ok := loadLatestBuildAttempt(phase)
+	if !ok {
+		return fmt.Errorf("build worker execution binding has no durable attempt")
+	}
+	if err := validateBuildExecutionBinding(current, binding, current.ManifestSHA256, false); err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var record buildAttemptRecord
+	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
+		if record.ID != binding.AttemptID || record.RunID != binding.RunID {
+			return fmt.Errorf("execution binding does not match the current build attempt")
+		}
+		for i := range record.WorkerRuns {
+			workerRun := &record.WorkerRuns[i]
+			if workerRun.ProviderRunID != strings.TrimSpace(providerRunID) {
+				continue
+			}
+			if workerRun.ResultSHA256 != "" && workerRun.ResultSHA256 != digest {
+				return fmt.Errorf("provider run %s already has a different terminal result", providerRunID)
+			}
+			copyResult := *result
+			workerRun.Result = &copyResult
+			workerRun.ResultSHA256 = digest
+			workerRun.Status = result.Status
+			workerRun.UpdatedAt = now
+			workerRun.CompletedAt = now
+			workerRun.ProcessID = 0
+			workerRun.Error = strings.TrimSpace(result.Error)
+			record.UpdatedAt = now
+			return nil
+		}
+		return fmt.Errorf("provider run %s is not registered", providerRunID)
+	}); err != nil {
+		return fmt.Errorf("record terminal build worker result: %w", err)
+	}
+	return nil
+}
+
+func buildAttemptHasDispatch(record buildAttemptRecord, request internalWorkerDispatchRequest) bool {
+	requestTaskID := effectiveInternalWorkerTaskID(request)
+	for _, dispatch := range record.Dispatches {
+		if dispatch.Name == strings.TrimSpace(request.WorkerName) && normalizedDispatchTaskID(dispatch) == requestTaskID && strings.EqualFold(dispatch.Caste, strings.TrimSpace(request.Caste)) {
+			return true
+		}
+	}
+	return false
+}
+
+func effectiveInternalWorkerTaskID(request internalWorkerDispatchRequest) string {
+	if taskID := strings.TrimSpace(request.TaskID); taskID != "" {
+		return taskID
+	}
+	return strings.TrimSpace(request.WorkerName)
+}
+
+func buildWorkerRunStillActive(run buildAttemptWorkerRun, now time.Time) bool {
+	if run.ProcessID > 0 {
+		return processAlive(run.ProcessID)
+	}
+	startedAt, err := time.Parse(time.RFC3339Nano, run.StartedAt)
+	return err == nil && now.Sub(startedAt) < 30*time.Second
+}
+
+func cachedInternalWorkerResult(run *buildAttemptWorkerRun) *internalWorkerResult {
+	if run == nil || run.Result == nil {
+		return nil
+	}
+	copyResult := *run.Result
+	return &copyResult
+}
+
+func cancelBuildAttemptWorkerRuns(attemptRel, reason string) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var record buildAttemptRecord
+	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
+		for i := range record.WorkerRuns {
+			workerRun := &record.WorkerRuns[i]
+			if workerRun.Status != buildWorkerDispatching {
+				continue
+			}
+			workerRun.Status = buildWorkerCancelled
+			workerRun.ProcessID = 0
+			workerRun.Error = strings.TrimSpace(reason)
+			workerRun.UpdatedAt = now
+			workerRun.CompletedAt = now
+		}
+		record.UpdatedAt = now
+		return nil
+	}); err != nil {
+		return fmt.Errorf("record cancelled build workers: %w", err)
+	}
+	return nil
+}
+
+func stageBuildAttemptCompletionFromWorkerRuns(phase int, binding codex.ExecutionBinding) (string, bool, error) {
+	attemptRel, record, ok := loadLatestBuildAttempt(phase)
+	if !ok {
+		return "", false, fmt.Errorf("build worker execution binding has no durable attempt")
+	}
+	if err := validateBuildExecutionBinding(record, binding, record.ManifestSHA256, false); err != nil {
+		return "", false, err
+	}
+	if record.PlanManifest == nil || !record.PlanManifest.PlanOnly {
+		return "", false, nil
+	}
+	completion, complete := buildCompletionFromWorkerRuns(record)
+	if !complete {
+		return "", false, nil
+	}
+	path, _, err := stageBuildAttemptCompletion(attemptRel, completion)
+	if err != nil {
+		return "", false, err
+	}
+	return path, true, nil
+}
+
+func beginDirectBuildWorkerRun(dispatch codex.WorkerDispatch, invoker codex.WorkerInvoker) error {
+	if dispatch.ExecutionBinding == nil {
+		return nil
+	}
+	request := internalWorkerDispatchRequest{
+		SchemaVersion:     internalWorkerAdapterSchemaVersion,
+		Workflow:          "build",
+		Phase:             dispatch.Phase,
+		AgentName:         dispatch.AgentName,
+		Caste:             dispatch.Caste,
+		WorkerName:        dispatch.WorkerName,
+		TaskID:            dispatch.TaskID,
+		Task:              dispatch.TaskBrief,
+		TaskBrief:         dispatch.TaskBrief,
+		ContextCapsule:    dispatch.ContextCapsule,
+		SkillSection:      dispatch.SkillSection,
+		PheromoneSection:  dispatch.PheromoneSection,
+		HandoffSection:    dispatch.HandoffSection,
+		TimeoutMS:         dispatch.Timeout.Milliseconds(),
+		PermissionProfile: dispatch.PermissionProfile,
+		ExecutionBinding:  dispatch.ExecutionBinding,
+	}
+	cached, err := beginBuildAttemptWorkerRun(
+		dispatch.Phase,
+		*dispatch.ExecutionBinding,
+		request,
+		dispatch.ProviderRunID,
+		codex.PlatformFromInvoker(invoker),
+	)
+	if err != nil {
+		return err
+	}
+	if cached != nil {
+		return fmt.Errorf("worker %s task %s already has a terminal result in build run %s", dispatch.WorkerName, dispatch.TaskID, dispatch.ExecutionBinding.RunID)
+	}
+	return nil
+}
+
+func recordDirectBuildWorkerTerminal(dispatch codex.WorkerDispatch, result codex.DispatchResult) error {
+	if dispatch.ExecutionBinding == nil {
+		return nil
+	}
+	terminal := &internalWorkerResult{
+		Name:   dispatch.WorkerName,
+		Caste:  dispatch.Caste,
+		TaskID: dispatch.TaskID,
+		Status: strings.ToLower(strings.TrimSpace(result.Status)),
+	}
+	if result.WorkerResult != nil {
+		terminal = mapInternalWorkerResult(*result.WorkerResult, result.Error)
+		terminal.Name = dispatch.WorkerName
+		terminal.Caste = dispatch.Caste
+		terminal.TaskID = dispatch.TaskID
+		terminal.Status = strings.ToLower(strings.TrimSpace(result.Status))
+	}
+	if result.Error != nil {
+		terminal.Error = sanitizeInternalWorkerAdapterError(result.Error.Error())
+		if strings.TrimSpace(terminal.Summary) == "" {
+			terminal.Summary = terminal.Error
+		}
+	}
+	switch terminal.Status {
+	case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+	default:
+		return fmt.Errorf("worker %s returned invalid terminal status %q", dispatch.WorkerName, terminal.Status)
+	}
+	return recordBuildAttemptWorkerTerminal(
+		dispatch.Phase,
+		*dispatch.ExecutionBinding,
+		dispatch.ProviderRunID,
+		terminal,
+	)
+}
+
+func buildCompletionFromWorkerRuns(record buildAttemptRecord) (codexExternalBuildCompletion, bool) {
+	if record.PlanManifest == nil || len(record.PlanManifest.Dispatches) == 0 {
+		return codexExternalBuildCompletion{}, false
+	}
+	results := make([]codexExternalBuildWorkerResult, 0, len(record.PlanManifest.Dispatches))
+	for _, dispatch := range record.PlanManifest.Dispatches {
+		workerRun, ok := latestTerminalBuildWorkerRun(record.WorkerRuns, dispatch.Name, normalizedDispatchTaskID(dispatch))
+		if !ok || workerRun.Result == nil {
+			return codexExternalBuildCompletion{}, false
+		}
+		result := workerRun.Result
+		summary := strings.TrimSpace(result.Summary)
+		if summary == "" {
+			summary = strings.TrimSpace(result.Error)
+		}
+		if summary == "" {
+			summary = fmt.Sprintf("Worker %s returned %s", dispatch.Name, result.Status)
+		}
+		results = append(results, codexExternalBuildWorkerResult{
+			Stage:         dispatch.Stage,
+			Wave:          dispatch.Wave,
+			ExecutionWave: dispatch.ExecutionWave,
+			Caste:         dispatch.Caste,
+			Name:          dispatch.Name,
+			Task:          dispatch.Task,
+			Status:        result.Status,
+			Summary:       summary,
+			TaskID:        dispatch.TaskID,
+			Duration:      result.Duration,
+			ToolCount:     result.ToolCount,
+			FilesCreated:  append([]string(nil), result.FilesCreated...),
+			FilesModified: append([]string(nil), result.FilesModified...),
+			TestsWritten:  append([]string(nil), result.TestsWritten...),
+			Blockers:      append([]string(nil), result.Blockers...),
+			Handoff:       result.Handoff,
+		})
+	}
+	manifest := *record.PlanManifest
+	return codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}, true
+}
+
+func latestTerminalBuildWorkerRun(runs []buildAttemptWorkerRun, workerName, taskID string) (buildAttemptWorkerRun, bool) {
+	for i := len(runs) - 1; i >= 0; i-- {
+		run := runs[i]
+		if run.WorkerName != workerName || run.TaskID != taskID || run.Result == nil || run.ResultSHA256 == "" {
+			continue
+		}
+		switch run.Status {
+		case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+			return run, true
+		}
+	}
+	return buildAttemptWorkerRun{}, false
+}

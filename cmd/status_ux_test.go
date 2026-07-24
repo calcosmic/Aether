@@ -354,3 +354,144 @@ func TestComputeWarningsPlatformHealth_NoFile(t *testing.T) {
 		}
 	}
 }
+
+func TestComputeWarningsDocCLI_HostCriticalFailures(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := createSeedStore(dataDir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ph := map[string]interface{}{
+		"failed_commands": []interface{}{},
+		"flag_mismatches": []interface{}{},
+		"doc_cli_alignment": map[string]interface{}{
+			"commands_checked":       5,
+			"host_critical_checked":  2,
+			"host_critical_failures": []interface{}{map[string]interface{}{"command": "ant-plan", "flag": "--fake"}},
+			"warnings":               []interface{}{},
+		},
+	}
+	s.SaveJSON("platform-health.json", ph)
+
+	goal := "Doc-CLI test"
+	warnings := computeWarnings(colony.ColonyState{Goal: &goal}, s)
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "Doc-CLI alignment: 1 host-critical flag mismatch(es) detected") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected host-critical doc-CLI warning, got: %v", warnings)
+	}
+}
+
+func TestComputeWarningsDocCLI_NonCriticalWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := createSeedStore(dataDir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ph := map[string]interface{}{
+		"failed_commands": []interface{}{},
+		"flag_mismatches": []interface{}{},
+		"doc_cli_alignment": map[string]interface{}{
+			"commands_checked":       5,
+			"host_critical_checked":  2,
+			"host_critical_failures": []interface{}{},
+			"warnings":               []interface{}{map[string]interface{}{"command": "ant-build", "flag": "--warn"}},
+		},
+	}
+	s.SaveJSON("platform-health.json", ph)
+
+	goal := "Doc-CLI test"
+	warnings := computeWarnings(colony.ColonyState{Goal: &goal}, s)
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "Doc-CLI alignment: 1 non-critical flag mismatch(es) detected") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected non-critical doc-CLI warning, got: %v", warnings)
+	}
+}
+
+func TestComputeWarningsDocCLI_ZeroCommandsChecked(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := createSeedStore(dataDir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ph := map[string]interface{}{
+		"failed_commands": []interface{}{},
+		"flag_mismatches": []interface{}{},
+		"doc_cli_alignment": map[string]interface{}{
+			"commands_checked":       0,
+			"host_critical_checked":  0,
+			"host_critical_failures": []interface{}{},
+			"warnings":               []interface{}{},
+		},
+	}
+	s.SaveJSON("platform-health.json", ph)
+
+	goal := "Doc-CLI test"
+	warnings := computeWarnings(colony.ColonyState{Goal: &goal}, s)
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "Doc-CLI alignment smoke test did not run") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'did not run' doc-CLI warning, got: %v", warnings)
+	}
+}
+
+func TestComputeWarningsDocCLI_NoAlignmentKey(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := createSeedStore(dataDir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ph := map[string]interface{}{
+		"failed_commands": []interface{}{},
+		"flag_mismatches": []interface{}{},
+	}
+	s.SaveJSON("platform-health.json", ph)
+
+	goal := "Doc-CLI test"
+	warnings := computeWarnings(colony.ColonyState{Goal: &goal}, s)
+
+	for _, w := range warnings {
+		if strings.Contains(w, "Doc-CLI alignment") {
+			t.Errorf("expected no doc-CLI warning when key is absent, got: %s", w)
+		}
+	}
+}

@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/reference-match.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-reference-match
-description: "Match global references to a worker role, task, and optional output type"
+description: "🔍 Match global references to a worker role, task, and optional output type"
 ---
 
 Use the Go `aether` CLI as the source of truth.

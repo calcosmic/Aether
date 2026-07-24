@@ -1,0 +1,6 @@
+signal_rules:
+  hard_constraint_prefixes:
+    - "[error-pattern]"
+    - "[redirect]"
+  auto_emit_on_phase_complete: true
+  max_feedback_per_phase: 3

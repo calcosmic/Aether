@@ -349,19 +349,85 @@ func (s ColonyState) EffectiveColonyMode() ColonyMode {
 
 // Plan holds the generated phase plan.
 type Plan struct {
-	GeneratedAt *time.Time `json:"generated_at"`
-	Confidence  *float64   `json:"confidence"`
-	Phases      []Phase    `json:"phases"`
+	GeneratedAt      *time.Time         `json:"generated_at"`
+	Confidence       *float64           `json:"confidence"`
+	EvidencePolicy   PlanEvidencePolicy `json:"evidence_policy,omitempty"`
+	ActiveRevisionID string             `json:"active_revision_id,omitempty"`
+	Revisions        []PlanRevision     `json:"revisions,omitempty"`
+	Phases           []Phase            `json:"phases"`
 }
+
+// PlanRevisionReason records why an accepted plan replaced its predecessor.
+type PlanRevisionReason string
+
+const (
+	PlanRevisionInitial             PlanRevisionReason = "initial"
+	PlanRevisionLegacyImport        PlanRevisionReason = "legacy_import"
+	PlanRevisionManual              PlanRevisionReason = "manual"
+	PlanRevisionUserFeedback        PlanRevisionReason = "user_feedback"
+	PlanRevisionResearch            PlanRevisionReason = "research"
+	PlanRevisionVerificationFailure PlanRevisionReason = "verification_failure"
+	PlanRevisionScopeChange         PlanRevisionReason = "scope_change"
+)
+
+// Valid reports whether r is a supported reason for replacing a plan.
+func (r PlanRevisionReason) Valid() bool {
+	switch r {
+	case PlanRevisionInitial,
+		PlanRevisionLegacyImport,
+		PlanRevisionManual,
+		PlanRevisionUserFeedback,
+		PlanRevisionResearch,
+		PlanRevisionVerificationFailure,
+		PlanRevisionScopeChange:
+		return true
+	}
+	return false
+}
+
+// PlanRevision is an immutable snapshot of one accepted plan. The current
+// execution view remains Plan.Phases; revisions explain how that view changed.
+type PlanRevision struct {
+	SchemaVersion       int                `json:"schema_version"`
+	Number              int                `json:"number"`
+	ID                  string             `json:"id"`
+	ParentID            string             `json:"parent_id,omitempty"`
+	CreatedAt           string             `json:"created_at"`
+	ReasonType          PlanRevisionReason `json:"reason_type"`
+	Reason              string             `json:"reason"`
+	Evidence            []string           `json:"evidence,omitempty"`
+	InputEvidenceHash   string             `json:"input_evidence_hash,omitempty"`
+	EvidenceHash        string             `json:"evidence_hash,omitempty"`
+	PlanningRunID       string             `json:"planning_run_id,omitempty"`
+	PlanHash            string             `json:"plan_hash"`
+	PreservedPhaseIDs   []int              `json:"preserved_phase_ids,omitempty"`
+	SupersededPhaseIDs  []int              `json:"superseded_phase_ids,omitempty"`
+	ReplacementPhaseIDs []int              `json:"replacement_phase_ids,omitempty"`
+	Phases              []Phase            `json:"phases"`
+}
+
+// PlanEvidencePolicy identifies whether a plan's acceptance criteria have a
+// machine-readable verification contract. Missing values belong to legacy
+// colonies and are classified during state normalization or migration.
+type PlanEvidencePolicy string
+
+const (
+	PlanEvidenceNotRequired PlanEvidencePolicy = "not_required"
+	PlanEvidenceLegacy      PlanEvidencePolicy = "legacy_unbound"
+	PlanEvidenceBoundV1     PlanEvidencePolicy = "bound_v1"
+)
 
 // UnmarshalJSON preserves compatibility with legacy plan confidence payloads.
 // Older colonies may store confidence as an object with per-axis percentages and
 // an "overall" field rather than the newer single numeric value.
 func (p *Plan) UnmarshalJSON(data []byte) error {
 	type rawPlan struct {
-		GeneratedAt *time.Time      `json:"generated_at"`
-		Confidence  json.RawMessage `json:"confidence"`
-		Phases      []Phase         `json:"phases"`
+		GeneratedAt      *time.Time         `json:"generated_at"`
+		Confidence       json.RawMessage    `json:"confidence"`
+		EvidencePolicy   PlanEvidencePolicy `json:"evidence_policy"`
+		ActiveRevisionID string             `json:"active_revision_id"`
+		Revisions        []PlanRevision     `json:"revisions"`
+		Phases           []Phase            `json:"phases"`
 	}
 
 	var raw rawPlan
@@ -370,6 +436,9 @@ func (p *Plan) UnmarshalJSON(data []byte) error {
 	}
 
 	p.GeneratedAt = raw.GeneratedAt
+	p.EvidencePolicy = raw.EvidencePolicy
+	p.ActiveRevisionID = raw.ActiveRevisionID
+	p.Revisions = raw.Revisions
 	p.Phases = raw.Phases
 
 	confidence, err := decodePlanConfidence(raw.Confidence)
@@ -520,25 +589,37 @@ func InferPhaseMode(name, description string) PhaseMode {
 
 // Phase represents a single phase in the colony plan.
 type Phase struct {
-	ID                  int       `json:"id"`
-	Name                string    `json:"name"`
-	Description         string    `json:"description"`
-	Status              string    `json:"status"`
-	Mode                PhaseMode `json:"mode,omitempty"`
-	Tasks               []Task    `json:"tasks"`
-	SuccessCriteria     []string  `json:"success_criteria"`
-	WatcherFailureCount int       `json:"watcher_failure_count,omitempty"`
+	ID                   int                            `json:"id"`
+	Name                 string                         `json:"name"`
+	Description          string                         `json:"description"`
+	Status               string                         `json:"status"`
+	Mode                 PhaseMode                      `json:"mode,omitempty"`
+	Tasks                []Task                         `json:"tasks"`
+	SuccessCriteria      []string                       `json:"success_criteria"`
+	EvidenceRequirements []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
+	WatcherFailureCount  int                            `json:"watcher_failure_count,omitempty"`
 }
 
 // Task represents a single task within a phase.
 type Task struct {
-	ID              *string  `json:"id"`
-	Goal            string   `json:"goal"`
-	Status          string   `json:"status"`
-	Constraints     []string `json:"constraints,omitempty"`
-	Hints           []string `json:"hints,omitempty"`
-	SuccessCriteria []string `json:"success_criteria,omitempty"`
-	DependsOn       []string `json:"depends_on,omitempty"`
+	ID                   *string                        `json:"id"`
+	Goal                 string                         `json:"goal"`
+	Status               string                         `json:"status"`
+	Constraints          []string                       `json:"constraints,omitempty"`
+	Hints                []string                       `json:"hints,omitempty"`
+	SuccessCriteria      []string                       `json:"success_criteria,omitempty"`
+	EvidenceRequirements []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
+	DependsOn            []string                       `json:"depends_on,omitempty"`
+}
+
+// CriterionEvidenceRequirement binds one success criterion to exact project
+// artifacts and/or named verification checks. TaskID is omitted in task-local
+// state and populated when requirements are flattened into a build manifest.
+type CriterionEvidenceRequirement struct {
+	Criterion string   `json:"criterion"`
+	TaskID    string   `json:"task_id,omitempty"`
+	Artifacts []string `json:"artifacts,omitempty"`
+	Checks    []string `json:"checks,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

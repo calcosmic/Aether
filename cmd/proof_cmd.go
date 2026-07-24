@@ -295,7 +295,7 @@ func convertCapsuleBlocked(records []colony.PromptIntegrityRecord) []proofContex
 func renderProofVisual(state colony.ColonyState, result proofOutput) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🔎", "Proof"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if strings.TrimSpace(result.Goal) != "" {
 		fmt.Fprintf(&b, "Goal: %s\n", result.Goal)
 	}

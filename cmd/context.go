@@ -285,8 +285,9 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"items": signals,
 			"count": len(signals),
 		},
-		"blockers": blockers,
-		"survey":   survey,
+		"blockers":      blockers,
+		"survey":        survey,
+		"plan_revision": planRevisionSummary(state.Plan),
 		"recovery": map[string]interface{}{
 			"context_path":   contextDocumentPath(),
 			"handoff_path":   handoffDocumentPath(),
@@ -299,6 +300,9 @@ func buildResumeDashboardResult() map[string]interface{} {
 		recoveryBlock["summary"] = guidance.Summary
 		recoveryBlock["next"] = guidance.Next
 		recoveryBlock["continue_report"] = guidance.ReportPath
+	}
+	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
+		result["build_attempt"] = buildAttemptSummary(attempt)
 	}
 
 	if nextPhaseID > 0 {
@@ -337,6 +341,32 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"active_todos":    todos,
 			"last_command":    session.LastCommand,
 			"context_cleared": session.ContextCleared,
+		}
+	}
+	if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && strings.TrimSpace(attempt.CompletionPath) != "" && strings.TrimSpace(attempt.CompletionSHA256) != "" {
+		next := buildFinalizeRecoveryCommand(attempt.Phase, attempt.CompletionPath)
+		summary := "External workers finished and their accepted completion packet is durable. Finalize this exact packet; do not redispatch workers."
+		recoveryBlock := result["recovery"].(map[string]interface{})
+		recoveryBlock["summary"] = summary
+		recoveryBlock["next"] = next
+		recoveryBlock["completion_path"] = attempt.CompletionPath
+		if sessionBlock, ok := result["session"].(map[string]interface{}); ok {
+			sessionBlock["summary"] = summary
+			sessionBlock["suggested_next"] = next
+		}
+	} else if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && state.State == colony.StateEXECUTING {
+		next := buildForceRedispatchCommand(attempt.Phase)
+		summary := "The previous build ended before durable lifecycle finalization. Partial output remains inspectable."
+		if buildAttemptProcessAlive(attempt) {
+			next = "aether watch"
+			summary = "The recorded build process is still running. Do not redispatch the phase while its workers are active."
+		}
+		recoveryBlock := result["recovery"].(map[string]interface{})
+		recoveryBlock["summary"] = summary
+		recoveryBlock["next"] = next
+		if sessionBlock, ok := result["session"].(map[string]interface{}); ok {
+			sessionBlock["summary"] = summary
+			sessionBlock["suggested_next"] = next
 		}
 	}
 	return result
@@ -462,6 +492,9 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 	totalPhases := len(state.Plan.Phases)
 	phaseName := lookupPhaseName(state, phase)
 	nextAction := computeNextAction(stateStr, phase, totalPhases)
+	if colonyNeedsEntomb(state) {
+		nextAction = "aether entomb"
+	}
 
 	selectedDecisions := selectRecentDecisions(state.Memory.Decisions, maxDecisions)
 	decisionTexts := make([]string, 0, len(selectedDecisions))
@@ -489,8 +522,8 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 			name:   "state",
 			title:  "Context Capsule State",
 			source: statePath,
-			content: fmt.Sprintf("Goal: %s\nState: %s\nPhase: %d/%d - %s\nNext: %s\n",
-				goal, stateStr, phase, totalPhases, phaseName, nextAction),
+			content: fmt.Sprintf("Goal: %s\nState: %s\nPhase: %d/%d - %s\n%sNext: %s\n",
+				goal, stateStr, phase, totalPhases, phaseName, planRevisionCapsuleLine(state.Plan), nextAction),
 			freshnessScore:    1.0,
 			confirmationScore: 1.0,
 			relevanceScore:    sectionRelevanceScore("state"),
@@ -789,6 +822,7 @@ var prContextCmd = &cobra.Command{
 				"current_phase": colState.CurrentPhase,
 				"total_phases":  len(colState.Plan.Phases),
 				"phase_name":    phaseName,
+				"plan_revision": planRevisionSummary(colState.Plan),
 			}
 			cacheStatus["colony_state"] = "read"
 		}
@@ -861,12 +895,16 @@ var prContextCmd = &cobra.Command{
 			totalPhases := len(colState.Plan.Phases)
 			phaseName := lookupPhaseName(colState, phase)
 			nextAction := computeNextAction(stateStr, phase, totalPhases)
+			if colonyNeedsEntomb(colState) {
+				nextAction = "aether entomb"
+			}
 
 			var cb strings.Builder
 			cb.WriteString("--- CONTEXT CAPSULE ---\n")
 			fmt.Fprintf(&cb, "Goal: %s\n", truncateString(goal, 160))
 			fmt.Fprintf(&cb, "State: %s\n", stateStr)
 			fmt.Fprintf(&cb, "Phase: %d/%d - %s\n", phase, totalPhases, phaseName)
+			cb.WriteString(planRevisionCapsuleLine(colState.Plan))
 			fmt.Fprintf(&cb, "Next: %s\n", nextAction)
 			cb.WriteString("--- END CONTEXT CAPSULE ---\n")
 			capsulePromptSection = cb.String()
@@ -1245,7 +1283,7 @@ func computeNextAction(stateStr string, currentPhase, totalPhases int) string {
 	case stateStr == "EXECUTING":
 		return "aether continue"
 	case stateStr == "COMPLETED":
-		return "aether entomb"
+		return "aether seal"
 	case stateStr == "READY" && currentPhase == 0:
 		return "aether build 1"
 	case stateStr == "READY" && currentPhase < totalPhases:

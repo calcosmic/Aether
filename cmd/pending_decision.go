@@ -106,9 +106,13 @@ var pendingDecisionListCmd = &cobra.Command{
 			return nil
 		}
 
+		// Scope: only show decisions matching current session/goal
+		scope := loadCurrentPendingDecisionScope()
+		active, stale := filterPendingDecisionFileForScope(file, scope)
+
 		// Filter decisions
 		filtered := []PendingDecision{}
-		for _, d := range file.Decisions {
+		for _, d := range active.Decisions {
 			if filterUnresolved && d.Resolved {
 				continue
 			}
@@ -119,7 +123,7 @@ var pendingDecisionListCmd = &cobra.Command{
 		}
 
 		unresolved := 0
-		for _, d := range file.Decisions {
+		for _, d := range active.Decisions {
 			if !d.Resolved {
 				unresolved++
 			}
@@ -128,6 +132,7 @@ var pendingDecisionListCmd = &cobra.Command{
 		outputOK(map[string]interface{}{
 			"total":      len(file.Decisions),
 			"unresolved": unresolved,
+			"stale":      len(stale.Decisions),
 			"decisions":  filtered,
 		})
 		return nil
@@ -160,12 +165,17 @@ var pendingDecisionResolveCmd = &cobra.Command{
 		}
 
 		found := false
+		scope := loadCurrentPendingDecisionScope()
 		for i := range file.Decisions {
 			if file.Decisions[i].ID == id {
+				if !pendingDecisionMatchesScope(file.Decisions[i], scope) {
+					outputError(1, fmt.Sprintf("decision %q is stale for the current goal/session", id), nil)
+					return nil
+				}
 				file.Decisions[i].Resolved = true
 				file.Decisions[i].Resolution = resolution
 				file.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
-				stampPendingDecisionScope(&file.Decisions[i], loadCurrentPendingDecisionScope())
+				stampPendingDecisionScope(&file.Decisions[i], scope)
 				found = true
 				break
 			}

@@ -11,10 +11,16 @@ import (
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
+// LearningValidator is a callback that validates learning entries when an
+// observation is promoted with high trust. Implemented by cmd/ to bridge
+// pkg/memory and pkg/learn without creating an import cycle.
+type LearningValidator func(content string, trustScore float64)
+
 // PipelineConfig holds configuration for the wisdom pipeline.
 type PipelineConfig struct {
-	ColonyName string
-	QueenPath  string // path to QUEEN.md relative to store
+	ColonyName        string
+	QueenPath         string // path to QUEEN.md relative to store
+	LearningValidator LearningValidator
 }
 
 // Pipeline wires all wisdom services together via event bus subscriptions.
@@ -121,6 +127,13 @@ func (p *Pipeline) handleObserveEvent(ctx context.Context, evt events.Event) {
 			if err != nil {
 				log.Printf("pipeline: auto-promote failed: %v", err)
 				return
+			}
+
+			// Bridge: if trust score >= 0.8, attempt to validate any linked learning entry.
+			// Threshold 0.8 = high confidence (D-09, D-10).
+			// Uses a callback to avoid import cycle between pkg/memory and pkg/learn.
+			if obs.TrustScore != nil && *obs.TrustScore >= 0.8 && p.config.LearningValidator != nil {
+				p.config.LearningValidator(obs.Content, *obs.TrustScore)
 			}
 			return
 		}

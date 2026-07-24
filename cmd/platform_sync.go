@@ -100,7 +100,7 @@ type codexSkillShim struct {
 }
 
 func codexSkillShims() []codexSkillShim {
-	return []codexSkillShim{
+	shims := []codexSkillShim{
 		{
 			Dir:         "aether-command-guide",
 			Name:        "aether-command-guide",
@@ -134,6 +134,76 @@ func codexSkillShims() []codexSkillShim {
 			TaskKeywords:     []string{"aether colonize", "aether plan", "aether build", "aether continue", "aether swarm", "aether seal", "dispatch manifest", "plan-only", "finalize"},
 		},
 	}
+	return append(shims, codexCommandSkillShims()...)
+}
+
+func codexCommandSkillShims() []codexSkillShim {
+	commands := []string{"init", "discuss", "oracle", "colonize", "plan", "build", "continue", "swarm", "seal"}
+	catalog := commandGuideCatalog()
+	shims := make([]codexSkillShim, 0, len(commands))
+	for _, command := range commands {
+		def, ok := catalog[command]
+		if !ok || def.Literal {
+			continue
+		}
+		keywords := []string{
+			"aether " + command,
+			"/ant-" + command,
+			"ant-" + command,
+			"command-guide " + command,
+			"aether command-guide " + command,
+		}
+		if def.SkillReference != "" {
+			keywords = append(keywords, def.SkillReference)
+		}
+		shims = append(shims, codexSkillShim{
+			Dir:              "aether-" + command,
+			Name:             "aether-" + command,
+			Description:      fmt.Sprintf("Use when Codex is asked to run `aether %s` or the equivalent Aether lifecycle action.", command),
+			Body:             renderCodexCommandSkillShimBody(command, def),
+			WorkflowTriggers: []string{command},
+			TaskKeywords:     keywords,
+		})
+	}
+	return shims
+}
+
+func renderCodexCommandSkillShimBody(command string, def commandGuideDefinition) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "This is the Codex command-shaped skill for `aether %s`. Use it instead of relying on free-form natural language for this lifecycle action.\n\n", command)
+	fmt.Fprintf(&b, "1. Run `aether command-guide %s --platform codex` first and treat that runtime guide as authoritative.\n", command)
+	if def.SkillReference != "" {
+		fmt.Fprintf(&b, "2. Load or follow `%s`; this command-specific skill is the entrypoint, not a replacement for the shared lifecycle skill.\n", def.SkillReference)
+	} else {
+		b.WriteString("2. Follow the runtime guide directly.\n")
+	}
+	b.WriteString("3. Preserve runtime ownership of state: wrappers and skills may interview, synthesize, spawn workers, and summarize, but must not hand-edit `.aether/data`.\n")
+	b.WriteString("4. Honor raw/exact/no-orchestration requests by using the raw bypass below.\n\n")
+
+	if def.Intent != "" {
+		fmt.Fprintf(&b, "## Intent\n%s\n\n", def.Intent)
+	}
+	writeCodexCommandSkillList(&b, "Pre-steps", def.PreSteps)
+	if def.RunCommand != "" {
+		fmt.Fprintf(&b, "## Runtime Command\n`%s`\n\n", def.RunCommand)
+	}
+	writeCodexCommandSkillList(&b, "Post-steps", def.PostSteps)
+	writeCodexCommandSkillList(&b, "Drift Guards", def.DriftGuards)
+	if def.RawBypass != "" {
+		fmt.Fprintf(&b, "## Raw Bypass\n%s\n", def.RawBypass)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func writeCodexCommandSkillList(b *strings.Builder, heading string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "## %s\n", heading)
+	for _, value := range values {
+		fmt.Fprintf(b, "- %s\n", value)
+	}
+	b.WriteString("\n")
 }
 
 func syncCodexSkillShims(destDir string) syncResult {

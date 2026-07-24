@@ -226,7 +226,7 @@ func emitLifecycleCeremonySequence(topics lifecycleCeremonyTopics, source, lifec
 
 func ceremonyStepStatus(status string) string {
 	status = strings.TrimSpace(status)
-	if status == "" || status == "spawned" || status == "planned" {
+	if status == "" {
 		return "completed"
 	}
 	return status
@@ -569,8 +569,8 @@ func emitLoopBreakEvent(loopType, detectionSignal, actionTaken, source string) {
 
 func emitOraclePhaseTransition(fromPhase, toPhase string, iteration int) {
 	emitLifecycleCeremony(events.CeremonyTopicOraclePhaseTransition, events.CeremonyPayload{
-		Status:  fmt.Sprintf("%s → %s", fromPhase, toPhase),
-		Message: fmt.Sprintf("Oracle phase transition at iteration %d", iteration),
+		Status:    fmt.Sprintf("%s → %s", fromPhase, toPhase),
+		Message:   fmt.Sprintf("Oracle phase transition at iteration %d", iteration),
 		PhaseName: fromPhase,
 	}, "aether-oracle")
 }

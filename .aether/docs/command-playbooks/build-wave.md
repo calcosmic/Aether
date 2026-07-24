@@ -663,13 +663,11 @@ cat >> .aether/midden/approach-changes.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-02)
-aether midden-write --category "abandoned-approach" --message "Tried: initial approach that failed. Switched to: new approach. Reason: reason it didn't work" --source "builder" 2>/dev/null || true
-
+aether midden-write --category "abandoned-approach" --message "Tried: initial approach that failed. Switched to: new approach. Reason: reason it didn't work" --source "builder"
 # Enter memory pipeline for learning observation tracking (MID-02)
 aether memory-capture \
   --type "failure" \
-  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)" 2>/dev/null || true
-```
+  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)"```
 
 Spawn sub-workers ONLY if 3x complexity:
 - Check spawn budget using Bash tool with description: `aether spawn-can-spawn --depth {depth}`
@@ -727,13 +725,11 @@ cat >> .aether/midden/build-failures.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-01)
-aether midden-write --category "worker_failure" --message "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" --source "builder" 2>/dev/null || true
-
+aether midden-write --category "worker_failure" --message "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" --source "builder"
 # Capture failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" 2>/dev/null || true
-```
+  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}"```
 
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete --name "{ant_name}" --status "completed" --summary "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
 
@@ -832,8 +828,7 @@ if [[ "$midden_count" -gt 0 ]]; then
         --strength 0.7 \
         --source "auto:error" \
         --reason "Auto-emitted: midden error pattern recurred 3+ times mid-build" \
-        --ttl "30d" 2>/dev/null || true
-      redirect_emit_count=$((redirect_emit_count + 1))
+        --ttl "30d"      redirect_emit_count=$((redirect_emit_count + 1))
     fi
   done
 

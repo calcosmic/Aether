@@ -57,6 +57,10 @@ export function classifyFailure(
     // Go command unavailable — fall through to heuristic
   }
 
+  if (isRuntimeOwnedRecoveryIssue(summary)) {
+    return "blocking";
+  }
+
   // Fallback heuristic
   switch (status) {
     case "failed":
@@ -68,6 +72,21 @@ export function classifyFailure(
     default:
       return "unknown";
   }
+}
+
+function isRuntimeOwnedRecoveryIssue(summary: string): boolean {
+  const lower = summary.toLowerCase();
+  return (
+    (lower.includes("stale") && lower.includes("clarification")) ||
+    lower.includes("stale resolved clarification") ||
+    lower.includes("pending decision") ||
+    lower.includes("aether discuss") ||
+    lower.includes("result collection") ||
+    lower.includes("completion file") ||
+    lower.includes("completion artifact") ||
+    lower.includes("worker result artifact") ||
+    (lower.includes("missing") && lower.includes("result"))
+  );
 }
 
 // ---------------------------------------------------------------------------

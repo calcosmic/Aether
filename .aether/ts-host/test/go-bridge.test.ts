@@ -20,7 +20,9 @@ import assert from "node:assert/strict";
 import {
   discoverGoBinary,
   callGoJSON,
+  callGoJSONAsync,
   assertNoDirectDataWrites,
+  approvedCompletionDirPrefix,
   writeCompletionFile,
 } from "../src/go-bridge.js";
 import type { GoBridgeOptions } from "../src/go-bridge.js";
@@ -114,6 +116,108 @@ describe("go-bridge", () => {
     }
   });
 
+  it("callGoJSON redacts failed subprocess provider output", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "ts-host-bridge-failure-"));
+    const fakeGo = join(tempDir, "aether-fake");
+    writeFileSync(
+      fakeGo,
+      "#!/bin/sh\nprintf 'stdout sk-proj-secret-123\\n'\nprintf 'stderr ghp_secret_123\\n' >&2\nexit 42\n",
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    try {
+      assert.throws(
+        () => callGoJSON({ goBinaryPath: fakeGo, cwd: tempDir }, ["build", "2", "--plan-only"]),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.ok(err.message.includes("exit status 42"), err.message);
+          for (const forbidden of ["sk-proj-secret-123", "ghp_secret_123", "stdout sk", "stderr ghp"]) {
+            assert.ok(!err.message.includes(forbidden), `leaked ${forbidden}: ${err.message}`);
+          }
+          return true;
+        }
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("callGoJSON redacts Go error envelopes", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "ts-host-bridge-envelope-"));
+    const fakeGo = join(tempDir, "aether-fake");
+    writeFileSync(
+      fakeGo,
+      "#!/bin/sh\nprintf '{\"ok\":false,\"error\":\"auth failed token sk-proj-secret-456 stderr: ghp_secret_456\",\"code\":2}\\n' >&2\nexit 2\n",
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    try {
+      assert.throws(
+        () => callGoJSON({ goBinaryPath: fakeGo, cwd: tempDir }, ["build", "2", "--plan-only"]),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.ok(err.message.includes("Go command failed"), err.message);
+          for (const forbidden of ["sk-proj-secret-456", "ghp_secret_456"]) {
+            assert.ok(!err.message.includes(forbidden), `leaked ${forbidden}: ${err.message}`);
+          }
+          assert.ok(err.message.includes("[redacted]") || err.message.includes("[omitted]"), err.message);
+          return true;
+        }
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("callGoJSONAsync parses the same Go envelope without blocking the host", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "ts-host-bridge-async-"));
+    const fakeGo = join(tempDir, "aether-fake");
+    writeFileSync(
+      fakeGo,
+      "#!/bin/sh\nprintf '{\"ok\":true,\"result\":{\"execution_owner\":\"go-adapter\"}}\\n'\n",
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    try {
+      const result = await callGoJSONAsync<{ execution_owner: string }>(
+        { goBinaryPath: fakeGo, cwd: tempDir },
+        ["internal-worker-adapter", "--preflight"],
+        5000
+      );
+      assert.equal(result.execution_owner, "go-adapter");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("callGoJSONAsync redacts failed provider envelopes", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "ts-host-bridge-async-failure-"));
+    const fakeGo = join(tempDir, "aether-fake");
+    writeFileSync(
+      fakeGo,
+      "#!/bin/sh\nprintf '{\"ok\":false,\"error\":\"credentials sk-proj-async-secret\",\"code\":1}\\n' >&2\nexit 1\n",
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    try {
+      await assert.rejects(
+        callGoJSONAsync(
+          { goBinaryPath: fakeGo, cwd: tempDir },
+          ["internal-worker-adapter", "--preflight"],
+          5000
+        ),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.ok(!err.message.includes("sk-proj-async-secret"), err.message);
+          assert.ok(err.message.includes("[redacted]"), err.message);
+          return true;
+        }
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("assertNoDirectDataWrites throws for .aether/data/ paths", () => {
     assert.throws(
       () => assertNoDirectDataWrites(".aether/data/COLONY_STATE.json"),
@@ -147,8 +251,9 @@ describe("go-bridge", () => {
   });
 
   it("writeCompletionFile writes to tmpdir not .aether/data", () => {
+    const dirPrefix = approvedCompletionDirPrefix("test-completions");
     const path = writeCompletionFile(
-      "aether-test-completions",
+      dirPrefix,
       "test-completion.json",
       { test: true, workers: [] }
     );
@@ -169,9 +274,15 @@ describe("go-bridge", () => {
     assert.ok(existsSync(path), `File should exist: ${path}`);
 
     // Cleanup
-    rmSync(join(tmpdir(), "aether-test-completions"), {
+    rmSync(join(tmpdir(), dirPrefix), {
       recursive: true,
       force: true,
     });
+  });
+
+  it("approvedCompletionDirPrefix normalizes workflow names", () => {
+    assert.equal(approvedCompletionDirPrefix("build"), "aether-build");
+    assert.equal(approvedCompletionDirPrefix("Seal Review"), "aether-seal-review");
+    assert.throws(() => approvedCompletionDirPrefix("   "), /workflow is required/);
   });
 });

@@ -11,6 +11,23 @@ This runbook is the authoritative workflow for publishing Aether changes and ver
 - `aether update --download-binary` downloads a published release binary. Use it when you need the released runtime, not an unreleased local source change.
 - `.aether/version.json` is the source-checkout release version file. `npm/package.json` must use the exact same version.
 
+## Local Publish vs Public Release
+
+For dummies: local publish is updating your own machine's Aether cupboard.
+Public release is shipping a version other people can install from GitHub or
+npm.
+
+`aether publish --channel stable --binary-dest "$HOME/.local/bin"` refreshes
+the local stable hub, platform home files, and local binary from the source
+checkout. Other repos on the same machine can then consume those companion files
+with `aether update --force`.
+
+A public release additionally requires the version files to match, the release
+commit to be pushed, a `vX.Y.Z` tag to drive the GitHub release workflow,
+published release assets, and npm `latest` pointing at the same version.
+Downstream `aether update --download-binary` can only fetch a runtime binary
+after that public release exists.
+
 ## Channel Policy
 
 - Stable/public runtime: `aether` + `~/.aether/`
@@ -54,8 +71,9 @@ Behavior:
 - On the stable channel, refreshes user-level Claude/OpenCode/Codex assets from the same source checkout; OpenCode is written to the active `~/.opencode/command` and `~/.opencode/agent` paths plus the legacy `~/.config/opencode/...` paths
 - On the dev channel, intentionally skips user-level platform asset sync so development does not overwrite the stable command surface
 - Verifies binary and hub versions agree after sync
-- Prints a warning if hub version changed
-- Prints an advisory note if stable and dev binaries co-locate in the same directory
+- Prints an actionable warning if the hub version changed, including the publish recovery command, `version --check`, `integrity`, and downstream `update --force` commands for the active channel
+- Prints actionable TS host warnings if build or hub sync is skipped, including the npm rebuild command and the publish command to rerun
+- Prints an advisory note if stable and dev binaries co-locate in the same directory, including channel-specific `version --check` commands
 
 > **Backward compatibility:** `aether install --package-dir "$PWD"` still works but does not include automatic version agreement verification. `aether publish` is the recommended path.
 
@@ -125,6 +143,16 @@ Release order matters:
 5. Create an annotated Git tag: `git tag -a vX.Y.Z -m "vX.Y.Z"`.
 6. Push only that tag: `git push origin vX.Y.Z`.
 7. Let the GitHub `Release` workflow publish the Go release first, then the npm bootstrap if `NPM_TOKEN` is configured.
+
+Release metadata gates:
+- The GitHub `Release` workflow checks that the pushed tag version, `.aether/version.json`, and `npm/package.json` all match before building or publishing release assets.
+- The CI and release workflows run `.aether/ts-host` `ci`, `typecheck`, `test`, and `build`, including deterministic provider/auth tests that use fake CLIs rather than real credentials.
+- The npm bootstrap job repeats that metadata check before publishing, so npm cannot intentionally move to a version that does not match the Go release tag.
+
+Auth gates:
+- The Go release publish step uses the workflow-provided `GITHUB_TOKEN` with `contents: write`; if release creation is blocked, verify the workflow run and release asset status before publishing npm.
+- The npm bootstrap job runs only when `NPM_TOKEN` is configured and the GoReleaser job is publishing a real release. The workflow resolves token availability in the GoReleaser job output instead of referencing `secrets.NPM_TOKEN` directly in a job conditional. If `NPM_TOKEN` is missing, the Go release can still succeed, but npm `latest` will not move.
+- Local GoReleaser fallback requires a usable GitHub token, for example `export GITHUB_TOKEN="$(gh auth token)"`, before `goreleaser release --clean`.
 
 Recommended verification:
 
@@ -269,10 +297,30 @@ aether publish --channel dev
 Companion file completeness checks verify expected counts:
 - 60 Claude commands
 - 60 OpenCode commands
-- 27 OpenCode agents
+- 28 OpenCode agent assets (27 castes plus `aether-worker-router`)
 - 27 Codex agents
 - 86 hub shipped skills
-- 4 Codex skill shims
+- 5 Codex skill shims
+
+## Release Gate
+
+The release gate has two layers.
+
+GoReleaser `before.hooks` block the release if any hook fails:
+
+- `go mod tidy` — ensures module metadata is normalized.
+- `git diff --exit-code -- go.mod go.sum` — blocks release if `go mod tidy` changed module files.
+- `go test ./cmd -run TestDocCLIAlignment -v` — Doc-CLI alignment smoke test. Host-critical flag mismatches between YAML documentation and the Go CLI will fail the release.
+
+The GitHub `Release` workflow adds the release/auth gates around GoReleaser:
+- Verifies the tag version, `.aether/version.json`, and `npm/package.json` match before publishing.
+- Runs `goreleaser check`, `go build`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1`, narrator package verification, a full GoReleaser snapshot release (archives plus checksums), and an exact-version binary smoke test before release publication.
+- Packs the npm bootstrap and installs the actual current-platform snapshot archive through it before the publishing step.
+- Runs `.aether/ts-host` install, typecheck, tests, and build so provider/auth preflight behavior is exercised under deterministic no-credential conditions.
+- Publishes Go release assets with the workflow `GITHUB_TOKEN`.
+- Publishes npm only when the GoReleaser job reports `NPM_TOKEN` availability and the Go release is a real publish, not a dry run.
+
+This ensures documentation, CLI flags, release metadata, and publish credentials cannot silently diverge on a shipped release.
 
 ## Go Binary Change Checklist
 
@@ -372,10 +420,10 @@ find "$HOME/.aether/system" -path '*/SKILL.md' | wc -l
 Expected counts:
 - Claude commands: `60`
 - OpenCode commands: `60`
-- OpenCode agents: `27`
+- OpenCode agents: `28` (27 castes plus the restricted router)
 - Codex agents: `27`
 - Hub shipped skills: `86`
-- Codex skill shims: `4`
+- Codex skill shims: `5`
 
 Release metadata should also agree:
 - `.aether/version.json` version equals `npm/package.json` version

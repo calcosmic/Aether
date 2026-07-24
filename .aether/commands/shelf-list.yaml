@@ -1,5 +1,5 @@
 name: ant-shelf-list
-description: "List Aether shelf backlog items"
+description: "📚 List Aether shelf backlog items"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether shelf-list $ARGUMENTS"

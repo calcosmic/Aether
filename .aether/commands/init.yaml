@@ -8,6 +8,10 @@ codex_orchestration:
   skill: "aether-colony-creation"
   guide: "aether command-guide init --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+ceremony_contract:
+  class: "guided_ritual"
+  authority: "Go owns colony state creation, session files, charter persistence, and canonical init visuals."
+  wrapper_role: "Ask scoping questions and synthesize an approved charter, then pass that charter to Go; do not write state files directly."
 intent_refinement:
   - "Do not treat init-research as the final charter. It is only a deterministic codebase scan."
   - "Before creating colony state, ask one compact batch of 4-7 AI-led scoping questions when the goal is vague or broad."
@@ -19,4 +23,5 @@ intent_refinement:
   - "Run `AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\"` after approval."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not claim init spawned implementation workers; it is a guided setup ritual until later lifecycle commands dispatch work."
   - "If docs and runtime disagree, runtime wins."

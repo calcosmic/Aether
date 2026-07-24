@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ const (
 	defaultProbeTimout  = 3 * time.Second
 )
 
-const defaultOpenCodePrimaryAgent = "build"
+const defaultOpenCodePrimaryAgent = "aether-worker-router"
 
 type Platform string
 
@@ -41,8 +42,24 @@ type AvailabilityStatus struct {
 	Platform  Platform `json:"platform"`
 	Binary    string   `json:"binary"`
 	Available bool     `json:"available"`
-	Reason    string   `json:"reason,omitempty"`
+	// Category is the stable machine-readable diagnostic contract. Reason is prose.
+	Category AvailabilityCategory `json:"category"`
+	Reason   string               `json:"reason,omitempty"`
 }
+
+type AvailabilityCategory string
+
+const (
+	AvailabilityCategoryAvailable           AvailabilityCategory = "available"
+	AvailabilityCategoryBinaryMissing       AvailabilityCategory = "binary_missing"
+	AvailabilityCategoryAuthProbeFailed     AvailabilityCategory = "auth_probe_failed"
+	AvailabilityCategoryAuthInactive        AvailabilityCategory = "auth_inactive"
+	AvailabilityCategoryInvalidAuthOutput   AvailabilityCategory = "invalid_auth_output"
+	AvailabilityCategoryCredentialsMissing  AvailabilityCategory = "credentials_missing"
+	AvailabilityCategoryProbeSkipped        AvailabilityCategory = "probe_skipped"
+	AvailabilityCategoryUnsupportedProvider AvailabilityCategory = "unsupported_provider"
+	AvailabilityCategoryProviderConfig      AvailabilityCategory = "provider_config_invalid"
+)
 
 type PlatformDispatcher interface {
 	WorkerInvoker
@@ -50,14 +67,29 @@ type PlatformDispatcher interface {
 	Availability(ctx context.Context) AvailabilityStatus
 }
 
+type WorkerProviderPreflighter interface {
+	Preflight(ctx context.Context, root string) AvailabilityStatus
+}
+
 type selectionMetadata interface {
 	ActivePlatform() Platform
+	// CandidateStatuses returns ordered evaluated candidates, stopping after selection.
 	CandidateStatuses() []AvailabilityStatus
 }
 
 type markdownAgentDefinition struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
+}
+
+type openCodePermissionDefinition struct {
+	Name        string          `yaml:"name"`
+	Description string          `yaml:"description"`
+	Mode        string          `yaml:"mode"`
+	Tools       map[string]bool `yaml:"tools"`
+	Permission  struct {
+		ExternalDirectory string `yaml:"external_directory"`
+	} `yaml:"permission"`
 }
 
 type CodexDispatcher = RealInvoker
@@ -115,7 +147,12 @@ func (s *SelectedInvoker) Platform() Platform {
 
 func (s *SelectedInvoker) Availability(ctx context.Context) AvailabilityStatus {
 	if s == nil || s.selected == nil {
-		return AvailabilityStatus{Platform: PlatformUnknown, Available: false, Reason: "no platform dispatcher selected"}
+		return AvailabilityStatus{
+			Platform:  PlatformUnknown,
+			Available: false,
+			Category:  AvailabilityCategoryBinaryMissing,
+			Reason:    "no platform dispatcher selected",
+		}
 	}
 	return s.selected.Availability(ctx)
 }
@@ -140,12 +177,18 @@ func (s *SelectedInvoker) Invoke(ctx context.Context, config WorkerConfig) (Work
 	if s == nil || s.selected == nil {
 		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: no platform selected")
 	}
+	if contract, ok := PlatformContractFor(s.selected.Platform()); !ok || !contract.canDispatchWorkers() {
+		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: platform %s does not support worker dispatch", s.selected.Platform())
+	}
 	return s.selected.Invoke(ctx, config)
 }
 
 func (s *SelectedInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
 	if s == nil || s.selected == nil {
 		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: no platform selected")
+	}
+	if contract, ok := PlatformContractFor(s.selected.Platform()); !ok || !contract.canDispatchWorkers() {
+		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: platform %s does not support worker dispatch", s.selected.Platform())
 	}
 	if invoker, ok := s.selected.(ProgressAwareWorkerInvoker); ok {
 		return invoker.InvokeWithProgress(ctx, config, observer)
@@ -164,12 +207,28 @@ func (s *SelectedInvoker) ValidateAgent(path string) error {
 	return s.selected.ValidateAgent(path)
 }
 
+func (s *SelectedInvoker) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	if s == nil || s.selected == nil {
+		return AvailabilityStatus{
+			Platform:  PlatformUnknown,
+			Available: false,
+			Category:  AvailabilityCategoryBinaryMissing,
+			Reason:    "no platform dispatcher selected",
+		}
+	}
+	if preflighter, ok := s.selected.(WorkerProviderPreflighter); ok {
+		return preflighter.Preflight(ctx, root)
+	}
+	return s.selected.Availability(ctx)
+}
+
 func (u *UnavailableInvoker) Platform() Platform { return PlatformUnknown }
 
 func (u *UnavailableInvoker) Availability(ctx context.Context) AvailabilityStatus {
 	return AvailabilityStatus{
 		Platform:  PlatformUnknown,
 		Available: false,
+		Category:  availabilityCategoryForStatuses(u.available),
 		Reason:    describeAvailabilitySet(u.active, u.available),
 	}
 }
@@ -207,6 +266,10 @@ func (u *UnavailableInvoker) IsAvailable(ctx context.Context) bool { return fals
 
 func (u *UnavailableInvoker) ValidateAgent(path string) error {
 	return fmt.Errorf("worker dispatcher unavailable: %s", describeAvailabilitySet(u.active, u.available))
+}
+
+func (u *UnavailableInvoker) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	return u.Availability(ctx)
 }
 
 func IsAgentDelegateSession() bool {
@@ -267,6 +330,11 @@ func AgentDefinitionPath(root string, platform Platform, agentName string) strin
 	}
 
 	local := localAgentDefinitionPath(root, platform, base)
+	// Hosted CLIs resolve project-local agents before global agents. Validate
+	// and report the same file the provider will actually select.
+	if (platform == PlatformClaude || platform == PlatformOpenCode) && fileExists(local) {
+		return local
+	}
 	if isAetherSourceRoot(root) {
 		return local
 	}
@@ -376,19 +444,48 @@ func fileExists(path string) bool {
 
 func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 	active := DetectActivePlatform()
-	preferred := active
-	if override := normalizePlatform(os.Getenv(envWorkerPlatform)); override != PlatformUnknown && override != PlatformFake {
-		preferred = override
+	preferences := defaultWorkerPlatformPreferences(active)
+	explicitOverride := PlatformUnknown
+	if rawOverride := strings.TrimSpace(os.Getenv(envWorkerPlatform)); rawOverride != "" {
+		override := normalizePlatform(rawOverride)
+		if override == PlatformUnknown {
+			return &UnavailableInvoker{
+				active:    active,
+				available: []AvailabilityStatus{unsupportedWorkerPlatformStatus(rawOverride)},
+			}
+		}
+		if override != PlatformFake {
+			explicitOverride = override
+			preferences = []Platform{override}
+		}
 	}
 
 	dispatchers := reorderDispatchers([]PlatformDispatcher{
 		NewCodexDispatcher(),
 		NewClaudeDispatcher(),
 		NewOpenCodeDispatcher(),
-	}, preferred)
+	}, preferences...)
+	if explicitOverride != PlatformUnknown {
+		for _, dispatcher := range dispatchers {
+			if dispatcher.Platform() == explicitOverride {
+				dispatchers = []PlatformDispatcher{dispatcher}
+				break
+			}
+		}
+	}
 
 	statuses := make([]AvailabilityStatus, 0, len(dispatchers))
 	for _, dispatcher := range dispatchers {
+		contract, supported := PlatformContractFor(dispatcher.Platform())
+		if !supported || !contract.canDispatchWorkers() {
+			statuses = append(statuses, AvailabilityStatus{
+				Platform:  dispatcher.Platform(),
+				Available: false,
+				Category:  AvailabilityCategoryUnsupportedProvider,
+				Reason:    fmt.Sprintf("platform %s does not support Aether worker dispatch", dispatcher.Platform()),
+			})
+			continue
+		}
 		status := dispatcher.Availability(ctx)
 		statuses = append(statuses, status)
 		if status.Available {
@@ -404,6 +501,29 @@ func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 		active:    active,
 		available: statuses,
 	}
+}
+
+func unsupportedWorkerPlatformStatus(value string) AvailabilityStatus {
+	value = safeWorkerPlatformOverride(value)
+	return AvailabilityStatus{
+		Platform:  PlatformUnknown,
+		Binary:    value,
+		Available: false,
+		Category:  AvailabilityCategoryUnsupportedProvider,
+		Reason:    fmt.Sprintf("unsupported %s %q; expected codex, claude, or opencode", envWorkerPlatform, value),
+	}
+}
+
+func safeWorkerPlatformOverride(value string) string {
+	value = strings.TrimSpace(sanitizeWorkerDiagnosticOutput(value))
+	if value == "" {
+		return "(empty)"
+	}
+	runes := []rune(value)
+	if len(runes) <= 80 {
+		return value
+	}
+	return string(runes[:80]) + "..."
 }
 
 func DescribeInvokerAvailability(invoker WorkerInvoker, ctx context.Context) string {
@@ -452,22 +572,28 @@ func (r *RealInvoker) Availability(ctx context.Context) AvailabilityStatus {
 		status.Binary = "codex"
 	}
 	if _, err := exec.LookPath(status.Binary); err != nil {
+		status.Category = AvailabilityCategoryBinaryMissing
 		status.Reason = fmt.Sprintf("%s binary %q not found in PATH", status.Platform, status.Binary)
 		return status
 	}
 	if !shouldProbeCLIAuth(status.Binary, "codex") {
 		status.Available = true
+		status.Category = AvailabilityCategoryProbeSkipped
+		status.Reason = formatAvailabilityProbeSkipped(status.Platform, status.Binary)
 		return status
 	}
 	output, err := runAvailabilityProbe(ctx, status.Binary, "login", "status")
 	if err != nil {
+		status.Category = AvailabilityCategoryAuthProbeFailed
 		status.Reason = formatAvailabilityProbeError(status.Platform, "login status", err, output)
 		return status
 	}
-	if strings.Contains(strings.ToLower(stripANSIEscapeCodes(output)), "logged in") {
+	if codexLoginStatusIsActive(output) {
 		status.Available = true
+		status.Category = AvailabilityCategoryAvailable
 		return status
 	}
+	status.Category = AvailabilityCategoryAuthInactive
 	status.Reason = fmt.Sprintf("%s login status did not confirm an authenticated session", status.Platform)
 	return status
 }
@@ -478,15 +604,19 @@ func (c *ClaudeDispatcher) Availability(ctx context.Context) AvailabilityStatus 
 		status.Binary = "claude"
 	}
 	if _, err := exec.LookPath(status.Binary); err != nil {
+		status.Category = AvailabilityCategoryBinaryMissing
 		status.Reason = fmt.Sprintf("%s binary %q not found in PATH", status.Platform, status.Binary)
 		return status
 	}
 	if !shouldProbeCLIAuth(status.Binary, "claude") {
 		status.Available = true
+		status.Category = AvailabilityCategoryProbeSkipped
+		status.Reason = formatAvailabilityProbeSkipped(status.Platform, status.Binary)
 		return status
 	}
 	output, err := runAvailabilityProbe(ctx, status.Binary, "auth", "status", "--json")
 	if err != nil {
+		status.Category = AvailabilityCategoryAuthProbeFailed
 		status.Reason = formatAvailabilityProbeError(status.Platform, "auth status", err, output)
 		return status
 	}
@@ -494,14 +624,17 @@ func (c *ClaudeDispatcher) Availability(ctx context.Context) AvailabilityStatus 
 		LoggedIn bool `json:"loggedIn"`
 	}
 	if err := json.Unmarshal([]byte(output), &payload); err != nil {
+		status.Category = AvailabilityCategoryInvalidAuthOutput
 		status.Reason = fmt.Sprintf("%s auth status returned invalid JSON: %v", status.Platform, err)
 		return status
 	}
 	if !payload.LoggedIn {
+		status.Category = AvailabilityCategoryAuthInactive
 		status.Reason = fmt.Sprintf("%s auth status reported no active login", status.Platform)
 		return status
 	}
 	status.Available = true
+	status.Category = AvailabilityCategoryAvailable
 	return status
 }
 
@@ -511,23 +644,29 @@ func (o *OpenCodeDispatcher) Availability(ctx context.Context) AvailabilityStatu
 		status.Binary = "opencode"
 	}
 	if _, err := exec.LookPath(status.Binary); err != nil {
+		status.Category = AvailabilityCategoryBinaryMissing
 		status.Reason = fmt.Sprintf("%s binary %q not found in PATH", status.Platform, status.Binary)
 		return status
 	}
 	if !shouldProbeCLIAuth(status.Binary, "opencode") {
 		status.Available = true
+		status.Category = AvailabilityCategoryProbeSkipped
+		status.Reason = formatAvailabilityProbeSkipped(status.Platform, status.Binary)
 		return status
 	}
 	output, err := runAvailabilityProbe(ctx, status.Binary, "auth", "list")
 	if err != nil {
+		status.Category = AvailabilityCategoryAuthProbeFailed
 		status.Reason = formatAvailabilityProbeError(status.Platform, "auth list", err, output)
 		return status
 	}
 	if countOpenCodeCredentials(output) == 0 {
+		status.Category = AvailabilityCategoryCredentialsMissing
 		status.Reason = fmt.Sprintf("%s auth list reported no configured credentials or environment keys", status.Platform)
 		return status
 	}
 	status.Available = true
+	status.Category = AvailabilityCategoryAvailable
 	return status
 }
 
@@ -540,6 +679,85 @@ func (o *OpenCodeDispatcher) IsAvailable(ctx context.Context) bool {
 func (c *ClaudeDispatcher) ValidateAgent(path string) error   { return validateMarkdownAgent(path) }
 func (o *OpenCodeDispatcher) ValidateAgent(path string) error { return validateMarkdownAgent(path) }
 
+func (c *ClaudeDispatcher) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	status := c.Availability(ctx)
+	if !status.Available {
+		return status
+	}
+
+	args := []string{
+		"-p",
+		"Return exactly OK.",
+		"--output-format", "json",
+		"--permission-mode", "plan",
+	}
+	return runHostedProviderPreflight(ctx, status, root, args)
+}
+
+func (o *OpenCodeDispatcher) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	status := o.Availability(ctx)
+	if !status.Available {
+		return status
+	}
+
+	args := []string{
+		"run",
+		"--agent", openCodePrimaryAgent(),
+		"--format", "json",
+		"Return exactly OK.",
+	}
+	return runHostedProviderPreflight(ctx, status, root, args)
+}
+
+func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, root string, args []string) AvailabilityStatus {
+	binary := strings.TrimSpace(status.Binary)
+	if binary == "" {
+		binary = string(status.Platform)
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(probeCtx, binary, args...)
+	if root := strings.TrimSpace(root); root != "" {
+		cmd.Dir = root
+	}
+	configureWorkerCommand(cmd)
+	if status.Platform == PlatformOpenCode {
+		if agentURL := os.Getenv(envOpenCodeAgentURL); agentURL != "" {
+			cmd.Env = append(os.Environ(), envOpenCodeAgentURL+"="+agentURL)
+		}
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		raw := strings.TrimSpace(combinedWorkerOutput(stdout.String(), stderr.String()))
+		reason := strings.TrimSpace(sanitizeWorkerDiagnosticOutput(raw))
+		if reason == "" {
+			reason = sanitizeWorkerDiagnosticOutput(err.Error())
+		}
+		category := AvailabilityCategoryProviderConfig
+		if probeCtx.Err() == context.DeadlineExceeded {
+			reason = fmt.Sprintf("%s provider/model preflight timed out before worker dispatch", status.Platform)
+			category = AvailabilityCategoryAuthProbeFailed
+		}
+		return AvailabilityStatus{
+			Platform:  status.Platform,
+			Binary:    binary,
+			Available: false,
+			Category:  category,
+			Reason:    fmt.Sprintf("%s provider/model preflight failed before worker dispatch: %s", status.Platform, reason),
+		}
+	}
+	return AvailabilityStatus{
+		Platform:  status.Platform,
+		Binary:    binary,
+		Available: true,
+		Category:  AvailabilityCategoryAvailable,
+	}
+}
+
 func (c *ClaudeDispatcher) Invoke(ctx context.Context, config WorkerConfig) (WorkerResult, error) {
 	return c.InvokeWithProgress(ctx, config, nil)
 }
@@ -550,6 +768,11 @@ func (o *OpenCodeDispatcher) Invoke(ctx context.Context, config WorkerConfig) (W
 
 func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
 	start := time.Now()
+	permission, permissionErr := ResolvePermissionDecision(PlatformClaude, config.Caste, config.PermissionProfile)
+	if permissionErr != nil {
+		return permissionDeniedWorkerResult(config, start, permissionErr)
+	}
+	config.PermissionProfile = permission.Profile
 	schemaJSON, err := marshalJSON(workerClaimsSchema())
 	if err != nil {
 		return WorkerResult{
@@ -561,21 +784,65 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 			Error:      fmt.Errorf("marshal worker claims schema: %w", err),
 		}, err
 	}
-	args := []string{"-p", "--output-format", "json", "--json-schema", string(schemaJSON), "--agent", strings.TrimSpace(config.AgentName), "--permission-mode", "bypassPermissions"}
-	if root := strings.TrimSpace(config.Root); root != "" {
-		args = append(args, "--add-dir", root)
+	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + RenderPermissionProfileSection(permission) + "\n\n" + renderResponseContract(config))
+	args := []string{"-p", prompt, "--output-format", "json", "--json-schema", string(schemaJSON), "--agent", strings.TrimSpace(config.AgentName)}
+	if permission.Profile.Name == PermissionRepositoryReadOnly {
+		args = append(args, "--permission-mode", "plan")
+	} else {
+		settingsPath, settingsErr := writeClaudeWorkspaceSettings()
+		if settingsErr != nil {
+			return permissionDeniedWorkerResult(config, start, fmt.Errorf("prepare Claude workspace sandbox: %w", settingsErr))
+		}
+		defer os.Remove(settingsPath)
+		args = append(args, "--permission-mode", "acceptEdits", "--settings", settingsPath)
 	}
-	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
-	args = append(args, prompt)
 	return invokeHostedWorker(ctx, c, config, observer, args, "claude")
 }
 
 func (o *OpenCodeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
+	start := time.Now()
+	permission, permissionErr := ResolvePermissionDecision(PlatformOpenCode, config.Caste, config.PermissionProfile)
+	if permissionErr != nil {
+		return permissionDeniedWorkerResult(config, start, permissionErr)
+	}
+	if primary := openCodePrimaryAgent(); primary != defaultOpenCodePrimaryAgent {
+		return permissionDeniedWorkerResult(config, start, fmt.Errorf(
+			"permission profile %q requires OpenCode primary router %q; configured router is %q",
+			permission.Profile.Name, defaultOpenCodePrimaryAgent, primary,
+		))
+	}
+	if err := validateOpenCodePermissionBoundary(config.AgentTOMLPath, permission.Profile); err != nil {
+		return permissionDeniedWorkerResult(config, start, err)
+	}
+	if err := validateOpenCodeRouter(config.Root); err != nil {
+		return permissionDeniedWorkerResult(config, start, err)
+	}
+	config.PermissionProfile = permission.Profile
 	args := []string{"run", "--agent", openCodePrimaryAgent(), "--format", "json"}
-	workerPrompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
+	workerPrompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + RenderPermissionProfileSection(permission) + "\n\n" + renderResponseContract(config))
 	prompt := renderOpenCodeSubagentDispatchPrompt(config, workerPrompt)
 	args = append(args, prompt)
 	return invokeHostedWorker(ctx, o, config, observer, args, "opencode")
+}
+
+func writeClaudeWorkspaceSettings() (string, error) {
+	settings := map[string]interface{}{
+		"permissions": map[string]interface{}{
+			"defaultMode":                  "acceptEdits",
+			"disableBypassPermissionsMode": "disable",
+		},
+		"sandbox": map[string]interface{}{
+			"enabled":                  true,
+			"failIfUnavailable":        true,
+			"autoAllowBashIfSandboxed": true,
+			"allowUnsandboxedCommands": false,
+		},
+	}
+	payload, err := json.Marshal(settings)
+	if err != nil {
+		return "", err
+	}
+	return writeTempFile("", "aether-claude-settings-*.json", payload)
 }
 
 func openCodePrimaryAgent() string {
@@ -614,6 +881,7 @@ Do not summarize, wrap, or reformat the JSON. Do not run the worker task yoursel
 }
 
 func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, config WorkerConfig, observer WorkerProgressObserver, args []string, label string) (WorkerResult, error) {
+	observer = synchronizedWorkerProgressObserver(observer)
 	start := time.Now()
 	status := dispatcher.Availability(ctx)
 	if !status.Available {
@@ -662,6 +930,22 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 		startupErr := fmt.Errorf("worker startup failed: %s start failed: %w", label, err)
 		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: time.Since(start), Error: startupErr}, startupErr
 	}
+	GlobalProcessTracker().TrackProcess(cmd.Process.Pid, TrackedProcess{
+		WorkerName:    config.WorkerName,
+		TaskID:        config.TaskID,
+		Caste:         config.Caste,
+		Platform:      label,
+		Root:          workerTrackingRoot(config),
+		ProviderRunID: config.ProviderRunID,
+		Binding:       config.ExecutionBinding,
+	})
+	defer GlobalProcessTracker().UntrackProcess(cmd.Process.Pid)
+	emitWorkerProgress(observer, WorkerProgressEvent{
+		Status:     "running",
+		Message:    "provider process started",
+		OccurredAt: time.Now().UTC(),
+		ProcessID:  cmd.Process.Pid,
+	})
 
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- cmd.Wait() }()
@@ -686,15 +970,16 @@ waitLoop:
 
 	duration := time.Since(start)
 	rawOutput := combinedWorkerOutput(stdout.String(), stderr.String())
+	safeRawOutput := sanitizeWorkerDiagnosticOutput(rawOutput)
 	if ctx.Err() == context.DeadlineExceeded {
 		reportedTimeout := duration.Round(time.Millisecond)
 		if duration >= time.Second {
 			reportedTimeout = duration.Round(time.Second)
 		}
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "timeout", Duration: duration, RawOutput: rawOutput, Error: fmt.Errorf("worker timeout after %v", reportedTimeout)}, nil
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "timeout", Duration: duration, RawOutput: safeRawOutput, Error: fmt.Errorf("worker timeout after %v", reportedTimeout)}, nil
 	}
 	if waitErr != nil {
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: rawOutput, Error: classifyHostedExecutionError(label, waitErr, stderr.String(), running.Observed())}, nil
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: classifyHostedExecutionError(label, waitErr, stderr.String(), running.Observed())}, nil
 	}
 	claims, parseErr := parseHostedWorkerOutput(label, rawOutput)
 	if parseErr != nil {
@@ -702,7 +987,7 @@ waitLoop:
 		if debugPath := writeHostedWorkerOutputDebug(config.Root, label, config, args, stdout.String(), stderr.String(), parseErr); debugPath != "" {
 			err = fmt.Errorf("%w (debug: %s)", err, debugPath)
 		}
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: rawOutput, Error: err}, nil
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: err}, nil
 	}
 	claims = normalizeWorkerClaims(claims, config)
 	return WorkerResult{
@@ -719,7 +1004,7 @@ waitLoop:
 		Spawns:        claims.Spawns,
 		Handoff:       claims.Handoff,
 		Duration:      duration,
-		RawOutput:     rawOutput,
+		RawOutput:     safeRawOutput,
 	}, nil
 }
 
@@ -864,7 +1149,7 @@ func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args 
 		"stderr_bytes":   len(stderrText),
 		"stdout_excerpt": workerOutputExcerpt(stdoutText),
 		"stderr_excerpt": workerOutputExcerpt(stderrText),
-		"error":          strings.TrimSpace(cause.Error()),
+		"error":          sanitizeWorkerDiagnosticOutput(cause.Error()),
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
@@ -890,7 +1175,7 @@ func safeHostedWorkerArgs(args []string) []string {
 }
 
 func workerOutputExcerpt(value string) string {
-	value = strings.TrimSpace(stripANSIEscapeCodes(value))
+	value = sanitizeWorkerDiagnosticOutput(value)
 	const limit = 4000
 	runes := []rune(value)
 	if len(runes) <= limit {
@@ -1029,20 +1314,38 @@ func hasEnvPrefix(prefix string) bool {
 	return false
 }
 
-func reorderDispatchers(dispatchers []PlatformDispatcher, preferred Platform) []PlatformDispatcher {
-	if preferred == PlatformUnknown {
-		return dispatchers
+func defaultWorkerPlatformPreferences(active Platform) []Platform {
+	preferences := []Platform{PlatformClaude}
+	if active != PlatformUnknown && active != PlatformClaude {
+		preferences = append(preferences, active)
 	}
+	preferences = append(preferences, PlatformCodex, PlatformOpenCode)
+	return preferences
+}
+
+func reorderDispatchers(dispatchers []PlatformDispatcher, preferred ...Platform) []PlatformDispatcher {
+	seen := make(map[Platform]struct{}, len(dispatchers))
 	out := make([]PlatformDispatcher, 0, len(dispatchers))
-	for _, dispatcher := range dispatchers {
-		if dispatcher.Platform() == preferred {
+	for _, platform := range preferred {
+		if platform == PlatformUnknown {
+			continue
+		}
+		for _, dispatcher := range dispatchers {
+			if dispatcher.Platform() != platform {
+				continue
+			}
+			if _, ok := seen[dispatcher.Platform()]; ok {
+				continue
+			}
 			out = append(out, dispatcher)
+			seen[dispatcher.Platform()] = struct{}{}
 		}
 	}
 	for _, dispatcher := range dispatchers {
-		if dispatcher.Platform() != preferred {
-			out = append(out, dispatcher)
+		if _, ok := seen[dispatcher.Platform()]; ok {
+			continue
 		}
+		out = append(out, dispatcher)
 	}
 	return out
 }
@@ -1071,12 +1374,36 @@ func runAvailabilityProbe(ctx context.Context, binary string, args ...string) (s
 	return output, nil
 }
 
-func formatAvailabilityProbeError(platform Platform, action string, err error, output string) string {
-	output = strings.TrimSpace(stripANSIEscapeCodes(output))
-	if output != "" {
-		return fmt.Sprintf("%s %s failed: %v (%s)", platform, action, err, output)
+func formatAvailabilityProbeError(platform Platform, action string, err error, _ string) string {
+	detail := sanitizedProbeFailureDetail(err)
+	if detail != "" {
+		return fmt.Sprintf("%s %s failed: %s; sensitive details omitted", platform, action, detail)
 	}
-	return fmt.Sprintf("%s %s failed: %v", platform, action, err)
+	return fmt.Sprintf("%s %s failed; sensitive details omitted", platform, action)
+}
+
+func formatAvailabilityProbeSkipped(platform Platform, binary string) string {
+	name := strings.TrimSpace(filepath.Base(binary))
+	if name == "" {
+		name = "override binary"
+	}
+	return fmt.Sprintf("%s auth probe skipped for override binary %q; provider authentication was not verified", platform, name)
+}
+
+func sanitizedProbeFailureDetail(err error) string {
+	if err == nil {
+		return ""
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if code := exitErr.ExitCode(); code >= 0 {
+			return fmt.Sprintf("exit status %d", code)
+		}
+		return "process exited unsuccessfully"
+	}
+	if strings.EqualFold(strings.TrimSpace(err.Error()), "timed out") {
+		return "timed out"
+	}
+	return "probe command failed"
 }
 
 func stripANSIEscapeCodes(value string) string {
@@ -1111,6 +1438,19 @@ func countOpenCodeCredentials(output string) int {
 	return count
 }
 
+func codexLoginStatusIsActive(output string) bool {
+	cleaned := strings.ToLower(stripANSIEscapeCodes(output))
+	if !strings.Contains(cleaned, "logged in") {
+		return false
+	}
+	if negativeCodexLoginStatusPattern.MatchString(cleaned) {
+		return false
+	}
+	return true
+}
+
+var negativeCodexLoginStatusPattern = regexp.MustCompile(`\b(?:not|no|never|without)\b.{0,40}\blogged in\b|\bnot authenticated\b|\bunauthenticated\b|\bno authenticated session\b`)
+
 func validateMarkdownAgent(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -1130,9 +1470,21 @@ func validateMarkdownAgent(path string) error {
 }
 
 func parseMarkdownAgentDefinition(data []byte) (markdownAgentDefinition, error) {
+	frontmatter, err := markdownFrontmatter(data)
+	if err != nil {
+		return markdownAgentDefinition{}, err
+	}
+	var def markdownAgentDefinition
+	if err := yaml.Unmarshal(frontmatter, &def); err != nil {
+		return markdownAgentDefinition{}, err
+	}
+	return def, nil
+}
+
+func markdownFrontmatter(data []byte) ([]byte, error) {
 	text := strings.TrimSpace(string(data))
 	if !strings.HasPrefix(text, "---") {
-		return markdownAgentDefinition{}, fmt.Errorf("missing YAML frontmatter")
+		return nil, fmt.Errorf("missing YAML frontmatter")
 	}
 	lines := strings.Split(text, "\n")
 	end := -1
@@ -1143,23 +1495,74 @@ func parseMarkdownAgentDefinition(data []byte) (markdownAgentDefinition, error) 
 		}
 	}
 	if end == -1 {
-		return markdownAgentDefinition{}, fmt.Errorf("unterminated YAML frontmatter")
+		return nil, fmt.Errorf("unterminated YAML frontmatter")
 	}
-	frontmatter := strings.Join(lines[1:end], "\n")
-	var def markdownAgentDefinition
-	if err := yaml.Unmarshal([]byte(frontmatter), &def); err != nil {
-		return markdownAgentDefinition{}, err
+	return []byte(strings.Join(lines[1:end], "\n")), nil
+}
+
+func parseOpenCodePermissionDefinition(path string) (openCodePermissionDefinition, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return openCodePermissionDefinition{}, fmt.Errorf("read %s: %w", path, err)
+	}
+	frontmatter, err := markdownFrontmatter(data)
+	if err != nil {
+		return openCodePermissionDefinition{}, fmt.Errorf("%s: %w", path, err)
+	}
+	var def openCodePermissionDefinition
+	if err := yaml.Unmarshal(frontmatter, &def); err != nil {
+		return openCodePermissionDefinition{}, fmt.Errorf("%s: %w", path, err)
 	}
 	return def, nil
 }
 
+func validateOpenCodePermissionBoundary(path string, profile PermissionProfile) error {
+	def, err := parseOpenCodePermissionDefinition(path)
+	if err != nil {
+		return fmt.Errorf("OpenCode permission attestation failed: %w", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(def.Permission.ExternalDirectory), "deny") {
+		return fmt.Errorf("OpenCode permission attestation failed for %s: external_directory must be denied", def.Name)
+	}
+	if profile.Name == PermissionRepositoryReadOnly {
+		for _, tool := range []string{"write", "edit", "bash"} {
+			allowed, declared := def.Tools[tool]
+			if !declared || allowed {
+				return fmt.Errorf("OpenCode permission attestation failed for %s: read-only profile requires tools.%s=false", def.Name, tool)
+			}
+		}
+	}
+	return nil
+}
+
+func validateOpenCodeRouter(root string) error {
+	path := localAgentDefinitionPath(root, PlatformOpenCode, defaultOpenCodePrimaryAgent)
+	if !fileExists(path) {
+		path = globalAgentDefinitionPath(PlatformOpenCode, defaultOpenCodePrimaryAgent)
+	}
+	if !fileExists(path) {
+		return fmt.Errorf("OpenCode permission attestation failed: primary router %q is not installed", defaultOpenCodePrimaryAgent)
+	}
+	def, err := parseOpenCodePermissionDefinition(path)
+	if err != nil {
+		return fmt.Errorf("OpenCode permission attestation failed: %w", err)
+	}
+	if def.Name != defaultOpenCodePrimaryAgent || def.Mode != "primary" ||
+		def.Tools["write"] || def.Tools["edit"] || def.Tools["bash"] || !def.Tools["task"] ||
+		!strings.EqualFold(strings.TrimSpace(def.Permission.ExternalDirectory), "deny") {
+		return fmt.Errorf("OpenCode permission attestation failed: router %s does not enforce task-only delegation", path)
+	}
+	return nil
+}
+
 func classifyHostedExecutionError(label string, err error, stderr string, runningObserved bool) error {
-	detail := strings.TrimSpace(stderr)
+	rawDetail := strings.TrimSpace(stderr)
+	detail := sanitizeWorkerDiagnosticOutput(stderr)
 	prefix := strings.TrimSpace(label)
 	if prefix == "" {
 		prefix = "worker process"
 	}
-	if strings.EqualFold(prefix, "opencode") && looksLikeOpenCodeLocalServerFailure(detail) {
+	if strings.EqualFold(prefix, "opencode") && looksLikeOpenCodeLocalServerFailure(rawDetail) {
 		return fmt.Errorf("opencode worker dispatcher unavailable: local OpenCode server rejected the run request; ensure OpenCode is running for `opencode run`, or set AETHER_WORKER_PLATFORM=claude/codex to use another dispatcher: %w (stderr: %s)", err, detail)
 	}
 	if !runningObserved {
@@ -1201,4 +1604,30 @@ func describeAvailabilitySet(active Platform, statuses []AvailabilityStatus) str
 		return "no worker dispatchers available"
 	}
 	return strings.Join(parts, "; ")
+}
+
+func availabilityCategoryForStatuses(statuses []AvailabilityStatus) AvailabilityCategory {
+	priority := []AvailabilityCategory{
+		AvailabilityCategoryUnsupportedProvider,
+		AvailabilityCategoryAuthProbeFailed,
+		AvailabilityCategoryAuthInactive,
+		AvailabilityCategoryInvalidAuthOutput,
+		AvailabilityCategoryCredentialsMissing,
+		AvailabilityCategoryProviderConfig,
+		AvailabilityCategoryBinaryMissing,
+		AvailabilityCategoryProbeSkipped,
+	}
+	for _, category := range priority {
+		for _, status := range statuses {
+			if status.Category == category && !status.Available {
+				return category
+			}
+		}
+	}
+	for _, status := range statuses {
+		if status.Category != "" {
+			return status.Category
+		}
+	}
+	return AvailabilityCategoryBinaryMissing
 }

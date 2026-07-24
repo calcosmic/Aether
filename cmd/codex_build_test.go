@@ -295,6 +295,10 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if got := result["dispatch_mode"].(string); got != "plan-only" {
 		t.Fatalf("dispatch_mode = %q, want plan-only", got)
 	}
+	wrapperContract := result["wrapper_contract"].(map[string]interface{})
+	if got := wrapperContract["source_command"].(string); got != "aether host build <phase>" {
+		t.Fatalf("wrapper_contract source_command = %q, want TS host build command", got)
+	}
 	if got := result["colony_mode"].(string); got != "colony" {
 		t.Fatalf("colony_mode = %q, want colony", got)
 	}
@@ -332,6 +336,9 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if manifest["checkpoint"].(string) != "" || manifest["claims_path"].(string) != "" {
 		t.Fatalf("plan-only manifest should not claim artifact paths: %+v", manifest)
 	}
+	if strings.TrimSpace(manifest["attempt_id"].(string)) == "" || strings.TrimSpace(manifest["attempt_path"].(string)) == "" {
+		t.Fatalf("plan-only manifest should identify its durable attempt: %+v", manifest)
+	}
 	if workerBriefs := manifest["worker_briefs"].([]interface{}); len(workerBriefs) != 0 {
 		t.Fatalf("plan-only manifest should not write worker briefs, got %v", workerBriefs)
 	}
@@ -358,11 +365,19 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 
 	for _, rel := range []string{
 		"checkpoints/pre-build-phase-1.json",
-		"build/phase-1/manifest.json",
 		"last-build-claims.json",
 	} {
 		if _, err := os.Stat(filepath.Join(dataDir, rel)); !os.IsNotExist(err) {
 			t.Fatalf("plan-only unexpectedly wrote %s (err=%v)", rel, err)
+		}
+	}
+	for _, rel := range []string{
+		"build/phase-1/manifest.json",
+		strings.TrimPrefix(manifest["attempt_path"].(string), ".aether/data/"),
+		"build/phase-1/latest-attempt.json",
+	} {
+		if _, err := os.Stat(filepath.Join(dataDir, rel)); err != nil {
+			t.Fatalf("plan-only did not persist durable coordination record %s: %v", rel, err)
 		}
 	}
 
@@ -381,6 +396,42 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 	if state.Plan.Phases[0].Status != colony.PhaseReady {
 		t.Fatalf("phase status = %s, want ready", state.Plan.Phases[0].Status)
+	}
+}
+
+func TestBuildQueenLedWrapperContractUsesHostSourceCommand(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupRuntimeSkillAssignmentHub(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Expose queen-led wrapper contract"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:          1,
+			Name:        "Wrapper bridge",
+			Description: "Let the Queen dispatch workers from a runtime manifest",
+			Status:      colony.PhaseReady,
+			Tasks:       []colony.Task{{ID: &taskID, Goal: "Build the wrapper bridge", Status: colony.TaskPending}},
+		}}},
+	})
+
+	result, _, _, _, err := runCodexBuildQueenLed(root, 1, nil, codexBuildOptions{})
+	if err != nil {
+		t.Fatalf("runCodexBuildQueenLed returned error: %v", err)
+	}
+	wrapperContract := result["wrapper_contract"].(map[string]interface{})
+	if got := wrapperContract["source_command"].(string); got != "aether host build <phase>" {
+		t.Fatalf("wrapper_contract source_command = %q, want TS host build command", got)
 	}
 }
 
@@ -540,6 +591,486 @@ func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
 	}
 	if got := intValue(contract["worker_count"]); got != len(manifest.Dispatches) {
 		t.Fatalf("dispatch_contract worker_count = %d, want dispatch count %d", got, len(manifest.Dispatches))
+	}
+}
+
+func TestBuildPlanOnlyManifestQueenExecutionPolicyExposesSpawnBudget(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Expose Queen spawn budget metadata"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Worker budget contract",
+				Description: "Publish minimal Queen spawn limits without exposing prompts or provider details",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks:       []colony.Task{{ID: &taskID, Goal: "Validate spawn budget contract", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal dispatch manifest: %v", err)
+	}
+	var manifestJSON map[string]interface{}
+	if err := json.Unmarshal(encoded, &manifestJSON); err != nil {
+		t.Fatalf("unmarshal dispatch manifest: %v", err)
+	}
+
+	rawPolicy, ok := manifestJSON["queen_execution_policy"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("manifest missing queen_execution_policy: %#v", manifestJSON)
+	}
+	if got := stringValue(rawPolicy["review_depth"]); got != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("queen_execution_policy.review_depth = %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+	if got := stringValue(rawPolicy["verification_depth"]); got != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("queen_execution_policy.verification_depth = %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+
+	rawBudget, ok := rawPolicy["spawn_budget"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("queen_execution_policy.spawn_budget missing from manifest policy: %#v", rawPolicy)
+	}
+	for _, key := range []string{
+		"max_workers",
+		"selected_workers",
+		"worker_count",
+		"max_selected_castes",
+		"selected_castes",
+		"pruned_workers",
+		"pruned_castes",
+		"required_castes",
+		"overflow_required_workers",
+		"relevance_threshold",
+		"selected_reasons",
+		"budget_unit",
+		"reason",
+		"flow_type",
+		"risk_level",
+		"castes",
+		"counts",
+	} {
+		if _, ok := rawBudget[key]; !ok {
+			t.Fatalf("spawn_budget missing stable JSON key %q: %#v", key, rawBudget)
+		}
+	}
+	for key := range rawBudget {
+		if strings.ContainsAny(key, "ABCDEFGHIJKLMNOPQRSTUVWXYZ-") {
+			t.Fatalf("spawn_budget key %q should use stable snake_case JSON", key)
+		}
+	}
+	if _, ok := rawBudget["provider_diagnostics"]; ok {
+		t.Fatalf("spawn_budget must not include provider_diagnostics: %#v", rawBudget)
+	}
+	if got := intValue(rawBudget["worker_count"]); got != len(manifest.Dispatches) {
+		t.Fatalf("spawn_budget.worker_count = %d, want dispatch count %d", got, len(manifest.Dispatches))
+	}
+	if got := intValue(rawBudget["selected_workers"]); got != len(manifest.Dispatches) {
+		t.Fatalf("spawn_budget.selected_workers = %d, want dispatch count %d", got, len(manifest.Dispatches))
+	}
+	if got := intValue(rawBudget["max_workers"]); got != len(manifest.Dispatches) {
+		t.Fatalf("spawn_budget.max_workers = %d, want concrete dispatch count %d", got, len(manifest.Dispatches))
+	}
+	if got := stringValue(rawBudget["budget_unit"]); got != "caste" {
+		t.Fatalf("spawn_budget.budget_unit = %q, want caste", got)
+	}
+	if got := intValue(rawBudget["max_selected_castes"]); got < 1 {
+		t.Fatalf("spawn_budget.max_selected_castes = %d, want positive caste budget", got)
+	}
+	if got := intValue(rawBudget["selected_castes"]); got != len(stringSliceValue(rawBudget["castes"])) {
+		t.Fatalf("spawn_budget.selected_castes = %d, want castes length %d", got, len(stringSliceValue(rawBudget["castes"])))
+	}
+	if got := intValue(rawBudget["pruned_castes"]); got < 0 {
+		t.Fatalf("spawn_budget.pruned_castes = %d, want non-negative", got)
+	}
+	if got := intValue(rawBudget["pruned_workers"]); got != intValue(rawBudget["pruned_castes"]) {
+		t.Fatalf("spawn_budget.pruned_workers = %d, want pruned_castes %d for caste budget unit", got, intValue(rawBudget["pruned_castes"]))
+	}
+	if got := intValue(rawBudget["overflow_required_workers"]); got < 0 {
+		t.Fatalf("spawn_budget.overflow_required_workers = %d, want non-negative", got)
+	}
+	for _, caste := range []string{"builder", "watcher"} {
+		if !containsString(stringSliceValue(rawBudget["castes"]), caste) {
+			t.Fatalf("spawn_budget.castes missing %s: %#v", caste, rawBudget["castes"])
+		}
+	}
+	counts, ok := rawBudget["counts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("spawn_budget.counts missing or wrong type: %#v", rawBudget)
+	}
+	if got := intValue(counts["builder"]); got < 1 {
+		t.Fatalf("spawn_budget.counts.builder = %d, want at least 1", got)
+	}
+	if strings.TrimSpace(stringValue(rawBudget["reason"])) == "" {
+		t.Fatalf("spawn_budget.reason missing or empty: %#v", rawBudget)
+	}
+	if selectedReasons, ok := rawBudget["selected_reasons"].(map[string]interface{}); !ok || len(selectedReasons) == 0 {
+		t.Fatalf("spawn_budget.selected_reasons missing or empty: %#v", rawBudget)
+	}
+}
+
+func TestCodexBuildPlanOnlySpawnBudgetPreservesSafetyCastesUnderLightAndHeavy(t *testing.T) {
+	tests := []struct {
+		name      string
+		phase     colony.Phase
+		options   codexBuildOptions
+		wantDepth colony.VerificationDepth
+	}{
+		{
+			name: "security light keeps required safety castes",
+			phase: colony.Phase{
+				ID:          1,
+				Name:        "Security hardening",
+				Description: "Protect privileged configuration before production rollout",
+				Mode:        colony.PhaseModeProduction,
+			},
+			options:   codexBuildOptions{LightFlag: true},
+			wantDepth: colony.VerificationDepthLight,
+		},
+		{
+			name: "security heavy keeps required safety castes",
+			phase: colony.Phase{
+				ID:          1,
+				Name:        "Security hardening",
+				Description: "Protect privileged configuration before production rollout",
+				Mode:        colony.PhaseModeProduction,
+			},
+			options:   codexBuildOptions{HeavyFlag: true},
+			wantDepth: colony.VerificationDepthHeavy,
+		},
+		{
+			name: "final review light keeps required safety castes",
+			phase: colony.Phase{
+				ID:          1,
+				Name:        "Final review",
+				Description: "Complete final signoff before handoff",
+				Mode:        colony.PhaseModeProduction,
+			},
+			options:   codexBuildOptions{LightFlag: true},
+			wantDepth: colony.VerificationDepthLight,
+		},
+		{
+			name: "final review heavy keeps required safety castes",
+			phase: colony.Phase{
+				ID:          1,
+				Name:        "Final review",
+				Description: "Complete final signoff before handoff",
+				Mode:        colony.PhaseModeProduction,
+			},
+			options:   codexBuildOptions{HeavyFlag: true},
+			wantDepth: colony.VerificationDepthHeavy,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			goal := "Preserve build safety castes"
+			taskID := "1.1"
+			tt.phase.Status = colony.PhaseReady
+			tt.phase.Tasks = []colony.Task{{
+				ID:     &taskID,
+				Goal:   "Build release evidence and address blockers",
+				Status: colony.TaskPending,
+			}}
+			createTestColonyState(t, dataDir, colony.ColonyState{
+				Version:      "3.0",
+				Goal:         &goal,
+				State:        colony.StateREADY,
+				ColonyDepth:  "full",
+				CurrentPhase: 0,
+				Plan:         colony.Plan{Phases: []colony.Phase{tt.phase}},
+			})
+
+			result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, tt.options)
+			if err != nil {
+				t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+			}
+			manifest := result["dispatch_manifest"].(codexBuildManifest)
+			policy := manifest.QueenExecutionPolicy
+			if policy.ReviewDepth != string(tt.wantDepth) {
+				t.Fatalf("queen_execution_policy.review_depth = %q, want %q", policy.ReviewDepth, tt.wantDepth)
+			}
+			if policy.VerificationDepth != string(tt.wantDepth) {
+				t.Fatalf("queen_execution_policy.verification_depth = %q, want %q", policy.VerificationDepth, tt.wantDepth)
+			}
+			if policy.SpawnBudget == nil {
+				t.Fatalf("queen_execution_policy.spawn_budget missing for %s", tt.name)
+			}
+
+			for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
+				if !containsString(policy.SpawnBudget.RequiredCastes, caste) {
+					t.Fatalf("spawn_budget.required_castes missing %s: %+v", caste, policy.SpawnBudget.RequiredCastes)
+				}
+				if !containsString(policy.SpawnBudget.Castes, caste) {
+					t.Fatalf("spawn_budget.castes missing %s: %+v", caste, policy.SpawnBudget.Castes)
+				}
+				if !buildManifestHasCaste(manifest, caste) {
+					t.Fatalf("manifest dispatches missing %s after %s pruning: %v", caste, tt.wantDepth, buildManifestCastes(manifest))
+				}
+			}
+		})
+	}
+}
+
+func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Separate caste budget from worker dispatch count"
+	taskIDs := []string{"1.1", "1.2", "1.3"}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Security release hardening",
+				Description: "Production release signoff with multiple implementation tasks",
+				Mode:        colony.PhaseModeProduction,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{
+					{ID: &taskIDs[0], Goal: "Implement budget manifest contract", Status: colony.TaskPending},
+					{ID: &taskIDs[1], Goal: "Add release hardening checks", Status: colony.TaskPending},
+					{ID: &taskIDs[2], Goal: "Verify security signoff evidence", Status: colony.TaskPending},
+				},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	budget := manifest.QueenExecutionPolicy.SpawnBudget
+	if budget == nil {
+		t.Fatalf("spawn_budget missing from manifest policy")
+	}
+	if budget.WorkerCount != len(manifest.Dispatches) {
+		t.Fatalf("worker_count = %d, want dispatch count %d", budget.WorkerCount, len(manifest.Dispatches))
+	}
+	if budget.MaxWorkers != budget.WorkerCount || budget.SelectedWorkers != budget.WorkerCount {
+		t.Fatalf("worker fields should use concrete dispatch units: %+v", budget)
+	}
+	if budget.BudgetUnit != "caste" {
+		t.Fatalf("budget_unit = %q, want caste", budget.BudgetUnit)
+	}
+	if budget.MaxSelectedCastes <= 0 {
+		t.Fatalf("max_selected_castes should expose Queen caste budget: %+v", budget)
+	}
+	if budget.WorkerCount <= budget.MaxSelectedCastes {
+		t.Fatalf("fixture should prove worker_count can exceed max_selected_castes: %+v", budget)
+	}
+	if budget.SelectedCastes != len(budget.Castes) {
+		t.Fatalf("selected_castes = %d, want castes length %d", budget.SelectedCastes, len(budget.Castes))
+	}
+	if len(budget.PolicyAddedCastes) == 0 {
+		t.Fatalf("policy_added_castes should expose build-policy castes added after Queen selection: %+v", budget)
+	}
+	if budget.PrunedCastes == nil || budget.PrunedWorkers == nil {
+		t.Fatalf("pruned budget counts should be present even when zero: %+v", budget)
+	}
+	if *budget.PrunedWorkers != *budget.PrunedCastes {
+		t.Fatalf("pruned worker count should mirror caste count for caste budget unit: %+v", budget)
+	}
+	if budget.OverflowRequiredWorkers == nil || *budget.OverflowRequiredWorkers != 0 {
+		t.Fatalf("overflow_required_workers = %v, want explicit zero for this fixture", budget.OverflowRequiredWorkers)
+	}
+}
+
+func TestCodexBuildPlanOnlySpawnBudgetExplainsPrunedCastes(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Explain pruned Queen castes"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Broad release verification and migration hardening",
+				Description: "Implement, test, audit, benchmark, document, refactor, package, and release a secure migration with legacy cleanup",
+				Mode:        colony.PhaseModeProduction,
+				Status:      colony.PhaseReady,
+				Tasks:       []colony.Task{{ID: &taskID, Goal: "Implement release migration hardening and package safeguards", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	budget := manifest.QueenExecutionPolicy.SpawnBudget
+	if budget == nil {
+		t.Fatal("spawn_budget missing from manifest policy")
+	}
+	if budget.PrunedCastes == nil || *budget.PrunedCastes == 0 {
+		t.Fatalf("pruned_castes should explain Queen pruning in broad fixture: %+v", budget)
+	}
+	if budget.PrunedWorkers == nil || *budget.PrunedWorkers != *budget.PrunedCastes {
+		t.Fatalf("pruned_workers should mirror pruned_castes for caste budget unit: %+v", budget)
+	}
+	if len(budget.SkippedCastes) == 0 {
+		t.Fatalf("skipped_castes should list Queen-pruned castes: %+v", budget)
+	}
+	if len(budget.PrunedReasons) == 0 {
+		t.Fatalf("pruned_reasons should explain Queen-pruned castes: %+v", budget)
+	}
+	for _, caste := range budget.SkippedCastes {
+		reason := budget.PrunedReasons[caste]
+		if !strings.Contains(reason, "not spawned") {
+			t.Fatalf("pruned reason for %s should explain not spawned decision: %q", caste, reason)
+		}
+	}
+}
+
+func TestCodexBuildPlanOnlyPhaseFiveSafetyVerificationKeepsRequiredCastes(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Full safety verification"
+	taskID := "5.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          5,
+				Name:        "Full Safety Verification",
+				Description: "Run the release-oriented verification set and inspect contract-sensitive output so adaptive pruning does not weaken state, security, release, or final safeguards.",
+				Mode:        colony.PhaseModeProduction,
+				Status:      colony.PhaseReady,
+				Tasks:       []colony.Task{{ID: &taskID, Goal: "Run focused release/security/final safeguard checks and manually inspect any failures before closing.", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	budget := manifest.QueenExecutionPolicy.SpawnBudget
+	if budget == nil {
+		t.Fatal("spawn_budget missing from manifest policy")
+	}
+	for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
+		if !containsString(budget.RequiredCastes, caste) {
+			t.Fatalf("required_castes missing %s: %+v", caste, budget.RequiredCastes)
+		}
+		if !containsString(budget.Castes, caste) {
+			t.Fatalf("castes missing required %s: %+v", caste, budget.Castes)
+		}
+		if !buildManifestHasCaste(manifest, caste) {
+			t.Fatalf("manifest dispatches missing required %s: %v", caste, buildManifestCastes(manifest))
+		}
+	}
+}
+
+func TestSuggestedBuildCasteDoesNotTreatInspectAsSpec(t *testing.T) {
+	task := colony.Task{
+		Goal: "Run focused release/security/final safeguard checks and manually inspect any failures before closing.",
+	}
+
+	if got := suggestedBuildCaste(task); got != "builder" {
+		t.Fatalf("suggestedBuildCaste(inspect task) = %q, want builder", got)
+	}
+}
+
+func TestSuggestedBuildCasteKeepsSpecificationTasksWithScout(t *testing.T) {
+	task := colony.Task{
+		Goal: "Research API specifications before implementation",
+	}
+
+	if got := suggestedBuildCaste(task); got != "scout" {
+		t.Fatalf("suggestedBuildCaste(specification task) = %q, want scout", got)
+	}
+}
+
+func TestBuildPlanOnlyIncludesRuntimeProviderDiagnostics(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Surface provider diagnostics"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "standard",
+		CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Provider diagnostics",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Validate diagnostics ownership", Status: colony.TaskPending}},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &buildProviderDiagnosticInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+
+	diagnostic := stringValue(result["provider_diagnostics"])
+	if !strings.Contains(diagnostic, "runtime-owned provider detail") {
+		t.Fatalf("provider_diagnostics = %q, want runtime-owned availability detail", diagnostic)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	if manifest.ProviderDiagnostics != diagnostic {
+		t.Fatalf("manifest provider diagnostics = %q, want %q", manifest.ProviderDiagnostics, diagnostic)
+	}
+	contract := result["dispatch_contract"].(map[string]interface{})
+	if visibility := stringSliceValue(contract["fallback_visibility"]); !containsString(visibility, "provider_diagnostics") {
+		t.Fatalf("fallback_visibility missing provider_diagnostics: %v", visibility)
 	}
 }
 
@@ -914,7 +1445,6 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
-	manifest.ColonyMode = ""
 	if err := os.WriteFile(filepath.Join(root, "wrapper-evidence.txt"), []byte("external work\n"), 0644); err != nil {
 		t.Fatalf("failed to write claimed file: %v", err)
 	}
@@ -1088,6 +1618,85 @@ func TestBuildWaveExecutionPlansRespectParallelMode(t *testing.T) {
 	}
 	if !strings.Contains(worktree[0].Reason, "isolated worktrees") {
 		t.Fatalf("worktree wave 1 reason = %q, want isolated worktree guidance", worktree[0].Reason)
+	}
+}
+
+func TestBuildFinalizeAcceptsVerificationOnlyOutputEvidence(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Verification-only finalizer evidence"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Verification-only phase",
+				Description: "Run verification checks before release",
+				Mode:        colony.PhaseModeProduction,
+				Status:      colony.PhaseReady,
+				Tasks:       []colony.Task{{ID: &taskID, Goal: "Run verification commands", Status: colony.TaskPending}},
+			}},
+		},
+	})
+	if err := os.WriteFile(filepath.Join(root, "verification.log"), []byte("verification passed\n"), 0644); err != nil {
+		t.Fatalf("write verification evidence: %v", err)
+	}
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	dispatchResults := make([]codexExternalBuildWorkerResult, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		worker := codexExternalBuildWorkerResult{
+			Stage:         dispatch.Stage,
+			Wave:          dispatch.Wave,
+			ExecutionWave: normalizedDispatchWave(dispatch),
+			Caste:         dispatch.Caste,
+			Name:          dispatch.Name,
+			TaskID:        dispatch.TaskID,
+			Status:        "completed",
+			Summary:       dispatch.Name + " completed verification-only work",
+		}
+		if dispatch.TaskID != "" {
+			worker.Outputs = []string{"verification.log"}
+		}
+		dispatchResults = append(dispatchResults, worker)
+	}
+	completion := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Dispatches:       dispatchResults,
+		Claims:           &codexBuildClaims{},
+	}
+
+	_, state, _, finalDispatches, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("runCodexBuildFinalize returned error: %v", err)
+	}
+	if state.State != colony.StateBUILT {
+		t.Fatalf("state = %s, want BUILT", state.State)
+	}
+	foundTaskOutput := false
+	for _, dispatch := range finalDispatches {
+		if dispatch.TaskID == "" {
+			continue
+		}
+		if len(dispatch.Outputs) == 0 {
+			t.Fatalf("verification-only task dispatch %s lost output evidence", dispatch.Name)
+		}
+		foundTaskOutput = true
+	}
+	if !foundTaskOutput {
+		t.Fatal("expected at least one task dispatch with verification-only output evidence")
 	}
 }
 
@@ -1539,6 +2148,26 @@ func (f *buildFailInvoker) IsAvailable(ctx context.Context) bool { return false 
 
 func (f *buildFailInvoker) ValidateAgent(path string) error { return nil }
 
+type buildProviderDiagnosticInvoker struct{}
+
+func (i *buildProviderDiagnosticInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{}, context.DeadlineExceeded
+}
+
+func (i *buildProviderDiagnosticInvoker) IsAvailable(ctx context.Context) bool { return false }
+
+func (i *buildProviderDiagnosticInvoker) ValidateAgent(path string) error { return nil }
+
+func (i *buildProviderDiagnosticInvoker) Availability(context.Context) codex.AvailabilityStatus {
+	return codex.AvailabilityStatus{
+		Platform:  codex.PlatformCodex,
+		Binary:    "codex",
+		Available: false,
+		Category:  codex.AvailabilityCategoryAuthInactive,
+		Reason:    "runtime-owned provider detail",
+	}
+}
+
 type recordedWorkerCall struct {
 	TaskID  string
 	Caste   string
@@ -1947,6 +2576,150 @@ func TestBuildAllowsRetryWhenBuiltPhaseHasFailedDispatches(t *testing.T) {
 }
 
 func floatPtr(v float64) *float64 { return &v }
+
+type terminalBuildResultInvoker struct {
+	status string
+}
+
+func (i *terminalBuildResultInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     i.status,
+		Summary:    "controlled terminal worker result",
+	}, nil
+}
+
+func (i *terminalBuildResultInvoker) IsAvailable(context.Context) bool { return true }
+func (i *terminalBuildResultInvoker) ValidateAgent(string) error       { return nil }
+
+type noChangePlatformInvoker struct{}
+
+func (i *noChangePlatformInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "claimed success without changing the workspace",
+	}, nil
+}
+
+func (i *noChangePlatformInvoker) IsAvailable(context.Context) bool { return true }
+func (i *noChangePlatformInvoker) ValidateAgent(string) error       { return nil }
+func (i *noChangePlatformInvoker) Platform() codex.Platform         { return codex.PlatformCodex }
+
+func TestBuildDoesNotAdvanceWhenWorkersFailOrTimeout(t *testing.T) {
+	for _, status := range []string{"failed", "blocked", "timeout"} {
+		t.Run(status, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			withWorkingDir(t, root)
+			goal := "Reject false build completion"
+			taskID := "1.1"
+			createTestColonyState(t, dataDir, colony.ColonyState{
+				Version: "3.0",
+				Goal:    &goal,
+				State:   colony.StateREADY,
+				Plan: colony.Plan{Phases: []colony.Phase{{
+					ID:     1,
+					Name:   "Truthful build",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement the feature", Status: colony.TaskPending}},
+				}}},
+			})
+
+			originalInvoker := newCodexWorkerInvoker
+			newCodexWorkerInvoker = func() codex.WorkerInvoker {
+				return &terminalBuildResultInvoker{status: status}
+			}
+			t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+			_, err := runCodexBuild(root, 1, nil, false)
+			if err == nil || !strings.Contains(err.Error(), "did not complete cleanly") {
+				t.Fatalf("build error = %v, want terminal-result failure", err)
+			}
+
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatalf("reload colony state: %v", err)
+			}
+			if state.State == colony.StateBUILT {
+				t.Fatalf("failed worker advanced colony to BUILT: %+v", state)
+			}
+			if strings.Contains(strings.Join(state.Events, "\n"), "|build_completed|") {
+				t.Fatalf("failed worker emitted build_completed: %v", state.Events)
+			}
+		})
+	}
+}
+
+func TestBuildDoesNotAdvanceOnProviderBackedNoOp(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Reject a no-op implementation"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "No-op build",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement the feature", Status: colony.TaskPending}},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &noChangePlatformInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	_, err := runCodexBuild(root, 1, nil, false)
+	if err == nil || !strings.Contains(err.Error(), "without observed file changes") {
+		t.Fatalf("build error = %v, want no-op evidence failure", err)
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	if state.State == colony.StateBUILT {
+		t.Fatal("provider-backed no-op advanced colony to BUILT")
+	}
+}
+
+func TestDiscoveryBuildAcceptsDurableReadOnlyTaskEvidence(t *testing.T) {
+	dispatches := []codexBuildDispatch{
+		{TaskID: "1.1", Caste: "scout", Status: "completed", Summary: "Mapped the current command surface."},
+		{TaskID: "1.2", Caste: "scout", Status: "completed", Summary: "Recorded the active risks and boundaries."},
+		{Caste: "watcher", Status: "completed", Summary: "Discovery evidence is internally consistent."},
+	}
+	phase := colony.Phase{
+		ID:   1,
+		Name: "Discovery and boundaries",
+		Mode: colony.PhaseModeDiscovery,
+		Tasks: []colony.Task{
+			{Goal: "Read the current implementation"},
+			{Goal: "Capture risks and constraints"},
+		},
+	}
+	if err := validateRuntimeBuildDispatchResults(phase, dispatches, &codex.ClaimsSummary{}, true); err != nil {
+		t.Fatalf("read-only discovery evidence was rejected: %v", err)
+	}
+
+	dispatches[0].Summary = ""
+	if err := validateRuntimeBuildDispatchResults(phase, dispatches, &codex.ClaimsSummary{}, true); err == nil {
+		t.Fatal("discovery phase advanced without a durable task summary")
+	}
+}
 
 func mustParseRFC3339(t *testing.T, value string) time.Time {
 	t.Helper()
@@ -2449,7 +3222,7 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	}
 
 	invoker := &codex.FakeInvoker{}
-	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3, false)
+	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3, false, nil)
 	if err != nil {
 		t.Fatalf("execute dispatches: %v", err)
 	}

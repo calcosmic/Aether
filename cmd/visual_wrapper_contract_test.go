@@ -38,9 +38,13 @@ func TestLifecycleWrappersRenderRuntimeCeremonySurfaces(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	workflows := []string{"build", "plan", "colonize", "continue", "seal", "swarm"}
+	// Workflows that render full worker ceremony in wrappers
+	workerTheatreWorkflows := []string{"colonize", "seal", "swarm"}
+	// Workflows that delegate manifest fetch to TS host
+	hostWorkflows := []string{"colonize", "build", "plan", "continue", "seal"}
+
 	for _, platformDir := range []string{".claude/commands/ant", ".opencode/commands/ant"} {
-		for _, workflow := range workflows {
+		for _, workflow := range workerTheatreWorkflows {
 			wrapperPath := filepath.Join(repoRoot, platformDir, workflow+".md")
 			content, err := os.ReadFile(wrapperPath)
 			if err != nil {
@@ -57,6 +61,23 @@ func TestLifecycleWrappersRenderRuntimeCeremonySurfaces(t *testing.T) {
 				}
 			}
 		}
+		for _, workflow := range hostWorkflows {
+			wrapperPath := filepath.Join(repoRoot, platformDir, workflow+".md")
+			content, err := os.ReadFile(wrapperPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", wrapperPath, err)
+			}
+			text := string(content)
+			// TS host workflows delegate manifest orchestration to aether host and retain visual closeout.
+			for _, want := range []string{
+				"aether host " + workflow,
+				"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow " + workflow,
+			} {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s missing TS host visual contract %q", wrapperPath, want)
+				}
+			}
+		}
 	}
 }
 
@@ -66,9 +87,13 @@ func TestWrapperOrchestratedCommandsPreserveLiveWorkerCeremony(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	commands := []string{"build", "plan", "colonize", "continue", "seal", "swarm"}
+	// Commands with full inline worker ceremony
+	workerTheatreCommands := []string{"colonize", "seal", "swarm"}
+	// TS host commands with host-backed manifest generation
+	hostCommands := []string{"colonize", "build", "plan", "continue", "seal"}
+
 	for _, platformDir := range []string{".claude/commands/ant", ".opencode/commands/ant"} {
-		for _, command := range commands {
+		for _, command := range workerTheatreCommands {
 			wrapperPath := filepath.Join(repoRoot, platformDir, command+".md")
 			content, err := os.ReadFile(wrapperPath)
 			if err != nil {
@@ -81,6 +106,23 @@ func TestWrapperOrchestratedCommandsPreserveLiveWorkerCeremony(t *testing.T) {
 				"Do not set `run_in_background`",
 				"background agents",
 				"markdown worker table",
+			} {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s missing live worker ceremony contract %q", wrapperPath, want)
+				}
+			}
+		}
+		for _, command := range hostCommands {
+			wrapperPath := filepath.Join(repoRoot, platformDir, command+".md")
+			content, err := os.ReadFile(wrapperPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", wrapperPath, err)
+			}
+			text := string(content)
+			// TS host wrappers delegate orchestration; only require core safety markers
+			for _, want := range []string{
+				"Do not set `run_in_background`",
+				"background agents",
 			} {
 				if !strings.Contains(text, want) {
 					t.Errorf("%s missing live worker ceremony contract %q", wrapperPath, want)

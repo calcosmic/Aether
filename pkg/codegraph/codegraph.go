@@ -68,14 +68,6 @@ var languageDetectors = map[string]string{
 	".hpp":  "cpp",
 }
 
-// dirsToSkip are directories never scanned.
-var dirsToSkip = map[string]bool{
-	".git": true, "node_modules": true, "vendor": true, ".aether": true,
-	"dist": true, "build": true, "out": true, "__pycache__": true,
-	".next": true, ".nuxt": true, "target": true, "bin": true,
-	".cache": true, ".terraform": true,
-}
-
 // importParser extracts file dependencies from source content.
 // Returns resolved file paths (relative to repo root).
 type importParser func(relPath, content, root string) []string
@@ -513,7 +505,7 @@ func Scan(root string, langs []string) (*CodeGraph, *Stats, error) {
 			return nil
 		}
 		if d.IsDir() {
-			if dirsToSkip[d.Name()] {
+			if ShouldSkipDir(d.Name()) {
 				stats.SkippedDirs++
 				return filepath.SkipDir
 			}

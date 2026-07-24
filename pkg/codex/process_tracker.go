@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 const (
@@ -21,12 +23,15 @@ const (
 
 // TrackedProcess records a worker subprocess that Aether can clean up.
 type TrackedProcess struct {
-	PID        int       `json:"pid"`
-	WorkerName string    `json:"worker_name,omitempty"`
-	Caste      string    `json:"caste,omitempty"`
-	Platform   string    `json:"platform,omitempty"`
-	Root       string    `json:"root,omitempty"`
-	SpawnedAt  time.Time `json:"spawned_at"`
+	PID           int               `json:"pid"`
+	WorkerName    string            `json:"worker_name,omitempty"`
+	TaskID        string            `json:"task_id,omitempty"`
+	Caste         string            `json:"caste,omitempty"`
+	Platform      string            `json:"platform,omitempty"`
+	Root          string            `json:"root,omitempty"`
+	ProviderRunID string            `json:"provider_run_id,omitempty"`
+	Binding       *ExecutionBinding `json:"execution_binding,omitempty"`
+	SpawnedAt     time.Time         `json:"spawned_at"`
 }
 
 // CleanupResult summarizes worker cleanup activity.
@@ -72,8 +77,10 @@ func (p *ProcessTracker) TrackProcess(pid int, process TrackedProcess) {
 	process.PID = pid
 	process.Root = normalizeProcessRoot(process.Root)
 	process.WorkerName = strings.TrimSpace(process.WorkerName)
+	process.TaskID = strings.TrimSpace(process.TaskID)
 	process.Caste = strings.TrimSpace(process.Caste)
 	process.Platform = strings.TrimSpace(process.Platform)
+	process.ProviderRunID = strings.TrimSpace(process.ProviderRunID)
 	if process.SpawnedAt.IsZero() {
 		process.SpawnedAt = time.Now().UTC()
 	}
@@ -137,6 +144,57 @@ func (p *ProcessTracker) KillAll(root string) CleanupResult {
 		p.UntrackProcess(process.PID)
 	}
 	return result
+}
+
+// ProcessesForRun returns live, known provider processes bound to one durable
+// execution run. Persisted records are included so a new Aether process can
+// diagnose work left behind after its predecessor exited.
+func (p *ProcessTracker) ProcessesForRun(root, runID string) ([]TrackedProcess, error) {
+	if p == nil {
+		return nil, nil
+	}
+	root = normalizeProcessRoot(root)
+	runID = strings.TrimSpace(runID)
+	if root == "" || runID == "" {
+		return nil, nil
+	}
+	persisted, err := readTrackedProcesses(root)
+	if err != nil {
+		return nil, err
+	}
+	byPID := map[int]TrackedProcess{}
+	for _, process := range append(persisted, p.snapshot(root)...) {
+		if process.PID <= 0 || process.Binding == nil || strings.TrimSpace(process.Binding.RunID) != runID {
+			continue
+		}
+		if !workerProcessExistsFunc(process.PID) || !isKnownWorkerProcess(process.PID) {
+			continue
+		}
+		byPID[process.PID] = process
+	}
+	result := make([]TrackedProcess, 0, len(byPID))
+	for _, process := range byPID {
+		result = append(result, process)
+	}
+	return result, nil
+}
+
+// KillRun cancels only provider processes carrying the requested durable run
+// identity. It never falls back to a repository-wide kill.
+func (p *ProcessTracker) KillRun(root, runID string) (CleanupResult, error) {
+	processes, err := p.ProcessesForRun(root, runID)
+	if err != nil {
+		return CleanupResult{}, err
+	}
+	result := CleanupResult{Stale: append([]TrackedProcess(nil), processes...)}
+	for _, process := range processes {
+		mergeCleanupResult(&result, killTrackedProcess(process))
+		p.UntrackProcess(process.PID)
+		if process.Root != "" {
+			_ = removeTrackedProcess(process.Root, process.PID)
+		}
+	}
+	return result, nil
 }
 
 // DetectStaleWorkers returns persisted same-root worker processes that are no
@@ -350,57 +408,71 @@ func readTrackedProcesses(root string) ([]TrackedProcess, error) {
 }
 
 func writeTrackedProcesses(root string, processes []TrackedProcess) error {
-	path := trackedProcessRegistryPath(root)
-	if path == "" {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("create worker process registry dir: %w", err)
+	registryStore, err := trackedProcessStore(root)
+	if err != nil || registryStore == nil {
+		return err
 	}
 	payload, err := json.MarshalIndent(trackedProcessFile{Processes: processes}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode worker process registry: %w", err)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0644); err != nil {
-		return fmt.Errorf("write worker process registry: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	if err := registryStore.AtomicWrite(filepath.Base(workerProcessRegistryRel), payload); err != nil {
 		return fmt.Errorf("replace worker process registry: %w", err)
 	}
 	return nil
 }
 
-func upsertTrackedProcess(root string, process TrackedProcess) error {
-	processes, err := readTrackedProcesses(root)
+func trackedProcessStore(root string) (*storage.Store, error) {
+	root = normalizeProcessRoot(root)
+	if root == "" {
+		return nil, nil
+	}
+	registryStore, err := storage.NewStore(filepath.Join(root, ".aether", "data"))
 	if err != nil {
+		return nil, fmt.Errorf("open worker process registry store: %w", err)
+	}
+	return registryStore, nil
+}
+
+func updateTrackedProcesses(root string, mutate func(*trackedProcessFile)) error {
+	registryStore, err := trackedProcessStore(root)
+	if err != nil || registryStore == nil {
 		return err
 	}
-	next := make([]TrackedProcess, 0, len(processes)+1)
-	for _, existing := range processes {
-		if existing.PID == process.PID {
-			continue
-		}
-		next = append(next, existing)
+	var file trackedProcessFile
+	if err := registryStore.UpdateJSONAtomically(filepath.Base(workerProcessRegistryRel), &file, func() error {
+		mutate(&file)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("update worker process registry: %w", err)
 	}
-	next = append(next, process)
-	return writeTrackedProcesses(root, next)
+	return nil
+}
+
+func upsertTrackedProcess(root string, process TrackedProcess) error {
+	return updateTrackedProcesses(root, func(file *trackedProcessFile) {
+		next := make([]TrackedProcess, 0, len(file.Processes)+1)
+		for _, existing := range file.Processes {
+			if existing.PID == process.PID {
+				continue
+			}
+			next = append(next, existing)
+		}
+		file.Processes = append(next, process)
+	})
 }
 
 func removeTrackedProcess(root string, pid int) error {
-	processes, err := readTrackedProcesses(root)
-	if err != nil {
-		return err
-	}
-	next := make([]TrackedProcess, 0, len(processes))
-	for _, existing := range processes {
-		if existing.PID == pid {
-			continue
+	return updateTrackedProcesses(root, func(file *trackedProcessFile) {
+		next := make([]TrackedProcess, 0, len(file.Processes))
+		for _, existing := range file.Processes {
+			if existing.PID == pid {
+				continue
+			}
+			next = append(next, existing)
 		}
-		next = append(next, existing)
-	}
-	return writeTrackedProcesses(root, next)
+		file.Processes = next
+	})
 }
 
 // Test helper functions -- exported for use by cmd tests.

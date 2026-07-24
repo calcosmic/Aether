@@ -451,7 +451,9 @@ type yamlContractInfo struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
 	Runtime     struct {
-		Command string `yaml:"command"`
+		Command         string `yaml:"command"`
+		ManifestCommand string `yaml:"manifest_command"`
+		DefaultCommand  string `yaml:"default_command"`
 	} `yaml:"runtime"`
 	Guardrails []string `yaml:"guardrails"`
 }
@@ -539,8 +541,13 @@ func TestYAMLWrapperContract(t *testing.T) {
 	// Verify YAML contracts.
 	for name, info := range yamlContracts {
 		// Prompt-only commands have no runtime command by design.
-		if !isExcludedFromRuntime(name) && info.Runtime.Command == "" {
-			violations = append(violations, fmt.Sprintf("YAML %q: missing runtime.command", name))
+		if !isExcludedFromRuntime(name) {
+			hasRuntimeRef := info.Runtime.Command != "" ||
+				info.Runtime.ManifestCommand != "" ||
+				info.Runtime.DefaultCommand != ""
+			if !hasRuntimeRef {
+				violations = append(violations, fmt.Sprintf("YAML %q: missing runtime.command (or manifest_command/default_command)", name))
+			}
 		}
 		if len(info.Guardrails) == 0 {
 			violations = append(violations, fmt.Sprintf("YAML %q: missing guardrails", name))

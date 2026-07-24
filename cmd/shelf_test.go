@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -244,5 +245,147 @@ func TestShelfFileNotExist(t *testing.T) {
 	entries := result["entries"].([]interface{})
 	if len(entries) != 0 {
 		t.Fatalf("expected 0 entries, got %d", len(entries))
+	}
+}
+
+func TestShelfDetectFindsCandidates(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	// Seed an unresolved flag to create a shelf candidate
+	ff := colony.FlagsFile{Decisions: []colony.FlagEntry{
+		{ID: "flag_1", Type: "issue", Description: "Unresolved flag", CreatedAt: time.Now().UTC().Format(time.RFC3339), Resolved: false},
+	}}
+	s.SaveJSON("pending-decisions.json", ff)
+
+	rootCmd.SetArgs([]string{"shelf-detect"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("shelf-detect returned error: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	var envelope map[string]interface{}
+	json.Unmarshal([]byte(output), &envelope)
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok:true, got: %s", output)
+	}
+	result := envelope["result"].(map[string]interface{})
+	count := result["count"].(float64)
+	if count < 1 {
+		t.Fatalf("expected at least 1 candidate, got %v", count)
+	}
+}
+
+func TestShelfPromoteBatch(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	// Seed shelf entries
+	sf := colony.NewShelfFile()
+	sf.Entries = []colony.ShelfEntry{
+		{ID: "shelf_1", Text: "a", Status: colony.ShelfShelved, Category: colony.ShelfCategoryUserNote, CreatedAt: "2024-01-01T00:00:00Z"},
+		{ID: "shelf_2", Text: "b", Status: colony.ShelfShelved, Category: colony.ShelfCategoryUserNote, CreatedAt: "2024-01-01T00:00:00Z"},
+	}
+	s.SaveJSON("shelf.json", sf)
+
+	rootCmd.SetArgs([]string{"shelf-promote-batch", "--ids", "shelf_1,shelf_2", "--colony", "Build feature X"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("shelf-promote-batch returned error: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	var envelope map[string]interface{}
+	json.Unmarshal([]byte(output), &envelope)
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok:true, got: %s", output)
+	}
+	result := envelope["result"].(map[string]interface{})
+	promoted := result["promoted"].([]interface{})
+	if len(promoted) != 2 {
+		t.Fatalf("expected 2 promoted, got %d", len(promoted))
+	}
+
+	// Verify filesystem
+	var updated colony.ShelfFile
+	s.LoadJSON("shelf.json", &updated)
+	for _, e := range updated.Entries {
+		if e.Status != colony.ShelfPromoted {
+			t.Fatalf("expected entry %s promoted, got %q", e.ID, e.Status)
+		}
+	}
+}
+
+func TestShelfDismissBatch(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	// Seed shelf entries
+	sf := colony.NewShelfFile()
+	sf.Entries = []colony.ShelfEntry{
+		{ID: "shelf_1", Text: "a", Status: colony.ShelfShelved, Category: colony.ShelfCategoryUserNote, CreatedAt: "2024-01-01T00:00:00Z"},
+		{ID: "shelf_2", Text: "b", Status: colony.ShelfShelved, Category: colony.ShelfCategoryUserNote, CreatedAt: "2024-01-01T00:00:00Z"},
+	}
+	s.SaveJSON("shelf.json", sf)
+
+	rootCmd.SetArgs([]string{"shelf-dismiss-batch", "--ids", "shelf_1,shelf_2"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("shelf-dismiss-batch returned error: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	var envelope map[string]interface{}
+	json.Unmarshal([]byte(output), &envelope)
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok:true, got: %s", output)
+	}
+	result := envelope["result"].(map[string]interface{})
+	dismissed := result["dismissed"].([]interface{})
+	if len(dismissed) != 2 {
+		t.Fatalf("expected 2 dismissed, got %d", len(dismissed))
+	}
+
+	// Verify filesystem
+	var updated colony.ShelfFile
+	s.LoadJSON("shelf.json", &updated)
+	for _, e := range updated.Entries {
+		if e.Status != colony.ShelfDismissed {
+			t.Fatalf("expected entry %s dismissed, got %q", e.ID, e.Status)
+		}
 	}
 }

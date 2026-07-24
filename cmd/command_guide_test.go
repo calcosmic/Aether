@@ -113,7 +113,7 @@ func TestOracleGuideCarriesBroadScopeTimeoutGuard(t *testing.T) {
 }
 
 func TestLifecycleGuidesCarryOrchestratorBoundaryGuidance(t *testing.T) {
-	for _, command := range []string{"plan", "build", "continue", "seal"} {
+	for _, command := range []string{"colonize", "plan", "build", "continue", "seal"} {
 		guide, err := buildCommandGuide(command, "codex")
 		if err != nil {
 			t.Fatalf("buildCommandGuide(%q): %v", command, err)
@@ -132,10 +132,29 @@ func TestLifecycleGuidesCarryOrchestratorBoundaryGuidance(t *testing.T) {
 	}
 }
 
+func TestLifecycleGuidesSurfaceSpawnBudgetReasons(t *testing.T) {
+	for _, command := range []string{"plan", "build", "continue", "seal"} {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), guide.PostSteps...), "\n")
+		for _, want := range []string{
+			"queen_execution_policy.spawn_budget",
+			"selected/pruned caste reasons",
+			"why workers were or were not spawned",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s command-guide missing spawn budget reason anchor %q", command, want)
+			}
+		}
+	}
+}
+
 func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 	tests := map[string][]string{
 		"colonize": {
-			"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+			"aether host colonize",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -143,7 +162,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether colonize-finalize",
 		},
 		"plan": {
-			"AETHER_OUTPUT_MODE=json aether plan --plan-only",
+			"aether host plan --depth <choice> --planning-depth <choice>",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -151,7 +170,8 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether plan-finalize",
 		},
 		"build": {
-			"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+			"aether host build --dry-run <phase>",
+			"Parse `result.manifest.dispatch_manifest`",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -159,8 +179,9 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether build-finalize",
 		},
 		"continue": {
-			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+			"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
+			"aether host continue --dry-run --classic-ceremony",
+			"Parse `result.manifest.continue_manifest`",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -178,6 +199,192 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 		for _, want := range wants {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s command-guide missing visible worker activity anchor %q", command, want)
+			}
+		}
+	}
+}
+
+func TestLifecycleGuidesDocumentApprovedTempCompletionContract(t *testing.T) {
+	for _, command := range []string{"colonize", "plan", "build", "continue", "seal"} {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+		for _, want := range []string{
+			"${TMPDIR:-/tmp}/aether-<workflow>-<run>/<workflow>-completion.json",
+			"never write wrapper result artifacts under `.aether/data`",
+			"<approved temp completion JSON>",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s command-guide missing approved temp completion contract %q", command, want)
+			}
+		}
+	}
+}
+
+func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
+	tests := map[string]struct {
+		required []string
+		retired  []string
+	}{
+		"plan": {
+			required: []string{
+				"aether host plan --depth <choice> --planning-depth <choice>",
+				"Parse `result.plan_manifest` or `result.planning_manifest`",
+				"AETHER_OUTPUT_MODE=json aether plan-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+			},
+		},
+		"colonize": {
+			required: []string{
+				"aether host colonize",
+				"Parse `result.colonize_manifest`",
+				"AETHER_OUTPUT_MODE=json aether colonize-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+			},
+		},
+		"build": {
+			required: []string{
+				"aether host build --dry-run <phase>",
+				"Parse `result.manifest.dispatch_manifest`",
+				"AETHER_OUTPUT_MODE=json aether build-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+				"aether host build <phase>",
+				"Parse `result.dispatch_manifest`",
+			},
+		},
+		"continue": {
+			required: []string{
+				"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
+				"aether host continue --dry-run --classic-ceremony",
+				"Parse `result.manifest.continue_manifest`",
+				"continue-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+				"aether host continue --classic-ceremony",
+				"Parse `result.continue_manifest`",
+			},
+		},
+		"seal": {
+			required: []string{
+				"aether host seal",
+				"Parse `result.seal_manifest`",
+				"AETHER_OUTPUT_MODE=json aether seal-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether seal --plan-only",
+			},
+		},
+	}
+
+	for command, test := range tests {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+		for _, want := range test.required {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s command-guide missing TS host spine anchor %q", command, want)
+			}
+		}
+		for _, forbidden := range test.retired {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s command-guide still documents retired direct manifest path %q", command, forbidden)
+			}
+		}
+	}
+}
+
+func TestCodexLifecycleGuidesDoNotDocumentRetiredHostFallbacks(t *testing.T) {
+	forbidden := map[string][]string{
+		"colonize": {
+			"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+		},
+		"plan": {
+			"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+		},
+		"build": {
+			"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+		},
+		"continue": {
+			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+		},
+		"seal": {
+			"AETHER_OUTPUT_MODE=json aether seal --plan-only",
+		},
+	}
+
+	for command, needles := range forbidden {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+		for _, needle := range needles {
+			if strings.Contains(text, needle) {
+				t.Errorf("%s command-guide still documents retired host fallback %q", command, needle)
+			}
+		}
+	}
+}
+
+func TestWrapperSourcesUseTypeScriptHostManifestSpine(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	tests := map[string][]string{
+		"colonize": {
+			"aether host colonize",
+			"colonize-finalize",
+		},
+		"plan": {
+			"aether host plan",
+			"--planning-depth",
+			"TS host is the sole entry point",
+			"plan-finalize",
+		},
+		"build": {
+			"aether host build --dry-run",
+			"build-finalize",
+		},
+		"continue": {
+			"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
+			"aether host continue --dry-run --classic-ceremony",
+			"continue-finalize",
+		},
+		"seal": {
+			"aether host seal",
+			"seal-finalize",
+		},
+	}
+
+	for command, anchors := range tests {
+		files := []string{
+			filepath.Join(repoRoot, ".aether", "commands", command+".yaml"),
+			filepath.Join(repoRoot, ".claude", "commands", "ant", command+".md"),
+			filepath.Join(repoRoot, ".opencode", "commands", "ant", command+".md"),
+		}
+		for _, path := range files {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			text := string(content)
+			for _, want := range anchors {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s missing TS host spine anchor %q", path, want)
+				}
 			}
 		}
 	}
@@ -231,11 +438,12 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	}
 	text := string(content)
 	for _, want := range []string{
-		"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
-		"AETHER_OUTPUT_MODE=json aether plan --plan-only",
-		"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
-		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+		"aether host colonize",
+		"aether host plan --depth <choice> --planning-depth <choice>",
+		"aether host build --dry-run <phase>",
+		"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
+		"aether host continue --dry-run --classic-ceremony",
+		"aether host seal",
 		"aether spawn-log",
 		"aether spawn-complete",
 		"aether ceremony worker-complete",
@@ -243,6 +451,15 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("%s missing lifecycle worker activity anchor %q", path, want)
+		}
+	}
+	for _, forbidden := range []string{
+		"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+		"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("%s still documents retired host fallback %q", path, forbidden)
 		}
 	}
 }
@@ -561,6 +778,49 @@ func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
 	}
 }
 
+func TestCodexGeneratedCommandShimsCoverIntelligentCommands(t *testing.T) {
+	shims := map[string]codexSkillShim{}
+	for _, shim := range codexSkillShims() {
+		shims[shim.Name] = shim
+	}
+	catalog := commandGuideCatalog()
+	for _, command := range []string{"init", "discuss", "oracle", "colonize", "plan", "build", "continue", "swarm", "seal"} {
+		def := catalog[command]
+		shim, ok := shims["aether-"+command]
+		if !ok {
+			t.Fatalf("codex generated shims missing command-shaped skill for %q", command)
+		}
+		if len(shim.WorkflowTriggers) != 1 || shim.WorkflowTriggers[0] != command {
+			t.Fatalf("%s workflow triggers = %v, want [%s]", shim.Name, shim.WorkflowTriggers, command)
+		}
+		for _, want := range []string{
+			"aether command-guide " + command + " --platform codex",
+			"aether " + command,
+			"/ant-" + command,
+			"Raw Bypass",
+		} {
+			text := shim.Description + "\n" + shim.Body + "\n" + strings.Join(shim.TaskKeywords, "\n")
+			if !strings.Contains(text, want) {
+				t.Fatalf("%s command shim missing %q", shim.Name, want)
+			}
+		}
+		if def.SkillReference != "" && !strings.Contains(shim.Body, def.SkillReference) {
+			t.Fatalf("%s command shim missing lifecycle skill %q", shim.Name, def.SkillReference)
+		}
+		if def.RunCommand != "" && !strings.Contains(shim.Body, def.RunCommand) {
+			t.Fatalf("%s command shim missing runtime command %q", shim.Name, def.RunCommand)
+		}
+		rendered := renderCodexSkillShim(shim)
+		fm := parseSkillFrontmatter(rendered)
+		if fm == nil {
+			t.Fatalf("%s generated shim should have parseable frontmatter", shim.Name)
+		}
+		if !stringSliceContains(fm.TaskKeywords, "aether "+command) {
+			t.Fatalf("%s generated frontmatter missing command keyword: %v", shim.Name, fm.TaskKeywords)
+		}
+	}
+}
+
 func stringSliceContains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
@@ -614,4 +874,166 @@ func readCommandGuideYAMLMetadata(t *testing.T, path string) commandGuideYAMLMet
 		t.Fatalf("%s missing codex_orchestration metadata", path)
 	}
 	return meta
+}
+
+// --- Phase 144 Codex smoke tests (CLEAN-05) ---
+
+func TestCommandGuideBuildSmoke(t *testing.T) {
+	guide, err := buildCommandGuide("build", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(build, codex) error: %v", err)
+	}
+	if guide.RunCommand == "" {
+		t.Error("RunCommand should be non-empty")
+	}
+	if len(guide.PreSteps) < 1 {
+		t.Errorf("PreSteps should have at least 1 entry, got %d", len(guide.PreSteps))
+	}
+	if len(guide.PostSteps) < 1 {
+		t.Errorf("PostSteps should have at least 1 entry, got %d", len(guide.PostSteps))
+	}
+}
+
+func TestCommandGuidePlanSmoke(t *testing.T) {
+	guide, err := buildCommandGuide("plan", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(plan, codex) error: %v", err)
+	}
+	if guide.RunCommand == "" {
+		t.Error("RunCommand should be non-empty")
+	}
+	if len(guide.PreSteps) < 1 {
+		t.Errorf("PreSteps should have at least 1 entry, got %d", len(guide.PreSteps))
+	}
+	if len(guide.PostSteps) < 1 {
+		t.Errorf("PostSteps should have at least 1 entry, got %d", len(guide.PostSteps))
+	}
+}
+
+// --- Phase 144 execution path audit (CLEAN-02) ---
+// CLEAN-06 coverage note: cross-platform build ceremony alignment is verified
+// by .aether/ts-host/test/cross-platform-parity.test.ts which checks that
+// Claude and OpenCode build wrappers have matching ceremony invocation patterns
+// and that dispatched command wrappers contain all 4 ceremony invocations.
+
+type executionPathTest struct {
+	name          string
+	yamlFile      string
+	wantHostCmd   string // runtime.command (or manifest_command/default_command) should contain this
+	orchestration string // orchestration block should contain this (empty = no orchestration block expected)
+}
+
+func TestExecutionPathAudit_OneConductorPerWorkflow(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	tests := []executionPathTest{
+		{
+			name:        "build",
+			yamlFile:    "build.yaml",
+			wantHostCmd: "aether host build",
+		},
+		{
+			name:        "plan",
+			yamlFile:    "plan.yaml",
+			wantHostCmd: "aether host plan",
+		},
+		{
+			name:          "colonize",
+			yamlFile:      "colonize.yaml",
+			wantHostCmd:   "aether host colonize",
+			orchestration: "aether host colonize",
+		},
+		{
+			name:        "continue",
+			yamlFile:    "continue.yaml",
+			wantHostCmd: "aether continue",
+		},
+		{
+			name:        "seal",
+			yamlFile:    "seal.yaml",
+			wantHostCmd: "aether host seal",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			yamlPath := filepath.Join(repoRoot, ".aether", "commands", tc.yamlFile)
+			content, err := os.ReadFile(yamlPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", yamlPath, err)
+			}
+			yamlText := string(content)
+
+			// Assert runtime.command (or manifest_command/default_command) field
+			// contains the expected host command. The YAML schema evolved: some
+			// commands use runtime.command, others use runtime.manifest_command +
+			// runtime.default_command (the single-conductor pattern).
+			var meta struct {
+				Runtime struct {
+					Command         string `yaml:"command"`
+					ManifestCommand string `yaml:"manifest_command"`
+					DefaultCommand  string `yaml:"default_command"`
+				} `yaml:"runtime"`
+			}
+			if err := yaml.Unmarshal(content, &meta); err != nil {
+				t.Fatalf("parse %s: %v", yamlPath, err)
+			}
+
+			// Collect all runtime command references
+			runtimeCmds := []string{meta.Runtime.Command, meta.Runtime.ManifestCommand, meta.Runtime.DefaultCommand}
+			found := false
+			for _, cmd := range runtimeCmds {
+				if cmd != "" && strings.Contains(cmd, tc.wantHostCmd) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("%s: no runtime command field contains %q (got command=%q manifest_command=%q default_command=%q)",
+					tc.name, tc.wantHostCmd, meta.Runtime.Command, meta.Runtime.ManifestCommand, meta.Runtime.DefaultCommand)
+			}
+
+			// For colonize: verify orchestration block references the host command
+			if tc.orchestration != "" {
+				if !strings.Contains(yamlText, tc.orchestration) {
+					t.Errorf("%s: YAML missing orchestration reference %q", tc.name, tc.orchestration)
+				}
+			}
+
+			// For continue: verify both default and heavy-review paths
+			if tc.name == "continue" {
+				if !strings.Contains(yamlText, "aether host continue --dry-run --classic-ceremony") {
+					t.Errorf("%s: YAML missing heavy-review path reference", tc.name)
+				}
+			}
+
+			// Each workflow should produce non-empty Codex command-guide output
+			guide, err := buildCommandGuide(tc.name, "codex")
+			if err != nil {
+				t.Fatalf("buildCommandGuide(%q, codex): %v", tc.name, err)
+			}
+			if guide.RunCommand == "" {
+				t.Errorf("%s: Codex command-guide RunCommand should be non-empty", tc.name)
+			}
+		})
+	}
+}
+
+func TestBuildCommandGuideIncludesPlatformContract(t *testing.T) {
+	guide, err := buildCommandGuide("build", "opencode")
+	if err != nil {
+		t.Fatalf("buildCommandGuide: %v", err)
+	}
+	if guide.PlatformContract.Platform != "opencode" {
+		t.Fatalf("platform contract = %#v", guide.PlatformContract)
+	}
+	if guide.PlatformContract.WorkerDispatch.Level != "limited" {
+		t.Fatalf("worker dispatch support = %#v", guide.PlatformContract.WorkerDispatch)
+	}
+	if guide.PlatformContract.NamedCasteRouting.Level != "limited" {
+		t.Fatalf("named caste routing support = %#v", guide.PlatformContract.NamedCasteRouting)
+	}
 }

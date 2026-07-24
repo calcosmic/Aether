@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
@@ -165,9 +166,16 @@ var phaseInsertCmd = &cobra.Command{
 			Tasks:       []colony.Task{},
 		}
 
+		previousPhaseCount := len(state.Plan.Phases)
+
 		// Insert after the specified index (0-based)
 		insertAt := after
 		state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
+		if shouldReopenInsertedPhase(state, insertAt, previousPhaseCount) {
+			state.State = colony.StateREADY
+			state.CurrentPhase = newID
+			state.Plan.Phases[insertAt].Status = colony.PhaseReady
+		}
 
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
@@ -183,6 +191,16 @@ var phaseInsertCmd = &cobra.Command{
 	},
 }
 
+func shouldReopenInsertedPhase(state colony.ColonyState, insertAt, previousPhaseCount int) bool {
+	if state.State != colony.StateCOMPLETED {
+		return false
+	}
+	if strings.TrimSpace(state.Milestone) == "Crowned Anthill" {
+		return false
+	}
+	return insertAt == previousPhaseCount
+}
+
 var validateOracleStateCmd = &cobra.Command{
 	Use:   "validate-oracle-state",
 	Short: "Validate oracle-specific state structure",
@@ -195,6 +213,12 @@ var validateOracleStateCmd = &cobra.Command{
 
 		issues := []string{}
 		files := map[string]bool{}
+
+		// Path validation: oracle state must be under .aether/data/oracle/
+		statePath := oracleStatePath()
+		if !strings.HasPrefix(statePath, filepath.Join(".aether", "data", "oracle")) {
+			issues = append(issues, fmt.Sprintf("oracle state path %q is outside .aether/data/oracle/", statePath))
+		}
 
 		// Check oracle/state.json
 		stateData, err := store.ReadFile("oracle/state.json")

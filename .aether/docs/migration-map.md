@@ -16,6 +16,20 @@ Milestones are ordered strictly sequential per D-02 and D-03:
 - **Boundary contract:** [.aether/references/contracts/runtime-boundary-contract.md](../references/contracts/runtime-boundary-contract.md) -- Go/TS ownership boundary
 - **TS host lifecycle pattern (Phase 109):** [.aether/ts-host/src/lifecycle.ts](../ts-host/src/lifecycle.ts) -- established `callGoJSON` / manifest / finalizer pattern
 
+## Current Boundary Correction (2026-07-22)
+
+This file records the migration sequence that produced the host. Where older
+sections say the TypeScript host "dispatches" workers, current production
+behavior means: the host schedules the wave and calls Go's hidden
+`internal-worker-adapter`; Go selects, preflights, launches, and parses the
+provider process. The legacy TypeScript provider launcher is test-only.
+
+Platform-native wrappers may instead own visible Task/subagent launch after
+requesting a dry-run manifest. That is a separate, explicitly selected run mode;
+it must not also invoke the Go subprocess path for the same manifest.
+
+`control-ts` is retired and unavailable, not a production migration target.
+
 ---
 
 ## Milestone A: Oracle/RALF Confidence Iteration

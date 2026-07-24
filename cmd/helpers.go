@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -30,6 +33,7 @@ func outputOK(result interface{}) {
 //
 // This matches the shell's json_err() function format for playbook compatibility.
 func outputError(code int, message string, details interface{}) {
+	markRenderedCommandError(code)
 	if shouldRenderVisualOutput(stderr) {
 		fmt.Fprint(stderr, renderVisualError(message, details))
 		return
@@ -173,7 +177,7 @@ func renderVisualError(message string, details interface{}) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderBanner("\u274C", "Error"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(strings.TrimSpace(message))
 	b.WriteString("\n")
 	if details != nil {
@@ -185,5 +189,66 @@ func renderVisualError(message string, details interface{}) string {
 	}
 	// Append generic hint for unmatched errors (per D-05)
 	b.WriteString("\nRun `aether patrol` for diagnostics or `aether status` to check colony health.\n")
+	return b.String()
+}
+
+// newLearningValidator returns a memory.LearningValidator callback that
+// bridges observation promotions to the learning store. When an observation
+// is promoted with trust >= 0.8, any learning entry with matching content
+// and status=hypothesis is upgraded to validated.
+func newLearningValidator(s *storage.Store) func(string, float64) {
+	return func(content string, trustScore float64) {
+		if s == nil || trustScore < 0.8 {
+			return
+		}
+		learnStore := learn.NewColonyStore(s)
+		entries, err := learnStore.List(learn.EntryFilter{Status: learn.StatusHypothesis})
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			if e.Content == content {
+				e.Status = learn.StatusValidated
+				_ = learnStore.Replace(e.ID, e)
+				return
+			}
+		}
+	}
+}
+
+// resolveSurveySection reads available survey artifacts from .aether/data/survey/
+// and returns a markdown section summarizing them. Returns empty string if no
+// survey data exists or if the store is not initialized.
+func resolveSurveySection() string {
+	if store == nil {
+		return ""
+	}
+	surveyDir := filepath.Join(store.BasePath(), "survey")
+	entries, err := os.ReadDir(surveyDir)
+	if err != nil || len(entries) == 0 {
+		return ""
+	}
+
+	var files []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".md") || strings.HasSuffix(name, ".json") {
+			files = append(files, name)
+		}
+	}
+	if len(files) == 0 {
+		return ""
+	}
+	sort.Strings(files)
+
+	var b strings.Builder
+	b.WriteString("### Territory Survey\n\n")
+	b.WriteString("Available survey documents:\n")
+	for _, f := range files {
+		b.WriteString(fmt.Sprintf("- %s\n", f))
+	}
 	return b.String()
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,15 @@ func (i *worktreeBuildInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig)
 	}
 	if !strings.Contains(filepath.ToSlash(cfg.Root), ".aether/worktrees/") {
 		i.t.Fatalf("expected worktree path, got %s", cfg.Root)
+	}
+	if cfg.Caste != "builder" {
+		return codex.WorkerResult{
+			WorkerName: cfg.WorkerName,
+			Caste:      cfg.Caste,
+			TaskID:     cfg.TaskID,
+			Status:     "completed",
+			Summary:    "read-only verification completed",
+		}, nil
 	}
 
 	target := filepath.Join(cfg.Root, "pkg", "feature.txt")
@@ -84,6 +94,53 @@ func (i *worktreePheromoneInvoker) Invoke(_ context.Context, cfg codex.WorkerCon
 
 func (i *worktreePheromoneInvoker) IsAvailable(_ context.Context) bool { return true }
 func (i *worktreePheromoneInvoker) ValidateAgent(_ string) error       { return nil }
+
+type overlappingWorktreeInvoker struct {
+	mu      sync.Mutex
+	arrived int
+	release chan struct{}
+	once    sync.Once
+}
+
+func newOverlappingWorktreeInvoker() *overlappingWorktreeInvoker {
+	return &overlappingWorktreeInvoker{release: make(chan struct{})}
+}
+
+func (i *overlappingWorktreeInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	if cfg.Caste != "builder" {
+		return codex.WorkerResult{WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID, Status: "completed", Summary: "read-only worker completed"}, nil
+	}
+
+	content := []byte(cfg.WorkerName + "\n")
+	if err := os.WriteFile(filepath.Join(cfg.Root, "shared.txt"), content, 0644); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	i.mu.Lock()
+	i.arrived++
+	if i.arrived == 2 {
+		i.once.Do(func() { close(i.release) })
+	}
+	i.mu.Unlock()
+	select {
+	case <-i.release:
+	case <-ctx.Done():
+		return codex.WorkerResult{}, ctx.Err()
+	case <-time.After(5 * time.Second):
+		return codex.WorkerResult{}, fmt.Errorf("timed out waiting for overlapping builder peer")
+	}
+
+	return codex.WorkerResult{
+		WorkerName:   cfg.WorkerName,
+		Caste:        cfg.Caste,
+		TaskID:       cfg.TaskID,
+		Status:       "completed",
+		Summary:      "created the shared path",
+		FilesCreated: []string{"shared.txt"},
+	}, nil
+}
+
+func (i *overlappingWorktreeInvoker) IsAvailable(context.Context) bool { return true }
+func (i *overlappingWorktreeInvoker) ValidateAgent(string) error       { return nil }
 
 func TestBuildWorktreeModeDispatchesIntoIsolatedRoots(t *testing.T) {
 	saveGlobals(t)
@@ -172,6 +229,85 @@ func TestBuildWorktreeModeDispatchesIntoIsolatedRoots(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(state.Worktrees[0].Path))); !os.IsNotExist(err) {
 		t.Fatalf("expected cleaned up worktree path, got err=%v", err)
+	}
+}
+
+func TestBuildWorktreeModeRejectsOverlappingUntrackedPaths(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "checkout", "-b", "main")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-overlap\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	goal := "Detect overlapping worktree writes"
+	taskOne := "1.1"
+	taskTwo := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "light",
+		ParallelMode: colony.ModeWorktree,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Overlap conflict",
+			Status: colony.PhaseReady,
+			Tasks: []colony.Task{
+				{ID: &taskOne, Goal: "Create the shared output for path A", Status: colony.TaskPending},
+				{ID: &taskTwo, Goal: "Create the shared output for path B", Status: colony.TaskPending},
+			},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	overlapInvoker := newOverlappingWorktreeInvoker()
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return overlapInvoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	_, err := runCodexBuild(root, 1, nil, false)
+	if err == nil || !strings.Contains(err.Error(), "worktree ownership conflict") {
+		t.Fatalf("build error = %v, want worktree ownership conflict", err)
+	}
+	data, readErr := os.ReadFile(filepath.Join(root, "shared.txt"))
+	if readErr != nil {
+		t.Fatalf("read accepted shared output: %v", readErr)
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		t.Fatal("accepted shared output is empty")
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	if state.State == colony.StateBUILT {
+		t.Fatal("overlapping worktree writes advanced colony to BUILT")
+	}
+	orphaned := 0
+	for _, entry := range state.Worktrees {
+		if entry.Status != colony.WorktreeOrphaned {
+			continue
+		}
+		orphaned++
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(entry.Path))); err != nil {
+			t.Fatalf("orphaned conflict worktree was not preserved at %s: %v", entry.Path, err)
+		}
+	}
+	if orphaned == 0 {
+		t.Fatalf("conflict left no inspectable orphaned worktree: %+v", state.Worktrees)
+	}
+	if _, _, cleanupErr := gcOrphanedWorktrees(); cleanupErr != nil {
+		t.Fatalf("clean conflict worktree fixture: %v", cleanupErr)
 	}
 }
 
@@ -375,5 +511,103 @@ func TestAllocateBuildWorktreeCleansExistingPath(t *testing.T) {
 	// Verify the leftover file is gone (replaced by git worktree)
 	if _, err := os.Stat(filepath.Join(absPath, "leftover.txt")); err == nil {
 		t.Error("leftover file should have been cleaned up")
+	}
+}
+
+func TestDetectOrphanedWorktrees(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Test"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Worktrees: []colony.WorktreeEntry{
+			{Phase: 1, Branch: "phase-1-wt", Status: colony.WorktreeInProgress, Path: ".aether/worktrees/wt1"},
+			{Phase: 2, Branch: "phase-2-wt", Status: colony.WorktreeInProgress, Path: ".aether/worktrees/wt2"},
+			{Phase: 2, Branch: "phase-2-merged", Status: colony.WorktreeMerged, Path: ".aether/worktrees/wt3"},
+		},
+	})
+
+	// Current phase 1 should detect phase-2 unmerged worktree as orphan
+	orphans := detectOrphanedWorktrees(1)
+	if len(orphans) != 1 {
+		t.Fatalf("expected 1 orphan for current phase 1, got %d", len(orphans))
+	}
+	if orphans[0].Branch != "phase-2-wt" {
+		t.Errorf("expected orphan branch phase-2-wt, got %s", orphans[0].Branch)
+	}
+
+	// Current phase 2 should detect phase-1 as orphan
+	orphans = detectOrphanedWorktrees(2)
+	if len(orphans) != 1 {
+		t.Fatalf("expected 1 orphan for current phase 2, got %d", len(orphans))
+	}
+	if orphans[0].Branch != "phase-1-wt" {
+		t.Errorf("expected orphan branch phase-1-wt, got %s", orphans[0].Branch)
+	}
+
+	// Current phase 3 should detect both unmerged as orphans
+	orphans = detectOrphanedWorktrees(3)
+	if len(orphans) != 2 {
+		t.Fatalf("expected 2 orphans for current phase 3, got %d", len(orphans))
+	}
+}
+
+func TestDetectOrphanedWorktreesNone(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Test"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:   "3.0",
+		Goal:      &goal,
+		State:     colony.StateREADY,
+		Worktrees: []colony.WorktreeEntry{},
+	})
+
+	orphans := detectOrphanedWorktrees(1)
+	if len(orphans) != 0 {
+		t.Errorf("expected 0 orphans, got %d", len(orphans))
+	}
+}
+
+func TestMergePhaseWorktreesEmpty(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Test"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:   "3.0",
+		Goal:      &goal,
+		State:     colony.StateREADY,
+		Worktrees: []colony.WorktreeEntry{},
+	})
+
+	merged, failed, err := mergePhaseWorktrees(1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(merged) != 0 {
+		t.Errorf("expected 0 merged, got %d", len(merged))
+	}
+	if len(failed) != 0 {
+		t.Errorf("expected 0 failed, got %d", len(failed))
 	}
 }

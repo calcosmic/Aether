@@ -175,6 +175,17 @@ var hiveReadCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		domain, _ := cmd.Flags().GetString("domain")
 		minConfidence, _ := cmd.Flags().GetFloat64("min-confidence")
+		forWorker, _ := cmd.Flags().GetBool("for-worker")
+		if forWorker && !automaticHiveReadEnabled() {
+			outputOK(map[string]interface{}{
+				"entries": []hiveWisdomEntry{},
+				"total":   0,
+				"policy":  string(currentHiveRuntimePolicy()),
+				"enabled": false,
+				"reason":  "automatic cross-project wisdom injection is disabled; set AETHER_HIVE_POLICY=read to opt in",
+			})
+			return nil
+		}
 
 		hub := resolveHubPath()
 		wisdomPath := filepath.Join(hub, "hive", "wisdom.json")
@@ -213,7 +224,7 @@ var hiveReadCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{"entries": results, "total": len(results)})
+		outputOK(map[string]interface{}{"entries": results, "total": len(results), "policy": string(currentHiveRuntimePolicy()), "enabled": true})
 		return nil
 	},
 }
@@ -396,6 +407,16 @@ var hivePromoteCmd = &cobra.Command{
 	Short: "End-to-end abstract + store pipeline for wisdom promotion",
 	Args:  cobra.MaximumNArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		automatic, _ := cmd.Flags().GetBool("automatic")
+		if automatic && !automaticHivePromotionEnabled() {
+			outputOK(map[string]interface{}{
+				"promoted": false,
+				"skipped":  true,
+				"policy":   string(currentHiveRuntimePolicy()),
+				"reason":   "automatic cross-project promotion is disabled; set AETHER_HIVE_POLICY=promote to opt in",
+			})
+			return nil
+		}
 		text := mustGetStringCompat(cmd, args, "text", 0)
 		if text == "" {
 			return nil
@@ -489,6 +510,7 @@ func init() {
 
 	hiveReadCmd.Flags().String("domain", "", "Filter by domain")
 	hiveReadCmd.Flags().Float64("min-confidence", 0, "Minimum confidence threshold")
+	hiveReadCmd.Flags().Bool("for-worker", false, "Apply the automatic worker-injection policy")
 
 	hiveAbstractCmd.Flags().String("instinct", "", "Instinct text to abstract (required)")
 	hiveAbstractCmd.Flags().String("source-repo", "", "Source repository")
@@ -497,6 +519,7 @@ func init() {
 	hivePromoteCmd.Flags().String("domain", "", "Domain tag (required)")
 	hivePromoteCmd.Flags().String("source-repo", "", "Source repository")
 	hivePromoteCmd.Flags().Float64("confidence", 0.75, "Confidence score")
+	hivePromoteCmd.Flags().Bool("automatic", false, "Apply the automatic cross-project promotion policy")
 
 	rootCmd.AddCommand(hiveInitCmd)
 	rootCmd.AddCommand(hiveStoreCmd)

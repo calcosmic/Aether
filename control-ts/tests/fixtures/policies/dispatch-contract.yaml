@@ -1,0 +1,12 @@
+dispatch_contract:
+  max_workers_per_phase: 10
+  spawn_depth_limits:
+    0: 4
+    1: 4
+    2: 2
+    3: 0
+  timeout_defaults:
+    build: 600
+    continue: 300
+    plan: 300
+    verify: 180

@@ -36,12 +36,12 @@ var colonizeFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalColonizeCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		result, err := runCodexColonizeFinalize(skillWorkspaceRoot(), completion)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		outputWorkflow(result, renderColonizeVisual(result))
 		return nil
@@ -52,6 +52,9 @@ func loadExternalColonizeCompletion(path string) (codexExternalColonizeCompletio
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return codexExternalColonizeCompletion{}, fmt.Errorf("flag --completion-file is required")
+	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return codexExternalColonizeCompletion{}, err
 	}
 	var data []byte
 	var err error

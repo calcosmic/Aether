@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 const (
@@ -1269,7 +1270,7 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 	}
 
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"mode":               "run",
 		"autonomous":         true,
 		"status":             status,
@@ -1315,7 +1316,20 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"approval_status":    mapApprovalStatus(status),
 		"original_prompt":    strings.TrimSpace(state.Topic),
 		"synthesized_prompt": buildSynthesizedPrompt(plan, state),
-	}, nil
+	}
+	if status == "complete" {
+		evidencePath, err := filepath.Rel(paths.Root, paths.SynthesisPath)
+		if err != nil {
+			return nil, fmt.Errorf("resolve Oracle synthesis evidence path: %w", err)
+		}
+		evidencePath = filepath.ToSlash(evidencePath)
+		result["plan_revision_option"] = planRevisionRecommendation(
+			colony.PlanRevisionResearch,
+			fmt.Sprintf("Oracle completed research for %s; revise unfinished phases if the findings invalidate plan assumptions", strings.TrimSpace(state.Topic)),
+			evidencePath,
+		)
+	}
+	return result, nil
 }
 
 type oracleAttemptResult struct {
@@ -1425,16 +1439,16 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 
 func buildOracleWorkerConfig(invoker codex.WorkerInvoker, paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, target oracleQuestion, attempt int, policy oracleAttemptPolicy, responsePath string) codex.WorkerConfig {
 	workerName := deterministicAntName("oracle", fmt.Sprintf("%s|%d", state.Topic, state.Iteration))
-	topicHeadline := oracleTopicHeadline(state.Topic)
-	if topicHeadline == "" {
-		topicHeadline = "Oracle research topic"
+	topicLabel := oracleTopicQuestionLabel(state.Topic)
+	if topicLabel == "" {
+		topicLabel = "Oracle research topic"
 	}
 	targetLabel := oracleQuestionLabel(target)
 	responseRelPath, _ := filepath.Rel(paths.Root, responsePath)
 	responseRelPath = filepath.ToSlash(responseRelPath)
 	brief := codex.RenderTaskBrief(codex.TaskBriefData{
 		TaskID: fmt.Sprintf("oracle.%d", state.Iteration),
-		Goal:   fmt.Sprintf("Advance the Oracle RALF loop for %s by investigating %s during the %s phase.", topicHeadline, targetLabel, state.Phase),
+		Goal:   fmt.Sprintf("Advance the Oracle RALF loop for %s by investigating %s during the %s phase.", topicLabel, targetLabel, state.Phase),
 		Constraints: []string{
 			fmt.Sprintf("Write exactly one Oracle response JSON file to %s.", emptyFallback(responseRelPath, responsePath)),
 			"Do not read or rewrite .aether/oracle/state.json, plan.json, gaps.md, synthesis.md, or research-plan.md.",
@@ -1513,6 +1527,11 @@ func renderOracleContextCapsule(state oracleStateFile, plan oraclePlanFile, dete
 	if len(state.FocusAreas) > 0 {
 		fmt.Fprintf(&b, "- Focus Areas: %s\n", renderCSV(compactOracleFocusAreas(state.FocusAreas), "none"))
 	}
+	if fullTopic := strings.TrimSpace(state.Topic); fullTopic != "" && fullTopic != strings.TrimSpace(oracleTopicHeadline(state.Topic)) {
+		b.WriteString("\n## Full User Topic\n")
+		b.WriteString(fullTopic)
+		b.WriteString("\n")
+	}
 	b.WriteString("\n## Prior Findings For This Question\n")
 	if prior := renderOraclePriorFindings(plan, target); prior != "" {
 		b.WriteString(prior)
@@ -1536,19 +1555,39 @@ func oraclePhaseDirective(state oracleStateFile, plan oraclePlanFile) string {
 	return buildOraclePhaseDirective(state.Phase)
 }
 
-func buildOraclePhaseDirective(phase string) string {
-	switch strings.ToLower(strings.TrimSpace(phase)) {
-	case "survey":
-		return "Your task is to survey the landscape. Identify key concepts, existing solutions, and open questions. Do not form conclusions yet."
-	case "verify":
-		return "Your task is to verify previous findings. Test assumptions, look for contradictions, and assess confidence levels."
-	case "investigate":
-		return "Your task is to investigate specific questions. Deep-dive into the most promising areas identified in the survey."
-	case "synthesize":
-		return "Your task is to synthesize all findings into a coherent report. Connect dots, resolve contradictions, and formulate recommendations."
-	default:
-		return "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings."
+func loadOraclePhaseDirectives() map[string]string {
+	data, err := os.ReadFile("colony/policies/oracle-phase-directives.yaml")
+	if err != nil {
+		return nil
 	}
+	directives := make(map[string]string)
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		val = strings.Trim(val, `"`)
+		directives[key] = val
+	}
+	return directives
+}
+
+func buildOraclePhaseDirective(phase string) string {
+	directives := loadOraclePhaseDirectives()
+	key := strings.ToLower(strings.TrimSpace(phase))
+	if d, ok := directives[key]; ok && d != "" {
+		return d
+	}
+	if d, ok := directives["default"]; ok && d != "" {
+		return d
+	}
+	return "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings."
 }
 
 func oracleWorkspacePaths(root string) oraclePaths {
@@ -1996,7 +2035,7 @@ func scanCodebaseStructure(root string) string {
 
 func buildBriefInformedQuestions(topic string, brief string, detectedType string, profiles ...oracleScopeProfile) []oracleQuestion {
 	scopeProfile := oracleScopeFromOptional(topic, profiles)
-	topicLabel := oracleTopicHeadline(topic)
+	topicLabel := oracleTopicQuestionLabel(topic)
 	if topicLabel == "" {
 		topicLabel = "this topic"
 	}
@@ -2270,7 +2309,8 @@ func normalizeOracleWorkerResponse(response oracleWorkerResponse, target oracleQ
 	}
 
 	response.Confidence = clampOracleConfidence(response.Confidence)
-	response.Summary = strings.TrimSpace(response.Summary)
+	originalSummary := strings.TrimSpace(response.Summary)
+	response.Summary = originalSummary
 	response.Gaps = compactOracleStrings(response.Gaps)
 	response.Contradictions = compactOracleStrings(response.Contradictions)
 	response.Recommendation = strings.TrimSpace(response.Recommendation)
@@ -2302,6 +2342,17 @@ func normalizeOracleWorkerResponse(response oracleWorkerResponse, target oracleQ
 	}
 	response.Findings = findings
 
+	switch response.Status {
+	case "answered", "partial":
+		if len(response.Findings) == 0 {
+			return oracleWorkerResponse{}, fmt.Errorf("oracle response for %s returned no findings", oracleQuestionLabel(target))
+		}
+	case "blocked":
+		if len(response.Findings) == 0 && len(response.Gaps) == 0 && originalSummary == "" && response.Recommendation == "" {
+			return oracleWorkerResponse{}, fmt.Errorf("oracle blocked response for %s omitted blocker detail", oracleQuestionLabel(target))
+		}
+	}
+
 	if response.Summary == "" {
 		switch response.Status {
 		case "blocked":
@@ -2310,17 +2361,6 @@ func normalizeOracleWorkerResponse(response oracleWorkerResponse, target oracleQ
 			response.Summary = fmt.Sprintf("Oracle worker made partial progress on %s.", oracleQuestionLabel(target))
 		default:
 			response.Summary = fmt.Sprintf("Oracle worker answered %s.", oracleQuestionLabel(target))
-		}
-	}
-
-	switch response.Status {
-	case "answered", "partial":
-		if len(response.Findings) == 0 {
-			return oracleWorkerResponse{}, fmt.Errorf("oracle response for %s returned no findings", oracleQuestionLabel(target))
-		}
-	case "blocked":
-		if len(response.Findings) == 0 && len(response.Gaps) == 0 && response.Summary == "" {
-			return oracleWorkerResponse{}, fmt.Errorf("oracle blocked response for %s omitted blocker detail", oracleQuestionLabel(target))
 		}
 	}
 
@@ -2912,6 +2952,11 @@ func writeOracleResearchPlan(path string, state oracleStateFile, plan oraclePlan
 	if topicSummary := oracleTopicSummary(state.Topic); topicSummary != "" {
 		fmt.Fprintf(&b, "**Topic Summary:** %s\n", topicSummary)
 	}
+	if fullTopic := strings.TrimSpace(state.Topic); fullTopic != "" && fullTopic != strings.TrimSpace(oracleTopicHeadline(state.Topic)) {
+		b.WriteString("\n## Full User Topic\n")
+		b.WriteString(fullTopic)
+		b.WriteString("\n")
+	}
 	fmt.Fprintf(&b, "**Status:** %s | **Phase:** %s | **Iteration:** %d of %d\n", emptyFallback(state.Status, "active"), emptyFallback(state.Phase, "survey"), state.Iteration, state.MaxIterations)
 	fmt.Fprintf(&b, "**Overall Confidence:** %d%% (target %d%%)\n", state.OverallConfidence, state.TargetConfidence)
 	if strings.TrimSpace(state.ActiveQuestionID) != "" || strings.TrimSpace(state.ActiveQuestionText) != "" {
@@ -3125,7 +3170,7 @@ func renderOracleIterationPreview(state oracleStateFile, plan oraclePlanFile) st
 
 	var b strings.Builder
 	b.WriteString(renderBanner("🔮🐜", "Oracle Loop"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Phase: %s\n", emptyFallback(state.Phase, "survey"))
 	fmt.Fprintf(&b, "Iteration: %d of %d\n", state.Iteration, state.MaxIterations)
 	if state.ActiveAttempt > 0 {
@@ -3145,7 +3190,7 @@ func renderOracleIterationPreview(state oracleStateFile, plan oraclePlanFile) st
 func renderOracleRetryPreview(state oracleStateFile) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🔁", "Oracle Retry"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Iteration: %d of %d\n", state.Iteration, state.MaxIterations)
 	fmt.Fprintf(&b, "Attempt: %d of %d\n", state.ActiveAttempt+1, defaultOracleMaxAttempts)
 	fmt.Fprintf(&b, "Target: %s\n", oracleQuestionLabel(oracleQuestion{ID: state.ActiveQuestionID, Text: state.ActiveQuestionText}))
@@ -3360,6 +3405,25 @@ func oracleTopicHeadline(topic string) string {
 		}
 	}
 	return ""
+}
+
+func oracleTopicQuestionLabel(topic string) string {
+	text := strings.Join(strings.Fields(strings.TrimSpace(topic)), " ")
+	if text == "" {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= 260 {
+		return text
+	}
+	headLimit := 145
+	tailLimit := 95
+	if len(runes) <= headLimit+tailLimit {
+		return text
+	}
+	head := strings.TrimSpace(string(runes[:headLimit]))
+	tail := strings.TrimSpace(string(runes[len(runes)-tailLimit:]))
+	return head + " ... " + tail
 }
 
 func oracleTopicSummary(topic string) string {

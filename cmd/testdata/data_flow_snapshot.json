@@ -127,7 +127,7 @@
       "dead_end": false
     },
     {
-      "name": "runtime-spawn-runs.jsonl",
+      "name": "spawn-runs.json",
       "classification": "async-pipeline",
       "colony_prime_sections": [],
       "capsule_sections": [],

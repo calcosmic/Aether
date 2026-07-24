@@ -117,6 +117,9 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
+		// Clear stale session from any prior colony to prevent old decisions from leaking in.
+		_ = os.Remove(filepath.Join(dataDir, "session.json"))
+
 		// Backup old colony state before overwriting (sealed colony fresh-init)
 		if _, err := os.Stat(statePath); err == nil {
 			backupDir := filepath.Join(dataDir, "backups")

@@ -2,7 +2,7 @@
  * Integration tests for the lifecycle orchestrator.
  *
  * Tests verify:
- * - runLifecycle completes the full plan -> build 1 -> continue sequence
+ * - runLifecycle stops before build when planning still needs real workers
  * - Each step calls Go --plan-only and finalizer commands correctly
  * - Spawn events are recorded for build workers
  * - Completion files are written to tmpdir, not .aether/data/
@@ -11,9 +11,11 @@
  * All tests run against the real Go CLI binary with a temp colony.
  */
 
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +23,34 @@ import assert from "node:assert/strict";
 import { discoverGoBinary, callGoJSON } from "../src/go-bridge.js";
 import type { GoBridgeOptions } from "../src/go-bridge.js";
 import { runLifecycle } from "../src/lifecycle.js";
-import type { LifecycleOptions } from "../src/lifecycle.js";
+import type { LifecycleOptions, LifecycleResult } from "../src/lifecycle.js";
+import {
+  __restoreCreateCeremonyAdapter,
+  __setCreateCeremonyAdapter,
+  type CeremonyAdapter,
+  type CeremonyWorkflow,
+} from "../src/ceremony-adapter.js";
+
+let sourceGoBinaryPath: string | undefined;
+
+function discoverSourceGoBinary(): string {
+  if (process.env["AETHER_BINARY_PATH"]) {
+    return discoverGoBinary();
+  }
+  if (sourceGoBinaryPath) {
+    return sourceGoBinaryPath;
+  }
+
+  const testDir = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolve(testDir, "..", "..", "..");
+  const buildDir = mkdtempSync(join(tmpdir(), "aether-ts-host-source-bin-"));
+  sourceGoBinaryPath = join(buildDir, "aether");
+  execFileSync("go", ["build", "-o", sourceGoBinaryPath, "./cmd/aether"], {
+    cwd: repoRoot,
+    stdio: "pipe",
+  });
+  return sourceGoBinaryPath;
+}
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -64,7 +93,7 @@ function setupTestColony(): {
   writeFileSync(join(dataDir, "constraints.json"), "[]", "utf-8");
   writeFileSync(join(dataDir, "session.json"), "{}", "utf-8");
 
-  const goBinaryPath = discoverGoBinary();
+  const goBinaryPath = discoverSourceGoBinary();
   const bridge: GoBridgeOptions = { goBinaryPath, cwd: tempDir };
 
   return {
@@ -89,6 +118,20 @@ function readColonyState(dataDir: string): Record<string, unknown> {
   return JSON.parse(raw) as Record<string, unknown>;
 }
 
+function assertRequiresPlanningLoop(result: LifecycleResult): void {
+  assert.equal(result.success, false, "Lifecycle should stop before build");
+  assert.deepEqual(
+    result.steps_completed,
+    [],
+    "No lifecycle step should be marked complete while planning is pending"
+  );
+  assert.match(
+    result.error ?? "",
+    /intermediate planning iteration|synthesis planning packets|real Scout and Route-Setter/,
+    `Error should explain the pending planning loop: ${result.error ?? "none"}`
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -105,7 +148,7 @@ describe("lifecycle", () => {
     context = null;
   });
 
-  it("runLifecycle completes full plan -> build 1 -> continue sequence", async () => {
+  it("runLifecycle stops before build when planning needs another worker iteration", async () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge, dataDir } = context;
 
@@ -118,36 +161,23 @@ describe("lifecycle", () => {
 
     const result = await runLifecycle(opts);
 
-    // The lifecycle should complete successfully
-    assert.ok(
-      result.success,
-      `Lifecycle should succeed. Error: ${result.error ?? "none"}`
-    );
+    assertRequiresPlanningLoop(result);
 
-    // All three steps should be completed
-    assert.deepEqual(
-      result.steps_completed,
-      ["plan", "build", "continue"],
-      "All three lifecycle steps should be completed"
-    );
-
-    // Verify colony state was updated by Go finalizers
+    // Verify colony state was not promoted to a completed plan by TS synthesis.
     const state = readColonyState(dataDir);
-
-    // After plan, the state should have phases
     const plan = state["plan"] as { phases?: unknown[] } | undefined;
-    assert.ok(plan, "Colony state should have a plan after lifecycle");
     assert.ok(
       Array.isArray(plan?.phases),
-      "Plan should have a phases array"
+      "Plan should still have a phases array"
     );
-    assert.ok(
-      (plan?.phases?.length ?? 0) > 0,
-      "Plan should have at least one phase"
+    assert.equal(
+      plan?.phases?.length ?? 0,
+      0,
+      "Pending planning must not write final phases"
     );
   });
 
-  it("runLifecycle records spawn events for build workers", async () => {
+  it("runLifecycle does not record build spawn events without a finalized plan", async () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge } = context;
 
@@ -159,9 +189,9 @@ describe("lifecycle", () => {
     };
 
     const result = await runLifecycle(opts);
-    assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "ok"}`);
+    assertRequiresPlanningLoop(result);
 
-    // Check spawn tree for build worker entries
+    // Check that build worker entries were not recorded.
     try {
       interface SpawnTreeResult {
         entries?: Array<{
@@ -173,18 +203,18 @@ describe("lifecycle", () => {
       const tree = callGoJSON<SpawnTreeResult>(bridge, ["spawn-tree-load"]);
       const entries = tree.entries ?? [];
 
-      // There should be at least one completed entry from build workers
       const completedEntries = entries.filter(
         (e) => e.status === "completed"
       );
-      assert.ok(
-        completedEntries.length > 0,
-        `Spawn tree should have at least one completed entry. ` +
+      assert.equal(
+        completedEntries.length,
+        0,
+        `Spawn tree should not have completed build entries before planning finishes. ` +
           `Found ${entries.length} entries: ${JSON.stringify(entries.map((e) => `${e.agent_name}=${e.status}`))}`
       );
     } catch (err) {
-      // spawn-tree-load may fail in a minimal test colony; the lifecycle
-      // itself succeeded which proves the spawn-log/complete calls were made.
+      // spawn-tree-load may fail in a minimal test colony; that is acceptable
+      // because planning stopped before build worker spawn-log/complete calls.
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(
         `Note: spawn-tree-load check skipped: ${msg}\n`
@@ -196,17 +226,12 @@ describe("lifecycle", () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge, dataDir } = context;
 
-    // Record .aether/data/ file list before lifecycle
-    const dataFilesBefore = new Set<string>();
-    try {
-      const { readdirSync } = await import("node:fs");
-      const files = readdirSync(dataDir);
-      for (const f of files) {
-        dataFilesBefore.add(f);
-      }
-    } catch {
-      // data dir may not exist yet
-    }
+    const { readdirSync } = await import("node:fs");
+    const completionDirNamesBefore = new Set(
+      readdirSync(tmpdir(), { withFileTypes: true })
+        .filter((e) => e.isDirectory() && /^aether-(plan|build|continue)-/.test(e.name))
+        .map((e) => e.name)
+    );
 
     const opts: LifecycleOptions = {
       goBinaryPath: bridge.goBinaryPath,
@@ -216,20 +241,19 @@ describe("lifecycle", () => {
     };
 
     const result = await runLifecycle(opts);
-    assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "ok"}`);
+    assertRequiresPlanningLoop(result);
 
-    // The .aether/data/ directory will have files modified by Go finalizers
-    // (COLONY_STATE.json, session.json, spawn-tree.txt, etc.) but NOT
-    // completion files. Completion files should only exist in unique tmpdirs.
-    const { readdirSync } = await import("node:fs");
+    // The .aether/data/ directory may have planning iteration state written by
+    // Go, but completion files should only exist in unique tmpdirs.
     const tmpEntries = readdirSync(tmpdir(), { withFileTypes: true });
     const completionDirs = tmpEntries
-      .filter((e) => e.isDirectory() && e.name.startsWith("aether-lifecycle-"))
+      .filter((e) => e.isDirectory() && /^aether-(plan|build|continue)-/.test(e.name))
+      .filter((e) => !completionDirNamesBefore.has(e.name))
       .map((e) => join(tmpdir(), e.name));
 
     assert.ok(
-      completionDirs.length >= 3,
-      `Expected at least 3 unique completion dirs, found ${completionDirs.length}`
+      completionDirs.length >= 1,
+      `Expected at least 1 unique approved completion dir, found ${completionDirs.length}`
     );
 
     // Collect all completion files across unique dirs
@@ -245,12 +269,12 @@ describe("lifecycle", () => {
       "Plan completion file should exist in tmpdir"
     );
     assert.ok(
-      completionFiles.has("build-completion.json"),
-      "Build completion file should exist in tmpdir"
+      !completionFiles.has("build-completion.json"),
+      "Build completion file should not exist before planning finishes"
     );
     assert.ok(
-      completionFiles.has("continue-completion.json"),
-      "Continue completion file should exist in tmpdir"
+      !completionFiles.has("continue-completion.json"),
+      "Continue completion file should not exist before planning finishes"
     );
 
     // Verify none of the completion files are in .aether/data/
@@ -322,7 +346,7 @@ describe("lifecycle", () => {
     );
 
     const opts: LifecycleOptions = {
-      goBinaryPath: discoverGoBinary(),
+      goBinaryPath: discoverSourceGoBinary(),
       cwd: tempDir,
       simulateWorkers: true,
     };
@@ -346,20 +370,13 @@ describe("lifecycle", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("lifecycle with dashboard option creates dashboard", async () => {
+  it("lifecycle with dashboard option still stops at pending planning", async () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge } = context;
 
     // Force dashboard on by overriding isTTY
     const originalIsTTY = process.stdout.isTTY;
     Object.defineProperty(process.stdout, "isTTY", { value: true, writable: true });
-
-    let createDashboardCalled = false;
-    const originalModule = await import("../src/dashboard.js");
-    const originalCreateDashboard = originalModule.createDashboard;
-
-    // Monkey-patch createDashboard for this test
-    const { createDashboard } = await import("../src/dashboard.js");
 
     const opts: LifecycleOptions = {
       goBinaryPath: bridge.goBinaryPath,
@@ -374,14 +391,10 @@ describe("lifecycle", () => {
     // Restore isTTY
     Object.defineProperty(process.stdout, "isTTY", { value: originalIsTTY, writable: true });
 
-    // The lifecycle should complete successfully (dashboard presence doesn't break it)
-    assert.ok(
-      result.success,
-      `Lifecycle should succeed with dashboard option. Error: ${result.error ?? "none"}`
-    );
+    assertRequiresPlanningLoop(result);
   });
 
-  it("lifecycle with no-dashboard skips dashboard", async () => {
+  it("lifecycle with no-dashboard still stops at pending planning", async () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge } = context;
 
@@ -395,13 +408,10 @@ describe("lifecycle", () => {
 
     const result = await runLifecycle(opts);
 
-    assert.ok(
-      result.success,
-      `Lifecycle should succeed with dashboard disabled. Error: ${result.error ?? "none"}`
-    );
+    assertRequiresPlanningLoop(result);
   });
 
-  it("lifecycle stops dashboard after build even on error", async () => {
+  it("lifecycle does not start build dashboard while planning is pending", async () => {
     // Use the existing test context which has a valid colony state
     assert.ok(context, "Test context should be initialized");
     const { bridge } = context;
@@ -410,15 +420,6 @@ describe("lifecycle", () => {
     const originalIsTTY = process.stdout.isTTY;
     Object.defineProperty(process.stdout, "isTTY", { value: true, writable: true });
 
-    // Track whether dashboard.stop was called by monkey-patching createDashboard
-    let stopCalled = false;
-    const dashboardModule = await import("../src/dashboard.js");
-    const originalCreateDashboard = dashboardModule.createDashboard;
-
-    // We can't easily intercept the internal dashboard instance from runLifecycle,
-    // but we can verify that when dashboard: true and isTTY is true, the lifecycle
-    // still completes without leaving the terminal in a bad state.
-    // The real verification is that dashboard.stop() is in the finally block.
     const opts: LifecycleOptions = {
       goBinaryPath: bridge.goBinaryPath,
       cwd: bridge.cwd,
@@ -432,34 +433,27 @@ describe("lifecycle", () => {
     // Restore isTTY
     Object.defineProperty(process.stdout, "isTTY", { value: originalIsTTY, writable: true });
 
-    assert.ok(
-      result.success,
-      `Lifecycle should succeed with dashboard. Error: ${result.error ?? "none"}`
-    );
+    assertRequiresPlanningLoop(result);
 
-    // Dashboard cleanup is verified by the finally block in lifecycle.ts
-    // and by the fact that the test runner output is not corrupted.
+    // Since build never starts, the build dashboard never owns terminal state.
   });
 
   // ---------------------------------------------------------------------------
   // QueenOrchestrator integration tests
   // ---------------------------------------------------------------------------
 
-  it("lifecycle uses QueenOrchestrator for build step", async () => {
+  it("lifecycle does not use QueenOrchestrator before planning completes", async () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge } = context;
 
     const lifecycleModule = await import("../src/lifecycle.js");
-    const originalCreateQueenOrchestrator = lifecycleModule.__setCreateQueenOrchestrator;
 
     let runBuildCalled = false;
-    let runBuildManifest: { dispatches?: unknown[] } | undefined;
 
     lifecycleModule.__setCreateQueenOrchestrator((opts: unknown) => {
       return {
         async runBuild(manifest: { dispatches?: unknown[] }) {
           runBuildCalled = true;
-          runBuildManifest = manifest;
           // Return one result per dispatch so Go finalizer is satisfied
           const dispatches = manifest.dispatches ?? [];
           const workerResults = dispatches.map((d: unknown) => {
@@ -491,15 +485,14 @@ describe("lifecycle", () => {
       };
 
       const result = await runLifecycle(opts);
-      assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "none"}`);
-      assert.ok(runBuildCalled, "QueenOrchestrator.runBuild should have been called");
-      assert.ok(runBuildManifest, "runBuild should have received a manifest");
+      assertRequiresPlanningLoop(result);
+      assert.equal(runBuildCalled, false, "QueenOrchestrator.runBuild should not be called");
     } finally {
       lifecycleModule.__restoreCreateQueenOrchestrator();
     }
   });
 
-  it("lifecycle passes skipMiddenCheck to QueenOrchestrator", async () => {
+  it("lifecycle does not pass build options to QueenOrchestrator before planning completes", async () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge } = context;
 
@@ -542,16 +535,14 @@ describe("lifecycle", () => {
       };
 
       const result = await runLifecycle(opts);
-      assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "none"}`);
-      assert.ok(receivedOpts, "QueenOrchestrator should have been created with options");
-      const qOpts = receivedOpts as { skipMiddenCheck?: boolean };
-      assert.equal(qOpts.skipMiddenCheck, true, "skipMiddenCheck should be passed through");
+      assertRequiresPlanningLoop(result);
+      assert.equal(receivedOpts, undefined, "QueenOrchestrator should not be created");
     } finally {
       lifecycleModule.__restoreCreateQueenOrchestrator();
     }
   });
 
-  it("lifecycle handles QueenOrchestrator failure gracefully", async () => {
+  it("lifecycle does not mask pending planning with QueenOrchestrator errors", async () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge } = context;
 
@@ -591,14 +582,13 @@ describe("lifecycle", () => {
       };
 
       const result = await runLifecycle(opts);
-      // The lifecycle should still complete because the error is logged, not thrown
-      assert.ok(result.success, `Lifecycle should succeed despite Queen error: ${result.error ?? "none"}`);
+      assertRequiresPlanningLoop(result);
     } finally {
       lifecycleModule.__restoreCreateQueenOrchestrator();
     }
   });
 
-  it("lifecycle build step includes worker results from Queen", async () => {
+  it("lifecycle does not write build state from Queen while planning is pending", async () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge, dataDir } = context;
 
@@ -637,14 +627,66 @@ describe("lifecycle", () => {
       };
 
       const result = await runLifecycle(opts);
-      assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "none"}`);
+      assertRequiresPlanningLoop(result);
 
-      // Verify colony state was updated by Go finalizers
+      // Verify colony state was not updated by build finalizers.
       const state = readColonyState(dataDir);
       const plan = state["plan"] as { phases?: unknown[] } | undefined;
-      assert.ok(plan, "Colony state should have a plan after lifecycle");
+      assert.equal(plan?.phases?.length ?? 0, 0, "No final plan should exist");
     } finally {
       lifecycleModule.__restoreCreateQueenOrchestrator();
+    }
+  });
+
+  it("renders Go-owned ceremony sequencing only through pending planning", async () => {
+    assert.ok(context, "Test context should be initialized");
+    const { bridge } = context;
+    const calls: string[] = [];
+
+    const fakeAdapter: CeremonyAdapter = {
+      renderSpawnPlan(workflow: CeremonyWorkflow) {
+        calls.push(`${workflow}:spawn-plan`);
+        return "";
+      },
+      renderWaveStart(workflow: CeremonyWorkflow, _manifest: unknown, executionWave: number) {
+        calls.push(`${workflow}:wave-start:${executionWave}`);
+        return "";
+      },
+      renderWorkerComplete(workflow: CeremonyWorkflow, worker: unknown) {
+        const name = (worker as { name?: string }).name ?? "unknown";
+        calls.push(`${workflow}:worker-complete:${name}`);
+        return "";
+      },
+      renderCloseout(workflow: CeremonyWorkflow) {
+        calls.push(`${workflow}:closeout`);
+        return "";
+      },
+    };
+
+    __setCreateCeremonyAdapter(() => fakeAdapter);
+    try {
+      const result = await runLifecycle({
+        goBinaryPath: bridge.goBinaryPath,
+        cwd: bridge.cwd,
+        simulateWorkers: true,
+        phase: 1,
+      });
+
+      assertRequiresPlanningLoop(result);
+      assert.deepEqual(
+        calls.filter((call) => call.endsWith("spawn-plan") || call.endsWith("closeout")),
+        ["plan:spawn-plan"]
+      );
+      assert.ok(
+        calls.some((call) => call.startsWith("plan:wave-start:")),
+        `Expected plan wave-start ceremony call, got ${JSON.stringify(calls)}`
+      );
+      assert.ok(
+        !calls.some((call) => call.startsWith("build:")),
+        `Build ceremony should not run before planning completes, got ${JSON.stringify(calls)}`
+      );
+    } finally {
+      __restoreCreateCeremonyAdapter();
     }
   });
 });

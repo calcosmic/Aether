@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -61,6 +63,10 @@ func dispatchBatchByWaveWithVisuals(
 	parallelWithinWave bool,
 	observerFactory func(wave int) codex.DispatchObserver,
 ) ([]codex.DispatchResult, error) {
+	if err := preflightWorkerProvider(ctx, invoker, dispatches); err != nil {
+		return nil, err
+	}
+
 	waves := codex.GroupByWave(dispatches)
 	waveNumbers := make([]int, 0, len(waves))
 	for wave := range waves {
@@ -86,6 +92,55 @@ func dispatchBatchByWaveWithVisuals(
 	}
 
 	return results, nil
+}
+
+type workerProviderPreflightError struct {
+	status codex.AvailabilityStatus
+}
+
+func (e *workerProviderPreflightError) Error() string {
+	status := e.status
+	reason := strings.TrimSpace(status.Reason)
+	if reason == "" {
+		reason = "no diagnostic was returned"
+	}
+	if strings.Contains(strings.ToLower(reason), "preflight failed before worker dispatch") {
+		return reason
+	}
+	if status.Platform == codex.PlatformCodex || strings.Contains(strings.ToLower(reason), "codex") {
+		return fmt.Sprintf("Codex provider/model preflight failed before worker dispatch: %s", reason)
+	}
+	if status.Platform != codex.PlatformUnknown {
+		return fmt.Sprintf("%s provider preflight failed before worker dispatch: %s", status.Platform, reason)
+	}
+	return fmt.Sprintf("worker provider preflight failed before dispatch: %s", reason)
+}
+
+func preflightWorkerProvider(ctx context.Context, invoker codex.WorkerInvoker, dispatches []codex.WorkerDispatch) error {
+	if invoker == nil || len(dispatches) == 0 {
+		return nil
+	}
+	preflighter, ok := invoker.(codex.WorkerProviderPreflighter)
+	if !ok {
+		return nil
+	}
+	root := ""
+	for _, dispatch := range dispatches {
+		if strings.TrimSpace(dispatch.Root) != "" {
+			root = dispatch.Root
+			break
+		}
+	}
+	status := preflighter.Preflight(ctx, root)
+	if status.Available {
+		return nil
+	}
+	return &workerProviderPreflightError{status: status}
+}
+
+func isWorkerProviderPreflightError(err error) bool {
+	var preflightErr *workerProviderPreflightError
+	return errors.As(err, &preflightErr)
 }
 
 func dispatchLifecycleSummary(event codex.DispatchLifecycleEvent, activePrefix string) string {

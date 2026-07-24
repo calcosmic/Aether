@@ -16,7 +16,7 @@ func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repa
 	var b strings.Builder
 
 	b.WriteString(renderBanner(commandEmoji("recover"), "Colony Recovery"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	// Colony context: goal, phase, state.
 	if state.Goal != nil && *state.Goal != "" {
@@ -176,6 +176,8 @@ func recoverNextStep(issues []HealthIssue) string {
 			return "Run `aether colonize` to regenerate survey data."
 		case "partial_phase":
 			return "Run `aether continue` to advance the colony."
+		case "unreconciled_worker_changes":
+			return "Run `aether build-reconcile` to record changes."
 		default:
 			return "Review the warnings above."
 		}

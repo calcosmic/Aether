@@ -1,5 +1,5 @@
 name: ant-shelf-promote
-description: "Promote a shelf item into a colony goal or todo"
+description: "⬆️ Promote a shelf item into a colony goal or todo"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether shelf-promote $ARGUMENTS"

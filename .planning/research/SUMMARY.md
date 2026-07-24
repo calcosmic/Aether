@@ -1,181 +1,229 @@
 # Project Research Summary
 
-**Project:** Aether v1.17 Classic Restoration
-**Domain:** CLI colony framework — hybrid Go runtime + TypeScript orchestration host
-**Researched:** 2026-05-13
+**Project:** Aether v1.23 Daily Driver Reliability
+**Domain:** CLI colony framework -- reliability restoration of flagship workflows after shell-to-Go migration
+**Researched:** 2026-05-20
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether v1.17 restores the living ceremony, animated swarm dashboard, and intelligent Queen orchestration that defined Classic v5.4, but within the modern hybrid architecture: Go runtime owns state and emits structured events; the TypeScript host consumes those events and dispatches platform workers; wrapper markdown renders the user-facing experience. This is not a rewrite — it is a restoration. The recommended approach is to build the event bridge first, then layer ceremony rendering and swarm display on top, then wire real worker dispatch and workflow patterns. The biggest risks are state corruption (if TS host writes directly to `.aether/data/`), ceremony drift across platforms, and scope creep disguised as improvement. Mitigation is strict boundary enforcement, shared YAML ceremony config, and golden parity tests locked to the v5.4 baseline.
+Aether v1.23 is a reliability restoration milestone, not a feature build. The Go runtime migration (v1.0-v1.5) and manifest-protocol cutover (v1.16-v1.18) were architecturally correct decisions -- Go owns state mutations, manifest protocol provides clean boundary enforcement, and ceremony rendering is deterministic. But the migration lost 3,786 lines of behavioral specification from the Classic v5.4.0 playbooks, leaving the system with 70 untested source files (35% of cmd/), 12 HIGH-severity gaps where failures silently drop user data, and a documentation-to-runtime contract that disagrees on execution modes, watcher behavior, and spawning rules.
+
+The highest-impact work falls into two camps. First, fix the silent failure pipeline: 80+ playbook instructions use `2>/dev/null || true` which makes the learning pipeline, failure tracking, and pheromone system completely hollow -- they appear to work but silently discard all output. Second, close the test coverage gap on 12 source files that handle colony intelligence (eventbus, queen, instinct, hive, spawn), where untested failures cause data loss or state corruption. Everything else -- spawning optimization, ceremony restoration, workflow parity -- is downstream of these two foundations.
+
+The key risk is that "everything looks fine but nothing is actually being recorded." A user can run builds, continues, and full colony lifecycles with no visible errors, while learnings are never extracted, failures are never tracked, pheromone signals are never written, and worker artifacts are silently dropped on interrupt. The mitigation is straightforward: remove error suppression, add smoke tests for data-persistence paths, and reconcile the documented execution policy with what the Go runtime actually implements.
 
 ## Key Findings
 
-### Recommended Stack
+### Command Surface and Test Coverage
 
-The TS host currently has zero runtime dependencies. v1.17 adds a lean, purpose-built terminal rendering stack — no heavy frameworks like Ink or Blessed. The core additions are `chalk` + `boxen` + `figlet` for ceremony banners and boxes, `ora` + `cli-progress` for animated spinners and progress bars, `log-update` for live dashboard refresh, and `chokidar` for watching Go's JSONL event file. All packages are ESM-native and compatible with Node >=20 (the TS host engine should bump from >=18 to >=20, since Node 18 is already EOL). Dev dependencies are only `@types/figlet` and `@types/cli-progress`. See `STACK.md` for full version table and rejected alternatives.
+**Summary from STACK.md -- the test gap is the reliability gap.**
 
-**Core technologies:**
-- `chalk@5.6.2`: ANSI color/style — zero deps, auto-detects color support, chainable API
-- `boxen@8.0.1`: Framed boxes for banners — 9 border styles, lightweight (~24 KB)
-- `figlet@1.11.0`: ASCII art banners — sync API, 300+ fonts, types via `@types/figlet`
-- `ora@9.4.0`: Per-worker spinners — 100+ styles, TTY-aware auto-disable
-- `cli-progress@3.12.0`: Multi-bar progress — `MultiBar` container for concurrent workers
-- `log-update@8.0.0`: Live terminal refresh — partial redraws, `done()`/`clear()` lifecycle
-- `chokidar@5.0.0`: Watch Go JSONL event file — de-facto standard, atomic-write handling
+Aether has 389 Cobra-registered commands, 60 YAML wrappers per platform, and 5,075 passing tests. The surface is large but the coverage is not uniform: 70 Go source files (35% of cmd/) have no dedicated test file. These are not edge cases -- they include the event bus (6 commands, backbone of wisdom pipeline), queen system (8 commands, central colony intelligence), instinct management (5+ commands, learning pipeline), midden failure tracking (10 commands, entire subsystem untested), hive cross-colony wisdom (6 commands), and spawn tracking (10 commands, worker lifecycle).
 
-### Expected Features
+**Core gap:**
+- 12 HIGH-severity untested files covering ~67 commands where failure causes data loss or silent corruption
+- 9 public utility commands with no test file (preferences, pause-colony, resume-colony, data-clean)
+- 5 lifecycle wrappers delegate through TypeScript host but lack end-to-end tests through that path
+- 5 pure-wrapper commands (chaos, dream, archaeology, interpret, organize) have no runtime backing -- low priority, exclude from test targets
 
-**Must have (table stakes):**
-- Event bridge (Go JSONL -> TS host) — infrastructure for everything else
-- Real worker dispatch (replace 100ms simulation) — the host must actually spawn agents
-- Parallel wave execution — concurrent workers per wave
-- Error recovery / retry / timeout — graceful fallback when workers fail
+### Behavioral Baselines and Regressions
 
-**Should have (differentiators):**
-- Ceremony narrator — ASCII banners, caste identity, stage separators, spawn notifications
-- Animated swarm dashboard — per-ant spinners, progress bars, chamber activity map, live refresh
-- Builder-Probe Lock — builders return `code_written`, Probe upgrades to `completed`
-- Workflow pattern selection — Queen picks pattern based on phase name
-- Tiered escalation — retry -> reassignment -> Queen -> user
+**Summary from FEATURES.md -- what "good" looked like and what got lost.**
 
-**Defer (v1.18+):**
-- WebSocket/SSE server for events — JSONL tail is sufficient now
-- Oracle phase-aware prompts / diminishing returns — Go-side, not blocking ceremony restoration
-- Real-time web dashboard — out of scope per PROJECT.md
-- Cross-colony ledger sharing — out of scope per PROJECT.md
+The Classic v5.4.0 era was the behavioral high-water mark. It had rich ceremony at every step, playbook-driven execution (5-stage build, 4-stage continue), first-class learning with hypothesis/validated/disproven lifecycle, a 7-question Oracle wizard, 15-step seal ceremony with Sage analytics and Chronicler audit, and 4-scout swarm with cross-comparison ranking.
 
-### Architecture Approach
+The Go migration kept the right architecture but lost behavioral fidelity. The most critical regression: the learning extraction lifecycle in `/ant-continue`. Classic continue extracted learnings as hypotheses, tracked evidence against them, promoted only validated knowledge to instincts, and piped through the full memory pipeline. The current Go runtime's default path (fast, Go-only) is correct for daily use, but it needs verification that the hypothesis lifecycle still exists in any depth mode. If it does not, this is the single highest-priority behavioral regression -- without learning extraction, the colony accumulates zero wisdom across phases.
 
-The architecture is a three-layer pipeline: **Go emits events** (from `pkg/events/` and `cmd/ceremony_emitter.go`), the **TS host subscribes and orchestrates dispatch** (`.aether/ts-host/`), and **wrappers render ceremony** (`.claude/commands/ant/build.md`). The TS host consumes events via a hybrid of JSONL tail (for startup replay) and subprocess narrator pipe (for live streaming). This requires no background server, respects the boundary contract, and works within the existing wrapper->Go->TS call chain. The TS host never writes to `.aether/data/`; it calls Go finalizers for all state commits.
+**What to restore (ranked by user impact):**
+1. Learning extraction with hypothesis lifecycle -- verify in Go runtime, restore if missing
+2. Worker context quality -- verify workers receive pheromones, skills, survey data, colony goal
+3. Oracle promote-to-colony pipeline -- verify end-to-end: oracle > instincts > learnings > QUEEN.md > hive
+4. Autopilot pause conditions -- verify all 10 Classic conditions implemented in Go `aether run`
+5. Swarm 4-scout cross-comparison and 3-attempt architectural escalation -- verify parity
+6. Seal ceremony (Sage analytics, Chronicler audit, wisdom approval) -- restore as optional ceremony
 
-**Major components:**
-1. **Event Bridge** (`src/event-bridge.ts`) — Consumes Go events via JSONL tail or subprocess pipe; emits typed events to TS consumers
-2. **Ceremony Narrator** (`src/ceremony-narrator.ts`) — Renders ANSI/plain ceremony from event stream: wave banners, worker status, progress bars
-3. **Wave Dispatcher** (`src/wave-dispatcher.ts`) — Parallel execution of manifest waves with event-driven status updates
-4. **Caste Config Loader** (`src/caste-config.ts`) — Loads shared YAML caste emoji/color/label map (prevents platform drift)
-5. **Go Runtime** (existing, modified) — Emits `ceremony.*` events, provides manifest + finalizers, owns all state mutation
+**What NOT to revert:** Go-owned state mutation (Frankenstein state proved LLMs cannot safely reconstruct JSON), manifest protocol for worker dispatch, Go ceremony rendering, golden workflow tests, loop safety, depth controls.
+
+### Architecture Gaps: Execution Policy and Spawning
+
+**Summary from ARCHITECTURE.md -- the documentation and runtime disagree.**
+
+The Queen orchestration system has two partially decoupled layers that have drifted apart. CLAUDE.md describes three execution modes (fast / standard / final-review) with specific watcher and specialist behavior. The Go runtime uses `VerificationDepth` (light / standard / heavy) with different rules. The mismatch is not cosmetic: CLAUDE.md says fast and standard modes skip watcher subprocess, but the Go code requires watcher at all depths for continue flow. Either the documentation was aspirational or the implementation chose a different path. Either way, users following the documentation will have wrong expectations about what each mode does.
+
+The spawning system (caste relevance scoring in `cmd/caste_relevance.go`) is sound in isolation but conflicts with playbook instructions in 9 identified ways. Playbooks spawn Auditor as mandatory for all continues; Go says only at heavy depth. Playbooks list Chaos in every spawn plan; Go only dispatches at full depth. Playbooks spawn Oracle and Architect for deep builds; Go's caste allowlist does not even permit them in build flow. These mismatches mean the playbooks sometimes spawn agents that the runtime would reject, or skip agents that the runtime would require.
+
+**Key components:**
+1. Caste relevance scoring -- keyword-based matching against phase descriptions, with base scores, threshold checks, and suppression rules. This is correct and well-tested.
+2. Queen decision layer (gate resolution) -- classifies gate failures as hard_block / soft_block / advisory, with auto-resolve budgets and circuit breakers. This is sound.
+3. Playbook-Go contract -- this is where the reliability problems live. Playbooks need to match Go behavior, not contradict it.
 
 ### Critical Pitfalls
 
-1. **TS Host Writes State Directly (Frankenstein Regression)** — TS host must never write to `.aether/data/`. Prevention: ESLint rule banning `fs` imports for data paths, runtime bridge rejection, contract tests. See PITFALLS.md Pitfall 1.
-2. **Duplicate Orchestration Logic in Go and TS** — Go generates the full `execution_plan`; TS host dispatches strictly from manifest. No TS-side wave logic. See PITFALLS.md Pitfall 2.
-3. **Ceremony Drift Across Platforms** — Use shared YAML ceremony config consumed by Go, TS host, and wrappers. Codex fallback via Go `codex_visuals.go`. See PITFALLS.md Pitfall 3.
-4. **Rewriting Instead of Restoring (Scope Creep)** — v5.4 baseline is read-only. Golden tests lock behavior. Any deviation must be explicitly approved as intentional. See PITFALLS.md Pitfall 4.
-5. **Race Conditions in Hybrid Event Streaming** — Use `event-bus-subscribe --stream` (not polling). Handle duplicate event IDs idempotently. Replay from timestamp on crash recovery. See PITFALLS.md Pitfall 5.
-6. **Animated Dashboard Breaks in Non-TTY** — Three output modes: `json` (machine), `visual` (TTY ANSI), `markdown` (plain text). TS host respects `AETHER_OUTPUT_MODE`. See PITFALLS.md Pitfall 6.
-7. **Builder-Probe Lock Bypassed** — TS host must not translate `code_written` to `completed`. Only Go finalizer (or Probe result) upgrades status. See PITFALLS.md Pitfall 7.
-8. **Worktree Merge-Back Orphans Code** — Manifest includes `requires_merge_back: true` in worktree mode. TS host calls `aether worktree-merge-back` between waves. See PITFALLS.md Pitfall 10.
+**Summary from PITFALLS-RELIABILITY.md -- six failure modes that silently lose user work.**
+
+1. **Frankenstein state corruption** -- LLM reconstructs full COLONY_STATE.json from stale context, mixing data from prior colonies. Prevention: every state write must use `state-mutate` with targeted jq. Audit all playbooks for raw "Write COLONY_STATE.json" instructions.
+
+2. **Silent failure pipeline** -- 80+ playbook instructions append `2>/dev/null || true`, making the learning pipeline, midden, pheromone system, and memory capture all fail silently. Workers report success while critical side-effects never happen. This is the most insidious pitfall because nothing appears broken.
+
+3. **Worker artifact loss on interrupt** -- Build workers complete work but if the build is interrupted before finalization, the completion JSON is never written. Completed code exists on disk but is not recorded in colony state. No recovery path exists beyond `--force` redispatch.
+
+4. **Pending decisions leaking across colonies** -- `pending-decisions.json` is scoped by session_id but only `discuss` filters by scope. Flag commands and plan commands read all decisions including stale ones from prior colonies, incorporating irrelevant constraints into new plans.
+
+5. **Worktree branch orphaning** -- Build waves spawn workers into git worktrees, but merge-back only runs during `continue-advance`, not `build-complete` or on interrupt. Valuable code accumulates on invisible branches (13 orphaned branches documented with real production code).
+
+6. **Provider API errors misreported as parse errors** -- When a worker process gets an auth failure or rate limit from the provider, the finalizer reports "parse worker output: no JSON found" instead of "provider auth failure." Users waste time debugging their worker config instead of fixing API credentials.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+Based on the combined research, this milestone needs a "fix the foundation first" structure. The work that makes everything else reliable must come before the work that makes everything else better.
 
-### Phase 1: Foundation — Event Bridge + Ceremony Config
-**Rationale:** Everything else depends on the TS host being able to consume Go events. The shared YAML ceremony config prevents drift from day one.
-**Delivers:** `event-bridge.ts`, `caste-config.ts`, shared `ceremony.yaml`, basic TypeScript types for `CeremonyEvent` / `CeremonyPayload`.
-**Addresses:** Event bridge (Category 1), ceremony config foundation (Category 2).
-**Avoids:** Pitfall 3 (drift), Pitfall 5 (races — uses subscription not polling).
-**Research flag:** LOW — event bus already exists in Go; patterns are well-documented.
+### Phase 1: Silent Pipeline Fix
 
-### Phase 2: Ceremony Narrator
-**Rationale:** Once events flow, render them. This restores the "living" feel and provides immediate user-visible value.
-**Delivers:** `ceremony-narrator.ts`, `banners.ts`, `caste-render.ts`, `stage-markers.ts`, `boxes.ts`.
-**Addresses:** ASCII banners, spawn notifications, worker completion lines, build summary block (Category 2).
-**Avoids:** Pitfall 6 (non-TTY breakage — implement three output modes here).
-**Research flag:** LOW — rendering libraries are standard; output modes are known pattern.
+**Rationale:** This is the single highest-impact fix. Currently, 80+ `|| true` patterns make the learning pipeline, failure tracking, pheromone system, and memory capture all silently non-functional. Fixing these unlocks the entire behavioral correctness chain -- without them, nothing downstream (learning extraction, colony wisdom, pheromone signals) can be verified because the underlying writes are being suppressed.
 
-### Phase 3: Real Worker Dispatch + Parallel Waves
-**Rationale:** Replace simulation with actual platform agent spawning. Parallel wave execution is a prerequisite for the swarm dashboard to have meaningful data.
-**Delivers:** Updated `worker-dispatch.ts` with real platform spawn, `wave-dispatcher.ts` for parallel execution, error recovery / retry / timeout.
-**Addresses:** Real worker dispatch, parallel waves, error recovery (Category 1).
-**Avoids:** Pitfall 2 (duplicate orchestration — dispatch strictly from manifest), Pitfall 7 (Builder-Probe Lock), Pitfall 10 (worktree merge-back).
-**Research flag:** MEDIUM — platform agent spawning varies by environment; needs validation.
+**Delivers:** All playbook CLI calls produce honest errors instead of silent drops. Midden, pheromone-write, memory-capture, and pheromone-write calls propagate failures properly.
 
-### Phase 4: Swarm Dashboard
-**Rationale:** The animated dashboard is the visual payoff. It needs real events and real workers, so it comes after dispatch works.
-**Delivers:** `dashboard.ts`, `worker-row.ts`, `wave-panel.ts`, `chamber-map.ts`, `renderer.ts`.
-**Addresses:** Animated spinners, per-ant progress bars, tool counters, elapsed time, chamber activity map, live refresh (Category 3).
-**Avoids:** Pitfall 6 (non-TTY), Pitfall 5 (event races).
-**Research flag:** LOW — dashboard components are standard terminal UI patterns.
+**Addresses:** Pitfall 2 (silent failure pipeline), unblocks verification of all learning/memory features from FEATURES.md
 
-### Phase 5: Queen Orchestration Intelligence
-**Rationale:** Workflow patterns, Builder-Probe Lock, and tiered escalation are safety and quality features. They depend on real dispatch and event flow.
-**Delivers:** Workflow pattern selection, Builder-Probe Lock enforcement, tiered escalation chain, intra-build midden checks.
-**Addresses:** Workflow patterns, Builder-Probe Lock, tiered escalation, phase mode awareness (Category 4).
-**Avoids:** Pitfall 7 (Builder-Probe Lock), Pitfall 9 (infinite escalation loops — escalation level in completion file).
-**Research flag:** MEDIUM — escalation logic has edge cases; needs careful testing.
+**Avoids:** The "looks done but isn't" trap where builds appear to complete successfully while no data is persisted
 
-### Phase 6: Oracle Behavioral Richness
-**Rationale:** Oracle improvements are Go-side prompt/template changes. They can proceed in parallel with TS host work but are lower priority than ceremony restoration.
-**Delivers:** Phase-aware prompts, diminishing returns detection, template synthesis, signal injection.
-**Addresses:** Oracle RALF loop richness (Category 5).
-**Avoids:** Pitfall 8 (Oracle state loss — stateless TS host loop, re-read from Go each iteration).
-**Research flag:** LOW — prompt engineering, no new infrastructure.
+**Also includes:**
+- State-mutate migration: audit all playbooks for raw COLONY_STATE.json writes, replace with state-mutate calls (Pitfall 1)
+- Pending decision scoping: ensure all readers filter by session scope, not just discuss.go (Pitfall 4)
+- Session cleanup on init: clear stale session.json from prior colonies (Pitfall 7)
+- Event array cap enforcement: move the 100-entry cap into state-mutate or add to build path (Pitfall 10)
 
-### Phase 7: Integration + Parity Verification
-**Rationale:** Wire everything together and prove parity with Classic v5.4.
-**Delivers:** Updated `lifecycle.ts`, `host.ts`, `build.md` wrapper, golden parity tests, end-to-end pipeline tests.
-**Addresses:** Integration (Category 1-5), verification.
-**Avoids:** Pitfall 1 (state writes), Pitfall 4 (scope creep — golden tests enforce baseline), Pitfall 14 (simulated code ships as real).
-**Research flag:** MEDIUM — golden tests need careful design to avoid brittleness (Pitfall 15).
+### Phase 2: Critical Test Coverage
+
+**Rationale:** Once the pipeline is honest, we need tests to keep it honest. The 12 HIGH-severity untested files handle data-persistence paths that can silently corrupt or lose data. Without tests, these paths regress silently. The STACK.md research identified these files and ranked them by data-loss risk.
+
+**Delivers:** Test files for the 12 most critical untested source files (~67 commands). Estimated 60-100 new test functions.
+
+**Addresses:** STACK.md Phase 2 recommendation, unblocks safe refactoring of spawning and learning paths
+
+**Priority order within this phase (data-loss risk):**
+1. eventbus.go -- wisdom pipeline backbone
+2. queen.go -- colony intelligence core
+3. instinct.go -- learning pipeline
+4. midden_cmds.go -- entire failure tracking subsystem
+5. hive.go + hive_search.go -- cross-colony wisdom
+6. spawn.go + spawn_runs.go + spawn_track.go -- worker lifecycle
+7. autopilot.go -- colony autopilot
+8. flag_cmds.go, council.go, shelf_cmd.go -- secondary data paths
+
+**Avoids:** Starting behavioral restoration work (Phase 3+) on untested code
+
+### Phase 3: Learning Extraction Verification and Restoration
+
+**Rationale:** With an honest pipeline and test coverage in place, we can now verify the most critical behavioral regression: the learning extraction lifecycle. Classic continue extracted learnings as hypotheses, tracked evidence, promoted validated knowledge. The current Go runtime needs verification that this lifecycle still exists at any depth. If not, it must be restored -- this is the core value proposition of the colony system (learning across phases).
+
+**Delivers:** Verified (or restored) hypothesis/validated/disproven learning lifecycle in continue. Verified worker context injection quality (pheromones, skills, survey data, colony goal, phase description). Verified Oracle promote-to-colony pipeline end-to-end.
+
+**Addresses:** FEATURES.md restoration targets 1-3 (learning extraction, worker context quality, oracle pipeline)
+
+**Uses:** Test coverage from Phase 2 to prevent regressions
+
+### Phase 4: Worker Artifact Recovery and Worktree Safety
+
+**Rationale:** Worker artifact loss on interrupt (Pitfall 3) and worktree branch orphaning (Pitfall 5) cause real user work to silently disappear. These are harder to fix because they require new commands (build-reconcile) and behavioral changes (merge-back on build-complete), but they directly prevent data loss.
+
+**Delivers:** `build-reconcile` command for post-interrupt recovery. Worktree merge-back moved to build-complete. Pre-build check for orphaned worktree branches. Status command reports unreconciled worker changes.
+
+**Addresses:** Pitfall 3 (artifact loss), Pitfall 5 (worktree orphaning), Pitfall 8 (completion file race conditions)
+
+**Also includes:** Provider error classification before JSON parsing (Pitfall 6)
+
+### Phase 5: Execution Policy Alignment
+
+**Rationale:** The CLAUDE.md-to-runtime mapping gap (3 documented execution modes vs 3 Go VerificationDepth values) and the 9 playbook-Go spawning mismatches are real but less urgent than data loss. Fix them after the foundation is solid. The recommendation from ARCHITECTURE.md is to update CLAUDE.md to match Go behavior (safer than changing Go to match aspirational docs) and update playbooks to match Go scoring.
+
+**Delivers:** CLAUDE.md execution mode documentation aligned with Go runtime. Playbook spawning instructions match Go caste relevance system. Ambassador and Measurer gated on phase mode, not keyword match. Sequential continue gates parallelized where possible.
+
+**Addresses:** ARCHITECTURE.md recommendations R1-R5
+
+### Phase 6: Workflow Parity and Ceremony Restoration
+
+**Rationale:** The remaining behavioral regressions (Oracle wizard richness, seal ceremony, swarm ceremony, autopilot pause conditions) are quality-of-life improvements that make Aether feel like the polished tool it was at v5.4.0. They should come last because they depend on the learning pipeline working correctly (Phase 3) and the spawning system being predictable (Phase 5).
+
+**Delivers:** Verified autopilot pause conditions (all 10 from Classic). Verified swarm 4-scout cross-comparison and rollback. Optional Sage analytics and Chronicler audit at seal. Oracle research brief formulation step.
+
+**Addresses:** FEATURES.md restoration targets 4-6 (Sage analytics, swarm verification, autopilot conditions)
+
+### Phase 7: Public Utility Test Gaps and E2E Coverage
+
+**Rationale:** After core reliability is established, address the 9 untested public utility commands (preferences, pause-colony, resume-colony, data-clean, insert-phase, quick, verify-castes, bump-version, maturity) and add end-to-end tests through the TypeScript host for the 5 lifecycle commands.
+
+**Delivers:** Test files for 9 public utility commands. E2E tests through TS host for build, continue, seal, plan, colonize.
+
+**Addresses:** STACK.md Phase 3-4 recommendations
 
 ### Phase Ordering Rationale
 
-- **Foundation first:** Event bridge is the data layer for everything else. Without it, ceremony and dashboard have nothing to render.
-- **Ceremony before dispatch:** Ceremony narrator can be tested with synthetic events while real dispatch is being built. This gives user-visible progress early.
-- **Dispatch before dashboard:** Dashboard needs real worker status events. Simulated workers would produce a fake dashboard.
-- **Orchestration after dispatch:** Workflow patterns and escalation operate on the dispatch layer. They are safety features, not prerequisites.
-- **Oracle last:** Oracle richness is independent of TS host ceremony. It can proceed in parallel but is lower priority for the milestone.
-- **Verification at the end:** Golden parity tests need all components stable. Running them too early creates noise from incomplete features.
+- Phases 1-2 must come first because they establish honest error handling and test coverage -- without these, every subsequent phase is built on a hollow foundation where failures are hidden
+- Phase 3 is next because learning extraction is the single most valuable behavioral feature and depends on the pipeline being honest (Phase 1) and tested (Phase 2)
+- Phase 4 addresses data loss on interrupt, which is the remaining critical user-impact issue
+- Phase 5 fixes the documentation-runtime contract, which matters for correctness but is lower urgency than data loss
+- Phase 6 restores ceremony quality-of-life after the system is reliable
+- Phase 7 closes remaining test gaps once the architecture is stable
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 3 (Real Worker Dispatch):** Platform agent spawning mechanics vary by environment (Claude Code Tasks, OpenCode, Codex). Needs validation of spawn-log / spawn-complete flow.
-- **Phase 5 (Queen Orchestration):** Escalation chain edge cases and circuit breaker behavior. Classic v5.4 had infinite loop bugs here.
-- **Phase 7 (Parity Verification):** Golden test design — how to compare hybrid output against Classic Bash output without brittle string snapshots.
+- **Phase 3 (Learning Extraction):** Need to trace the Go runtime's continue path to determine if the hypothesis lifecycle exists in any form. This requires reading `cmd/codex_continue.go` and related learning pipeline code. If the lifecycle is entirely missing, restoration is a larger effort than verification.
+- **Phase 4 (Worker Artifact Recovery):** The `build-reconcile` command does not exist and needs design research -- what heuristics to use for detecting unrecorded worker changes from filesystem state, how to create a synthetic build packet, and what the UX should be.
+- **Phase 5 (Execution Policy):** Need to decide whether to update CLAUDE.md to match Go (recommended, safer) or implement the CLAUDE.md intent in Go (watcher skip for light/standard). The former is a documentation change; the latter is a behavioral change that needs design and testing.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (Event Bridge):** Well-documented in Go codebase; `event-bus-subscribe --stream` is existing CLI.
-- **Phase 2 (Ceremony Narrator):** Standard terminal rendering libraries; output mode pattern already in Go.
-- **Phase 4 (Swarm Dashboard):** Standard terminal UI components; no novel algorithms.
-- **Phase 6 (Oracle Richness):** Prompt engineering; no new infrastructure or patterns.
+- **Phase 1 (Silent Pipeline Fix):** Well-understood -- grep for patterns, remove suppression, add fallback handling. No design ambiguity.
+- **Phase 2 (Test Coverage):** Standard Go testing against existing source files. Test patterns established in existing 2,591 cmd/ test functions.
+- **Phase 6 (Workflow Parity):** Classic v5.4.0 source is available at git tag for comparison. The "what to restore" list is specific.
+- **Phase 7 (Public Utility Tests):** Standard Go testing against existing source files.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verified via npm registry + official GitHub sources. All versions confirmed ESM-native and Node >=20 compatible. Rejected alternatives well-justified. |
-| Features | HIGH | Direct comparison against Classic v5.4 codebase. Feature gaps are well-documented in migration map and ceremony-revival handoff. |
-| Architecture | HIGH | Based on direct source code analysis of Go event bus, TS host, and wrapper contracts. Three integration options analyzed; hybrid approach is lowest-risk. |
-| Pitfalls | HIGH | Derived from runtime boundary contract, migration map, known issues, and MEMORY.md entries. Many pitfalls reference existing tests and detection mechanisms. |
+| Command Surface (STACK) | HIGH | Direct `audit-catalog --json` output, file system scans, live `go test` runs |
+| Behavioral Baselines (FEATURES) | HIGH | Direct git tag inspection of v5.4.0 source, milestone audit trail |
+| Architecture (ARCHITECTURE) | HIGH | Direct Go source code inspection of caste_relevance.go, codex_continue.go, queen_decision.go |
+| Pitfalls (PITFALLS) | HIGH | Root causes confirmed against source code and incident records; many have memory entries |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Node engine bump:** TS host currently specifies `>=18`. `chokidar@5` requires `>=20.19.0`, `log-update@8` requires `>=22`. Decision needed: bump to `>=20` or downgrade packages. Recommendation: bump to `>=20` (Node 18 EOL April 2025).
-- **Worktree merge-back in manifest:** The `requires_merge_back` flag is recommended but not yet in the Go manifest schema. Needs a small Go change in Phase 3.
-- **Escalation level in completion file:** Completion file schema may need `escalation_level` field added for Pitfall 9 prevention. Needs Go change.
-- **Golden test baseline:** Classic v5.4 output must be captured and stored before any restoration work begins, or parity tests have no reference.
-- **Codex skill update:** Any change to plan/build/continue orchestration must update 5 artifacts together (command guide, YAML, Claude wrapper, OpenCode wrapper, Codex skill). Manual process is error-prone.
+- **Go runtime learning extraction status:** The research could not confirm whether the hypothesis/validated/disproven lifecycle exists in the Go runtime's continue path. This needs source code inspection of `cmd/codex_continue.go` and the learning pipeline before Phase 3 planning. If the lifecycle is entirely absent, Phase 3 scope increases significantly.
+- **Worktree merge-back feasibility in build-complete:** Research identified the gap but did not assess whether moving merge-back from continue-advance to build-complete creates ordering problems (e.g., worktree branches not ready at build-complete time). Needs design validation.
+- **TS host end-to-end test infrastructure:** No information on how to test through the TypeScript host layer. The Go tests and Codex tests exist, but TS host testing may require different infrastructure.
+- **Quantitative impact of `|| true` removal:** Research identified 80+ instances but did not measure what percentage of builds would fail if suppression were removed immediately. Some calls may legitimately need graceful degradation. Needs per-instance analysis during Phase 1.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `STACK.md` — npm registry verified versions, GitHub official repos, Aether codebase integration points
-- `ARCHITECTURE.md` — Direct source analysis of `pkg/events/`, `cmd/ceremony_*.go`, `.aether/ts-host/src/`, wrapper markdown
-- `FEATURES-V117.md` — Classic v5.4 comparison, 4 research agent synthesis, complexity assessment
-- `PITFALLS.md` — Runtime boundary contract, migration map, ceremony-revival handoff, wrapper-runtime UX contract, state contract, known issues, command playbooks, MEMORY.md
+- `cmd/caste_relevance.go` -- caste relevance registry, scoring, threshold, always-required, suppression
+- `cmd/codex_continue.go` -- continue dispatches, review specs, always-required for continue flow
+- `cmd/queen_decision.go` -- gate classification, recommendations, circuit breaker, budget
+- `cmd/codex_build_finalize.go` -- finalizer completion contract and validation
+- `cmd/finalizer_completion_contract.go` -- temp path pattern and freshness validation
+- `cmd/discuss.go` -- pending decision scope filtering
+- `cmd/flag_cmds.go`, `cmd/pending_decision.go` -- pending decision reads
+- `cmd/recover_scanner.go` -- 7 stuck-state detectors
+- `pkg/colony/colony.go` -- VerificationDepth type, normalization
+- v5.4.0 git tag source code -- Classic behavioral baselines
+- `.aether/docs/command-playbooks/build-full.md`, `continue-full.md`, `continue-advance.md` -- playbook source
+- `.aether/docs/command-playbooks/build-wave.md`, `continue-gates.md` -- spawning instructions
+- `.aether/commands/*.yaml` -- YAML wrapper definitions
+- `aether audit-catalog --json` -- live CLI output
+- File system scans of cmd/*.go (201 files), cmd/*_test.go (219 files)
+- `go test ./... --count=1` -- 5,075 test functions, 18/18 packages passing
 
 ### Secondary (MEDIUM confidence)
-- Bazel BEP / Turborepo / GitHub CLI `gh run watch` — External tool comparison for ceremony and dashboard patterns
-- LangGraph / OpenAI Agents JS / Temporal — Workflow pattern comparison
-
-### Tertiary (LOW confidence)
-- k9s / Lazygit / Docker Compose `up` — TUI/dashboard analogs, mostly for "what to avoid" validation
+- `.claude/projects/*/memory/*.md` -- incident records (state corruption, CLI flag mismatch, worktree merge gap)
+- `.aether/docs/known-issues.md` -- documented known issues
+- `.aether/references/contracts/queen-execution-policy-contract.md` -- design intent
+- v1.10-MILESTONE-AUDIT.md, v1.12-REQUIREMENTS.md, v1.16-MILESTONE-AUDIT.md -- milestone audit trails
 
 ---
-*Research completed: 2026-05-13*
+*Research completed: 2026-05-20*
 *Ready for roadmap: yes*

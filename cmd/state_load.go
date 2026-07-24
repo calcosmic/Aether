@@ -99,6 +99,7 @@ func normalizeLegacyColonyState(state colony.ColonyState) colony.ColonyState {
 	rawState := strings.ToUpper(strings.TrimSpace(string(state.State)))
 	hasGoal := state.Goal != nil && strings.TrimSpace(*state.Goal) != ""
 	hasPlanContext := len(state.Plan.Phases) > 0 || state.CurrentPhase > 0
+	state.Plan.EvidencePolicy = inferredPlanEvidencePolicy(state.Plan)
 
 	if rawState == "" {
 		if hasGoal || hasPlanContext {

@@ -1,3 +1,7 @@
+### Queen Spawn Decision
+
+The Queen selects castes using relevance scoring (`casteRelevanceScore`) and enforces a spawn budget (`queenMaxWorkersForBudget`). Required castes like `builder`, `watcher`, and `probe` are always included for build flows. See [caste-relevance-reference.md](caste-relevance-reference.md) for the full table.
+
 ### Step 4: Load Colony Context (colony-prime)
 
 Call `colony-prime --compact` to get unified worker context (wisdom + context capsule + signals + instincts):
@@ -189,7 +193,7 @@ Otherwise: Apply existing file-modification conditional below.
 6. **Wait for user** to indicate review is complete. The user will run approve/dismiss commands in the conversation and then signal continuation. The build does NOT proceed to Step 4.3 until the user has had the opportunity to review suggestions.
 
 **Error handling** (detection is non-blocking; review pause is intentional):
-- If suggest-analyze returns error: Skip silently, continue to Step 4.3 (no pause)
+- If suggest-analyze returns error: Skip without error, continue to Step 4.3 (no pause)
 - If suggest-approve returns error during review: Log the error but keep the pause -- user still needs to acknowledge
 - Never let suggestion DETECTION failures block the build, but the REVIEW PAUSE is intentional per D-04
 

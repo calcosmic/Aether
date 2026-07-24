@@ -187,6 +187,52 @@ func TestOrchestrateRecovery_BlockingEscalatesImmediately(t *testing.T) {
 	}
 }
 
+func TestOrchestrateRecovery_RuntimeOwnedIssuesDoNotDispatchFixer(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  string
+		message string
+	}{
+		{
+			name:    "stale clarification",
+			status:  "timeout",
+			message: "stale clarification requires aether discuss before rebuilding",
+		},
+		{
+			name:    "missed result collection",
+			status:  "failed",
+			message: "result collection missed completion artifact for Watcher-1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			budget := newRecoveryBudget(1)
+			outcome := orchestrateRecovery(RecoveryContext{
+				Phase:          1,
+				Wave:           1,
+				WorkerName:     "Builder-1",
+				TaskID:         "task-1",
+				Caste:          "builder",
+				Status:         tt.status,
+				ErrorMessage:   tt.message,
+				Dispatches:     []codex.WorkerDispatch{},
+				CircuitBreaker: NewCircuitBreaker(3),
+				Budget:         budget,
+			})
+			if outcome.Classification != Blocking {
+				t.Fatalf("classification = %q, want blocking", outcome.Classification)
+			}
+			if outcome.Action.Type != "escalate" {
+				t.Fatalf("action = %q, want escalate", outcome.Action.Type)
+			}
+			if budget.FixerDispatchesUsed != 0 || budget.RetriesUsed != 0 || budget.ReassignsUsed != 0 {
+				t.Fatalf("runtime-owned issue should not consume recovery budget: %+v", budget)
+			}
+		})
+	}
+}
+
 func TestOrchestrateRecovery_RequiresAttemptSequence(t *testing.T) {
 	cb := NewCircuitBreaker(3)
 	budget := newRecoveryBudget(1)
@@ -568,8 +614,9 @@ func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
 
 	// Create completion with one failed (timeout) dispatch
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
 			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
@@ -653,8 +700,9 @@ func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
 	// Blocked dispatch needs at least one completed worker to pass provenance validation.
 	// Provenance (SAFE-01, SAFE-02) rejects builds where no worker completed with file modifications.
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
 			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
@@ -718,8 +766,9 @@ func TestBuildFinalize_NoRecoveryForCompletedDispatches(t *testing.T) {
 	createTestColonyState(t, dataDir, state)
 
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
 		},
@@ -775,8 +824,9 @@ func TestBuildFinalize_BudgetPersisted(t *testing.T) {
 
 	// Need at least one completed worker with files to pass provenance validation.
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
 			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
@@ -838,8 +888,9 @@ func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
 	createTestColonyState(t, dataDir, state)
 
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature 1", Status: "pending", Wave: 1},
 			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},

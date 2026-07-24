@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/gjson"
@@ -141,24 +142,6 @@ var governanceDetectors = []struct {
 	{"Makefile", "build", "Make"},
 	{"Taskfile.yml", "build", "Task"},
 	{"justfile", "build", "Just"},
-}
-
-// extendedSkipDirs lists directories to skip during recursive walk.
-var extendedSkipDirs = map[string]bool{
-	".git":         true,
-	"node_modules": true,
-	".next":        true,
-	"dist":         true,
-	"build":        true,
-	"vendor":       true,
-	".venv":        true,
-	"venv":         true,
-	"coverage":     true,
-	".aether":      true,
-	".claude":      true,
-	".opencode":    true,
-	".codex":       true,
-	"__pycache__":  true,
 }
 
 // detectGovernance scans the target directory for governance tool config files.
@@ -1867,7 +1850,7 @@ var initResearchCmd = &cobra.Command{
 				return nil
 			}
 			if d.IsDir() {
-				if extendedSkipDirs[d.Name()] && path != target {
+				if codegraph.ShouldSkipDir(d.Name()) && path != target {
 					return filepath.SkipDir
 				}
 				totalDirs++

@@ -1,14 +1,18 @@
 /**
- * Prompt assembler for the TypeScript orchestration host.
+ * Legacy TypeScript prompt assembler retained for regression tests only.
+ *
+ * Production worker prompts are assembled by Go at the same boundary that
+ * selects and launches the provider.
  *
  * Loads agent definitions from platform-specific paths, assembles worker
  * prompts matching Go's AssemblePrompt output, and renders the response
  * contract that instructs workers to return structured JSON claims.
  *
- * Satisfies TS-01 (real worker dispatch).
+ * @deprecated Test/forensic compatibility only; not production prompt truth.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { Platform } from "./platform-dispatcher.js";
@@ -31,6 +35,20 @@ export interface PromptAssemblyConfig {
   platform: Platform;
   /** Agent name (e.g. "aether-builder"). */
   agentName: string;
+  /** Go-provided colony-prime context section. */
+  contextCapsule?: string | undefined;
+  /** Go-provided previous worker handoff section. */
+  handoffSection?: string | undefined;
+  /** Go-provided skill injection section. */
+  skillSection?: string | undefined;
+  /** Cross-colony hive wisdom section. Injected after skills when present. */
+  hiveSection?: string | undefined;
+  /** Go-provided pheromone section, if not folded into context. */
+  pheromoneSection?: string | undefined;
+  /** Go-provided task brief. */
+  taskBrief?: string | undefined;
+  /** Test override for global Queen scope. */
+  homeDir?: string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,26 +72,24 @@ export interface PromptAssemblyConfig {
 export function loadAgentDefinition(
   cwd: string,
   platform: Platform,
-  agentName: string
+  agentName: string,
+  homeDir?: string
 ): string {
-  let filePath: string;
-  switch (platform) {
-    case "claude":
-      filePath = join(cwd, ".claude", "agents", "ant", `${agentName}.md`);
-      break;
-    case "opencode":
-      filePath = join(cwd, ".opencode", "agents", `${agentName}.md`);
-      break;
-    case "codex":
-      filePath = join(cwd, ".codex", "agents", `${agentName}.toml`);
-      break;
+  const candidates = agentDefinitionCandidatePaths(cwd, platform, agentName, homeDir);
+  for (const filePath of candidates) {
+    if (!existsSync(filePath)) {
+      continue;
+    }
+    try {
+      return readFileSync(filePath, "utf-8");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Agent definition could not be read: ${agentName} at ${filePath}: ${msg}`);
+    }
   }
-
-  try {
-    return readFileSync(filePath, "utf-8");
-  } catch {
-    throw new Error(`Agent definition not found: ${agentName} at ${filePath}`);
-  }
+  throw new Error(
+    `Agent definition not found: ${agentName}; searched: ${candidates.join(", ")}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -85,27 +101,26 @@ export function loadAgentDefinition(
  *
  * Sections are assembled in order:
  * 1. Agent Definition
- * 2. Context Capsule (stub — to be filled with QUEEN.md, colony goal, etc.)
- * 3. Worker Handoff Section (stub)
- * 4. Skill Section (stub)
- * 5. Pheromone Section (stub)
+ * 2. Context Capsule (Go-provided, or a local/global Queen fallback)
+ * 3. Worker Handoff Section
+ * 4. Skill Section
+ * 4a. Hive Wisdom Section (when present)
+ * 5. Pheromone Section
  * 6. Task Brief
  * 7. Response Contract
- *
- * Stubs for context capsule, handoff, skills, and pheromones are included
- * as placeholders for future waves.
  *
  * @param config - Prompt assembly configuration
  * @returns Fully assembled prompt string
  */
 export function assemblePrompt(config: PromptAssemblyConfig): string {
-  const agentDef = loadAgentDefinition(config.cwd, config.platform, config.agentName);
+  const agentDef = loadAgentDefinition(config.cwd, config.platform, config.agentName, config.homeDir);
 
-  const contextCapsule = renderContextCapsule(config);
-  const handoffSection = ""; // stub
-  const skillSection = ""; // stub
-  const pheromoneSection = ""; // stub
-  const taskBrief = renderTaskBrief(config);
+  const contextCapsule = firstNonEmpty(config.contextCapsule, renderContextCapsule(config));
+  const handoffSection = compactSection(config.handoffSection);
+  const skillSection = compactSection(config.skillSection);
+  const hiveSection = compactSection(config.hiveSection);
+  const pheromoneSection = compactSection(config.pheromoneSection);
+  const taskBrief = firstNonEmpty(config.taskBrief, renderTaskBrief(config));
   const responseContract = renderResponseContract(config);
 
   const parts: string[] = [];
@@ -113,6 +128,7 @@ export function assemblePrompt(config: PromptAssemblyConfig): string {
   if (contextCapsule) parts.push(contextCapsule);
   if (handoffSection) parts.push(handoffSection);
   if (skillSection) parts.push(skillSection);
+  if (hiveSection) parts.push(hiveSection);
   if (pheromoneSection) parts.push(pheromoneSection);
   parts.push(taskBrief);
   parts.push(responseContract);
@@ -120,35 +136,146 @@ export function assemblePrompt(config: PromptAssemblyConfig): string {
   return parts.join("\n\n");
 }
 
+function agentDefinitionCandidatePaths(
+  cwd: string,
+  platform: Platform,
+  agentName: string,
+  homeDir?: string
+): string[] {
+  const base = normalizeAgentBase(agentName);
+  const local = localAgentDefinitionPath(cwd, platform, base);
+  if (isAetherSourceRoot(cwd)) {
+    return [local];
+  }
+
+  const home = homeDir ?? homedir();
+  return compactStrings([
+    globalAgentDefinitionPath(home, platform, base),
+    hubAgentDefinitionPath(home, platform, base),
+    local,
+  ]);
+}
+
+function normalizeAgentBase(agentName: string): string {
+  return agentName.trim().replace(/\.(md|toml)$/i, "");
+}
+
+function localAgentDefinitionPath(cwd: string, platform: Platform, base: string): string {
+  switch (platform) {
+    case "claude":
+      return join(cwd, ".claude", "agents", "ant", `${base}.md`);
+    case "opencode":
+      return join(cwd, ".opencode", "agents", `${base}.md`);
+    case "codex":
+      return join(cwd, ".codex", "agents", `${base}.toml`);
+  }
+}
+
+function globalAgentDefinitionPath(home: string, platform: Platform, base: string): string {
+  if (!home.trim()) return "";
+  switch (platform) {
+    case "claude":
+      return join(home, ".claude", "agents", "ant", `${base}.md`);
+    case "opencode":
+      return join(home, ".config", "opencode", "agents", `${base}.md`);
+    case "codex":
+      return join(home, ".codex", "agents", `${base}.toml`);
+  }
+}
+
+function hubAgentDefinitionPath(home: string, platform: Platform, base: string): string {
+  const hub = resolveHubDir(home);
+  if (!hub) return "";
+  switch (platform) {
+    case "claude":
+      return join(hub, "system", "agents-claude", `${base}.md`);
+    case "opencode":
+      return join(hub, "system", "agents", `${base}.md`);
+    case "codex":
+      return join(hub, "system", "codex", `${base}.toml`);
+  }
+}
+
+function resolveHubDir(home: string): string {
+  const explicit = process.env["AETHER_HUB_DIR"]?.trim();
+  if (explicit) return explicit;
+  if (!home.trim()) return "";
+  const hubName = process.env["AETHER_CHANNEL"]?.trim().toLowerCase() === "dev"
+    ? ".aether-dev"
+    : ".aether";
+  return join(home, hubName);
+}
+
+function isAetherSourceRoot(cwd: string): boolean {
+  try {
+    const goMod = readFileSync(join(cwd, "go.mod"), "utf-8");
+    return (
+      goMod.includes("module github.com/calcosmic/Aether") &&
+      existsSync(join(cwd, "cmd", "aether", "main.go"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function compactStrings(values: readonly string[]): string[] {
+  return values.filter((value) => value.trim() !== "");
+}
+
 // ---------------------------------------------------------------------------
 // Section renderers
 // ---------------------------------------------------------------------------
 
 /**
- * Render a simplified context capsule.
+ * Render a simplified context capsule fallback.
  *
- * For now, this loads QUEEN.md if it exists and includes a colony goal
- * placeholder. Full context capsule assembly (skills, pheromones, hive
- * wisdom, etc.) will be added in a later wave.
+ * Real worker dispatch should pass Go's colony-prime prompt section through
+ * `contextCapsule`. This fallback only keeps direct prompt assembly usable in
+ * tests or platforms that have not yet fetched Go context.
  *
  * @param config - Prompt assembly configuration
  * @returns Context capsule string (may be empty if no context available)
  */
-function renderContextCapsule(config: PromptAssemblyConfig): string {
+export function renderContextCapsule(config: PromptAssemblyConfig): string {
   const parts: string[] = [];
 
-  // Try to load QUEEN.md from hub
-  try {
-    const { homedir } = require("node:os");
-    const queenPath = join(homedir(), ".aether", "QUEEN.md");
-    const queenContent = readFileSync(queenPath, "utf-8");
-    // Take first 2000 chars as a compact context capsule
-    parts.push("## Colony Wisdom (QUEEN.md)\n\n" + queenContent.slice(0, 2000));
-  } catch {
-    // QUEEN.md is optional
+  const localQueen = readOptionalText(join(config.cwd, ".aether", "QUEEN.md"));
+  if (localQueen) {
+    parts.push("## Repo Queen Wisdom (.aether/QUEEN.md)\n\n" + localQueen.slice(0, 2000));
+  }
+
+  const home = config.homeDir ?? homedir();
+  const globalQueen = readOptionalText(join(home, ".aether", "QUEEN.md"));
+  if (globalQueen) {
+    parts.push("## Global Queen Wisdom (~/.aether/QUEEN.md)\n\n" + globalQueen.slice(0, 2000));
   }
 
   return parts.join("\n\n");
+}
+
+function readOptionalText(path: string): string {
+  if (!existsSync(path)) {
+    return "";
+  }
+  try {
+    return readFileSync(path, "utf-8").trim();
+  } catch {
+    return "";
+  }
+}
+
+function compactSection(value: string | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    const compacted = compactSection(value);
+    if (compacted) {
+      return compacted;
+    }
+  }
+  return "";
 }
 
 /**

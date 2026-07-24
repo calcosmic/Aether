@@ -44,15 +44,28 @@ jobs:
       - name: Run Go tests with race detection
         run: go test ./... -race -count=1 -timeout 600s
 
+      - name: Resolve source release version
+        id: source-version
+        run: |
+          SOURCE_VERSION="$(node -p "require('./.aether/version.json').version")"
+          NPM_VERSION="$(node -p "require('./npm/package.json').version")"
+          test "$NPM_VERSION" = "$SOURCE_VERSION"
+          echo "version=$SOURCE_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Build GoReleaser snapshot
-        run: goreleaser build --snapshot --clean
+        env:
+          AETHER_RELEASE_VERSION: ${{ steps.source-version.outputs.version }}
+        run: goreleaser release --snapshot --clean
 
       - name: Binary smoke test
-        run: ./dist/Aether_linux_amd64_v1/Aether version
-
-      - name: Verify release metadata sync
         run: |
-          test "$(node -p "require('./npm/package.json').version")" = "$(node -p "require('./.aether/version.json').version")"
+          BINARY_VERSION="$(./dist/Aether_linux_amd64_v1/aether version | python3 -c 'import json, sys; print(json.load(sys.stdin)["result"])')"
+          test "$BINARY_VERSION" = "${{ steps.source-version.outputs.version }}"
+
+      - name: Install staged release through packed npm
+        env:
+          AETHER_RELEASE_ACCEPTANCE_DIR: dist
+        run: go test ./cmd -run '^TestStagedGoReleaserArtifactsInstallThroughPackedNPM$' -count=1 -v
 
       - name: Verify bundled narrator package
         run: |
@@ -67,11 +80,21 @@ jobs:
           printf '%s\n' '{"topic":"ceremony.build.spawn","payload":{"phase":1,"caste":"builder","name":"Mason-67","status":"starting"}}' | node .aether/ts/dist/narrator.js --visuals /tmp/aether-visuals.json
           mv .aether/ts/node_modules.disabled .aether/ts/node_modules
 
+      - name: Verify TypeScript host package
+        run: |
+          npm --prefix .aether/ts-host ci
+          npm --prefix .aether/ts-host run typecheck
+          npm --prefix .aether/ts-host test
+          npm --prefix .aether/ts-host run build
+
       - name: Run npm bootstrap tests
         run: npm --prefix npm test
 
       - name: Parity tests
         run: go test ./cmd/... -run "TestParity|TestGoOnly" -count=1 -timeout 300s -v
+
+      - name: Verify command catalog classification
+        run: python3 scripts/verify_catalog_classified.py --strict
 
       - name: Test summary
         if: always()

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/learn"
 )
 
 func TestLearningInject(t *testing.T) {
@@ -331,5 +333,160 @@ func writeTestJSON(t *testing.T, dir, name string, data interface{}) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), append(encoded, '\n'), 0644); err != nil {
 		t.Fatalf("writing %s: %v", name, err)
+	}
+}
+
+
+func TestLearningPropose(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	rootCmd.SetArgs([]string{"learning-propose",
+		"--content", "Test hypothesis",
+		"--phase", "42",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("learning-propose failed: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("parsing result: %v", err)
+	}
+	res := result["result"].(map[string]interface{})
+	if res["status"] != "hypothesis" {
+		t.Errorf("expected status hypothesis, got %v", res["status"])
+	}
+	if res["created"] != true {
+		t.Errorf("expected created true, got %v", res["created"])
+	}
+}
+
+func TestLearningValidate(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// First create a hypothesis
+	learnStore := learn.NewColonyStore(s)
+	entry := learn.Entry{Content: "Test hypothesis", Phase: 1, Status: learn.StatusHypothesis}
+	if err := learnStore.Add(entry); err != nil {
+		t.Fatalf("add entry: %v", err)
+	}
+	entries, _ := learnStore.List(learn.EntryFilter{})
+	if len(entries) == 0 {
+		t.Fatal("no entries after add")
+	}
+	id := entries[0].ID
+
+	rootCmd.SetArgs([]string{"learning-validate", "--id", id})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("learning-validate failed: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("parsing result: %v", err)
+	}
+	res := result["result"].(map[string]interface{})
+	if res["validated"] != true {
+		t.Errorf("expected validated true, got %v", res["validated"])
+	}
+
+	// Verify entry was updated
+	updated, err := learnStore.Get(id)
+	if err != nil {
+		t.Fatalf("get entry: %v", err)
+	}
+	if updated.Status != learn.StatusValidated {
+		t.Errorf("expected status validated, got %s", updated.Status)
+	}
+}
+
+func TestLearningDisprove(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	learnStore := learn.NewColonyStore(s)
+	entry := learn.Entry{Content: "False hypothesis", Phase: 1, Status: learn.StatusHypothesis}
+	if err := learnStore.Add(entry); err != nil {
+		t.Fatalf("add entry: %v", err)
+	}
+	entries, _ := learnStore.List(learn.EntryFilter{})
+	if len(entries) == 0 {
+		t.Fatal("no entries after add")
+	}
+	id := entries[0].ID
+
+	rootCmd.SetArgs([]string{"learning-disprove", "--id", id})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("learning-disprove failed: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("parsing result: %v", err)
+	}
+	res := result["result"].(map[string]interface{})
+	if res["disproven"] != true {
+		t.Errorf("expected disproven true, got %v", res["disproven"])
+	}
+
+	updated, err := learnStore.Get(id)
+	if err != nil {
+		t.Fatalf("get entry: %v", err)
+	}
+	if updated.Status != learn.StatusDisproven {
+		t.Errorf("expected status disproven, got %s", updated.Status)
+	}
+}
+
+func TestLearningList(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	learnStore := learn.NewColonyStore(s)
+	learnStore.Add(learn.Entry{Content: "H1", Status: learn.StatusHypothesis})
+	learnStore.Add(learn.Entry{Content: "H2", Status: learn.StatusValidated})
+	learnStore.Add(learn.Entry{Content: "H3", Status: learn.StatusHypothesis})
+
+	rootCmd.SetArgs([]string{"learning-list", "--status", "hypothesis"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("learning-list failed: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("parsing result: %v", err)
+	}
+	res := result["result"].(map[string]interface{})
+	if res["total"].(float64) != 2 {
+		t.Errorf("expected 2 hypothesis entries, got %v", res["total"])
+	}
+	if res["status_filter"] != "hypothesis" {
+		t.Errorf("expected status_filter hypothesis, got %v", res["status_filter"])
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 type sourceCheckIssue struct {
@@ -33,6 +34,23 @@ type sourceCheckResult struct {
 	Components []sourceCheckComponent `json:"components"`
 	Issues     []sourceCheckIssue     `json:"issues,omitempty"`
 	Next       string                 `json:"next"`
+}
+
+type sourceCheckCommandSpec struct {
+	Name          string `yaml:"name"`
+	Description   string `yaml:"description"`
+	SourceOfTruth string `yaml:"source_of_truth"`
+	Runtime       struct {
+		Command          string `yaml:"command"`
+		DefaultCommand   string `yaml:"default_command"`
+		ManifestCommand  string `yaml:"manifest_command"`
+		FinalizerCommand string `yaml:"finalizer_command"`
+	} `yaml:"runtime"`
+}
+
+type sourceCheckWrapperFrontmatter struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
 }
 
 var sourceCheckGeneratedHeader = regexp.MustCompile(`^<!-- Generated from (\.aether/commands/[^ ]+\.yaml) - DO NOT EDIT DIRECTLY -->$`)
@@ -273,14 +291,19 @@ func checkRetiredSourceMirrors(root string) (int, []sourceCheckIssue) {
 func checkGeneratedCommandSurfaces(root string) (int, []sourceCheckIssue) {
 	yamlDir := filepath.Join(root, ".aether", "commands")
 	yamlNames := map[string]string{}
+	yamlSpecs := map[string]sourceCheckCommandSpec{}
+	var issues []sourceCheckIssue
 	for _, rel := range sourceCheckFiles(root, ".aether/commands", func(rel string) bool {
 		return !strings.Contains(filepath.ToSlash(rel), "/") && filepath.Ext(rel) == ".yaml"
 	}) {
 		name := strings.TrimSuffix(filepath.Base(rel), ".yaml")
-		yamlNames[name] = filepath.ToSlash(filepath.Join(".aether", "commands", rel))
+		yamlRel := filepath.ToSlash(filepath.Join(".aether", "commands", rel))
+		yamlNames[name] = yamlRel
+		spec, specIssues := readSourceCheckCommandSpec(root, yamlRel, name)
+		yamlSpecs[name] = spec
+		issues = append(issues, specIssues...)
 	}
 
-	var issues []sourceCheckIssue
 	wrapperDirs := []string{
 		".claude/commands/ant",
 		".opencode/commands/ant",
@@ -323,6 +346,18 @@ func checkGeneratedCommandSurfaces(root string) (int, []sourceCheckIssue) {
 					Actual:   matches[1],
 				})
 			}
+			frontmatter, body, err := parseSourceCheckWrapper(data)
+			if err != nil {
+				issues = append(issues, sourceCheckIssue{
+					Area:     "commands",
+					Path:     wrapperRel,
+					Message:  "generated wrapper frontmatter is invalid",
+					Expected: "YAML frontmatter with name and description",
+					Actual:   err.Error(),
+				})
+				continue
+			}
+			issues = append(issues, compareSourceCheckWrapperContract(wrapperRel, yamlSpecs[name], frontmatter, body)...)
 		}
 
 		for _, rel := range sourceCheckFiles(root, wrapperDir, func(rel string) bool {
@@ -341,6 +376,173 @@ func checkGeneratedCommandSurfaces(root string) (int, []sourceCheckIssue) {
 	}
 
 	return checked, issues
+}
+
+func readSourceCheckCommandSpec(root, rel, commandName string) (sourceCheckCommandSpec, []sourceCheckIssue) {
+	var spec sourceCheckCommandSpec
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		return spec, []sourceCheckIssue{{
+			Area:    "commands",
+			Path:    rel,
+			Message: "YAML command source is unreadable",
+			Actual:  err.Error(),
+		}}
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return spec, []sourceCheckIssue{{
+			Area:    "commands",
+			Path:    rel,
+			Message: "YAML command source is invalid",
+			Actual:  err.Error(),
+		}}
+	}
+
+	var issues []sourceCheckIssue
+	expectedName := "ant-" + commandName
+	if strings.TrimSpace(spec.Name) == "" {
+		issues = append(issues, sourceCheckIssue{
+			Area:     "commands",
+			Path:     rel,
+			Message:  "YAML command source is missing name",
+			Expected: expectedName,
+			Actual:   "",
+		})
+	} else if spec.Name != expectedName {
+		issues = append(issues, sourceCheckIssue{
+			Area:     "commands",
+			Path:     rel,
+			Message:  "YAML command name does not match command file",
+			Expected: expectedName,
+			Actual:   spec.Name,
+		})
+	}
+	if strings.TrimSpace(spec.Description) == "" {
+		issues = append(issues, sourceCheckIssue{
+			Area:    "commands",
+			Path:    rel,
+			Message: "YAML command source is missing description",
+		})
+	}
+	if strings.TrimSpace(spec.SourceOfTruth) == "" {
+		issues = append(issues, sourceCheckIssue{
+			Area:    "commands",
+			Path:    rel,
+			Message: "YAML command source is missing source_of_truth",
+		})
+	}
+	return spec, issues
+}
+
+func parseSourceCheckWrapper(data []byte) (sourceCheckWrapperFrontmatter, string, error) {
+	var frontmatter sourceCheckWrapperFrontmatter
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	_, bodyWithFrontmatter, ok := strings.Cut(text, "\n")
+	if !ok {
+		return frontmatter, "", fmt.Errorf("missing body after generated header")
+	}
+	if !strings.HasPrefix(bodyWithFrontmatter, "---\n") {
+		return frontmatter, "", fmt.Errorf("missing opening frontmatter delimiter")
+	}
+	rest := strings.TrimPrefix(bodyWithFrontmatter, "---\n")
+	end := strings.Index(rest, "\n---\n")
+	if end < 0 {
+		return frontmatter, "", fmt.Errorf("missing closing frontmatter delimiter")
+	}
+	rawFrontmatter := rest[:end]
+	body := rest[end+len("\n---\n"):]
+	if err := yaml.Unmarshal([]byte(rawFrontmatter), &frontmatter); err != nil {
+		return frontmatter, "", err
+	}
+	return frontmatter, body, nil
+}
+
+func compareSourceCheckWrapperContract(wrapperRel string, spec sourceCheckCommandSpec, frontmatter sourceCheckWrapperFrontmatter, body string) []sourceCheckIssue {
+	var issues []sourceCheckIssue
+	if spec.Name != "" && frontmatter.Name != spec.Name {
+		issues = append(issues, sourceCheckIssue{
+			Area:     "commands",
+			Path:     wrapperRel,
+			Message:  "generated wrapper frontmatter name does not match YAML",
+			Expected: spec.Name,
+			Actual:   frontmatter.Name,
+		})
+	}
+	if strings.TrimSpace(frontmatter.Description) == "" {
+		issues = append(issues, sourceCheckIssue{
+			Area:    "commands",
+			Path:    wrapperRel,
+			Message: "generated wrapper frontmatter is missing description",
+		})
+	}
+	if spec.SourceOfTruth != "" && strings.Contains(body, spec.SourceOfTruth) {
+		for _, command := range sourceCheckRuntimeCommands(spec) {
+			if !sourceCheckWrapperContainsRuntimeCommand(body, command) {
+				issues = append(issues, sourceCheckIssue{
+					Area:     "commands",
+					Path:     wrapperRel,
+					Message:  "generated wrapper is missing YAML runtime command",
+					Expected: command,
+					Actual:   "missing",
+				})
+			}
+		}
+	}
+	return issues
+}
+
+func sourceCheckRuntimeCommands(spec sourceCheckCommandSpec) []string {
+	var commands []string
+	for _, command := range []string{
+		spec.Runtime.Command,
+		spec.Runtime.DefaultCommand,
+		spec.Runtime.ManifestCommand,
+		spec.Runtime.FinalizerCommand,
+	} {
+		command = strings.TrimSpace(command)
+		if command != "" {
+			commands = append(commands, command)
+		}
+	}
+	return commands
+}
+
+func sourceCheckWrapperContainsRuntimeCommand(body, command string) bool {
+	for _, needle := range sourceCheckRuntimeCommandNeedles(command) {
+		if strings.Contains(body, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func sourceCheckRuntimeCommandNeedles(command string) []string {
+	var needles []string
+	normalized := strings.Join(strings.Fields(strings.ReplaceAll(command, "$ARGUMENTS", "")), " ")
+	if normalized != "" {
+		needles = append(needles, normalized)
+	}
+	if anchor := sourceCheckRuntimeCommandAnchor(command); anchor != "" && anchor != normalized {
+		needles = append(needles, anchor)
+	}
+	return needles
+}
+
+func sourceCheckRuntimeCommandAnchor(command string) string {
+	fields := strings.Fields(command)
+	for i, field := range fields {
+		if field != "aether" {
+			continue
+		}
+		if i+1 >= len(fields) {
+			return "aether"
+		}
+		if fields[i+1] == "host" && i+2 < len(fields) {
+			return "aether host " + fields[i+2]
+		}
+		return "aether " + fields[i+1]
+	}
+	return ""
 }
 
 func sourceCheckFiles(root, relDir string, include func(string) bool) []string {
@@ -390,7 +592,7 @@ func sortSourceCheckIssues(issues []sourceCheckIssue) {
 func renderSourceCheckVisual(result sourceCheckResult) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("source-check"), "Source Check"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Root: ")
 	b.WriteString(result.Root)
 	b.WriteString("\n\n")

@@ -1,0 +1,6 @@
+memory_rules:
+  max_learnings: 100
+  auto_promote_threshold: 0.75
+  learning_retention_days: 60
+  instinct_cap: 30
+  event_cap: 100

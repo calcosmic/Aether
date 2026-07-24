@@ -2,7 +2,7 @@ name: ant-seal
 description: "🏺 Seal the colony with Crowned Anthill milestone"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS"
+  command: "aether host seal $ARGUMENTS"
 codex_orchestration:
   category: "semi-intelligent"
   skill: "aether-colony-build-cycle"
@@ -12,7 +12,7 @@ wrapper_contract:
   manifest: "result.seal_manifest"
   finalizer: "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>"
   instructions: |
-    1. Run `AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+    1. Run `aether host seal $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
     2. If the runtime returns blockers, surface them and stop.
     3. Parse `result.seal_manifest`.
     4. Before rendering spawn ceremonies or spawning final-review workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the seal flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
@@ -21,15 +21,16 @@ wrapper_contract:
     7. Use visible live Task/subagent panels as the final-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
     8. Before each manifest wave, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal --manifest-file <manifest_file> --execution-wave <execution_wave>`.
     9. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
-    10. After each terminal reviewer result, write that one result to a temporary JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`.
-    11. Each spawned reviewer description must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
-    12. Write a completion packet containing `seal_manifest` plus terminal worker `dispatches`. Preserve optional structured review fields: `findings`, `issues`, `recommendations`, `weak_spots`, `edge_cases_discovered`, and `reusable_lessons`.
-    13. Run `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`.
-    14. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file <file>` for the user-facing ceremony.
-    15. Follow the runtime's Porter readiness output from visual mode; do not deliver unless the user selects delivery actions.
+    10. Write per-reviewer JSON and the final completion JSON under `${TMPDIR:-/tmp}/aether-seal-<run>/seal-completion.json`; never write wrapper result artifacts under `.aether/data`.
+    11. After each terminal reviewer result, write that one result to an approved temp JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`.
+    12. Each spawned reviewer description must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+    13. Write a completion packet containing `seal_manifest` plus terminal worker `dispatches`. Preserve optional structured review fields: `findings`, `issues`, `recommendations`, `weak_spots`, `edge_cases_discovered`, and `reusable_lessons`.
+    14. Run `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`.
+    15. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file <file>` for the user-facing ceremony.
+    16. Follow the runtime's Porter readiness output from visual mode; do not deliver unless the user selects delivery actions.
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
-  - "Do not run `aether seal` without `--plan-only` from Claude/OpenCode orchestration unless the user explicitly asks for raw/no-orchestration."
+  - "Do not bypass `aether host seal` from Claude/OpenCode orchestration unless the user explicitly asks for raw/no-orchestration."
   - "Do not run Porter delivery commands unless the user explicitly chooses them after seal-finalize."
   - "Do not describe platform reviewers as background agents or replace the live worker stack with a markdown table."
   - "Do not drop structured reviewer findings; seal-finalize persists them to final-review.json, review ledgers, the post-seal backlog, and QUEEN.md lessons when supplied."

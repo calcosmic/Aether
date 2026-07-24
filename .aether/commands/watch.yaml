@@ -3,6 +3,14 @@ description: "👁️ View the current colony watch surface through the Aether C
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether watch $ARGUMENTS"
+ceremony_contract:
+  class: "dashboard"
+  authority: "Go owns live activity facts and writes the watch snapshot artifacts."
+  artifacts:
+    - ".aether/data/watch-status.txt"
+    - ".aether/data/watch-progress.txt"
+  wrapper_role: "Render a live or one-shot dashboard from Go-owned facts; do not request worker manifests for watch mode."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not describe watch as a worker dispatch or route it through swarm-finalize/build-finalize."
   - "If docs and runtime disagree, runtime wins."

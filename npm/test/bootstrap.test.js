@@ -2,6 +2,10 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const fsp = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
 
 const bootstrap = require("../lib/bootstrap");
 const packageJson = require("../package.json");
@@ -54,3 +58,69 @@ test("parseVersionOutput handles JSON and plain text", () => {
   assert.equal(bootstrap.parseVersionOutput("{\"ok\":true,\"result\":\"1.2.3\"}"), "1.2.3");
   assert.equal(bootstrap.parseVersionOutput("v1.2.3"), "1.2.3");
 });
+
+test("release base URL permits HTTPS mirrors and loopback acceptance servers", () => {
+  const original = process.env[bootstrap.RELEASE_BASE_URL_ENV];
+  try {
+    process.env[bootstrap.RELEASE_BASE_URL_ENV] = "https://releases.example.test/aether/";
+    assert.equal(bootstrap.releaseBaseURL("1.2.3"), "https://releases.example.test/aether/v1.2.3");
+    process.env[bootstrap.RELEASE_BASE_URL_ENV] = "http://127.0.0.1:8123";
+    assert.equal(bootstrap.releaseBaseURL("1.2.3"), "http://127.0.0.1:8123/v1.2.3");
+  } finally {
+    restoreEnv(bootstrap.RELEASE_BASE_URL_ENV, original);
+  }
+});
+
+test("release base URL rejects insecure remote mirrors and embedded credentials", () => {
+  const original = process.env[bootstrap.RELEASE_BASE_URL_ENV];
+  try {
+    process.env[bootstrap.RELEASE_BASE_URL_ENV] = "http://releases.example.test/aether";
+    assert.throws(() => bootstrap.releaseBaseURL("1.2.3"), /must use HTTPS/);
+    process.env[bootstrap.RELEASE_BASE_URL_ENV] = "https://user:secret@releases.example.test/aether";
+    assert.throws(() => bootstrap.releaseBaseURL("1.2.3"), /must not contain credentials/);
+  } finally {
+    restoreEnv(bootstrap.RELEASE_BASE_URL_ENV, original);
+  }
+});
+
+test("activation refuses a wrong-version binary without replacing the installed binary", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "aether-bootstrap-test-"));
+  const installed = path.join(root, process.platform === "win32" ? "aether.exe" : "aether");
+  const staged = path.join(root, process.platform === "win32" ? "staged.exe" : "staged");
+  try {
+    await fsp.copyFile(process.execPath, installed);
+    await fsp.copyFile(process.execPath, staged);
+    const before = await fsp.readFile(installed);
+    await assert.rejects(
+      bootstrap.activateReleaseBinary(staged, installed, "0.0.0-impossible"),
+      /Downloaded binary version mismatch/
+    );
+    assert.deepEqual(await fsp.readFile(installed), before);
+    assert.equal(fs.existsSync(bootstrap.rollbackBinaryPath(installed)), false);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("interrupted activation restores the previous binary before retry", async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "aether-bootstrap-recover-"));
+  const installed = path.join(root, process.platform === "win32" ? "aether.exe" : "aether");
+  const rollback = bootstrap.rollbackBinaryPath(installed);
+  try {
+    await fsp.copyFile(process.execPath, rollback);
+    const result = await bootstrap.recoverInterruptedInstall(installed, process.version);
+    assert.equal(result, "restored");
+    assert.equal(fs.existsSync(installed), true);
+    assert.equal(fs.existsSync(rollback), false);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+function restoreEnv(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}

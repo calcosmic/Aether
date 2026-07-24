@@ -1,0 +1,37 @@
+{
+  "name": "@aether/control",
+  "version": "0.1.0",
+  "description": "Retired experimental Aether control-plane prototype (non-production, fail-closed)",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:schemas": "vitest run tests/schemas",
+    "test:control": "vitest run tests/orchestrator tests/agents tests/phases tests/prompts tests/skills tests/memory",
+    "aether:control": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
+    "tsx": "^4.22.3",
+    "@types/node": "^25.9.1"
+  },
+  "keywords": [
+    "aether",
+    "colony",
+    "orchestration",
+    "ai-agent"
+  ],
+  "license": "MIT"
+}

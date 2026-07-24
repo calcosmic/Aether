@@ -1,8 +1,15 @@
 version: 2
 
+snapshot:
+  # Local and CI release candidates must use the source manifest version rather
+  # than whichever historical tag happens to be nearest to the checkout.
+  version_template: '{{ envOrDefault "AETHER_RELEASE_VERSION" .Version }}'
+
 before:
   hooks:
     - go mod tidy
+    - git diff --exit-code -- go.mod go.sum
+    - go test ./cmd -run TestDocCLIAlignment -v
 
 builds:
   - main: ./cmd/aether/

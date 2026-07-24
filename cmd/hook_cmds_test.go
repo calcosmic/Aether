@@ -107,7 +107,7 @@ func TestHookPreToolUseBlocksMainBranchWhenRedirectActive(t *testing.T) {
 				Type:      "REDIRECT",
 				Priority:  "high",
 				Source:    "user",
-				CreatedAt: "2026-04-15T18:00:00Z",
+				CreatedAt: time.Now().UTC().Format(time.RFC3339),
 				Active:    true,
 				Strength:  &redirectStrength,
 				Content:   json.RawMessage(`{"text":"Avoid modifying files directly on the main branch during builds -- all changes go through PRs"}`),

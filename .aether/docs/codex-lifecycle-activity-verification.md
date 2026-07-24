@@ -18,6 +18,29 @@ should write the official colony state.
 | `build` | `build <phase> --plan-only`, visible manifest workers, `spawn-log`, `spawn-complete`, `ceremony worker-complete` | `build-finalize` writes build state and claims |
 | `continue` | default `continue --skip-watchers --verification-depth standard`; heavy review uses visible reviewers with `spawn-log`, `spawn-complete`, `ceremony worker-complete` | default runtime continue advances state; heavy review uses `continue-finalize` |
 
+## Phase 3 Provider/Auth Hardening
+
+Provider availability preflight and launched-worker provider failures are
+different evidence classes.
+
+- **Availability preflight:** before dispatch, the runtime checks the selected
+  platform CLI and auth status and returns a structured, sanitized provider
+  diagnostic. Generated context may repeat only the provider, cause, and next
+  action.
+- **Post-launch provider/API/auth failure:** after a worker process starts, the
+  provider can still return API/auth output instead of Aether worker claims JSON.
+  That should be reported as a launched-worker provider/API/auth failure, not as
+  a missing CLI or preflight failure.
+
+For dummies: preflight means Aether can try to send the worker. Post-launch
+failure means the send happened, but the provider rejected or malformed the
+actual worker response.
+
+Generated context, wrapper summaries, and release notes must not expose raw
+provider stdout/stderr, tokens, or auth probe details. They also must not treat
+ignored `.opencode/package*.json` files as release-surface package manifests;
+the tracked TS-host package files are under `.aether/ts-host/`.
+
 ## Regression Tests
 
 The focused phase-6 tests are:

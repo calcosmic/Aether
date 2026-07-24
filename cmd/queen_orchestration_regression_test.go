@@ -33,7 +33,9 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 	regressionRequireContinueSpec(t, continueSpecs, "gatekeeper")
 
 	planningDispatches := plannedPlanningWorkersForGoal(root, "Plan secure auth token rotation and permission checks")
-	regressionRequirePlanningCaste(t, planningDispatches, "gatekeeper")
+	if got, want := regressionPlanningCastes(planningDispatches), []string{"scout", "route_setter"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("planning dispatches = %v, want restored Scout/Route-Setter loop %v", got, want)
+	}
 
 	swarmCastes := queenSwarmSelectedCastes("Auth token regression in session permissions")
 	if !swarmCastes["gatekeeper"] {
@@ -85,6 +87,14 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 }
 
 func regressionBuildCastes(dispatches []codexBuildDispatch) []string {
+	castes := make([]string, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		castes = append(castes, dispatch.Caste)
+	}
+	return castes
+}
+
+func regressionPlanningCastes(dispatches []codexPlanningDispatch) []string {
 	castes := make([]string, 0, len(dispatches))
 	for _, dispatch := range dispatches {
 		castes = append(castes, dispatch.Caste)

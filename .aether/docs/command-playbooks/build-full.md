@@ -17,6 +17,12 @@ The phase to build is: `$ARGUMENTS`
 
 ## Instructions
 
+## State Mutation Policy
+
+All writes to COLONY_STATE.json MUST go through `aether state-mutate` with targeted jq expressions.
+Never use the Write tool, `jq ... > file`, or any other direct file modification on COLONY_STATE.json.
+The Go runtime handles atomic writes, validation, and backups — direct writes risk corrupting colony state.
+
 ## Build Worker Read Cache Discipline
 
 Every worker spawned by build waves must receive this discipline in its task prompt:
@@ -239,7 +245,7 @@ Parse the JSON result (`.result.blockers`):
 
 ### Step 2: Update State
 
-Read then update `.aether/data/COLONY_STATE.json`:
+Update `.aether/data/COLONY_STATE.json` using `aether state-mutate` (atomic, locked, validated):
 - Set `state` to `"EXECUTING"`
 - Set `current_phase` to the phase number
 - Set the phase's `status` to `"in_progress"` in `plan.phases[N]`
@@ -248,7 +254,14 @@ Read then update `.aether/data/COLONY_STATE.json`:
 
 If `events` exceeds 100 entries, keep only the last 100.
 
-Write COLONY_STATE.json.
+Run using the Bash tool with description "Updating colony state for build...":
+```bash
+aether state-mutate \
+  --argjson phase "$PHASE_NUMBER" \
+  --arg phase_name "$PHASE_NAME" \
+  --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '.state = "EXECUTING" | .current_phase = $phase | .plan.phases |= map(if .id == $phase then .status = "in_progress" else . end) | .build_started_at = $timestamp | .events = ((.events[-99:]) + [$timestamp + "|phase_started|build|Phase " + ($phase|tostring) + ": " + $phase_name + " started"])'
+```
 
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...":
@@ -397,26 +410,25 @@ suggest_result=$(aether suggest-approve --dry-run 2>/dev/null)
 suggest_deprecated=$(echo "$suggest_result" | jq -r '.result.deprecated // false')
 
 if [[ "$suggest_deprecated" == "true" ]]; then
-    # Command is deprecated — skip silently, continue to Step 4.3
+    # Command is deprecated — skip without error, continue to Step 4.3
     :
 elif [[ -z "$suggest_result" ]]; then
-    # Command failed entirely — skip silently
+    # Command failed entirely — skip without error
     :
 else
     # Legacy path: parse suggestion_count (for older aether versions)
     suggestion_count=$(echo "$suggest_result" | jq -r '.result.suggestion_count // 0')
     if [[ "$suggestion_count" -gt 0 ]]; then
         echo "$suggestion_count pheromone suggestion(s) detected from code analysis"
-        aether suggest-approve 2>/dev/null || true
-    fi
+        aether suggest-approve    fi
 fi
 ```
 
 **Non-blocking**: This step never stops the build.
 
 **Error handling**:
-- If suggest-approve returns error: Skip silently, continue
-- If suggest-approve returns deprecated: Skip silently, continue
+- If suggest-approve returns error: Skip without error, continue
+- If suggest-approve returns deprecated: Skip without error, continue
 - Never let suggestion failures block the build
 
 2. **If existing code modification detected — spawn Archaeologist Scout:**
@@ -831,13 +843,11 @@ cat >> .aether/midden/approach-changes.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-02)
-aether midden-write --category "abandoned-approach" --message "Tried: initial approach that failed. Switched to: new approach. Reason: reason it didn't work" --source "builder" 2>/dev/null || true
-
+aether midden-write --category "abandoned-approach" --message "Tried: initial approach that failed. Switched to: new approach. Reason: reason it didn't work" --source "builder"
 # Enter memory pipeline for learning observation tracking (MID-02)
 aether memory-capture \
   --type "failure" \
-  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)" 2>/dev/null || true
-```
+  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)"```
 
 Spawn sub-workers ONLY if 3x complexity:
 - Check spawn budget using Bash tool with description: `aether spawn-can-spawn --depth {depth}`
@@ -895,13 +905,11 @@ cat >> .aether/midden/build-failures.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-01)
-aether midden-write --category "worker_failure" --message "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" --source "builder" 2>/dev/null || true
-
+aether midden-write --category "worker_failure" --message "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" --source "builder"
 # Capture failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" 2>/dev/null || true
-```
+  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}"```
 
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete --name "{ant_name}" --status "completed" --summary "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
 
@@ -1000,8 +1008,7 @@ if [[ "$midden_count" -gt 0 ]]; then
         --strength 0.7 \
         --source "auto:error" \
         --reason "Auto-emitted: midden error pattern recurred 3+ times mid-build" \
-        --ttl "30d" 2>/dev/null || true
-      redirect_emit_count=$((redirect_emit_count + 1))
+        --ttl "30d"      redirect_emit_count=$((redirect_emit_count + 1))
     fi
   done
 
@@ -1343,12 +1350,12 @@ cat >> .aether/midden/build-failures.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-01)
-aether midden-write --category "resilience" --message "Chaos finding: ${finding.title} (${finding.severity})" --source "chaos" 2>/dev/null || true
+aether midden-write --category "resilience" --message "Chaos finding: ${finding.title} (${finding.severity})" --source "chaos"
 
 # Capture resilience failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Resilience issue found: ${finding.title} (${finding.severity})" 2>/dev/null || true
+  --content "Resilience issue found: ${finding.title} (${finding.severity})"
 ```
 
 Log chaos ant completion and update swarm display:
@@ -1383,13 +1390,11 @@ cat >> .aether/midden/test-failures.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-01)
-aether midden-write --category "verification" --message "Watcher verification failed: ${issue_title}" --source "watcher" 2>/dev/null || true
-
+aether midden-write --category "verification" --message "Watcher verification failed: ${issue_title}" --source "watcher"
 # Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Verification failed: ${issue_title} - ${issue_description}" 2>/dev/null || true
-```
+  --content "Verification failed: ${issue_title} - ${issue_description}"```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
 

@@ -22,51 +22,30 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	}
 
 	required := []string{
+		"Use the Go `aether` CLI as the source of truth.",
 		"AETHER_OUTPUT_MODE=visual aether status",
-		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS",
+		"aether host continue --dry-run --classic-ceremony $ARGUMENTS",
+		"aether host continue --dry-run --verification-depth heavy $ARGUMENTS",
+		"The wrapper is the sole conductor for interactive reviewer spawning",
 		"temporary manifest file outside `.aether/data/`",
-		"result.continue_manifest",
-		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>",
-		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue",
-		"AETHER_OUTPUT_MODE=json aether spawn-log",
-		`subagent_type="{agent_name}"`,
-		"AETHER_OUTPUT_MODE=json aether spawn-complete",
-		"AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <worker_file>",
+		"result.manifest.continue_manifest",
+		"Do not set `run_in_background`",
 		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file",
-		"## Verification Gates",
-		"## Verification Depth",
-		"Gatekeeper",
-		"Auditor",
-		"Probe",
-		"## Learning Extraction",
 		"## After Continue",
-		"signal housekeeping",
-		"what expired, what remained active, and what that means for the next phase",
-		"### If the phase advanced",
 		"/ant-build N+1",
-		"### If continue is blocked",
-		"specific recovery command",
-		"/ant-continue",
-		"### If the colony completed",
 		"/ant-seal",
 	}
 
 	inOrder := []string{
-		"## What Continue Means",
 		"## Default Continue",
-		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
-		"## Verification Gates",
-		"## Verification Depth",
+		"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS",
 		"## Heavy External Review",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
-		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>",
-		"## Learning Extraction",
+		"aether host continue --dry-run --classic-ceremony $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
+		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file",
 		"## After Continue",
-		"### If the phase advanced",
-		"### If continue is blocked",
-		"### If the colony completed",
 	}
 
 	for _, wrapperPath := range wrapperPaths {
@@ -84,47 +63,21 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		if guardrail := "Do NOT use `--plan-only` or `continue-finalize` for default fast continue."; !strings.Contains(text, guardrail) {
 			t.Errorf("%s missing guardrail %q", wrapperPath, guardrail)
 		}
-		for _, forbidden := range []string{"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS"} {
+		for _, forbidden := range []string{
+			"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
+			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
+			"The TS host is the sole entry point to the Go CLI for manifest generation.",
+		} {
 			if strings.Contains(text, forbidden) {
-				t.Errorf("%s should not contain direct visual continue pass-through %q", wrapperPath, forbidden)
+				t.Errorf("%s should not contain stale direct continue command %q", wrapperPath, forbidden)
 			}
 		}
 
 		assertSubstringsInOrder(t, wrapperPath, text, inOrder)
 
-		advancedSection := sliceBetweenMarkers(t, wrapperPath, text, "### If the phase advanced", "### If continue is blocked")
-		for _, want := range []string{"/ant-build N+1", "signal housekeeping"} {
-			if !strings.Contains(advancedSection, want) {
-				t.Errorf("%s advanced section missing %q", wrapperPath, want)
-			}
-		}
 		for _, forbidden := range []string{"It's safe to clear your context now.", "/ant-resume"} {
-			if strings.Contains(advancedSection, forbidden) {
-				t.Errorf("%s advanced section should not contain %q (runtime owns context-clear)", wrapperPath, forbidden)
-			}
-		}
-
-		blockedSection := sliceBetweenMarkers(t, wrapperPath, text, "### If continue is blocked", "### If the colony completed")
-		for _, want := range []string{"specific recovery command", "/ant-continue"} {
-			if !strings.Contains(blockedSection, want) {
-				t.Errorf("%s blocked section missing %q", wrapperPath, want)
-			}
-		}
-		for _, forbidden := range []string{"It's safe to clear your context now.", "/ant-resume"} {
-			if strings.Contains(blockedSection, forbidden) {
-				t.Errorf("%s blocked section should not contain %q", wrapperPath, forbidden)
-			}
-		}
-
-		finalSection := sliceBetweenMarkers(t, wrapperPath, text, "### If the colony completed", "## Guardrails")
-		for _, want := range []string{"/ant-seal", "signal housekeeping"} {
-			if !strings.Contains(finalSection, want) {
-				t.Errorf("%s final section missing %q", wrapperPath, want)
-			}
-		}
-		for _, forbidden := range []string{"It's safe to clear your context now.", "/ant-resume"} {
-			if strings.Contains(finalSection, forbidden) {
-				t.Errorf("%s final section should not contain %q (runtime owns context-clear)", wrapperPath, forbidden)
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s should not contain %q (runtime owns context-clear)", wrapperPath, forbidden)
 			}
 		}
 	}
@@ -160,7 +113,7 @@ func TestContinueWrapperSourcesUseFastDevContinue(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	command := "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
+	command := "AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS"
 	paths := []string{
 		filepath.Join(repoRoot, ".aether", "commands", "continue.yaml"),
 		filepath.Join(repoRoot, ".claude", "commands", "ant-continue.md"),

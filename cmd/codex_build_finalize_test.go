@@ -167,6 +167,69 @@ func TestValidateBuildProvenanceRequiresCompletedBuilderFileEvidence(t *testing.
 	}
 }
 
+func TestValidateBuildProvenanceForManifestAllowsVerificationOnlyOutputs(t *testing.T) {
+	manifest := &codexBuildManifest{
+		Tasks: []codexBuildTaskPlan{
+			{ID: "3.1", Goal: "Run go test ./... from the repo root."},
+			{ID: "3.2", Goal: "Verify TS host dependencies are available and Node satisfies >=20."},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:    "Brick-52",
+			Caste:   "builder",
+			Status:  "completed",
+			TaskID:  "3.1",
+			Outputs: []string{"go.mod"},
+		},
+	}
+
+	if err := validateBuildProvenanceForManifest(manifest, results); err != nil {
+		t.Fatalf("expected verification-only output evidence to pass provenance: %v", err)
+	}
+}
+
+func TestValidateBuildProvenanceForManifestRejectsOutputOnlyMutationPhase(t *testing.T) {
+	manifest := &codexBuildManifest{
+		Tasks: []codexBuildTaskPlan{
+			{ID: "2.1", Goal: "Update wrapper ceremony contract tests."},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:    "Weld-96",
+			Caste:   "builder",
+			Status:  "completed",
+			TaskID:  "2.1",
+			Outputs: []string{"cmd/codex_build_finalize.go"},
+		},
+	}
+
+	if err := validateBuildProvenanceForManifest(manifest, results); err == nil {
+		t.Fatal("expected output-only mutation phase to fail provenance")
+	}
+}
+
+func TestValidateBuildProvenanceForManifestRejectsWatcherOnlyVerificationEvidence(t *testing.T) {
+	manifest := &codexBuildManifest{
+		Tasks: []codexBuildTaskPlan{
+			{ID: "3.1", Goal: "Run go test ./... from the repo root."},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:    "Hawk-45",
+			Caste:   "watcher",
+			Status:  "completed",
+			Outputs: []string{"go.mod"},
+		},
+	}
+
+	if err := validateBuildProvenanceForManifest(manifest, results); err == nil {
+		t.Fatal("expected watcher-only verification evidence to fail provenance")
+	}
+}
+
 func TestMergeExternalBuildResultsWithCodeWritten(t *testing.T) {
 	manifest := codexBuildManifest{
 		PlanOnly: true,
@@ -312,6 +375,39 @@ func TestClaimsOrAggregateWithAntName(t *testing.T) {
 	}
 	if len(claims.FilesModified) == 0 {
 		t.Error("expected FilesModified to be populated")
+	}
+}
+
+func TestClaimsOrAggregateMatchesRetrySuffixDrift(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "cmd/reliability.go")
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:          "Hunt-33",
+			Caste:         "builder",
+			Stage:         "wave",
+			TaskID:        "1.1",
+			Status:        "completed",
+			FilesModified: []string{"cmd/reliability.go"},
+		}},
+	}
+	dispatches := []codexBuildDispatch{{
+		Name:   "Hunt-33-r4",
+		Caste:  "builder",
+		Stage:  "wave",
+		Status: "completed",
+		TaskID: "1.1",
+	}}
+
+	claims, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err != nil {
+		t.Fatalf("claimsOrAggregate with retry suffix drift: %v", err)
+	}
+	if len(claims.FilesModified) != 1 || claims.FilesModified[0] != "cmd/reliability.go" {
+		t.Fatalf("FilesModified = %+v, want retry-suffix matched worker file", claims.FilesModified)
+	}
+	if len(claims.TaskClaims) != 1 || claims.TaskClaims[0].TaskID != "1.1" {
+		t.Fatalf("TaskClaims = %+v, want task 1.1 claim", claims.TaskClaims)
 	}
 }
 

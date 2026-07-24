@@ -178,6 +178,8 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 			"verification_timeout_seconds": int(verificationTimeout / time.Second),
 			"finalize_surface":             "awaiting_wrapper_completion",
 			"runtime_verification_only":    true,
+			"result_artifact_paths":        []string{finalizerCompletionTempPattern},
+			"result_collection_policy":     "A structurally valid completed result wins over a timeout placeholder for the same reviewer; malformed JSON, duplicate terminal results, and .aether/data completion files are rejected.",
 		},
 	}
 	addBoundaryQuestionResultFields(result, boundary)
@@ -190,10 +192,9 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 
 func continuePlanOnlySourceCommand(reviewDepth colony.VerificationDepth, skipWatchers bool) string {
 	parts := []string{
-		"AETHER_OUTPUT_MODE=json",
 		"aether",
+		"host",
 		"continue",
-		"--plan-only",
 		"--verification-depth",
 		string(colony.NormalizeVerificationDepth(string(reviewDepth))),
 	}

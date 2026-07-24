@@ -8,12 +8,15 @@
  * graceful error handling).
  */
 
-import type { BuildDispatch, TerminalWorkerStatus } from "./types.js";
+import type { BuildDispatch, TerminalWorkerStatus, WorkerHandoff, SpawnClaim, SpawnedWorker } from "./types.js";
 import {
   dispatchSingleWorker,
   type DispatchOptions,
   type DispatchResult,
 } from "./worker-dispatch.js";
+import {
+  type SpawnOrchestrator,
+} from "./spawn-orchestrator.js";
 
 // Mutable reference for test injection.
 let _dispatchSingleWorker = dispatchSingleWorker;
@@ -45,6 +48,13 @@ export interface WaveOrchestratorOptions extends DispatchOptions {
    * Default: 600000 (10 minutes)
    */
   timeoutMs?: number;
+  /**
+   * Spawn orchestrator for processing worker spawn claims after wave completion.
+   * When provided, completed workers' spawn claims are validated, accepted children
+   * are dispatched in a follow-up spawn wave, and child results are attached to
+   * parent handoffs (SPAWN-04).
+   */
+  spawnOrchestrator?: SpawnOrchestrator;
 }
 
 /** Result of dispatching a single wave. */
@@ -172,16 +182,6 @@ export async function dispatchWave(
 // Multi-wave dispatch
 // ---------------------------------------------------------------------------
 
-/**
- * Dispatch multiple workers grouped by wave.
- *
- * Waves run sequentially (wave 1 must complete before wave 2 starts).
- * Within each wave, workers run in parallel by default.
- *
- * @param opts - Wave orchestrator options
- * @param dispatches - Array of build dispatch entries from the manifest
- * @returns Array of wave results, one per wave
- */
 /** Test-only: inject a mock dispatchSingleWorker. */
 export function __setDispatchSingleWorker(
   fn: typeof dispatchSingleWorker
@@ -194,6 +194,107 @@ export function __restoreDispatchSingleWorker(): void {
   _dispatchSingleWorker = dispatchSingleWorker;
 }
 
+// ---------------------------------------------------------------------------
+// Post-wave spawn processing (SPAWN-01, SPAWN-04)
+// ---------------------------------------------------------------------------
+
+/**
+ * Process spawn claims from a completed wave.
+ *
+ * After a wave of workers completes, collect any spawn claims from their
+ * results, validate them through the spawn orchestrator, dispatch accepted
+ * child workers in a follow-up spawn wave, and attach child results to the
+ * parent workers' handoffs.
+ *
+ * Child workers dispatched via spawn waves do not themselves trigger further
+ * spawn processing in this version (prevents recursive complexity). The
+ * spawnOrchestrator depth limit already prevents grandchildren.
+ *
+ * @param opts - Wave orchestrator options (must include spawnOrchestrator)
+ * @param waveResult - The completed wave result to process spawns from
+ * @returns Child wave result if children were dispatched, undefined otherwise
+ */
+async function processWaveSpawns(
+  opts: WaveOrchestratorOptions,
+  waveResult: WaveResult,
+): Promise<WaveResult | undefined> {
+  const orchestrator = opts.spawnOrchestrator;
+  if (!orchestrator) return undefined;
+
+  // Collect spawn claims from all completed workers in the wave
+  const allClaims: { parent: string; depth: number; claims: SpawnClaim[] }[] = [];
+  for (const result of waveResult.results) {
+    if (result.status === "completed" && result.spawns && result.spawns.length > 0) {
+      allClaims.push({
+        parent: result.name,
+        depth: 1, // Manifest workers are depth 1
+        claims: result.spawns,
+      });
+    }
+  }
+
+  if (allClaims.length === 0) return undefined;
+
+  // Process claims through orchestrator
+  const allAccepted: SpawnedWorker[] = [];
+  const allRejected: { claim: SpawnClaim; reason: string }[] = [];
+  for (const { parent, depth, claims } of allClaims) {
+    const { accepted, rejected } = orchestrator.processClaims(parent, depth, claims);
+    allAccepted.push(...accepted);
+    allRejected.push(...rejected);
+  }
+
+  if (allAccepted.length === 0) return undefined;
+
+  // Synthesize child dispatches
+  const childDispatches: BuildDispatch[] = allAccepted.map((sw) => ({
+    stage: "spawned",
+    caste: sw.claim.caste,
+    name: sw.name,
+    task: sw.claim.task,
+    status: "pending",
+    // Mark as spawned worker with parent context for spawn-log (SPAWN-05)
+    parent: sw.parent,
+    depth: sw.depth,
+  } as unknown as BuildDispatch));
+
+  // Dispatch child workers as a spawn wave
+  process.stderr.write(`Dispatching spawn wave: ${childDispatches.length} child workers\n`);
+  const childWaveResult = await dispatchWave(opts, childDispatches);
+
+  // Attach child results to parent handoffs (SPAWN-04)
+  for (const childResult of childWaveResult.results) {
+    const parentName = childResult.name.split("-spawn-")[0];
+    if (!parentName) continue;
+    const parentWorker = waveResult.results.find((r) => r.name === parentName);
+    if (parentWorker) {
+      if (!parentWorker.handoff) parentWorker.handoff = {} as WorkerHandoff;
+      if (!parentWorker.handoff.child_results) parentWorker.handoff.child_results = [];
+      parentWorker.handoff.child_results.push({
+        name: childResult.name,
+        status: childResult.status,
+        summary: childResult.summary,
+      });
+    }
+  }
+
+  return childWaveResult;
+}
+
+/**
+ * Dispatch multiple workers grouped by wave.
+ *
+ * Waves run sequentially (wave 1 must complete before wave 2 starts).
+ * Within each wave, workers run in parallel by default.
+ *
+ * When a spawnOrchestrator is provided, after each wave completes, spawn
+ * claims from completed workers are processed and accepted children are
+ * dispatched in a follow-up spawn wave.
+ *
+ * @param opts - Wave orchestrator options
+ * @param dispatches - Array of build dispatch entries from the manifest
+ * @returns Array of wave results, one per wave (including spawn waves)
+ */
 export async function dispatchWaves(
   opts: WaveOrchestratorOptions,
   dispatches: BuildDispatch[]
@@ -219,6 +320,12 @@ export async function dispatchWaves(
     const waveDispatches = waveMap.get(waveNum)!;
     const result = await dispatchWave(opts, waveDispatches);
     waveResults.push(result);
+
+    // Process spawns from this wave (SPAWN-01, SPAWN-04)
+    const spawnResult = await processWaveSpawns(opts, result);
+    if (spawnResult) {
+      waveResults.push(spawnResult);
+    }
   }
 
   return waveResults;

@@ -20,12 +20,20 @@ None
 ## Outputs
 
 ### Stdout
-JSON envelope via `outputWorkflow` (visual + structured). Shows worker activity, build status, and colony health snapshot. In TTY mode, renders live refreshing display.
+JSON envelope via `outputWorkflow` (visual + structured). Shows current worker
+activity, build status, recovery guidance, and colony health snapshot. In TTY
+mode, renders a live refreshing display.
+
+### Ceremony Class
+`watch` and `swarm --watch` are dashboards. They may show active/recent worker
+facts already recorded by the runtime spawn ledger, but they must not request a
+new dispatch manifest or route to `swarm-finalize`.
 
 ### Files Created/Modified
 | File | Operation | When |
 |------|-----------|------|
-| .aether/data/watch-snapshot.json | create | Watch snapshot artifact |
+| .aether/data/watch-status.txt | create/update | One-line machine-readable watch status snapshot |
+| .aether/data/watch-progress.txt | create/update | Last rendered visual watch dashboard |
 
 ### Exit Codes
 | Code | Meaning |
@@ -41,7 +49,8 @@ None -- read-only monitoring.
 ### Data Artifacts Modified
 | Artifact | Write Type | Content Changed |
 |----------|------------|-----------------|
-| .aether/data/watch-snapshot.json | create | Watch snapshot data |
+| .aether/data/watch-status.txt | create/update | Watch counters, state, scope, live-refresh flag, and next command |
+| .aether/data/watch-progress.txt | create/update | Human-readable watch dashboard text |
 
 ## Preconditions
 

@@ -87,6 +87,8 @@ logs/
 .aether/HANDOFF.md
 .aether/PAUSE_HANDOFF.md
 .aether/error_ledger.json
+.aether/events/*
+!.aether/events/.gitkeep
 .aether/checkpoints/
 .aether/ledger.jsonl
 .aether/manifest.json
@@ -103,6 +105,13 @@ logs/
 # NPM
 node_modules/
 *.tgz
+.aether/ts-host/SIMULATED_BUILD_OUTPUT.txt
+!.aether/ts-host/dist/
+!.aether/ts-host/dist/**
+.aether/ts-host/src/**/*.js
+.aether/ts-host/src/**/*.d.ts
+.aether/ts-host/test/**/*.js
+.aether/ts-host/test/**/*.d.ts
 
 # Allow bin/lib (Aether CLI libraries)
 !bin/lib/
@@ -116,3 +125,5 @@ cmd/.aether/worktrees/
 # Go build output
 /aether
 *.test
+# Retired TypeScript control-plane quarantine state
+control-ts/.retired-state/

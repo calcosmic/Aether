@@ -2,7 +2,8 @@ name: ant-plan
 description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep>"
+  command: "aether host plan --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep> --target <70-99> --max-iterations <2-12>"
+  contract: ".aether/docs/wrapper-host-contract.md"
 codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-build-cycle"
@@ -22,38 +23,42 @@ wrapper_additions:
     2. Standard — normal task breakdown. Recommended default.
     3. Deep — granular subtasks including edge cases, error handling, and test coverage as separate tasks.
     This controls task detail within each plan, not how many phases are generated. If not specified, defaults to "standard".
-  orchestration: |
-    Restore real wrapper planning orchestration:
-    1. Run `AETHER_OUTPUT_MODE=visual aether status`.
-    2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2>` for normal wrapper planning, or run the user's requested `aether plan --refresh` when refreshing an existing plan, and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
-    3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
-    4. Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the planning flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
-    5. If the runtime reports `dispatch_mode: agent-delegate`, treat it as the same host-dispatch contract: do not run nested subprocess planning; dispatch the manifest workers through the current host platform and finish with `plan-finalize`.
-    6. If the result reports `unresolved_clarifications` or `clarification_warning`, pause before spawning workers and route first to `/ant-discuss`; proceed with implicit assumptions only if the user explicitly chooses to continue.
-    7. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest_file>` so the old-style planning spawn stack appears before live workers.
-    8. Use visible live Task/subagent panels as the worker ceremony. Do not set `run_in_background`, do not describe workers as background agents, and do not replace the live stack with a markdown worker table.
-    9. Before each manifest wave, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest_file> --execution-wave <execution_wave>`.
-    10. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `agent_name`, and each dispatch's runtime-provided `skill_section` when present.
-    11. Each spawned worker description must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
-    12. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
-    13. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
-    14. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
-    15. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
-    16. After each terminal worker result, write that one result to a temporary JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <worker_file>`.
-    17. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
-    18. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
-    19. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <file>` for the user-facing ceremony.
+  iterative_planning_ceremony: |
+    Restore the classic planning-loop controls while leaving state writes to Go:
+    - `--target <70-99>` sets the confidence target. Presets default to fast=80, balanced=90, deep=95, exhaustive=99.
+    - `--max-iterations <2-12>` sets the loop budget. Presets default to fast=4, balanced=6, deep=8, exhaustive=12.
+    - `--accept` records that the current best plan may finalize below target.
+    Each `aether host plan` response is one planning iteration manifest. It includes `planning_run_id`, `iteration`, `target_confidence`, `max_iterations`, `previous_confidence`, `selected_gaps`, `previous_plan_draft`, and exactly two expected workers: Scout followed by Route-Setter.
+    The wrapper loops by dispatching Scout, then Route-Setter with the Scout result, then calling `plan-finalize`. If `plan-finalize` returns `requires_next_iteration: true`, request a fresh `aether host plan` manifest and repeat. Do not reuse the previous manifest or completion packet.
+    The runtime emits `planning_loop.stop_reason` as `pending`, `target_reached`, `stalled`, `max_iterations`, or `accepted`; wrappers must surface that reason and must not hand-edit state.
+    Confidence may only increase when the Scout/Route-Setter evidence changes or selected gaps are resolved; `plan-finalize` rejects confidence-only bumps.
+  revision_ceremony: |
+    When refreshing a plan after any phase completed, treat it as a versioned revision rather than a reset:
+    - Pass `--refresh --revision-type <user_feedback|research|verification_failure|scope_change|manual> --revision-reason "<why>"` to every `aether host plan` iteration.
+    - For research or verification-driven revisions, also pass one or more repository-relative `--revision-evidence <path>` files.
+    - Preserve the manifest `revision` context and each worker brief verbatim. Completed phases are immutable; Route-Setter outputs replacement unfinished phases only.
+    - Surface the accepted `plan_revision` ID, reason, preserved phase IDs, and replacement phase IDs from `plan-finalize`.
+    - Never reuse a planning or build packet from the superseded revision.
   post_plan: |
     Close from the `plan-finalize` result only:
-    1. Run the visual closeout command first; use its next-step line as the source of truth.
-    2. Summarize selected depth and planning depth, phase count, confidence, and which planning agents ran.
-    3. Route first to `/ant-build 1` or the runtime-surfaced next build command.
-    4. If finalization blocks, follow the runtime recovery command first.
+    1. If `requires_next_iteration` is true, do not render final closeout. Request the next manifest and continue the loop unless the runtime reports a stop condition, provider unavailable, or the user explicitly accepts below target.
+    2. After the JSON finalizer succeeds with a completed plan, run the visual closeout command first; use its next-step line as the source of truth.
+    3. Summarize selected depth, planning depth, phase count, confidence, `planning_loop.stop_reason`, and which planning agents ran.
+    4. Route first to `/ant-build 1` or the runtime-surfaced next build command.
+    5. If finalization blocks, follow the runtime recovery command first.
 guardrails:
-  - "Do NOT run `aether plan` without `--plan-only` from Claude/OpenCode wrapper orchestration."
+  - "The TS host is the sole entry point to the Go CLI; respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
+  - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest — always fresh."
+  - "Use visible live Task/subagent panels for plan ceremony. Run aether spawn-log before each dispatch and aether spawn-complete after."
+  - "Inspect each planning dispatch permission_profile. Scout repository_read_only must use a host-enforced no-write boundary; never replace it with an unrestricted agent or a prompt-only promise."
+  - "Do NOT run direct `aether plan` from Claude/OpenCode wrapper orchestration for manifest generation; use `aether host plan`."
   - "Do NOT run `aether plan --synthetic` after real wrapper Task agents complete."
   - "Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand from this command spec."
   - "Do NOT parse visual output as authoritative state."
   - "Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`."
+  - "Do NOT dispatch extra planning workers. The real planning contract is one Scout followed by one Route-Setter per iteration."
+  - "Do NOT treat `requires_next_iteration: true` as a completed colony plan."
+  - "Do NOT reuse a manifest or completion packet across iterations."
+  - "Do NOT hand-edit, repeat, or renumber completed phases during a revision; the Go finalizer owns completed-prefix preservation and final IDs."
   - "Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table."
   - "If docs and runtime disagree, runtime wins."

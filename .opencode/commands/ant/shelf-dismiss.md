@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/shelf-dismiss.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-shelf-dismiss
-description: "Dismiss a shelf backlog item by ID"
+description: "🗑️ Dismiss a shelf backlog item by ID"
 ---
 
 Use the Go `aether` CLI as the source of truth.

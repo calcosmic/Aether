@@ -7,13 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.40] - 2026-05-19
+
+### Added
+- Unified 5 divergent skip lists into canonical ScanFilter with 36-entry noise map (Python, Node, Go, Rust, build artifacts, caches)
+- Source anchor extraction from clean survey output (top 50 repo-owned files) wired through to planner context
+- Plan-grounding validation gate with soft warnings when generic plans meet available anchors
+- Decision conflict detection with 9 contradiction pairs and FEEDBACK pheromone emission
+- PlaybookLoader TS module restoring ceremony — loads 5 build + 2 plan playbooks via resolution chain
+- YAML slimmed to packaging-only (orchestration removed from build.yaml and plan.yaml)
+- M4L regression test proving end-to-end survey-to-grounding pipeline
+- Execution path audit test verifying one conductor per workflow per platform
+- Codex command-guide smoke tests (build, plan) verifying output without playbook loading
+- Cross-platform parity tests (8/8 passing)
+- 84 new tests across 4 phases
+
+### Changed
+- Bumped version to 1.0.40
+
+## [1.0.39] - 2026-05-17
+
+### Added
+- Restored universal classic ceremony parity across Codex lifecycle flows, including spawn plans, wave starts, worker completions, and closeouts.
+- Added final seal evidence for the Universal Classic Ceremony Parity and Command UX Completion colony.
+
+### Changed
+- Bumped the Aether source and npm package version to 1.0.39 for hub-backed testing in other repositories.
+- Aligned Codex and Claude project guides plus README version references with the release version.
+
+### Fixed
+- Hardened Porter full-release readiness with persisted receipts, version agreement, binary smoke, Go/TypeScript/npm gates, and redacted failed-command diagnostics.
+- Strengthened final seal review so blocker-level security and quality findings stop sealing while non-blocking release lessons are preserved.
+
+## [1.0.38] - 2026-05-16
+
 ### Docs
 - AGENTS.md: add Runtime Lifecycle mermaid diagram (under Architecture Overview) and Wisdom Pipeline mermaid diagram (under Wisdom Pipeline). Model-agnostic, shows both `in-repo` and `worktree` parallel modes, and contains the `skill-match` sub-graph.
 - Added Phase 5 lifecycle integration guidance covering Orchestrator Mode routing, finalizer validation, wrapper parity, and changelog planning.
+- Added final release-readiness handoff notes covering smoke commands, provider/auth redaction evidence, seal-time blockers, explicit residual risks for tag-pinned Actions and absent `govulncheck`, and the publish-readiness handoff.
 - Documented runtime-owned `orchestrator_boundary_guidance` routing across command guides, Claude/OpenCode wrappers, Codex build-cycle skill, and wrapper-runtime contract docs.
+- Clarified Phase 3 provider/auth hardening docs: provider availability preflight is separate from post-launch provider/API/auth worker failures, generated context must use sanitized provider/cause/next-action wording only, and ignored `.opencode/package*.json` files are local install artifacts rather than release-surface manifests.
+- Updated the publish/update runbook with actionable publish-warning commands plus release metadata and auth-gate details for GitHub `GITHUB_TOKEN` and npm `NPM_TOKEN` paths.
 
 ### Changed
 - Lifecycle wrapper guidance now stops before worker spawning when Orchestrator Mode routes to `aether discuss`, then requires rerunning `after_discuss_next` with a fresh plan-only manifest after answers are resolved.
+- `aether publish` warnings now include exact recovery and verification commands for hub-version changes, skipped TS host publish steps, and stable/dev binary co-location.
+- Release and CI workflows now run TS-host install/typecheck/test/build gates and avoid direct secret references in release job conditionals.
+- Worker subprocess diagnostics now redact provider secrets before surfacing through errors, debug artifacts, RawOutput reports, or TypeScript host failure summaries.
 
 ## [1.0.30] - 2026-05-06
 

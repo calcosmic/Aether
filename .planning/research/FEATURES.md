@@ -1,447 +1,509 @@
-# Feature Landscape: Aether v1.14 Queen Authority
+# Feature Research: Historical Workflow Baselines for Reliability Restoration
 
-**Domain:** Autonomous queen coordination -- auto-recovery, smart gating, output filtering, wave coordination
-**Researched:** 2026-05-03
-**Confidence:** HIGH (findings verified against source code in `cmd/`, `pkg/colony/`, `pkg/codex/`; ecosystem patterns verified against official docs and published research)
+**Domain:** AI colony framework (Aether) -- flagship workflow behavioral baselines from Classic era through modern versions
+**Researched:** 2026-05-20
+**Confidence:** HIGH (based on direct git tag inspection of v5.4.0 source and milestone audit trail)
 
-## Executive Summary
+## Feature Landscape
 
-Queen Authority transforms the queen from narrator into autonomous coordinator. The core problem: Aether's 11 continue gates, 4-tier worker escalation (retry -> reassign -> queen reassign -> user escalation), wave dispatch, and Fixer caste all exist as infrastructure, but they require manual triggering. Workers stall, gates block, and the user babysits every phase transition.
+This research defines behavioral baselines for each flagship workflow by inspecting the actual command source code at the Classic v5.4.0 git tag, tracking evolution through v1.10-v1.21 milestones, and identifying regressions from the shell-to-Go migration and subsequent TS host cutover.
 
-The research reveals a clear consensus across multi-agent frameworks (LangGraph, AutoGen, CrewAI, Google ADK, Erlang/OTP) on what autonomous supervisors must do: detect failures, classify severity, apply recovery strategies with bounded retry, and escalate only when genuinely stuck. The differentiator is not adding exotic features -- it is wiring existing Aether infrastructure together with a severity-classified decision loop that runs autonomously within well-defined boundaries.
+### Table Stakes: Flagship Workflows
 
-The anti-feature insight is equally clear: autonomous supervisors must NOT silently skip failures, make irreversible state mutations without audit trails, or attempt to recover from fundamentally broken conditions (corrupted state, dependency conflicts). Erlang/OTP's principle is instructive: if MaxR restarts happen within MaxT seconds, the supervisor itself terminates rather than entering an infinite recovery loop.
+These are the core workflows users rely on. A workflow is "working" when it completes the full lifecycle from user invocation through state mutation with honest output and no silent failures.
 
-## Feature Categories
-
-### Category A: Queen Auto-Recovery
-
-How the queen detects, classifies, and recovers from worker and gate failures without human intervention.
-
-#### A1. Failure Classification Engine
-
-**Why expected:** Every autonomous supervisor must distinguish between recoverable and non-recoverable failures before acting. Without classification, the queen either over-reacts (escalating trivial issues) or under-reacts (retrying fundamentally broken tasks). This is table stakes in Erlang/OTP (permanent vs transient vs temporary errors), LangGraph (retryable vs non-retryable exceptions), and production supervision trees.
-
-**Current state:** Aether has `CircuitBreaker` (per-worker consecutive failure tracking with threshold), `GateCheckResult` (per-gate status/detail/fixHint/recoveryOptions), and `gateRecoveryTemplates` (manual recovery instructions). But there is no severity classification -- every gate failure is treated equally, and the Fixer dispatches with the same `propose` mode regardless of whether the failure is "a test assertion name changed" or "the entire build is broken."
-
-**Expected behavior:**
-1. Each failure gets a severity classification: `recoverable` (auto-fixable, low risk), `requires-attempt` (may be fixable, needs one try), `blocking` (genuinely stuck, needs human)
-2. Classification signals come from gate metadata already present: `FixHint` presence (recoverable), `RecoveryOptions` content (requires-attempt), gate name itself (some gates like `spawn_gate` are inherently blocking)
-3. Classification is deterministic and auditable -- logged to COLONY_STATE.json, not guessed by LLM
-4. The queen uses classification to choose recovery strategy, not to decide *whether* to recover
-
-**Complexity:** Medium -- classification logic is rule-based, but getting the rules right requires understanding each gate's failure semantics
-
-**Dependencies:** Existing `GateCheckResult`, `gateRecoveryTemplates`, `CircuitBreaker`
-
-**Confidence:** HIGH -- pattern is well-established in Erlang/OTP, LangGraph, and production systems
+| Workflow | "Good" at v5.4.0 (Classic) | Status at v1.22 (Current) | Key Regression |
+|----------|---------------------------|--------------------------|----------------|
+| **init** | Rich charter ceremony: scan repo, generate charter, ask approval, write QUEEN.md, set state v3.0 | Runtime-owned via `aether init-research`; wrapper does intent refinement | Lost: charter approval ceremony replaced by AI synthesis; lost: auto-suggest pheromones |
+| **colonize** | 4 parallel Surveyor agents (nest, disciplines, pathogens, provisions) writing 7 survey docs; stale detection | Runtime manifest via `aether host colonize`; wrapper spawns from manifest | Surveyors still work but ceremony is runtime-driven instead of playbook-driven |
+| **plan** | Iterative research loop (scout + route-setter), confidence scoring, stall detection, territory survey injection, auto-finalize | Go-owned `aether plan` with worker dispatch; wrapper is thin passthrough | Lost: interactive confidence display during planning; gained: Go-managed state |
+| **oracle/RALF** | Rich wizard (7 questions), in-session loop, template system (5 types), diminishing returns, promote findings to colony | Go-owned `aether oracle` with `--depth`, `--template`, `--background`; wrapper is thin | Lost: wizard ceremony (replaced by shorter intent refinement); gained: background mode, Go state |
+| **build** | 5-stage playbook (prep, context, wave, verify, complete); Queen spawns workers directly; wave-based parallel execution | Manifest via `aether host build --dry-run`; wrapper spawns from manifest; Go owns finalizer | Architecture fundamentally changed: was playbook-driven, now manifest-driven |
+| **continue** | 4-stage playbook (verify, gates, advance, finalize); 6-phase verification loop; command resolution; learning extraction | Default path: `aether continue` (fast, Go-only); heavy path: manifest + wrapper-spawned reviewers | Default path is faster but lost: manual verification loop, learning extraction ceremony |
+| **run** | Full autopilot: loads build+continue playbooks inline, pause conditions, replan trigger, headless mode, elapsed tracking | `aether run` CLI subcommand, wrapper just delegates | Lost: inline playbook execution; gained: Go-native autopilot with same pause conditions |
+| **swarm** | 4 parallel scouts (archaeologist, pattern hunter, error analyst, web researcher); cross-compare; auto-fix with rollback | `aether swarm` CLI subcommand | Lost: rich 4-scout ceremony; gained: Go-native dispatch with same logic |
+| **seal** | Multi-step ceremony: Sage analytics, wisdom approval, hive promotion, Chronicler audit, CROWNED-ANTHILL.md, XML export, commit suggestion | Go-owned `aether seal`; wrapper shows ceremony output | Lost: interactive wisdom review, Sage spawn, Chronicler spawn; gained: Go-native ceremony |
+| **entomb** | Full archive: chamber creation, XML export (hard-stop on failure), state reset, HANDOFF.md, eternal memory | Go-owned `aether entomb`; wrapper shows ceremony output | Lost: interactive wisdom review; gained: Go-native archive pipeline |
 
 ---
 
-#### A2. Bounded Auto-Retry with Exponential Backoff
-
-**Why expected:** When a worker fails for a transient reason (timeout, race condition, flaky test), the supervisor should retry automatically. This is the most basic recovery pattern in every framework: Erlang's `one_for_one` restart strategy, LangGraph's `RetryPolicy(max_attempts=3, backoff_factor=2.0)`, AutoGen's typed state transitions with retry logic.
-
-**Current state:** `CircuitBreaker` exists but only *tracks* failures -- it does not retry. `findSameCastePeer` can redistribute to a peer, but only after the breaker trips (3 consecutive failures). The queen has no retry mechanism at all. Retry currently requires the user to run `/ant-build` or `/ant-continue` again manually.
-
-**Expected behavior:**
-1. For `recoverable`-classified failures: queen retries the same worker once, with a brief delay (configurable, default 10s)
-2. For `requires-attempt`-classified failures: queen dispatches Fixer in `propose` mode (current default behavior)
-3. Retry count is bounded per the Erlang model: MaxR retries within MaxT seconds, then escalate. Suggested defaults: 2 retries within 120 seconds
-4. Each retry increments `RetryCount` on the `GateCheckResult` (field already exists, currently unused)
-5. Retry events are emitted to the ceremony event bus for visibility
-
-**Complexity:** Low -- the infrastructure exists, this is wiring it together
-
-**Dependencies:** `CircuitBreaker`, `GateCheckResult.RetryCount`, ceremony event bus
-
-**Confidence:** HIGH -- implementation is straightforward given existing infrastructure
-
----
-
-#### A3. Peer Redistribution on Worker Failure
-
-**Why expected:** When a specific worker is failing (circuit tripped), redistributing its task to a same-caste peer is a proven pattern. Erlang calls this "restart with a different worker." Aether already has `findSameCastePeer` -- it just is not called automatically.
-
-**Current state:** `findSameCastePeer` exists and finds non-tripped same-caste peers. Circuit breaker trip events are emitted but no redistribution occurs. The user must manually redistribute.
-
-**Expected behavior:**
-1. When CircuitBreaker trips for a worker, queen automatically checks for a same-caste peer via `findSameCastePeer`
-2. If a peer exists: redistribute the failed task, emit `emitCircuitBreakerRedistributed` (already implemented), mark original worker as `superseded`
-3. If no peer exists: mark task as `blocked`, escalate to user with clear explanation
-4. Peer redistribution counts against the retry budget (MaxR/MaxT)
-
-**Complexity:** Low -- `findSameCastePeer` and event emission already exist
-
-**Dependencies:** `CircuitBreaker`, `findSameCastePeer`, `emitCircuitBreakerRedistributed`
-
-**Confidence:** HIGH -- infrastructure complete, just needs orchestration
-
----
-
-#### A4. Queen-Driven Fixer Dispatch
-
-**Why expected:** The Fixer caste exists (`dispatchFixer` with full/propose/advise modes, attempt cap, circuit breaker integration) but requires manual triggering via `/ant-unblock --dispatch`. An autonomous queen should dispatch the Fixer automatically when `requires-attempt` failures are detected.
-
-**Current state:** `dispatchFixer` validates mode, checks circuit breaker, checks attempt cap, reads gate results, builds fix context, and outputs dispatch instruction JSON. `resolveFixedGates` updates gate results for addressed gates. `recordFixerFailure` records failures in the circuit breaker. The full pipeline exists -- it is just not called automatically.
-
-**Expected behavior:**
-1. After auto-retry exhausts its budget (A2), queen checks if any `requires-attempt` failures remain
-2. For each such failure, queen calls `dispatchFixer` with `propose` mode (safe default)
-3. If Fixer resolves gates (via `resolveFixedGates`), queen proceeds to verification
-4. If Fixer fails (via `recordFixerFailure`), queen classifies as `blocking` and escalates
-5. Fixer dispatch respects existing attempt cap (`DefaultMaxUnblockAttempts = 1`) -- this is a safety rail, not something the queen overrides
-
-**Complexity:** Low -- the entire Fixer pipeline exists, needs orchestration only
-
-**Dependencies:** `dispatchFixer`, `resolveFixedGates`, `recordFixerFailure`, `checkAttemptCap`
-
-**Confidence:** HIGH -- all infrastructure exists and is tested
-
----
-
-#### A5. Escalation Protocol with Human Handoff
-
-**Why expected:** Every autonomous supervisor must have a bounded escalation path. The queen cannot recover from everything. Erlang/OTP: supervisor terminates when MaxR/MaxT exceeded, its own supervisor handles it. LangGraph: `interrupt_before` for human-in-the-loop. Google ADK: Human-in-the-Loop pattern with ApprovalTool. The key insight from research: escalation is not failure -- it is the supervisor demonstrating good judgment.
-
-**Current state:** Aether's 4-tier escalation exists conceptually (retry -> reassign -> queen reassign -> user escalation) but is not implemented as a state machine. The user is always the escalation target. There is no intermediate "queen tried everything, here is what happened" summary.
-
-**Expected behavior:**
-1. When all recovery strategies exhaust (retry, peer redistribution, Fixer), queen generates an escalation summary
-2. Summary includes: what failed, what recovery was attempted, why each recovery failed, what the user needs to do
-3. Queen marks the phase as `blocked` in COLONY_STATE.json with the escalation reason
-4. The escalation summary is persisted so `/ant-resume` can pick it up
-5. User sees a clean "Queen is stuck, needs your help" message, not raw gate output
-
-**Complexity:** Medium -- the escalation summary generation is the novel part
-
-**Dependencies:** COLONY_STATE.json phase status, gate results, recovery attempt history
-
-**Confidence:** HIGH -- pattern is well-established; implementation is mostly formatting existing data
-
----
-
-### Category B: Smart Gating
-
-How gates transition from "everything blocks, user decides" to "non-critical auto-resolves, genuine problems block."
-
-#### B1. Gate Severity Classification
-
-**Why expected:** Not all gate failures are equal. A `complexity` gate finding that one file is 310 lines (threshold is 300) is fundamentally different from a `gatekeeper` gate finding a critical CVE. Research on multi-agent error cascades (arXiv 2603.04474v1) shows that treating all failures equally causes noise amplification and cascade failures.
-
-**Current state:** All 11 gates produce `GateCheckResult` with `Status` (passed/failed/skipped/not-reached) and `Detail`. Some gates have `FixHint` and `RecoveryOptions`. But there is no severity field. The gate system treats a complexity threshold breach identically to a critical security vulnerability.
-
-**Expected behavior:**
-1. Add `Severity` field to `GateCheckResult`: `critical`, `high`, `medium`, `low`, `info`
-2. Each gate defines its own severity mapping (e.g., `gatekeeper` -> critical by default, `complexity` -> medium by default)
-3. Gate implementations can override severity based on finding details (e.g., `gatekeeper` finding a low-severity npm advisory -> medium, not critical)
-4. Severity is persisted with gate results and visible in `/ant-status`
-
-**Complexity:** Medium -- adding the field is trivial; getting severity mappings right per gate requires care
-
-**Dependencies:** `GateCheckResult`, gate implementations in `codex_continue.go`
-
-**Confidence:** HIGH -- straightforward extension of existing data model
-
----
-
-#### B2. Non-Blocking Advisory Gates
-
-**Why expected:** The Google ADK framework distinguishes between "blocking checks" and "advisory checks" in its `codexWorkflowProfile`. CrewAI's hierarchical process has result validation but not every validation blocks. The concept is universal: some findings are worth noting but not worth stopping progress for.
-
-**Current state:** `codexWorkflowProfile` already has `BlockingChecks` and `AdvisoryChecks` fields. But the gate execution in `runCodexContinueGates` does not use them -- all failed gates are blocking. The `shouldSkipGate` function only skips previously-passed gates, not low-severity findings.
-
-**Expected behavior:**
-1. Gates classified as `low` or `info` severity become advisory by default
-2. Advisory gates still run and record findings, but do not block phase advancement
-3. Advisory findings are aggregated into a "Phase Notes" section in the continue report
-4. The user can promote an advisory gate to blocking via a pheromone or flag (existing REDIRECT mechanism)
-5. Critical and high severity gates remain blocking (unchanged behavior)
-
-**Complexity:** Medium -- requires modifying gate execution flow without breaking existing behavior
-
-**Dependencies:** `codexWorkflowProfile.BlockingChecks`/`AdvisoryChecks`, `runCodexContinueGates`, `shouldSkipGate`
-
-**Confidence:** HIGH -- fields exist, just need wiring
-
----
-
-#### B3. Auto-Resolution for Known Recoverable Patterns
-
-**Why expected:** LangGraph's node-level retries handle known-recoverable patterns automatically. Erlang's supervisor distinguishes permanent from temporary errors. The EAGER framework (IJCAI 2025) uses historical failure patterns for efficient failure management. The idea: if a gate failure matches a previously-seen-and-resolved pattern, auto-resolve it.
-
-**Current state:** `gateRecoveryTemplates` provide manual recovery instructions. `resolveFixedGates` can mark gates as passed. But there is no auto-resolution -- the user or Fixer must always act.
-
-**Expected behavior:**
-1. Maintain a small set of auto-resolvable patterns (e.g., `tests_pass` gate failing due to a known flaky test that the Fixer already fixed once this session)
-2. When a gate fails, check if the failure matches an auto-resolvable pattern
-3. If matched: attempt the automated fix (re-run tests with retry), and if it passes, mark gate as passed with `auto-resolved` status
-4. Auto-resolutions are logged with full provenance (what was auto-resolved, why, when)
-5. Auto-resolution count is bounded per phase (default: 2 auto-resolutions max) to prevent masking real problems
-
-**Complexity:** Medium-High -- requires pattern matching logic and careful safety bounds
-
-**Dependencies:** `gateRecoveryTemplates`, `resolveFixedGates`, gate execution flow
-
-**Confidence:** MEDIUM -- pattern is established in literature but implementation details need phase-specific research
-
----
-
-#### B4. Gate Dependency Graph
-
-**Why expected:** In complex multi-agent systems, gates can have dependencies. For example, `tdd_evidence` is meaningless if `spawn_gate` failed (no workers spawned). Running dependent gates when their prerequisite has already failed wastes time and produces noisy output. Google ADK's sequential pipeline pattern handles this via state management.
-
-**Current state:** Gates run in a fixed sequence defined in `runCodexContinueGates`. There is no dependency metadata. If `spawn_gate` fails, all subsequent gates still run and produce failure output.
-
-**Expected behavior:**
-1. Define gate dependencies: some gates require others to pass first
-2. If a prerequisite gate fails, dependent gates are marked `not-reached` (status already exists in `GateCheckResult`)
-3. This reduces gate execution time and output noise when a fundamental problem exists
-4. Dependencies are declared in a simple map, not a complex DAG
-
-**Complexity:** Low -- `not-reached` status exists, just need skip logic
-
-**Dependencies:** `runCodexContinueGates`, `GateCheckResult.Status`
-
-**Confidence:** HIGH -- straightforward optimization
-
----
-
-### Category C: Clean Output
-
-How the queen filters, summarizes, and presents information so the user sees what matters.
-
-#### C1. Output Severity Filtering
-
-**Why expected:** Research on multi-agent noise (RCAFlow, AAAI 2025) shows that multi-agent systems "introduce low-level noise in complex multi-stage diagnostic workflows." The AgentReport system (MDPI) uses "fixed responsibilities, input/output contracts, and integration with quantitative evaluation mechanisms" for structured output. Without filtering, users drown in irrelevant details.
-
-**Current state:** Worker output goes through `emitVisualProgress` and ceremony emitters. There is no filtering -- all worker output is displayed. The `codexBuildManifest` captures dispatches and results, but the display layer shows everything.
-
-**Expected behavior:**
-1. Each output line gets a severity tag: `progress`, `info`, `warning`, `error`, `success`
-2. Default display level shows `warning` and above
-3. Verbose mode (`--verbose` or `/ant-run --verbose`) shows everything
-4. The queen's summary at phase end shows: tasks completed, tasks failed, gates passed, gates failed (with severity), auto-recoveries attempted, escalations needed
-5. Worker output is NOT shown in real-time by default -- only the queen's summary and any escalation messages
-
-**Complexity:** Medium -- requires tagging all output sources and a filtering layer
-
-**Dependencies:** `emitVisualProgress`, ceremony emitters, visual output rendering
-
-**Confidence:** HIGH -- standard practice in production systems
-
----
-
-#### C2. Phase Completion Summary
-
-**Why expected:** Every autonomous supervisor must report what happened. Google ADK's sequential pipeline produces aggregated output. CrewAI's hierarchical process has result validation. The user should not need to read raw gate output to understand phase outcomes.
-
-**Current state:** `codexContinueReport` has `Summary` field but it is populated by the wrapper (Claude/OpenCode), not the Go runtime. The runtime produces `codexContinueGateReport` and `codexContinueVerificationReport` but does not synthesize them into a human-readable summary.
-
-**Expected behavior:**
-1. At phase completion, the Go runtime generates a structured summary with: phase number, tasks completed/total, gates passed/failed/advisory, auto-recoveries attempted, time elapsed, next action needed
-2. Summary is rendered by the visual output system (Go runtime, not wrapper)
-3. Summary replaces the current approach of showing raw gate-by-gate output
-4. Detailed output is available via `/ant-phase N` or `--verbose`
-
-**Complexity:** Low-Medium -- data is available, synthesis logic is new
-
-**Dependencies:** `codexContinueReport`, `codexContinueGateReport`, `codexContinueVerificationReport`, visual rendering
-
-**Confidence:** HIGH -- data aggregation, no architectural changes needed
-
----
-
-#### C3. Progressive Disclosure
-
-**Why expected:** Autonomous systems must not overwhelm users with information. The principle of progressive disclosure (show summary first, details on demand) is universal in UX design and is specifically called out in multi-agent system design papers as essential for trust.
-
-**Current state:** `/ant-status` shows a dashboard, `/ant-phase N` shows phase details, `/ant-memory-details` shows memory drill-down. The progressive disclosure skeleton exists but is not applied to build/continue output.
-
-**Expected behavior:**
-1. During build: show wave progress (worker started, worker completed) but not worker output
-2. During continue: show gate pass/fail summary but not individual gate details
-3. On escalation: show what failed, what was attempted, and what the user needs to do
-4. All detailed output available on demand via existing commands
-5. The queen's output follows a consistent template: "X of Y tasks done, Z gates passed, 1 issue needs your attention"
-
-**Complexity:** Medium -- requires consistent output format decisions across multiple command paths
-
-**Dependencies:** Visual rendering system, ceremony emitters, wrapper commands
-
-**Confidence:** HIGH -- well-understood UX pattern
-
----
-
-### Category D: Queen Wave Coordination
-
-How the queen manages the full wave lifecycle within a phase end-to-end.
-
-#### D1. Wave Lifecycle Ownership
-
-**Why expected:** The queen should own the wave lifecycle: dispatch, monitor, recover, verify, advance. Currently, the user drives each step manually. Google ADK's Coordinator pattern shows how a central agent routes and monitors. Erlang's supervisor owns child process lifecycle.
-
-**Current state:** `dispatchBatchByWaveWithVisuals` handles wave dispatch. `codexBuildProgress` emits wave progress events. But these are passive -- they report what happened, they do not decide what to do next. The queen observes but does not act.
-
-**Expected behavior:**
-1. Queen receives wave completion events (which workers completed, which failed)
-2. For failures: queen applies auto-recovery (A1-A5) before reporting to user
-3. Only when queen's recovery is exhausted does the user see a failure message
-4. Queen tracks wave-level progress (wave 1: 3/4 tasks done, 1 auto-recovered) and reports at wave end
-5. Queen decides whether to proceed to the next wave or pause
-
-**Complexity:** Medium-High -- requires event-driven coordination between dispatch and recovery systems
-
-**Dependencies:** `dispatchBatchByWaveWithVisuals`, `CircuitBreaker`, Fixer dispatch, gate system
-
-**Confidence:** MEDIUM -- architectural integration is the main risk, not individual components
-
----
-
-#### D2. Inter-Wave Decision Making
-
-**Why expected:** Between waves, the queen should evaluate whether conditions warrant continuing. If wave 1 had 3 auto-recoveries, wave 2 might need different parameters. LangGraph's conditional edges route based on state. The EAGER framework uses reasoning traces for failure pattern detection.
-
-**Current state:** Waves are dispatched statically at build time based on `codexWaveExecutionPlan`. There is no dynamic adjustment between waves. If wave 1 reveals that the codebase has widespread issues, wave 2 still runs with the same plan.
-
-**Expected behavior:**
-1. Between waves, queen evaluates: how many failures occurred, how many auto-recoveries were needed, any new blockers detected
-2. If failure rate exceeds threshold (e.g., >50% of tasks in a wave failed): queen pauses and escalates
-3. If failure rate is moderate (20-50%): queen adjusts next wave parameters (smaller batches, more conservative dispatch)
-4. If failure rate is low (<20%): queen proceeds normally
-5. Decision and rationale are logged
-
-**Complexity:** Medium -- decision logic is straightforward, integration with wave dispatch is the work
-
-**Dependencies:** Wave execution plan, dispatch results, circuit breaker state
-
-**Confidence:** MEDIUM -- requires careful threshold tuning in practice
-
----
-
-#### D3. Phase Completion Decision
-
-**Why expected:** The queen should be able to declare a phase complete when all gates pass, not wait for the user to run `/ant-continue`. This is the natural endpoint of wave coordination.
-
-**Current state:** Phase completion requires: user runs `/ant-build N`, then user runs `/ant-continue`. The continue flow runs gates, generates reports, and advances the phase. But every step requires explicit user invocation.
-
-**Expected behavior:**
-1. When all waves in a phase complete and all tasks are done, queen automatically runs gate checks
-2. If all gates pass: queen advances the phase, records learnings, and reports completion
-3. If gates fail: queen applies smart gating (B1-B4) and auto-recovery (A1-A5)
-4. Only when queen cannot recover does the user need to act
-5. In `/ant-run` (autopilot) mode, this is the default behavior
-6. In manual mode, queen still auto-recovers but asks for confirmation before phase advance
-
-**Complexity:** High -- this is the most complex feature, touching build, continue, gate, and recovery systems
-
-**Dependencies:** All Category A, B, C features; autopilot (`/ant-run`); phase advancement logic
-
-**Confidence:** MEDIUM -- highest architectural integration risk
+## Detailed Workflow Behavioral Baselines
+
+### 1. Init Workflow
+
+**Classic v5.4.0 (GOOD):**
+- User provides goal string
+- `aether queen-init` initializes QUEEN.md
+- Charter ceremony: scan repo surface, present charter for approval, write to QUEEN.md
+- Auto-upgrade old state to v3.0
+- Write COLONY_STATE.json with goal, state=IDLE
+- Write session file for `/ant-resume`
+- Display: colony name, goal, territory status, next steps
+
+**v1.10 Polish (HIGH WATER MARK):**
+- Rich init-research: tech stack, directory analysis, colony context, governance detection, 10 pheromone patterns
+- Charter approval ceremony with MAX 2 revision rounds
+- Suggest-analyze: automatic pheromone suggestions during builds (618 lines of pattern detection)
+
+**v1.11 Unification (Restored):**
+- Smart Init ceremony: charter approval flow, repo scanning, governance detection ported to Go
+- Rich init-research restored: tech stack, directory analysis, colony context, governance detection, pheromone suggestions
+- Suggest-analyze restored
+
+**Current (v1.22) Architecture:**
+- `aether init-research --goal "$ARGUMENTS" --target .` does the deterministic scan
+- Wrapper does AI intent refinement (4-7 questions when goal is broad)
+- Wrapper calls `aether init-create` with refined goal + charter
+- Lost: explicit charter approval ceremony (user approves the charter itself)
+- Lost: suggest-analyze pheromone auto-detection (not called from init flow)
+
+**Restoration Target:** Charter approval ceremony and suggest-analyze integration need verification. The intent refinement is a reasonable replacement but users should see the charter before it is committed.
+
+### 2. Colonize Workflow
+
+**Classic v5.4.0 (GOOD):**
+- Validates colony state exists and is not sealed
+- Quick surface scan: package manifests, README, entry points, config files
+- Dispatches 4 parallel Surveyor agents via Task tool:
+  - `aether-surveyor-provisions` -- PROVISIONS.md + TRAILS.md
+  - `aether-surveyor-nest` -- BLUEPRINT.md + CHAMBERS.md
+  - `aether-surveyor-disciplines` -- DISCIPLINES.md + SENTINEL-PROTOCOLS.md
+  - `aether-surveyor-pathogens` -- PATHOGENS.md
+- Session freshness check: auto-clears stale surveys
+- Updates COLONY_STATE.json: state=IDLE, territory_surveyed=<timestamp>
+- Produces 7 survey documents in `.aether/data/survey/`
+- Next steps: route to `/ant-plan` or signal injection
+
+**v1.22 Current:**
+- Runtime manifest via `aether host colonize`
+- Wrapper spawns surveyors from manifest using platform Agent tool
+- Surveyors still produce the same 7 documents
+- Lost: stale survey detection is now Go-managed (same behavior, different code path)
+
+**Restoration Target:** Functional parity achieved. Verify stale survey detection works. Verify 7 documents are always produced.
+
+### 3. Plan Workflow
+
+**Classic v5.4.0 (GOOD):**
+- Iterative research loop: scout + route-setter per iteration
+- User selects depth: fast/balanced/deep/exhaustive
+- Territory survey loaded into planning context
+- Hive wisdom retrieved for research priming
+- Phase domain research spawned before planning loop
+- Gap-focused research on iterations 2+
+- Stall detection: < 5% improvement for 2 consecutive iterations
+- Auto-finalize when confidence >= target or stall detected
+- Plan persisted with verification (read-back check)
+- Watch files updated for tmux visibility
+- Session updated for `/ant-resume`
+- No user confirmation needed -- plan auto-finalizes
+
+**v1.12 Safe Colony (Added):**
+- Independent planning depth (light/standard/deep)
+- Smart depth defaults based on phase position + code change risk
+- User depth selection UI at plan start
+- Depth persistence from plan through build to continue
+
+**Current (v1.22):**
+- Go-owned `aether plan` with worker dispatch
+- Scout surveys repo, Route-Setter creates phases
+- Confidence scoring preserved
+- Territory survey integration preserved
+- Lost: watch-status.txt / watch-progress.txt (tmux visibility files)
+- Lost: explicit iterative loop visible to user (now hidden in Go runtime)
+- Gained: Go-managed state, deterministic execution
+
+**Restoration Target:** Verify the planning loop produces plans with real file references (v1.22 grounding gate). Verify depth controls persist through build/continue. Watch files are obsolete (replaced by Go ceremony output).
+
+### 4. Oracle / RALF Workflow
+
+**Classic v5.4.0 (GOOD):**
+- Rich 7-question wizard:
+  1. Research topic (or use $ARGUMENTS)
+  1.5. Research Brief formulation and approval (MAX 2 revision rounds)
+  2. Research template (tech-eval, architecture-review, bug-investigation, best-practices, custom)
+  3. Research depth (5/15/30/50 iterations)
+  4. Confidence target (80/90/95/99%)
+  5. Research scope (codebase only / codebase+web / web only)
+  6. Search strategy (adaptive/breadth-first/depth-first)
+  7. Focus areas (optional, comma-separated)
+- In-session loop: reads `.aether/utils/oracle/oracle.md`, iterates through phases (survey/investigate/synthesize/verify)
+- State tracked in `.aether/oracle/state.json` and `.aether/oracle/plan.json`
+- Sub-questions with per-question confidence tracking
+- Diminishing returns detection
+- Template-specific question sets
+- Promote findings to colony (instincts, learnings, observations)
+- Non-invasive: only writes to `.aether/oracle/`
+
+**v1.10 Polish (Fixed):**
+- Oracle loop fix with research formulation, depth selection, and state persistence
+
+**v1.17 Classic Restoration:**
+- Phase-aware prompts, diminishing returns detection, template-specific synthesis
+
+**Current (v1.22):**
+- Go-owned `aether oracle` with `--depth`, `--template`, `--background`
+- Wrapper does short AI intent refinement (3-6 questions) then delegates
+- Template mapping preserved: tech-eval, architecture-review, bug-investigation, research-brief, custom, prd
+- Depth presets preserved: quick, balanced, deep, exhaustive
+- Confidence target preserved
+- Background mode added
+- Lost: rich 7-question wizard (replaced by 3-6 question scoping)
+- Lost: research brief formulation with approval rounds
+- Lost: interactive in-session loop visible to user (now Go-managed)
+
+**Restoration Target:** The Go oracle loop is the correct architecture. The wrapper intent refinement is adequate but should include the research brief formulation step. Verify diminishing returns detection and promote-to-colony pipeline work end-to-end.
+
+### 5. Build Workflow
+
+**Classic v5.4.0 (GOOD):**
+- 5-stage modular playbook (short wrapper, long playbooks):
+  1. `build-prep.md` -- load state, determine visual mode, select colony depth, pheromone suggestions
+  2. `build-context.md` -- context capsule, survey context, active signals, skill injection
+  3. `build-wave.md` -- THE BIG ONE: analyze tasks, group by dependencies into waves, assign castes, generate ant names, spawn workers via Task tool, Oracle research step (non-blocking), Builder-Probe Lock
+  4. `build-verify.md` -- post-build verification, gate evaluation (Probe, Gatekeeper, Auditor, Measurer)
+  5. `build-complete.md` -- synthesis, learning extraction, activity log, next steps
+- Queen spawns workers directly (not delegated to Prime Worker)
+- Wave-based parallel execution with dependency ordering
+- Oracle research step at depth "deep" or "full" (non-blocking)
+- Caste identity: colored labels, emojis, deterministic names
+- Pheromone suggestions analyzed at build start
+- State checkpoint before build wave
+
+**v1.14 Queen Authority (Added):**
+- Queen decision layer: pure-function coordinator
+- Queen wave lifecycle: always-advance, dependency injection, recovery
+
+**Current (v1.22):**
+- Manifest via `aether host build --dry-run`
+- Wrapper spawns from manifest using platform Agent tool
+- Go owns state mutation via `build-finalize`
+- Ceremony via `aether ceremony spawn-plan`, `wave-start`, `worker-complete`, `closeout`
+- Lost: playbook-driven execution (replaced by manifest protocol)
+- Lost: Queen directly spawning workers (now wrapper interprets manifest)
+- Gained: Go-owned ceremony rendering, boundary enforcement
+- Gained: Builder-Probe Lock in Go runtime
+
+**Restoration Target:** The manifest protocol is the correct architecture. The key question is whether workers receive the same quality of context (signals, skills, pheromones, survey data) that the Classic playbooks assembled. Verify prompt injection is complete.
+
+### 6. Continue Workflow
+
+**Classic v5.4.0 (GOOD):**
+- 4-stage modular playbook:
+  1. `continue-verify.md` -- load state, staleness detection, command resolution (CLAUDE.md > codebase.md > heuristic), 6-phase verification loop
+  2. `continue-gates.md` -- gate classification, recovery templates, per-gate skip, Watcher Veto
+  3. `continue-advance.md` -- mark phase completed, extract learnings (with hypothesis/validated/disproven status), deterministic fallback extraction, memory pipeline, instinct promotion, hive promotion
+  4. `continue-finalize.md` -- changelog append, registry update, session update, wisdom summary
+- "Iron Law": no phase advancement without fresh verification evidence
+- Learning starts as hypothesis until verified by testing
+- Deterministic fallback: git-diff-based learning extraction when AI produces none
+- Memory pipeline: observation capture, auto-pheromone, auto-promotion check
+- Confidence-driven depth resolution
+
+**v1.10 Polish (Fixed):**
+- Gate failure recovery with skip logic
+- Smart review depth (auto/light/heavy)
+
+**Current (v1.22):**
+- Default path: `aether continue --skip-watchers --verification-depth standard` (Go-only, fast)
+- Heavy path: manifest + wrapper-spawned reviewers (classic ceremony)
+- Lost: 4-stage playbook execution visible to user
+- Lost: explicit hypothesis/validated/disproven learning lifecycle
+- Lost: deterministic fallback learning extraction
+- Gained: Go-native verification, faster default path
+- Gained: `--reconcile-task` for manual task reconciliation
+
+**Restoration Target:** The fast default path is correct for daily use. The heavy path preserves classic ceremony. Critical question: does the Go runtime still extract learnings with the hypothesis lifecycle? This is the most important behavioral regression to verify.
+
+### 7. Run (Autopilot) Workflow
+
+**Classic v5.4.0 (GOOD):**
+- Inline playbook execution: loads build-prep through build-complete, then continue-verify through continue-finalize
+- Variables/results carried forward between stages
+- Pause conditions:
+  1. Watcher verification_failed
+  2. Critical/high Chaos findings
+  3. New blocker flags
+  4. Verification loop NOT READY
+  5. Gatekeeper critical CVEs
+  6. Auditor critical findings or score < 60
+  7. Unresolved blockers
+  8. Runtime verification needed
+  9. All phases complete
+  10. Replan trigger
+- Replan trigger: configurable interval (default 2 phases)
+- Headless mode: queues decisions instead of pausing
+- Elapsed time tracking
+- Dry-run preview mode
+- Max-phases cap
+
+**v1.10 Polish:**
+- Autopilot loop complete with smart pausing
+
+**Current (v1.22):**
+- Go-owned `aether run` CLI subcommand
+- Wrapper is 15 lines: just delegates to CLI
+- Same flags: --max-phases, --replan-interval, --continue, --dry-run, --headless, --verbose
+- Lost: inline playbook loading (now Go manages the loop)
+- Gained: Go-native execution, cleaner separation
+
+**Restoration Target:** Go autopilot should have feature parity with the Classic playbook version. Verify all 10 pause conditions are implemented. Verify replan trigger fires correctly.
+
+### 8. Swarm Workflow
+
+**Classic v5.4.0 (GOOD):**
+- Two modes: Quick View (live swarm display) and Bug Destruction
+- Bug Destruction mode:
+  - Validate input, read state, generate swarm ID
+  - Git checkpoint before investigation (auto-fix-checkpoint)
+  - Read context: blockers, activity log, recent git commits
+  - Deploy 4 parallel scouts:
+    1. Archaeologist (git history)
+    2. Pattern Hunter (working patterns)
+    3. Error Analyst (stack trace analysis)
+    4. Web Researcher (external solutions)
+  - Cross-compare findings, rank solutions by confidence
+  - Apply best fix, verify, rollback on failure
+  - 3-attempt limit before escalating to architectural concern
+  - Cleanup: archive findings, inject learnings as FOCUS/REDIRECT
+
+**Current (v1.22):**
+- Go-owned `aether swarm` CLI subcommand
+- Wrapper is thin passthrough
+- Lost: rich 4-scout ceremony visible to user
+- Gained: Go-native dispatch with same logic
+- Verify: git checkpoint, rollback, 3-attempt limit, learning injection
+
+**Restoration Target:** Verify the Go implementation preserves all 4 scout types, cross-comparison ranking, auto-fix with rollback, and 3-attempt architectural escalation.
+
+### 9. Seal Workflow
+
+**Classic v5.4.0 (GOOD):**
+- Multi-step ceremony:
+  1. Read state, maturity gate (not executing, handle incomplete phases)
+  2. User confirmation
+  3. Sage spawn: colony analytics review (velocity, bug density, review turnaround)
+  4. Wisdom approval: batch auto-promotion + interactive review
+  5. Hive promotion: high-confidence instincts to cross-colony hive (non-blocking)
+  6. Chronicler spawn: documentation coverage audit
+  7. Log activity, checkpoint state, increment colony version
+  8. Update milestone to Crowned Anthill
+  9. Update changelog
+  10. Update registry (silent)
+  11. Write CROWNED-ANTHILL.md from template
+  12. Export XML archives (colony-archive.xml, pheromones.xml, queen-wisdom.xml, colony-registry.xml)
+  13. Display ASCII art ceremony
+  14. Commit suggestion (non-blocking)
+  15. Push suggestion (non-blocking)
+- Every spawn is non-blocking except wisdom approval
+
+**v1.10 Polish (Fixed):**
+- Hive Brain wiring: seal auto-promotes high-confidence instincts
+
+**Current (v1.22):**
+- Go-owned `aether seal` CLI
+- Lost: Sage spawn (colony analytics)
+- Lost: Chronicler spawn (documentation coverage audit)
+- Lost: interactive wisdom approval ceremony
+- Lost: commit/push suggestions
+- Gained: Go-native ceremony, faster execution
+- Preserved: CROWNED-ANTHILL.md, XML export, hive promotion, changelog
+
+**Restoration Target:** Sage analytics and Chronicler audit were valuable ceremony steps that provided data-driven insights before sealing. These should be restored as optional Go subcommands or brought back as non-blocking agent spawns. Wisdom approval ceremony needs investigation.
+
+### 10. Entomb Workflow
+
+**Classic v5.4.0 (GOOD):**
+- Seal-first enforcement (hard gate)
+- User confirmation
+- Wisdom approval (blocking)
+- xmllint check (required for XML archiving)
+- Ensure QUEEN.md exists
+- Generate chamber name (date-first, collision handling)
+- Create chamber, archive all data files
+- Export XML archive (HARD STOP on failure -- chamber cleaned up)
+- Verify chamber integrity
+- Record in eternal memory
+- Reset colony state (backup, reset via jq template, verify, remove backup)
+- Clear session, seal document, exchange XML
+- Write HANDOFF.md
+- Display result, offer next steps
+
+**Current (v1.22):**
+- Go-owned `aether entomb` CLI
+- Lost: interactive wisdom approval ceremony
+- Lost: HANDOFF.md generation (verify)
+- Preserved: seal-first gate, chamber creation, XML archive, state reset, eternal memory
+- Preserved: chamber integrity verification
+
+**Restoration Target:** Verify XML archive hard-stop behavior. Verify chamber integrity verification. Verify HANDOFF.md is written. Verify eternal memory recording.
 
 ---
 
 ## Feature Dependencies
 
 ```
-A1 (Failure Classification)
-  -> A2 (Bounded Auto-Retry)
-  -> A3 (Peer Redistribution)
-  -> A4 (Queen-Driven Fixer)
-  -> A5 (Escalation Protocol)
+Init
+  └──requires──> Colony state initialized
+                  └──requires──> QUEEN.md
 
-B1 (Gate Severity)
-  -> B2 (Advisory Gates)
-  -> B3 (Auto-Resolution)
-  -> B4 (Gate Dependencies)
+Colonize
+  └──requires──> Colony state initialized
+  └──produces──> Survey documents (consumed by Plan)
 
-C1 (Output Filtering)
-  -> C2 (Phase Summary)
-  -> C3 (Progressive Disclosure)
+Plan
+  └──requires──> Colony state initialized
+  └──enhances──> Survey documents (better plans with survey)
+  └──produces──> Phase plan (consumed by Build)
 
-D1 (Wave Ownership) depends on A1-A5
-D2 (Inter-Wave Decisions) depends on D1, A1
-D3 (Phase Completion) depends on D1, D2, B1-B4, C1-C3
+Build
+  └──requires──> Phase plan exists
+  └──produces──> Completed work (consumed by Continue)
+
+Continue
+  └──requires──> Build completed
+  └──produces──> Learnings, advanced state
+
+Run
+  └──requires──> Phase plan exists
+  └──wraps──> Build + Continue in a loop
+
+Oracle
+  └──independent──> Can run anytime
+  └──produces──> Research findings (promotable to colony)
+
+Swarm
+  └──requires──> Colony state initialized
+  └──independent──> Bug investigation, not phase-bound
+
+Seal
+  └──requires──> Colony at any milestone
+  └──produces──> CROWNED-ANTHILL.md, hive wisdom
+
+Entomb
+  └──requires──> Colony sealed (Crowned Anthill milestone)
+  └──produces──> Chamber archive, state reset
 ```
 
-## MVP Recommendation
+---
 
-**Phase 1 (Core Recovery Loop):**
-- A1: Failure Classification Engine
-- A2: Bounded Auto-Retry
-- A3: Peer Redistribution
-- A4: Queen-Driven Fixer Dispatch
-- A5: Escalation Protocol
+## MVP Definition
 
-**Rationale:** These five features form the complete auto-recovery loop. They wire together existing infrastructure (CircuitBreaker, Fixer, gate results) into an autonomous decision chain. The user sees immediate value: fewer manual interventions, faster recovery from transient failures.
+### Launch With (Daily Driver)
 
-**Phase 2 (Smart Gates):**
-- B1: Gate Severity Classification
-- B2: Non-Blocking Advisory Gates
-- B4: Gate Dependency Graph
-- C1: Output Severity Filtering
-- C2: Phase Completion Summary
+Minimum for Aether to work reliably as a daily-driver development tool:
 
-**Rationale:** Once the queen can auto-recover, reducing gate noise becomes the next priority. Severity classification enables advisory gates, which reduces blocking. Output filtering makes the recovery visible.
+- [ ] **init** -- Creates colony with goal, sets state, initializes QUEEN.md
+- [ ] **plan** -- Generates phases with real file references and confidence scoring
+- [ ] **build** -- Dispatches workers, produces working code, finalizes state
+- [ ] **continue** -- Verifies work, extracts learnings, advances phase
+- [ ] **run** -- Chains build+continue across phases with smart pausing
 
-**Phase 3 (Full Coordination):**
-- B3: Auto-Resolution for Known Patterns
-- C3: Progressive Disclosure
-- D1: Wave Lifecycle Ownership
-- D2: Inter-Wave Decision Making
-- D3: Phase Completion Decision
+### Restore After Validation
 
-**Rationale:** Full coordination is the payoff. The queen manages entire phases autonomously. This depends on both recovery and smart gating being solid first.
+Workflows that complete the lifecycle but can be validated after core flows work:
 
-**Defer:**
-- Learned severity thresholds (adjusting severity based on colony history) -- requires multiple colonies' worth of data
-- Cross-phase pattern learning (queen learns from failures in phase 3 to prevent similar failures in phase 7) -- complexity not justified yet
-- User-defined recovery strategies (letting users define custom auto-recovery rules) -- YAGNI until core loop is proven
+- [ ] **colonize** -- Survey territory before planning (enhances plan quality)
+- [ ] **seal** -- Crown the colony and promote wisdom
+- [ ] **entomb** -- Archive completed colony
 
-## Anti-Features
+### Restore After Core Proof
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|---|---|---|
-| Silent auto-recovery without logging | User loses visibility into what happened; cannot debug if auto-recovery makes wrong choice | Log every recovery decision with full provenance; make logs accessible via `/ant-phase N` |
-| Queen overriding circuit breaker thresholds | Circuit breaker exists to prevent cascade failures; overriding defeats its purpose | Queen respects all existing safety rails (MaxR, MaxT, attempt caps) |
-| LLM-based failure classification | Non-deterministic; hard to debug; adds latency and cost | Rule-based classification using gate metadata (FixHint, RecoveryOptions, gate name) |
-| Auto-advance without confirmation in manual mode | User expects to control phase advancement; silent advance is surprising | In manual mode, queen recovers but asks before advancing; in autopilot mode, full auto |
-| Auto-resolving critical severity gates | Critical gates exist for a reason (security, data loss); auto-resolving them is dangerous | Critical gates always block and always escalate to human |
-| Queen modifying worker code directly | Creates blame attribution problems; hard to audit; breaks worker autonomy | Queen dispatches Fixer (existing mechanism) which has its own audit trail |
-| Infinite recovery loops | Erlang/OTP's lesson: if recovery keeps failing, stop recovering and escalate | MaxR/MaxT bounds on all recovery; circuit breaker integration; hard escalation after budget exhausted |
+Workflows that add power-user value:
 
-## Complexity Summary
+- [ ] **oracle/RALF** -- Deep research loop with diminishing returns
+- [ ] **swarm** -- Parallel bug investigation with 4-scout cross-comparison
 
-| Feature | Complexity | Risk | Existing Infrastructure |
-|---|---|---|---|
-| A1 Failure Classification | Medium | Low | GateCheckResult, gateRecoveryTemplates |
-| A2 Bounded Auto-Retry | Low | Low | CircuitBreaker, RetryCount field |
-| A3 Peer Redistribution | Low | Low | findSameCastePeer, emitCircuitBreakerRedistributed |
-| A4 Queen-Driven Fixer | Low | Low | dispatchFixer, resolveFixedGates |
-| A5 Escalation Protocol | Medium | Low | COLONY_STATE.json, gate results |
-| B1 Gate Severity | Medium | Low | GateCheckResult (needs field) |
-| B2 Advisory Gates | Medium | Medium | BlockingChecks/AdvisoryChecks fields |
-| B3 Auto-Resolution | Medium-High | Medium | gateRecoveryTemplates, resolveFixedGates |
-| B4 Gate Dependencies | Low | Low | not-reached status |
-| C1 Output Filtering | Medium | Medium | emitVisualProgress, ceremony emitters |
-| C2 Phase Summary | Low-Medium | Low | codexContinueReport data |
-| C3 Progressive Disclosure | Medium | Medium | /ant-status, /ant-phase commands |
-| D1 Wave Ownership | Medium-High | Medium | dispatchBatchByWaveWithVisuals |
-| D2 Inter-Wave Decisions | Medium | Medium | Wave execution plan |
-| D3 Phase Completion | High | Medium-High | All of the above |
+---
+
+## Feature Prioritization Matrix
+
+| Workflow | User Value (Daily Driver) | Restoration Cost | Priority |
+|----------|--------------------------|------------------|----------|
+| build | HIGH -- core value prop | MEDIUM -- manifest protocol works, need context injection verification | P1 |
+| continue | HIGH -- learnings + advancement | MEDIUM -- fast path works, need learning extraction verification | P1 |
+| plan | HIGH -- phase generation | LOW -- Go-owned and working | P1 |
+| run | HIGH -- autopilot | LOW -- Go-owned with same flags | P1 |
+| init | MEDIUM -- ceremony quality | LOW -- Go-owned, intent refinement works | P2 |
+| seal | MEDIUM -- lifecycle completion | MEDIUM -- ceremony simplified, need Sage/Chronicler investigation | P2 |
+| entomb | MEDIUM -- cleanup | LOW -- Go-owned, verify XML hard-stop | P2 |
+| colonize | MEDIUM -- plan quality | LOW -- survey works via manifest | P2 |
+| oracle | HIGH (power users) | MEDIUM -- Go loop works, need diminish-returns + promote verification | P2 |
+| swarm | MEDIUM (power users) | MEDIUM -- Go dispatch works, need 4-scout + rollback verification | P3 |
+
+---
+
+## Regression Points (Version References)
+
+| Regression | When | Evidence | Severity |
+|-----------|------|----------|----------|
+| Shell-to-Go migration lost ceremony richness | v1.0-v1.5 (April 2026) | CLAUDE.md "Known losses" section lists 11 lost features | HIGH |
+| Playbook-driven execution replaced by manifest protocol | v1.16-v1.18 (May 2026) | v1.16 established Go boundary, v1.17 restored ceremony via Go events | HIGH |
+| Wrapper commands lost 3786 lines of behavioral spec | v5.4.0 to HEAD | `git diff` shows 3786 deletions, 818 additions | HIGH |
+| Oracle wizard reduced from 7 questions to 3-6 | v1.19-v1.20 (May 2026) | Current oracle.md is 85 lines vs v5.4.0's 700+ lines | MEDIUM |
+| Seal lost Sage/Chronicler spawns | v1.19-v1.20 (May 2026) | Current seal.md delegates to Go; no agent spawns | MEDIUM |
+| Continue lost hypothesis/validated learning lifecycle | v1.16-v1.18 (May 2026) | Classic had explicit hypothesis/validated/disproven status tracking | HIGH |
+| Entomb lost interactive wisdom approval | v1.19-v1.20 (May 2026) | Classic had blocking wisdom approval; current is Go-owned | LOW |
+
+## What "Good" Looked Like
+
+The best version of Aether (v5.4.0 Classic + v1.10 Polish) had these qualitative properties:
+
+1. **Rich ceremony at every step.** Every command had visual headers, progress bars, caste identity, and clear next steps. Users felt the colony was "alive."
+
+2. **Playbook-driven execution.** Build and continue were 5-stage and 4-stage playbooks respectively. Each stage was a readable markdown file that anyone could inspect, modify, or debug. The wrapper was thin; the playbooks were the brain.
+
+3. **Learning was first-class.** Continue extracted learnings as hypotheses, tracked evidence, promoted to instincts, and piped through memory. The hypothesis/validated/disproven lifecycle ensured only tested knowledge became wisdom.
+
+4. **Oracle was a deep research partner.** 7-question wizard, 5 template types, diminishing returns, phase-aware prompts, and promote-to-colony made Oracle genuinely useful for domain research.
+
+5. **Seal was a ceremony, not a checkpoint.** Sage analytics, Chronicler audit, wisdom approval, hive promotion, XML export, commit suggestion -- seal was a 15-step ritual that made colony completion feel meaningful.
+
+6. **Swarm was nuclear bug destruction.** 4 parallel scouts with cross-comparison ranking, auto-fix with rollback, 3-attempt architectural escalation. Swarm felt like deploying an army.
+
+7. **State was honest and inspectable.** Watch files, activity logs, spawn trees, timing data -- everything was visible. Users could see what the colony was doing in real time.
+
+## What to Keep From Modern Architecture
+
+The Go runtime migration was correct. These changes should NOT be reverted:
+
+1. **Go owns state mutation.** The Frankenstein state corruption bug proved LLMs cannot safely reconstruct JSON. Go finalizers are the right pattern.
+
+2. **Manifest protocol for worker dispatch.** The wrapper-spawns-from-manifest pattern provides clean boundary enforcement and cross-platform consistency.
+
+3. **Go ceremony rendering.** ANSI-colored banners, caste identity, stage markers -- Go renders these deterministically.
+
+4. **Golden workflow tests.** v1.17-v1.18 established automated behavioral tests. These are the correctness anchor.
+
+5. **Loop safety.** v1.12 added 6 loop-breaking requirements. These prevent the worst failure modes.
+
+6. **Depth controls.** v1.12 added independent planning/verification depth with smart defaults. These give users appropriate control.
+
+## What Needs Restoration
+
+1. **Learning extraction in continue.** Verify Go runtime implements hypothesis/validated/disproven lifecycle. If not, this is the single highest-priority behavioral regression.
+
+2. **Worker context quality.** Verify workers receive: active pheromone signals, skill injection, survey context, colony goal, phase description, success criteria. Classic playbooks assembled this manually; the manifest protocol must carry it.
+
+3. **Oracle promote-to-colony pipeline.** Verify findings can flow: oracle research > instincts > learnings > QUEEN.md > hive brain.
+
+4. **Sage analytics at seal.** Restore as optional Go subcommand or non-blocking ceremony step.
+
+5. **Swarm 4-scout cross-comparison.** Verify Go implementation preserves all scout types and confidence-based ranking.
+
+6. **Autopilot pause conditions.** Verify all 10 Classic pause conditions are implemented in Go `aether run`.
+
+---
 
 ## Sources
 
-| Source | Type | Confidence |
-|---|---|---|
-| Erlang/OTP Supervisor Behaviour (erlang.org/doc/apps/stdlib/supervisor.html) | Official docs | HIGH |
-| Google ADK Multi-Agent Patterns (developers.googleblog.com, 2025-12-16) | Official docs | HIGH |
-| LangGraph Multi-Agent Patterns (langchain-ai.github.io/langgraph/concepts/multi_agent/) | Official docs | HIGH |
-| CrewAI Hierarchical Process (docs.crewai.com/en/learn/hierarchical-process) | Official docs | HIGH |
-| OpenAI Swarm Handoff Patterns (github.com/openai/swarm) | Official source | MEDIUM (experimental) |
-| AutoGen Error Handling (github.com/microsoft/autogen) | Official source | MEDIUM |
-| EAGER: Efficient Failure Management (arxiv.org/abs/2603.21522, IJCAI 2025) | Peer-reviewed research | MEDIUM |
-| Error Cascades in Multi-Agent Systems (arxiv.org/html/2603.04474v1) | Peer-reviewed research | MEDIUM |
-| RCAFlow: Hierarchical Planning (ojs.aaai.org, AAAI) | Peer-reviewed research | MEDIUM |
-| Aether source code: cmd/gate.go, cmd/circuit_breaker.go, cmd/fixer_dispatch.go, cmd/unblock_cmd.go, cmd/dispatch_runtime.go | Source code verification | HIGH |
-| Aether source code: cmd/codex_dispatch_contract.go, cmd/codex_build.go, cmd/codex_continue.go | Source code verification | HIGH |
+- v5.4.0 git tag source code (direct inspection of .claude/commands/ant/*.md)
+- v1.10-MILESTONE-AUDIT.md -- 35/35 requirements, 6/6 E2E flows
+- v1.12-REQUIREMENTS.md -- loop safety + depth controls
+- v1.16-MILESTONE-AUDIT.md -- Classic baseline selection, boundary contract
+- v1.17-ROADMAP.md -- Classic restoration phases
+- CLAUDE.md "Known losses from shell-to-Go migration"
+- cmd/testdata/golden_*.txt -- behavioral snapshots
+- .claude/commands/ant/*.md (current) -- comparison baseline
+- PROJECT.md v1.23 milestone requirements -- active requirements list
+- Confidence: HIGH -- all findings from direct source code inspection

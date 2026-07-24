@@ -68,6 +68,186 @@ func TestDiscussCreatesClarificationQuestions(t *testing.T) {
 	}
 }
 
+func TestDiscussIncludesCodebaseAwareQuestionWhenRepoContextExists(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	if err := os.MkdirAll(filepath.Join(root, "cmd"), 0755); err != nil {
+		t.Fatalf("mkdir cmd: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/discuss\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Dockerfile"), []byte("FROM scratch\n"), 0644); err != nil {
+		t.Fatalf("write Dockerfile: %v", err)
+	}
+
+	goal := "Refactor the architecture and improve test coverage"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 0,
+		ColonyDepth:  "light",
+		Plan:         colony.Plan{},
+	})
+
+	rootCmd.SetArgs([]string{"discuss"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	questions := result["questions"].([]interface{})
+	if len(questions) != 3 {
+		t.Fatalf("default discuss questions = %d, want 3", len(questions))
+	}
+	hasAnalyze := false
+	for _, raw := range questions {
+		question := raw.(map[string]interface{})
+		source, _ := question["source"].(string)
+		if strings.HasPrefix(source, analyzeSourcePrefix) {
+			hasAnalyze = true
+			break
+		}
+	}
+	if !hasAnalyze {
+		t.Fatalf("expected at least one codebase-aware analyze question, got %#v", questions)
+	}
+}
+
+func TestDiscussVisualPendingQuestionsAvoidsWorkerTheatre(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Build a dashboard for internal operations"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 0,
+		ColonyDepth:  "light",
+		Plan:         colony.Plan{},
+	})
+
+	rootCmd.SetArgs([]string{"discuss"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"D I S C U S S",
+		"Questions: 3",
+		"This answer becomes a hard constraint.",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("discuss visual missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{
+		"workers completed",
+		"Worker Results",
+		"S P A W N",
+		"worker-complete",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("discuss visual rendered worker theatre via %q\n%s", forbidden, output)
+		}
+	}
+}
+
+func TestDiscussVisualSettledPathAvoidsWorkerTheatre(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Build a dashboard for internal operations"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	strength := 1.0
+	now := time.Now().UTC().Format(time.RFC3339)
+	makeContent := func(text string) json.RawMessage {
+		payload, _ := json.Marshal(map[string]string{"text": text})
+		return payload
+	}
+	if err := store.SaveJSON("pheromones.json", colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "sig_surface", Type: "REDIRECT", Priority: "high", Source: "test", CreatedAt: now, Active: true, Strength: &strength, Content: makeContent("use the current surface stack")},
+			{ID: "sig_integration", Type: "FOCUS", Priority: "normal", Source: "test", CreatedAt: now, Active: true, Strength: &strength, Content: makeContent("preserve the current api contract")},
+			{ID: "sig_scope", Type: "FEEDBACK", Priority: "low", Source: "test", CreatedAt: now, Active: true, Strength: &strength, Content: makeContent("prefer the smallest scope slice first")},
+			{ID: "sig_verification", Type: "FEEDBACK", Priority: "low", Source: "test", CreatedAt: now, Active: true, Strength: &strength, Content: makeContent("keep the test verification bar explicit")},
+		},
+	}); err != nil {
+		t.Fatalf("seed pheromones: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"discuss"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"D I S C U S S",
+		"Questions: 0",
+		"No new clarification questions are outstanding.",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("settled discuss visual missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{
+		"workers completed",
+		"Worker Results",
+		"S P A W N",
+		"worker-complete",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("settled discuss visual rendered worker theatre via %q\n%s", forbidden, output)
+		}
+	}
+}
+
 func TestDiscussResolveHardConstraintEmitsRedirect(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -130,6 +310,62 @@ func TestDiscussResolveHardConstraintEmitsRedirect(t *testing.T) {
 	}
 	if text := extractText(pheromones.Signals[0].Content); text == "" || text == "Use the existing admin-app surface" {
 		t.Fatalf("redirect text should include question context, got %q", text)
+	}
+}
+
+func TestDiscussResolveBoundaryRoutesToFreshWorkflowManifest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Resolve build boundary"
+	sessionID := "session_resolve_build_boundary"
+	initializedAt := time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC)
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		SessionID:     &sessionID,
+		InitializedAt: &initializedAt,
+		ColonyMode:    colony.ColonyModeOrchestrator,
+	})
+
+	source := orchestratorBoundaryClarificationSource("build", 2, "build-scope", true)
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{
+		Decisions: []PendingDecision{{
+			ID:          "pd_build_boundary",
+			Type:        clarificationDecisionType,
+			Description: formatClarificationDescription("What boundary should builders protect for Phase 2?", []string{"phase tasks only", "pause"}),
+			Source:      source,
+			Resolved:    false,
+			CreatedAt:   "2026-05-12T09:01:00Z",
+			GoalHash:    pendingDecisionGoalHash(goal),
+			SessionID:   sessionID,
+		}},
+	}); err != nil {
+		t.Fatalf("seed boundary pending decision: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"discuss", "--resolve", "pd_build_boundary", "--answer", "Keep builders to phase tasks only."})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss resolve returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	next := stringValue(result["next"])
+	if !strings.Contains(next, "aether build 2") || !strings.Contains(next, "fresh manifest") {
+		t.Fatalf("next = %q, want fresh build manifest guidance", next)
 	}
 }
 
@@ -562,5 +798,182 @@ func TestDiscussSurfacesCandidatesDespiteOldColonyResolvedDecisions(t *testing.T
 	}
 	if got := int(result["ignored_stale_count"].(float64)); got != 1 {
 		t.Fatalf("ignored_stale_count = %d, want 1 (old session decision should be stale)", got)
+	}
+}
+
+func TestDetectDecisionConflicts_NoDecisions(t *testing.T) {
+	result := detectDecisionConflicts(nil)
+	if result != nil {
+		t.Fatalf("expected nil for nil input, got %v", result)
+	}
+
+	result = detectDecisionConflicts([]PendingDecision{})
+	if result != nil {
+		t.Fatalf("expected nil for empty input, got %v", result)
+	}
+
+	result = detectDecisionConflicts([]PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use Go"},
+	})
+	if result != nil {
+		t.Fatalf("expected nil for single decision, got %v", result)
+	}
+}
+
+func TestDetectDecisionConflicts_NoConflict(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use Go"},
+		{ID: "pd_2", Resolved: true, Resolution: "add tests"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if result != nil {
+		t.Fatalf("expected nil for compatible decisions, got %v", result)
+	}
+}
+
+func TestDetectDecisionConflicts_DatabaseConflict(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use PostgreSQL for persistence"},
+		{ID: "pd_2", Resolved: true, Resolution: "keep the stack serverless"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 conflict, got %d: %v", len(result), result)
+	}
+	if !strings.Contains(result[0], "database") {
+		t.Fatalf("expected conflict to contain 'database', got %q", result[0])
+	}
+}
+
+func TestDetectDecisionConflicts_ArchitectureConflict(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "build a monolith for now"},
+		{ID: "pd_2", Resolved: true, Resolution: "use microservices from the start"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 conflict, got %d: %v", len(result), result)
+	}
+	if !strings.Contains(result[0], "architecture") {
+		t.Fatalf("expected conflict to contain 'architecture', got %q", result[0])
+	}
+}
+
+func TestDetectDecisionConflicts_FrontendConflict(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use React for the UI"},
+		{ID: "pd_2", Resolved: true, Resolution: "use Vue for the UI"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 conflict, got %d: %v", len(result), result)
+	}
+	if !strings.Contains(result[0], "frontend") {
+		t.Fatalf("expected conflict to contain 'frontend', got %q", result[0])
+	}
+}
+
+func TestDetectDecisionConflicts_MultipleConflicts(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use React for the UI"},
+		{ID: "pd_2", Resolved: true, Resolution: "use Vue for the frontend"},
+		{ID: "pd_3", Resolved: true, Resolution: "build a monolith"},
+		{ID: "pd_4", Resolved: true, Resolution: "use microservices for scaling"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 conflicts, got %d: %v", len(result), result)
+	}
+	hasFrontend := false
+	hasArchitecture := false
+	for _, c := range result {
+		if strings.Contains(c, "frontend") {
+			hasFrontend = true
+		}
+		if strings.Contains(c, "architecture") {
+			hasArchitecture = true
+		}
+	}
+	if !hasFrontend || !hasArchitecture {
+		t.Fatalf("expected both frontend and architecture conflicts, got %v", result)
+	}
+}
+
+func TestDetectDecisionConflicts_UnresolvedIgnored(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use PostgreSQL for persistence"},
+		{ID: "pd_2", Resolved: false, Resolution: "keep the stack serverless"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if result != nil {
+		t.Fatalf("expected nil when only one resolved decision, got %v", result)
+	}
+}
+
+func TestDetectDecisionConflicts_EmptyResolutionIgnored(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use PostgreSQL for persistence"},
+		{ID: "pd_2", Resolved: true, Resolution: ""},
+	}
+	result := detectDecisionConflicts(decisions)
+	if result != nil {
+		t.Fatalf("expected nil when one resolution is empty, got %v", result)
+	}
+}
+
+func TestDiscussSurfacesCandidatesDespiteLegacySameGoalResolvedDecisionWithoutSession(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Build a dashboard for internal operations"
+	currentSession := "session_new_colony"
+	initializedAt := time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC)
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		SessionID:     &currentSession,
+		InitializedAt: &initializedAt,
+	})
+
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{
+		Decisions: []PendingDecision{{
+			ID:          "pd_legacy_surface",
+			Type:        clarificationDecisionType,
+			Description: formatClarificationDescription("Which existing surface should own the first implementation slice?", []string{"admin-app", "new-module"}),
+			Source:      discussSource("surface", true),
+			Resolved:    true,
+			Resolution:  "Use admin-app",
+			ResolvedAt:  "2026-05-10T10:00:00Z",
+			CreatedAt:   "2026-05-10T09:00:00Z",
+			GoalHash:    pendingDecisionGoalHash(goal),
+		}},
+	}); err != nil {
+		t.Fatalf("seed legacy resolved decision: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"discuss"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := int(result["created_count"].(float64)); got != 3 {
+		t.Fatalf("created_count = %d, want 3 (legacy same-goal decision without session should not block current questions)", got)
+	}
+	if got := int(result["ignored_stale_count"].(float64)); got != 1 {
+		t.Fatalf("ignored_stale_count = %d, want 1 legacy stale clarification", got)
 	}
 }

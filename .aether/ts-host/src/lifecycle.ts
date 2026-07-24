@@ -1,7 +1,7 @@
 /**
- * Full lifecycle orchestrator for the TypeScript orchestration host.
+ * Experimental lifecycle smoke harness for the TypeScript orchestration host.
  *
- * Drives the plan -> build 1 -> continue lifecycle by:
+ * Drives the plan -> build 1 -> continue lifecycle in explicit simulation mode by:
  * 1. Calling Go --plan-only commands to obtain JSON manifests
  * 2. Building completion files with worker results
  * 3. Calling Go finalizer commands to commit state changes
@@ -9,6 +9,10 @@
  *
  * Contract: The TS host never writes to .aether/data/ directly. All state
  * mutations go through Go finalizer commands.
+ *
+ * This is not production orchestration. Real colony work should use the
+ * dedicated plan/build/continue host commands so every worker result comes from
+ * the active wrapper layer.
  *
  * Satisfies HOST-04 (finalizers called) and HOST-07 (end-to-end lifecycle).
  */
@@ -18,25 +22,34 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { GoBridgeOptions } from "./go-bridge.js";
-import { callGoJSON, writeCompletionFile } from "./go-bridge.js";
+import { approvedCompletionDirPrefix, callGoJSON, writeCompletionFile } from "./go-bridge.js";
 import type {
   BuildManifest,
   BuildDispatch,
-  WorkerResult,
   PlanCompletion,
+  PlanningDispatch,
+  PlanManifest,
+  WorkerPlanArtifact,
   ContinueCompletion,
+  ContinueExternalDispatch,
 } from "./types.js";
 import {
   dispatchWorkers,
   toWorkerResults,
   type DispatchOptions,
 } from "./worker-dispatch.js";
-import { detectAvailablePlatforms } from "./platform-dispatcher.js";
 import { createDashboard, type Dashboard } from "./dashboard.js";
 import { createNarrator, type Narrator } from "./narrator.js";
 import { startEventBridge, stopEventBridge, type EventBridgeController } from "./event-bridge.js";
 import { createQueenOrchestrator as _createQueenOrchestrator } from "./queen/orchestrator.js";
 import type { QueenOrchestratorResult } from "./queen/types.js";
+import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
+import type { OracleLifecycleResult } from "./oracle-lifecycle.js";
+import {
+  createCeremonyAdapter,
+  type CeremonyAdapter,
+  type CeremonyWorkflow,
+} from "./ceremony-adapter.js";
 
 // Mutable reference for test injection.
 let _createQueenOrchestratorRef = _createQueenOrchestrator;
@@ -77,6 +90,20 @@ export interface LifecycleOptions extends DispatchOptions {
   dashboard?: boolean;
   /** When true, skip the pre-build midden threshold check. */
   skipMiddenCheck?: boolean;
+  /** When true, run Oracle RALF research before planning. */
+  runOracle?: boolean;
+  /** Research topic for the Oracle step (default: "auto"). */
+  oracleTopic?: string;
+}
+
+/** Oracle result summary embedded in LifecycleResult. */
+export interface LifecycleOracleResult {
+  /** Number of Oracle iterations completed. */
+  iterations_completed: number;
+  /** Final confidence percentage after Oracle loop. */
+  final_confidence: number;
+  /** Reason the Oracle loop stopped. */
+  stop_reason: string;
 }
 
 /** Result of the lifecycle orchestration. */
@@ -85,56 +112,70 @@ export interface LifecycleResult {
   success: boolean;
   /** Steps completed in order. */
   steps_completed: string[];
+  /** Oracle result if the Oracle step ran. */
+  oracle_result?: LifecycleOracleResult;
   /** Error message if the lifecycle failed. */
   error?: string;
 }
 
 /** Plan manifest shape from Go plan --plan-only output. */
-interface PlanManifestResult {
-  plan_manifest?: Record<string, unknown>;
-  planning_manifest?: Record<string, unknown>;
-  dispatches?: PlanningDispatchResult[];
-  [key: string]: unknown;
-}
-
-/** Planning dispatch from Go plan --plan-only output. */
-interface PlanningDispatchResult {
-  name?: string;
-  caste?: string;
-  stage?: string;
-  task?: string;
-  task_id?: string;
-  wave?: number;
-  [key: string]: unknown;
-}
+type PlanManifestResult = PlanCompletion;
 
 /** Build manifest result from Go build --plan-only output. */
 interface BuildManifestResult {
   dispatch_manifest?: BuildManifest;
   dispatches?: BuildDispatch[];
-  dispatch_count?: number;
-  [key: string]: unknown;
+  provider_diagnostics?: string;
 }
 
 /** Continue manifest result from Go continue --plan-only output. */
-interface ContinueManifestResult {
-  continue_manifest?: Record<string, unknown>;
-  dispatches?: ContinueDispatchResult[];
-  phase?: number;
-  [key: string]: unknown;
+type ContinueManifestResult = ContinueCompletion;
+
+interface CeremonyDispatchLike {
+  execution_wave?: number;
+  wave?: number;
 }
 
-/** Continue dispatch from Go continue --plan-only output. */
-interface ContinueDispatchResult {
-  name?: string;
-  caste?: string;
-  stage?: string;
-  task?: string;
-  task_id?: string;
-  wave?: number;
-  status?: string;
-  summary?: string;
-  [key: string]: unknown;
+function emitCeremonyOutput(output: string): void {
+  if (output.trim() === "") {
+    return;
+  }
+  process.stderr.write(output.endsWith("\n") ? output : `${output}\n`);
+}
+
+function ceremonyExecutionWaves(dispatches: CeremonyDispatchLike[]): number[] {
+  const waves = new Set<number>();
+  for (const dispatch of dispatches) {
+    const wave = dispatch.execution_wave ?? dispatch.wave ?? 0;
+    if (wave > 0) {
+      waves.add(wave);
+    }
+  }
+  return [...waves].sort((a, b) => a - b);
+}
+
+function renderManifestCeremony(
+  ceremony: CeremonyAdapter,
+  workflow: CeremonyWorkflow,
+  manifestEnvelope: unknown,
+  dispatches: CeremonyDispatchLike[]
+): void {
+  emitCeremonyOutput(ceremony.renderSpawnPlan(workflow, manifestEnvelope));
+  for (const executionWave of ceremonyExecutionWaves(dispatches)) {
+    emitCeremonyOutput(
+      ceremony.renderWaveStart(workflow, manifestEnvelope, executionWave)
+    );
+  }
+}
+
+function renderWorkerCeremony(
+  ceremony: CeremonyAdapter,
+  workflow: CeremonyWorkflow,
+  workers: unknown[]
+): void {
+  for (const worker of workers) {
+    emitCeremonyOutput(ceremony.renderWorkerComplete(workflow, worker));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -158,14 +199,46 @@ interface ContinueDispatchResult {
 export async function runLifecycle(
   opts: LifecycleOptions
 ): Promise<LifecycleResult> {
+  if (opts.simulateWorkers !== true) {
+    return {
+      success: false,
+      steps_completed: [],
+      error:
+        "Lifecycle host is experimental and simulate-only; pass simulateWorkers=true for the smoke harness or run aether plan/build/continue for real orchestration.",
+    };
+  }
+
   const stepsCompleted: string[] = [];
   const targetPhase = opts.phase ?? 1;
+  let oracleResult: OracleLifecycleResult | undefined;
+  const ceremony = createCeremonyAdapter(opts);
 
   // Determine if dashboard should be active (default true when TTY)
   const useDashboard = opts.dashboard !== false && process.stdout.isTTY;
   let dashboard: Dashboard | undefined;
 
   try {
+    // ── Step 0: Oracle (optional) ────────────────────────────────────────
+    if (opts.runOracle) {
+      const oracleOpts: OracleLifecycleOptions = {
+        goBinaryPath: opts.goBinaryPath,
+        cwd: opts.cwd,
+        topic: opts.oracleTopic ?? "auto",
+        simulateWorkers: opts.simulateWorkers ?? false,
+        dashboard: useDashboard,
+      };
+
+      const oracleRes = await runOracleLifecycle(oracleOpts);
+      if (!oracleRes.success) {
+        throw new Error(oracleRes.error ?? "Oracle lifecycle failed");
+      }
+      oracleResult = oracleRes;
+      stepsCompleted.push("oracle");
+      process.stderr.write(
+        `Oracle completed: ${oracleRes.iterations_completed} iterations, confidence ${oracleRes.final_confidence}%\n`
+      );
+    }
+
     // ── Step 1: Plan ─────────────────────────────────────────────────────
 
     const planResult = callGoJSON<PlanManifestResult>(opts, [
@@ -177,7 +250,8 @@ export async function runLifecycle(
 
     // Extract the plan manifest from the result. Go plan --plan-only outputs
     // plan_manifest as the primary manifest field.
-    const planManifest = planResult.plan_manifest ?? planResult.planning_manifest;
+    const planManifest: PlanManifest | undefined =
+      planResult.plan_manifest ?? planResult.planning_manifest;
     if (!planManifest) {
       throw new Error("Plan --plan-only returned no plan_manifest");
     }
@@ -185,29 +259,25 @@ export async function runLifecycle(
     // Extract planning dispatches from the result. These are the planning
     // workers (scout, route-setter) that would normally run during planning.
     const planDispatches = planResult.dispatches ?? [];
+    const planCeremonyEnvelope = {
+      plan_manifest: planManifest,
+      dispatches: planDispatches,
+    };
+    renderManifestCeremony(ceremony, "plan", planCeremonyEnvelope, planDispatches);
 
-    // Build planning dispatch results: mark all as completed since the TS host
-    // is orchestrating (not actually running planning agents for this prototype).
-    const planningResults = planDispatches.map((d): PlanningDispatchResult => {
-      const result: PlanningDispatchResult = {
-        name: d.name ?? "unknown",
-        status: "completed",
-        summary: `Planning dispatch completed by TS host (${d.name ?? "unknown"})`,
-      };
-      if (d.caste !== undefined) result.caste = d.caste;
-      if (d.stage !== undefined) result.stage = d.stage;
-      if (d.task !== undefined) result.task = d.task;
-      if (d.task_id !== undefined) result.task_id = d.task_id;
-      if (d.wave !== undefined) result.wave = d.wave;
-      return result;
-    });
+    // The TS host does not run planning workers here. Only real planning
+    // dispatch completions belong in this list; host-created plans are labeled
+    // with the synthesis envelope below and must not be treated as a completed
+    // production plan unless the Go finalizer says a real stop condition was met.
+    const planningResults: PlanningDispatch[] = [];
+    renderWorkerCeremony(ceremony, "plan", planningResults);
 
-    // Build plan completion file with a synthetic phase_plan.
+    // Build plan completion file with explicit host synthesis.
     // The Go plan-finalizer requires a phase_plan (codexWorkerPlanArtifact)
-    // with at least one phase containing tasks. The TS host provides this
-    // since it orchestrates planning rather than running real planning agents.
-    const goal = typeof planManifest["goal"] === "string"
-      ? planManifest["goal"] as string
+    // with at least one phase containing tasks. The TS host labels this as
+    // synthesis instead of presenting it as worker evidence.
+    const goal = typeof planManifest.goal === "string"
+      ? planManifest.goal
       : "colony goal";
     const phasePlan = {
       phases: [
@@ -225,27 +295,48 @@ export async function runLifecycle(
           success_criteria: ["Feature implemented", "Tests passing"],
         },
       ],
-      confidence: { coverage: 50, complexity: 50, dependencies: 50, effort: 50, overall: 50 },
-    };
+      confidence: {
+        knowledge: 50,
+        requirements: 50,
+        risks: 50,
+        dependencies: 50,
+        effort: 50,
+        overall: 50,
+      },
+    } satisfies WorkerPlanArtifact;
 
-    const planCompletion = {
+    const planCompletion: PlanCompletion = {
       plan_manifest: planManifest,
       dispatches: planningResults,
-      phase_plan: phasePlan,
+      synthesis: {
+        source: "ts-host",
+        reason: "TS lifecycle host created a fallback phase plan without running planning workers.",
+        phase_plan: phasePlan,
+      },
     };
 
     const planCompletionPath = writeCompletionFile(
-      "aether-lifecycle",
+      approvedCompletionDirPrefix("plan"),
       "plan-completion.json",
       { result: planCompletion }
     );
 
-    // Call plan-finalizer to commit the plan to colony state
-    callGoJSON<Record<string, unknown>>(opts, [
+    // Call plan-finalizer. Iterative planning can validly return an
+    // intermediate result that requires a fresh Scout -> Route-Setter pass.
+    const planFinalizeResult = callGoJSON<Record<string, unknown>>(opts, [
       "plan-finalize",
       "--completion-file",
       planCompletionPath,
     ]);
+    if (
+      planFinalizeResult["requires_next_iteration"] === true ||
+      planFinalizeResult["planned"] !== true
+    ) {
+      throw new Error(
+        "Plan finalizer returned an intermediate planning iteration; TS lifecycle host cannot synthesize the remaining planning loop. Run Claude /ant-plan or provide real Scout and Route-Setter completions, then rerun the build lifecycle."
+      );
+    }
+    emitCeremonyOutput(ceremony.renderCloseout("plan", planCompletionPath));
 
     stepsCompleted.push("plan");
     process.stderr.write("Plan finalized successfully\n");
@@ -272,46 +363,36 @@ export async function runLifecycle(
     if (buildDispatches.length === 0) {
       throw new Error("Build manifest contains no dispatches");
     }
+    const buildCeremonyEnvelope = { dispatch_manifest: buildManifest };
+    renderManifestCeremony(ceremony, "build", buildCeremonyEnvelope, buildDispatches);
 
-    // Detect available platforms before dispatching.
-    const availablePlatforms = await detectAvailablePlatforms();
-    const hasPlatforms = availablePlatforms.length > 0;
-
-    // Default simulateWorkers to false (real dispatch) when platforms are available.
-    // If no platforms are available and simulateWorkers is not explicitly true,
-    // warn and fall back to simulation.
-    let simulateWorkers = opts.simulateWorkers;
-    if (simulateWorkers === undefined) {
-      if (hasPlatforms) {
-        simulateWorkers = false;
-      } else {
-        process.stderr.write(
-          "Warning: no platform CLI available. Falling back to simulation mode.\n"
-        );
-        simulateWorkers = true;
-      }
-    }
+    // Lifecycle is guarded to explicit simulation at entry. Keep the local
+    // variable so the build path can share the same option shape as worker
+    // dispatch without pretending this is production orchestration.
+    const simulateWorkers = true;
 
     // Create a placeholder file for simulated worker file claims.
     // The Go build-finalizer validates that all claimed files exist on disk
     // and are within the repository. For simulated workers, we create a real
     // file in .aether/ts-host/ (TS-host-owned, NOT in GO_OWNED_PATHS) that
     // can be claimed as file_created by the simulated workers.
-    const placeholderDir = join(opts.cwd, ".aether", "ts-host");
-    const placeholderRel = ".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt";
-    try {
-      if (!existsSync(placeholderDir)) {
-        mkdirSync(placeholderDir, { recursive: true });
+    if (simulateWorkers) {
+      const placeholderDir = join(opts.cwd, ".aether", "ts-host");
+      const placeholderRel = ".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt";
+      try {
+        if (!existsSync(placeholderDir)) {
+          mkdirSync(placeholderDir, { recursive: true });
+        }
+        writeFileSync(
+          join(opts.cwd, placeholderRel),
+          "Simulated build output for TS host prototype lifecycle test.\n",
+          "utf-8"
+        );
+      } catch {
+        // If we can't write the placeholder, continue without file claims.
+        // The build-finalizer will reject the build if no files are claimed,
+        // which is the expected behavior for a prototype that doesn't do real work.
       }
-      writeFileSync(
-        join(opts.cwd, placeholderRel),
-        "Simulated build output for TS host prototype lifecycle test.\n",
-        "utf-8"
-      );
-    } catch {
-      // If we can't write the placeholder, continue without file claims.
-      // The build-finalizer will reject the build if no files are claimed,
-      // which is the expected behavior for a prototype that doesn't do real work.
     }
 
     // Start dashboard before build dispatch when active
@@ -320,13 +401,8 @@ export async function runLifecycle(
       dashboard.start();
     }
 
-    // Emit wave start event
-    process.stderr.write(
-      `Ceremony: ceremony.build.wave.start wave=1 workers=${buildDispatches.length}\n`
-    );
-
     // Build step with Queen orchestration
-    const queen = createQueenOrchestrator({
+    const queenOpts = {
       goBinaryPath: opts.goBinaryPath,
       cwd: opts.cwd,
       phase: targetPhase,
@@ -334,8 +410,9 @@ export async function runLifecycle(
       parallel: opts.parallel ?? true,
       dashboard: useDashboard,
       skipMiddenCheck: opts.skipMiddenCheck ?? false,
-      simulatedFileClaims: [placeholderRel],
-    });
+      ...(simulateWorkers ? { simulatedFileClaims: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"] as string[] } : {}),
+    };
+    const queen = createQueenOrchestrator(queenOpts);
     const queenResult = await queen.runBuild(buildManifest);
 
     // Log midden warnings and recovery actions if present
@@ -355,11 +432,6 @@ export async function runLifecycle(
       process.stderr.write(`Queen orchestrator error: ${queenResult.error}\n`);
     }
 
-    // Emit wave end event
-    process.stderr.write(
-      `Ceremony: ceremony.build.wave.end wave=1 workers=${buildDispatches.length}\n`
-    );
-
     // Stop dashboard after build dispatch completes
     if (dashboard) {
       dashboard.stop();
@@ -368,6 +440,7 @@ export async function runLifecycle(
 
     // Use worker results from Queen orchestrator for the finalizer
     const workerResults = queenResult.workerResults;
+    renderWorkerCeremony(ceremony, "build", workerResults);
 
     // Build completion file
     const buildCompletion = {
@@ -376,7 +449,7 @@ export async function runLifecycle(
     };
 
     const buildCompletionPath = writeCompletionFile(
-      "aether-lifecycle",
+      approvedCompletionDirPrefix("build"),
       "build-completion.json",
       { result: buildCompletion }
     );
@@ -388,6 +461,7 @@ export async function runLifecycle(
       "--completion-file",
       buildCompletionPath,
     ]);
+    emitCeremonyOutput(ceremony.renderCloseout("build", buildCompletionPath));
 
     stepsCompleted.push("build");
     process.stderr.write("Build finalized successfully\n");
@@ -409,24 +483,27 @@ export async function runLifecycle(
 
     // Get continue dispatches from the manifest
     const continueDispatches = continueResult.dispatches ?? [];
-
-    // Build continue dispatch results: mark all as completed for the prototype.
-    // In production, these would be review worker results (watcher, auditor, etc.)
-    const continueResults = continueDispatches.map(
-      (d): ContinueDispatchResult => {
-        const result: ContinueDispatchResult = {
-          name: d.name ?? "unknown",
-          status: "completed",
-          summary: `Continue dispatch completed by TS host (${d.name ?? "unknown"})`,
-        };
-        if (d.caste !== undefined) result.caste = d.caste;
-        if (d.stage !== undefined) result.stage = d.stage;
-        if (d.task !== undefined) result.task = d.task;
-        if (d.task_id !== undefined) result.task_id = d.task_id;
-        if (d.wave !== undefined) result.wave = d.wave;
-        return result;
-      }
+    const continueCeremonyEnvelope = {
+      continue_manifest: continueManifest,
+      dispatches: continueDispatches,
+    };
+    renderManifestCeremony(
+      ceremony,
+      "continue",
+      continueCeremonyEnvelope,
+      continueDispatches
     );
+
+    // Build continue dispatch results for the simulation harness only.
+    // Production continue reviews must use the dedicated continue host path.
+    const continueResults: ContinueExternalDispatch[] = continueDispatches.map(
+      (d): ContinueExternalDispatch => ({
+        ...d,
+        status: "completed",
+        summary: `Continue dispatch completed by TS host (${d.name})`,
+      })
+    );
+    renderWorkerCeremony(ceremony, "continue", continueResults);
 
     // Build continue completion file
     const continueCompletion = {
@@ -435,7 +512,7 @@ export async function runLifecycle(
     };
 
     const continueCompletionPath = writeCompletionFile(
-      "aether-lifecycle",
+      approvedCompletionDirPrefix("continue"),
       "continue-completion.json",
       { result: continueCompletion }
     );
@@ -446,6 +523,9 @@ export async function runLifecycle(
       "--completion-file",
       continueCompletionPath,
     ]);
+    emitCeremonyOutput(
+      ceremony.renderCloseout("continue", continueCompletionPath)
+    );
 
     // Check if continue was blocked by gates (informational, not a failure)
     const blocked = continueFinalizeResult["blocked"] === true;
@@ -458,10 +538,18 @@ export async function runLifecycle(
     stepsCompleted.push("continue");
     process.stderr.write("Continue finalized successfully\n");
 
-    return {
+    const result: LifecycleResult = {
       success: true,
       steps_completed: stepsCompleted,
     };
+    if (oracleResult) {
+      result.oracle_result = {
+        iterations_completed: oracleResult.iterations_completed,
+        final_confidence: oracleResult.final_confidence,
+        stop_reason: oracleResult.stop_reason,
+      };
+    }
+    return result;
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : String(err);

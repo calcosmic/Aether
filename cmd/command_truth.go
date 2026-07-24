@@ -90,7 +90,14 @@ var migrateStateCmd = &cobra.Command{
 			return nil
 		}
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
-		result, err := runMigrateState(dryRun)
+		rollbackPath, _ := cmd.Flags().GetString("rollback")
+		var result map[string]interface{}
+		var err error
+		if strings.TrimSpace(rollbackPath) != "" {
+			result, err = runMigrateStateRollback(rollbackPath, dryRun)
+		} else {
+			result, err = runMigrateState(dryRun)
+		}
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -115,6 +122,7 @@ func init() {
 	quickCmd.Flags().Duration("timeout", codex.DefaultWorkerTimeout, "Scout worker timeout")
 	bumpVersionCmd.Flags().Bool("dry-run", false, "Preview version updates without writing files")
 	migrateStateCmd.Flags().Bool("dry-run", false, "Preview migration without writing COLONY_STATE.json")
+	migrateStateCmd.Flags().String("rollback", "", "Restore an Aether-created pre-migration backup")
 
 	rootCmd.AddCommand(maturityCmd)
 	rootCmd.AddCommand(quickCmd)
@@ -193,7 +201,7 @@ func goalText(state colony.ColonyState) string {
 func renderMaturityVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("maturity"), "Maturity"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
 		b.WriteString("Goal: ")
 		b.WriteString(goal)
@@ -267,7 +275,7 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 		"worker_name": workerResult.WorkerName,
 		"status":      emptyFallback(workerResult.Status, "completed"),
 		"summary":     strings.TrimSpace(workerResult.Summary),
-		"raw_output":  strings.TrimSpace(workerResult.RawOutput),
+		"raw_output":  codex.SanitizeWorkerDiagnosticOutput(workerResult.RawOutput),
 		"duration_ms": workerResult.Duration.Milliseconds(),
 		"files":       workerResult.FilesModified,
 		"next":        "aether status",
@@ -288,7 +296,7 @@ func renderQuickContextCapsule(question string) string {
 func renderQuickVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("⚡", "Quick Scout"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Question: ")
 	b.WriteString(emptyFallback(stringValue(result["question"]), "(none)"))
 	b.WriteString("\n")
@@ -432,7 +440,7 @@ func parseSemver(version string) ([3]int, error) {
 func renderBumpVersionVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("bump-version"), "Bump Version"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Version: ")
 	b.WriteString(emptyFallback(stringValue(result["version"]), "unknown"))
 	b.WriteString("\n")
@@ -449,28 +457,35 @@ func renderBumpVersionVisual(result map[string]interface{}) string {
 }
 
 func runMigrateState(dryRun bool) (map[string]interface{}, error) {
+	originalData, err := store.ReadFile("COLONY_STATE.json")
+	if err != nil {
+		return nil, fmt.Errorf("COLONY_STATE.json not found: %w", err)
+	}
 	var raw map[string]interface{}
-	if err := store.LoadJSON("COLONY_STATE.json", &raw); err != nil {
+	if err := json.Unmarshal(originalData, &raw); err != nil {
 		return nil, fmt.Errorf("COLONY_STATE.json not found: %w", err)
 	}
 	fromVersion := strings.TrimSpace(stringValue(raw["version"]))
 	if fromVersion == "" {
 		fromVersion = "legacy"
 	}
-	if fromVersion == "3.0" {
-		return map[string]interface{}{
-			"mode":     "migrate-state",
-			"migrated": false,
-			"from":     fromVersion,
-			"to":       "3.0",
-			"reason":   "already current",
-			"dry_run":  dryRun,
-			"next":     "aether medic --deep",
-		}, nil
-	}
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
 		return nil, fmt.Errorf("legacy state is not compatible with automatic migration: %w", err)
+	}
+	originalEvidencePolicy := state.Plan.EvidencePolicy
+	state.Plan.EvidencePolicy = inferredPlanEvidencePolicy(state.Plan)
+	if fromVersion == "3.0" && originalEvidencePolicy == state.Plan.EvidencePolicy && originalEvidencePolicy != "" {
+		return map[string]interface{}{
+			"mode":            "migrate-state",
+			"migrated":        false,
+			"from":            fromVersion,
+			"to":              "3.0",
+			"reason":          "already current",
+			"dry_run":         dryRun,
+			"evidence_policy": string(state.Plan.EvidencePolicy),
+			"next":            "aether medic --deep",
+		}, nil
 	}
 	state.Version = "3.0"
 	if strings.TrimSpace(string(state.State)) == "" {
@@ -481,13 +496,12 @@ func runMigrateState(dryRun bool) (map[string]interface{}, error) {
 		}
 	}
 	state.Events = append(trimmedEvents(state.Events),
-		fmt.Sprintf("%s|state_migrated|migrate-state|Migrated COLONY_STATE.json from %s to 3.0", time.Now().UTC().Format(time.RFC3339), fromVersion),
+		fmt.Sprintf("%s|state_migrated|migrate-state|Migrated COLONY_STATE.json from %s to 3.0; plan evidence policy=%s", time.Now().UTC().Format(time.RFC3339), fromVersion, state.Plan.EvidencePolicy),
 	)
 	backupPath := ""
 	if !dryRun {
 		backupPath = filepath.Join("backups", fmt.Sprintf("COLONY_STATE.pre-migrate.%s.json", time.Now().UTC().Format("20060102-150405")))
-		data, _ := json.MarshalIndent(raw, "", "  ")
-		if err := store.AtomicWrite(backupPath, append(data, '\n')); err != nil {
+		if err := store.AtomicWrite(backupPath, originalData); err != nil {
 			return nil, fmt.Errorf("write migration backup: %w", err)
 		}
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -495,29 +509,124 @@ func runMigrateState(dryRun bool) (map[string]interface{}, error) {
 		}
 	}
 	return map[string]interface{}{
-		"mode":        "migrate-state",
-		"migrated":    !dryRun,
-		"from":        fromVersion,
-		"to":          "3.0",
-		"dry_run":     dryRun,
-		"backup_path": backupPath,
-		"next":        "aether medic --deep",
+		"mode":             "migrate-state",
+		"migrated":         !dryRun,
+		"from":             fromVersion,
+		"to":               "3.0",
+		"dry_run":          dryRun,
+		"evidence_policy":  string(state.Plan.EvidencePolicy),
+		"backup_path":      backupPath,
+		"rollback_command": migrationRollbackCommand(backupPath),
+		"next":             "aether medic --deep",
 	}, nil
+}
+
+func migrationRollbackCommand(backupPath string) string {
+	backupPath = filepath.ToSlash(strings.TrimSpace(backupPath))
+	if backupPath == "" {
+		return ""
+	}
+	return fmt.Sprintf("aether migrate-state --rollback %s", backupPath)
+}
+
+func runMigrateStateRollback(backupPath string, dryRun bool) (map[string]interface{}, error) {
+	cleanPath, err := validateMigrationBackupPath(backupPath)
+	if err != nil {
+		return nil, err
+	}
+	backupData, err := store.ReadFile(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("read migration rollback backup: %w", err)
+	}
+	var restored colony.ColonyState
+	if err := json.Unmarshal(backupData, &restored); err != nil {
+		return nil, fmt.Errorf("migration rollback backup is not valid colony state: %w", err)
+	}
+
+	safetyBackup := ""
+	if !dryRun {
+		safetyBackup = filepath.Join("backups", fmt.Sprintf("COLONY_STATE.pre-rollback.%s.json", time.Now().UTC().Format("20060102-150405.000000000")))
+		if err := store.UpdateFile("COLONY_STATE.json", func(current []byte) ([]byte, error) {
+			if len(current) == 0 {
+				return nil, fmt.Errorf("COLONY_STATE.json not found")
+			}
+			if err := store.AtomicWrite(safetyBackup, current); err != nil {
+				return nil, fmt.Errorf("write pre-rollback safety backup: %w", err)
+			}
+			return backupData, nil
+		}); err != nil {
+			return nil, fmt.Errorf("restore migration backup: %w", err)
+		}
+	}
+
+	return map[string]interface{}{
+		"mode":          "migrate-state-rollback",
+		"rolled_back":   !dryRun,
+		"dry_run":       dryRun,
+		"restored_from": filepath.ToSlash(cleanPath),
+		"safety_backup": filepath.ToSlash(safetyBackup),
+		"state_version": restored.Version,
+		"next":          "aether medic --deep",
+	}, nil
+}
+
+func validateMigrationBackupPath(path string) (string, error) {
+	path = filepath.Clean(filepath.FromSlash(strings.TrimSpace(path)))
+	if path == "." || filepath.IsAbs(path) || path == ".." || strings.HasPrefix(path, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("rollback backup must be a relative path under backups/")
+	}
+	prefix := "backups" + string(filepath.Separator)
+	if !strings.HasPrefix(path, prefix) {
+		return "", fmt.Errorf("rollback backup must be under backups/")
+	}
+	name := filepath.Base(path)
+	if !strings.HasPrefix(name, "COLONY_STATE.pre-migrate.") || filepath.Ext(name) != ".json" {
+		return "", fmt.Errorf("rollback backup must be an Aether-created COLONY_STATE.pre-migrate backup")
+	}
+	fullPath := filepath.Join(store.BasePath(), path)
+	info, err := os.Lstat(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("rollback backup is unavailable: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("rollback backup must not be a symbolic link")
+	}
+	return path, nil
 }
 
 func renderMigrateStateVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("migrate-state"), "Migrate State"))
-	b.WriteString(visualDivider)
-	if boolValue(result["migrated"]) {
+	b.WriteString(visualDividerStr())
+	if boolValue(result["rolled_back"]) {
+		b.WriteString("State rollback completed.\n")
+	} else if stringValue(result["mode"]) == "migrate-state-rollback" && boolValue(result["dry_run"]) {
+		b.WriteString("State rollback preview completed.\n")
+	} else if boolValue(result["migrated"]) {
 		b.WriteString("State migrated.\n")
 	} else {
 		b.WriteString("No migration applied.\n")
 	}
-	b.WriteString(fmt.Sprintf("Version: %s -> %s\n", emptyFallback(stringValue(result["from"]), "legacy"), emptyFallback(stringValue(result["to"]), "3.0")))
+	if stringValue(result["mode"]) == "migrate-state-rollback" {
+		b.WriteString("Restored from: ")
+		b.WriteString(emptyFallback(stringValue(result["restored_from"]), "unknown"))
+		b.WriteString("\n")
+		if safety := strings.TrimSpace(stringValue(result["safety_backup"])); safety != "" {
+			b.WriteString("Safety backup: ")
+			b.WriteString(safety)
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString(fmt.Sprintf("Version: %s -> %s\n", emptyFallback(stringValue(result["from"]), "legacy"), emptyFallback(stringValue(result["to"]), "3.0")))
+	}
 	if backup := strings.TrimSpace(stringValue(result["backup_path"])); backup != "" {
 		b.WriteString("Backup: ")
 		b.WriteString(backup)
+		b.WriteString("\n")
+	}
+	if rollback := strings.TrimSpace(stringValue(result["rollback_command"])); rollback != "" {
+		b.WriteString("Rollback: ")
+		b.WriteString(rollback)
 		b.WriteString("\n")
 	}
 	b.WriteString(renderNextUp(fmt.Sprintf("Run `%s` to verify colony health.", emptyFallback(stringValue(result["next"]), "aether medic --deep"))))
@@ -575,7 +684,7 @@ func loadCasteAssignments(root string) []map[string]interface{} {
 func renderVerifyCastesVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("verify-castes"), "Verify Castes"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Expected agents per surface: %d\n", intValue(result["expected_agents"])))
 	if counts, ok := result["counts"].(map[string]int); ok {
 		keys := make([]string, 0, len(counts))

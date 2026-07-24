@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1164,14 +1166,14 @@ func TestResolveVerificationDepth_Table(t *testing.T) {
 
 func TestResolveEffectiveContinueDepth_Table(t *testing.T) {
 	tests := []struct {
-		name      string
-		phase     colony.Phase
-		total     int
-		light     bool
-		heavy     bool
-		depthStr  string
+		name       string
+		phase      colony.Phase
+		total      int
+		light      bool
+		heavy      bool
+		depthStr   string
 		stateDepth string
-		expected  colony.VerificationDepth
+		expected   colony.VerificationDepth
 	}{
 		// CLI heavy flag overrides persisted state
 		{"CLI heavy overrides persisted light", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, true, "", "light", colony.VerificationDepthHeavy},
@@ -1375,12 +1377,12 @@ func TestResolveEffectiveContinueDepth_PrecedenceOrder(t *testing.T) {
 
 func TestBuildAndContinueEmitMatchingDepthMetadata(t *testing.T) {
 	tests := []struct {
-		name      string
-		phase     colony.Phase
-		total     int
-		light     bool
-		heavy     bool
-		depthStr  string
+		name       string
+		phase      colony.Phase
+		total      int
+		light      bool
+		heavy      bool
+		depthStr   string
 		stateDepth string
 	}{
 		{"final phase no flags", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", ""},
@@ -1414,13 +1416,13 @@ func TestBuildAndContinueEmitMatchingDepthMetadata(t *testing.T) {
 
 func TestRecommendQueenExecutionPolicyMatchesContinueDepth(t *testing.T) {
 	tests := []struct {
-		name      string
-		phase     colony.Phase
-		total     int
-		light     bool
-		heavy     bool
-		depthStr  string
-		stateVD   string
+		name     string
+		phase    colony.Phase
+		total    int
+		light    bool
+		heavy    bool
+		depthStr string
+		stateVD  string
 	}{
 		{"final phase no flags", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", ""},
 		{"intermediate no flags", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", ""},
@@ -1443,6 +1445,79 @@ func TestRecommendQueenExecutionPolicyMatchesContinueDepth(t *testing.T) {
 				t.Errorf("build policy depth = %q, continue depth = %q -- mismatch", buildDepth, continueDepth)
 			}
 		})
+	}
+}
+
+func TestRecommendQueenExecutionPolicyMatchesContinueDepthSpawnBudget(t *testing.T) {
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Worker budget contract",
+		Description: "Publish minimal Queen spawn limits",
+		Mode:        colony.PhaseModePrototype,
+		Tasks: []colony.Task{
+			{Goal: "Add spawn budget contract"},
+			{Goal: "Verify spawn budget contract"},
+		},
+	}
+	state := colony.ColonyState{ColonyDepth: "full"}
+	policy := recommendQueenExecutionPolicy(state, phase, 1, codexQueenExecutionPolicyInput{
+		VerificationDepth: string(colony.VerificationDepthHeavy),
+	})
+	dispatches := []codexBuildDispatch{
+		{Caste: "builder"},
+		{Caste: "builder"},
+		{Caste: "watcher"},
+	}
+
+	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", colony.VerificationDepthHeavy, dispatches)
+
+	if policy.ReviewDepth != string(colony.VerificationDepthHeavy) || policy.VerificationDepth != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("policy depth changed after spawn budget enrichment: %+v", policy)
+	}
+	budget := policy.SpawnBudget
+	if budget == nil {
+		t.Fatalf("spawn budget missing after enrichment")
+	}
+	if budget.WorkerCount != len(dispatches) {
+		t.Fatalf("worker_count = %d, want %d", budget.WorkerCount, len(dispatches))
+	}
+	if budget.SelectedWorkers != len(dispatches) {
+		t.Fatalf("selected_workers = %d, want %d", budget.SelectedWorkers, len(dispatches))
+	}
+	if budget.MaxWorkers != len(dispatches) {
+		t.Fatalf("max_workers = %d, want concrete dispatch count %d", budget.MaxWorkers, len(dispatches))
+	}
+	if budget.BudgetUnit != "caste" {
+		t.Fatalf("budget_unit = %q, want caste", budget.BudgetUnit)
+	}
+	if budget.MaxSelectedCastes == 0 {
+		t.Fatalf("max_selected_castes should expose Queen caste budget: %+v", budget)
+	}
+	if budget.SelectedCastes != len(budget.Castes) {
+		t.Fatalf("selected_castes = %d, want castes length %d", budget.SelectedCastes, len(budget.Castes))
+	}
+	if got := budget.Counts["builder"]; got != 2 {
+		t.Fatalf("counts.builder = %d, want 2", got)
+	}
+	if got := budget.Counts["watcher"]; got != 1 {
+		t.Fatalf("counts.watcher = %d, want 1", got)
+	}
+	for _, caste := range []string{"builder", "watcher"} {
+		if !containsString(budget.Castes, caste) {
+			t.Fatalf("castes missing %q: %+v", caste, budget.Castes)
+		}
+	}
+	if budget.FlowType != "build" {
+		t.Fatalf("flow_type = %q, want build", budget.FlowType)
+	}
+	if strings.TrimSpace(budget.Reason) == "" {
+		t.Fatalf("budget metadata incomplete: %+v", budget)
+	}
+	if !containsString(budget.RequiredCastes, "builder") || !containsString(budget.RequiredCastes, "watcher") {
+		t.Fatalf("required_castes missing build safety castes: %+v", budget.RequiredCastes)
+	}
+	if budget.RelevanceThreshold == nil || *budget.RelevanceThreshold != spawnThreshold("build", state) {
+		t.Fatalf("relevance_threshold = %v, want build threshold", budget.RelevanceThreshold)
 	}
 }
 
@@ -1487,7 +1562,7 @@ func TestWatcherTimeoutAdvisoryWhenRuntimePassed(t *testing.T) {
 		Phase:        3,
 		ChecksPassed: true,
 		Passed:       true,
-		Steps:        []codexVerificationStep{
+		Steps: []codexVerificationStep{
 			{Name: "build", Passed: true},
 			{Name: "types", Passed: true},
 			{Name: "lint", Passed: true},
@@ -1504,10 +1579,10 @@ func TestWatcherTimeoutAdvisoryWhenRuntimePassed(t *testing.T) {
 
 	workerFlow := []codexContinueWorkerFlowStep{
 		{
-			Stage:  "verification",
-			Caste:  "watcher",
-			Name:   "Watcher-42",
-			Status: "timeout",
+			Stage:   "verification",
+			Caste:   "watcher",
+			Name:    "Watcher-42",
+			Status:  "timeout",
 			Summary: "watcher timed out",
 		},
 	}
@@ -1554,10 +1629,10 @@ func TestWatcherFailureBlocksWhenRuntimeFailed(t *testing.T) {
 
 	workerFlow := []codexContinueWorkerFlowStep{
 		{
-			Stage:  "verification",
-			Caste:  "watcher",
-			Name:   "Watcher-42",
-			Status: "failed",
+			Stage:   "verification",
+			Caste:   "watcher",
+			Name:    "Watcher-42",
+			Status:  "failed",
 			Summary: "watcher found critical issues",
 		},
 	}
@@ -1641,5 +1716,118 @@ func TestDepthKeysPresentInFreshPlanResultMap(t *testing.T) {
 		if count < 3 {
 			t.Errorf("key %s found %d times in codex_plan.go, expected at least 3 (existing-plan, fresh generation, plan-only)", key, count)
 		}
+	}
+}
+
+// resetReviewDepthPolicyState clears the loaded policy and cache so each test
+// starts fresh.
+func resetReviewDepthPolicyState() {
+	loadedReviewDepthPolicy = nil
+	loadedReviewDepthPolicyOnce = sync.Once{}
+	policyCacheMu.Lock()
+	delete(policyCache, reviewDepthPathOverride)
+	policyCacheMu.Unlock()
+}
+
+func TestReviewDepthLoad_CustomHeavyKeywords(t *testing.T) {
+	resetReviewDepthPolicyState()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "review-depth.yaml")
+	content := `review_depth_version: "2.0"
+heavy_keywords:
+  - customkeyword
+  - anothercustom
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reviewDepthPathOverride = path
+	defer func() { reviewDepthPathOverride = "" }()
+
+	keywords := getHeavyKeywords()
+	if len(keywords) != 2 || keywords[0] != "customkeyword" {
+		t.Errorf("getHeavyKeywords() = %v, want [customkeyword anothercustom]", keywords)
+	}
+	if !phaseHasHeavyKeywords("something with customkeyword inside") {
+		t.Error("expected phaseHasHeavyKeywords to match customkeyword from policy")
+	}
+}
+
+func TestReviewDepthFallback_NoPolicyFile(t *testing.T) {
+	resetReviewDepthPolicyState()
+	reviewDepthPathOverride = filepath.Join(t.TempDir(), "nonexistent.yaml")
+	defer func() { reviewDepthPathOverride = "" }()
+
+	keywords := getHeavyKeywords()
+	if len(keywords) != len(heavyKeywordsFallback) {
+		t.Fatalf("getHeavyKeywords() length = %d, want %d", len(keywords), len(heavyKeywordsFallback))
+	}
+	for i, kw := range keywords {
+		if kw != heavyKeywordsFallback[i] {
+			t.Errorf("keyword[%d] = %q, want %q", i, kw, heavyKeywordsFallback[i])
+		}
+	}
+}
+
+func TestReviewDepthLoad_CustomSmartDefaultReasons(t *testing.T) {
+	resetReviewDepthPolicyState()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "review-depth.yaml")
+	content := `review_depth_version: "2.0"
+smart_default_reasons:
+  high_risk: "custom: security risk"
+  final_phase: "custom: final phase"
+  medium_risk: "custom: high blast radius"
+  early_phase: "custom: early phase"
+  late_phase: "custom: late phase"
+  standard: "custom: standard"
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reviewDepthPathOverride = path
+	defer func() { reviewDepthPathOverride = "" }()
+
+	phase := colony.Phase{ID: 2, Name: "Security audit"}
+	got := renderSmartDepthReason(phase, 5)
+	want := "custom: security risk"
+	if got != want {
+		t.Errorf("renderSmartDepthReason(high risk) = %q, want %q", got, want)
+	}
+
+	phase = colony.Phase{ID: 5, Name: "Final polish"}
+	got = renderSmartDepthReason(phase, 5)
+	want = "custom: final phase"
+	if got != want {
+		t.Errorf("renderSmartDepthReason(final phase) = %q, want %q", got, want)
+	}
+
+	phase = colony.Phase{ID: 3, Name: "Core runtime refactor"}
+	got = renderSmartDepthReason(phase, 5)
+	want = "custom: high blast radius"
+	if got != want {
+		t.Errorf("renderSmartDepthReason(medium risk) = %q, want %q", got, want)
+	}
+}
+
+func TestReviewDepthLoad_KeywordUsedInPhaseHasHeavyKeywords(t *testing.T) {
+	resetReviewDepthPolicyState()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "review-depth.yaml")
+	content := `review_depth_version: "2.0"
+heavy_keywords:
+  - unicornkeyword
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reviewDepthPathOverride = path
+	defer func() { reviewDepthPathOverride = "" }()
+
+	if !phaseHasHeavyKeywords("phase with unicornkeyword inside") {
+		t.Error("expected phaseHasHeavyKeywords to match unicornkeyword from policy")
+	}
+	if phaseHasHeavyKeywords("plain phase without match") {
+		t.Error("expected phaseHasHeavyKeywords to return false for plain phase")
 	}
 }

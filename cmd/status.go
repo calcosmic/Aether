@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ func init() {
 func renderNoColonyStatusVisual() string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("status"), "Colony Status"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("No colony initialized in this repo.\n")
 	b.WriteString(renderNextUp(
 		`Run `+"`aether init \"goal\"`"+` to start a colony.`,
@@ -127,10 +128,165 @@ func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 			if mismatches, ok := ph["flag_mismatches"].([]interface{}); ok && len(mismatches) > 0 {
 				warnings = append(warnings, fmt.Sprintf("Platform health: %d CLI flag mismatch(es) detected. Run `aether cli-audit` to review.", len(mismatches)))
 			}
+			// 5a. Doc-CLI alignment warnings
+			if dcaRaw, ok := ph["doc_cli_alignment"]; ok {
+				var dca map[string]interface{}
+				if dcaMap, ok := dcaRaw.(map[string]interface{}); ok {
+					dca = dcaMap
+				} else {
+					// Try JSON round-trip for typed structs
+					b, _ := json.Marshal(dcaRaw)
+					json.Unmarshal(b, &dca)
+				}
+				if hcf, ok := dca["host_critical_failures"].([]interface{}); ok && len(hcf) > 0 {
+					warnings = append(warnings, fmt.Sprintf("Doc-CLI alignment: %d host-critical flag mismatch(es) detected", len(hcf)))
+				}
+				if w, ok := dca["warnings"].([]interface{}); ok && len(w) > 0 {
+					warnings = append(warnings, fmt.Sprintf("Doc-CLI alignment: %d non-critical flag mismatch(es) detected", len(w)))
+				}
+				if cc, ok := dca["commands_checked"].(float64); ok && cc == 0 {
+					warnings = append(warnings, "Doc-CLI alignment smoke test did not run")
+				}
+			}
 		}
 	}
 
 	return warnings
+}
+
+// ---------------------------------------------------------------------------
+// Reconciliation: unreconciled worker changes
+// ---------------------------------------------------------------------------
+
+// unreconciledChangesResult holds the outcome of comparing git working tree
+// changes against worker-reported files.
+type unreconciledChangesResult struct {
+	HasUnreconciledChanges bool     `json:"has_unreconciled_changes"`
+	ChangedFiles           []string `json:"changed_files,omitempty"`
+	Recommendation         string   `json:"recommendation,omitempty"`
+}
+
+// detectUnreconciledChanges compares the current git working tree against
+// files recorded in the latest build claims and manifest dispatches.
+// If changed files exist that are NOT in any worker result, they are flagged.
+func detectUnreconciledChanges(s *storage.Store, state *colony.ColonyState) unreconciledChangesResult {
+	result := unreconciledChangesResult{}
+	if s == nil {
+		return result
+	}
+
+	// a. Run git status --short in the repo root
+	root := resolveAetherRoot()
+	cmd := exec.Command("git", "-C", root, "status", "--short")
+	out, err := cmd.Output()
+	if err != nil {
+		// Not a git repo or git not available -- nothing to reconcile
+		return result
+	}
+
+	// b. Collect modified/added/deleted files
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	var changedFiles []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if len(line) < 3 {
+			continue
+		}
+		// git status --short format: XY <path> or XY <path> -> <origpath>
+		// The path starts at index 3
+		path := strings.TrimSpace(line[2:])
+		if path == "" {
+			continue
+		}
+		// Handle rename format: "R  old -> new"
+		if strings.Contains(path, " -> ") {
+			parts := strings.Split(path, " -> ")
+			if len(parts) == 2 {
+				changedFiles = append(changedFiles, strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]))
+				continue
+			}
+		}
+		changedFiles = append(changedFiles, path)
+	}
+	if len(changedFiles) == 0 {
+		return result
+	}
+
+	// c. Gather all files reported by workers (build claims + manifest dispatches)
+	recorded := make(map[string]bool)
+
+	// From last-build-claims.json
+	claims, claimsOk := loadCodexBuildClaims()
+	if claimsOk {
+		for _, f := range claims.FilesCreated {
+			recorded[strings.TrimSpace(f)] = true
+		}
+		for _, f := range claims.FilesModified {
+			recorded[strings.TrimSpace(f)] = true
+		}
+		for _, f := range claims.TestsWritten {
+			recorded[strings.TrimSpace(f)] = true
+		}
+		for _, tc := range claims.TaskClaims {
+			for _, f := range tc.FilesCreated {
+				recorded[strings.TrimSpace(f)] = true
+			}
+			for _, f := range tc.FilesModified {
+				recorded[strings.TrimSpace(f)] = true
+			}
+			for _, f := range tc.TestsWritten {
+				recorded[strings.TrimSpace(f)] = true
+			}
+		}
+	}
+
+	// From current phase manifest dispatches (if state available)
+	if state != nil && state.CurrentPhase > 0 {
+		manifest := loadCodexContinueManifest(state.CurrentPhase)
+		if manifest.Present {
+			for _, d := range manifest.Data.Dispatches {
+				for _, f := range d.Outputs {
+					recorded[strings.TrimSpace(f)] = true
+				}
+			}
+		}
+	}
+
+	// d. Compare: are changed files listed in any worker result?
+	var unreconciled []string
+	for _, f := range changedFiles {
+		if !recorded[f] {
+			unreconciled = append(unreconciled, f)
+		}
+	}
+
+	if len(unreconciled) > 0 {
+		result.HasUnreconciledChanges = true
+		result.ChangedFiles = unreconciled
+		result.Recommendation = "Run `aether build-reconcile` to record changes"
+	}
+
+	return result
+}
+
+// renderReconciliationSection renders the reconciliation block for visual mode.
+// Returns empty string when there are no unreconciled changes.
+func renderReconciliationSection(result unreconciledChangesResult) string {
+	if !result.HasUnreconciledChanges {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner("⚠️", "Reconciliation"))
+	b.WriteString(visualDividerStr())
+	fmt.Fprintf(&b, "%d unreconciled file change(s) not recorded by any worker\n", len(result.ChangedFiles))
+	for _, f := range result.ChangedFiles {
+		fmt.Fprintf(&b, "  - %s\n", f)
+	}
+	if result.Recommendation != "" {
+		fmt.Fprintf(&b, "  %s\n", result.Recommendation)
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 // Warnings are visual-mode only. JSON output uses structured colony state data.
@@ -140,7 +296,7 @@ func renderWarningsSection(warnings []string) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderBanner("\u26A0\uFE0F", "Warnings"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	for _, w := range warnings {
 		b.WriteString(w)
 		b.WriteString("\n")
@@ -176,7 +332,7 @@ func renderLoopSafetySection(loopEvents []events.Event) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderBanner("\U0001F527", "Loop Safety"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Loop Safety: %d events in last 7 days\n", len(loopEvents))
 
 	t := table.NewWriter()
@@ -236,7 +392,7 @@ func renderGateStatusSection(state colony.ColonyState, s *storage.Store) string 
 
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("status"), "Gate Status"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Phase: %d\n", state.CurrentPhase)
 	fmt.Fprintf(&b, "Gates: %d (%d passed, %d failed, %d skipped)\n", len(results), passed, failed, skipped)
 	if lastRun != "" {
@@ -506,6 +662,7 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		"tasks_total":            tasksTotal,
 		"colony_mode":            string(state.EffectiveColonyMode()),
 		"agent_delegate_session": codex.IsAgentDelegateSession(),
+		"plan_revision":          planRevisionSummary(state.Plan),
 	}
 
 	if s != nil {
@@ -513,6 +670,15 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		if len(warnings) > 0 {
 			result["warnings"] = warnings
 		}
+	}
+	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
+		result["build_attempt"] = buildAttemptSummary(attempt)
+	}
+
+	// Reconciliation section (JSON mode)
+	recon := detectUnreconciledChanges(s, &state)
+	if recon.HasUnreconciledChanges {
+		result["reconciliation"] = recon
 	}
 
 	return result
@@ -524,7 +690,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 
 	// Banner
 	b.WriteString(renderBanner(commandEmoji("status"), "Colony Status"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	// Goal (truncated to 60 chars)
 	goal := *state.Goal
@@ -649,6 +815,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	// Scope
 	fmt.Fprintf(&b, "Scope: %s\n", state.EffectiveScope())
 	fmt.Fprintf(&b, "Colony Mode: %s\n", state.EffectiveColonyMode())
+	if revision, ok := activePlanRevision(state.Plan); ok {
+		fmt.Fprintf(&b, "Plan Revision: r%d (%s) - %s\n", revision.Number, revision.ReasonType, revision.Reason)
+	} else if len(state.Plan.Phases) > 0 {
+		fmt.Fprintf(&b, "Plan Revision: legacy (%s)\n", activePlanRevisionID(state.Plan))
+	}
 
 	// Milestone
 	if state.Milestone != "" {
@@ -741,6 +912,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		b.WriteString("\nRecent Outcomes\n")
 		renderRecentWorkerOutcomes(&b, spawnSummary.RecentOutcomeEntries)
 	}
+	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
+		b.WriteString("\nBuild Attempt\n")
+		b.WriteString(renderBuildAttemptStatus(attempt))
+	}
 	if guidance := loadActiveRecoveryGuidance(state); guidance != nil {
 		b.WriteString("\nRecovery\n")
 		if guidance.Summary != "" {
@@ -758,6 +933,12 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 			b.WriteString(guidance.ReportPath)
 			b.WriteString("\n")
 		}
+	}
+
+	// Reconciliation section (visual mode)
+	recon := detectUnreconciledChanges(s, &state)
+	if reconSection := renderReconciliationSection(recon); reconSection != "" {
+		b.WriteString(reconSection)
 	}
 
 	if totalInstincts > 0 {
@@ -805,6 +986,49 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	alternatives = append(alternatives, `Run `+"`aether proof`"+` to inspect the current context and skill proof.`)
 	b.WriteString(renderNextUp(primary, alternatives...))
 
+	return b.String()
+}
+
+func renderBuildAttemptStatus(attempt buildAttemptRecord) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "  %s | %s | %d workers\n", attempt.ID, attempt.Status, len(attempt.Dispatches))
+	if attempt.RunID != "" {
+		fmt.Fprintf(&b, "  Run: %s\n", attempt.RunID)
+	}
+	if attempt.ManifestSHA256 != "" {
+		digest := attempt.ManifestSHA256
+		if len(digest) > 12 {
+			digest = digest[:12]
+		}
+		fmt.Fprintf(&b, "  Manifest: %s\n", digest)
+	}
+	workerCounts := map[string]int{}
+	for _, workerRun := range attempt.WorkerRuns {
+		workerCounts[workerRun.Status]++
+	}
+	if len(attempt.WorkerRuns) > 0 {
+		fmt.Fprintf(
+			&b,
+			"  Worker runs: %d completed | %d active | %d failed | %d blocked | %d timed out | %d cancelled\n",
+			workerCounts[buildWorkerCompleted],
+			workerCounts[buildWorkerDispatching],
+			workerCounts[buildWorkerFailed],
+			workerCounts[buildWorkerBlocked],
+			workerCounts[buildWorkerTimeout],
+			workerCounts[buildWorkerCancelled],
+		)
+	}
+	if attempt.RunID != "" {
+		if processes, err := codex.GlobalProcessTracker().ProcessesForRun(buildAttemptWorkspaceRoot(), attempt.RunID); err == nil && len(processes) > 0 {
+			fmt.Fprintf(&b, "  Provider processes: %d active\n", len(processes))
+		}
+	}
+	if attempt.Error != "" {
+		fmt.Fprintf(&b, "  Error: %s\n", compactActionText(attempt.Error, 160))
+	}
+	if attempt.RecoveryCommand != "" {
+		fmt.Fprintf(&b, "  Next: %s\n", attempt.RecoveryCommand)
+	}
 	return b.String()
 }
 

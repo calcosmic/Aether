@@ -86,8 +86,6 @@ func TestLifecycleOrchestratorsMentionReadCacheLoopHandling(t *testing.T) {
 	for _, rel := range []string{
 		".aether/skills/colony/aether-colony-build-cycle/SKILL.md",
 		".aether/commands/continue.yaml",
-		".claude/commands/ant/continue.md",
-		".opencode/commands/ant/continue.md",
 	} {
 		content, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
 		if err != nil {
@@ -100,6 +98,7 @@ func TestLifecycleOrchestratorsMentionReadCacheLoopHandling(t *testing.T) {
 			}
 		}
 	}
+	// Wrapper continue.md files now delegate to TS host; read-cache discipline lives in SKILL.md
 }
 
 func TestRuntimeBuildAndContinueBriefsIncludeReadCacheDiscipline(t *testing.T) {

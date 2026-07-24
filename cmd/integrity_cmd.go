@@ -21,8 +21,13 @@ type integrityCheck struct {
 type integrityResult struct {
 	Context          string           `json:"context"` // "source" or "consumer"
 	Channel          string           `json:"channel"`
+	Scope            string           `json:"scope,omitempty"`
+	GeneratedAt      string           `json:"generated_at,omitempty"`
 	Checks           []integrityCheck `json:"checks"`
 	Overall          string           `json:"overall"` // "ok", "warning", "critical"
+	Evidence         string           `json:"evidence,omitempty"`
+	EvidenceError    string           `json:"evidence_error,omitempty"`
+	SkippedChecks    []string         `json:"skipped_checks,omitempty"`
 	RecoveryCommands []string         `json:"recovery_commands,omitempty"`
 }
 

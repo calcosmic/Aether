@@ -16,7 +16,9 @@ import (
 // cleanup via saveGlobals.
 func TestMain(m *testing.M) {
 	origOutputMode, hadOutputMode := os.LookupEnv("AETHER_OUTPUT_MODE")
+	origHivePolicy, hadHivePolicy := os.LookupEnv(hivePolicyEnv)
 	_ = os.Setenv("AETHER_OUTPUT_MODE", "json")
+	_ = os.Setenv(hivePolicyEnv, "promote")
 
 	origStore := store
 	origStdout := stdout
@@ -69,6 +71,11 @@ func TestMain(m *testing.M) {
 	} else {
 		_ = os.Unsetenv("AETHER_OUTPUT_MODE")
 	}
+	if hadHivePolicy {
+		_ = os.Setenv(hivePolicyEnv, origHivePolicy)
+	} else {
+		_ = os.Unsetenv(hivePolicyEnv)
+	}
 
 	os.Exit(code)
 }
@@ -99,6 +106,7 @@ func saveGlobals(t *testing.T) {
 	origNarratorCommandContext := narratorCommandContext
 	origNarratorRuntimePath := narratorRuntimePath
 	origResumeNoHandoff := resumeNoHandoff
+	origColonyPrimeTemplatesPathOverride := colonyPrimeTemplatesPathOverride
 	t.Cleanup(func() {
 		store = origStore
 		stdout = origStdout
@@ -120,6 +128,8 @@ func saveGlobals(t *testing.T) {
 		narratorCommandContext = origNarratorCommandContext
 		narratorRuntimePath = origNarratorRuntimePath
 		resumeNoHandoff = origResumeNoHandoff
+		colonyPrimeTemplatesPathOverride = origColonyPrimeTemplatesPathOverride
+		resetColonyPrimeTemplatesCache()
 	})
 }
 

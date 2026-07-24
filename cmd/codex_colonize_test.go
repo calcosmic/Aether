@@ -1,11 +1,15 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -217,7 +221,7 @@ func TestColonizeIncludesDispatchContract(t *testing.T) {
 	}
 
 	visibility := stringSliceValue(contract["fallback_visibility"])
-	for _, want := range []string{"dispatch_mode", "survey_warning", "artifact_source"} {
+	for _, want := range []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"} {
 		if !containsString(visibility, want) {
 			t.Fatalf("fallback_visibility missing %q: %v", want, visibility)
 		}
@@ -1561,5 +1565,446 @@ func TestIdentifyPathogens_MultipleIssues(t *testing.T) {
 	got := identifyPathogens(facts)
 	if len(got) < 4 {
 		t.Errorf("expected at least 4 issues, got %d: %v", len(got), got)
+	}
+}
+
+// --- Phase 141 regression tests ---
+
+func createVenvNoiseFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	dirs := []string{
+		filepath.Join(root, ".venv", "lib", "site-packages", "requests"),
+		filepath.Join(root, "cmd"),
+		filepath.Join(root, "src"),
+		filepath.Join(root, "__pycache__"),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	files := map[string]string{
+		filepath.Join(".venv", "lib", "site-packages", "requests", "api.py"): `import urllib3\n`,
+		filepath.Join("cmd", "main.go"):                                      `package main\nfunc main() {}\n`,
+		filepath.Join("src", "app.py"):                                       `def app(): pass\n`,
+		filepath.Join("__pycache__", "cache.pyc"):                            "\x00\x00\x00\x00", // fake bytecode
+	}
+	for rel, content := range files {
+		target := filepath.Join(root, rel)
+		if err := os.WriteFile(target, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+	return root
+}
+
+func TestVenvNoiseExclusion(t *testing.T) {
+	root := createVenvNoiseFixture(t)
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace error: %v", err)
+	}
+
+	// No .venv references in any survey output
+	outputPaths := strings.Join(facts.TopLevelDirs, "\n") + "\n" +
+		strings.Join(facts.ConfigFiles, "\n") + "\n" +
+		strings.Join(facts.Languages, "\n") + "\n" +
+		strings.Join(facts.TestFiles, "\n")
+	for _, forbidden := range []string{".venv", "site-packages", "__pycache__"} {
+		if strings.Contains(outputPaths, forbidden) {
+			t.Errorf("survey output contains forbidden noise path %q:\n%s", forbidden, outputPaths)
+		}
+	}
+}
+
+func TestVenvNoiseExclusion_SourceFilesPreserved(t *testing.T) {
+	root := createVenvNoiseFixture(t)
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace error: %v", err)
+	}
+
+	// Source directories (src, cmd) should appear in TopLevelDirs,
+	// proving they are NOT excluded by the noise filter.
+	srcFound := false
+	cmdFound := false
+	for _, dir := range facts.TopLevelDirs {
+		if dir == "src" {
+			srcFound = true
+		}
+		if dir == "cmd" {
+			cmdFound = true
+		}
+	}
+	if !srcFound {
+		t.Errorf("src/ not found in TopLevelDirs; source directories must not be excluded. Got: %v", facts.TopLevelDirs)
+	}
+	if !cmdFound {
+		t.Errorf("cmd/ not found in TopLevelDirs; source directories must not be excluded. Got: %v", facts.TopLevelDirs)
+	}
+
+	// .venv must NOT appear in TopLevelDirs
+	for _, dir := range facts.TopLevelDirs {
+		if dir == ".venv" || strings.Contains(dir, "site-packages") {
+			t.Errorf("noise directory %q found in TopLevelDirs", dir)
+		}
+	}
+}
+
+// --- Source anchor tests (Plan 141-02) ---
+
+func createAnchorTestFixture(t *testing.T, files map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	for path, content := range files {
+		full := filepath.Join(root, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(full), err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", full, err)
+		}
+	}
+	return root
+}
+
+func TestExtractSourceAnchors_Basic(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"cmd/main.go":    "package main",
+		"src/app.ts":     "export class App {}",
+		"pkg/util.go":    "package util",
+		"README.md":      "# readme",
+		"config.json":    "{}",
+		"docs/guide.md":  "# guide",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+
+	want := []string{"cmd/main.go", "pkg/util.go", "src/app.ts"}
+	if len(anchors) != len(want) {
+		t.Fatalf("len(anchors) = %d, want %d; got %v", len(anchors), len(want), anchors)
+	}
+	for i, w := range want {
+		if anchors[i] != w {
+			t.Errorf("anchors[%d] = %q, want %q", i, anchors[i], w)
+		}
+	}
+}
+
+func TestExtractSourceAnchors_CapAt50(t *testing.T) {
+	files := make(map[string]string, 60)
+	for i := 0; i < 60; i++ {
+		name := fmt.Sprintf("file%02d.go", i)
+		files[name] = fmt.Sprintf("package p%d", i)
+	}
+	root := createAnchorTestFixture(t, files)
+
+	anchors := extractSourceAnchors(root, 50)
+	if len(anchors) != 50 {
+		t.Fatalf("len(anchors) = %d, want 50", len(anchors))
+	}
+}
+
+func TestExtractSourceAnchors_ExcludesNoise(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"main.go":                          "package main",
+		".venv/lib/api.py":                 "def api(): pass",
+		"node_modules/react/index.js":      "module.exports = {}",
+		"__pycache__/cache.py":             "# cached",
+		"src/app.go":                       "package src",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+	for _, a := range anchors {
+		if strings.Contains(a, ".venv") || strings.Contains(a, "node_modules") || strings.Contains(a, "__pycache__") {
+			t.Errorf("anchor %q should have been excluded (noise dir)", a)
+		}
+	}
+	if !containsString(anchors, "main.go") {
+		t.Errorf("anchors missing main.go: %v", anchors)
+	}
+	if !containsString(anchors, "src/app.go") {
+		t.Errorf("anchors missing src/app.go: %v", anchors)
+	}
+}
+
+func TestExtractSourceAnchors_ExcludesTests(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"main.go":      "package main",
+		"main_test.go": "package main_test",
+		"app.test.ts":  "describe('app')",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+	if !containsString(anchors, "main.go") {
+		t.Errorf("anchors missing main.go: %v", anchors)
+	}
+	for _, a := range anchors {
+		if strings.HasSuffix(a, "_test.go") || strings.HasSuffix(a, ".test.ts") {
+			t.Errorf("anchor %q should have been excluded (test file)", a)
+		}
+	}
+}
+
+func TestExtractSourceAnchors_ExcludesMinified(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"app.js":           "const x = 1;",
+		"vendor.min.js":    "var a,b,c",
+		"styles.css":       "body { }",
+		"bundle.min.css":   ".a{b:c}",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+	if !containsString(anchors, "app.js") {
+		t.Errorf("anchors missing app.js: %v", anchors)
+	}
+	for _, a := range anchors {
+		if strings.HasSuffix(a, ".min.js") || strings.HasSuffix(a, ".min.css") {
+			t.Errorf("anchor %q should have been excluded (minified)", a)
+		}
+	}
+}
+
+func TestExtractSourceAnchors_SortsByDepthThenAlpha(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"a/b/c/deep.go": "package deep",
+		"shallow.go":    "package shallow",
+		"a/mid.go":      "package mid",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+	want := []string{"shallow.go", "a/mid.go", "a/b/c/deep.go"}
+	if len(anchors) != len(want) {
+		t.Fatalf("len(anchors) = %d, want %d; got %v", len(anchors), len(want), anchors)
+	}
+	for i, w := range want {
+		if anchors[i] != w {
+			t.Errorf("anchors[%d] = %q, want %q", i, anchors[i], w)
+		}
+	}
+}
+
+func TestAnchorsWrittenToSurvey(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"cmd/main.go":   "package main",
+		"pkg/util.go":   "package util",
+		"src/app.ts":    "export class App {}",
+		"main_test.go":  "package main_test",
+		"config.json":   "{}",
+		"README.md":     "# readme",
+	})
+
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace error: %v", err)
+	}
+
+	surveyDir := t.TempDir()
+	if err := writeSurveyCompatibilityJSON(surveyDir, facts); err != nil {
+		t.Fatalf("writeSurveyCompatibilityJSON error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(surveyDir, "anchors.json"))
+	if err != nil {
+		t.Fatalf("anchors.json not found: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("anchors.json parse error: %v", err)
+	}
+
+	anchorsRaw, ok := payload["source_anchors"].([]interface{})
+	if !ok {
+		t.Fatalf("source_anchors missing or wrong type: %T", payload["source_anchors"])
+	}
+	anchors := make([]string, len(anchorsRaw))
+	for i, a := range anchorsRaw {
+		anchors[i], _ = a.(string)
+	}
+
+	if len(anchors) < 2 {
+		t.Fatalf("expected at least 2 anchors, got %d: %v", len(anchors), anchors)
+	}
+	if !containsString(anchors, "cmd/main.go") {
+		t.Errorf("anchors.json missing cmd/main.go: %v", anchors)
+	}
+	if !containsString(anchors, "pkg/util.go") {
+		t.Errorf("anchors.json missing pkg/util.go: %v", anchors)
+	}
+	if containsString(anchors, "main_test.go") {
+		t.Errorf("anchors.json should not contain test file main_test.go: %v", anchors)
+	}
+
+	count, ok := payload["anchor_count"].(float64)
+	if !ok || int(count) != len(anchors) {
+		t.Errorf("anchor_count = %v, want %d", payload["anchor_count"], len(anchors))
+	}
+}
+
+func TestSkipListDivergence(t *testing.T) {
+	// Grep cmd/*.go (non-test) for local skip-list map patterns.
+	// This prevents anyone from re-introducing a divergent skip list.
+	skipListPattern := regexp.MustCompile(`var\s+\w*[Ss]kip\w*\s*=\s*map\[string\]`)
+
+	// Resolve the cmd/ directory relative to this test file's location.
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	cmdDir := filepath.Join(filepath.Dir(thisFile))
+
+	entries, err := os.ReadDir(cmdDir)
+	if err != nil {
+		t.Fatalf("ReadDir %s: %v", cmdDir, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		f, err := os.Open(filepath.Join(cmdDir, entry.Name()))
+		if err != nil {
+			t.Fatalf("open %s: %v", entry.Name(), err)
+		}
+		scanner := bufio.NewScanner(f)
+		lineNum := 0
+		for scanner.Scan() {
+			lineNum++
+			if skipListPattern.MatchString(scanner.Text()) {
+				t.Errorf("%s:%d: local skip-list map found: %s", entry.Name(), lineNum, scanner.Text())
+			}
+		}
+		f.Close()
+	}
+}
+
+// --- Source anchor planner context tests (Plan 141-02, Task 2) ---
+
+func TestLoadSurveyContext_IncludesAnchors(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goMod := "module example.com/test\ngo 1.24\n"
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	surveyDir := filepath.Join(dataDir, "survey")
+	if err := os.MkdirAll(surveyDir, 0755); err != nil {
+		t.Fatalf("mkdir survey: %v", err)
+	}
+
+	anchorsData, _ := json.MarshalIndent(map[string]interface{}{
+		"source_anchors": []string{"cmd/main.go", "pkg/util.go"},
+		"anchor_count":   2,
+		"summary":        "Repo-owned source files for plan grounding",
+	}, "", "  ")
+	if err := os.WriteFile(filepath.Join(surveyDir, "anchors.json"), append(anchorsData, '\n'), 0644); err != nil {
+		t.Fatalf("write anchors.json: %v", err)
+	}
+
+	ctx, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("loadCodexSurveyContext error: %v", err)
+	}
+
+	if len(ctx.SourceAnchors) != 2 {
+		t.Fatalf("len(SourceAnchors) = %d, want 2; got %v", len(ctx.SourceAnchors), ctx.SourceAnchors)
+	}
+	if !containsString(ctx.SourceAnchors, "cmd/main.go") {
+		t.Errorf("SourceAnchors missing cmd/main.go: %v", ctx.SourceAnchors)
+	}
+	if !containsString(ctx.SourceAnchors, "pkg/util.go") {
+		t.Errorf("SourceAnchors missing pkg/util.go: %v", ctx.SourceAnchors)
+	}
+}
+
+func TestLoadSurveyContext_AnchorsEmptyWhenNoFile(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goMod := "module example.com/test\ngo 1.24\n"
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	ctx, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("loadCodexSurveyContext error: %v", err)
+	}
+
+	if ctx.SourceAnchors == nil {
+		t.Fatal("SourceAnchors should be empty slice, not nil")
+	}
+	if len(ctx.SourceAnchors) != 0 {
+		t.Errorf("len(SourceAnchors) = %d, want 0", len(ctx.SourceAnchors))
+	}
+}
+
+// --- Phase 144 M4L regression test (CLEAN-01) ---
+
+func TestM4LRegression_VenvProducesGroundedPlan(t *testing.T) {
+	root := createVenvNoiseFixture(t)
+
+	// Step 1: Survey must exclude .venv from output
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace error: %v", err)
+	}
+	outputPaths := strings.Join(facts.TopLevelDirs, "\n") + "\n" +
+		strings.Join(facts.ConfigFiles, "\n") + "\n" +
+		strings.Join(facts.Languages, "\n") + "\n" +
+		strings.Join(facts.TestFiles, "\n")
+	for _, forbidden := range []string{".venv", "site-packages", "__pycache__"} {
+		if strings.Contains(outputPaths, forbidden) {
+			t.Errorf("survey output contains forbidden noise path %q", forbidden)
+		}
+	}
+
+	// Step 2: Source anchors must not include .venv paths
+	anchors := extractSourceAnchors(root, 50)
+	for _, anchor := range anchors {
+		if strings.Contains(anchor, ".venv") {
+			t.Errorf("source anchor %q should not contain .venv", anchor)
+		}
+	}
+
+	// Step 3: Grounded tasks should produce zero warnings
+	groundedPhases := []colony.Phase{
+		{
+			ID:   1,
+			Name: "Build API",
+			Tasks: []colony.Task{
+				{Goal: "Edit cmd/main.go to add new endpoint"},
+			},
+		},
+	}
+	warnings := checkPlanGrounding(groundedPhases, anchors)
+	if len(warnings) != 0 {
+		t.Errorf("grounded plan should produce zero warnings, got %d: %v", len(warnings), warnings)
+	}
+
+	// Step 4: Ungrounded tasks should produce warnings when anchors exist
+	ungroundedPhases := []colony.Phase{
+		{
+			ID:   2,
+			Name: "Implementation",
+			Tasks: []colony.Task{
+				{Goal: "Build the feature"},
+			},
+		},
+	}
+	if len(anchors) == 0 {
+		t.Fatal("no source anchors extracted from fixture; test cannot verify ungrounded warnings")
+	}
+	warnings = checkPlanGrounding(ungroundedPhases, anchors)
+	if len(warnings) != 1 {
+		t.Errorf("ungrounded plan should produce exactly 1 warning, got %d: %v", len(warnings), warnings)
+	}
+	if warnings[0].PhaseID != 2 {
+		t.Errorf("warning PhaseID = %d, want 2", warnings[0].PhaseID)
 	}
 }

@@ -134,6 +134,79 @@ func TestMaterializeOrchestratorBoundaryClarificationsDedupesBySource(t *testing
 	}
 }
 
+func TestMaterializeOrchestratorBoundaryClarificationsIgnoresStaleSameSourceDecision(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Build scoped boundary decisions"
+	currentSession := "session_current_boundary"
+	oldSession := "session_old_boundary"
+	initializedAt := time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC)
+	if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		SessionID:     &currentSession,
+		InitializedAt: &initializedAt,
+	}); err != nil {
+		t.Fatalf("seed colony state: %v", err)
+	}
+
+	source := orchestratorBoundaryClarificationSource("build", 2, "build-scope", true)
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{
+		Decisions: []PendingDecision{{
+			ID:          "pd_old_build_boundary",
+			Type:        clarificationDecisionType,
+			Description: formatClarificationDescription("What old boundary should builders protect?", []string{"old scope"}),
+			Source:      source,
+			Resolved:    true,
+			Resolution:  "Use the old scope.",
+			CreatedAt:   "2026-05-11T10:00:00Z",
+			ResolvedAt:  "2026-05-11T10:05:00Z",
+			GoalHash:    pendingDecisionGoalHash(goal),
+			SessionID:   oldSession,
+		}},
+	}); err != nil {
+		t.Fatalf("seed old boundary decision: %v", err)
+	}
+
+	questions, createdCount, existingCount, err := materializeOrchestratorBoundaryClarifications("build", 2, loadPendingDecisionFile(), []discussQuestion{{
+		Category:       "build-scope",
+		Question:       "What boundary should builders protect for Phase 2?",
+		Options:        []string{"phase tasks only", "pause"},
+		HardConstraint: true,
+	}}, 1, false)
+	if err != nil {
+		t.Fatalf("materialize boundary clarifications: %v", err)
+	}
+	if createdCount != 1 || existingCount != 0 || len(questions) != 1 {
+		t.Fatalf("created=%d existing=%d questions=%d, want fresh current-scope question", createdCount, existingCount, len(questions))
+	}
+	if questions[0].ID == "pd_old_build_boundary" {
+		t.Fatalf("reused stale old-session boundary question: %#v", questions[0])
+	}
+
+	var file PendingDecisionFile
+	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+		t.Fatalf("load pending decisions: %v", err)
+	}
+	if len(file.Decisions) != 2 {
+		t.Fatalf("decisions = %d, want old audit entry plus new current entry", len(file.Decisions))
+	}
+	currentScoped := 0
+	for _, decision := range file.Decisions {
+		if decision.SessionID == currentSession && decision.Source == source && !decision.Resolved {
+			currentScoped++
+		}
+	}
+	if currentScoped != 1 {
+		t.Fatalf("current scoped unresolved boundary decisions = %d, want 1", currentScoped)
+	}
+}
+
 func TestMaterializeOrchestratorBoundaryClarificationsStampsScopeOnNewDecisions(t *testing.T) {
 	saveGlobals(t)
 

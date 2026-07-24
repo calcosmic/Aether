@@ -224,6 +224,8 @@ func dispatchRecoverRepair(issue HealthIssue, dataDir string, force bool) Repair
 		return repairDirtyWorktree(issue, dataDir, force)
 	case "bad_manifest":
 		return repairBadManifest(issue, dataDir)
+	case "unreconciled_worker_changes":
+		return repairUnreconciledWorkerChanges(issue, dataDir)
 	default:
 		return RepairRecord{
 			Category: issue.Category,
@@ -781,4 +783,23 @@ func repairBadManifest(issue HealthIssue, dataDir string) RepairRecord {
 		record.Error = "unrecognized bad_manifest sub-type"
 		return record
 	}
+}
+
+// ---------------------------------------------------------------------------
+// REPAIR-08: Unreconciled Worker Changes
+// ---------------------------------------------------------------------------
+
+// repairUnreconciledWorkerChanges writes a placeholder build-reconcile record
+// so the user knows what command to run. The actual reconciliation is handled
+// by the build-reconcile command (not yet implemented), so this repair is
+// informational.
+func repairUnreconciledWorkerChanges(issue HealthIssue, dataDir string) RepairRecord {
+	record := RepairRecord{
+		Category: issue.Category,
+		File:     issue.File,
+		Action:   "prompt_build_reconcile",
+		After:    "Run `aether build-reconcile` to record changes",
+		Success:  true,
+	}
+	return record
 }

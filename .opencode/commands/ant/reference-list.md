@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/reference-list.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-reference-list
-description: "List installed global references"
+description: "📋 List installed global references"
 ---
 
 Use the Go `aether` CLI as the source of truth.

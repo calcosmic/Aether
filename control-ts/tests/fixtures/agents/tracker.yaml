@@ -1,0 +1,16 @@
+id: tracker
+role: tracker
+prompt_file: ../../colony/prompts/tracker.md
+allowed_tools:
+- read
+- bash
+- grep
+- glob
+- write
+tier: specialist
+model: opus
+color: orange
+description: Use this agent to investigate bugs systematically and identify root causes.
+  Returns root cause analysis AND a suggested fix — Builder applies the fix. Tracker
+  has scoped Write for persisting findings to the bugs domain review ledger only.
+  Do NOT use for implementation (use aether-builder) or refactoring (use aether-weaver).

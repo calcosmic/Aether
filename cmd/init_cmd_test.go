@@ -1259,3 +1259,85 @@ func TestInitCmd_ClearsReviews_NoReviewsDir(t *testing.T) {
 		t.Errorf("goal should be 'New colony goal', got %v", newState.Goal)
 	}
 }
+
+func TestInitCmd_ReplaceSessionJSON(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	s, _ := storage.NewStore(dataDir)
+
+	// Create a sealed colony state so init allows re-init
+	writeSealedState(t, dataDir, "Old goal")
+
+	// Write an old session.json
+	oldSession := colony.SessionFile{
+		SessionID:  "old-session-id",
+		ColonyGoal: "Old goal",
+		StartedAt:  "2026-01-01T00:00:00Z",
+	}
+	if err := s.SaveJSON("session.json", oldSession); err != nil {
+		t.Fatalf("write old session: %v", err)
+	}
+
+	// Run init with a new goal
+	rootCmd.SetArgs([]string{"init", "New goal"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned error: %v", err)
+	}
+
+	// Verify session.json was replaced with a new session
+	var newSession colony.SessionFile
+	if err := s.LoadJSON("session.json", &newSession); err != nil {
+		t.Fatalf("load new session: %v", err)
+	}
+	if newSession.SessionID == "" {
+		t.Error("new session.session_id should not be empty")
+	}
+	if newSession.SessionID == "old-session-id" {
+		t.Errorf("session.session_id was not replaced: still %q", newSession.SessionID)
+	}
+	if newSession.ColonyGoal != "New goal" {
+		t.Errorf("session.colony_goal = %q, want 'New goal'", newSession.ColonyGoal)
+	}
+}
+
+func TestInitCmd_SessionJSONNoErrorWhenMissing(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	// No session.json exists, no COLONY_STATE.json exists either
+	rootCmd.SetArgs([]string{"init", "First goal"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned error: %v", err)
+	}
+
+	// Verify session.json was created
+	s, _ := storage.NewStore(dataDir)
+	var session colony.SessionFile
+	if err := s.LoadJSON("session.json", &session); err != nil {
+		t.Fatalf("session.json not found: %v", err)
+	}
+	if session.ColonyGoal != "First goal" {
+		t.Errorf("session.colony_goal = %q, want 'First goal'", session.ColonyGoal)
+	}
+}

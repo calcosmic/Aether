@@ -13,22 +13,26 @@ import (
 // It maps to the codexBuildDispatch from cmd/codex_build.go but lives in the
 // pkg layer to avoid cmd dependencies.
 type WorkerDispatch struct {
-	ID               string        // Unique dispatch identifier
-	WorkerName       string        // Deterministic ant name (e.g., "Hammer-23")
-	AgentName        string        // TOML agent name (e.g., "aether-builder")
-	AgentTOMLPath    string        // Absolute path to the agent's TOML file
-	Caste            string        // Worker caste (builder, watcher, scout, etc.)
-	TaskID           string        // Task identifier from the build dispatch
-	TaskBrief        string        // The markdown task brief content
-	ContextCapsule   string        // The assembled compact colony-prime context for the worker
-	Wave             int           // Wave number for dependency ordering (1-based)
-	Root             string        // Working tree root for the worker process
-	Timeout          time.Duration // Per-worker timeout override
-	SkillSection     string        // Skill guidance content injected into worker prompts
-	PheromoneSection string        // Pheromone signal content injected into worker prompts
-	HandoffSection   string        // Worker handoff context section
-	Workflow         string        // Workflow type (build, continue, etc.)
-	Phase            int           // Phase number
+	ID                string            // Unique dispatch identifier
+	WorkerName        string            // Deterministic ant name (e.g., "Hammer-23")
+	AgentName         string            // TOML agent name (e.g., "aether-builder")
+	AgentTOMLPath     string            // Absolute path to the agent's TOML file
+	Caste             string            // Worker caste (builder, watcher, scout, etc.)
+	TaskID            string            // Task identifier from the build dispatch
+	TaskBrief         string            // The markdown task brief content
+	ContextCapsule    string            // The assembled compact colony-prime context for the worker
+	Wave              int               // Wave number for dependency ordering (1-based)
+	Root              string            // Working tree root for the worker process
+	TrackingRoot      string            // Owning colony root for durable process tracking
+	Timeout           time.Duration     // Per-worker timeout override
+	SkillSection      string            // Skill guidance content injected into worker prompts
+	PheromoneSection  string            // Pheromone signal content injected into worker prompts
+	HandoffSection    string            // Worker handoff context section
+	Workflow          string            // Workflow type (build, continue, etc.)
+	Phase             int               // Phase number
+	PermissionProfile PermissionProfile // Canonical host permission request
+	ExecutionBinding  *ExecutionBinding // Durable build-run identity
+	ProviderRunID     string            // Unique provider invocation within the build run
 }
 
 // DispatchResult captures the outcome of a single worker dispatch within a batch.
@@ -161,18 +165,22 @@ func invokeDispatch(ctx context.Context, invoker WorkerInvoker, d WorkerDispatch
 	}
 
 	config := WorkerConfig{
-		AgentName:        d.AgentName,
-		AgentTOMLPath:    d.AgentTOMLPath,
-		Caste:            d.Caste,
-		WorkerName:       d.WorkerName,
-		TaskID:           d.TaskID,
-		TaskBrief:        d.TaskBrief,
-		ContextCapsule:   d.ContextCapsule,
-		Root:             d.Root,
-		Timeout:          d.Timeout,
-		SkillSection:     d.SkillSection,
-		PheromoneSection: d.PheromoneSection,
-		HandoffSection:   d.HandoffSection,
+		AgentName:         d.AgentName,
+		AgentTOMLPath:     d.AgentTOMLPath,
+		Caste:             d.Caste,
+		WorkerName:        d.WorkerName,
+		TaskID:            d.TaskID,
+		TaskBrief:         d.TaskBrief,
+		ContextCapsule:    d.ContextCapsule,
+		Root:              d.Root,
+		TrackingRoot:      d.TrackingRoot,
+		Timeout:           d.Timeout,
+		SkillSection:      d.SkillSection,
+		PheromoneSection:  d.PheromoneSection,
+		HandoffSection:    d.HandoffSection,
+		PermissionProfile: d.PermissionProfile,
+		ExecutionBinding:  d.ExecutionBinding,
+		ProviderRunID:     d.ProviderRunID,
 	}
 
 	emitDispatchLifecycle(observer, d, "starting", "", nil, nil)

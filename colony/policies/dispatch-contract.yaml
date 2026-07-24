@@ -1,0 +1,42 @@
+dispatch_contract:
+  max_workers_per_phase: 10
+  spawn_depth_limits:
+    0: 4
+    1: 4
+    2: 2
+    3: 0
+  timeout_defaults:
+    build: 600
+    continue: 300
+    plan: 300
+    verify: 180
+  execution_models:
+    survey: "1 wave, parallel read-only worker execution"
+    planning: "2 staged workers, scout then route-setter"
+    planning_extended: "%d staged planning workers, scout plus route-setter with supporting castes"
+  deadline_policies:
+    survey: "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets."
+    planning: "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked."
+  dependency_behaviors:
+    survey: "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher."
+    planning: "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first."
+    planning_extended: "Real worker dispatch requires an authenticated platform dispatcher. Supporting planning castes may contribute evidence, and route-setter finalization is selected by caste identity rather than fixed array position."
+  fallback_behaviors:
+    survey: "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first."
+    planning: "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first."
+  fallback_visibility:
+    survey:
+      - dispatch_mode
+      - survey_warning
+      - provider_diagnostics
+      - artifact_source
+    planning:
+      - dispatch_mode
+      - planning_warning
+      - provider_diagnostics
+      - artifact_source
+      - plan_source
+      - planning_loop
+  result_collection_policies:
+    survey: "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files."
+    planning: "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid."

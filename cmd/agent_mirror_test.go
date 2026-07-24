@@ -38,9 +38,32 @@ func TestCanonicalAgentSourcesRemainAligned(t *testing.T) {
 	claudeNames := agentBaseNames(t, claudeDir, ".md")
 	opencodeNames := agentBaseNames(t, opencodeDir, ".md")
 	codexNames := listShippedAetherCodexAgentBaseNames(t, codexDir)
+	if !containsAgentBaseName(opencodeNames, "aether-worker-router") {
+		t.Fatal("OpenCode is missing the required infrastructure agent aether-worker-router")
+	}
+	opencodeNames = removeAgentBaseName(opencodeNames, "aether-worker-router")
 
 	assertSameAgentBaseNames(t, "OpenCode", claudeNames, opencodeNames)
 	assertSameAgentBaseNames(t, "Codex", claudeNames, codexNames)
+}
+
+func containsAgentBaseName(names []string, target string) bool {
+	for _, name := range names {
+		if name == target {
+			return true
+		}
+	}
+	return false
+}
+
+func removeAgentBaseName(names []string, target string) []string {
+	filtered := make([]string, 0, len(names))
+	for _, name := range names {
+		if name != target {
+			filtered = append(filtered, name)
+		}
+	}
+	return filtered
 }
 
 func agentBaseNames(t *testing.T, dir, ext string) []string {

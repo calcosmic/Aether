@@ -126,7 +126,8 @@ func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interfac
 	staleClarificationCount := countClarifications(stalePending)
 	activeSignals := activeSignalTexts()
 
-	questions, createdCount, existingCount, err := materializeDiscussQuestions(goal, survey, pending, activeSignals, maxQuestions, dryRun, scope)
+	analyze := runDiscussAnalyze(root, goal)
+	questions, createdCount, existingCount, err := materializeDiscussQuestions(goal, survey, analyze, pending, activeSignals, maxQuestions, dryRun, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -242,6 +243,13 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 		redirectEmitted = true
 	}
 
+	// Detect contradictory resolved decisions and emit FEEDBACK pheromones.
+	// Non-blocking: errors from pheromone creation are silently ignored.
+	conflicts := detectDecisionConflicts(file.Decisions)
+	for _, conflict := range conflicts {
+		_, _ = createPheromoneSignal("FEEDBACK", conflict, "discuss", "decision conflict detection", "", 0.5, "low")
+	}
+
 	if tracer != nil {
 		var state colony.ColonyState
 		if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
@@ -256,7 +264,7 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	remaining := countPendingClarifications(activeFile)
 	next := "Run `aether discuss` to review remaining questions before planning."
 	if remaining == 0 {
-		next = "Run `aether plan` to generate phases with the clarified intent."
+		next = nextAfterClarificationResolution(file.Decisions[found])
 	}
 
 	return map[string]interface{}{
@@ -270,10 +278,10 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	}, nil
 }
 
-func materializeDiscussQuestions(goal string, survey codexSurveyContext, pending PendingDecisionFile, activeSignals []string, maxQuestions int, dryRun bool, scope pendingDecisionScope) ([]discussQuestion, int, int, error) {
+func materializeDiscussQuestions(goal string, survey codexSurveyContext, analyze analyzeScanData, pending PendingDecisionFile, activeSignals []string, maxQuestions int, dryRun bool, scope pendingDecisionScope) ([]discussQuestion, int, int, error) {
 	activePending, _ := filterPendingDecisionFileForScope(pending, scope)
 	existingBySource := clarificationDecisionIndex(activePending)
-	candidates := generateDiscussCandidates(goal, survey)
+	candidates := generateDiscussCandidates(goal, survey, analyze)
 	questions := make([]discussQuestion, 0, maxQuestions)
 	createdCount := 0
 	existingCount := 0
@@ -325,23 +333,106 @@ func materializeDiscussQuestions(goal string, survey codexSurveyContext, pending
 	return questions, createdCount, existingCount, nil
 }
 
-func generateDiscussCandidates(goal string, survey codexSurveyContext) []discussQuestion {
+func generateDiscussCandidates(goal string, survey codexSurveyContext, analyze analyzeScanData) []discussQuestion {
 	goalLower := strings.ToLower(goal)
 	candidates := []discussQuestion{
 		buildDiscussSurfaceQuestion(survey),
 		buildDiscussIntegrationQuestion(goalLower, survey),
+	}
+	candidates = append(candidates, rankDiscussAnalyzeQuestions(goalLower, analyze)...)
+	candidates = append(candidates,
 		buildDiscussScopeQuestion(goalLower),
 		buildDiscussVerificationQuestion(survey),
-	}
+	)
 
 	filtered := make([]discussQuestion, 0, len(candidates))
+	seen := map[string]bool{}
 	for _, candidate := range candidates {
 		if strings.TrimSpace(candidate.Question) == "" || strings.TrimSpace(candidate.Source) == "" {
 			continue
 		}
+		source := strings.TrimSpace(candidate.Source)
+		if seen[source] {
+			continue
+		}
+		seen[source] = true
 		filtered = append(filtered, candidate)
 	}
 	return filtered
+}
+
+func rankDiscussAnalyzeQuestions(goalLower string, scan analyzeScanData) []discussQuestion {
+	if !discussAnalyzeHasContext(scan) {
+		return nil
+	}
+	questions := generateAnalyzeQuestions(scan)
+	type scoredQuestion struct {
+		score    int
+		question discussQuestion
+	}
+	scored := make([]scoredQuestion, 0, len(questions))
+	for _, question := range questions {
+		if strings.TrimSpace(question.Question) == "" || strings.TrimSpace(question.Source) == "" {
+			continue
+		}
+		score := 10
+		switch question.Category {
+		case "architecture":
+			score += 20
+			if len(scan.TopLevelDirs) > 3 || scan.HasDockerCompose || scan.HasK8s {
+				score += 20
+			}
+			if containsAnyOracleKeyword(goalLower, "architecture", "refactor", "module", "surface", "system") {
+				score += 20
+			}
+		case "dependencies":
+			score += 15 + len(scan.Frameworks)*3 + len(scan.Languages)*2
+			if containsAnyOracleKeyword(goalLower, "dependency", "library", "package", "tool", "integration") {
+				score += 20
+			}
+		case "testing_infrastructure":
+			score += len(scan.Governance.TestFrameworks) * 5
+			if containsAnyOracleKeyword(goalLower, "test", "verify", "coverage", "quality", "regression") {
+				score += 25
+			}
+		case "deployment":
+			if scan.HasDocker || scan.HasDockerCompose || scan.HasK8s {
+				score += 30
+			}
+			if containsAnyOracleKeyword(goalLower, "deploy", "release", "production", "ship") {
+				score += 20
+			}
+		case "performance":
+			if containsAnyOracleKeyword(goalLower, "performance", "speed", "latency", "throughput", "scale") {
+				score += 35
+			}
+		}
+		scored = append(scored, scoredQuestion{score: score, question: question})
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score == scored[j].score {
+			return scored[i].question.Category < scored[j].question.Category
+		}
+		return scored[i].score > scored[j].score
+	})
+	result := make([]discussQuestion, 0, len(scored))
+	for _, item := range scored {
+		result = append(result, item.question)
+	}
+	return result
+}
+
+func discussAnalyzeHasContext(scan analyzeScanData) bool {
+	return strings.TrimSpace(scan.DetectedType) != "" && scan.DetectedType != "unknown" ||
+		len(scan.Languages) > 0 ||
+		len(scan.Frameworks) > 0 ||
+		len(scan.TopLevelDirs) > 0 ||
+		len(scan.Governance.TestFrameworks) > 0 ||
+		len(scan.Governance.CIConfigs) > 0 ||
+		scan.HasDocker ||
+		scan.HasDockerCompose ||
+		scan.HasK8s ||
+		scan.HasMakefile
 }
 
 func buildDiscussSurfaceQuestion(survey codexSurveyContext) discussQuestion {
@@ -464,7 +555,7 @@ func discussionStatus(questionCount, createdCount, existingCount int) string {
 func renderDiscussVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧭", "Discuss"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	if resolved, _ := result["resolved"].(bool); resolved {
 		b.WriteString("Clarification locked in.\n")
@@ -599,12 +690,22 @@ func pendingDecisionMatchesScope(decision PendingDecision, scope pendingDecision
 	// stronger scope boundary.
 	scopeSession := strings.TrimSpace(scope.SessionID)
 	decisionSession := strings.TrimSpace(decision.SessionID)
+	scopeGoal := strings.TrimSpace(scope.GoalHash)
+	decisionGoal := strings.TrimSpace(decision.GoalHash)
 	if scopeSession != "" && decisionSession != "" {
 		return scopeSession == decisionSession
 	}
+	if scopeSession != "" && decisionSession == "" && scope.InitializedAt != nil {
+		createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(decision.CreatedAt))
+		if err != nil || createdAt.Before(*scope.InitializedAt) {
+			return false
+		}
+		if scopeGoal != "" && decisionGoal != "" {
+			return scopeGoal == decisionGoal
+		}
+		return true
+	}
 
-	scopeGoal := strings.TrimSpace(scope.GoalHash)
-	decisionGoal := strings.TrimSpace(decision.GoalHash)
 	if scopeGoal != "" && decisionGoal != "" {
 		return scopeGoal == decisionGoal
 	}
@@ -717,10 +818,15 @@ func activeSignalTexts() []string {
 
 func clarificationSuppressedBySignals(category string, activeSignals []string) bool {
 	keywords := map[string][]string{
-		"surface":      {"react", "vue", "svelte", "stack", "surface", "module", "backend", "frontend"},
-		"integration":  {"api", "contract", "integration", "endpoint", "data", "adapter"},
-		"scope":        {"scope", "slice", "prototype", "polish", "cleanup", "breadth"},
-		"verification": {"test", "coverage", "qa", "verify", "validation"},
+		"surface":                {"react", "vue", "svelte", "stack", "surface", "module", "backend", "frontend"},
+		"integration":            {"api", "contract", "integration", "endpoint", "data", "adapter"},
+		"scope":                  {"scope", "slice", "prototype", "polish", "cleanup", "breadth"},
+		"verification":           {"test", "coverage", "qa", "verify", "validation"},
+		"architecture":           {"architecture", "monolith", "module", "service", "boundary", "stack"},
+		"dependencies":           {"dependency", "dependencies", "package", "library", "contract", "integration"},
+		"testing_infrastructure": {"test", "coverage", "qa", "verify", "validation", "regression"},
+		"deployment":             {"deploy", "deployment", "docker", "kubernetes", "release", "production"},
+		"performance":            {"performance", "speed", "latency", "throughput", "scale"},
 	}
 	for _, signal := range activeSignals {
 		for _, keyword := range keywords[category] {
@@ -896,6 +1002,38 @@ func buildClarificationRedirect(decision PendingDecision, answer string) string 
 	return fmt.Sprintf("%s: %s", question, answer)
 }
 
+func nextAfterClarificationResolution(decision PendingDecision) string {
+	if command := orchestratorBoundaryAfterDiscussCommand(decision.Source); command != "" {
+		return fmt.Sprintf("Run `%s` to request a fresh manifest with the clarified boundary.", command)
+	}
+	return "Run `aether plan` to generate phases with the clarified intent."
+}
+
+func orchestratorBoundaryAfterDiscussCommand(source string) string {
+	parts := strings.Split(strings.TrimSpace(source), ":")
+	if len(parts) < 2 || parts[0] != orchestratorBoundarySourcePrefix {
+		return ""
+	}
+	workflow := normalizeOrchestratorBoundarySourcePart(parts[1], "")
+	switch workflow {
+	case "plan":
+		return "aether plan"
+	case "build":
+		if len(parts) >= 4 && parts[2] == "phase" {
+			if phase := strings.TrimSpace(parts[3]); phase != "" && phase != "0" {
+				return "aether build " + phase
+			}
+		}
+		return "aether build"
+	case "continue":
+		return "aether continue"
+	case "seal":
+		return "aether seal"
+	default:
+		return ""
+	}
+}
+
 func discussSource(category string, hard bool) string {
 	if hard {
 		return discussSourcePrefix + category + ":hard"
@@ -926,4 +1064,74 @@ func derefGoal(goal *string) string {
 		return ""
 	}
 	return *goal
+}
+
+// contradictionPair defines a pair of terms that contradict each other when
+// both appear across resolved decisions. Positive and negative are lowercased
+// keywords; category is a human-readable label for the conflict message.
+type contradictionPair struct {
+	positive string
+	negative string
+	category string
+}
+
+// contradictionPairs is a conservative list of genuinely contradictory term
+// pairs. Keep the list small -- only add pairs where seeing both terms in
+// resolved decisions clearly signals divergent intent.
+var contradictionPairs = []contradictionPair{
+	{"postgresql", "serverless", "database"},
+	{"mysql", "serverless", "database"},
+	{"sqlite", "serverless", "database"},
+	{"monolith", "microservice", "architecture"},
+	{"react", "vue", "frontend"},
+	{"react", "svelte", "frontend"},
+	{"rest", "graphql", "api"},
+	{"docker", "no docker", "deployment"},
+	{"kubernetes", "no kubernetes", "deployment"},
+}
+
+// detectDecisionConflicts examines resolved decisions for contradictory
+// keyword pairs. For each contradiction pair where one resolved decision
+// contains the positive keyword and another contains the negative keyword,
+// it appends a formatted conflict string. Returns nil if no conflicts are
+// found. Unresolved decisions and decisions with empty Resolution text are
+// ignored.
+func detectDecisionConflicts(decisions []PendingDecision) []string {
+	if len(decisions) < 2 {
+		return nil
+	}
+
+	var resolutions []string
+	for _, d := range decisions {
+		if !d.Resolved || strings.TrimSpace(d.Resolution) == "" {
+			continue
+		}
+		resolutions = append(resolutions, strings.ToLower(d.Resolution))
+	}
+
+	if len(resolutions) < 2 {
+		return nil
+	}
+
+	var conflicts []string
+	for _, pair := range contradictionPairs {
+		hasPositive := false
+		hasNegative := false
+		for _, r := range resolutions {
+			if strings.Contains(r, pair.positive) {
+				hasPositive = true
+			}
+			if strings.Contains(r, pair.negative) {
+				hasNegative = true
+			}
+		}
+		if hasPositive && hasNegative {
+			conflicts = append(conflicts, fmt.Sprintf("Possible %s conflict: decisions reference both '%s' and '%s'", pair.category, pair.positive, pair.negative))
+		}
+	}
+
+	if len(conflicts) == 0 {
+		return nil
+	}
+	return conflicts
 }

@@ -56,49 +56,66 @@ For `plan`, `build`, heavy external-review `continue`, and `seal`, inspect
 finalizer packet. If guidance is active or `next` is `aether discuss`, stop the
 lifecycle flow, show the guidance summary, route to `aether discuss`, and tell
 the user to rerun `after_discuss_next` after the answer is resolved. Then request
-a fresh plan-only manifest; never reuse the pre-discuss manifest, and never ask,
+a fresh host manifest; never reuse the pre-discuss manifest, and never ask,
 answer, or store boundary questions in Codex chat or wrapper state.
 
 ## Plan Flow
 
-1. Select planning depth and decomposition depth unless arguments already make
+1. If the colony already has completed phases and the user is revising future
+   work, keep the existing goal and pass `--refresh`, `--revision-type`, and a
+   concrete `--revision-reason` to every host-plan iteration. Research and
+   verification revisions also require one or more repository-relative
+   `--revision-evidence` files. Do not create a new colony just to replan.
+2. Select planning depth and decomposition depth unless arguments already make
    them clear.
-2. Run `AETHER_OUTPUT_MODE=visual aether status`.
-3. Run:
+3. Run `AETHER_OUTPUT_MODE=visual aether status`.
+4. Run the TS host manifest command for one planning iteration:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice>
+aether host plan --depth <choice> --planning-depth <choice>
 ```
 
-4. Save the full JSON envelope to a temporary manifest file outside
+5. Save the full JSON envelope to a temporary manifest file outside
    `.aether/data/`.
-5. Parse `result.plan_manifest` or `result.planning_manifest`. Never parse
-   visual output as state.
-6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
+6. Parse `result.plan_manifest` or `result.planning_manifest`. Never parse
+   visual output as state. Treat `planning_run_id`, `iteration`,
+   `target_confidence`, `max_iterations`, `previous_confidence`,
+   `selected_gaps`, `previous_plan_draft`, and `expected_workers` as
+   authoritative loop state.
+7. When the manifest includes `revision`, preserve it and the worker briefs
+   verbatim. Completed phases are immutable, and Route-Setter must output only
+   replacement unfinished phases; Go assigns their final phase and task IDs.
+8. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
    planning workers.
-7. If runtime reports unresolved clarifications, route to `aether discuss`
+9. If runtime reports unresolved clarifications, route to `aether discuss`
    unless the user explicitly approves continuing with assumptions.
-8. Render the runtime-owned spawn ceremony:
+10. Render the runtime-owned spawn ceremony:
 
 ```bash
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>
 ```
 
-9. Spawn the runtime-specified Scout and Route-Setter workers using visible
-   live Task/subagent panels with caste-labelled descriptions, manifest
-   names, castes, task IDs, briefs, and `skill_section` values.
-10. Before each manifest wave, render `aether ceremony wave-start` for that
+11. Spawn exactly one runtime-specified Scout and then exactly one
+   runtime-specified Route-Setter using visible live Task/subagent panels with
+   caste-labelled descriptions, manifest names, castes, task IDs, briefs, and
+   `skill_section` values. Do not add extra planning workers.
+12. Before each manifest wave, render `aether ceremony wave-start` for that
    workflow and execution wave.
-11. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
+13. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
    loop guard, output contract, and stop condition. If a planning worker keeps
    rereading the same file or command, mark it `blocked` with a concrete
    blocker instead of manually reconciling it as completed.
-12. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
-   consumes Scout findings directly instead of re-running the survey.
-13. Call `aether spawn-log` before each planning worker and
+14. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
+   consumes Scout findings directly instead of re-running the survey. If the
+   manifest includes `selected_gaps` or `previous_plan_draft`, require fresh
+   evidence or resolved gaps before confidence may rise.
+15. Call `aether spawn-log` before each planning worker and
    `aether spawn-complete` after each terminal result.
-14. After each terminal result, render `aether ceremony worker-complete`.
-15. Finalize through:
+16. After each terminal result, render `aether ceremony worker-complete`.
+17. Build the completion packet with `planning_run_id`, `iteration`, Scout
+   `scout_report`, Route-Setter `phase_plan`, and a compact `source_summary`.
+   Never reuse a manifest or completion packet across iterations. Finalize
+   through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>
@@ -110,12 +127,21 @@ Then render the wrapper closeout:
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <worker completion JSON>
 ```
 
+If the JSON finalizer returns `requires_next_iteration: true`, do not render
+final closeout and do not claim the colony plan is complete. Request a fresh
+`aether host plan` manifest with the same depth, planning depth, target, and
+max-iteration controls, then repeat Scout -> Route-Setter -> `plan-finalize`.
+Only `plan-finalize` may decide that the target was reached, the loop stalled,
+the max iteration cap was hit, or explicit `--accept` finalized below target.
+For a completed-prefix revision, report the accepted `plan_revision` and never
+dispatch a task from the superseded revision.
+
 ## Colonize Flow
 
 1. Run:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether colonize --plan-only <args>
+aether host colonize <args>
 ```
 
 2. Save the full JSON envelope to a temporary manifest file outside
@@ -150,15 +176,15 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --complet
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status`.
 2. Surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.
-3. Run:
+3. Run the TS host manifest command:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether build <phase> --plan-only
+aether host build --dry-run <phase>
 ```
 
 4. Save the full JSON envelope to a temporary manifest file outside
    `.aether/data/`.
-5. Parse `result.dispatch_manifest`.
+5. Parse `result.manifest.dispatch_manifest`.
 6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
    build workers.
 7. Render the user-facing spawn ceremony:
@@ -180,16 +206,25 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 12. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
 13. After each terminal result, render `aether ceremony worker-complete`.
-14. Finalize through:
+14. Stage the accepted completion packet in the Go-owned attempt journal:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker completion JSON>
+AETHER_OUTPUT_MODE=json aether build-completion-stage <phase> --completion-file <worker completion JSON>
+```
+
+Parse `result.completion_path`. If the wrapper stops after this point, `aether resume`
+must offer this exact packet rather than redispatching workers.
+
+15. Finalize through the durable packet only:
+
+```bash
+AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path>
 ```
 
 Then render the wrapper closeout:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <worker completion JSON>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>
 ```
 
 ## Continue Flow
@@ -197,19 +232,19 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion
 Default path:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard <args>
+AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard <args>
 ```
 
-Use external review orchestration only when the user explicitly requested heavy
-review or the runtime asks for wrapper-spawned review workers. In that case,
-request the runtime manifest:
+Use external review orchestration only when the user explicitly requested
+`--classic-ceremony`, heavy review, or the runtime asks for wrapper-spawned
+review workers. In that case, request the runtime manifest:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy <args>
+aether host continue --dry-run --classic-ceremony <args>
 ```
 
 Save the JSON manifest envelope to a temporary file, parse
-`result.continue_manifest`, apply the Guided Boundary Gate before rendering
+`result.manifest.continue_manifest`, apply the Guided Boundary Gate before rendering
 spawn ceremonies or spawning reviewers, and spawn only the planned reviewers as
 visible live Task/subagent panels with caste-labelled descriptions. Use
 `aether ceremony spawn-plan`, `aether ceremony wave-start`, and
@@ -269,7 +304,7 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow swarm --completion
 2. Run:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether seal --plan-only <args>
+aether host seal <args>
 ```
 
 3. If the runtime returns blockers or recovery guidance, surface that and stop.
@@ -305,6 +340,7 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-
 - Do not write `.aether/data/COLONY_STATE.json`, `session.json`, `CONTEXT.md`,
   `HANDOFF.md`, planning artifacts, or pheromone files by hand.
 - Do not invent worker names, castes, task IDs, waves, or dispatches.
+- Preserve each manifest worker's typed `permission_profile`. Never broaden `repository_read_only`, and never present `behavioral_restrictions` under `workspace_write` as host-enforced isolation.
 - Do not parse visual output for authoritative state. Use JSON mode for
   manifests.
 - If Claude/OpenCode lifecycle wrapper behavior changes, update the matching

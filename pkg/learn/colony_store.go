@@ -28,6 +28,7 @@ func NewColonyStore(store *storage.Store) *ColonyStore {
 }
 
 // loadEntries reads the entries from disk. Returns empty slice if file does not exist.
+// Backward compatibility: entries without Status default to StatusHypothesis.
 func (c *ColonyStore) loadEntries() ([]Entry, error) {
 	var entries []Entry
 	err := c.store.LoadJSON(entriesFile, &entries)
@@ -36,6 +37,11 @@ func (c *ColonyStore) loadEntries() ([]Entry, error) {
 			return []Entry{}, nil
 		}
 		return nil, fmt.Errorf("learn: load entries: %w", err)
+	}
+	for i := range entries {
+		if entries[i].Status == "" {
+			entries[i].Status = StatusHypothesis
+		}
 	}
 	return entries, nil
 }
@@ -76,11 +82,15 @@ func (c *ColonyStore) updateEntries(mutate func([]Entry) ([]Entry, error)) error
 }
 
 // Add writes an entry to the store and assigns an ID if empty.
+// If Status is empty, it defaults to StatusHypothesis.
 func (c *ColonyStore) Add(entry Entry) error {
 	var assignedID string
 	err := c.updateEntries(func(entries []Entry) ([]Entry, error) {
 		if entry.ID == "" {
 			entry.ID = c.generateID()
+		}
+		if entry.Status == "" {
+			entry.Status = StatusHypothesis
 		}
 		assignedID = entry.ID
 		return append(entries, entry), nil
@@ -121,6 +131,9 @@ func (c *ColonyStore) List(filter EntryFilter) ([]Entry, error) {
 			continue
 		}
 		if filter.MinConfidence > 0 && e.Confidence < filter.MinConfidence {
+			continue
+		}
+		if filter.Status != "" && e.Status != filter.Status {
 			continue
 		}
 		result = append(result, e)

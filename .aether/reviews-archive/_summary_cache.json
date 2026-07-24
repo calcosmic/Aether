@@ -1,12 +1,11 @@
 {
-  "text": "## Prior Reviews\n\n- Quality (12 open): INFO -- , INFO -- .aether/docs/codex-ant-workflow-gap-map.md:41 Phase artifact is specific to plan/build/continue behavio... +10 more\n- Resilience (10 open): MEDIUM -- , HIGH --  +8 more\n- Testing (13 open): INFO -- , WARNING --  +11 more\n- Security (1 open)\n- Performance (1 open)\n",
+  "text": "## Prior Reviews\n\n- Resilience (17 open): MEDIUM -- .aether/ts-host/src/go-bridge.ts:136 callGoJSON returns parsed.result as T without verifying r..., MEDIUM -- .aether/ts-host/src/worker-dispatch.ts:315 claims.status is cast as TerminalWorkerStatus without val... +15 more\n- Testing (13 open):  -- ,  --  +11 more\n- Bugs (4 open)\n- History (1 open):  -- \n",
   "domain_counts": {
-    "performance": 1,
-    "quality": 12,
-    "resilience": 10,
-    "security": 1,
+    "bugs": 4,
+    "history": 1,
+    "resilience": 17,
     "testing": 13
   },
-  "total_open": 37,
-  "cache_write_at": "2026-05-12T06:49:37Z"
+  "total_open": 35,
+  "cache_write_at": "2026-05-20T17:39:53Z"
 }

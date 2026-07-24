@@ -91,6 +91,54 @@ func TestOracleBackgroundEnvMarksDetachedController(t *testing.T) {
 	}
 }
 
+func TestOracleContextCapsulePreservesFullLongTopic(t *testing.T) {
+	longTail := "Codex command skills, discuss restoration, Oracle prompt fidelity, and MDS Max for Live downstream proof must remain visible."
+	topic := strings.Repeat("Aether daily-driver recovery review with ceremony and worker routing context. ", 5) + longTail
+	state := oracleStateFile{
+		Topic:             topic,
+		Scope:             "repo",
+		Template:          "architecture-review",
+		Phase:             "survey",
+		Iteration:         1,
+		MaxIterations:     5,
+		TargetConfidence:  90,
+		OverallConfidence: 20,
+	}
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{{
+			ID:     "q1",
+			Text:   "What should be preserved?",
+			Status: "open",
+		}},
+	}
+
+	capsule := renderOracleContextCapsule(state, plan, "go", []string{"go"}, []string{"cobra"}, plan.Questions[0], 1, ".aether/oracle/responses/q1.json")
+	if !strings.Contains(capsule, "## Full User Topic") {
+		t.Fatalf("context capsule missing full-topic section:\n%s", capsule)
+	}
+	if !strings.Contains(capsule, longTail) {
+		t.Fatalf("context capsule dropped the long-topic acceptance criteria:\n%s", capsule)
+	}
+}
+
+func TestOracleQuestionGenerationUsesLongTopicContext(t *testing.T) {
+	longTail := "Codex command skills and MDS Max for Live downstream proof"
+	topic := strings.Repeat("Aether orchestration recovery context. ", 8) + longTail
+	profile, err := resolveOracleScope(topic, "repo")
+	if err != nil {
+		t.Fatalf("resolveOracleScope: %v", err)
+	}
+
+	questions := buildBriefInformedQuestions(topic, "# Oracle Research Brief\n", "go", profile)
+	joined := ""
+	for _, question := range questions {
+		joined += question.Text + "\n"
+	}
+	if !strings.Contains(joined, longTail) {
+		t.Fatalf("generated questions lost long-topic context:\n%s", joined)
+	}
+}
+
 func TestOracleRunLoopModeResumesInitializedWorkspace(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -778,6 +826,16 @@ func TestFinalizeOracleLoopRubricOutput(t *testing.T) {
 	if _, ok := result["final_confidence"]; !ok {
 		t.Error("finalizeOracleLoop output missing 'final_confidence' field")
 	}
+	revisionOption, ok := result["plan_revision_option"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("finalizeOracleLoop output missing plan_revision_option: %#v", result["plan_revision_option"])
+	}
+	if command := stringValue(revisionOption["command"]); !strings.Contains(command, "--revision-evidence \".aether/oracle/synthesis.md\"") {
+		t.Fatalf("Oracle revision command points at the wrong synthesis artifact: %q", command)
+	}
+	if _, err := os.Stat(paths.SynthesisPath); err != nil {
+		t.Fatalf("Oracle revision evidence does not exist: %v", err)
+	}
 
 	// Verify approval_status is "approved" for complete status
 	if result["approval_status"] != "approved" {
@@ -868,6 +926,33 @@ func TestFinalizeOracleLoopBlocked(t *testing.T) {
 
 	if result["approval_status"] != "blocked" {
 		t.Errorf("approval_status = %v, want 'blocked'", result["approval_status"])
+	}
+}
+
+func TestNormalizeOracleWorkerResponseBlockedRequiresConcreteDetail(t *testing.T) {
+	target := oracleQuestion{ID: "q1", Text: "Which command boundary is blocked?"}
+
+	_, err := normalizeOracleWorkerResponse(oracleWorkerResponse{
+		QuestionID: "q1",
+		Status:     "blocked",
+	}, target)
+	if err == nil {
+		t.Fatal("expected blocked response without detail to fail")
+	}
+	if !strings.Contains(err.Error(), "omitted blocker detail") {
+		t.Fatalf("error = %v, want omitted blocker detail", err)
+	}
+
+	response, err := normalizeOracleWorkerResponse(oracleWorkerResponse{
+		QuestionID: "q1",
+		Status:     "blocked",
+		Gaps:       []string{"Need runtime provider diagnostics before continuing."},
+	}, target)
+	if err != nil {
+		t.Fatalf("blocked response with gap detail returned error: %v", err)
+	}
+	if response.Summary == "" {
+		t.Fatal("blocked response with detail should get a user-facing summary")
 	}
 }
 

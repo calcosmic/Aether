@@ -198,6 +198,10 @@ var resumeColonyCmd = &cobra.Command{
 			return nil
 		}
 		if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
+			activeBuildProcess := false
+			if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
+				activeBuildProcess = state.State == colony.StateEXECUTING && buildAttemptProcessAlive(attempt)
+			}
 			state.Paused = false
 			state.PausedAt = nil
 			if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil {
@@ -211,7 +215,7 @@ var resumeColonyCmd = &cobra.Command{
 				rotateSpawnTree(store)
 			}
 			// Clear stale spawn state if session is not fresh
-			if !freshness.Fresh {
+			if !freshness.Fresh && !activeBuildProcess {
 				state.BuildStartedAt = nil
 				// Generate new run_id for resumed stale session
 				newRunID := fmt.Sprintf("resume_%d_%s", now.Unix(), randomHex(4))

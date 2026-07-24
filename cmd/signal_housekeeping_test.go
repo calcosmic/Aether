@@ -29,7 +29,12 @@ func TestSignalHousekeepingExpiresSignalsAndShrinksPrompt(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
-	now := time.Date(2026, 4, 15, 17, 34, 14, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
+	expiredCreated := now.Add(-48 * time.Hour).Format(time.RFC3339)
+	expiredAt := now.Add(-24 * time.Hour).Format(time.RFC3339)
+	weakCreated := now.AddDate(-1, 0, 0).Format(time.RFC3339)
+	continueCreated := now.Add(-96 * time.Hour).Format(time.RFC3339)
+	keepCreated := now.Add(-time.Hour).Format(time.RFC3339)
 
 	goal := "guidance foundation"
 	initializedAt := now
@@ -48,9 +53,9 @@ func TestSignalHousekeepingExpiresSignalsAndShrinksPrompt(t *testing.T) {
 			},
 		},
 		Events: []string{
-			"2026-04-12T09:00:00Z|phase_advanced|continue|Completed phase 1, ready for phase 2",
-			"2026-04-13T09:00:00Z|phase_advanced|continue|Completed phase 2, ready for phase 3",
-			"2026-04-14T09:00:00Z|phase_advanced|continue|Completed phase 3, ready for phase 4",
+			now.Add(-72*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 1, ready for phase 2",
+			now.Add(-48*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 2, ready for phase 3",
+			now.Add(-24*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 3, ready for phase 4",
 		},
 	})
 
@@ -63,8 +68,8 @@ func TestSignalHousekeepingExpiresSignalsAndShrinksPrompt(t *testing.T) {
 				Type:      "FEEDBACK",
 				Priority:  "low",
 				Source:    "worker:continue",
-				CreatedAt: "2026-04-10T09:00:00Z",
-				ExpiresAt: ptrString("2026-04-11T09:00:00Z"),
+				CreatedAt: expiredCreated,
+				ExpiresAt: ptrString(expiredAt),
 				Active:    true,
 				Strength:  &s0_6,
 				Content:   json.RawMessage(`{"text":"` + strings.Repeat("expired signal ", 20) + `"}`),
@@ -74,7 +79,7 @@ func TestSignalHousekeepingExpiresSignalsAndShrinksPrompt(t *testing.T) {
 				Type:      "FEEDBACK",
 				Priority:  "low",
 				Source:    "auto:success",
-				CreatedAt: "2025-01-01T09:00:00Z",
+				CreatedAt: weakCreated,
 				Active:    true,
 				Strength:  &s0_6,
 				Content:   json.RawMessage(`{"text":"` + strings.Repeat("weak signal ", 20) + `"}`),
@@ -84,7 +89,7 @@ func TestSignalHousekeepingExpiresSignalsAndShrinksPrompt(t *testing.T) {
 				Type:      "FEEDBACK",
 				Priority:  "low",
 				Source:    "worker:continue",
-				CreatedAt: "2026-04-11T09:00:00Z",
+				CreatedAt: continueCreated,
 				Active:    true,
 				Strength:  &s0_6,
 				Content:   json.RawMessage(`{"text":"` + strings.Repeat("continue signal ", 20) + `"}`),
@@ -94,7 +99,7 @@ func TestSignalHousekeepingExpiresSignalsAndShrinksPrompt(t *testing.T) {
 				Type:      "REDIRECT",
 				Priority:  "high",
 				Source:    "user",
-				CreatedAt: "2026-04-15T09:00:00Z",
+				CreatedAt: keepCreated,
 				Active:    true,
 				Strength:  &s1_0,
 				Content:   json.RawMessage(`{"text":"avoid globals"}`),
@@ -122,9 +127,9 @@ func TestSignalHousekeepingExpiresSignalsAndShrinksPrompt(t *testing.T) {
 	}
 	result := applySignalHousekeeping(loadPheromones(), &colony.ColonyState{
 		Events: []string{
-			"2026-04-12T09:00:00Z|phase_advanced|continue|Completed phase 1, ready for phase 2",
-			"2026-04-13T09:00:00Z|phase_advanced|continue|Completed phase 2, ready for phase 3",
-			"2026-04-14T09:00:00Z|phase_advanced|continue|Completed phase 3, ready for phase 4",
+			now.Add(-72*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 1, ready for phase 2",
+			now.Add(-48*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 2, ready for phase 3",
+			now.Add(-24*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 3, ready for phase 4",
 		},
 	}, now, false)
 	if result.ExpiredByTime != 1 {

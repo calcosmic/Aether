@@ -799,6 +799,10 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 	claudeNames := listAgentBaseNames(t, claudeDir, ".md")
 	opencodeNames := listAgentBaseNames(t, opencodeDir, ".md")
 	codexNames := listShippedAetherCodexAgentBaseNames(t, codexDir)
+	if !containsAgentBaseName(opencodeNames, "aether-worker-router") {
+		t.Fatal("OpenCode is missing the required infrastructure agent aether-worker-router")
+	}
+	opencodeNames = removeAgentBaseName(opencodeNames, "aether-worker-router")
 
 	// Verify each directory has exactly 27 entries (25 original + medic + fixer).
 	const expectedCount = 27
@@ -874,6 +878,10 @@ func TestClaudeOpenCodeAgentContentParity(t *testing.T) {
 
 	claudeNames := listAgentBaseNames(t, claudeDir, ".md")
 	opencodeNames := listAgentBaseNames(t, opencodeDir, ".md")
+	if !containsAgentBaseName(opencodeNames, "aether-worker-router") {
+		t.Fatal("OpenCode is missing the required infrastructure agent aether-worker-router")
+	}
+	opencodeNames = removeAgentBaseName(opencodeNames, "aether-worker-router")
 
 	if !slicesEqual(claudeNames, opencodeNames) {
 		t.Fatalf("Claude and OpenCode agent names do not match.\nClaude:   %v\nOpenCode: %v", claudeNames, opencodeNames)
@@ -993,8 +1001,8 @@ func TestE2EOpenCodeAgentLoad(t *testing.T) {
 	if len(agentFiles) == 0 {
 		t.Fatal("no aether-*.md files found to copy")
 	}
-	if len(agentFiles) != 27 {
-		t.Errorf("expected 27 agent files, found %d", len(agentFiles))
+	if len(agentFiles) != 28 {
+		t.Errorf("expected 28 OpenCode agent files (27 castes plus router), found %d", len(agentFiles))
 	}
 
 	// 3-4. Parse and validate each file

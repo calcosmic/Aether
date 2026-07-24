@@ -2,7 +2,7 @@ name: ant-colonize
 description: "🗺️ Survey territory with visible platform Surveyor workers"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS"
+  command: "aether host colonize $ARGUMENTS"
 codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-build-cycle"
@@ -11,7 +11,7 @@ codex_orchestration:
 wrapper_additions:
   orchestration: |
     Restore host-visible surveyor orchestration:
-    1. Run `AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+    1. Run `aether host colonize $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
     2. Parse `result.colonize_manifest`; do not parse visual output.
     3. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest_file>` so the surveyor stack appears before live workers.
     4. Use visible live Task/subagent panels as the survey ceremony. Do not set `run_in_background`, do not describe surveyors as background agents, and do not replace the live stack with a markdown worker table.
@@ -32,6 +32,6 @@ guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "Do not copy command wrappers into target repos; commands are published globally through the platform homes."
   - "Do NOT parse visual output as authoritative state."
-  - "Do NOT run `aether colonize` without `--plan-only` from Claude/OpenCode wrapper orchestration unless the user explicitly asks for raw/no-orchestration."
+  - "Do NOT bypass `aether host colonize` from Claude/OpenCode wrapper orchestration unless the user explicitly asks for raw/no-orchestration."
   - "Do NOT describe platform surveyors as background agents or replace the live worker stack with a markdown table."
   - "If docs and runtime disagree, runtime wins."

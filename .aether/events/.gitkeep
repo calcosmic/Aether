@@ -1,0 +1,12 @@
+# Aether Events Directory
+#
+# This directory holds the NDJSON event stream that is the shared
+# observable truth between the Go runtime and the TypeScript control plane.
+#
+# File: .aether/events/current.ndjson
+# Format: One JSON object per line (newline-delimited JSON)
+# Shape: { "type": "...", "timestamp": "...", "payload": { ... } }
+#
+# Both Go and TypeScript append to and read from this file concurrently.
+# The event stream is created on demand by InitEventStream() (Go) or
+# createEventStream() (TS).

@@ -10,7 +10,7 @@
 
 ### [aetherantcolony.com](https://aetherantcolony.com?utm_source=github&utm_medium=readme&utm_campaign=aether)
 
-Aether is an open-source biomimetic AI colony that replaces deterministic agent frameworks with a self-organizing swarm. Instead of brittle DAGs where one failure crashes everything, 25 specialized worker castes communicate through stigmergy — leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) that let the colony dynamically pivot without catastrophic failure. A built-in OODA loop treats errors as observations, not crashes, and a "Synthetic SLA" verification loop mathematically drives reliability from ~80% model accuracy to 99.2%. The Hive Brain ensures knowledge compounds across sessions and projects — instincts extracted from real work are scored for trust, promoted to permanent memory, and shared colony-wide. The result: complex intelligence emerges from simple, localized rules, just like a real ant colony.
+Aether is an open-source biomimetic AI colony that replaces deterministic agent frameworks with a self-organizing swarm. Instead of brittle DAGs where one failure crashes everything, 27 specialized worker castes communicate through stigmergy — leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) that let the colony dynamically pivot without catastrophic failure. A built-in OODA loop treats errors as observations, not crashes, and a "Synthetic SLA" verification loop mathematically drives reliability from ~80% model accuracy to 99.2%. The Hive Brain ensures knowledge compounds across sessions and projects — instincts extracted from real work are scored for trust, promoted to permanent memory, and shared colony-wide. The result: complex intelligence emerges from simple, localized rules, just like a real ant colony.
 
 <br>
 
@@ -25,9 +25,9 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/calcosmic/Aether.svg)](https://pkg.go.dev/github.com/calcosmic/Aether)
 
-[![agents](https://img.shields.io/badge/agents-25-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
-[![commands](https://img.shields.io/badge/commands-50-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.34-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![agents](https://img.shields.io/badge/agents-27-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
+[![commands](https://img.shields.io/badge/commands-60-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
+[![colony](https://img.shields.io/badge/colony-v1.0.41-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -49,7 +49,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 If Claude Code, OpenCode, and Codex are the workers, Aether is the colony.
 
-Aether is a Go runtime plus companion-file system that orchestrates 25 specialized worker castes across planning, building, verification, recovery, and release hygiene. It gives you a shared engineering lifecycle instead of a pile of disconnected agent tabs, ad hoc prompts, and fragile one-off scripts.
+Aether is a Go runtime plus companion-file system that orchestrates 27 specialized worker castes across planning, building, verification, recovery, and release hygiene. It gives you a shared engineering lifecycle instead of a pile of disconnected agent tabs, ad hoc prompts, and fragile one-off scripts.
 
 Manage engineering goals, not disconnected terminals.
 
@@ -72,7 +72,7 @@ Manage engineering goals, not disconnected terminals.
 
 Every AI coding tool now has "agents." Most of them are the same thing repackaged — a loop that plans, executes, and checks. LangGraph uses strict directed state machines (DAGs). CrewAI uses top-down hierarchical delegation. AutoGen uses conversational group chats. That's not a colony. That's one ant doing laps.
 
-Aether rejects all of these. It's an **Artificial Ecology** modeled on how real ant colonies work: no central brain, no single point of failure, no brittle JSON schemas. Instead, 25 specialized workers self-organize in parallel waves around your goal.
+Aether rejects all of these. It's an **Artificial Ecology** modeled on how real ant colonies work: no central brain, no single point of failure, no brittle JSON schemas. Instead, 27 specialized workers self-organize in parallel waves around your goal.
 
 ### Not Prompt Engineering — Stigmergy
 
@@ -121,7 +121,7 @@ This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
 platform, installs it locally, and then runs `aether install` for you. The npm
 package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.34` bootstraps Aether `1.0.34`.
+`aether-colony@1.0.41` bootstraps Aether `1.0.41`.
 
 **Option 1: Go binary**
 
@@ -224,13 +224,13 @@ primary platforms.
 
 | | Feature | Description |
 |---|---------|-------------|
-| **Agents** | 25 Specialized Workers | Builder, Watcher, Scout, Tracker, Archaeologist, Oracle, Medic, and more |
-| **Commands** | 50 Slash Commands + Native CLI | Slash workflow for Claude Code and OpenCode, native `aether` lifecycle for Codex CLI |
+| **Agents** | 27 Specialized Workers | Builder, Watcher, Scout, Tracker, Archaeologist, Oracle, Medic, Fixer, Porter, and more |
+| **Commands** | 60 Slash Commands + Native CLI | Slash workflow for Claude Code and OpenCode, native `aether` lifecycle for Codex CLI |
 | **Signals** | Pheromone System | FOCUS, REDIRECT, FEEDBACK — guide colony attention |
 | **Memory** | Colony Wisdom | Learnings and instincts persist via QUEEN.md |
 | **Hive Brain** | Cross-colony | Domain-scoped wisdom sharing |
 | **Autopilot** | `/ant-run` | Build-verify-advance loop with smart pause on Claude Code and OpenCode |
-| **Skills** | 28 Skills | 10 colony + 18 domain knowledge for workers |
+| **Skills** | 86 Skills | 55 colony + 31 domain knowledge modules for workers |
 | **Research** | Oracle + Scouts | Deep autonomous research before task decomposition |
 | **Quality Gates** | 6-phase verification before advancing |
 | **Platforms** | Primary: Claude Code + OpenCode. Secondary: Codex CLI | Shared Go binary with platform-specific agents |
@@ -243,23 +243,29 @@ primary platforms.
 | 🔨🐜 | **Builder** | Implementation work — writes code following TDD discipline |
 | 👁️🐜 | **Watcher** | Monitoring and verification — quality checks and independent testing |
 | 🔍🐜 | **Scout** | Research and discovery — investigates unfamiliar territory |
-| 🗺️🐜 | **Colonizer** | New project setup — explores and maps existing codebases |
-| 📊🐜 | **Surveyor** | Measurement and assessment — evaluates colony health and progress |
+| 📋🐜 | **Route Setter** | Direction setting — defines phase plans and task decomposition |
+| 🏗️🐜 | **Architect** | Architecture design — maps structural tradeoffs and system boundaries |
+| 🗺️🐜 | **Surveyor Nest** | Territory mapping — documents directory structure and project topology |
+| 📏🐜 | **Surveyor Disciplines** | Practice mapping — documents coding, testing, and workflow conventions |
+| 🧫🐜 | **Surveyor Pathogens** | Risk mapping — identifies technical debt, bugs, and health concerns |
+| 📦🐜 | **Surveyor Provisions** | Dependency mapping — inventories stack, packages, and integrations |
+| 📚🐜 | **Keeper** | Knowledge curation — manages instincts, patterns, and wisdom |
+| 🐛🐜 | **Tracker** | Bug investigation — traces failures to root cause |
+| 🧪🐜 | **Probe** | Test generation — writes and maintains test suites |
+| 🔄🐜 | **Weaver** | Code refactoring — restructures and cleans codebases |
+| 👥🐜 | **Auditor** | Code review and quality audits — catches maintainability risks |
+| 🩹🐜 | **Medic** | Colony health — diagnoses and repairs corrupted or stale colony state |
+| 🛠️🐜 | **Fixer** | Gate recovery — investigates failed checks and applies targeted fixes |
 | 🎲🐜 | **Chaos** | Edge case testing — resilience and stress testing |
 | 🏺🐜 | **Archaeologist** | Git history excavation — uncovers context from commit history |
-| 🔮🐜 | **Oracle** | Deep research — autonomous research via RALF loop |
-| 📋🐜 | **Route Setter** | Direction setting — defines phase plans and task decomposition |
-| 🔌🐜 | **Ambassador** | Third-party API integration — bridges external services |
-| 👥🐜 | **Auditor** | Code review and quality audits — includes security audit duties |
-| 📝🐜 | **Chronicler** | Documentation generation — produces docs, READMEs, and guides |
-| 📦🐜 | **Gatekeeper** | Dependency management — handles packages, versions, and supply chain |
+| 📦🐜 | **Gatekeeper** | Dependency and supply-chain review — checks packages, versions, and release inputs |
 | ♿🐜 | **Includer** | Accessibility audits — WCAG compliance and barrier identification |
-| 📚🐜 | **Keeper** | Knowledge curation — manages instincts, patterns, and wisdom |
 | ⚡🐜 | **Measurer** | Performance profiling — benchmarks and optimization |
-| 🧪🐜 | **Probe** | Test generation — writes and maintains test suites |
-| 🐛🐜 | **Tracker** | Bug investigation — traces, hunts, and roots out bugs |
-| 🔄🐜 | **Weaver** | Code refactoring — restructures and cleans codebases |
-| 💭🐜 | **Dreamer** | Creative ideation — imaginative exploration and blue-sky thinking |
+| 🧠🐜 | **Sage** | Wisdom synthesis — extracts patterns and release lessons |
+| 🔮🐜 | **Oracle** | Deep research — autonomous research via RALF loop |
+| 🔌🐜 | **Ambassador** | Third-party API integration — bridges external services |
+| 📝🐜 | **Chronicler** | Documentation generation — produces docs, READMEs, and guides |
+| 🚚🐜 | **Porter** | Delivery readiness — checks publish, push, and release handoff steps |
 
 ## ⚖️ Aether vs Others
 
@@ -267,11 +273,11 @@ primary platforms.
 |-----------|--------|--------|---------|-----------|
 | **Language** | Go | Python | Python | Python |
 | **License** | Apache 2.0 | MIT | MIT | Open + paid tiers |
-| **Architecture** | Biological colony — 25 specialized workers self-organize via pheromone signals | Role-based agents with sequential/task delegation | Multi-agent conversation framework (Microsoft) | Graph-based state machines with conditional edges |
+| **Architecture** | Biological colony — 27 specialized workers self-organize via pheromone signals | Role-based agents with sequential/task delegation | Multi-agent conversation framework (Microsoft) | Graph-based state machines with conditional edges |
 | **Memory / Learning** | Colony Wisdom — learnings persist as instincts, promote to QUEEN.md, share cross-colony via Hive Brain | Short-term memory + optional long-term via integration | No built-in persistent memory | Checkpoint-based state persistence |
 | **Agent Coordination** | Pheromone signals (FOCUS, REDIRECT, FEEDBACK) guide attention without rewriting prompts | Hierarchical task delegation between role-assigned agents | Turn-based conversation between agents | Explicit graph edges define control flow |
-| **Workers / Agents** | 25 specialized castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, etc.) | User-defined roles with goals and backstories | Configurable assistant and user proxy agents | Nodes as functions or LangChain runnables |
-| **Commands / Control** | 50 slash commands on Claude/OpenCode + native `aether` CLI workflow on Codex | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
+| **Workers / Agents** | 27 specialized castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, Fixer, Porter, etc.) | User-defined roles with goals and backstories | Configurable assistant and user proxy agents | Nodes as functions or LangChain runnables |
+| **Commands / Control** | 60 slash commands on Claude/OpenCode + native `aether` CLI workflow on Codex | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
 | **Autopilot** | `/ant-run` on Claude/OpenCode, `aether run` on Codex | Sequential task execution, no built-in loop | No built-in loop | Can loop via graph cycles, not opinionated |
 | **Quality Gates** | 6-phase verification before advancing phases | Optional human-in-the-loop review | No built-in gates | Manual checkpoint implementation |
 | **Research** | Oracle + Scouts — autonomous deep research before task decomposition | No dedicated research agents | Group chat can approximate research | No built-in research pattern |
@@ -289,7 +295,7 @@ primary platforms.
 └── skills/                     Custom repo skills only
 
 .codex/                         Codex CLI agent definitions
-└── agents/                     25 TOML agent files
+└── agents/                     27 TOML agent files
 
 ~/.aether/                     Hub (cross-colony, user-level)
 ├── system/                   Companion file source (populated by install)
@@ -493,9 +499,9 @@ It pauses — not crashes — when something needs attention: test failures, cri
 
 ## 🔌 Works With
 
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 50 slash commands + 25 agent definitions
-- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 50 slash commands + 25 agent definitions
-- **Codex CLI** - secondary platform, native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 25 TOML agent definitions
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 60 slash commands + 27 agent definitions
+- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 60 slash commands + 27 agent definitions
+- **Codex CLI** - secondary platform, native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 27 TOML agent definitions
 
 <div align="center">
   <img src="assets/logo/logo.jpg" alt="✦" width="80" />
@@ -504,9 +510,9 @@ It pauses — not crashes — when something needs attention: test failures, cri
 ## 📋 Command Reference (Claude Code / OpenCode)
 
 <details>
-<summary>50 slash commands for Claude Code and OpenCode — click to expand</summary>
+<summary>60 slash commands for Claude Code and OpenCode — click to expand</summary>
 
-Aether provides 50 slash commands organized into seven categories for Claude
+Aether provides 60 slash commands organized into seven categories for Claude
 Code and OpenCode. This section is the slash-command reference for the primary
 platforms.
 
@@ -628,7 +634,7 @@ Maintenance, introspection, and convenience commands for operating the colony sy
 | `/ant-run` | Autopilot mode -- see Setup and Getting Started above. Listed in both categories because it is the primary execution driver. |
 | `/ant-skill-create "<topic>"` | Create a custom domain skill via Oracle mini-research and a guided wizard. Researches best practices, asks about focus area and experience level, then generates a SKILL.md in `~/.aether/skills/domain/`. |
 | `/ant-tunnels [chamber] [chamber2]` | Browse archived colonies in `.aether/chambers/`. No arguments shows a timeline. One argument shows the seal document for that chamber. Two arguments compares chambers side-by-side with growth metrics and pheromone trail diffs. |
-| `/ant-verify-castes` | Display the colony caste system -- all 24 castes with their model slot assignments (opus, sonnet, inherit), system status (utils, proxy health), and current model configuration. |
+| `/ant-verify-castes` | Display the colony caste system -- all 27 castes with their model slot assignments (opus, sonnet, inherit), system status (utils, proxy health), and current model configuration. |
 
 </details>
 
@@ -1076,7 +1082,13 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.34 -- Released (Current)
+### 🎉 v1.0.41 -- Released (Current)
+
+- Restored universal classic ceremony parity across Codex lifecycle flows, including spawn plans, wave starts, worker completions, and closeouts.
+- Hardened Porter full-release readiness with persisted receipts, version agreement, binary smoke, Go/TypeScript/npm gates, and redacted failed-command diagnostics.
+- Strengthened final seal review so blocker-level security and quality findings stop sealing while non-blocking release lessons are preserved.
+
+### 🎉 v1.0.34 -- Released
 
 - Plan closeout ceremony now renders the actual planned phases, task goals, selected hints, and confidence directly in the runtime visual surface.
 - `aether ceremony closeout --workflow plan` can pull phase details from either the completion packet or the active colony state, so Claude/OpenCode no longer need to supply the rich plan recap as plain prose after the banner.
@@ -1116,15 +1128,15 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 - The publish/update runbook now treats `aether install --package-dir "$PWD"`, downstream `aether update --force`, `--download-binary`, and npm publishing as one release system instead of disconnected steps
 - Medic now diagnoses release-integrity drift across hub publish completeness, runtime versioning, npm page behavior, and downstream refresh verification before recommending repairs
 - OpenCode, Claude, Codex, and repo-level operator docs now describe the same source-checkout publish path and the same released-user update path
-- 25 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, and more)
-- 50 slash commands across the full colony lifecycle on the primary Claude/OpenCode surfaces, plus native Codex CLI workflow
-- 29 skills (11 colony + 18 domain), shared through the same hub and release pipeline
+- Current release surfaces now include 27 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, Fixer, Porter, and more)
+- Current release surfaces now include 60 slash commands across the full colony lifecycle on the primary Claude/OpenCode surfaces, plus native Codex CLI workflow
+- Current release surfaces now include 86 skills (55 colony + 31 domain), shared through the same hub and release pipeline
 
 ### 📅 Near-Term
 
 - Additional platform support beyond Claude Code, OpenCode, and Codex CLI
 - Enhanced Hive Brain cross-colony sharing -- richer wisdom exchange between projects with domain scoping
-- More domain skills -- expanding the 18 domain knowledge skills to cover additional frameworks, languages, and ecosystems
+- More domain skills -- expanding the current 31 domain knowledge skills to cover additional frameworks, languages, and ecosystems
 - Community-contributed castes -- allowing teams to define and share custom worker roles
 
 ### 🔮 Future

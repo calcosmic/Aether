@@ -77,6 +77,12 @@ does not overwrite the stable user-facing command surface on the same machine.
 
 This is the preferred source-checkout publish path.
 
+For dummies: `aether publish --channel stable` updates your local Aether
+cupboard and local binary. It is not the same thing as a public GitHub/npm
+release. A public release also needs the committed version bump, a pushed
+`vX.Y.Z` tag, GitHub release assets, and npm `latest` pointing at the same
+version.
+
 What it does:
 1. Builds the channel binary (`aether` or `aether-dev`) unless
    `--skip-build-binary` is used.
@@ -198,7 +204,7 @@ The integrity/stale-publish checks currently expect:
 | OpenCode agents | 27 |
 | Codex agents | 27 |
 | Hub shipped skills | 86 |
-| Codex skill shims | 4 |
+| Codex skill shims | 5 |
 
 ## Agent Parity Model
 

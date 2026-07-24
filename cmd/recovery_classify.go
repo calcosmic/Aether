@@ -50,8 +50,8 @@ var failureClassifications = map[string]failureClassificationEntry{
 	"invalid_file_path":  {Blocking, Systemic, "File path error -- structural issue in task definition"},
 	"structural_error":   {Blocking, Systemic, "Code structure error -- requires human inspection"},
 	// Requires-attempt: ambiguous, try once -- per D-10
-	"partial_completion":   {RequiresAttempt, Transient, "Worker completed some but not all tasks -- one retry may help"},
-	"unparseable_output":   {RequiresAttempt, Systemic, "Worker output was garbled -- may indicate deeper issue"},
+	"partial_completion":  {RequiresAttempt, Transient, "Worker completed some but not all tasks -- one retry may help"},
+	"unparseable_output":  {RequiresAttempt, Systemic, "Worker output was garbled -- may indicate deeper issue"},
 	"failed":              {RequiresAttempt, Systemic, "Generic failure -- safe middle ground, one attempt allowed"},
 	"blocked":             {RequiresAttempt, Systemic, "Worker was blocked -- may resolve on retry or may indicate conflict"},
 	"manually-reconciled": {RequiresAttempt, Systemic, "Manual reconciliation -- one retry may stabilize"},
@@ -62,6 +62,11 @@ var failureClassifications = map[string]failureClassificationEntry{
 // Unknown patterns default to requires-attempt per D-11.
 func classifyWorkerFailure(status string, errMsg string) (FailureClassification, FailureType, string) {
 	normalized := strings.ToLower(strings.TrimSpace(status))
+	lower := strings.ToLower(errMsg)
+
+	if entry, ok := classifyRuntimeOwnedRecoveryIssue(lower); ok {
+		return entry.Classification, entry.FailureType, entry.Rationale
+	}
 
 	// Direct status match from registry
 	if entry, ok := failureClassifications[normalized]; ok {
@@ -69,7 +74,6 @@ func classifyWorkerFailure(status string, errMsg string) (FailureClassification,
 	}
 
 	// Error message pattern matching for ambiguous statuses
-	lower := strings.ToLower(errMsg)
 	switch {
 	case strings.Contains(lower, "context window"),
 		strings.Contains(lower, "token limit"),
@@ -84,6 +88,47 @@ func classifyWorkerFailure(status string, errMsg string) (FailureClassification,
 
 	// Default: requires-attempt (safe middle ground per D-11)
 	return RequiresAttempt, Systemic, "Unknown failure pattern -- defaulting to requires-attempt for safety"
+}
+
+func classifyRuntimeOwnedRecoveryIssue(lowerMessage string) (failureClassificationEntry, bool) {
+	lowerMessage = strings.TrimSpace(lowerMessage)
+	if lowerMessage == "" {
+		return failureClassificationEntry{}, false
+	}
+
+	if matchesAllRecoveryKeywords(lowerMessage, []string{"stale", "clarification"}) ||
+		strings.Contains(lowerMessage, "stale resolved clarification") ||
+		strings.Contains(lowerMessage, "pending decision") ||
+		strings.Contains(lowerMessage, "aether discuss") {
+		return failureClassificationEntry{
+			Classification: Blocking,
+			FailureType:    Systemic,
+			Rationale:      "Runtime-owned clarification state issue -- rerun discussion or refresh the manifest instead of spawning a recovery worker",
+		}, true
+	}
+
+	if strings.Contains(lowerMessage, "result collection") ||
+		strings.Contains(lowerMessage, "completion file") ||
+		strings.Contains(lowerMessage, "completion artifact") ||
+		strings.Contains(lowerMessage, "worker result artifact") ||
+		matchesAllRecoveryKeywords(lowerMessage, []string{"missing", "result"}) {
+		return failureClassificationEntry{
+			Classification: Blocking,
+			FailureType:    Systemic,
+			Rationale:      "Runtime-owned result collection issue -- fix the completion artifact or rerun finalization instead of spawning a recovery worker",
+		}, true
+	}
+
+	return failureClassificationEntry{}, false
+}
+
+func matchesAllRecoveryKeywords(text string, keywords []string) bool {
+	for _, keyword := range keywords {
+		if !strings.Contains(text, keyword) {
+			return false
+		}
+	}
+	return true
 }
 
 // FailureRecord captures a worker failure with classification metadata.

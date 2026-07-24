@@ -478,11 +478,12 @@ func TestLockingUnchanged(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SAFE-04: Install, update, publish have zero TS host involvement
+// SAFE-04: Install stays independent of TS host runtime execution
 // ---------------------------------------------------------------------------
 
-// TestInstallPureGo proves install, update, and publish commands contain no
-// references to the TypeScript host.
+// TestInstallPureGo proves install does not execute through the TypeScript
+// host. Publish and update may intentionally sync/build TS host assets, but
+// they must not delegate their own command behavior to the TS host runtime.
 func TestInstallPureGo(t *testing.T) {
 	files := []struct {
 		name    string
@@ -504,7 +505,19 @@ func TestInstallPureGo(t *testing.T) {
 		"typescript-host",
 	}
 
+	// The `host` command is explicitly the bridge between Go CLI and TS host.
+	// Publish and update are also exempt from this string check because they
+	// intentionally sync/build TS host assets while keeping command behavior in Go.
+	exemptFiles := map[string]bool{
+		"host":    true,
+		"publish": true,
+		"update":  true,
+	}
+
 	for _, f := range files {
+		if exemptFiles[f.name] {
+			continue
+		}
 		t.Run(f.name+"_no_ts_host", func(t *testing.T) {
 			data, err := os.ReadFile(f.path)
 			if err != nil {
@@ -590,11 +603,12 @@ func TestVerificationContractsPass(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SAFE-06: plan --plan-only and build --plan-only produce unchanged JSON
+// SAFE-06: plan-only commands do not advance canonical lifecycle state
 // ---------------------------------------------------------------------------
 
-// TestPlanOnlyUnchanged proves plan-only and build-only commands produce
-// valid JSON output with dispatch_mode="plan-only" and zero state side effects.
+// TestPlanOnlyUnchanged proves plan-only and build-only commands produce valid
+// JSON without advancing COLONY_STATE. Build planning may persist only its
+// immutable dispatch manifest and recovery journal.
 func TestPlanOnlyUnchanged(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -664,6 +678,10 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 
 		// Snapshot before
 		before := snapshotDataDir(t, dataDir)
+		stateBefore, err := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+		if err != nil {
+			t.Fatalf("read state before build plan: %v", err)
+		}
 
 		rootCmd.SetArgs([]string{"build", "--plan-only", "1"})
 		if err := rootCmd.Execute(); err != nil {
@@ -682,8 +700,27 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 			t.Errorf("expected dispatch_mode plan-only in build output, got: %s", output)
 		}
 
-		// Verify no state mutation
+		// Verify no canonical state mutation. The only new top-level data path is
+		// the Go-owned build journal used to recover external dispatch attempts.
 		after := snapshotDataDir(t, dataDir)
+		delete(after, "build")
 		assertDataDirUnchanged(t, before, after)
+		stateAfter, err := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+		if err != nil {
+			t.Fatalf("read state after build plan: %v", err)
+		}
+		if !bytes.Equal(stateBefore, stateAfter) {
+			t.Fatal("build --plan-only mutated COLONY_STATE.json")
+		}
+		phaseBuildDir := filepath.Join(dataDir, "build", "phase-1")
+		for _, rel := range []string{"manifest.json", "latest-attempt.json", "attempts"} {
+			if _, err := os.Stat(filepath.Join(phaseBuildDir, rel)); err != nil {
+				t.Fatalf("build --plan-only missing durable coordination path %s: %v", rel, err)
+			}
+		}
+		attempts, err := os.ReadDir(filepath.Join(phaseBuildDir, "attempts"))
+		if err != nil || len(attempts) != 1 || attempts[0].IsDir() || !strings.HasSuffix(attempts[0].Name(), ".json") {
+			t.Fatalf("build --plan-only attempt journal = %v, err=%v", attempts, err)
+		}
 	})
 }

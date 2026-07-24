@@ -127,6 +127,34 @@ func closeoutCompletionDetails(path string) map[string]interface{} {
 	}
 
 	details["completion_loaded"] = true
+	if _, ok := raw["ok"]; ok {
+		completionOK := boolValue(raw["ok"])
+		details["completion_ok"] = completionOK
+		if !completionOK {
+			details["completion_finalizer_failed"] = true
+		}
+	}
+	if errText := strings.TrimSpace(stringValue(raw["error"])); errText != "" {
+		details["completion_error_message"] = errText
+		if _, ok := raw["ok"]; ok && !boolValue(raw["ok"]) {
+			details["completion_finalizer_failed"] = true
+		}
+	}
+	if message := strings.TrimSpace(stringValue(raw["message"])); message != "" {
+		details["completion_message"] = message
+	}
+	if next := strings.TrimSpace(stringValue(raw["next"])); next != "" {
+		details["completion_next"] = next
+	}
+	if existingPlan, ok := raw["existing_plan"].(bool); ok {
+		details["completion_existing_plan"] = existingPlan
+	}
+	if requiresFinalizer, ok := raw["requires_finalizer"].(bool); ok {
+		details["completion_requires_finalizer"] = requiresFinalizer
+	}
+	if blocked, ok := raw["blocked"].(bool); ok {
+		details["completion_path_blocked"] = blocked
+	}
 	if manifestKey, manifest := closeoutManifest(raw); manifestKey != "" {
 		details["completion_manifest"] = manifestKey
 		if phase := intValue(manifest["phase"]); phase > 0 {
@@ -147,13 +175,13 @@ func closeoutCompletionDetails(path string) map[string]interface{} {
 	blockers := []string{}
 	artifacts := []string{}
 	for _, worker := range workers {
-		status := normalizeRuntimeDispatchStatus(stringValue(worker["status"]))
+		status := normalizeCloseoutWorkerStatus(worker)
 		switch status {
 		case "completed", "passed", "success", "manually-reconciled":
 			completed++
 		case "blocked":
 			blocked++
-		case "failed", "timeout", "cancelled":
+		case "failed", "timeout", "cancelled", "canceled":
 			failed++
 		}
 		name := emptyFallback(stringValue(worker["name"]), stringValue(worker["agent_name"]))
@@ -205,6 +233,9 @@ func closeoutWorkerMaps(raw map[string]interface{}) []map[string]interface{} {
 	seen := map[string]bool{}
 	for _, key := range []string{"dispatches", "results", "workers"} {
 		for _, worker := range mapSliceValue(raw[key]) {
+			if !isVerifiedCloseoutWorkerResult(worker) {
+				continue
+			}
 			name := emptyFallback(stringValue(worker["name"]), stringValue(worker["agent_name"]))
 			id := strings.Join([]string{name, stringValue(worker["status"]), stringValue(worker["summary"]), stringValue(worker["task_id"])}, "\x00")
 			if seen[id] {
@@ -215,4 +246,33 @@ func closeoutWorkerMaps(raw map[string]interface{}) []map[string]interface{} {
 		}
 	}
 	return workers
+}
+
+func isVerifiedCloseoutWorkerResult(worker map[string]interface{}) bool {
+	switch normalizeCloseoutWorkerStatus(worker) {
+	case "completed", "blocked", "failed", "timeout", "manually-reconciled":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeCloseoutWorkerStatus(worker map[string]interface{}) string {
+	status := emptyFallback(stringValue(worker["status"]), stringValue(worker["result_status"]))
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "" {
+		return ""
+	}
+	switch status {
+	case "complete", "done", "success", "succeeded", "passed", "code_written":
+		return "completed"
+	case "fail", "error":
+		return "failed"
+	case "timed_out", "cancelled", "canceled":
+		return "timeout"
+	case "manual", "manually_reconciled":
+		return "manually-reconciled"
+	default:
+		return normalizeRuntimeDispatchStatus(status)
+	}
 }

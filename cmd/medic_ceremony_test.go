@@ -41,6 +41,11 @@ func TestExtractEmojisFromMarkdown(t *testing.T) {
 			content:  "🥚 init 🗺️ colonize 📋 plan 🔨 build 👁️ continue",
 			expected: []string{"🥚", "🗺️", "📋", "🔨", "👁️"},
 		},
+		{
+			name:     "lower unicode emojis",
+			content:  "⚰️ entomb ➕ insert-phase ⚡ run ✓ verify-castes ⬆️ shelf-promote",
+			expected: []string{"⚰️", "➕", "⚡", "✓", "⬆️"},
+		},
 	}
 
 	for _, tc := range tests {
@@ -168,9 +173,10 @@ func TestCheckStageMarkersPresent(t *testing.T) {
 		}
 	}
 
-	// Create wrappers with stage markers for all state-changing commands
+	// Create wrappers with aether ceremony references for all state-changing commands
 	for _, cmd := range stateChangingCommands {
-		writeFile(t, claudeDir, cmd+".md", []byte("── Context ──\n── Tasks ──\ncontent"))
+		writeFile(t, claudeDir, cmd+".md", []byte(
+			"AETHER_FORCE_COLOR=1 aether ceremony spawn-plan --workflow "+cmd+"\n"))
 		writeFile(t, yamlDir, cmd+".yaml", []byte("name: "+cmd))
 	}
 
@@ -178,7 +184,7 @@ func TestCheckStageMarkersPresent(t *testing.T) {
 	issues := checkStageMarkers(fc)
 
 	for _, issue := range issues {
-		t.Errorf("state-changing commands with markers produced issue: [%s] %s", issue.Severity, issue.Message)
+		t.Errorf("state-changing commands with ceremony references produced issue: [%s] %s", issue.Severity, issue.Message)
 	}
 }
 
@@ -198,8 +204,8 @@ func TestCheckStageMarkersMissing(t *testing.T) {
 		}
 	}
 
-	// Create wrapper without stage markers
-	writeFile(t, claudeDir, "build.md", []byte("plain content with no markers"))
+	// Create wrapper without aether ceremony references
+	writeFile(t, claudeDir, "build.md", []byte("plain content with no ceremony references"))
 	writeFile(t, yamlDir, "build.yaml", []byte("name: build"))
 
 	fc := newFileChecker(dataDir)
@@ -207,12 +213,12 @@ func TestCheckStageMarkersMissing(t *testing.T) {
 
 	found := false
 	for _, issue := range issues {
-		if issue.Severity == "warning" && contains(issue.Message, "no stage markers") {
+		if issue.Severity == "warning" && contains(issue.Message, "ceremony") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected warning for missing stage markers; got issues: %+v", issues)
+		t.Errorf("expected warning for missing ceremony references; got issues: %+v", issues)
 	}
 }
 
@@ -231,8 +237,8 @@ func TestCheckStageMarkersMissingYAML(t *testing.T) {
 		}
 	}
 
-	// Wrapper with markers but no YAML source
-	writeFile(t, claudeDir, "build.md", []byte("── Context ──\ncontent"))
+	// Wrapper with ceremony references but no YAML source
+	writeFile(t, claudeDir, "build.md", []byte("aether ceremony spawn-plan --workflow build\n"))
 
 	fc := newFileChecker(dataDir)
 	issues := checkStageMarkers(fc)
@@ -245,6 +251,36 @@ func TestCheckStageMarkersMissingYAML(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected warning for missing YAML source; got issues: %+v", issues)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestCheckStageMarkersLiteralMarkersNotRequired
+// ---------------------------------------------------------------------------
+
+func TestCheckStageMarkersLiteralMarkersNotRequired(t *testing.T) {
+	dir := t.TempDir()
+	claudeDir := filepath.Join(dir, ".claude", "commands", "ant")
+	yamlDir := filepath.Join(dir, ".aether", "commands")
+	dataDir := filepath.Join(dir, ".aether", "data")
+
+	for _, d := range []string{claudeDir, yamlDir, dataDir} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+	}
+
+	// Wrapper with aether ceremony references but NO literal stage markers should pass
+	writeFile(t, claudeDir, "build.md", []byte("aether ceremony spawn-plan --workflow build\n"))
+	writeFile(t, yamlDir, "build.yaml", []byte("name: build"))
+
+	fc := newFileChecker(dataDir)
+	issues := checkStageMarkers(fc)
+
+	for _, issue := range issues {
+		if contains(issue.Message, "ceremony") && !contains(issue.Message, "YAML source") {
+			t.Errorf("wrapper with ceremony references but no literal markers should not produce ceremony warning: [%s] %s", issue.Severity, issue.Message)
+		}
 	}
 }
 
@@ -346,16 +382,16 @@ func TestScanCeremonyIntegrityIntegration(t *testing.T) {
 		}
 	}
 
-	// Healthy setup: correct emojis, stage markers, no hardcoded context-clear
+	// Healthy setup: correct emojis, ceremony refs, no hardcoded context-clear
 	for _, cmd := range stateChangingCommands {
 		expectedEmoji := getCommandEmoji(cmd)
 		writeFile(t, claudeDir, cmd+".md", []byte(
-			"── Context ──\n"+expectedEmoji+" "+cmd+" command\n"))
+			"aether ceremony spawn-plan --workflow "+cmd+"\n"+expectedEmoji+" "+cmd+" command\n"))
 		writeFile(t, yamlDir, cmd+".yaml", []byte("name: "+cmd))
 	}
 
-	writeFile(t, claudeDir, "build.md", []byte("── Context ──\n🔨 build command\n"))
-	writeFile(t, opencodeDir, "build.md", []byte("── Context ──\n🔨 build command\n"))
+	writeFile(t, claudeDir, "build.md", []byte("aether ceremony spawn-plan --workflow build\n🔨 build command\n"))
+	writeFile(t, opencodeDir, "build.md", []byte("🔨 build command\n"))
 	writeFile(t, claudeDir, "continue.md", []byte(
 		"The runtime emits context-clear guidance automatically.\n"))
 

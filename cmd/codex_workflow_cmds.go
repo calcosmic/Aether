@@ -62,9 +62,16 @@ var planCmd = &cobra.Command{
 		forceAlias, _ := cmd.Flags().GetBool("force")
 		synthetic, _ := cmd.Flags().GetBool("synthetic")
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
+		repairArtifact, _ := cmd.Flags().GetBool("repair-artifact")
 		depth, _ := cmd.Flags().GetString("depth")
 		planningDepth, _ := cmd.Flags().GetString("planning-depth")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
+		targetConfidence, _ := cmd.Flags().GetInt("target")
+		maxIterations, _ := cmd.Flags().GetInt("max-iterations")
+		acceptBelowTarget, _ := cmd.Flags().GetBool("accept")
+		revisionType, _ := cmd.Flags().GetString("revision-type")
+		revisionReason, _ := cmd.Flags().GetString("revision-reason")
+		revisionEvidence, _ := cmd.Flags().GetStringArray("revision-evidence")
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -78,6 +85,13 @@ var planCmd = &cobra.Command{
 			PlanningDepth:     planningDepth,
 			VerificationDepth: verificationDepth,
 			WorkerTimeout:     workerTimeout,
+			TargetConfidence:  targetConfidence,
+			MaxIterations:     maxIterations,
+			Accept:            acceptBelowTarget,
+			RepairArtifact:    repairArtifact,
+			RevisionType:      revisionType,
+			RevisionReason:    revisionReason,
+			RevisionEvidence:  revisionEvidence,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -113,6 +127,7 @@ var buildCmd = &cobra.Command{
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, codexBuildOptions{
 				WorkerTimeout:     workerTimeout,
+				Force:             forceBuild,
 				LightFlag:         lightFlag,
 				HeavyFlag:         heavyFlag,
 				VerificationDepth: verificationDepth,
@@ -183,6 +198,14 @@ var continueCmd = &cobra.Command{
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
+		classicCeremony, _ := cmd.Flags().GetBool("classic-ceremony")
+		if classicCeremony {
+			planOnly = true
+			heavyFlag = true
+			if strings.TrimSpace(verificationDepth) == "" {
+				verificationDepth = string(colony.VerificationDepthHeavy)
+			}
+		}
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
 				ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
@@ -393,7 +416,10 @@ func completeSealRuntime(state colony.ColonyState) error {
 			}
 			if entry.Confidence >= 0.8 && entry.Action != "" {
 				hiveEligibleCount++
-				// Hive Brain promotion (non-blocking per CERE-02)
+				if !automaticHivePromotionEnabled() {
+					continue
+				}
+				// Explicitly enabled Hive Brain promotion remains non-blocking.
 				domain := entry.Domain
 				if domain == "" {
 					domain = "general"
@@ -414,6 +440,9 @@ func completeSealRuntime(state colony.ColonyState) error {
 	}
 	if hivePromotionFailures > 0 {
 		fmt.Fprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
+	}
+	if hiveEligibleCount > 0 && !automaticHivePromotionEnabled() {
+		fmt.Fprintln(stdout, fmt.Sprintf("Hive auto-promotion is disabled; %d eligible instinct(s) remain project-local", hiveEligibleCount))
 	}
 
 	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
@@ -781,8 +810,35 @@ func detectDomainsFromRoot(root string) []string {
 			}
 		}
 	}
+	if detectMDSWorkspace(root) {
+		domains = append(domains, "max-for-live", "mds")
+	}
 	sort.Strings(domains)
 	return domains
+}
+
+func detectMDSWorkspace(root string) bool {
+	for _, rel := range []string{
+		"devices",
+		"m4l_builder",
+		filepath.Join("scripts", "mds"),
+		"MaxForLive_Vault",
+	} {
+		if _, err := os.Stat(filepath.Join(root, rel)); err == nil {
+			return true
+		}
+	}
+	for _, rel := range []string{"AGENTS.md", filepath.Join(".aether", "AGENTS.md")} {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			continue
+		}
+		text := strings.ToLower(string(data))
+		if strings.Contains(text, "max for live") || strings.Contains(text, "maxforlive") || strings.Contains(text, "mds") {
+			return true
+		}
+	}
+	return false
 }
 
 // scanHighSeverityOpen iterates all domain ledgers and collects warning strings
@@ -1074,13 +1130,20 @@ func init() {
 	planCmd.Flags().Bool("refresh", false, "Regenerate the plan even when an existing plan is already present")
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
 	planCmd.Flags().Bool("plan-only", false, "Print the planning dispatch manifest without mutating colony state or spawning workers")
+	planCmd.Flags().Bool("repair-artifact", false, "Repair and validate dependency references in .aether/data/planning/phase-plan.json without rerunning workers")
 	planCmd.Flags().String("depth", "", "Planning depth: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().String("planning-depth", "", "Task decomposition depth: light, standard, or deep")
 	planCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
+	planCmd.Flags().Int("target", 0, "Planning confidence target 70-99 (default from depth preset)")
+	planCmd.Flags().Int("max-iterations", 0, "Planning iteration budget 2-12 (default from depth preset)")
+	planCmd.Flags().Bool("accept", false, "Accept the current best plan even if confidence is below target")
+	planCmd.Flags().String("revision-type", "", "Why a refreshed plan is needed: manual, user_feedback, research, verification_failure, or scope_change")
+	planCmd.Flags().String("revision-reason", "", "Traceable explanation for refreshing a plan after completed work")
+	planCmd.Flags().StringArray("revision-evidence", nil, "Repository-relative evidence file supporting the revision (repeatable)")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
-	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results (use - for stdin)")
-	colonizeFinalizeCmd.Flags().String("completion-file", "", "JSON file containing colonize_manifest and external surveyor worker results (use - for stdin)")
+	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results")
+	colonizeFinalizeCmd.Flags().String("completion-file", "", "JSON file containing colonize_manifest and external surveyor worker results")
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("force", false, "Force redispatch of the current active phase after an interrupted build")
 	buildCmd.Flags().Bool("plan-only", false, "Print the build dispatch manifest without mutating colony state or spawning workers")
@@ -1092,7 +1155,8 @@ func init() {
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")
-	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
+	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results")
+	buildCompletionStageCmd.Flags().String("completion-file", "", "JSON file containing the accepted dispatch_manifest and external worker results")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
@@ -1103,14 +1167,15 @@ func init() {
 	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
 	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
 	continueCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
-	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
+	continueCmd.Flags().Bool("classic-ceremony", false, "Emit the heavy continue review manifest for wrapper-spawned classic ceremony reviewers")
+	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results")
 	continueFinalizeCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	continueFinalizeCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
 	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")
 	sealCmd.Flags().Bool("plan-only", false, "Print the final seal review manifest without mutating colony state or spawning workers")
-	sealFinalizeCmd.Flags().String("completion-file", "", "JSON file containing seal_manifest and external review worker results (use - for stdin)")
+	sealFinalizeCmd.Flags().String("completion-file", "", "JSON file containing seal_manifest and external review worker results")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 
 	rootCmd.AddCommand(layEggsCmd)
@@ -1120,6 +1185,7 @@ func init() {
 	rootCmd.AddCommand(planFinalizeCmd)
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(buildFinalizeCmd)
+	rootCmd.AddCommand(buildCompletionStageCmd)
 	rootCmd.AddCommand(continueCmd)
 	rootCmd.AddCommand(continueFinalizeCmd)
 	rootCmd.AddCommand(skipPhaseCmd)

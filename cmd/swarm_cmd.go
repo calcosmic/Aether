@@ -133,12 +133,12 @@ var swarmFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalSwarmCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		result, err := runSwarmFinalize(resolveAetherRootPath(), completion)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		outputWorkflow(result, renderSwarmCompatibilityVisual(result))
 		return nil
@@ -553,6 +553,9 @@ func loadExternalSwarmCompletion(path string) (externalSwarmCompletion, error) {
 	if path == "" {
 		return externalSwarmCompletion{}, fmt.Errorf("flag --completion-file is required")
 	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return externalSwarmCompletion{}, err
+	}
 	var data []byte
 	var err error
 	if path == "-" {
@@ -638,6 +641,9 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	}
 	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(manifest.Root, root) {
 		return nil, fmt.Errorf("swarm_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
+	}
+	if err := validateFinalizerManifestFreshness("swarm_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
+		return nil, err
 	}
 
 	state, _ := loadColonyState()
@@ -1348,7 +1354,7 @@ func swarmExecutionsForJSON(runs []swarmWorkerExecution) []map[string]interface{
 func renderSwarmDispatchPreview(swarmID, target string, plans []swarmWorkerPlan, title string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("swarm-display"), title))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Swarm ID: " + swarmID + "\n")
 	b.WriteString("Target: " + strings.TrimSpace(target) + "\n\n")
 	for _, plan := range plans {
@@ -1368,7 +1374,7 @@ func renderSwarmDispatchPreview(swarmID, target string, plans []swarmWorkerPlan,
 func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("swarm"), "Swarm"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	mode := strings.TrimSpace(stringValue(result["mode"]))
 	target := strings.TrimSpace(stringValue(result["target"]))

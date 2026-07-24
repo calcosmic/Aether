@@ -1,0 +1,16 @@
+id: porter
+role: porter
+prompt_file: colony/prompts/porter.md
+allowed_tools:
+- read
+- write
+- edit
+- bash
+- grep
+- glob
+tier: specialist
+model: sonnet
+color: cyan
+description: Use this agent when delivering colony work after seal. Spawns post-seal
+  to run publish/push/deploy commands. Per D-06, Porter runs the actual commands and
+  reports results. Per D-09, stops on first failure. 📦

@@ -141,11 +141,11 @@ var sealFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalSealCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		if err := runSealFinalize(resolveAetherRootPath(), completion); err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		return nil
 	},
@@ -155,6 +155,9 @@ func loadExternalSealCompletion(path string) (externalSealCompletion, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return externalSealCompletion{}, fmt.Errorf("flag --completion-file is required")
+	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return externalSealCompletion{}, err
 	}
 	var data []byte
 	var err error
@@ -270,14 +273,16 @@ func runSealPlanOnly(root string, force bool) (map[string]interface{}, error) {
 		WorkerTimeout:     int(effectiveContinueReviewTimeout(0) / time.Second),
 		Dispatches:        dispatches,
 		DispatchContract: map[string]interface{}{
-			"execution_model":        "single final review wave before runtime seal",
-			"worker_count":           len(dispatches),
-			"required_castes":        append([]string{}, requiredCastes...),
-			"state_authority":        "runtime finalizer writes final review, sealed state, Crowned Anthill summary, and post-seal readiness output",
-			"wrapper_write_policy":   "workers return structured terminal results to the wrapper; wrappers do not hand-edit .aether/data",
-			"worker_status_values":   []string{"completed", "passed", "blocked", "failed", "timeout"},
-			"required_result_fields": []string{"name", "caste", "task", "status", "summary"},
-			"optional_result_fields": []string{"findings", "issues", "recommendations", "weak_spots", "edge_cases_discovered", "reusable_lessons"},
+			"execution_model":          "single final review wave before runtime seal",
+			"worker_count":             len(dispatches),
+			"required_castes":          append([]string{}, requiredCastes...),
+			"state_authority":          "runtime finalizer writes final review, sealed state, Crowned Anthill summary, and post-seal readiness output",
+			"wrapper_write_policy":     "workers return structured terminal results to the wrapper; wrappers do not hand-edit .aether/data",
+			"result_artifact_paths":    []string{finalizerCompletionTempPattern},
+			"result_collection_policy": "A structurally valid completed result wins over a timeout placeholder for the same reviewer; malformed JSON, duplicate terminal results, and .aether/data completion files are rejected.",
+			"worker_status_values":     []string{"completed", "passed", "blocked", "failed", "timeout"},
+			"required_result_fields":   []string{"name", "caste", "task", "status", "summary"},
+			"optional_result_fields":   []string{"findings", "issues", "recommendations", "weak_spots", "edge_cases_discovered", "reusable_lessons"},
 		},
 		PostSealDirectives: []string{
 			"After seal-finalize succeeds, follow the runtime's Porter readiness output.",
@@ -386,6 +391,9 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 		return fmt.Errorf("seal_manifest contains no dispatches")
 	}
 	if err := validateFinalizerManifestRoot("seal_manifest", manifest.Root, root); err != nil {
+		return err
+	}
+	if err := validateFinalizerManifestFreshness("seal_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
 		return err
 	}
 
@@ -645,7 +653,7 @@ func normalizeSealReviewSeverity(severity string) string {
 func sealReviewFindingBlockingIssues(findings []sealFinalReviewFinding) []string {
 	var blockers []string
 	for _, finding := range findings {
-		if !finding.Blocking && finding.Severity != "CRITICAL" {
+		if !sealReviewFindingBlocksSeal(finding) {
 			continue
 		}
 		label := finding.AgentName
@@ -657,10 +665,25 @@ func sealReviewFindingBlockingIssues(findings []sealFinalReviewFinding) []string
 	return blockers
 }
 
+func sealReviewFindingBlocksSeal(finding sealFinalReviewFinding) bool {
+	if finding.Blocking || finding.Severity == "CRITICAL" {
+		return true
+	}
+	if finding.Severity != "HIGH" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(finding.Domain)) {
+	case "security", "quality":
+		return true
+	default:
+		return false
+	}
+}
+
 func sealFinalReviewBacklog(findings []sealFinalReviewFinding) []sealFinalReviewFinding {
 	backlog := []sealFinalReviewFinding{}
 	for _, finding := range findings {
-		if finding.Blocking || finding.Severity == "CRITICAL" {
+		if sealReviewFindingBlocksSeal(finding) {
 			continue
 		}
 		backlog = append(backlog, finding)
@@ -923,7 +946,7 @@ func runSealFinalReview(root string, state colony.ColonyState, phase colony.Phas
 				}
 				step.Blockers = uniqueSortedStrings(result.WorkerResult.Blockers)
 				step.Duration = result.WorkerResult.Duration.Seconds()
-				step.Report = strings.TrimSpace(result.WorkerResult.RawOutput)
+				step.Report = codex.SanitizeWorkerDiagnosticOutput(result.WorkerResult.RawOutput)
 				for _, blocker := range result.WorkerResult.Blockers {
 					if strings.TrimSpace(blocker) != "" {
 						blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", result.WorkerName, blocker))
@@ -931,7 +954,7 @@ func runSealFinalReview(root string, state colony.ColonyState, phase colony.Phas
 				}
 			}
 			if step.Summary == "" && result.Error != nil {
-				step.Summary = strings.TrimSpace(result.Error.Error())
+				step.Summary = codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())
 			}
 			if step.Summary == "" {
 				step.Summary = sealFinalReviewFlowSummary(step)
@@ -1039,7 +1062,7 @@ func renderSealFinalReviewBrief(root string, state colony.ColonyState, phase col
 	b.WriteString(fmt.Sprintf("- Final phase verification, gates, continue, and review reports, if present: .aether/data/build/phase-%d/\n", phase.ID))
 	b.WriteString("- Review ledgers: .aether/data/reviews/\n")
 	b.WriteString("- Active constraints/signals from the injected pheromone section\n\n")
-	b.WriteString("Return structured findings when you discover useful release evidence. Use `findings` or `issues` with objects shaped as `{domain,severity,file,line,category,description,suggestion,blocking}`. Use `blocking:true` or a CRITICAL severity only for issues that must stop sealing. Put durable process lessons in `reusable_lessons` so the runtime can promote them into repo-local QUEEN.md.\n\n")
+	b.WriteString("Return structured findings when you discover useful release evidence. Use `findings` or `issues` with objects shaped as `{domain,severity,file,line,category,description,suggestion,blocking}`. Use `blocking:true` for any issue that must stop sealing. CRITICAL findings always stop sealing; HIGH security and HIGH quality findings are also seal blockers. Put durable process lessons in `reusable_lessons` so the runtime can promote them into repo-local QUEEN.md.\n\n")
 	if len(state.Plan.Phases) > 0 {
 		b.WriteString("Completed phase summary:\n")
 		if len(state.Plan.Phases) > 5 {

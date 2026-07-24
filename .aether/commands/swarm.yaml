@@ -13,6 +13,7 @@ wrapper_additions:
     Keep live visibility direct:
     - If the user provides no problem description, run `AETHER_OUTPUT_MODE=visual aether swarm --watch`.
     - Do not request a manifest for watch mode.
+    - Treat `swarm --watch` as dashboard ceremony: current activity facts and watch artifacts only, with no swarm-finalize route.
   orchestration: |
     Restore host-visible bug-destroyer orchestration:
     1. Run `AETHER_OUTPUT_MODE=json aether swarm --plan-only $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
@@ -37,6 +38,7 @@ guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "Do not copy command wrappers into target repos; commands are published globally through the platform homes."
   - "Do NOT parse visual output as authoritative state."
+  - "Do NOT treat `swarm --watch` as worker theatre; only problem-bearing swarm runs use manifest dispatch and swarm-finalize."
   - "Do NOT run `aether swarm` without `--plan-only` from Claude/OpenCode bug-destroyer orchestration unless the user explicitly asks for raw/no-orchestration."
   - "Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table."
   - "If docs and runtime disagree, runtime wins."

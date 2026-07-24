@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/shelf-add.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-shelf-add
-description: "Add a note to the Aether shelf backlog"
+description: "📝 Add a note to the Aether shelf backlog"
 ---
 
 Use the Go `aether` CLI as the source of truth.

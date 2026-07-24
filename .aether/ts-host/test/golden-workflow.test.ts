@@ -1,15 +1,17 @@
 /**
- * Golden workflow test — captures the full ceremony output of a lifecycle run.
+ * Golden workflow test — captures the lifecycle planning boundary.
  *
- * Runs plan -> build -> continue with simulated workers, captures all rendered
- * output, and compares against a stored baseline snapshot.
+ * The TS lifecycle harness no longer fabricates a final plan from local
+ * synthesis. It should stop after the planning finalizer reports that a fresh
+ * Scout -> Route-Setter iteration is required.
  *
  * To update the snapshot after intentional ceremony changes:
  *   AETHER_UPDATE_SNAPSHOTS=1 npx tsx --test test/golden-workflow.test.ts
  */
 
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -18,13 +20,32 @@ import { discoverGoBinary, callGoJSON } from "../src/go-bridge.js";
 import { runLifecycle } from "../src/lifecycle.js";
 
 import { readFileSync as readSnapshot, writeFileSync as writeSnapshot, existsSync as snapshotExists, mkdirSync as mkdirSnapshot } from "node:fs";
-import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SNAPSHOT_DIR = join(__dirname, "__snapshots__");
 const UPDATE_SNAPSHOTS = process.env.AETHER_UPDATE_SNAPSHOTS === "1";
+
+let sourceGoBinaryPath: string | undefined;
+
+function discoverSourceGoBinary(): string {
+  if (process.env["AETHER_BINARY_PATH"]) {
+    return discoverGoBinary();
+  }
+  if (sourceGoBinaryPath) {
+    return sourceGoBinaryPath;
+  }
+
+  const repoRoot = resolve(__dirname, "..", "..", "..");
+  const buildDir = mkdtempSync(join(tmpdir(), "aether-ts-host-source-bin-"));
+  sourceGoBinaryPath = join(buildDir, "aether");
+  execFileSync("go", ["build", "-o", sourceGoBinaryPath, "./cmd/aether"], {
+    cwd: repoRoot,
+    stdio: "pipe",
+  });
+  return sourceGoBinaryPath;
+}
 
 // ---------------------------------------------------------------------------
 // Snapshot helpers
@@ -147,8 +168,8 @@ describe("golden-workflow", () => {
     }
   });
 
-  it("runLifecycle produces deterministic golden output", async () => {
-    const goBinaryPath = discoverGoBinary();
+  it("runLifecycle reports the pending planning boundary deterministically", async () => {
+    const goBinaryPath = discoverSourceGoBinary();
     const result = await runLifecycle({
       goBinaryPath,
       cwd: context!.tempDir,
@@ -156,13 +177,17 @@ describe("golden-workflow", () => {
       phase: 1,
     });
 
-    assert.equal(result.success, true, "Lifecycle should succeed");
-    assert.deepEqual(result.steps_completed, ["plan", "build", "continue"]);
+    assert.equal(result.success, false, "Lifecycle should stop at planning");
+    assert.deepEqual(result.steps_completed, []);
+    assert.match(
+      result.error ?? "",
+      /intermediate planning iteration|synthesis planning packets|real Scout and Route-Setter/
+    );
 
-    // Combine stdout captures into normalized golden output
+    // Combine stdout captures into normalized output. Ceremony output is routed
+    // to stderr, and no fake build/continue output should be emitted on stdout.
     const rawOutput = capturedOutput.join("");
     const normalized = normalizeOutput(rawOutput);
-
-    assertGoldenSnapshot(normalized);
+    assert.equal(normalized, "");
   });
 });

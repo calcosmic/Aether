@@ -7,6 +7,12 @@ You are the **Queen Ant Colony**. Reconcile completed work and advance to the ne
 
 ## Instructions
 
+## State Mutation Policy
+
+All writes to COLONY_STATE.json MUST go through `aether state-mutate` with targeted jq expressions.
+Never use the Write tool, `jq ... > file`, or any other direct file modification on COLONY_STATE.json.
+The Go runtime handles atomic writes, validation, and backups — direct writes risk corrupting colony state.
+
 Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
@@ -1009,11 +1015,15 @@ Determine next phase (`current_phase + 1`).
 
 **If no next phase (all complete):** Skip to Step 2.4 (commit suggestion), then Step 2.7 (completion).
 
-Update COLONY_STATE.json:
+Write the updated state through targeted `state-mutate` calls. Each call acquires a lock, creates a backup, applies the jq expression, validates, and writes atomically. Do NOT use the Write tool or `state-write` with full JSON content — always use `state-mutate` to avoid stale-context corruption.
 
 1. **Mark current phase completed:**
-   - Set `plan.phases[current].status` to `"completed"`
-   - Set all tasks in phase to `"completed"`
+
+   Run using the Bash tool with description "Marking phase completed...":
+   ```bash
+   aether state-mutate --argjson pid "$current_phase" \
+     '.plan.phases |= map(if .id == $pid then .status = "completed" else . end)'
+   ```
 
 2. **Extract learnings (with validation status):**
 
@@ -1024,23 +1034,21 @@ Update COLONY_STATE.json:
    - The feature works in practice, not just in theory
    - User has confirmed the behavior
 
-   Append to `memory.phase_learnings`:
-   ```json
-   {
-     "id": "learning_<unix_timestamp>",
-     "phase": <phase_number>,
-     "phase_name": "<name>",
-     "learnings": [
-       {
-         "claim": "<specific actionable learning>",
-         "status": "hypothesis",
-         "tested": false,
-         "evidence": "<what observation led to this>",
-         "disproven_by": null
-       }
-     ],
-     "timestamp": "<ISO-8601>"
-   }
+   Build the learning JSON in a shell variable, then append it via state-mutate:
+   ```bash
+   learning_json=$(jq -n \
+     --argjson phase "$current_phase" \
+     --arg phase_name "$phase_name" \
+     --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+     '{
+       id: ("learning_" + (now | tostring)),
+       phase: $phase,
+       phase_name: $phase_name,
+       learnings: [],
+       timestamp: $timestamp
+     }')
+   aether state-mutate --argjson learning "$learning_json" \
+     '.memory.phase_learnings += [$learning]'
    ```
 
    **Status values:**
@@ -1057,22 +1065,23 @@ Update COLONY_STATE.json:
 
    For each learning extracted, run the memory pipeline (observation + auto-pheromone + auto-promotion check).
 
-  Run using the Bash tool with description "Recording learning observations...":
-  ```bash
-  # Get learnings from the current phase
-  current_phase_learnings=$(jq -r --argjson phase "$current_phase" '.memory.phase_learnings[] | select(.phase == $phase)' .aether/data/COLONY_STATE.json 2>/dev/null || echo "")
+   Run using the Bash tool with description "Recording learning observations...":
+   ```bash
+   # Get learnings from the current phase
+   current_phase_learnings=$(aether state-mutate --verify-only --argjson phase "$current_phase" \
+     '.memory.phase_learnings[] | select(.phase == $phase)' 2>/dev/null || echo "")
 
-  if [[ -n "$current_phase_learnings" ]]; then
-    echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
-      if [[ -n "$claim" ]]; then
-        aether memory-capture --type "learning" --source-type success_pattern --evidence-type multi_phase --content "$claim"
-      fi
-    done
-    echo "Recorded observations for threshold tracking"
-  else
-    echo "No learnings to record"
-  fi
-  ```
+   if [[ -n "$current_phase_learnings" ]]; then
+     echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
+       if [[ -n "$claim" ]]; then
+         aether memory-capture --type "learning" --source-type success_pattern --evidence-type multi_phase --content "$claim"
+       fi
+     done
+     echo "Recorded observations for threshold tracking"
+   else
+     echo "No learnings to record"
+   fi
+   ```
 
    This records each learning in `learning-observations.json` with:
    - Content hash for deduplication (same claim across phases increments count)
@@ -1106,24 +1115,28 @@ Update COLONY_STATE.json:
      - user_feedback: 0.9
    - When a learning has observation_count data in learning-observations.json, use formula: min(0.7 + (count-1)*0.05, 0.9) to override the base value.
 
-   Append to `memory.instincts`:
-   ```json
-   {
-     "id": "instinct_<unix_timestamp>",
-     "trigger": "<when X>",
-     "action": "<do Y>",
-     "confidence": 0.5,
-     "status": "hypothesis",
-     "domain": "<testing|architecture|code-style|debugging|workflow>",
-     "source": "phase-<id>",
-     "evidence": ["<specific observation that led to this>"],
-     "tested": false,
-     "created_at": "<ISO-8601>",
-     "last_applied": null,
-     "applications": 0,
-     "successes": 0,
-     "failures": 0
-   }
+   Build the instinct JSON in a shell variable, then append it via state-mutate:
+   ```bash
+   instinct_json=$(jq -n \
+     --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+     '{
+       id: ("instinct_" + (now | tostring)),
+       trigger: "<when X>",
+       action: "<do Y>",
+       confidence: 0.5,
+       status: "hypothesis",
+       domain: "<testing|architecture|code-style|debugging|workflow>",
+       source: "phase-<id>",
+       evidence: ["<specific observation that led to this>"],
+       tested: false,
+       created_at: $timestamp,
+       last_applied: null,
+       applications: 0,
+       successes: 0,
+       failures: 0
+     }')
+   aether state-mutate --argjson instinct "$instinct_json" \
+     '.memory.instincts += [$instinct]'
    ```
 
    **Instinct confidence updates:**
@@ -1135,25 +1148,30 @@ Update COLONY_STATE.json:
    Cap: Keep max 30 instincts (remove lowest confidence when exceeded).
 
 4. **Advance state:**
-   - Set `current_phase` to next phase number
-   - Set `state` to `"READY"`
-   - Set `build_started_at` to null
-   - Append event: `"<timestamp>|phase_advanced|continue|Completed Phase <id>, advancing to Phase <next>"`
+
+   Run using the Bash tool with description "Advancing colony state...":
+   ```bash
+   aether state-mutate \
+     --argjson pid "$current_phase" \
+     --argjson next "$next_phase" \
+     --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+     '.current_phase = $next | .state = "READY" | .build_started_at = null | .events += [$timestamp + "|phase_advanced|continue|Completed Phase " + ($pid|tostring) + ", advancing to Phase " + ($next|tostring)]'
+   ```
 
 5. **Cap enforcement:**
-   - Keep max 20 phase_learnings
-   - Keep max 30 decisions
-   - Keep max 30 instincts (remove lowest confidence)
-   - Keep max 100 events
 
-Write COLONY_STATE.json.
+   Run using the Bash tool with description "Enforcing memory caps...":
+   ```bash
+   aether state-mutate \
+     '.memory.phase_learnings = (.memory.phase_learnings[-20:]) | .memory.decisions = (.memory.decisions[-30:]) | .memory.instincts = (.memory.instincts | sort_by(.confidence) | .[-30:]) | .events = (.events[-100:])'
+   ```
 
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...": `aether validate-state`
 
 ### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
 
-**This entire step produces NO user-visible output.** All pheromone operations run silently — learnings are deposited in the background. If any pheromone call fails, log the error and continue. Phase advancement must never fail due to pheromone errors.
+**This entire step produces minimal user-visible output.** All pheromone operations run in the background. If any pheromone call fails, the error is visible (honest stderr) and execution continues. Phase advancement must never fail due to pheromone errors.
 
 #### 2.1a: Auto-emit FEEDBACK pheromone for phase outcome
 
@@ -1173,8 +1191,7 @@ aether pheromone-write --type FEEDBACK --content "$phase_feedback" \
   --strength 0.6 \
   --source "worker:continue" \
   --reason "Auto-emitted on phase advance: captures what worked and what was learned" \
-  --ttl "30d" 2>/dev/null || true
-```
+  --ttl "30d"```
 
 The strength is 0.6 (auto-emitted = lower than user-emitted 0.7). Source is "worker:continue" to distinguish from user-emitted feedback. TTL is 30d so it survives phase transitions and can guide subsequent work.
 
@@ -1210,8 +1227,7 @@ if [[ -n "$decisions" ]]; then
         --strength 0.6 \
         --source "auto:decision" \
         --reason "Auto-emitted from phase decision during continue" \
-        --ttl "30d" 2>/dev/null || true
-      emit_count=$((emit_count + 1))
+        --ttl "30d"      emit_count=$((emit_count + 1))
     fi
   done <<< "$decisions"
 fi
@@ -1256,16 +1272,14 @@ if [[ "$midden_count" -gt 0 ]]; then
         --strength 0.7 \
         --source "auto:error" \
         --reason "Auto-emitted: midden error pattern recurred 3+ times" \
-        --ttl "30d" 2>/dev/null || true
-      emit_count=$((emit_count + 1))
+        --ttl "30d"      emit_count=$((emit_count + 1))
 
       # Capture as resolution candidate for promotion tracking
       aether memory-capture \
         --type "resolution" \
         --source-type error_resolution \
         --evidence-type multi_phase \
-        --content "Recurring error pattern: $category ($count occurrences)" 2>/dev/null || true
-    fi
+        --content "Recurring error pattern: $category ($count occurrences)"    fi
   done
 fi
 ```
@@ -1312,8 +1326,7 @@ for encoded in $recurring_criteria; do
       --strength 0.6 \
       --source "auto:success" \
       --reason "Auto-emitted: success criteria pattern recurred across $count phases" \
-      --ttl "30d" 2>/dev/null || true
-  fi
+      --ttl "30d"  fi
 done
 ```
 
@@ -1576,7 +1589,11 @@ Then regenerate the commit message with the new description and commit.
 Display: `Skipped. Your changes are saved on disk but not committed.`
 
 **Record the suggestion to prevent double-prompting:**
-Set `last_commit_suggestion_phase` to `{phase_id}` in COLONY_STATE.json (add the field at the top level if it does not exist).
+
+Run using the Bash tool with description "Recording commit suggestion...":
+```bash
+aether state-mutate --argjson phase_id "$phase_id" '.last_commit_suggestion_phase = $phase_id'
+```
 
 **Error handling:** If any git command fails (not a repo, merge conflict, pre-commit hook rejection), display the error output and continue to the next step. The commit suggestion is advisory only -- it never blocks the flow.
 
@@ -1617,7 +1634,10 @@ Clear context now?
    Then run: /ant-build {next_id}
    ```
    
-   Record the suggestion: Set `context_clear_suggested` to `true` in COLONY_STATE.json.
+   Run using the Bash tool with description "Recording context clear suggestion...":
+   ```bash
+   aether state-mutate '.context_clear_suggested = true'
+   ```
 
 4. **If option 2 ("No, continue in current context"):**
    Display: `Continuing in current context. State is saved.`
@@ -1736,10 +1756,8 @@ Prune stale backups and temp files. This runs automatically — failures never a
 
 Run using the Bash tool with description "Pruning stale backups...":
 ```bash
-aether backup-prune-global 2>/dev/null || true
-```
+aether backup-prune-global```
 
 Run using the Bash tool with description "Cleaning temp files...":
 ```bash
-aether temp-clean 2>/dev/null || true
-```
+aether temp-clean```

@@ -95,6 +95,10 @@ func casteRelevanceScore(phase colony.Phase, caste string) int {
 
 // queenOrchestrate decides which castes to dispatch for a given flow.
 func queenOrchestrate(phase colony.Phase, flowType string, state colony.ColonyState) []CasteDispatch {
+	return applyQueenSpawnBudget(queenCandidateDispatches(phase, flowType, state), phase, flowType, state)
+}
+
+func queenCandidateDispatches(phase colony.Phase, flowType string, state colony.ColonyState) []CasteDispatch {
 	var dispatches []CasteDispatch
 	seen := make(map[string]struct{}, len(casteRelevanceRegistry))
 	flowType = normalizeQueenFlowType(flowType)
@@ -229,10 +233,7 @@ func spawnThreshold(flowType string, state colony.ColonyState) int {
 func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.ColonyState) bool {
 	switch flowType {
 	case "build":
-		if phase.Mode == colony.PhaseModeDiscovery {
-			return caste == "watcher" || caste == "probe" // No builder for discovery
-		}
-		return caste == "builder" || caste == "watcher" || caste == "probe"
+		return queenBuildSafetyRequiredCaste(caste, flowType, phase)
 	case "continue":
 		switch stateVerificationDepth(state) {
 		case colony.VerificationDepthLight:
@@ -250,6 +251,9 @@ func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.C
 			caste == "surveyor-disciplines" ||
 			caste == "surveyor-pathogens"
 	case "swarm":
+		if caste == "gatekeeper" && phaseRiskLevel(phase) == "high" {
+			return true
+		}
 		return caste == "tracker" ||
 			caste == "scout" ||
 			caste == "archaeologist" ||

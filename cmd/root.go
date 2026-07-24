@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/calcosmic/Aether/pkg/trace"
@@ -160,6 +161,11 @@ var tracer *trace.Tracer
 var stdout io.Writer = os.Stdout
 var stderr io.Writer = os.Stderr
 
+// renderedCommandExitCode bridges legacy handlers that render an error envelope
+// but return nil to Cobra. Commands execute serially in the CLI process, so one
+// atomic marker is sufficient and keeps the shell exit status aligned with JSON.
+var renderedCommandExitCode atomic.Int64
+
 // rootCmd is the root Cobra command for the aether CLI.
 var rootCmd = &cobra.Command{
 	Use:   "aether",
@@ -193,7 +199,7 @@ var rootCmd = &cobra.Command{
 func skipStoreInit(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "command-guide", "completion", "version", "help", "audit-catalog":
+		case "command-guide", "completion", "version", "help", "audit-catalog", "reconcile", "internal-worker-adapter":
 			return true
 		}
 	}
@@ -202,7 +208,19 @@ func skipStoreInit(cmd *cobra.Command) bool {
 
 // Execute runs the root command and returns any error.
 func Execute() error {
-	return rootCmd.Execute()
+	renderedCommandExitCode.Store(0)
+	err := rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code > 0 {
+		return renderedErrorExit(code)
+	}
+	return err
+}
+
+func markRenderedCommandError(code int) {
+	if code <= 0 {
+		code = 1
+	}
+	renderedCommandExitCode.Store(int64(code))
 }
 
 type renderedCommandError struct {

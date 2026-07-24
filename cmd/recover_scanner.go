@@ -12,7 +12,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-// performStuckStateScan runs all 7 stuck-state detectors in dependency order
+// performStuckStateScan runs all 8 stuck-state detectors in dependency order
 // and returns the collected issues.
 func performStuckStateScan(dataDir string) ([]HealthIssue, error) {
 	state, stateErr := loadActiveColonyState()
@@ -37,6 +37,7 @@ func performStuckStateScan(dataDir string) ([]HealthIssue, error) {
 	issues = append(issues, scanDirtyWorktrees(state)...)
 	issues = append(issues, scanBrokenSurvey(state, dataDir)...)
 	issues = append(issues, scanMissingAgentFiles()...)
+	issues = append(issues, scanUnreconciledWorkerChanges(state)...)
 
 	return issues, nil
 }
@@ -470,6 +471,23 @@ func scanMissingAgentFiles() []HealthIssue {
 	}
 
 	return issues
+}
+
+// ---------------------------------------------------------------------------
+// DETECT-08: Unreconciled Worker Changes
+// ---------------------------------------------------------------------------
+
+// scanUnreconciledWorkerChanges detects when the git working tree has changes
+// that were not recorded by any worker result.
+func scanUnreconciledWorkerChanges(state colony.ColonyState) []HealthIssue {
+	result := detectUnreconciledChanges(store, &state)
+	if !result.HasUnreconciledChanges {
+		return nil
+	}
+	return []HealthIssue{
+		fixableIssue(issueWarning("unreconciled_worker_changes", "git working tree",
+			fmt.Sprintf("%d unreconciled file change(s) not recorded by any worker", len(result.ChangedFiles)))),
+	}
 }
 
 // homeDir returns the user's home directory.

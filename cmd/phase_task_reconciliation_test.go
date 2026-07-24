@@ -192,12 +192,8 @@ func TestBuildState_PriorPhaseIncompleteTasks(t *testing.T) {
 	}
 }
 
-// TestBuildFinalize_DivergentManifestTaskCount demonstrates that build-finalize
-// does not detect when a manifest claims fewer tasks than the colony state phase.
-//
-// BUG: validateBuildManifestTaskSetForPhase checks task ID sets match, but when
-// the manifest has fewer tasks than the phase, the allowMissingTasks=true path
-// in finalize can skip the validation entirely.
+// TestBuildFinalize_DivergentManifestTaskCount verifies that a plan-only
+// manifest cannot be edited after Go binds it to a durable build attempt.
 func TestBuildFinalize_DivergentManifestTaskCount(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -292,12 +288,12 @@ func TestBuildFinalize_DivergentManifestTaskCount(t *testing.T) {
 				manifestTaskCount, stateTaskCount)
 		}
 	} else {
-		// Finalize rejected the divergence — check it's for the right reason
+		// Finalize must reject the modified dispatch contract before worker claims.
 		errOutput := stderr.(*bytes.Buffer).String()
-		if !strings.Contains(errOutput, "task") && !strings.Contains(executeErr.Error(), "task") {
+		if !strings.Contains(errOutput, "does not match durable build attempt") && !strings.Contains(executeErr.Error(), "does not match durable build attempt") {
 			t.Fatalf("finalize rejected but for wrong reason: %v", executeErr)
 		}
-		t.Logf("finalize correctly detected task count mismatch: %v", executeErr)
+		t.Logf("finalize correctly rejected a modified durable manifest: %v", executeErr)
 	}
 }
 
@@ -395,10 +391,10 @@ func TestBuildFinalize_ManifestTaskCountMismatchWithState(t *testing.T) {
 	} else {
 		errOutput := stderr.(*bytes.Buffer).String()
 		combinedErr := executeErr.Error() + " " + errOutput
-		if !strings.Contains(combinedErr, "task") {
+		if !strings.Contains(combinedErr, "does not match durable build attempt") {
 			t.Fatalf("finalize rejected but for wrong reason: %v", executeErr)
 		}
-		t.Logf("finalize correctly detected task count mismatch: %v", executeErr)
+		t.Logf("finalize correctly rejected a modified durable manifest: %v", executeErr)
 	}
 }
 

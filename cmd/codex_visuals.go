@@ -8,11 +8,19 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-const visualDivider = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+const visualDividerFallback = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+
+func visualDividerStr() string {
+	if loaded := loadVisualsConfig(); loaded != nil && loaded.VisualDivider != "" {
+		return loaded.VisualDivider
+	}
+	return visualDividerFallback
+}
 
 var visualOutputMu sync.Mutex
 
@@ -201,7 +209,57 @@ var commandEmojiMap = map[string]string{
 	"medic":                  "🩹",
 }
 
+type commandCeremonyLevel string
+
+const (
+	commandCeremonyLevelWorkerTheatre commandCeremonyLevel = "worker_theatre"
+	commandCeremonyLevelGuidedRitual  commandCeremonyLevel = "guided_ritual"
+	commandCeremonyLevelDashboard     commandCeremonyLevel = "dashboard"
+	commandCeremonyLevelProgress      commandCeremonyLevel = "progress"
+	commandCeremonyLevelQuiet         commandCeremonyLevel = "quiet"
+)
+
+func classifyCommandCeremonyLevel(command string) commandCeremonyLevel {
+	command = strings.TrimSpace(strings.ToLower(command))
+	command = strings.TrimPrefix(command, "aether ")
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return commandCeremonyLevelQuiet
+	}
+	command = fields[0]
+	if strings.HasSuffix(command, "-finalize") {
+		return commandCeremonyLevelQuiet
+	}
+	switch command {
+	case "plan", "build", "colonize", "seal":
+		return commandCeremonyLevelWorkerTheatre
+	case "swarm":
+		for _, field := range fields[1:] {
+			switch field {
+			case "--watch", "watch":
+				return commandCeremonyLevelDashboard
+			}
+		}
+		return commandCeremonyLevelWorkerTheatre
+	case "init", "discuss", "oracle":
+		return commandCeremonyLevelGuidedRitual
+	case "status", "watch", "history", "phase", "resume":
+		return commandCeremonyLevelDashboard
+	case "run", "update", "publish", "continue", "install", "lay-eggs", "porter", "source-check", "bump-version":
+		return commandCeremonyLevelProgress
+	case "command-guide", "spawn-log", "spawn-complete", "ceremony", "completion", "version", "generate-progress-bar", "version-check-cached":
+		return commandCeremonyLevelQuiet
+	default:
+		return commandCeremonyLevelQuiet
+	}
+}
+
 func commandEmoji(command string) string {
+	if loaded := loadVisualsConfig(); loaded != nil {
+		if emoji, ok := loaded.CommandEmojiMap[command]; ok {
+			return emoji
+		}
+	}
 	if emoji, ok := commandEmojiMap[command]; ok {
 		return emoji
 	}
@@ -292,6 +350,9 @@ func renderBanner(emoji, title string) string {
 
 func renderAetherWordmark() string {
 	wordmark := strings.Trim(aetherWordmark, "\n")
+	if loaded := loadVisualsConfig(); loaded != nil && loaded.AetherWordmark != "" {
+		wordmark = strings.Trim(loaded.AetherWordmark, "\n")
+	}
 	if wordmark == "" {
 		return ""
 	}
@@ -323,7 +384,7 @@ func renderArtifactsSection(paths ...string) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("artifacts"), "Artifacts"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	for _, path := range filtered {
 		b.WriteString(path)
 		b.WriteString("\n")
@@ -414,6 +475,17 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 		return `Run ` + "`aether resume`" + ` to restore the paused colony into a runnable state.`,
 			[]string{`Run ` + "`aether status`" + ` if you only want to inspect the saved colony first.`}
 	}
+	if flag, ok := activePlanFinalizeFailureFlag(store); ok {
+		description := compactActionText(flag.Description, 120)
+		if description == "" {
+			description = "plan-finalize failed"
+		}
+		return `Run ` + "`aether flags --status active`" + ` to inspect the planning blocker before building.`,
+			[]string{
+				`Run ` + "`aether plan --repair-artifact`" + ` if the blocker is only invalid phase-plan dependency references.`,
+				fmt.Sprintf("Blocker: %s", description),
+			}
+	}
 
 	if len(state.Plan.Phases) == 0 {
 		return `Run ` + "`aether discuss`" + ` to capture intent clarifications before planning.`,
@@ -446,7 +518,7 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	switch state.State {
 	case colony.StateEXECUTING, colony.StateBUILT:
 		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
-			return fmt.Sprintf("Run `aether build %d` to restart the interrupted phase.", state.CurrentPhase),
+			return fmt.Sprintf("Run `%s` to restart the interrupted phase.", buildForceRedispatchCommand(state.CurrentPhase)),
 				[]string{`Run ` + "`aether status`" + ` if you want to inspect the saved colony first.`}
 		}
 		if guidance := loadActiveRecoveryGuidance(state); guidance != nil && guidance.HasTargetedRoute {
@@ -473,7 +545,7 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 func renderInitVisual(goal, scope, sessionID, dataDir string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderStageMarker("Colony"))
 	b.WriteString("Queen charter accepted.\n")
 	b.WriteString("Goal: ")
@@ -501,7 +573,7 @@ func renderInitVisual(goal, scope, sessionID, dataDir string) string {
 func renderCharterDisplay(ch colony.Charter) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Charter"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderStageMarker("Charter"))
 	b.WriteString("  Intent:      ")
 	b.WriteString(emptyFallback(ch.Intent, "(none)"))
@@ -524,7 +596,7 @@ func renderCharterDisplay(ch colony.Charter) string {
 	b.WriteString("  Constraints: ")
 	b.WriteString(emptyFallback(ch.Constraints, "(none)"))
 	b.WriteString("\n")
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	return b.String()
 }
 
@@ -542,7 +614,7 @@ func renderResearchDisplay(data ceremonyResearchData) string {
 
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("scout"), "Research Data"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	// Tech Stack Detail
 	if len(data.TechStackDetail) > 0 {
@@ -611,14 +683,14 @@ func renderResearchDisplay(data ceremonyResearchData) string {
 		b.WriteString(fmt.Sprintf("  Is Git Repo:       %t\n", cs.IsGitRepo))
 	}
 
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	return b.String()
 }
 
 func renderColonizeVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("colonize"), "Colonize"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	dispatchMode := strings.TrimSpace(stringValue(result["dispatch_mode"]))
 	requiresFinalizer, _ := result["requires_finalizer"].(bool)
 	if requiresFinalizer || dispatchMode == "agent-delegate" || dispatchMode == "plan-only" {
@@ -713,7 +785,7 @@ func renderColonizeVisual(result map[string]interface{}) string {
 func renderColonizeDispatchPreview(root string, dispatches []codexSurveyorDispatch) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("colonize-dispatch"), "Colonize Dispatch"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Surveyor wave dispatching.\n")
 	b.WriteString("Root: ")
 	b.WriteString(root)
@@ -807,11 +879,14 @@ func renderSurveyorResults(surveyors []codexSurveyorDispatch) string {
 	return b.String()
 }
 
-// hasRealPlanningExecutionData returns true if any planning worker has a non-"spawned" status,
-// indicating real worker execution data is available.
+// hasRealPlanningExecutionData returns true when a planning worker reports evidence
+// beyond a manifest placeholder. Planned and spawned entries are not completion evidence.
 func hasRealPlanningExecutionData(dispatches []codexPlanningDispatch) bool {
 	for _, d := range dispatches {
-		if d.Status != "spawned" {
+		switch strings.TrimSpace(d.Status) {
+		case "", "planned", "spawned":
+			continue
+		default:
 			return true
 		}
 	}
@@ -897,9 +972,40 @@ func dispatchStatusIcon(status string) string {
 func renderPlanVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("plan"), "Plan"))
-	b.WriteString(visualDivider)
-	if existing, _ := result["existing_plan"].(bool); existing {
+	b.WriteString(visualDividerStr())
+	if _, ok := result["repair_source"]; ok {
+		if repaired, _ := result["repaired"].(bool); repaired {
+			b.WriteString("Repaired phase-plan dependency references.\n")
+		} else {
+			b.WriteString("Phase-plan dependency references are already valid.\n")
+		}
+		if phasePlan := strings.TrimSpace(stringValue(result["phase_plan"])); phasePlan != "" {
+			b.WriteString("Artifact: ")
+			b.WriteString(phasePlan)
+			b.WriteString("\n")
+		}
+		b.WriteString(fmt.Sprintf("Plan size: %d phases, %d tasks\n\n", intValue(result["phase_count"]), intValue(result["task_count"])))
+		if repairs := stringSliceValue(result["repairs"]); len(repairs) > 0 {
+			b.WriteString("Repairs\n")
+			b.WriteString(renderIndentedList(repairs))
+			b.WriteString("\n")
+		}
+		b.WriteString(renderNextUp(
+			`Run `+"`aether plan-finalize --completion-file <file>`"+` to retry finalization with the repaired artifact.`,
+			`Run `+"`aether flags --status active`"+` if a planning blocker is still open.`,
+		))
+		return b.String()
+	}
+	existing, _ := result["existing_plan"].(bool)
+	planOnly, _ := result["plan_only"].(bool)
+	requiresFinalizer, _ := result["requires_finalizer"].(bool)
+	requiresNextIteration, _ := result["requires_next_iteration"].(bool)
+	if existing {
 		b.WriteString("Existing colony plan loaded.\n")
+	} else if requiresNextIteration {
+		b.WriteString("Planning iteration recorded; another Scout and Route-Setter pass is required before the colony plan is written.\n")
+	} else if planOnly && requiresFinalizer {
+		b.WriteString("Planning manifest prepared for host-dispatched Scout and Route-Setter workers.\n")
 	} else {
 		b.WriteString("Scout and Route-Setter mapped the colony goal into executable phases.\n")
 	}
@@ -958,9 +1064,29 @@ func renderPlanVisual(result map[string]interface{}) string {
 	if confidence, ok := result["confidence"].(map[string]interface{}); ok {
 		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", intValue(confidence["overall"])))
 	}
+	if planningLoop, ok := result["planning_loop"].(codexPlanningLoop); ok && planningLoop.TargetConfidence > 0 {
+		b.WriteString(fmt.Sprintf("Planning loop: target %d%%, %d/%d iteration(s), stop=%s\n",
+			planningLoop.TargetConfidence,
+			planningLoop.Iterations,
+			planningLoop.MaxIterations,
+			planningLoop.StopReason,
+		))
+	} else if planningLoop, ok := result["planning_loop"].(map[string]interface{}); ok && intValue(planningLoop["target_confidence"]) > 0 {
+		b.WriteString(fmt.Sprintf("Planning loop: target %d%%, %d/%d iteration(s), stop=%s\n",
+			intValue(planningLoop["target_confidence"]),
+			intValue(planningLoop["iterations"]),
+			intValue(planningLoop["max_iterations"]),
+			stringValue(planningLoop["stop_reason"]),
+		))
+	}
 	phases := phaseSliceValue(result["phases"])
 	b.WriteString("Plan size: ")
 	b.WriteString(fmt.Sprintf("%d phases\n\n", len(phases)))
+	if revision, ok := result["plan_revision"].(colony.PlanRevision); ok && strings.TrimSpace(revision.ID) != "" {
+		b.WriteString(fmt.Sprintf("Plan revision: r%d (%s) - %s\n\n", revision.Number, revision.ReasonType, revision.Reason))
+	} else if revision, ok := result["plan_revision"].(map[string]interface{}); ok && strings.TrimSpace(stringValue(revision["id"])) != "" {
+		b.WriteString(fmt.Sprintf("Plan revision: %s (%s)\n\n", stringValue(revision["id"]), stringValue(revision["reason_type"])))
+	}
 	if warning := strings.TrimSpace(stringValue(result["clarification_warning"])); warning != "" {
 		b.WriteString("Clarifications\n")
 		b.WriteString(fmt.Sprintf("  - %d unresolved clarification(s)\n", intValue(result["unresolved_clarifications"])))
@@ -1002,12 +1128,12 @@ func renderPlanVisual(result map[string]interface{}) string {
 		}
 		b.WriteString("\n")
 	}
-	if contract := renderDispatchContract(result["dispatch_contract"]); contract != "" {
+	if contract := renderDispatchContract(result["dispatch_contract"]); contract != "" && (!existing || requiresFinalizer) {
 		b.WriteString(contract)
 		b.WriteString("\n")
 	}
-	if planOnly, _ := result["plan_only"].(bool); planOnly {
-		if existing, _ := result["existing_plan"].(bool); !existing {
+	if planOnly {
+		if !existing {
 			if agentDelegate, _ := result["agent_delegate"].(bool); agentDelegate || strings.TrimSpace(stringValue(result["dispatch_mode"])) == "agent-delegate" {
 				if reason := strings.TrimSpace(stringValue(result["agent_delegate_reason"])); reason != "" {
 					b.WriteString("Agent-Delegate\n")
@@ -1040,6 +1166,25 @@ func renderPlanVisual(result map[string]interface{}) string {
 			b.WriteString(fmt.Sprintf("  - ... and %d more phase research files\n", len(files)-5))
 		}
 		b.WriteString("\n")
+	}
+	if requiresNextIteration {
+		if gaps := stringSliceValue(result["selected_gaps"]); len(gaps) > 0 {
+			b.WriteString("Next Iteration Gaps\n")
+			b.WriteString(renderIndentedList(gaps))
+			b.WriteString("\n")
+		}
+		b.WriteString("Coordination: ")
+		b.WriteString(displayDataPath("spawn-tree.txt"))
+		b.WriteString("\n\n")
+		next := strings.TrimSpace(stringValue(result["next"]))
+		if next == "" {
+			next = "aether host plan"
+		}
+		b.WriteString(renderNextUp(
+			fmt.Sprintf("Run `%s` to request the next planning iteration manifest.", next),
+			`Do not start `+"`aether build`"+` until the planning loop reaches a real stop condition or you explicitly accept below target.`,
+		))
+		return b.String()
 	}
 
 	for _, phase := range phases {
@@ -1119,7 +1264,7 @@ func renderPlanVisual(result map[string]interface{}) string {
 func renderPlanDispatchPreview(goal string, dispatches []codexPlanningDispatch) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("plan-dispatch"), "Plan Dispatch"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Planning worker wave dispatching.\n")
 	b.WriteString("Goal: ")
 	b.WriteString(goal)
@@ -1167,21 +1312,21 @@ func renderSmartDepthReason(phase colony.Phase, totalPhases int) string {
 	position := phasePositionLevel(phase.ID, totalPhases)
 
 	if risk == "high" {
-		return "auto: security risk"
+		return getSmartDefaultReason("high_risk")
 	}
 	if position == "final" {
-		return "auto: final phase"
+		return getSmartDefaultReason("final_phase")
 	}
 	if risk == "medium" {
-		return "auto: high blast radius"
+		return getSmartDefaultReason("medium_risk")
 	}
 	if position == "early" {
-		return "auto: early phase"
+		return getSmartDefaultReason("early_phase")
 	}
 	if position == "late" {
-		return "auto: late phase"
+		return getSmartDefaultReason("late_phase")
 	}
-	return "auto: standard"
+	return getSmartDefaultReason("standard")
 }
 
 // renderReviewDepthLineWithReason wraps renderReviewDepthLine with smart-default
@@ -1215,7 +1360,7 @@ func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
 func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d", phase.ID)))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	b.WriteString("Phase: ")
@@ -1268,7 +1413,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Plan %d", phase.ID)))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Dispatch manifest only. No state was changed and no workers were spawned.\n")
 	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
@@ -1286,7 +1431,7 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
 	b.WriteString(renderNextUp(
 		`Use the JSON `+"`dispatch_manifest`"+` to spawn wrapper agents with the Task tool.`,
-		`Run `+"`AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`"+` when a machine-readable manifest is needed.`,
+		`Run `+"`aether host build <phase>`"+` when a machine-readable manifest is needed.`,
 	))
 	return b.String()
 }
@@ -1294,7 +1439,7 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 func renderBuildFinalizeVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Finalize %d", phase.ID)))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("External Task worker results recorded.\n")
 	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
@@ -1317,7 +1462,7 @@ func renderBuildFinalizeVisual(state colony.ColonyState, phase colony.Phase, dis
 func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Dispatch %d", phase.ID)))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Worker wave dispatching.\n")
 	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
@@ -1337,7 +1482,7 @@ func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, di
 func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekeeping *signalHousekeepingResult, final bool, nextPhase *colony.Phase, result map[string]interface{}, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	b.WriteString(renderStageMarker("Verification"))
@@ -1405,7 +1550,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue Plan"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Verification snapshot and review manifest only. No state was changed and no review workers were spawned.\n")
 	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
@@ -1445,7 +1590,7 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue-blocked"), "Continue Blocked"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Phase %d remains active: %s\n", phase.ID, phase.Name))
@@ -1591,7 +1736,7 @@ func mapValue(raw interface{}) map[string]interface{} {
 func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("seal"), "Seal"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderStageMarker("Summary"))
 	b.WriteString("Colony sealed at Crowned Anthill.\n")
 	if state.Goal != nil {
@@ -1628,7 +1773,7 @@ func renderSignalVisual(sigType, content, priority string, replaced bool) string
 
 	var b strings.Builder
 	b.WriteString(renderBanner(emoji, sigType+" Signal"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(status)
 	b.WriteString("\n")
 	b.WriteString("Priority: ")
@@ -1659,7 +1804,7 @@ func renderNextUpVisual(suggestions []string) string {
 func renderInstallVisual(homeDir string, results []map[string]interface{}, totalCopied, totalSkipped int, binaryMode string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("install"), "Install"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderAetherWordmark())
 	b.WriteString("Aether hub refreshed.\n")
 	b.WriteString("Home: ")
@@ -1684,7 +1829,7 @@ func renderInstallVisual(homeDir string, results []map[string]interface{}, total
 func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("lay-eggs"), "Lay Eggs"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Nest prepared in this repository.\n")
 	b.WriteString("Repo: ")
 	b.WriteString(repoDir)
@@ -1714,7 +1859,7 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 	var b strings.Builder
 	totalRemoved := syncDetailsRemoved(details)
 	b.WriteString(renderBanner(commandEmoji("update"), "Update"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderAetherWordmark())
 	if dryRun {
 		b.WriteString("Dry run complete. No files were changed.\n")
@@ -1908,7 +2053,7 @@ func renderUpdatePaths(force bool, binaryMode string) string {
 func renderBinaryActionVisual(title, message, version, path string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("⚡", title))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(strings.TrimSpace(message))
 	b.WriteString("\n")
 	if strings.TrimSpace(version) != "" {
@@ -1951,7 +2096,7 @@ func renderBinaryActionNextUp(title string) string {
 func renderPauseVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("pause"), "Pause Colony"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderStageMarker("Handoff"))
 	b.WriteString("Colony handoff saved for later resumption.\n")
 	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
@@ -1989,7 +2134,7 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		title = "Resume Colony"
 	}
 	b.WriteString(renderBanner(commandEmoji("resume"), title))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(renderStageMarker("Restored"))
 
 	// Freshness warning for stale sessions
@@ -2228,7 +2373,7 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 func renderPatrolVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("patrol"), "Patrol"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	label := strings.TrimSpace(stringValue(result["health_label"]))
 	score := intValue(result["overall_health"])
 	if label != "" {
@@ -2264,7 +2409,7 @@ func renderPhaseVisual(result map[string]interface{}) string {
 	total := intValue(result["total_phases"])
 
 	b.WriteString(renderBanner(commandEmoji("phase"), fmt.Sprintf("Phase %d", number)))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if total > 0 {
 		b.WriteString(renderProgressSummary(number, total))
 		b.WriteString("\n")
@@ -2344,7 +2489,7 @@ func writePhaseTaskLine(b *strings.Builder, task map[string]interface{}) {
 func renderHistoryVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("history"), "History"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	switch events := result["events"].(type) {
 	case []interface{}:
@@ -2421,7 +2566,7 @@ func writeHistoryEntry(b *strings.Builder, entry map[string]interface{}) {
 func renderReferenceIndexVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("reference-index"), "Reference Index"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Library: %s\n", emptyFallback(stringValue(result["root"]), "not found")))
 	b.WriteString(fmt.Sprintf("References indexed: %d\n", intValue(result["total"])))
 	if categories := categoryCountsValue(result["categories"]); len(categories) > 0 {
@@ -2440,7 +2585,7 @@ func renderReferenceIndexVisual(result map[string]interface{}) string {
 func renderReferenceListVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("reference-list"), "Reference Library"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Library: %s\n", emptyFallback(stringValue(result["root"]), "not found")))
 	refs := mapSliceValue(result["references"])
 	if len(refs) == 0 {
@@ -2458,7 +2603,7 @@ func renderReferenceListVisual(result map[string]interface{}) string {
 func renderReferenceMatchVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("reference-match"), "Reference Match"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if task := strings.TrimSpace(stringValue(result["task"])); task != "" {
 		b.WriteString("Task: ")
 		b.WriteString(task)
@@ -2518,7 +2663,7 @@ func writeReferenceSummaryLines(b *strings.Builder, refs []map[string]interface{
 func renderFlagsVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("flags"), "Flags"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	entries := flagEntriesValue(result["flags"])
 	if len(entries) == 0 {
 		b.WriteString("No flags found.\n")
@@ -2546,7 +2691,7 @@ func renderFlagsVisual(result map[string]interface{}) string {
 func renderFlagActionVisual(command, title string, result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji(command), title))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if flag, ok := result["flag"].(colony.FlagEntry); ok {
 		b.WriteString(fmt.Sprintf("ID: %s\n", flag.ID))
 		b.WriteString(fmt.Sprintf("Type: %s\n", flag.Type))
@@ -2574,7 +2719,7 @@ func renderFlagActionVisual(command, title string, result map[string]interface{}
 func renderShelfListVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("shelf-list"), "Shelf"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if status := strings.TrimSpace(stringValue(result["status"])); status != "" {
 		b.WriteString("Filter: ")
 		b.WriteString(status)
@@ -2616,7 +2761,7 @@ func renderShelfListVisual(result map[string]interface{}) string {
 func renderShelfActionVisual(command, title string, result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji(command), title))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if entry, ok := result["entry"].(colony.ShelfEntry); ok {
 		b.WriteString(fmt.Sprintf("Entry: %s\n", emptyFallback(entry.Text, "(empty entry)")))
 		b.WriteString(fmt.Sprintf("Category: %s\n", entry.Category))
@@ -2639,7 +2784,7 @@ func renderShelfActionVisual(command, title string, result map[string]interface{
 func renderQueenActionVisual(command, title string, result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji(command), title))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if path := strings.TrimSpace(stringValue(result["path"])); path != "" {
 		b.WriteString("Path: ")
 		b.WriteString(path)
@@ -2684,7 +2829,7 @@ func renderQueenActionVisual(command, title string, result map[string]interface{
 func renderExportSignalsVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("export-signals"), "Signals Exported"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Signals: %d\n", intValue(result["count"])))
 	if file := strings.TrimSpace(stringValue(result["file"])); file != "" {
 		b.WriteString("File: ")
@@ -2702,7 +2847,7 @@ func renderExportSignalsVisual(result map[string]interface{}) string {
 func renderImportSignalsVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("import-signals"), "Signals Imported"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Imported: %d\n", intValue(result["imported"])))
 	b.WriteString(fmt.Sprintf("Total active file entries: %d\n", intValue(result["total"])))
 	if source := strings.TrimSpace(stringValue(result["source"])); source != "" {
@@ -2736,7 +2881,7 @@ func renderTunnelsVisual(result map[string]interface{}) string {
 func renderTunnelsListVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("tunnels"), "Colony Timeline"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	total := intValue(result["total"])
 	b.WriteString(fmt.Sprintf("%d colonies archived\n", total))
 	chambers := mapSliceValue(result["chambers"])
@@ -2772,7 +2917,7 @@ func renderTunnelsDetailVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	chamber := emptyFallback(stringValue(result["chamber"]), "unknown")
 	b.WriteString(renderBanner(commandEmoji("tunnels"), "Chamber Details"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Chamber: %s\n", chamber))
 	if manifest := mapValue(result["manifest"]); len(manifest) > 0 {
 		if goal := strings.TrimSpace(stringValue(manifest["goal"])); goal != "" {
@@ -2819,7 +2964,7 @@ func renderTunnelsCompareVisual(result map[string]interface{}) string {
 	growth := mapValue(result["growth"])
 
 	b.WriteString(renderBanner(commandEmoji("tunnels"), "Chamber Comparison"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "%s  vs  %s\n\n", leftName, rightName)
 	b.WriteString(fmt.Sprintf("%-18s | %s\n", "Goal", ""))
 	b.WriteString(fmt.Sprintf("  %-16s | %s\n", leftName, truncateString(stringValue(left["goal"]), 64)))
@@ -2850,7 +2995,7 @@ func renderTunnelsCompareVisual(result map[string]interface{}) string {
 func renderTunnelsImportVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("import-signals"), "Signals Imported"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Chamber: %s\n", emptyFallback(stringValue(result["chamber"]), "unknown"))
 	fmt.Fprintf(&b, "Imported: %d pheromone signals\n", intValue(result["imported"]))
 	if prefix := strings.TrimSpace(stringValue(result["id_prefix"])); prefix != "" {
@@ -2885,7 +3030,7 @@ func renderCloseoutVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	workflow := emptyFallback(stringValue(result["workflow"]), "workflow")
 	b.WriteString(renderBanner(commandEmoji("closeout"), fmt.Sprintf("%s Closeout", strings.Title(workflow))))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if !boolValue(result["state_available"]) {
 		b.WriteString(emptyFallback(stringValue(result["message"]), "No colony state available."))
 		b.WriteString("\n")
@@ -3138,7 +3283,7 @@ func renderSpawnPlan(phase colony.Phase, depth string) string {
 func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode colony.ParallelMode) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("spawn-plan"), "Spawn Plan"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	executionPlans := buildExecutionPlans(dispatches, parallelMode)
 	dispatchesByExecutionWave := map[int][]codexBuildDispatch{}
@@ -3254,19 +3399,44 @@ func filterBuildDispatches(dispatches []codexBuildDispatch, stage string) []code
 
 func suggestedBuildCaste(task colony.Task) string {
 	text := strings.ToLower(strings.TrimSpace(task.Goal + " " + strings.Join(task.Hints, " ") + " " + strings.Join(task.SuccessCriteria, " ")))
+	words := buildCasteKeywordWords(text)
 	// Check builder keywords first (higher priority)
 	for _, token := range []string{"implement", "build", "create", "fix", "add", "write", "code", "refactor", "test", "deploy"} {
-		if strings.Contains(text, token) {
+		if buildCasteWordMatches(words, token) {
 			return "builder"
 		}
 	}
 	// Then check scout keywords
 	for _, token := range []string{"research", "investigat", "survey", "analy", "document", "readme", "spec"} {
-		if strings.Contains(text, token) {
+		if buildCasteWordMatches(words, token) {
 			return "scout"
 		}
 	}
 	return "builder"
+}
+
+func buildCasteKeywordWords(text string) []string {
+	return strings.FieldsFunc(text, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+}
+
+func buildCasteWordMatches(words []string, token string) bool {
+	for _, word := range words {
+		if word == token || word == token+"s" || word == token+"ed" || word == token+"ing" {
+			return true
+		}
+		if token == "investigat" && strings.HasPrefix(word, token) {
+			return true
+		}
+		if token == "analy" && strings.HasPrefix(word, token) {
+			return true
+		}
+		if token == "spec" && (word == "specification" || word == "specifications") {
+			return true
+		}
+	}
+	return false
 }
 
 func taskWaves(tasks []colony.Task) [][]int {
@@ -3337,9 +3507,28 @@ func dependenciesSatisfied(dependsOn []string, satisfied map[string]bool, indexB
 }
 
 func deterministicAntName(caste, seed string) string {
-	prefixes, ok := castePrefixes[caste]
-	if !ok || len(prefixes) == 0 {
-		prefixes = defaultPrefixes
+	var prefixes []string
+	var ok bool
+
+	// File first
+	if filePrefixes, fileOk := fileCastePrefixes(caste); fileOk && len(filePrefixes) > 0 {
+		prefixes = filePrefixes
+		ok = true
+	}
+	// Fallback to hardcoded castePrefixes
+	if !ok {
+		prefixes, ok = castePrefixes[caste]
+		if ok && len(prefixes) == 0 {
+			ok = false
+		}
+	}
+	// Fallback to default prefixes (file first, then hardcoded)
+	if !ok {
+		if fileDefaults, fileOk := fileDefaultPrefixes(); fileOk && len(fileDefaults) > 0 {
+			prefixes = fileDefaults
+		} else {
+			prefixes = defaultPrefixes
+		}
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(caste + "|" + seed))
@@ -3365,6 +3554,11 @@ func normalizeCasteKey(caste string) string {
 
 func casteEmoji(caste string) string {
 	caste = normalizeCasteKey(caste)
+	if loaded := loadVisualsConfig(); loaded != nil {
+		if emoji, ok := loaded.CasteEmojiMap[caste]; ok {
+			return emoji
+		}
+	}
 	if emoji, ok := casteEmojiMap[caste]; ok {
 		return emoji
 	}
@@ -3373,6 +3567,11 @@ func casteEmoji(caste string) string {
 
 func casteLabel(caste string) string {
 	caste = normalizeCasteKey(caste)
+	if loaded := loadVisualsConfig(); loaded != nil {
+		if label, ok := loaded.CasteLabelMap[caste]; ok {
+			return label
+		}
+	}
 	if label, ok := casteLabelMap[caste]; ok {
 		return label
 	}
@@ -3381,6 +3580,11 @@ func casteLabel(caste string) string {
 
 func casteANSIColor(caste string) string {
 	caste = normalizeCasteKey(caste)
+	if loaded := loadVisualsConfig(); loaded != nil {
+		if color, ok := loaded.CasteColorMap[caste]; ok {
+			return color
+		}
+	}
 	return casteColorMap[caste]
 }
 
@@ -3625,7 +3829,7 @@ func renderStalePublishBanner(stale stalePublishResult) string {
 	}
 
 	b.WriteString(renderBanner(emoji, title))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Classification: %s\n", stale.Classification))
 	b.WriteString(fmt.Sprintf("Binary version: %s\n", stale.BinaryVersion))
 	b.WriteString(fmt.Sprintf("Hub version: %s\n", stale.HubVersion))

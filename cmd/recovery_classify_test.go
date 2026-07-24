@@ -3,8 +3,14 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // --- Classification registry tests ---
@@ -61,6 +67,43 @@ func TestClassifyWorkerFailure_Timeout(t *testing.T) {
 	}
 	if rationale == "" {
 		t.Error("timeout should have non-empty rationale")
+	}
+}
+
+func TestClassifyWorkerFailure_RuntimeOwnedIssuesBlockRecoveryWorkers(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  string
+		message string
+		want    string
+	}{
+		{
+			name:    "stale clarification overrides timeout",
+			status:  "timeout",
+			message: "stale resolved clarification: run aether discuss before redispatch",
+			want:    "clarification",
+		},
+		{
+			name:    "result collection overrides failure",
+			status:  "failed",
+			message: "result collection missed worker result artifact for Builder-1",
+			want:    "result collection",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			classification, failureType, rationale := classifyWorkerFailure(tt.status, tt.message)
+			if classification != Blocking {
+				t.Fatalf("classification = %q, want blocking", classification)
+			}
+			if failureType != Systemic {
+				t.Fatalf("failure type = %q, want systemic", failureType)
+			}
+			if !strings.Contains(strings.ToLower(rationale), tt.want) {
+				t.Fatalf("rationale = %q, want mention %q", rationale, tt.want)
+			}
+		})
 	}
 }
 
@@ -506,5 +549,94 @@ func TestRecoveryLogReadCmd(t *testing.T) {
 	}
 	if !strings.Contains(output, `"total":0`) {
 		t.Errorf("expected output to contain 'total:0', got: %s", output)
+	}
+}
+
+// TestRecoveryClassifyUnreconciledChanges verifies the new stuck-state class
+// "unreconciled-worker-changes" is detected by the recovery scanner.
+func TestRecoveryClassifyUnreconciledChanges(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	if err := exec.Command("git", "init").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	if err := exec.Command("git", "config", "user.email", "test@aether").Run(); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	if err := exec.Command("git", "config", "user.name", "Test").Run(); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".aether/\n"), 0644); err != nil {
+		t.Fatalf("write gitignore: %v", err)
+	}
+	if err := exec.Command("git", "add", ".").Run(); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if err := exec.Command("git", "commit", "-m", "initial").Run(); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "orphan.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write orphan file: %v", err)
+	}
+
+	goal := "Detect unreconciled"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Phase 1",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	claims := codexBuildClaims{
+		BuildPhase:    1,
+		FilesCreated:  []string{"go.mod", "main.go", "main_test.go"},
+		FilesModified: []string{},
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("save claims: %v", err)
+	}
+
+	issues, err := performStuckStateScan(dataDir)
+	if err != nil {
+		t.Fatalf("performStuckStateScan failed: %v", err)
+	}
+
+	var found bool
+	for _, issue := range issues {
+		if issue.Category == "unreconciled_worker_changes" {
+			found = true
+			if issue.Severity != "warning" {
+				t.Errorf("expected warning severity, got %q", issue.Severity)
+			}
+			if !issue.Fixable {
+				t.Error("expected fixable=true")
+			}
+			if !strings.Contains(issue.Message, "unreconciled") {
+				t.Errorf("expected message to contain 'unreconciled', got: %s", issue.Message)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected unreconciled_worker_changes issue in scan results, got: %+v", issues)
 	}
 }

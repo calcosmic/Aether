@@ -57,6 +57,20 @@ gates, claims, housekeeping, blockers, and next-step suggestions.
 
 Visual output is the JSON data rendered through `codex_visuals.go` functions.
 
+### Provider Availability Diagnostics
+
+The runtime owns provider availability preflight before real worker dispatch.
+The preflight reports whether the selected Codex, Claude, or OpenCode-compatible
+CLI exists and appears authenticated. It does not guarantee that the launched
+worker request will later pass provider API/auth checks.
+
+Wrappers and Codex skills may surface only the sanitized provider, cause, and
+next action returned by the runtime. They must not expose raw provider
+stdout/stderr, tokens, or auth probe output. If a worker process starts and then
+returns provider API/auth output instead of worker claims JSON, describe it as a
+post-launch provider/API/auth failure and keep final state handling in the
+runtime/finalizer path.
+
 ### Orchestrator Boundary Guidance
 
 In Orchestrator Mode, plan-only lifecycle commands for `plan`, `build`, heavy
@@ -89,9 +103,12 @@ Wrappers MAY add the following on top of runtime output:
 
 ### Task-Tool Execution Bridge
 - Requesting the lifecycle dispatch manifest:
-  - Build: `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`
-  - Continue (heavy review): `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy`
-  - Seal: `AETHER_OUTPUT_MODE=json aether seal --plan-only`
+  - Colonize: `aether host colonize`
+  - Plan: `aether host plan --depth <choice> --planning-depth <choice>`
+  - Build: `aether host build <phase>`
+  - Continue (default): `AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard`
+  - Continue (classic/heavy review): `aether host continue --classic-ceremony`
+  - Seal: `aether host seal`
 - Honoring `orchestrator_boundary_guidance` before any lifecycle worker spawn
 - Spawning Claude/OpenCode agents from `result.dispatch_manifest`
 - Recording live visibility with `aether spawn-log` and `aether spawn-complete`
@@ -99,6 +116,10 @@ Wrappers MAY add the following on top of runtime output:
   - Build: `aether build-finalize <phase> --completion-file <file>`
   - Continue: `aether continue-finalize --completion-file <file>`
   - Seal: `aether seal-finalize --completion-file <file>`
+
+`colonize` and `seal` are TS-host orchestration targets. Their wrappers still
+return worker completion packets to Go finalizers; TypeScript only fetches the
+manifest and forwards supported flags.
 
 ### Post-Build Summary
 - What was accomplished in colony terms
@@ -139,6 +160,10 @@ Wrappers MUST NOT:
 7. **Own boundary questions** — Never ask, answer, or store Orchestrator
    boundary questions in wrapper markdown or chat-only state. Route through
    `aether discuss`, then request a fresh manifest before continuing.
+
+8. **Expose provider secrets or raw output** — Never paste provider stdout,
+   stderr, tokens, or auth probe output into wrapper summaries or generated
+   context. Use the runtime's sanitized provider/cause/next-action wording.
 
 ## Codex Platform
 
