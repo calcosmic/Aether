@@ -831,6 +831,158 @@ func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) 
 	harness.assertSourceUnchanged(t)
 }
 
+// TestCLIProviderBackedPlanRevisionJourney closes the acceptance gap left by
+// the synthetic revision journey: a research question flows through a real
+// Oracle provider process into evidence, real Scout and Route-Setter provider
+// processes produce the replacement plan, the revision binds that evidence, and
+// the revised phase builds and verifies through real provider workers.
+func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
+	harness := newCLIBlackBox(t)
+	logPath := filepath.Join(filepath.Dir(harness.repo), "revision-adapter-invocations.jsonl")
+	providerEnv := map[string]string{
+		"AETHER_ACTIVE_PLATFORM":     "codex",
+		"AETHER_CODEX_PATH":          harness.adapter,
+		"AETHER_CODEX_REAL_DISPATCH": "real",
+		"AETHER_HIVE_POLICY":         "off",
+		"AETHER_TEST_ADAPTER_LOG":    logPath,
+		"AETHER_TEST_ADAPTER_MODE":   "success",
+		"AETHER_WORKER_PLATFORM":     "codex",
+	}
+
+	install := harness.run(t, "install", "--package-dir", harness.sourceRoot, "--home-dir", harness.home, "--skip-build-binary")
+	assertBlackBoxSuccess(t, "install", install)
+	setup := harness.run(t, "lay-eggs", "--repo-dir", harness.repo, "--home-dir", harness.home)
+	assertBlackBoxSuccess(t, "lay-eggs", setup)
+
+	if err := os.WriteFile(filepath.Join(harness.repo, "go.mod"), []byte("module example.com/aetherrevision\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write revision go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(harness.repo, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+		t.Fatalf("write revision main.go: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(harness.repo, "main_test.go"), []byte("package main\n\nimport \"testing\"\n\nfunc TestBaseline(t *testing.T) {}\n"), 0644); err != nil {
+		t.Fatalf("write revision main_test.go: %v", err)
+	}
+	harness.runGit(t, "init", "-q")
+	harness.runGit(t, "add", ".")
+	harness.runGit(t, "-c", "user.name=Aether Test", "-c", "user.email=aether@example.invalid", "commit", "-qm", "revision baseline")
+
+	goal := "Adapt the remaining implementation after research"
+	doneTaskID := "1.1"
+	futureTaskID := "2.1"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			EvidencePolicy: colony.PlanEvidenceBoundV1,
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Completed foundation", Description: "Accepted work", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &doneTaskID, Goal: "Build foundation", Status: colony.TaskCompleted}}},
+				{ID: 2, Name: "Invalidated approach", Description: "Research made this obsolete", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &futureTaskID, Goal: "Use old approach", Status: colony.TaskPending}}},
+			},
+		},
+		Memory: colony.Memory{PhaseLearnings: []colony.PhaseLearning{}, Decisions: []colony.Decision{}, Instincts: []colony.Instinct{}},
+		Errors: colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}},
+		Events: []string{},
+	}
+	stateData, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(harness.repo, ".aether", "data", "COLONY_STATE.json"), stateData, 0644); err != nil {
+		t.Fatalf("write revision state: %v", err)
+	}
+	completedBefore, _ := json.Marshal(state.Plan.Phases[0])
+
+	research := harness.runWithEnv(t, providerEnv,
+		"oracle", "Is the original dependency assumption still valid?",
+		"--depth", "quick", "--confidence-target", "1", "--scope", "repo", "--template", "research-brief", "--max-iterations", "1")
+	assertBlackBoxSuccess(t, "oracle", research)
+	if _, err := os.Stat(filepath.Join(harness.repo, ".aether", "oracle", "synthesis.md")); err != nil {
+		t.Fatalf("oracle provider run did not persist synthesis evidence: %v", err)
+	}
+
+	revise := harness.runWithEnv(t, providerEnv,
+		"plan", "--refresh", "--depth", "fast", "--accept",
+		"--revision-type", "research",
+		"--revision-reason", "Oracle disproved the original dependency assumption",
+		"--revision-evidence", ".aether/oracle/synthesis.md",
+	)
+	assertBlackBoxSuccess(t, "plan --refresh", revise)
+	var planEnvelope struct {
+		Result struct {
+			DispatchMode string              `json:"dispatch_mode"`
+			PlanSource   string              `json:"plan_source"`
+			PlanRevision colony.PlanRevision `json:"plan_revision"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(revise.Stdout), &planEnvelope); err != nil {
+		t.Fatalf("parse provider-backed plan result: %v\n%s", err, revise.Stdout)
+	}
+	if planEnvelope.Result.DispatchMode != "real" {
+		t.Fatalf("provider-backed revision dispatch mode = %q, want real", planEnvelope.Result.DispatchMode)
+	}
+	if planEnvelope.Result.PlanSource != "worker-artifact" {
+		t.Fatalf("provider-backed revision plan source = %q, want worker-artifact", planEnvelope.Result.PlanSource)
+	}
+
+	revised := harness.loadColonyState(t)
+	completedAfter, _ := json.Marshal(revised.Plan.Phases[0])
+	if string(completedBefore) != string(completedAfter) {
+		t.Fatalf("completed phase changed across provider-backed revision\nbefore=%s\nafter=%s", completedBefore, completedAfter)
+	}
+	active, ok := activePlanRevision(revised.Plan)
+	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch {
+		t.Fatalf("provider-backed revision history = %+v, active=%+v ok=%v", revised.Plan.Revisions, active, ok)
+	}
+	if active.PlanningRunID == "" {
+		t.Fatalf("provider-backed revision lacks a planning run identity: %+v", active)
+	}
+	if revised.CurrentPhase != 2 || len(revised.Plan.Phases) != 2 || revised.Plan.Phases[1].Status != colony.PhaseReady {
+		t.Fatalf("provider-backed revision did not activate replacement future work: %+v", revised)
+	}
+	if revised.Plan.Phases[1].Name != "Provider-planned replacement approach" {
+		t.Fatalf("replacement phase = %q, want the Route-Setter provider artifact", revised.Plan.Phases[1].Name)
+	}
+
+	resume := harness.run(t, "resume")
+	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) || !strings.Contains(resume.Stdout, "Oracle disproved") {
+		t.Fatalf("new process did not restore provider-backed revision context: exit=%d\nstdout:\n%s\nstderr:\n%s", resume.ExitCode, resume.Stdout, resume.Stderr)
+	}
+
+	build := harness.runWithEnv(t, providerEnv, "build", "2", "--light", "--worker-timeout", "2s")
+	assertBlackBoxSuccess(t, "build 2", build)
+	attempt := harness.loadBuildAttempt(t, 2)
+	if attempt.Status != buildAttemptBuilt || attempt.Claims == nil {
+		t.Fatalf("revised phase lacks durable provider-backed build evidence: %+v", attempt)
+	}
+
+	continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "2s")
+	assertBlackBoxSuccess(t, "continue phase 2", continued)
+	report := harness.loadVerificationReport(t, 2)
+	if !report.Passed || !report.CriteriaEnforced || !report.CriteriaPassed {
+		claimsDebug, _ := os.ReadFile(filepath.Join(harness.repo, ".aether", "data", "last-build-claims.json"))
+		logDebug, _ := os.ReadFile(logPath)
+		t.Fatalf("revised phase verification did not enforce its criteria: %+v\nclaims: %s\nadapter log:\n%s", report, claimsDebug, logDebug)
+	}
+	final := harness.loadColonyState(t)
+	if final.State != colony.StateCOMPLETED {
+		t.Fatalf("revised colony ended in %s, want COMPLETED", final.State)
+	}
+
+	logData, err := os.ReadFile(logPath)
+	if err != nil ||
+		!bytes.Contains(logData, []byte(`"caste":"oracle"`)) ||
+		!bytes.Contains(logData, []byte(`"caste":"scout"`)) ||
+		!bytes.Contains(logData, []byte(`"caste":"route_setter"`)) ||
+		!bytes.Contains(logData, []byte(`"caste":"builder"`)) ||
+		!bytes.Contains(logData, []byte(`"caste":"watcher"`)) {
+		t.Fatalf("revision journey did not execute oracle, scout, route-setter, builder, and watcher provider processes: err=%v\n%s", err, logData)
+	}
+	harness.assertSourceUnchanged(t)
+}
+
 func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	harness := newCLIBlackBox(t)
 	providerEnv := map[string]string{

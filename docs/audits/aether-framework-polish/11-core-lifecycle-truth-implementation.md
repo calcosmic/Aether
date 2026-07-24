@@ -231,7 +231,7 @@ Production behavior was not weakened: a new regression proves a 365-day-old inst
 - Newly accepted real and synthetic plans require complete `bound_v1` evidence bindings. Pre-existing plans remain explicitly `legacy_unbound`; migration does not invent evidence they never had.
 - Interrupted direct builds are safely redispatched as a new attempt; Aether does not yet reuse their terminal results to auto-finalize or resume only unfinished workers.
 - Wrapper plan-only dispatch is journaled before external agents run. The host stages the accepted completion under the Go-owned attempt path before finalization, so resume can replay the exact packet without redispatch.
-- The compiled-CLI fixture now covers source-candidate install, discussion, one Oracle pass, bound planning, all build/continue phases, resume, seal, update preservation, migration backup/rollback guidance, platform assets, binary/hub agreement, and deterministic research-driven plan revision. The revision journey uses synthetic replacement planning; real Oracle/Scout/Route-Setter provider execution remains an acceptance gap.
+- The compiled-CLI fixture now covers source-candidate install, discussion, one Oracle pass, bound planning, all build/continue phases, resume, seal, update preservation, migration backup/rollback guidance, platform assets, binary/hub agreement, and deterministic research-driven plan revision. ~~The revision journey uses synthetic replacement planning; real Oracle/Scout/Route-Setter provider execution remains an acceptance gap.~~ Closed 2026-07-24: `TestCLIProviderBackedPlanRevisionJourney` proves the full research-to-verification loop through real Oracle, Scout, Route-Setter, Builder, and Watcher provider processes (see `16-provider-backed-plan-revision.md`).
 - Revisions currently preserve an immutable completed prefix and replace the unfinished suffix. They do not yet model typed assumption/decision IDs or a sparse affected-node graph, so the planner may replace more future work than strictly necessary.
 - Snapshot versioning now takes the explicit source-manifest version through `AETHER_RELEASE_VERSION`; CI and release workflows assert the binary version and install the staged archive through the packed npm bootstrap. This proves a local release candidate, not the already-published registry assets.
 - Hive is quarantined rather than repaired: automatic worker retrieval and seal promotion are off by default. Evidence provenance, contradiction, stable repository identity, revocation, decay, locking, and retrieval relevance still require redesign.
@@ -240,8 +240,8 @@ Production behavior was not weakened: a new regression proves a 365-day-old inst
 
 ## Next Implementation Slice
 
-1. Select one production orchestration owner, quarantine duplicate success stubs, and move all model/process behavior behind the typed adapter contract.
-2. Replace prompt-only caste permission claims with host-enforced profiles or visibly mark the capability unavailable.
-3. Prove the revision boundary with real Oracle/Scout/Route-Setter providers and add typed assumption/decision impact links without creating another plan store.
+1. ~~Select one production orchestration owner, quarantine duplicate success stubs, and move all model/process behavior behind the typed adapter contract.~~ Done.
+2. ~~Replace prompt-only caste permission claims with host-enforced profiles or visibly mark the capability unavailable.~~ Done.
+3. ~~Prove the revision boundary with real Oracle/Scout/Route-Setter providers and add typed assumption/decision impact links without creating another plan store.~~ Done 2026-07-24 (`16-provider-backed-plan-revision.md`); typed links not added — no missing contract demonstrated.
 4. Replace first-accepted worktree conflict handling with declared ownership and one atomic whole-wave reconciliation decision.
 5. Redesign project/Hive knowledge around evidence IDs, stable repository identity, contradiction, revocation, decay, locking, and opt-in retrieval before re-enabling promotion.

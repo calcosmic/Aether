@@ -273,8 +273,12 @@ Relevant files:
 
 ## Next Work, In Order
 
-1. Prove plan revision through real Oracle/Scout/Route-Setter provider execution and
-   add typed assumption/decision impact links without creating another plan store.
+1. ~~Prove plan revision through real Oracle/Scout/Route-Setter provider execution
+   and add typed assumption/decision impact links without creating another plan
+   store.~~ Done 2026-07-24: see `16-provider-backed-plan-revision.md`. The
+   compiled journey proved the full question-to-verification loop through real
+   provider processes; typed links were deliberately not added because the
+   journey exposed no missing contract.
 2. Replace first-accepted worktree conflict handling with declared ownership and an
    atomic whole-wave reconciliation decision.
 3. Redesign Hive knowledge around evidence IDs, stable repository identity,
@@ -332,12 +336,29 @@ status/resume diagnostics are implemented. The honest limits are recorded in
 `15-durable-build-run-identity.md`: native aggregate commit reconstruction and
 general orphaned-stream reattachment are not implemented.
 
+## Completed Checkpoint: Provider-Backed Plan Revision
+
+The research-to-plan loop is proven through real provider execution:
+`TestCLIProviderBackedPlanRevisionJourney` drives the compiled CLI plus the
+deterministic provider fixture through Oracle evidence production, real Scout
+and Route-Setter planning (`dispatch_mode: real`, `plan_source:
+worker-artifact`), immutable research-bound revision activation with exact
+completed-prefix preservation, restart recovery, provider-backed build, and
+criteria-enforced verification to `COMPLETED`. Typed assumption/decision
+impact links were not added: the journey exposed no missing contract in the
+existing revision record, and the checkpoint rule forbids speculative
+structure. One behavioral finding is recorded in
+`16-provider-backed-plan-revision.md`: keyword phase-mode inference turns
+planner prose containing words like "research" into discovery phases, which
+then dispatch research workers instead of builders.
+
 ## Definition Of The Next Safe Checkpoint
 
-Use the real provider adapter to prove a question moves through Scout/Oracle
-evidence, Route-Setter planning, immutable revision rationale, build constraints,
-and verification. Add typed assumption and decision impact links only where that
-journey demonstrates a missing contract; do not add a parallel plan store.
+Replace first-accepted worktree conflict handling with declared ownership and
+one atomic whole-wave reconciliation decision. Declared task ownership should
+prevent same-path claims before workers run, and a wave should reconcile as
+one atomic decision instead of accepting the first finisher and orphaning the
+rest.
 
-No commit, push, tag, publish, release, or intentional version bump was performed
-before this handoff.
+No tag, publish, release, or intentional version bump was performed before
+this handoff.

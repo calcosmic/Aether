@@ -12,19 +12,20 @@ import (
 )
 
 type workerClaims struct {
-	AntName       string         `json:"ant_name"`
-	Caste         string         `json:"caste"`
-	TaskID        string         `json:"task_id"`
-	Status        string         `json:"status"`
-	Summary       string         `json:"summary"`
-	FilesCreated  []string       `json:"files_created"`
-	FilesModified []string       `json:"files_modified"`
-	TestsWritten  []string       `json:"tests_written"`
-	Artifacts     map[string]any `json:"artifacts"`
-	ToolCount     int            `json:"tool_count"`
-	Blockers      []string       `json:"blockers"`
-	Spawns        []string       `json:"spawns"`
-	Handoff       workerHandoff  `json:"handoff"`
+	AntName       string          `json:"ant_name"`
+	Caste         string          `json:"caste"`
+	TaskID        string          `json:"task_id"`
+	Status        string          `json:"status"`
+	Summary       string          `json:"summary"`
+	FilesCreated  []string        `json:"files_created"`
+	FilesModified []string        `json:"files_modified"`
+	TestsWritten  []string        `json:"tests_written"`
+	Artifacts     map[string]any  `json:"artifacts"`
+	ScoutReport   json.RawMessage `json:"scout_report,omitempty"`
+	ToolCount     int             `json:"tool_count"`
+	Blockers      []string        `json:"blockers"`
+	Spawns        []string        `json:"spawns"`
+	Handoff       workerHandoff   `json:"handoff"`
 }
 
 type workerHandoff struct {
@@ -57,6 +58,9 @@ func main() {
 	}
 	worker := promptField(string(prompt), "Worker")
 	caste := strings.ToLower(promptField(string(prompt), "Caste"))
+	if caste == "" {
+		caste = inferPlanningCaste(string(prompt))
+	}
 	taskID := promptTaskID(string(prompt))
 	logInvocation(mode, worker, caste)
 
@@ -127,6 +131,31 @@ func main() {
 			created = append(created, filepath.ToSlash(responsePath))
 		}
 	}
+	var scoutReport json.RawMessage
+	if mode == "success" && caste == "scout" {
+		scoutReport = json.RawMessage(`{
+			"findings": [
+				{
+					"area": "research evidence",
+					"discovery": "Oracle synthesis disproved the original dependency assumption",
+					"source": ".aether/oracle/synthesis.md"
+				},
+				{
+					"area": "completed work",
+					"discovery": "Completed phases are immutable; only the unfinished suffix may be replaced",
+					"source": ".aether/data/COLONY_STATE.json"
+				}
+			],
+			"gaps": [],
+			"confidence": 95,
+			"study_files": [".aether/oracle/synthesis.md"]
+		}`)
+	}
+	if mode == "success" && caste == "route_setter" {
+		planRelPath := filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json"))
+		mustWrite(planRelPath, []byte(routeSetterPlanArtifact))
+		created = append(created, planRelPath)
+	}
 	claims := workerClaims{
 		AntName:       worker,
 		Caste:         caste,
@@ -137,6 +166,7 @@ func main() {
 		FilesModified: []string{},
 		TestsWritten:  []string{},
 		Artifacts:     map[string]any{},
+		ScoutReport:   scoutReport,
 		ToolCount:     1,
 		Blockers:      []string{},
 		Spawns:        []string{},
@@ -269,8 +299,61 @@ func safeName(value string) string {
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+			return value
 		}
 	}
 	return ""
 }
+
+// inferPlanningCaste detects worker castes whose briefs do not carry the
+// "- Caste:" header line used by build briefs. The scout marker comes from the
+// planning-only response contract, the route-setter marker is a line only
+// present in route-setter planning briefs, and the Oracle marker heads the
+// Oracle loop's response-file contract.
+func inferPlanningCaste(prompt string) string {
+	if strings.Contains(prompt, "Include scout_report as an object") {
+		return "scout"
+	}
+	if strings.Contains(prompt, "Read scout output before drafting phases") {
+		return "route_setter"
+	}
+	if strings.Contains(prompt, "## Oracle Response Contract") {
+		return "oracle"
+	}
+	return ""
+}
+
+const routeSetterPlanArtifact = `{
+  "phases": [
+    {
+      "name": "Provider-planned replacement approach",
+      "description": "Replacement for the invalidated approach, planned by the Route-Setter provider process.",
+      "tasks": [
+        {
+          "goal": "Implement the replacement approach in app.txt",
+          "constraints": ["Preserve completed phase 1 work"],
+          "hints": ["app.txt"],
+          "success_criteria": ["Replacement artifact app.txt exists"],
+          "evidence_requirements": [
+            {"criterion": "Replacement artifact app.txt exists", "artifacts": ["app.txt"], "checks": ["claims", "watcher"]}
+          ],
+          "depends_on": []
+        }
+      ],
+      "success_criteria": ["Replacement approach verified by tests"],
+      "evidence_requirements": [
+        {"criterion": "Replacement approach verified by tests", "artifacts": ["app.txt"], "checks": ["claims", "watcher", "tests"]}
+      ]
+    }
+  ],
+  "confidence": {
+    "knowledge": 95,
+    "requirements": 94,
+    "risks": 93,
+    "dependencies": 94,
+    "effort": 95,
+    "overall": 94
+  },
+  "gaps": []
+}
+`
