@@ -275,15 +275,15 @@ func TestBuildWorktreeModeRejectsOverlappingUntrackedPaths(t *testing.T) {
 	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
 
 	_, err := runCodexBuild(root, 1, nil, false)
-	if err == nil || !strings.Contains(err.Error(), "worktree ownership conflict") {
-		t.Fatalf("build error = %v, want worktree ownership conflict", err)
+	if err == nil {
+		t.Fatal("overlapping worktree writes succeeded; want an atomic wave rejection")
 	}
-	data, readErr := os.ReadFile(filepath.Join(root, "shared.txt"))
-	if readErr != nil {
-		t.Fatalf("read accepted shared output: %v", readErr)
-	}
-	if strings.TrimSpace(string(data)) == "" {
-		t.Fatal("accepted shared output is empty")
+
+	// The wave reconciles as one atomic decision: neither conflicting worker's
+	// output reaches the root checkout.
+	if _, statErr := os.Stat(filepath.Join(root, "shared.txt")); !os.IsNotExist(statErr) {
+		data, _ := os.ReadFile(filepath.Join(root, "shared.txt"))
+		t.Fatalf("rejected wave left worker output in the root checkout: %q", string(data))
 	}
 
 	var state colony.ColonyState
@@ -303,8 +303,303 @@ func TestBuildWorktreeModeRejectsOverlappingUntrackedPaths(t *testing.T) {
 			t.Fatalf("orphaned conflict worktree was not preserved at %s: %v", entry.Path, err)
 		}
 	}
-	if orphaned == 0 {
-		t.Fatalf("conflict left no inspectable orphaned worktree: %+v", state.Worktrees)
+	if orphaned < 2 {
+		t.Fatalf("rejected wave preserved %d orphaned worktrees, want both conflicting workers: %+v", orphaned, state.Worktrees)
+	}
+
+	// The attempt journal records the reconciled terminal outcome per worker.
+	_, attempt, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("no build attempt journal recorded for the rejected wave")
+	}
+	reconciliationErrors := 0
+	for _, run := range attempt.WorkerRuns {
+		if strings.Contains(run.Error, "wave reconciliation") {
+			reconciliationErrors++
+		}
+	}
+	if reconciliationErrors == 0 {
+		t.Fatalf("attempt journal lacks wave reconciliation errors: %+v", attempt.WorkerRuns)
+	}
+	if _, _, cleanupErr := gcOrphanedWorktrees(); cleanupErr != nil {
+		t.Fatalf("clean conflict worktree fixture: %v", cleanupErr)
+	}
+}
+
+type countingWorktreeInvoker struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (i *countingWorktreeInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	i.mu.Lock()
+	i.calls++
+	i.mu.Unlock()
+	return codex.WorkerResult{WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID, Status: "completed", Summary: "counted"}, nil
+}
+
+func (i *countingWorktreeInvoker) IsAvailable(context.Context) bool { return true }
+func (i *countingWorktreeInvoker) ValidateAgent(string) error       { return nil }
+func (i *countingWorktreeInvoker) callCount() int {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.calls
+}
+
+func TestBuildWorktreeModeRejectsDeclaredOverlapBeforeDispatch(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "checkout", "-b", "main")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-declared-overlap\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	goal := "Reject same-wave declared overlap before workers run"
+	taskOne := "1.1"
+	taskTwo := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "light",
+		ParallelMode: colony.ModeWorktree,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Declared overlap",
+			Status: colony.PhaseReady,
+			Tasks: []colony.Task{
+				{ID: &taskOne, Goal: "Produce the shared artifact for path A", Hints: []string{"shared.txt"}, Status: colony.TaskPending},
+				{ID: &taskTwo, Goal: "Produce the shared artifact for path B", Hints: []string{"shared.txt"}, Status: colony.TaskPending},
+			},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	invoker := &countingWorktreeInvoker{}
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	_, err := runCodexBuild(root, 1, nil, false)
+	if err == nil || !strings.Contains(err.Error(), "worktree declared ownership conflict") {
+		t.Fatalf("build error = %v, want worktree declared ownership conflict", err)
+	}
+	if calls := invoker.callCount(); calls != 0 {
+		t.Fatalf("declared overlap dispatched %d workers before failing; want zero", calls)
+	}
+}
+
+type sequentialSharedFileInvoker struct {
+	t *testing.T
+}
+
+func (i *sequentialSharedFileInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	if cfg.Caste != "builder" {
+		return codex.WorkerResult{WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID, Status: "completed", Summary: "read-only worker completed"}, nil
+	}
+	sharedPath := filepath.Join(cfg.Root, "shared.txt")
+	switch cfg.TaskID {
+	case "1.1":
+		if err := os.WriteFile(sharedPath, []byte("task-1.1\n"), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+	case "1.2":
+		data, err := os.ReadFile(sharedPath)
+		if err != nil {
+			return codex.WorkerResult{}, fmt.Errorf("dependent wave worktree lacks the earlier wave's synced file: %w", err)
+		}
+		if !strings.Contains(string(data), "task-1.1") {
+			return codex.WorkerResult{}, fmt.Errorf("dependent wave worktree inherited %q, want the earlier wave's content", string(data))
+		}
+		if err := os.WriteFile(sharedPath, []byte("task-1.1+task-1.2\n"), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+	}
+	return codex.WorkerResult{
+		WorkerName:   cfg.WorkerName,
+		Caste:        cfg.Caste,
+		TaskID:       cfg.TaskID,
+		Status:       "completed",
+		Summary:      "advanced the shared file",
+		FilesCreated: []string{"shared.txt"},
+	}, nil
+}
+
+func (i *sequentialSharedFileInvoker) IsAvailable(context.Context) bool { return true }
+func (i *sequentialSharedFileInvoker) ValidateAgent(string) error       { return nil }
+
+func TestBuildWorktreeModeAllowsDeclaredOverlapAcrossWaves(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "checkout", "-b", "main")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-cross-wave\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	goal := "Sequential waves build on the same declared file"
+	taskOne := "1.1"
+	taskTwo := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "light",
+		ParallelMode: colony.ModeWorktree,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Cross-wave declared overlap",
+			Status: colony.PhaseReady,
+			Tasks: []colony.Task{
+				{ID: &taskOne, Goal: "Create the shared artifact", Hints: []string{"shared.txt"}, Status: colony.TaskPending},
+				{ID: &taskTwo, Goal: "Extend the shared artifact", Hints: []string{"shared.txt"}, DependsOn: []string{"1.1"}, Status: colony.TaskPending},
+			},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	invoker := &sequentialSharedFileInvoker{t: t}
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	if _, err := runCodexBuild(root, 1, nil, false); err != nil {
+		t.Fatalf("cross-wave declared overlap failed: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "shared.txt"))
+	if err != nil {
+		t.Fatalf("read cross-wave shared output: %v", err)
+	}
+	if strings.TrimSpace(string(data)) != "task-1.1+task-1.2" {
+		t.Fatalf("cross-wave shared output = %q, want the sequentially advanced content", string(data))
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	if state.State != colony.StateBUILT {
+		t.Fatalf("cross-wave declared overlap ended in %s, want BUILT", state.State)
+	}
+}
+
+type declaredViolationInvoker struct{}
+
+func (i *declaredViolationInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	if cfg.Caste != "builder" {
+		return codex.WorkerResult{WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID, Status: "completed", Summary: "read-only worker completed"}, nil
+	}
+	target := "first.txt"
+	if cfg.TaskID == "1.2" {
+		target = "owned.txt"
+	}
+	if err := os.WriteFile(filepath.Join(cfg.Root, target), []byte(cfg.WorkerName+"\n"), 0644); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return codex.WorkerResult{
+		WorkerName:   cfg.WorkerName,
+		Caste:        cfg.Caste,
+		TaskID:       cfg.TaskID,
+		Status:       "completed",
+		Summary:      "wrote " + target,
+		FilesCreated: []string{target},
+	}, nil
+}
+
+func (i *declaredViolationInvoker) IsAvailable(context.Context) bool { return true }
+func (i *declaredViolationInvoker) ValidateAgent(string) error       { return nil }
+
+func TestBuildWorktreeModeRejectsDeclaredPathViolation(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "checkout", "-b", "main")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-drift\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	goal := "Reject a worker that touches another task's declared path"
+	taskOne := "1.1"
+	taskTwo := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "light",
+		ParallelMode: colony.ModeWorktree,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Declared path violation",
+			Status: colony.PhaseReady,
+			Tasks: []colony.Task{
+				{ID: &taskOne, Goal: "Write the first artifact", Hints: []string{"owned.txt"}, Status: colony.TaskPending},
+				{ID: &taskTwo, Goal: "Write the second artifact", Status: colony.TaskPending},
+			},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &declaredViolationInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	_, err := runCodexBuild(root, 1, nil, false)
+	if err == nil {
+		t.Fatal("declared path violation succeeded; want an atomic wave rejection")
+	}
+
+	// All-or-nothing: the violating worker's drift and the innocent worker's
+	// valid output both stay out of the root checkout.
+	for _, rel := range []string{"owned.txt", "first.txt"} {
+		if _, statErr := os.Stat(filepath.Join(root, rel)); !os.IsNotExist(statErr) {
+			t.Fatalf("rejected wave left %s in the root checkout", rel)
+		}
+	}
+
+	_, attempt, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("no build attempt journal recorded for the rejected wave")
+	}
+	violatorFound := false
+	bystanderFound := false
+	for _, run := range attempt.WorkerRuns {
+		switch run.TaskID {
+		case "1.2":
+			if run.Status == "failed" && strings.Contains(run.Error, "declared by task 1.1") {
+				violatorFound = true
+			}
+		case "1.1":
+			if run.Status == "blocked" {
+				bystanderFound = true
+			}
+		}
+	}
+	if !violatorFound {
+		t.Fatalf("journal lacks the violating worker's declared-ownership failure: %+v", attempt.WorkerRuns)
+	}
+	if !bystanderFound {
+		t.Fatalf("journal lacks the innocent worker's blocked outcome: %+v", attempt.WorkerRuns)
 	}
 	if _, _, cleanupErr := gcOrphanedWorktrees(); cleanupErr != nil {
 		t.Fatalf("clean conflict worktree fixture: %v", cleanupErr)

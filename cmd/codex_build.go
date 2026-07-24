@@ -31,6 +31,7 @@ type codexBuildDispatch struct {
 	TaskID            string                  `json:"task_id,omitempty"`
 	TaskIndex         int                     `json:"task_index,omitempty"`
 	DependsOn         []string                `json:"depends_on,omitempty"`
+	DeclaredPaths     []string                `json:"declared_paths,omitempty"`
 	Outputs           []string                `json:"outputs,omitempty"`
 	Blockers          []string                `json:"blockers,omitempty"`
 	Duration          float64                 `json:"duration,omitempty"`
@@ -952,6 +953,7 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 				TaskID:        taskID,
 				TaskIndex:     taskIdx,
 				DependsOn:     append([]string{}, task.DependsOn...),
+				DeclaredPaths: declaredPathsForTask(task),
 			})
 		}
 	}
@@ -1427,20 +1429,26 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			PermissionProfile: dispatch.PermissionProfile,
 			ExecutionBinding:  executionBinding,
 			ProviderRunID:     providerRunID,
+			DeclaredPaths:     append([]string{}, dispatch.DeclaredPaths...),
 		}
 		workerDispatches = append(workerDispatches, workerDispatch)
 		indexByName[dispatch.Name] = i
 		dispatchByName[dispatch.Name] = workerDispatch
 	}
 
+	if parallelMode == colony.ModeWorktree {
+		if err := validateDeclaredWorktreeOwnership(workerDispatches); err != nil {
+			return nil, nil, "", err
+		}
+	}
+
 	cb := NewCircuitBreaker(circuitBreakerThreshold)
-	ownership := newBuildPathOwnership()
 	// Per D-02/D-04: set verbose flag before dispatch so filtered functions work correctly
 	setBuildVerbose(verbose)
 
 	// Per D-09/D-12: queen owns the wave loop. Build calls queen once.
 	waveDispatchFn := func(ctx context.Context, waveDispatches []codex.WorkerDispatch, waveNum int) ([]codex.DispatchResult, error) {
-		return dispatchCodexBuildWorkersWithOwnership(ctx, root, phase, waveDispatches, invoker, startedAt, parallelMode, cb, ownership)
+		return dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, waveDispatches, invoker, startedAt, parallelMode, cb)
 	}
 	summary, results, err := queenWaveLifecycle(ctx, workerDispatches, waveDispatchFn, phase, cb, phase.ID)
 	// Persist wave summary JSON for Phase 99 consumption (D-07)

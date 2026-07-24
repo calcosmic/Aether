@@ -33,6 +33,7 @@ type WorkerDispatch struct {
 	PermissionProfile PermissionProfile // Canonical host permission request
 	ExecutionBinding  *ExecutionBinding // Durable build-run identity
 	ProviderRunID     string            // Unique provider invocation within the build run
+	DeclaredPaths     []string          // Repo-relative paths this dispatch declares ownership of (worktree mode)
 }
 
 // DispatchResult captures the outcome of a single worker dispatch within a batch.
