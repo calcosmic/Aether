@@ -2329,9 +2329,10 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	b.WriteString(strings.TrimSpace(dispatch.Task))
 	b.WriteString("\n")
 
-	b.WriteString("\n")
-	b.WriteString(renderWorkerReadCacheDiscipline())
-	b.WriteString("\n")
+	// Read-cache discipline removed: 683 chars per prompt telling the worker not
+	// to re-read unchanged files. Claude Code and OpenCode both cache reads and
+	// tell the model directly when a file is unchanged since its last read, so
+	// this restates a message the harness already delivers more reliably.
 
 	if strings.TrimSpace(phase.Description) != "" {
 		b.WriteString("\n## Phase Objective\n\n")
@@ -2405,11 +2406,11 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 		}
 	}
 
-	heartbeatPath := filepath.ToSlash(filepath.Join(root, ".aether", "data", heartbeatFilePrefix+dispatch.Name+".json"))
-	b.WriteString("\n## Heartbeat Protocol\n\n")
-	b.WriteString(fmt.Sprintf("- While active, write `%s` roughly every 30 seconds.\n", heartbeatPath))
-	b.WriteString(fmt.Sprintf("- Include `worker_id: %s`, `caste: %s`, `phase: %d`, and an RFC3339 `timestamp`.\n", dispatch.Name, dispatch.Caste, phase.ID))
-	b.WriteString("- Remove your heartbeat file before reporting completion.\n")
+	// Heartbeat protocol removed: it asked the worker to write a file "roughly
+	// every 30 seconds" during its own turn. A model has no timer and cannot
+	// act between turns, so this instruction has never been satisfiable. It
+	// cost ~380 chars of every prompt and taught workers to ignore an
+	// instruction, which is worse than costing nothing.
 
 	if graphContext := renderCodegraphContextForText(root, codegraphTextPartsForBuildBrief(phase, dispatch), codegraphWorkerContextBudgetChars); graphContext != "" {
 		b.WriteString("\n")
@@ -2417,11 +2418,19 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 		b.WriteString("\n")
 	}
 
-	if playbookContext := renderBuildPlaybookContext(root, dispatch, playbooks); playbookContext != "" {
-		b.WriteString("\n")
-		b.WriteString(playbookContext)
-		b.WriteString("\n")
-	}
+	// Playbook injection removed. Measured on a real brief, it was 5,733 of
+	// 7,485 characters — 76.6% — against an assignment of 79. Worse than the
+	// size: buildPlaybooksForDispatch feeds workers orchestrator playbooks,
+	// truncated at 2,800 chars, so a Builder received the opening of
+	// build-wave.md instructing it "YOU (the Queen) will spawn workers
+	// directly. Do NOT delegate to a single Prime Worker." That is a direct
+	// role contradiction carried at five times the mass of the real task, and
+	// its own "## " headings collided with the brief's structure so a worker
+	// could not tell where its instructions ended.
+	//
+	// Playbooks remain loaded for the orchestrator (codexBuildPlaybooks, the
+	// TS host's playbook-loader). They are simply no longer injected into
+	// individual worker prompts, which is not what they were written for.
 
 	if surveySection := resolveSurveySection(); surveySection != "" {
 		b.WriteString("\n")

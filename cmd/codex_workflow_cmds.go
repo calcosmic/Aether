@@ -123,6 +123,22 @@ var buildCmd = &cobra.Command{
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
+
+		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
+			worker, _ := cmd.Flags().GetString("worker")
+			err := printWorkerBriefs(
+				skillWorkspaceRoot(),
+				phaseNum,
+				selectedTasks,
+				worker,
+				buildPrintBriefOptions(workerTimeout, forceBuild, lightFlag, heavyFlag, verificationDepth),
+			)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+			}
+			return nil
+		}
+
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, codexBuildOptions{
@@ -424,7 +440,7 @@ func completeSealRuntime(state colony.ColonyState) error {
 				if domain == "" {
 					domain = "general"
 				}
-				if err := promoteToHive(entry.Action, domain, repoName, entry.Confidence); err != nil {
+				if err := promoteToHiveWithReference(entry.Action, domain, repoName, entry.Confidence, "seal:"+entry.ID); err != nil {
 					log.Printf("seal: hive-promote failed for %s: %v", entry.ID, err)
 					hivePromotionFailures++
 				} else {
@@ -1147,6 +1163,8 @@ func init() {
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("force", false, "Force redispatch of the current active phase after an interrupted build")
 	buildCmd.Flags().Bool("plan-only", false, "Print the build dispatch manifest without mutating colony state or spawning workers")
+	buildCmd.Flags().Bool("print-brief", false, "Print the exact prompt each worker would receive, with a section-by-section composition breakdown. Reads state; mutates nothing")
+	buildCmd.Flags().String("worker", "", "With --print-brief, print only the named worker's prompt")
 	buildCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	buildCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build dispatches (e.g. 15m)")
 	buildCmd.Flags().Bool("light", false, "Force light review (skip heavy agents on intermediate phases)")
