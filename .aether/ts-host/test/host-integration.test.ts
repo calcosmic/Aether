@@ -1231,7 +1231,10 @@ describe("build iteration loop", () => {
 		const finalizeIndex = goCalls.findIndex((args) => args[0] === "build-finalize");
 		assert.ok(stageIndex >= 0 && stageIndex < finalizeIndex, "accepted completion must be staged before finalization");
     const enriched = capturedAllDispatches[0]![0] as Record<string, unknown>;
-    assert.match(String(enriched.task_brief), /Relevant Playbooks/);
+    // Playbook context is no longer appended to worker briefs — it was
+    // orchestrator guidance that told a single worker it was the Queen.
+    // Hive enrichment is still expected; that is genuine per-worker context.
+    assert.doesNotMatch(String(enriched.task_brief ?? ""), /Relevant Playbooks/);
     assert.match(String(enriched.hive_section), /Use typed errors/);
   });
 
