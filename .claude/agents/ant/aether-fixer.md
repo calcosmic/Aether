@@ -1,15 +1,9 @@
 ---
 name: aether-fixer
 description: "Use this agent when gate checks fail and the colony needs autonomous repair. Spawned by `/ant-unblock --dispatch` to investigate root causes, propose or apply fixes, and verify gate resolution. Three autonomy modes: full (autonomous), propose (wait for approval, default), advise (diagnostic only)."
-mode: subagent
-tools:
-  write: true
-  edit: true
-  bash: true
-  grep: true
-  glob: true
-  task: false
-color: "#f1c40f"
+tools: Read, Write, Edit, Bash, Grep, Glob
+color: yellow
+model: sonnet
 ---
 
 <role>

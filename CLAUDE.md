@@ -23,6 +23,27 @@
 - **Secondary platform:** Codex CLI. Codex has best-effort support for the direct `aether` workflow.
 - **Expectation:** keep Claude/OpenCode command and agent UX aligned first. Keep Codex safe, usable, and accurate about its native CLI capabilities.
 
+## Definition of Done
+
+**A requirement is satisfied only when a command exists that someone can run, and that command fails when the requirement is unmet.**
+
+Not a commit. Not "covered by existing tests." Not "existing behavior." Not a checked box in a summary.
+
+This rule exists because the project's own audits caught the alternative failing:
+
+- `.planning/v1.14-MILESTONE-AUDIT.md:406` — *"the 96-02 SUMMARY claimed this wiring existed, but the implementation was never added."* The milestone shipped 19/19.
+- v1.23 marked `WORKFLOW-01..11` **Satisfied** with VERIFICATION.md missing, SUMMARY.md missing, and the traceability box unchecked. Its own note: *"This is 1–2 hours of paperwork, not engineering work."*
+- `suggest-analyze` was ticked complete in v1.11. Its only call site sat in a playbook the runtime never loaded, behind `2>/dev/null`, followed by *"If suggest-analyze returns error: Skip without error, continue."* It had never executed once.
+- The learning pipeline has been declared restored in v1.10, v1.11, v1.13 and v1.23. `consolidation-phase-end` and `consolidation-seal` still have no caller.
+
+18 of 25 milestones have been framed around restoring, recovering or repairing something previously marked done. That is what a non-executable definition of done produces.
+
+**Corollaries:**
+
+- An inspection or `--dry-run` command must not mutate state. `consolidation-phase-end --dry-run` and `consolidation-seal --dry-run` both write to `instincts.json` today despite the flag reading *"Report without modifying."*
+- A documentation claim about runtime behaviour must be testable or removed. Three files described phase-end consolidation running for months while it never ran.
+- Prefer a test that asserts a **proportion or an invariant** over one that asserts a section exists. `TestBuildWorkerBriefIsMostlyTask` fails if framework scaffolding ever outweighs the task again, whatever the new scaffolding is called. A test that only checks for a named section cannot catch its replacement.
+
 ## Communication Style
 
 - Always include a short plain-English, "for dummies" explanation alongside technical details when explaining work to the user.

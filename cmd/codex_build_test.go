@@ -3092,7 +3092,13 @@ func TestDispatchManifestAllCastes(t *testing.T) {
 	}
 }
 
-func TestBuildWorkerBriefContainsHeartbeat(t *testing.T) {
+// TestBuildWorkerBriefOmitsHeartbeat locks in the removal of the heartbeat
+// protocol. It previously asserted the opposite. The instruction asked a worker
+// to write a file "roughly every 30 seconds" during its own turn; a model has no
+// timer and cannot act between turns, so it was never satisfiable. Reinstating
+// it would spend ~380 chars of every prompt teaching workers to ignore an
+// instruction.
+func TestBuildWorkerBriefOmitsHeartbeat(t *testing.T) {
 	saveGlobals(t)
 
 	tmpDir := t.TempDir()
@@ -3104,26 +3110,34 @@ func TestBuildWorkerBriefContainsHeartbeat(t *testing.T) {
 	phase := colony.Phase{
 		ID:          1,
 		Name:        "Test Phase",
-		Description: "Testing heartbeat brief",
+		Description: "Testing heartbeat removal",
 	}
 
 	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
 
-	if !strings.Contains(brief, "Heartbeat Protocol") {
-		t.Error("worker brief missing 'Heartbeat Protocol' section")
+	if strings.Contains(brief, "Heartbeat Protocol") {
+		t.Error("worker brief reinstated the 'Heartbeat Protocol' section; a model has no timer and cannot honour it")
 	}
-	if !strings.Contains(brief, "heartbeat-") {
-		t.Error("worker brief missing 'heartbeat-' file reference")
+	if strings.Contains(brief, "heartbeat-") {
+		t.Error("worker brief reinstated a heartbeat file reference")
 	}
-	if !strings.Contains(brief, "Hammer-23") {
-		t.Error("worker brief missing worker name in heartbeat section")
-	}
-	if !strings.Contains(brief, "builder") {
-		t.Error("worker brief missing caste in heartbeat section")
+	if !strings.Contains(brief, "Implement feature X") {
+		t.Error("worker brief lost its assignment")
 	}
 }
 
-func TestBuildWorkerBriefLoadsPlaybookContent(t *testing.T) {
+// TestBuildWorkerBriefOmitsPlaybooks locks in the removal of playbook injection
+// from worker prompts. It previously asserted the opposite.
+//
+// Measured on a real brief before removal: playbook content was 5,733 of 7,485
+// characters (76.6%) against an assignment of 79. The injected text was
+// orchestrator guidance truncated at 2,800 chars, so a Builder received the
+// opening of build-wave.md telling it "YOU (the Queen) will spawn workers
+// directly" — a role contradiction at five times the mass of its actual task.
+//
+// Playbooks are still loaded for the orchestrator. They are simply not injected
+// into individual worker prompts, which is not what they were written for.
+func TestBuildWorkerBriefOmitsPlaybooks(t *testing.T) {
 	saveGlobals(t)
 
 	tmpDir := t.TempDir()
@@ -3131,7 +3145,7 @@ func TestBuildWorkerBriefLoadsPlaybookContent(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(playbookPath), 0755); err != nil {
 		t.Fatalf("mkdir playbook dir: %v", err)
 	}
-	if err := os.WriteFile(playbookPath, []byte("# Build Wave\n\nWorker must follow runtime wave guidance.\n"), 0644); err != nil {
+	if err := os.WriteFile(playbookPath, []byte("# Build Wave\n\nYOU (the Queen) will spawn workers directly.\n"), 0644); err != nil {
 		t.Fatalf("write playbook: %v", err)
 	}
 
@@ -3144,11 +3158,55 @@ func TestBuildWorkerBriefLoadsPlaybookContent(t *testing.T) {
 
 	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, []string{".aether/docs/command-playbooks/build-wave.md"}, time.Now())
 
-	if !strings.Contains(brief, "## Relevant Playbooks") {
-		t.Fatal("worker brief missing Relevant Playbooks section")
+	if strings.Contains(brief, "## Relevant Playbooks") {
+		t.Error("worker brief reinstated the Relevant Playbooks section")
 	}
-	if !strings.Contains(brief, "Worker must follow runtime wave guidance.") {
-		t.Fatalf("worker brief did not load playbook content:\n%s", brief)
+	if strings.Contains(brief, "YOU (the Queen) will spawn workers directly") {
+		t.Fatalf("worker brief injected orchestrator guidance into a worker prompt:\n%s", brief)
+	}
+	if !strings.Contains(brief, "Implement feature X") {
+		t.Error("worker brief lost its assignment")
+	}
+}
+
+// TestBuildWorkerBriefIsMostlyTask is the regression lock that matters. It
+// asserts a proportion rather than the presence of any one section, so any
+// future addition that pushes framework scaffolding past half the prompt fails
+// here regardless of what that addition is called.
+func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-25",
+		Caste: "builder",
+		Task:  "Add the exporter call to commands.rs and pass its result to the dashboard view",
+	}
+	phase := colony.Phase{
+		ID:              1,
+		Name:            "Wire the exporter",
+		Description:     "Connect the vault exporter to the dashboard command",
+		SuccessCriteria: []string{"Dashboard renders exporter output"},
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, codexBuildPlaybooks(), time.Now())
+
+	taskChars := 0
+	for _, section := range splitBriefSections(brief) {
+		switch section.Name {
+		case "Assignment", "Phase Objective", "Phase Success Criteria",
+			"Task Success Criteria", "Dependencies", "Task Constraints", "Hints":
+			taskChars += section.Chars
+		}
+	}
+
+	if len(brief) == 0 {
+		t.Fatal("empty worker brief")
+	}
+	share := float64(taskChars) / float64(len(brief)) * 100
+	if share < 40 {
+		t.Errorf("task-relevant content is %.1f%% of the worker brief (%d of %d chars); framework scaffolding now outweighs the task",
+			share, taskChars, len(brief))
 	}
 }
 
