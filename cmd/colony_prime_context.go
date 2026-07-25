@@ -584,6 +584,21 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		repoRoot = filepath.Dir(filepath.Dir(store.BasePath()))
 	}
 	hiveEntries := readHiveWisdomEntriesForDomains(hubDir, 5, readRegistryDomainsForRepo(hubDir, repoRoot), &fallbacks)
+
+	// Surface why hive wisdom was withheld — but only once the colony has
+	// actually opted in. These reasons were previously collected and dropped on
+	// the floor, so the section vanished with no explanation, which contradicts
+	// the design rule that cross-project wisdom adoption is never silent.
+	//
+	// Not-opted-in is deliberately excluded: it is the default state of every
+	// colony, and warning about it on every single colony-prime call would train
+	// users to ignore warnings. The case worth reporting is the confusing one —
+	// a user who DID opt in, sees no wisdom, and needs to know whether the hub is
+	// empty, the domain did not match, or everything has decayed to dormant.
+	if hiveRetrievalOptedIn() {
+		result.Warnings = append(result.Warnings, fallbacks...)
+	}
+
 	hiveLines := buildHiveWisdomLines(hiveEntries)
 	if len(hiveLines) > 0 {
 		var hiveSB strings.Builder
@@ -862,6 +877,24 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	for _, item := range ranking.Trimmed {
 		result.Trimmed = append(result.Trimmed, item.Name)
 		result.Ledger.Trimmed = append(result.Ledger.Trimmed, colonyPrimeLedgerItemFromRanked(item))
+	}
+
+	// Cross-project wisdom adoption is never silent: the ledger records
+	// exactly which entries were retrieved into this colony's context.
+	if len(hiveEntries) > 0 {
+		hiveIDs := make([]string, 0, len(hiveEntries))
+		for _, entry := range hiveEntries {
+			hiveIDs = append(hiveIDs, entry.ID)
+		}
+		recordHiveRetrieval := func(items []colonyPrimeLedgerItem) {
+			for i := range items {
+				if items[i].Name == "hive_wisdom" {
+					items[i].Decision = strings.TrimSpace(items[i].Decision + "; retrieved entries: " + strings.Join(hiveIDs, ", "))
+				}
+			}
+		}
+		recordHiveRetrieval(result.Ledger.Included)
+		recordHiveRetrieval(result.Ledger.Trimmed)
 	}
 
 	context := strings.TrimSpace(assembled.String())

@@ -419,4 +419,3 @@ func TestTraceRotateNoOpWhenUnderLimit(t *testing.T) {
 		t.Errorf("expected no rotation, got: %v", result.Result["rotated"])
 	}
 }
-

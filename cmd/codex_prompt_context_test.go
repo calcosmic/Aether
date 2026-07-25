@@ -19,6 +19,10 @@ func TestResolveCodexWorkerContextUsesColonyPrimeSections(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	store = s
 
+	// Hive retrieval is off by default; this test asserts on hive content,
+	// so it opts in explicitly rather than relying on an implicit default.
+	enableHiveForTest(t)
+
 	hubDir := filepath.Join(tmpDir, "hub")
 	if err := os.MkdirAll(filepath.Join(hubDir, "hive"), 0755); err != nil {
 		t.Fatalf("mkdir hive: %v", err)

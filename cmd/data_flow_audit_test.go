@@ -12,13 +12,13 @@ import (
 // as the codebase evolves -- catching drift when artifacts are added without
 // writers/readers or when colony-prime wiring changes.
 type DataFlowSnapshot struct {
-	Artifacts              []DataFlowArtifact `json:"artifacts"`
-	ColonyPrimeSectionCount int              `json:"colony_prime_section_count"`
-	CapsuleSectionCount     int              `json:"capsule_section_count"`
-	DeadEndArtifacts        []string         `json:"dead_end_artifacts"`
-	GhostFiles              []string         `json:"ghost_files"`
-	NotWiredToColonyPrime   []string         `json:"not_wired_to_colony_prime"`
-	FindingsCount           DataFlowFindings `json:"findings_count"`
+	Artifacts               []DataFlowArtifact `json:"artifacts"`
+	ColonyPrimeSectionCount int                `json:"colony_prime_section_count"`
+	CapsuleSectionCount     int                `json:"capsule_section_count"`
+	DeadEndArtifacts        []string           `json:"dead_end_artifacts"`
+	GhostFiles              []string           `json:"ghost_files"`
+	NotWiredToColonyPrime   []string           `json:"not_wired_to_colony_prime"`
+	FindingsCount           DataFlowFindings   `json:"findings_count"`
 }
 
 // DataFlowArtifact represents a single artifact in the data flow inventory.

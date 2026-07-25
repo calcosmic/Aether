@@ -160,10 +160,10 @@ func buildHealthData(s *storage.Store, commands []smoke.YAMLCommand, blocking, w
 	}
 
 	existing["doc_cli_alignment"] = map[string]interface{}{
-		"commands_checked":        len(commands),
-		"host_critical_checked":   hostCriticalChecked,
-		"host_critical_failures":  blocking,
-		"warnings":                warnings,
+		"commands_checked":       len(commands),
+		"host_critical_checked":  hostCriticalChecked,
+		"host_critical_failures": blocking,
+		"warnings":               warnings,
 	}
 
 	return existing

@@ -59,27 +59,27 @@ func TestUnblock_ShowFailedGates(t *testing.T) {
 	// Write gate results with 2 failed and 1 passed gate
 	results := []GateCheckResult{
 		{
-			Name:      "tests_pass",
-			Status:    "failed",
-			Detail:    "3 tests failed in pkg/core",
-			FixHint:   "Run go test ./pkg/core to see failures",
-			Timestamp: "2026-05-01T10:00:00Z",
+			Name:       "tests_pass",
+			Status:     "failed",
+			Detail:     "3 tests failed in pkg/core",
+			FixHint:    "Run go test ./pkg/core to see failures",
+			Timestamp:  "2026-05-01T10:00:00Z",
 			RetryCount: 0,
 		},
 		{
-			Name:      "flags",
-			Status:    "failed",
-			Detail:    "2 unresolved blocker flags",
-			FixHint:   "Resolve blockers with /ant-flags --resolve",
+			Name:            "flags",
+			Status:          "failed",
+			Detail:          "2 unresolved blocker flags",
+			FixHint:         "Resolve blockers with /ant-flags --resolve",
 			RecoveryOptions: []string{"Fix flag 1", "Fix flag 2"},
-			Timestamp: "2026-05-01T10:00:01Z",
-			RetryCount: 1,
+			Timestamp:       "2026-05-01T10:00:01Z",
+			RetryCount:      1,
 		},
 		{
-			Name:      "spawn_gate",
-			Status:    "passed",
-			Detail:    "3 workers spawned",
-			Timestamp: "2026-05-01T10:00:02Z",
+			Name:       "spawn_gate",
+			Status:     "passed",
+			Detail:     "3 workers spawned",
+			Timestamp:  "2026-05-01T10:00:02Z",
 			RetryCount: 0,
 		},
 	}
@@ -156,11 +156,11 @@ func TestUnblock_RecoveryOptions(t *testing.T) {
 	// Write gate results with 1 failed gate
 	results := []GateCheckResult{
 		{
-			Name:      "anti_pattern",
-			Status:    "failed",
-			Detail:    "Critical anti-pattern detected",
-			FixHint:   "Fix the anti-pattern",
-			Timestamp: "2026-05-01T10:00:00Z",
+			Name:       "anti_pattern",
+			Status:     "failed",
+			Detail:     "Critical anti-pattern detected",
+			FixHint:    "Fix the anti-pattern",
+			Timestamp:  "2026-05-01T10:00:00Z",
 			RetryCount: 0,
 		},
 	}
@@ -217,11 +217,11 @@ func TestUnblock_NoForbiddenStrings(t *testing.T) {
 	// Write gate results with 1 failed gate
 	results := []GateCheckResult{
 		{
-			Name:      "tests_pass",
-			Status:    "failed",
-			Detail:    "Tests failed",
-			FixHint:   "Fix the tests",
-			Timestamp: "2026-05-01T10:00:00Z",
+			Name:       "tests_pass",
+			Status:     "failed",
+			Detail:     "Tests failed",
+			FixHint:    "Fix the tests",
+			Timestamp:  "2026-05-01T10:00:00Z",
 			RetryCount: 0,
 		},
 	}
@@ -278,11 +278,11 @@ func TestUnblock_DispatchProposeMode(t *testing.T) {
 
 	results := []GateCheckResult{
 		{
-			Name:      "tests_pass",
-			Status:    "failed",
-			Detail:    "Tests failed",
-			FixHint:   "Fix the tests",
-			Timestamp: "2026-05-01T10:00:00Z",
+			Name:       "tests_pass",
+			Status:     "failed",
+			Detail:     "Tests failed",
+			FixHint:    "Fix the tests",
+			Timestamp:  "2026-05-01T10:00:00Z",
 			RetryCount: 0,
 		},
 	}
@@ -329,9 +329,9 @@ func TestUnblock_DispatchCircuitBreakerTripped(t *testing.T) {
 
 	results := []GateCheckResult{
 		{
-			Name:      "tests_pass",
-			Status:    "failed",
-			Timestamp: "2026-05-01T10:00:00Z",
+			Name:       "tests_pass",
+			Status:     "failed",
+			Timestamp:  "2026-05-01T10:00:00Z",
 			RetryCount: 0,
 		},
 	}
@@ -384,9 +384,9 @@ func TestUnblock_DispatchAttemptCapExceeded(t *testing.T) {
 		Attempts: 1,
 		Results: []GateCheckResult{
 			{
-				Name:      "tests_pass",
-				Status:    "failed",
-				Timestamp: "2026-05-01T10:00:00Z",
+				Name:       "tests_pass",
+				Status:     "failed",
+				Timestamp:  "2026-05-01T10:00:00Z",
 				RetryCount: 0,
 			},
 		},
@@ -427,9 +427,9 @@ func TestUnblock_DispatchInvalidMode(t *testing.T) {
 
 	results := []GateCheckResult{
 		{
-			Name:      "tests_pass",
-			Status:    "failed",
-			Timestamp: "2026-05-01T10:00:00Z",
+			Name:       "tests_pass",
+			Status:     "failed",
+			Timestamp:  "2026-05-01T10:00:00Z",
 			RetryCount: 0,
 		},
 	}
@@ -469,11 +469,11 @@ func TestUnblock_RecoverySummaryIncludesFixerOption(t *testing.T) {
 
 	results := []GateCheckResult{
 		{
-			Name:      "tests_pass",
-			Status:    "failed",
-			Detail:    "Tests failed",
-			FixHint:   "Fix the tests",
-			Timestamp: "2026-05-01T10:00:00Z",
+			Name:       "tests_pass",
+			Status:     "failed",
+			Detail:     "Tests failed",
+			FixHint:    "Fix the tests",
+			Timestamp:  "2026-05-01T10:00:00Z",
 			RetryCount: 0,
 		},
 	}

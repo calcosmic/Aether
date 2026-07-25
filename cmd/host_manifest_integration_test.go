@@ -392,15 +392,15 @@ func TestHostManifest_ContinueManifest(t *testing.T) {
 
 func TestHostManifest_BuildManifestRoundtrip(t *testing.T) {
 	original := codexBuildManifest{
-		Phase:       2,
-		PhaseName:   "Test Roundtrip",
-		Root:        "/tmp/roundtrip",
-		ColonyDepth: "full",
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		State:       "READY",
-		Checkpoint:  "build-start",
-		ClaimsPath:  ".aether/data/claims.json",
-		Playbooks:   []string{"build-prep.md"},
+		Phase:        2,
+		PhaseName:    "Test Roundtrip",
+		Root:         "/tmp/roundtrip",
+		ColonyDepth:  "full",
+		GeneratedAt:  time.Now().UTC().Format(time.RFC3339),
+		State:        "READY",
+		Checkpoint:   "build-start",
+		ClaimsPath:   ".aether/data/claims.json",
+		Playbooks:    []string{"build-prep.md"},
 		WorkerBriefs: []string{"brief"},
 		Dispatches: []codexBuildDispatch{
 			{

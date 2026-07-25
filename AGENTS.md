@@ -661,6 +661,9 @@ domain, and shared across all colonies on the same machine.
 | `hive-read` | Read wisdom with domain filtering and confidence threshold |
 | `hive-abstract` | Generalize repo-specific instinct into cross-colony wisdom |
 | `hive-promote` | Orchestrate abstract + store pipeline |
+| `hive-opt-in` | Consent this colony to receiving cross-project wisdom |
+| `hive-opt-out` | Withdraw this colony's consent |
+| `hive-revoke` | Revoke a wisdom entry by id (`--unrevoke` restores it) |
 
 Automatic Hive influence is quarantined by default:
 
@@ -677,9 +680,42 @@ Automatic Hive influence is quarantined by default:
 | 3 repos | 0.85 |
 | 4+ repos | 0.95 |
 
-Confidence is never downgraded. During `aether seal`, instincts with confidence
->= 0.8 remain project-local unless `AETHER_HIVE_POLICY=promote` explicitly enables
-non-blocking Hive promotion.
+**Confirmations are counted by stable repository identity, never by display
+name.** Identity is derived from the normalized git remote URL, falling back to a
+hash of the absolute path (`cmd/hive_repo_identity.go`). Promoting the same text
+four times from one repository under four different labels earns no boost — this
+is what stops a single colony inflating its own wisdom.
+
+Confidence is never downgraded by re-promotion, but it **decays lazily on read**
+with a 180-day half-life measured from `last_confirmed_at`. Entries whose
+effective confidence falls below 0.3 are treated as dormant and are not injected.
+The stored value is never rewritten by a read, so history stays auditable.
+
+### Retrieval is opt-in, twice over
+
+Cross-project wisdom reaches worker context only when **both** gates are open:
+
+1. **Machine policy** — `AETHER_HIVE_POLICY` must be `read` or `promote`. It
+   defaults to `off`.
+2. **Colony consent** — the repository must have run `aether hive-opt-in`, which
+   writes `hive_retrieval.json` into its colony data directory.
+
+The policy decides whether the feature exists; consent decides whether *this*
+repository receives other repositories' wisdom. When wisdom is withheld, the
+reason is surfaced in colony-prime's `warnings` rather than the section silently
+vanishing.
+
+### Contradiction and revocation
+
+A new entry that shares most of its tokens with an existing same-domain entry but
+disagrees on negation is stored **quarantined** and cross-linked to what it
+contradicts. Neither side wins silently. Quarantined and revoked entries are
+never retrieved, are evicted first under the 200-entry cap, and remain in the
+file as an audit trail. Re-storing the exact text of a revoked entry fails rather
+than resurrecting it.
+
+Hive text is sanitized through the same `SanitizeSignalContent` path as pheromone
+signals before storage — it is an untrusted cross-colony channel.
 
 ---
 

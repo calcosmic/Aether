@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -37,6 +38,13 @@ func NewPromoteService(store *storage.Store, bus *events.Bus) *PromoteService {
 // Promote promotes an observation to an instinct.
 // Source: Shell instinct-store.sh lines 25-203
 func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, colonyName string) (*PromotionResult, error) {
+	// Gate before anything else. Promotion writes durable memory that is later
+	// injected into worker prompts, so content that cannot be verified against
+	// a repository must never enter the store. See admissible.go for why.
+	if ok, reason := IsAdmissibleInstinctContent(obs.Content); !ok {
+		return nil, fmt.Errorf("observation not admissible as an instinct: %s", reason)
+	}
+
 	now := time.Now().UTC()
 
 	// Step 1: Generate instinct ID: inst_{unix}_{6hex}
@@ -122,7 +130,12 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 	}
 
 	// Step 7: Create new instinct entry
-	action := fmt.Sprintf("When %s, apply observed pattern", truncateStr(obs.Content, 100))
+	// The action is the observation itself. The previous template wrapped it as
+	// "When <content>, apply observed pattern", which made the trigger and the
+	// action the same sentence — no rule was expressed, and the 100-char
+	// truncation cut mid-word. Content is admissible-gated above, so it is
+	// already bounded and concrete; wrapping it added nothing but noise.
+	action := strings.TrimSpace(obs.Content)
 	entry := colony.InstinctEntry{
 		ID:         instID,
 		Trigger:    obs.Content,

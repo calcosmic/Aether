@@ -106,7 +106,7 @@ func TestIsGroundedTask_FileInGoal(t *testing.T) {
 
 func TestIsGroundedTask_FileInConstraints(t *testing.T) {
 	task := colony.Task{
-		Goal: "Refactor storage layer",
+		Goal:        "Refactor storage layer",
 		Constraints: []string{"Must not modify pkg/storage/store.go"},
 	}
 	if !isGroundedTask(task) {

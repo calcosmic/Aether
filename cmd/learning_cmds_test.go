@@ -26,7 +26,7 @@ func TestLearningInject(t *testing.T) {
 
 	rootCmd.SetArgs([]string{"learning-inject",
 		"--category", "testing",
-		"--content", "test observation content",
+		"--content", "test observation content referencing pkg/memory/observe.go",
 		"--trust-score", "0.8",
 		"--source", "unit-test",
 	})
@@ -48,8 +48,8 @@ func TestLearningInject(t *testing.T) {
 		t.Fatalf("expected 1 observation, got %d", len(obs))
 	}
 	obsMap := obs[0].(map[string]interface{})
-	if obsMap["content"] != "test observation content" {
-		t.Errorf("expected content 'test observation content', got %v", obsMap["content"])
+	if obsMap["content"] != "test observation content referencing pkg/memory/observe.go" {
+		t.Errorf("expected content 'test observation content referencing pkg/memory/observe.go', got %v", obsMap["content"])
 	}
 }
 
@@ -113,7 +113,7 @@ func TestLearningPromote(t *testing.T) {
 		"observations": []interface{}{
 			map[string]interface{}{
 				"content_hash": "obs_999",
-				"content":      "test observation",
+				"content":      "test observation referencing pkg/memory/promote.go",
 				"wisdom_type":  "testing",
 				"source_type":  "observation",
 			},
@@ -281,7 +281,7 @@ func TestLearningPromoteAutoCreatesInstincts(t *testing.T) {
 		"observations": []interface{}{
 			map[string]interface{}{
 				"content_hash":      "obs_promote_1",
-				"content":           "pattern: always close resources in defer",
+				"content":           "pattern: always close resources in defer, see pkg/storage/store.go",
 				"wisdom_type":       "pattern",
 				"observation_count": 4,
 				"source_type":       "observation",
@@ -335,7 +335,6 @@ func writeTestJSON(t *testing.T, dir, name string, data interface{}) {
 		t.Fatalf("writing %s: %v", name, err)
 	}
 }
-
 
 func TestLearningPropose(t *testing.T) {
 	saveGlobals(t)

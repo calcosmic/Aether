@@ -14,19 +14,41 @@ import (
 const maxHiveWisdomEntries = 200
 
 // hiveWisdomEntry mirrors cmd/hive.go hiveWisdomEntry for JSON persistence.
+// Field parity matters: a load/save cycle through this package must never
+// silently strip trust metadata from entries written by the CLI.
 type hiveWisdomEntry struct {
-	ID          string  `json:"id"`
-	Text        string  `json:"text"`
-	Domain      string  `json:"domain"`
-	SourceRepo  string  `json:"source_repo"`
-	Confidence  float64 `json:"confidence"`
-	CreatedAt   string  `json:"created_at"`
-	AccessedAt  string  `json:"accessed_at"`
-	AccessCount int     `json:"access_count"`
+	ID               string         `json:"id"`
+	Text             string         `json:"text"`
+	Domain           string         `json:"domain"`
+	SourceRepo       string         `json:"source_repo"`
+	SourceRepos      []string       `json:"source_repos,omitempty"`
+	SourceRepoIDs    []string       `json:"source_repo_ids,omitempty"`
+	Evidence         []hiveEvidence `json:"evidence,omitempty"`
+	Confidence       float64        `json:"confidence"`
+	CreatedAt        string         `json:"created_at"`
+	AccessedAt       string         `json:"accessed_at"`
+	AccessCount      int            `json:"access_count"`
+	LastConfirmedAt  string         `json:"last_confirmed_at,omitempty"`
+	Revoked          bool           `json:"revoked,omitempty"`
+	RevokedAt        string         `json:"revoked_at,omitempty"`
+	RevokedReason    string         `json:"revoked_reason,omitempty"`
+	Quarantined      bool           `json:"quarantined,omitempty"`
+	QuarantineReason string         `json:"quarantine_reason,omitempty"`
+	Contradicts      []string       `json:"contradicts,omitempty"`
+	ContradictedBy   []string       `json:"contradicted_by,omitempty"`
+}
+
+// hiveEvidence mirrors cmd/hive.go hiveEvidence for JSON persistence.
+type hiveEvidence struct {
+	RepoID    string `json:"repo_id"`
+	Kind      string `json:"kind"`
+	Reference string `json:"reference"`
+	At        string `json:"at"`
 }
 
 // hiveWisdomData mirrors cmd/hive.go hiveWisdomData for JSON persistence.
 type hiveWisdomData struct {
+	Version int               `json:"version,omitempty"`
 	Entries []hiveWisdomEntry `json:"entries"`
 }
 
@@ -76,17 +98,23 @@ func (h *HiveStore) saveWisdom(data hiveWisdomData) error {
 	return os.WriteFile(h.hiveWisdomPath(), append(encoded, '\n'), 0644)
 }
 
-// abstractContent removes repo-specific paths from text, making it generic
-// for cross-colony sharing.
+// abstractContent replaces the source repository name with a placeholder so a
+// claim reads sensibly in another colony.
+//
+// It deliberately no longer strips `src/`, `lib/`, `pkg/`, `cmd/` and
+// `internal/` prefixes. That was labelled abstraction but was plain string
+// replacement: turning `pkg/auth/token.go` into `auth/token.go` does not
+// generalise the claim, it makes it point at a path that does not exist. The
+// resulting entries were both less true and harder to invalidate.
+//
+// Real generalisation requires understanding the claim, which string
+// replacement cannot do. Keeping paths intact at least leaves the entry
+// falsifiable.
 func (h *HiveStore) abstractContent(text string) string {
-	abstracted := text
-	if h.sourceRepo != "" {
-		abstracted = strings.ReplaceAll(abstracted, h.sourceRepo, "<repo>")
+	if h.sourceRepo == "" {
+		return text
 	}
-	for _, prefix := range []string{"src/", "lib/", "pkg/", "cmd/", "internal/"} {
-		abstracted = strings.ReplaceAll(abstracted, prefix, "")
-	}
-	return abstracted
+	return strings.ReplaceAll(text, h.sourceRepo, "<repo>")
 }
 
 // Add promotes a learning entry to hive wisdom. Only hive-shareable entries
@@ -273,11 +301,11 @@ func (h *HiveStore) Compact(budget int) error {
 // hiveWisdomToEntry converts a hive wisdom entry to a learn Entry.
 func hiveWisdomToEntry(e hiveWisdomEntry) Entry {
 	return Entry{
-		ID:            e.ID,
-		Content:       e.Text,
-		CreatedAt:     e.CreatedAt,
-		Confidence:    e.Confidence,
+		ID:             e.ID,
+		Content:        e.Text,
+		CreatedAt:      e.CreatedAt,
+		Confidence:     e.Confidence,
 		Classification: ClassHiveShareable,
-		FilePath:      e.SourceRepo,
+		FilePath:       e.SourceRepo,
 	}
 }

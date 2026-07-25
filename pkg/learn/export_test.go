@@ -337,19 +337,26 @@ func TestHiveStore_AddAbstractsContent(t *testing.T) {
 		t.Fatalf("len(entries) = %d, want 1", len(entries))
 	}
 
-	// Verify content was abstracted
+	// The repository name is replaced so a claim reads sensibly elsewhere.
 	content := entries[0].Content
-	if containsString(content, "src/") {
-		t.Error("content still contains src/ prefix (should be abstracted)")
-	}
-	if containsString(content, "pkg/") {
-		t.Error("content still contains pkg/ prefix (should be abstracted)")
-	}
 	if containsString(content, "/Users/testuser/myrepo") {
 		t.Error("content still contains repo path (should be abstracted)")
 	}
 	if !containsString(content, "<repo>") {
 		t.Error("content does not contain <repo> placeholder")
+	}
+
+	// Source-directory prefixes are deliberately PRESERVED. Stripping "src/",
+	// "pkg/" and friends was labelled abstraction but was plain string
+	// replacement: it turned pkg/auth/token.go into auth/token.go, a path that
+	// does not exist, making the entry both less true and impossible to check
+	// against a repository later. A claim that cannot be falsified never leaves
+	// the store.
+	if !containsString(content, "src/") {
+		t.Error("src/ prefix was stripped; paths must stay intact so entries remain verifiable")
+	}
+	if !containsString(content, "pkg/") {
+		t.Error("pkg/ prefix was stripped; paths must stay intact so entries remain verifiable")
 	}
 }
 

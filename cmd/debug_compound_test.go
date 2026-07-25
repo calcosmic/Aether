@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"bytes"
-	
+
 	"fmt"
 	"os"
 	"path/filepath"
@@ -40,10 +40,10 @@ func TestDebugCompoundDestructive(t *testing.T) {
 	stdout = &buf
 	rootCmd.SetArgs([]string{"recover", "--apply", "--force", "--json"})
 	err := rootCmd.Execute()
-	
+
 	fmt.Printf("Error: %v\n", err)
 	fmt.Printf("Output:\n%s\n", buf.String())
-	
+
 	// Check the state of files after repair
 	manifestPath := filepath.Join(dataDir, "build", "phase-1", "manifest.json")
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
@@ -52,7 +52,7 @@ func TestDebugCompoundDestructive(t *testing.T) {
 		data, _ := os.ReadFile(manifestPath)
 		fmt.Printf("Manifest still exists: %s\n", string(data))
 	}
-	
+
 	stateData, _ := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
 	fmt.Printf("State after repair:\n%s\n", string(stateData))
 }

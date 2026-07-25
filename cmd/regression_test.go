@@ -12,9 +12,9 @@ import (
 type RegressionSnapshot struct {
 	AuditDimensions struct {
 		CommandContracts struct {
-			CommandCount      int      `json:"command_count"`
-			LifecycleContracts int     `json:"lifecycle_contracts"`
-			OutputModes       []string `json:"output_modes"`
+			CommandCount       int      `json:"command_count"`
+			LifecycleContracts int      `json:"lifecycle_contracts"`
+			OutputModes        []string `json:"output_modes"`
 		} `json:"command_contracts"`
 		WorkerEconomy struct {
 			DocumentedCastes int `json:"documented_castes"`
@@ -23,10 +23,10 @@ type RegressionSnapshot struct {
 			VisualFunctions  int `json:"visual_functions"`
 		} `json:"worker_economy"`
 		DataFlow struct {
-			ArtifactCount         int      `json:"artifact_count"`
-			ColonyPrimeSections   int      `json:"colony_prime_sections"`
-			CapsuleSections       int      `json:"capsule_sections"`
-			DeadEndArtifacts      []string `json:"dead_end_artifacts"`
+			ArtifactCount       int      `json:"artifact_count"`
+			ColonyPrimeSections int      `json:"colony_prime_sections"`
+			CapsuleSections     int      `json:"capsule_sections"`
+			DeadEndArtifacts    []string `json:"dead_end_artifacts"`
 		} `json:"data_flow"`
 		ReleaseIntegrity struct {
 			SyncPairCount     int `json:"sync_pair_count"`

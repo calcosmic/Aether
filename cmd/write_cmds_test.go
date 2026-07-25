@@ -1468,6 +1468,7 @@ func TestLearningPromoteAuto(t *testing.T) {
 		Observations: []colony.Observation{
 			{
 				ContentHash: "sha256:eligible1",
+				Content:     "eligible observation referencing pkg/memory/promote.go",
 				WisdomType:  "pattern",
 				TrustScore:  &score,
 			},

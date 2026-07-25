@@ -30,8 +30,8 @@ func TestQueenPromoteInstinctWritesGlobal(t *testing.T) {
 	instinctData := map[string]interface{}{
 		"instincts": []map[string]interface{}{
 			{
-				"id":        "inst_test_001",
-				"action":    "Always write tests first",
+				"id":         "inst_test_001",
+				"action":     "Always write tests first",
 				"confidence": 0.95,
 			},
 		},
@@ -80,8 +80,8 @@ func TestQueenPromoteInstinctSucceedsWithoutHub(t *testing.T) {
 	instinctData := map[string]interface{}{
 		"instincts": []map[string]interface{}{
 			{
-				"id":        "inst_test_002",
-				"action":    "Test without hub",
+				"id":         "inst_test_002",
+				"action":     "Test without hub",
 				"confidence": 0.85,
 			},
 		},

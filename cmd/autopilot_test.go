@@ -193,7 +193,7 @@ func TestAutopilotCheckReplan(t *testing.T) {
 		resetRootCmd(t)
 		stdout = &buf
 		buf.Reset()
-		rootCmd.SetArgs([]string{"autopilot-update", "--phase", string(rune('0'+i)), "--status", "completed"})
+		rootCmd.SetArgs([]string{"autopilot-update", "--phase", string(rune('0' + i)), "--status", "completed"})
 		_ = rootCmd.Execute()
 	}
 

@@ -249,11 +249,11 @@ func TestPreBuildGates(t *testing.T) {
 		t.Fatalf("load state: %v", err)
 	}
 	state.Errors.Records = append(state.Errors.Records, colony.ErrorRecord{
-		ID:        "1",
-		Severity:  "CRITICAL",
-		Category:  "test",
-		Description:   "critical error",
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		ID:          "1",
+		Severity:    "CRITICAL",
+		Category:    "test",
+		Description: "critical error",
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save state: %v", err)
@@ -295,11 +295,11 @@ func TestPreContinueGates(t *testing.T) {
 		t.Fatalf("load state: %v", err)
 	}
 	state.Errors.Records = append(state.Errors.Records, colony.ErrorRecord{
-		ID:        "1",
-		Severity:  "CRITICAL",
-		Category:  "test",
-		Description:   "critical error",
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		ID:          "1",
+		Severity:    "CRITICAL",
+		Category:    "test",
+		Description: "critical error",
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save state: %v", err)
@@ -778,15 +778,15 @@ func TestShouldSkipGateCmd_PassedGate(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
 
 	var buf bytes.Buffer
-		rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate", "--phase", "1"})
+	rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate", "--phase", "1"})
 	stdout = &buf
 
-		// Write per-phase gate results file
-		phaseResults := []GateCheckResult{
-			{Name: "spawn_gate", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
-		}
-		phaseData, _ := json.Marshal(phaseResults)
-		os.WriteFile(filepath.Join(dir, "gate-results-1.json"), phaseData, 0644)
+	// Write per-phase gate results file
+	phaseResults := []GateCheckResult{
+		{Name: "spawn_gate", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	phaseData, _ := json.Marshal(phaseResults)
+	os.WriteFile(filepath.Join(dir, "gate-results-1.json"), phaseData, 0644)
 
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)

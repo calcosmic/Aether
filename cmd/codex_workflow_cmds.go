@@ -440,7 +440,7 @@ func completeSealRuntime(state colony.ColonyState) error {
 				if domain == "" {
 					domain = "general"
 				}
-				if err := promoteToHive(entry.Action, domain, repoName, entry.Confidence); err != nil {
+				if err := promoteToHiveWithReference(entry.Action, domain, repoName, entry.Confidence, "seal:"+entry.ID); err != nil {
 					log.Printf("seal: hive-promote failed for %s: %v", entry.ID, err)
 					hivePromotionFailures++
 				} else {
