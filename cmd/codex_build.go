@@ -2448,6 +2448,12 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 		b.WriteString("\n")
 	}
 
+	if researchSection := resolvePhaseResearchSection(root, phase.ID); researchSection != "" {
+		b.WriteString("\n")
+		b.WriteString(researchSection)
+		b.WriteString("\n")
+	}
+
 	b.WriteString("\n## Expected Output\n\n")
 	b.WriteString("- ")
 	b.WriteString(expectedDispatchOutcome(dispatch))

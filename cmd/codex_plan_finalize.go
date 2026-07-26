@@ -348,12 +348,14 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err := os.MkdirAll(planningDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create planning directory: %w", err)
 	}
-	if err := os.RemoveAll(phaseResearchDir); err != nil {
-		return nil, fmt.Errorf("failed to clear phase research directory: %w", err)
-	}
+	// Never wipe phase-research: workers write real research there during
+	// planning iterations, and finalize used to RemoveAll the directory and
+	// regenerate templates from empty — destroying every artifact a worker
+	// produced. Prune only files that no longer map to a current phase.
 	if err := os.MkdirAll(phaseResearchDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create phase research directory: %w", err)
 	}
+	prunePhaseResearchOrphans(phaseResearchDir, phases)
 	for _, name := range []string{"SCOUT.md", "ROUTE-SETTER.md", "phase-plan.json", ".fallback-marker"} {
 		_ = os.Remove(filepath.Join(planningDir, name))
 	}
@@ -379,7 +381,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err != nil {
 		return nil, err
 	}
-	phaseResearchFiles, _, err := writePhaseResearchArtifacts(root, phaseResearchDir, manifest.Survey, scoutReport, phases, emptySnapshots, nil)
+	phaseResearchFiles, _, err := writePhaseResearchArtifacts(root, phaseResearchDir, manifest.Survey, scoutReport, phases, emptySnapshots, dispatches)
 	if err != nil {
 		return nil, err
 	}
@@ -619,7 +621,7 @@ func validatePlanningIterationContract(manifest *codexPlanManifest, completion c
 }
 
 func validatePlanningWorkerChain(label string, dispatches []codexPlanningDispatch) error {
-	if len(dispatches) != 2 {
+	if len(dispatches) < 2 {
 		return fmt.Errorf("%s must contain exactly one Scout followed by one Route-Setter", label)
 	}
 	if !strings.EqualFold(dispatches[0].Caste, "scout") {
@@ -630,6 +632,18 @@ func validatePlanningWorkerChain(label string, dispatches []codexPlanningDispatc
 	}
 	if dispatches[0].Wave >= dispatches[1].Wave {
 		return fmt.Errorf("%s must order Scout before Route-Setter", label)
+	}
+	// The only workers permitted beyond the core pair are phase_research
+	// Scouts — the per-phase domain research wave. Arbitrary worker sets stay
+	// rejected. Research runs BEFORE the Route-Setter so its findings can
+	// inform the route.
+	for i, dispatch := range dispatches[2:] {
+		if dispatch.Stage != phaseResearchStage || !strings.EqualFold(dispatch.Caste, "scout") {
+			return fmt.Errorf("%s worker %d must be a phase_research Scout; other dynamic planning workers are not allowed", label, i+3)
+		}
+		if dispatch.Wave >= dispatches[1].Wave {
+			return fmt.Errorf("%s must order phase research before the Route-Setter", label)
+		}
 	}
 	return nil
 }

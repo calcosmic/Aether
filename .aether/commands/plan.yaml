@@ -28,7 +28,7 @@ wrapper_additions:
     - `--target <70-99>` sets the confidence target. Presets default to fast=80, balanced=90, deep=95, exhaustive=99.
     - `--max-iterations <2-12>` sets the loop budget. Presets default to fast=4, balanced=6, deep=8, exhaustive=12.
     - `--accept` records that the current best plan may finalize below target.
-    Each `aether host plan` response is one planning iteration manifest. It includes `planning_run_id`, `iteration`, `target_confidence`, `max_iterations`, `previous_confidence`, `selected_gaps`, `previous_plan_draft`, and exactly two expected workers: Scout followed by Route-Setter.
+    Each `aether host plan` response is one planning iteration manifest. It includes `planning_run_id`, `iteration`, `target_confidence`, `max_iterations`, `previous_confidence`, `selected_gaps`, `previous_plan_draft`, and the expected workers: one Scout (plus any phase_research Scouts, one per drafted phase) in wave 1, followed by one Route-Setter in wave 2.
     The wrapper loops by dispatching Scout, then Route-Setter with the Scout result, then calling `plan-finalize`. If `plan-finalize` returns `requires_next_iteration: true`, request a fresh `aether host plan` manifest and repeat. Do not reuse the previous manifest or completion packet.
     The runtime emits `planning_loop.stop_reason` as `pending`, `target_reached`, `stalled`, `max_iterations`, or `accepted`; wrappers must surface that reason and must not hand-edit state.
     Confidence may only increase when the Scout/Route-Setter evidence changes or selected gaps are resolved; `plan-finalize` rejects confidence-only bumps.
@@ -56,7 +56,7 @@ guardrails:
   - "Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand from this command spec."
   - "Do NOT parse visual output as authoritative state."
   - "Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`."
-  - "Do NOT dispatch extra planning workers. The real planning contract is one Scout followed by one Route-Setter per iteration."
+  - "Do NOT dispatch planning workers beyond the manifest dispatch list. The contract is Scout plus manifest-listed phase_research Scouts in wave 1, then one Route-Setter in wave 2, per iteration."
   - "Do NOT treat `requires_next_iteration: true` as a completed colony plan."
   - "Do NOT reuse a manifest or completion packet across iterations."
   - "Do NOT hand-edit, repeat, or renumber completed phases during a revision; the Go finalizer owns completed-prefix preservation and final IDs."

@@ -220,7 +220,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"If runtime returns `dispatch_mode: agent-delegate`, dispatch Scout and Route-Setter through the host platform instead of nested subprocess workers, then finalize with the returned manifest.",
 			"If runtime reports unresolved clarifications, route to `aether discuss` before spawning planning workers unless the user explicitly approves assumptions.",
 			"Before each manifest wave, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest file> --execution-wave <execution_wave>`.",
-			"Spawn exactly one Scout and then exactly one Route-Setter as visible live Task/subagent panels with caste-labelled descriptions; do not use background-only dispatch as the ceremony.",
+			"Spawn every manifest dispatch as visible live Task/subagent panels with caste-labelled descriptions: one Scout plus any phase_research Scouts in wave 1, then exactly one Route-Setter in wave 2; do not use background-only dispatch as the ceremony.",
 			"Pass each dispatch `brief` verbatim, honor its read budget and no-repeat loop guard, and mark workers blocked rather than manually reconciling read loops as completed.",
 			"Include the Scout terminal result in the Route-Setter prompt. If `selected_gaps` or `previous_plan_draft` are present, require fresh evidence or resolved gaps before allowing confidence to rise.",
 			"Call `aether spawn-log` before each planning worker and `aether spawn-complete` after each terminal result.",

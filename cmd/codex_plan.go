@@ -859,6 +859,17 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			dispatches[i].Brief += iterationAppendix
 		}
 	}
+	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, phaseResearchCandidates(state, iterationSeed))
+	if len(researchDispatches) > 0 {
+		// The Route-Setter runs after the research wave; point it at the
+		// fresh RESEARCH.md files so findings shape the route.
+		for i := range dispatches {
+			if dispatches[i].Caste == "route_setter" {
+				dispatches[i].Brief += "\n\n## Phase Research Available\n\nParallel research Scouts are writing per-phase findings to `.aether/data/phase-research/phase-N-research.md` during wave 1. Read each phase's research before finalizing the route, and fold its Recommended Approach and Gotchas into task constraints and hints.\n"
+			}
+		}
+		dispatches = append(dispatches, researchDispatches...)
+	}
 	artifactSnapshots := snapshotRelativeFiles(root,
 		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
 		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
@@ -3028,6 +3039,28 @@ func clearPlanningBackupArtifacts(planningDir string) {
 	}
 }
 
+// prunePhaseResearchOrphans removes phase-N-research.md files that no longer
+// correspond to a current phase. Files for live phases are never touched.
+func prunePhaseResearchOrphans(dir string, phases []colony.Phase) {
+	live := make(map[string]bool, len(phases))
+	for _, phase := range phases {
+		live[fmt.Sprintf("phase-%d-research.md", phase.ID)] = true
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, "phase-") || !strings.HasSuffix(name, "-research.md") {
+			continue
+		}
+		if !live[name] {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+	}
+}
+
 func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, report codexScoutReport, phases []colony.Phase, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) ([]string, int, error) {
 	written := make([]string, 0, len(phases))
 	claimed := claimedPlanningFiles(dispatches)
@@ -3041,25 +3074,33 @@ func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, re
 			preserved++
 			continue
 		}
+		// Fallback template in the six-section RESEARCH.md format (the v5
+		// Phase Domain Research contract). Real Scout research written by a
+		// phase_research worker replaces this and is preserved above.
 		var b strings.Builder
 		b.WriteString(fmt.Sprintf("# Phase %d Research: %s\n\n", phase.ID, phase.Name))
-		b.WriteString(fmt.Sprintf("- Generated: %s\n", time.Now().UTC().Format(time.RFC3339)))
-		b.WriteString(fmt.Sprintf("- Phase: %d - %s\n\n", phase.ID, phase.Name))
-		b.WriteString("## Goal Alignment\n")
-		b.WriteString(strings.TrimSpace(phase.Description))
-		b.WriteString("\n\n## Key Patterns\n")
+		b.WriteString(fmt.Sprintf("**Generated:** %s\n", time.Now().UTC().Format(time.RFC3339)))
+		b.WriteString(fmt.Sprintf("**Phase:** %d - %s\n", phase.ID, phase.Name))
+		b.WriteString("**Research scope:** synthesized from territory survey and scout findings (no dedicated research worker ran for this phase)\n\n")
+		b.WriteString("## Hive Wisdom (Pre-existing Knowledge)\n")
+		b.WriteString("No relevant hive wisdom found\n")
+		b.WriteString("\n## Key Patterns\n")
 		patterns := []string{}
 		for _, finding := range report.Findings {
-			patterns = append(patterns, fmt.Sprintf("%s: %s", finding.Area, finding.Discovery))
+			patterns = append(patterns, fmt.Sprintf("**%s:** %s (Source: %s)", finding.Area, finding.Discovery, firstNonEmpty(finding.Source, "scout survey")))
 			if len(patterns) == 3 {
 				break
 			}
 		}
 		b.WriteString(bulletList(patterns, "No extra repo patterns were synthesized for this phase."))
-		b.WriteString("\n\n## Risks\n")
+		b.WriteString("\n\n## External Context\n")
+		b.WriteString("No external research needed for this phase\n")
+		b.WriteString("\n## Gotchas\n")
 		risks := append([]string{}, report.Gaps...)
 		risks = append(risks, survey.Issues...)
 		b.WriteString(bulletList(limitStrings(uniqueSortedStrings(risks), 4), "No additional risks captured for this phase."))
+		b.WriteString("\n\n## Recommended Approach\n")
+		b.WriteString(strings.TrimSpace(firstNonEmpty(phase.Description, "Follow the phase tasks in order and verify against the phase success criteria.")))
 		b.WriteString("\n\n## Files to Study\n")
 		files := append([]string{}, report.StudyFiles...)
 		for _, task := range phase.Tasks {

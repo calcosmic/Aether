@@ -161,6 +161,7 @@ var briefOwnedSections = map[string]bool{
 	"Relevant Playbooks":       true,
 	"Pheromone Signals":        true,
 	"Territory Survey":         true,
+	"Phase Research":           true,
 	"Codegraph Context":        true,
 	"Previous Worker Handoffs": true,
 	"Expected Output":          true,

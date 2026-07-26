@@ -635,8 +635,26 @@ func TestPlanFinalizeRejectsDynamicPlanningWorkerSets(t *testing.T) {
 		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
 		Dispatches:   results,
 	})
-	if err == nil || !strings.Contains(err.Error(), "exactly one Scout followed by one Route-Setter") {
+	if err == nil || !strings.Contains(err.Error(), "second worker must be Route-Setter") {
 		t.Fatalf("expected dynamic worker-set rejection, got %v", err)
+	}
+	assertPlanFinalizeStateUnchanged(t, 0)
+
+	// Trailing workers beyond the core pair are allowed ONLY as phase_research
+	// Scouts; any other dynamic addition stays rejected.
+	trailing := []codexPlanningDispatch{
+		{Stage: "scouting", Wave: 1, Caste: "scout", Name: "Scout-1", Task: "Summarize planning context", TaskID: "plan-scout", Outputs: []string{"SCOUT.md"}},
+		{Stage: "routing", Wave: 2, Caste: "route_setter", Name: "Route-1", Task: "Create constrained phase plan", TaskID: "plan-route-setter", Outputs: []string{"ROUTE-SETTER.md", "phase-plan.json"}},
+		{Stage: "architecture", Wave: 3, Caste: "architect", Name: "Arch-1", Task: "Identify structural risks", TaskID: "plan-architect", Outputs: []string{"ARCHITECT.md"}},
+	}
+	trailingResults := testCompletedPlanningResults(trailing)
+	trailingResults[1].PhasePlan = testWorkerPlanArtifact()
+	_, err = runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, trailing),
+		Dispatches:   trailingResults,
+	})
+	if err == nil || !strings.Contains(err.Error(), "must be a phase_research Scout") {
+		t.Fatalf("expected trailing non-research worker rejection, got %v", err)
 	}
 	assertPlanFinalizeStateUnchanged(t, 0)
 }
