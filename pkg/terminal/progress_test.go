@@ -359,8 +359,8 @@ func TestPauseResume(t *testing.T) {
 // TestTruncateString tests string truncation.
 func TestTruncateString(t *testing.T) {
 	tests := []struct {
-		input   string
-		maxLen  int
+		input    string
+		maxLen   int
 		expected string
 	}{
 		{"hello", 10, "hello"},
@@ -412,10 +412,10 @@ func TestFormatAgentLine(t *testing.T) {
 	defer pi.Close()
 
 	agent := &AgentProgress{
-		AgentID:   "builder-1",
-		AgentName: "Weld-20",
-		Caste:     "builder",
-		Status:    StatusActive,
+		AgentID:    "builder-1",
+		AgentName:  "Weld-20",
+		Caste:      "builder",
+		Status:     StatusActive,
 		TokenCount: 42,
 	}
 

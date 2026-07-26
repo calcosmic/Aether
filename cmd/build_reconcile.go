@@ -164,13 +164,13 @@ func runBuildReconcile(dryRun bool) (map[string]interface{}, error) {
 
 	// Save synthetic packet marker
 	packet := map[string]interface{}{
-		"phase":       currentPhase,
-		"synthetic":   true,
-		"reconciled":  true,
-		"timestamp":   syntheticClaims.Timestamp,
-		"files_added": newAdded,
+		"phase":          currentPhase,
+		"synthetic":      true,
+		"reconciled":     true,
+		"timestamp":      syntheticClaims.Timestamp,
+		"files_added":    newAdded,
 		"files_modified": newModified,
-		"files_deleted": newDeleted,
+		"files_deleted":  newDeleted,
 	}
 	packetPath := filepath.Join(store.BasePath(), fmt.Sprintf("build-reconcile-phase-%d.json", currentPhase))
 	packetData, _ := json.MarshalIndent(packet, "", "  ")

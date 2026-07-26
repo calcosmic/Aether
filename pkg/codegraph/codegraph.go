@@ -32,19 +32,19 @@ type DepEdge struct {
 
 // CodeGraph holds the scanned file dependency graph.
 type CodeGraph struct {
-	Files    []FileNode `json:"files"`
-	Edges    []DepEdge  `json:"edges"`
-	Langs    []string   `json:"languages"`
-	FileCount int       `json:"file_count"`
-	EdgeCount int       `json:"edge_count"`
+	Files     []FileNode `json:"files"`
+	Edges     []DepEdge  `json:"edges"`
+	Langs     []string   `json:"languages"`
+	FileCount int        `json:"file_count"`
+	EdgeCount int        `json:"edge_count"`
 }
 
 // Stats returns a human-readable summary of the scan.
 type Stats struct {
-	FilesScanned int     `json:"files_scanned"`
-	EdgesFound   int     `json:"edges_found"`
+	FilesScanned int      `json:"files_scanned"`
+	EdgesFound   int      `json:"edges_found"`
 	Languages    []string `json:"languages"`
-	SkippedDirs  int     `json:"skipped_dirs"`
+	SkippedDirs  int      `json:"skipped_dirs"`
 }
 
 // languageDetectors maps file extensions to language names.
@@ -380,8 +380,8 @@ func javaPackageFromPath(relPath string) string {
 // --- Rust ---
 
 var (
-	rustUse  = regexp.MustCompile(`(?m)^\s*use\s+([^;]+);`)
-	rustMod  = regexp.MustCompile(`(?m)^\s*mod\s+(\w+)`)
+	rustUse = regexp.MustCompile(`(?m)^\s*use\s+([^;]+);`)
+	rustMod = regexp.MustCompile(`(?m)^\s*mod\s+(\w+)`)
 )
 
 func parseRustImports(relPath, content, root string) []string {

@@ -243,8 +243,19 @@ func checkTestsPass() gateCheck {
 // resolveTestCommand determines the test command for the current project.
 // Priority: CLAUDE.md → CODEBASE.md → language detection → empty (skip).
 func resolveTestCommand() string {
-	// Check CLAUDE.md for test command
-	repoRoot := storage.ResolveAetherRoot(context.Background())
+	// Resolve against the colony's own root, not the process cwd. The previous
+	// ResolveAetherRoot call answered "where am I running" rather than "which
+	// repository is this gate checking" — under `go test` that resolved to the
+	// Aether repo itself, so the gate extracted `go test ./...` from CLAUDE.md
+	// and recursively ran the entire suite inside a 2-minute timeout.
+	repoRoot := ""
+	if store != nil && strings.TrimSpace(store.BasePath()) != "" {
+		// BasePath is <root>/.aether/data; walk up to the repo root.
+		repoRoot = filepath.Dir(filepath.Dir(store.BasePath()))
+	}
+	if repoRoot == "" {
+		repoRoot = storage.ResolveAetherRoot(context.Background())
+	}
 	claudeMD := repoRoot + "/CLAUDE.md"
 	if data, err := os.ReadFile(claudeMD); err == nil {
 		cmd := extractTestCommand(string(data))

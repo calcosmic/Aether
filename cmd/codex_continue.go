@@ -66,6 +66,10 @@ type codexContinueVerificationReport struct {
 	ChecksPassed               bool                         `json:"checks_passed"`
 	Passed                     bool                         `json:"passed"`
 	BlockingIssues             []string                     `json:"blocking_issues,omitempty"`
+	// Warnings surface non-blocking verification observations — most
+	// importantly "no deterministic verification command resolved", which used
+	// to be a silent hard-block and is now a visible handover to the watcher.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type codexWatcherVerification struct {
@@ -82,6 +86,10 @@ type codexContinueGateReport struct {
 	Checks         []gateCheck `json:"checks"`
 	Passed         bool        `json:"passed"`
 	BlockingIssues []string    `json:"blocking_issues,omitempty"`
+	// Warnings carry non-blocking observations (for example recorded
+	// operational worker issues). They replaced the operational_evidence
+	// "gate", which hardcoded Passed=true and therefore asserted nothing.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type codexContinueReport struct {
@@ -1445,9 +1453,14 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 			shellChecksPassed = false
 		}
 	}
-	if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
-		shellChecksPassed = false
-	}
+	// Zero executed checks no longer hard-fails. It used to set
+	// shellChecksPassed=false, which blocked any repo outside the five detected
+	// ecosystems from ever advancing past its first continue — with no remedy
+	// visible to the user. When nothing shell-verifiable resolved, verification
+	// responsibility passes to the watcher below (shellChecksPassed stays true,
+	// so the watcher path runs); a warning makes the situation visible. A user
+	// who also passes --skip-watchers has explicitly chosen to advance on
+	// claims alone, and that choice is theirs.
 
 	var continueWatcher codexWatcherVerification
 	var watcherFlow *codexContinueWorkerFlowStep
@@ -1491,10 +1504,10 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	checksPassed := shellChecksPassed
 	blockers := []string{}
 	warnings := []string{}
+	if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
+		warnings = append(warnings, "no deterministic verification command resolved in this repository; verification relies on the watcher — add real build/test commands to CLAUDE.md to enable shell checks")
+	}
 	if !shellChecksPassed {
-		if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
-			blockers = append(blockers, "no deterministic verification command was resolved; at least one fresh check is required before advancement")
-		}
 		for _, step := range steps {
 			if !step.Passed && !step.Skipped {
 				if step.ErrorClass == ErrorClassEnvironment && phase.Mode != colony.PhaseModeProduction {
@@ -1558,6 +1571,7 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		ChecksPassed:               checksPassed,
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,
+		Warnings:                   warnings,
 	}, watcherFlow
 }
 
@@ -2653,6 +2667,22 @@ func runVerificationStep(ctx context.Context, root, name, command string, timeou
 		Output:         output,
 	}
 	if err != nil {
+		// A command that does not exist is not a failed verification — it is a
+		// wrong guess by the language-fallback resolver. `npm run lint` in a
+		// project with no lint script, or `make test` with no such target, used
+		// to hard-block phase advancement with no remedy the user could see.
+		// The absence of a tool proves nothing about the code; classify it as
+		// Skipped and let the watcher carry verification.
+		if isCommandUnresolvable(output, exitCode) {
+			return codexVerificationStep{
+				Name:     name,
+				Command:  command,
+				Skipped:  true,
+				Passed:   true,
+				ExitCode: exitCode,
+				Summary:  fmt.Sprintf("%s: command unavailable in this repository (%s); skipped — configure a real command in CLAUDE.md to enable this check", name, command),
+			}
+		}
 		step.Summary = failureSummaryForStep(name, exitCode, output, err, timedOut, timeout)
 		if timedOut {
 			step.ErrorClass = ErrorClassTimeout
@@ -2661,6 +2691,33 @@ func runVerificationStep(ctx context.Context, root, name, command string, timeou
 		}
 	}
 	return step
+}
+
+// isCommandUnresolvable reports whether a verification failure means the
+// command itself cannot run in this repository, as opposed to the code failing
+// the check. Exit 127 is the shell's universal command-not-found; the string
+// patterns cover the per-ecosystem equivalents of "no such script/target".
+func isCommandUnresolvable(output string, exitCode int) bool {
+	if exitCode == 127 {
+		return true
+	}
+	lower := strings.ToLower(output)
+	for _, marker := range []string{
+		"command not found",
+		"executable file not found",
+		"missing script:",                                      // npm
+		"npm error missing script",                             // npm >= 10 phrasing
+		"could not determine executable to run",                // npx
+		"no rule to make target",                               // make
+		"no such command",                                      // cargo
+		"unknown command",                                      // misc CLIs
+		"is not recognized as an internal or external command", // windows
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexClaimVerification {
@@ -2752,6 +2809,7 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []GateCheckResult) codexContinueGateReport {
 	checks := []gateCheck{}
 	blockers := []string{}
+	warnings := []string{}
 
 	// Circuit breaker integration (LOOP-01): check if any gate has exceeded retry threshold
 	for _, prior := range priorGateResults {
@@ -2823,20 +2881,16 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		checks = append(checks, evidenceCheck)
 	}
 
-	// operational_evidence gate
-	if shouldSkipGate(priorGateResults, "operational_evidence") {
-		checks = append(checks, gateCheck{Name: "operational_evidence", Passed: true, Detail: "skipped: previously passed"})
-	} else {
-		operationalCheck := gateCheck{Name: "operational_evidence", Passed: true, Detail: "no operational worker issues were recorded"}
-		if len(assessment.OperationalIssues) > 0 {
-			operationalCheck.Detail = fmt.Sprintf("%d operational worker issues recorded; continue is using verification-led truth instead", len(assessment.OperationalIssues))
-			operationalCheck.FixHint = "Review worker output for operational issues"
-			operationalCheck.RecoveryOptions = []string{
-				"Fix manually and run /ant-continue",
-				"Run /ant-unblock for guided recovery",
-			}
-		}
-		checks = append(checks, operationalCheck)
+	// The operational_evidence gate was removed: it hardcoded Passed=true
+	// regardless of assessment.OperationalIssues, so it was a gate that could
+	// not gate. An always-pass check is worse than no check — it reads as
+	// assurance while asserting nothing, which is the exact failure mode the
+	// Definition of Done exists to prevent. Operational issues still surface as
+	// warnings below; genuine operational evidence now arrives structurally via
+	// mandatory worker handoffs (changed_files, commands_run,
+	// verification_status), which the build finalizer rejects when empty.
+	if len(assessment.OperationalIssues) > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d operational worker issues recorded; review worker output", len(assessment.OperationalIssues)))
 	}
 
 	// flags gate (no_critical_flags) — runs every time for safety
@@ -2872,6 +2926,7 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		Checks:         checks,
 		Passed:         len(blockingIssues) == 0,
 		BlockingIssues: blockingIssues,
+		Warnings:       warnings,
 	}
 }
 

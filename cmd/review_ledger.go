@@ -249,10 +249,10 @@ var reviewLedgerSummaryCmd = &cobra.Command{
 			}
 
 			domains = append(domains, map[string]interface{}{
-				"domain":     d,
-				"total":      lf.Summary.Total,
-				"open":       lf.Summary.Open,
-				"resolved":   lf.Summary.Resolved,
+				"domain":      d,
+				"total":       lf.Summary.Total,
+				"open":        lf.Summary.Open,
+				"resolved":    lf.Summary.Resolved,
 				"by_severity": lf.Summary.BySeverity,
 			})
 		}

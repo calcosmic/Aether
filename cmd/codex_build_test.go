@@ -1462,6 +1462,11 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 			Status:        "completed",
 			Summary:       dispatch.Name + " completed externally",
 			Duration:      1.25,
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"work complete"},
+			},
 		}
 		if dispatch.Caste == "builder" {
 			worker.FilesCreated = []string{"wrapper-evidence.txt"}
@@ -1666,6 +1671,11 @@ func TestBuildFinalizeAcceptsVerificationOnlyOutputEvidence(t *testing.T) {
 			TaskID:        dispatch.TaskID,
 			Status:        "completed",
 			Summary:       dispatch.Name + " completed verification-only work",
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"work complete"},
+			},
 		}
 		if dispatch.TaskID != "" {
 			worker.Outputs = []string{"verification.log"}

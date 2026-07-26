@@ -199,6 +199,13 @@ func TestResolveTestCommand_GoProject(t *testing.T) {
 	os.Unsetenv("AETHER_ROOT")
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
+	// resolveTestCommand now prefers the store's own root over the process
+	// cwd, so pin store to nil for a deterministic fallback path regardless
+	// of what earlier tests left behind.
+	origStore := store
+	store = nil
+	defer func() { store = origStore }()
+
 	// Since this test runs inside the Aether repo (which has go.mod),
 	// it should detect Go and return the test command.
 	cmd := resolveTestCommand()
@@ -212,6 +219,10 @@ func TestResolveTestCommand_NoProject(t *testing.T) {
 	origRoot := os.Getenv("AETHER_ROOT")
 	os.Unsetenv("AETHER_ROOT")
 	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	origStore := store
+	store = nil
+	defer func() { store = origStore }()
 
 	// resolveTestCommand uses ResolveAetherRoot which finds the git repo root.
 	// Just verify it doesn't panic.

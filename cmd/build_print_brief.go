@@ -55,7 +55,6 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		return fmt.Errorf("phase %d has no planned dispatches", phaseNum)
 	}
 
-	playbooks := codexBuildPlaybooks()
 	startedAt := time.Now()
 
 	matched := 0
@@ -67,7 +66,12 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		}
 		matched++
 
-		brief := renderCodexBuildWorkerBrief(root, phase, dispatch, playbooks, startedAt)
+		// Attach the same context the manifest path attaches, then compose the
+		// same brief the manifest carries — the inspector must show exactly what
+		// a wrapper-spawned worker receives, steering sections included.
+		single := []codexBuildDispatch{dispatch}
+		attachBuildDispatchContext(root, phase, single, startedAt)
+		brief := single[0].Brief
 
 		out.WriteString(strings.Repeat("━", 72))
 		out.WriteString(fmt.Sprintf("\n%s  %s  (%s)\n", casteEmoji(dispatch.Caste), dispatch.Name, dispatch.Caste))
@@ -155,6 +159,7 @@ var briefOwnedSections = map[string]bool{
 	"Phase Success Criteria":   true,
 	"Heartbeat Protocol":       true,
 	"Relevant Playbooks":       true,
+	"Pheromone Signals":        true,
 	"Territory Survey":         true,
 	"Codegraph Context":        true,
 	"Previous Worker Handoffs": true,

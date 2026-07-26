@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "TypeScript orchestration host for the Aether hybrid runtime. Calls Go manifests and finalizers, dispatches platform workers, never writes .aether/data/ directly.",
+  "description": "TypeScript wave coordinator for the Aether hybrid runtime. Calls Go manifests, provider adapters, and finalizers; never launches provider CLIs or writes .aether/data/ directly.",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

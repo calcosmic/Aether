@@ -56,10 +56,10 @@ func privacyScanForExport(content string) PrivacyScanResult {
 
 // ExportManifest is the top-level structure of a learning pack file.
 type ExportManifest struct {
-	SourceRepo    string    `json:"source_repo"`
-	ExportedAt    string    `json:"exported_at"`
-	EntryCount    int       `json:"entry_count"`
-	Entries       []Entry   `json:"entries"`
+	SourceRepo      string   `json:"source_repo"`
+	ExportedAt      string   `json:"exported_at"`
+	EntryCount      int      `json:"entry_count"`
+	Entries         []Entry  `json:"entries"`
 	RedactionReport []string `json:"redaction_report,omitempty"`
 }
 
@@ -93,10 +93,10 @@ func ExportPack(colonyStore *ColonyStore, outputPath string) (string, []string, 
 	}
 
 	manifest := ExportManifest{
-		ExportedAt:       time.Now().UTC().Format(time.RFC3339),
-		EntryCount:       len(exported),
-		Entries:          exported,
-		RedactionReport:  report,
+		ExportedAt:      time.Now().UTC().Format(time.RFC3339),
+		EntryCount:      len(exported),
+		Entries:         exported,
+		RedactionReport: report,
 	}
 
 	if exported == nil {

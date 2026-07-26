@@ -20,21 +20,28 @@ import (
 )
 
 type codexBuildDispatch struct {
-	Stage             string                  `json:"stage"`
-	Wave              int                     `json:"wave,omitempty"`
-	ExecutionWave     int                     `json:"execution_wave,omitempty"`
-	Caste             string                  `json:"caste"`
-	Name              string                  `json:"name"`
-	Task              string                  `json:"task"`
-	Status            string                  `json:"status"`
-	Summary           string                  `json:"summary,omitempty"`
-	TaskID            string                  `json:"task_id,omitempty"`
-	TaskIndex         int                     `json:"task_index,omitempty"`
-	DependsOn         []string                `json:"depends_on,omitempty"`
-	DeclaredPaths     []string                `json:"declared_paths,omitempty"`
-	Outputs           []string                `json:"outputs,omitempty"`
-	Blockers          []string                `json:"blockers,omitempty"`
-	Duration          float64                 `json:"duration,omitempty"`
+	Stage         string   `json:"stage"`
+	Wave          int      `json:"wave,omitempty"`
+	ExecutionWave int      `json:"execution_wave,omitempty"`
+	Caste         string   `json:"caste"`
+	Name          string   `json:"name"`
+	Task          string   `json:"task"`
+	Status        string   `json:"status"`
+	Summary       string   `json:"summary,omitempty"`
+	TaskID        string   `json:"task_id,omitempty"`
+	TaskIndex     int      `json:"task_index,omitempty"`
+	DependsOn     []string `json:"depends_on,omitempty"`
+	DeclaredPaths []string `json:"declared_paths,omitempty"`
+	Outputs       []string `json:"outputs,omitempty"`
+	Blockers      []string `json:"blockers,omitempty"`
+	Duration      float64  `json:"duration,omitempty"`
+	// Brief is the fully rendered worker prompt for wrapper-spawned workers.
+	// Build was the only workflow whose plan-only manifest carried no brief —
+	// colonize, plan, and heavy-continue all do — so everything the runtime
+	// assembles (phase objective, constraints, hints, criteria, pheromone
+	// signals, survey, handoffs) never reached the workers the user actually
+	// watches spawn. Wrappers must inject this verbatim, never reconstruct it.
+	Brief             string                  `json:"brief,omitempty"`
 	SkillSection      string                  `json:"skill_section,omitempty"`
 	SkillCount        int                     `json:"skill_count,omitempty"`
 	ColonySkills      int                     `json:"colony_skill_count,omitempty"`
@@ -218,7 +225,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	attachBuildDispatchContext(phase.ID, dispatches)
+	attachBuildDispatchContext(root, phase, dispatches, generatedAt)
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 
 	parallelMode := effectiveParallelMode(state)
@@ -1720,6 +1727,9 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 			entry["matched_skills"] = append([]string{}, dispatch.MatchedSkills...)
 			entry["skill_section"] = dispatch.SkillSection
 		}
+		if strings.TrimSpace(dispatch.Brief) != "" {
+			entry["brief"] = dispatch.Brief
+		}
 		if strings.TrimSpace(dispatch.HandoffSection) != "" {
 			entry["handoff_section"] = dispatch.HandoffSection
 		}
@@ -2713,7 +2723,7 @@ func resolveWorkerSkillAssignmentForWorkflow(workflow, caste, task string) codex
 	}
 }
 
-func attachBuildDispatchContext(phaseID int, dispatches []codexBuildDispatch) {
+func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []codexBuildDispatch, startedAt time.Time) {
 	for i := range dispatches {
 		dispatches[i].PermissionProfile = codex.PermissionProfileForCaste(dispatches[i].Caste)
 		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
@@ -2722,8 +2732,45 @@ func attachBuildDispatchContext(phaseID int, dispatches []codexBuildDispatch) {
 		dispatches[i].ColonySkills = assignment.ColonyCount
 		dispatches[i].DomainSkills = assignment.DomainCount
 		dispatches[i].MatchedSkills = append([]string{}, assignment.MatchedNames...)
-		dispatches[i].HandoffSection = renderWorkerHandoffSection("build", phaseID, dispatches[i].Name)
+		dispatches[i].HandoffSection = renderWorkerHandoffSection("build", phase.ID, dispatches[i].Name)
+		// Brief must be composed after HandoffSection is set — it embeds it.
+		dispatches[i].Brief = composeBuildManifestBrief(root, phase, dispatches[i], startedAt)
 	}
+}
+
+// composeBuildManifestBrief is the single source of the worker prompt that
+// ships in the plan-only manifest. It is the base task brief plus the steering
+// sections the wrapper has no other channel for: pheromone signals and prior
+// worker handoffs.
+//
+// The Go subprocess path deliberately does NOT use this composition — it
+// delivers PheromoneSection and HandoffSection separately through WorkerConfig
+// and pkg/codex/prompt.go, so embedding them in the shared renderer would
+// duplicate them there. --print-brief uses this composer so what the user
+// inspects is exactly what the manifest carries.
+func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
+	var b strings.Builder
+	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, nil, startedAt))
+
+	if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
+		// The resolver emits its own "### Active Pheromone Signals" heading;
+		// rewrap under the "## Pheromone Signals" heading every caste agent
+		// definition's <pheromone_protocol> block is written against.
+		content := strings.TrimSpace(strings.TrimPrefix(pheromoneSection, "### Active Pheromone Signals"))
+		if content != "" {
+			b.WriteString("\n## Pheromone Signals\n\n")
+			b.WriteString(content)
+			b.WriteString("\n")
+		}
+	}
+
+	if handoff := strings.TrimSpace(dispatch.HandoffSection); handoff != "" {
+		b.WriteString("\n")
+		b.WriteString(handoff)
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }
 
 // resolveSkillSection matches skills for the given role and task through the

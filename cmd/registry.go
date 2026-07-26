@@ -24,12 +24,12 @@ type registryFinalStats struct {
 }
 
 type registryEntry struct {
-	RepoPath   string              `json:"repo_path"`
-	Domains    []string            `json:"domains"`
-	Active     bool                `json:"active"`
-	RegisteredAt string            `json:"registered_at"`
-	LastGoal   string              `json:"last_goal,omitempty"`
-	FinalStats *registryFinalStats `json:"final_stats,omitempty"`
+	RepoPath     string              `json:"repo_path"`
+	Domains      []string            `json:"domains"`
+	Active       bool                `json:"active"`
+	RegisteredAt string              `json:"registered_at"`
+	LastGoal     string              `json:"last_goal,omitempty"`
+	FinalStats   *registryFinalStats `json:"final_stats,omitempty"`
 }
 
 type registryData struct {

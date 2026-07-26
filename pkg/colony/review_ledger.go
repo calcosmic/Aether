@@ -59,9 +59,9 @@ type ReviewLedgerSeverityCounts struct {
 
 // ReviewLedgerSummary provides a computed summary of ledger entries.
 type ReviewLedgerSummary struct {
-	Total      int                      `json:"total"`
-	Open       int                      `json:"open"`
-	Resolved   int                      `json:"resolved"`
+	Total      int                        `json:"total"`
+	Open       int                        `json:"open"`
+	Resolved   int                        `json:"resolved"`
 	BySeverity ReviewLedgerSeverityCounts `json:"by_severity"`
 }
 

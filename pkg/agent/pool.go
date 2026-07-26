@@ -68,17 +68,17 @@ type TokenUsageCallback func(model string, inputTokens, outputTokens int64)
 // subscribes to agent-specific topics (agent.{name}.*). Events flow from agents
 // to the StreamManager without blocking pool goroutines.
 type Pool struct {
-	registry         *Registry
-	bus              *events.Bus
-	maxG             int
-	eventCh          <-chan events.Event
-	cancel           context.CancelFunc
-	streamMgr        *StreamManager
-	enableStream     bool
-	onTokenUsage     TokenUsageCallback
-	tracer           *trace.Tracer
-	runID            string
-	mu               sync.Mutex
+	registry     *Registry
+	bus          *events.Bus
+	maxG         int
+	eventCh      <-chan events.Event
+	cancel       context.CancelFunc
+	streamMgr    *StreamManager
+	enableStream bool
+	onTokenUsage TokenUsageCallback
+	tracer       *trace.Tracer
+	runID        string
+	mu           sync.Mutex
 }
 
 // NewPool creates a worker pool that dispatches events to agents in the registry.

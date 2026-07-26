@@ -69,10 +69,10 @@ var learnImportCmd = &cobra.Command{
 				return nil
 			}
 			outputOK(map[string]interface{}{
-				"preview":      true,
-				"entry_count":  len(entries),
-				"redactions":   len(report),
-				"entries":      entries,
+				"preview":     true,
+				"entry_count": len(entries),
+				"redactions":  len(report),
+				"entries":     entries,
 			})
 			return nil
 		}

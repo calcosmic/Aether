@@ -20,20 +20,20 @@ type StreamMultiplexer struct {
 
 // multiplexedStream represents a single stream that multiple consumers can subscribe to.
 type multiplexedStream struct {
-	streamID    string
+	streamID     string
 	topicPattern string
-	sub         <-chan events.Event
-	consumers   map[string]*streamConsumer
-	mu          sync.RWMutex
-	stopCh      chan struct{}
-	stopped     bool
+	sub          <-chan events.Event
+	consumers    map[string]*streamConsumer
+	mu           sync.RWMutex
+	stopCh       chan struct{}
+	stopped      bool
 }
 
 // streamConsumer represents a single consumer of a multiplexed stream.
 type streamConsumer struct {
-	id       string
-	eventCh  chan events.Event
-	doneCh   chan struct{}
+	id         string
+	eventCh    chan events.Event
+	doneCh     chan struct{}
 	clientType ClientType
 }
 
@@ -374,9 +374,9 @@ func (sm *StreamMultiplexer) ConnectWebSocket(topicPattern string) (*WebSocketCo
 
 // MultiplexerStats provides statistics about the multiplexer.
 type MultiplexerStats struct {
-	StreamCount       int `json:"streamCount"`
-	TotalConsumers    int `json:"totalConsumers"`
-	SSEConsumers      int `json:"sseConsumers"`
+	StreamCount        int `json:"streamCount"`
+	TotalConsumers     int `json:"totalConsumers"`
+	SSEConsumers       int `json:"sseConsumers"`
 	WebSocketConsumers int `json:"webSocketConsumers"`
 }
 

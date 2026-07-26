@@ -104,4 +104,3 @@ func renderNoColonyRecoverVisual() string {
 	))
 	return b.String()
 }
-

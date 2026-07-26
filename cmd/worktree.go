@@ -238,11 +238,11 @@ var worktreeAllocateCmd = &cobra.Command{
 		store.AppendJSONL("state-changelog.jsonl", auditEntry)
 
 		outputOK(map[string]interface{}{
-			"ok":      true,
-			"branch":  branch,
-			"path":    worktreePath,
-			"id":      entry.ID,
-			"status":  string(entry.Status),
+			"ok":     true,
+			"branch": branch,
+			"path":   worktreePath,
+			"id":     entry.ID,
+			"status": string(entry.Status),
 		})
 		return nil
 	},
@@ -563,9 +563,9 @@ func reportOrphanBranches() ([]map[string]interface{}, error) {
 		}
 
 		orphaned = append(orphaned, map[string]interface{}{
-			"branch":       branch,
-			"age":          age,
-			"cleanup_cmd":  fmt.Sprintf("git branch -D %s", branch),
+			"branch":      branch,
+			"age":         age,
+			"cleanup_cmd": fmt.Sprintf("git branch -D %s", branch),
 		})
 	}
 

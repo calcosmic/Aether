@@ -11,8 +11,8 @@ import (
 
 func TestAssessDifficulty_WorkerFailures(t *testing.T) {
 	evidence := Evidence{
-		RunID:   "run-fail-1",
-		Phase:   5,
+		RunID: "run-fail-1",
+		Phase: 5,
 		Workers: []WorkerEvidence{
 			{Name: "Builder-1", Caste: "builder", Status: "failed"},
 			{Name: "Builder-2", Caste: "builder", Status: "failed"},
@@ -34,8 +34,8 @@ func TestAssessDifficulty_WorkerFailures(t *testing.T) {
 
 func TestAssessDifficulty_GateFailures(t *testing.T) {
 	evidence := Evidence{
-		RunID:   "run-gate-1",
-		Phase:   3,
+		RunID: "run-gate-1",
+		Phase: 3,
 		Workers: []WorkerEvidence{
 			{Name: "Builder-1", Caste: "builder", Status: "completed"},
 		},
@@ -62,8 +62,8 @@ func TestAssessDifficulty_GateFailures(t *testing.T) {
 
 func TestAssessDifficulty_EasyTask(t *testing.T) {
 	evidence := Evidence{
-		RunID:   "run-easy-1",
-		Phase:   2,
+		RunID: "run-easy-1",
+		Phase: 2,
 		Workers: []WorkerEvidence{
 			{Name: "Builder-1", Caste: "builder", Status: "completed"},
 		},
@@ -81,8 +81,8 @@ func TestAssessDifficulty_EasyTask(t *testing.T) {
 func TestAssessDifficulty_ScoreThreshold(t *testing.T) {
 	// Create evidence that should score >= 0.3
 	evidence := Evidence{
-		RunID:   "run-thresh-1",
-		Phase:   4,
+		RunID: "run-thresh-1",
+		Phase: 4,
 		Workers: []WorkerEvidence{
 			{Name: "Builder-1", Caste: "builder", Status: "failed"},
 			{Name: "Builder-2", Caste: "builder", Status: "failed"},
@@ -480,11 +480,11 @@ func TestDifficultyScoreThreshold(t *testing.T) {
 
 func makeDifficultEntry() Entry {
 	return Entry{
-		ID:             "",
-		Content:        "authentication middleware implementation with JWT tokens and refresh rotation",
+		ID:      "",
+		Content: "authentication middleware implementation with JWT tokens and refresh rotation",
 		Evidence: Evidence{
-			RunID:   "run-diff-1",
-			Phase:   5,
+			RunID: "run-diff-1",
+			Phase: 5,
 			Workers: []WorkerEvidence{
 				{Name: "Builder-1", Caste: "builder", Status: "failed"},
 				{Name: "Builder-2", Caste: "builder", Status: "completed"},

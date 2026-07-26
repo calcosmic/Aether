@@ -29,9 +29,9 @@ func makeEntry(id, content string, confidence float64) Entry {
 		Phase:          1,
 		Confidence:     confidence,
 		Evidence: Evidence{
-			RunID:   "run-1",
-			Phase:   1,
-			Workers: []WorkerEvidence{{Name: "Builder-1", Caste: "builder", Status: "done"}},
+			RunID:       "run-1",
+			Phase:       1,
+			Workers:     []WorkerEvidence{{Name: "Builder-1", Caste: "builder", Status: "done"}},
 			GatesPassed: 3,
 			GatesTotal:  3,
 			Confidence:  confidence,

@@ -709,6 +709,11 @@ func TestCLIPlanOnlyCompletionIsBoundAndIdempotent(t *testing.T) {
 			TaskID:        dispatch.TaskID,
 			Status:        "completed",
 			Summary:       dispatch.Name + " completed through compiled wrapper contract",
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"work complete"},
+			},
 		}
 		if dispatch.Caste == "builder" {
 			worker.FilesCreated = []string{"app.txt"}

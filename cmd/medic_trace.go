@@ -12,16 +12,16 @@ import (
 
 // TraceDiagnostic holds the result of analyzing a trace export.
 type TraceDiagnostic struct {
-	RunID       string               `json:"run_id"`
-	EntryCount  int                  `json:"entry_count"`
-	Duration    string               `json:"duration"`
-	Timeline    []StateTransition    `json:"timeline,omitempty"`
-	ErrorGroups []ErrorCluster       `json:"error_groups,omitempty"`
-	StateGaps   []StateGap           `json:"state_gaps,omitempty"`
-	Stalled     []StalledPhase       `json:"stalled_phases,omitempty"`
-	TokenTotals TokenTotals          `json:"token_totals"`
-	Suggestions []string             `json:"suggestions,omitempty"`
-	HealthScore int                  `json:"health_score"` // 0-100
+	RunID       string            `json:"run_id"`
+	EntryCount  int               `json:"entry_count"`
+	Duration    string            `json:"duration"`
+	Timeline    []StateTransition `json:"timeline,omitempty"`
+	ErrorGroups []ErrorCluster    `json:"error_groups,omitempty"`
+	StateGaps   []StateGap        `json:"state_gaps,omitempty"`
+	Stalled     []StalledPhase    `json:"stalled_phases,omitempty"`
+	TokenTotals TokenTotals       `json:"token_totals"`
+	Suggestions []string          `json:"suggestions,omitempty"`
+	HealthScore int               `json:"health_score"` // 0-100
 }
 
 // StateTransition represents a single state change in the timeline.
@@ -42,10 +42,10 @@ type ErrorCluster struct {
 
 // StateGap represents a missing expected state transition.
 type StateGap struct {
-	After    string `json:"after"`
-	Missing  string `json:"missing"`
-	Phase    int    `json:"phase,omitempty"`
-	Message  string `json:"message"`
+	After   string `json:"after"`
+	Missing string `json:"missing"`
+	Phase   int    `json:"phase,omitempty"`
+	Message string `json:"message"`
 }
 
 // StalledPhase represents a phase with no activity for an extended period.

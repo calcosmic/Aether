@@ -32,12 +32,12 @@ type PatrolStaleEntry struct {
 
 // PatrolCheck is a single health check result.
 type PatrolCheck struct {
-	Name         string              `json:"name"`
-	Status       string              `json:"status"`
-	Files        []PatrolCheckFile   `json:"files,omitempty"`
-	StaleCount   int                 `json:"stale_count,omitempty"`
-	StaleSignals []PatrolStaleEntry  `json:"stale_signals,omitempty"`
-	Artifacts    []string            `json:"artifacts,omitempty"`
+	Name         string             `json:"name"`
+	Status       string             `json:"status"`
+	Files        []PatrolCheckFile  `json:"files,omitempty"`
+	StaleCount   int                `json:"stale_count,omitempty"`
+	StaleSignals []PatrolStaleEntry `json:"stale_signals,omitempty"`
+	Artifacts    []string           `json:"artifacts,omitempty"`
 }
 
 // PatrolResult is the top-level output of patrol-check.
@@ -181,8 +181,8 @@ func runStalePheromonesCheck(basePath string) PatrolCheck {
 		}
 		if sig.SourcePhase != nil && *sig.SourcePhase < state.CurrentPhase {
 			stale = append(stale, PatrolStaleEntry{
-				ID:     sig.ID,
-				Type:   sig.Type,
+				ID:   sig.ID,
+				Type: sig.Type,
 				Reason: fmt.Sprintf("references completed phase %d, current is %d",
 					*sig.SourcePhase, state.CurrentPhase),
 			})

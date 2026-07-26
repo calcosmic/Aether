@@ -344,8 +344,9 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 		{
 			path: ".claude/commands/ant/help.md",
 			required: []string{
-				"runtime CLI and current slash-command surface as the source of truth.",
-				"aether --help",
+				"The Colony Lifecycle",
+				"aether command-guide",
+				"aether recipes",
 			},
 			forbidden: []string{
 				"tmux",
@@ -632,8 +633,9 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 		{
 			path: ".opencode/commands/ant/help.md",
 			required: []string{
-				"Use the runtime CLI as the source of truth.",
-				"aether --help",
+				"The Colony Lifecycle",
+				"aether command-guide",
+				"aether recipes",
 			},
 			forbidden: []string{
 				"tmux",

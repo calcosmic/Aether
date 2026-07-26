@@ -17,13 +17,13 @@ type EventBusStreamHandler struct {
 	ctx       context.Context
 
 	// Batching state
-	mu          sync.Mutex
-	buffer      []string
-	sequence    int
-	ticker      *time.Ticker
-	stopCh      chan struct{}
-	stopped     bool
-	isComplete  bool
+	mu         sync.Mutex
+	buffer     []string
+	sequence   int
+	ticker     *time.Ticker
+	stopCh     chan struct{}
+	stopped    bool
+	isComplete bool
 }
 
 // EventBusStreamHandlerConfig configures the handler's behavior.

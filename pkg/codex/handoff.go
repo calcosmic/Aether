@@ -19,6 +19,21 @@ type WorkerHandoff struct {
 	Freshness              string   `json:"freshness,omitempty"`
 }
 
+// IsEmptyWorkerHandoff reports whether a handoff carries no relay content at
+// all. Handoffs are the memory the next phase's workers receive; a
+// content-free record occupies a slot in that memory while telling the next
+// worker nothing, which is worse than no record.
+func IsEmptyWorkerHandoff(h WorkerHandoff) bool {
+	return len(h.ChangedFiles) == 0 &&
+		len(h.CommandsRun) == 0 &&
+		strings.TrimSpace(h.VerificationStatus) == "" &&
+		len(h.KnownFailures) == 0 &&
+		len(h.OpenDecisions) == 0 &&
+		len(h.Assumptions) == 0 &&
+		len(h.NextWorkerInstructions) == 0 &&
+		len(h.DoNotRepeat) == 0
+}
+
 // ValidateWorkerHandoff checks that a WorkerHandoff is structurally valid.
 func ValidateWorkerHandoff(h WorkerHandoff) error {
 	status := strings.ToLower(strings.TrimSpace(h.VerificationStatus))

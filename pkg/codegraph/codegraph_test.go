@@ -44,7 +44,7 @@ func Serve() {}`,
 		"pkg/utils/utils.go": `package utils
 
 func Helper() {}`,
-		"go.mod":             "module myrepo\n",
+		"go.mod": "module myrepo\n",
 	})
 
 	got := parseGoImports("cmd/main.go", mustRead(t, repo, "cmd/main.go"), repo)
@@ -56,8 +56,8 @@ func Helper() {}`,
 
 	// Test with actual relative import
 	repo2 := createTestRepo(t, map[string]string{
-		"main.go":       `package main` + "\n" + `import "./lib"`,
-		"lib/lib.go":    `package lib`,
+		"main.go":    `package main` + "\n" + `import "./lib"`,
+		"lib/lib.go": `package lib`,
 	})
 	got2 := parseGoImports("main.go", mustRead(t, repo2, "main.go"), repo2)
 	if len(got2) != 1 || got2[0] != filepath.Clean("lib") {
@@ -106,11 +106,11 @@ func TestPythonImports(t *testing.T) {
 from models import User
 from . import config
 from .services import auth`,
-		"utils.py":              `def helper(): pass`,
-		"models.py":             `class User: pass`,
-		"config.py":             `DEBUG = True`,
-		"services/__init__.py":  ``,
-		"services/auth.py":      `def login(): pass`,
+		"utils.py":             `def helper(): pass`,
+		"models.py":            `class User: pass`,
+		"config.py":            `DEBUG = True`,
+		"services/__init__.py": ``,
+		"services/auth.py":     `def login(): pass`,
 	})
 
 	got := parsePythonImports("app.py", mustRead(t, repo, "app.py"), repo)
@@ -135,7 +135,7 @@ func TestRubyImports(t *testing.T) {
 		"app.rb": `require_relative 'lib/helper'
 require './config'`,
 		"lib/helper.rb": `module Helper; end`,
-		"config.rb":      `SETTINGS = {}`,
+		"config.rb":     `SETTINGS = {}`,
 	})
 
 	got := parseRubyImports("app.rb", mustRead(t, repo, "app.rb"), repo)
@@ -179,8 +179,8 @@ func TestCImports(t *testing.T) {
 	repo := createTestRepo(t, map[string]string{
 		"main.c": `#include "utils.h"
 #include "lib/helper.h"`,
-		"utils.h":          `void help();`,
-		"lib/helper.h":     `void assist();`,
+		"utils.h":      `void help();`,
+		"lib/helper.h": `void assist();`,
 	})
 
 	got := parseCImports("main.c", mustRead(t, repo, "main.c"), repo)
@@ -221,10 +221,10 @@ func TestScan(t *testing.T) {
 
 func TestScanLanguageFilter(t *testing.T) {
 	repo := createTestRepo(t, map[string]string{
-		"app.py":       `import utils`,
-		"utils.py":     `def help(): pass`,
-		"main.go":      `package main`,
-		"go.mod":       `module test`,
+		"app.py":   `import utils`,
+		"utils.py": `def help(): pass`,
+		"main.go":  `package main`,
+		"go.mod":   `module test`,
 	})
 
 	graph, stats, err := Scan(repo, []string{"python"})
@@ -272,8 +272,8 @@ func TestRelatedFiles(t *testing.T) {
 
 func TestFormatRelatedFiles(t *testing.T) {
 	repo := createTestRepo(t, map[string]string{
-		"app.ts":    `import { User } from './types';`,
-		"types.ts":  `export interface User {}`,
+		"app.ts":   `import { User } from './types';`,
+		"types.ts": `export interface User {}`,
 	})
 
 	graph, _, err := Scan(repo, nil)
@@ -333,11 +333,11 @@ func TestSaveAndLoad(t *testing.T) {
 
 func TestScanSkipsNoiseDirs(t *testing.T) {
 	repo := createTestRepo(t, map[string]string{
-		"src/app.ts":                  `import { x } from './x';`,
-		"src/x.ts":                    `export const x = 1;`,
-		"node_modules/y.ts":           `export const y = 1;`,
-		".git/objects/pack/test":      `data`,
-		"vendor/z.ts":                 `export const z = 1;`,
+		"src/app.ts":             `import { x } from './x';`,
+		"src/x.ts":               `export const x = 1;`,
+		"node_modules/y.ts":      `export const y = 1;`,
+		".git/objects/pack/test": `data`,
+		"vendor/z.ts":            `export const z = 1;`,
 	})
 
 	graph, stats, err := Scan(repo, nil)
@@ -363,8 +363,8 @@ func TestJavaImports(t *testing.T) {
 		"src/main/java/com/example/App.java": `package com.example;
 import com.example.models.User;
 import com.example.utils.Helper;`,
-		"src/main/java/com/example/models/User.java":   `package com.example.models; public class User {}`,
-		"src/main/java/com/example/utils/Helper.java":  `package com.example.utils; public class Helper {}`,
+		"src/main/java/com/example/models/User.java":  `package com.example.models; public class User {}`,
+		"src/main/java/com/example/utils/Helper.java": `package com.example.utils; public class Helper {}`,
 	})
 
 	got := parseJavaImports(

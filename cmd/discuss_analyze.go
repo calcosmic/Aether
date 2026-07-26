@@ -14,19 +14,19 @@ import (
 const analyzeSourcePrefix = "analyze:"
 
 type analyzeScanData struct {
-	DetectedType string        `json:"detected_type"`
-	Languages    []string      `json:"languages"`
-	Frameworks   []string      `json:"frameworks"`
-	Goal         string        `json:"goal,omitempty"`
-	TopLevelDirs []string      `json:"top_level_dirs"`
-	FileCount    int           `json:"file_count"`
-	TotalDirs    int           `json:"total_dirs"`
-	IsGitRepo    bool          `json:"is_git_repo"`
-	Governance   governanceInfo `json:"governance"`
-	HasDocker    bool          `json:"has_docker"`
-	HasDockerCompose bool     `json:"has_docker_compose"`
-	HasK8s       bool          `json:"has_k8s"`
-	HasMakefile  bool          `json:"has_makefile"`
+	DetectedType     string         `json:"detected_type"`
+	Languages        []string       `json:"languages"`
+	Frameworks       []string       `json:"frameworks"`
+	Goal             string         `json:"goal,omitempty"`
+	TopLevelDirs     []string       `json:"top_level_dirs"`
+	FileCount        int            `json:"file_count"`
+	TotalDirs        int            `json:"total_dirs"`
+	IsGitRepo        bool           `json:"is_git_repo"`
+	Governance       governanceInfo `json:"governance"`
+	HasDocker        bool           `json:"has_docker"`
+	HasDockerCompose bool           `json:"has_docker_compose"`
+	HasK8s           bool           `json:"has_k8s"`
+	HasMakefile      bool           `json:"has_makefile"`
 }
 
 var discussAnalyzeCmd = &cobra.Command{
@@ -44,7 +44,7 @@ var discussAnalyzeCmd = &cobra.Command{
 		questions := generateAnalyzeQuestions(scan)
 
 		outputOK(map[string]interface{}{
-			"scan":     scan,
+			"scan":      scan,
 			"questions": questions,
 		})
 		return nil

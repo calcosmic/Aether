@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -276,6 +277,13 @@ func prepareExternalBuildCompletion(t *testing.T, root string) (codexBuildManife
 			TaskID:        dispatch.TaskID,
 			Status:        "completed",
 			Summary:       dispatch.Name + " completed externally",
+			// Completed workers must relay a non-empty handoff; the finalizer
+			// rejects content-free records so the next phase inherits context.
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{dispatch.Name + " work is complete"},
+			},
 		}
 		if dispatch.Caste == "builder" {
 			worker.FilesModified = []string{"external-evidence.txt"}
@@ -283,4 +291,36 @@ func prepareExternalBuildCompletion(t *testing.T, root string) (codexBuildManife
 		results = append(results, worker)
 	}
 	return manifest, codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+}
+
+// TestBuildFinalizeRejectsCompletedWorkerWithoutHandoff locks in the
+// mandatory-handoff contract. Handoffs are the memory the next phase's workers
+// receive; before this rule the store filled with content-free records — the
+// chain was "written but empty, read but not delivered."
+func TestBuildFinalizeRejectsCompletedWorkerWithoutHandoff(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	_ = manifest
+
+	// Strip every handoff — simulating the pre-contract worker output.
+	for i := range completion.Dispatches {
+		completion.Dispatches[i].Handoff = codex.WorkerHandoff{}
+	}
+
+	_, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err == nil {
+		t.Fatal("completed worker without a handoff was accepted; the finalizer must reject content-free relays")
+	}
+	if !strings.Contains(err.Error(), "handoff") {
+		t.Fatalf("rejection should name the missing handoff, got: %v", err)
+	}
+
+	// A freshness-only handoff is still content-free and must also be rejected.
+	for i := range completion.Dispatches {
+		completion.Dispatches[i].Handoff = codex.WorkerHandoff{Freshness: "not-run"}
+	}
+	_, _, _, _, err = runCodexBuildFinalize(root, 1, completion, false)
+	if err == nil {
+		t.Fatal("freshness-only handoff was accepted; a timestamp alone relays nothing")
+	}
 }

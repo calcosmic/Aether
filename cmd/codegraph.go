@@ -149,12 +149,12 @@ func runCodebaseQuery(cmd *cobra.Command, args []string) error {
 	}
 
 	outputOK(map[string]interface{}{
-		"action":       "codebase-query",
-		"file":         queryFile,
-		"depth":        codegraphQueryDepth,
-		"imports":      directDeps["imports"],
-		"imported_by":  directDeps["imported_by"],
-		"related":      related,
+		"action":        "codebase-query",
+		"file":          queryFile,
+		"depth":         codegraphQueryDepth,
+		"imports":       directDeps["imports"],
+		"imported_by":   directDeps["imported_by"],
+		"related":       related,
 		"related_count": len(related),
 	})
 
