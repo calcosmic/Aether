@@ -121,7 +121,7 @@ func TestRuntimeBuildAndContinueBriefsIncludeReadCacheDiscipline(t *testing.T) {
 	// unchanged since its last read, so the 683-char section restated a message
 	// the harness already delivers. Continue's review brief still carries it and
 	// is asserted below; if that is ever revisited, revisit this comment too.
-	buildBrief := renderCodexBuildWorkerBrief("/tmp/repo", phase, dispatch, nil, time.Now())
+	buildBrief := renderCodexBuildWorkerBrief("/tmp/repo", phase, dispatch, time.Now())
 	if strings.Contains(buildBrief, "Read Cache Discipline") {
 		t.Error("renderCodexBuildWorkerBrief reinstated read-cache discipline; the harness already handles this")
 	}

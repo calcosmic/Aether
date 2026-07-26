@@ -1162,7 +1162,7 @@ func init() {
 	colonizeFinalizeCmd.Flags().String("completion-file", "", "JSON file containing colonize_manifest and external surveyor worker results")
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("force", false, "Force redispatch of the current active phase after an interrupted build")
-	buildCmd.Flags().Bool("plan-only", false, "Print the build dispatch manifest without mutating colony state or spawning workers")
+	buildCmd.Flags().Bool("plan-only", false, "Emit the build dispatch manifest for wrapper-spawned workers; opens a durable build attempt (superseded automatically on re-entry) but spawns nothing. For a pure read, use --print-brief")
 	buildCmd.Flags().Bool("print-brief", false, "Print the exact prompt each worker would receive, with a section-by-section composition breakdown. Reads state; mutates nothing")
 	buildCmd.Flags().String("worker", "", "With --print-brief, print only the named worker's prompt")
 	buildCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")

@@ -64,8 +64,13 @@ var initCmd = &cobra.Command{
 				if existing.Goal == nil || strings.TrimSpace(ptrStr(existing.Goal)) == "" || existing.State == colony.StateIDLE {
 					goto createFreshColony
 				}
-				// If colony is sealed, check for in-progress seal (uncommitted changes)
-				if existing.Milestone == "Crowned Anthill" {
+				// If colony is sealed, check for in-progress seal (uncommitted changes).
+				// Completion is keyed on state OR milestone: the review found a
+				// state marked complete without the milestone string hit the generic
+				// refusal that never mentions --confirm-reinit — and silently
+				// ignored the flag when given. A COMPLETED colony carries its whole
+				// history just like a sealed one.
+				if existing.Milestone == "Crowned Anthill" || existing.State == colony.StateCOMPLETED {
 					if sealInProgress(dataDir) {
 						outputError(1, "a seal operation appears to be in progress (COLONY_STATE.json has uncommitted changes with Crowned Anthill milestone). Wait for the seal to complete, commit the seal state, or run `aether entomb` first.", nil)
 						return nil

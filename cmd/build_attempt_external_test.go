@@ -100,17 +100,18 @@ func TestBuildPlanOnlyBindsAndSupersedesExternalAttempt(t *testing.T) {
 		t.Fatalf("attempt was not durably bound to the plan manifest: %+v", first)
 	}
 
-	if _, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil); err == nil || !strings.Contains(err.Error(), "active build attempt") {
-		t.Fatalf("second plan-only build should require explicit supersession, got %v", err)
-	}
-
-	forced, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{Force: true})
+	// Re-entry contract (changed after the v1.25 review): a dangling
+	// plan-only attempt still awaiting external workers holds no worker
+	// output, so a fresh plan-only request supersedes it automatically — the
+	// old behavior blocked every /ant-build after an aborted one until the
+	// user discovered --force.
+	second, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
 	if err != nil {
-		t.Fatalf("forced plan-only redispatch returned error: %v", err)
+		t.Fatalf("plan-only re-entry over an idle plan-only attempt should supersede automatically, got %v", err)
 	}
-	forcedManifest := forced["dispatch_manifest"].(codexBuildManifest)
-	if forcedManifest.AttemptID == manifest.AttemptID {
-		t.Fatalf("forced plan-only redispatch reused attempt %s", manifest.AttemptID)
+	secondManifest := second["dispatch_manifest"].(codexBuildManifest)
+	if secondManifest.AttemptID == manifest.AttemptID {
+		t.Fatalf("plan-only re-entry reused attempt %s instead of opening a fresh one", manifest.AttemptID)
 	}
 	var superseded buildAttemptRecord
 	if err := store.LoadJSON(firstRel, &superseded); err != nil {
@@ -118,6 +119,29 @@ func TestBuildPlanOnlyBindsAndSupersedesExternalAttempt(t *testing.T) {
 	}
 	if superseded.Status != buildAttemptInterrupted {
 		t.Fatalf("superseded attempt status = %s, want %s", superseded.Status, buildAttemptInterrupted)
+	}
+
+	// An attempt that has moved past awaiting_external (workers dispatching)
+	// still blocks without --force — automatic supersession applies ONLY to
+	// idle plan-only attempts.
+	secondRel, secondAttempt, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("second plan-only attempt not persisted")
+	}
+	secondAttempt.Status = buildAttemptDispatching
+	if err := store.SaveJSON(secondRel, &secondAttempt); err != nil {
+		t.Fatalf("mark attempt dispatching: %v", err)
+	}
+	if _, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil); err == nil || !strings.Contains(err.Error(), "active build attempt") {
+		t.Fatalf("plan-only over a dispatching attempt should still require --force, got %v", err)
+	}
+	forced, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{Force: true})
+	if err != nil {
+		t.Fatalf("forced plan-only redispatch returned error: %v", err)
+	}
+	forcedManifest := forced["dispatch_manifest"].(codexBuildManifest)
+	if forcedManifest.AttemptID == secondManifest.AttemptID {
+		t.Fatalf("forced redispatch reused attempt %s", secondManifest.AttemptID)
 	}
 
 	staleCompletion := codexExternalBuildCompletion{DispatchManifest: &manifest}

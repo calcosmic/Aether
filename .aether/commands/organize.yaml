@@ -4,3 +4,4 @@ source_of_truth: "Use the Go `aether` CLI as the source of truth."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."
+  - "Exception: the wrapper MAY write the advisory report to .aether/data/hygiene-report.md; that report file is the only sanctioned wrapper-written artifact under .aether/data/."

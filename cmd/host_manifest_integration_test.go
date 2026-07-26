@@ -400,7 +400,6 @@ func TestHostManifest_BuildManifestRoundtrip(t *testing.T) {
 		State:        "READY",
 		Checkpoint:   "build-start",
 		ClaimsPath:   ".aether/data/claims.json",
-		Playbooks:    []string{"build-prep.md"},
 		WorkerBriefs: []string{"brief"},
 		Dispatches: []codexBuildDispatch{
 			{

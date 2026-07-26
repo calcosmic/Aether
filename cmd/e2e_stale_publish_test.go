@@ -13,6 +13,8 @@ import (
 // TestE2EStableUpdateDetectsCriticalStale proves stable channel update detects
 // critical stale publish when hub version is behind binary version.
 func TestE2EStableUpdateDetectsCriticalStale(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -138,6 +140,8 @@ func TestE2EDevUpdateDetectsCriticalStale(t *testing.T) {
 // TestE2EUpdateDetectsInfoStale proves info-level detection when versions agree
 // but companion files are incomplete.
 func TestE2EUpdateDetectsInfoStale(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -221,6 +225,8 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 // TestE2EUpdateDetectsOK proves ok path when versions agree and companion files
 // are complete.
 func TestE2EUpdateDetectsOK(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -276,6 +282,8 @@ func TestE2EUpdateDetectsOK(t *testing.T) {
 // TestE2EUpdateDryRunDetectsCriticalStale proves dry-run still reports critical
 // stale honestly.
 func TestE2EUpdateDryRunDetectsCriticalStale(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -327,6 +335,8 @@ func TestE2EUpdateDryRunDetectsCriticalStale(t *testing.T) {
 // TestE2EUpdateVisualBannerForCriticalStale proves visual output mode shows the
 // stale publish banner for critical classification.
 func TestE2EUpdateVisualBannerForCriticalStale(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -390,6 +400,8 @@ func TestE2EUpdateVisualBannerForCriticalStale(t *testing.T) {
 // TestE2EUpdateVisualBannerForInfoStale proves visual output mode shows info
 // status for incomplete companion files.
 func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

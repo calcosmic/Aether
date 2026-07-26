@@ -142,7 +142,7 @@ func TestHivePromoteDefaultsDomainForLegacyPlaybooks(t *testing.T) {
 	os.Setenv("AETHER_HUB_DIR", hubDir)
 	t.Cleanup(func() { os.Setenv("AETHER_HUB_DIR", origHub) })
 
-	rootCmd.SetArgs([]string{"hive-promote", "--text", "Prefer focused fixes", "--source-repo", "aether", "--confidence", "0.9"})
+	rootCmd.SetArgs([]string{"hive-promote", "--text", "Prefer focused fixes scoped to cmd/hive.go over broad rewrites", "--source-repo", "aether", "--confidence", "0.9"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

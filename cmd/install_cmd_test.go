@@ -85,6 +85,9 @@ func TestResolveInstallPackageDirRejectsInvalidExplicitPath(t *testing.T) {
 }
 
 func TestInstallUsesEmbeddedAssetsWithoutPackageDir(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -158,6 +161,9 @@ func TestInstallUsesEmbeddedAssetsWithoutPackageDir(t *testing.T) {
 }
 
 func TestInstallDevChannelUsesSeparateHubAndSkipsPlatformHomes(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -393,6 +399,8 @@ func TestSyncDirToHubSkipsIgnoredAndExcludedArtifacts(t *testing.T) {
 // TestInstallCopiesClaudeCommands verifies that install copies Claude commands
 // into the flat ant-*.md layout Claude Code exposes as /ant-* commands.
 func TestInstallCopiesClaudeCommands(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -462,6 +470,8 @@ func TestInstallCopiesClaudeCommands(t *testing.T) {
 // TestInstallCopiesClaudeAgents verifies that install copies .claude/agents/ant/
 // files to the target directory.
 func TestInstallCopiesClaudeAgents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -497,6 +507,8 @@ func TestInstallCopiesClaudeAgents(t *testing.T) {
 
 // TestInstallCopiesOpenCodeCommands verifies OpenCode commands are copied.
 func TestInstallCopiesOpenCodeCommands(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -539,6 +551,8 @@ func TestInstallCopiesOpenCodeCommands(t *testing.T) {
 
 // TestInstallCopiesOpenCodeAgents verifies OpenCode agents are copied.
 func TestInstallCopiesOpenCodeAgents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -574,6 +588,9 @@ func TestInstallCopiesOpenCodeAgents(t *testing.T) {
 
 // TestInstallSetsUpHub verifies that install creates ~/.aether/ directory.
 func TestInstallSetsUpHub(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -610,6 +627,8 @@ func TestInstallSetsUpHub(t *testing.T) {
 // TestInstallIdempotent verifies that running install twice does not error
 // and is idempotent.
 func TestInstallIdempotent(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -651,6 +670,8 @@ func TestInstallIdempotent(t *testing.T) {
 
 // TestInstallSkipsUnchanged verifies that unchanged files are skipped.
 func TestInstallSkipsUnchanged(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -693,6 +714,8 @@ func TestInstallSkipsUnchanged(t *testing.T) {
 // TestInstallRemovesStale verifies that files removed from source are also
 // removed from destination.
 func TestInstallRemovesStale(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -748,6 +771,8 @@ func TestInstallRemovesStale(t *testing.T) {
 
 // TestInstallOutputJSON verifies the install command produces valid JSON output.
 func TestInstallOutputJSON(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -785,6 +810,8 @@ func TestInstallOutputJSON(t *testing.T) {
 // TestInstallSkipsMissingSource verifies that install does not error when
 // a source directory doesn't exist.
 func TestInstallSkipsMissingSource(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -812,6 +839,8 @@ func TestInstallSkipsMissingSource(t *testing.T) {
 
 // TestInstallWithSubdirs verifies that nested directory structures are preserved.
 func TestInstallWithSubdirs(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -846,6 +875,8 @@ func TestInstallWithSubdirs(t *testing.T) {
 // TestInstallCopiesCodexAgents verifies that install copies .codex/agents/
 // files to the target directory.
 func TestInstallCopiesCodexAgents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -882,6 +913,9 @@ func TestInstallCopiesCodexAgents(t *testing.T) {
 // TestInstallCopiesCodexAgentsToHub verifies that .codex/ files are synced
 // to the hub at ~/.aether/system/codex/.
 func TestInstallCopiesCodexAgentsToHub(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -916,6 +950,8 @@ func TestInstallCopiesCodexAgentsToHub(t *testing.T) {
 
 // TestInstallShellScriptsGetExecutable verifies that .sh files get chmod 0755.
 func TestInstallShellScriptsGetExecutable(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

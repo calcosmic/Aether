@@ -38,11 +38,19 @@ var checkAntipatternCmd = &cobra.Command{
 			return nil
 		}
 
-		filePath := mustGetString(cmd, "file")
-		if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
-			filePath = args[0]
+		// Positional wins; --file is the fallback. The error fires only when
+		// BOTH are missing — the old code called mustGetString first, which
+		// emitted a spurious "flag --file is required" envelope with exit code
+		// 1 on every positional call even though the scan then ran fine.
+		filePath := ""
+		if len(args) > 0 {
+			filePath = strings.TrimSpace(args[0])
 		}
 		if filePath == "" {
+			filePath = mustGetStringCompatOptional(cmd, "file")
+		}
+		if filePath == "" {
+			outputError(1, "a file path is required: check-antipattern <file> or --file <file>", nil)
 			return nil
 		}
 
@@ -155,7 +163,10 @@ var checkAntipatternCmd = &cobra.Command{
 		// Common patterns across all languages
 
 		// Exposed secrets check (critical)
-		secretRe := regexp.MustCompile(`(?i)(api_key|apikey|secret|password|token)\s*=\s*['"][^'"]+['"]`)
+		// Keyword may sit anywhere in the variable name: the old pattern
+		// required it immediately before "=", so `aws_secret_access_key = "…"`
+		// — the most common real-world leak — scanned clean.
+		secretRe := regexp.MustCompile(`(?i)[a-z0-9_-]*(api_?key|secret|password|token|access_key)[a-z0-9_-]*\s*[:=]\s*['"][^'"]+['"]`)
 		for i, line := range lines {
 			if secretRe.MatchString(line) {
 				lowerLine := strings.ToLower(line)

@@ -28,6 +28,8 @@ type stagedReleaseCandidate struct {
 }
 
 func TestPackedNPMReleaseCandidateContract(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" && runtime.GOOS != "windows" {
 		t.Skipf("npm bootstrap does not support %s", runtime.GOOS)
 	}

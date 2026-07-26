@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -19,6 +20,24 @@ func TestMain(m *testing.M) {
 	origHivePolicy, hadHivePolicy := os.LookupEnv(hivePolicyEnv)
 	_ = os.Setenv("AETHER_OUTPUT_MODE", "json")
 	_ = os.Setenv(hivePolicyEnv, "promote")
+
+	// Isolate the whole suite from the developer's real hub. This TestMain
+	// enables hive promotion above, and the v1.25 multi-agent review found
+	// TestSealPromoteInstincts had promoted its fixture into the user's actual
+	// ~/.aether/hive/wisdom.json on every full-suite run. AETHER_HUB_DIR is
+	// the supported override; individual tests may still t.Setenv their own.
+	var testHubDir string
+	if os.Getenv("AETHER_HUB_DIR") == "" {
+		if dir, err := os.MkdirTemp("", "aether-test-hub-"); err == nil {
+			testHubDir = dir
+			_ = os.Setenv("AETHER_HUB_DIR", dir)
+			// Make the isolated hub minimally valid so tests that check
+			// "hub installed" (version.json present) behave as they would on
+			// a machine with Aether installed — without touching the real one.
+			_ = os.WriteFile(filepath.Join(dir, "version.json"), []byte(`{"version":"0.0.0-test"}`), 0644)
+			_ = os.MkdirAll(filepath.Join(dir, "system"), 0755)
+		}
+	}
 
 	origStore := store
 	origStdout := stdout
@@ -75,6 +94,10 @@ func TestMain(m *testing.M) {
 		_ = os.Setenv(hivePolicyEnv, origHivePolicy)
 	} else {
 		_ = os.Unsetenv(hivePolicyEnv)
+	}
+	if testHubDir != "" {
+		_ = os.Unsetenv("AETHER_HUB_DIR")
+		_ = os.RemoveAll(testHubDir)
 	}
 
 	os.Exit(code)

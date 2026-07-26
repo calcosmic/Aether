@@ -1,7 +1,7 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.41
-> **Last Updated:** 2026-05-20
+> **Current Version:** v1.0.42
+> **Last Updated:** 2026-07-26
 
 ---
 
@@ -40,7 +40,7 @@ This rule exists because the project's own audits caught the alternative failing
 
 **Corollaries:**
 
-- An inspection or `--dry-run` command must not mutate state. `consolidation-phase-end --dry-run` and `consolidation-seal --dry-run` both write to `instincts.json` today despite the flag reading *"Report without modifying."*
+- An inspection or `--dry-run` command must not mutate state. `consolidation-phase-end --dry-run` and `consolidation-seal --dry-run` wrote to `instincts.json` for months despite the flag reading *"Report without modifying"* — fixed in v1.25 and locked by `TestConsolidationPhaseEndDryRunDoesNotMutate` / `TestConsolidationSealDryRunDoesNotMutate`.
 - A documentation claim about runtime behaviour must be testable or removed. Three files described phase-end consolidation running for months while it never ran.
 - Prefer a test that asserts a **proportion or an invariant** over one that asserts a section exists. `TestBuildWorkerBriefIsMostlyTask` fails if framework scaffolding ever outweighs the task again, whatever the new scaffolding is called. A test that only checks for a named section cannot catch its replacement.
 
@@ -350,25 +350,22 @@ Runtime note:
 └── CODEX.md             # Codex commands + rules
 ```
 
-### Split Playbooks (Reliability)
+### Command Playbooks (Reference Material)
 
-High-length commands are split into smaller execution playbooks:
-
-- `.aether/docs/command-playbooks/build-prep.md`
-- `.aether/docs/command-playbooks/build-context.md`
-- `.aether/docs/command-playbooks/build-wave.md`
-- `.aether/docs/command-playbooks/build-verify.md`
-- `.aether/docs/command-playbooks/build-complete.md`
-- `.aether/docs/command-playbooks/continue-verify.md`
-- `.aether/docs/command-playbooks/continue-gates.md`
-- `.aether/docs/command-playbooks/continue-advance.md`
-- `.aether/docs/command-playbooks/continue-finalize.md`
+`.aether/docs/command-playbooks/*.md` are reference documentation for the
+build/continue methodology. Since v1.25 they are NOT loaded by the runtime and
+NOT injected into worker or orchestrator prompts — execution behavior lives in
+the host-manifest flow (`aether host build` → spawn from `dispatch_manifest` →
+`build-finalize`), and workers receive the lean runtime-composed brief.
 
 Authority note:
-- In Claude Code, `.claude/commands/ant/build.md` and `.claude/commands/ant/continue.md` are orchestrators only.
-- Build/continue execution behavior is defined in `.aether/docs/command-playbooks/*.md`.
-- OpenCode maintains separate command specs in `.opencode/commands/ant/*.md`.
-- Agent parity model: `.claude/agents/ant/*.md`, `.opencode/agents/*.md`, and `.codex/agents/*.toml` are canonical platform sources. `aether publish` installs those sources into the global hub; there are no repo-local packaging mirrors.
+- `.claude/commands/ant/build.md` and `continue.md` describe the host-manifest
+  flow directly; there is no playbook indirection.
+- OpenCode maintains mirrored command specs in `.opencode/commands/ant/*.md`.
+- Agent parity model: `.claude/agents/ant/*.md`, `.opencode/agents/*.md`, and
+  `.codex/agents/*.toml` are canonical platform sources. `aether publish`
+  installs those sources into the global hub; there are no repo-local
+  packaging mirrors.
 
 ---
 
@@ -870,8 +867,8 @@ Aether supports two parallel execution strategies, selected at colony init:
 1. **`/ant-init`** prompts for strategy selection (Step 6.5) during colony setup
 2. The choice is saved as `parallel_mode` in `COLONY_STATE.json` (omitempty, defaults to `"in-repo"`)
 3. **Colony-prime** injects the current parallel mode into worker context
-4. **Build-wave playbook** conditionally allocates worktrees when mode is `"worktree"`
-5. **Continue-advance playbook** performs mode-aware cleanup/merge checks after build-wave sync-back
+4. **The build runtime** conditionally allocates worktrees when mode is `"worktree"`
+5. **The continue runtime** performs mode-aware cleanup/merge checks after worktree sync-back
 6. **Status and resume** commands display the active parallel mode
 
 ### CLI Subcommands
@@ -914,4 +911,4 @@ For Codex-specific rules and agents, see `.codex/CODEX.md`
 
 ---
 
-*Updated for Aether v1.0.41 — 2026-05-20*
+*Updated for Aether v1.0.42 — 2026-07-26*

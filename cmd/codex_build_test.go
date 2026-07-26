@@ -3125,7 +3125,7 @@ func TestBuildWorkerBriefOmitsHeartbeat(t *testing.T) {
 		Description: "Testing heartbeat removal",
 	}
 
-	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
 
 	if strings.Contains(brief, "Heartbeat Protocol") {
 		t.Error("worker brief reinstated the 'Heartbeat Protocol' section; a model has no timer and cannot honour it")
@@ -3168,7 +3168,7 @@ func TestBuildWorkerBriefOmitsPlaybooks(t *testing.T) {
 	}
 	phase := colony.Phase{ID: 1, Name: "Test Phase"}
 
-	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, []string{".aether/docs/command-playbooks/build-wave.md"}, time.Now())
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
 
 	if strings.Contains(brief, "## Relevant Playbooks") {
 		t.Error("worker brief reinstated the Relevant Playbooks section")
@@ -3201,7 +3201,7 @@ func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
 		SuccessCriteria: []string{"Dashboard renders exporter output"},
 	}
 
-	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, codexBuildPlaybooks(), time.Now())
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
 
 	taskChars := 0
 	for _, section := range splitBriefSections(brief) {
@@ -3257,7 +3257,7 @@ func TestBuildWorkerBriefIncludesCodegraphContext(t *testing.T) {
 		TaskIndex: 0,
 	}
 
-	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
 
 	if !strings.Contains(brief, "## Codebase Graph Context") {
 		t.Fatalf("worker brief missing codegraph context:\n%s", brief)
@@ -3292,7 +3292,7 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	}
 
 	invoker := &codex.FakeInvoker{}
-	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3, false, nil)
+	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, time.Now(), invoker, colony.ModeInRepo, 0, 3, false, nil)
 	if err != nil {
 		t.Fatalf("execute dispatches: %v", err)
 	}

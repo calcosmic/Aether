@@ -651,11 +651,16 @@ func ensureTsHostBuilt(repoDir string) error {
 		return fmt.Errorf("npm not found in PATH: %w", err)
 	}
 
+	// npm's chatter must NEVER reach stdout: with AETHER_OUTPUT_MODE=json the
+	// process's stdout is a machine-readable envelope, and the first update in
+	// a fresh repo used to emit npm's install summary ("added 63 packages...
+	// 2 vulnerabilities") ahead of the JSON, breaking every wrapper that
+	// parses it. Progress goes to stderr, where humans still see it.
 	nodeModulesDir := filepath.Join(tsHostDir, "node_modules")
 	if _, err := os.Stat(nodeModulesDir); os.IsNotExist(err) {
-		cmd := exec.Command("npm", "ci")
+		cmd := exec.Command("npm", "ci", "--no-audit", "--no-fund")
 		cmd.Dir = tsHostDir
-		cmd.Stdout = os.Stdout
+		cmd.Stdout = os.Stderr
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("npm ci failed: %w", err)
@@ -666,7 +671,7 @@ func ensureTsHostBuilt(repoDir string) error {
 	if _, err := os.Stat(distHostPath); os.IsNotExist(err) {
 		cmd := exec.Command("npm", "run", "build")
 		cmd.Dir = tsHostDir
-		cmd.Stdout = os.Stdout
+		cmd.Stdout = os.Stderr
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("npm run build failed: %w", err)

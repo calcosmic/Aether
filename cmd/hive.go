@@ -14,6 +14,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/memory"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -448,6 +449,16 @@ func storeHiveWisdomEntry(wf *hiveWisdomData, text, domain, sourceRepo, repoID s
 		return hiveWisdomEntry{}, "", fmt.Errorf("hive text rejected by sanitizer: %w", err)
 	}
 	text = sanitized
+
+	// Admissibility gates EVERY hive write at the chokepoint, not per caller.
+	// The multi-agent review found "Always write tests first" (no file,
+	// command, or error named) had entered the hive through the seal-promotion
+	// path, which bypassed the gate that hand-written observations go through.
+	// Wisdom that cannot be checked against a repository later can never be
+	// invalidated, and memory that cannot be invalidated accumulates forever.
+	if ok, reason := memory.IsAdmissibleInstinctContent(text); !ok {
+		return hiveWisdomEntry{}, "", fmt.Errorf("hive entry not admissible: %s", reason)
+	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	if confidence <= 0 {

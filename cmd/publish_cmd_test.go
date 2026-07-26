@@ -42,6 +42,8 @@ func TestPublishCommandFlags(t *testing.T) {
 }
 
 func TestPublishRejectsNonSourceCheckout(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -63,6 +65,9 @@ func TestPublishRejectsNonSourceCheckout(t *testing.T) {
 }
 
 func TestPublishVerificationFailure(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	// This test validates the verification logic by ensuring publish
 	// detects and corrects a version mismatch between source and hub.
 	saveGlobals(t)
@@ -122,6 +127,9 @@ func TestPublishVerificationFailure(t *testing.T) {
 }
 
 func TestPublishHubVersionWarningIncludesRecoveryAndVerificationCommands(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -162,6 +170,8 @@ func TestPublishHubVersionWarningIncludesRecoveryAndVerificationCommands(t *test
 }
 
 func TestPublishSyncsStablePlatformHomeCommands(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -252,6 +262,9 @@ func writeBuiltTsHostFixture(t *testing.T, root string) {
 }
 
 func TestPublishSyncsBuiltTsHostToHub(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -277,6 +290,9 @@ func TestPublishSyncsBuiltTsHostToHub(t *testing.T) {
 }
 
 func TestPublishChannelIsolation(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

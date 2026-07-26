@@ -71,7 +71,7 @@ func TestBuildBriefIncludesSurvey(t *testing.T) {
 
 	phase := colony.Phase{ID: 1, Name: "Test"}
 	dispatch := codexBuildDispatch{Name: "Builder-1", Caste: "builder", Task: "Build feature"}
-	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
 
 	if !strings.Contains(brief, "Territory Survey") {
 		t.Errorf("expected survey section in build brief, got:\n%s", brief)

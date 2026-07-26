@@ -2,7 +2,7 @@ name: ant-init
 description: "🥚 Initialize Aether colony through the Aether CLI runtime"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether init $ARGUMENTS"
+  command: "AETHER_OUTPUT_MODE=visual aether init --colony-mode <colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\""
 codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-creation"

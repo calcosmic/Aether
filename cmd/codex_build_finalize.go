@@ -360,7 +360,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
-	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, manifest.Playbooks, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
+	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
 	finalManifest.GeneratedAt = completedAt.Format(time.RFC3339)
 	finalManifest.AttemptID = strings.TrimSpace(manifest.AttemptID)
 	finalManifest.AttemptPath = filepath.ToSlash(strings.TrimSpace(manifest.AttemptPath))

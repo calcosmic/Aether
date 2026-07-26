@@ -84,7 +84,6 @@ type codexBuildManifest struct {
 	State                     string                                `json:"state"`
 	Checkpoint                string                                `json:"checkpoint"`
 	ClaimsPath                string                                `json:"claims_path"`
-	Playbooks                 []string                              `json:"playbooks"`
 	WorkerBriefs              []string                              `json:"worker_briefs"`
 	Dispatches                []codexBuildDispatch                  `json:"dispatches"`
 	SelectedTasks             []string                              `json:"selected_tasks,omitempty"`
@@ -199,16 +198,24 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if activePriorAttempt {
-		if !options.Force {
+		// A dangling plan-only attempt still awaiting external workers holds
+		// no worker output, and the wrapper needs a fresh manifest anyway. Let
+		// re-entry supersede it automatically instead of demanding --force;
+		// blocking here made an aborted /ant-build jam every following one.
+		priorIsIdlePlanOnly := priorAttempt.Status == buildAttemptAwaiting && strings.TrimSpace(priorAttempt.DispatchMode) == "plan-only"
+		if !options.Force && !priorIsIdlePlanOnly {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d already has active build attempt %s (%s); finalize its completion packet or rerun with --force to supersede it", phaseNum, priorAttempt.ID, priorAttempt.Status)
 		}
-		if err := interruptLatestBuildAttempt(phaseNum, "superseded by an explicit plan-only force redispatch"); err != nil {
+		reason := "superseded by an explicit plan-only force redispatch"
+		if !options.Force {
+			reason = "superseded by a fresh plan-only manifest request before any worker was recorded"
+		}
+		if err := interruptLatestBuildAttempt(phaseNum, reason); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
 	}
 
 	generatedAt := time.Now().UTC()
-	playbooks := codexBuildPlaybooks()
 	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
 		LightFlag:         options.LightFlag,
 		HeavyFlag:         options.HeavyFlag,
@@ -237,7 +244,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	claimsRel := "last-build-claims.json"
-	manifest := buildCodexBuildManifest(root, state, phase, "", "", playbooks, dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true, reviewDepth)
+	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true, reviewDepth)
 	manifest.Phase = phaseNum
 	manifest.DispatchContract = dispatchContract
 	manifest.ProviderDiagnostics = providerDiagnostics
@@ -260,7 +267,6 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"review_depth":             string(reviewDepth),
 		"phase_name":               phase.Name,
 		"state":                    state.State,
-		"playbooks":                playbooks,
 		"next":                     "spawn wrapper agents from dispatches, then record completion",
 		"currentTask":              phase.Tasks,
 		"dispatches":               codexBuildDispatchMaps(dispatches),
@@ -458,7 +464,6 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		DispatchWorkers:   true,
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	playbooks := codexBuildPlaybooks()
 	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
 	if err != nil {
@@ -537,7 +542,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		progress.Advance("Prepare")
 	}
 
-	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, plannedDispatchMode, selectedTaskIDs, reviewDepth, policy)
+	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, plannedDispatchMode, selectedTaskIDs, reviewDepth, policy)
 	if err != nil {
 		finishAttempt(buildAttemptFailed, "failed to prepare worker artifacts", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
@@ -588,7 +593,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if progress != nil {
 		progress.Advance("Dispatch")
 	}
-	dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold, options.Verbose, dispatchManifest.ExecutionBinding)
+	dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, updatedPhase, dispatches, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold, options.Verbose, dispatchManifest.ExecutionBinding)
 	terminalClaims, attemptErr := recordBuildAttemptTerminal(root, attemptRel, phaseNum, startedAt, dispatches, claims, mode, err)
 	if attemptErr != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist terminal worker results", attemptErr)
@@ -609,7 +614,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, updatedState, updatedPhase, "build", reviewDepth, dispatches)
-	if _, finalDispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy); err != nil {
+	if _, finalDispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist final build artifacts", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -673,7 +678,6 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		"review_depth":             string(reviewDepth),
 		"phase_name":               updatedPhase.Name,
 		"state":                    updatedState.State,
-		"playbooks":                playbooks,
 		"next":                     "aether continue",
 		"currentTask":              updatedPhase.Tasks,
 		"dispatches":               dispatchMaps,
@@ -895,15 +899,6 @@ func applyBuildTaskStatuses(phase *colony.Phase, selectedTaskIDs []string) {
 		if phase.Tasks[i].Status == "" {
 			phase.Tasks[i].Status = colony.TaskPending
 		}
-	}
-}
-
-func codexBuildPlaybooks() []string {
-	return []string{
-		".aether/docs/command-playbooks/build-prep.md",
-		".aether/docs/command-playbooks/build-wave.md",
-		".aether/docs/command-playbooks/build-verify.md",
-		".aether/docs/command-playbooks/build-complete.md",
 	}
 }
 
@@ -1390,7 +1385,7 @@ func buildTaskID(task colony.Task, idx int) string {
 	return fmt.Sprintf("task-%d", idx+1)
 }
 
-func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration, circuitBreakerThreshold int, verbose bool, executionBinding *codex.ExecutionBinding) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
+func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration, circuitBreakerThreshold int, verbose bool, executionBinding *codex.ExecutionBinding) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
 	}
@@ -1422,7 +1417,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
 			Caste:             dispatch.Caste,
 			TaskID:            normalizedDispatchTaskID(dispatch),
-			TaskBrief:         renderCodexBuildWorkerBrief(root, phase, dispatch, playbooks, startedAt),
+			TaskBrief:         renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt),
 			ContextCapsule:    capsule,
 			HandoffSection:    dispatch.HandoffSection,
 			Workflow:          "build",
@@ -1585,7 +1580,7 @@ func codexBuildTaskPlans(phase colony.Phase) []codexBuildTaskPlan {
 	return taskPlans
 }
 
-func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony.Phase, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, workerBriefs []string, planOnly bool, reviewDepth colony.VerificationDepth) codexBuildManifest {
+func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony.Phase, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, workerBriefs []string, planOnly bool, reviewDepth colony.VerificationDepth) codexBuildManifest {
 	goal := ""
 	if state.Goal != nil {
 		goal = strings.TrimSpace(*state.Goal)
@@ -1632,7 +1627,6 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		State:                   string(state.State),
 		Checkpoint:              checkpoint,
 		ClaimsPath:              claimsPath,
-		Playbooks:               append([]string{}, playbooks...),
 		WorkerBriefs:            briefs,
 		Dispatches:              append([]codexBuildDispatch{}, dispatches...),
 		SelectedTasks:           append([]string{}, selectedTaskIDs...),
@@ -1747,14 +1741,14 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 	return dispatchMaps
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
 	briefPaths := make([]string, 0, len(dispatches))
 	briefOutputs := map[string]string{}
 	finalOutputs := map[string][]string{}
 
 	for i := range dispatches {
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
-		content := renderCodexBuildWorkerBrief(root, phase, dispatches[i], playbooks, startedAt)
+		content := renderCodexBuildWorkerBrief(root, phase, dispatches[i], startedAt)
 		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
 			return nil, nil, fmt.Errorf("failed to write worker brief for %s: %w", dispatches[i].Name, err)
 		}
@@ -1782,7 +1776,7 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 		}
 	}
 
-	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, playbooks, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
+	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
 	manifest.QueenExecutionPolicy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	if err := store.SaveJSON(manifestRel, manifest); err != nil {
@@ -2324,7 +2318,7 @@ func cloneColonyState(state colony.ColonyState) (colony.ColonyState, error) {
 	return cloned, nil
 }
 
-func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, playbooks []string, startedAt time.Time) string {
+func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
 	var b strings.Builder
 	b.WriteString("# Codex Build Dispatch\n\n")
 	b.WriteString(fmt.Sprintf("- Worker: %s\n", dispatch.Name))
@@ -2438,9 +2432,9 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	// its own "## " headings collided with the brief's structure so a worker
 	// could not tell where its instructions ended.
 	//
-	// Playbooks remain loaded for the orchestrator (codexBuildPlaybooks, the
-	// TS host's playbook-loader). They are simply no longer injected into
-	// individual worker prompts, which is not what they were written for.
+	// Playbooks are no longer loaded by the runtime at all: workers get the
+	// lean brief, and orchestration lives in the host-manifest flow. The
+	// command-playbook docs remain as reference material only.
 
 	if surveySection := resolveSurveySection(); surveySection != "" {
 		b.WriteString("\n")
@@ -2732,7 +2726,7 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 // inspects is exactly what the manifest carries.
 func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
 	var b strings.Builder
-	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, nil, startedAt))
+	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt))
 
 	if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
 		// The resolver emits its own "### Active Pheromone Signals" heading;

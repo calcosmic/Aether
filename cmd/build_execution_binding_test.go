@@ -144,7 +144,6 @@ func TestNativeBuildDispatchJournalsEveryTerminalWorker(t *testing.T) {
 		root,
 		phase,
 		append([]codexBuildDispatch(nil), manifest.Dispatches...),
-		manifest.Playbooks,
 		time.Now().UTC(),
 		&codex.FakeInvoker{},
 		colony.ModeInRepo,

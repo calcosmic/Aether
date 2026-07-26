@@ -18,8 +18,9 @@ import (
 func TestCheckAntipatternAcceptsPlaybookInvocationForm(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
-	var buf bytes.Buffer
+	var buf, errBuf bytes.Buffer
 	stdout = &buf
+	stderr = &errBuf
 
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -32,9 +33,21 @@ func TestCheckAntipatternAcceptsPlaybookInvocationForm(t *testing.T) {
 	}
 
 	// The playbook's exact form: positional argument, no --file flag.
+	renderedCommandExitCode.Store(0) // rootCmd.Execute() alone does not reset it
 	rootCmd.SetArgs([]string{"check-antipattern", target})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("playbook-form invocation failed: %v", err)
+	}
+
+	// The multi-agent review caught the vacuous version of this test: the scan
+	// ran and printed a correct envelope to stdout, while a spurious
+	// "flag --file is required" error went to stderr WITH exit code 1 — so
+	// every playbook invocation still reported failure. Pin all three surfaces.
+	if code := int(renderedCommandExitCode.Load()); code != 0 {
+		t.Fatalf("positional invocation set exit code %d; the gate reports failure on every scan", code)
+	}
+	if strings.Contains(errBuf.String(), "--file is required") {
+		t.Fatalf("positional invocation still emits the spurious --file error: %s", errBuf.String())
 	}
 
 	env := parseEnvelope(t, buf.String())
@@ -48,6 +61,34 @@ func TestCheckAntipatternAcceptsPlaybookInvocationForm(t *testing.T) {
 	}
 	if result["clean"] == true {
 		t.Fatal("file with a hardcoded credential reported clean")
+	}
+}
+
+// The classic real-world leak format has the keyword mid-name — the old regex
+// required the keyword immediately before "=" so this exact line scanned clean.
+func TestCheckAntipatternCatchesAWSStyleSecrets(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := filepath.Join(tmpDir, "deploy.sh")
+	if err := os.WriteFile(target, []byte("#!/bin/sh\naws_secret_access_key = \"AKIA0PROD0KEY0999\"\n"), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"check-antipattern", target})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("invocation failed: %v", err)
+	}
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["clean"] == true {
+		t.Fatalf("aws_secret_access_key assignment reported clean: %s", buf.String())
 	}
 }
 
