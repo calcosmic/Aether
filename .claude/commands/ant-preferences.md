@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/preferences.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/preferences.yaml. Synced by aether update. -->
 ---
 name: ant-preferences
 description: "🧠 Add or list user preferences in hub QUEEN.md"

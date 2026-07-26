@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/reference-list.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/reference-list.yaml. Synced by aether update. -->
 ---
 name: ant-reference-list
 description: "📋 List installed global references"

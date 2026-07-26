@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/quick.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/quick.yaml. Synced by aether update. -->
 ---
 name: ant-quick
 description: "⚡ Quick scout query — fast answers without build ceremony"

@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/flags.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/flags.yaml. Synced by aether update. -->
 ---
 name: ant-flags
 description: "🚩 List project flags (blockers, issues, notes)"

@@ -53,7 +53,10 @@ type sourceCheckWrapperFrontmatter struct {
 	Description string `yaml:"description"`
 }
 
-var sourceCheckGeneratedHeader = regexp.MustCompile(`^<!-- Generated from (\.aether/commands/[^ ]+\.yaml) - DO NOT EDIT DIRECTLY -->$`)
+// The header is honest now: no generator exists, and these wrappers ARE the
+// edited files. The header's real job is pairing a wrapper with its YAML
+// runtime spec and marking the file Aether-managed for update/prune.
+var sourceCheckGeneratedHeader = regexp.MustCompile(`^<!-- Aether-managed: runtime spec at (\.aether/commands/[^ ]+\.yaml)\. Synced by aether update\. -->$`)
 
 var sourceCheckRequiredExchangeXMLAssets = []string{
 	"colony-archive.xml",
@@ -331,8 +334,8 @@ func checkGeneratedCommandSurfaces(root string) (int, []sourceCheckIssue) {
 				issues = append(issues, sourceCheckIssue{
 					Area:     "commands",
 					Path:     wrapperRel,
-					Message:  "generated wrapper is missing the generated-from header",
-					Expected: "<!-- Generated from .aether/commands/<name>.yaml - DO NOT EDIT DIRECTLY -->",
+					Message:  "wrapper is missing the Aether-managed header",
+					Expected: "<!-- Aether-managed: runtime spec at .aether/commands/<name>.yaml. Synced by aether update. -->",
 					Actual:   firstLine,
 				})
 				continue

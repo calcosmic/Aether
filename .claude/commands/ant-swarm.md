@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/swarm.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/swarm.yaml. Synced by aether update. -->
 ---
 name: ant-swarm
 description: "🔥 Real-time colony swarm display + stubborn bug destroyer"

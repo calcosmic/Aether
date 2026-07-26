@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/history.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/history.yaml. Synced by aether update. -->
 ---
 name: ant-history
 description: "📜 Show colony event history"

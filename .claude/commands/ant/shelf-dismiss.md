@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/shelf-dismiss.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/shelf-dismiss.yaml. Synced by aether update. -->
 ---
 name: ant-shelf-dismiss
 description: "🗑️ Dismiss a shelf backlog item by ID"

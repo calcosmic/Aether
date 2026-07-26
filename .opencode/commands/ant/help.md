@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/help.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/help.yaml. Synced by aether update. -->
 ---
 name: ant-help
 description: "🐜 Aether command guide — the colony lifecycle and every /ant command"

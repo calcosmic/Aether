@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/organize.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/organize.yaml. Synced by aether update. -->
 ---
 name: ant-organize
 description: "🧹 Run codebase hygiene report"

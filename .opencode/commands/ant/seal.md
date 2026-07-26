@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/seal.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/seal.yaml. Synced by aether update. -->
 ---
 name: ant-seal
 description: "🏺 Seal the colony with visible final review workers"

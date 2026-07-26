@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/phase.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/phase.yaml. Synced by aether update. -->
 ---
 name: ant-phase
 description: "🧱 View phase details through the Aether CLI runtime"

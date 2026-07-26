@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/pause-colony.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/pause-colony.yaml. Synced by aether update. -->
 ---
 name: ant-pause-colony
 description: "💾 Pause colony work through the Aether CLI runtime"

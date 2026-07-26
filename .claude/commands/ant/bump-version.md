@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/bump-version.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/bump-version.yaml. Synced by aether update. -->
 ---
 name: ant-bump-version
 description: "🚀 Bump version across runtime files, docs, hub publish, commit, push, and tag for release"

@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/queen-compose.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/queen-compose.yaml. Synced by aether update. -->
 ---
 name: ant-queen-compose
 description: "📝 Create or improve repo-local QUEEN.md project brain"

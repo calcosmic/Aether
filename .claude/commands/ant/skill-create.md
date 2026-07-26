@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/skill-create.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/skill-create.yaml. Synced by aether update. -->
 ---
 name: ant-skill-create
 description: "🧪 Create a custom domain skill using Oracle mini-research and a guided wizard"

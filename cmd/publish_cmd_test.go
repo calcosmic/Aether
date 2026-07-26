@@ -171,7 +171,7 @@ func TestPublishSyncsStablePlatformHomeCommands(t *testing.T) {
 	if err := os.MkdirAll(commandDir, 0755); err != nil {
 		t.Fatalf("failed to create command dir: %v", err)
 	}
-	generated := []byte("<!-- Generated from .aether/commands/build.yaml - DO NOT EDIT DIRECTLY -->\n---\nname: ant-build\n---\n")
+	generated := []byte("<!-- Aether-managed: runtime spec at .aether/commands/build.yaml. Synced by aether update. -->\n---\nname: ant-build\n---\n")
 	if err := os.WriteFile(filepath.Join(commandDir, "build.md"), generated, 0644); err != nil {
 		t.Fatalf("failed to write command: %v", err)
 	}

@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/import-signals.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/import-signals.yaml. Synced by aether update. -->
 ---
 name: ant-import-signals
 description: "📥 Import pheromone signals from another colony's XML export"

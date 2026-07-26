@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/entomb.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/entomb.yaml. Synced by aether update. -->
 ---
 name: ant-entomb
 description: "⚰️ Entomb completed colony in chambers"

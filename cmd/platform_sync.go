@@ -378,8 +378,16 @@ func isManagedFlatClaudeCommandPath(relPath string) bool {
 	return strings.HasPrefix(base, "ant-") && filepath.Ext(base) == ".md"
 }
 
+// isGeneratedAetherCommandWrapper marks a file as Aether-managed for
+// update/prune. It accepts both the current header and the legacy
+// "Generated from" form so downstream repos installed before the header
+// reform still get their stale wrappers pruned.
 func isGeneratedAetherCommandWrapper(data []byte) bool {
 	firstLine := strings.SplitN(string(data), "\n", 2)[0]
+	if strings.HasPrefix(firstLine, "<!-- Aether-managed: runtime spec at .aether/commands/") &&
+		strings.HasSuffix(firstLine, ". Synced by aether update. -->") {
+		return true
+	}
 	return strings.HasPrefix(firstLine, "<!-- Generated from .aether/commands/") &&
 		strings.HasSuffix(firstLine, ".yaml - DO NOT EDIT DIRECTLY -->")
 }

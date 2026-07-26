@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/lay-eggs.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/lay-eggs.yaml. Synced by aether update. -->
 ---
 name: ant-lay-eggs
 description: "🥚 Set up Aether in this repo — creates repo-local Aether state"

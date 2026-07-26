@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/continue.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/continue.yaml. Synced by aether update. -->
 ---
 name: ant-continue
 description: "👁️ Verify build work, extract learnings, and advance the colony"

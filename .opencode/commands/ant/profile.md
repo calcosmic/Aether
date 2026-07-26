@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/profile.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/profile.yaml. Synced by aether update. -->
 ---
 name: ant-profile
 description: "🧠 Inspect or refresh the behavioral profile through the Aether CLI runtime"

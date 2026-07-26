@@ -47,59 +47,6 @@ func requiredSurveyArtifacts() []requiredSurveyArtifact {
 	return artifacts
 }
 
-var surveyLoadCmd = &cobra.Command{
-	Use:   "survey-load",
-	Short: "Load survey results from territory survey",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-
-		surveyDir := filepath.Join(store.BasePath(), "survey")
-
-		// Check if survey directory exists
-		info, err := os.Stat(surveyDir)
-		if err != nil || !info.IsDir() {
-			outputOK(map[string]interface{}{
-				"loaded": false,
-				"files":  map[string]interface{}{},
-				"data":   nil,
-			})
-			return nil
-		}
-
-		files := make(map[string]interface{})
-		data := make(map[string]interface{})
-
-		for _, name := range surveyFiles {
-			filePath := filepath.Join(surveyDir, name+".json")
-			content, err := os.ReadFile(filePath)
-			if err != nil {
-				files[name] = false
-				continue
-			}
-
-			var parsed interface{}
-			if err := json.Unmarshal(content, &parsed); err != nil {
-				files[name] = false
-				continue
-			}
-
-			files[name] = true
-			data[name] = parsed
-		}
-
-		outputOK(map[string]interface{}{
-			"loaded": true,
-			"files":  files,
-			"data":   data,
-		})
-		return nil
-	},
-}
-
 var surveyVerifyCmd = &cobra.Command{
 	Use:   "survey-verify",
 	Short: "Verify survey data integrity",
@@ -196,6 +143,5 @@ func validateSurveyMarkdown(content []byte) error {
 }
 
 func init() {
-	rootCmd.AddCommand(surveyLoadCmd)
 	rootCmd.AddCommand(surveyVerifyCmd)
 }

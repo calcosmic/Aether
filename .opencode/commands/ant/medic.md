@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/medic.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/medic.yaml. Synced by aether update. -->
 ---
 name: ant-medic
 description: "🩹 Diagnose colony health — scan all colony data for corruption, staleness, and configuration issues"

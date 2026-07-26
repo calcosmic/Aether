@@ -409,7 +409,7 @@ func TestInstallCopiesClaudeCommands(t *testing.T) {
 	if err := os.MkdirAll(legacyDir, 0755); err != nil {
 		t.Fatalf("failed to create legacy dir: %v", err)
 	}
-	generatedLegacy := []byte("<!-- Generated from .aether/commands/test.yaml - DO NOT EDIT DIRECTLY -->\n---\nname: ant-test\n---\n")
+	generatedLegacy := []byte("<!-- Aether-managed: runtime spec at .aether/commands/test.yaml. Synced by aether update. -->\n---\nname: ant-test\n---\n")
 	if err := os.WriteFile(filepath.Join(legacyDir, "test.md"), generatedLegacy, 0644); err != nil {
 		t.Fatalf("failed to create legacy generated file: %v", err)
 	}

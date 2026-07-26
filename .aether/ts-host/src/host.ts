@@ -44,7 +44,6 @@ import {
 import { ConfidenceLoop, type ConfidenceLoopOptions, type ConfidenceResult } from "./confidence-loop.js";
 import { ConfidenceEvaluator, type EvaluatedConfidence, type ConfidenceInput } from "./confidence-evaluator.js";
 import type { WorkerClaims } from "./claims-parser.js";
-import { loadPlaybooksForWorkflow, renderPlaybookContext } from "./playbook-loader.js";
 import type {
   BuildDispatch,
   BuildManifest,

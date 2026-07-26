@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/init.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/init.yaml. Synced by aether update. -->
 ---
 name: ant-init
 description: "🥚 Initialize Aether colony through the Aether CLI runtime"
@@ -150,3 +150,8 @@ flow.
 - Do not write `.aether/QUEEN.md`, `.aether/data/COLONY_STATE.json`, `session.json`, `constraints.json`, or `pheromones.json` by hand from this command spec.
 - If setup is missing, relay the runtime guidance exactly.
 - If docs and runtime disagree, runtime wins.
+
+**Next steps:**
+- `/ant-colonize` — map an existing codebase before planning
+- `/ant-discuss` — clarify intent before the plan is drawn
+- `/ant-plan` — generate the phase plan

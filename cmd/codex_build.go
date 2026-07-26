@@ -2430,7 +2430,7 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 
 	// Playbook injection removed. Measured on a real brief, it was 5,733 of
 	// 7,485 characters — 76.6% — against an assignment of 79. Worse than the
-	// size: buildPlaybooksForDispatch feeds workers orchestrator playbooks,
+	// size: the old playbook filter fed workers orchestrator playbooks,
 	// truncated at 2,800 chars, so a Builder received the opening of
 	// build-wave.md instructing it "YOU (the Queen) will spawn workers
 	// directly. Do NOT delegate to a single Prime Worker." That is a direct
@@ -2485,30 +2485,6 @@ func findDispatchTask(phase colony.Phase, dispatch codexBuildDispatch) *colony.T
 		}
 	}
 	return nil
-}
-
-func buildPlaybooksForDispatch(dispatch codexBuildDispatch, playbooks []string) []string {
-	filtered := make([]string, 0, len(playbooks))
-	for _, playbook := range playbooks {
-		switch dispatch.Caste {
-		case "oracle", "architect", "archaeologist", "ambassador", "weaver", "tracker", "keeper", "chronicler", "medic", "fixer", "porter", "sage":
-			if strings.Contains(playbook, "build-prep") || strings.Contains(playbook, "build-wave") {
-				filtered = append(filtered, playbook)
-			}
-		case "watcher", "chaos", "probe", "measurer", "gatekeeper", "auditor", "includer":
-			if strings.Contains(playbook, "build-verify") || strings.Contains(playbook, "build-complete") {
-				filtered = append(filtered, playbook)
-			}
-		default:
-			if strings.Contains(playbook, "build-wave") || strings.Contains(playbook, "build-complete") {
-				filtered = append(filtered, playbook)
-			}
-		}
-	}
-	if len(filtered) == 0 {
-		return append([]string{}, playbooks...)
-	}
-	return filtered
 }
 
 func expectedDispatchOutcome(dispatch codexBuildDispatch) string {

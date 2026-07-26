@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/reference-match.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/reference-match.yaml. Synced by aether update. -->
 ---
 name: ant-reference-match
 description: "🔍 Match global references to a worker role, task, and optional output type"

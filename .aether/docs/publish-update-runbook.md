@@ -2,6 +2,24 @@
 
 This runbook is the authoritative workflow for publishing Aether changes and verifying that downstream repos can actually receive them.
 
+## Preflight: Clean Tree Before Publish
+
+`aether publish` builds the binary and hub from the **working tree, with no
+clean guard** — uncommitted edits ship silently. Before every publish:
+
+```bash
+git status --porcelain   # must be empty
+```
+
+If it is not empty, commit or stash first. Publishing from a dirty tree means
+the hub and binary contain changes no commit records, which makes "what is
+actually deployed" unanswerable.
+
+Also note: when publishing via `go run ./cmd/aether publish`, verify the binary
+actually updated afterwards (`aether version --check` matches AND the binary
+mtime moved). A past bug sent go-run builds to a temp directory while reporting
+success.
+
 ## Rule of Thumb
 
 - `aether publish` is the source-checkout publish command. It builds the local channel binary, refreshes the shared hub, and verifies binary/hub version agreement.

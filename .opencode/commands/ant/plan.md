@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/plan.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/plan.yaml. Synced by aether update. -->
 ---
 name: ant-plan
 description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"

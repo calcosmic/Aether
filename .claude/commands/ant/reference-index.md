@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/reference-index.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/reference-index.yaml. Synced by aether update. -->
 ---
 name: ant-reference-index
 description: "📇 Build the global reference library index"

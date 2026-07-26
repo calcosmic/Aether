@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/feedback.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/feedback.yaml. Synced by aether update. -->
 ---
 name: ant-feedback
 description: "💬 Emit FEEDBACK through the Aether CLI runtime"

@@ -341,7 +341,6 @@ Check if territory survey exists and load relevant documents:
 
 Run using the Bash tool with description "Loading territory survey...":
 ```bash
-aether survey-load "{phase_name}" 2>/dev/null
 ```
 
 **Parse the JSON response:**

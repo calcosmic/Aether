@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/shelf.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/shelf.yaml. Synced by aether update. -->
 ---
 name: ant-shelf
 description: "📚 Show shelved Aether backlog items"

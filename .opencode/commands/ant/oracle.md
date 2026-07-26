@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/oracle.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/oracle.yaml. Synced by aether update. -->
 ---
 name: ant-oracle
 description: "🔮 Run the autonomous Oracle loop through the Aether CLI runtime"
@@ -196,3 +196,8 @@ For each approved finding:
 - Let the user approve each suggestion before persisting
 
 **Do NOT suggest persistence for:** low-confidence findings, obvious observations, or findings already captured as pheromones.
+
+**Next steps:**
+- `aether oracle status` — check a running loop
+- `aether oracle promote --dry-run` — preview capturing findings into colony memory
+- `/ant-plan` (refresh with `--revision-evidence`) — fold findings into the plan
