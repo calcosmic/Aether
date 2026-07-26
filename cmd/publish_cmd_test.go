@@ -424,3 +424,21 @@ func TestPublishDevAllowsDevHub(t *testing.T) {
 		t.Errorf("dev hub version = %q, want %q", devHubVersion, "1.0.20-dev")
 	}
 }
+
+// Under `go run ./cmd/aether publish` the executable is a temp go-build
+// binary named "aether"; trusting its directory sent the freshly built binary
+// into the go-run temp dir while publish reported success. Two publishes
+// shipped stale binaries this way before it was caught.
+func TestDefaultLocalBinaryDestIgnoresGoRunTempExecutable(t *testing.T) {
+	if isEphemeralExecutablePath("/Users/dev/.local/bin/aether") {
+		t.Error("real install path misclassified as ephemeral")
+	}
+	for _, exe := range []string{
+		"/private/var/folders/pj/x/T/go-build2384/b001/exe/aether",
+		"/tmp/go-build812345/b001/exe/aether",
+	} {
+		if !isEphemeralExecutablePath(exe) {
+			t.Errorf("go-run temp executable %q not classified as ephemeral", exe)
+		}
+	}
+}
