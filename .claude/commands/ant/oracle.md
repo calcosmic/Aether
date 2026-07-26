@@ -64,7 +64,38 @@ blocker.
 The PRD template/reference is automatic. Do not ask the user to run
 `aether reference-match`; that command is only diagnostic.
 
-Run the Oracle after the user confirms the refined prompt:
+## Research Brief Gate
+
+Before any tokens burn on the loop, present the synthesized brief as an
+approvable artifact — this is the gate that prevents the Oracle from spending
+thirty iterations answering a malformed question:
+
+```
+╭─ 🔮 Research Brief ─────────────────────────────╮
+  Topic:            {one-line topic}
+  Core Question:    {the single question the loop must answer}
+  Context:          {2-3 lines: why now, what decision this feeds}
+  Success Criteria: {what a done answer contains — bullet list}
+
+  Template: {template}   Depth: {depth}   Target: {confidence}%
+╰─────────────────────────────────────────────────╯
+```
+
+Ask: **approve**, **edit** (revise a field and re-present), or **cancel**.
+Maximum 2 edit rounds — after the second, run with the latest brief or cancel.
+Do not start the runtime loop until the brief is approved. The Core Question
+must be a genuine question, scoped to one decision — never a directory listing,
+a task list, or "everything about X". If the user's topic is that broad, split
+it into focused briefs and gate each one.
+
+**Focus signal:** if the approved brief names a specific area of the codebase
+or a constraint the colony should honor during upcoming builds, offer once to
+record it: `aether focus "<area or constraint from the brief>"`. Write it only
+with the user's approval — research topics are not automatically colony
+steering.
+
+Run the Oracle after the brief is approved, passing the synthesized prompt
+built from the approved brief:
 
 ```bash
 AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> --background "<synthesized prompt>"
@@ -82,6 +113,23 @@ When the runtime detects a hosted Claude/OpenCode agent session and the command
 is not already backgrounded, it auto-detaches the Oracle controller. Treat that
 as a normal background run: report the PID/log path and inspect progress through
 `aether oracle status`.
+
+## Promoting Findings Into Colony Memory
+
+When a research loop completes (or the user asks to capture what Oracle
+learned), offer promotion:
+
+```bash
+AETHER_OUTPUT_MODE=json aether oracle promote --dry-run   # preview
+AETHER_OUTPUT_MODE=json aether oracle promote             # write
+```
+
+Promote takes every finding from questions at or above 80% confidence
+(`--min-confidence` to change) and stores the admissible ones as learnings and
+instincts. Findings that name no file, command, or error are rejected with the
+reason shown — that is the admissibility gate working, not a failure. Show the
+user the outcome table: what was promoted, what was skipped, and why. Colony
+steering (FOCUS/REDIRECT) stays a separate, user-approved step.
 
 ## Broad Scope And Timeout Handling
 

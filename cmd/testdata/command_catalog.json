@@ -4616,7 +4616,9 @@
       "background",
       "confidence-target",
       "depth",
+      "dry-run",
       "max-iterations",
+      "min-confidence",
       "scope",
       "template"
     ],

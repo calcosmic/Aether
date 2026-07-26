@@ -752,6 +752,13 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 			destDir:  filepath.Join(systemDir, "agents"),
 			validate: validateOpenCodeAgentFile,
 		},
+		{
+			// The one policy file whose absence loses real content downstream:
+			// without it every Oracle phase collapses to one generic directive.
+			srcDir:  filepath.Join(packageDir, "colony", "policies"),
+			destDir: filepath.Join(systemDir, "colony", "policies"),
+			include: isOraclePhaseDirectivesFile,
+		},
 	} {
 		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, pair.validate, pair.include)
 		hubSyncResult.copied += syncRes.copied

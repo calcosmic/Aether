@@ -393,7 +393,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	iterationLoop.Iterations = iterationSeed.LastIteration
 	iterationLoop.FinalConfidence = iterationSeed.PreviousConfidence
 	iterationLoop.Gaps = append([]string{}, iterationSeed.SelectedGaps...)
-	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(revisionContext)
+	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(root, revisionContext)
 
 	planningDir := filepath.Join(store.BasePath(), "planning")
 	phaseResearchDir := filepath.Join(store.BasePath(), "phase-research")
@@ -851,7 +851,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 
 	dispatches := plannedPlanningWorkersForGoal(root, *state.Goal)
 	specs := planningWorkerSpecsForGoal(*state.Goal)
-	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(revisionContext)
+	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(root, revisionContext)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i])

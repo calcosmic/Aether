@@ -354,6 +354,10 @@ func isClaudeSettingsFile(relPath string) bool {
 	return filepath.Base(relPath) == "settings.json"
 }
 
+func isOraclePhaseDirectivesFile(relPath string) bool {
+	return filepath.Base(relPath) == "oracle-phase-directives.yaml"
+}
+
 func claudeCommandDestRelPath(relPath string) string {
 	base := filepath.Base(filepath.Clean(relPath))
 	if filepath.Ext(base) != ".md" {
