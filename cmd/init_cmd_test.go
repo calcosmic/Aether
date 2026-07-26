@@ -531,7 +531,7 @@ func TestInitCmd_SealedColonyAllowsFreshInit(t *testing.T) {
 	s.SaveJSON("COLONY_STATE.json", state)
 
 	// Running init on a sealed colony should allow fresh init
-	rootCmd.SetArgs([]string{"init", "New colony goal"})
+	rootCmd.SetArgs([]string{"init", "New colony goal", "--confirm-reinit"})
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -576,7 +576,7 @@ func TestInitCmd_SealedColonyCreatesBackup(t *testing.T) {
 	}
 	s.SaveJSON("COLONY_STATE.json", state)
 
-	rootCmd.SetArgs([]string{"init", "New colony goal"})
+	rootCmd.SetArgs([]string{"init", "New colony goal", "--confirm-reinit"})
 	rootCmd.Execute()
 
 	// Verify backup was created
@@ -969,7 +969,7 @@ func TestInitCmd_CleansWorktreesOnReInit(t *testing.T) {
 		t.Fatalf("save state: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"init", "New goal"})
+	rootCmd.SetArgs([]string{"init", "New goal", "--confirm-reinit"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("init returned error: %v", err)
 	}
@@ -1084,7 +1084,7 @@ func TestInitCmd_ClearsReviews(t *testing.T) {
 		t.Fatalf("reviews dir should exist before init: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"init", "New colony goal"})
+	rootCmd.SetArgs([]string{"init", "New colony goal", "--confirm-reinit"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("init returned error: %v", err)
 	}
@@ -1245,7 +1245,7 @@ func TestInitCmd_ClearsReviews_NoReviewsDir(t *testing.T) {
 
 	// Do NOT create any reviews directory
 
-	rootCmd.SetArgs([]string{"init", "New colony goal"})
+	rootCmd.SetArgs([]string{"init", "New colony goal", "--confirm-reinit"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("init returned error when no reviews dir exists: %v", err)
 	}
@@ -1289,8 +1289,8 @@ func TestInitCmd_ReplaceSessionJSON(t *testing.T) {
 		t.Fatalf("write old session: %v", err)
 	}
 
-	// Run init with a new goal
-	rootCmd.SetArgs([]string{"init", "New goal"})
+	// Run init with a new goal (sealed colony replacement requires confirmation)
+	rootCmd.SetArgs([]string{"init", "New goal", "--confirm-reinit"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("init returned error: %v", err)
 	}
@@ -1339,5 +1339,53 @@ func TestInitCmd_SessionJSONNoErrorWhenMissing(t *testing.T) {
 	}
 	if session.ColonyGoal != "First goal" {
 		t.Errorf("session.colony_goal = %q, want 'First goal'", session.ColonyGoal)
+	}
+}
+
+// TestInitCmd_SealedColonyRefusedWithoutConfirm locks in the data-safety
+// contract: replacing a sealed colony's state — its phases, instincts,
+// decisions, and errors — must be said out loud. The old behavior overwrote
+// silently with only a stderr note about a .bak nobody was told how to
+// restore.
+func TestInitCmd_SealedColonyRefusedWithoutConfirm(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf // outputError writes the JSON envelope to stderr
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	writeSealedState(t, dataDir, "Precious sealed history")
+
+	rootCmd.SetArgs([]string{"init", "New goal without confirmation"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned hard error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatal("unconfirmed re-init over a sealed colony was allowed")
+	}
+	msg, _ := env["error"].(string)
+	for _, needle := range []string{"--confirm-reinit", "entomb", "backups"} {
+		if !strings.Contains(msg, needle) {
+			t.Errorf("refusal must mention %q so the user knows the safe paths, got: %s", needle, msg)
+		}
+	}
+
+	// And the sealed state must be untouched.
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if state.Goal == nil || *state.Goal != "Precious sealed history" {
+		t.Fatalf("sealed colony state was modified by a refused re-init: %+v", state)
 	}
 }

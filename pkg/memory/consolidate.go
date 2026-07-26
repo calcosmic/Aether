@@ -31,6 +31,12 @@ type ConsolidationService struct {
 	bus        *events.Bus
 	queenPath  string
 	colonyName string
+	// dryRun computes every result — decay counts, archive candidates,
+	// promotion candidates — without persisting anything or publishing events.
+	// The --dry-run flag used to route straight into the mutating Run(), so
+	// "Report without modifying" irreversibly decayed trust scores and archived
+	// instincts on every preview. A dry run that writes is not a dry run.
+	dryRun bool
 }
 
 // NewConsolidationService creates a new consolidation service.
@@ -41,6 +47,15 @@ func NewConsolidationService(store *storage.Store, bus *events.Bus, queenPath st
 		queenPath:  queenPath,
 		colonyName: colonyName,
 	}
+}
+
+// NewDryRunConsolidationService returns a service that reports what
+// consolidation WOULD do while guaranteeing no file is written and no event is
+// published.
+func NewDryRunConsolidationService(store *storage.Store, bus *events.Bus, queenPath string, colonyName string) *ConsolidationService {
+	s := NewConsolidationService(store, bus, queenPath, colonyName)
+	s.dryRun = true
+	return s
 }
 
 // Run executes the full consolidation pipeline: decay instincts, archive low-trust,
@@ -64,16 +79,20 @@ func (s *ConsolidationService) Run(ctx context.Context) (*ConsolidationResult, e
 	} else {
 		instinctsLoaded = true
 		result.InstinctsDecayed = s.decayInstincts(&instincts, rawDecayScores)
-		if err := s.store.SaveJSON("instincts.json", instincts); err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("save decayed instincts: %w", err))
+		if !s.dryRun {
+			if err := s.store.SaveJSON("instincts.json", instincts); err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("save decayed instincts: %w", err))
+			}
 		}
 	}
 
 	// STEP 2 - Janitor: Archive instincts whose raw decayed score < 0.2.
 	if instinctsLoaded {
 		result.InstinctsArchived, result.ReviewCandidates = s.archiveBelowFloor(&instincts, rawDecayScores)
-		if err := s.store.SaveJSON("instincts.json", instincts); err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("save archived instincts: %w", err))
+		if !s.dryRun {
+			if err := s.store.SaveJSON("instincts.json", instincts); err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("save archived instincts: %w", err))
+			}
 		}
 	}
 
@@ -85,8 +104,10 @@ func (s *ConsolidationService) Run(ctx context.Context) (*ConsolidationResult, e
 	} else {
 		obsLoaded = true
 		result.ObservationsDecayed = s.decayObservations(&obsFile)
-		if err := s.store.SaveJSON("learning-observations.json", obsFile); err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("save decayed observations: %w", err))
+		if !s.dryRun {
+			if err := s.store.SaveJSON("learning-observations.json", obsFile); err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("save decayed observations: %w", err))
+			}
 		}
 	}
 
@@ -138,8 +159,11 @@ func (s *ConsolidationService) Run(ctx context.Context) (*ConsolidationResult, e
 		}
 	}
 
-	// Publish consolidation.phase_end event with summary
-	s.publishConsolidationEvent(ctx, result)
+	// Publish consolidation.phase_end event with summary — never on a dry run;
+	// a preview that emits lifecycle events is observable state change.
+	if !s.dryRun {
+		s.publishConsolidationEvent(ctx, result)
+	}
 
 	return result, nil
 }

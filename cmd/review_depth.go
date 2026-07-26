@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -148,9 +150,12 @@ func resolveReviewDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFla
 	if phase.ID == totalPhases {
 		return ReviewDepthHeavy
 	}
-	// Keyword auto-detection triggers heavy review, BUT explicit light flag
-	// overrides keyword match (user intent takes priority).
+	// Keyword auto-detection may only ever ESCALATE review depth (more
+	// checking, never less), an explicit light flag overrides it, and it must
+	// never act silently — the note below is the difference between a smart
+	// default and prose secretly steering verification policy.
 	if phaseHasHeavyKeywords(phase.Name) {
+		fmt.Fprintf(os.Stderr, "note: phase %q matched a security/release keyword; review depth escalated to heavy (pass --light to override)\n", phase.Name)
 		return ReviewDepthHeavy
 	}
 	// Default to light for intermediate phases.

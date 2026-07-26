@@ -73,7 +73,10 @@ AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <per
 Use `--background` for long-running research, especially from OpenCode. The
 runtime detaches a controller, writes progress under `.aether/oracle`, and
 `aether oracle status` remains the inspection path. Omit `--background` only
-when the user explicitly wants foreground execution.
+when the user explicitly wants foreground execution — and if they do, tell them
+first: foreground Oracle runs its research workers through the **Go subprocess
+path**, not the Agent tool. There is no visible per-worker ceremony while it
+runs; progress is CLI output and `.aether/oracle` files only.
 
 When the runtime detects a hosted Claude/OpenCode agent session and the command
 is not already backgrounded, it auto-detaches the Oracle controller. Treat that

@@ -23,9 +23,15 @@ type AntipatternFinding struct {
 }
 
 var checkAntipatternCmd = &cobra.Command{
-	Use:   "check-antipattern",
+	Use:   "check-antipattern [file]",
 	Short: "Scan a file for security antipatterns",
-	Args:  cobra.NoArgs,
+	// Accepts the file as a positional argument as well as --file. The
+	// Gatekeeper playbooks have always invoked `check-antipattern "<path>"`
+	// positionally, while this command was cobra.NoArgs + --file only — so
+	// every invocation errored, the error went to /dev/null, and the security
+	// gate never executed once. Both forms now work; positional wins when both
+	// are given.
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
@@ -33,6 +39,9 @@ var checkAntipatternCmd = &cobra.Command{
 		}
 
 		filePath := mustGetString(cmd, "file")
+		if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+			filePath = args[0]
+		}
 		if filePath == "" {
 			return nil
 		}

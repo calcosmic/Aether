@@ -307,6 +307,12 @@ func isCasteSuppressed(caste, flowType string, phase colony.Phase, state colony.
 	if flowType == "build" && phase.Mode == colony.PhaseModeDiscovery {
 		return oneOf(caste, "builder", "weaver", "fixer", "porter")
 	}
+	// Oracle in a build flow is gated by the phase's TYPED mode, never prose.
+	// The word "research" in a production phase's description used to score
+	// Oracle past the spawn threshold — the original prose-steers-dispatch bug.
+	if flowType == "build" && caste == "oracle" && effectiveQueenPhaseMode(phase) != colony.PhaseModeDiscovery {
+		return true
+	}
 	if flowType == "seal" && stateVerificationDepth(state) == colony.VerificationDepthLight {
 		return oneOf(caste, "gatekeeper", "auditor", "probe")
 	}

@@ -90,8 +90,14 @@ type codexWorkerPlanArtifact struct {
 }
 
 type codexWorkerPlanPhase struct {
-	Name                 string                                `json:"name"`
-	Description          string                                `json:"description"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Mode is the phase's declared work mode (discovery, prototype,
+	// production, maintenance). The Route-Setter states it explicitly; prose
+	// keywords never decide it at runtime. A phase description containing the
+	// word "research" once silently flipped an implementation phase to
+	// discovery and dispatched an Oracle instead of a Builder.
+	Mode                 string                                `json:"mode,omitempty"`
 	Tasks                []codexWorkerPlanTask                 `json:"tasks"`
 	SuccessCriteria      []string                              `json:"success_criteria,omitempty"`
 	EvidenceRequirements []colony.CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
@@ -2184,7 +2190,7 @@ func buildWorkerPlanPhases(artifact codexWorkerPlanArtifact) []colony.Phase {
 			Name:                 strings.TrimSpace(sourcePhase.Name),
 			Description:          strings.TrimSpace(sourcePhase.Description),
 			Status:               colony.PhasePending,
-			Mode:                 colony.InferPhaseMode(sourcePhase.Name, sourcePhase.Description),
+			Mode:                 resolveAuthoredPhaseMode(sourcePhase.Mode, sourcePhase.Name, sourcePhase.Description),
 			Tasks:                []colony.Task{},
 			SuccessCriteria:      uniqueSortedStrings(sourcePhase.SuccessCriteria),
 			EvidenceRequirements: normalizeWorkerCriterionRequirements(sourcePhase.EvidenceRequirements),
@@ -2337,7 +2343,7 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 			Name:            template.Name,
 			Description:     template.Description,
 			Status:          colony.PhasePending,
-			Mode:            colony.InferPhaseMode(template.Name, template.Description),
+			Mode:            resolveAuthoredPhaseMode("", template.Name, template.Description),
 			Tasks:           []colony.Task{},
 			SuccessCriteria: append([]string{}, template.SuccessCriteria...),
 		}

@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -185,14 +187,38 @@ var swarmCleanupCmd = &cobra.Command{
 			return nil
 		}
 
-		// Remove findings
-		findingsPath := fmt.Sprintf("swarms/%s/findings.json", id)
-		store.LoadJSON(findingsPath, &swarmFindingsFile{}) // check existence
-		// Note: Store doesn't have Delete; we use SaveJSON with empty to effectively reset.
-		// For full cleanup we use the basePath directly.
-		swarmDir := fmt.Sprintf("swarms/%s", id)
+		// Actually remove the swarm's data directory. The previous version
+		// loaded a file "to check existence", admitted in a comment that the
+		// store has no delete, then reported cleaned:true having removed
+		// nothing. A cleanup report must describe the filesystem, not the
+		// intention.
+		swarmDirRel := fmt.Sprintf("swarms/%s", id)
+		swarmDirAbs := filepath.Join(store.BasePath(), "swarms", id)
 
-		outputOK(map[string]interface{}{"cleaned": true, "swarm_id": id, "dir": swarmDir})
+		existedBefore := false
+		if _, err := os.Stat(swarmDirAbs); err == nil {
+			existedBefore = true
+		}
+
+		if existedBefore {
+			if err := os.RemoveAll(swarmDirAbs); err != nil {
+				outputError(2, fmt.Sprintf("failed to remove swarm data at %s: %v", swarmDirRel, err), nil)
+				return nil
+			}
+		}
+
+		// Verify against the filesystem before claiming success.
+		if _, err := os.Stat(swarmDirAbs); err == nil {
+			outputError(2, fmt.Sprintf("swarm data at %s still present after removal attempt", swarmDirRel), nil)
+			return nil
+		}
+
+		outputOK(map[string]interface{}{
+			"cleaned":  existedBefore,
+			"existed":  existedBefore,
+			"swarm_id": id,
+			"dir":      swarmDirRel,
+		})
 		return nil
 	},
 }

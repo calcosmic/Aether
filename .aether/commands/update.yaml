@@ -9,4 +9,6 @@ ceremony_contract:
   wrapper_role: "Run the literal runtime command and show its progress/result summary. Do not imply worker dispatch or publish source-checkout changes from a target-repo update."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "State clearly that update syncs companion files only and does not update the binary unless --download-binary is passed."
+  - "Surface hub-ahead-of-binary version skew prominently as action-required, never as an informational footnote."
   - "If docs and runtime disagree, runtime wins."

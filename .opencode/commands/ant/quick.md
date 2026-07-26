@@ -10,3 +10,4 @@ Use the Go `aether` CLI as the source of truth.
 - If `$ARGUMENTS` is empty, show `Usage: /ant-quick "<question>"`.
 - Do not generate scout names, write spawn logs, update session files, or mutate colony state by hand.
 - Report the CLI result directly.
+- Note: quick queries run through the **Go subprocess path**, not the Agent tool — no spawning ceremony is shown. That is by design: quick means no ceremony.

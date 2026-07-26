@@ -3399,6 +3399,7 @@
     "flags": [
       "charter-json",
       "colony-mode",
+      "confirm-reinit",
       "scope"
     ],
     "parent_command": "",

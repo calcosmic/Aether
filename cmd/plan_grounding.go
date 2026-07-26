@@ -37,7 +37,17 @@ func checkPlanGrounding(phases []colony.Phase, sourceAnchors []string) []planGro
 	}
 	var warnings []planGroundingWarning
 	for _, phase := range phases {
-		if isResearchPhase(phase.Name) {
+		// Exemption from grounding is decided by the phase's TYPED mode, never
+		// by name keywords. The keyword path meant any phase with "design" or
+		// "research" in its title escaped grounding validation entirely —
+		// prose steering a gate. Discovery-mode phases legitimately lack file
+		// targets; everything else must ground. The keyword check survives
+		// only as a fallback for phases that predate typed modes.
+		if phase.Mode.Valid() {
+			if phase.Mode == colony.PhaseModeDiscovery {
+				continue
+			}
+		} else if isResearchPhase(phase.Name) {
 			continue
 		}
 		groundedCount := 0

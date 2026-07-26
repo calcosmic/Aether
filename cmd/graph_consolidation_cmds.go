@@ -224,7 +224,10 @@ var consolidationPhaseEndCmd = &cobra.Command{
 			err    error
 		)
 		if dryRun {
-			service := learn.NewConsolidationService(store, bus, "QUEEN.md", pipelineConfigForStore().ColonyName)
+			// The dry-run path used to call the MUTATING service directly, so
+			// "Report without modifying" irreversibly decayed trust scores and
+			// archived instincts on every preview.
+			service := learn.NewDryRunConsolidationService(store, bus, "QUEEN.md", pipelineConfigForStore().ColonyName)
 			result, err = service.Run(ctx)
 		} else {
 			result, err = pipeline.RunConsolidation(ctx)
@@ -299,9 +302,20 @@ var consolidationSealCmd = &cobra.Command{
 			})
 		}
 
-		// Step 2: Run consolidation (decay + archive)
-		pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
-		consResult, err := pipeline.RunConsolidation(ctx)
+		// Step 2: Run consolidation (decay + archive). On a dry run this MUST be
+		// the no-write preview service — the previous code ran the full mutating
+		// pipeline unconditionally, so `consolidation-seal --dry-run` decayed
+		// and archived instincts and promoted entries into QUEEN.md.
+		var consResult *learn.ConsolidationResult
+		var err2 error
+		if dryRun {
+			service := learn.NewDryRunConsolidationService(store, bus, "QUEEN.md", pipelineConfigForStore().ColonyName)
+			consResult, err2 = service.Run(ctx)
+		} else {
+			pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
+			consResult, err2 = pipeline.RunConsolidation(ctx)
+		}
+		err = err2
 		if err != nil {
 			steps = append(steps, stepInfo{Name: "consolidation", Success: false, Summary: err.Error()})
 		} else {

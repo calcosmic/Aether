@@ -475,7 +475,22 @@ func runMigrateState(dryRun bool) (map[string]interface{}, error) {
 	}
 	originalEvidencePolicy := state.Plan.EvidencePolicy
 	state.Plan.EvidencePolicy = inferredPlanEvidencePolicy(state.Plan)
-	if fromVersion == "3.0" && originalEvidencePolicy == state.Plan.EvidencePolicy && originalEvidencePolicy != "" {
+
+	// Backfill typed phase modes. This is the one sanctioned use of keyword
+	// inference: run once, at migration time, writing a durable, auditable
+	// value to disk. Runtime keyword inference is gone (effectiveQueenPhaseMode
+	// no longer falls back to it), so phases created before typed modes must
+	// receive theirs here or dispatch decisions would fall to the neutral
+	// default forever.
+	modesBackfilled := 0
+	for i := range state.Plan.Phases {
+		if !state.Plan.Phases[i].Mode.Valid() {
+			state.Plan.Phases[i].Mode = colony.InferPhaseMode(state.Plan.Phases[i].Name, state.Plan.Phases[i].Description)
+			modesBackfilled++
+		}
+	}
+
+	if fromVersion == "3.0" && originalEvidencePolicy == state.Plan.EvidencePolicy && originalEvidencePolicy != "" && modesBackfilled == 0 {
 		return map[string]interface{}{
 			"mode":            "migrate-state",
 			"migrated":        false,
@@ -515,6 +530,7 @@ func runMigrateState(dryRun bool) (map[string]interface{}, error) {
 		"to":               "3.0",
 		"dry_run":          dryRun,
 		"evidence_policy":  string(state.Plan.EvidencePolicy),
+		"modes_backfilled": modesBackfilled,
 		"backup_path":      backupPath,
 		"rollback_command": migrationRollbackCommand(backupPath),
 		"next":             "aether medic --deep",

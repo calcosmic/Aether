@@ -20,7 +20,21 @@ Display a brief summary from the scan:
 - README summary (if `readme_summary` is non-empty, show first 200 chars)
 - Git: `{git_history.commits}` commits, `{git_history.contributors}` contributors on `{git_history.branch}`
 - Governance: list detected linters, CI, test frameworks from `governance` object
-- Prior colonies: `{prior_colonies.count}` archived colonies (if > 0)
+
+## Prior Context
+
+If `prior_colonies.count > 0`, show what came before **before** asking for the new goal — past colonies shape what the next one should be:
+
+```
+## Prior Context — {count} archived colonies
+
+Most recent:
+1. "{recent[0].goal}" — {recent[0].outcome} ({recent[0].entombed_at date})
+2. "{recent[1].goal}" — {recent[1].outcome}
+3. "{recent[2].goal}" — {recent[2].outcome}
+```
+
+Show up to 3 entries from `prior_colonies.recent` (goal truncated to ~120 chars). If `recent` is empty but `count > 0`, fall back to `Prior colonies: {count} archived`. If `count` is 0, skip this section silently.
 
 ## Intent Refinement
 

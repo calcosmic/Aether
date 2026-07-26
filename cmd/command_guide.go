@@ -155,6 +155,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		PreSteps: []string{
 			"Load the aether-colony-creation Codex skill.",
 			"Run `AETHER_OUTPUT_MODE=json aether init-research --goal \"<raw goal>\" --target .` for deterministic codebase context.",
+			"If prior_colonies.count > 0, show a Prior Context section (up to 3 recent colonies' goals and outcomes from prior_colonies.recent) before asking for the new goal.",
 			"Ask one compact batch of 4-7 questions when target users, success criteria, non-goals, constraints, risks, affected systems, or first milestone are unclear.",
 			"Synthesize raw goal, user answers, and init-research output into a refined goal and charter JSON; do not echo the scan output as the final charter.",
 			"Before creating colony state, ask the user to choose Colony Mode or Orchestrator Mode. Explain that Colony Mode is the existing default, while Orchestrator Mode asks guided boundary questions at phase points for tighter user control. If the user skips the choice or the host is non-interactive, default to Colony Mode.",

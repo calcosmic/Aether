@@ -81,8 +81,10 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 
 	result := envelope["result"].(map[string]interface{})
-	if got := int(result["dispatch_count"].(float64)); got != 7 {
-		t.Fatalf("dispatch_count = %d, want 7", got)
+	if got := int(result["dispatch_count"].(float64)); got != 6 {
+		// Modeless phase resolves to prototype: prose "Research" in a task no
+		// longer spawns an Oracle (typed phase mode).
+		t.Fatalf("dispatch_count = %d, want 6", got)
 	}
 	if got := int(result["wave_count"].(float64)); got != 2 {
 		t.Fatalf("wave_count = %d, want 2 task waves", got)
@@ -90,8 +92,8 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if got := int(result["parallel_waves"].(float64)); got != 0 {
 		t.Fatalf("parallel_waves = %d, want 0", got)
 	}
-	if got := int(result["execution_wave_count"].(float64)); got != 7 {
-		t.Fatalf("execution_wave_count = %d, want 7 execution waves", got)
+	if got := int(result["execution_wave_count"].(float64)); got != 6 {
+		t.Fatalf("execution_wave_count = %d, want 6 execution waves", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
@@ -99,8 +101,8 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if waveExecution, ok := result["wave_execution"].([]interface{}); !ok || len(waveExecution) != 2 {
 		t.Fatalf("wave_execution = %#v, want 2 wave plans", result["wave_execution"])
 	}
-	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 7 {
-		t.Fatalf("execution_plan = %#v, want 7 execution stages", result["execution_plan"])
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 6 {
+		t.Fatalf("execution_plan = %#v, want 6 execution stages", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -123,11 +125,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 7 {
-		t.Fatalf("expected 7 manifest dispatches, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 6 {
+		t.Fatalf("expected 6 manifest dispatches, got %d", len(manifest.Dispatches))
 	}
-	if len(manifest.WorkerBriefs) != 7 {
-		t.Fatalf("expected 7 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	if len(manifest.WorkerBriefs) != 6 {
+		t.Fatalf("expected 6 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
@@ -162,7 +164,7 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected spawn-tree.txt: %v", err)
 	}
-	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|watcher|", "|Queen|probe|"} {
+	for _, want := range []string{"|Queen|builder|", "|Queen|watcher|", "|Queen|probe|"} {
 		if !strings.Contains(string(spawnTreeData), want) {
 			t.Fatalf("spawn tree missing %q\n%s", want, string(spawnTreeData))
 		}

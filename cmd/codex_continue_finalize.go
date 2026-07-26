@@ -464,102 +464,12 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	}
 
 	// --- Learning capture (D-01, D-02, D-03, D-04) ---
-	// Learning fires only after gates pass AND review passes AND provenance valid AND all workers succeeded.
-	// This is the ONLY path that produces durable learning (D-03).
-	captureLearning := func() {
-		// Check if all workers succeeded (D-02)
-		allWorkersSucceeded := true
-		for _, step := range workerFlow {
-			if step.Status != "completed" {
-				allWorkersSucceeded = false
-				break
-			}
-		}
-
-		// Check if learning is enabled (D-16) -- config + flag
-		learningEnabled := isLearningEnabled(noLearn)
-
-		if !learn.IsLearningEligible(allWorkersSucceeded, true, gates.Passed, learningEnabled) {
-			return // Not eligible -- no durable learning
-		}
-
-		// Collect evidence (D-09, LRN-02)
-		workerResults := make([]learn.WorkerResult, 0, len(workerFlow))
-		for _, step := range workerFlow {
-			workerResults = append(workerResults, learn.WorkerResult{
-				Name:         step.Name,
-				Caste:        step.Caste,
-				Status:       step.Status,
-				FilesTouched: nil, // codexContinueWorkerFlowStep has no FilesModified field
-			})
-		}
-
-		gatesPassed := 0
-		for _, c := range gates.Checks {
-			if c.Passed {
-				gatesPassed++
-			}
-		}
-
-		runID := ""
-		if runHandle != nil {
-			runID = runHandle.Run.ID
-		}
-		if runID == "" {
-			runID = fmt.Sprintf("run_%d_%s", phase.ID, now.Format("20060102_150405"))
-		}
-
-		evidence := learn.CollectEvidence(
-			runID, phase.ID, workerResults,
-			learn.GateResult{Passed: gatesPassed, Total: len(gates.Checks)},
-			"repo-local",
-		)
-
-		// Build learning content from deep worker extraction
-		content := buildLearningContent(phase, workerFlow)
-
-		// Run privacy scan + classify (D-10, D-11, PRIV-03)
-		scanResult := privacyScan(content)
-		classification := learn.ClassifyEntry(content, learn.PrivacyScanResult{
-			Blocked:  scanResult.Blocked,
-			Clean:    scanResult.Clean,
-			Findings: scanResult.Findings,
-		})
-
-		if classification == learn.ClassBlocked {
-			return // Blocked content never stored
-		}
-
-		// Store via ColonyStore (D-06: .aether/data/learn/)
-		learnStore := learn.NewColonyStore(store)
-		entry := learn.Entry{
-			Content:        scanResult.Clean, // use cleaned content
-			Evidence:       evidence,
-			Classification: classification,
-			Phase:          phase.ID,
-			Confidence:     evidence.Confidence,
-			Status:         learn.StatusHypothesis,
-		}
-		if err := learnStore.Add(entry); err != nil {
-			// Non-blocking: learning failure must not prevent phase advancement
-			fmt.Fprintf(os.Stderr, "warning: failed to capture learning: %v\n", err)
-		} else {
-			// Phase 91: Auto-skill creation hook (AUTO-01)
-			// Only fires after successful learning capture for difficult verified tasks.
-			// Reads auto_skill_mode config to determine behavior (off/propose/auto, default propose).
-			sqliteStore, sqliteErr := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
-			if sqliteErr == nil {
-				defer sqliteStore.Close()
-				aetherRoot := storage.ResolveAetherRoot(context.Background())
-				mode := learn.LoadAutoSkillMode(store.BasePath())
-				if err := learn.AutoCreateSkillIfDifficult(entry, sqliteStore, aetherRoot, mode); err != nil {
-					// Non-blocking: auto-skill failure must not prevent phase advancement
-					fmt.Fprintf(os.Stderr, "warning: failed to auto-create skill: %v\n", err)
-				}
-			}
-		}
+	// Shared with the default continue path; see captureContinueLearning.
+	runID := ""
+	if runHandle != nil {
+		runID = runHandle.Run.ID
 	}
-	captureLearning()
+	captureContinueLearning(phase, workerFlow, gates, runID, noLearn, now)
 
 	result, updated, nextPhase, housekeeping, final, err := advanceExternalContinue(root, state, phase, manifest, verification, assessment, gates, review, reviewReportRel, watcherFlow, workerFlow, now, verificationReportRel, gateReportRel, finalizeReviewDepth)
 	if err != nil {
@@ -1329,4 +1239,105 @@ func buildLearningContent(phase colony.Phase, workerFlow []codexContinueWorkerFl
 	}
 
 	return b.String()
+}
+
+// captureContinueLearning is the single durable-learning capture point for
+// BOTH continue paths. It previously lived as a closure inside
+// runCodexContinueFinalizeExternal — a command the continue wrapper explicitly
+// forbids on the default fast path — which meant learning had never once fired
+// in normal daily use. The colony's entire learning story (pkg/learn capture,
+// hypothesis promotion, auto-skill creation) was dark unless the user opted
+// into heavy verification every phase.
+//
+// Eligibility is unchanged: all workers succeeded AND gates passed AND
+// learning enabled. runID may be empty; a deterministic fallback is derived.
+func captureContinueLearning(phase colony.Phase, workerFlow []codexContinueWorkerFlowStep, gates codexContinueGateReport, runID string, noLearn bool, now time.Time) {
+
+	// Check if all workers succeeded (D-02)
+	allWorkersSucceeded := true
+	for _, step := range workerFlow {
+		if step.Status != "completed" {
+			allWorkersSucceeded = false
+			break
+		}
+	}
+
+	// Check if learning is enabled (D-16) -- config + flag
+	learningEnabled := isLearningEnabled(noLearn)
+
+	if !learn.IsLearningEligible(allWorkersSucceeded, true, gates.Passed, learningEnabled) {
+		return // Not eligible -- no durable learning
+	}
+
+	// Collect evidence (D-09, LRN-02)
+	workerResults := make([]learn.WorkerResult, 0, len(workerFlow))
+	for _, step := range workerFlow {
+		workerResults = append(workerResults, learn.WorkerResult{
+			Name:         step.Name,
+			Caste:        step.Caste,
+			Status:       step.Status,
+			FilesTouched: nil, // codexContinueWorkerFlowStep has no FilesModified field
+		})
+	}
+
+	gatesPassed := 0
+	for _, c := range gates.Checks {
+		if c.Passed {
+			gatesPassed++
+		}
+	}
+
+	if runID == "" {
+		runID = fmt.Sprintf("run_%d_%s", phase.ID, now.Format("20060102_150405"))
+	}
+
+	evidence := learn.CollectEvidence(
+		runID, phase.ID, workerResults,
+		learn.GateResult{Passed: gatesPassed, Total: len(gates.Checks)},
+		"repo-local",
+	)
+
+	// Build learning content from deep worker extraction
+	content := buildLearningContent(phase, workerFlow)
+
+	// Run privacy scan + classify (D-10, D-11, PRIV-03)
+	scanResult := privacyScan(content)
+	classification := learn.ClassifyEntry(content, learn.PrivacyScanResult{
+		Blocked:  scanResult.Blocked,
+		Clean:    scanResult.Clean,
+		Findings: scanResult.Findings,
+	})
+
+	if classification == learn.ClassBlocked {
+		return // Blocked content never stored
+	}
+
+	// Store via ColonyStore (D-06: .aether/data/learn/)
+	learnStore := learn.NewColonyStore(store)
+	entry := learn.Entry{
+		Content:        scanResult.Clean, // use cleaned content
+		Evidence:       evidence,
+		Classification: classification,
+		Phase:          phase.ID,
+		Confidence:     evidence.Confidence,
+		Status:         learn.StatusHypothesis,
+	}
+	if err := learnStore.Add(entry); err != nil {
+		// Non-blocking: learning failure must not prevent phase advancement
+		fmt.Fprintf(os.Stderr, "warning: failed to capture learning: %v\n", err)
+	} else {
+		// Phase 91: Auto-skill creation hook (AUTO-01)
+		// Only fires after successful learning capture for difficult verified tasks.
+		// Reads auto_skill_mode config to determine behavior (off/propose/auto, default propose).
+		sqliteStore, sqliteErr := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
+		if sqliteErr == nil {
+			defer sqliteStore.Close()
+			aetherRoot := storage.ResolveAetherRoot(context.Background())
+			mode := learn.LoadAutoSkillMode(store.BasePath())
+			if err := learn.AutoCreateSkillIfDifficult(entry, sqliteStore, aetherRoot, mode); err != nil {
+				// Non-blocking: auto-skill failure must not prevent phase advancement
+				fmt.Fprintf(os.Stderr, "warning: failed to auto-create skill: %v\n", err)
+			}
+		}
+	}
 }

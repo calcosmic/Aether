@@ -922,6 +922,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if err := applyCodexContinueWorkerClosures(closedWorkerDetails); err != nil {
 		return nil, state, phase, nil, &housekeeping, false, err
 	}
+	// Durable learning capture on the DEFAULT path. This call is the fix for
+	// "the colony never learns": capture previously existed only inside
+	// continue-finalize, which the wrapper forbids for fast continue, so
+	// pkg/learn, hypothesis promotion, and auto-skill creation were unreachable
+	// in normal daily use. Gates have passed by this point; state is committed;
+	// learning failure is non-blocking inside the function.
+	captureContinueLearning(phase, workerFlow, gates, "", false, now)
 	emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 	flowEvents := continueWorkerFlowEvents(now, workerFlow)
 	updated.Events = append(updated.Events, flowEvents...)
