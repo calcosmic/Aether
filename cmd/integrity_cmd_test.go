@@ -46,6 +46,8 @@ func TestScanIntegrityCriticalWhenHubNotInstalled(t *testing.T) {
 
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	// Simulates a machine with no hub; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 
 	oldVersion := Version
 	Version = "1.0.20"

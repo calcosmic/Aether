@@ -34,7 +34,13 @@ func TestMain(m *testing.M) {
 			// Make the isolated hub minimally valid so tests that check
 			// "hub installed" (version.json present) behave as they would on
 			// a machine with Aether installed — without touching the real one.
-			_ = os.WriteFile(filepath.Join(dir, "version.json"), []byte(`{"version":"0.0.0-test"}`), 0644)
+			// The version mirrors the source checkout's so stale-publish
+			// detection sees binary and hub in agreement.
+			hubVersion := `{"version":"0.0.0-test"}`
+			if data, err := os.ReadFile(filepath.Join("..", ".aether", "version.json")); err == nil {
+				hubVersion = string(data)
+			}
+			_ = os.WriteFile(filepath.Join(dir, "version.json"), []byte(hubVersion), 0644)
 			_ = os.MkdirAll(filepath.Join(dir, "system"), 0755)
 		}
 	}

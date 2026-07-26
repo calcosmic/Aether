@@ -87,6 +87,8 @@ func TestE2EDevUpdateDetectsCriticalStale(t *testing.T) {
 
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	// Manages its own dev hub via HOME; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 
 	hubDir := filepath.Join(homeDir, ".aether-dev")
 	createHubWithExpectedCounts(t, hubDir)

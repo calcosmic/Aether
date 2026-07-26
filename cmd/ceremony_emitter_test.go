@@ -416,8 +416,7 @@ func TestResolveSkillSectionEmitsSkillActivationCeremony(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte(skillContent), 0644); err != nil {
 		t.Fatalf("failed to write skill: %v", err)
 	}
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	section := resolveSkillSection("builder", "testing task")
 	if section == "" {

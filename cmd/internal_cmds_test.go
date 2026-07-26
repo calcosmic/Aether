@@ -87,8 +87,7 @@ func TestEternalStore(t *testing.T) {
 
 	// Use temp dir as hub
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	defer os.Unsetenv("AETHER_HUB_DIR")
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	rootCmd.SetArgs([]string{"eternal-store",
 		"--content", "high value signal",
@@ -127,8 +126,7 @@ func TestBootstrapSystem(t *testing.T) {
 
 	// Create a mock hub with templates
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	defer os.Unsetenv("AETHER_HUB_DIR")
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	templateDir := filepath.Join(tmpHub, "templates")
 	os.MkdirAll(templateDir, 0755)

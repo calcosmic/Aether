@@ -2824,8 +2824,7 @@ func TestResolveSkillSection_FormatsMatchedSkills(t *testing.T) {
 		t.Fatalf("failed to write skill: %v", err)
 	}
 
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	section := resolveSkillSection("builder", "testing task")
 	if section == "" {
@@ -2848,8 +2847,7 @@ func TestResolveSkillSection_ReturnsEmptyWhenNoMatches(t *testing.T) {
 		t.Fatalf("failed to create hub dir: %v", err)
 	}
 
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	section := resolveSkillSection("builder", "some task")
 	if section != "" {

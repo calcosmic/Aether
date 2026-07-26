@@ -64,6 +64,11 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
 	t.Setenv("COLONY_DATA_DIR", dataDir)
+	// Seal promotes instincts into the hive at the hub. Belt-and-suspenders
+	// with the suite-wide TestMain isolation: whatever the global env is in
+	// this test's position in the run order, seal tests NEVER write the
+	// developer's real ~/.aether/hive.
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(tmpDir, ".hub"))
 
 	store = s
 	outBuf := &bytes.Buffer{}
@@ -393,7 +398,7 @@ func TestSealHiveEligibleLog(t *testing.T) {
 	s, tmpDir := setupSealTestStore(t)
 
 	// Set up temp hive directory so promotion succeeds
-	hubDir := t.TempDir()
+	hubDir := filepath.Join(tmpDir, ".hub") // runSealCmd pins AETHER_HUB_DIR here
 	hiveDir := filepath.Join(hubDir, "hive")
 	if err := os.MkdirAll(hiveDir, 0755); err != nil {
 		t.Fatal(err)
@@ -413,10 +418,6 @@ func TestSealHiveEligibleLog(t *testing.T) {
 		},
 	}
 	_ = s.SaveJSON("instincts.json", instincts)
-
-	origHub := os.Getenv("AETHER_HUB_DIR")
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	defer os.Setenv("AETHER_HUB_DIR", origHub)
 
 	out, _ := runSealCmd(t, s, tmpDir, nil)
 
@@ -667,7 +668,7 @@ func TestSealHivePromote(t *testing.T) {
 	s, tmpDir := setupSealTestStore(t)
 
 	// Set up temp hive directory
-	hubDir := t.TempDir()
+	hubDir := filepath.Join(tmpDir, ".hub") // runSealCmd pins AETHER_HUB_DIR here
 	hiveDir := filepath.Join(hubDir, "hive")
 	if err := os.MkdirAll(hiveDir, 0755); err != nil {
 		t.Fatal(err)
@@ -703,10 +704,6 @@ func TestSealHivePromote(t *testing.T) {
 	if err := s.SaveJSON("instincts.json", instincts); err != nil {
 		t.Fatal(err)
 	}
-
-	origHub := os.Getenv("AETHER_HUB_DIR")
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	defer os.Setenv("AETHER_HUB_DIR", origHub)
 
 	out, _ := runSealCmd(t, s, tmpDir, nil)
 
@@ -804,7 +801,7 @@ func TestSealHivePromotedCount(t *testing.T) {
 	s, tmpDir := setupSealTestStore(t)
 
 	// Set up temp hive directory
-	hubDir := t.TempDir()
+	hubDir := filepath.Join(tmpDir, ".hub") // runSealCmd pins AETHER_HUB_DIR here
 	hiveDir := filepath.Join(hubDir, "hive")
 	if err := os.MkdirAll(hiveDir, 0755); err != nil {
 		t.Fatal(err)
