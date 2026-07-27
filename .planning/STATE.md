@@ -2,11 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.25
 milestone_name: Switch It On
-status: roadmapped
-last_updated: "2026-07-25T20:00:00.000Z"
-last_activity: 2026-07-25
+status: planning
+stopped_at: Phase 160 context gathered
+last_updated: "2026-07-27T12:37:01.674Z"
+last_activity: 2026-07-25 — Roadmap corrected for v1.25 Switch It On (88 requirements, Phases 160-171)
 progress:
-  total_phases: 12
+  total_phases: 27
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -97,6 +98,6 @@ Carried from v1.23, deferred again in v1.25 (see REQUIREMENTS.md "Deferred"):
 
 ## Session Continuity
 
-Last session: 2026-07-25T20:00:00Z
-Stopped at: ROADMAP.md, STATE.md, and REQUIREMENTS.md traceability corrected for v1.25 Switch It On (88 requirements, Phases 160-171) — awaiting user approval
-Resume file: None
+Last session: 2026-07-27T12:37:01.666Z
+Stopped at: Phase 160 context gathered
+Resume file: .planning/phases/160-fail-loudly/160-CONTEXT.md
