@@ -329,7 +329,7 @@ Plans:
 - [x] 160-04-PLAN.md — LOUD-02: wire check-antipattern into the live continue gate pipeline (wave 1)
 - [x] 160-05-PLAN.md — D-03/04/05: worker debug artifacts on every failure mode, capped, worktree-safe (wave 1)
 - [x] 160-06-PLAN.md — RETIRE-01/02/03/04: delete control-ts as a standalone commit, prove ts-host/ts survive (wave 2, needs 01)
-- [ ] 160-07-PLAN.md — LOUD-04/05 + D-01: positional-drift execution audit + gate/enrichment classification (wave 2, needs 02, 04)
+- [x] 160-07-PLAN.md — LOUD-04/05 + D-01: positional-drift execution audit + gate/enrichment classification (wave 2, needs 02, 04)
 - [ ] 160-08-PLAN.md — LOUD-08 (D-02): build the /ant-unblock wrapper on Claude + OpenCode (wave 2, needs 03)
 
 ### Phase 161: Cheap Models By Design
@@ -494,7 +494,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 157. TS Adapters & Oracle | v1.24 | 2/2 | Complete   | 2026-05-24 |
 | 158. Event Stream | v1.24 | 3/3 | Complete | 2026-05-24 |
 | 159. End-to-End Acceptance | v1.24 | 3/3 | Complete | 2026-05-24 |
-| 160. Fail Loudly | v1.25 | 6/8 | In Progress|  |
+| 160. Fail Loudly | v1.25 | 7/8 | In Progress|  |
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 0/TBD | Not started | - |
