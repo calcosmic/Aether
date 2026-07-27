@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1230,6 +1231,20 @@ func isWorkerClaimsMap(value map[string]interface{}) bool {
 	return matches >= 2
 }
 
+// WorkerDebugRetentionMaxAge and WorkerDebugRetentionMaxFiles are the
+// worker-debug artifact retention policy: files older than the max age are
+// pruned first, then, if more than the file cap remain, the oldest are
+// removed until the cap is met. Declared once here (the package that owns
+// the .aether/data/worker-debug directory layout) and referenced by both
+// the write-time prune below and `aether data-clean`'s worker-debug step
+// (cmd/maintenance.go) so the two prune paths cannot silently drift apart.
+// 50 files / 14 days was chosen as generous enough to cover a week of heavy
+// debugging without letting the directory grow unbounded on disk.
+const (
+	WorkerDebugRetentionMaxAge   = 14 * 24 * time.Hour
+	WorkerDebugRetentionMaxFiles = 50
+)
+
 // hostedWorkerDebugDetails carries per-failure-mode facts that the debug
 // writer cannot infer from config, args, or cause alone. Kept as a struct
 // rather than positional parameters so a fifth failure mode doesn't require
@@ -1285,7 +1300,54 @@ func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args 
 	if err := os.WriteFile(filepath.Join(debugDir, filename), data, 0644); err != nil {
 		return ""
 	}
+	// Pruning is best-effort: the artifact just written is the operator's
+	// evidence for the failure they're about to see, and losing it to a
+	// housekeeping error would recreate the exact problem this function
+	// exists to fix. Never let pruning fail the write, and never prune the
+	// file just written even if the clock is skewed.
+	pruneWorkerDebugArtifacts(debugDir, filename)
 	return relPath
+}
+
+// pruneWorkerDebugArtifacts enforces WorkerDebugRetentionMaxAge and
+// WorkerDebugRetentionMaxFiles against dir, in that order: age-based
+// removal first, then cap-based oldest-first removal of whatever remains.
+// keepFilename is never removed, even if its mod time would otherwise
+// qualify it for pruning. Errors reading or removing individual files are
+// ignored — see the comment at the call site for why.
+func pruneWorkerDebugArtifacts(dir, keepFilename string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	type debugArtifact struct {
+		name    string
+		modTime time.Time
+	}
+	var artifacts []debugArtifact
+	cutoff := time.Now().Add(-WorkerDebugRetentionMaxAge)
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() == keepFilename {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, entry.Name()))
+			continue
+		}
+		artifacts = append(artifacts, debugArtifact{name: entry.Name(), modTime: info.ModTime()})
+	}
+	if len(artifacts) <= WorkerDebugRetentionMaxFiles-1 {
+		return
+	}
+	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].modTime.Before(artifacts[j].modTime) })
+	excess := len(artifacts) - (WorkerDebugRetentionMaxFiles - 1)
+	for i := 0; i < excess; i++ {
+		_ = os.Remove(filepath.Join(dir, artifacts[i].name))
+	}
 }
 
 // safeHostedWorkerArgs prepares an arg vector for the debug artifact. It
