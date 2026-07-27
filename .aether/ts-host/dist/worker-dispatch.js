@@ -280,7 +280,11 @@ function normalizeTerminalStatus(value) {
 /** Ask the Go-owned adapter layer to select and preflight the worker provider. */
 export async function preflightGoWorkerProvider(opts, context) {
     try {
-        return await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight"], 30_000);
+        // Must exceed the Go side's full preflight budget (hostedPreflightTimeout
+        // x hostedPreflightAttempts in pkg/codex/platform_dispatch.go, 45s x 2)
+        // plus startup slack. At 30s Node SIGTERM'd the adapter before the Go
+        // retry could ever fire, so the retry existed only on the direct-Go path.
+        return await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight"], 120_000);
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);

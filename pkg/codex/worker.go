@@ -99,14 +99,14 @@ type workerClaims struct {
 	TaskID        string                     `json:"task_id"`
 	Status        string                     `json:"status"`
 	Summary       string                     `json:"summary"`
-	FilesCreated  []string                   `json:"files_created"`
-	FilesModified []string                   `json:"files_modified"`
-	TestsWritten  []string                   `json:"tests_written"`
+	FilesCreated  stringList                 `json:"files_created"`
+	FilesModified stringList                 `json:"files_modified"`
+	TestsWritten  stringList                 `json:"tests_written"`
 	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
 	ScoutReport   json.RawMessage            `json:"scout_report,omitempty"`
 	ToolCount     int                        `json:"tool_count"`
-	Blockers      []string                   `json:"blockers"`
-	Spawns        []string                   `json:"spawns"`
+	Blockers      stringList                 `json:"blockers"`
+	Spawns        stringList                 `json:"spawns"`
 	Handoff       WorkerHandoff              `json:"handoff,omitempty"`
 }
 
@@ -1372,6 +1372,12 @@ func classifyWorkerFinalMessageError(action string, err error, runningObserved b
 	}
 	if !runningObserved {
 		return fmt.Errorf("worker startup failed before proof of life: %s: %w", prefix, err)
+	}
+	// ParseWorkerOutput already stamps its own "parse worker output:" prefix;
+	// re-wrapping produced the doubled "parse worker output: parse worker
+	// output: ..." users saw. Wrap only when the cause isn't self-labelled.
+	if err != nil && strings.HasPrefix(err.Error(), prefix+":") {
+		return err
 	}
 	return fmt.Errorf("%s: %w", prefix, err)
 }

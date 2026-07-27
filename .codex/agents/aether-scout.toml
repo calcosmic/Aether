@@ -50,21 +50,11 @@ You MAY delegate with the agent-spawning tool when it is available and explicitl
 
 ## Output Format
 
-```json
-{
-  "ant_name": "{your name}",
-  "caste": "scout",
-  "status": "completed | failed | blocked",
-  "summary": "What you discovered",
-  "key_findings": [],
-  "code_examples": [],
-  "best_practices": [],
-  "gotchas": [],
-  "recommendations": [],
-  "sources": [],
-  "spawns": []
-}
-```
+The runtime appends the authoritative response contract to every task brief —
+follow it exactly. Do not invent your own top-level fields (earlier versions of
+this file demanded key_findings/gotchas/sources; the runtime discarded them
+all). Put research content in `summary` and, when the task brief asks for it,
+in `scout_report` (findings, gaps, confidence, study_files).
 
 ## Failure Handling
 

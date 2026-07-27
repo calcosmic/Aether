@@ -685,11 +685,16 @@ func (c *ClaudeDispatcher) Preflight(ctx context.Context, root string) Availabil
 		return status
 	}
 
+	// --strict-mcp-config keeps the probe from booting the target repo's MCP
+	// servers, plugins, and hooks just to answer a liveness question. That
+	// startup cost scales with project config and is what pushed the probe
+	// past its timeout (and cost ~$0.59/probe in a heavily configured repo).
 	args := []string{
 		"-p",
 		"Return exactly OK.",
 		"--output-format", "json",
 		"--permission-mode", "plan",
+		"--strict-mcp-config",
 	}
 	return runHostedProviderPreflight(ctx, status, root, args)
 }
@@ -709,12 +714,41 @@ func (o *OpenCodeDispatcher) Preflight(ctx context.Context, root string) Availab
 	return runHostedProviderPreflight(ctx, status, root, args)
 }
 
+// The preflight is a real model round-trip, so it inherits cold-start and
+// network variance. 20s was tight enough that ordinary contention aborted whole
+// commands: the 27 July M4L /ant-plan run died 22 seconds in, while the same
+// probe run by hand answered in 5. Declared as vars so tests can shrink the
+// wait without waiting out the production budget.
+var (
+	hostedPreflightTimeout = 45 * time.Second
+	// One retry, and only for timeouts. A timeout is the transient case;
+	// missing credentials or a bad model name will fail identically twice and
+	// should surface immediately.
+	hostedPreflightAttempts = 2
+)
+
 func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, root string, args []string) AvailabilityStatus {
 	binary := strings.TrimSpace(status.Binary)
 	if binary == "" {
 		binary = string(status.Platform)
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+
+	var failure AvailabilityStatus
+	for attempt := 1; attempt <= hostedPreflightAttempts; attempt++ {
+		result, timedOut := attemptHostedProviderPreflight(ctx, status, root, args, binary)
+		if result.Available {
+			return result
+		}
+		failure = result
+		if !timedOut || ctx.Err() != nil || attempt == hostedPreflightAttempts {
+			break
+		}
+	}
+	return failure
+}
+
+func attemptHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, root string, args []string, binary string) (AvailabilityStatus, bool) {
+	probeCtx, cancel := context.WithTimeout(ctx, hostedPreflightTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(probeCtx, binary, args...)
@@ -738,8 +772,9 @@ func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, 
 			reason = sanitizeWorkerDiagnosticOutput(err.Error())
 		}
 		category := AvailabilityCategoryProviderConfig
-		if probeCtx.Err() == context.DeadlineExceeded {
-			reason = fmt.Sprintf("%s provider/model preflight timed out before worker dispatch", status.Platform)
+		timedOut := probeCtx.Err() == context.DeadlineExceeded
+		if timedOut {
+			reason = fmt.Sprintf("%s provider/model preflight timed out before worker dispatch after %d attempts", status.Platform, hostedPreflightAttempts)
 			category = AvailabilityCategoryAuthProbeFailed
 		}
 		return AvailabilityStatus{
@@ -748,14 +783,14 @@ func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, 
 			Available: false,
 			Category:  category,
 			Reason:    fmt.Sprintf("%s provider/model preflight failed before worker dispatch: %s", status.Platform, reason),
-		}
+		}, timedOut
 	}
 	return AvailabilityStatus{
 		Platform:  status.Platform,
 		Binary:    binary,
 		Available: true,
 		Category:  AvailabilityCategoryAvailable,
-	}
+	}, false
 }
 
 func (c *ClaudeDispatcher) Invoke(ctx context.Context, config WorkerConfig) (WorkerResult, error) {
@@ -773,7 +808,11 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 		return permissionDeniedWorkerResult(config, start, permissionErr)
 	}
 	config.PermissionProfile = permission.Profile
-	schemaJSON, err := marshalJSON(workerClaimsSchema())
+	// Scout-aware schema: without this, the Claude path handed a scout a
+	// schema whose additionalProperties:false forbade the scout_report the
+	// task brief demanded — a contradiction in the worker's context on every
+	// planning run. Codex already used the config-aware variant.
+	schemaJSON, err := marshalJSON(workerClaimsSchemaForConfig(config))
 	if err != nil {
 		return WorkerResult{
 			WorkerName: config.WorkerName,
@@ -981,6 +1020,20 @@ waitLoop:
 	if waitErr != nil {
 		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: classifyHostedExecutionError(label, waitErr, stderr.String(), running.Observed())}, nil
 	}
+	// Provider failures arrive as well-formed JSON on stdout with exit code 0,
+	// so they reach this point looking like output to parse. Detect them
+	// before claims parsing: an error envelope means no claims exist, and
+	// running the parser first can only produce a mislabelled parse error.
+	if providerErr, ok := detectProviderErrorEnvelope(rawOutput); ok {
+		err := error(providerErr)
+		if strings.EqualFold(label, "opencode") && looksLikeOpenCodeLocalServerFailure(providerErr.URL+" "+providerErr.Message) {
+			err = fmt.Errorf("%w; the local OpenCode server rejected the run request — ensure OpenCode is running for `opencode run`, or set AETHER_WORKER_PLATFORM=claude/codex", providerErr)
+		}
+		if debugPath := writeHostedWorkerOutputDebug(config.Root, label, config, args, stdout.String(), stderr.String(), err); debugPath != "" {
+			err = fmt.Errorf("%w (debug: %s)", err, debugPath)
+		}
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: err}, nil
+	}
 	claims, parseErr := parseHostedWorkerOutput(label, rawOutput)
 	if parseErr != nil {
 		err := classifyWorkerFinalMessageError("parse worker output", parseErr, running.Observed())
@@ -990,6 +1043,17 @@ waitLoop:
 		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: err}, nil
 	}
 	claims = normalizeWorkerClaims(claims, config)
+	return hostedWorkerResultFromClaims(config, claims, duration, safeRawOutput), nil
+}
+
+// hostedWorkerResultFromClaims maps parsed claims onto the WorkerResult the
+// colony consumes. Every content field must cross this seam: Artifacts and
+// ScoutReport were once omitted here, so a scout's research parsed
+// successfully and was then discarded — scoutReportFromWorkerResult found
+// both fields empty and planning fell back to synthesized boilerplate. The
+// Codex path (worker.go) and FakeInvoker always carried them; hosted must
+// match, and TestHostedWorkerResultCarriesAllClaimsContent pins it.
+func hostedWorkerResultFromClaims(config WorkerConfig, claims workerClaims, duration time.Duration, safeRawOutput string) WorkerResult {
 	return WorkerResult{
 		WorkerName:    config.WorkerName,
 		Caste:         config.Caste,
@@ -999,38 +1063,65 @@ waitLoop:
 		FilesCreated:  claims.FilesCreated,
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
+		Artifacts:     claims.Artifacts,
+		ScoutReport:   claims.ScoutReport,
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
 		Handoff:       claims.Handoff,
 		Duration:      duration,
 		RawOutput:     safeRawOutput,
-	}, nil
+	}
 }
 
 func parseHostedWorkerOutput(label, output string) (workerClaims, error) {
 	platform := strings.ToLower(strings.TrimSpace(label))
+	var hostedErr error
 	switch platform {
 	case "claude", "opencode":
-		if claims, err := parseHostedJSONWorkerOutput(platform, output); err == nil {
+		claims, err := parseHostedJSONWorkerOutput(platform, output)
+		if err == nil {
 			return claims, nil
 		}
+		hostedErr = err
 	}
-	return ParseWorkerOutput(output)
+	claims, err := ParseWorkerOutput(output)
+	if err == nil {
+		return claims, nil
+	}
+	if hostedErr != nil {
+		// Report why the worker's actual answer was rejected, not why the CLI
+		// transport envelope wrapped around it is not worker claims. The
+		// generic fallback can only ever say "no JSON found in output", which
+		// sent the 27 July M4L investigation after a nonexistent code-fence
+		// bug while the real cause was a field type mismatch.
+		return workerClaims{}, fmt.Errorf("%w (envelope fallback: %v)", hostedErr, err)
+	}
+	return workerClaims{}, err
 }
 
 func parseHostedJSONWorkerOutput(label, output string) (workerClaims, error) {
 	candidates := hostedJSONTextCandidates(output)
+	var firstErr error
 	for i := len(candidates) - 1; i >= 0; i-- {
 		claims, err := ParseWorkerOutput(candidates[i])
 		if err == nil {
 			return claims, nil
+		}
+		if firstErr == nil {
+			firstErr = err
 		}
 	}
 	if len(candidates) > 0 {
 		if claims, err := ParseWorkerOutput(strings.Join(candidates, "\n")); err == nil {
 			return claims, nil
 		}
+	}
+	if firstErr != nil {
+		// firstErr comes from ParseWorkerOutput and is already self-labelled;
+		// stacking another "parse ... output" prefix produced the doubled
+		// messages users saw.
+		return workerClaims{}, firstErr
 	}
 	return workerClaims{}, fmt.Errorf("parse %s json output: no worker claims found", strings.TrimSpace(label))
 }
@@ -1161,27 +1252,75 @@ func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args 
 	return relPath
 }
 
+// safeHostedWorkerArgs prepares an arg vector for the debug artifact. It
+// redacts by argument identity, not position: the old positional rule
+// ("redact the last arg") was built for the OpenCode vector where the prompt
+// is last, but on the Claude vector the last arg is the --permission-mode
+// value — so debug files recorded `"--permission-mode", "<prompt: 4 bytes>"`
+// while the actual 19 KB prompt at index 1 was written to disk verbatim,
+// bypassing the diagnostic sanitizer entirely.
 func safeHostedWorkerArgs(args []string) []string {
 	if len(args) == 0 {
 		return nil
 	}
+	// Values following these flags are large or sensitive payloads, not
+	// diagnostics. Everything else (flag names, modes, agent names, paths)
+	// is diagnostic gold and stays readable.
+	redactedFlags := map[string]string{
+		"-p":                     "prompt",
+		"--print":                "prompt",
+		"--json-schema":          "schema",
+		"--system-prompt":        "system prompt",
+		"--append-system-prompt": "system prompt",
+	}
 	out := make([]string, len(args))
-	copy(out, args)
-	last := strings.TrimSpace(out[len(out)-1])
-	if last != "" {
-		out[len(out)-1] = fmt.Sprintf("<prompt: %d bytes>", len(last))
+	redactNext := ""
+	for i, arg := range args {
+		if redactNext != "" {
+			out[i] = fmt.Sprintf("<%s: %d bytes>", redactNext, len(arg))
+			redactNext = ""
+			continue
+		}
+		if label, ok := redactedFlags[arg]; ok {
+			out[i] = arg
+			redactNext = label
+			continue
+		}
+		out[i] = sanitizeWorkerDiagnosticOutput(arg)
+	}
+	// Fallback for vectors that pass the prompt as a bare trailing positional
+	// (the OpenCode `run ... <prompt>` shape): a long final arg that is not a
+	// flag value is the prompt.
+	if redactNext == "" && len(args) >= 2 {
+		last := args[len(args)-1]
+		prev := args[len(args)-2]
+		if !strings.HasPrefix(last, "-") && !strings.HasPrefix(prev, "--") && len(last) > 200 {
+			out[len(out)-1] = fmt.Sprintf("<prompt: %d bytes>", len(last))
+		}
 	}
 	return out
 }
 
+// workerOutputExcerpt keeps both ends of an oversized worker output. A
+// head-only excerpt spends its whole budget on the CLI's transport envelope
+// (usage counters, cache statistics, session ids) and cuts away the tail of the
+// worker's answer — which is exactly where a malformed field sits. The 27 July
+// M4L debug artifacts were unusable for that reason: diagnosing them needed the
+// raw CLI session transcript instead.
 func workerOutputExcerpt(value string) string {
 	value = sanitizeWorkerDiagnosticOutput(value)
-	const limit = 4000
+	const (
+		headLimit = 3000
+		tailLimit = 3000
+	)
 	runes := []rune(value)
-	if len(runes) <= limit {
+	if len(runes) <= headLimit+tailLimit {
 		return value
 	}
-	return string(runes[:limit]) + "\n[truncated]"
+	omitted := len(runes) - headLimit - tailLimit
+	return string(runes[:headLimit]) +
+		fmt.Sprintf("\n[... %d characters omitted ...]\n", omitted) +
+		string(runes[len(runes)-tailLimit:])
 }
 
 func safeDebugToken(value string) string {
