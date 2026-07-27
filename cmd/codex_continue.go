@@ -50,6 +50,11 @@ type codexClaimVerification struct {
 	Summary    string   `json:"summary"`
 	Checked    int      `json:"checked"`
 	Mismatches []string `json:"mismatches,omitempty"`
+	// ScannedFiles is the union of FilesCreated + FilesModified + TestsWritten
+	// from the loaded build claims (blanks trimmed and skipped) — the single
+	// notion of "what changed this phase" that checkAntiPatternGate scans.
+	// Populated on every return path where claims were successfully loaded.
+	ScannedFiles []string `json:"scanned_files,omitempty"`
 }
 
 type codexContinueVerificationReport struct {
@@ -2742,11 +2747,26 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 			Summary: missingClaimsSummary(manifest),
 		}
 	}
+
+	// The union of everything the claims file says changed this phase — the
+	// single notion of "what changed" that both mismatch checking above and
+	// checkAntiPatternGate below consume. Populated on every return path from
+	// this point on, since claims were successfully loaded.
+	scannedFiles := []string{}
+	for _, rel := range append(append(append([]string{}, claims.FilesCreated...), claims.FilesModified...), claims.TestsWritten...) {
+		rel = strings.TrimSpace(rel)
+		if rel == "" {
+			continue
+		}
+		scannedFiles = append(scannedFiles, rel)
+	}
+
 	if manifest.Present && manifest.Data.Phase > 0 && claims.BuildPhase != manifest.Data.Phase {
 		return codexClaimVerification{
-			Present: true,
-			Passed:  false,
-			Summary: fmt.Sprintf("builder claims build_phase %d does not match manifest phase %d; run `%s` to regenerate claims before `aether continue`", claims.BuildPhase, manifest.Data.Phase, buildForceRedispatchCommand(manifest.Data.Phase)),
+			Present:      true,
+			Passed:       false,
+			Summary:      fmt.Sprintf("builder claims build_phase %d does not match manifest phase %d; run `%s` to regenerate claims before `aether continue`", claims.BuildPhase, manifest.Data.Phase, buildForceRedispatchCommand(manifest.Data.Phase)),
+			ScannedFiles: scannedFiles,
 		}
 	}
 
@@ -2768,36 +2788,40 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 	}
 	if len(mismatches) > 0 {
 		return codexClaimVerification{
-			Present:    true,
-			Passed:     false,
-			Summary:    fmt.Sprintf("worker claims mismatch: %d missing paths", len(mismatches)),
-			Checked:    checked,
-			Mismatches: mismatches,
+			Present:      true,
+			Passed:       false,
+			Summary:      fmt.Sprintf("worker claims mismatch: %d missing paths", len(mismatches)),
+			Checked:      checked,
+			Mismatches:   mismatches,
+			ScannedFiles: scannedFiles,
 		}
 	}
 
 	if checked == 0 && manifestRequiresBuilderClaims(manifest) {
 		if manifestUsesSyntheticDispatch(manifest) {
 			return codexClaimVerification{
-				Present: true,
-				Passed:  false,
-				Summary: "builder claims file is empty because the build ran in simulated mode; rerun `aether build <phase>` without `--synthetic` before `aether continue` can advance",
-				Checked: 0,
+				Present:      true,
+				Passed:       false,
+				Summary:      "builder claims file is empty because the build ran in simulated mode; rerun `aether build <phase>` without `--synthetic` before `aether continue` can advance",
+				Checked:      0,
+				ScannedFiles: scannedFiles,
 			}
 		}
 		if manifestUsesExternalTask(manifest) {
 			return codexClaimVerification{
-				Present: true,
-				Passed:  true,
-				Summary: "builder claims file is empty (external-task mode); verification-led truth applies",
-				Checked: 0,
+				Present:      true,
+				Passed:       true,
+				Summary:      "builder claims file is empty (external-task mode); verification-led truth applies",
+				Checked:      0,
+				ScannedFiles: scannedFiles,
 			}
 		}
 		return codexClaimVerification{
-			Present: true,
-			Passed:  false,
-			Summary: emptyClaimsFailureSummary(manifest),
-			Checked: 0,
+			Present:      true,
+			Passed:       false,
+			Summary:      emptyClaimsFailureSummary(manifest),
+			Checked:      0,
+			ScannedFiles: scannedFiles,
 		}
 	}
 
@@ -2806,10 +2830,11 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 		summary = "builder claims file present but empty"
 	}
 	return codexClaimVerification{
-		Present: true,
-		Passed:  true,
-		Summary: summary,
-		Checked: checked,
+		Present:      true,
+		Passed:       true,
+		Summary:      summary,
+		Checked:      checked,
+		ScannedFiles: scannedFiles,
 	}
 }
 
@@ -2911,6 +2936,24 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		blockers = append(blockers, flagCheck.Detail)
 	}
 	checks = append(checks, flagCheck)
+
+	// anti_pattern / anti_pattern_executed gates — the live caller for the
+	// security gate that RESEARCH.md found had no live caller (T-160-01).
+	// anti_pattern_executed is in alwaysRunGates, so shouldSkipGate already
+	// returns false for it; only the findings gate participates in skip logic.
+	antiPatternCheck, antiPatternExecutedCheck := checkAntiPatternGate(verification.Claims.ScannedFiles)
+	if shouldSkipGate(priorGateResults, "anti_pattern") {
+		checks = append(checks, gateCheck{Name: "anti_pattern", Passed: true, Detail: "skipped: previously passed"})
+	} else {
+		if !antiPatternCheck.Passed {
+			blockers = append(blockers, antiPatternCheck.Detail)
+		}
+		checks = append(checks, antiPatternCheck)
+	}
+	if !antiPatternExecutedCheck.Passed {
+		blockers = append(blockers, antiPatternExecutedCheck.Detail)
+	}
+	checks = append(checks, antiPatternExecutedCheck)
 
 	// Record failures/successes in circuit breaker (LOOP-01)
 	for _, c := range checks {
