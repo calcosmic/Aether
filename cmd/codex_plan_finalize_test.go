@@ -1190,7 +1190,7 @@ func testWorkerPlanArtifact() *codexWorkerPlanArtifact {
 	return &bound
 }
 
-func testWorkerPlanArtifactWithConfidence(overall int, gaps []string) *codexWorkerPlanArtifact {
+func testWorkerPlanArtifactWithConfidence(overall planScore, gaps []string) *codexWorkerPlanArtifact {
 	artifact := testWorkerPlanArtifact()
 	artifact.Confidence = codexPlanConfidence{
 		Knowledge:    overall,

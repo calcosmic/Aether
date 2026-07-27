@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -74,12 +75,46 @@ type codexScoutReport struct {
 }
 
 type codexPlanConfidence struct {
-	Knowledge    int `json:"knowledge"`
-	Requirements int `json:"requirements"`
-	Risks        int `json:"risks"`
-	Dependencies int `json:"dependencies"`
-	Effort       int `json:"effort"`
-	Overall      int `json:"overall"`
+	Knowledge    planScore `json:"knowledge"`
+	Requirements planScore `json:"requirements"`
+	Risks        planScore `json:"risks"`
+	Dependencies planScore `json:"dependencies"`
+	Effort       planScore `json:"effort"`
+	Overall      planScore `json:"overall"`
+}
+
+// planScore is a 0-100 confidence value that also accepts the 0-1 fractional
+// scale models naturally produce. The 27 July 2026 M4L run lost a complete
+// 45KB phase-plan.json because the Route-Setter wrote "knowledge": 0.85 and
+// the plain int field hard-failed the whole decode — the same one-loose-field
+// failure class as the scout payload that morning. A value written with a
+// fractional form (a decimal point in the JSON literal) is treated as 0-1 and
+// rescaled; a bare integer is taken literally. Non-numeric input still errors.
+type planScore int
+
+func (s *planScore) UnmarshalJSON(data []byte) error {
+	var num json.Number
+	if err := json.Unmarshal(data, &num); err != nil {
+		return fmt.Errorf("confidence must be a number: %w", err)
+	}
+	text := num.String()
+	if !strings.ContainsAny(text, ".eE") {
+		value, err := num.Int64()
+		if err != nil {
+			return err
+		}
+		*s = planScore(value)
+		return nil
+	}
+	value, err := num.Float64()
+	if err != nil {
+		return err
+	}
+	if value <= 1.0 {
+		value *= 100
+	}
+	*s = planScore(math.Round(value))
+	return nil
 }
 
 type codexWorkerPlanArtifact struct {
@@ -1760,7 +1795,7 @@ func limitWorkerPlanPhases(phases []codexWorkerPlanPhase, limit int) []codexWork
 
 func evaluatePlanningLoop(confidence codexPlanConfidence, unresolvedGaps []string, opts codexPlanOptions, planDepth string) codexPlanningLoop {
 	loop := resolvePlanningLoopOptions(planDepth, opts)
-	overall := clampInt(confidence.Overall, 0, 100)
+	overall := clampInt(int(confidence.Overall), 0, 100)
 	gaps := limitStrings(uniqueSortedStrings(unresolvedGaps), 4)
 	loop.FinalConfidence = overall
 	loop.Gaps = gaps
@@ -1816,7 +1851,7 @@ func planningEvidenceSummary(confidence codexPlanConfidence, gaps []string) stri
 
 func planningEvidenceCount(confidence codexPlanConfidence) int {
 	count := 0
-	for _, score := range []int{confidence.Knowledge, confidence.Requirements, confidence.Risks, confidence.Dependencies, confidence.Effort, confidence.Overall} {
+	for _, score := range []int{int(confidence.Knowledge), int(confidence.Requirements), int(confidence.Risks), int(confidence.Dependencies), int(confidence.Effort), int(confidence.Overall)} {
 		if score > 0 {
 			count++
 		}
@@ -2291,7 +2326,7 @@ func mergePlanConfidence(base codexPlanConfidence, override codexPlanConfidence)
 	if override.Overall > 0 {
 		base.Overall = override.Overall
 	} else {
-		base.Overall = int(float64(base.Knowledge)*0.25 +
+		base.Overall = planScore(float64(base.Knowledge)*0.25 +
 			float64(base.Requirements)*0.25 +
 			float64(base.Risks)*0.20 +
 			float64(base.Dependencies)*0.15 +
@@ -2379,13 +2414,13 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 	}
 
 	confidence := codexPlanConfidence{
-		Knowledge:    clampInt(report.Confidence, 55, 96),
-		Requirements: clampInt(70+len(templates)*2, 68, 94),
-		Risks:        clampInt(88-len(survey.Issues)*4-len(report.Gaps)*5, 55, 90),
-		Dependencies: clampInt(60+len(survey.EntryPoints)*5+len(survey.Dependencies)*2, 58, 92),
-		Effort:       clampInt(80-len(templates), 62, 88),
+		Knowledge:    planScore(clampInt(report.Confidence, 55, 96)),
+		Requirements: planScore(clampInt(70+len(templates)*2, 68, 94)),
+		Risks:        planScore(clampInt(88-len(survey.Issues)*4-len(report.Gaps)*5, 55, 90)),
+		Dependencies: planScore(clampInt(60+len(survey.EntryPoints)*5+len(survey.Dependencies)*2, 58, 92)),
+		Effort:       planScore(clampInt(80-len(templates), 62, 88)),
 	}
-	confidence.Overall = int(float64(confidence.Knowledge)*0.25 +
+	confidence.Overall = planScore(float64(confidence.Knowledge)*0.25 +
 		float64(confidence.Requirements)*0.25 +
 		float64(confidence.Risks)*0.20 +
 		float64(confidence.Dependencies)*0.15 +
