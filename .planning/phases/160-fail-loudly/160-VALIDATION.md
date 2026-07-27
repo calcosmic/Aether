@@ -1,10 +1,11 @@
 ---
 phase: 160
 slug: fail-loudly
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-27
+updated: 2026-07-27
 ---
 
 # Phase 160 — Validation Strategy
@@ -39,28 +40,29 @@ Supplementary phase-gate commands (not `go test`): `go build ./cmd/aether`, `go 
 
 ## Per-Task Verification Map
 
-Task IDs are assigned by the planner; this map is keyed by requirement and must be
-re-keyed to task IDs once PLAN.md files exist.
+Re-keyed against the 8 plans as written (2026-07-27). Task-level IDs are assigned
+inside each PLAN.md; this map is keyed by requirement → plan → command.
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | 1 | RETIRE-01 | — | N/A | e2e | `go build ./cmd/aether && aether integrity` | ✅ | ⬜ pending |
-| TBD | TBD | 1 | RETIRE-02/03 | — | N/A | invariant | `git diff --stat -- .aether/ts-host .aether/ts` returns empty | ✅ | ⬜ pending |
-| TBD | TBD | 1 | RETIRE-04 | — | N/A | unit + doc | `go test ./cmd -run TestPolicySchemaValidation -count=1` + ledger file present | ❌ W0 | ⬜ pending |
-| TBD | TBD | 1 | LOUD-01 | — | N/A | static | `go test ./cmd -run TestSurveyLoadAbsentAndUncalled -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | LOUD-02 | T-160-01 | Critical secret finding in a changed file causes the continue gate to report a non-passing result | integration | `go test ./cmd -run TestContinueAntiPatternGate -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | LOUD-03 | — | N/A | static | `go test ./cmd -run TestCommandCallsMatchCobraContracts -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | LOUD-04 | — | N/A | self-test | `go test ./cmd -run TestAuditDetectsPositionalDrift -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | LOUD-05 | — | N/A | integration | `go test ./cmd -run TestCommandCallsMatchCobraContracts -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | LOUD-06 | — | N/A | invariant | `go test ./cmd -run TestLiveWrapperStderrSuppression -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | LOUD-07 | — | N/A | static/doc | `go test ./cmd -run TestDocsDoNotClaimConsolidationRunsToday -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | LOUD-08 | — | N/A | existing harness | `go test ./cmd -run TestCommandWrappersReferenceRealYamlSources -count=1` | ✅ harness / ❌ fixture | ⬜ pending |
-| TBD | TBD | 3 | D-03/D-04/D-05 (debug trio) | T-160-02 | Debug artifacts written on timeout and non-zero exit reuse existing redaction; no raw unsanitized provider output | unit | `go test ./pkg/codex -run TestWorkerDebug -count=1` | ❌ W0 | ⬜ pending |
+| Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
+|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
+| 160-01 | 1 | RETIRE-04 (safety net) | — | N/A | unit + doc | `go test ./cmd -run TestPolicySchemaRequiredFields -count=1` + `.aether/docs/retired-tests-ledger.md` present | ❌ W0 | ⬜ pending |
+| 160-02 | 1 | LOUD-01 | — | N/A | static | `go test ./cmd -run TestSurveyLoadAbsentAndUncalled -count=1` | ❌ W0 | ⬜ pending |
+| 160-02 | 1 | LOUD-03 | — | N/A | static | `go test ./cmd -run TestCommandCallsMatchCobraContracts -count=1` (delivered by 160-07) | ❌ W0 | ⬜ pending |
+| 160-03 | 1 | LOUD-06 | — | N/A | invariant | `go test ./cmd -run TestLiveWrapperStderrSuppressionCount -count=1` | ❌ W0 | ⬜ pending |
+| 160-03 | 1 | LOUD-07 | — | N/A | static/doc | `go test ./cmd -run TestDocsDoNotClaimConsolidationRunsToday -count=1` | ❌ W0 | ⬜ pending |
+| 160-04 | 1 | LOUD-02 | T-160-01 | A critical secret finding in a changed file makes the continue gate report a non-passing result; inability to scan hard-blocks | integration | `go test ./cmd -run 'TestContinueAntiPatternGate\|TestAntiPatternScanFailureHardBlocks' -count=1` | ❌ W0 | ⬜ pending |
+| 160-05 | 1 | LOUD-09 | T-160-02 | Debug writes on timeout and non-zero exit reuse the existing redaction/sanitization path; no raw unsanitized provider output reaches disk | unit | `go test ./pkg/codex -run TestWriteHostedWorkerOutputDebug -count=1` and `go test ./cmd -run TestDataCleanWorkerDebug -count=1` | ❌ W0 | ⬜ pending |
+| 160-06 | 2 | RETIRE-01/02/03 | — | N/A | e2e + invariant | `go test ./cmd -run TestRetiredPackagesStayRetired -count=1`; `go build ./cmd/aether && aether integrity`; `git diff --stat -- .aether/ts-host .aether/ts` empty | ✅ / ❌ W0 | ⬜ pending |
+| 160-07 | 2 | LOUD-04 | — | N/A | self-test | `go test ./cmd -run TestAuditDetectsPositionalDrift -count=1` | ❌ W0 | ⬜ pending |
+| 160-07 | 2 | LOUD-05 | — | N/A | integration (real execution, not regex) | `go test ./cmd -run TestCommandCallsExecuteAsDocumented -count=1` | ❌ W0 | ⬜ pending |
+| 160-07 | 2 | D-01 classification | — | Gate-classified calls must halt when they cannot execute | invariant | `go test ./cmd -run TestGateClassifiedCallsHaveGateWiring -count=1` | ❌ W0 | ⬜ pending |
+| 160-08 | 2 | LOUD-08 | — | N/A | static | `go test ./cmd -run TestSlashCommandGuidancePointsAtRealCommands -count=1` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
-Test names above are indicative; the planner may rename, but every requirement must
-retain at least one command that fails when the requirement is unmet (CLAUDE.md Definition of Done).
+Every requirement retains at least one command that fails when the requirement is
+unmet (CLAUDE.md Definition of Done). Executors may rename tests; they may not drop
+the failing-on-regression property.
 
 ---
 
@@ -89,11 +91,12 @@ retain at least one command that fails when the requirement is unmet (CLAUDE.md 
 
 ## Validation Sign-Off
 
-- [ ] All tasks have an automated verify command or a Wave 0 dependency
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references above
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s per task
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have an automated verify command or a Wave 0 dependency — verified against all 8 plans; no `MISSING` markers
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references above — Wave 0 gap-fillers are delivered as wave-1 tasks in plans 01–05
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s per task
+- [x] `nyquist_compliant: true` set in frontmatter
+- [ ] `wave_0_complete` — flips to true during execution, once the wave-1 test files exist and run
 
-**Approval:** pending
+**Approval:** approved 2026-07-27 (plan-checker: 0 blockers)

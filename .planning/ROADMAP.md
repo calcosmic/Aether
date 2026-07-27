@@ -311,7 +311,7 @@ Plans:
 ### Phase 160: Fail Loudly
 **Goal**: Every playbook and wrapper CLI call either succeeds or visibly fails -- no call is silently swallowed by a `/dev/null` redirect -- and the drift-detection test that should have caught this catches positional-argument drift, not only `--flag` drift. This is fixing seven confirmed-broken calls (`survey-load`, `check-antipattern`, `print-next-up`, `verify-claims`, `state-checkpoint`, `generate-progress-bar`, `skill-detect`) and closing a test blind spot, not writing new subsystems. Alongside it, `control-ts/` -- the one component confirmed genuinely dead, self-described in its own `package.json` as a retired prototype -- is deleted as a standalone first commit; `.aether/ts-host/` and `.aether/ts/` are explicitly kept, since deleting either breaks `go build` and hard-fails `aether publish`/`aether integrity`. Any edit this phase makes to `build.md` is limited to fixing a specific broken call's arguments -- the full method rewrite belongs to Phase 165, which depends on this phase completing first.
 **Depends on**: Phase 159 (v1.24 completion)
-**Requirements**: LOUD-01, LOUD-02, LOUD-03, LOUD-04, LOUD-05, LOUD-06, LOUD-07, LOUD-08, RETIRE-01, RETIRE-02, RETIRE-03, RETIRE-04
+**Requirements**: LOUD-01, LOUD-02, LOUD-03, LOUD-04, LOUD-05, LOUD-06, LOUD-07, LOUD-08, LOUD-09, RETIRE-01, RETIRE-02, RETIRE-03, RETIRE-04
 **Success Criteria** (what must be TRUE):
   1. A build or continue run where a previously-broken call fails (any of the seven: survey-load, check-antipattern, print-next-up, verify-claims, state-checkpoint, generate-progress-bar, skill-detect) now shows a visible error in the terminal -- not silence
   2. The Gatekeeper security gate (`check-antipattern`) actually executes during continue, and its pass/fail result visibly affects the continue outcome
@@ -320,7 +320,17 @@ Plans:
   5. Any guidance from `cmd/unblock_cmd.go` points at a command that actually exists and works -- not a slash command available on no platform
   6. `control-ts/` no longer exists in the repository; `.aether/ts-host/` and `.aether/ts/` are unchanged; `go build`, `aether publish`, and `aether integrity` all still succeed after the deletion
   7. *(Code-verifiable only)*: any test removed with `control-ts/` is recorded in a ledger as dead-with-no-replacement, or its coverage is named as continuing in a specific surviving test
-**Plans**: TBD
+**Plans**: 8 plans in 2 waves
+
+Plans:
+- [ ] 160-01-PLAN.md — RETIRE-04 safety net: Go policy schema test + retired-tests ledger (wave 1)
+- [ ] 160-02-PLAN.md — LOUD-01/03: correct the six broken documented call sites + survey-load absence test (wave 1)
+- [ ] 160-03-PLAN.md — LOUD-06/07: correct the consolidation-runs doc claims + stderr-suppression invariant (wave 1)
+- [ ] 160-04-PLAN.md — LOUD-02: wire check-antipattern into the live continue gate pipeline (wave 1)
+- [ ] 160-05-PLAN.md — D-03/04/05: worker debug artifacts on every failure mode, capped, worktree-safe (wave 1)
+- [ ] 160-06-PLAN.md — RETIRE-01/02/03/04: delete control-ts as a standalone commit, prove ts-host/ts survive (wave 2, needs 01)
+- [ ] 160-07-PLAN.md — LOUD-04/05 + D-01: positional-drift execution audit + gate/enrichment classification (wave 2, needs 02, 04)
+- [ ] 160-08-PLAN.md — LOUD-08 (D-02): build the /ant-unblock wrapper on Claude + OpenCode (wave 2, needs 03)
 
 ### Phase 161: Cheap Models By Design
 **Goal**: `colony/policies/model-routing.yaml` already maps every caste to a model tier -- builders, watchers, scouts, and surveyors to the cheap tier; oracle, architect, route-setter, and archaeologist to the expensive one. It has zero readers. This phase wires an existing, fully-written YAML to dispatch; it is not writing new routing logic. `colony/` also gets distributed, since `cmd/policy_loader.go:19` currently resolves a relative path and nothing embeds, publishes, or installs `colony/` to `~/.aether/system/colony` -- so every policy silently falls back to compiled defaults the moment Aether runs outside this repo.
