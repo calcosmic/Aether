@@ -199,15 +199,31 @@ func TestContinueAntiPatternGateIsWiredIntoThePipeline(t *testing.T) {
 
 	report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), nil)
 
-	names := map[string]bool{}
+	// Asserting only that checks NAMED "anti_pattern" appear is not enough: two
+	// literal gateCheck{Name: "anti_pattern", Passed: true} structs substituted
+	// for the producer call satisfy that and the gate never runs. CLAUDE.md's
+	// Definition of Done says it directly — "a test that only checks for a named
+	// section cannot catch its replacement". So compare the pipeline's checks
+	// against what checkAntiPatternGate itself produces for the same input; a
+	// stub diverges on Detail even when it matches on Name and Passed.
+	wantFindings, wantExecuted := checkAntiPatternGate(verification.Claims.ScannedFiles)
+
+	got := map[string]gateCheck{}
 	for _, c := range report.Checks {
-		names[c.Name] = true
+		got[c.Name] = c
 	}
-	if !names["anti_pattern"] {
-		t.Error("runCodexContinueGates report is missing the 'anti_pattern' check — the security gate call site may have been removed")
-	}
-	if !names["anti_pattern_executed"] {
-		t.Error("runCodexContinueGates report is missing the 'anti_pattern_executed' check — the security gate call site may have been removed")
+
+	for _, want := range []gateCheck{wantFindings, wantExecuted} {
+		have, ok := got[want.Name]
+		if !ok {
+			t.Fatalf("runCodexContinueGates report is missing the %q check — the security gate call site has been removed from the continue pipeline", want.Name)
+		}
+		if have.Passed != want.Passed {
+			t.Errorf("%s: pipeline reported Passed=%v but checkAntiPatternGate produced Passed=%v — the pipeline is not using the real producer", want.Name, have.Passed, want.Passed)
+		}
+		if have.Detail != want.Detail {
+			t.Errorf("%s: pipeline Detail %q does not match checkAntiPatternGate's %q — the call site appears to be stubbed rather than calling the producer", want.Name, have.Detail, want.Detail)
+		}
 	}
 }
 
