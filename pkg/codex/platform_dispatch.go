@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -1015,10 +1016,23 @@ waitLoop:
 		if duration >= time.Second {
 			reportedTimeout = duration.Round(time.Second)
 		}
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "timeout", Duration: duration, RawOutput: safeRawOutput, Error: fmt.Errorf("worker timeout after %v", reportedTimeout)}, nil
+		timeoutErr := fmt.Errorf("worker timeout after %v", reportedTimeout)
+		if debugPath := writeHostedWorkerOutputDebug(workerTrackingRoot(config), label, config, args, stdout.String(), stderr.String(), timeoutErr, hostedWorkerDebugDetails{Duration: duration, ExitCode: -1, FailureMode: "timeout"}); debugPath != "" {
+			timeoutErr = fmt.Errorf("%w (debug: %s)", timeoutErr, debugPath)
+		}
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "timeout", Duration: duration, RawOutput: safeRawOutput, Error: timeoutErr}, nil
 	}
 	if waitErr != nil {
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: classifyHostedExecutionError(label, waitErr, stderr.String(), running.Observed())}, nil
+		execErr := classifyHostedExecutionError(label, waitErr, stderr.String(), running.Observed())
+		exitCode := -1
+		var exitError *exec.ExitError
+		if errors.As(waitErr, &exitError) {
+			exitCode = exitError.ExitCode()
+		}
+		if debugPath := writeHostedWorkerOutputDebug(workerTrackingRoot(config), label, config, args, stdout.String(), stderr.String(), execErr, hostedWorkerDebugDetails{Duration: duration, ExitCode: exitCode, FailureMode: "non_zero_exit"}); debugPath != "" {
+			execErr = fmt.Errorf("%w (debug: %s)", execErr, debugPath)
+		}
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: execErr}, nil
 	}
 	// Provider failures arrive as well-formed JSON on stdout with exit code 0,
 	// so they reach this point looking like output to parse. Detect them
@@ -1029,7 +1043,7 @@ waitLoop:
 		if strings.EqualFold(label, "opencode") && looksLikeOpenCodeLocalServerFailure(providerErr.URL+" "+providerErr.Message) {
 			err = fmt.Errorf("%w; the local OpenCode server rejected the run request — ensure OpenCode is running for `opencode run`, or set AETHER_WORKER_PLATFORM=claude/codex", providerErr)
 		}
-		if debugPath := writeHostedWorkerOutputDebug(config.Root, label, config, args, stdout.String(), stderr.String(), err); debugPath != "" {
+		if debugPath := writeHostedWorkerOutputDebug(workerTrackingRoot(config), label, config, args, stdout.String(), stderr.String(), err, hostedWorkerDebugDetails{Duration: duration, ExitCode: -1, FailureMode: "provider_error_envelope"}); debugPath != "" {
 			err = fmt.Errorf("%w (debug: %s)", err, debugPath)
 		}
 		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: err}, nil
@@ -1037,7 +1051,7 @@ waitLoop:
 	claims, parseErr := parseHostedWorkerOutput(label, rawOutput)
 	if parseErr != nil {
 		err := classifyWorkerFinalMessageError("parse worker output", parseErr, running.Observed())
-		if debugPath := writeHostedWorkerOutputDebug(config.Root, label, config, args, stdout.String(), stderr.String(), parseErr); debugPath != "" {
+		if debugPath := writeHostedWorkerOutputDebug(workerTrackingRoot(config), label, config, args, stdout.String(), stderr.String(), parseErr, hostedWorkerDebugDetails{Duration: duration, ExitCode: -1, FailureMode: "parse_failure"}); debugPath != "" {
 			err = fmt.Errorf("%w (debug: %s)", err, debugPath)
 		}
 		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: err}, nil
@@ -1216,7 +1230,25 @@ func isWorkerClaimsMap(value map[string]interface{}) bool {
 	return matches >= 2
 }
 
-func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args []string, stdoutText, stderrText string, cause error) string {
+// hostedWorkerDebugDetails carries per-failure-mode facts that the debug
+// writer cannot infer from config, args, or cause alone. Kept as a struct
+// rather than positional parameters so a fifth failure mode doesn't require
+// a fifth argument at every call site.
+type hostedWorkerDebugDetails struct {
+	// Duration is the worker's elapsed wall-clock time.
+	Duration time.Duration
+	// ExitCode is the subprocess exit status. Use -1 when no exit code is
+	// available (timeout, provider error envelope, parse failure) rather
+	// than a fabricated 0, so a reader never has to guess whether the
+	// field was absent or genuinely zero.
+	ExitCode int
+	// FailureMode is one of "timeout", "non_zero_exit",
+	// "provider_error_envelope", "parse_failure" — lets a reader tell the
+	// four failure paths apart without inferring from the error text.
+	FailureMode string
+}
+
+func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args []string, stdoutText, stderrText string, cause error, details hostedWorkerDebugDetails) string {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		return ""
@@ -1229,18 +1261,22 @@ func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args 
 	filename := fmt.Sprintf("%s-%s-%d.json", safeDebugToken(label), safeDebugToken(config.WorkerName), now.UnixNano())
 	relPath := filepath.ToSlash(filepath.Join(".aether", "data", "worker-debug", filename))
 	payload := map[string]interface{}{
-		"created_at":     now.Format(time.RFC3339Nano),
-		"platform":       strings.TrimSpace(label),
-		"worker_name":    strings.TrimSpace(config.WorkerName),
-		"caste":          strings.TrimSpace(config.Caste),
-		"task_id":        strings.TrimSpace(config.TaskID),
-		"agent_name":     strings.TrimSpace(config.AgentName),
-		"args":           safeHostedWorkerArgs(args),
-		"stdout_bytes":   len(stdoutText),
-		"stderr_bytes":   len(stderrText),
-		"stdout_excerpt": workerOutputExcerpt(stdoutText),
-		"stderr_excerpt": workerOutputExcerpt(stderrText),
-		"error":          sanitizeWorkerDiagnosticOutput(cause.Error()),
+		"created_at":      now.Format(time.RFC3339Nano),
+		"platform":        strings.TrimSpace(label),
+		"worker_name":     strings.TrimSpace(config.WorkerName),
+		"caste":           strings.TrimSpace(config.Caste),
+		"task_id":         strings.TrimSpace(config.TaskID),
+		"agent_name":      strings.TrimSpace(config.AgentName),
+		"args":            safeHostedWorkerArgs(args),
+		"stdout_bytes":    len(stdoutText),
+		"stderr_bytes":    len(stderrText),
+		"stdout_excerpt":  workerOutputExcerpt(stdoutText),
+		"stderr_excerpt":  workerOutputExcerpt(stderrText),
+		"error":           sanitizeWorkerDiagnosticOutput(cause.Error()),
+		"duration_ms":     details.Duration.Milliseconds(),
+		"exit_code":       details.ExitCode,
+		"provider_run_id": strings.TrimSpace(config.ProviderRunID),
+		"failure_mode":    strings.TrimSpace(details.FailureMode),
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
