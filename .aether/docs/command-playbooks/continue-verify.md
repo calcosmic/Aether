@@ -189,7 +189,7 @@ Record: exit code, any errors. **STOP if fails.**
 
 After build check completes, write gate result:
 ```bash
-aether gate-results-write --name "build_check" --passed {true/false} --detail "{summary}"
+aether gate-results-write --name "build_check" --passed={true/false} --detail "{summary}"
 ```
 
 **Phase 2: Type Check** (if command exists):
@@ -198,7 +198,7 @@ Record: error count. Report all type errors.
 
 After type check completes, write gate result:
 ```bash
-aether gate-results-write --name "type_check" --passed {true/false} --detail "{summary}"
+aether gate-results-write --name "type_check" --passed={true/false} --detail "{summary}"
 ```
 
 **Phase 3: Lint Check** (if command exists):
@@ -207,7 +207,7 @@ Record: warning count, error count.
 
 After lint check completes, write gate result:
 ```bash
-aether gate-results-write --name "lint_check" --passed {true/false} --detail "{summary}"
+aether gate-results-write --name "lint_check" --passed={true/false} --detail "{summary}"
 ```
 
 **Phase 4: Test Check** (if command exists):
@@ -218,7 +218,7 @@ Record: pass count, fail count, exit code. **STOP if fails.**
 
 After test check completes, write gate result:
 ```bash
-aether gate-results-write --name "tests_pass" --passed {true/false} --detail "{summary of pass/fail counts}"
+aether gate-results-write --name "tests_pass" --passed={true/false} --detail "{summary of pass/fail counts}"
 ```
 
 **Coverage Check** (if coverage command exists AND phase mode is not `discovery`):
@@ -342,7 +342,7 @@ Note: Professional security scanning happens in Step 1.8 (Gatekeeper for CVEs) a
 
 After secrets scan completes, write gate result:
 ```bash
-aether gate-results-write --name "secrets_check" --passed {true/false} --detail "{summary of secrets found or clean}"
+aether gate-results-write --name "secrets_check" --passed={true/false} --detail "{summary of secrets found or clean}"
 ```
 
 **Phase 6: Diff Review**:
@@ -351,7 +351,7 @@ Review changed files for unintended modifications.
 
 After diff review completes, write gate result:
 ```bash
-aether gate-results-write --name "diff_review" --passed {true/false} --detail "{summary of files changed or issues found}"
+aether gate-results-write --name "diff_review" --passed={true/false} --detail "{summary of files changed or issues found}"
 ```
 
 **Success Criteria Check:**
@@ -448,7 +448,7 @@ Proceeding to gate checks...
 
 Write gate results for all verification phases as passed (ensures gate results reflect the successful run):
 ```bash
-aether gate-results-write --name "verification_loop" --passed true --detail "All verification phases passed"
+aether gate-results-write --name "verification_loop" --passed=true --detail "All verification phases passed"
 ```
 
 Continue to Step 1.5.3.

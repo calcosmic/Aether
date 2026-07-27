@@ -224,7 +224,7 @@ Store this as `ai_description` for the commit message.
 #### Step 2.4.2: Generate Enhanced Commit Message
 
 ```bash
-aether generate-commit-message "contextual" {phase_id} "{phase_name}" "{ai_description}" {plan_number}
+aether generate-commit-message --type contextual --scope "{phase_id}-{plan_number}" --subject "{phase_name}" --body "{ai_description}"
 ```
 
 Parse the returned JSON to extract:

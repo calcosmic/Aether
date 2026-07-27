@@ -222,7 +222,7 @@ Check for unresolved blocker flags on the requested phase:
 
 Run using the Bash tool with description "Checking for blockers...":
 ```bash
-aether flag-check-blockers {phase_number}
+aether flag-check-blockers
 ```
 
 Parse the JSON result (`.result.blockers`):
