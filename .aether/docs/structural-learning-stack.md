@@ -11,7 +11,9 @@ colony wisdom that workers can act on. Each stage adds structure: trust scores q
 reliability, the graph records relationships between instincts, curation ants clean and
 promote, and the event bus connects everything loosely.
 
-The stack runs automatically at phase-end and seal — workers never call it directly.
+The stack is invoked through the `consolidation-phase-end` and `consolidation-seal`
+subcommands, which no lifecycle command calls yet (Phase 162 wires this) — workers
+never call it directly either.
 
 ---
 
@@ -200,15 +202,23 @@ All steps are non-blocking — a failure in one step is logged and execution con
 
 ### 7. Consolidation Pipeline
 
+> **Wiring status:** Both modes below exist as working CLI subcommands but neither
+> is invoked by any lifecycle command today. Wiring them into `/ant-continue` and
+> `/ant-seal` is Phase 162's scope.
+
 Two consolidation modes, each calling into the curation ants.
 
 **Phase-end (lightweight) — `consolidation-phase-end`:**
 
-Runs at the end of every phase (`/ant-continue`). Executes three ants only: `nurse → herald → janitor`. Publishes a `consolidation.phase_end` event on the event bus. All three steps are non-blocking.
+The lightweight mode intended for phase end, currently invoked manually only — no
+lifecycle command calls it yet (Phase 162 wires this). Executes three ants only:
+`nurse → herald → janitor`. Publishes a `consolidation.phase_end` event on the
+event bus. All three steps are non-blocking.
 
 **Seal (full) — `consolidation-seal`:**
 
-Runs once during `/ant-seal`. Executes five steps:
+The full mode intended for seal, currently invoked manually only — no lifecycle
+command calls it yet (Phase 162 wires this). Executes five steps:
 
 1. `curation-run` — full 8-ant orchestration
 2. `instinct-decay-all` — final trust decay pass across all active instincts
@@ -224,8 +234,8 @@ All steps are non-blocking. The seal report path is returned in the output.
 
 | Trigger | Stack call | Effect |
 |---------|-----------|--------|
-| `/ant-continue` | `consolidation-phase-end` | nurse + herald + janitor; phase_end event |
-| `/ant-seal` | `consolidation-seal` | full 8-ant curation + decay + archive + seal event + report |
+| Manual only — not wired to any lifecycle command yet (Phase 162) | `consolidation-phase-end` | nurse + herald + janitor; phase_end event |
+| Manual only — not wired to any lifecycle command yet (Phase 162) | `consolidation-seal` | full 8-ant curation + decay + archive + seal event + report |
 | `/ant-build` (pattern capture) | `learning-observe` | Records observation with trust score |
 | `colony-prime` | `instinct-read-trusted` | Injects trusted instincts into worker prompts |
 
