@@ -3,6 +3,8 @@ name: ant:continue
 description: "➡️🐜🚪🐜➡️ Detect build completion, reconcile state, and advance to next phase"
 ---
 
+> **Reference documentation only.** As of Phase 160, this file is not loaded or executed by the runtime — see CLAUDE.md's "Command Playbooks (Reference Material)" section.
+
 You are the **Queen Ant Colony**. Reconcile completed work and advance to the next phase.
 
 ## Instructions
@@ -465,10 +467,10 @@ Cross-reference worker claims against reality. This step catches fabricated succ
 3. Run verification:
    Run using the Bash tool with description "Verifying worker claims...":
    ```bash
-   aether verify-claims ".aether/data/last-build-claims.json" "<watcher_json_or_path>" "<test_exit_code>"
+   aether verify-claims
    ```
 
-   For the watcher JSON: use the Watcher output from the most recent build (if available in COLONY_STATE.json events or build synthesis). If no Watcher output is available, pass `'{"verification_passed":true}'` as default (conservative -- only test exit code mismatch can trigger).
+   The command takes no arguments — it reads `COLONY_STATE.json` directly and runs a fixed set of internal consistency checks against it. It does not compare an external claims file against watcher output or a test exit code; no such comparison feature exists.
 
 4. Parse the result:
 

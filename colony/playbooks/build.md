@@ -42,7 +42,7 @@ Display active pheromones table via `aether pheromone-display`.
 
 ### Step 4.0: Load Territory Survey
 
-Run `aether survey-load "{phase_name}"` and load relevant survey documents based on phase type.
+Load relevant survey documents based on phase type. (No `survey-load` subcommand exists under `aether` in the Go runtime — this step describes intent only, not a runnable command.)
 
 ### Step 4.1: Archaeologist Pre-Build Scan
 
