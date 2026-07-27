@@ -57,6 +57,7 @@
     "status",
     "swarm",
     "tunnels",
+    "unblock",
     "update",
     "verify-castes",
     "watch"
@@ -119,6 +120,7 @@
     "status",
     "swarm",
     "tunnels",
+    "unblock",
     "update",
     "verify-castes",
     "watch"
@@ -181,6 +183,7 @@
     "status",
     "swarm",
     "tunnels",
+    "unblock",
     "update",
     "verify-castes",
     "watch"
@@ -243,6 +246,7 @@
     "status",
     "swarm",
     "tunnels",
+    "unblock",
     "update",
     "verify-castes",
     "watch"

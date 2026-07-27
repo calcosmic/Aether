@@ -467,6 +467,7 @@ func commandGuideLiteralCommands() []string {
 		"skill-create",
 		"status",
 		"tunnels",
+		"unblock",
 		"update",
 		"verify-castes",
 		"watch",
