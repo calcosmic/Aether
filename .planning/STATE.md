@@ -4,8 +4,8 @@ milestone: v1.25
 milestone_name: Switch It On
 status: executing
 stopped_at: Phase 160 context gathered
-last_updated: "2026-07-27T13:34:36.191Z"
-last_activity: 2026-07-27 -- Phase 160 planning complete
+last_updated: "2026-07-27T13:58:51.659Z"
+last_activity: 2026-07-27 -- Phase 160 execution started
 progress:
   total_phases: 27
   completed_phases: 0
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-25)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 160 — Fail Loudly
+**Current focus:** Phase 160 — fail-loudly
 **Milestone:** v1.25 Switch It On — ROADMAPPED (rebuilt twice, awaiting user approval)
 **Previous milestone:** v1.24 Hybrid Architecture Salvage (shipped 2026-05-24, phases 152-159)
 **Product version:** v1.0.41
 
 ## Current Position
 
-Phase: 160 of 171 (Fail Loudly)
-Plan: TBD — not yet planned
-Status: Ready to execute
-Last activity: 2026-07-27 -- Phase 160 planning complete
+Phase: 160 (fail-loudly) — EXECUTING
+Plan: 1 of 8
+Status: Executing Phase 160
+Last activity: 2026-07-27 -- Phase 160 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
