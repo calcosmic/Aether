@@ -1,7 +1,7 @@
 # AGENTS.md -- Aether Development Guide (Codex CLI)
 
 > **Current Version:** v1.0.41
-> **Last Updated:** 2026-05-20
+> **Last Updated:** 2026-07-27
 > **Platform:** Codex CLI (OpenAI)
 
 This file provides project-level instructions for Codex CLI, equivalent to
@@ -896,7 +896,7 @@ Key additions:
 - JSONL event bus with pub/sub and TTL cleanup
 - Standalone instinct storage with full provenance
 - 8 curation ants with orchestrated execution
-- Lifecycle integration: phase-end at `aether continue`, full at `aether seal`
+- Lifecycle integration: `consolidation-phase-end` and `consolidation-seal` are available as `aether` subcommands; `aether continue` and `aether seal` do not invoke either one yet (Phase 162 wires this)
 
 ### Curation Ants
 

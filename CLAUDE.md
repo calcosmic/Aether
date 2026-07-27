@@ -835,7 +835,7 @@ Key additions:
 - Standalone instinct storage with full provenance
 - jq-based graph layer for instinct relationships
 - 8 curation ants with orchestrated execution
-- Lifecycle integration: phase-end at /ant-continue, full at /ant-seal
+- Lifecycle integration: `consolidation-phase-end` and `consolidation-seal` exist as working CLI subcommands; no lifecycle command invokes either one yet (Phase 162 wires this)
 
 ### Curation Ants
 
