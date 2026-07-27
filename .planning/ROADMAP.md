@@ -330,7 +330,7 @@ Plans:
 - [x] 160-05-PLAN.md — D-03/04/05: worker debug artifacts on every failure mode, capped, worktree-safe (wave 1)
 - [x] 160-06-PLAN.md — RETIRE-01/02/03/04: delete control-ts as a standalone commit, prove ts-host/ts survive (wave 2, needs 01)
 - [x] 160-07-PLAN.md — LOUD-04/05 + D-01: positional-drift execution audit + gate/enrichment classification (wave 2, needs 02, 04)
-- [ ] 160-08-PLAN.md — LOUD-08 (D-02): build the /ant-unblock wrapper on Claude + OpenCode (wave 2, needs 03)
+- [x] 160-08-PLAN.md — LOUD-08 (D-02): build the /ant-unblock wrapper on Claude + OpenCode (wave 2, needs 03)
 
 ### Phase 161: Cheap Models By Design
 **Goal**: `colony/policies/model-routing.yaml` already maps every caste to a model tier -- builders, watchers, scouts, and surveyors to the cheap tier; oracle, architect, route-setter, and archaeologist to the expensive one. It has zero readers. This phase wires an existing, fully-written YAML to dispatch; it is not writing new routing logic. `colony/` also gets distributed, since `cmd/policy_loader.go:19` currently resolves a relative path and nothing embeds, publishes, or installs `colony/` to `~/.aether/system/colony` -- so every policy silently falls back to compiled defaults the moment Aether runs outside this repo.
@@ -494,7 +494,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 157. TS Adapters & Oracle | v1.24 | 2/2 | Complete   | 2026-05-24 |
 | 158. Event Stream | v1.24 | 3/3 | Complete | 2026-05-24 |
 | 159. End-to-End Acceptance | v1.24 | 3/3 | Complete | 2026-05-24 |
-| 160. Fail Loudly | v1.25 | 7/8 | In Progress|  |
+| 160. Fail Loudly | v1.25 | 8/8 | Complete   | 2026-07-27 |
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 0/TBD | Not started | - |
