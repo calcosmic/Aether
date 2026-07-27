@@ -1,3 +1,5 @@
+> **Reference documentation only.** As of Phase 160, this file is not loaded or executed by the runtime — see CLAUDE.md's "Command Playbooks (Reference Material)" section.
+
 ### Stage Audit Gate (Pre-Synthesis Check)
 
 **This gate runs before Step 5.9. All 4 prior playbook stages must have completed with "ok" status.**
@@ -397,10 +399,7 @@ Retry: /ant-swarm to auto-repair failed tasks, or /ant-flags to review blockers
 
 After displaying the BUILD SUMMARY (and optional verbose details), call the Next Up helper by running using the Bash tool with description "Displaying next steps...":
 ```bash
-state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json 2>/dev/null || echo "IDLE")
-current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
-total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/dev/null || echo "0")
-aether print-next-up "$state" "$current_phase" "$total_phases"
+aether print-next-up
 ```
 
 **Routing Note:** The state-based Next Up block above routes based on colony state. If verification failed or blockers exist, review `/ant-flags` before continuing.

@@ -1,3 +1,5 @@
+> **Reference documentation only.** As of Phase 160, this file is not loaded or executed by the runtime — see CLAUDE.md's "Command Playbooks (Reference Material)" section.
+
 ### Queen Spawn Decision
 
 The Queen selects castes using relevance scoring (`casteRelevanceScore`) and enforces a spawn budget (`queenMaxWorkersForBudget`). Required castes like `builder`, `watcher`, and `probe` are always included for build flows. See [caste-relevance-reference.md](caste-relevance-reference.md) for the full table.
@@ -217,7 +219,7 @@ skill_index_result=$(aether skill-index 2>/dev/null)
 
 Run using the Bash tool with description "Detecting codebase skills...":
 ```bash
-skill_detect_result=$(aether skill-detect "$(pwd)" 2>/dev/null)
+skill_detect_result=$(aether skill-detect)
 ```
 
 **Parse the JSON response:**
