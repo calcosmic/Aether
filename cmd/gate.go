@@ -410,6 +410,109 @@ func checkAllTasksCompleted(phaseNum int) gateCheck {
 	}
 }
 
+// checkAntiPatternGate scans the files a phase claims to have touched for
+// security antipatterns (hardcoded secrets, etc.) using the shared
+// scanFileForAntipatterns implementation, and returns two gate checks:
+//
+//   - "anti_pattern" (soft_block): fails when a critical finding is present.
+//     Before this function existed, "anti_pattern" was a fully specified gate
+//     name in gateClassifications/gateRecoveryTemplates/
+//     gateAutoResolveThresholds that no code anywhere produced -- this is the
+//     producer ROADMAP success criterion 2 requires.
+//   - "anti_pattern_executed" (hard_block): fails when the scan could not run
+//     at all (no store, unresolvable root, or a per-file scan error). Per
+//     D-01, a safety gate that cannot execute must never be reported as
+//     passing.
+//
+// Paths in files are resolved against the colony root using the same idiom
+// as effectiveGateAutoResolveThresholds: filepath.Dir(store.BasePath())
+// joined with "..". Do NOT use storage.ResolveAetherRoot -- the comment
+// above resolveTestCommand records it resolving to the wrong repository
+// under `go test`.
+func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
+	findingsCheck := gateCheck{Name: "anti_pattern"}
+	executedCheck := gateCheck{Name: "anti_pattern_executed"}
+
+	if store == nil {
+		executedCheck.Passed = false
+		executedCheck.Detail = "antipattern scan could not execute: no store initialized, colony root unresolvable"
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+		findingsCheck.Passed = true
+		findingsCheck.Detail = "antipattern scan did not run: no store initialized"
+		return findingsCheck, executedCheck
+	}
+
+	root := filepath.Join(filepath.Dir(store.BasePath()), "..")
+
+	var allCriticals []AntipatternFinding
+	scannedFiles := 0
+	var scanErrors []string
+
+	for _, f := range files {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		resolved := f
+		if !filepath.IsAbs(resolved) {
+			resolved = filepath.Join(root, f)
+		}
+		criticals, _, err := scanFileForAntipatterns(resolved)
+		if err != nil {
+			scanErrors = append(scanErrors, fmt.Sprintf("%s: %v", f, err))
+			continue
+		}
+		scannedFiles++
+		allCriticals = append(allCriticals, criticals...)
+	}
+
+	if len(scanErrors) > 0 {
+		executedCheck.Passed = false
+		executedCheck.Detail = fmt.Sprintf("antipattern scan could not execute for %d file(s): %s", len(scanErrors), strings.Join(scanErrors, "; "))
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+	} else if len(files) == 0 {
+		executedCheck.Passed = true
+		executedCheck.Detail = "no changed files were claimed for this phase; antipattern scan had nothing to scan"
+	} else {
+		executedCheck.Passed = true
+		executedCheck.Detail = fmt.Sprintf("antipattern scan executed successfully across %d file(s)", scannedFiles)
+	}
+
+	if len(allCriticals) > 0 {
+		distinctFiles := map[string]bool{}
+		var locations []string
+		for _, c := range allCriticals {
+			distinctFiles[c.File] = true
+			if len(locations) < 5 {
+				locations = append(locations, fmt.Sprintf("%s:%d", c.File, c.Line))
+			}
+		}
+		findingsCheck.Passed = false
+		findingsCheck.Detail = fmt.Sprintf("%d critical antipattern finding(s) across %d file(s): %s", len(allCriticals), len(distinctFiles), strings.Join(locations, ", "))
+		findingsCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		findingsCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+	} else {
+		// A pass detail that does not state the number scanned is
+		// unacceptable: it makes "scanned nothing" indistinguishable from
+		// "scanned everything and found nothing" (T-160-10).
+		findingsCheck.Passed = true
+		findingsCheck.Detail = fmt.Sprintf("scanned %d changed file(s), no critical patterns", scannedFiles)
+	}
+
+	return findingsCheck, executedCheck
+}
+
 // runPreBuildGates checks preconditions before dispatching a build.
 // Returns an error with the specific gate name if any check fails.
 // Note: Phase state validation is handled by validateCodexBuildState;
@@ -582,10 +685,11 @@ func gateRecoveryTemplate(name string) string {
 
 // alwaysRunGates lists gates that always execute regardless of prior results.
 var alwaysRunGates = map[string]bool{
-	"tests_pass":        true,
-	"flags":             true,
-	"watcher_veto":      true,
-	"no_critical_flags": true,
+	"tests_pass":            true,
+	"flags":                 true,
+	"watcher_veto":          true,
+	"no_critical_flags":     true,
+	"anti_pattern_executed": true,
 }
 
 // GateClassificationTier represents the severity tier of a gate.
@@ -608,12 +712,13 @@ type gateClassificationEntry struct {
 // This is a read-only constant -- no configuration can change these values.
 // Gatekeeper and watcher_veto are compile-time hard_block per D-06.
 var gateClassifications = map[string]gateClassificationEntry{
-	// hard_block gates (5): security, quality veto, human escalation, and pre-checks
-	"gatekeeper":        {hardBlock, "Security CVE findings require human judgment"},
-	"watcher_veto":      {hardBlock, "Watcher has final say by colony design"},
-	"flags":             {hardBlock, "Flags represent intentional human escalation"},
-	"tests_pass":        {hardBlock, "Broken build is always a hard block"},
-	"no_critical_flags": {hardBlock, "Critical errors existing is always a hard block"},
+	// hard_block gates (6): security, quality veto, human escalation, and pre-checks
+	"gatekeeper":            {hardBlock, "Security CVE findings require human judgment"},
+	"watcher_veto":          {hardBlock, "Watcher has final say by colony design"},
+	"flags":                 {hardBlock, "Flags represent intentional human escalation"},
+	"tests_pass":            {hardBlock, "Broken build is always a hard block"},
+	"no_critical_flags":     {hardBlock, "Critical errors existing is always a hard block"},
+	"anti_pattern_executed": {hardBlock, "A safety scan which could not run must never be reported as passing"},
 	// soft_block gates (6): quality findings that auto-resolve when non-critical
 	"auditor":           {softBlock, "Quality findings auto-resolve when non-critical"},
 	"complexity":        {softBlock, "Maintainability thresholds are advisory until verified"},
