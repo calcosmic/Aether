@@ -49,7 +49,7 @@
 **Where `build.md` is owned (CMD-05):** three phases touch `build.md` this milestone. **Phase 165 (Core Lifecycle Commands) is the sole structural owner** — it performs the full method-over-protocol rewrite. Phase 160 (Fail Loudly) may only make narrow, isolated edits to fix specific broken CLI call arguments inside it, and must merge *before* Phase 165, so the rewrite starts from corrected calls rather than stale ones. Phase 168 (Live Visibility) may only append a "what happens next" / visual-guidance layer on top of the file Phase 165 already restructured, and must merge *after* it. No other phase edits `build.md`'s structure. This ordering is enforced by the dependency chain below (165 depends on 160; 168 depends on 160 and, for this reason, effectively follows 165 in execution even though its formal dependency is the shared Phase 160 foundation — see the phase detail note).
 
 - [ ] **Phase 160: Fail Loudly** - Seven broken CLI calls fixed, drift detection catches positional-argument drift, stderr suppression removed where load-bearing; `control-ts/` deleted as a standalone opener; `.aether/ts-host/` and `.aether/ts/` explicitly kept and verified untouched. Only narrow, isolated `build.md` call-argument fixes here — see the `build.md` ownership note above
-- [ ] **Phase 161: Cheap Models By Design** - `model-routing.yaml` (fully written, zero readers) gets wired to dispatch; routing becomes visible and user-editable; `colony/` gets distributed so this works outside the Aether repo
+- [ ] **Phase 161: Cheap Models By Design** - DESCOPED 2026-07-28: no automatic model selection (user decision — see phase detail). Residual scope: `colony/` distribution + zero-reader policy file reckoning. Phase 163 executes next; "cheap models" is served by context/clarity work, not allocation
 - [ ] **Phase 162: Switch On Learning** - The complete but never-invoked consolidation pipeline runs at phase end and seal; `pkg/learn` vs `pkg/memory` is reconciled; the Hive Brain default is a written decision, not an accident
 - [ ] **Phase 163: Context Reaches Workers** - The context capsule, survey, phase research, `suggest-analyze`, and the approved charter reach a wrapper-spawned worker's actual prompt — at manifest level, measured, and inspectable by a person
 - [ ] **Phase 164: Research Feeds Planning** - The Queen decides whether a phase needs research and, when it does, a worker runs automatically using the existing `confidence-loop.ts` (kept, not rebuilt) rather than a stub the user pastes findings into
@@ -333,7 +333,17 @@ Plans:
 - [x] 160-08-PLAN.md — LOUD-08 (D-02): build the /ant-unblock wrapper on Claude + OpenCode (wave 2, needs 03)
 
 ### Phase 161: Cheap Models By Design
-**Goal**: `colony/policies/model-routing.yaml` already maps every caste to a model tier -- builders, watchers, scouts, and surveyors to the cheap tier; oracle, architect, route-setter, and archaeologist to the expensive one. It has zero readers. This phase wires an existing, fully-written YAML to dispatch; it is not writing new routing logic. `colony/` also gets distributed, since `cmd/policy_loader.go:19` currently resolves a relative path and nothing embeds, publishes, or installs `colony/` to `~/.aether/system/colony` -- so every policy silently falls back to compiled defaults the moment Aether runs outside this repo.
+**Goal**: > **DESCOPED 2026-07-28 (user decision, pre-planning):** automatic model selection is
+> rejected. The user's intent behind "usable daily on an inexpensive model" is
+> capability — the colony works well when the USER runs it on a cheap model — not
+> allocation. Phase 163 (the clarity work that actually serves that intent) executes
+> next instead. What survives of this phase: the `colony/` distribution gap and the
+> wire-or-delete reckoning for the seven zero-reader policy files (with
+> `model-routing.yaml`'s likely fate being deletion or a strictly manual opt-in —
+> never default-on routing). Requirements MODEL-01..06 need revision before any
+> planning here.
+>
+> Original goal (superseded): `colony/policies/model-routing.yaml` already maps every caste to a model tier -- builders, watchers, scouts, and surveyors to the cheap tier; oracle, architect, route-setter, and archaeologist to the expensive one. It has zero readers. This phase wires an existing, fully-written YAML to dispatch; it is not writing new routing logic. `colony/` also gets distributed, since `cmd/policy_loader.go:19` currently resolves a relative path and nothing embeds, publishes, or installs `colony/` to `~/.aether/system/colony` -- so every policy silently falls back to compiled defaults the moment Aether runs outside this repo.
 **Depends on**: Phase 160
 **Requirements**: MODEL-01, MODEL-02, MODEL-03, MODEL-04, MODEL-05, MODEL-06
 **Success Criteria** (what must be TRUE):
