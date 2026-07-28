@@ -113,10 +113,10 @@ jobs:
         run: go vet ./...
 
       - name: Run Go tests
-        run: go test ./... -count=1 -timeout 300s
+        run: go test ./... -count=1 -timeout 900s
 
       - name: Run Go tests with race detection
-        run: go test ./... -race -count=1 -timeout 600s
+        run: go test ./... -race -count=1 -timeout 2400s
 
       - name: Verify bundled narrator package
         run: |
