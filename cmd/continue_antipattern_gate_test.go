@@ -292,3 +292,49 @@ func TestAntiPatternScanFailureHardBlocks(t *testing.T) {
 		}
 	}
 }
+
+// Found during UAT of Phase 160, not by the plan's own tests.
+//
+// `scanFileForAntipatterns` returns clean (nil,nil,nil) for a file that does
+// not exist — correct for the CLI, where a phase may legitimately have deleted
+// the file. The gate originally inherited that and counted absent files as
+// scanned, reporting "antipattern scan executed successfully across 1 file(s)"
+// having read nothing. A security gate that reports success without running is
+// the exact failure this phase exists to eliminate, so it is pinned here.
+func TestAntiPatternGateDoesNotCountAbsentFilesAsScanned(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	t.Run("AllFilesAbsentHardBlocks", func(t *testing.T) {
+		findings, executed := checkAntiPatternGate([]string{"no/such/file.go", "also/missing.go"})
+		if executed.Passed {
+			t.Errorf("anti_pattern_executed passed when 0 of 2 claimed files could be read — the scan did not happen, so the gate must not report success. Detail: %q", executed.Detail)
+		}
+		if !strings.Contains(executed.Detail, "0 of 2") {
+			t.Errorf("detail should state how many of the claimed files were actually scanned, got: %q", executed.Detail)
+		}
+		if strings.Contains(findings.Detail, "scanned 2") {
+			t.Errorf("findings detail claims 2 files were scanned when none existed: %q", findings.Detail)
+		}
+	})
+
+	t.Run("PartialScanReportsBothCounts", func(t *testing.T) {
+		real := filepath.Join(tmpDir, "real.go")
+		if err := os.WriteFile(real, []byte("package main\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		findings, executed := checkAntiPatternGate([]string{real, "gone/missing.go"})
+		if !executed.Passed {
+			t.Errorf("one readable file is enough for the scan to have executed; got failure: %q", executed.Detail)
+		}
+		if !strings.Contains(executed.Detail, "absent") {
+			t.Errorf("an absent claimed file must be named in the detail so the operator can see it, got: %q", executed.Detail)
+		}
+		if !strings.Contains(findings.Detail, "1 of 2") {
+			t.Errorf("findings detail must distinguish scanned from claimed, got: %q", findings.Detail)
+		}
+	})
+}

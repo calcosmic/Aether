@@ -450,16 +450,29 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 
 	var allCriticals []AntipatternFinding
 	scannedFiles := 0
+	claimedFiles := 0
 	var scanErrors []string
+	var absentFiles []string
 
 	for _, f := range files {
 		f = strings.TrimSpace(f)
 		if f == "" {
 			continue
 		}
+		claimedFiles++
 		resolved := f
 		if !filepath.IsAbs(resolved) {
 			resolved = filepath.Join(root, f)
+		}
+		// scanFileForAntipatterns deliberately returns clean (nil,nil,nil) for
+		// a file that does not exist — correct for the CLI, where a phase may
+		// legitimately have deleted the file. But the gate must NOT count an
+		// absent file as scanned: doing so reports "scan executed successfully
+		// across 1 file(s)" when nothing was read, which is precisely the
+		// looks-like-it-ran-but-didn't failure this gate exists to prevent.
+		if _, statErr := os.Stat(resolved); statErr != nil {
+			absentFiles = append(absentFiles, f)
+			continue
 		}
 		criticals, _, err := scanFileForAntipatterns(resolved)
 		if err != nil {
@@ -478,12 +491,28 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 			"Fix manually and run /ant-continue",
 			"Run /ant-unblock for guided recovery",
 		}
-	} else if len(files) == 0 {
+	} else if claimedFiles == 0 {
 		executedCheck.Passed = true
 		executedCheck.Detail = "no changed files were claimed for this phase; antipattern scan had nothing to scan"
+	} else if scannedFiles == 0 {
+		// Files were claimed but not one could be read. Whatever the cause —
+		// wrong paths, a root-resolution mismatch, or claims describing work
+		// that never landed — the security scan did not happen, and a phase
+		// must not pass with its safety gate unexecuted (D-01).
+		executedCheck.Passed = false
+		executedCheck.Detail = fmt.Sprintf("antipattern scan executed against 0 of %d claimed file(s); none could be read (absent: %s)",
+			claimedFiles, strings.Join(absentFiles, ", "))
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
 	} else {
 		executedCheck.Passed = true
-		executedCheck.Detail = fmt.Sprintf("antipattern scan executed successfully across %d file(s)", scannedFiles)
+		executedCheck.Detail = fmt.Sprintf("antipattern scan executed across %d of %d claimed file(s)", scannedFiles, claimedFiles)
+		if len(absentFiles) > 0 {
+			executedCheck.Detail += fmt.Sprintf("; %d absent (deleted or wrong path): %s", len(absentFiles), strings.Join(absentFiles, ", "))
+		}
 	}
 
 	if len(allCriticals) > 0 {
@@ -507,7 +536,7 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 		// unacceptable: it makes "scanned nothing" indistinguishable from
 		// "scanned everything and found nothing" (T-160-10).
 		findingsCheck.Passed = true
-		findingsCheck.Detail = fmt.Sprintf("scanned %d changed file(s), no critical patterns", scannedFiles)
+		findingsCheck.Detail = fmt.Sprintf("scanned %d of %d claimed file(s), no critical patterns", scannedFiles, claimedFiles)
 	}
 
 	return findingsCheck, executedCheck
