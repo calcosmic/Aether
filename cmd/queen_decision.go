@@ -22,33 +22,33 @@ type QueenDecision struct {
 // QueenRecoveryPreview describes what would happen if recovery is needed for a gate.
 // Per D-02, D-04: generated for ALL gates (passing and failing).
 type QueenRecoveryPreview struct {
-	Classification    string `json:"classification"`     // FailureClassification: "recoverable", "requires-attempt", "blocking"
-	FirstAction       string `json:"first_action"`       // "retry", "escalate", "fixer_dispatch"
-	BudgetRemaining   int    `json:"budget_remaining"`
-	WouldAutoResolve  bool   `json:"would_auto_resolve"`  // based on tier == softBlock and budget > 0
-	WouldEscalate     bool   `json:"would_escalate"`      // true for hardBlock or exhausted budget
+	Classification   string `json:"classification"` // FailureClassification: "recoverable", "requires-attempt", "blocking"
+	FirstAction      string `json:"first_action"`   // "retry", "escalate", "fixer_dispatch"
+	BudgetRemaining  int    `json:"budget_remaining"`
+	WouldAutoResolve bool   `json:"would_auto_resolve"` // based on tier == softBlock and budget > 0
+	WouldEscalate    bool   `json:"would_escalate"`     // true for hardBlock or exhausted budget
 }
 
 // QueenStateFile persists the queen's decision list, budget snapshot, and escalation log.
 // Per D-11: stored as queen-state-{N}.json in the data directory.
 type QueenStateFile struct {
-	Phase                 int              `json:"phase"`
-	GeneratedAt           string           `json:"generated_at"`
-	Decisions             []QueenDecision  `json:"decisions"`
-	BudgetSnapshot        *RecoveryBudget  `json:"budget_snapshot,omitempty"`
+	Phase                 int               `json:"phase"`
+	GeneratedAt           string            `json:"generated_at"`
+	Decisions             []QueenDecision   `json:"decisions"`
+	BudgetSnapshot        *RecoveryBudget   `json:"budget_snapshot,omitempty"`
 	EscalationLog         []EscalationEntry `json:"escalation_log,omitempty"`
-	BreakerTrippedWorkers []string         `json:"breaker_tripped_workers,omitempty"`
+	BreakerTrippedWorkers []string          `json:"breaker_tripped_workers,omitempty"`
 }
 
 // EscalationEntry records a circuit breaker escalation event.
 // Per D-12: captures breaker state, tripped workers, and action taken.
 type EscalationEntry struct {
-	Timestamp         string   `json:"timestamp"`
-	GateName          string   `json:"gate_name,omitempty"`
-	WorkerName        string   `json:"worker_name,omitempty"`
-	BreakerTripped    []string `json:"breaker_tripped_workers"`
-	EscalationAction  string   `json:"escalation_action"` // "escalate_to_human", "skip_retry"
-	Rationale         string   `json:"rationale"`
+	Timestamp        string   `json:"timestamp"`
+	GateName         string   `json:"gate_name,omitempty"`
+	WorkerName       string   `json:"worker_name,omitempty"`
+	BreakerTripped   []string `json:"breaker_tripped_workers"`
+	EscalationAction string   `json:"escalation_action"` // "escalate_to_human", "skip_retry"
+	Rationale        string   `json:"rationale"`
 }
 
 // queenDecide produces a decision list for every gate in the gate report.

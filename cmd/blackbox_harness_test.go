@@ -709,6 +709,11 @@ func TestCLIPlanOnlyCompletionIsBoundAndIdempotent(t *testing.T) {
 			TaskID:        dispatch.TaskID,
 			Status:        "completed",
 			Summary:       dispatch.Name + " completed through compiled wrapper contract",
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"work complete"},
+			},
 		}
 		if dispatch.Caste == "builder" {
 			worker.FilesCreated = []string{"app.txt"}
@@ -837,6 +842,8 @@ func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) 
 // processes produce the replacement plan, the revision binds that evidence, and
 // the revised phase builds and verifies through real provider workers.
 func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	harness := newCLIBlackBox(t)
 	logPath := filepath.Join(filepath.Dir(harness.repo), "revision-adapter-invocations.jsonl")
 	providerEnv := map[string]string{
@@ -984,6 +991,8 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 }
 
 func TestCLICompiledInstallToSealJourney(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	harness := newCLIBlackBox(t)
 	providerEnv := map[string]string{
 		"AETHER_ACTIVE_PLATFORM":     "codex",
@@ -1093,6 +1102,8 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 }
 
 func TestCLICompiledInstallUpdateMigrationContract(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	harness := newCLIBlackBox(t)
 	install := harness.run(t, "install", "--package-dir", harness.sourceRoot, "--home-dir", harness.home, "--skip-build-binary")
 	assertBlackBoxSuccess(t, "install", install)

@@ -11,9 +11,9 @@ import (
 
 func TestFindingsInjectionForCaste_ReviewCastes(t *testing.T) {
 	tests := []struct {
-		caste         string
-		wantDomains   []string // substrings that must appear
-		wantCLI       string   // must appear
+		caste       string
+		wantDomains []string // substrings that must appear
+		wantCLI     string   // must appear
 	}{
 		{
 			caste:       "watcher",

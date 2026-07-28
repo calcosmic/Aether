@@ -3,6 +3,8 @@ name: ant:continue
 description: "➡️🐜🚪🐜➡️ Detect build completion, reconcile state, and advance to next phase"
 ---
 
+> **Reference documentation only.** As of Phase 160, this file is not loaded or executed by the runtime — see CLAUDE.md's "Command Playbooks (Reference Material)" section.
+
 You are the **Queen Ant Colony**. Reconcile completed work and advance to the next phase.
 
 ## Instructions
@@ -187,7 +189,7 @@ Record: exit code, any errors. **STOP if fails.**
 
 After build check completes, write gate result:
 ```bash
-aether gate-results-write --name "build_check" --passed {true/false} --detail "{summary}"
+aether gate-results-write --name "build_check" --passed={true/false} --detail "{summary}"
 ```
 
 **Phase 2: Type Check** (if command exists):
@@ -196,7 +198,7 @@ Record: error count. Report all type errors.
 
 After type check completes, write gate result:
 ```bash
-aether gate-results-write --name "type_check" --passed {true/false} --detail "{summary}"
+aether gate-results-write --name "type_check" --passed={true/false} --detail "{summary}"
 ```
 
 **Phase 3: Lint Check** (if command exists):
@@ -205,7 +207,7 @@ Record: warning count, error count.
 
 After lint check completes, write gate result:
 ```bash
-aether gate-results-write --name "lint_check" --passed {true/false} --detail "{summary}"
+aether gate-results-write --name "lint_check" --passed={true/false} --detail "{summary}"
 ```
 
 **Phase 4: Test Check** (if command exists):
@@ -216,7 +218,7 @@ Record: pass count, fail count, exit code. **STOP if fails.**
 
 After test check completes, write gate result:
 ```bash
-aether gate-results-write --name "tests_pass" --passed {true/false} --detail "{summary of pass/fail counts}"
+aether gate-results-write --name "tests_pass" --passed={true/false} --detail "{summary of pass/fail counts}"
 ```
 
 **Coverage Check** (if coverage command exists AND phase mode is not `discovery`):
@@ -340,7 +342,7 @@ Note: Professional security scanning happens in Step 1.8 (Gatekeeper for CVEs) a
 
 After secrets scan completes, write gate result:
 ```bash
-aether gate-results-write --name "secrets_check" --passed {true/false} --detail "{summary of secrets found or clean}"
+aether gate-results-write --name "secrets_check" --passed={true/false} --detail "{summary of secrets found or clean}"
 ```
 
 **Phase 6: Diff Review**:
@@ -349,7 +351,7 @@ Review changed files for unintended modifications.
 
 After diff review completes, write gate result:
 ```bash
-aether gate-results-write --name "diff_review" --passed {true/false} --detail "{summary of files changed or issues found}"
+aether gate-results-write --name "diff_review" --passed={true/false} --detail "{summary of files changed or issues found}"
 ```
 
 **Success Criteria Check:**
@@ -446,7 +448,7 @@ Proceeding to gate checks...
 
 Write gate results for all verification phases as passed (ensures gate results reflect the successful run):
 ```bash
-aether gate-results-write --name "verification_loop" --passed true --detail "All verification phases passed"
+aether gate-results-write --name "verification_loop" --passed=true --detail "All verification phases passed"
 ```
 
 Continue to Step 1.5.3.
@@ -465,10 +467,10 @@ Cross-reference worker claims against reality. This step catches fabricated succ
 3. Run verification:
    Run using the Bash tool with description "Verifying worker claims...":
    ```bash
-   aether verify-claims ".aether/data/last-build-claims.json" "<watcher_json_or_path>" "<test_exit_code>"
+   aether verify-claims
    ```
 
-   For the watcher JSON: use the Watcher output from the most recent build (if available in COLONY_STATE.json events or build synthesis). If no Watcher output is available, pass `'{"verification_passed":true}'` as default (conservative -- only test exit code mismatch can trigger).
+   The command takes no arguments — it reads `COLONY_STATE.json` directly and runs a fixed set of internal consistency checks against it. It does not compare an external claims file against watcher output or a test exit code; no such comparison feature exists.
 
 4. Parse the result:
 

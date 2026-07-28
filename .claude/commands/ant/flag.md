@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/flag.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/flag.yaml. Synced by aether update. -->
 ---
 name: ant-flag
 description: "🚩 Create a project-specific flag (blocker, issue, or note)"

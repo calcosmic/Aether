@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/resume-colony.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/resume-colony.yaml. Synced by aether update. -->
 ---
 name: ant-resume-colony
 description: "💾 Resume colony work through the Aether CLI runtime"

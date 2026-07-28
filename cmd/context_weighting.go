@@ -19,12 +19,31 @@ func readHiveWisdomEntriesForDomains(hubDir string, limit int, domains []string,
 	if !automaticHiveReadEnabled() {
 		return nil
 	}
+	if !hiveRetrievalOptedIn() {
+		if fallbacks != nil {
+			*fallbacks = append(*fallbacks, "hive_wisdom: colony has not opted in to cross-project wisdom")
+		}
+		return nil
+	}
 	wisdomPath := filepath.Join(hubDir, "hive", "wisdom.json")
 	data, err := os.ReadFile(wisdomPath)
 	if err == nil {
 		var wf hiveWisdomData
 		if json.Unmarshal(data, &wf) == nil && len(wf.Entries) > 0 {
-			entries := filterHiveWisdomEntriesByDomain(wf.Entries, domains)
+			now := time.Now().UTC()
+			active := make([]hiveWisdomEntry, 0, len(wf.Entries))
+			for _, entry := range wf.Entries {
+				if !hiveEntryActive(entry) {
+					continue
+				}
+				effective := effectiveHiveConfidence(entry, now)
+				if effective < hiveRetrievalMinEffectiveConfidence {
+					continue
+				}
+				entry.EffectiveConfidence = effective
+				active = append(active, entry)
+			}
+			entries := filterHiveWisdomEntriesByDomain(active, domains)
 			if limit > 0 && len(entries) > limit {
 				return append([]hiveWisdomEntry(nil), entries[:limit]...)
 			}

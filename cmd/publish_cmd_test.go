@@ -42,6 +42,8 @@ func TestPublishCommandFlags(t *testing.T) {
 }
 
 func TestPublishRejectsNonSourceCheckout(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -63,6 +65,9 @@ func TestPublishRejectsNonSourceCheckout(t *testing.T) {
 }
 
 func TestPublishVerificationFailure(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	// This test validates the verification logic by ensuring publish
 	// detects and corrects a version mismatch between source and hub.
 	saveGlobals(t)
@@ -122,6 +127,9 @@ func TestPublishVerificationFailure(t *testing.T) {
 }
 
 func TestPublishHubVersionWarningIncludesRecoveryAndVerificationCommands(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -162,6 +170,8 @@ func TestPublishHubVersionWarningIncludesRecoveryAndVerificationCommands(t *test
 }
 
 func TestPublishSyncsStablePlatformHomeCommands(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -171,7 +181,7 @@ func TestPublishSyncsStablePlatformHomeCommands(t *testing.T) {
 	if err := os.MkdirAll(commandDir, 0755); err != nil {
 		t.Fatalf("failed to create command dir: %v", err)
 	}
-	generated := []byte("<!-- Generated from .aether/commands/build.yaml - DO NOT EDIT DIRECTLY -->\n---\nname: ant-build\n---\n")
+	generated := []byte("<!-- Aether-managed: runtime spec at .aether/commands/build.yaml. Synced by aether update. -->\n---\nname: ant-build\n---\n")
 	if err := os.WriteFile(filepath.Join(commandDir, "build.md"), generated, 0644); err != nil {
 		t.Fatalf("failed to write command: %v", err)
 	}
@@ -252,6 +262,9 @@ func writeBuiltTsHostFixture(t *testing.T, root string) {
 }
 
 func TestPublishSyncsBuiltTsHostToHub(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -277,6 +290,9 @@ func TestPublishSyncsBuiltTsHostToHub(t *testing.T) {
 }
 
 func TestPublishChannelIsolation(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -422,5 +438,23 @@ func TestPublishDevAllowsDevHub(t *testing.T) {
 	devHubVersion := readHubVersionAtPath(devHubDir)
 	if devHubVersion != "1.0.20-dev" {
 		t.Errorf("dev hub version = %q, want %q", devHubVersion, "1.0.20-dev")
+	}
+}
+
+// Under `go run ./cmd/aether publish` the executable is a temp go-build
+// binary named "aether"; trusting its directory sent the freshly built binary
+// into the go-run temp dir while publish reported success. Two publishes
+// shipped stale binaries this way before it was caught.
+func TestDefaultLocalBinaryDestIgnoresGoRunTempExecutable(t *testing.T) {
+	if isEphemeralExecutablePath("/Users/dev/.local/bin/aether") {
+		t.Error("real install path misclassified as ephemeral")
+	}
+	for _, exe := range []string{
+		"/private/var/folders/pj/x/T/go-build2384/b001/exe/aether",
+		"/tmp/go-build812345/b001/exe/aether",
+	} {
+		if !isEphemeralExecutablePath(exe) {
+			t.Errorf("go-run temp executable %q not classified as ephemeral", exe)
+		}
 	}
 }

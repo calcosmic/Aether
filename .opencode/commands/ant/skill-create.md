@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/skill-create.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/skill-create.yaml. Synced by aether update. -->
 ---
 name: ant-skill-create
 description: "🧪 Create a custom domain skill using Oracle mini-research and a guided wizard"
@@ -228,7 +228,7 @@ Use the Write tool to create `~/.aether/skills/domain/{SKILL_NAME}/SKILL.md` wit
 Run using the Bash tool with description "Verifying skill frontmatter...":
 
 ```bash
-aether skill-parse-frontmatter ~/.aether/skills/domain/{SKILL_NAME}/SKILL.md
+aether skill-parse-frontmatter --file ~/.aether/skills/domain/{SKILL_NAME}/SKILL.md
 ```
 
 Check the output. If the result contains `"ok": true` (or the parsed JSON shows the correct name and type), the skill is valid. If parsing fails, fix the frontmatter and retry once.

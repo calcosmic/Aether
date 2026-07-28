@@ -16,6 +16,8 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestScanIntegrityReturnsEmptyWhenHealthy(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -44,6 +46,8 @@ func TestScanIntegrityCriticalWhenHubNotInstalled(t *testing.T) {
 
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	// Simulates a machine with no hub; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 
 	oldVersion := Version
 	Version = "1.0.20"
@@ -68,6 +72,8 @@ func TestScanIntegrityCriticalWhenHubNotInstalled(t *testing.T) {
 }
 
 func TestScanIntegrityCriticalWhenVersionsDisagree(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -107,6 +113,8 @@ func TestScanIntegrityCriticalWhenVersionsDisagree(t *testing.T) {
 }
 
 func TestScanIntegrityWarningForStaleInfo(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -164,6 +172,8 @@ func TestScanIntegrityWarningForStaleInfo(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMedicDeepIncludesIntegrity(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -216,6 +226,8 @@ func TestMedicDeepIncludesIntegrity(t *testing.T) {
 }
 
 func TestMedicDeepIntegrityRecovery(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -290,6 +302,9 @@ func TestIntegrityCommandExists(t *testing.T) {
 }
 
 func TestIntegrityJSONOutput(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -401,6 +416,9 @@ func TestIntegrityExitCodeFail(t *testing.T) {
 }
 
 func TestIntegrityChannelFlag(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -447,6 +465,8 @@ func TestIntegrityChannelFlag(t *testing.T) {
 }
 
 func TestIntegritySourceFlag(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -502,6 +522,9 @@ func TestIntegritySourceFlag(t *testing.T) {
 }
 
 func TestIntegrityVisualOutput(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

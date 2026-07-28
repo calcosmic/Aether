@@ -14,6 +14,8 @@ import (
 // TestE2ERegressionStablePublishUpdate proves the full stable pipeline:
 // publish -> downstream update -> version agreement.
 func TestE2ERegressionStablePublishUpdate(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -82,6 +84,8 @@ func TestE2ERegressionStablePublishUpdate(t *testing.T) {
 // TestE2ERegressionDevPublishUpdate proves the full dev pipeline:
 // dev publish -> dev update -> version agreement.
 func TestE2ERegressionDevPublishUpdate(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -150,6 +154,8 @@ func TestE2ERegressionDevPublishUpdate(t *testing.T) {
 // TestE2ERegressionStalePublishDetection proves stale publish is caught at
 // the downstream update boundary with critical classification and recovery command.
 func TestE2ERegressionStalePublishDetection(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -229,6 +235,8 @@ func TestE2ERegressionStalePublishDetection(t *testing.T) {
 // TestE2ERegressionChannelIsolation proves dev publish does not contaminate
 // the stable hub at all — version.json and workers.md remain unchanged.
 func TestE2ERegressionChannelIsolation(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -305,6 +313,8 @@ func TestE2ERegressionChannelIsolation(t *testing.T) {
 // instantly. This test proves the full downstream publish-update-init-plan pipeline
 // works without hanging.
 func TestE2ERegressionStuckPlanInvestigation(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

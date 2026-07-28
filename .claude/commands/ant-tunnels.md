@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/tunnels.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/tunnels.yaml. Synced by aether update. -->
 ---
 name: ant-tunnels
 description: "🕳️ Explore tunnels (browse archived colonies, compare chambers)"

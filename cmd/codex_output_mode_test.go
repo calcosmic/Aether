@@ -42,6 +42,8 @@ func TestBuildBufferedOutputBreaksJSONUnderVisualEnv(t *testing.T) {
 }
 
 func TestInstallBufferedOutputBreaksJSONUnderVisualEnv(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

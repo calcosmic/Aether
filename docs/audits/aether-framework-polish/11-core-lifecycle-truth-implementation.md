@@ -225,7 +225,7 @@ Production behavior was not weakened: a new regression proves a 365-day-old inst
 ## Deliberate Limits
 
 - Build rollback restores lifecycle state but does not undo partial writes already made in the shared root checkout.
-- Worktree conflict handling is first-accepted-writer wins. It detects and preserves the conflicting result; it does not pre-allocate ownership or atomically reconcile a whole wave.
+- ~~Worktree conflict handling is first-accepted-writer wins.~~ Resolved 2026-07-24: declared per-task path ownership prevents same-wave claims before workers run, and each wave reconciles as one atomic all-or-nothing decision (see `17-declared-worktree-ownership.md`).
 - No-op enforcement remains as a coarse backstop for recognized production platform adapters. Bound plans now add artifact- and check-specific proof, but legacy unbound plans still rely on aggregate verification.
 - Evidence requirements match exact files. Directory trees, globs, generated bundles, semantic UI behavior, and other richer evidence types are not yet modeled.
 - Newly accepted real and synthetic plans require complete `bound_v1` evidence bindings. Pre-existing plans remain explicitly `legacy_unbound`; migration does not invent evidence they never had.
@@ -243,5 +243,5 @@ Production behavior was not weakened: a new regression proves a 365-day-old inst
 1. ~~Select one production orchestration owner, quarantine duplicate success stubs, and move all model/process behavior behind the typed adapter contract.~~ Done.
 2. ~~Replace prompt-only caste permission claims with host-enforced profiles or visibly mark the capability unavailable.~~ Done.
 3. ~~Prove the revision boundary with real Oracle/Scout/Route-Setter providers and add typed assumption/decision impact links without creating another plan store.~~ Done 2026-07-24 (`16-provider-backed-plan-revision.md`); typed links not added — no missing contract demonstrated.
-4. Replace first-accepted worktree conflict handling with declared ownership and one atomic whole-wave reconciliation decision.
+4. ~~Replace first-accepted worktree conflict handling with declared ownership and one atomic whole-wave reconciliation decision.~~ Done 2026-07-24 (`17-declared-worktree-ownership.md`).
 5. Redesign project/Hive knowledge around evidence IDs, stable repository identity, contradiction, revocation, decay, locking, and opt-in retrieval before re-enabling promotion.

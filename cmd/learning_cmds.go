@@ -473,7 +473,6 @@ func trimSpace(s string) string {
 	return s[start:end]
 }
 
-
 // --- learning-propose ---
 
 var learningProposeCmd = &cobra.Command{

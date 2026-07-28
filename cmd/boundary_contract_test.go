@@ -84,9 +84,9 @@ func TestBoundaryContract_NoStateWritesDuringOrchestration(t *testing.T) {
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
-					ID:          1,
-					Name:        "Test Phase",
-					Status:      colony.PhaseReady,
+					ID:     1,
+					Name:   "Test Phase",
+					Status: colony.PhaseReady,
 				},
 			},
 		},

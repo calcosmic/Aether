@@ -1,10 +1,10 @@
-<!-- Generated from .aether/commands/preferences.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/preferences.yaml. Synced by aether update. -->
 ---
 name: ant-preferences
 description: "🧠 Add or list user preferences in hub QUEEN.md"
 ---
 
-You are the **Queen**. Manage user preferences in the hub `~/.aether/QUEEN.md`.
+You are the **Queen**. Manage user preferences through the runtime CLI — never edit `~/.aether/QUEEN.md` by hand from this command.
 
 ## Instructions
 
@@ -16,50 +16,25 @@ If `$ARGUMENTS` empty -> show usage: `/ant-preferences "preference text"` or `/a
 
 ### Step 2: Route
 
-- `$ARGUMENTS` is `--list` -> **List mode**
-- Otherwise -> **Add mode**
+- `$ARGUMENTS` is `--list` -> execute `aether preferences --list` and display each stored preference as a bullet. If none exist, show:
+  ```
+  No user preferences set yet.
+  Add one with: /ant-preferences "your preference"
+  ```
+- Otherwise -> execute `aether preferences "$ARGUMENTS"` (strip surrounding quotes first). The CLI enforces the 500-character limit and creates QUEEN.md if missing — do not pre-validate or re-implement either.
 
-### List Mode
+### Step 3: Confirm
 
-Read `~/.aether/QUEEN.md`. If missing -> "No hub QUEEN.md found. Run /ant-init to create one.", stop.
-
-Find the `## User Preferences` section (with or without emoji). Extract bullet lines (`- ...`) between that heading and the next `---`.
-
-If user-added bullets exist, output each. Otherwise:
-```
-No user preferences set yet.
-Add one with: /ant-preferences "your preference"
-```
-Stop.
-
-### Add Mode
-
-Set `PREF` to `$ARGUMENTS` (strip surrounding quotes).
-If length > 500 chars -> "Preference too long (max 500 chars)", stop.
-
-Read `~/.aether/QUEEN.md`. If missing -> "No hub QUEEN.md found. Run /ant-init to create one.", stop.
-
-**If `## User Preferences` section exists** (with or without emoji):
-1. Remove `*No user preferences recorded yet.*` placeholder if present
-2. Append `- $PREF` at end of section (before next `---`)
-
-**If section missing** (migration case):
-1. Insert before `## Evolution Log` (with or without emoji):
-```
-## User Preferences
-
-- $PREF
-
----
-
-```
-
-Update METADATA comment: increment `stats.total_user_prefs` by 1.
-
-### Confirm
-
-Output (2 lines, no banners):
+On success, output (2 lines, no banners):
 ```
 Preference saved to hub QUEEN.md
-  "$PREF"
+  "<preference text>"
 ```
+
+On CLI error, relay the CLI's message in one plain sentence.
+
+**Why the CLI:** preferences live in the global hub `~/.aether/QUEEN.md`, shared by every colony on this machine. One malformed hand-edit corrupts context injection for all of them. The CLI writes the section safely.
+
+**Next steps:**
+- `/ant-profile` — review learned behavior directives alongside your preferences
+- `/ant-status` — see colony state

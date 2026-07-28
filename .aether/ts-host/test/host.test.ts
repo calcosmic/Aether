@@ -624,7 +624,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
     __restoreCreateCeremonyAdapter();
   });
 
-  it("build runner injects playbook context into worker task_briefs", async () => {
+  it("build runner does NOT inject playbook context into worker task_briefs", async () => {
     const handler = <T>(_opts: unknown, args: string[]): T => {
       goCalls.push(args);
       const cmd = args[0];
@@ -694,13 +694,13 @@ describe("playbook context injection (CEREMONY-06)", () => {
       const dispatch = d as Record<string, unknown>;
       const brief = dispatch.task_brief as string;
       assert.ok(
-        typeof brief === "string" && brief.includes("Relevant Playbooks"),
-        `Build dispatch ${dispatch.name} task_brief should contain playbook context. Got: ${brief?.slice(0, 200)}`
+        typeof brief !== "string" || !brief.includes("Relevant Playbooks"),
+        `Build dispatch ${dispatch.name} task_brief must NOT contain playbook context; playbooks are orchestrator guidance and told workers they were the Queen. Got: ${brief?.slice(0, 200)}`
       );
     }
   });
 
-  it("plan runner injects playbook context into worker task_briefs", async () => {
+  it("plan runner does NOT inject playbook context into worker task_briefs", async () => {
     const handler = <T>(_opts: unknown, args: string[]): T => {
       goCalls.push(args);
       const cmd = args[0];
@@ -761,13 +761,13 @@ describe("playbook context injection (CEREMONY-06)", () => {
       const dispatch = d as Record<string, unknown>;
       const brief = dispatch.task_brief as string;
       assert.ok(
-        typeof brief === "string" && brief.includes("Relevant Playbooks"),
-        `Plan dispatch ${dispatch.name} task_brief should contain playbook context. Got: ${brief?.slice(0, 200)}`
+        typeof brief !== "string" || !brief.includes("Relevant Playbooks"),
+        `Plan dispatch ${dispatch.name} task_brief must NOT contain playbook context (orchestrator guidance). Got: ${brief?.slice(0, 200)}`
       );
     }
   });
 
-  it("dry-run build injects playbook context into manifest dispatches", async () => {
+  it("dry-run build does NOT inject playbook context into manifest dispatches", async () => {
     const handler = <T>(_opts: unknown, args: string[]): T => {
       goCalls.push(args);
       const cmd = args[0];
@@ -818,15 +818,15 @@ describe("playbook context injection (CEREMONY-06)", () => {
 
       // Verify playbook context appears in the manifest output
       assert.ok(
-        stdoutOutput.includes("Relevant Playbooks"),
-        `Dry-run output should contain playbook context. Got: ${stdoutOutput.slice(0, 500)}`
+        !stdoutOutput.includes("Relevant Playbooks"),
+        `Dry-run output must NOT contain playbook context. Got: ${stdoutOutput.slice(0, 500)}`
       );
     } finally {
       process.stdout.write = originalStdoutWrite;
     }
   });
 
-  it("dry-run plan injects playbook context into manifest dispatches", async () => {
+  it("dry-run plan does NOT inject playbook context into manifest dispatches", async () => {
     const handler = <T>(_opts: unknown, args: string[]): T => {
       goCalls.push(args);
       const cmd = args[0];
@@ -874,8 +874,8 @@ describe("playbook context injection (CEREMONY-06)", () => {
       await runDryRunDispatchedCommand(bridge, parsed, def);
 
       assert.ok(
-        stdoutOutput.includes("Relevant Playbooks"),
-        `Dry-run plan output should contain playbook context. Got: ${stdoutOutput.slice(0, 500)}`
+        !stdoutOutput.includes("Relevant Playbooks"),
+        `Dry-run plan output must NOT contain playbook context. Got: ${stdoutOutput.slice(0, 500)}`
       );
     } finally {
       process.stdout.write = originalStdoutWrite;

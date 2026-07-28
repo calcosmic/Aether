@@ -18,14 +18,14 @@ var noiseDirs = map[string]bool{
 	// Version control
 	".git": true,
 	// Python virtual environments and caches
-	".venv":        true,
-	"venv":         true,
-	"__pycache__":  true,
-	".mypy_cache":  true,
+	".venv":         true,
+	"venv":          true,
+	"__pycache__":   true,
+	".mypy_cache":   true,
 	".pytest_cache": true,
-	".tox":         true,
-	".ruff_cache":  true,
-	".pytype":      true,
+	".tox":          true,
+	".ruff_cache":   true,
+	".pytype":       true,
 	"site-packages": true,
 	// Node.js
 	"node_modules": true,
@@ -35,8 +35,8 @@ var noiseDirs = map[string]bool{
 	// Go
 	"vendor": true,
 	// Rust
-	"target":  true,
-	".cargo":  true,
+	"target": true,
+	".cargo": true,
 	// General build/artifact dirs
 	"dist":     true,
 	"build":    true,
@@ -44,9 +44,9 @@ var noiseDirs = map[string]bool{
 	"bin":      true,
 	"coverage": true,
 	// Caches and registries
-	".cache":      true,
-	".terraform":  true,
-	".gradle":     true,
+	".cache":     true,
+	".terraform": true,
+	".gradle":    true,
 	// Aether-managed directories
 	".aether":   true,
 	".claude":   true,
@@ -62,9 +62,9 @@ var noiseDirs = map[string]bool{
 
 // noiseFileExts lists file extensions for files that should be skipped.
 var noiseFileExts = map[string]bool{
-	".pyc":   true, ".pyo":   true,           // Python bytecode
-	".so":    true, ".dylib": true, ".dll": true, // Compiled libraries
-	".map":   true,                             // Source maps
+	".pyc": true, ".pyo": true, // Python bytecode
+	".so": true, ".dylib": true, ".dll": true, // Compiled libraries
+	".map": true, // Source maps
 }
 
 // compoundNoiseSuffixes are multi-part extensions to skip (checked before single ext).

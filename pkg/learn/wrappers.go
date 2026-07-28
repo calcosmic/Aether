@@ -95,6 +95,12 @@ func NewConsolidationService(store *storage.Store, bus *events.Bus, queenPath st
 	return &ConsolidationService{inner: memory.NewConsolidationService(store, bus, queenPath, colonyName)}
 }
 
+// NewDryRunConsolidationService reports what consolidation would do without
+// writing any file or publishing any event.
+func NewDryRunConsolidationService(store *storage.Store, bus *events.Bus, queenPath string, colonyName string) *ConsolidationService {
+	return &ConsolidationService{inner: memory.NewDryRunConsolidationService(store, bus, queenPath, colonyName)}
+}
+
 // Run executes the full consolidation pipeline.
 func (s *ConsolidationService) Run(ctx context.Context) (*ConsolidationResult, error) {
 	return s.inner.Run(ctx)

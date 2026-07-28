@@ -16,12 +16,12 @@ import (
 // skill-inject + task brief + pheromone section).
 //
 // AAC-005 required sections and their delivery paths:
-//   1. colony-prime     -> resolveCodexWorkerContext() -> buildColonyPrimeOutput()
-//   2. prompt_section   -> same as colony-prime (result.PromptSection)
-//   3. survey context   -> buildContextCapsuleOutput() fallback or renderCodexBuildWorkerBrief()
-//   4. phase research   -> renderCodexBuildWorkerBrief() playbooks section
-//   5. matched skills   -> resolveSkillSectionForWorkflow() -> WorkerConfig.SkillSection
-//   6. midden/graveyard -> buildContextCapsuleOutput() midden section (context.go line ~817)
+//  1. colony-prime     -> resolveCodexWorkerContext() -> buildColonyPrimeOutput()
+//  2. prompt_section   -> same as colony-prime (result.PromptSection)
+//  3. survey context   -> buildContextCapsuleOutput() fallback or renderCodexBuildWorkerBrief()
+//  4. phase research   -> renderCodexBuildWorkerBrief() playbooks section
+//  5. matched skills   -> resolveSkillSectionForWorkflow() -> WorkerConfig.SkillSection
+//  6. midden/graveyard -> buildContextCapsuleOutput() midden section (context.go line ~817)
 func TestColonyPrimeAAC005Audit(t *testing.T) {
 	saveGlobalsCmd(t)
 
@@ -258,6 +258,10 @@ func TestColonyPrimeSectionsPresent(t *testing.T) {
 	s, tmpDir := newTestStoreCmd(t)
 	defer os.RemoveAll(tmpDir)
 	store = s
+
+	// Hive retrieval is off by default; this test asserts on hive content,
+	// so it opts in explicitly rather than relying on an implicit default.
+	enableHiveForTest(t)
 
 	// Set up hub directory
 	hubDir := filepath.Join(tmpDir, "hub")

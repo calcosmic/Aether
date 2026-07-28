@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/build.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/build.yaml. Synced by aether update. -->
 ---
 name: ant-build
 description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"

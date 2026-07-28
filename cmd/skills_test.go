@@ -522,8 +522,7 @@ func TestSkillIndexReadEmpty(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	rootCmd.SetArgs([]string{"skill-index-read"})
 	if err := rootCmd.Execute(); err != nil {
@@ -789,8 +788,7 @@ func TestSkillMatchTop3(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	// Create 5 colony skills that all match role "builder"
 	for i := 0; i < 5; i++ {
@@ -1109,8 +1107,7 @@ func TestSkillInjectStatThenFallback(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	// Create a skill whose category path does NOT contain SKILL.md at the
 	// standard hub/<category>/SKILL.md location, so skill-inject falls back
@@ -1272,8 +1269,7 @@ func TestSkillDiff(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	// Create shipped skill relative to CWD (.aether/skills/domain/<name>/SKILL.md)
 	workDir := filepath.Join(tmpHub, "local")
@@ -1316,8 +1312,7 @@ func TestSkillDiffIdentical(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	content := "---\nname: Same\n---\nSame content\n"
 
@@ -1354,8 +1349,7 @@ func TestSkillDiffNotFound(t *testing.T) {
 	stderr = &errBuf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	rootCmd.SetArgs([]string{"skill-diff", "--skill", "nonexistent"})
 	if err := rootCmd.Execute(); err != nil {
@@ -1379,8 +1373,7 @@ func TestSkillIsUserCreated(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	// Only in hub (user-created)
 	userDir := filepath.Join(tmpHub, "skills", "domain", "user-only")
@@ -1412,8 +1405,7 @@ func TestSkillIsUserCreatedShipped(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	// Only in shipped (relative to CWD)
 	workDir := filepath.Join(tmpHub, "local")
@@ -1449,8 +1441,7 @@ func TestSkillManifestReadFromHub(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	os.MkdirAll(filepath.Join(tmpHub, "skills"), 0755)
 	manifest := `{"skills":[{"name":"tdd","version":"1.0.0","checksum":"abc123"}],"updated_at":"2026-01-01T00:00:00Z"}`
@@ -1475,8 +1466,7 @@ func TestSkillManifestReadEmpty(t *testing.T) {
 	stdout = &buf
 
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	rootCmd.SetArgs([]string{"skill-manifest-read"})
 	if err := rootCmd.Execute(); err != nil {
@@ -1800,8 +1790,7 @@ func TestBuildFullIndexMatchesCommandOutput(t *testing.T) {
 // cheap. Without the env var, each call does os.UserHomeDir() + filepath.Join().
 func TestResolveHubPathReturnsConsistentValue(t *testing.T) {
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	defer os.Unsetenv("AETHER_HUB_DIR")
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
 
 	// Call resolveHubPath multiple times and verify consistency
 	results := make([]string, 10)

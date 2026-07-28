@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/export-signals.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/export-signals.yaml. Synced by aether update. -->
 ---
 name: ant-export-signals
 description: "📤 Export colony pheromone signals to portable XML format"

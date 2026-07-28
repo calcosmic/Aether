@@ -156,10 +156,10 @@ func TestCLIFlagAudit(t *testing.T) {
 // that this plan (71-02) is responsible for registering.
 func TestCLIFlagAuditSubcommandsRegistered(t *testing.T) {
 	required := map[string]string{
-		"suggest-approve":  "suggest-approve (called from build playbooks)",
-		"versions":         "versions (called from build playbooks)",
-		"chamber-compare":  "chamber-compare (called from tunnels.md)",
-		"council":          "council (parent command, called from council.md)",
+		"suggest-approve": "suggest-approve (called from build playbooks)",
+		"versions":        "versions (called from build playbooks)",
+		"chamber-compare": "chamber-compare (called from tunnels.md)",
+		"council":         "council (parent command, called from council.md)",
 	}
 
 	registered := make(map[string]bool)

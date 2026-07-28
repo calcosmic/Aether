@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/council.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/council.yaml. Synced by aether update. -->
 ---
 name: ant-council
 description: "📜 Convene council for intent clarification via multi-choice questions"

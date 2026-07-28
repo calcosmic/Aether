@@ -626,8 +626,8 @@ func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "timeout", Summary: "worker timed out after 300s", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
-			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-1", Status: "timeout", Summary: "worker timed out after 300s", Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
 		},
 	}
 
@@ -712,8 +712,8 @@ func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "blocked", Summary: "worker was blocked", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
-			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-1", Status: "blocked", Summary: "worker was blocked", Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
 		},
 	}
 
@@ -777,7 +777,7 @@ func TestBuildFinalize_NoRecoveryForCompletedDispatches(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "completed", Summary: "all done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-1", Status: "completed", Summary: "all done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
 		},
 	}
 
@@ -836,8 +836,8 @@ func TestBuildFinalize_BudgetPersisted(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "timeout", Summary: "timed out", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
-			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-1", Status: "timeout", Summary: "timed out", Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
 		},
 	}
 
@@ -901,9 +901,9 @@ func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "timeout", Summary: "timed out", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
-			{Name: "Builder-2", Status: "failed", Summary: "generic failure", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
-			{Name: "Builder-3", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-1", Status: "timeout", Summary: "timed out", Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "failed", Summary: "generic failure", Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
+			{Name: "Builder-3", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
 		},
 	}
 

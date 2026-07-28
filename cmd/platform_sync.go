@@ -354,6 +354,10 @@ func isClaudeSettingsFile(relPath string) bool {
 	return filepath.Base(relPath) == "settings.json"
 }
 
+func isOraclePhaseDirectivesFile(relPath string) bool {
+	return filepath.Base(relPath) == "oracle-phase-directives.yaml"
+}
+
 func claudeCommandDestRelPath(relPath string) string {
 	base := filepath.Base(filepath.Clean(relPath))
 	if filepath.Ext(base) != ".md" {
@@ -374,8 +378,16 @@ func isManagedFlatClaudeCommandPath(relPath string) bool {
 	return strings.HasPrefix(base, "ant-") && filepath.Ext(base) == ".md"
 }
 
+// isGeneratedAetherCommandWrapper marks a file as Aether-managed for
+// update/prune. It accepts both the current header and the legacy
+// "Generated from" form so downstream repos installed before the header
+// reform still get their stale wrappers pruned.
 func isGeneratedAetherCommandWrapper(data []byte) bool {
 	firstLine := strings.SplitN(string(data), "\n", 2)[0]
+	if strings.HasPrefix(firstLine, "<!-- Aether-managed: runtime spec at .aether/commands/") &&
+		strings.HasSuffix(firstLine, ". Synced by aether update. -->") {
+		return true
+	}
 	return strings.HasPrefix(firstLine, "<!-- Generated from .aether/commands/") &&
 		strings.HasSuffix(firstLine, ".yaml - DO NOT EDIT DIRECTLY -->")
 }
@@ -762,14 +774,28 @@ func ensureRepoLocalScaffold(localAether string) syncResult {
 
 	gitignorePath := filepath.Join(localAether, ".gitignore")
 	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
-		content := "# Aether local state - not versioned\ndata/\ncheckpoints/\nlocks/\ndreams/\noracle/\n"
+		// ts-host/node_modules is ~60 MB of npm packages installed by
+		// `aether update`; without this line a `git add .aether` (which the
+		// versioned QUEEN.md invites) commits all of it.
+		content := "# Aether local state - not versioned\ndata/\ncheckpoints/\nlocks/\ndreams/\noracle/\nts-host/node_modules/\n"
 		if writeErr := os.WriteFile(gitignorePath, []byte(content), 0644); writeErr != nil {
 			result.errors = append(result.errors, fmt.Sprintf("write %s: %v", gitignorePath, writeErr))
 		} else {
 			result.copied++
 		}
 	} else if err == nil {
-		result.skipped++
+		// Idempotent upgrade for repos scaffolded before the ts-host ignore
+		// line existed: append it once, never rewrite user content.
+		if data, readErr := os.ReadFile(gitignorePath); readErr == nil && !strings.Contains(string(data), "ts-host/node_modules") {
+			appended := strings.TrimRight(string(data), "\n") + "\nts-host/node_modules/\n"
+			if writeErr := os.WriteFile(gitignorePath, []byte(appended), 0644); writeErr != nil {
+				result.errors = append(result.errors, fmt.Sprintf("append %s: %v", gitignorePath, writeErr))
+			} else {
+				result.copied++
+			}
+		} else {
+			result.skipped++
+		}
 	} else {
 		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", gitignorePath, err))
 	}

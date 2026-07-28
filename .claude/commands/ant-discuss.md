@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/discuss.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/discuss.yaml. Synced by aether update. -->
 ---
 name: ant-discuss
 description: "💬 Capture clarifications before planning through the Aether CLI runtime"

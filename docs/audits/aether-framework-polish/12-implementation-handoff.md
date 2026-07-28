@@ -279,8 +279,12 @@ Relevant files:
    compiled journey proved the full question-to-verification loop through real
    provider processes; typed links were deliberately not added because the
    journey exposed no missing contract.
-2. Replace first-accepted worktree conflict handling with declared ownership and an
-   atomic whole-wave reconciliation decision.
+2. ~~Replace first-accepted worktree conflict handling with declared ownership and
+   an atomic whole-wave reconciliation decision.~~ Done 2026-07-24: see
+   `17-declared-worktree-ownership.md`. Tasks declare owned paths up front,
+   same-wave declared overlap fails pre-dispatch, cross-wave declared overlap is
+   legal (later waves inherit earlier output), and each wave reconciles as one
+   atomic decision with the journal written after the decision.
 3. Redesign Hive knowledge around evidence IDs, stable repository identity,
    contradiction, revocation, decay, locks, and opt-in retrieval before enabling it.
 4. Complete released-artifact Journeys A-H: greenfield, brownfield, difficult bug,
@@ -352,13 +356,25 @@ structure. One behavioral finding is recorded in
 planner prose containing words like "research" into discovery phases, which
 then dispatch research workers instead of builders.
 
+## Completed Checkpoint: Declared Worktree Ownership And Atomic Wave Reconciliation
+
+Worktree-mode builds now declare per-task path ownership from evidence
+artifacts and single-path hints. Same-wave declared overlap fails before any
+worker runs; cross-wave declared overlap is legal because later worktrees
+inherit earlier synced output. Each wave reconciles as one atomic decision:
+a conflict-free wave syncs in deterministic dispatch order, and any
+ownership violation rejects the whole wave — nothing syncs, violators fail
+with paths and owners named, innocent workers are blocked, and all wave
+worktrees are preserved as orphan evidence. Terminal results are journaled
+only after the decision. See `17-declared-worktree-ownership.md`.
+
 ## Definition Of The Next Safe Checkpoint
 
-Replace first-accepted worktree conflict handling with declared ownership and
-one atomic whole-wave reconciliation decision. Declared task ownership should
-prevent same-path claims before workers run, and a wave should reconcile as
-one atomic decision instead of accepting the first finisher and orphaning the
-rest.
+Redesign Hive knowledge around evidence IDs, stable repository identity,
+contradiction, revocation, decay, locks, and opt-in retrieval before
+enabling automatic retrieval or promotion. The current quarantine
+(`AETHER_HIVE_POLICY=off` by default) stays in place until the trust model
+is designed and tested.
 
 No tag, publish, release, or intentional version bump was performed before
 this handoff.

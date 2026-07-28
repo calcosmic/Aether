@@ -34,16 +34,39 @@ That means:
 
 ## Current State
 
-- **v1.24 Hybrid Architecture Salvage — SHIPPED 2026-05-24**
-- **Product version: v1.0.41**
+- **v1.25 Switch It On — IN PROGRESS** (started 2026-07-25)
+- **Product version: v1.0.42**
 - v1.24 shipped: Architecture boundary defined, 27 agent YAMLs + 28 prompt MDs + 9 phase YAMLs + 7 playbooks extracted, TypeScript control plane with 68 tests, NDJSON event stream, 80% Classic parity verified, end-to-end demo flow running
-- Focus: Planning next milestone
-- Go = runtime spine (state, gates, finalizers), TS = control plane (orchestration), colony/ = editable behaviour
-- 512 TS tests, 2900+ Go tests, 86 skills, 60 commands per platform, 27 Codex agents
+- Focus: Deleting layers, restoring Queen judgement and colony richness
+- 27 caste YAMLs and 10 policy files live in `colony/`; the Queen's execution policy does not — it is compiled into `cmd/codex_dispatch_contract.go`
+- Four parallel execution paths currently coexist: markdown wrappers + playbooks (~13k lines), `.aether/ts-host` (40 files), `control-ts` (33 files, self-described as retired), and the Go runtime
+- `v5.4.0` tag remains available as the Classic behaviour baseline for Queen orchestration archaeology
 
-## Current Milestone: [Next]
+## Current Milestone: v1.25 Switch It On
 
-*Next milestone not yet defined. Run `/gsd-new-milestone` to start planning.*
+**Goal:** Make Aether usable daily on an inexpensive model by switching on machinery that already exists and has never run.
+
+**How this milestone was arrived at:** an initial plan was written, then subjected to six specialist review agents — claim verification, adversarial refutation, goal-backward plan checking, architectural blast-radius, completeness archaeology, and a devil's advocate. The review refuted the original diagnosis and several of its load-bearing claims. This milestone is the rebuild.
+
+**What the review established:**
+
+1. **Almost nothing was deleted; things were never switched on.** `pkg/memory/pipeline.go` wires the entire learning loop and is invoked by nothing — the colony has never learned. `colony/policies/model-routing.yaml` maps every caste to a model and has zero readers — the cheap-model mechanism exists and is inert. `colony-vital-signs` computes colony health 0-100 and is unplugged. The approved charter never reaches a worker.
+2. **The TypeScript host is an asset, not a liability.** `.aether/ts-host/src/` holds the only playbook loader, the only confidence loop, and the only worker dashboard and swarm display. The original plan deleted it in Phase 160 and rebuilt its functions in Phases 161-166. It also breaks `go build` outright via `//go:embed`.
+3. **Failures are silent.** Seven playbook CLI calls were executed against a built binary and failed — including the Gatekeeper security scan — while stderr is redirected to `/dev/null`. The project's own drift test passes because its regex sees only `--flags`, never positional arguments.
+4. **The framework's real disease is churn, not a severed wire.** Build orchestration was rearchitected at least five times in eight weeks. Several previous milestones fixed defects that later silently reverted.
+
+**Target features:**
+- Fail loudly — fix seven broken calls, close the drift-test blind spot, stop suppressing stderr, correct three documents that describe behaviour which has never happened
+- Cheap models by design — wire `model-routing.yaml`, give the six unread policy files readers, and distribute `colony/` so policies work outside this repo
+- Switch on learning — run the consolidation pipeline at phase end and at seal; reconcile the two competing learning systems
+- Context reaches workers — the capsule, survey, phase research, `suggest-analyze`, and the approved charter; measured, bounded, and inspectable
+- Typed control — migrate `mode` before requiring it; close ten-plus prose-to-control-flow sites, starting with the grounding-gate exemption
+- Your eyes back — wire the health meter and dashboard that already exist; decide what a live panel means on Claude Code before building one
+- Reclaim the 37 subcommands that no playbook reconnection can recover
+- Retire `control-ts` only; keep the TS host and the narrator
+- Prove it on three real tasks with an inexpensive model
+
+**Explicitly not in scope:** deleting the TS host, a four-mode Queen policy (it never existed), collapsing castes, Codex parity, hive trust redesign, a Dream caste.
 
 **Previous Milestone: v1.24 Hybrid Architecture Salvage** — Shipped 2026-05-24
 
@@ -197,6 +220,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [x] v1.22 Grounded Planning + Ceremony Restore -- Phases 141-144 (shipped 2026-05-19)
 - [x] v1.23 Daily Driver Reliability -- Phases 145-151 (shipped 2026-05-21)
 - [x] v1.24 Hybrid Architecture Salvage -- Phases 152-159 (shipped 2026-05-24)
+- [ ] v1.25 Switch It On -- Phases 160-171 (started 2026-07-25)
 
 ## Requirements
 
@@ -308,7 +332,11 @@ Execute v1.15 with `/gsd-discuss-phase 100`.
 
 This document evolves at phase transitions and milestone boundaries.
 
-## Current Milestone: v1.11 Aether Unification
+## Historical Milestone Briefs (superseded)
+
+*The three sections below are archived milestone briefs from v1.11, v1.12, and v1.16. They are retained for context only and are NOT the current milestone. The current milestone is v1.25 Switch It On, defined near the top of this file.*
+
+### v1.11 Aether Unification (shipped)
 
 **Goal:** Make Aether clean, canonical, and intelligent again — remove self-hosting artifacts, restore lost Smart Init intelligence, harden the 3-platform experience, and improve user-facing flows.
 
@@ -331,9 +359,9 @@ This document evolves at phase transitions and milestone boundaries.
 - Curation ant pipeline (8-ant orchestrated pipeline)
 - Consolidation pipeline (phase-end knowledge compression)
 
-*Last updated: 2026-05-20 after v1.23 milestone started*
+*Last updated: 2026-07-25 — v1.25 Working Again milestone started*
 
-## Current Milestone: v1.12 Safe Colony
+### v1.12 Safe Colony (shipped)
 
 **Goal:** Make Aether loop-proof and give users independent control over planning depth and verification depth, with smart defaults that adapt to phase position and code change risk.
 
@@ -345,7 +373,7 @@ This document evolves at phase transitions and milestone boundaries.
 
 *Last updated: 2026-05-01 — v1.12 Safe Colony milestone shipped*
 
-## Current Milestone: v1.16 Hybrid Runtime Boundary and Orchestration Recovery
+### v1.16 Hybrid Runtime Boundary and Orchestration Recovery (shipped)
 
 **Goal:** Prove one lifecycle workflow can be restored through a hybrid architecture — Go as safety kernel, TypeScript as orchestration control plane, Markdown/YAML/TOML as editable colony brain, Bash only as small glue.
 

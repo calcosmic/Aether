@@ -229,6 +229,10 @@ func renderRecoveryMenu(failedCmd string, errMsg string, details interface{}) st
 	detailBytes, _ := json.Marshal(recoveryDetails)
 	fmt.Fprintf(stderr, "{\"ok\":false,\"error\":\"%s\",\"code\":1,\"details\":%s}\n",
 		jsonEscape(errMsg), string(detailBytes))
+	// The envelope says code:1; the process must agree. Every other error
+	// path exits non-zero — the recovery menu was the one that lied to
+	// scripts by exiting 0.
+	markRenderedCommandError(1)
 	return ""
 }
 

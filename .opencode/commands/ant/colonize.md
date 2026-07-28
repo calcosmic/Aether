@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/colonize.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/colonize.yaml. Synced by aether update. -->
 ---
 name: ant-colonize
 description: "🗺️ Survey territory with visible platform Surveyor workers"

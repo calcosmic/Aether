@@ -92,18 +92,18 @@ func spawnTrackCheck(cmd *cobra.Command) error {
 	if err != nil {
 		// No tracking file = no timeout enforced
 		outputOK(map[string]interface{}{
-			"tracked":  false,
+			"tracked":   false,
 			"timed_out": false,
-			"agent":    agent,
+			"agent":     agent,
 		})
 		return nil
 	}
 
 	if entry.Agent != agent {
 		outputOK(map[string]interface{}{
-			"tracked":  false,
+			"tracked":   false,
 			"timed_out": false,
-			"agent":    agent,
+			"agent":     agent,
 		})
 		return nil
 	}

@@ -243,8 +243,19 @@ func checkTestsPass() gateCheck {
 // resolveTestCommand determines the test command for the current project.
 // Priority: CLAUDE.md → CODEBASE.md → language detection → empty (skip).
 func resolveTestCommand() string {
-	// Check CLAUDE.md for test command
-	repoRoot := storage.ResolveAetherRoot(context.Background())
+	// Resolve against the colony's own root, not the process cwd. The previous
+	// ResolveAetherRoot call answered "where am I running" rather than "which
+	// repository is this gate checking" — under `go test` that resolved to the
+	// Aether repo itself, so the gate extracted `go test ./...` from CLAUDE.md
+	// and recursively ran the entire suite inside a 2-minute timeout.
+	repoRoot := ""
+	if store != nil && strings.TrimSpace(store.BasePath()) != "" {
+		// BasePath is <root>/.aether/data; walk up to the repo root.
+		repoRoot = filepath.Dir(filepath.Dir(store.BasePath()))
+	}
+	if repoRoot == "" {
+		repoRoot = storage.ResolveAetherRoot(context.Background())
+	}
 	claudeMD := repoRoot + "/CLAUDE.md"
 	if data, err := os.ReadFile(claudeMD); err == nil {
 		cmd := extractTestCommand(string(data))
@@ -397,6 +408,138 @@ func checkAllTasksCompleted(phaseNum int) gateCheck {
 		Passed: false,
 		Detail: fmt.Sprintf("%d/%d tasks completed, pending: %s", completed, total, strings.Join(pending, ", ")),
 	}
+}
+
+// checkAntiPatternGate scans the files a phase claims to have touched for
+// security antipatterns (hardcoded secrets, etc.) using the shared
+// scanFileForAntipatterns implementation, and returns two gate checks:
+//
+//   - "anti_pattern" (soft_block): fails when a critical finding is present.
+//     Before this function existed, "anti_pattern" was a fully specified gate
+//     name in gateClassifications/gateRecoveryTemplates/
+//     gateAutoResolveThresholds that no code anywhere produced -- this is the
+//     producer ROADMAP success criterion 2 requires.
+//   - "anti_pattern_executed" (hard_block): fails when the scan could not run
+//     at all (no store, unresolvable root, or a per-file scan error). Per
+//     D-01, a safety gate that cannot execute must never be reported as
+//     passing.
+//
+// Paths in files are resolved against the colony root using the same idiom
+// as effectiveGateAutoResolveThresholds: filepath.Dir(store.BasePath())
+// joined with "..". Do NOT use storage.ResolveAetherRoot -- the comment
+// above resolveTestCommand records it resolving to the wrong repository
+// under `go test`.
+func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
+	findingsCheck := gateCheck{Name: "anti_pattern"}
+	executedCheck := gateCheck{Name: "anti_pattern_executed"}
+
+	if store == nil {
+		executedCheck.Passed = false
+		executedCheck.Detail = "antipattern scan could not execute: no store initialized, colony root unresolvable"
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+		findingsCheck.Passed = true
+		findingsCheck.Detail = "antipattern scan did not run: no store initialized"
+		return findingsCheck, executedCheck
+	}
+
+	root := filepath.Join(filepath.Dir(store.BasePath()), "..")
+
+	var allCriticals []AntipatternFinding
+	scannedFiles := 0
+	claimedFiles := 0
+	var scanErrors []string
+	var absentFiles []string
+
+	for _, f := range files {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		claimedFiles++
+		resolved := f
+		if !filepath.IsAbs(resolved) {
+			resolved = filepath.Join(root, f)
+		}
+		// scanFileForAntipatterns deliberately returns clean (nil,nil,nil) for
+		// a file that does not exist — correct for the CLI, where a phase may
+		// legitimately have deleted the file. But the gate must NOT count an
+		// absent file as scanned: doing so reports "scan executed successfully
+		// across 1 file(s)" when nothing was read, which is precisely the
+		// looks-like-it-ran-but-didn't failure this gate exists to prevent.
+		if _, statErr := os.Stat(resolved); statErr != nil {
+			absentFiles = append(absentFiles, f)
+			continue
+		}
+		criticals, _, err := scanFileForAntipatterns(resolved)
+		if err != nil {
+			scanErrors = append(scanErrors, fmt.Sprintf("%s: %v", f, err))
+			continue
+		}
+		scannedFiles++
+		allCriticals = append(allCriticals, criticals...)
+	}
+
+	if len(scanErrors) > 0 {
+		executedCheck.Passed = false
+		executedCheck.Detail = fmt.Sprintf("antipattern scan could not execute for %d file(s): %s", len(scanErrors), strings.Join(scanErrors, "; "))
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+	} else if claimedFiles == 0 {
+		executedCheck.Passed = true
+		executedCheck.Detail = "no changed files were claimed for this phase; antipattern scan had nothing to scan"
+	} else if scannedFiles == 0 {
+		// Files were claimed but not one could be read. Whatever the cause —
+		// wrong paths, a root-resolution mismatch, or claims describing work
+		// that never landed — the security scan did not happen, and a phase
+		// must not pass with its safety gate unexecuted (D-01).
+		executedCheck.Passed = false
+		executedCheck.Detail = fmt.Sprintf("antipattern scan executed against 0 of %d claimed file(s); none could be read (absent: %s)",
+			claimedFiles, strings.Join(absentFiles, ", "))
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+	} else {
+		executedCheck.Passed = true
+		executedCheck.Detail = fmt.Sprintf("antipattern scan executed across %d of %d claimed file(s)", scannedFiles, claimedFiles)
+		if len(absentFiles) > 0 {
+			executedCheck.Detail += fmt.Sprintf("; %d absent (deleted or wrong path): %s", len(absentFiles), strings.Join(absentFiles, ", "))
+		}
+	}
+
+	if len(allCriticals) > 0 {
+		distinctFiles := map[string]bool{}
+		var locations []string
+		for _, c := range allCriticals {
+			distinctFiles[c.File] = true
+			if len(locations) < 5 {
+				locations = append(locations, fmt.Sprintf("%s:%d", c.File, c.Line))
+			}
+		}
+		findingsCheck.Passed = false
+		findingsCheck.Detail = fmt.Sprintf("%d critical antipattern finding(s) across %d file(s): %s", len(allCriticals), len(distinctFiles), strings.Join(locations, ", "))
+		findingsCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		findingsCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+	} else {
+		// A pass detail that does not state the number scanned is
+		// unacceptable: it makes "scanned nothing" indistinguishable from
+		// "scanned everything and found nothing" (T-160-10).
+		findingsCheck.Passed = true
+		findingsCheck.Detail = fmt.Sprintf("scanned %d of %d claimed file(s), no critical patterns", scannedFiles, claimedFiles)
+	}
+
+	return findingsCheck, executedCheck
 }
 
 // runPreBuildGates checks preconditions before dispatching a build.
@@ -571,10 +714,11 @@ func gateRecoveryTemplate(name string) string {
 
 // alwaysRunGates lists gates that always execute regardless of prior results.
 var alwaysRunGates = map[string]bool{
-	"tests_pass":        true,
-	"flags":             true,
-	"watcher_veto":      true,
-	"no_critical_flags": true,
+	"tests_pass":            true,
+	"flags":                 true,
+	"watcher_veto":          true,
+	"no_critical_flags":     true,
+	"anti_pattern_executed": true,
 }
 
 // GateClassificationTier represents the severity tier of a gate.
@@ -597,12 +741,13 @@ type gateClassificationEntry struct {
 // This is a read-only constant -- no configuration can change these values.
 // Gatekeeper and watcher_veto are compile-time hard_block per D-06.
 var gateClassifications = map[string]gateClassificationEntry{
-	// hard_block gates (5): security, quality veto, human escalation, and pre-checks
-	"gatekeeper":        {hardBlock, "Security CVE findings require human judgment"},
-	"watcher_veto":      {hardBlock, "Watcher has final say by colony design"},
-	"flags":             {hardBlock, "Flags represent intentional human escalation"},
-	"tests_pass":        {hardBlock, "Broken build is always a hard block"},
-	"no_critical_flags": {hardBlock, "Critical errors existing is always a hard block"},
+	// hard_block gates (6): security, quality veto, human escalation, and pre-checks
+	"gatekeeper":            {hardBlock, "Security CVE findings require human judgment"},
+	"watcher_veto":          {hardBlock, "Watcher has final say by colony design"},
+	"flags":                 {hardBlock, "Flags represent intentional human escalation"},
+	"tests_pass":            {hardBlock, "Broken build is always a hard block"},
+	"no_critical_flags":     {hardBlock, "Critical errors existing is always a hard block"},
+	"anti_pattern_executed": {hardBlock, "A safety scan which could not run must never be reported as passing"},
 	// soft_block gates (6): quality findings that auto-resolve when non-critical
 	"auditor":           {softBlock, "Quality findings auto-resolve when non-critical"},
 	"complexity":        {softBlock, "Maintainability thresholds are advisory until verified"},

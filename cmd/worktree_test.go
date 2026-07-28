@@ -498,12 +498,12 @@ func TestWorktreeEntryInColonyPackage(t *testing.T) {
 
 func makeTestStateWithWorktrees(worktrees []colony.WorktreeEntry) string {
 	state := map[string]interface{}{
-		"version": "3.0",
-		"goal":    "test",
-		"state":   "READY",
+		"version":       "3.0",
+		"goal":          "test",
+		"state":         "READY",
 		"current_phase": 1,
-		"plan":   map[string]interface{}{"phases": []interface{}{}},
-		"events": []interface{}{},
+		"plan":          map[string]interface{}{"phases": []interface{}{}},
+		"events":        []interface{}{},
 		"memory": map[string]interface{}{
 			"phase_learnings": []interface{}{},
 			"decisions":       []interface{}{},
@@ -1937,4 +1937,3 @@ func TestReportOrphanBranches(t *testing.T) {
 		t.Errorf("expected phase-1/builder-1 in orphaned branches, got %+v", orphaned)
 	}
 }
-

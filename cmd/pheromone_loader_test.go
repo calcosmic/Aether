@@ -468,6 +468,10 @@ func TestColonyPrimeWithHiveWisdom(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	store = s
 
+	// Hive retrieval is off by default; this test asserts on hive content,
+	// so it opts in explicitly rather than relying on an implicit default.
+	enableHiveForTest(t)
+
 	// Set up hub directory with hive wisdom
 	hubDir := t.TempDir()
 	os.MkdirAll(filepath.Join(hubDir, "hive"), 0755)
@@ -734,6 +738,10 @@ func TestColonyPrimeHiveWisdomEternalFallback(t *testing.T) {
 	s, tmpDir := newTestStoreCmd(t)
 	defer os.RemoveAll(tmpDir)
 	store = s
+
+	// Hive retrieval is off by default; this test asserts on hive content,
+	// so it opts in explicitly rather than relying on an implicit default.
+	enableHiveForTest(t)
 
 	// Set up hub directory with ONLY eternal memory (no hive)
 	hubDir := t.TempDir()

@@ -95,8 +95,9 @@ aether host plan --depth <choice> --planning-depth <choice>
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>
 ```
 
-11. Spawn exactly one runtime-specified Scout and then exactly one
-   runtime-specified Route-Setter using visible live Task/subagent panels with
+11. Spawn every runtime-specified dispatch: the base Scout plus any
+   phase_research Scouts in wave 1 (parallel), then exactly one
+   runtime-specified Route-Setter in wave 2, using visible live Task/subagent panels with
    caste-labelled descriptions, manifest names, castes, task IDs, briefs, and
    `skill_section` values. Do not add extra planning workers.
 12. Before each manifest wave, render `aether ceremony wave-start` for that

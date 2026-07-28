@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/discuss.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/discuss.yaml. Synced by aether update. -->
 ---
 name: ant-discuss
 description: "💬 Capture clarifications before planning through the Aether CLI runtime"
@@ -22,3 +22,7 @@ routing behavior here, update `.aether/commands/discuss.yaml`,
 `cmd/command_guide.go`, and the Codex skill `aether-colony-research` in the same
 change. Verify `aether command-guide discuss --platform codex` still describes
 the matching Codex flow.
+
+**Next steps:**
+- `/ant-plan` — plan with clarified intent
+- `/ant-assumptions` — surface plan assumptions after planning

@@ -5145,7 +5145,13 @@ func TestRunCodexContinueVerificationSkipsWatcherForRawBindEPERM(t *testing.T) {
 	}
 }
 
-func TestRunCodexContinueVerificationBlocksWhenAllCommandsAreSkipped(t *testing.T) {
+func TestRunCodexContinueVerificationWarnsWhenAllCommandsAreSkipped(t *testing.T) {
+	// Zero resolvable verification commands used to hard-block advancement,
+	// which stranded every repo outside the five detected ecosystems at its
+	// first continue with no visible remedy. The contract now: verification
+	// responsibility passes to the watcher, and the situation surfaces as an
+	// explicit warning. With --skip-watchers the user has knowingly chosen to
+	// advance on claims alone.
 	saveGlobals(t)
 
 	s, tmpDir := newTestStore(t)
@@ -5168,11 +5174,11 @@ func TestRunCodexContinueVerificationBlocksWhenAllCommandsAreSkipped(t *testing.
 	if watcherFlow != nil {
 		t.Fatalf("watcherFlow = %+v, want nil with --skip-watchers", watcherFlow)
 	}
-	if report.Passed || report.ChecksPassed {
-		t.Fatalf("all-skipped verification passed: %+v", report)
+	if !report.ChecksPassed {
+		t.Fatalf("all-skipped verification must not hard-block: %+v", report.BlockingIssues)
 	}
-	if !strings.Contains(strings.Join(report.BlockingIssues, "\n"), "no deterministic verification command") {
-		t.Fatalf("missing explicit all-skipped blocker: %+v", report.BlockingIssues)
+	if !strings.Contains(strings.Join(report.Warnings, "\n"), "no deterministic verification command") {
+		t.Fatalf("all-skipped state must surface as an explicit warning: %+v", report.Warnings)
 	}
 	for _, step := range report.Steps {
 		if !step.Skipped {

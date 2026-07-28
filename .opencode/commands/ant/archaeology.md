@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/archaeology.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/archaeology.yaml. Synced by aether update. -->
 ---
 name: ant-archaeology
 description: "🏺 The Archaeologist — excavates git history and surfaces tribal knowledge"

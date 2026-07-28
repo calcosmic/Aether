@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -27,13 +28,28 @@ var dataCleanCmd = &cobra.Command{
 
 		confirm, _ := cmd.Flags().GetBool("confirm")
 
+		// Worker-debug artifacts (D-04): reported in both dry-run and
+		// confirmed mode — unlike the pheromones `removed` field below,
+		// `worker_debug_prunable` is deliberately non-zero without
+		// --confirm, so data-clean without --confirm is still useful as an
+		// inspection command rather than reporting zeros for everything.
+		workerDebugDir := filepath.Join(store.BasePath(), "worker-debug")
+		wdTotal, wdPrunable, wdRemoved, wdErr := pruneWorkerDebugDirectory(workerDebugDir, confirm)
+		if wdErr != nil {
+			outputError(3, fmt.Sprintf("failed to prune worker-debug artifacts: %v", wdErr), nil)
+			return nil
+		}
+
 		// Load pheromones.json
 		data, err := store.ReadFile("pheromones.json")
 		if err != nil {
 			outputOK(map[string]interface{}{
-				"scanned": true,
-				"removed": 0,
-				"dry_run": !confirm,
+				"scanned":               true,
+				"removed":               0,
+				"dry_run":               !confirm,
+				"worker_debug_total":    wdTotal,
+				"worker_debug_prunable": wdPrunable,
+				"worker_debug_removed":  wdRemoved,
 			})
 			return nil
 		}
@@ -47,9 +63,12 @@ var dataCleanCmd = &cobra.Command{
 		rawSignals, _ := pheromonesFile["signals"].([]interface{})
 		if rawSignals == nil {
 			outputOK(map[string]interface{}{
-				"scanned": true,
-				"removed": 0,
-				"dry_run": !confirm,
+				"scanned":               true,
+				"removed":               0,
+				"dry_run":               !confirm,
+				"worker_debug_total":    wdTotal,
+				"worker_debug_prunable": wdPrunable,
+				"worker_debug_removed":  wdRemoved,
 			})
 			return nil
 		}
@@ -84,12 +103,80 @@ var dataCleanCmd = &cobra.Command{
 		}
 
 		outputOK(map[string]interface{}{
-			"scanned": true,
-			"removed": reportedRemoved,
-			"dry_run": !confirm,
+			"scanned":               true,
+			"removed":               reportedRemoved,
+			"dry_run":               !confirm,
+			"worker_debug_total":    wdTotal,
+			"worker_debug_prunable": wdPrunable,
+			"worker_debug_removed":  wdRemoved,
 		})
 		return nil
 	},
+}
+
+// pruneWorkerDebugDirectory applies the shared codex.WorkerDebugRetentionMaxAge
+// / codex.WorkerDebugRetentionMaxFiles policy against dir: files older than
+// the max age are counted as prunable first, then, if more than the file cap
+// survive, the oldest of those are counted as prunable too. total is the
+// artifact count before pruning; prunable is what WOULD be removed, reported
+// regardless of confirm; removed is what was actually deleted, which is
+// always 0 when confirm is false. A missing directory is not an error —
+// dataCleanCmd zeros all three and continues.
+func pruneWorkerDebugDirectory(dir string, confirm bool) (total, prunable, removed int, err error) {
+	entries, readErr := os.ReadDir(dir)
+	if readErr != nil {
+		if os.IsNotExist(readErr) {
+			return 0, 0, 0, nil
+		}
+		return 0, 0, 0, readErr
+	}
+
+	type debugArtifact struct {
+		name    string
+		modTime time.Time
+	}
+	var artifacts []debugArtifact
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			continue
+		}
+		artifacts = append(artifacts, debugArtifact{name: entry.Name(), modTime: info.ModTime()})
+	}
+	total = len(artifacts)
+
+	cutoff := time.Now().Add(-codex.WorkerDebugRetentionMaxAge)
+	var toPrune []string
+	var survivors []debugArtifact
+	for _, a := range artifacts {
+		if a.modTime.Before(cutoff) {
+			toPrune = append(toPrune, a.name)
+			continue
+		}
+		survivors = append(survivors, a)
+	}
+	if len(survivors) > codex.WorkerDebugRetentionMaxFiles {
+		sort.Slice(survivors, func(i, j int) bool { return survivors[i].modTime.Before(survivors[j].modTime) })
+		excess := len(survivors) - codex.WorkerDebugRetentionMaxFiles
+		for i := 0; i < excess; i++ {
+			toPrune = append(toPrune, survivors[i].name)
+		}
+	}
+	prunable = len(toPrune)
+	if !confirm {
+		return total, prunable, 0, nil
+	}
+	for _, name := range toPrune {
+		if removeErr := os.Remove(filepath.Join(dir, name)); removeErr != nil {
+			log.Printf("data-clean: failed to remove worker-debug artifact %s: %v", name, removeErr)
+			continue
+		}
+		removed++
+	}
+	return total, prunable, removed, nil
 }
 
 var backupPruneGlobalCmd = &cobra.Command{

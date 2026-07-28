@@ -1,0 +1,72 @@
+```json
+{
+  "status": "completed",
+  "summary": "Surveyed .aether/data/survey artifacts (generic auto-scan, low domain value) plus 6 targeted repo reads (STATE.md, GOLDEN_EXAMPLES_INDEX.md, ARCHITECTURE_PATTERNS.md, m4l_builder/instrument.py, m4l_builder/devices.py, m4l_builder/__init__.py) and grep-based checks. The MDS system already has proven, tested infrastructure (M4LAudioEffect/M4LMidiEffect/M4LInstrument classes, poly~ voice-patch generator with gen~ resonator support, an 8-gate MIDI sequencer architecture) that covers most of the drum-sequencer goal, but has zero proven pattern for granular/glitch DSP and no documented architecture that combines internal synthesis + step sequencing in one device. This is the key planning risk: the smallest working slice should prove the synthesis+sequencing seam first (per clarified intent) before touching granular processing, which the codebase itself flags as needing ad-hoc research.",
+  "files_created": [],
+  "files_modified": [],
+  "tests_written": [],
+  "blockers": [
+    "No existing ARCHITECTURE_PATTERNS.md entry combines 'Instrument' (internal synthesis) with 'Step Sequencer' (transport-synced MIDI engine) in one device — these are documented as two separate architectures (Instrument+Partials vs Step Sequencer), and the sequencer pattern is built for MIDI Effect devices, not Instruments that generate their own audio. The plan must explicitly define how the M4LInstrument class hosts an internal step engine (metro @quantize @active 1 + counter) driving its own poly~/gen~ voices, since no golden example does this today.",
+    "Granular/grain DSP has no verified M4L golden example in this repo. docs/GOLDEN_EXAMPLES_INDEX.md points only to Cycling'74's generic `examples/Examples/sampling/` for granular reference, and docs/IMPLEMENTATION_PLAN_CDS_PATTERNS.md explicitly encodes granular as a 'needs research' case (triggers RESEARCH.md scaffolding) alongside spectral/physical-modeling/neural techniques. Treat granular as phase-3+ work, not part of the first vertical slice, consistent with the clarified intent to prove synthesis+sequencing first."
+  ],
+  "handoff": {
+    "changed_files": [],
+    "commands_run": [],
+    "verification_status": "not_applicable_research_only",
+    "known_failures": [],
+    "open_decisions": [
+      "Should the first vertical slice be built as M4LInstrument (audio-generating, hosts its own step engine) or as an M4LMidiEffect (reuses aws-step-sequencer's proven 8-gate engine) feeding a separate M4LInstrument via internal note routing? The codebase supports both classes but has no precedent for a single fused instrument+sequencer device.",
+      "Which golden example is the closest 'smallest slice' starting point: `aws-step-sequencer` (proven sequencing engine, MIDI-only) or `PGS1 Mono.amxd` / `warm_metals` resonator pattern (proven gen~ voice synthesis, no sequencing)? Plan should pick one as primary scaffold and graft the other's pattern in, per CLAUDE.md's 'copy closest golden example, adapt' rule."
+    ],
+    "assumptions": [
+      "Devices/ folder is empty of relevant WIP (only STS-BioToneSampler.amxd present) — this is a genuinely new build, no in-flight device state to reconcile.",
+      "m4l_builder's public API (M4LAudioEffect, M4LMidiEffect, M4LInstrument in m4l_builder/devices.py, exported via __init__.py) is stable and should be extended, not replaced, per user's 'reuse existing contracts' directive."
+    ],
+    "next_worker_instructions": "Phase 1 (Discovery/boundaries) should confirm which M4L device class (Instrument vs MIDI Effect) hosts the fused synth+sequencer, and read m4l_builder/instrument.py build_voice_patch() in full plus docs/SEQUENCER_PATTERNS.md and docs/GEN_PATTERNS.md end-to-end (not yet fully read by this scout) before finalizing the architecture doc. Do not attempt granular/glitch processing in the first implementation slice — stub it as a later phase per the accepted plan revision boundary.",
+    "do_not_repeat": [
+      "Do not re-run the generic top-level survey (.aether/data/survey/*) again this session — it only found site-packages/.venv noise and generic layout facts with no M4L domain signal; already fully read.",
+      "Do not re-glob examples/aws-shipped-devices/ expecting device subfolders via glob — the top-level only resolved a .DS_Store; use targeted paths like examples/aws-shipped-devices/aws-step-sequencer/ directly instead."
+    ],
+    "freshness": "as of 2026-07-27, based on docs last updated 2026-04-11 (ARCHITECTURE_PATTERNS.md) and 2026-03-12 (STATE.md, most recent project state entry)"
+  },
+  "artifacts": {},
+  "scout_report": {
+    "findings": [
+      "docs/ARCHITECTURE_PATTERNS.md (updated 2026-04-11) documents 7 proven architectures sourced from 10 shipped devices in examples/aws-shipped-devices/: Simple Audio Effect, Compressor, Multi-FX, Step Sequencer, Modulation, Delay/Reverb, Display-First. None combine internal synthesis with sequencing — this is a genuine architectural gap the plan must close explicitly.",
+      "Step Sequencer pattern (Section 4) is fully specified and gate-tested: metro @quantize @active 1 + counter (CRIT-16), coll @embed 1 + pattr for persistence (CRIT-21), delay not pipe for swing timing (CRIT-19), jsui step grid with getvalueof/setvalueof. Reference: examples/aws-shipped-devices/aws-step-sequencer/. It targets MIDI Effect devices with midiout, not audio-generating instruments.",
+      "m4l_builder/devices.py defines three device classes exported via m4l_builder/__init__.py: M4LAudioEffect, M4LMidiEffect, M4LInstrument (grep-confirmed at lines 80, 576, 633). The framework already has the class scaffolding needed for an instrument-type drum device; no new base class is required.",
+      "m4l_builder/instrument.py provides build_voice_patch(), a poly~ voice-patch generator supporting mtof frequency conversion, velocity scaling, thispoly~ mute management, and an optional gen~ resonator with parameter forwarding — this is the direct reusable building block for internally-synthesized drum voices (confirms 'Instrument + Partials' pattern referenced in ARCHITECTURE_PATTERNS.md as 'warm_metals').",
+      "Granular/grain DSP has zero proven M4L pattern in this repo. Grep of docs/ for 'granular|grain' found matches only in indexing/reference docs (GOLDEN_EXAMPLES_INDEX.md pointing to generic Cycling'74 Examples/sampling/, DISPLAY_PATTERNS.md, VISUAL_DESIGN_SYSTEM.md) and in docs/IMPLEMENTATION_PLAN_CDS_PATTERNS.md, which explicitly encodes granular synthesis as a case requiring auto-generated RESEARCH.md scaffolding before build (same tier as spectral/physical-modeling/neural techniques) — meaning the system itself treats granular as unproven, novel work.",
+      "docs/GEN_PATTERNS.md (the authoritative gen~ codebox pattern doc) did NOT appear in the granular/grain grep results across docs/ — no granular GenExpr pattern is documented there, confirming the gap rather than just an indexing oversight.",
+      ".planning/STATE.md (last updated ~2026-03-12) shows the v6.0 infrastructure roadmap was paused in favor of shipping devices directly; two of its unresolved 'Blockers/Concerns' are directly relevant: Phase 21 ('TMT-style per-instance variation needs working gen~ pattern') and Phase 22 ('granular... pfft~ doesn't support dynamic FFT parameters'). These are pre-existing, unresolved technical risks in this codebase, not solved by any later work found in this survey.",
+      "examples/github-sources/DrumBrain/ (drumbrain.js, model.js, model.indented.json) is a GitHub-sourced golden example cataloged in docs/GOLDEN_EXAMPLES_INDEX.md for 'LiveAPI clip manipulation' and 'Version branching Live 10 vs 11+' — it is ML/JS-driven external clip generation, not internal synthesis+sequencing, so it is tangential background reference rather than a direct architectural template for this goal.",
+      "devices/ folder contains only STS-BioToneSampler.amxd and a .DS_Store — there is no in-progress drum-sequencer device or STATE.md to reconcile; this confirms a clean-slate first implementation slice.",
+      "m4l_builder ships its own pytest-style test suite (test_builder.py, test_polish.py, test_knobs.py, test_vault_compliance.py, test_display_templates.py, etc.), directly contradicting the generic survey's SENTINEL-PROTOCOLS.md claim of 'No test suite detected' (that tool only scanned .mds/test_*.py, missing m4l_builder/test_*.py). Use m4l_builder's own test patterns as the model for any 'focused regression tests' required by the verification bar.",
+      "The generic .aether/data/survey/* artifacts (BLUEPRINT, CHAMBERS, DISCIPLINES, PATHOGENS, PROVISIONS, SENTINEL-PROTOCOLS, TRAILS) are dated 2026-05-18 but contain almost no M4L-domain signal — their 'entry points' and 'key abstractions' resolved mostly to .venv/site-packages files (pip, sphinx, docutils) and Obsidian plugin JS, not this project's actual architecture. They should not be relied upon for architecture/interface planning; docs/ARCHITECTURE_PATTERNS.md and docs/GOLDEN_EXAMPLES_INDEX.md are the credible sources."
+    ],
+    "gaps": [
+      "Did not fully read docs/GEN_PATTERNS.md or docs/SEQUENCER_PATTERNS.md end-to-end (only grep-confirmed absence of granular content in the former) — Phase 1/2 planning should do a full read before locking the GenExpr and sequencing interface design.",
+      "Did not inspect examples/aws-shipped-devices/aws-step-sequencer/ or examples/working-reference-devices/instrument/PGS1 Mono.amxd/ build scripts directly (glob only, no file content read) — needed before deciding which golden example to fork.",
+      "Did not confirm whether m4l_builder/instrument.py or devices.py already has any helper for wiring an internal step-engine's note output directly into poly~ voices within a single M4LInstrument patch (vs. the two-device MIDI-effect + separate instrument approach) — this is the crux open decision and requires direct source reading, not just grep, in the next research pass.",
+      "Did not check .planning/LESSONS.md or MEMORY.md for any CRIT/STD lesson specifically tagged 'granular' beyond the MEMORY.md excerpt already visible in this session's context (none found there either) — worth a dedicated grep before granular work begins in a later phase."
+    ],
+    "confidence": "medium-high — architecture and framework capability findings are directly sourced and cross-confirmed (grep + doc read); the granular gap and the synthesis+sequencing fusion gap are well-evidenced as genuinely unsolved in-repo, which is the most decision-relevant finding for planning phases 1-2. Confidence on exact class-level wiring approach (M4LInstrument internal step engine feasibility) is lower since only helper-level code (build_voice_patch) was read, not the full M4LInstrument class body.",
+    "study_files": [
+      ".aether/data/survey/BLUEPRINT.md",
+      ".aether/data/survey/CHAMBERS.md",
+      ".aether/data/survey/DISCIPLINES.md",
+      ".aether/data/survey/PATHOGENS.md",
+      ".aether/data/survey/PROVISIONS.md",
+      ".aether/data/survey/SENTINEL-PROTOCOLS.md",
+      ".aether/data/survey/TRAILS.md",
+      ".planning/STATE.md",
+      "docs/GOLDEN_EXAMPLES_INDEX.md",
+      "docs/ARCHITECTURE_PATTERNS.md",
+      "docs/IMPLEMENTATION_PLAN_CDS_PATTERNS.md",
+      "m4l_builder/instrument.py",
+      "m4l_builder/devices.py",
+      "m4l_builder/__init__.py"
+    ]
+  }
+}
+```

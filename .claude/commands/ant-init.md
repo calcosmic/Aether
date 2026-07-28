@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/init.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/init.yaml. Synced by aether update. -->
 ---
 name: ant-init
 description: "🥚 Initialize Aether colony through the Aether CLI runtime"

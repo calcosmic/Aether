@@ -83,32 +83,17 @@ of your return JSON indicating which signals you observed and how they influence
 <return_format>
 ## Output Format
 
-Return structured JSON at task completion:
-
-```json
-{
-  "ant_name": "{your name}",
-  "caste": "scout",
-  "status": "completed" | "failed" | "blocked",
-  "summary": "What you discovered",
-  "key_findings": [
-    "Finding 1 with evidence and source",
-    "Finding 2 with evidence and source"
-  ],
-  "code_examples": [],
-  "best_practices": [],
-  "gotchas": [],
-  "recommendations": [],
-  "sources": []
-}
-```
+The runtime appends the authoritative response contract to every task brief —
+follow it exactly. Do not invent your own top-level fields: earlier versions of
+this file demanded `key_findings`/`gotchas`/`sources`, and the runtime silently
+discarded all of them. Put research content in `summary` and, when the task
+brief asks for it, in `scout_report` (findings, gaps, confidence, study_files).
+Every finding needs evidence and a source.
 
 **Status values:**
-- `completed` — Research done, all findings sourced, output matches schema
+- `completed` — Research done, all findings sourced, output matches the runtime contract
 - `failed` — Unrecoverable error; summary explains what was attempted
-- `blocked` — Scope exceeded quick lookup; escalation_reason recommends next step (e.g., /ant-oracle)
-
-**Note:** The `spawns` field from OpenCode Scout format is removed. Claude Code subagents cannot spawn other subagents.
+- `blocked` — Scope exceeded quick lookup; summary recommends next step (e.g., /ant-oracle)
 </return_format>
 
 <success_criteria>

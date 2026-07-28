@@ -199,6 +199,13 @@ func TestResolveTestCommand_GoProject(t *testing.T) {
 	os.Unsetenv("AETHER_ROOT")
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
+	// resolveTestCommand now prefers the store's own root over the process
+	// cwd, so pin store to nil for a deterministic fallback path regardless
+	// of what earlier tests left behind.
+	origStore := store
+	store = nil
+	defer func() { store = origStore }()
+
 	// Since this test runs inside the Aether repo (which has go.mod),
 	// it should detect Go and return the test command.
 	cmd := resolveTestCommand()
@@ -212,6 +219,10 @@ func TestResolveTestCommand_NoProject(t *testing.T) {
 	origRoot := os.Getenv("AETHER_ROOT")
 	os.Unsetenv("AETHER_ROOT")
 	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	origStore := store
+	store = nil
+	defer func() { store = origStore }()
 
 	// resolveTestCommand uses ResolveAetherRoot which finds the git repo root.
 	// Just verify it doesn't panic.
@@ -249,11 +260,11 @@ func TestPreBuildGates(t *testing.T) {
 		t.Fatalf("load state: %v", err)
 	}
 	state.Errors.Records = append(state.Errors.Records, colony.ErrorRecord{
-		ID:        "1",
-		Severity:  "CRITICAL",
-		Category:  "test",
-		Description:   "critical error",
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		ID:          "1",
+		Severity:    "CRITICAL",
+		Category:    "test",
+		Description: "critical error",
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save state: %v", err)
@@ -295,11 +306,11 @@ func TestPreContinueGates(t *testing.T) {
 		t.Fatalf("load state: %v", err)
 	}
 	state.Errors.Records = append(state.Errors.Records, colony.ErrorRecord{
-		ID:        "1",
-		Severity:  "CRITICAL",
-		Category:  "test",
-		Description:   "critical error",
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		ID:          "1",
+		Severity:    "CRITICAL",
+		Category:    "test",
+		Description: "critical error",
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save state: %v", err)
@@ -778,15 +789,15 @@ func TestShouldSkipGateCmd_PassedGate(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
 
 	var buf bytes.Buffer
-		rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate", "--phase", "1"})
+	rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate", "--phase", "1"})
 	stdout = &buf
 
-		// Write per-phase gate results file
-		phaseResults := []GateCheckResult{
-			{Name: "spawn_gate", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
-		}
-		phaseData, _ := json.Marshal(phaseResults)
-		os.WriteFile(filepath.Join(dir, "gate-results-1.json"), phaseData, 0644)
+	// Write per-phase gate results file
+	phaseResults := []GateCheckResult{
+		{Name: "spawn_gate", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	phaseData, _ := json.Marshal(phaseResults)
+	os.WriteFile(filepath.Join(dir, "gate-results-1.json"), phaseData, 0644)
 
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)

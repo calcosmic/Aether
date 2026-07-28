@@ -110,11 +110,11 @@ var pheromoneWriteCmd = &cobra.Command{
 			Tags:        make([]colony.PheromoneTag, 0, len(tags)),
 		}
 
-			// Populate source_phase from current colony state
-			var cs colony.ColonyState
-			if loadErr := store.LoadJSON("COLONY_STATE.json", &cs); loadErr == nil && cs.CurrentPhase > 0 {
-				signal.SourcePhase = &cs.CurrentPhase
-			}
+		// Populate source_phase from current colony state
+		var cs colony.ColonyState
+		if loadErr := store.LoadJSON("COLONY_STATE.json", &cs); loadErr == nil && cs.CurrentPhase > 0 {
+			signal.SourcePhase = &cs.CurrentPhase
+		}
 
 		if reasonFlag != "" {
 			signal.Reason = &reasonFlag

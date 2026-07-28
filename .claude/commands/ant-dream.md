@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/dream.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/dream.yaml. Synced by aether update. -->
 ---
 name: ant-dream
 description: "💭 The Dreamer — observes, imagines, and writes wisdom about the codebase"

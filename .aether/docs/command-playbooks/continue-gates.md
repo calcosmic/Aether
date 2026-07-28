@@ -54,7 +54,7 @@ Log the violation:
 ```bash
 aether activity-log --command "BLOCKED" --details "colony: Spawn gate failed: {task_count} tasks, 0 spawns"
 aether error-flag-pattern --name "no-spawn-violation" --description "Prime Worker completed phase without spawning specialists" --severity "critical"
-aether gate-results-write --name "spawn_gate" --passed false --detail "No workers spawned for {task_count} tasks"
+aether gate-results-write --name "spawn_gate" --passed=false --detail "No workers spawned for {task_count} tasks"
 ```
 
 **HARD REJECTION - If watcher_count == 0 (no testing separation):**
@@ -92,7 +92,7 @@ Watcher validation has not completed. Recovery options:
 
 Write gate result:
 ```bash
-aether gate-results-write --name "spawn_gate" --passed true --detail "{spawn_count} workers, {watcher_count} watchers"
+aether gate-results-write --name "spawn_gate" --passed=true --detail "{spawn_count} workers, {watcher_count} watchers"
 ```
 
 Continue to Step 1.7.
@@ -155,14 +155,14 @@ Run /ant-build {phase} again after fixing.
 
 Write gate result:
 ```bash
-aether gate-results-write --name "anti_pattern" --passed false --detail "Critical anti-patterns detected: {count}"
+aether gate-results-write --name "anti_pattern" --passed=false --detail "Critical anti-patterns detected: {count}"
 ```
 
 Do NOT proceed to Step 2.
 
 If no CRITICAL issues, write gate result:
 ```bash
-aether gate-results-write --name "anti_pattern" --passed true --detail "No critical anti-patterns"
+aether gate-results-write --name "anti_pattern" --passed=true --detail "No critical anti-patterns"
 ```
 
 Continue to Step 1.7.1.
@@ -234,7 +234,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.8.
    ```
    Write gate result:
    ```bash
-   aether gate-results-write --name "complexity" --passed true --detail "Complexity thresholds not exceeded"
+   aether gate-results-write --name "complexity" --passed=true --detail "Complexity thresholds not exceeded"
    ```
    Continue to Step 1.8.
 
@@ -345,7 +345,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.8.
 
    Write gate result:
    ```bash
-   aether gate-results-write --name "complexity" --passed true --detail "Weaver {weaver_status}: {files_refactored} files refactored"
+   aether gate-results-write --name "complexity" --passed=true --detail "Weaver {weaver_status}: {files_refactored} files refactored"
    ```
 
 Continue to Step 1.8.
@@ -449,7 +449,7 @@ Critical CVEs were detected. Recovery options:
 ```
 Write gate result:
 ```bash
-aether gate-results-write --name "gatekeeper" --passed false --detail "{critical_count} critical CVEs detected"
+aether gate-results-write --name "gatekeeper" --passed=false --detail "{critical_count} critical CVEs detected"
 ```
 **Action Required:** Resolve the CVE findings before continuing. Run `/ant-unblock` for guided recovery.
 
@@ -463,7 +463,7 @@ Proceeding with caution...
 Run using the Bash tool with description "Logging high-severity warnings...": `aether midden-write --category "security" --message "High CVEs found: $high_count" --source "gatekeeper"`
 Write gate result:
 ```bash
-aether gate-results-write --name "gatekeeper" --passed true --detail "No critical CVEs, {high_count} high-severity warnings"
+aether gate-results-write --name "gatekeeper" --passed=true --detail "No critical CVEs, {high_count} high-severity warnings"
 ```
 Continue to Step 1.9.
 
@@ -473,7 +473,7 @@ Continue to Step 1.9.
 ```
 Write gate result:
 ```bash
-aether gate-results-write --name "gatekeeper" --passed true --detail "No critical or high security issues"
+aether gate-results-write --name "gatekeeper" --passed=true --detail "No critical or high security issues"
 ```
 Continue to Step 1.9.
 
@@ -581,7 +581,7 @@ Critical quality issues were detected. Recovery options:
 Run using the Bash tool with description "Logging critical quality block...": `aether error-flag-pattern --name "auditor-critical-findings" --description "$critical_count critical quality issues found" --severity "critical"`
 Write gate result:
 ```bash
-aether gate-results-write --name "auditor" --passed false --detail "{critical_count} critical quality issues, score {overall_score}/100"
+aether gate-results-write --name "auditor" --passed=false --detail "{critical_count} critical quality issues, score {overall_score}/100"
 ```
 **Action Required:** Fix the critical quality issues before continuing. Run `/ant-unblock` for guided recovery.
 
@@ -608,7 +608,7 @@ Quality score is below the threshold of 60. Recovery options:
 Run using the Bash tool with description "Logging quality score block...": `aether error-flag-pattern --name "auditor-quality-score" --description "Score $overall_score below threshold 60" --severity "critical"`
 Write gate result:
 ```bash
-aether gate-results-write --name "auditor" --passed false --detail "Quality score {overall_score}/100 below threshold 60"
+aether gate-results-write --name "auditor" --passed=false --detail "Quality score {overall_score}/100 below threshold 60"
 ```
 **Action Required:** Improve the quality score above 60 before continuing. Run `/ant-unblock` for guided recovery.
 
@@ -625,7 +625,7 @@ Proceeding with caution...
 Run using the Bash tool with description "Logging high-quality warnings...": `aether midden-write --category "quality" --message "High severity issues: $high_count (score: $overall_score)" --source "auditor"`
 Write gate result:
 ```bash
-aether gate-results-write --name "auditor" --passed true --detail "Score {overall_score}/100, {high_count} high-severity warnings"
+aether gate-results-write --name "auditor" --passed=true --detail "Score {overall_score}/100, {high_count} high-severity warnings"
 ```
 Continue to Step 1.10.
 
@@ -635,7 +635,7 @@ Continue to Step 1.10.
 ```
 Write gate result:
 ```bash
-aether gate-results-write --name "auditor" --passed true --detail "Score {overall_score}/100, no critical issues"
+aether gate-results-write --name "auditor" --passed=true --detail "Score {overall_score}/100, no critical issues"
 ```
 Continue to Step 1.10.
 
@@ -685,14 +685,14 @@ Fabricated metrics were detected. Recovery options:
 **Action Required:** Log the metrics violation, then run `/ant-unblock` for recovery options.
 ```bash
 aether error-flag-pattern --name "fabricated-tdd" --description "Prime Worker reported TDD metrics without creating test files" --severity "critical"
-aether gate-results-write --name "tdd_evidence" --passed false --detail "Claimed {claimed_count} tests but no test files found"
+aether gate-results-write --name "tdd_evidence" --passed=false --detail "Claimed {claimed_count} tests but no test files found"
 ```
 
 **If tests_added == 0 or test files exist matching claims:**
 
 Write gate result:
 ```bash
-aether gate-results-write --name "tdd_evidence" --passed true --detail "TDD evidence verified"
+aether gate-results-write --name "tdd_evidence" --passed=true --detail "TDD evidence verified"
 ```
 
 Continue to Step 1.11.
@@ -736,7 +736,7 @@ Options:
 ```
 Write gate result:
 ```bash
-aether gate-results-write --name "runtime" --passed true --detail "User confirmed app works at runtime"
+aether gate-results-write --name "runtime" --passed=true --detail "User confirmed app works at runtime"
 ```
 Continue to Step 1.12.
 
@@ -750,7 +750,7 @@ Please describe the issues so they can be addressed:
 Use AskUserQuestion to get issue details. Log to errors.records:
 ```bash
 aether error-add --category "runtime" --severity "critical" --description "{user_description}" --phase {phase}
-aether gate-results-write --name "runtime" --passed false --detail "User reported runtime issues: {user_description}"
+aether gate-results-write --name "runtime" --passed=false --detail "User reported runtime issues: {user_description}"
 ```
 
 Do NOT proceed to Step 2.
@@ -780,7 +780,7 @@ Proceeding to phase advancement.
 
 Write gate result:
 ```bash
-aether gate-results-write --name "runtime" --passed true --detail "Skipped -- no runnable app in this phase"
+aether gate-results-write --name "runtime" --passed=true --detail "Skipped -- no runnable app in this phase"
 ```
 
 Continue to Step 1.12.
@@ -828,7 +828,7 @@ Parse result for `blockers`, `issues`, and `notes` counts.
 
 Write gate result:
 ```bash
-aether gate-results-write --name "flags" --passed false --detail "{blockers} unresolved blocker flags"
+aether gate-results-write --name "flags" --passed=false --detail "{blockers} unresolved blocker flags"
 ```
 
 **If blockers == 0 but issues > 0:**
@@ -851,7 +851,7 @@ Continue to Step 2.
 
 Write gate result:
 ```bash
-aether gate-results-write --name "flags" --passed true --detail "No blocker flags"
+aether gate-results-write --name "flags" --passed=true --detail "No blocker flags"
 ```
 
 Continue to Step 1.13.
@@ -884,7 +884,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
    ```
    Write gate result:
    ```bash
-   aether gate-results-write --name "watcher_veto" --passed true --detail "No Watcher results found -- skipped"
+   aether gate-results-write --name "watcher_veto" --passed=true --detail "No Watcher results found -- skipped"
    ```
    Continue to Step 1.14.
 
@@ -931,7 +931,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
      ```
      Run using the Bash tool with description "Writing watcher veto gate result...":
      ```bash
-     aether gate-results-write --name "watcher_veto" --passed false --detail "User kept changes: score $quality_score, $critical_count critical issues"
+     aether gate-results-write --name "watcher_veto" --passed=false --detail "User kept changes: score $quality_score, $critical_count critical issues"
      ```
      Display:
      ```
@@ -942,7 +942,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
    - **Choice 2 ("Keep working (stay blocked)"):**
      Run using the Bash tool with description "Writing watcher veto gate result...":
      ```bash
-     aether gate-results-write --name "watcher_veto" --passed false --detail "User chose to keep working: score $quality_score, $critical_count critical issues"
+     aether gate-results-write --name "watcher_veto" --passed=false --detail "User chose to keep working: score $quality_score, $critical_count critical issues"
      ```
      Display:
      ```
@@ -961,7 +961,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
      ```
      Run using the Bash tool with description "Writing watcher veto gate result (override)..." :
      ```bash
-     aether gate-results-write --name "watcher_veto" --passed true --detail "User force-advanced: score $quality_score, $critical_count critical issues"
+     aether gate-results-write --name "watcher_veto" --passed=true --detail "User force-advanced: score $quality_score, $critical_count critical issues"
      ```
      Display:
      ```
@@ -977,7 +977,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
 
    Write gate result:
    ```bash
-   aether gate-results-write --name "watcher_veto" --passed true --detail "Score $quality_score, no critical issues"
+   aether gate-results-write --name "watcher_veto" --passed=true --detail "Score $quality_score, no critical issues"
    ```
 
    Continue to Step 1.14.
@@ -1005,7 +1005,7 @@ Run using the Bash tool with description "Checking colony health for Medic auto-
 ```
 Write gate result:
 ```bash
-aether gate-results-write --name "medic" --passed true --detail "Colony healthy -- no auto-spawn needed"
+aether gate-results-write --name "medic" --passed=true --detail "Colony healthy -- no auto-spawn needed"
 ```
 Continue to Step 2.
 
@@ -1083,7 +1083,7 @@ Recommended Actions:
 Log the block:
 ```bash
 aether activity-log --command "BLOCKED" --details "medic: {critical_count} critical health issues detected"
-aether gate-results-write --name "medic" --passed false --detail "{critical_count} critical health issues detected"
+aether gate-results-write --name "medic" --passed=false --detail "{critical_count} critical health issues detected"
 ```
 
 - **If `critical_count == 0` but `warning_count > 0`:**
@@ -1092,7 +1092,7 @@ aether gate-results-write --name "medic" --passed false --detail "{critical_coun
 ```
 Write gate result:
 ```bash
-aether gate-results-write --name "medic" --passed true --detail "Warnings detected: {warning_count}"
+aether gate-results-write --name "medic" --passed=true --detail "Warnings detected: {warning_count}"
 ```
 Continue to Step 2.
 
@@ -1102,6 +1102,6 @@ Continue to Step 2.
 ```
 Write gate result:
 ```bash
-aether gate-results-write --name "medic" --passed true --detail "Colony is healthy"
+aether gate-results-write --name "medic" --passed=true --detail "Colony is healthy"
 ```
 Continue to Step 2.

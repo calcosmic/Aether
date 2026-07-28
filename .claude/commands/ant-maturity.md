@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/maturity.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/maturity.yaml. Synced by aether update. -->
 ---
 name: ant-maturity
 description: "👑 View colony maturity journey with ASCII art anthill"

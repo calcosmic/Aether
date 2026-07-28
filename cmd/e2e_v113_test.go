@@ -138,7 +138,7 @@ func TestE2EV113FullFlow(t *testing.T) {
 	startedAt := time.Now()
 
 	results, claims, mode, err := executeCodexBuildDispatches(
-		ctx, tmpDir, phase, dispatches, nil, startedAt,
+		ctx, tmpDir, phase, dispatches, startedAt,
 		invoker, colony.ModeInRepo, 5*time.Minute, 3, false, nil,
 	)
 	if err != nil {
@@ -240,7 +240,7 @@ func TestE2EV113FullFlow(t *testing.T) {
 		t.Fatalf("Step 5: recordCodexBuildDispatches: %v", err)
 	}
 	fixerResults, _, _, err := executeCodexBuildDispatches(
-		ctx, tmpDir, phase, fixerDispatch, nil, time.Now(),
+		ctx, tmpDir, phase, fixerDispatch, time.Now(),
 		invoker, colony.ModeInRepo, 5*time.Minute, 3, false, nil,
 	)
 	if err != nil {

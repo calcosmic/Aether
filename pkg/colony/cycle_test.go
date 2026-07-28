@@ -13,18 +13,18 @@ import (
 
 func TestDetectCycles(t *testing.T) {
 	tests := []struct {
-		name        string
-		phases      []Phase
-		wantErr     bool
-		errIsCycle  bool
+		name         string
+		phases       []Phase
+		wantErr      bool
+		errIsCycle   bool
 		errIsMissing bool
-		errDetail   string // substring expected in error message
+		errDetail    string // substring expected in error message
 	}{
 		{
 			name: "no dependencies returns nil",
 			phases: []Phase{
 				{
-					ID:   1,
+					ID:    1,
 					Tasks: []Task{{ID: strPtr("1.1"), Goal: "task 1.1"}},
 				},
 			},

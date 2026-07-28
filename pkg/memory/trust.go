@@ -47,7 +47,13 @@ func Calculate(input TrustInput) TrustResult {
 	activityScore := math.Pow(0.5, float64(input.DaysSince)/60.0)
 
 	rawScore := 0.4*sourceScore + 0.35*evidenceScore + 0.25*activityScore
-	score := math.Max(0.2, rawScore)
+
+	// No floor. The previous `math.Max(0.2, rawScore)` meant nothing could ever
+	// decay out of the store: only 25% of the score is time-sensitive, so a
+	// test-verified entry still scored ~0.67 after two years and cleared the 0.3
+	// injection filter in colony-prime. Memory that cannot expire accumulates
+	// forever and is injected forever.
+	score := rawScore
 
 	// Round to 6 decimal places to match shell scale=6
 	score = math.Round(score*1e6) / 1e6

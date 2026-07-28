@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 func TestBuildAndPlanningManifestsCarryCanonicalPermissionProfiles(t *testing.T) {
@@ -12,7 +14,7 @@ func TestBuildAndPlanningManifestsCarryCanonicalPermissionProfiles(t *testing.T)
 		{Caste: "builder", Name: "Builder-1", Task: "implement"},
 		{Caste: "probe", Name: "Probe-1", Task: "test"},
 	}
-	attachBuildDispatchContext(1, build)
+	attachBuildDispatchContext(t.TempDir(), colony.Phase{ID: 1, Name: "Test"}, build, time.Now())
 	if build[0].PermissionProfile.Name != codex.PermissionRepositoryReadOnly {
 		t.Fatalf("Scout build profile = %+v", build[0].PermissionProfile)
 	}

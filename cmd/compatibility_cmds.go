@@ -61,6 +61,18 @@ var oracleCmd = &cobra.Command{
 			return nil
 		}
 
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "promote") {
+			minConfidence, _ := cmd.Flags().GetInt("min-confidence")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			result, err := runOraclePromote(skillWorkspaceRoot(), minConfidence, dryRun)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			outputOK(result)
+			return nil
+		}
+
 		depth, _ := cmd.Flags().GetString("depth")
 		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
 		scope, _ := cmd.Flags().GetString("scope")
@@ -160,6 +172,8 @@ func init() {
 	runCompatibilityCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build and continue dispatches (e.g. 15m)")
 	runCompatibilityCmd.Flags().Duration("timeout", 0, "Optional overall autopilot deadline; normal runs are bounded by phase and worker timeouts")
 
+	oracleCmd.Flags().Int("min-confidence", 80, "For `oracle promote`: minimum question confidence to promote findings from")
+	oracleCmd.Flags().Bool("dry-run", false, "For `oracle promote`: report what would be promoted without writing")
 	oracleCmd.Flags().String("depth", "", "Research depth: quick, balanced, deep, exhaustive (default: balanced)")
 	oracleCmd.Flags().String("confidence-target", "", "Target confidence percentage 1-100 (default: per depth level). Oracle will not finalize below this target unless a hard blocker is reported or max iterations are reached.")
 	oracleCmd.Flags().String("scope", defaultOracleScope, "Research scope: auto, repo, web, or both")

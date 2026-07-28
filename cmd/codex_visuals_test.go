@@ -1083,6 +1083,8 @@ func TestShouldUseANSIColorsUsesVisualModeOrForce(t *testing.T) {
 }
 
 func TestInstallVisualOutput(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1295,6 +1297,8 @@ func TestWorkflowSuggestionsBlockBuildAfterPlanFinalizeFailure(t *testing.T) {
 }
 
 func TestSetupVisualOutput(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1333,6 +1337,8 @@ func TestSetupVisualOutput(t *testing.T) {
 }
 
 func TestUpdateDryRunVisualOutput(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -2290,6 +2296,8 @@ func TestBuildWorkerFinishedShowsCasteIdentity(t *testing.T) {
 }
 
 func TestInstallJsonModeStillProducesJson(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

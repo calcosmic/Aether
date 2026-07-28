@@ -81,8 +81,10 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 
 	result := envelope["result"].(map[string]interface{})
-	if got := int(result["dispatch_count"].(float64)); got != 7 {
-		t.Fatalf("dispatch_count = %d, want 7", got)
+	if got := int(result["dispatch_count"].(float64)); got != 6 {
+		// Modeless phase resolves to prototype: prose "Research" in a task no
+		// longer spawns an Oracle (typed phase mode).
+		t.Fatalf("dispatch_count = %d, want 6", got)
 	}
 	if got := int(result["wave_count"].(float64)); got != 2 {
 		t.Fatalf("wave_count = %d, want 2 task waves", got)
@@ -90,8 +92,8 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if got := int(result["parallel_waves"].(float64)); got != 0 {
 		t.Fatalf("parallel_waves = %d, want 0", got)
 	}
-	if got := int(result["execution_wave_count"].(float64)); got != 7 {
-		t.Fatalf("execution_wave_count = %d, want 7 execution waves", got)
+	if got := int(result["execution_wave_count"].(float64)); got != 6 {
+		t.Fatalf("execution_wave_count = %d, want 6 execution waves", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
@@ -99,8 +101,8 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if waveExecution, ok := result["wave_execution"].([]interface{}); !ok || len(waveExecution) != 2 {
 		t.Fatalf("wave_execution = %#v, want 2 wave plans", result["wave_execution"])
 	}
-	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 7 {
-		t.Fatalf("execution_plan = %#v, want 7 execution stages", result["execution_plan"])
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 6 {
+		t.Fatalf("execution_plan = %#v, want 6 execution stages", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -123,11 +125,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 7 {
-		t.Fatalf("expected 7 manifest dispatches, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 6 {
+		t.Fatalf("expected 6 manifest dispatches, got %d", len(manifest.Dispatches))
 	}
-	if len(manifest.WorkerBriefs) != 7 {
-		t.Fatalf("expected 7 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	if len(manifest.WorkerBriefs) != 6 {
+		t.Fatalf("expected 6 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
@@ -162,7 +164,7 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected spawn-tree.txt: %v", err)
 	}
-	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|watcher|", "|Queen|probe|"} {
+	for _, want := range []string{"|Queen|builder|", "|Queen|watcher|", "|Queen|probe|"} {
 		if !strings.Contains(string(spawnTreeData), want) {
 			t.Fatalf("spawn tree missing %q\n%s", want, string(spawnTreeData))
 		}
@@ -1462,6 +1464,11 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 			Status:        "completed",
 			Summary:       dispatch.Name + " completed externally",
 			Duration:      1.25,
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"work complete"},
+			},
 		}
 		if dispatch.Caste == "builder" {
 			worker.FilesCreated = []string{"wrapper-evidence.txt"}
@@ -1666,6 +1673,11 @@ func TestBuildFinalizeAcceptsVerificationOnlyOutputEvidence(t *testing.T) {
 			TaskID:        dispatch.TaskID,
 			Status:        "completed",
 			Summary:       dispatch.Name + " completed verification-only work",
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"work complete"},
+			},
 		}
 		if dispatch.TaskID != "" {
 			worker.Outputs = []string{"verification.log"}
@@ -2812,8 +2824,7 @@ func TestResolveSkillSection_FormatsMatchedSkills(t *testing.T) {
 		t.Fatalf("failed to write skill: %v", err)
 	}
 
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	section := resolveSkillSection("builder", "testing task")
 	if section == "" {
@@ -2836,8 +2847,7 @@ func TestResolveSkillSection_ReturnsEmptyWhenNoMatches(t *testing.T) {
 		t.Fatalf("failed to create hub dir: %v", err)
 	}
 
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	section := resolveSkillSection("builder", "some task")
 	if section != "" {
@@ -3092,7 +3102,13 @@ func TestDispatchManifestAllCastes(t *testing.T) {
 	}
 }
 
-func TestBuildWorkerBriefContainsHeartbeat(t *testing.T) {
+// TestBuildWorkerBriefOmitsHeartbeat locks in the removal of the heartbeat
+// protocol. It previously asserted the opposite. The instruction asked a worker
+// to write a file "roughly every 30 seconds" during its own turn; a model has no
+// timer and cannot act between turns, so it was never satisfiable. Reinstating
+// it would spend ~380 chars of every prompt teaching workers to ignore an
+// instruction.
+func TestBuildWorkerBriefOmitsHeartbeat(t *testing.T) {
 	saveGlobals(t)
 
 	tmpDir := t.TempDir()
@@ -3104,26 +3120,34 @@ func TestBuildWorkerBriefContainsHeartbeat(t *testing.T) {
 	phase := colony.Phase{
 		ID:          1,
 		Name:        "Test Phase",
-		Description: "Testing heartbeat brief",
+		Description: "Testing heartbeat removal",
 	}
 
-	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
 
-	if !strings.Contains(brief, "Heartbeat Protocol") {
-		t.Error("worker brief missing 'Heartbeat Protocol' section")
+	if strings.Contains(brief, "Heartbeat Protocol") {
+		t.Error("worker brief reinstated the 'Heartbeat Protocol' section; a model has no timer and cannot honour it")
 	}
-	if !strings.Contains(brief, "heartbeat-") {
-		t.Error("worker brief missing 'heartbeat-' file reference")
+	if strings.Contains(brief, "heartbeat-") {
+		t.Error("worker brief reinstated a heartbeat file reference")
 	}
-	if !strings.Contains(brief, "Hammer-23") {
-		t.Error("worker brief missing worker name in heartbeat section")
-	}
-	if !strings.Contains(brief, "builder") {
-		t.Error("worker brief missing caste in heartbeat section")
+	if !strings.Contains(brief, "Implement feature X") {
+		t.Error("worker brief lost its assignment")
 	}
 }
 
-func TestBuildWorkerBriefLoadsPlaybookContent(t *testing.T) {
+// TestBuildWorkerBriefOmitsPlaybooks locks in the removal of playbook injection
+// from worker prompts. It previously asserted the opposite.
+//
+// Measured on a real brief before removal: playbook content was 5,733 of 7,485
+// characters (76.6%) against an assignment of 79. The injected text was
+// orchestrator guidance truncated at 2,800 chars, so a Builder received the
+// opening of build-wave.md telling it "YOU (the Queen) will spawn workers
+// directly" — a role contradiction at five times the mass of its actual task.
+//
+// Playbooks are still loaded for the orchestrator. They are simply not injected
+// into individual worker prompts, which is not what they were written for.
+func TestBuildWorkerBriefOmitsPlaybooks(t *testing.T) {
 	saveGlobals(t)
 
 	tmpDir := t.TempDir()
@@ -3131,7 +3155,7 @@ func TestBuildWorkerBriefLoadsPlaybookContent(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(playbookPath), 0755); err != nil {
 		t.Fatalf("mkdir playbook dir: %v", err)
 	}
-	if err := os.WriteFile(playbookPath, []byte("# Build Wave\n\nWorker must follow runtime wave guidance.\n"), 0644); err != nil {
+	if err := os.WriteFile(playbookPath, []byte("# Build Wave\n\nYOU (the Queen) will spawn workers directly.\n"), 0644); err != nil {
 		t.Fatalf("write playbook: %v", err)
 	}
 
@@ -3142,13 +3166,57 @@ func TestBuildWorkerBriefLoadsPlaybookContent(t *testing.T) {
 	}
 	phase := colony.Phase{ID: 1, Name: "Test Phase"}
 
-	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, []string{".aether/docs/command-playbooks/build-wave.md"}, time.Now())
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
 
-	if !strings.Contains(brief, "## Relevant Playbooks") {
-		t.Fatal("worker brief missing Relevant Playbooks section")
+	if strings.Contains(brief, "## Relevant Playbooks") {
+		t.Error("worker brief reinstated the Relevant Playbooks section")
 	}
-	if !strings.Contains(brief, "Worker must follow runtime wave guidance.") {
-		t.Fatalf("worker brief did not load playbook content:\n%s", brief)
+	if strings.Contains(brief, "YOU (the Queen) will spawn workers directly") {
+		t.Fatalf("worker brief injected orchestrator guidance into a worker prompt:\n%s", brief)
+	}
+	if !strings.Contains(brief, "Implement feature X") {
+		t.Error("worker brief lost its assignment")
+	}
+}
+
+// TestBuildWorkerBriefIsMostlyTask is the regression lock that matters. It
+// asserts a proportion rather than the presence of any one section, so any
+// future addition that pushes framework scaffolding past half the prompt fails
+// here regardless of what that addition is called.
+func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-25",
+		Caste: "builder",
+		Task:  "Add the exporter call to commands.rs and pass its result to the dashboard view",
+	}
+	phase := colony.Phase{
+		ID:              1,
+		Name:            "Wire the exporter",
+		Description:     "Connect the vault exporter to the dashboard command",
+		SuccessCriteria: []string{"Dashboard renders exporter output"},
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+	taskChars := 0
+	for _, section := range splitBriefSections(brief) {
+		switch section.Name {
+		case "Assignment", "Phase Objective", "Phase Success Criteria",
+			"Task Success Criteria", "Dependencies", "Task Constraints", "Hints":
+			taskChars += section.Chars
+		}
+	}
+
+	if len(brief) == 0 {
+		t.Fatal("empty worker brief")
+	}
+	share := float64(taskChars) / float64(len(brief)) * 100
+	if share < 40 {
+		t.Errorf("task-relevant content is %.1f%% of the worker brief (%d of %d chars); framework scaffolding now outweighs the task",
+			share, taskChars, len(brief))
 	}
 }
 
@@ -3187,7 +3255,7 @@ func TestBuildWorkerBriefIncludesCodegraphContext(t *testing.T) {
 		TaskIndex: 0,
 	}
 
-	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
 
 	if !strings.Contains(brief, "## Codebase Graph Context") {
 		t.Fatalf("worker brief missing codegraph context:\n%s", brief)
@@ -3222,7 +3290,7 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	}
 
 	invoker := &codex.FakeInvoker{}
-	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3, false, nil)
+	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, time.Now(), invoker, colony.ModeInRepo, 0, 3, false, nil)
 	if err != nil {
 		t.Fatalf("execute dispatches: %v", err)
 	}

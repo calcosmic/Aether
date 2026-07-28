@@ -36,8 +36,8 @@ type EventPayload map[string]interface{}
 
 // EventLine is a single NDJSON line in the event stream.
 type EventLine struct {
-	Type      EventType   `json:"type"`
-	Timestamp string      `json:"timestamp"`
+	Type      EventType    `json:"type"`
+	Timestamp string       `json:"timestamp"`
 	Payload   EventPayload `json:"payload"`
 }
 

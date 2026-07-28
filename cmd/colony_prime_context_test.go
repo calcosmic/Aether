@@ -166,6 +166,11 @@ section_templates:
 		t.Fatalf("create store: %v", err)
 	}
 	store = s
+
+	// This test asserts on the custom hive_wisdom header template, so it must
+	// opt into hive retrieval explicitly — it is off by default.
+	enableHiveForTest(t)
+
 	stdout = &bytes.Buffer{}
 	stderr = &bytes.Buffer{}
 

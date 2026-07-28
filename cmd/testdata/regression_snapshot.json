@@ -1,7 +1,7 @@
 {
   "audit_dimensions": {
     "command_contracts": {
-      "command_count": 396,
+      "command_count": 398,
       "lifecycle_contracts": 18,
       "output_modes": [
         "json",
@@ -30,8 +30,8 @@
       "home_sync_pair_count": 7
     },
     "gate_classifications": {
-      "total_gates": 13,
-      "hard_block": 5,
+      "total_gates": 14,
+      "hard_block": 6,
       "soft_block": 6,
       "advisory": 2
     }

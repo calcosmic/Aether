@@ -864,7 +864,6 @@ func TestColonyPrimeLargePheromonesTrimLowerPriority(t *testing.T) {
 		trimmedSet[name.(string)] = true
 	}
 
-
 	// Some lower-priority sections should be trimmed
 	if len(trimmed) == 0 {
 		t.Error("expected some sections to be trimmed when large pheromones compete with other sections for budget")
@@ -1031,6 +1030,10 @@ func TestColonyPrimeFreshDecisionsBeatStaleHiveWisdom(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	store = s
 
+	// Hive retrieval is off by default; this test asserts on hive content,
+	// so it opts in explicitly rather than relying on an implicit default.
+	enableHiveForTest(t)
+
 	hubDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(hubDir, "hive"), 0755); err != nil {
 		t.Fatal(err)
@@ -1042,11 +1045,19 @@ func TestColonyPrimeFreshDecisionsBeatStaleHiveWisdom(t *testing.T) {
 	var fixture freshVsStaleFixture
 	loadContextWeightingFixture(t, "fresh-vs-stale.json", &fixture)
 
-	stale := time.Now().Add(-240 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	// 120 days at confidence 0.9 decays to ~0.57 under the 180-day half-life,
+	// which stays above the 0.3 dormancy floor. That matters: this test is about
+	// WEIGHTED TRIMMING preferring fresh decisions over stale wisdom, so the
+	// stale entry must actually reach the candidate list. The previous fixture
+	// (240 days at 0.55 → ~0.22) fell below the floor and was dropped before
+	// trimming ran, so the test silently stopped exercising what it names.
+	// Dormancy filtering is covered separately by
+	// TestColonyPrimeDropsDormantHiveWisdomBelowDecayFloor.
+	stale := time.Now().Add(-120 * 24 * time.Hour).UTC().Format(time.RFC3339)
 	var hiveEntries []string
 	for i := 0; i < fixture.StaleHiveCount; i++ {
 		hiveEntries = append(hiveEntries, fmt.Sprintf(
-			`{"id":"w_%d","text":"Stale wisdom %d: %s","domain":"go","source_repo":"test","confidence":0.55,"created_at":"%s","accessed_at":"%s","access_count":1}`,
+			`{"id":"w_%d","text":"Stale wisdom %d: %s","domain":"go","source_repo":"test","confidence":0.9,"created_at":"%s","accessed_at":"%s","access_count":1}`,
 			i, i, strings.Repeat(fixture.StaleHivePhrase+" ", 18), stale, stale,
 		))
 	}

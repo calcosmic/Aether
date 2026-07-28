@@ -1555,27 +1555,59 @@ func oraclePhaseDirective(state oracleStateFile, plan oraclePlanFile) string {
 	return buildOraclePhaseDirective(state.Phase)
 }
 
+// fallbackOraclePhaseDirectives carries the REAL per-phase directives, not one
+// generic line. Before this, any repo without a CWD-relative colony/policies/
+// directory — every downstream repo — collapsed all four Oracle phases to the
+// same "investigate" instruction. The yaml files remain authoritative when
+// present; this is the of-last-resort copy.
+var fallbackOraclePhaseDirectives = map[string]string{
+	"survey":      "Your task is to survey the landscape. Identify key concepts, existing solutions, and open questions. Do not form conclusions yet.",
+	"verify":      "Your task is to verify previous findings. Test assumptions, look for contradictions, and assess confidence levels.",
+	"investigate": "Your task is to investigate specific questions. Deep-dive into the most promising areas identified in the survey.",
+	"synthesize":  "Your task is to synthesize all findings into a coherent report. Connect dots, resolve contradictions, and formulate recommendations.",
+	"default":     "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings.",
+}
+
+// oraclePhaseDirectivePaths returns candidate locations for the directives
+// file: the repo's own colony/policies (source checkouts), then the hub copy
+// that `aether publish` distributes.
+func oraclePhaseDirectivePaths() []string {
+	paths := []string{filepath.Join("colony", "policies", "oracle-phase-directives.yaml")}
+	if root := resolveAetherRootPath(); root != "" {
+		paths = append(paths, filepath.Join(root, "colony", "policies", "oracle-phase-directives.yaml"))
+	}
+	if hub := resolveHubPath(); hub != "" {
+		paths = append(paths, filepath.Join(hub, "system", "colony", "policies", "oracle-phase-directives.yaml"))
+	}
+	return paths
+}
+
 func loadOraclePhaseDirectives() map[string]string {
-	data, err := os.ReadFile("colony/policies/oracle-phase-directives.yaml")
-	if err != nil {
-		return nil
-	}
-	directives := make(map[string]string)
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+	for _, path := range oraclePhaseDirectivePaths() {
+		data, err := os.ReadFile(path)
+		if err != nil {
 			continue
 		}
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 {
-			continue
+		directives := make(map[string]string)
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			val = strings.Trim(val, `"`)
+			directives[key] = val
 		}
-		key := strings.TrimSpace(parts[0])
-		val := strings.TrimSpace(parts[1])
-		val = strings.Trim(val, `"`)
-		directives[key] = val
+		if len(directives) > 0 {
+			return directives
+		}
 	}
-	return directives
+	return fallbackOraclePhaseDirectives
 }
 
 func buildOraclePhaseDirective(phase string) string {
@@ -1587,7 +1619,7 @@ func buildOraclePhaseDirective(phase string) string {
 	if d, ok := directives["default"]; ok && d != "" {
 		return d
 	}
-	return "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings."
+	return fallbackOraclePhaseDirectives["default"]
 }
 
 func oracleWorkspacePaths(root string) oraclePaths {

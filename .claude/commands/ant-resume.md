@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/resume.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/resume.yaml. Synced by aether update. -->
 ---
 name: ant-resume
 description: "💾 Resume previous session through the Aether CLI runtime"

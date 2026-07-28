@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/run.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/run.yaml. Synced by aether update. -->
 ---
 name: ant-run
 description: "⚡ Autopilot — builds, verifies, learns, and advances through phases automatically"

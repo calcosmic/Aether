@@ -194,9 +194,9 @@ func TestComputeHealthScore(t *testing.T) {
 
 func TestRenderTraceDiagnostic(t *testing.T) {
 	diag := TraceDiagnostic{
-		RunID:      "run_test",
-		EntryCount: 10,
-		Duration:   "5m0s",
+		RunID:       "run_test",
+		EntryCount:  10,
+		Duration:    "5m0s",
 		HealthScore: 85,
 		Timeline: []StateTransition{
 			{Timestamp: "2026-01-01T00:00:00Z", From: "initialized", To: "planning"},

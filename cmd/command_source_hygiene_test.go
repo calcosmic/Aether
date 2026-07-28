@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var generatedCommandHeaderPattern = regexp.MustCompile(`^<!-- Generated from (\.aether/commands/[^ ]+\.yaml) - DO NOT EDIT DIRECTLY -->$`)
+var generatedCommandHeaderPattern = regexp.MustCompile(`^<!-- Aether-managed: runtime spec at (\.aether/commands/[^ ]+\.yaml)\. Synced by aether update\. -->$`)
 
 func TestCommandWrappersReferenceRealYamlSources(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()

@@ -1839,3 +1839,49 @@ func TestInitResearchFullOutputIntegration(t *testing.T) {
 		t.Errorf("missing output fields: %v", missing)
 	}
 }
+
+// Prior Context: detectPriorColonies must surface the most recent chambers'
+// goals and outcomes (from manifest.json) so /ant-init can show what came
+// before — v5's Prior Context section, restored on the modern engine.
+func TestDetectPriorColoniesReturnsRecentGoalsAndOutcomes(t *testing.T) {
+	target := t.TempDir()
+	chambers := filepath.Join(target, ".aether", "chambers")
+	seed := []struct {
+		dir      string
+		manifest string
+	}{
+		{"2026-01-10-project-oldest", `{"goal":"Oldest goal","milestone":"Crowned Anthill","entombed_at":"2026-01-10T00:00:00Z"}`},
+		{"2026-02-15-project-middle", `{"goal":"Middle goal","milestone":"Brood Stable","entombed_at":"2026-02-15T00:00:00Z"}`},
+		{"2026-03-20-abandoned-broken", `{}`}, // no goal — must be skipped, not crash
+		{"2026-04-25-project-newest", `{"goal":"Newest goal","milestone":"Crowned Anthill","entombed_at":"2026-04-25T00:00:00Z"}`},
+	}
+	for _, s := range seed {
+		dir := filepath.Join(chambers, s.dir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(s.manifest), 0644); err != nil {
+			t.Fatalf("write manifest: %v", err)
+		}
+	}
+
+	result := detectPriorColonies(target)
+	if got := result["count"].(int); got != 4 {
+		t.Fatalf("count = %d, want 4", got)
+	}
+	recent := result["recent"].([]map[string]string)
+	if len(recent) != 3 {
+		t.Fatalf("recent = %d entries, want 3 (goal-less chamber skipped, oldest dropped)", len(recent))
+	}
+	if recent[0]["goal"] != "Newest goal" || recent[0]["outcome"] != "Crowned Anthill" {
+		t.Errorf("recent[0] = %+v, want newest colony first with its milestone", recent[0])
+	}
+	if recent[1]["goal"] != "Middle goal" || recent[2]["goal"] != "Oldest goal" {
+		t.Errorf("recent order wrong: %+v", recent)
+	}
+
+	empty := detectPriorColonies(t.TempDir())
+	if empty["count"].(int) != 0 || len(empty["recent"].([]map[string]string)) != 0 {
+		t.Errorf("no-chambers repo should return empty recent: %+v", empty)
+	}
+}

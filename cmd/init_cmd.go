@@ -64,14 +64,31 @@ var initCmd = &cobra.Command{
 				if existing.Goal == nil || strings.TrimSpace(ptrStr(existing.Goal)) == "" || existing.State == colony.StateIDLE {
 					goto createFreshColony
 				}
-				// If colony is sealed, check for in-progress seal (uncommitted changes)
-				if existing.Milestone == "Crowned Anthill" {
+				// If colony is sealed, check for in-progress seal (uncommitted changes).
+				// Completion is keyed on state OR milestone: the review found a
+				// state marked complete without the milestone string hit the generic
+				// refusal that never mentions --confirm-reinit — and silently
+				// ignored the flag when given. A COMPLETED colony carries its whole
+				// history just like a sealed one.
+				if existing.Milestone == "Crowned Anthill" || existing.State == colony.StateCOMPLETED {
 					if sealInProgress(dataDir) {
 						outputError(1, "a seal operation appears to be in progress (COLONY_STATE.json has uncommitted changes with Crowned Anthill milestone). Wait for the seal to complete, commit the seal state, or run `aether entomb` first.", nil)
 						return nil
 					}
-					// Sealed colony with committed state — allow overwrite (fresh init)
-					// Fall through to create new colony state
+					// A sealed colony's state carries its whole history — phases,
+					// instincts, decisions, errors. Re-init used to overwrite it
+					// silently with only a stderr note about a .bak nobody was
+					// told how to restore. Destroying a colony's memory requires
+					// saying so out loud.
+					if confirmed, _ := cmd.Flags().GetBool("confirm-reinit"); !confirmed {
+						outputError(1, fmt.Sprintf(
+							"this repository has a sealed colony (goal: %q, %d phases). Re-initializing replaces its state. "+
+								"The preferred path is `aether entomb` to archive it properly. "+
+								"To proceed anyway, rerun with --confirm-reinit; the old state will be backed up under .aether/data/backups/ and can be restored by copying the .bak file back over COLONY_STATE.json.",
+							ptrStr(existing.Goal), len(existing.Plan.Phases)), nil)
+						return nil
+					}
+					// Confirmed — fall through; the backup below preserves the state.
 				} else {
 					// Active (non-sealed) colony — block
 					outputError(1, fmt.Sprintf("colony already initialized (state=%s, phase=%d, goal=%q)",
@@ -120,15 +137,25 @@ var initCmd = &cobra.Command{
 		// Clear stale session from any prior colony to prevent old decisions from leaking in.
 		_ = os.Remove(filepath.Join(dataDir, "session.json"))
 
-		// Backup old colony state before overwriting (sealed colony fresh-init)
+		// Backup old colony state before overwriting (sealed colony fresh-init).
+		// The backup is mandatory, not best-effort: if it cannot be written, the
+		// re-init stops rather than destroying the only copy of the colony's
+		// history. The restore command ships in the error/result so recovery
+		// never requires reading source code.
+		priorStateBackup := ""
 		if _, err := os.Stat(statePath); err == nil {
 			backupDir := filepath.Join(dataDir, "backups")
-			if err := os.MkdirAll(backupDir, 0755); err == nil {
-				backupFile := filepath.Join(backupDir, fmt.Sprintf("COLONY_STATE.pre-init.%s.bak", time.Now().Format("20060102-150405")))
-				if err := copyFile(statePath, backupFile); err == nil {
-					fmt.Fprintf(os.Stderr, "warning: backed up previous colony state to %s\n", backupFile)
-				}
+			if err := os.MkdirAll(backupDir, 0755); err != nil {
+				outputError(1, fmt.Sprintf("cannot create backup directory before re-init: %v — refusing to overwrite the previous colony state without a backup", err), nil)
+				return nil
 			}
+			backupFile := filepath.Join(backupDir, fmt.Sprintf("COLONY_STATE.pre-init.%s.bak", time.Now().Format("20060102-150405")))
+			if err := copyFile(statePath, backupFile); err != nil {
+				outputError(1, fmt.Sprintf("cannot back up previous colony state: %v — refusing to overwrite without a backup", err), nil)
+				return nil
+			}
+			priorStateBackup = backupFile
+			fmt.Fprintf(os.Stderr, "backed up previous colony state to %s\nrestore with: cp %q %q\n", backupFile, backupFile, statePath)
 		}
 
 		// Clean up any leftover worktrees from previous colony
@@ -230,6 +257,10 @@ var initCmd = &cobra.Command{
 			"shelf_backlog":       shelfEntries,
 			"shelf_backlog_count": len(shelfEntries),
 		}
+		if priorStateBackup != "" {
+			result["prior_state_backup"] = priorStateBackup
+			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
+		}
 		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir))
 		return nil
 	},
@@ -258,6 +289,7 @@ func init() {
 	initCmd.Flags().String("scope", string(colony.ScopeProject), "Colony scope: project or meta")
 	initCmd.Flags().String("colony-mode", string(colony.ColonyModeColony), "Colony mode: colony or orchestrator")
 	initCmd.Flags().String("charter-json", "", "Approved charter data as JSON string")
+	initCmd.Flags().Bool("confirm-reinit", false, "Confirm replacing a sealed colony's state (a timestamped backup is written to .aether/data/backups/)")
 	rootCmd.AddCommand(initCmd)
 }
 

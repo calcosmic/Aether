@@ -34,8 +34,8 @@ func TestComputeWarningsFailedPhase(t *testing.T) {
 	goal := "Failed phase test"
 	taskID := "t-1"
 	warnings := computeWarnings(colony.ColonyState{
-		Goal:   &goal,
-		State:  colony.StateREADY,
+		Goal:  &goal,
+		State: colony.StateREADY,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{ID: 1, Name: "Good phase", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "done", Status: colony.TaskCompleted}}},
@@ -178,8 +178,8 @@ func TestWorkflowSuggestionsFailedPhase(t *testing.T) {
 	goal := "Failed phase suggestion test"
 	taskID := "t-1"
 	primary, _ := workflowSuggestionsForState(colony.ColonyState{
-		Goal:   &goal,
-		State:  colony.StateREADY,
+		Goal:  &goal,
+		State: colony.StateREADY,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{ID: 1, Name: "Done", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "done", Status: colony.TaskCompleted}}},
@@ -200,8 +200,8 @@ func TestWorkflowSuggestionsAllComplete(t *testing.T) {
 	goal := "All complete test"
 	taskID := "t-1"
 	primary, _ := workflowSuggestionsForState(colony.ColonyState{
-		Goal:   &goal,
-		State:  colony.StateREADY,
+		Goal:  &goal,
+		State: colony.StateREADY,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{ID: 1, Name: "Phase 1", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "done", Status: colony.TaskCompleted}}},

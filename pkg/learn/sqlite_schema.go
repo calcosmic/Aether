@@ -21,7 +21,7 @@ const (
 		redacted INTEGER NOT NULL DEFAULT 0
 	)`
 
-	sqlCreateMemoriesIdx = `CREATE INDEX IF NOT EXISTS idx_memories_phase ON memories(phase)`
+	sqlCreateMemoriesIdx  = `CREATE INDEX IF NOT EXISTS idx_memories_phase ON memories(phase)`
 	sqlCreateMemoriesIdx2 = `CREATE INDEX IF NOT EXISTS idx_memories_classification ON memories(classification)`
 	sqlCreateMemoriesIdx3 = `CREATE INDEX IF NOT EXISTS idx_memories_confidence ON memories(confidence)`
 
@@ -76,7 +76,7 @@ const (
 		file_path TEXT NOT NULL DEFAULT ''
 	)`
 
-	sqlCreateSkillsIdx = `CREATE INDEX IF NOT EXISTS idx_skills_stage ON skills(stage)`
+	sqlCreateSkillsIdx  = `CREATE INDEX IF NOT EXISTS idx_skills_stage ON skills(stage)`
 	sqlCreateSkillsIdx2 = `CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(name)`
 
 	sqlCreateDecisions = `CREATE TABLE IF NOT EXISTS decisions (

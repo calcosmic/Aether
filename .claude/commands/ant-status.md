@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/status.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/status.yaml. Synced by aether update. -->
 ---
 name: ant-status
 description: "📊 Show colony status at a glance through the Aether CLI runtime"

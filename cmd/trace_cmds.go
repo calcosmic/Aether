@@ -267,9 +267,9 @@ var traceInspectCmd = &cobra.Command{
 		lines, err := store.ReadJSONL("trace.jsonl")
 		if err != nil {
 			outputOK(map[string]interface{}{
-				"run_id":   runID,
-				"focus":    focus,
-				"timeline": []trace.TraceEntry{},
+				"run_id":      runID,
+				"focus":       focus,
+				"timeline":    []trace.TraceEntry{},
 				"suggestions": []string{},
 			})
 			return nil
@@ -369,11 +369,11 @@ func summarizeTraceEntries(entries []trace.TraceEntry) map[string]interface{} {
 	sort.Ints(phaseList)
 
 	return map[string]interface{}{
-		"duration":           duration,
-		"state_transitions":  stateTransitions,
+		"duration":               duration,
+		"state_transitions":      stateTransitions,
 		"state_transition_count": len(stateTransitions),
-		"phases":             phaseList,
-		"phase_count":        len(phaseList),
+		"phases":                 phaseList,
+		"phase_count":            len(phaseList),
 		"errors": map[string]interface{}{
 			"count":      errorCount,
 			"severities": errorSeverities,
@@ -457,7 +457,7 @@ var traceRotateCmd = &cobra.Command{
 		}
 
 		result := map[string]interface{}{
-			"rotated": rotated,
+			"rotated":     rotated,
 			"max_size_mb": maxSizeMB,
 		}
 		if rotated {

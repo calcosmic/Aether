@@ -8,15 +8,30 @@ import (
 
 // WorkerHandoff carries structured relay data from one worker to the next.
 type WorkerHandoff struct {
-	ChangedFiles           []string `json:"changed_files,omitempty"`
-	CommandsRun            []string `json:"commands_run,omitempty"`
-	VerificationStatus     string   `json:"verification_status,omitempty"`
-	KnownFailures          []string `json:"known_failures,omitempty"`
-	OpenDecisions          []string `json:"open_decisions,omitempty"`
-	Assumptions            []string `json:"assumptions,omitempty"`
-	NextWorkerInstructions []string `json:"next_worker_instructions,omitempty"`
-	DoNotRepeat            []string `json:"do_not_repeat,omitempty"`
-	Freshness              string   `json:"freshness,omitempty"`
+	ChangedFiles           stringList `json:"changed_files,omitempty"`
+	CommandsRun            stringList `json:"commands_run,omitempty"`
+	VerificationStatus     string     `json:"verification_status,omitempty"`
+	KnownFailures          stringList `json:"known_failures,omitempty"`
+	OpenDecisions          stringList `json:"open_decisions,omitempty"`
+	Assumptions            stringList `json:"assumptions,omitempty"`
+	NextWorkerInstructions stringList `json:"next_worker_instructions,omitempty"`
+	DoNotRepeat            stringList `json:"do_not_repeat,omitempty"`
+	Freshness              string     `json:"freshness,omitempty"`
+}
+
+// IsEmptyWorkerHandoff reports whether a handoff carries no relay content at
+// all. Handoffs are the memory the next phase's workers receive; a
+// content-free record occupies a slot in that memory while telling the next
+// worker nothing, which is worse than no record.
+func IsEmptyWorkerHandoff(h WorkerHandoff) bool {
+	return len(h.ChangedFiles) == 0 &&
+		len(h.CommandsRun) == 0 &&
+		strings.TrimSpace(h.VerificationStatus) == "" &&
+		len(h.KnownFailures) == 0 &&
+		len(h.OpenDecisions) == 0 &&
+		len(h.Assumptions) == 0 &&
+		len(h.NextWorkerInstructions) == 0 &&
+		len(h.DoNotRepeat) == 0
 }
 
 // ValidateWorkerHandoff checks that a WorkerHandoff is structurally valid.

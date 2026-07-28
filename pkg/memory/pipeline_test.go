@@ -63,7 +63,7 @@ func TestPipeline_CapturePromotes(t *testing.T) {
 
 	// Capture same observation 3 times
 	for i := 0; i < 3; i++ {
-		result, err := p.Observe.Capture(ctx, "always validate inputs before processing", "pattern", "test-colony")
+		result, err := p.Observe.Capture(ctx, "always validate inputs before processing in cmd/handler.go", "pattern", "test-colony")
 		if err != nil {
 			t.Fatalf("capture %d: %v", i+1, err)
 		}
@@ -245,7 +245,7 @@ func TestPipeline_FullCycle(t *testing.T) {
 
 	// Step 1: Capture 3 identical observations to trigger auto-promotion
 	for i := 0; i < 3; i++ {
-		_, err := p.Observe.Capture(ctx, "always handle errors gracefully with user-friendly messages", "pattern", "test-colony")
+		_, err := p.Observe.Capture(ctx, "always handle errors gracefully with user-friendly messages in cmd/errors.go", "pattern", "test-colony")
 		if err != nil {
 			t.Fatalf("capture %d: %v", i+1, err)
 		}
@@ -318,7 +318,7 @@ func TestPipeline_RunConsolidation_PromotesCandidates(t *testing.T) {
 		Observations: []colony.Observation{
 			{
 				ContentHash:      "sha256:testeligible",
-				Content:          "test eligible observation",
+				Content:          "test eligible observation referencing pkg/memory/pipeline.go",
 				WisdomType:       "pattern",
 				ObservationCount: 3,
 				FirstSeen:        now,

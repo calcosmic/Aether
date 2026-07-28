@@ -265,9 +265,9 @@ var suggestApproveCmd = &cobra.Command{
 				_ = store.AtomicWrite("COLONY_STATE.json", stateData)
 			}
 			outputOK(map[string]interface{}{
-				"dismissed":      true,
+				"dismissed":       true,
 				"dismissed_count": count,
-				"dry_run":        dryRun,
+				"dry_run":         dryRun,
 			})
 			return nil
 		}

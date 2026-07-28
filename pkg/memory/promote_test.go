@@ -35,7 +35,7 @@ func TestPromoteNewInstinct(t *testing.T) {
 
 	obs := colony.Observation{
 		ContentHash:      "abc123",
-		Content:          "Use table-driven tests for all verification",
+		Content:          "Use table-driven tests for all verification in pkg/colony/colony_test.go",
 		WisdomType:       "testing",
 		ObservationCount: 3,
 		FirstSeen:        "2026-03-01T10:00:00Z",
@@ -78,9 +78,13 @@ func TestPromoteNewInstinct(t *testing.T) {
 		t.Errorf("Domain = %q, want %q", entry.Domain, obs.WisdomType)
 	}
 
-	// Trust score is calculated
-	if entry.TrustScore < 0.2 {
-		t.Errorf("TrustScore = %f, want >= 0.2", entry.TrustScore)
+	// Trust score is calculated. The old assertion was >= 0.2, which only ever
+	// held because Calculate clamped with math.Max(0.2, raw). That floor is gone
+	// so low-trust entries can actually decay out of the store, and this fixture
+	// (unknown source type, unknown evidence, aged) legitimately scores low.
+	// What matters is that a score was computed and is a valid probability.
+	if entry.TrustScore <= 0 || entry.TrustScore > 1 {
+		t.Errorf("TrustScore = %f, want a value in (0, 1]", entry.TrustScore)
 	}
 
 	// Trust tier is assigned
@@ -134,8 +138,8 @@ func TestPromoteDedup_TriggerPrefix(t *testing.T) {
 	ctx := context.Background()
 
 	// First 50 chars match (both have 40 'a' chars + "PREFIX_MATCH_HERE")
-	content1 := strings.Repeat("a", 40) + "PREFIX_MATCH_HERE_and_more_text_after_fifty_chars"
-	content2 := strings.Repeat("a", 40) + "PREFIX_MATCH_HERE_but_different_text_later_on"
+	content1 := strings.Repeat("a", 40) + "PREFIX_MATCH_HERE_and_more cmd/build.go"
+	content2 := strings.Repeat("a", 40) + "PREFIX_MATCH_HERE_but_other cmd/plan.go"
 
 	obs1 := colony.Observation{
 		ContentHash:      "hash1",
@@ -189,8 +193,8 @@ func TestPromoteDedup_DifferentAfter50(t *testing.T) {
 	ctx := context.Background()
 
 	// These differ at position 30 (well before 50), so they DO NOT dedup
-	content1 := strings.Repeat("a", 30) + "FIRST" + strings.Repeat("x", 20)
-	content2 := strings.Repeat("a", 30) + "SECOND" + strings.Repeat("x", 20)
+	content1 := strings.Repeat("a", 30) + "FIRST" + strings.Repeat("x", 10) + " cmd/first.go"
+	content2 := strings.Repeat("a", 30) + "SECOND" + strings.Repeat("x", 10) + " cmd/second.go"
 
 	obs1 := colony.Observation{
 		ContentHash:      "hash1",
@@ -241,7 +245,7 @@ func TestPromote_InstinctCap(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		obs := colony.Observation{
 			ContentHash:      fmt.Sprintf("hash_%02d_unique_pad", i),
-			Content:          fmt.Sprintf("instinct_%02d_unique_trigger_prefix_to_avoid_dedup_pad", i),
+			Content:          fmt.Sprintf("instinct %02d unique trigger avoiding dedup in pkg/mod%02d/file.go", i, i),
 			WisdomType:       "testing",
 			ObservationCount: 2,
 			FirstSeen:        "2026-03-01T10:00:00Z",
@@ -269,7 +273,7 @@ func TestPromote_InstinctCap(t *testing.T) {
 	// Promote one more -- should evict the lowest-trust
 	obs := colony.Observation{
 		ContentHash:      "overflow_hash",
-		Content:          "overflow trigger text causing eviction of lowest",
+		Content:          "overflow trigger causing eviction of lowest in pkg/memory/evict.go",
 		WisdomType:       "testing",
 		ObservationCount: 3,
 		FirstSeen:        "2026-03-01T10:00:00Z",
@@ -306,7 +310,7 @@ func TestPromote_ArchivedSkip(t *testing.T) {
 	svc, store, _ := newTestPromoteService(t)
 	ctx := context.Background()
 
-	content := "archived test trigger that is long enough to be meaningful"
+	content := "archived test trigger long enough to be meaningful in pkg/memory/archive.go"
 
 	obs := colony.Observation{
 		ContentHash:      "hash1",
@@ -359,7 +363,7 @@ func TestPromote_GraphEdge(t *testing.T) {
 
 	obs := colony.Observation{
 		ContentHash:      "graph_test_hash",
-		Content:          "graph edge test trigger content",
+		Content:          "graph edge test trigger content referencing pkg/graph/edge.go",
 		WisdomType:       "testing",
 		ObservationCount: 2,
 		FirstSeen:        "2026-03-01T10:00:00Z",
@@ -414,7 +418,7 @@ func TestPromote_Event(t *testing.T) {
 
 	obs := colony.Observation{
 		ContentHash:      "event_test_hash",
-		Content:          "event publishing test trigger content",
+		Content:          "event publishing test trigger content referencing pkg/events/bus.go",
 		WisdomType:       "testing",
 		ObservationCount: 2,
 		FirstSeen:        "2026-03-01T10:00:00Z",

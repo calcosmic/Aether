@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/watch.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/watch.yaml. Synced by aether update. -->
 ---
 name: ant-watch
 description: "👁️ View the current colony watch surface through the Aether CLI runtime"

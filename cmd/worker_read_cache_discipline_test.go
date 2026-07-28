@@ -116,8 +116,15 @@ func TestRuntimeBuildAndContinueBriefsIncludeReadCacheDiscipline(t *testing.T) {
 		Task:  "Redesign CardNode wrapper",
 	}
 
-	buildBrief := renderCodexBuildWorkerBrief("/tmp/repo", phase, dispatch, nil, time.Now())
-	assertReadCacheText(t, buildBrief, "renderCodexBuildWorkerBrief")
+	// Build briefs no longer carry read-cache discipline. Claude Code and
+	// OpenCode both cache reads and tell the model directly when a file is
+	// unchanged since its last read, so the 683-char section restated a message
+	// the harness already delivers. Continue's review brief still carries it and
+	// is asserted below; if that is ever revisited, revisit this comment too.
+	buildBrief := renderCodexBuildWorkerBrief("/tmp/repo", phase, dispatch, time.Now())
+	if strings.Contains(buildBrief, "Read Cache Discipline") {
+		t.Error("renderCodexBuildWorkerBrief reinstated read-cache discipline; the harness already handles this")
+	}
 
 	reviewBrief := renderCodexContinueReviewBrief(
 		"/tmp/repo",

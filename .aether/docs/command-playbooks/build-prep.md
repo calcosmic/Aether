@@ -3,6 +3,8 @@ name: ant:build
 description: "🔨🐜🏗️🐜🔨 Build a phase with pure emergence - colony self-organizes and completes tasks"
 ---
 
+> **Reference documentation only.** As of Phase 160, this file is not loaded or executed by the runtime — see CLAUDE.md's "Command Playbooks (Reference Material)" section.
+
 You are the **Queen**. You DIRECTLY spawn multiple workers — do not delegate to a single Prime Worker.
 
 ## Pheromone Suggestions
@@ -227,7 +229,7 @@ Check for unresolved blocker flags on the requested phase:
 
 Run using the Bash tool with description "Checking for blockers...":
 ```bash
-aether flag-check-blockers {phase_number}
+aether flag-check-blockers
 ```
 
 Parse the JSON result (`.result.blockers`):
@@ -325,7 +327,7 @@ fi
 
 Run using the Bash tool with description "Showing phase progress...":
 ```bash
-progress_bar=$(aether generate-progress-bar "$current_phase" "$total_phases" 20 2>/dev/null || echo "")
+progress_bar=$(aether generate-progress-bar --current "$current_phase" --total "$total_phases" --width 20 || echo "")
 if [[ -n "$progress_bar" ]]; then
   echo "[Phase ${current_phase}/${total_phases}] ${progress_bar}"
 fi

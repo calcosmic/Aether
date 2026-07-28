@@ -246,9 +246,14 @@ func resolveSurveySection() string {
 
 	var b strings.Builder
 	b.WriteString("### Territory Survey\n\n")
-	b.WriteString("Available survey documents:\n")
+	// Real repo-relative paths, not bare filenames. A worker handed "BLUEPRINT.md"
+	// with no directory cannot resolve it; ".aether/data/survey/BLUEPRINT.md" it
+	// can open directly. The colony data dir is always <root>/.aether/data by
+	// scaffold convention (ensureRepoLocalScaffold), so the relative form holds
+	// from the repo root every worker runs in.
+	b.WriteString("Survey documents (read the ones relevant to your task):\n")
 	for _, f := range files {
-		b.WriteString(fmt.Sprintf("- %s\n", f))
+		b.WriteString(fmt.Sprintf("- .aether/data/survey/%s\n", f))
 	}
 	return b.String()
 }

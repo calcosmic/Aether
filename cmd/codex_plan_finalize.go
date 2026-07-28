@@ -348,12 +348,14 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err := os.MkdirAll(planningDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create planning directory: %w", err)
 	}
-	if err := os.RemoveAll(phaseResearchDir); err != nil {
-		return nil, fmt.Errorf("failed to clear phase research directory: %w", err)
-	}
+	// Never wipe phase-research: workers write real research there during
+	// planning iterations, and finalize used to RemoveAll the directory and
+	// regenerate templates from empty — destroying every artifact a worker
+	// produced. Prune only files that no longer map to a current phase.
 	if err := os.MkdirAll(phaseResearchDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create phase research directory: %w", err)
 	}
+	prunePhaseResearchOrphans(phaseResearchDir, phases)
 	for _, name := range []string{"SCOUT.md", "ROUTE-SETTER.md", "phase-plan.json", ".fallback-marker"} {
 		_ = os.Remove(filepath.Join(planningDir, name))
 	}
@@ -379,7 +381,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err != nil {
 		return nil, err
 	}
-	phaseResearchFiles, _, err := writePhaseResearchArtifacts(root, phaseResearchDir, manifest.Survey, scoutReport, phases, emptySnapshots, nil)
+	phaseResearchFiles, _, err := writePhaseResearchArtifacts(root, phaseResearchDir, manifest.Survey, scoutReport, phases, emptySnapshots, dispatches)
 	if err != nil {
 		return nil, err
 	}
@@ -619,7 +621,7 @@ func validatePlanningIterationContract(manifest *codexPlanManifest, completion c
 }
 
 func validatePlanningWorkerChain(label string, dispatches []codexPlanningDispatch) error {
-	if len(dispatches) != 2 {
+	if len(dispatches) < 2 {
 		return fmt.Errorf("%s must contain exactly one Scout followed by one Route-Setter", label)
 	}
 	if !strings.EqualFold(dispatches[0].Caste, "scout") {
@@ -631,6 +633,18 @@ func validatePlanningWorkerChain(label string, dispatches []codexPlanningDispatc
 	if dispatches[0].Wave >= dispatches[1].Wave {
 		return fmt.Errorf("%s must order Scout before Route-Setter", label)
 	}
+	// The only workers permitted beyond the core pair are phase_research
+	// Scouts — the per-phase domain research wave. Arbitrary worker sets stay
+	// rejected. Research runs BEFORE the Route-Setter so its findings can
+	// inform the route.
+	for i, dispatch := range dispatches[2:] {
+		if dispatch.Stage != phaseResearchStage || !strings.EqualFold(dispatch.Caste, "scout") {
+			return fmt.Errorf("%s worker %d must be a phase_research Scout; other dynamic planning workers are not allowed", label, i+3)
+		}
+		if dispatch.Wave >= dispatches[1].Wave {
+			return fmt.Errorf("%s must order phase research before the Route-Setter", label)
+		}
+	}
 	return nil
 }
 
@@ -641,7 +655,7 @@ func validatePlanningConfidenceEvidence(manifest codexPlanManifest, confidence c
 	if strings.TrimSpace(manifest.PreviousEvidenceHash) == "" {
 		return fmt.Errorf("plan_manifest previous_evidence_hash is required after iteration 1")
 	}
-	if strings.TrimSpace(manifest.PreviousEvidenceHash) == strings.TrimSpace(evidenceHash) && confidence.Overall != manifest.PreviousConfidence {
+	if strings.TrimSpace(manifest.PreviousEvidenceHash) == strings.TrimSpace(evidenceHash) && int(confidence.Overall) != manifest.PreviousConfidence {
 		return fmt.Errorf("planning confidence changed from %d%% to %d%% without new Scout or Route-Setter evidence", manifest.PreviousConfidence, confidence.Overall)
 	}
 	return nil
@@ -673,7 +687,7 @@ func evaluatePlanningLoopIteration(manifest codexPlanManifest, confidence codexP
 	if iteration < 1 {
 		iteration = 1
 	}
-	overall := clampInt(confidence.Overall, 0, 100)
+	overall := clampInt(int(confidence.Overall), 0, 100)
 	gaps := limitStrings(uniqueSortedStrings(unresolvedGaps), 4)
 	history := append([]codexPlanningLoopSample{}, loop.History...)
 	previousConfidence := manifest.PreviousConfidence
@@ -739,11 +753,11 @@ func selectedPlanningGapsForNext(confidence codexPlanConfidence, gaps []string) 
 		score int
 	}
 	dimensions := []dimension{
-		{name: "knowledge evidence", score: confidence.Knowledge},
-		{name: "requirements evidence", score: confidence.Requirements},
-		{name: "risk evidence", score: confidence.Risks},
-		{name: "dependency evidence", score: confidence.Dependencies},
-		{name: "effort evidence", score: confidence.Effort},
+		{name: "knowledge evidence", score: int(confidence.Knowledge)},
+		{name: "requirements evidence", score: int(confidence.Requirements)},
+		{name: "risk evidence", score: int(confidence.Risks)},
+		{name: "dependency evidence", score: int(confidence.Dependencies)},
+		{name: "effort evidence", score: int(confidence.Effort)},
 	}
 	sort.SliceStable(dimensions, func(i, j int) bool {
 		return dimensions[i].score < dimensions[j].score
@@ -819,7 +833,7 @@ func persistIntermediatePlanningIteration(root string, manifest codexPlanManifes
 		TargetConfidence:     manifest.TargetConfidence,
 		MaxIterations:        manifest.MaxIterations,
 		LastIteration:        manifest.Iteration,
-		PreviousConfidence:   confidence.Overall,
+		PreviousConfidence:   int(confidence.Overall),
 		PreviousEvidenceHash: evidenceHash,
 		SelectedGaps:         selectedGaps,
 		PreviousPlanDraft:    &phasePlan,

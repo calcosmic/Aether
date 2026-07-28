@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -298,6 +299,11 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 			Status:        "completed",
 			Summary:       "Implemented boundary guidance",
 			FilesModified: []string{"cmd/orchestrator_boundary_guidance.go"},
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"work complete"},
+			},
 		}},
 	}
 	writeClaimFileForTest(t, root, "cmd/orchestrator_boundary_guidance.go")

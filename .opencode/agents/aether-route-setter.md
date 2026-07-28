@@ -94,39 +94,12 @@ When the task brief asks for `.aether/data/planning/phase-plan.json`, write that
 
 Aether assigns task ids by phase/task array order. Do not include explicit task id fields in `phase-plan.json`. The first task in phase 1 is `1.1`, the second is `1.2`, and the first task in phase 2 is `2.1`. `depends_on` must contain only those runtime ids. Never use task text, file paths, descriptions, or aliases such as `P1-T1`.
 
-Return structured JSON at plan completion:
-
-```json
-{
-  "ant_name": "{your name}",
-  "caste": "route-setter",
-  "goal": "{what was planned}",
-  "status": "completed",
-  "phases": [
-    {
-      "number": 1,
-      "name": "{phase name}",
-      "description": "{what this phase accomplishes}",
-      "tasks": [
-        {
-          "id": "1.1",
-          "description": "{specific action}",
-          "files": {
-            "create": [],
-            "modify": [],
-            "test": []
-          },
-          "steps": [],
-          "expected_output": "{what success looks like}"
-        }
-      ],
-      "success_criteria": []
-    }
-  ],
-  "total_tasks": 0,
-  "estimated_duration": "{time estimate}"
-}
-```
+For your final response, follow the response contract the runtime appends to
+your task brief exactly. The plan itself lives in `phase-plan.json` (above) and
+is reported through `files_created`; do not invent top-level response fields —
+earlier versions of this file demanded `goal`/`phases`/`total_tasks`/
+`estimated_duration` in the response and the runtime discarded all of them.
+Summarize the plan's shape in `summary`.
 
 **Status values:**
 - `completed` — Plan done, all phases structured, paths verified

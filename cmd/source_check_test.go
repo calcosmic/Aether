@@ -188,7 +188,7 @@ runtime:
 }
 
 func sourceCheckWrapperFixture(source, name, description, runtimeCommand string) []byte {
-	return []byte(`<!-- Generated from ` + source + ` - DO NOT EDIT DIRECTLY -->
+	return []byte(`<!-- Aether-managed: runtime spec at ` + source + `. Synced by aether update. -->
 ---
 name: ` + name + `
 description: "` + description + `"

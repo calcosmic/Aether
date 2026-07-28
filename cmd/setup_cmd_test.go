@@ -28,6 +28,9 @@ func TestSetupCommandExists(t *testing.T) {
 
 // TestSetupFailsWithoutHub verifies setup reports error when no hub directory exists.
 func TestSetupFailsWithoutHub(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -53,6 +56,8 @@ func TestSetupFailsWithoutHub(t *testing.T) {
 // TestSetupKeepsSystemFilesGlobal verifies setup creates local state without
 // copying hub system files into the repo.
 func TestSetupKeepsSystemFilesGlobal(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -94,6 +99,8 @@ func TestSetupKeepsSystemFilesGlobal(t *testing.T) {
 
 // TestSetupCreatesRequiredDirs verifies that setup creates data/checkpoints/locks.
 func TestSetupCreatesRequiredDirs(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -132,6 +139,8 @@ func TestSetupCreatesRequiredDirs(t *testing.T) {
 
 // TestSetupIdempotent verifies running setup twice does not error.
 func TestSetupIdempotent(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -178,6 +187,8 @@ func TestSetupIdempotent(t *testing.T) {
 // TestSetupPreservesLocalData verifies that existing local files like
 // COLONY_STATE.json are not overwritten.
 func TestSetupPreservesLocalData(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -225,6 +236,8 @@ func TestSetupPreservesLocalData(t *testing.T) {
 
 // TestSetupOutputJSON verifies the setup command produces valid JSON output.
 func TestSetupOutputJSON(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -392,6 +405,8 @@ func TestSetupSyncDirSkipsProtectedFiles(t *testing.T) {
 // TestSetupCommandRespectsProtectedDirs verifies the full setup command
 // does not overwrite files in data/ or dreams/ directories.
 func TestSetupCommandRespectsProtectedDirs(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -449,6 +464,8 @@ func TestSetupCommandRespectsProtectedDirs(t *testing.T) {
 // TestSetupDoesNotSyncCodexAgents verifies that setup leaves Codex agents in
 // the global home/hub instead of copying them into target repos.
 func TestSetupDoesNotSyncCodexAgents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -497,6 +514,9 @@ func TestSetupDoesNotSyncCodexAgents(t *testing.T) {
 // TestSetupGeneratesAgentsMD verifies that setup creates AGENTS.md in the
 // repo root when it does not already exist, using the hub template.
 func TestSetupGeneratesAgentsMD(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -550,6 +570,9 @@ func TestSetupGeneratesAgentsMD(t *testing.T) {
 // TestSetupGeneratesCodexMD verifies that setup creates .codex/CODEX.md in the
 // repo when the template exists in the hub.
 func TestSetupGeneratesCodexMD(t *testing.T) {
+	// This test manages its own hub via --home-dir; opt out of the
+	// suite-wide AETHER_HUB_DIR isolation so home-based resolution applies.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -608,6 +631,8 @@ func TestSetupGeneratesCodexMD(t *testing.T) {
 // TestSetupSkipsExistingAgentsMD verifies that setup does not overwrite an
 // existing AGENTS.md file.
 func TestSetupSkipsExistingAgentsMD(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -658,6 +683,8 @@ func TestSetupSkipsExistingAgentsMD(t *testing.T) {
 
 // TestSetupSkipsUnchangedFiles verifies that identical files are skipped.
 func TestSetupSkipsUnchangedFiles(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

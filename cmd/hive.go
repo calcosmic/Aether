@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,11 +12,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/memory"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
 // Hive types for wisdom management.
+
+// hiveEvidence records where one piece of cross-colony wisdom came from so a
+// later colony can judge it instead of trusting prose. Reference identifies
+// the producing artifact (for example "seal:<instinct-id>" or "hive-store").
+type hiveEvidence struct {
+	RepoID    string `json:"repo_id"`
+	Kind      string `json:"kind"`
+	Reference string `json:"reference"`
+	At        string `json:"at"`
+}
 
 type hiveWisdomEntry struct {
 	ID          string   `json:"id"`
@@ -23,18 +37,302 @@ type hiveWisdomEntry struct {
 	Domain      string   `json:"domain"`
 	SourceRepo  string   `json:"source_repo"`
 	SourceRepos []string `json:"source_repos,omitempty"`
-	Confidence  float64  `json:"confidence"`
-	CreatedAt   string   `json:"created_at"`
-	AccessedAt  string   `json:"accessed_at"`
-	AccessCount int      `json:"access_count"`
+	// SourceRepoIDs holds stable repository identities (see
+	// hive_repo_identity.go). Confidence boosts count these, never display
+	// names, so the same repository cannot inflate its own count by changing
+	// directories or names.
+	SourceRepoIDs []string       `json:"source_repo_ids,omitempty"`
+	Evidence      []hiveEvidence `json:"evidence,omitempty"`
+	Confidence    float64        `json:"confidence"`
+	CreatedAt     string         `json:"created_at"`
+	AccessedAt    string         `json:"accessed_at"`
+	AccessCount   int            `json:"access_count"`
+	// LastConfirmedAt drives lazy decay: confidence is recomputed at read
+	// time from this timestamp and never silently rewritten in the file.
+	LastConfirmedAt string `json:"last_confirmed_at,omitempty"`
+	// Revoked entries are never retrieved and are evicted first, but remain
+	// in the file as an audit trail.
+	Revoked       bool   `json:"revoked,omitempty"`
+	RevokedAt     string `json:"revoked_at,omitempty"`
+	RevokedReason string `json:"revoked_reason,omitempty"`
+	// Quarantined entries contradicted an existing entry on arrival. Neither
+	// side wins silently: the new entry waits for human resolution.
+	Quarantined      bool     `json:"quarantined,omitempty"`
+	QuarantineReason string   `json:"quarantine_reason,omitempty"`
+	Contradicts      []string `json:"contradicts,omitempty"`
+	ContradictedBy   []string `json:"contradicted_by,omitempty"`
+	// EffectiveConfidence is the decay-adjusted confidence computed at read
+	// time. It is report-only and never persisted as truth.
+	EffectiveConfidence float64 `json:"effective_confidence,omitempty"`
 }
 
 type hiveWisdomData struct {
+	Version int               `json:"version,omitempty"`
 	Entries []hiveWisdomEntry `json:"entries"`
 }
 
 const hiveWisdomPath = "hive/wisdom.json"
 const maxHiveEntries = 200
+
+// hiveWisdomSchemaVersion is written on every save. Readers tolerate older
+// files with missing fields and backfill them on the next write.
+const hiveWisdomSchemaVersion = 2
+
+// hiveDecayHalfLifeDays is the half-life applied lazily at read time. Wisdom
+// that no colony re-confirms fades; reinforcement re-confirms it.
+const hiveDecayHalfLifeDays = 180.0
+
+// hiveRetrievalMinEffectiveConfidence is the floor below which decayed wisdom
+// is treated as dormant and not injected into worker context.
+const hiveRetrievalMinEffectiveConfidence = 0.3
+
+// --- locked storage ---
+
+// hiveStorageStore returns the locked, atomic store rooted at the hub's hive
+// directory. All wisdom reads and writes go through it: two colonies must
+// never lose each other's updates.
+func hiveStorageStore(hub string) (*storage.Store, error) {
+	return storage.NewStore(filepath.Join(hub, "hive"))
+}
+
+// loadWisdomLocked reads wisdom.json through the store. A missing file is an
+// empty v2 dataset; a corrupted file is an error so writes never silently
+// destroy existing knowledge.
+func loadWisdomLocked(hub string) (hiveWisdomData, error) {
+	s, err := hiveStorageStore(hub)
+	if err != nil {
+		return hiveWisdomData{}, err
+	}
+	var wf hiveWisdomData
+	if err := s.LoadJSON("wisdom.json", &wf); err != nil {
+		if os.IsNotExist(err) {
+			return hiveWisdomData{Version: hiveWisdomSchemaVersion, Entries: []hiveWisdomEntry{}}, nil
+		}
+		return hiveWisdomData{}, fmt.Errorf("corrupted wisdom.json: %w", err)
+	}
+	migrateHiveWisdom(&wf)
+	return wf, nil
+}
+
+// updateWisdomLocked applies a mutation under the store's cross-process lock
+// and persists atomically.
+func updateWisdomLocked(hub string, mutate func(*hiveWisdomData) error) error {
+	s, err := hiveStorageStore(hub)
+	if err != nil {
+		return err
+	}
+	var wf hiveWisdomData
+	err = s.UpdateJSONAtomically("wisdom.json", &wf, func() error {
+		migrateHiveWisdom(&wf)
+		return mutate(&wf)
+	})
+	if err != nil && os.IsNotExist(err) {
+		return fmt.Errorf("hive is not initialized; run aether hive-init first")
+	}
+	return err
+}
+
+// migrateHiveWisdom backfills v2 fields on pre-versioning entries.
+func migrateHiveWisdom(wf *hiveWisdomData) {
+	if wf.Version >= hiveWisdomSchemaVersion {
+		return
+	}
+	wf.Version = hiveWisdomSchemaVersion
+	for i := range wf.Entries {
+		if strings.TrimSpace(wf.Entries[i].LastConfirmedAt) == "" {
+			wf.Entries[i].LastConfirmedAt = firstNonEmpty(
+				strings.TrimSpace(wf.Entries[i].CreatedAt),
+				strings.TrimSpace(wf.Entries[i].AccessedAt),
+			)
+		}
+	}
+}
+
+// --- activity, decay, and contradiction ---
+
+func hiveEntryActive(entry hiveWisdomEntry) bool {
+	return !entry.Revoked && !entry.Quarantined
+}
+
+// effectiveHiveConfidence applies lazy decay from the last confirmation
+// timestamp. The stored confidence is never rewritten by reads.
+func effectiveHiveConfidence(entry hiveWisdomEntry, now time.Time) float64 {
+	base := entry.Confidence
+	anchor := strings.TrimSpace(entry.LastConfirmedAt)
+	if anchor == "" {
+		anchor = strings.TrimSpace(entry.CreatedAt)
+	}
+	if anchor == "" || base <= 0 {
+		return base
+	}
+	parsed, err := time.Parse(time.RFC3339, anchor)
+	if err != nil {
+		return base
+	}
+	days := now.Sub(parsed).Hours() / 24
+	if days <= 0 {
+		return base
+	}
+	return base * math.Pow(0.5, days/hiveDecayHalfLifeDays)
+}
+
+// hiveNegationMarkers are the asymmetry signals used by the contradiction
+// heuristic. Detection is deliberately conservative: high token overlap plus
+// opposite negation parity, nothing else.
+var hiveNegationMarkers = []string{"not", "never", "no ", "don't", "dont", "avoid", "stop"}
+
+func hiveTokens(text string) map[string]bool {
+	fields := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return r < 'a' || r > 'z'
+	})
+	tokens := map[string]bool{}
+	for _, field := range fields {
+		if field != "" {
+			tokens[field] = true
+		}
+	}
+	return tokens
+}
+
+func hiveNegationParity(text string) bool {
+	lower := strings.ToLower(text)
+	for _, marker := range hiveNegationMarkers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// detectHiveContradiction reports whether candidate contradicts existing.
+// It fires only when the two texts share most of their tokens but disagree
+// on negation, which is the strongest cheap signal available without model
+// judgment. Same-domain comparison only.
+func detectHiveContradiction(candidate, existing string) bool {
+	candidateTokens := hiveTokens(candidate)
+	existingTokens := hiveTokens(existing)
+	if len(candidateTokens) == 0 || len(existingTokens) == 0 {
+		return false
+	}
+	overlap := 0
+	for token := range candidateTokens {
+		if existingTokens[token] {
+			overlap++
+		}
+	}
+	smaller := len(candidateTokens)
+	if len(existingTokens) < smaller {
+		smaller = len(existingTokens)
+	}
+	if float64(overlap)/float64(smaller) < 0.6 {
+		return false
+	}
+	return hiveNegationParity(candidate) != hiveNegationParity(existing)
+}
+
+// evictHiveEntryForCapacity removes the least valuable entry when the file is
+// at capacity: revoked entries first, then quarantined, then least recently
+// accessed.
+func evictHiveEntryForCapacity(wf *hiveWisdomData) {
+	if len(wf.Entries) < maxHiveEntries {
+		return
+	}
+	oldestIdx := -1
+	oldestQuarantined := -1
+	oldestRevoked := -1
+	for i, e := range wf.Entries {
+		if e.Revoked {
+			if oldestRevoked < 0 || e.AccessedAt < wf.Entries[oldestRevoked].AccessedAt {
+				oldestRevoked = i
+			}
+			continue
+		}
+		if e.Quarantined {
+			if oldestQuarantined < 0 || e.AccessedAt < wf.Entries[oldestQuarantined].AccessedAt {
+				oldestQuarantined = i
+			}
+			continue
+		}
+		if oldestIdx < 0 || e.AccessedAt < wf.Entries[oldestIdx].AccessedAt {
+			oldestIdx = i
+		}
+	}
+	evict := oldestRevoked
+	if evict < 0 {
+		evict = oldestQuarantined
+	}
+	if evict < 0 {
+		evict = oldestIdx
+	}
+	if evict >= 0 {
+		wf.Entries = append(wf.Entries[:evict], wf.Entries[evict+1:]...)
+	}
+}
+
+// --- colony retrieval consent ---
+
+const hiveRetrievalConsentFile = "hive_retrieval.json"
+
+type hiveRetrievalConsent struct {
+	OptIn     bool   `json:"opt_in"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// hiveRetrievalConsentPath resolves the current colony's consent record. The
+// colony data dir takes precedence; the working directory is the fallback so
+// data-only subcommands still resolve it.
+func hiveRetrievalConsentPath() string {
+	if store != nil && strings.TrimSpace(store.BasePath()) != "" {
+		return filepath.Join(store.BasePath(), hiveRetrievalConsentFile)
+	}
+	if envDir := strings.TrimSpace(os.Getenv("COLONY_DATA_DIR")); envDir != "" {
+		return filepath.Join(envDir, hiveRetrievalConsentFile)
+	}
+	if root := strings.TrimSpace(os.Getenv("AETHER_ROOT")); root != "" {
+		return filepath.Join(root, ".aether", "data", hiveRetrievalConsentFile)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cwd, ".aether", "data", hiveRetrievalConsentFile)
+}
+
+// hiveRetrievalOptedIn reports whether this colony has explicitly consented
+// to receiving cross-project wisdom. Consent is per colony, always: the
+// global policy only decides whether the feature exists, never whether this
+// repository receives it.
+func hiveRetrievalOptedIn() bool {
+	path := hiveRetrievalConsentPath()
+	if path == "" {
+		return false
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var consent hiveRetrievalConsent
+	if err := json.Unmarshal(raw, &consent); err != nil {
+		return false
+	}
+	return consent.OptIn
+}
+
+func writeHiveRetrievalConsent(optIn bool) error {
+	path := hiveRetrievalConsentPath()
+	if path == "" {
+		return fmt.Errorf("no colony data directory; run inside an initialized colony")
+	}
+	consent := hiveRetrievalConsent{OptIn: optIn, UpdatedAt: time.Now().UTC().Format(time.RFC3339)}
+	encoded, err := json.MarshalIndent(consent, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(encoded, '\n'), 0644)
+}
 
 // --- hive-init ---
 
@@ -90,80 +388,146 @@ var hiveStoreCmd = &cobra.Command{
 		}
 
 		hub := resolveHubPath()
-		wisdomPath := filepath.Join(hub, "hive", "wisdom.json")
+		repoID := currentRepoIdentity()
+		evidence := hiveEvidence{
+			RepoID:    repoID,
+			Kind:      "manual",
+			Reference: "hive-store",
+			At:        time.Now().UTC().Format(time.RFC3339),
+		}
 
-		var wf hiveWisdomData
-		if raw, err := os.ReadFile(wisdomPath); err == nil {
-			if err := json.Unmarshal(raw, &wf); err != nil {
-				outputError(2, fmt.Sprintf("corrupted wisdom.json: %v", err), nil)
-				return nil
+		var stored hiveWisdomEntry
+		var outcome string
+		storeErr := updateWisdomLocked(hub, func(wf *hiveWisdomData) error {
+			entry, result, err := storeHiveWisdomEntry(wf, text, domain, sourceRepo, repoID, 0.5, evidence)
+			if err != nil {
+				return err
 			}
-		}
-
-		// Dedup: check if same text+domain already exists
-		for i, e := range wf.Entries {
-			if e.Text == text && e.Domain == domain {
-				// Reinforce
-				reinforceHiveWisdomEntry(&wf.Entries[i], sourceRepo, 0.5)
-				wf.Entries[i].AccessCount++
-				wf.Entries[i].AccessedAt = time.Now().UTC().Format(time.RFC3339)
-				if err := writeWisdom(wisdomPath, wf); err != nil {
-					outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
-					return nil
-				}
-				emitLifecycleCeremony(events.CeremonyTopicHiveStore, events.CeremonyPayload{
-					TaskID:  e.ID,
-					Task:    domain,
-					Status:  "reinforced",
-					Message: text,
-				}, "aether-hive")
-				outputOK(map[string]interface{}{"stored": true, "reinforced": true, "id": e.ID})
-				return nil
-			}
-		}
-
-		// LRU eviction if at cap
-		if len(wf.Entries) >= maxHiveEntries {
-			// Find least recently accessed
-			oldestIdx := 0
-			for i, e := range wf.Entries {
-				if e.AccessedAt < wf.Entries[oldestIdx].AccessedAt {
-					oldestIdx = i
-				}
-			}
-			wf.Entries = append(wf.Entries[:oldestIdx], wf.Entries[oldestIdx+1:]...)
-		}
-
-		now := time.Now().UTC().Format(time.RFC3339)
-		textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
-		entry := hiveWisdomEntry{
-			ID:          fmt.Sprintf("%s_%s", domain, textHash[:12]),
-			Text:        text,
-			Domain:      domain,
-			SourceRepo:  sourceRepo,
-			SourceRepos: uniqueSortedStrings([]string{sourceRepo}),
-			Confidence:  0.5,
-			CreatedAt:   now,
-			AccessedAt:  now,
-			AccessCount: 0,
-		}
-
-		wf.Entries = append(wf.Entries, entry)
-		if err := writeWisdom(wisdomPath, wf); err != nil {
-			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
+			stored = entry
+			outcome = result
+			return nil
+		})
+		if storeErr != nil {
+			outputError(2, fmt.Sprintf("failed to save: %v", storeErr), nil)
 			return nil
 		}
 
 		emitLifecycleCeremony(events.CeremonyTopicHiveStore, events.CeremonyPayload{
-			TaskID:  entry.ID,
+			TaskID:  stored.ID,
 			Task:    domain,
-			Status:  "stored",
+			Status:  outcome,
 			Message: text,
 		}, "aether-hive")
-
-		outputOK(map[string]interface{}{"stored": true, "reinforced": false, "id": entry.ID, "total": len(wf.Entries)})
+		result := map[string]interface{}{
+			"stored":     outcome != "quarantined",
+			"reinforced": outcome == "reinforced",
+			"id":         stored.ID,
+			"status":     outcome,
+		}
+		if stored.Quarantined {
+			result["quarantined"] = true
+			result["quarantine_reason"] = stored.QuarantineReason
+		}
+		outputOK(result)
 		return nil
 	},
+}
+
+// storeHiveWisdomEntry applies one store or promote mutation inside the
+// locked update. Exact duplicates of active entries reinforce them; exact
+// duplicates of revoked entries are refused so revocation stays meaningful;
+// contradictions are stored quarantined and cross-linked, never silently
+// accepted. Returns the stored entry and an outcome label.
+func storeHiveWisdomEntry(wf *hiveWisdomData, text, domain, sourceRepo, repoID string, confidence float64, evidence hiveEvidence) (hiveWisdomEntry, string, error) {
+	// Hive text is injected into worker prompts in other repositories, so it is
+	// an untrusted cross-colony channel and must be sanitized on the same terms
+	// as pheromone signals. Pheromones have gone through SanitizeSignalContent
+	// since v2.0; the hive never did, which left a path for one colony's stored
+	// text to carry instruction-override content into another colony's prompts.
+	sanitized, err := colony.SanitizeSignalContent(text)
+	if err != nil {
+		return hiveWisdomEntry{}, "", fmt.Errorf("hive text rejected by sanitizer: %w", err)
+	}
+	text = sanitized
+
+	// Admissibility gates EVERY hive write at the chokepoint, not per caller.
+	// The multi-agent review found "Always write tests first" (no file,
+	// command, or error named) had entered the hive through the seal-promotion
+	// path, which bypassed the gate that hand-written observations go through.
+	// Wisdom that cannot be checked against a repository later can never be
+	// invalidated, and memory that cannot be invalidated accumulates forever.
+	if ok, reason := memory.IsAdmissibleInstinctContent(text); !ok {
+		return hiveWisdomEntry{}, "", fmt.Errorf("hive entry not admissible: %s", reason)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if confidence <= 0 {
+		confidence = 0.5
+	}
+
+	for i := range wf.Entries {
+		existing := &wf.Entries[i]
+		if existing.Text != text || existing.Domain != domain {
+			continue
+		}
+		if existing.Revoked {
+			return hiveWisdomEntry{}, "", fmt.Errorf("entry %s is revoked (%s); run `aether hive-revoke --id %s --unrevoke` to restore it before storing the same text", existing.ID, firstNonEmpty(existing.RevokedReason, "no reason recorded"), existing.ID)
+		}
+		if existing.Quarantined {
+			return hiveWisdomEntry{}, "", fmt.Errorf("entry %s is quarantined (%s); resolve the contradiction before reinforcing it", existing.ID, existing.QuarantineReason)
+		}
+		reinforceHiveWisdomEntry(existing, sourceRepo, repoID, confidence, evidence)
+		existing.AccessCount++
+		existing.AccessedAt = now
+		return *existing, "reinforced", nil
+	}
+
+	evictHiveEntryForCapacity(wf)
+
+	textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
+	entry := hiveWisdomEntry{
+		ID:              fmt.Sprintf("%s_%s", domain, textHash[:12]),
+		Text:            text,
+		Domain:          domain,
+		SourceRepo:      sourceRepo,
+		SourceRepos:     uniqueSortedStrings([]string{sourceRepo}),
+		Confidence:      confidence,
+		CreatedAt:       now,
+		AccessedAt:      now,
+		AccessCount:     0,
+		LastConfirmedAt: now,
+	}
+	if repoID != "" {
+		entry.SourceRepoIDs = []string{repoID}
+		entry.Evidence = []hiveEvidence{evidence}
+	}
+
+	contradictedIDs := make([]string, 0)
+	for _, existing := range wf.Entries {
+		if !hiveEntryActive(existing) || existing.Domain != domain {
+			continue
+		}
+		if detectHiveContradiction(text, existing.Text) {
+			contradictedIDs = append(contradictedIDs, existing.ID)
+		}
+	}
+	outcome := "stored"
+	if len(contradictedIDs) > 0 {
+		entry.Quarantined = true
+		entry.QuarantineReason = fmt.Sprintf("contradicts %s", strings.Join(contradictedIDs, ", "))
+		entry.Contradicts = contradictedIDs
+		for i := range wf.Entries {
+			for _, id := range contradictedIDs {
+				if wf.Entries[i].ID == id {
+					wf.Entries[i].ContradictedBy = uniqueSortedStrings(append(wf.Entries[i].ContradictedBy, entry.ID))
+				}
+			}
+		}
+		outcome = "quarantined"
+	}
+
+	wf.Entries = append(wf.Entries, entry)
+	return entry, outcome, nil
 }
 
 // --- hive-read ---
@@ -176,6 +540,7 @@ var hiveReadCmd = &cobra.Command{
 		domain, _ := cmd.Flags().GetString("domain")
 		minConfidence, _ := cmd.Flags().GetFloat64("min-confidence")
 		forWorker, _ := cmd.Flags().GetBool("for-worker")
+		includeAll, _ := cmd.Flags().GetBool("all")
 		if forWorker && !automaticHiveReadEnabled() {
 			outputOK(map[string]interface{}{
 				"entries": []hiveWisdomEntry{},
@@ -186,41 +551,48 @@ var hiveReadCmd = &cobra.Command{
 			})
 			return nil
 		}
+		if forWorker && !hiveRetrievalOptedIn() {
+			outputOK(map[string]interface{}{
+				"entries": []hiveWisdomEntry{},
+				"total":   0,
+				"policy":  string(currentHiveRuntimePolicy()),
+				"enabled": false,
+				"reason":  "this colony has not consented to cross-project wisdom; run `aether hive-opt-in` to enable it here",
+			})
+			return nil
+		}
 
 		hub := resolveHubPath()
-		wisdomPath := filepath.Join(hub, "hive", "wisdom.json")
-
-		var wf hiveWisdomData
-		if raw, err := os.ReadFile(wisdomPath); err != nil {
-			outputOK(map[string]interface{}{"entries": []hiveWisdomEntry{}, "total": 0})
-			return nil
-		} else {
-			if err := json.Unmarshal(raw, &wf); err != nil {
-				outputError(2, fmt.Sprintf("corrupted wisdom.json: %v", err), nil)
-				return nil
-			}
-		}
-
-		// Update access times
-		now := time.Now().UTC().Format(time.RFC3339)
+		now := time.Now().UTC()
 
 		var results []hiveWisdomEntry
-		for i := range wf.Entries {
-			e := &wf.Entries[i]
-			if domain != "" && e.Domain != domain {
-				continue
+		readErr := updateWisdomLocked(hub, func(wf *hiveWisdomData) error {
+			for i := range wf.Entries {
+				e := &wf.Entries[i]
+				if !includeAll && !hiveEntryActive(*e) {
+					continue
+				}
+				if domain != "" && e.Domain != domain {
+					continue
+				}
+				effective := effectiveHiveConfidence(*e, now)
+				if minConfidence > 0 && effective < minConfidence {
+					continue
+				}
+				e.AccessCount++
+				e.AccessedAt = now.Format(time.RFC3339)
+				result := *e
+				result.EffectiveConfidence = effective
+				results = append(results, result)
 			}
-			if minConfidence > 0 && e.Confidence < minConfidence {
-				continue
+			return nil
+		})
+		if readErr != nil {
+			if strings.Contains(readErr.Error(), "not initialized") {
+				outputOK(map[string]interface{}{"entries": []hiveWisdomEntry{}, "total": 0})
+				return nil
 			}
-			e.AccessCount++
-			e.AccessedAt = now
-			results = append(results, *e)
-		}
-
-		// Persist access updates
-		if err := writeWisdom(wisdomPath, wf); err != nil {
-			outputError(2, fmt.Sprintf("failed to persist access updates: %v", err), nil)
+			outputError(2, fmt.Sprintf("failed to read hive wisdom: %v", readErr), nil)
 			return nil
 		}
 
@@ -267,6 +639,10 @@ var hiveAbstractCmd = &cobra.Command{
 // wisdom file, and emits a promotion event. It returns an error on failure so callers
 // can decide whether to block or continue.
 func promoteToHive(text, domain, sourceRepo string, confidence float64) error {
+	return promoteToHiveWithReference(text, domain, sourceRepo, confidence, "hive-promote")
+}
+
+func promoteToHiveWithReference(text, domain, sourceRepo string, confidence float64, reference string) error {
 	if text == "" {
 		return nil
 	}
@@ -277,86 +653,50 @@ func promoteToHive(text, domain, sourceRepo string, confidence float64) error {
 		confidence = 0.75
 	}
 
-	// Abstract
+	// Replace the repository name so the claim reads sensibly elsewhere. Source
+	// directory prefixes are deliberately preserved — stripping "src/", "pkg/"
+	// and friends was labelled abstraction but was plain string replacement that
+	// pointed entries at paths which do not exist, making them unverifiable.
+	// Same reasoning as HiveStore.abstractContent in pkg/learn/hive_store.go.
 	abstracted := text
 	if sourceRepo != "" {
 		abstracted = strings.ReplaceAll(abstracted, sourceRepo, "<repo>")
 	}
-	for _, prefix := range []string{"src/", "lib/", "pkg/", "cmd/", "internal/"} {
-		abstracted = strings.ReplaceAll(abstracted, prefix, "")
-	}
 
-	// Store
 	hub := resolveHubPath()
-	wisdomPath := filepath.Join(hub, "hive", "wisdom.json")
+	repoID := currentRepoIdentity()
+	evidence := hiveEvidence{
+		RepoID:    repoID,
+		Kind:      "promote",
+		Reference: reference,
+		At:        time.Now().UTC().Format(time.RFC3339),
+	}
 
-	var wf hiveWisdomData
-	if raw, err := os.ReadFile(wisdomPath); err == nil {
-		if err := json.Unmarshal(raw, &wf); err != nil {
-			return fmt.Errorf("corrupted wisdom.json: %w", err)
+	var stored hiveWisdomEntry
+	var outcome string
+	if err := updateWisdomLocked(hub, func(wf *hiveWisdomData) error {
+		entry, result, err := storeHiveWisdomEntry(wf, abstracted, domain, sourceRepo, repoID, confidence, evidence)
+		if err != nil {
+			return err
 		}
-	}
-
-	textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(abstracted)))
-	now := time.Now().UTC().Format(time.RFC3339)
-
-	// Check for existing entry to boost confidence
-	for i, e := range wf.Entries {
-		if e.Text == abstracted && e.Domain == domain {
-			reinforceHiveWisdomEntry(&wf.Entries[i], sourceRepo, confidence)
-			wf.Entries[i].AccessCount++
-			wf.Entries[i].AccessedAt = now
-			if err := writeWisdom(wisdomPath, wf); err != nil {
-				return fmt.Errorf("failed to save wisdom: %w", err)
-			}
-			emitLifecycleCeremony(events.CeremonyTopicHivePromote, events.CeremonyPayload{
-				TaskID:  e.ID,
-				Task:    domain,
-				Status:  "boosted",
-				Message: abstracted,
-			}, "aether-hive")
-			return nil
-		}
-	}
-
-	// LRU eviction
-	if len(wf.Entries) >= maxHiveEntries {
-		oldestIdx := 0
-		for i, e := range wf.Entries {
-			if e.AccessedAt < wf.Entries[oldestIdx].AccessedAt {
-				oldestIdx = i
-			}
-		}
-		wf.Entries = append(wf.Entries[:oldestIdx], wf.Entries[oldestIdx+1:]...)
-	}
-
-	entry := hiveWisdomEntry{
-		ID:          fmt.Sprintf("%s_%s", domain, textHash[:12]),
-		Text:        abstracted,
-		Domain:      domain,
-		SourceRepo:  sourceRepo,
-		SourceRepos: uniqueSortedStrings([]string{sourceRepo}),
-		Confidence:  confidence,
-		CreatedAt:   now,
-		AccessedAt:  now,
-		AccessCount: 0,
-	}
-	wf.Entries = append(wf.Entries, entry)
-	if err := writeWisdom(wisdomPath, wf); err != nil {
+		stored = entry
+		outcome = result
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to save wisdom: %w", err)
 	}
 
 	emitLifecycleCeremony(events.CeremonyTopicHivePromote, events.CeremonyPayload{
-		TaskID:  entry.ID,
+		TaskID:  stored.ID,
 		Task:    domain,
-		Status:  "promoted",
+		Status:  outcome,
 		Message: abstracted,
 	}, "aether-hive")
 
 	return nil
 }
 
-func reinforceHiveWisdomEntry(entry *hiveWisdomEntry, sourceRepo string, confidence float64) {
+func reinforceHiveWisdomEntry(entry *hiveWisdomEntry, sourceRepo, repoID string, confidence float64, evidence hiveEvidence) {
 	if entry == nil {
 		return
 	}
@@ -371,13 +711,30 @@ func reinforceHiveWisdomEntry(entry *hiveWisdomEntry, sourceRepo string, confide
 	if strings.TrimSpace(entry.SourceRepo) == "" && len(repos) > 0 {
 		entry.SourceRepo = repos[0]
 	}
+	if repoID != "" {
+		entry.SourceRepoIDs = uniqueSortedStrings(append(entry.SourceRepoIDs, repoID))
+	}
+	if evidence.Kind != "" {
+		entry.Evidence = append(entry.Evidence, evidence)
+	}
+	entry.LastConfirmedAt = time.Now().UTC().Format(time.RFC3339)
 	boosted := confidence
-	if tier := hiveConfidenceForRepoCount(len(repos)); tier > boosted {
+	if tier := hiveConfidenceForRepoCount(hiveRepoConfirmationCount(*entry)); tier > boosted {
 		boosted = tier
 	}
 	if boosted > entry.Confidence {
 		entry.Confidence = boosted
 	}
+}
+
+// hiveRepoConfirmationCount is the number of distinct repositories that
+// confirmed an entry. Stable identities win; display names are only a legacy
+// fallback for entries written before identities existed.
+func hiveRepoConfirmationCount(entry hiveWisdomEntry) int {
+	if len(entry.SourceRepoIDs) > 0 {
+		return len(uniqueSortedStrings(entry.SourceRepoIDs))
+	}
+	return len(hiveSourceRepos(entry))
 }
 
 func hiveSourceRepos(entry hiveWisdomEntry) []string {
@@ -448,16 +805,96 @@ var hivePromoteCmd = &cobra.Command{
 	},
 }
 
-// writeWisdom writes the wisdom file atomically.
-func writeWisdom(path string, wf hiveWisdomData) error {
-	encoded, err := json.MarshalIndent(wf, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("mkdir hive dir: %w", err)
-	}
-	return os.WriteFile(path, append(encoded, '\n'), 0644)
+// --- hive-revoke ---
+
+var hiveRevokeCmd = &cobra.Command{
+	Use:   "hive-revoke --id <entry-id> [--reason \"why\"] [--unrevoke]",
+	Short: "Revoke a wisdom entry so it is never retrieved, or restore it",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, _ := cmd.Flags().GetString("id")
+		reason, _ := cmd.Flags().GetString("reason")
+		unrevoke, _ := cmd.Flags().GetBool("unrevoke")
+		if strings.TrimSpace(id) == "" {
+			outputError(2, "hive-revoke requires --id", nil)
+			return nil
+		}
+
+		hub := resolveHubPath()
+		var updated hiveWisdomEntry
+		found := false
+		err := updateWisdomLocked(hub, func(wf *hiveWisdomData) error {
+			for i := range wf.Entries {
+				if wf.Entries[i].ID != id {
+					continue
+				}
+				found = true
+				if unrevoke {
+					wf.Entries[i].Revoked = false
+					wf.Entries[i].RevokedAt = ""
+					wf.Entries[i].RevokedReason = ""
+					wf.Entries[i].LastConfirmedAt = time.Now().UTC().Format(time.RFC3339)
+				} else {
+					if wf.Entries[i].Revoked {
+						return fmt.Errorf("entry %s is already revoked", id)
+					}
+					wf.Entries[i].Revoked = true
+					wf.Entries[i].RevokedAt = time.Now().UTC().Format(time.RFC3339)
+					wf.Entries[i].RevokedReason = strings.TrimSpace(reason)
+				}
+				updated = wf.Entries[i]
+				return nil
+			}
+			if !found {
+				return fmt.Errorf("no hive entry with id %s", id)
+			}
+			return nil
+		})
+		if err != nil {
+			outputError(2, err.Error(), nil)
+			return nil
+		}
+
+		outputOK(map[string]interface{}{
+			"id":      updated.ID,
+			"revoked": updated.Revoked,
+			"reason":  updated.RevokedReason,
+		})
+		return nil
+	},
+}
+
+// --- hive-opt-in / hive-opt-out ---
+
+var hiveOptInCmd = &cobra.Command{
+	Use:   "hive-opt-in",
+	Short: "Consent this colony to receiving cross-project wisdom in worker context",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := writeHiveRetrievalConsent(true); err != nil {
+			outputError(2, err.Error(), nil)
+			return nil
+		}
+		outputOK(map[string]interface{}{
+			"opt_in": true,
+			"note":   "cross-project wisdom will be injected into this colony's worker context when AETHER_HIVE_POLICY allows reads",
+		})
+		return nil
+	},
+}
+
+var hiveOptOutCmd = &cobra.Command{
+	Use:   "hive-opt-out",
+	Short: "Withdraw this colony's consent to receiving cross-project wisdom",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := writeHiveRetrievalConsent(false); err != nil {
+			outputError(2, err.Error(), nil)
+			return nil
+		}
+		outputOK(map[string]interface{}{"opt_in": false})
+		return nil
+	},
 }
 
 // --- eternal-init ---
@@ -511,6 +948,7 @@ func init() {
 	hiveReadCmd.Flags().String("domain", "", "Filter by domain")
 	hiveReadCmd.Flags().Float64("min-confidence", 0, "Minimum confidence threshold")
 	hiveReadCmd.Flags().Bool("for-worker", false, "Apply the automatic worker-injection policy")
+	hiveReadCmd.Flags().Bool("all", false, "Include revoked and quarantined entries")
 
 	hiveAbstractCmd.Flags().String("instinct", "", "Instinct text to abstract (required)")
 	hiveAbstractCmd.Flags().String("source-repo", "", "Source repository")
@@ -521,10 +959,17 @@ func init() {
 	hivePromoteCmd.Flags().Float64("confidence", 0.75, "Confidence score")
 	hivePromoteCmd.Flags().Bool("automatic", false, "Apply the automatic cross-project promotion policy")
 
+	hiveRevokeCmd.Flags().String("id", "", "Wisdom entry ID (required)")
+	hiveRevokeCmd.Flags().String("reason", "", "Why this entry is revoked")
+	hiveRevokeCmd.Flags().Bool("unrevoke", false, "Restore a revoked entry")
+
 	rootCmd.AddCommand(hiveInitCmd)
 	rootCmd.AddCommand(hiveStoreCmd)
 	rootCmd.AddCommand(hiveReadCmd)
 	rootCmd.AddCommand(hiveAbstractCmd)
 	rootCmd.AddCommand(hivePromoteCmd)
+	rootCmd.AddCommand(hiveRevokeCmd)
+	rootCmd.AddCommand(hiveOptInCmd)
+	rootCmd.AddCommand(hiveOptOutCmd)
 	rootCmd.AddCommand(eternalInitCmd)
 }

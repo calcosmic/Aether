@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/interpret.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/interpret.yaml. Synced by aether update. -->
 ---
 name: ant-interpret
 description: "🔍 Read-only interpretation of dream sessions against the current codebase"

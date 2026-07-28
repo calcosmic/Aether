@@ -218,7 +218,14 @@ func effectiveQueenPhaseMode(phase colony.Phase) colony.PhaseMode {
 	if phase.Mode.Valid() {
 		return phase.Mode
 	}
-	return colony.InferPhaseMode(phase.Name, phase.Description)
+	// No keyword inference at runtime — this was the last site where prose
+	// could steer dispatch. A phase whose description contained "research"
+	// silently became a discovery phase here and got an Oracle instead of a
+	// Builder. Modes are now written durably at authoring time
+	// (resolveAuthoredPhaseMode) and backfilled by `aether migrate-state`; a
+	// phase that still has none gets the neutral default, exactly as
+	// InferPhaseMode returns when no keyword matches.
+	return colony.PhaseModePrototype
 }
 
 func queenPhaseLooksDocumentationOrMaintenance(phase colony.Phase) bool {

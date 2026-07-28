@@ -20,7 +20,7 @@ func TestConsolidationPhaseEndPromotesEligibleObservation(t *testing.T) {
 		"observations": []interface{}{
 			map[string]interface{}{
 				"content_hash":      "obs_phase_end",
-				"content":           "promote this pattern",
+				"content":           "promote this pattern found in pkg/graph/consolidate.go",
 				"wisdom_type":       "pattern",
 				"observation_count": 3,
 				"first_seen":        "2026-04-20T10:00:00Z",

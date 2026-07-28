@@ -152,9 +152,9 @@ func TestQueenDecide_RecoveryPreviewForAllGates(t *testing.T) {
 		Phase:       1,
 		GeneratedAt: time.Now().Format(time.RFC3339),
 		Checks: []gateCheck{
-			{Name: "tests_pass", Passed: true},  // hard_block, passing
-			{Name: "auditor", Passed: false},     // soft_block, failing
-			{Name: "medic", Passed: true},        // advisory, passing
+			{Name: "tests_pass", Passed: true}, // hard_block, passing
+			{Name: "auditor", Passed: false},   // soft_block, failing
+			{Name: "medic", Passed: true},      // advisory, passing
 		},
 		Passed: false,
 	}
@@ -288,10 +288,10 @@ func TestQueenState_RoundTrip(t *testing.T) {
 		},
 		EscalationLog: []EscalationEntry{
 			{
-				Timestamp:         time.Now().Format(time.RFC3339),
-				BreakerTripped:    []string{"worker-1"},
-				EscalationAction:  "escalate_to_human",
-				Rationale:         "circuit breaker tripped",
+				Timestamp:        time.Now().Format(time.RFC3339),
+				BreakerTripped:   []string{"worker-1"},
+				EscalationAction: "escalate_to_human",
+				Rationale:        "circuit breaker tripped",
 			},
 		},
 	}
@@ -692,8 +692,8 @@ func TestPlanOnlyResultMapKeys(t *testing.T) {
 
 	// Simulate what plan-only does: add keys to result map
 	result := map[string]interface{}{
-		"queen_decisions":   decisions,
-		"queen_state_file":  fmt.Sprintf("queen-state-%d.json", 88),
+		"queen_decisions":  decisions,
+		"queen_state_file": fmt.Sprintf("queen-state-%d.json", 88),
 	}
 
 	// Verify queen_decisions key exists

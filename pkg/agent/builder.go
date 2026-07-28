@@ -11,7 +11,7 @@ import (
 // BuilderAgent is a streaming-enabled agent that implements code changes.
 // It demonstrates streaming execution by progressively reporting progress.
 type BuilderAgent struct {
-	name    string
+	name     string
 	triggers []Trigger
 }
 

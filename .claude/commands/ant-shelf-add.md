@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/shelf-add.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/shelf-add.yaml. Synced by aether update. -->
 ---
 name: ant-shelf-add
 description: "Add a note to the Aether shelf backlog"

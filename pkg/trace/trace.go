@@ -136,10 +136,10 @@ func (t *Tracer) LogTokenUsage(runID, model string, inputTokens, outputTokens in
 		Topic:  "token.usage",
 		Source: source,
 		Payload: map[string]interface{}{
-			"model":          model,
-			"input_tokens":   inputTokens,
-			"output_tokens":  outputTokens,
-			"usd_cost":       usdCost,
+			"model":         model,
+			"input_tokens":  inputTokens,
+			"output_tokens": outputTokens,
+			"usd_cost":      usdCost,
 		},
 	})
 }

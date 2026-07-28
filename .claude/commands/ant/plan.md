@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/plan.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/plan.yaml. Synced by aether update. -->
 ---
 name: ant-plan
 description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"
@@ -71,12 +71,13 @@ This output is display-only; do not parse it as state.
 
 ## Worker Spawning
 
-Dispatch exactly one Scout from wave 1, then exactly one Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `permission_profile`, and `agent_name` as `subagent_type`. Scout's `repository_read_only` profile must remain host-enforced; never substitute an unrestricted agent or a prompt-only promise. Preserve caste-labelled descriptions: `{caste emoji} {Caste} {name}: {task}`.
+Dispatch every worker in `plan_manifest.dispatches`, using manifest names, castes, task IDs, briefs, `permission_profile`, and `agent_name` as `subagent_type`. The set is: one Scout in wave 1, zero or more `phase_research` Scouts also in wave 1 (parallel with the base Scout — one per drafted phase, researching its domain), then exactly one Route-Setter in wave 2. Scout's `repository_read_only` profile must remain host-enforced; never substitute an unrestricted agent or a prompt-only promise. Preserve caste-labelled descriptions: `{caste emoji} {Caste} {name}: {task}`.
 
 - Issue parallel workers as visible Task/subagent calls. Do not set `run_in_background`.
 - Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading.
-- For Route-Setter, include the Scout terminal result in the prompt.
-- If the manifest includes `selected_gaps` or `previous_plan_draft`, keep them in the brief and require fresh evidence or resolved gaps before allowing confidence to rise.
+- Spawn all wave-1 workers (base Scout + research Scouts) in the same message so they run concurrently. Announce the research wave in one line: `🔍 Researching {N} phases before routing`.
+- For Route-Setter, include the Scout terminal result in the prompt and note that fresh per-phase research now exists at `.aether/data/phase-research/`.
+- If the manifest includes `selected_gaps` or `previous_plan_draft`, keep them in the brief and require fresh evidence or resolved gaps before allowing confidence to rise. Surface `selected_gaps` to the user between iterations: `Unresolved gaps this iteration:` followed by the list, so they can see what the next pass is chasing.
 
 For each manifest wave:
 
@@ -89,7 +90,7 @@ For each manifest wave:
 7. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 8. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <worker_file>`.
 
-Wave 1 Scout must complete before wave 2 Route-Setter starts.
+All wave-1 workers (base Scout and any research Scouts) must complete before the wave-2 Route-Setter starts — the route is set with research in hand.
 
 ## Finalize
 
@@ -132,7 +133,7 @@ the matching Codex flow.
 - Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand.
 - Do NOT parse visual output as authoritative state.
 - Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`.
-- Do NOT dispatch extra planning workers; the real planning contract is Scout then Route-Setter per iteration.
+- Do NOT dispatch planning workers beyond the manifest's dispatch list; the contract is Scout (+ manifest-listed phase_research Scouts) then Route-Setter per iteration.
 - Do NOT reuse a manifest or completion packet across iterations.
 - Do NOT repeat or renumber completed phases during a revision, and do not reuse packets from the superseded revision.
 - Do NOT treat `requires_next_iteration: true` as a completed colony plan.

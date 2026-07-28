@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -50,33 +51,65 @@ type buildWorktreeSession struct {
 	AbsPath string
 }
 
-type buildPathOwnership struct {
-	mu     sync.Mutex
-	owners map[string]string
-}
-
-func newBuildPathOwnership() *buildPathOwnership {
-	return &buildPathOwnership{owners: map[string]string{}}
-}
-
-func (o *buildPathOwnership) claim(worker string, paths []string) []string {
-	if o == nil {
-		return nil
+// declaredPathsForTask computes the repo-relative paths a task claims
+// ownership of before workers run. Declarations come from task-level
+// criterion evidence artifacts and from hints that are exactly one
+// repo-relative file path. Runtime and companion files under .aether/ never
+// participate in ownership.
+func declaredPathsForTask(task colony.Task) []string {
+	paths := make([]string, 0, len(task.Hints)+1)
+	add := func(raw string) {
+		normalized, err := normalizeCriterionArtifactPath(raw)
+		if err != nil {
+			return
+		}
+		if strings.HasPrefix(normalized, ".aether/") {
+			return
+		}
+		paths = append(paths, normalized)
 	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	conflicts := make([]string, 0)
-	for _, path := range uniqueSortedStrings(paths) {
-		if owner := o.owners[path]; owner != "" && owner != worker {
-			conflicts = append(conflicts, fmt.Sprintf("%s (owned by %s)", path, owner))
+	for _, requirement := range task.EvidenceRequirements {
+		for _, artifact := range requirement.Artifacts {
+			add(artifact)
 		}
 	}
-	if len(conflicts) > 0 {
-		return conflicts
+	for _, hint := range task.Hints {
+		hint = strings.TrimSpace(hint)
+		if hint == "" || strings.ContainsAny(hint, " \t") {
+			continue
+		}
+		if looksLikeFile(hint) || filePathPattern.MatchString(hint) || bareFileNameWithExtension(hint) {
+			add(hint)
+		}
 	}
-	for _, path := range uniqueSortedStrings(paths) {
-		o.owners[path] = worker
+	return uniqueSortedStrings(paths)
+}
+
+var bareFileNamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+$`)
+
+func bareFileNameWithExtension(value string) bool {
+	return bareFileNamePattern.MatchString(value) && !strings.Contains(value, "/")
+}
+
+// validateDeclaredWorktreeOwnership rejects a worktree-mode build before any
+// worker runs when two tasks in the same wave declare the same path. Parallel
+// claims on one path cannot reconcile, so the conflict is surfaced while it is
+// still cheap. Declared overlaps across waves are allowed: waves execute
+// sequentially and later worktrees inherit the earlier waves' synced output.
+func validateDeclaredWorktreeOwnership(dispatches []codex.WorkerDispatch) error {
+	declaredByWave := map[int]map[string]string{}
+	for _, dispatch := range dispatches {
+		for _, path := range dispatch.DeclaredPaths {
+			owners := declaredByWave[dispatch.Wave]
+			if owners == nil {
+				owners = map[string]string{}
+				declaredByWave[dispatch.Wave] = owners
+			}
+			if previous, ok := owners[path]; ok && previous != dispatch.TaskID {
+				return fmt.Errorf("worktree declared ownership conflict: wave %d tasks %s and %s both declare %s; declare disjoint paths, move the tasks into different waves, or run with --parallel-mode in-repo", dispatch.Wave, previous, dispatch.TaskID, path)
+			}
+			owners[path] = dispatch.TaskID
+		}
 	}
 	return nil
 }
@@ -182,10 +215,20 @@ func collectRepoTouchedPaths(root string, baseline map[string]string, result cod
 }
 
 func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
-	return dispatchCodexBuildWorkersWithOwnership(ctx, root, phase, dispatches, invoker, startedAt, parallelMode, cb, newBuildPathOwnership())
+	return dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, dispatches, invoker, startedAt, parallelMode, cb)
 }
 
-func dispatchCodexBuildWorkersWithOwnership(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker, ownership *buildPathOwnership) ([]codex.DispatchResult, error) {
+// worktreeWaveOutcome captures everything a worker goroutine produced. No
+// result is synced, journaled, or finalized until the whole wave's ownership
+// decision has been made.
+type worktreeWaveOutcome struct {
+	dispatch codex.WorkerDispatch
+	result   codex.DispatchResult
+	session  *buildWorktreeSession
+	touched  []string
+}
+
+func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
 	if parallelMode != colony.ModeWorktree {
 		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode, cb)
 	}
@@ -209,16 +252,18 @@ func dispatchCodexBuildWorkersWithOwnership(ctx context.Context, root string, ph
 		waveDispatches := waves[wave]
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
-		waveResults := make([]codex.DispatchResult, len(waveDispatches))
+		outcomes := make([]*worktreeWaveOutcome, len(waveDispatches))
 		cb.Reset() // Per D-06: per-wave reset
 		var wg sync.WaitGroup
 		for idx, dispatch := range waveDispatches {
 			wg.Add(1)
 			go func(i int, dispatch codex.WorkerDispatch) {
 				defer wg.Done()
+				outcome := &worktreeWaveOutcome{dispatch: dispatch}
+				outcomes[i] = outcome
 
 				if ctx.Err() != nil {
-					waveResults[i] = codex.DispatchResult{
+					outcome.result = codex.DispatchResult{
 						WorkerName: dispatch.WorkerName,
 						Status:     "timeout",
 						Error:      ctx.Err(),
@@ -232,14 +277,15 @@ func dispatchCodexBuildWorkersWithOwnership(ctx context.Context, root string, ph
 					if peer != nil {
 						emitCircuitBreakerRedistributed(phase, wave, dispatch.WorkerName, peer.WorkerName)
 						dispatch = *peer
+						outcome.dispatch = dispatch
 					} else {
 						emitCircuitBreakerNoPeer(phase, wave, dispatch.WorkerName)
-						waveResults[i] = codex.DispatchResult{
+						outcome.result = codex.DispatchResult{
 							WorkerName: dispatch.WorkerName,
 							Status:     "failed",
 							Error:      fmt.Errorf("circuit breaker tripped, no same-caste peer for redistribution"),
 						}
-						emitBuildCeremonyWorkerFailed(dispatch, wave, waveResults[i].Error)
+						emitBuildCeremonyWorkerFailed(dispatch, wave, outcome.result.Error)
 						return
 					}
 				}
@@ -267,7 +313,7 @@ func dispatchCodexBuildWorkersWithOwnership(ctx context.Context, root string, ph
 						_ = finalizeBuildWorktree(root, session, colony.WorktreeOrphaned)
 						rootOpsMu.Unlock()
 					}
-					waveResults[i] = codex.DispatchResult{
+					outcome.result = codex.DispatchResult{
 						WorkerName: dispatch.WorkerName,
 						Status:     "failed",
 						Error:      allocErr,
@@ -275,6 +321,7 @@ func dispatchCodexBuildWorkersWithOwnership(ctx context.Context, root string, ph
 					emitBuildCeremonyWorkerFailed(dispatch, wave, allocErr)
 					return
 				}
+				outcome.session = session
 
 				emitBuildCeremonyWorkerStarting(dispatch, wave)
 				emitCodexBuildWorkerStarted(dispatch, wave)
@@ -311,104 +358,226 @@ func dispatchCodexBuildWorkersWithOwnership(ctx context.Context, root string, ph
 					}
 				}
 
-				finalStatus := colony.WorktreeMerged
-				preserveWorktree := false
-				if dr.Status != "completed" || dr.WorkerResult == nil {
-					finalStatus = colony.WorktreeOrphaned
-					preserveWorktree = true
-				} else {
+				if dr.Status == "completed" && dr.WorkerResult != nil {
 					touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, *dr.WorkerResult)
 					if touchErr != nil {
 						dr.Status = "failed"
 						dr.Error = touchErr
-						finalStatus = colony.WorktreeOrphaned
-						preserveWorktree = true
 					} else {
 						applyObservedClaims(session.AbsPath, baseline, touched, dr.WorkerResult)
-						rootOpsMu.Lock()
-						if conflicts := ownership.claim(dispatch.WorkerName, touched); len(conflicts) > 0 {
-							dr.Status = "failed"
-							dr.Error = fmt.Errorf("worktree ownership conflict: %s", strings.Join(conflicts, ", "))
-							finalStatus = colony.WorktreeOrphaned
-							preserveWorktree = true
-						} else if syncErr := syncWorktreeChangesToRoot(root, session.AbsPath, touched); syncErr != nil {
-							dr.Status = "failed"
-							dr.Error = syncErr
-							finalStatus = colony.WorktreeOrphaned
-							preserveWorktree = true
-						} else if pheromoneResult, pheromoneErr := syncPheromoneStores(session.AbsPath, root, pheromoneSyncOptions{}); pheromoneErr != nil {
-							dr.Status = "failed"
-							dr.Error = pheromoneErr
-							finalStatus = colony.WorktreeOrphaned
-							preserveWorktree = true
-						} else if dr.WorkerResult != nil {
-							syncSummary := formatPheromoneSyncSummary(pheromoneResult)
-							if syncSummary != "" {
-								if strings.TrimSpace(dr.WorkerResult.Summary) == "" {
-									dr.WorkerResult.Summary = syncSummary
-								} else {
-									dr.WorkerResult.Summary = strings.TrimSpace(dr.WorkerResult.Summary) + " " + syncSummary
-								}
-							}
-							if tracer != nil {
-								var state colony.ColonyState
-								if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
-									_ = tracer.LogArtifact(*state.RunID, "worktree.merge", map[string]interface{}{
-										"worker":       dispatch.WorkerName,
-										"files_synced": len(touched),
-										"pheromones":   syncSummary,
-									})
-								}
-							}
-						}
-						rootOpsMu.Unlock()
+						outcome.touched = touched
 					}
 				}
-
-				rootOpsMu.Lock()
-				if preserveWorktree {
-					if statusErr := updateBuildWorktreeStatus(session.Branch, colony.WorktreeOrphaned); statusErr != nil && dr.Error == nil {
-						dr.Status = "failed"
-						dr.Error = statusErr
-					}
-				} else if cleanupErr := finalizeBuildWorktree(root, session, finalStatus); cleanupErr != nil && dr.Error == nil {
-					dr.Status = "failed"
-					dr.Error = cleanupErr
-				}
-				if dr.Status == "" {
-					dr.Status = "failed"
-				}
-
-				// Record result with circuit breaker
-				if dr.Status == "completed" {
-					cb.RecordSuccess(dispatch.WorkerName)
-				} else if cb.RecordFailure(dispatch.WorkerName) {
-					cb.emitCircuitBreakerTripped(phase, wave, dispatch.WorkerName)
-				}
-				statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr))
-				rootOpsMu.Unlock()
-				if statusErr != nil {
-					dr.Status = "failed"
-					dr.Error = fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, statusErr)
-				}
-				if journalErr := recordDirectBuildWorkerTerminal(dispatch, dr); journalErr != nil {
-					dr.Status = "failed"
-					dr.Error = fmt.Errorf("journal terminal worker %s: %w", dispatch.WorkerName, journalErr)
-					rootOpsMu.Lock()
-					_ = updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr))
-					rootOpsMu.Unlock()
-				}
-
-				emitBuildCeremonyWorkerFinished(dispatch, dr)
-				emitCodexBuildWorkerFinished(dispatch, dr)
-				waveResults[i] = dr
+				outcome.result = dr
 			}(idx, dispatch)
 		}
 		wg.Wait()
+		waveResults := reconcileWorktreeWave(root, phase, wave, outcomes, cb)
 		emitBuildCeremonyWaveEnd(phase, wave, waveResults)
 		results = append(results, waveResults...)
 	}
 	return results, nil
+}
+
+// reconcileWorktreeWave makes one atomic ownership decision for a completed
+// wave. A conflict-free wave syncs every accepted worker in deterministic
+// dispatch order. Any conflict rejects the entire wave: nothing syncs into the
+// root checkout, conflicting workers fail with the exact paths and owners, and
+// conflict-free workers are blocked rather than silently accepted, so the root
+// never carries a partial wave. Terminal results are journaled only after the
+// decision, so the attempt journal always matches the reconciled outcome.
+func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes []*worktreeWaveOutcome, cb *CircuitBreaker) []codex.DispatchResult {
+	conflicts, conflictWorkers := detectWorktreeWaveConflicts(outcomes)
+
+	accepted := map[int]bool{}
+	if len(conflicts) == 0 {
+		for i, outcome := range outcomes {
+			if outcome != nil && outcome.result.Status == "completed" && outcome.result.WorkerResult != nil && outcome.session != nil {
+				accepted[i] = true
+			}
+		}
+	}
+
+	rejectionReason := ""
+	if len(conflicts) > 0 {
+		rejectionReason = fmt.Sprintf("worktree wave reconciliation conflict: %s", strings.Join(conflicts, ", "))
+	}
+
+	for i, outcome := range outcomes {
+		if outcome == nil {
+			continue
+		}
+		dr := outcome.result
+		session := outcome.session
+		preserveWorktree := false
+
+		switch {
+		case accepted[i]:
+			if syncErr := syncWorktreeChangesToRoot(root, session.AbsPath, outcome.touched); syncErr != nil {
+				dr.Status = "failed"
+				dr.Error = syncErr
+				preserveWorktree = true
+			} else if pheromoneResult, pheromoneErr := syncPheromoneStores(session.AbsPath, root, pheromoneSyncOptions{}); pheromoneErr != nil {
+				dr.Status = "failed"
+				dr.Error = pheromoneErr
+				preserveWorktree = true
+			} else {
+				appendPheromoneSyncSummary(dr.WorkerResult, pheromoneResult)
+				logWorktreeMergeTrace(outcome.dispatch, outcome.touched, pheromoneResult)
+			}
+		case len(conflicts) > 0 && dr.Status == "completed" && outcome.session != nil:
+			preserveWorktree = true
+			if conflictWorkers[i] {
+				dr.Status = "failed"
+				dr.Error = fmt.Errorf("%s", rejectionReason)
+			} else {
+				dr.Status = "blocked"
+				dr.Error = fmt.Errorf("wave reconciliation rejected the wave before this worker's output could sync: %s", rejectionReason)
+			}
+		case dr.Status != "completed" && session != nil:
+			preserveWorktree = true
+		}
+
+		if session != nil {
+			if preserveWorktree {
+				if statusErr := updateBuildWorktreeStatus(session.Branch, colony.WorktreeOrphaned); statusErr != nil && dr.Error == nil {
+					dr.Status = "failed"
+					dr.Error = statusErr
+				}
+			} else if accepted[i] || dr.Status == "completed" {
+				finalStatus := colony.WorktreeMerged
+				if dr.Status != "completed" {
+					finalStatus = colony.WorktreeOrphaned
+				}
+				if cleanupErr := finalizeBuildWorktree(root, session, finalStatus); cleanupErr != nil && dr.Error == nil {
+					dr.Status = "failed"
+					dr.Error = cleanupErr
+				}
+			}
+		}
+		if dr.Status == "" {
+			dr.Status = "failed"
+		}
+
+		if dr.Status == "completed" {
+			cb.RecordSuccess(outcome.dispatch.WorkerName)
+		} else if cb.RecordFailure(outcome.dispatch.WorkerName) {
+			cb.emitCircuitBreakerTripped(phase, wave, outcome.dispatch.WorkerName)
+		}
+		if statusErr := updateCodexBuildDispatchRuntimeStatus(outcome.dispatch.WorkerName, dr.Status, buildDispatchResultSummary(outcome.dispatch, dr)); statusErr != nil {
+			dr.Status = "failed"
+			dr.Error = fmt.Errorf("complete worker %s: %w", outcome.dispatch.WorkerName, statusErr)
+		}
+		if journalErr := recordDirectBuildWorkerTerminal(outcome.dispatch, dr); journalErr != nil {
+			dr.Status = "failed"
+			dr.Error = fmt.Errorf("journal terminal worker %s: %w", outcome.dispatch.WorkerName, journalErr)
+			_ = updateCodexBuildDispatchRuntimeStatus(outcome.dispatch.WorkerName, dr.Status, buildDispatchResultSummary(outcome.dispatch, dr))
+		}
+
+		emitBuildCeremonyWorkerFinished(outcome.dispatch, dr)
+		emitCodexBuildWorkerFinished(outcome.dispatch, dr)
+		outcome.result = dr
+	}
+
+	results := make([]codex.DispatchResult, 0, len(outcomes))
+	for _, outcome := range outcomes {
+		if outcome == nil {
+			continue
+		}
+		results = append(results, outcome.result)
+	}
+	return results
+}
+
+// detectWorktreeWaveConflicts finds every same-wave ownership violation among
+// completed workers: a path touched by a worker whose task did not declare it
+// when another same-wave task did, or a path produced by more than one worker
+// with no declared owner to arbitrate. Returns human-readable conflict
+// descriptions and the set of outcome indexes involved.
+func detectWorktreeWaveConflicts(outcomes []*worktreeWaveOutcome) ([]string, map[int]bool) {
+	declared := map[string]string{}
+	for _, outcome := range outcomes {
+		if outcome == nil {
+			continue
+		}
+		for _, path := range outcome.dispatch.DeclaredPaths {
+			if _, ok := declared[path]; !ok {
+				declared[path] = outcome.dispatch.TaskID
+			}
+		}
+	}
+
+	touchedBy := map[string][]int{}
+	for i, outcome := range outcomes {
+		if outcome == nil || outcome.result.Status != "completed" || outcome.result.WorkerResult == nil || outcome.session == nil {
+			continue
+		}
+		for _, path := range outcome.touched {
+			touchedBy[path] = append(touchedBy[path], i)
+		}
+	}
+
+	conflictWorkers := map[int]bool{}
+	conflicts := make([]string, 0)
+	for _, path := range uniqueSortedStrings(mapKeys(touchedBy)) {
+		idxs := touchedBy[path]
+		if len(idxs) > 1 {
+			names := make([]string, 0, len(idxs))
+			for _, idx := range idxs {
+				names = append(names, outcomes[idx].dispatch.WorkerName)
+				conflictWorkers[idx] = true
+			}
+			if owner, ok := declared[path]; ok {
+				conflicts = append(conflicts, fmt.Sprintf("%s produced by multiple workers (%s) but declared by task %s", path, strings.Join(names, ", "), owner))
+			} else {
+				conflicts = append(conflicts, fmt.Sprintf("%s produced by multiple workers (%s) with no declared owner", path, strings.Join(names, ", ")))
+			}
+			continue
+		}
+		idx := idxs[0]
+		if owner, ok := declared[path]; ok && owner != outcomes[idx].dispatch.TaskID {
+			conflicts = append(conflicts, fmt.Sprintf("%s touched by worker %s (task %s) but declared by task %s", path, outcomes[idx].dispatch.WorkerName, outcomes[idx].dispatch.TaskID, owner))
+			conflictWorkers[idx] = true
+		}
+	}
+	return conflicts, conflictWorkers
+}
+
+func mapKeys[V any](values map[string]V) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func appendPheromoneSyncSummary(result *codex.WorkerResult, pheromoneResult pheromoneSyncResult) {
+	if result == nil {
+		return
+	}
+	syncSummary := formatPheromoneSyncSummary(pheromoneResult)
+	if syncSummary == "" {
+		return
+	}
+	if strings.TrimSpace(result.Summary) == "" {
+		result.Summary = syncSummary
+	} else {
+		result.Summary = strings.TrimSpace(result.Summary) + " " + syncSummary
+	}
+}
+
+func logWorktreeMergeTrace(dispatch codex.WorkerDispatch, touched []string, pheromoneResult pheromoneSyncResult) {
+	if tracer == nil {
+		return
+	}
+	var state colony.ColonyState
+	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
+		_ = tracer.LogArtifact(*state.RunID, "worktree.merge", map[string]interface{}{
+			"worker":       dispatch.WorkerName,
+			"files_synced": len(touched),
+			"pheromones":   formatPheromoneSyncSummary(pheromoneResult),
+		})
+	}
 }
 
 func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {

@@ -229,13 +229,17 @@ func analyzeGitHistory(target string) gitHistoryInfo {
 }
 
 // detectPriorColonies checks for archived colony directories in .aether/chambers/.
+// Alongside the count it returns up to 3 most recent colonies' goals and
+// outcomes (from each chamber's manifest.json) so init can show a Prior
+// Context section before goal-setting.
 func detectPriorColonies(target string) map[string]interface{} {
 	chambersDir := filepath.Join(target, ".aether", "chambers")
 	entries, err := os.ReadDir(chambersDir)
 	if err != nil {
 		return map[string]interface{}{
-			"count": 0,
-			"names": []string{},
+			"count":  0,
+			"names":  []string{},
+			"recent": []map[string]string{},
 		}
 	}
 
@@ -245,10 +249,36 @@ func detectPriorColonies(target string) map[string]interface{} {
 			names = append(names, e.Name())
 		}
 	}
+	// Chamber names are date-prefixed; lexicographic order is chronological.
+	sort.Strings(names)
+
+	recent := make([]map[string]string, 0, 3)
+	for i := len(names) - 1; i >= 0 && len(recent) < 3; i-- {
+		manifestPath := filepath.Join(chambersDir, names[i], "manifest.json")
+		data, err := os.ReadFile(manifestPath)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+		var manifest struct {
+			Goal       string `json:"goal"`
+			Milestone  string `json:"milestone"`
+			EntombedAt string `json:"entombed_at"`
+		}
+		if err := json.Unmarshal(data, &manifest); err != nil || strings.TrimSpace(manifest.Goal) == "" {
+			continue
+		}
+		recent = append(recent, map[string]string{
+			"name":        names[i],
+			"goal":        manifest.Goal,
+			"outcome":     manifest.Milestone,
+			"entombed_at": manifest.EntombedAt,
+		})
+	}
 
 	return map[string]interface{}{
-		"count": len(names),
-		"names": names,
+		"count":  len(names),
+		"names":  names,
+		"recent": recent,
 	}
 }
 

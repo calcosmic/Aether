@@ -519,7 +519,7 @@ func planRevisionCapsuleLine(plan colony.Plan) string {
 	return ""
 }
 
-func renderPlanRevisionWorkerAppendix(revision *codexPlanRevisionContext) string {
+func renderPlanRevisionWorkerAppendix(root string, revision *codexPlanRevisionContext) string {
 	if revision == nil {
 		return ""
 	}
@@ -528,6 +528,10 @@ func renderPlanRevisionWorkerAppendix(revision *codexPlanRevisionContext) string
 	b.WriteString(fmt.Sprintf("- Revision reason: %s: %s\n", revision.ReasonType, revision.Reason))
 	if len(revision.Evidence) > 0 {
 		b.WriteString("- Read these revision evidence files before proposing replacement work: " + strings.Join(revision.Evidence, ", ") + "\n")
+		// The evidence CONTENTS travel in the brief. A path string alone made
+		// Oracle→plan human-mediated: findings written to a file never reached
+		// the Route-Setter unless someone pasted them by hand.
+		b.WriteString(renderRevisionEvidenceExcerpts(root, revision.Evidence))
 	}
 	if len(revision.CompletedPhases) > 0 {
 		b.WriteString("- Completed phases are immutable and must not appear in phase-plan.json:\n")
@@ -608,4 +612,52 @@ func sortedPlanRevisionEvidence(values []string) []string {
 	result := append([]string{}, values...)
 	sort.Strings(result)
 	return result
+}
+
+// revisionEvidenceExcerptBudget bounds total evidence content carried in a
+// planning brief; revisionEvidencePerFileBudget bounds each file's share.
+const (
+	revisionEvidenceExcerptBudget = 6000
+	revisionEvidencePerFileBudget = 2500
+)
+
+// renderRevisionEvidenceExcerpts reads each evidence file and inlines a
+// bounded excerpt so the Route-Setter plans from the findings themselves, not
+// a filename. Unreadable files degrade to their path (already listed above).
+func renderRevisionEvidenceExcerpts(root string, evidence []string) string {
+	var b strings.Builder
+	remaining := revisionEvidenceExcerptBudget
+	for _, rel := range evidence {
+		if remaining <= 0 {
+			b.WriteString(fmt.Sprintf("\n### Evidence: %s\n_(excerpt budget exhausted — read the file directly)_\n", rel))
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		content := strings.TrimSpace(string(data))
+		if content == "" {
+			continue
+		}
+		limit := revisionEvidencePerFileBudget
+		if limit > remaining {
+			limit = remaining
+		}
+		truncated := false
+		if len(content) > limit {
+			cut := content[:limit]
+			if idx := strings.LastIndex(cut, "\n\n"); idx > limit/2 {
+				cut = cut[:idx]
+			}
+			content = cut
+			truncated = true
+		}
+		remaining -= len(content)
+		b.WriteString(fmt.Sprintf("\n### Evidence: %s\n\n%s\n", rel, content))
+		if truncated {
+			b.WriteString(fmt.Sprintf("_(truncated — full evidence: %s)_\n", rel))
+		}
+	}
+	return b.String()
 }

@@ -1671,12 +1671,12 @@ func createAnchorTestFixture(t *testing.T, files map[string]string) string {
 
 func TestExtractSourceAnchors_Basic(t *testing.T) {
 	root := createAnchorTestFixture(t, map[string]string{
-		"cmd/main.go":    "package main",
-		"src/app.ts":     "export class App {}",
-		"pkg/util.go":    "package util",
-		"README.md":      "# readme",
-		"config.json":    "{}",
-		"docs/guide.md":  "# guide",
+		"cmd/main.go":   "package main",
+		"src/app.ts":    "export class App {}",
+		"pkg/util.go":   "package util",
+		"README.md":     "# readme",
+		"config.json":   "{}",
+		"docs/guide.md": "# guide",
 	})
 
 	anchors := extractSourceAnchors(root, 50)
@@ -1708,11 +1708,11 @@ func TestExtractSourceAnchors_CapAt50(t *testing.T) {
 
 func TestExtractSourceAnchors_ExcludesNoise(t *testing.T) {
 	root := createAnchorTestFixture(t, map[string]string{
-		"main.go":                          "package main",
-		".venv/lib/api.py":                 "def api(): pass",
-		"node_modules/react/index.js":      "module.exports = {}",
-		"__pycache__/cache.py":             "# cached",
-		"src/app.go":                       "package src",
+		"main.go":                     "package main",
+		".venv/lib/api.py":            "def api(): pass",
+		"node_modules/react/index.js": "module.exports = {}",
+		"__pycache__/cache.py":        "# cached",
+		"src/app.go":                  "package src",
 	})
 
 	anchors := extractSourceAnchors(root, 50)
@@ -1749,10 +1749,10 @@ func TestExtractSourceAnchors_ExcludesTests(t *testing.T) {
 
 func TestExtractSourceAnchors_ExcludesMinified(t *testing.T) {
 	root := createAnchorTestFixture(t, map[string]string{
-		"app.js":           "const x = 1;",
-		"vendor.min.js":    "var a,b,c",
-		"styles.css":       "body { }",
-		"bundle.min.css":   ".a{b:c}",
+		"app.js":         "const x = 1;",
+		"vendor.min.js":  "var a,b,c",
+		"styles.css":     "body { }",
+		"bundle.min.css": ".a{b:c}",
 	})
 
 	anchors := extractSourceAnchors(root, 50)
@@ -1787,12 +1787,12 @@ func TestExtractSourceAnchors_SortsByDepthThenAlpha(t *testing.T) {
 
 func TestAnchorsWrittenToSurvey(t *testing.T) {
 	root := createAnchorTestFixture(t, map[string]string{
-		"cmd/main.go":   "package main",
-		"pkg/util.go":   "package util",
-		"src/app.ts":    "export class App {}",
-		"main_test.go":  "package main_test",
-		"config.json":   "{}",
-		"README.md":     "# readme",
+		"cmd/main.go":  "package main",
+		"pkg/util.go":  "package util",
+		"src/app.ts":   "export class App {}",
+		"main_test.go": "package main_test",
+		"config.json":  "{}",
+		"README.md":    "# readme",
 	})
 
 	facts, err := surveyWorkspace(root)

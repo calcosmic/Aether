@@ -752,6 +752,13 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 			destDir:  filepath.Join(systemDir, "agents"),
 			validate: validateOpenCodeAgentFile,
 		},
+		{
+			// The one policy file whose absence loses real content downstream:
+			// without it every Oracle phase collapses to one generic directive.
+			srcDir:  filepath.Join(packageDir, "colony", "policies"),
+			destDir: filepath.Join(systemDir, "colony", "policies"),
+			include: isOraclePhaseDirectivesFile,
+		},
 	} {
 		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, pair.validate, pair.include)
 		hubSyncResult.copied += syncRes.copied
@@ -1149,7 +1156,7 @@ func runLocalBinaryBuildFromInstall(cmd *cobra.Command, homeDir, packageDir stri
 }
 
 func defaultLocalBinaryDest(homeDir string, channel runtimeChannel) string {
-	if exe, err := os.Executable(); err == nil {
+	if exe, err := os.Executable(); err == nil && !isEphemeralExecutablePath(exe) {
 		base := filepath.Base(exe)
 		if base == defaultBinaryName(channel) || base == defaultBinaryName(channel)+".exe" {
 			return filepath.Dir(exe)
@@ -1160,6 +1167,20 @@ func defaultLocalBinaryDest(homeDir string, channel runtimeChannel) string {
 		return localBin
 	}
 	return filepath.Join(homeDir, defaultBinaryDestSubdirForChannel(channel))
+}
+
+// isEphemeralExecutablePath reports whether the running executable lives in a
+// throwaway build location. Under `go run ./cmd/aether publish` the executable
+// is a temp go-build binary also named "aether", and trusting its directory
+// made publish install the freshly built binary into the go-run temp dir —
+// while reporting success. The user's real binary silently stayed stale.
+func isEphemeralExecutablePath(exe string) bool {
+	exe = filepath.ToSlash(exe)
+	if strings.Contains(exe, "/go-build") {
+		return true
+	}
+	tmp := filepath.ToSlash(filepath.Clean(os.TempDir()))
+	return tmp != "" && tmp != "/" && strings.HasPrefix(exe, tmp+"/")
 }
 
 func buildLocalBinary(sourceRoot, destDir, version string, channel runtimeChannel) (*downloader.DownloadResult, error) {

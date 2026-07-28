@@ -537,10 +537,12 @@
       "light",
       "no-suggest",
       "plan-only",
+      "print-brief",
       "synthetic",
       "task",
       "verbose",
       "verification-depth",
+      "worker",
       "worker-timeout"
     ],
     "parent_command": "",
@@ -3149,6 +3151,22 @@
     "stability_score": 91
   },
   {
+    "name": "hive-opt-in",
+    "short_description": "Consent this colony to receiving cross-project wisdom in worker context",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "hive-opt-out",
+    "short_description": "Withdraw this colony's consent to receiving cross-project wisdom",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "hive-promote",
     "short_description": "End-to-end abstract + store pipeline for wisdom promotion",
     "flags": [
@@ -3182,6 +3200,7 @@
     "name": "hive-read",
     "short_description": "Read wisdom entries with optional domain and confidence filtering",
     "flags": [
+      "all",
       "domain",
       "for-worker",
       "min-confidence"
@@ -3205,6 +3224,18 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "hive-revoke",
+    "short_description": "Revoke a wisdom entry so it is never retrieved, or restore it",
+    "flags": [
+      "id",
+      "reason",
+      "unrevoke"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "hive-search",
@@ -3368,6 +3399,7 @@
     "flags": [
       "charter-json",
       "colony-mode",
+      "confirm-reinit",
       "scope"
     ],
     "parent_command": "",
@@ -4584,7 +4616,9 @@
       "background",
       "confidence-target",
       "depth",
+      "dry-run",
       "max-iterations",
+      "min-confidence",
       "scope",
       "template"
     ],
@@ -7939,30 +7973,6 @@
       "v5.4.0": false
     },
     "stability_score": 82
-  },
-  {
-    "name": "survey-load",
-    "short_description": "Load survey results from territory survey",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
   },
   {
     "name": "survey-verify",

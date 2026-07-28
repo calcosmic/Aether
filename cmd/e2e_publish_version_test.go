@@ -12,6 +12,8 @@ import (
 // TestE2EPublishVersionAgreement verifies that publish updates a stale hub
 // version to match the source version.
 func TestE2EPublishVersionAgreement(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -81,6 +83,8 @@ func TestE2EPublishVersionAgreement(t *testing.T) {
 // TestE2EVersionCheckFlag verifies that `aether version --check` passes when
 // binary and hub agree, and fails when they disagree.
 func TestE2EVersionCheckFlag(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

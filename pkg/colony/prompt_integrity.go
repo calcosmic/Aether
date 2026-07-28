@@ -31,20 +31,20 @@ type PromptIntegrityFinding struct {
 }
 
 type PromptIntegrityAssessment struct {
-	BaseTrustClass PromptTrustClass      `json:"base_trust_class"`
-	TrustClass     PromptTrustClass      `json:"trust_class"`
-	Action         PromptIntegrityAction `json:"action"`
+	BaseTrustClass PromptTrustClass         `json:"base_trust_class"`
+	TrustClass     PromptTrustClass         `json:"trust_class"`
+	Action         PromptIntegrityAction    `json:"action"`
 	Findings       []PromptIntegrityFinding `json:"findings,omitempty"`
 }
 
 type PromptIntegrityRecord struct {
-	Name           string                 `json:"name,omitempty"`
-	Title          string                 `json:"title,omitempty"`
-	Source         string                 `json:"source,omitempty"`
-	BaseTrustClass PromptTrustClass       `json:"base_trust_class"`
-	TrustClass     PromptTrustClass       `json:"trust_class"`
-	Action         PromptIntegrityAction  `json:"action"`
-	Blocked        bool                   `json:"blocked,omitempty"`
+	Name           string                   `json:"name,omitempty"`
+	Title          string                   `json:"title,omitempty"`
+	Source         string                   `json:"source,omitempty"`
+	BaseTrustClass PromptTrustClass         `json:"base_trust_class"`
+	TrustClass     PromptTrustClass         `json:"trust_class"`
+	Action         PromptIntegrityAction    `json:"action"`
+	Blocked        bool                     `json:"blocked,omitempty"`
 	Findings       []PromptIntegrityFinding `json:"findings,omitempty"`
 }
 

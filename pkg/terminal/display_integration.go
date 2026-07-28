@@ -10,8 +10,8 @@ import (
 
 // StreamFlag represents the streaming display configuration.
 type StreamFlag struct {
-	Enabled    bool   // Whether streaming display is enabled
-	AutoDetect bool   // Whether TTY was auto-detected
+	Enabled    bool      // Whether streaming display is enabled
+	AutoDetect bool      // Whether TTY was auto-detected
 	Output     io.Writer // Output writer (defaults to os.Stdout)
 }
 
@@ -369,4 +369,3 @@ func (cdc *ContinueDisplayContext) GetSummary() ProgressSummary {
 
 	return cdc.progress.GetSummary()
 }
-

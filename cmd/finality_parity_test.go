@@ -211,10 +211,10 @@ func TestFinalityParity_RootValidation_ContinueUsesSameValidator(t *testing.T) {
 
 func TestFinalityParity_RequiredFinalizer_ContinueRequiresPlanOnlyAndFinalizer(t *testing.T) {
 	tests := []struct {
-		name             string
-		dispatchMode     string
+		name              string
+		dispatchMode      string
 		requiresFinalizer bool
-		shouldAccept     bool
+		shouldAccept      bool
 	}{
 		{"plan-only + finalizer", "plan-only", true, true},
 		{"plan-only no finalizer", "plan-only", false, false},
@@ -237,10 +237,10 @@ func TestFinalityParity_RequiredFinalizer_ContinueRequiresPlanOnlyAndFinalizer(t
 
 func TestFinalityParity_RequiredFinalizer_SealRequiresPlanOnlyOrAgentDelegateAndFinalizer(t *testing.T) {
 	tests := []struct {
-		name             string
-		dispatchMode     string
+		name              string
+		dispatchMode      string
 		requiresFinalizer bool
-		shouldAccept     bool
+		shouldAccept      bool
 	}{
 		{"plan-only + finalizer", "plan-only", true, true},
 		{"plan-only no finalizer", "plan-only", false, false},

@@ -74,9 +74,9 @@ func TestEventBusTimeoutFlag_CustomValue(t *testing.T) {
 
 func TestEventBusTimeoutFlag_AcceptsDurationFormats(t *testing.T) {
 	tests := []struct {
-		name    string
-		args    string
-		want    time.Duration
+		name string
+		args string
+		want time.Duration
 	}{
 		{"milliseconds", "500ms", 500 * time.Millisecond},
 		{"minutes", "2m", 2 * time.Minute},

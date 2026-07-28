@@ -97,12 +97,12 @@ func TestAccumulateStreamError(t *testing.T) {
 
 // testStreamHandler is a test implementation of StreamHandler that records callbacks.
 type testStreamHandler struct {
-	tokens      []string
-	toolStarts  []struct{ name, id string }
-	toolEnds    []struct{ name, id, result string }
-	completed   bool
+	tokens         []string
+	toolStarts     []struct{ name, id string }
+	toolEnds       []struct{ name, id, result string }
+	completed      bool
 	completeResult *StreamResult
-	err         error
+	err            error
 }
 
 func (h *testStreamHandler) OnToken(token string) {

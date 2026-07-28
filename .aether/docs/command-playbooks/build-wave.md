@@ -1,12 +1,14 @@
 > Runtime note: the current Go `aether build` path dispatches workers from the active repository root. The worktree allocation steps in this playbook are design-level guidance and are not wired into the default Codex build path unless the runtime explicitly calls the worktree commands.
 
+> **Reference documentation only.** As of Phase 160, this file is not loaded or executed by the runtime — see CLAUDE.md's "Command Playbooks (Reference Material)" section.
+
 ### Step 4.5: Checkpoint State
 
 Before modifying colony state during the build, create a rolling backup:
 
 Run using the Bash tool with description "Checkpointing colony state...":
 ```bash
-aether state-checkpoint "pre-build-wave" 2>/dev/null || echo "Warning: State checkpoint failed -- continuing without backup" >&2
+aether state-checkpoint --name "pre-build-wave" || echo "Warning: State checkpoint failed -- continuing without backup" >&2
 ```
 
 This creates a timestamped backup of COLONY_STATE.json in `.aether/data/backups/` with at most 3 retained.

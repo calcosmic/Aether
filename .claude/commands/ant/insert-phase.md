@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/insert-phase.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/insert-phase.yaml. Synced by aether update. -->
 ---
 name: ant-insert-phase
 description: "➕ Insert a corrective phase into the active plan"

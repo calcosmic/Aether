@@ -360,7 +360,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
-	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, manifest.Playbooks, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
+	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
 	finalManifest.GeneratedAt = completedAt.Format(time.RFC3339)
 	finalManifest.AttemptID = strings.TrimSpace(manifest.AttemptID)
 	finalManifest.AttemptPath = filepath.ToSlash(strings.TrimSpace(manifest.AttemptPath))
@@ -753,6 +753,14 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 		}
 		usedResults[resultName] = true
 		status := normalizeExternalBuildStatus(result.Status)
+		// A completed worker must relay something to the next phase. Empty
+		// handoffs were previously accepted and persisted, which filled the
+		// handoff store with content-free records — the chain was "written but
+		// empty, read but not delivered." Failing here is what makes the
+		// wrapper's mandatory-handoff instruction enforceable rather than prose.
+		if status == buildWorkerCompleted && codex.IsEmptyWorkerHandoff(result.Handoff) {
+			return fmt.Errorf("worker %s completed without a handoff; completed workers must relay changed_files, commands_run, verification_status, and next_worker_instructions so the next phase inherits their context", resultName)
+		}
 		filesCreated, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_created", resultName), result.FilesCreated)
 		if err != nil {
 			return err

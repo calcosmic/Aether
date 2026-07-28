@@ -26,7 +26,7 @@ type ParitySnapshot struct {
 // Only entries where the YAML name differs from the Cobra Use field are listed.
 // Commands not listed here have a direct 1:1 name match with the runtime.
 var yamlToRuntimeName = map[string]string{
-	"assumptions":   "assumptions-analyze",
+	"assumptions":    "assumptions-analyze",
 	"export-signals": "pheromone-export-xml",
 	"import-signals": "pheromone-import-xml",
 	"flag":           "flag-add",
@@ -448,8 +448,8 @@ func TestFlagParityAcrossSurfaces(t *testing.T) {
 
 // yamlContractInfo captures frontmatter fields we verify for each YAML command.
 type yamlContractInfo struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description"`
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
 	Runtime     struct {
 		Command         string `yaml:"command"`
 		ManifestCommand string `yaml:"manifest_command"`

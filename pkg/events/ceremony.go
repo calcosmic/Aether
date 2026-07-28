@@ -3,30 +3,30 @@ package events
 import "encoding/json"
 
 const (
-	CeremonyTopicBuildPrewave      = "ceremony.build.prewave"
-	CeremonyTopicBuildWaveStart    = "ceremony.build.wave.start"
-	CeremonyTopicBuildSpawn        = "ceremony.build.spawn"
-	CeremonyTopicBuildToolUse      = "ceremony.build.tool_use"
-	CeremonyTopicBuildWaveEnd      = "ceremony.build.wave.end"
-	CeremonyTopicBuildCircuitBreak = "ceremony.build.circuit_break"
-	CeremonyTopicPlanWaveStart     = "ceremony.plan.wave.start"
-	CeremonyTopicPlanSpawn         = "ceremony.plan.spawn"
-	CeremonyTopicPlanWaveEnd       = "ceremony.plan.wave.end"
-	CeremonyTopicColonizeWaveStart = "ceremony.colonize.wave.start"
-	CeremonyTopicColonizeSpawn     = "ceremony.colonize.spawn"
-	CeremonyTopicColonizeWaveEnd   = "ceremony.colonize.wave.end"
-	CeremonyTopicContinueWaveStart = "ceremony.continue.wave.start"
-	CeremonyTopicContinueSpawn     = "ceremony.continue.spawn"
-	CeremonyTopicContinueWaveEnd   = "ceremony.continue.wave.end"
-	CeremonyTopicPheromoneEmit     = "ceremony.pheromone.emit"
-	CeremonyTopicSkillActivate     = "ceremony.skill.activate"
-	CeremonyTopicChamberSeal       = "ceremony.chamber.seal"
-	CeremonyTopicChamberEntomb     = "ceremony.chamber.entomb"
-	CeremonyTopicMiddenRecord      = "ceremony.midden.record"
-	CeremonyTopicQueenPromote      = "ceremony.queen.promote"
-	CeremonyTopicHiveStore         = "ceremony.hive.store"
-	CeremonyTopicHivePromote       = "ceremony.hive.promote"
-	CeremonyTopicLoopBreak         = "ceremony.loop.break"
+	CeremonyTopicBuildPrewave          = "ceremony.build.prewave"
+	CeremonyTopicBuildWaveStart        = "ceremony.build.wave.start"
+	CeremonyTopicBuildSpawn            = "ceremony.build.spawn"
+	CeremonyTopicBuildToolUse          = "ceremony.build.tool_use"
+	CeremonyTopicBuildWaveEnd          = "ceremony.build.wave.end"
+	CeremonyTopicBuildCircuitBreak     = "ceremony.build.circuit_break"
+	CeremonyTopicPlanWaveStart         = "ceremony.plan.wave.start"
+	CeremonyTopicPlanSpawn             = "ceremony.plan.spawn"
+	CeremonyTopicPlanWaveEnd           = "ceremony.plan.wave.end"
+	CeremonyTopicColonizeWaveStart     = "ceremony.colonize.wave.start"
+	CeremonyTopicColonizeSpawn         = "ceremony.colonize.spawn"
+	CeremonyTopicColonizeWaveEnd       = "ceremony.colonize.wave.end"
+	CeremonyTopicContinueWaveStart     = "ceremony.continue.wave.start"
+	CeremonyTopicContinueSpawn         = "ceremony.continue.spawn"
+	CeremonyTopicContinueWaveEnd       = "ceremony.continue.wave.end"
+	CeremonyTopicPheromoneEmit         = "ceremony.pheromone.emit"
+	CeremonyTopicSkillActivate         = "ceremony.skill.activate"
+	CeremonyTopicChamberSeal           = "ceremony.chamber.seal"
+	CeremonyTopicChamberEntomb         = "ceremony.chamber.entomb"
+	CeremonyTopicMiddenRecord          = "ceremony.midden.record"
+	CeremonyTopicQueenPromote          = "ceremony.queen.promote"
+	CeremonyTopicHiveStore             = "ceremony.hive.store"
+	CeremonyTopicHivePromote           = "ceremony.hive.promote"
+	CeremonyTopicLoopBreak             = "ceremony.loop.break"
 	CeremonyTopicOraclePhaseTransition = "ceremony.oracle.phase_transition"
 	CeremonyTopicOracleIteration       = "ceremony.oracle.iteration"
 )
@@ -55,10 +55,10 @@ type CeremonyPayload struct {
 	FilesModified   []string `json:"files_modified,omitempty"`
 	TestsWritten    []string `json:"tests_written,omitempty"`
 	Blockers        []string `json:"blockers,omitempty"`
-	SuccessCriteria  []string `json:"success_criteria,omitempty"`
-	LoopType         string   `json:"loop_type,omitempty"`
-	DetectionSignal  string   `json:"detection_signal,omitempty"`
-	ActionTaken      string   `json:"action_taken,omitempty"`
+	SuccessCriteria []string `json:"success_criteria,omitempty"`
+	LoopType        string   `json:"loop_type,omitempty"`
+	DetectionSignal string   `json:"detection_signal,omitempty"`
+	ActionTaken     string   `json:"action_taken,omitempty"`
 }
 
 func (p CeremonyPayload) RawMessage() (json.RawMessage, error) {
@@ -76,7 +76,7 @@ func CeremonyTopics() []string {
 		CeremonyTopicBuildSpawn,
 		CeremonyTopicBuildToolUse,
 		CeremonyTopicBuildWaveEnd,
-			CeremonyTopicBuildCircuitBreak,
+		CeremonyTopicBuildCircuitBreak,
 		CeremonyTopicPlanWaveStart,
 		CeremonyTopicPlanSpawn,
 		CeremonyTopicPlanWaveEnd,

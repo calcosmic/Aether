@@ -27,12 +27,39 @@
 - **v1.22 Grounded Planning + Ceremony Restore** - Phases 141-144 (shipped 2026-05-19) — [Archive](milestones/v1.22-ROADMAP.md)
 - **v1.23 Daily Driver Reliability** - Phases 145-151 (shipped 2026-05-21) — [Archive](milestones/v1.23-ROADMAP.md)
 - **v1.24 Hybrid Architecture Salvage** - Phases 152-159 (shipped 2026-05-24) — [Archive](milestones/v1.24-ROADMAP.md)
+- **v1.25 Switch It On** - Phases 160-171 (in progress, started 2026-07-25; DRAFT ROADMAP, not yet user-approved)
 
 ## Phases
 
-### v1.25 [Next Milestone] (Planned)
+### v1.25 Switch It On (DRAFT — awaiting user approval)
 
-*Next milestone not yet defined. Run `/gsd-new-milestone` to start planning.*
+**Milestone Goal:** Make Aether usable daily on an inexpensive model by switching on machinery that already exists and has never run.
+
+**Rebuild history:** the milestone was fully rebuilt once already (58 requirements, 8 phases) after six specialist review agents refuted the original "Working Again" diagnosis (see REQUIREMENTS.md's "Corrections carried forward"). That rebuild then over-corrected and dropped three categories of requirement that no review agent had actually refuted — research feeding planning, lifecycle commands carrying method instead of protocol, and full phase-fit caste selection — plus compressed "Your Eyes Back" (the rich terminal experience) too far. This revision restores all of it. Requirement count moves from 58 to **88**, and the phase count grows from 8 to **12** (160-171) to hold the three restored categories plus a split of the now much larger "Your Eyes Back" work.
+
+**What was restored, and why it doesn't reopen any refuted claim:**
+1. **Research Feeds Planning (RESEARCH-01..10, new)** — the user's own specific request, and nothing in the review touched it. Keeping the TS host (a review finding, not a new decision) makes this *easier*: `.aether/ts-host/src/confidence-loop.ts` (250 lines) already implements the target-confidence loop this needs, and `RESEARCH-07` requires using it as-is rather than reimplementing it.
+2. **Core Lifecycle Commands (CMD-01..05, new)** — lifecycle wrappers carrying engineering method instead of manifest-parsing protocol. Not refuted; scoped by content, not line count, since the review separately established that a short `oracle.md` is not evidence of hollowing (its loop moved into Go). `CMD-05` is new: it addresses a defect the plan-checker review found in the *original* discarded draft — multiple phases rewriting `build.md` with no stated merge order — by naming a single structural owner and an explicit merge sequence (see the note under Phase 165 below).
+3. **Full Colony On Demand (COLONY-01..05, new)** — all 27 castes kept, phase-fit selection. Corrected on restoration: `COLONY-02` no longer references Dream as a caste (it's a command — a review finding). `COLONY-03` is rewritten so the criterion can actually fail (the old "fewer than 27 loaded" framing already passes today and proves nothing). `COLONY-05` is new and decision-shaped: whether Dream becomes a 28th caste is a decision to record, not assumed either way.
+4. **Your Eyes Back expanded (SEE-01..14, was 7)** — this is the rich terminal experience the user cares about most, and it was compressed too far in the rebuild. Restored: the rolling worker panel with caste emoji and deterministic name (SEE-08), incremental live progress (SEE-09), the full charter ceremony with genuine approve/edit/cancel (SEE-10), re-init preserving all colony state (SEE-11 — a data-safety requirement with its own test, not a ceremony detail), progressive-disclosure output (SEE-12), zero-context worker task packets (SEE-13), and "what happens next" on every command (SEE-14).
+5. **Reclaim expanded (RECLAIM-01..09, was 6)** — added the swarm state quartet (`/ant-swarm` is a flagship workflow whose state machine currently has no caller), the remaining Class A orphans, and `queen-seed-from-hive`.
+
+**Phase count and the SEE split:** SEE alone reached 14 requirements — too broad for one phase to stay independently verifiable. It splits along a real seam: **Phase 168 (Live Visibility)** covers everything that renders *during* a running command — the health meter, the TS host dashboard, the worker panel, incremental progress, next-step guidance, decision blocks, and the two decisions (what a "live panel" honestly means on Claude Code, and why caste identity feels absent) that gate what gets built. **Phase 169 (Charter & Standards)** covers everything that is a *document or standard*, not a live render — the charter ceremony structure, the progressive-disclosure output format, the task-packet format, and the data-safety guarantee that re-init doesn't silently wipe colony state. These test differently (live-behavior observation vs. document structure plus an automated data-safety test) and ship independently, which is why they're two phases rather than one 14-requirement phase or an arbitrary half-and-half split.
+
+**Where `build.md` is owned (CMD-05):** three phases touch `build.md` this milestone. **Phase 165 (Core Lifecycle Commands) is the sole structural owner** — it performs the full method-over-protocol rewrite. Phase 160 (Fail Loudly) may only make narrow, isolated edits to fix specific broken CLI call arguments inside it, and must merge *before* Phase 165, so the rewrite starts from corrected calls rather than stale ones. Phase 168 (Live Visibility) may only append a "what happens next" / visual-guidance layer on top of the file Phase 165 already restructured, and must merge *after* it. No other phase edits `build.md`'s structure. This ordering is enforced by the dependency chain below (165 depends on 160; 168 depends on 160 and, for this reason, effectively follows 165 in execution even though its formal dependency is the shared Phase 160 foundation — see the phase detail note).
+
+- [ ] **Phase 160: Fail Loudly** - Seven broken CLI calls fixed, drift detection catches positional-argument drift, stderr suppression removed where load-bearing; `control-ts/` deleted as a standalone opener; `.aether/ts-host/` and `.aether/ts/` explicitly kept and verified untouched. Only narrow, isolated `build.md` call-argument fixes here — see the `build.md` ownership note above
+- [ ] **Phase 161: Cheap Models By Design** - `model-routing.yaml` (fully written, zero readers) gets wired to dispatch; routing becomes visible and user-editable; `colony/` gets distributed so this works outside the Aether repo
+- [ ] **Phase 162: Switch On Learning** - The complete but never-invoked consolidation pipeline runs at phase end and seal; `pkg/learn` vs `pkg/memory` is reconciled; the Hive Brain default is a written decision, not an accident
+- [ ] **Phase 163: Context Reaches Workers** - The context capsule, survey, phase research, `suggest-analyze`, and the approved charter reach a wrapper-spawned worker's actual prompt — at manifest level, measured, and inspectable by a person
+- [ ] **Phase 164: Research Feeds Planning** - The Queen decides whether a phase needs research and, when it does, a worker runs automatically using the existing `confidence-loop.ts` (kept, not rebuilt) rather than a stub the user pastes findings into
+- [ ] **Phase 165: Core Lifecycle Commands** - `init`/`plan`/`build`/`continue` carry engineering method instead of manifest-parsing protocol; sole structural owner of `build.md` this milestone
+- [ ] **Phase 166: Full Colony On Demand** - All 27 castes stay available; phase-fit selection is provable, not assumed; whether Dream becomes a 28th caste is decided
+- [ ] **Phase 167: Typed Control** - `mode` migrated onto every existing phase before it's required anywhere; the grounding-gate and review-depth keyword-inference sites closed; remaining sites catalogued with a decision each
+- [ ] **Phase 168: Your Eyes Back — Live Visibility** - The existing colony health meter and TS host dashboard/swarm-display/next-step guidance get wired into `/ant-status` and builds; what "live panel" means on Claude Code, and why caste identity feels absent, are decided before anything is built against them
+- [ ] **Phase 169: Your Eyes Back — Charter & Standards** - The full charter ceremony with genuine approve/edit/cancel; re-init proven by test to preserve all colony state; output and worker task packets follow written standards
+- [ ] **Phase 170: Reclaim The Unreachable** - Of 37 subcommands no playbook reconnection recovers (now including the `/ant-swarm` state quartet, the remaining Class A orphans, and `queen-seed-from-hive`), the ones worth having back become reachable; 3,475 duplicate playbook lines deleted
+- [ ] **Phase 171: Prove It** - Three real tasks on a cheap model, an interrupted-session resume, a downstream-repo lifecycle run, and a benchmark harness that is fixed to actually invoke Aether or explicitly retired
 
 <details>
 <summary>v1.24 Hybrid Architecture Salvage (Phases 152-159) — SHIPPED 2026-05-24</summary>
@@ -281,10 +308,174 @@ Plans:
   7. The Classic parity checklist exists and at least 50% of items are verifiable against the new hybrid system
 **Plans**: 3 plans
 
+### Phase 160: Fail Loudly
+**Goal**: Every playbook and wrapper CLI call either succeeds or visibly fails -- no call is silently swallowed by a `/dev/null` redirect -- and the drift-detection test that should have caught this catches positional-argument drift, not only `--flag` drift. This is fixing seven confirmed-broken calls (`survey-load`, `check-antipattern`, `print-next-up`, `verify-claims`, `state-checkpoint`, `generate-progress-bar`, `skill-detect`) and closing a test blind spot, not writing new subsystems. Alongside it, `control-ts/` -- the one component confirmed genuinely dead, self-described in its own `package.json` as a retired prototype -- is deleted as a standalone first commit; `.aether/ts-host/` and `.aether/ts/` are explicitly kept, since deleting either breaks `go build` and hard-fails `aether publish`/`aether integrity`. Any edit this phase makes to `build.md` is limited to fixing a specific broken call's arguments -- the full method rewrite belongs to Phase 165, which depends on this phase completing first.
+**Depends on**: Phase 159 (v1.24 completion)
+**Requirements**: LOUD-01, LOUD-02, LOUD-03, LOUD-04, LOUD-05, LOUD-06, LOUD-07, LOUD-08, LOUD-09, RETIRE-01, RETIRE-02, RETIRE-03, RETIRE-04
+**Success Criteria** (what must be TRUE):
+  1. A build or continue run where a previously-broken call fails (any of the seven: survey-load, check-antipattern, print-next-up, verify-claims, state-checkpoint, generate-progress-bar, skill-detect) now shows a visible error in the terminal -- not silence
+  2. The Gatekeeper security gate (`check-antipattern`) actually executes during continue, and its pass/fail result visibly affects the continue outcome
+  3. *(Code-verifiable only, cannot be confirmed by a non-technical user watching the tool run)*: the drift-detection test fails when a playbook calls a positional-argument command incorrectly, and a full-execution audit -- not regex -- covers every documented CLI call
+  4. `.aether/docs/structural-learning-stack.md`, `CLAUDE.md`, and `AGENTS.md` no longer claim `/ant-continue` runs phase-end consolidation today (that claim becomes true only once Phase 162 ships)
+  5. Any guidance from `cmd/unblock_cmd.go` points at a command that actually exists and works -- not a slash command available on no platform
+  6. `control-ts/` no longer exists in the repository; `.aether/ts-host/` and `.aether/ts/` are unchanged; `go build`, `aether publish`, and `aether integrity` all still succeed after the deletion
+  7. *(Code-verifiable only)*: any test removed with `control-ts/` is recorded in a ledger as dead-with-no-replacement, or its coverage is named as continuing in a specific surviving test
+**Plans**: 8 plans in 2 waves
+
+Plans:
+- [x] 160-01-PLAN.md — RETIRE-04 safety net: Go policy schema test + retired-tests ledger (wave 1)
+- [x] 160-02-PLAN.md — LOUD-01/03: correct the six broken documented call sites + survey-load absence test (wave 1)
+- [x] 160-03-PLAN.md — LOUD-06/07: correct the consolidation-runs doc claims + stderr-suppression invariant (wave 1)
+- [x] 160-04-PLAN.md — LOUD-02: wire check-antipattern into the live continue gate pipeline (wave 1)
+- [x] 160-05-PLAN.md — D-03/04/05: worker debug artifacts on every failure mode, capped, worktree-safe (wave 1)
+- [x] 160-06-PLAN.md — RETIRE-01/02/03/04: delete control-ts as a standalone commit, prove ts-host/ts survive (wave 2, needs 01)
+- [x] 160-07-PLAN.md — LOUD-04/05 + D-01: positional-drift execution audit + gate/enrichment classification (wave 2, needs 02, 04)
+- [x] 160-08-PLAN.md — LOUD-08 (D-02): build the /ant-unblock wrapper on Claude + OpenCode (wave 2, needs 03)
+
+### Phase 161: Cheap Models By Design
+**Goal**: `colony/policies/model-routing.yaml` already maps every caste to a model tier -- builders, watchers, scouts, and surveyors to the cheap tier; oracle, architect, route-setter, and archaeologist to the expensive one. It has zero readers. This phase wires an existing, fully-written YAML to dispatch; it is not writing new routing logic. `colony/` also gets distributed, since `cmd/policy_loader.go:19` currently resolves a relative path and nothing embeds, publishes, or installs `colony/` to `~/.aether/system/colony` -- so every policy silently falls back to compiled defaults the moment Aether runs outside this repo.
+**Depends on**: Phase 160
+**Requirements**: MODEL-01, MODEL-02, MODEL-03, MODEL-04, MODEL-05, MODEL-06
+**Success Criteria** (what must be TRUE):
+  1. Starting a build, the user can see which model each spawned worker is using, and that builders/watchers/scouts/surveyors run on the cheap tier while oracle/architect/route-setter/archaeologist run on the expensive tier
+  2. Editing `colony/policies/model-routing.yaml` to move a caste to a different model tier changes which model that caste's next worker actually runs on -- no Go rebuild required
+  3. Of the six other zero-reader policy files (`autopilot.yaml`, `memory-rules.yaml`, `pheromone-lifecycle.yaml`, `safety-gates.yaml`, `signal-rules.yaml`, `skill-creation.yaml`), each either has a visible runtime effect or is deleted -- `safety-gates.yaml` in particular actually gates something observable
+  4. Running Aether from a separate downstream repo still applies the routing and policy decisions from `colony/` -- checked by observing a worker's model/behaviour in that other repo, not only in this one
+  5. If `colony/` is ever absent (e.g. a fresh install before distribution completes), dispatch still works using Go's compiled fallback defaults instead of crashing
+**Plans**: TBD
+
+### Phase 162: Switch On Learning
+**Goal**: `pkg/memory/pipeline.go` already wires Observe -> Promote -> Queen -> Consolidate. It is constructed in exactly two places (`consolidation-phase-end`, `consolidation-seal`) and neither is invoked by any wrapper, playbook, or Go call site -- the colony described in CLAUDE.md has never learned anything. This phase invokes the two subcommands that already exist; it does not build a learning system. It also reconciles the fact that a second, different learning system (`pkg/learn`) already runs live on every continue, and makes the Hive Brain's off-by-default behaviour a deliberate, written decision instead of an accident.
+**Depends on**: Phase 160
+**Requirements**: LEARN-01, LEARN-02, LEARN-03, LEARN-04, LEARN-05
+**Success Criteria** (what must be TRUE):
+  1. Running `/ant-continue` at the end of a phase visibly reports learning activity (e.g. observations promoted to instincts) that did not appear before this phase shipped
+  2. Running `/ant-seal` visibly reports the full eight-ant consolidation pass, instinct decay, and an archive/report artifact being written
+  3. *(Decision-shaped, not build-shaped)*: a written decision states which of `pkg/learn` or `pkg/memory` is authoritative and what happens to the other -- retired, or explicitly subordinate -- documented in the repo, not only implemented
+  4. *(Decision-shaped)*: a written decision states whether the Hive Brain default changes from off to on, with the reasoning; if it stays off, the documentation stops implying it is on by default
+  5. The same worker task, run once with colony memory populated and once with it wiped, produces demonstrably different output (referencing a prior instinct, wisdom entry, or pattern) -- recorded as a before/after comparison, not assumed
+**Plans**: TBD
+
+### Phase 163: Context Reaches Workers
+**Goal**: Four things are confirmed disconnected from the active build path, independently verified by two review agents: the colony-prime context capsule, `survey-load`, phase research, and `suggest-analyze`. A fifth -- the approved colony charter -- has never reached a worker at all, despite governance detection being healthy. This phase reconnects `build-context.md` (the one build playbook Go currently omits) and carries context at manifest level, once per phase, rather than duplicating an 8K capsule across every worker dispatch -- which on an 8-worker phase would otherwise add roughly 16K tokens of overhead to a milestone about running cheaply.
+**Depends on**: Phase 160
+**Requirements**: CONTEXT-01, CONTEXT-02, CONTEXT-03, CONTEXT-04, CONTEXT-05, CONTEXT-06, CONTEXT-07, CONTEXT-08, CONTEXT-09
+**Success Criteria** (what must be TRUE):
+  1. `build-context.md` is part of the playbook sequence Go actually loads for a build (`codexBuildPlaybooks()`), where before it was the one playbook omitted
+  2. Running `aether build <n> --print-brief` (or equivalent) shows a human-readable dump of what a spawned worker's prompt actually contains -- a person can check context presence themselves, without reading Go source
+  3. That printed brief shows the context capsule, hive/pheromone sections, survey findings, phase research, and the approved charter's governance rules (e.g. "TDD required, ESLint enforced") all present -- where before an approved charter was invisible to every worker
+  4. `suggest-analyze` actually runs during a build and its pheromone suggestions appear for the user to approve or dismiss, visible in the build output
+  5. Total assembled context size is measured and reported (e.g. in the `--print-brief` output), so a person can see whether prompts are appropriately sized rather than needlessly stacked (colony-prime 8K + skills 8K + playbook injection 7K)
+  6. The same worker task, run once with this context path connected and once with it disconnected, produces a recorded before/after comparison on an inexpensive model
+**Plans**: TBD
+
+### Phase 164: Research Feeds Planning
+**Goal**: Before a phase is planned, the Queen decides whether it needs research and states why; when it does, a research worker runs automatically and its findings persist and feed the plan directly -- restoring `v5.4.0` `plan.md` Step 3.6 "Phase Domain Research" choreography. Current `plan.md` contains zero references to Oracle; research is a standalone command the user must remember to run and paste in. Nothing in the review refuted this, and keeping the TS host (Phase 160's decision) makes it *easier*, not harder: `.aether/ts-host/src/confidence-loop.ts` (250 lines, with `maxIterations` already wired) is a working target-confidence loop. This phase uses it as-is; it does not reimplement a confidence loop.
+**Depends on**: Phase 160, Phase 163 (research findings ride the same manifest-level context path Phase 163 restores, rather than a second parallel assembly)
+**Requirements**: RESEARCH-01, RESEARCH-02, RESEARCH-03, RESEARCH-04, RESEARCH-05, RESEARCH-06, RESEARCH-07, RESEARCH-08, RESEARCH-09, RESEARCH-10
+**Success Criteria** (what must be TRUE):
+  1. Before planning a phase, the Queen states whether that phase needs research and why; the user can override the decision either way, and when research is warranted a worker runs automatically without the user having to invoke it
+  2. Research findings persist to a durable per-phase artifact and appear in the planner's context automatically -- not pasted in by hand
+  3. Re-running plan on a phase re-researches from scratch rather than reusing stale findings, and territory survey context (where it exists) reaches both the research worker and the planner
+  4. During a live plan run, a confidence readout is visible while research runs, using the existing `confidence-loop.ts` rather than a reimplementation, and the loop stops at the depth-bound target/iteration budget (fast 80%/4, balanced 90%/6, deep 95%/8, exhaustive 99%/12) with an accept override to exit early
+  5. At plan time, the Queen proposes plan granularity, task decomposition depth, and verification depth with a plain-English reason each, and the user can accept or change any of them before planning proceeds
+**Plans**: TBD
+
+### Phase 165: Core Lifecycle Commands
+**Goal**: `init`, `plan`, `build`, and `continue` wrappers are rewritten to carry engineering method -- stage purpose, files to read, spawn choreography, stop conditions -- instead of protocol instructions whose primary job is parsing `result.manifest.dispatch_manifest`. Scoped by content, not line count: a short `oracle.md` is not evidence of hollowing, since its RALF loop moved into Go. **This phase is the sole structural owner of `build.md` for this milestone.** Phase 160 may only have made narrow, isolated fixes to specific broken call arguments inside it (merged first); Phase 168 may only append a "what happens next" / visual-guidance layer on top of the file this phase produces (merges after). No other phase restructures it.
+**Depends on**: Phase 160, Phase 163, Phase 164 (documents the research step Phase 164 adds and the context injection Phase 163 restores)
+**Requirements**: CMD-01, CMD-02, CMD-03, CMD-04, CMD-05
+**Success Criteria** (what must be TRUE):
+  1. Reading `build.md`, `plan.md`, `continue.md`, and `init.md` shows stage purpose, files-to-read guidance, spawn choreography, and stop conditions -- not instructions whose primary job is parsing an internal JSON envelope
+  2. Grepping the four core lifecycle wrappers for instructions to parse an internal JSON envelope or write to a temporary manifest file as their primary job returns zero matches
+  3. A user reading `build.md` before running a build can describe what each stage does and what context/research a worker receives, without opening Go source
+  4. `/ant-chaos`, `/ant-archaeology`, `/ant-dream`, `/ant-oracle`, `/ant-swarm`, `/ant-sage`, `/ant-colonize`, and `/ant-council` continue to work unchanged
+  5. `build.md`'s structural rewrite is committed by this phase alone; the commit or a header comment states what Phase 160 fixed beforehand and reserves the trailer section Phase 168 appends afterward, so the merge order is traceable, not assumed
+**Plans**: TBD
+
+### Phase 166: Full Colony On Demand
+**Goal**: All 27 castes are markdown and YAML and cost nothing at rest; none are deleted or merged. Dream is a command, not a caste -- corrected on restoration, since the earlier draft's "Sage and Dream at milestone close" language implied a Dream worker that cannot exist. This phase makes phase-fit caste selection actually provable: the old success criterion ("fewer than 27 castes loaded") already passes today and proves nothing, so it is replaced with a criterion that can fail. It also gives `colony/agents/*.yaml` its first Go reader -- today only the deleted `control-ts` ever read it.
+**Depends on**: Phase 160
+**Requirements**: COLONY-01, COLONY-02, COLONY-03, COLONY-04, COLONY-05
+**Success Criteria** (what must be TRUE):
+  1. All 27 caste YAMLs in `colony/agents/` still exist -- none deleted or merged
+  2. A phase touching legacy code spawns Archaeologist, a hardening phase spawns Chaos, an auth-touching phase spawns Gatekeeper, and milestone close spawns Sage -- observable in the run's dispatch log
+  3. A specific, failable test proves phase-fit selection: a legacy-touching phase's dispatch log shows Archaeologist loaded AND Includer not loaded -- replacing the old "fewer than 27 loaded" framing, which would pass trivially today
+  4. Adding or editing a caste requires only editing its `colony/agents/*.yaml` file, and that file now has a working Go reader -- verified by editing a caste's YAML and observing the change take effect without a rebuild
+  5. *(Decision-shaped)*: a written decision states whether Dream becomes a 28th caste or remains a command, with the reasoning recorded
+**Plans**: TBD
+
+### Phase 167: Typed Control
+**Goal**: `mode` becomes a required, explicit field on every phase -- but only after a migration backfills it onto every existing phase, since `mode` is currently `omitempty` and untouched by `runMigrateState`; requiring it first would hard-block every colony planned to date, including Aether's own. Beyond `InferPhaseMode`, the two live behavioural sites also stop inferring from phase-name prose: `plan_grounding.go:40` currently exempts a phase from the grounding gate purely because its name contains "research", and `review_depth.go:153` selects review depth the same way. Ten-plus inference sites exist in total; the ones not fixed this phase get a written decision instead of silent continuation.
+**Depends on**: Phase 160
+**Requirements**: TYPED-01, TYPED-02, TYPED-03, TYPED-04, TYPED-05, TYPED-06, TYPED-07, TYPED-08
+**Success Criteria** (what must be TRUE):
+  1. Running the migration on this repo's own colony state backfills `mode` on every phase that lacks it, using `InferPhaseMode` once at migration time and writing the result explicitly to disk -- inspectable in the state file afterward, before any validation requiring `mode` is turned on
+  2. After migration, planning a new phase without an explicit `mode` fails with a clear, readable error instead of silently inferring one
+  3. A phase named or described with "research"/"explore"/"spike" language no longer skips the grounding gate purely because of that name -- the grounding gate applies based on the typed mode
+  4. Review depth for a phase is chosen from its typed mode, not inferred from words in its description; where keyword hints are still shown to the author, they are visibly labeled as suggestions, never silently applied
+  5. *(Code-verifiable only)*: the remaining prose-to-control-flow sites (`oracle_loop.go:88`/`:154`, `recovery_engine.go:46`, `codex_continue.go:3499`, `hive.go:209`, `codex_visuals.go:222`) are catalogued with a written decision recorded for each -- fix, accept, or defer
+  6. A regression test proves a phase description containing "research" still dispatches a Builder when its typed mode says production
+**Plans**: TBD
+
+### Phase 168: Your Eyes Back — Live Visibility
+**Goal**: Most of what this phase needs already exists. `colony-vital-signs` computes build velocity, error rate, signal health, memory pressure, colony age, and overall health 0-100 -- v5.4.0's `status.md` called it and nothing does now. The TS host already holds `dashboard.ts`, `swarm-display.ts`, and `narrator.ts`. The Go runtime already computes next-step guidance (`nextCommandFromState`, `closeoutNextCommand`, `continueNextCommandForAssessment`) and zero of 60 wrappers surface it. This phase wires all of that into the commands a user actually runs; it does not reimplement any of it. Two things are decided and written down before anything is built against them: what "live worker panel" honestly means inside Claude Code's Task-tool spawn model (no repaintable surface), and why caste identity feels absent when colours already render via `AETHER_FORCE_COLOR=1`. This phase's only edit to `build.md` is appending the next-step-guidance/visual layer on top of Phase 165's already-restructured file -- it does not restructure `build.md` itself.
+**Depends on**: Phase 160
+**Requirements**: SEE-01, SEE-02, SEE-03, SEE-04, SEE-05, SEE-06, SEE-07, SEE-08, SEE-09, SEE-14
+**Success Criteria** (what must be TRUE):
+  1. Running `/ant-status` shows a colony health score (0-100) with its component signals (build velocity, error rate, signal health, memory pressure, colony age) -- using the existing `colony-vital-signs` computation, not a new one
+  2. Running a build surfaces the existing TS host dashboard/swarm display rather than a bare log
+  3. *(Decision-shaped, not build-shaped)*: a written decision states exactly what "live worker panel" means on Claude Code specifically, given the Task-tool spawn model has no repaintable surface -- and that decision, not an assumed animated panel, is what gets built
+  4. During a build, a rolling panel shows each worker as it spawns, runs, and completes, with caste emoji, ANSI-coloured label, and deterministic name, in whatever form criterion 3 establishes as achievable; progress is visible incrementally, not only in a final summary
+  5. Lifecycle commands show banner-framed stages, structured summaries, and the next-step guidance the Go runtime already computes, at the end of every command
+  6. When a command needs a decision from the user, it appears in a visually distinct block, not buried in prose
+  7. When context health reaches "replace," a handoff is written and confirmed saved before the tool suggests `/clear`, and `/ant-resume` afterward restores the work without the user re-explaining it
+  8. *(Decision-shaped)*: a written diagnosis states the real, specific reason caste identity feels absent to the user -- given colours already render -- before any further fix is scoped or built against it
+**Plans**: TBD
+
+### Phase 169: Your Eyes Back — Charter & Standards
+**Goal**: Everything in this phase is a document or a standard, not a live render -- which is why it is split from Phase 168. The colony charter ceremony gets its full structure with genuine approve/edit/cancel, re-init is proven by an automated test (not manual observation) to preserve all colony state rather than silently discarding it, and command output plus worker task packets follow explicit, written standards instead of an ad hoc format.
+**Depends on**: Phase 160
+**Requirements**: SEE-10, SEE-11, SEE-12, SEE-13
+**Success Criteria** (what must be TRUE):
+  1. The colony charter ceremony presents its full structure (Prior Context, Charter with Intent/Vision/Governance/Goals, Context, Pheromone suggestions) with genuine approve/edit/cancel -- a user can reject or modify what's proposed, not just click through
+  2. A dedicated automated test -- not manual observation -- proves re-running init on an existing colony preserves all colony state, wisdom, instincts, learnings, pheromones, and phase progress; this test fails if re-init silently wipes any of them
+  3. Command output follows a progressive-disclosure standard: compact single-line summaries by default, with bracketed counts marking expandable detail, and verbose output only on request
+  4. Worker task packets are written for a worker with zero prior context -- one action per task, explicit acceptance criteria, and the exact command to verify -- inspectable by reading an actual generated task packet
+**Plans**: TBD
+
+### Phase 170: Reclaim The Unreachable
+**Goal**: Of 83 subcommands that lost every caller since v5.4.0, 46 return automatically once Phase 163 reconnects the playbooks. These 37 do not -- no caller anywhere, playbook reconnection or otherwise. This phase makes the ones worth having back reachable: the original 6 (checkpoint/rollback, registry population, XML exchange, `recover`, the duplicate full-playbook deletion, and the unread `colony/` file audit), plus the swarm state quartet (`/ant-swarm` is a flagship workflow whose state machine currently has no caller), the remaining Class A orphans, and `queen-seed-from-hive`. Separately, it deletes 3,475 duplicate playbook lines (`build-full.md` + `continue-full.md`, 37% of the total playbook surface).
+**Depends on**: Phase 160, Phase 162 (`RECLAIM-09` ties directly to the hive-default decision Phase 162 makes)
+**Requirements**: RECLAIM-01, RECLAIM-02, RECLAIM-03, RECLAIM-04, RECLAIM-05, RECLAIM-06, RECLAIM-07, RECLAIM-08, RECLAIM-09
+**Success Criteria** (what must be TRUE):
+  1. Before a risky auto-repair runs, a checkpoint is visibly created, and a user can roll back to it afterward if the repair made things worse (`autofix-checkpoint`/`autofix-rollback` reachable)
+  2. Running `/ant-init` and `/ant-seal` populates the colony registry, checkable via a registry command -- this is what supplies the domain tags used to scope hive wisdom
+  3. The XML exchange path either produces a real colony archive at seal (matching v5.4.0 behaviour) or is explicitly retired, with its stale files in `.aether/exchange/` and references in `.aether/docs/xml-utilities.md` removed -- not left half-alive
+  4. `aether recover` (`cmd/recover_scanner.go`) is reachable from a documented command path, not only by direct binary invocation
+  5. `build-full.md` and `continue-full.md` no longer exist in the repository, and the split playbooks they duplicated still work
+  6. Every file in `colony/playbooks/`, `colony/phases/`, and `colony/prompts/` either has a verifiable reader or is deleted -- an audit lists each file's disposition
+  7. Running `/ant-swarm` populates and reads real swarm state (`swarm-findings-init`, `swarm-findings-add`, `swarm-solution-set`, `swarm-cleanup`) instead of a state machine with no caller
+  8. The remaining Class A orphans (`pheromone-count`, `data-safety-stats`, `clash-setup`, `domain-detect`, `skill-list`) are each reached or explicitly retired with a reason recorded
+  9. `queen-seed-from-hive` is reconnected to `/ant-init` (matching v5.4.0) or explicitly retired alongside the Phase 162 hive-default decision -- not left silently unreferenced
+**Plans**: TBD
+
+### Phase 171: Prove It
+**Goal**: Aether's daily-driver claim is tested against real evidence, on real repositories, using an inexpensive model. The existing benchmark cannot do this job today: `aether_bench/aether_colony.py:143-166` runs the identical `claude --dangerously-skip-permissions --print` invocation as the solo arm and never calls a single Aether command -- it compares Claude Code to Claude Code. This phase either fixes that or explicitly retires the harness; it is not left described as merely "needing repair."
+**Depends on**: Phase 160, Phase 161, Phase 162, Phase 163, Phase 164, Phase 165, Phase 166, Phase 167, Phase 168, Phase 169, Phase 170
+**Requirements**: PROOF-01, PROOF-02, PROOF-03, PROOF-04, PROOF-05
+**Success Criteria** (what must be TRUE):
+  1. Three real development tasks are completed in real repositories on this machine using an inexpensive model, with the number of operator interventions counted and recorded per task -- the milestone's primary verdict
+  2. A task interrupted mid-session resumes in a fresh session without the user re-explaining what was in progress
+  3. A full colony lifecycle runs successfully in a separate downstream repo without Aether modifying its own repository -- proving the Phase 161 `colony/` distribution work actually works outside this repo
+  4. *(Decision-shaped, not build-shaped)*: a written decision states whether `aether-bench`'s colony arm has been rewritten to actually invoke Aether commands, or whether the harness is retired -- it is not left described as merely "needing repair"
+  5. If the benchmark runs, its colony-vs-solo result is recorded in the repository as the milestone's honest verdict, including if it is unfavourable
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 → 151 → 152 → 153 → 154 → 155 → 156 → 157 → 158 → 159
+Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 → 151 → 152 → 153 → 154 → 155 → 156 → 157 → 158 → 159 → 160 → 161 → 162 → 163 → 164 → 165 → 166 → 167 → 168 → 169 → 170 → 171
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -303,3 +494,15 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 157. TS Adapters & Oracle | v1.24 | 2/2 | Complete   | 2026-05-24 |
 | 158. Event Stream | v1.24 | 3/3 | Complete | 2026-05-24 |
 | 159. End-to-End Acceptance | v1.24 | 3/3 | Complete | 2026-05-24 |
+| 160. Fail Loudly | v1.25 | 8/8 | Complete   | 2026-07-27 |
+| 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
+| 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
+| 163. Context Reaches Workers | v1.25 | 0/TBD | Not started | - |
+| 164. Research Feeds Planning | v1.25 | 0/TBD | Not started | - |
+| 165. Core Lifecycle Commands | v1.25 | 0/TBD | Not started | - |
+| 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
+| 167. Typed Control | v1.25 | 0/TBD | Not started | - |
+| 168. Your Eyes Back — Live Visibility | v1.25 | 0/TBD | Not started | - |
+| 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
+| 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
+| 171. Prove It | v1.25 | 0/TBD | Not started | - |

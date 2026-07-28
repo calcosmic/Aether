@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -74,12 +75,46 @@ type codexScoutReport struct {
 }
 
 type codexPlanConfidence struct {
-	Knowledge    int `json:"knowledge"`
-	Requirements int `json:"requirements"`
-	Risks        int `json:"risks"`
-	Dependencies int `json:"dependencies"`
-	Effort       int `json:"effort"`
-	Overall      int `json:"overall"`
+	Knowledge    planScore `json:"knowledge"`
+	Requirements planScore `json:"requirements"`
+	Risks        planScore `json:"risks"`
+	Dependencies planScore `json:"dependencies"`
+	Effort       planScore `json:"effort"`
+	Overall      planScore `json:"overall"`
+}
+
+// planScore is a 0-100 confidence value that also accepts the 0-1 fractional
+// scale models naturally produce. The 27 July 2026 M4L run lost a complete
+// 45KB phase-plan.json because the Route-Setter wrote "knowledge": 0.85 and
+// the plain int field hard-failed the whole decode — the same one-loose-field
+// failure class as the scout payload that morning. A value written with a
+// fractional form (a decimal point in the JSON literal) is treated as 0-1 and
+// rescaled; a bare integer is taken literally. Non-numeric input still errors.
+type planScore int
+
+func (s *planScore) UnmarshalJSON(data []byte) error {
+	var num json.Number
+	if err := json.Unmarshal(data, &num); err != nil {
+		return fmt.Errorf("confidence must be a number: %w", err)
+	}
+	text := num.String()
+	if !strings.ContainsAny(text, ".eE") {
+		value, err := num.Int64()
+		if err != nil {
+			return err
+		}
+		*s = planScore(value)
+		return nil
+	}
+	value, err := num.Float64()
+	if err != nil {
+		return err
+	}
+	if value <= 1.0 {
+		value *= 100
+	}
+	*s = planScore(math.Round(value))
+	return nil
 }
 
 type codexWorkerPlanArtifact struct {
@@ -90,8 +125,14 @@ type codexWorkerPlanArtifact struct {
 }
 
 type codexWorkerPlanPhase struct {
-	Name                 string                                `json:"name"`
-	Description          string                                `json:"description"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Mode is the phase's declared work mode (discovery, prototype,
+	// production, maintenance). The Route-Setter states it explicitly; prose
+	// keywords never decide it at runtime. A phase description containing the
+	// word "research" once silently flipped an implementation phase to
+	// discovery and dispatched an Oracle instead of a Builder.
+	Mode                 string                                `json:"mode,omitempty"`
 	Tasks                []codexWorkerPlanTask                 `json:"tasks"`
 	SuccessCriteria      []string                              `json:"success_criteria,omitempty"`
 	EvidenceRequirements []colony.CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
@@ -387,7 +428,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	iterationLoop.Iterations = iterationSeed.LastIteration
 	iterationLoop.FinalConfidence = iterationSeed.PreviousConfidence
 	iterationLoop.Gaps = append([]string{}, iterationSeed.SelectedGaps...)
-	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(revisionContext)
+	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(root, revisionContext)
 
 	planningDir := filepath.Join(store.BasePath(), "planning")
 	phaseResearchDir := filepath.Join(store.BasePath(), "phase-research")
@@ -845,13 +886,24 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 
 	dispatches := plannedPlanningWorkersForGoal(root, *state.Goal)
 	specs := planningWorkerSpecsForGoal(*state.Goal)
-	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(revisionContext)
+	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(root, revisionContext)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i])
 		if iterationAppendix != "" {
 			dispatches[i].Brief += iterationAppendix
 		}
+	}
+	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, phaseResearchCandidates(state, iterationSeed))
+	if len(researchDispatches) > 0 {
+		// The Route-Setter runs after the research wave; point it at the
+		// fresh RESEARCH.md files so findings shape the route.
+		for i := range dispatches {
+			if dispatches[i].Caste == "route_setter" {
+				dispatches[i].Brief += "\n\n## Phase Research Available\n\nParallel research Scouts are writing per-phase findings to `.aether/data/phase-research/phase-N-research.md` during wave 1. Read each phase's research before finalizing the route, and fold its Recommended Approach and Gotchas into task constraints and hints.\n"
+			}
+		}
+		dispatches = append(dispatches, researchDispatches...)
 	}
 	artifactSnapshots := snapshotRelativeFiles(root,
 		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
@@ -1743,7 +1795,7 @@ func limitWorkerPlanPhases(phases []codexWorkerPlanPhase, limit int) []codexWork
 
 func evaluatePlanningLoop(confidence codexPlanConfidence, unresolvedGaps []string, opts codexPlanOptions, planDepth string) codexPlanningLoop {
 	loop := resolvePlanningLoopOptions(planDepth, opts)
-	overall := clampInt(confidence.Overall, 0, 100)
+	overall := clampInt(int(confidence.Overall), 0, 100)
 	gaps := limitStrings(uniqueSortedStrings(unresolvedGaps), 4)
 	loop.FinalConfidence = overall
 	loop.Gaps = gaps
@@ -1799,7 +1851,7 @@ func planningEvidenceSummary(confidence codexPlanConfidence, gaps []string) stri
 
 func planningEvidenceCount(confidence codexPlanConfidence) int {
 	count := 0
-	for _, score := range []int{confidence.Knowledge, confidence.Requirements, confidence.Risks, confidence.Dependencies, confidence.Effort, confidence.Overall} {
+	for _, score := range []int{int(confidence.Knowledge), int(confidence.Requirements), int(confidence.Risks), int(confidence.Dependencies), int(confidence.Effort), int(confidence.Overall)} {
 		if score > 0 {
 			count++
 		}
@@ -2184,7 +2236,7 @@ func buildWorkerPlanPhases(artifact codexWorkerPlanArtifact) []colony.Phase {
 			Name:                 strings.TrimSpace(sourcePhase.Name),
 			Description:          strings.TrimSpace(sourcePhase.Description),
 			Status:               colony.PhasePending,
-			Mode:                 colony.InferPhaseMode(sourcePhase.Name, sourcePhase.Description),
+			Mode:                 resolveAuthoredPhaseMode(sourcePhase.Mode, sourcePhase.Name, sourcePhase.Description),
 			Tasks:                []colony.Task{},
 			SuccessCriteria:      uniqueSortedStrings(sourcePhase.SuccessCriteria),
 			EvidenceRequirements: normalizeWorkerCriterionRequirements(sourcePhase.EvidenceRequirements),
@@ -2274,7 +2326,7 @@ func mergePlanConfidence(base codexPlanConfidence, override codexPlanConfidence)
 	if override.Overall > 0 {
 		base.Overall = override.Overall
 	} else {
-		base.Overall = int(float64(base.Knowledge)*0.25 +
+		base.Overall = planScore(float64(base.Knowledge)*0.25 +
 			float64(base.Requirements)*0.25 +
 			float64(base.Risks)*0.20 +
 			float64(base.Dependencies)*0.15 +
@@ -2337,7 +2389,7 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 			Name:            template.Name,
 			Description:     template.Description,
 			Status:          colony.PhasePending,
-			Mode:            colony.InferPhaseMode(template.Name, template.Description),
+			Mode:            resolveAuthoredPhaseMode("", template.Name, template.Description),
 			Tasks:           []colony.Task{},
 			SuccessCriteria: append([]string{}, template.SuccessCriteria...),
 		}
@@ -2362,13 +2414,13 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 	}
 
 	confidence := codexPlanConfidence{
-		Knowledge:    clampInt(report.Confidence, 55, 96),
-		Requirements: clampInt(70+len(templates)*2, 68, 94),
-		Risks:        clampInt(88-len(survey.Issues)*4-len(report.Gaps)*5, 55, 90),
-		Dependencies: clampInt(60+len(survey.EntryPoints)*5+len(survey.Dependencies)*2, 58, 92),
-		Effort:       clampInt(80-len(templates), 62, 88),
+		Knowledge:    planScore(clampInt(report.Confidence, 55, 96)),
+		Requirements: planScore(clampInt(70+len(templates)*2, 68, 94)),
+		Risks:        planScore(clampInt(88-len(survey.Issues)*4-len(report.Gaps)*5, 55, 90)),
+		Dependencies: planScore(clampInt(60+len(survey.EntryPoints)*5+len(survey.Dependencies)*2, 58, 92)),
+		Effort:       planScore(clampInt(80-len(templates), 62, 88)),
 	}
-	confidence.Overall = int(float64(confidence.Knowledge)*0.25 +
+	confidence.Overall = planScore(float64(confidence.Knowledge)*0.25 +
 		float64(confidence.Requirements)*0.25 +
 		float64(confidence.Risks)*0.20 +
 		float64(confidence.Dependencies)*0.15 +
@@ -3022,6 +3074,28 @@ func clearPlanningBackupArtifacts(planningDir string) {
 	}
 }
 
+// prunePhaseResearchOrphans removes phase-N-research.md files that no longer
+// correspond to a current phase. Files for live phases are never touched.
+func prunePhaseResearchOrphans(dir string, phases []colony.Phase) {
+	live := make(map[string]bool, len(phases))
+	for _, phase := range phases {
+		live[fmt.Sprintf("phase-%d-research.md", phase.ID)] = true
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, "phase-") || !strings.HasSuffix(name, "-research.md") {
+			continue
+		}
+		if !live[name] {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+	}
+}
+
 func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, report codexScoutReport, phases []colony.Phase, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) ([]string, int, error) {
 	written := make([]string, 0, len(phases))
 	claimed := claimedPlanningFiles(dispatches)
@@ -3035,25 +3109,33 @@ func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, re
 			preserved++
 			continue
 		}
+		// Fallback template in the six-section RESEARCH.md format (the v5
+		// Phase Domain Research contract). Real Scout research written by a
+		// phase_research worker replaces this and is preserved above.
 		var b strings.Builder
 		b.WriteString(fmt.Sprintf("# Phase %d Research: %s\n\n", phase.ID, phase.Name))
-		b.WriteString(fmt.Sprintf("- Generated: %s\n", time.Now().UTC().Format(time.RFC3339)))
-		b.WriteString(fmt.Sprintf("- Phase: %d - %s\n\n", phase.ID, phase.Name))
-		b.WriteString("## Goal Alignment\n")
-		b.WriteString(strings.TrimSpace(phase.Description))
-		b.WriteString("\n\n## Key Patterns\n")
+		b.WriteString(fmt.Sprintf("**Generated:** %s\n", time.Now().UTC().Format(time.RFC3339)))
+		b.WriteString(fmt.Sprintf("**Phase:** %d - %s\n", phase.ID, phase.Name))
+		b.WriteString("**Research scope:** synthesized from territory survey and scout findings (no dedicated research worker ran for this phase)\n\n")
+		b.WriteString("## Hive Wisdom (Pre-existing Knowledge)\n")
+		b.WriteString("No relevant hive wisdom found\n")
+		b.WriteString("\n## Key Patterns\n")
 		patterns := []string{}
 		for _, finding := range report.Findings {
-			patterns = append(patterns, fmt.Sprintf("%s: %s", finding.Area, finding.Discovery))
+			patterns = append(patterns, fmt.Sprintf("**%s:** %s (Source: %s)", finding.Area, finding.Discovery, firstNonEmpty(finding.Source, "scout survey")))
 			if len(patterns) == 3 {
 				break
 			}
 		}
 		b.WriteString(bulletList(patterns, "No extra repo patterns were synthesized for this phase."))
-		b.WriteString("\n\n## Risks\n")
+		b.WriteString("\n\n## External Context\n")
+		b.WriteString("No external research needed for this phase\n")
+		b.WriteString("\n## Gotchas\n")
 		risks := append([]string{}, report.Gaps...)
 		risks = append(risks, survey.Issues...)
 		b.WriteString(bulletList(limitStrings(uniqueSortedStrings(risks), 4), "No additional risks captured for this phase."))
+		b.WriteString("\n\n## Recommended Approach\n")
+		b.WriteString(strings.TrimSpace(firstNonEmpty(phase.Description, "Follow the phase tasks in order and verify against the phase success criteria.")))
 		b.WriteString("\n\n## Files to Study\n")
 		files := append([]string{}, report.StudyFiles...)
 		for _, task := range phase.Tasks {

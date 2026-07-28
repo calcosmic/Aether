@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/update.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/update.yaml. Synced by aether update. -->
 ---
 name: ant-update
 description: "🔄 Update Aether safely from the global hub (transactional)"

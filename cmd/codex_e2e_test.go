@@ -15,6 +15,8 @@ import (
 // TestCodexInstallCopiesAgents verifies that install copies .codex/agents/
 // files to the home directory (~/.codex/agents/).
 func TestCodexInstallCopiesAgents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -50,6 +52,8 @@ func TestCodexInstallCopiesAgents(t *testing.T) {
 // TestCodexInstallCopiesAgentsToHub verifies that install syncs .codex/
 // files to the hub system directory (~/.aether/system/codex/).
 func TestCodexInstallCopiesAgentsToHub(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -84,6 +88,8 @@ func TestCodexInstallCopiesAgentsToHub(t *testing.T) {
 // TestCodexInstallAgentsEmpty verifies that install handles missing .codex/
 // directory gracefully (no error, no crash).
 func TestCodexInstallAgentsEmpty(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -127,6 +133,8 @@ func TestCodexInstallAgentsEmpty(t *testing.T) {
 // TestCodexInstallAgentContent verifies that copied Codex agent files have
 // the correct content (byte-for-byte match).
 func TestCodexInstallAgentContent(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -177,6 +185,8 @@ func TestCodexInstallAgentContent(t *testing.T) {
 // TestCodexSetupCopiesAgents verifies that setup copies Codex agent files
 // from the package to the global home and hub, while target repos stay local-only.
 func TestCodexSetupCopiesAgents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -235,6 +245,8 @@ func TestCodexSetupCopiesAgents(t *testing.T) {
 // TestCodexUpdateCopiesAgents verifies that update does not copy Codex agent
 // files from the hub into a target repository.
 func TestCodexUpdateCopiesAgents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -322,6 +334,8 @@ func TestCodexUpdateCopiesAgents(t *testing.T) {
 // TestCodexE2EFullLifecycle verifies the complete install -> setup -> update
 // lifecycle for Codex agents end-to-end.
 func TestCodexE2EFullLifecycle(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -476,6 +490,8 @@ func TestCodexE2EFullLifecycle(t *testing.T) {
 // TestCodexInstallMultipleAgents verifies that install correctly handles
 // multiple Codex agent files.
 func TestCodexInstallMultipleAgents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -530,6 +546,8 @@ func TestCodexInstallMultipleAgents(t *testing.T) {
 }
 
 func TestCodexInstallPreservesModifiedHomeAgent(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -576,6 +594,8 @@ Keep my local builder instructions.
 }
 
 func TestCodexInstallPrunesHomeFullSkillMirrorAndWritesShims(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -683,6 +703,8 @@ type codexAgentTOML struct {
 // TestCodexInstallSetupUpdate_All24Agents verifies install publishes Codex TOML
 // agents globally, while setup keeps target repos local-state-only.
 func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
+	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
+	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 

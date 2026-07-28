@@ -1,4 +1,4 @@
-<!-- Generated from .aether/commands/pheromones.yaml - DO NOT EDIT DIRECTLY -->
+<!-- Aether-managed: runtime spec at .aether/commands/pheromones.yaml. Synced by aether update. -->
 ---
 name: ant-pheromones
 description: "🎯 View and manage active pheromone signals"

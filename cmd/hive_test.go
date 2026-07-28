@@ -61,7 +61,7 @@ func TestHiveStorePersistsEntry(t *testing.T) {
 	stdout = &buf
 	buf.Reset()
 
-	rootCmd.SetArgs([]string{"hive-store", "Test wisdom entry", "testing", "aether"})
+	rootCmd.SetArgs([]string{"hive-store", "Prefer table-driven cases in pkg/colony/state.go when states multiply", "testing", "aether"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("hive-store returned error: %v", err)
 	}
@@ -88,8 +88,8 @@ func TestHiveStorePersistsEntry(t *testing.T) {
 	if len(wf.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(wf.Entries))
 	}
-	if wf.Entries[0].Text != "Test wisdom entry" {
-		t.Fatalf("expected text 'Test wisdom entry', got %q", wf.Entries[0].Text)
+	if wf.Entries[0].Text != "Prefer table-driven cases in pkg/colony/state.go when states multiply" {
+		t.Fatalf("expected admissible fixture text, got %q", wf.Entries[0].Text)
 	}
 }
 
@@ -112,14 +112,14 @@ func TestHiveStoreReinforcesDuplicate(t *testing.T) {
 	resetRootCmd(t)
 	stdout = &buf
 	buf.Reset()
-	rootCmd.SetArgs([]string{"hive-store", "Duplicate test", "testing", "aether"})
+	rootCmd.SetArgs([]string{"hive-store", "Run go vet ./... before commit; it catches shadowed err returns", "testing", "aether"})
 	_ = rootCmd.Execute()
 
 	// Store same text again
 	resetRootCmd(t)
 	stdout = &buf
 	buf.Reset()
-	rootCmd.SetArgs([]string{"hive-store", "Duplicate test", "testing", "aether"})
+	rootCmd.SetArgs([]string{"hive-store", "Run go vet ./... before commit; it catches shadowed err returns", "testing", "aether"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("hive-store returned error: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestHiveReadReturnsEntries(t *testing.T) {
 	resetRootCmd(t)
 	stdout = &buf
 	buf.Reset()
-	rootCmd.SetArgs([]string{"hive-store", "Read me", "testing", "aether"})
+	rootCmd.SetArgs([]string{"hive-store", "Guard nil store before use in cmd/helpers.go accessors", "testing", "aether"})
 	_ = rootCmd.Execute()
 
 	resetRootCmd(t)
@@ -203,5 +203,32 @@ func TestHiveAbstractRemovesRepoName(t *testing.T) {
 	abstracted := result["abstracted"].(string)
 	if strings.Contains(abstracted, "aether") {
 		t.Fatalf("expected repo name removed from abstracted, got: %q", abstracted)
+	}
+}
+
+// The v1.25 multi-agent review found "Always write tests first" (naming no
+// file, command, or error) had entered the real hive via seal promotion,
+// bypassing the admissibility gate. Every hive write now passes through the
+// gate at the storeHiveWisdomEntry chokepoint — pin it.
+func TestHiveStoreRejectsInadmissibleWisdom(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+	hubDir := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+	s, _ := newTestStore(t)
+	store = s
+
+	rootCmd.SetArgs([]string{"hive-init"})
+	_ = rootCmd.Execute()
+	buf.Reset()
+
+	rootCmd.SetArgs([]string{"hive-store", "Always write tests first because quality matters a lot", "testing", "aether"})
+	_ = rootCmd.Execute()
+	combined := buf.String() + errBuf.String()
+	if !strings.Contains(combined, "not admissible") {
+		t.Fatalf("anchor-free wisdom entered the hive without rejection: %s", combined)
 	}
 }

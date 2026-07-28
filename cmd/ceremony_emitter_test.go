@@ -416,8 +416,7 @@ func TestResolveSkillSectionEmitsSkillActivationCeremony(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte(skillContent), 0644); err != nil {
 		t.Fatalf("failed to write skill: %v", err)
 	}
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	section := resolveSkillSection("builder", "testing task")
 	if section == "" {
@@ -558,11 +557,11 @@ func TestHiveStoreAndPromoteEmitCeremonyEvents(t *testing.T) {
 	os.Setenv("AETHER_HUB_DIR", hubDir)
 	t.Cleanup(func() { os.Setenv("AETHER_HUB_DIR", origHub) })
 
-	rootCmd.SetArgs([]string{"hive-store", "Keep docs aligned", "docs", "aether"})
+	rootCmd.SetArgs([]string{"hive-store", "Run go doc ./pkg/colony before renaming exported colony state fields", "docs", "aether"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("hive-store returned error: %v", err)
 	}
-	rootCmd.SetArgs([]string{"hive-promote", "--text", "Prefer focused fixes", "--source-repo", "aether", "--confidence", "0.9"})
+	rootCmd.SetArgs([]string{"hive-promote", "--text", "Prefer focused fixes scoped to cmd/hive.go over broad rewrites", "--source-repo", "aether", "--confidence", "0.9"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("hive-promote returned error: %v", err)
 	}

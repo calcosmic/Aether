@@ -64,6 +64,11 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
 	t.Setenv("COLONY_DATA_DIR", dataDir)
+	// Seal promotes instincts into the hive at the hub. Belt-and-suspenders
+	// with the suite-wide TestMain isolation: whatever the global env is in
+	// this test's position in the run order, seal tests NEVER write the
+	// developer's real ~/.aether/hive.
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(tmpDir, ".hub"))
 
 	store = s
 	outBuf := &bytes.Buffer{}
@@ -343,7 +348,7 @@ func TestSealPromoteInstincts(t *testing.T) {
 			{
 				ID:         "inst-001",
 				Trigger:    "test pattern",
-				Action:     "Always write tests first",
+				Action:     "Run go vet ./... before commit; it catches shadowed err returns",
 				Domain:     "testing",
 				Confidence: 0.9,
 				Archived:   false,
@@ -379,7 +384,7 @@ func TestSealPromoteInstincts(t *testing.T) {
 	if !strings.Contains(queenText, "inst-001") {
 		t.Error("local QUEEN.md should contain promoted instinct inst-001")
 	}
-	if !strings.Contains(queenText, "Always write tests first") {
+	if !strings.Contains(queenText, "Run go vet ./... before commit; it catches shadowed err returns") {
 		t.Error("local QUEEN.md should contain the instinct action text")
 	}
 	// Low-confidence instinct should NOT be promoted
@@ -393,7 +398,7 @@ func TestSealHiveEligibleLog(t *testing.T) {
 	s, tmpDir := setupSealTestStore(t)
 
 	// Set up temp hive directory so promotion succeeds
-	hubDir := t.TempDir()
+	hubDir := filepath.Join(tmpDir, ".hub") // runSealCmd pins AETHER_HUB_DIR here
 	hiveDir := filepath.Join(hubDir, "hive")
 	if err := os.MkdirAll(hiveDir, 0755); err != nil {
 		t.Fatal(err)
@@ -408,15 +413,11 @@ func TestSealHiveEligibleLog(t *testing.T) {
 	instincts := colony.InstinctsFile{
 		Version: "1",
 		Instincts: []colony.InstinctEntry{
-			{ID: "hive-1", Trigger: "t1", Action: "a1", Domain: "d1", Confidence: 0.85, Archived: false},
-			{ID: "hive-2", Trigger: "t2", Action: "a2", Domain: "d2", Confidence: 0.95, Archived: false},
+			{ID: "hive-1", Trigger: "t1", Action: "Run go test ./cmd before merging colony state changes", Domain: "d1", Confidence: 0.85, Archived: false},
+			{ID: "hive-2", Trigger: "t2", Action: "Guard nil pointers in cmd/hive.go before dereference", Domain: "d2", Confidence: 0.95, Archived: false},
 		},
 	}
 	_ = s.SaveJSON("instincts.json", instincts)
-
-	origHub := os.Getenv("AETHER_HUB_DIR")
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	defer os.Setenv("AETHER_HUB_DIR", origHub)
 
 	out, _ := runSealCmd(t, s, tmpDir, nil)
 
@@ -667,7 +668,7 @@ func TestSealHivePromote(t *testing.T) {
 	s, tmpDir := setupSealTestStore(t)
 
 	// Set up temp hive directory
-	hubDir := t.TempDir()
+	hubDir := filepath.Join(tmpDir, ".hub") // runSealCmd pins AETHER_HUB_DIR here
 	hiveDir := filepath.Join(hubDir, "hive")
 	if err := os.MkdirAll(hiveDir, 0755); err != nil {
 		t.Fatal(err)
@@ -685,7 +686,7 @@ func TestSealHivePromote(t *testing.T) {
 			{
 				ID:         "hive-high",
 				Trigger:    "test pattern",
-				Action:     "Always write tests first",
+				Action:     "Run go vet ./... before commit; it catches shadowed err returns",
 				Domain:     "testing",
 				Confidence: 0.9,
 				Archived:   false,
@@ -703,10 +704,6 @@ func TestSealHivePromote(t *testing.T) {
 	if err := s.SaveJSON("instincts.json", instincts); err != nil {
 		t.Fatal(err)
 	}
-
-	origHub := os.Getenv("AETHER_HUB_DIR")
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	defer os.Setenv("AETHER_HUB_DIR", origHub)
 
 	out, _ := runSealCmd(t, s, tmpDir, nil)
 
@@ -730,7 +727,7 @@ func TestSealHivePromote(t *testing.T) {
 
 	found := false
 	for _, e := range wf.Entries {
-		if strings.Contains(e.Text, "Always write tests first") {
+		if strings.Contains(e.Text, "Run go vet ./... before commit; it catches shadowed err returns") {
 			found = true
 			break
 		}
@@ -804,7 +801,7 @@ func TestSealHivePromotedCount(t *testing.T) {
 	s, tmpDir := setupSealTestStore(t)
 
 	// Set up temp hive directory
-	hubDir := t.TempDir()
+	hubDir := filepath.Join(tmpDir, ".hub") // runSealCmd pins AETHER_HUB_DIR here
 	hiveDir := filepath.Join(hubDir, "hive")
 	if err := os.MkdirAll(hiveDir, 0755); err != nil {
 		t.Fatal(err)
@@ -819,8 +816,8 @@ func TestSealHivePromotedCount(t *testing.T) {
 	instincts := colony.InstinctsFile{
 		Version: "1",
 		Instincts: []colony.InstinctEntry{
-			{ID: "hp1", Trigger: "t1", Action: "High confidence action one", Domain: "d1", Confidence: 0.85, Archived: false},
-			{ID: "hp2", Trigger: "t2", Action: "High confidence action two", Domain: "d2", Confidence: 0.95, Archived: false},
+			{ID: "hp1", Trigger: "t1", Action: "Check cmd/seal.go archive paths before renaming chambers", Domain: "d1", Confidence: 0.85, Archived: false},
+			{ID: "hp2", Trigger: "t2", Action: "Run go build ./cmd before tagging a release", Domain: "d2", Confidence: 0.95, Archived: false},
 		},
 	}
 	if err := s.SaveJSON("instincts.json", instincts); err != nil {

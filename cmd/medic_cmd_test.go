@@ -194,9 +194,9 @@ func TestMedicSeverityColor(t *testing.T) {
 
 func TestMedicExitCodes(t *testing.T) {
 	tests := []struct {
-		name    string
-		issues  []HealthIssue
-		want    int
+		name   string
+		issues []HealthIssue
+		want   int
 	}{
 		{"healthy", nil, 0},
 		{"warnings", []HealthIssue{{Severity: "warning", Message: "test"}}, 1},

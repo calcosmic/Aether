@@ -22,164 +22,200 @@ type AntipatternFinding struct {
 	Message string `json:"message"`
 }
 
+// scanFileForAntipatterns is the single scanning implementation shared by
+// checkAntipatternCmd (the CLI command) and checkAntiPatternGate (the
+// continue gate producer). Adding a second scanner is prohibited — two
+// implementations would drift, and T-160-12 exists specifically to prevent
+// the CLI and the gate from silently disagreeing about what counts as
+// critical.
+//
+// A missing file is not an error and returns two empty, nil slices with a
+// nil error — this preserves the CLI's long-standing "if file doesn't
+// exist, return clean" behaviour. A non-nil error is returned only when the
+// file exists but cannot be read or scanned; callers must not treat that
+// as a clean scan.
+func scanFileForAntipatterns(filePath string) (criticals []AntipatternFinding, warnings []AntipatternFinding, err error) {
+	// If file doesn't exist, return clean (nil, nil, nil).
+	if _, statErr := os.Stat(filePath); os.IsNotExist(statErr) {
+		return nil, nil, nil
+	}
+
+	ext := strings.TrimPrefix(filepath.Ext(filePath), ".")
+
+	content, readErr := os.ReadFile(filePath)
+	if readErr != nil {
+		return nil, nil, fmt.Errorf("failed to read file %s: %w", filePath, readErr)
+	}
+	text := string(content)
+	lines := strings.Split(text, "\n")
+
+	// Language-specific checks
+	switch ext {
+	case "swift":
+		// didSet infinite recursion
+		didSetRe := regexp.MustCompile(`(?i)didSet`)
+		selfDotRe := regexp.MustCompile(`self\.`)
+		for i, line := range lines {
+			if didSetRe.MatchString(line) && selfDotRe.MatchString(line) {
+				criticals = append(criticals, AntipatternFinding{
+					Pattern: "didSet-recursion",
+					File:    filePath,
+					Line:    i + 1,
+					Message: "Potential didSet infinite recursion - self assignment in didSet",
+				})
+				break
+			}
+		}
+	case "ts", "tsx", "js", "jsx":
+		// TypeScript 'any' type check (only in non-comment lines)
+		anyRe := regexp.MustCompile(`\bany\b`)
+		anyCount := 0
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
+				continue
+			}
+			if anyRe.MatchString(line) {
+				anyCount++
+			}
+		}
+		if anyCount > 0 {
+			warnings = append(warnings, AntipatternFinding{
+				Pattern: "typescript-any",
+				File:    filePath,
+				Count:   anyCount,
+				Message: fmt.Sprintf("Found %d uses of 'any' type", anyCount),
+			})
+		}
+
+		// console.log in non-test files
+		if !strings.Contains(filePath, ".test.") && !strings.Contains(filePath, ".spec.") {
+			consoleRe := regexp.MustCompile(`console\.log`)
+			consoleCount := 0
+			for _, line := range lines {
+				if strings.Contains(line, "//") {
+					// Check if console.log appears before the comment marker
+					commentIdx := strings.Index(line, "//")
+					if commentIdx >= 0 && strings.Contains(line[:commentIdx], "console.log") {
+						consoleCount++
+					} else if commentIdx < 0 {
+						if consoleRe.MatchString(line) {
+							consoleCount++
+						}
+					}
+				} else if consoleRe.MatchString(line) {
+					consoleCount++
+				}
+			}
+			if consoleCount > 0 {
+				warnings = append(warnings, AntipatternFinding{
+					Pattern: "console-log",
+					File:    filePath,
+					Count:   consoleCount,
+					Message: fmt.Sprintf("Found %d console.log statements", consoleCount),
+				})
+			}
+		}
+	case "py":
+		// Bare except
+		exceptRe := regexp.MustCompile(`^\s*except\s*:`)
+		for i, line := range lines {
+			if exceptRe.MatchString(line) && !strings.Contains(line, "#") {
+				warnings = append(warnings, AntipatternFinding{
+					Pattern: "bare-except",
+					File:    filePath,
+					Line:    i + 1,
+					Message: "Bare except clause - specify exception type",
+				})
+				break
+			}
+		}
+	}
+
+	// Common patterns across all languages
+
+	// Exposed secrets check (critical)
+	// Keyword may sit anywhere in the variable name: the old pattern
+	// required it immediately before "=", so `aws_secret_access_key = "…"`
+	// — the most common real-world leak — scanned clean.
+	secretRe := regexp.MustCompile(`(?i)[a-z0-9_-]*(api_?key|secret|password|token|access_key)[a-z0-9_-]*\s*[:=]\s*['"][^'"]+['"]`)
+	for i, line := range lines {
+		if secretRe.MatchString(line) {
+			lowerLine := strings.ToLower(line)
+			if !strings.Contains(lowerLine, "example") &&
+				!strings.Contains(lowerLine, "test") &&
+				!strings.Contains(lowerLine, "mock") &&
+				!strings.Contains(lowerLine, "fake") {
+				criticals = append(criticals, AntipatternFinding{
+					Pattern: "exposed-secret",
+					File:    filePath,
+					Line:    i + 1,
+					Message: "Potential hardcoded secret or credential",
+				})
+				break
+			}
+		}
+	}
+
+	// TODO/FIXME check (warning)
+	todoRe := regexp.MustCompile(`(TODO|FIXME|XXX|HACK)`)
+	todoCount := 0
+	for _, line := range lines {
+		if todoRe.MatchString(line) {
+			todoCount++
+		}
+	}
+	if todoCount > 0 {
+		warnings = append(warnings, AntipatternFinding{
+			Pattern: "todo-comment",
+			File:    filePath,
+			Count:   todoCount,
+			Message: fmt.Sprintf("Found %d TODO/FIXME comments", todoCount),
+		})
+	}
+
+	return criticals, warnings, nil
+}
+
 var checkAntipatternCmd = &cobra.Command{
-	Use:   "check-antipattern",
+	Use:   "check-antipattern [file]",
 	Short: "Scan a file for security antipatterns",
-	Args:  cobra.NoArgs,
+	// Accepts the file as a positional argument as well as --file. The
+	// Gatekeeper playbooks have always invoked `check-antipattern "<path>"`
+	// positionally, while this command was cobra.NoArgs + --file only — so
+	// every invocation errored, the error went to /dev/null, and the security
+	// gate never executed once. Both forms now work; positional wins when both
+	// are given.
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
 			return nil
 		}
 
-		filePath := mustGetString(cmd, "file")
+		// Positional wins; --file is the fallback. The error fires only when
+		// BOTH are missing — the old code called mustGetString first, which
+		// emitted a spurious "flag --file is required" envelope with exit code
+		// 1 on every positional call even though the scan then ran fine.
+		filePath := ""
+		if len(args) > 0 {
+			filePath = strings.TrimSpace(args[0])
+		}
 		if filePath == "" {
+			filePath = mustGetStringCompatOptional(cmd, "file")
+		}
+		if filePath == "" {
+			outputError(1, "a file path is required: check-antipattern <file> or --file <file>", nil)
 			return nil
 		}
 
-		// If file doesn't exist, return clean
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			outputOK(map[string]interface{}{
-				"critical": []interface{}{},
-				"warnings": []interface{}{},
-				"clean":    true,
-			})
-			return nil
-		}
-
-		var criticals []AntipatternFinding
-		var warnings []AntipatternFinding
-
-		ext := strings.TrimPrefix(filepath.Ext(filePath), ".")
-
-		content, err := os.ReadFile(filePath)
+		criticals, warnings, err := scanFileForAntipatterns(filePath)
 		if err != nil {
-			outputError(1, fmt.Sprintf("failed to read file: %v", err), nil)
+			// A scanner that cannot read a file must not report the file as
+			// clean; that is the silent-failure class this whole phase exists
+			// to remove.
+			outputError(1, fmt.Sprintf("failed to scan file %s: %v", filePath, err), nil)
 			return nil
-		}
-		text := string(content)
-		lines := strings.Split(text, "\n")
-
-		// Language-specific checks
-		switch ext {
-		case "swift":
-			// didSet infinite recursion
-			didSetRe := regexp.MustCompile(`(?i)didSet`)
-			selfDotRe := regexp.MustCompile(`self\.`)
-			for i, line := range lines {
-				if didSetRe.MatchString(line) && selfDotRe.MatchString(line) {
-					criticals = append(criticals, AntipatternFinding{
-						Pattern: "didSet-recursion",
-						File:    filePath,
-						Line:    i + 1,
-						Message: "Potential didSet infinite recursion - self assignment in didSet",
-					})
-					break
-				}
-			}
-		case "ts", "tsx", "js", "jsx":
-			// TypeScript 'any' type check (only in non-comment lines)
-			anyRe := regexp.MustCompile(`\bany\b`)
-			anyCount := 0
-			for _, line := range lines {
-				trimmed := strings.TrimSpace(line)
-				if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
-					continue
-				}
-				if anyRe.MatchString(line) {
-					anyCount++
-				}
-			}
-			if anyCount > 0 {
-				warnings = append(warnings, AntipatternFinding{
-					Pattern: "typescript-any",
-					File:    filePath,
-					Count:   anyCount,
-					Message: fmt.Sprintf("Found %d uses of 'any' type", anyCount),
-				})
-			}
-
-			// console.log in non-test files
-			if !strings.Contains(filePath, ".test.") && !strings.Contains(filePath, ".spec.") {
-				consoleRe := regexp.MustCompile(`console\.log`)
-				consoleCount := 0
-				for _, line := range lines {
-					if strings.Contains(line, "//") {
-						// Check if console.log appears before the comment marker
-						commentIdx := strings.Index(line, "//")
-						if commentIdx >= 0 && strings.Contains(line[:commentIdx], "console.log") {
-							consoleCount++
-						} else if commentIdx < 0 {
-							if consoleRe.MatchString(line) {
-								consoleCount++
-							}
-						}
-					} else if consoleRe.MatchString(line) {
-						consoleCount++
-					}
-				}
-				if consoleCount > 0 {
-					warnings = append(warnings, AntipatternFinding{
-						Pattern: "console-log",
-						File:    filePath,
-						Count:   consoleCount,
-						Message: fmt.Sprintf("Found %d console.log statements", consoleCount),
-					})
-				}
-			}
-		case "py":
-			// Bare except
-			exceptRe := regexp.MustCompile(`^\s*except\s*:`)
-			for i, line := range lines {
-				if exceptRe.MatchString(line) && !strings.Contains(line, "#") {
-					warnings = append(warnings, AntipatternFinding{
-						Pattern: "bare-except",
-						File:    filePath,
-						Line:    i + 1,
-						Message: "Bare except clause - specify exception type",
-					})
-					break
-				}
-			}
-		}
-
-		// Common patterns across all languages
-
-		// Exposed secrets check (critical)
-		secretRe := regexp.MustCompile(`(?i)(api_key|apikey|secret|password|token)\s*=\s*['"][^'"]+['"]`)
-		for i, line := range lines {
-			if secretRe.MatchString(line) {
-				lowerLine := strings.ToLower(line)
-				if !strings.Contains(lowerLine, "example") &&
-					!strings.Contains(lowerLine, "test") &&
-					!strings.Contains(lowerLine, "mock") &&
-					!strings.Contains(lowerLine, "fake") {
-					criticals = append(criticals, AntipatternFinding{
-						Pattern: "exposed-secret",
-						File:    filePath,
-						Line:    i + 1,
-						Message: "Potential hardcoded secret or credential",
-					})
-					break
-				}
-			}
-		}
-
-		// TODO/FIXME check (warning)
-		todoRe := regexp.MustCompile(`(TODO|FIXME|XXX|HACK)`)
-		todoCount := 0
-		for _, line := range lines {
-			if todoRe.MatchString(line) {
-				todoCount++
-			}
-		}
-		if todoCount > 0 {
-			warnings = append(warnings, AntipatternFinding{
-				Pattern: "todo-comment",
-				File:    filePath,
-				Count:   todoCount,
-				Message: fmt.Sprintf("Found %d TODO/FIXME comments", todoCount),
-			})
 		}
 
 		clean := len(criticals) == 0 && len(warnings) == 0

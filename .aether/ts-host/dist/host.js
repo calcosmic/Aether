@@ -25,7 +25,6 @@ import { createSpawnOrchestrator } from "./spawn-orchestrator.js";
 import { createCeremonyAdapter, renderDryRunBadge, } from "./ceremony-adapter.js";
 import { ConfidenceLoop } from "./confidence-loop.js";
 import { ConfidenceEvaluator } from "./confidence-evaluator.js";
-import { loadPlaybooksForWorkflow, renderPlaybookContext } from "./playbook-loader.js";
 export { buildHostGoArgs } from "./command-registry.js";
 // Mutable reference for test injection.
 let _callGoJSONRef = callGoJSON;
@@ -511,14 +510,13 @@ async function runDryRunDispatchedCommand(bridge, parsed, definition) {
     for (const d of dispatches) {
         d.hive_section = hiveSection;
     }
-    // Load playbooks for the active workflow and inject context into worker briefs (CEREMONY-06)
-    const dryRunPlaybooks = loadPlaybooksForWorkflow(bridge.cwd, workflow);
-    const dryRunPlaybookContext = renderPlaybookContext(dryRunPlaybooks);
-    if (dryRunPlaybookContext) {
-        for (const d of dispatches) {
-            d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + dryRunPlaybookContext;
-        }
-    }
+    // Playbook injection removed to match cmd/codex_build.go. Playbooks are
+    // orchestrator guidance; appending them to every worker's task_brief told a
+    // single Builder "YOU (the Queen) will spawn workers directly" at five times
+    // the mass of its actual assignment. Measured before removal: 5,733 of 7,485
+    // brief characters. The Go side stopped doing this; this path is the one the
+    // /ant-build wrapper actually uses, so it has to stop too or the fix only
+    // covers direct CLI use.
     if (manifestObj) {
         const envelope = { ...manifestEnvelope, [`${workflow}_manifest`]: manifestObj };
         renderManifestCeremony(ceremony, workflow, envelope, dispatches);
@@ -670,14 +668,8 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
     for (const d of dispatches) {
         d.hive_section = hiveSection;
     }
-    // Step 1c: Load build playbooks and inject context into worker briefs (CEREMONY-06)
-    const buildPlaybooks = loadPlaybooksForWorkflow(bridge.cwd, "build");
-    const buildPlaybookContext = renderPlaybookContext(buildPlaybooks);
-    if (buildPlaybookContext) {
-        for (const d of dispatches) {
-            d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + buildPlaybookContext;
-        }
-    }
+    // Step 1c removed: build playbooks are no longer injected into worker briefs.
+    // See the note in runDryRunDispatchedCommand and cmd/codex_build.go.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
         const diagnostic = buildResult.provider_diagnostics;
@@ -827,14 +819,8 @@ async function runDispatchedPlanCommand(bridge, parsed) {
     for (const d of dispatches) {
         d.hive_section = hiveSection;
     }
-    // Step 1c: Load plan playbooks and inject context into worker briefs (CEREMONY-06)
-    const planPlaybooks = loadPlaybooksForWorkflow(bridge.cwd, "plan");
-    const planPlaybookContext = renderPlaybookContext(planPlaybooks);
-    if (planPlaybookContext) {
-        for (const d of dispatches) {
-            d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + planPlaybookContext;
-        }
-    }
+    // Step 1c removed: plan playbooks are no longer injected into worker briefs.
+    // See the note in runDryRunDispatchedCommand and cmd/codex_build.go.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
         await preflightHostWorkerDispatch(bridge, "Plan");

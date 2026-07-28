@@ -1,5 +1,0 @@
-pheromone_lifecycle:
-  default_ttl_days: 30
-  auto_expire_on_phase_end: true
-  max_active_signals: 100
-  strength_decay_per_day: 0.05

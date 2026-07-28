@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAgentDefinitionPathUsesSourceCheckoutLocalAgents(t *testing.T) {
@@ -1079,11 +1080,12 @@ func TestWriteHostedWorkerOutputDebugRedactsProviderOutput(t *testing.T) {
 	rel := writeHostedWorkerOutputDebug(
 		root,
 		"opencode",
-		WorkerConfig{WorkerName: "Forge-2", Caste: "builder", TaskID: "2.2", AgentName: "aether-builder"},
+		WorkerConfig{WorkerName: "Forge-2", Caste: "builder", TaskID: "2.2", AgentName: "aether-builder", ProviderRunID: "run-42"},
 		[]string{"run", "--agent", "build", "prompt with sk-proj-prompt-secret"},
 		"stdout sk-proj-stdout-secret token=stdout-secret",
 		"stderr ghp_stderr_secret secret=stderr-secret",
 		fmt.Errorf("parse failed sk-proj-error-secret"),
+		hostedWorkerDebugDetails{Duration: 1500 * time.Millisecond, ExitCode: -1, FailureMode: "parse_failure"},
 	)
 	if rel == "" {
 		t.Fatal("expected debug artifact path")
@@ -1105,7 +1107,11 @@ func TestWriteHostedWorkerOutputDebugRedactsProviderOutput(t *testing.T) {
 			t.Fatalf("debug artifact leaked %q:\n%s", forbidden, text)
 		}
 	}
-	for _, want := range []string{`"stdout_bytes"`, `"stderr_bytes"`, "[redacted]"} {
+	for _, want := range []string{
+		`"stdout_bytes"`, `"stderr_bytes"`, "[redacted]",
+		`"duration_ms": 1500`, `"exit_code": -1`,
+		`"provider_run_id": "run-42"`, `"failure_mode": "parse_failure"`,
+	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("debug artifact missing %q:\n%s", want, text)
 		}

@@ -49,15 +49,15 @@ func CompactProgressStyle() ProgressStyle {
 
 // AgentProgress tracks the progress of a single agent.
 type AgentProgress struct {
-	AgentID       string
-	AgentName     string
-	Caste         string
-	Status        StreamStatus
-	TokenCount    int
+	AgentID        string
+	AgentName      string
+	Caste          string
+	Status         StreamStatus
+	TokenCount     int
 	EstimatedTotal int // Estimated total tokens (0 = unknown)
-	StartedAt     time.Time
-	LastActivity  time.Time
-	mu            sync.RWMutex
+	StartedAt      time.Time
+	LastActivity   time.Time
+	mu             sync.RWMutex
 }
 
 // UpdateTokens updates the token count and last activity time.
@@ -113,17 +113,17 @@ func (ap *AgentProgress) IsActive() bool {
 
 // ProgressIndicator manages the display of progress for multiple agents.
 type ProgressIndicator struct {
-	output      io.Writer
-	agents      map[string]*AgentProgress
-	mu          sync.RWMutex
-	isTTY       bool
-	style       ProgressStyle
-	spinnerIdx  int
-	spinnerMu   sync.Mutex
-	ticker      *time.Ticker
-	done        chan struct{}
-	paused      bool
-	pausedMu    sync.RWMutex
+	output     io.Writer
+	agents     map[string]*AgentProgress
+	mu         sync.RWMutex
+	isTTY      bool
+	style      ProgressStyle
+	spinnerIdx int
+	spinnerMu  sync.Mutex
+	ticker     *time.Ticker
+	done       chan struct{}
+	paused     bool
+	pausedMu   sync.RWMutex
 }
 
 // NewProgressIndicator creates a new ProgressIndicator writing to stdout.
@@ -471,13 +471,13 @@ func formatProgressBar(percent, width int) string {
 
 // ProgressSummary provides aggregate statistics about all agents.
 type ProgressSummary struct {
-	TotalAgents    int
-	ActiveAgents   int
-	PendingAgents  int
+	TotalAgents     int
+	ActiveAgents    int
+	PendingAgents   int
 	CompletedAgents int
-	FailedAgents   int
-	TotalTokens    int
-	ByCaste        map[string]int
+	FailedAgents    int
+	TotalTokens     int
+	ByCaste         map[string]int
 }
 
 // GetSummary returns a summary of all agent progress.

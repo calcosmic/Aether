@@ -50,6 +50,11 @@ type codexClaimVerification struct {
 	Summary    string   `json:"summary"`
 	Checked    int      `json:"checked"`
 	Mismatches []string `json:"mismatches,omitempty"`
+	// ScannedFiles is the union of FilesCreated + FilesModified + TestsWritten
+	// from the loaded build claims (blanks trimmed and skipped) — the single
+	// notion of "what changed this phase" that checkAntiPatternGate scans.
+	// Populated on every return path where claims were successfully loaded.
+	ScannedFiles []string `json:"scanned_files,omitempty"`
 }
 
 type codexContinueVerificationReport struct {
@@ -66,6 +71,10 @@ type codexContinueVerificationReport struct {
 	ChecksPassed               bool                         `json:"checks_passed"`
 	Passed                     bool                         `json:"passed"`
 	BlockingIssues             []string                     `json:"blocking_issues,omitempty"`
+	// Warnings surface non-blocking verification observations — most
+	// importantly "no deterministic verification command resolved", which used
+	// to be a silent hard-block and is now a visible handover to the watcher.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type codexWatcherVerification struct {
@@ -82,6 +91,10 @@ type codexContinueGateReport struct {
 	Checks         []gateCheck `json:"checks"`
 	Passed         bool        `json:"passed"`
 	BlockingIssues []string    `json:"blocking_issues,omitempty"`
+	// Warnings carry non-blocking observations (for example recorded
+	// operational worker issues). They replaced the operational_evidence
+	// "gate", which hardcoded Passed=true and therefore asserted nothing.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type codexContinueReport struct {
@@ -914,6 +927,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if err := applyCodexContinueWorkerClosures(closedWorkerDetails); err != nil {
 		return nil, state, phase, nil, &housekeeping, false, err
 	}
+	// Durable learning capture on the DEFAULT path. This call is the fix for
+	// "the colony never learns": capture previously existed only inside
+	// continue-finalize, which the wrapper forbids for fast continue, so
+	// pkg/learn, hypothesis promotion, and auto-skill creation were unreachable
+	// in normal daily use. Gates have passed by this point; state is committed;
+	// learning failure is non-blocking inside the function.
+	captureContinueLearning(phase, workerFlow, gates, "", false, now)
 	emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 	flowEvents := continueWorkerFlowEvents(now, workerFlow)
 	updated.Events = append(updated.Events, flowEvents...)
@@ -1445,9 +1465,14 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 			shellChecksPassed = false
 		}
 	}
-	if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
-		shellChecksPassed = false
-	}
+	// Zero executed checks no longer hard-fails. It used to set
+	// shellChecksPassed=false, which blocked any repo outside the five detected
+	// ecosystems from ever advancing past its first continue — with no remedy
+	// visible to the user. When nothing shell-verifiable resolved, verification
+	// responsibility passes to the watcher below (shellChecksPassed stays true,
+	// so the watcher path runs); a warning makes the situation visible. A user
+	// who also passes --skip-watchers has explicitly chosen to advance on
+	// claims alone, and that choice is theirs.
 
 	var continueWatcher codexWatcherVerification
 	var watcherFlow *codexContinueWorkerFlowStep
@@ -1491,10 +1516,10 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	checksPassed := shellChecksPassed
 	blockers := []string{}
 	warnings := []string{}
+	if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
+		warnings = append(warnings, "no deterministic verification command resolved in this repository; verification relies on the watcher — add real build/test commands to CLAUDE.md to enable shell checks")
+	}
 	if !shellChecksPassed {
-		if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
-			blockers = append(blockers, "no deterministic verification command was resolved; at least one fresh check is required before advancement")
-		}
 		for _, step := range steps {
 			if !step.Passed && !step.Skipped {
 				if step.ErrorClass == ErrorClassEnvironment && phase.Mode != colony.PhaseModeProduction {
@@ -1558,6 +1583,7 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		ChecksPassed:               checksPassed,
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,
+		Warnings:                   warnings,
 	}, watcherFlow
 }
 
@@ -2653,6 +2679,22 @@ func runVerificationStep(ctx context.Context, root, name, command string, timeou
 		Output:         output,
 	}
 	if err != nil {
+		// A command that does not exist is not a failed verification — it is a
+		// wrong guess by the language-fallback resolver. `npm run lint` in a
+		// project with no lint script, or `make test` with no such target, used
+		// to hard-block phase advancement with no remedy the user could see.
+		// The absence of a tool proves nothing about the code; classify it as
+		// Skipped and let the watcher carry verification.
+		if isCommandUnresolvable(output, exitCode) {
+			return codexVerificationStep{
+				Name:     name,
+				Command:  command,
+				Skipped:  true,
+				Passed:   true,
+				ExitCode: exitCode,
+				Summary:  fmt.Sprintf("%s: command unavailable in this repository (%s); skipped — configure a real command in CLAUDE.md to enable this check", name, command),
+			}
+		}
 		step.Summary = failureSummaryForStep(name, exitCode, output, err, timedOut, timeout)
 		if timedOut {
 			step.ErrorClass = ErrorClassTimeout
@@ -2661,6 +2703,33 @@ func runVerificationStep(ctx context.Context, root, name, command string, timeou
 		}
 	}
 	return step
+}
+
+// isCommandUnresolvable reports whether a verification failure means the
+// command itself cannot run in this repository, as opposed to the code failing
+// the check. Exit 127 is the shell's universal command-not-found; the string
+// patterns cover the per-ecosystem equivalents of "no such script/target".
+func isCommandUnresolvable(output string, exitCode int) bool {
+	if exitCode == 127 {
+		return true
+	}
+	lower := strings.ToLower(output)
+	for _, marker := range []string{
+		"command not found",
+		"executable file not found",
+		"missing script:",                                      // npm
+		"npm error missing script",                             // npm >= 10 phrasing
+		"could not determine executable to run",                // npx
+		"no rule to make target",                               // make
+		"no such command",                                      // cargo
+		"unknown command",                                      // misc CLIs
+		"is not recognized as an internal or external command", // windows
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexClaimVerification {
@@ -2678,11 +2747,26 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 			Summary: missingClaimsSummary(manifest),
 		}
 	}
+
+	// The union of everything the claims file says changed this phase — the
+	// single notion of "what changed" that both mismatch checking above and
+	// checkAntiPatternGate below consume. Populated on every return path from
+	// this point on, since claims were successfully loaded.
+	scannedFiles := []string{}
+	for _, rel := range append(append(append([]string{}, claims.FilesCreated...), claims.FilesModified...), claims.TestsWritten...) {
+		rel = strings.TrimSpace(rel)
+		if rel == "" {
+			continue
+		}
+		scannedFiles = append(scannedFiles, rel)
+	}
+
 	if manifest.Present && manifest.Data.Phase > 0 && claims.BuildPhase != manifest.Data.Phase {
 		return codexClaimVerification{
-			Present: true,
-			Passed:  false,
-			Summary: fmt.Sprintf("builder claims build_phase %d does not match manifest phase %d; run `%s` to regenerate claims before `aether continue`", claims.BuildPhase, manifest.Data.Phase, buildForceRedispatchCommand(manifest.Data.Phase)),
+			Present:      true,
+			Passed:       false,
+			Summary:      fmt.Sprintf("builder claims build_phase %d does not match manifest phase %d; run `%s` to regenerate claims before `aether continue`", claims.BuildPhase, manifest.Data.Phase, buildForceRedispatchCommand(manifest.Data.Phase)),
+			ScannedFiles: scannedFiles,
 		}
 	}
 
@@ -2704,36 +2788,40 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 	}
 	if len(mismatches) > 0 {
 		return codexClaimVerification{
-			Present:    true,
-			Passed:     false,
-			Summary:    fmt.Sprintf("worker claims mismatch: %d missing paths", len(mismatches)),
-			Checked:    checked,
-			Mismatches: mismatches,
+			Present:      true,
+			Passed:       false,
+			Summary:      fmt.Sprintf("worker claims mismatch: %d missing paths", len(mismatches)),
+			Checked:      checked,
+			Mismatches:   mismatches,
+			ScannedFiles: scannedFiles,
 		}
 	}
 
 	if checked == 0 && manifestRequiresBuilderClaims(manifest) {
 		if manifestUsesSyntheticDispatch(manifest) {
 			return codexClaimVerification{
-				Present: true,
-				Passed:  false,
-				Summary: "builder claims file is empty because the build ran in simulated mode; rerun `aether build <phase>` without `--synthetic` before `aether continue` can advance",
-				Checked: 0,
+				Present:      true,
+				Passed:       false,
+				Summary:      "builder claims file is empty because the build ran in simulated mode; rerun `aether build <phase>` without `--synthetic` before `aether continue` can advance",
+				Checked:      0,
+				ScannedFiles: scannedFiles,
 			}
 		}
 		if manifestUsesExternalTask(manifest) {
 			return codexClaimVerification{
-				Present: true,
-				Passed:  true,
-				Summary: "builder claims file is empty (external-task mode); verification-led truth applies",
-				Checked: 0,
+				Present:      true,
+				Passed:       true,
+				Summary:      "builder claims file is empty (external-task mode); verification-led truth applies",
+				Checked:      0,
+				ScannedFiles: scannedFiles,
 			}
 		}
 		return codexClaimVerification{
-			Present: true,
-			Passed:  false,
-			Summary: emptyClaimsFailureSummary(manifest),
-			Checked: 0,
+			Present:      true,
+			Passed:       false,
+			Summary:      emptyClaimsFailureSummary(manifest),
+			Checked:      0,
+			ScannedFiles: scannedFiles,
 		}
 	}
 
@@ -2742,16 +2830,18 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 		summary = "builder claims file present but empty"
 	}
 	return codexClaimVerification{
-		Present: true,
-		Passed:  true,
-		Summary: summary,
-		Checked: checked,
+		Present:      true,
+		Passed:       true,
+		Summary:      summary,
+		Checked:      checked,
+		ScannedFiles: scannedFiles,
 	}
 }
 
 func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []GateCheckResult) codexContinueGateReport {
 	checks := []gateCheck{}
 	blockers := []string{}
+	warnings := []string{}
 
 	// Circuit breaker integration (LOOP-01): check if any gate has exceeded retry threshold
 	for _, prior := range priorGateResults {
@@ -2823,20 +2913,16 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		checks = append(checks, evidenceCheck)
 	}
 
-	// operational_evidence gate
-	if shouldSkipGate(priorGateResults, "operational_evidence") {
-		checks = append(checks, gateCheck{Name: "operational_evidence", Passed: true, Detail: "skipped: previously passed"})
-	} else {
-		operationalCheck := gateCheck{Name: "operational_evidence", Passed: true, Detail: "no operational worker issues were recorded"}
-		if len(assessment.OperationalIssues) > 0 {
-			operationalCheck.Detail = fmt.Sprintf("%d operational worker issues recorded; continue is using verification-led truth instead", len(assessment.OperationalIssues))
-			operationalCheck.FixHint = "Review worker output for operational issues"
-			operationalCheck.RecoveryOptions = []string{
-				"Fix manually and run /ant-continue",
-				"Run /ant-unblock for guided recovery",
-			}
-		}
-		checks = append(checks, operationalCheck)
+	// The operational_evidence gate was removed: it hardcoded Passed=true
+	// regardless of assessment.OperationalIssues, so it was a gate that could
+	// not gate. An always-pass check is worse than no check — it reads as
+	// assurance while asserting nothing, which is the exact failure mode the
+	// Definition of Done exists to prevent. Operational issues still surface as
+	// warnings below; genuine operational evidence now arrives structurally via
+	// mandatory worker handoffs (changed_files, commands_run,
+	// verification_status), which the build finalizer rejects when empty.
+	if len(assessment.OperationalIssues) > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d operational worker issues recorded; review worker output", len(assessment.OperationalIssues)))
 	}
 
 	// flags gate (no_critical_flags) — runs every time for safety
@@ -2850,6 +2936,24 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		blockers = append(blockers, flagCheck.Detail)
 	}
 	checks = append(checks, flagCheck)
+
+	// anti_pattern / anti_pattern_executed gates — the live caller for the
+	// security gate that RESEARCH.md found had no live caller (T-160-01).
+	// anti_pattern_executed is in alwaysRunGates, so shouldSkipGate already
+	// returns false for it; only the findings gate participates in skip logic.
+	antiPatternCheck, antiPatternExecutedCheck := checkAntiPatternGate(verification.Claims.ScannedFiles)
+	if shouldSkipGate(priorGateResults, "anti_pattern") {
+		checks = append(checks, gateCheck{Name: "anti_pattern", Passed: true, Detail: "skipped: previously passed"})
+	} else {
+		if !antiPatternCheck.Passed {
+			blockers = append(blockers, antiPatternCheck.Detail)
+		}
+		checks = append(checks, antiPatternCheck)
+	}
+	if !antiPatternExecutedCheck.Passed {
+		blockers = append(blockers, antiPatternExecutedCheck.Detail)
+	}
+	checks = append(checks, antiPatternExecutedCheck)
 
 	// Record failures/successes in circuit breaker (LOOP-01)
 	for _, c := range checks {
@@ -2872,6 +2976,7 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		Checks:         checks,
 		Passed:         len(blockingIssues) == 0,
 		BlockingIssues: blockingIssues,
+		Warnings:       warnings,
 	}
 }
 
