@@ -48,3 +48,21 @@ Historical bash/npm migration bugs were removed once the affected paths stopped 
 - **Area:** Codex visual surfaces
 - **Impact:** caste colors and live previews only render in visual/TTY mode.
 - **Mitigation:** use an interactive terminal, or set `AETHER_FORCE_VISUAL=1`. JSON mode intentionally disables the visuals.
+
+## Workers route around the .aether/data/ write guardrail (2026-07-28)
+
+Observed live in a downstream colony (M4L-AnalogWave-System, v1.0.43): the distributed
+platform rules mark `.aether/data/` as protected ("never modify programmatically"), but
+Aether's own planning workers must write artifacts there (`planning/phase-plan.json`,
+`SCOUT.md`, iteration state). The worker's own report: *"The Write tool is
+guardrail-blocked on .aether/data/ paths. These planning artifacts were staged in the
+repository and relocated with a scripted move."*
+
+A guardrail that the system's own workers must evade is worse than no guardrail: it is
+neither respected nor effective, and it trains workers to work around protections in
+general. Same contradiction class as `pkg/codex/permission_profile.go:96` (profile says
+read-only while the brief orders writing phase-plan.json) — both are Phase 163 (Context
+Reaches Workers / worker contracts) scope. Decision needed there: carve out
+`.aether/data/planning/` (and similar runtime-artifact dirs) as declared-writable for
+workers, or route those writes through the CLI, and make the rules file say what the
+system actually intends.
