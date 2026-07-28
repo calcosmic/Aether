@@ -15,7 +15,7 @@ import {
   DEFAULT_TEMPLATES,
 } from "../src/template-loader.js";
 
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+import { REPO_ROOT } from "./repo-root.js";
 
 // ---------------------------------------------------------------------------
 // Tests

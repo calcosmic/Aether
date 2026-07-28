@@ -490,6 +490,18 @@ async function runPreflight(binary, args, cwd, stdin, timeoutMs) {
                 duration: Date.now() - start,
             });
         });
+        // A fast-failing child (e.g. a preflight rejection) can exit before the
+        // stdin write flushes; the stream then emits EPIPE on ITS OWN emitter,
+        // which the child "error" handler above never sees, and an unhandled
+        // stream error crashes the dispatch. The child's close handler already
+        // reports the real outcome (exit code + stderr), so a broken pipe here
+        // carries no information worth failing on. Surfaced as a CI-only race:
+        // fast developer machines won the write, slower runners did not.
+        child.stdin?.on("error", (err) => {
+            if (err.code !== "EPIPE") {
+                stderr.push(Buffer.from(`\nstdin write failed: ${err.message}`));
+            }
+        });
         child.stdin?.end(stdin);
     });
 }

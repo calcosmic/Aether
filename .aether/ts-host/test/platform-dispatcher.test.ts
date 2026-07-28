@@ -28,7 +28,7 @@ import {
 } from "../src/platform-dispatcher.js";
 import { parseWorkerClaims } from "../src/claims-parser.js";
 
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+import { REPO_ROOT } from "./repo-root.js";
 
 // ---------------------------------------------------------------------------
 // Tests

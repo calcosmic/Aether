@@ -22,7 +22,7 @@ import {
 import { loadCeremonyConfig, type CeremonyConfig } from "../src/caste-config.js";
 import type { CeremonyEvent } from "../src/types.js";
 
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+import { REPO_ROOT } from "./repo-root.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

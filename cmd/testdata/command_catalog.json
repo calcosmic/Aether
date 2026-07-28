@@ -316,7 +316,24 @@
     "flags": [],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "autopilot-set-headless",
@@ -599,7 +616,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "bump-version",
@@ -3156,7 +3190,24 @@
     "flags": [],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "hive-opt-out",
@@ -3164,7 +3215,24 @@
     "flags": [],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "hive-promote",
@@ -3235,7 +3303,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "hive-search",
@@ -3895,7 +3980,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "learning-extract-fallback",
@@ -3962,7 +4064,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "learning-observe",
@@ -4052,7 +4171,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "learning-select-proposals",
@@ -4114,7 +4250,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "load-state",
@@ -5812,7 +5965,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "json+visual"
+    "output_mode": "json+visual",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 10
   },
   {
     "name": "recover",

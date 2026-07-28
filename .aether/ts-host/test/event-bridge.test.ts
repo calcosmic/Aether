@@ -20,7 +20,7 @@ import type { CeremonyEvent } from "../src/types.js";
 
 let mockDir = "";
 let MOCK_AETHER = "";
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+import { REPO_ROOT } from "./repo-root.js";
 
 before(() => {
   mockDir = mkdtempSync(join(tmpdir(), "aether-event-bridge-"));

@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { createNarrator } from "../src/narrator.js";
 import type { CeremonyEvent } from "../src/types.js";
 
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+import { REPO_ROOT } from "./repo-root.js";
 
 // ---------------------------------------------------------------------------
 // Helper
