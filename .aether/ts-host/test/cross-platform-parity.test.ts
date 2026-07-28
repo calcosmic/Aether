@@ -6,11 +6,15 @@
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+// Derived from this file's location (test/ -> ts-host/ -> .aether/ -> repo).
+// Previously a hardcoded developer-machine path, so on CI every filesystem
+// read landed in a nonexistent directory and all parity checks failed.
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -27,7 +27,11 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+// Derived from this file's location (test/ -> ts-host/ -> .aether/ -> repo).
+// This was a hardcoded developer-machine path; on CI the cwd did not exist and
+// every Go spawn died with ENOENT — the suite could only ever pass on the one
+// laptop the path pointed at.
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const config = loadCeremonyConfig(REPO_ROOT);
 const goCeremonyRunner: CeremonyCommandRunner = (_opts, args) => {
   const env: NodeJS.ProcessEnv = {
