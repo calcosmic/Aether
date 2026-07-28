@@ -84,12 +84,12 @@ func TestRetiredTestsLedgerDispositionsAreHonest(t *testing.T) {
 	}
 	ledger := string(raw)
 
-	entries := regexp.MustCompile(`(?m)^### ` + "`" + `([^` + "`" + `]+)` + "`").FindAllStringSubmatch(ledger, -1)
+	entries := regexp.MustCompile(`(?m)^### `+"`"+`([^`+"`"+`]+)`+"`").FindAllStringSubmatch(ledger, -1)
 	if len(entries) == 0 {
 		t.Fatal("retired-tests ledger contains no entries; Phase 160 retired at least control-ts/tests/schemas/policy.schema.test.ts")
 	}
 
-	dispositions := regexp.MustCompile(`\*\*Disposition:\*\*\s*` + "`?" + `(dead-with-no-replacement|recovered-by:([^` + "`" + `\s,]+))`).FindAllStringSubmatch(ledger, -1)
+	dispositions := regexp.MustCompile(`\*\*Disposition:\*\*\s*`+"`?"+`(dead-with-no-replacement|recovered-by:([^`+"`"+`\s,]+))`).FindAllStringSubmatch(ledger, -1)
 	if len(dispositions) != len(entries) {
 		t.Fatalf("ledger has %d entries but %d valid dispositions — every retired test needs exactly one disposition of `dead-with-no-replacement` or `recovered-by:<path>` (RETIRE-04)", len(entries), len(dispositions))
 	}

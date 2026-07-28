@@ -269,7 +269,15 @@ func TestStagedGoReleaserArtifactsInstallThroughPackedNPM(t *testing.T) {
 		t.Fatalf("actual GoReleaser binary version = %q, want %q", got, version)
 	}
 	if got := readVersionJSONFile(filepath.Join(home, ".aether", "version.json")); got != version {
-		t.Fatalf("actual GoReleaser hub version = %q, want %q", got, version)
+		var hubListing []string
+		_ = filepath.Walk(home, func(p string, info os.FileInfo, err error) error {
+			if err == nil {
+				hubListing = append(hubListing, p)
+			}
+			return nil
+		})
+		t.Fatalf("actual GoReleaser hub version = %q, want %q\nbootstrap stdout:\n%s\nbootstrap stderr:\n%s\nhome tree (%d entries):\n%s",
+			got, version, result.Stdout, result.Stderr, len(hubListing), strings.Join(hubListing[:min(len(hubListing), 40)], "\n"))
 	}
 }
 
@@ -366,6 +374,32 @@ func serveStagedRelease(t *testing.T, candidate stagedReleaseCandidate, checksum
 	return server
 }
 
+// dropEnvKeys removes entries for the named keys from an environment slice.
+//
+// The blackbox helpers below simulate a CLEAN USER MACHINE inside a sandboxed
+// HOME. The parent `go test` process, however, runs under TestMain's suite-wide
+// hub isolation (testing_main_test.go sets AETHER_HUB_DIR to a temp hub so
+// tests can never pollute the developer's real ~/.aether — the v1.25
+// hive-pollution fix). Passing that variable through to spawned release
+// binaries makes `aether install` write its hub to the SUITE's isolation dir
+// instead of the simulated user's $HOME/.aether, and the acceptance assertions
+// then read an empty hub. No real user machine has AETHER_HUB_DIR set, so the
+// faithful simulation is to strip it.
+func dropEnvKeys(env []string, keys ...string) []string {
+	dropped := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		dropped[k] = true
+	}
+	result := make([]string, 0, len(env))
+	for _, entry := range env {
+		if key, _, ok := strings.Cut(entry, "="); ok && dropped[key] {
+			continue
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
 func runPackedBootstrap(t *testing.T, packagePath, home, releaseURL string, args ...string) cliBlackBoxResult {
 	t.Helper()
 	consumer := filepath.Join(t.TempDir(), "consumer")
@@ -380,7 +414,7 @@ func runPackedBootstrap(t *testing.T, packagePath, home, releaseURL string, args
 	script := filepath.Join(consumer, "node_modules", "aether-colony", "bin", "aether.js")
 	command := exec.Command("node", append([]string{script}, args...)...)
 	command.Dir = consumer
-	command.Env = replaceProcessEnv(os.Environ(), map[string]string{
+	command.Env = replaceProcessEnv(dropEnvKeys(os.Environ(), "AETHER_HUB_DIR"), map[string]string{
 		"AETHER_OUTPUT_MODE":      "json",
 		"AETHER_RELEASE_BASE_URL": releaseURL,
 		"CODEX_HOME":              filepath.Join(home, ".codex"),
@@ -406,7 +440,7 @@ func runPackedBootstrap(t *testing.T, packagePath, home, releaseURL string, args
 func runBinaryVersion(t *testing.T, binary, home string) string {
 	t.Helper()
 	command := exec.Command(binary, "version")
-	command.Env = replaceProcessEnv(os.Environ(), map[string]string{
+	command.Env = replaceProcessEnv(dropEnvKeys(os.Environ(), "AETHER_HUB_DIR"), map[string]string{
 		"AETHER_OUTPUT_MODE": "json",
 		"HOME":               home,
 		"NO_COLOR":           "1",
@@ -429,7 +463,7 @@ func runCandidateAether(t *testing.T, binary, repo, home string, args ...string)
 	t.Helper()
 	command := exec.Command(binary, args...)
 	command.Dir = repo
-	command.Env = replaceProcessEnv(os.Environ(), map[string]string{
+	command.Env = replaceProcessEnv(dropEnvKeys(os.Environ(), "AETHER_HUB_DIR"), map[string]string{
 		"AETHER_HIVE_POLICY": "off",
 		"AETHER_OUTPUT_MODE": "json",
 		"AETHER_ROOT":        repo,
