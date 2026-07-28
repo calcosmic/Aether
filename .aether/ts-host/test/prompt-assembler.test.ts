@@ -19,7 +19,7 @@ import {
   getAgentNameForCaste,
 } from "../src/prompt-assembler.js";
 
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+import { REPO_ROOT } from "./repo-root.js";
 
 // ---------------------------------------------------------------------------
 // Tests

@@ -32,6 +32,22 @@ const __dirname = dirname(__filename);
 // every Go spawn died with ENOENT — the suite could only ever pass on the one
 // laptop the path pointed at.
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+// The Go binary shows a one-time first-run welcome banner in visual mode when
+// a checkout has no colony data (cmd/ux_firstrun.go), then drops a .welcomed
+// marker. Developer machines have colony state so the banner never fires; on a
+// fresh CI checkout it prepends itself to the FIRST ceremony render and breaks
+// that snapshot only. Seed the marker so the fixture is declared rather than
+// inherited from whichever machine runs the tests. (.aether/data is local-only
+// and gitignored; the marker is the runtime's own suppression mechanism.)
+{
+  const dataDir = join(REPO_ROOT, ".aether", "data");
+  mkdirSync(dataDir, { recursive: true });
+  const welcomeMarker = join(dataDir, ".welcomed");
+  if (!existsSync(welcomeMarker)) {
+    writeFileSync(welcomeMarker, "");
+  }
+}
 const config = loadCeremonyConfig(REPO_ROOT);
 const goCeremonyRunner: CeremonyCommandRunner = (_opts, args) => {
   const env: NodeJS.ProcessEnv = {

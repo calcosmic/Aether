@@ -38,6 +38,7 @@ import {
   dispatchSingleWorker,
 } from "../src/worker-dispatch.js";
 import { TEST_EXECUTION_BINDING } from "./execution-binding-fixture.js";
+import { REPO_ROOT } from "./repo-root.js";
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -87,7 +88,7 @@ function makeDispatch(name: string, wave: number): BuildDispatch {
 
 const defaultOpts: DispatchOptions = {
   goBinaryPath: "/usr/bin/true",
-  cwd: "/Users/callumcowie/repos/Aether",
+  cwd: REPO_ROOT,
   simulateWorkers: true,
   parallel: true,
   retryLimit: 2,

@@ -7,6 +7,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
+import { REPO_ROOT } from "./repo-root.js";
 import {
   loadCeremonyConfig,
   getCasteConfig,
@@ -22,12 +23,12 @@ import {
 
 describe("caste-config", () => {
   it("loadCeremonyConfig loads .aether/config/ceremony.yaml with 27 castes", () => {
-    const config = loadCeremonyConfig("/Users/callumcowie/repos/Aether");
+    const config = loadCeremonyConfig(REPO_ROOT);
     assert.equal(Object.keys(config.castes).length, 27, "Should have 27 castes");
   });
 
   it("loadCeremonyConfig returns all required sections", () => {
-    const config = loadCeremonyConfig("/Users/callumcowie/repos/Aether");
+    const config = loadCeremonyConfig(REPO_ROOT);
     assert.ok(config.stage_separator, "Should have stage_separator");
     assert.ok(config.naming, "Should have naming");
     assert.ok(config.banners, "Should have banners");
@@ -41,19 +42,19 @@ describe("caste-config", () => {
   });
 
   it("getCasteEmoji returns correct emoji for builder", () => {
-    const config = loadCeremonyConfig("/Users/callumcowie/repos/Aether");
+    const config = loadCeremonyConfig(REPO_ROOT);
     assert.equal(getCasteEmoji(config, "builder"), "🔨");
   });
 
   it("getCasteColor returns hex string starting with #", () => {
-    const config = loadCeremonyConfig("/Users/callumcowie/repos/Aether");
+    const config = loadCeremonyConfig(REPO_ROOT);
     const color = getCasteColor(config, "builder");
     assert.ok(color.startsWith("#"), "Color should start with #");
     assert.equal(color.length, 7, "Color should be 7 chars (#RRGGBB)");
   });
 
   it("unknown caste returns fallback values", () => {
-    const config = loadCeremonyConfig("/Users/callumcowie/repos/Aether");
+    const config = loadCeremonyConfig(REPO_ROOT);
     assert.equal(getCasteEmoji(config, "unknown-caste"), "❓");
     assert.equal(getCasteColor(config, "unknown-caste"), "#FFFFFF");
     assert.equal(getCasteLabel(config, "unknown-caste"), "Unknown-caste");
@@ -77,12 +78,12 @@ describe("caste-config", () => {
   });
 
   it("getCasteConfig returns undefined for unknown castes", () => {
-    const config = loadCeremonyConfig("/Users/callumcowie/repos/Aether");
+    const config = loadCeremonyConfig(REPO_ROOT);
     assert.equal(getCasteConfig(config, "nonexistent"), undefined);
   });
 
   it("getCasteLabel capitalizes unknown caste names", () => {
-    const config = loadCeremonyConfig("/Users/callumcowie/repos/Aether");
+    const config = loadCeremonyConfig(REPO_ROOT);
     assert.equal(getCasteLabel(config, "unknown"), "Unknown");
   });
 });

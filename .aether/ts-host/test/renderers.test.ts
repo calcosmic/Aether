@@ -13,7 +13,7 @@ import { jsonRenderer } from "../src/renderers/json.js";
 import { loadCeremonyConfig } from "../src/caste-config.js";
 import type { CeremonyPayload } from "../src/types.js";
 
-const REPO_ROOT = "/Users/callumcowie/repos/Aether";
+import { REPO_ROOT } from "./repo-root.js";
 const config = loadCeremonyConfig(REPO_ROOT);
 
 // ---------------------------------------------------------------------------

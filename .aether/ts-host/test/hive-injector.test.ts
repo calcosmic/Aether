@@ -20,6 +20,7 @@ import {
   resolveDomainTags,
   type HiveInjectorOptions,
 } from "../src/hive-injector.js";
+import { REPO_ROOT } from "./repo-root.js";
 import {
   __setCallGoJSON,
   __restoreCallGoJSON,
@@ -63,7 +64,7 @@ function captureStderr(): { lines: string[]; restore: () => void } {
 
 const defaultOpts: HiveInjectorOptions = {
   goBinaryPath: "/usr/bin/aether",
-  cwd: "/Users/callumcowie/repos/Aether",
+  cwd: REPO_ROOT,
   domains: ["go"],
   minConfidence: 0.5,
   maxEntries: 10,
@@ -189,7 +190,7 @@ describe("resolveDomainTags", () => {
     __setCallGoJSON(<T>(): T => ({
       colonies: [
         {
-          repo_path: "/Users/callumcowie/repos/Aether",
+          repo_path: REPO_ROOT,
           domains: ["go", "typescript", "cli"],
           active: true,
           registered_at: "2026-05-18T00:00:00Z",
@@ -198,7 +199,7 @@ describe("resolveDomainTags", () => {
     } as T));
     const result = await resolveDomainTags({
       goBinaryPath: "/usr/bin/aether",
-      cwd: "/Users/callumcowie/repos/Aether",
+      cwd: REPO_ROOT,
     });
     assert.deepEqual(result, ["go", "typescript", "cli"]);
   });
@@ -216,7 +217,7 @@ describe("resolveDomainTags", () => {
     } as T));
     const result = await resolveDomainTags({
       goBinaryPath: "/usr/bin/aether",
-      cwd: "/Users/callumcowie/repos/Aether",
+      cwd: REPO_ROOT,
     });
     assert.deepEqual(result, []);
   });
@@ -227,7 +228,7 @@ describe("resolveDomainTags", () => {
     });
     const result = await resolveDomainTags({
       goBinaryPath: "/usr/bin/aether",
-      cwd: "/Users/callumcowie/repos/Aether",
+      cwd: REPO_ROOT,
     });
     assert.deepEqual(result, []);
   });
@@ -236,7 +237,7 @@ describe("resolveDomainTags", () => {
     __setCallGoJSON(<T>(): T => ({
       colonies: [
         {
-          repo_path: "/Users/callumcowie/repos/Aether/", // trailing slash variant
+          repo_path: REPO_ROOT + "/", // trailing slash variant
           domains: ["go", "typescript"],
           active: true,
           registered_at: "2026-05-18T00:00:00Z",
@@ -245,7 +246,7 @@ describe("resolveDomainTags", () => {
     } as T));
     const result = await resolveDomainTags({
       goBinaryPath: "/usr/bin/aether",
-      cwd: "/Users/callumcowie/repos/Aether",
+      cwd: REPO_ROOT,
     });
     assert.deepEqual(result, ["go", "typescript"]);
   });
