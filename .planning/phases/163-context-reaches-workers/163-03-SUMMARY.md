@@ -151,3 +151,9 @@ None - no external service configuration required.
 ---
 *Phase: 163-context-reaches-workers*
 *Completed: 2026-07-29*
+
+## Self-Check: PASSED
+
+- All 13 files listed in `key-files.modified` (plus this SUMMARY.md) confirmed present on disk.
+- All 4 commit hashes (`fb6df774`, `ed6306c7`, `f0829822`, plus this metadata commit) confirmed present in `git log --oneline`.
+- Final verification commands re-run clean: `go test ./cmd -run TestHookPreToolUse -count=1`, `go test ./pkg/codex -count=1`, `go build ./cmd/aether`, `go vet ./...`.
