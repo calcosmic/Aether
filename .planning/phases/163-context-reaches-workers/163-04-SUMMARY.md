@@ -122,3 +122,13 @@ None - no external service configuration required.
 ---
 *Phase: 163-context-reaches-workers*
 *Completed: 2026-07-29*
+
+## Self-Check: PASSED
+
+- FOUND: cmd/survey_staleness.go
+- FOUND: cmd/survey_staleness_test.go
+- FOUND: .planning/phases/163-context-reaches-workers/163-04-SUMMARY.md
+- FOUND commit: c5e48cf6 (Task 1)
+- FOUND commit: 792e3a03 (Task 2)
+- FOUND commit: eb9e63ba (Task 3)
+- FOUND commit: d59285bf (SUMMARY)
