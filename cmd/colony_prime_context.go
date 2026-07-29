@@ -14,6 +14,19 @@ import (
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
+// Budget constants for buildColonyPrimeOutput (D-03). Named so every later
+// measurement (e.g. Plan 06's budget-ceiling invariant test) refers to the
+// same number instead of a literal that can silently drift out of sync.
+const (
+	colonyPrimeBudgetChars        = 8000
+	colonyPrimeCompactBudgetChars = 4000
+)
+
+// charterNoGovernanceFallback is generateCharter's placeholder string
+// (cmd/init_research.go) for a colony where no governance tooling was
+// detected. It carries no binding rule, so it must not surface as one.
+const charterNoGovernanceFallback = "No formal governance detected -- colony should establish conventions"
+
 type colonyPrimeOutput struct {
 	Context       string            `json:"context"`
 	PromptSection string            `json:"prompt_section"`
@@ -332,9 +345,9 @@ func buildPriorReviewsSection(s *storage.Store, compact bool) (colonyPrimeSectio
 }
 
 func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
-	budget := 8000
+	budget := colonyPrimeBudgetChars
 	if compact {
-		budget = 4000
+		budget = colonyPrimeCompactBudgetChars
 	}
 	result := colonyPrimeOutput{
 		Budget:   budget,
@@ -426,6 +439,47 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			priority:       6,
 			freshnessScore: 1.0,
 		})
+	}
+
+	// Charter section (CONTEXT-06, D-09): the colony charter is
+	// user-approved governance and must reach every worker as a binding
+	// rule, not background information -- silence is what made the charter
+	// decorative in the first place. Skip entirely when there is nothing to
+	// say (no charter, or generateCharter's "no formal governance" fallback):
+	// an empty heading is noise that costs budget. Do NOT string-concatenate
+	// this into any brief renderer -- routing it through colonyPrimeSection
+	// is the security control (T-163-03); it inherits AssessPromptSource and
+	// RankContextCandidates below for free, same as every other section.
+	if state.Charter != nil {
+		governanceText := strings.TrimSpace(state.Charter.Governance)
+		if governanceText == charterNoGovernanceFallback {
+			governanceText = ""
+		}
+		constraintsText := strings.TrimSpace(state.Charter.Constraints)
+		if governanceText != "" || constraintsText != "" {
+			var charterSB strings.Builder
+			writeSectionHeader(&charterSB, "charter", "## Charter -- Binding Rules\n\n")
+			charterSB.WriteString("The colony operator approved the following governance. These are hard rules every worker must follow, not background information:\n\n")
+			if governanceText != "" {
+				charterSB.WriteString(fmt.Sprintf("Governance: %s\n", governanceText))
+			}
+			if constraintsText != "" {
+				charterSB.WriteString(fmt.Sprintf("Constraints: %s\n", constraintsText))
+			}
+			charterProtected, charterPreserveReason := protectedSectionPolicy("charter")
+			sections = append(sections, colonyPrimeSection{
+				name:              "charter",
+				title:             "Charter",
+				source:            statePath,
+				content:           charterSB.String(),
+				priority:          9,
+				freshnessScore:    1.0,
+				confirmationScore: 1.0,
+				relevanceScore:    sectionRelevanceScore("charter"),
+				protected:         charterProtected,
+				preserveReason:    charterPreserveReason,
+			})
+		}
 	}
 
 	now := time.Now().UTC()
