@@ -60,31 +60,41 @@ type codexBuildTaskPlan struct {
 }
 
 type codexBuildManifest struct {
-	Phase                     int                                   `json:"phase"`
-	PhaseName                 string                                `json:"phase_name"`
-	PhaseMode                 colony.PhaseMode                      `json:"phase_mode,omitempty"`
-	Goal                      string                                `json:"goal,omitempty"`
-	Root                      string                                `json:"root"`
-	ColonyMode                string                                `json:"colony_mode,omitempty"`
-	PlanOnly                  bool                                  `json:"plan_only,omitempty"`
-	ParallelMode              string                                `json:"parallel_mode,omitempty"`
-	WaveExecution             []codexWaveExecutionPlan              `json:"wave_execution,omitempty"`
-	ExecutionPlan             []codexBuildExecutionPlan             `json:"execution_plan,omitempty"`
-	ColonyDepth               string                                `json:"colony_depth"`
-	DispatchMode              string                                `json:"dispatch_mode,omitempty"`
-	HostPlatform              string                                `json:"host_platform,omitempty"`
-	ExecutionOwner            string                                `json:"execution_owner,omitempty"`
-	WorkerDispatchOptIn       bool                                  `json:"worker_dispatch_opt_in,omitempty"`
-	GeneratedAt               string                                `json:"generated_at"`
-	PlanRevisionID            string                                `json:"plan_revision_id,omitempty"`
-	PlanStateHash             string                                `json:"plan_state_hash,omitempty"`
-	AttemptID                 string                                `json:"attempt_id,omitempty"`
-	AttemptPath               string                                `json:"attempt_path,omitempty"`
-	ExecutionBinding          *codex.ExecutionBinding               `json:"execution_binding,omitempty"`
-	State                     string                                `json:"state"`
-	Checkpoint                string                                `json:"checkpoint"`
-	ClaimsPath                string                                `json:"claims_path"`
-	WorkerBriefs              []string                              `json:"worker_briefs"`
+	Phase               int                       `json:"phase"`
+	PhaseName           string                    `json:"phase_name"`
+	PhaseMode           colony.PhaseMode          `json:"phase_mode,omitempty"`
+	Goal                string                    `json:"goal,omitempty"`
+	Root                string                    `json:"root"`
+	ColonyMode          string                    `json:"colony_mode,omitempty"`
+	PlanOnly            bool                      `json:"plan_only,omitempty"`
+	ParallelMode        string                    `json:"parallel_mode,omitempty"`
+	WaveExecution       []codexWaveExecutionPlan  `json:"wave_execution,omitempty"`
+	ExecutionPlan       []codexBuildExecutionPlan `json:"execution_plan,omitempty"`
+	ColonyDepth         string                    `json:"colony_depth"`
+	DispatchMode        string                    `json:"dispatch_mode,omitempty"`
+	HostPlatform        string                    `json:"host_platform,omitempty"`
+	ExecutionOwner      string                    `json:"execution_owner,omitempty"`
+	WorkerDispatchOptIn bool                      `json:"worker_dispatch_opt_in,omitempty"`
+	GeneratedAt         string                    `json:"generated_at"`
+	PlanRevisionID      string                    `json:"plan_revision_id,omitempty"`
+	PlanStateHash       string                    `json:"plan_state_hash,omitempty"`
+	AttemptID           string                    `json:"attempt_id,omitempty"`
+	AttemptPath         string                    `json:"attempt_path,omitempty"`
+	ExecutionBinding    *codex.ExecutionBinding   `json:"execution_binding,omitempty"`
+	State               string                    `json:"state"`
+	Checkpoint          string                    `json:"checkpoint"`
+	ClaimsPath          string                    `json:"claims_path"`
+	WorkerBriefs        []string                  `json:"worker_briefs"`
+	// ContextCapsule is the colony-prime grounding payload (state, decisions,
+	// phase learnings, instincts, hive wisdom, prior reviews, blockers, user
+	// preferences) for wrapper-spawned build workers. It is computed once per
+	// plan-only manifest, carried here at the top level rather than copied into
+	// every dispatch brief, and the wrapper reads it once and prepends it,
+	// verbatim, to each spawned worker's prompt. Only populated when planOnly —
+	// the hosted/subprocess path already computes and shares its own capsule
+	// (see executeCodexBuildDispatches), and the finalize record does not
+	// deliver prompts.
+	ContextCapsule            string                                `json:"context_capsule,omitempty"`
 	Dispatches                []codexBuildDispatch                  `json:"dispatches"`
 	SelectedTasks             []string                              `json:"selected_tasks,omitempty"`
 	Tasks                     []codexBuildTaskPlan                  `json:"tasks"`
@@ -1605,6 +1615,17 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 	planHash, _ := planStateHash(state.Plan)
 
+	// Compute the colony-prime capsule once, only for the plan-only wrapper
+	// manifest — the hosted path (executeCodexBuildDispatches) already
+	// computes and shares its own capsule, and the finalize record does not
+	// deliver prompts. This is the single call site for this field; it must
+	// never be computed inside a per-dispatch loop (that would reintroduce
+	// the duplication CONTEXT-03 exists to prevent).
+	contextCapsule := ""
+	if planOnly {
+		contextCapsule = resolveCodexWorkerContext()
+	}
+
 	return codexBuildManifest{
 		Phase:                   phase.ID,
 		PhaseName:               phase.Name,
@@ -1628,6 +1649,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		Checkpoint:              checkpoint,
 		ClaimsPath:              claimsPath,
 		WorkerBriefs:            briefs,
+		ContextCapsule:          contextCapsule,
 		Dispatches:              append([]codexBuildDispatch{}, dispatches...),
 		SelectedTasks:           append([]string{}, selectedTaskIDs...),
 		Tasks:                   codexBuildTaskPlans(phase),
