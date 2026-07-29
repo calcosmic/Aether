@@ -174,3 +174,7 @@ None — the plan's own `<threat_model>` (T-163-04, T-163-05, T-163-06) fully co
 ## Next Steps
 
 Proceed to plan 163-02 (charter section inside the capsule) and the remaining phase-163 plans; this plan's `ContextCapsule` field and delivery contract are now available as a dependency for any plan that needs to verify the manifest-level capsule reaches wrapper workers.
+
+## Self-Check: PASSED
+
+All created/modified files confirmed present on disk (cmd/codex_build.go, cmd/codex_build_manifest_context_test.go, cmd/build_wrapper_ceremony_test.go, .claude/commands/ant/build.md, .opencode/commands/ant/build.md, cmd/safety_invariant_test.go, this SUMMARY.md). All claimed commit hashes (390e87ee, 2fdd9135, bc8197db, 13b5fd98, ae150cdb) confirmed present in `git log --oneline --all`.
