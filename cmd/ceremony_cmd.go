@@ -238,6 +238,11 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		if state.Goal != nil {
 			result["goal"] = *state.Goal
 		}
+		if workflow == "build" {
+			if active := filterActiveSuggestions(state.PendingSuggestions); len(active) > 0 {
+				result["pending_suggestions_block"] = renderPendingSuggestionsBlock(active)
+			}
+		}
 		if next := strings.TrimSpace(stringValue(result["completion_next"])); next != "" {
 			result["next"] = next
 		} else {
@@ -577,6 +582,14 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 	writeCeremonyCloseoutNotice(&b, result)
 	writeCeremonyWorkerSummary(&b, result)
 	writeCeremonyPlanSummary(&b, result)
+	if block := strings.TrimSpace(stringValue(result["pending_suggestions_block"])); block != "" {
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Suggestions From This Build"))
+		b.WriteString(block)
+		if !strings.HasSuffix(block, "\n") {
+			b.WriteString("\n")
+		}
+	}
 	if readiness := strings.TrimSpace(stringValue(result["porter_readiness"])); readiness != "" {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Post-Seal: Delivery Readiness"))
@@ -587,6 +600,28 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 	}
 	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
 	b.WriteString(renderNextUp(next))
+	return b.String()
+}
+
+// renderPendingSuggestionsBlock renders the once-at-the-end, tick-to-approve
+// list D-11 asks for: each active suggestion's type, content, reason, and
+// ID, followed by the exact copyable approve/dismiss commands for that ID.
+// Callers must pass suggestions already filtered by filterActiveSuggestions
+// -- this function does not re-implement dismissed filtering.
+func renderPendingSuggestionsBlock(suggestions []colony.PendingSuggestion) string {
+	var b strings.Builder
+	for i, s := range suggestions {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "[%s] %s\n", s.Type, s.Content)
+		if reason := strings.TrimSpace(s.Reason); reason != "" {
+			fmt.Fprintf(&b, "  Reason: %s\n", reason)
+		}
+		fmt.Fprintf(&b, "  ID: %s\n", s.ID)
+		fmt.Fprintf(&b, "  Approve: aether suggest-approve --approve %s\n", s.ID)
+		fmt.Fprintf(&b, "  Dismiss: aether suggest-approve --dismiss %s\n", s.ID)
+	}
 	return b.String()
 }
 
