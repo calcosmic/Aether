@@ -126,12 +126,13 @@ var buildCmd = &cobra.Command{
 
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			worker, _ := cmd.Flags().GetString("worker")
+			fullFlag, _ := cmd.Flags().GetBool("full")
 			err := printWorkerBriefs(
 				skillWorkspaceRoot(),
 				phaseNum,
 				selectedTasks,
 				worker,
-				buildPrintBriefOptions(workerTimeout, forceBuild, lightFlag, heavyFlag, verificationDepth),
+				buildPrintBriefOptions(workerTimeout, forceBuild, lightFlag, heavyFlag, fullFlag, verificationDepth),
 			)
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -1163,7 +1164,8 @@ func init() {
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("force", false, "Force redispatch of the current active phase after an interrupted build")
 	buildCmd.Flags().Bool("plan-only", false, "Emit the build dispatch manifest for wrapper-spawned workers; opens a durable build attempt (superseded automatically on re-entry) but spawns nothing. For a pure read, use --print-brief")
-	buildCmd.Flags().Bool("print-brief", false, "Print the exact prompt each worker would receive, with a section-by-section composition breakdown. Reads state; mutates nothing")
+	buildCmd.Flags().Bool("print-brief", false, "Print a ten-second checklist of which context sections arrived (present/absent, size, total against budget). Add --full for the raw assembled prompt. Reads state; mutates nothing")
+	buildCmd.Flags().Bool("full", false, "With --print-brief, print the raw assembled prompt and composition table instead of the checklist. No effect without --print-brief")
 	buildCmd.Flags().String("worker", "", "With --print-brief, print only the named worker's prompt")
 	buildCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	buildCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build dispatches (e.g. 15m)")

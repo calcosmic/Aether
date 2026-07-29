@@ -73,9 +73,9 @@ These were asserted in the first draft and are now **verified false**. No work i
 - [ ] **CONTEXT-04**: Phase research findings are demonstrably present in a build worker's actual prompt via `resolvePhaseResearchSection()`, and a worker is told when the survey map is stale rather than grounding on fiction (reworded 2026-07-29 per Phase 163 D-07: `survey-load` was deleted in Phase 160 and is pinned absent — see `TestSurveyLoadAbsentAndUncalled`)
 - [ ] **CONTEXT-05**: `suggest-analyze` actually runs during a build and its pheromone suggestions reach the user — it has never executed
 - [ ] **CONTEXT-06**: The approved colony charter reaches workers. Governance detection is healthy (`cmd/init_research.go:117`, with ESLint, golangci-lint and Prettier parsers), but `cmd/colony_prime_context.go` contains zero charter or governance references — so a user can approve "TDD required, ESLint enforced" and no builder ever learns of it
-- [ ] **CONTEXT-07**: `aether build <n> --print-brief` (or equivalent) makes the assembled worker prompt inspectable, so context presence is checkable by a person rather than by reading Go
-- [ ] **CONTEXT-08**: Total context is measured and bounded. Budgets today: colony-prime 8000/4000, skills ~8000, phase research 3500, codegraph 2200 (corrected 2026-07-29 per Phase 163 D-07: the prior budget list's "playbook 7K" figure is stale — playbook injection into worker prompts was removed entirely, measured at 5,733 of 7,485 characters before removal per the code comment near `renderCodexBuildWorkerBrief`; the requirement's substance is unchanged, only the stale figure is removed). This is tested before more context is added
-- [ ] **CONTEXT-09**: Descoped per Phase 163 D-08 (2026-07-29): the user's decision is that testing happens through real repos in real use, not a staged before/after benchmark on an inexpensive model. Replacement evidence is the brief inspector plus the automated presence and budget tests this phase ships (`TestBuildWorkerBriefIncludesSurveyAndResearch`, `TestBuildWorkerBriefIsMostlyTask`). Real-world validation is explicitly post-phase, not abandoned
+- [x] **CONTEXT-07**: `aether build <n> --print-brief` (or equivalent) makes the assembled worker prompt inspectable, so context presence is checkable by a person rather than by reading Go
+- [x] **CONTEXT-08**: Total context is measured and bounded. Budgets today: colony-prime 8000/4000, skills ~8000, phase research 3500, codegraph 2200 (corrected 2026-07-29 per Phase 163 D-07: the prior budget list's "playbook 7K" figure is stale — playbook injection into worker prompts was removed entirely, measured at 5,733 of 7,485 characters before removal per the code comment near `renderCodexBuildWorkerBrief`; the requirement's substance is unchanged, only the stale figure is removed). This is tested before more context is added
+- [x] **CONTEXT-09**: Descoped per Phase 163 D-08 (2026-07-29): the user's decision is that testing happens through real repos in real use, not a staged before/after benchmark on an inexpensive model. Replacement evidence is the brief inspector plus the automated presence and budget tests this phase ships (`TestBuildWorkerBriefIncludesSurveyAndResearch`, `TestBuildWorkerBriefIsMostlyTask`). Real-world validation is explicitly post-phase, not abandoned
 
 ## Research Feeds Planning (RESEARCH)
 
@@ -244,9 +244,9 @@ Carried from v1.23, still open, not addressed here: `CATALOG-01/02`, `TEST-01/02
 | CONTEXT-04 | Phase 163 | Pending |
 | CONTEXT-05 | Phase 163 | Pending |
 | CONTEXT-06 | Phase 163 | Pending |
-| CONTEXT-07 | Phase 163 | Pending |
-| CONTEXT-08 | Phase 163 | Pending |
-| CONTEXT-09 | Phase 163 | Pending |
+| CONTEXT-07 | Phase 163 | Complete |
+| CONTEXT-08 | Phase 163 | Complete |
+| CONTEXT-09 | Phase 163 | Complete |
 | RESEARCH-01 | Phase 164 | Pending |
 | RESEARCH-02 | Phase 164 | Pending |
 | RESEARCH-03 | Phase 164 | Pending |

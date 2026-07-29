@@ -550,6 +550,7 @@
     "flags": [
       "circuit-breaker-threshold",
       "force",
+      "full",
       "heavy",
       "light",
       "no-suggest",

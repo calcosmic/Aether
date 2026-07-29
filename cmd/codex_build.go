@@ -162,6 +162,9 @@ type codexBuildOptions struct {
 	DispatchWorkers         bool
 	CircuitBreakerThreshold int
 	Verbose                 bool
+	// Full gates the raw-prompt path of --print-brief. It has no effect on any
+	// mutating build path — only printWorkerBriefs reads it.
+	Full bool
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
