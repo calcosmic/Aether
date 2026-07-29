@@ -49,8 +49,8 @@ func TestInternalWorkerAdapterRequiresAndValidatesPermissionProfile(t *testing.T
 	t.Chdir(root)
 	base := map[string]interface{}{
 		"schema_version": 1,
-		"caste":          "scout",
-		"worker_name":    "Scout-Test",
+		"caste":          "includer",
+		"worker_name":    "Includer-Test",
 		"task":           "Inspect without writing",
 	}
 
@@ -71,7 +71,7 @@ func TestInternalWorkerAdapterRequiresAndValidatesPermissionProfile(t *testing.T
 		t.Fatal(err)
 	}
 	if _, err := internalWorkerConfig(root, &codex.FakeInvoker{}, broadRequest); err == nil || !strings.Contains(err.Error(), "mismatch") {
-		t.Fatalf("broadened scout profile was accepted: %v", err)
+		t.Fatalf("broadened includer profile was accepted: %v", err)
 	}
 }
 

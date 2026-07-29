@@ -861,7 +861,7 @@ Return ONLY a single JSON object as your final response.
 - Report blockers truthfully. If blocked, explain why in blockers.
 - Include handoff with changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness.
 - Keep summary concise and concrete.
-- Include artifacts as an object. Use {} unless the task brief gives an explicit schema.
+- Include artifacts as an object with research_file, survey_file, and plan_file. Set the one the task brief ordered you to produce (e.g. renderPhaseResearchBrief's research file path); set the rest to null.
 %s
 `, filepath.Clean(root), statusLine, scoutReportLine))
 }
@@ -918,11 +918,27 @@ func workerClaimsSchema() jsonSchema {
 			"files_created":  stringArray,
 			"files_modified": stringArray,
 			"tests_written":  stringArray,
+			// artifacts carries named, typed fields a worker reports when its task
+			// brief orders a specific output — e.g. renderPhaseResearchBrief
+			// (cmd/phase_research.go:124) orders a scout to write phase research to
+			// disk and report the path back. Every declared property is nullable and
+			// listed in required, matching the strict-schema convention already used
+			// by the sibling handoff schema below (and enforced repo-wide by
+			// TestWorkerClaimsSchemaStrictObjects / the Codex --output-schema strict
+			// validator) — "required" in this dialect means "key must be present",
+			// not "must be non-null", so a worker that produces no artifacts stays
+			// valid by reporting null for every field. additionalProperties MUST
+			// stay false: flipping it to true would let a worker report arbitrary
+			// unvalidated JSON as artifacts (T-163-02).
 			"artifacts": map[string]interface{}{
 				"type":                 "object",
 				"additionalProperties": false,
-				"properties":           map[string]interface{}{},
-				"required":             []string{},
+				"properties": map[string]interface{}{
+					"research_file": map[string]interface{}{"type": []string{"string", "null"}},
+					"survey_file":   map[string]interface{}{"type": []string{"string", "null"}},
+					"plan_file":     map[string]interface{}{"type": []string{"string", "null"}},
+				},
+				"required": []string{"research_file", "survey_file", "plan_file"},
 			},
 			"tool_count": map[string]interface{}{
 				"type":    "integer",

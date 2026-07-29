@@ -15,10 +15,7 @@ func TestBuildAndPlanningManifestsCarryCanonicalPermissionProfiles(t *testing.T)
 		{Caste: "probe", Name: "Probe-1", Task: "test"},
 	}
 	attachBuildDispatchContext(t.TempDir(), colony.Phase{ID: 1, Name: "Test"}, build, time.Now())
-	if build[0].PermissionProfile.Name != codex.PermissionRepositoryReadOnly {
-		t.Fatalf("Scout build profile = %+v", build[0].PermissionProfile)
-	}
-	for _, dispatch := range build[1:] {
+	for _, dispatch := range build {
 		if dispatch.PermissionProfile.Name != codex.PermissionWorkspaceWrite {
 			t.Fatalf("%s build profile = %+v", dispatch.Caste, dispatch.PermissionProfile)
 		}
@@ -32,7 +29,7 @@ func TestBuildAndPlanningManifestsCarryCanonicalPermissionProfiles(t *testing.T)
 	if len(planning) < 2 {
 		t.Fatalf("planning dispatches = %d, want at least 2", len(planning))
 	}
-	if planning[0].Caste != "scout" || planning[0].PermissionProfile.Name != codex.PermissionRepositoryReadOnly {
+	if planning[0].Caste != "scout" || planning[0].PermissionProfile.Name != codex.PermissionWorkspaceWrite {
 		t.Fatalf("planning Scout profile = %+v", planning[0])
 	}
 	if planning[1].PermissionProfile.Name != codex.PermissionWorkspaceWrite {

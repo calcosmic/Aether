@@ -14,7 +14,7 @@ func TestPermissionProfileForCasteUsesOnlyEnforceableReleaseProfiles(t *testing.
 		caste string
 		want  PermissionProfileName
 	}{
-		{"scout", PermissionRepositoryReadOnly},
+		{"scout", PermissionWorkspaceWrite},
 		{"aether-includer", PermissionRepositoryReadOnly},
 		{"builder", PermissionWorkspaceWrite},
 		{"watcher", PermissionWorkspaceWrite},
@@ -36,15 +36,43 @@ func TestPermissionProfileForCasteUsesOnlyEnforceableReleaseProfiles(t *testing.
 	}
 }
 
+// TestScoutPermissionProfileAllowsPhaseResearchWrite pins the D-05 fix: scout
+// converges onto the same default-workspace-write-plus-behavioral-restriction
+// pattern the surveyor castes already use, so the permission profile no longer
+// contradicts the write renderPhaseResearchBrief orders. includer stays the
+// control case proving the carve-out is scout-specific, not a general
+// loosening of repositoryReadOnlyCastes.
+func TestScoutPermissionProfileAllowsPhaseResearchWrite(t *testing.T) {
+	scout := PermissionProfileForCaste("scout")
+	if scout.Name != PermissionWorkspaceWrite {
+		t.Fatalf("scout profile = %q, want %q", scout.Name, PermissionWorkspaceWrite)
+	}
+	found := false
+	for _, restriction := range scout.BehavioralRestrictions {
+		if strings.Contains(restriction, ".aether/data/phase-research") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("scout behavioral restrictions do not name .aether/data/phase-research: %v", scout.BehavioralRestrictions)
+	}
+
+	includer := PermissionProfileForCaste("includer")
+	if includer.Name != PermissionRepositoryReadOnly {
+		t.Fatalf("includer profile = %q, want %q (carve-out must stay scout-specific)", includer.Name, PermissionRepositoryReadOnly)
+	}
+}
+
 func TestCodexReadOnlyProfileSelectsReadOnlySandbox(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell fixture uses POSIX sh")
 	}
 	dir := t.TempDir()
-	agentPath := filepath.Join(dir, "aether-scout.toml")
-	if err := os.WriteFile(agentPath, []byte(`name = "aether-scout"
-description = "Scout"
-nickname_candidates = ["scout"]
+	agentPath := filepath.Join(dir, "aether-includer.toml")
+	if err := os.WriteFile(agentPath, []byte(`name = "aether-includer"
+description = "Includer"
+nickname_candidates = ["includer"]
 developer_instructions = '''Inspect only.'''
 `), 0644); err != nil {
 		t.Fatal(err)
@@ -62,7 +90,7 @@ while [ "$#" -gt 0 ]; do
   if [ "$1" = "--output-last-message" ]; then out="$2"; shift 2; else shift; fi
 done
 cat >/dev/null
-printf '{"ant_name":"Scout-1","caste":"scout","task_id":"s.1","status":"completed","summary":"inspected","files_created":[],"files_modified":[],"tests_written":[],"tool_count":0,"blockers":[],"spawns":[]}' > "$out"
+printf '{"ant_name":"Includer-1","caste":"includer","task_id":"s.1","status":"completed","summary":"inspected","files_created":[],"files_modified":[],"tests_written":[],"tool_count":0,"blockers":[],"spawns":[]}' > "$out"
 `
 	if err := os.WriteFile(binary, []byte(script), 0755); err != nil {
 		t.Fatal(err)
@@ -70,14 +98,14 @@ printf '{"ant_name":"Scout-1","caste":"scout","task_id":"s.1","status":"complete
 	t.Setenv("ARGS_PATH", argsPath)
 	invoker := &RealInvoker{binaryName: binary}
 	_, err := invoker.Invoke(context.Background(), WorkerConfig{
-		AgentName:         "aether-scout",
+		AgentName:         "aether-includer",
 		AgentTOMLPath:     agentPath,
-		Caste:             "scout",
-		WorkerName:        "Scout-1",
+		Caste:             "includer",
+		WorkerName:        "Includer-1",
 		TaskID:            "s.1",
 		TaskBrief:         "Inspect",
 		Root:              dir,
-		PermissionProfile: PermissionProfileForCaste("scout"),
+		PermissionProfile: PermissionProfileForCaste("includer"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -138,15 +166,15 @@ func TestShippedOpenCodeAgentsDeclarePermissionBoundary(t *testing.T) {
 }
 
 func TestResolvePermissionProfileRejectsBroadeningAndStaleContracts(t *testing.T) {
-	readOnly := PermissionProfileForCaste("scout")
+	readOnly := PermissionProfileForCaste("includer")
 	broad := PermissionProfileForCaste("builder")
-	if _, err := ResolvePermissionProfile("scout", broad); err == nil || !strings.Contains(err.Error(), "mismatch") {
+	if _, err := ResolvePermissionProfile("includer", broad); err == nil || !strings.Contains(err.Error(), "mismatch") {
 		t.Fatalf("read-only caste accepted broader profile: %v", err)
 	}
 
 	stale := readOnly
 	stale.SchemaVersion = 99
-	if _, err := ResolvePermissionProfile("scout", stale); err == nil || !strings.Contains(err.Error(), "mismatch") {
+	if _, err := ResolvePermissionProfile("includer", stale); err == nil || !strings.Contains(err.Error(), "mismatch") {
 		t.Fatalf("stale profile was accepted: %v", err)
 	}
 
