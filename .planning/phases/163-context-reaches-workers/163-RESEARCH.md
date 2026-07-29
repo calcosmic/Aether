@@ -331,19 +331,24 @@ A CONTEXT-08 test should follow this exact shape but assert a **ceiling** (e.g.,
 | A3 | `.claude/commands/ant/build.md` / `.opencode/commands/ant/build.md` currently instruct passing `dispatch.brief` verbatim into each Task-tool spawn, exactly as commit `281dd34a`'s message states | Architecture Patterns | This session read the commit message and the `codexBuildDispatch.Brief` field comment but did not do a full line-by-line read of the current `build.md` dispatch-loop section. If the wrapper text has since drifted, the planner should re-read `build.md`/`continue.md`'s relevant sections directly before writing the manifest-level-capsule task. |
 | A4 | The 27-agent-file "Global Protected Paths" sections are identical (word-for-word) across all 27 castes, not just the 3 sampled (scout, builder, route-setter) | Reconciliation Corrections | If some castes have a different or additional protected-paths list that does mention `.aether/data/`, the lockstep-update surface for D-04's doc-text fix is larger than stated. Medium risk — sample size was 3 of 27; recommend a full grep sweep as a planning-time verification step, not a research-time one, since it's cheap and mechanical. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Exact wording currently in `.claude/commands/ant/build.md`'s dispatch-spawn instructions.**
+> All three questions were resolved during planning (2026-07-29); resolutions noted inline below.
+
+1. **RESOLVED — Exact wording currently in `.claude/commands/ant/build.md`'s dispatch-spawn instructions.**
+   - *Resolution:* the planner read the live file: lines 84/97 instruct passing `dispatch.brief` + `skill_section`, "nothing else, nothing invented." A two-bullet content-only wrapper amendment is required and is scoped in plan 163-01 task 3, guarded by an extended `TestBuildWrapperCeremonyContract`. The dispatch wording is not generated from `.aether/commands/build.yaml`, so no regeneration hazard.
    - What we know: the field comment and commit message both assert "pass verbatim."
    - What's unclear: whether the wrapper text already anticipates a future `manifest.context_capsule` field, or would need explicit new instruction text added.
    - Recommendation: read `build.md`'s dispatch-loop section directly as the first planning-time action before writing the manifest-level-capsule task (this is a 2-minute read, deliberately deferred to planning rather than spent here, since the Go-side design is now well-grounded and the wrapper text is a small, mechanical follow-on edit).
 
-2. **Where charter is populated, precisely, and whether `Governance` alone is sufficient for D-09's gate.**
+2. **RESOLVED — Where charter is populated, precisely, and whether `Governance` alone is sufficient for D-09's gate.**
+   - *Resolution:* plan 163-02's `<interfaces>` block records the answer: `Charter.Governance` is machine-generated from `governanceDetectors` ("Linting: X. Testing: Y. ..."), so Linting/Testing/Formatting are mechanically gateable; Intent/Vision/Goals/KeyRisks remain prose and go to the brief as hard rules only.
    - What we know: `pkg/colony.Charter` has `Governance` as a free-text string field (`pkg/colony/colony.go:274`); `cmd/init_ceremony.go:76`'s `synthesizeLaunchBrief` takes a `*colony.Charter` parameter, implying charter is assembled/approved at init.
    - What's unclear: whether `Governance` is structured enough (e.g., contains literal tool names matching `governanceDetectors`' labels like "ESLint", "golangci-lint") to mechanically cross-check against detected tooling for D-09's gate, or whether it's free prose that only a human (or an LLM reading it) could interpret.
    - Recommendation: read `cmd/init_ceremony.go` and wherever `Charter.Governance` is populated (likely from `governanceDetectors`' output directly, given `cmd/init_research.go:117`'s proximity) before scoping the gate check's mechanical-vs-prose boundary. Only build the gate for whatever subset is genuinely structured; the rest goes to the brief as hard rules only, per D-09's two-part design.
 
-3. **Full sweep of all 27 agent files' "Global Protected Paths" sections.**
+3. **RESOLVED — Full sweep of all 27 agent files' "Global Protected Paths" sections.**
+   - *Resolution:* the planner ran the sweep (correcting assumption A4): 7 Claude agent files (plus mirrors) assert blanket `.aether/data/` protection outside the sampled section. Plan 163-03 task 3 edits only the 4 constrained doc surfaces and records the remaining agent-file surface as an explicit follow-up in its SUMMARY rather than silently expanding scope.
    - What we know: 3 of 27 sampled are identical and do not mention `.aether/data/`.
    - What's unclear: full consistency across all 27.
    - Recommendation: `grep -A5 "Global Protected Paths" .claude/agents/ant/*.md | sort -u` as a cheap planning-time verification step before deciding the doc-text lockstep surface is only `.aether/rules/aether-colony.md` + `.opencode/OPENCODE.md`.

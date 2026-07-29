@@ -1,8 +1,8 @@
 ---
 phase: 163
 slug: context-reaches-workers
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-29
 ---
@@ -75,10 +75,10 @@ Phase-gate extras: `go build ./cmd/aether`, `go vet ./...`, `aether integrity`.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have automated verify or Wave 0 dependency
-- [ ] No 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags; feedback latency < 30s per task
-- [ ] `nyquist_compliant: true` set when plans are written
+- [x] All tasks have automated verify or Wave 0 dependency — checker's Dimension 8 pass: 18/18 tasks, one `<automated>` command each
+- [x] No 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references — all 7 gaps assigned to tasks
+- [x] No watch-mode flags; feedback latency < 30s per task
+- [x] `nyquist_compliant: true` set
 
-**Approval:** pending
+**Approval:** approved 2026-07-29 (plan-checker: 1 mechanical blocker fixed, 3 warnings resolved)
