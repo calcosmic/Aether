@@ -137,10 +137,19 @@ Workers are assigned to castes based on task type:
 
 | Path | Reason |
 |------|--------|
-| `.aether/data/` | Colony state (COLONY_STATE.json, session files) |
+| `.aether/data/` (except sanctioned scratch subpaths below) | Colony state (COLONY_STATE.json, session files) |
 | `.aether/dreams/` | Dream journal entries |
 | `.aether/checkpoints/` | Session checkpoints |
 | `.aether/locks/` | File locks |
+
+**Sanctioned scratch subpaths** — a worker following its own task brief may write here; `protectedHookWriteReason` in `cmd/hook_cmds.go` allows exactly these four directory segments and nothing else under `.aether/data/`:
+
+| Path | A worker writes here when |
+|------|---------------------------|
+| `.aether/data/planning/` | Persisting planning artifacts during the plan workflow |
+| `.aether/data/phase-research/` | A scout writes phase domain research (`renderPhaseResearchBrief`) |
+| `.aether/data/survey/` | A surveyor writes territory survey artifacts |
+| `.aether/data/worker-debug/` | Persisting worker debug artifacts for diagnostics |
 
 ## Colony State
 

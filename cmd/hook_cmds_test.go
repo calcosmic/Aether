@@ -172,6 +172,41 @@ func TestHookPreToolUseAllowsSanctionedScratchDirs(t *testing.T) {
 	})
 }
 
+// TestSanctionedScratchDirsDocumented makes the "four documents describe the
+// same sanctioned scratch subpaths as the real enforcement code" claim
+// checkable rather than prose that drifts. Deleting any one sanctioned
+// subpath from any one of the four documents must fail this test.
+func TestSanctionedScratchDirsDocumented(t *testing.T) {
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("findRepoRoot: %v", err)
+	}
+
+	docs := []string{
+		filepath.Join(repoRoot, ".aether", "rules", "aether-colony.md"),
+		filepath.Join(repoRoot, ".claude", "rules", "aether-colony.md"),
+		filepath.Join(repoRoot, ".opencode", "OPENCODE.md"),
+		filepath.Join(repoRoot, ".aether", "references", "contracts", "protected-local-state-contract.md"),
+	}
+
+	for _, doc := range docs {
+		content, err := os.ReadFile(doc)
+		if err != nil {
+			t.Fatalf("read %s: %v", doc, err)
+		}
+		text := string(content)
+		for _, prefix := range sanctionedDataWritePrefixes {
+			// sanctionedDataWritePrefixes entries are host-relative match
+			// segments ("/.aether/data/planning/"); documentation names the
+			// repo-relative path without the leading slash.
+			repoRelative := strings.TrimPrefix(prefix, "/")
+			if !strings.Contains(text, repoRelative) {
+				t.Fatalf("%s does not name sanctioned scratch subpath %q", doc, repoRelative)
+			}
+		}
+	}
+}
+
 func TestHookPreToolUseBlocksMainBranchWhenRedirectActive(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
