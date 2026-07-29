@@ -367,17 +367,26 @@ Plans:
 **Plans**: TBD
 
 ### Phase 163: Context Reaches Workers
-**Goal**: Four things are confirmed disconnected from the active build path, independently verified by two review agents: the colony-prime context capsule, `survey-load`, phase research, and `suggest-analyze`. A fifth -- the approved colony charter -- has never reached a worker at all, despite governance detection being healthy. This phase reconnects `build-context.md` (the one build playbook Go currently omits) and carries context at manifest level, once per phase, rather than duplicating an 8K capsule across every worker dispatch -- which on an 8-worker phase would otherwise add roughly 16K tokens of overhead to a milestone about running cheaply.
+**Goal**: Everything the colony knows demonstrably arrives in a worker's actual prompt, measured and inspectable by a person. *(Goal corrected 2026-07-29 during planning, per Phase 163 D-07 and the phase research: two of the four "confirmed disconnected" items were already reconnected by commits `281dd34a` and `a2c8288e` on 2026-07-26 -- survey findings and phase research reach build workers today. `build-context.md` and `codexBuildPlaybooks()` were deleted in Phase 160 and stay dead.)* What is genuinely missing: the colony-prime context capsule never reaches a wrapper-spawned worker, the approved charter has never reached any worker, and `suggest-analyze` has never executed. This phase carries the capsule at manifest level -- once per build, not an 8K copy per dispatch -- adds charter to the same integrity-assessed pipeline plus a compliance gate, gives `suggest-analyze` its first caller, refines the existing `--print-brief` inspector into a ten-second checklist, and fixes the three worker write-contract contradictions folded in from Phase 160 (the `.aether/data/` guardrail workers were forced to evade, scout's read-only profile versus its own write instruction, and the `{}`-only artifacts schema).
 **Depends on**: Phase 160
 **Requirements**: CONTEXT-01, CONTEXT-02, CONTEXT-03, CONTEXT-04, CONTEXT-05, CONTEXT-06, CONTEXT-07, CONTEXT-08, CONTEXT-09
 **Success Criteria** (what must be TRUE):
-  1. `build-context.md` is part of the playbook sequence Go actually loads for a build (`codexBuildPlaybooks()`), where before it was the one playbook omitted
-  2. Running `aether build <n> --print-brief` (or equivalent) shows a human-readable dump of what a spawned worker's prompt actually contains -- a person can check context presence themselves, without reading Go source
-  3. That printed brief shows the context capsule, hive/pheromone sections, survey findings, phase research, and the approved charter's governance rules (e.g. "TDD required, ESLint enforced") all present -- where before an approved charter was invisible to every worker
-  4. `suggest-analyze` actually runs during a build and its pheromone suggestions appear for the user to approve or dismiss, visible in the build output
-  5. Total assembled context size is measured and reported (e.g. in the `--print-brief` output), so a person can see whether prompts are appropriately sized rather than needlessly stacked (colony-prime 8K + skills 8K + playbook injection 7K)
-  6. The same worker task, run once with this context path connected and once with it disconnected, produces a recorded before/after comparison on an inexpensive model
-**Plans**: TBD
+  1. A wrapper-spawned build worker receives the colony-prime context capsule, carried once at manifest level, and a named test fails when it stops arriving or starts duplicating per dispatch
+  2. Running `aether build <n> --print-brief` shows a sectioned checklist -- each context section present or absent, its size, and the total against a real budget -- with `--full` for the raw assembled prompt
+  3. That checklist shows the context capsule, pheromone signals, survey findings (with a staleness warning), phase research, and the approved charter's governance rules; an approved charter is no longer invisible to every worker, and an ignored mechanically-checkable charter rule surfaces as a gate finding at continue
+  4. `suggest-analyze` runs on every completed build, exactly once, and its suggestions appear once at closeout with copyable approve and dismiss commands
+  5. Total assembled context is measured against the budgets the codebase actually declares (colony-prime 8000/4000, skills 8000, phase research 3500, codegraph 2200) and bounded by an invariant test -- a guard on future additions, not a trimming programme *(the "playbook injection 7K" figure in the original criterion no longer exists; playbook injection was removed entirely)*
+  6. A worker told to write planning or research artifacts can do so without evading the guardrail, while colony state stays blocked; scout's permissions match its own brief; and the artifacts schema accepts named typed fields
+  7. *(CONTEXT-09, descoped per D-08)*: no staged benchmark. The inspector plus the phase's automated presence and budget tests are the evidence; real-world cheap-model validation happens through the user's own repos after the phase ships
+**Plans**: 6 plans
+
+Plans:
+- [ ] 163-01-PLAN.md -- CONTEXT-02/03: context capsule reaches wrapper workers, once, at manifest level (wave 1)
+- [ ] 163-02-PLAN.md -- CONTEXT-06/D-09: charter as a protected colony-prime section + charter compliance gate wired into continue (wave 1)
+- [ ] 163-03-PLAN.md -- D-04/D-05: sanctioned scratch-dir allowlist in the hook, scout permission fix, artifacts schema fix, aligned rules docs (wave 1)
+- [ ] 163-04-PLAN.md -- CONTEXT-01/04, D-07/D-10: survey staleness warning, survey+research presence tests, REQUIREMENTS.md rewording (wave 1)
+- [ ] 163-05-PLAN.md -- CONTEXT-05/D-11: suggest-analyze gets a live caller at build-finalize, tick-to-approve at closeout (wave 1)
+- [ ] 163-06-PLAN.md -- CONTEXT-07/08/09, D-06/D-03/D-08: --print-brief checklist default, --full, budget invariant (wave 2, needs 01, 02, 04)
 
 ### Phase 164: Research Feeds Planning
 **Goal**: Before a phase is planned, the Queen decides whether it needs research and states why; when it does, a research worker runs automatically and its findings persist and feed the plan directly -- restoring `v5.4.0` `plan.md` Step 3.6 "Phase Domain Research" choreography. Current `plan.md` contains zero references to Oracle; research is a standalone command the user must remember to run and paste in. Nothing in the review refuted this, and keeping the TS host (Phase 160's decision) makes it *easier*, not harder: `.aether/ts-host/src/confidence-loop.ts` (250 lines, with `maxIterations` already wired) is a working target-confidence loop. This phase uses it as-is; it does not reimplement a confidence loop.
