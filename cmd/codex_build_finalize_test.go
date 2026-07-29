@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 func TestNormalizeExternalBuildStatus(t *testing.T) {
@@ -1048,4 +1050,112 @@ func writeClaimFileForTest(t *testing.T, root, rel string) {
 	if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
 		t.Fatalf("write %s: %v", rel, err)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 2 (163-05): suggest-analyze wired into build finalize as its first
+// live caller. Deliberate-regression proof (removing the collectPendingSuggestions
+// call in runCodexBuildFinalize and re-running this suite) is recorded in
+// 163-05-SUMMARY.md, not duplicated here.
+// ---------------------------------------------------------------------------
+
+func TestBuildFinalizeCollectsSuggestAnalyzeResults(t *testing.T) {
+	t.Run("populates PendingSuggestions in COLONY_STATE.json", func(t *testing.T) {
+		root := setupExternalBuildAttemptTest(t)
+		if err := os.WriteFile(filepath.Join(root, ".env"), []byte("SECRET=abc123\n"), 0o644); err != nil {
+			t.Fatalf("write .env fixture: %v", err)
+		}
+		_, completion := prepareExternalBuildCompletion(t, root)
+
+		if _, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false); err != nil {
+			t.Fatalf("finalize: %v", err)
+		}
+
+		var reloaded colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &reloaded); err != nil {
+			t.Fatalf("reload colony state: %v", err)
+		}
+		if reloaded.PendingSuggestions == nil || len(*reloaded.PendingSuggestions) == 0 {
+			t.Error("expected pending_suggestions to be populated after a completed build with analysable patterns")
+		}
+	})
+
+	t.Run("result carries a pending suggestion count and the approve next action", func(t *testing.T) {
+		root := setupExternalBuildAttemptTest(t)
+		if err := os.WriteFile(filepath.Join(root, ".env"), []byte("SECRET=abc123\n"), 0o644); err != nil {
+			t.Fatalf("write .env fixture: %v", err)
+		}
+		_, completion := prepareExternalBuildCompletion(t, root)
+
+		result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+		if err != nil {
+			t.Fatalf("finalize: %v", err)
+		}
+		if result["suggest_analyze_ran"] != true {
+			t.Errorf("expected suggest_analyze_ran=true, got %v", result["suggest_analyze_ran"])
+		}
+		count, ok := result["pending_suggestion_count"].(int)
+		if !ok || count == 0 {
+			t.Fatalf("expected pending_suggestion_count > 0, got %v (%T)", result["pending_suggestion_count"], result["pending_suggestion_count"])
+		}
+		if result["pending_suggestions_next"] != "aether suggest-approve" {
+			t.Errorf("expected pending_suggestions_next to name the approve command, got %v", result["pending_suggestions_next"])
+		}
+	})
+
+	t.Run("a suggest-analyze failure leaves finalize succeeding with a zero count", func(t *testing.T) {
+		// collectPendingSuggestions is the exact seam runCodexBuildFinalize
+		// calls; testing it directly with no store initialized proves the
+		// non-blocking contract deterministically -- store can never be nil
+		// mid-finalize (finalize itself requires it), so this is the only
+		// way to force runSuggestAnalyze's one hard-error path without
+		// fabricating an inconsistent finalize fixture.
+		origStore := store
+		store = nil
+		defer func() { store = origStore }()
+
+		ran, count := collectPendingSuggestions(".")
+		if ran {
+			t.Error("expected ran=false when suggest-analyze cannot run (no store)")
+		}
+		if count != 0 {
+			t.Errorf("expected count=0 when suggest-analyze cannot run, got %d", count)
+		}
+
+		// Confirm the same non-blocking contract holds inside a real,
+		// successful finalize: a colony with no analysable pattern changes
+		// still finalizes successfully and reports zero pending suggestions
+		// rather than an error.
+		store = origStore
+		root := setupExternalBuildAttemptTest(t)
+		_, completion := prepareExternalBuildCompletion(t, root)
+		result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+		if err != nil {
+			t.Fatalf("finalize with no analysable patterns should still succeed: %v", err)
+		}
+		if result["suggest_analyze_ran"] != true {
+			t.Errorf("expected suggest_analyze_ran=true (ran, found nothing), got %v", result["suggest_analyze_ran"])
+		}
+	})
+
+	t.Run("suggest-analyze is invoked exactly once per finalize, never per dispatch", func(t *testing.T) {
+		root := setupExternalBuildAttemptTest(t)
+		if err := os.WriteFile(filepath.Join(root, ".env"), []byte("SECRET=abc123\n"), 0o644); err != nil {
+			t.Fatalf("write .env fixture: %v", err)
+		}
+		_, completion := prepareExternalBuildCompletion(t, root)
+		if len(completion.Dispatches) < 2 {
+			t.Fatalf("fixture must have multiple dispatches to prove per-finalize (not per-dispatch) invocation, got %d", len(completion.Dispatches))
+		}
+
+		before := suggestAnalyzeInvocationCount
+		if _, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false); err != nil {
+			t.Fatalf("finalize: %v", err)
+		}
+		after := suggestAnalyzeInvocationCount
+
+		if got := after - before; got != 1 {
+			t.Errorf("expected runSuggestAnalyze to be invoked exactly once for %d dispatches, got %d invocations", len(completion.Dispatches), got)
+		}
+	})
 }

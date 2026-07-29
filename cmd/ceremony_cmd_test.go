@@ -352,6 +352,172 @@ func TestCeremonyPlanCloseoutRendersPhaseDetails(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Task 3 (163-05): build closeout shows pending suggestions once, at the
+// end, with copyable approve/dismiss commands (D-11's tick-to-approve
+// presentation, at the one moment D-11 permits).
+// ---------------------------------------------------------------------------
+
+func TestCeremonyCloseoutRendersPendingSuggestionsBlock(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Restore ceremony"
+	pending := []colony.PendingSuggestion{
+		{
+			ID:          "sig_1",
+			Type:        "REDIRECT",
+			Content:     "never commit secrets or .env files to version control",
+			Reason:      "detected a tracked .env file",
+			ContentHash: "sha256:abc123",
+			CreatedAt:   "2026-07-29T00:00:00Z",
+			Dismissed:   false,
+		},
+	}
+	state := colony.ColonyState{
+		Version:            "3.0",
+		Goal:               &goal,
+		State:              colony.StateBUILT,
+		CurrentPhase:       2,
+		Milestone:          "Open Chambers",
+		PendingSuggestions: &pending,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Foundation"},
+			{ID: 2, Name: "Card Redesign"},
+		}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"dispatch_manifest": ceremonyTestManifest(),
+	})
+
+	_, visual := renderCeremonyCloseout("build", completionFile)
+
+	for _, want := range []string{
+		"Suggestions From This Build",
+		"[REDIRECT] never commit secrets or .env files to version control",
+		"detected a tracked .env file",
+		"sig_1",
+	} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("closeout missing %q\n%s", want, visual)
+		}
+	}
+}
+
+func TestCeremonyCloseoutNamesApproveAndDismissCommandsWithRealID(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Restore ceremony"
+	pending := []colony.PendingSuggestion{
+		{ID: "sig_real_id_42", Type: "FEEDBACK", Content: "high TODO density", ContentHash: "sha256:def456"},
+	}
+	state := colony.ColonyState{
+		Version:            "3.0",
+		Goal:               &goal,
+		State:              colony.StateBUILT,
+		CurrentPhase:       1,
+		PendingSuggestions: &pending,
+		Plan:               colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Foundation"}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"dispatch_manifest": ceremonyTestManifest(),
+	})
+
+	_, visual := renderCeremonyCloseout("build", completionFile)
+
+	if !strings.Contains(visual, "aether suggest-approve --approve sig_real_id_42") {
+		t.Fatalf("closeout missing a copyable approve command with the real ID\n%s", visual)
+	}
+	if !strings.Contains(visual, "aether suggest-approve --dismiss sig_real_id_42") {
+		t.Fatalf("closeout missing a copyable dismiss command with the real ID\n%s", visual)
+	}
+}
+
+func TestCeremonyCloseoutOmitsDismissedSuggestions(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Restore ceremony"
+	pending := []colony.PendingSuggestion{
+		{ID: "sig_active", Type: "FEEDBACK", Content: "an active suggestion", ContentHash: "sha256:aaa", Dismissed: false},
+		{ID: "sig_dismissed", Type: "FEEDBACK", Content: "a dismissed suggestion", ContentHash: "sha256:bbb", Dismissed: true},
+	}
+	state := colony.ColonyState{
+		Version:            "3.0",
+		Goal:               &goal,
+		State:              colony.StateBUILT,
+		CurrentPhase:       1,
+		PendingSuggestions: &pending,
+		Plan:               colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Foundation"}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"dispatch_manifest": ceremonyTestManifest(),
+	})
+
+	_, visual := renderCeremonyCloseout("build", completionFile)
+
+	if !strings.Contains(visual, "an active suggestion") {
+		t.Fatalf("closeout should show the active suggestion\n%s", visual)
+	}
+	if strings.Contains(visual, "a dismissed suggestion") {
+		t.Fatalf("closeout should not show the dismissed suggestion\n%s", visual)
+	}
+	if strings.Contains(visual, "sig_dismissed") {
+		t.Fatalf("closeout should not name the dismissed suggestion's ID\n%s", visual)
+	}
+}
+
+func TestCeremonyCloseoutOmitsBlockAndHeadingWithNoPendingSuggestions(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Restore ceremony"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Foundation"}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"dispatch_manifest": ceremonyTestManifest(),
+	})
+
+	_, visual := renderCeremonyCloseout("build", completionFile)
+
+	if strings.Contains(visual, "Suggestions From This Build") {
+		t.Fatalf("closeout should not render the suggestions heading with no pending suggestions\n%s", visual)
+	}
+	if strings.Contains(visual, "suggest-approve") {
+		t.Fatalf("closeout should not mention suggest-approve with no pending suggestions\n%s", visual)
+	}
+}
+
 func ceremonyTestManifest() map[string]interface{} {
 	return map[string]interface{}{
 		"phase":      2,

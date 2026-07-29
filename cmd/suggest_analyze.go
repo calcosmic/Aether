@@ -30,158 +30,183 @@ const largeFileLineThreshold = 500
 // FEEDBACK suggestion is generated about dependency count.
 const highDependencyThreshold = 20
 
+// suggestAnalyzeInvocationCount tracks how many times runSuggestAnalyze has
+// executed in the current process. It exists purely as a test seam: tests
+// assert non-blocking callers (like build finalize) invoke it exactly once
+// per operation, not once per worker dispatch inside a loop -- the exact
+// regression class this project has shipped before. Production code never
+// reads this value.
+var suggestAnalyzeInvocationCount int
+
 var suggestAnalyzeCmd = &cobra.Command{
 	Use:   "suggest-analyze",
 	Short: "Analyze codebase for patterns worth capturing as pheromone suggestions",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		target, _ := cmd.Flags().GetString("target")
 
-		// Load active colony state. If this fails, return ok:true with empty
-		// suggestions (non-blocking per RESEARCH Pitfall 3).
-		cs, err := loadActiveColonyState()
+		result, err := runSuggestAnalyze(target, dryRun)
 		if err != nil {
-			outputOK(map[string]interface{}{
-				"suggestions":   []interface{}{},
-				"total":         0,
+			outputErrorMessage(err.Error())
+			return nil
+		}
+		outputOK(result)
+		return nil
+	},
+}
+
+// runSuggestAnalyze is the entire suggest-analyze pattern-detection pipeline,
+// factored out of the cobra RunE so it can be called from any live caller
+// (the CLI command itself, and cmd/codex_build_finalize.go's end-of-build
+// hook). Content sanitization (prompt-injection rejection) always runs
+// inside this function -- callers must not re-implement it on top of this.
+//
+// Returns a non-nil error only for a hard precondition failure (no store
+// initialized). A colony-state load failure is treated as non-blocking per
+// RESEARCH Pitfall 3: it returns an empty, successful result rather than an
+// error, so a suggestion-engine problem never fails a build or the CLI.
+func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, error) {
+	suggestAnalyzeInvocationCount++
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
+
+	// Load active colony state. If this fails, return ok:true with empty
+	// suggestions (non-blocking per RESEARCH Pitfall 3).
+	cs, err := loadActiveColonyState()
+	if err != nil {
+		return map[string]interface{}{
+			"suggestions":   []interface{}{},
+			"total":         0,
+			"new_count":     0,
+			"skipped_dedup": 0,
+			"dry_run":       dryRun,
+		}, nil
+	}
+
+	// --- Change Detection (D-01) ---
+	currentHead, err := execGitHead(target)
+	if err != nil {
+		// If we can't get HEAD, proceed with analysis anyway.
+		currentHead = ""
+	}
+
+	if cs.LastAnalyzeCommit != nil && currentHead != "" && *cs.LastAnalyzeCommit != "" {
+		changedCount, err := countChangedFiles(target, *cs.LastAnalyzeCommit, currentHead)
+		if err == nil && changedCount < changeThreshold {
+			// Below threshold: skip analysis, return existing pending suggestions.
+			existing := pendingSuggestionsToMap(cs.PendingSuggestions)
+			return map[string]interface{}{
+				"suggestions":   existing,
+				"total":         len(existing),
 				"new_count":     0,
 				"skipped_dedup": 0,
 				"dry_run":       dryRun,
-			})
-			return nil
+			}, nil
 		}
+	}
 
-		// --- Change Detection (D-01) ---
-		currentHead, err := execGitHead(target)
+	// --- Pattern Detection ---
+	governance := detectGovernance(target)
+	dirClass := classifyDirectory(target)
+	techStack := parseDependencyFiles(target)
+
+	// Get the 25 base pheromone suggestions.
+	baseSuggestions := generatePheromoneSuggestions(target, governance, dirClass, techStack)
+
+	// Add build-specific extra patterns.
+	extraSuggestions := buildSpecificPatterns(target, techStack)
+	allSuggestions := append(baseSuggestions, extraSuggestions...)
+
+	// --- Deduplication (D-07, D-08) ---
+	activeHashSet, err := loadActivePheromoneHashes()
+	if err != nil {
+		activeHashSet = make(map[string]struct{})
+	}
+
+	var filtered []pheromoneSuggestion
+	skippedCount := 0
+	for _, sug := range allSuggestions {
+		contentHash := "sha256:" + sha256Sum(sug.Content)
+		key := sug.Type + ":" + contentHash
+		if _, exists := activeHashSet[key]; exists {
+			skippedCount++
+			continue
+		}
+		filtered = append(filtered, sug)
+	}
+
+	// --- Sanitize (T-74-01) ---
+	var sanitized []pheromoneSuggestion
+	for _, sug := range filtered {
+		_, err := colony.SanitizeSignalContent(sug.Content)
 		if err != nil {
-			// If we can't get HEAD, proceed with analysis anyway.
-			currentHead = ""
+			continue // skip unsanitizable content
 		}
+		sanitized = append(sanitized, sug)
+	}
 
-		if cs.LastAnalyzeCommit != nil && currentHead != "" && *cs.LastAnalyzeCommit != "" {
-			changedCount, err := countChangedFiles(target, *cs.LastAnalyzeCommit, currentHead)
-			if err == nil && changedCount < changeThreshold {
-				// Below threshold: skip analysis, return existing pending suggestions.
-				existing := pendingSuggestionsToMap(cs.PendingSuggestions)
-				outputOK(map[string]interface{}{
-					"suggestions":   existing,
-					"total":         len(existing),
-					"new_count":     0,
-					"skipped_dedup": 0,
-					"dry_run":       dryRun,
-				})
-				return nil
-			}
-		}
+	// Build output suggestions as maps.
+	newCount := len(sanitized)
+	var resultSuggestions []map[string]interface{}
+	for _, sug := range sanitized {
+		contentHash := "sha256:" + sha256Sum(sug.Content)
+		resultSuggestions = append(resultSuggestions, map[string]interface{}{
+			"type":         sug.Type,
+			"content":      sug.Content,
+			"reason":       sug.Reason,
+			"content_hash": contentHash,
+		})
+	}
 
-		// --- Pattern Detection ---
-		governance := detectGovernance(target)
-		dirClass := classifyDirectory(target)
-		techStack := parseDependencyFiles(target)
-
-		// Get the 25 base pheromone suggestions.
-		baseSuggestions := generatePheromoneSuggestions(target, governance, dirClass, techStack)
-
-		// Add build-specific extra patterns.
-		extraSuggestions := buildSpecificPatterns(target, techStack)
-		allSuggestions := append(baseSuggestions, extraSuggestions...)
-
-		// --- Deduplication (D-07, D-08) ---
-		activeHashSet, err := loadActivePheromoneHashes()
-		if err != nil {
-			activeHashSet = make(map[string]struct{})
-		}
-
-		var filtered []pheromoneSuggestion
-		skippedCount := 0
-		for _, sug := range allSuggestions {
-			contentHash := "sha256:" + sha256Sum(sug.Content)
-			key := sug.Type + ":" + contentHash
-			if _, exists := activeHashSet[key]; exists {
-				skippedCount++
-				continue
-			}
-			filtered = append(filtered, sug)
-		}
-
-		// --- Sanitize (T-74-01) ---
-		var sanitized []pheromoneSuggestion
-		for _, sug := range filtered {
-			_, err := colony.SanitizeSignalContent(sug.Content)
-			if err != nil {
-				continue // skip unsanitizable content
-			}
-			sanitized = append(sanitized, sug)
-		}
-
-		// Build output suggestions as maps.
-		newCount := len(sanitized)
-		var resultSuggestions []map[string]interface{}
+	// --- Persist (unless dry-run) ---
+	if !dryRun {
+		now := time.Now().UTC().Format(time.RFC3339)
+		var pending []colony.PendingSuggestion
 		for _, sug := range sanitized {
 			contentHash := "sha256:" + sha256Sum(sug.Content)
-			resultSuggestions = append(resultSuggestions, map[string]interface{}{
-				"type":         sug.Type,
-				"content":      sug.Content,
-				"reason":       sug.Reason,
-				"content_hash": contentHash,
+			pending = append(pending, colony.PendingSuggestion{
+				ID:          generateSignalID(),
+				Type:        sug.Type,
+				Content:     sug.Content,
+				Reason:      sug.Reason,
+				ContentHash: contentHash,
+				CreatedAt:   now,
+				Dismissed:   false,
 			})
 		}
 
-		// --- Persist (unless dry-run) ---
-		if !dryRun {
-			now := time.Now().UTC().Format(time.RFC3339)
-			var pending []colony.PendingSuggestion
-			for _, sug := range sanitized {
-				contentHash := "sha256:" + sha256Sum(sug.Content)
-				pending = append(pending, colony.PendingSuggestion{
-					ID:          generateSignalID(),
-					Type:        sug.Type,
-					Content:     sug.Content,
-					Reason:      sug.Reason,
-					ContentHash: contentHash,
-					CreatedAt:   now,
-					Dismissed:   false,
-				})
+		// Merge with existing pending suggestions: keep any that aren't in the
+		// new set (by content hash comparison).
+		if cs.PendingSuggestions != nil {
+			existingHashes := make(map[string]struct{})
+			for _, p := range pending {
+				existingHashes[p.ContentHash] = struct{}{}
 			}
-
-			// Merge with existing pending suggestions: keep any that aren't in the
-			// new set (by content hash comparison).
-			if cs.PendingSuggestions != nil {
-				existingHashes := make(map[string]struct{})
-				for _, p := range pending {
-					existingHashes[p.ContentHash] = struct{}{}
+			for _, old := range *cs.PendingSuggestions {
+				if _, exists := existingHashes[old.ContentHash]; !exists {
+					pending = append(pending, old)
 				}
-				for _, old := range *cs.PendingSuggestions {
-					if _, exists := existingHashes[old.ContentHash]; !exists {
-						pending = append(pending, old)
-					}
-				}
-			}
-
-			cs.PendingSuggestions = &pending
-			cs.LastAnalyzeCommit = &currentHead
-
-			stateData, err := json.Marshal(cs)
-			if err == nil {
-				_ = store.AtomicWrite("COLONY_STATE.json", stateData)
 			}
 		}
 
-		outputOK(map[string]interface{}{
-			"suggestions":   resultSuggestions,
-			"total":         len(resultSuggestions),
-			"new_count":     newCount,
-			"skipped_dedup": skippedCount,
-			"dry_run":       dryRun,
-		})
-		return nil
-	},
+		cs.PendingSuggestions = &pending
+		cs.LastAnalyzeCommit = &currentHead
+
+		stateData, err := json.Marshal(cs)
+		if err == nil {
+			_ = store.AtomicWrite("COLONY_STATE.json", stateData)
+		}
+	}
+
+	return map[string]interface{}{
+		"suggestions":   resultSuggestions,
+		"total":         len(resultSuggestions),
+		"new_count":     newCount,
+		"skipped_dedup": skippedCount,
+		"dry_run":       dryRun,
+	}, nil
 }
 
 func init() {
