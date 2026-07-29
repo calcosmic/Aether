@@ -143,6 +143,11 @@ None - no external service configuration required.
 - All three tasks' automated verification commands pass: `go test ./cmd -run 'TestPrintBrief|TestAssembledContextStaysUnderBudgetCeiling' -count=1`, `go test ./... -count=1 -race` (entire repo, all packages green), and `go build ./cmd/aether && go vet ./...` all exit 0.
 - Manual validation from VALIDATION.md ("on a real colony, the checklist answers 'did the charter arrive?' within ten seconds") could not be performed in this isolated worktree — there is no initialized colony state here — and is explicitly deferred to the user per the plan's own D-08 evidence framing.
 
+## Self-Check: PASSED
+
+All created/modified files confirmed present on disk; all four commit hashes
+(`4b9d1ae5`, `05d866dd`, `d1c71e49`, `afa07bdb`) confirmed in `git log`.
+
 ---
 *Phase: 163-context-reaches-workers*
 *Completed: 2026-07-29*
