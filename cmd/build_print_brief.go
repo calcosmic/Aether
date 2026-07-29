@@ -57,6 +57,12 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 
 	startedAt := time.Now()
 
+	// The context capsule is manifest-level, not per-dispatch (CONTEXT-07): it
+	// is resolved once here for display only. Nothing below may write it into
+	// single[0].Brief or any dispatch — that would reintroduce the per-dispatch
+	// duplication plan 01 removed.
+	capsule := resolveCodexWorkerContext()
+
 	matched := 0
 	var out strings.Builder
 
@@ -77,9 +83,10 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		out.WriteString(fmt.Sprintf("\n%s  %s  (%s)\n", casteEmoji(dispatch.Caste), dispatch.Name, dispatch.Caste))
 		out.WriteString(strings.Repeat("━", 72))
 		out.WriteString("\n\n")
-		out.WriteString(brief)
-		out.WriteString("\n")
-		out.WriteString(renderBriefComposition(brief))
+
+		// D-06: the checklist is the default and, for now, the only output —
+		// the --full raw-prompt escape hatch lands in the next task.
+		out.WriteString(renderBriefChecklist(single[0], brief, capsule))
 		out.WriteString("\n")
 	}
 
@@ -162,7 +169,7 @@ var briefOwnedSections = map[string]bool{
 	"Pheromone Signals":        true,
 	"Territory Survey":         true,
 	"Phase Research":           true,
-	"Codegraph Context":        true,
+	"Codebase Graph Context":   true,
 	"Previous Worker Handoffs": true,
 	"Expected Output":          true,
 }
@@ -221,6 +228,153 @@ func buildPrintBriefOptions(workerTimeout time.Duration, force, light, heavy boo
 		HeavyFlag:         heavy,
 		VerificationDepth: verificationDepth,
 	}
+}
+
+// briefTaskContentAllowanceChars bounds everything an assembled worker
+// context carries that has no named budget constant of its own: assignment,
+// dependencies, constraints, hints, success criteria, pheromone signals,
+// previous worker handoffs, and the territory survey pointer list. This is a
+// judgement call, not a measurement — it exists so the budget ceiling
+// (D-03's growth guard) has a concrete number to sum against, distinct from
+// the grounding budgets (capsule, skills, research, codegraph) that already
+// declare their own constants. If real usage shows this is consistently too
+// tight or too loose, that is a finding to raise, not a number to creep.
+const briefTaskContentAllowanceChars = 6000
+
+// assembledContextBudgetCeilingChars is the derived ceiling for the total
+// assembled worker context: the sum of every named budget constant plus the
+// task-content allowance above. It is derived, never a literal — a literal
+// would silently drift the moment any budget constant moves.
+func assembledContextBudgetCeilingChars() int {
+	return colonyPrimeBudgetChars +
+		skillInjectNormalBudgetChars +
+		phaseResearchBriefBudgetChars +
+		codegraphWorkerContextBudgetChars +
+		briefTaskContentAllowanceChars
+}
+
+// briefChecklistRow is one line of the D-06 inspector checklist: a named
+// context section, whether it arrived, its size, and an optional annotation
+// (used for the survey staleness notice).
+type briefChecklistRow struct {
+	Label   string
+	Present bool
+	Chars   int
+	Note    string
+}
+
+// locateChecklistSection finds an exact heading line (e.g. "## Phase
+// Research" or "### Territory Survey") inside text and returns whether it is
+// present, plus the character span from that heading through the next "## "
+// or "### " heading line, or the end of the text. Unlike splitBriefSections,
+// this does not depend on the heading being registered in
+// briefOwnedSections, so it works for headings the checklist needs to detect
+// (the charter heading inside the capsule, the survey's own "### " heading)
+// without needing that registry's exact spelling to match. Named distinctly
+// from oracle_loop.go's extractBriefSection (a different, single-value
+// helper) to avoid collision.
+func locateChecklistSection(text, heading string) (present bool, chars int) {
+	idx := strings.Index(text, heading)
+	if idx < 0 {
+		return false, 0
+	}
+	rest := text[idx:]
+	pieces := strings.SplitAfter(rest, "\n")
+	if len(pieces) == 0 {
+		return true, len(rest)
+	}
+	size := len(pieces[0])
+	for _, piece := range pieces[1:] {
+		if strings.HasPrefix(piece, "## ") || strings.HasPrefix(piece, "### ") {
+			break
+		}
+		size += len(piece)
+	}
+	return true, size
+}
+
+// checklistRowFor builds a checklist row by locating heading inside brief.
+func checklistRowFor(brief, label, heading string) briefChecklistRow {
+	present, chars := locateChecklistSection(brief, heading)
+	return briefChecklistRow{Label: label, Present: present, Chars: chars}
+}
+
+// renderBriefChecklist is the default `--print-brief` output (D-06): a
+// ten-second, sectioned answer to "which context arrived and which did not,"
+// with sizes and a total against a real, derived budget. It reports what the
+// worker would actually receive — brief sections plus the manifest-level
+// capsule and skill section read for display only — never what the database
+// contains, so a section the runtime silently stopped delivering shows up as
+// ABSENT here even if the state that would produce it still exists.
+func renderBriefChecklist(dispatch codexBuildDispatch, brief, capsule string) string {
+	var rows []briefChecklistRow
+
+	taskChars := 0
+	taskAnyPresent := false
+	for _, section := range splitBriefSections(brief) {
+		switch section.Name {
+		case "Assignment", "Phase Objective", "Phase Success Criteria",
+			"Task Success Criteria", "Dependencies", "Task Constraints",
+			"Constraints", "Hints":
+			taskChars += section.Chars
+			taskAnyPresent = true
+		}
+	}
+	rows = append(rows, briefChecklistRow{Label: "Assignment & Task Content", Present: taskAnyPresent, Chars: taskChars})
+
+	territoryRow := checklistRowFor(brief, "Territory Survey", "### Territory Survey")
+	if territoryRow.Present {
+		switch {
+		case strings.Contains(brief, "STALE MAP WARNING"):
+			territoryRow.Note = "STALE MAP WARNING — codebase map may not match the tree, run /ant-colonize"
+		case strings.Contains(brief, "never been surveyed"):
+			territoryRow.Note = "territory has never been surveyed"
+		}
+	}
+	rows = append(rows, territoryRow)
+
+	rows = append(rows, checklistRowFor(brief, "Phase Research", "## Phase Research"))
+	rows = append(rows, checklistRowFor(brief, "Codegraph Context", "## Codebase Graph Context"))
+	rows = append(rows, checklistRowFor(brief, "Pheromone Signals", "## Pheromone Signals"))
+	rows = append(rows, checklistRowFor(brief, "Previous Worker Handoffs", "## Previous Worker Handoffs"))
+	rows = append(rows, checklistRowFor(brief, "Expected Output", "## Expected Output"))
+
+	capsulePresent := strings.TrimSpace(capsule) != ""
+	rows = append(rows, briefChecklistRow{Label: "Context Capsule (manifest-level)", Present: capsulePresent, Chars: len(capsule)})
+
+	charterPresent, charterChars := locateChecklistSection(capsule, "## Charter -- Binding Rules")
+	rows = append(rows, briefChecklistRow{Label: "Charter (inside capsule)", Present: charterPresent, Chars: charterChars})
+
+	var b strings.Builder
+	b.WriteString(strings.Repeat("─", 72))
+	b.WriteString("\n  CONTEXT CHECKLIST\n")
+	b.WriteString(strings.Repeat("─", 72))
+	b.WriteString("\n")
+
+	for _, row := range rows {
+		marker := "ABSENT"
+		if row.Present {
+			marker = "present"
+		}
+		b.WriteString(fmt.Sprintf("  %-34s %-9s %6d\n", truncateSectionName(row.Label, 34), marker, row.Chars))
+		if row.Note != "" {
+			b.WriteString(fmt.Sprintf("    ⚠ %s\n", row.Note))
+		}
+	}
+
+	skillChars := len(dispatch.SkillSection)
+	total := len(capsule) + len(brief) + skillChars
+	ceiling := assembledContextBudgetCeilingChars()
+	pct := 0.0
+	if ceiling > 0 {
+		pct = float64(total) / float64(ceiling) * 100
+	}
+
+	b.WriteString(strings.Repeat("─", 72))
+	b.WriteString(fmt.Sprintf("\n  %-34s %6d / %-6d %5.1f%%\n", "TOTAL (capsule+brief+skills)", total, ceiling, pct))
+	b.WriteString("\n  Run with --full to print the raw assembled prompt.\n")
+
+	return b.String()
 }
 
 var _ = colony.PhaseModeProduction
