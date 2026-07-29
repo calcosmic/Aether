@@ -246,6 +246,12 @@ func resolveSurveySection() string {
 
 	var b strings.Builder
 	b.WriteString("### Territory Survey\n\n")
+	// Say how old the map is before handing over the pointer list (D-10) — a
+	// worker (and the brief inspector) should never ground on the survey
+	// without knowing whether it is fresh or stale.
+	if notice := surveyStalenessNotice(); notice != "" {
+		b.WriteString(notice)
+	}
 	// Real repo-relative paths, not bare filenames. A worker handed "BLUEPRINT.md"
 	// with no directory cannot resolve it; ".aether/data/survey/BLUEPRINT.md" it
 	// can open directly. The colony data dir is always <root>/.aether/data by
