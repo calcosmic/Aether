@@ -37,10 +37,21 @@ overwritten** by `aether update`, `aether publish`, or any automated operation.
 
 | Path | Contents | Why Protected |
 |------|----------|---------------|
-| `.aether/data/` | Colony state, pheromones, midden, handoffs | This is the colony's working memory |
+| `.aether/data/` (except sanctioned scratch subpaths below) | Colony state, pheromones, midden, handoffs | This is the colony's working memory |
 | `.aether/dreams/` | Dream journal entries | User-created session notes |
 | `.aether/checkpoints/` | Session checkpoints | Recovery points for paused colonies |
 | `.aether/locks/` | File locks | Concurrency control state |
+
+**Sanctioned scratch subpaths:** `.aether/data/planning/`, `.aether/data/phase-research/`,
+`.aether/data/survey/`, and `.aether/data/worker-debug/` are exempt from the
+blanket protection above — a worker following its own task brief is expected
+to write here (e.g. a scout persisting phase research, a surveyor persisting
+territory survey artifacts). `protectedHookWriteReason`
+(`cmd/hook_cmds.go`) enforces this as an exact-subpath allowlist on Claude
+Code via the `PreToolUse` hook; every other path under `.aether/data/` stays
+blocked. Everything else in this contract's "never overwritten" guarantee is
+unaffected — `aether update`/`aether publish` still never touch any file
+under `.aether/data/`, sanctioned or not.
 
 ### What Lives in `.aether/data/`
 
@@ -53,7 +64,10 @@ overwritten** by `aether update`, `aether publish`, or any automated operation.
 | `assumptions.json` | Plan assumptions |
 | `behavior-observations.jsonl` | Raw behavioral observations |
 | `midden/midden.json` | Failure tracking |
-| `survey/` | Territory survey results |
+| `planning/` | Planning artifacts a worker persists during the plan workflow (sanctioned scratch subpath, worker-writable) |
+| `phase-research/` | Phase domain research written by a scout (sanctioned scratch subpath, worker-writable) |
+| `survey/` | Territory survey results (sanctioned scratch subpath, worker-writable) |
+| `worker-debug/` | Worker debug artifacts for diagnostics (sanctioned scratch subpath, worker-writable) |
 | `session.json` | Current session metadata |
 | `handoffs/worker-handoffs.json` | Worker relay notes |
 
@@ -76,7 +90,12 @@ create or overwrite:
 
 The update command must never overwrite, delete, or modify:
 
-1. Any file in `.aether/data/`
+1. Any file in `.aether/data/` — including the sanctioned scratch subpaths
+   (`planning/`, `phase-research/`, `survey/`, `worker-debug/`). Those
+   subpaths are worker-writable via the `PreToolUse` hook allowlist, but that
+   is a separate protection domain from this update-safety guarantee: `aether
+   update`/`aether publish` never touch any file under `.aether/data/`,
+   sanctioned or not.
 2. Any file in `.aether/dreams/`
 3. Any file in `.aether/checkpoints/`
 4. Any file in `.aether/locks/`
