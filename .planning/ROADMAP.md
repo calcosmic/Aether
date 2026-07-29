@@ -381,11 +381,11 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 163-01-PLAN.md -- CONTEXT-02/03: context capsule reaches wrapper workers, once, at manifest level (wave 1)
-- [ ] 163-02-PLAN.md -- CONTEXT-06/D-09: charter as a protected colony-prime section + charter compliance gate wired into continue (wave 1)
-- [ ] 163-03-PLAN.md -- D-04/D-05: sanctioned scratch-dir allowlist in the hook, scout permission fix, artifacts schema fix, aligned rules docs (wave 1)
-- [ ] 163-04-PLAN.md -- CONTEXT-01/04, D-07/D-10: survey staleness warning, survey+research presence tests, REQUIREMENTS.md rewording (wave 1)
-- [ ] 163-05-PLAN.md -- CONTEXT-05/D-11: suggest-analyze gets a live caller at build-finalize, tick-to-approve at closeout (wave 1)
+- [x] 163-01-PLAN.md -- CONTEXT-02/03: context capsule reaches wrapper workers, once, at manifest level (wave 1)
+- [x] 163-02-PLAN.md -- CONTEXT-06/D-09: charter as a protected colony-prime section + charter compliance gate wired into continue (wave 1)
+- [x] 163-03-PLAN.md -- D-04/D-05: sanctioned scratch-dir allowlist in the hook, scout permission fix, artifacts schema fix, aligned rules docs (wave 1)
+- [x] 163-04-PLAN.md -- CONTEXT-01/04, D-07/D-10: survey staleness warning, survey+research presence tests, REQUIREMENTS.md rewording (wave 1)
+- [x] 163-05-PLAN.md -- CONTEXT-05/D-11: suggest-analyze gets a live caller at build-finalize, tick-to-approve at closeout (wave 1)
 - [ ] 163-06-PLAN.md -- CONTEXT-07/08/09, D-06/D-03/D-08: --print-brief checklist default, --full, budget invariant (wave 2, needs 01, 02, 04)
 
 ### Phase 164: Research Feeds Planning
@@ -516,7 +516,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 160. Fail Loudly | v1.25 | 8/8 | Complete   | 2026-07-27 |
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
-| 163. Context Reaches Workers | v1.25 | 0/TBD | Not started | - |
+| 163. Context Reaches Workers | v1.25 | 5/6 | In Progress|  |
 | 164. Research Feeds Planning | v1.25 | 0/TBD | Not started | - |
 | 165. Core Lifecycle Commands | v1.25 | 0/TBD | Not started | - |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
