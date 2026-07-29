@@ -2955,6 +2955,28 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 	}
 	checks = append(checks, antiPatternExecutedCheck)
 
+	// charter_compliance / charter_compliance_executed gates — the live
+	// caller for CONTEXT-06/D-09: Aether's recurring defect is producers
+	// with no callers (18 of 25 milestones have been framed around
+	// restoring something previously marked done), and this comment is
+	// what makes a future reader check the call site is still here.
+	// charter_compliance_executed is in alwaysRunGates, so shouldSkipGate
+	// already returns false for it; only the findings gate participates in
+	// skip logic.
+	charterComplianceCheck, charterComplianceExecutedCheck := checkCharterComplianceGate(verification.Steps)
+	if shouldSkipGate(priorGateResults, "charter_compliance") {
+		checks = append(checks, gateCheck{Name: "charter_compliance", Passed: true, Detail: "skipped: previously passed"})
+	} else {
+		if !charterComplianceCheck.Passed {
+			blockers = append(blockers, charterComplianceCheck.Detail)
+		}
+		checks = append(checks, charterComplianceCheck)
+	}
+	if !charterComplianceExecutedCheck.Passed {
+		blockers = append(blockers, charterComplianceExecutedCheck.Detail)
+	}
+	checks = append(checks, charterComplianceExecutedCheck)
+
 	// Record failures/successes in circuit breaker (LOOP-01)
 	for _, c := range checks {
 		key := gateRetryKey(phase.ID, c.Name)

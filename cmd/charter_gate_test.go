@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -208,4 +209,164 @@ func TestCharterComplianceGateAlwaysRuns(t *testing.T) {
 	if !alwaysRunGates["charter_compliance_executed"] {
 		t.Fatal("charter_compliance_executed must be registered in alwaysRunGates")
 	}
+}
+
+// These tests prove the charter compliance gate has a live caller inside the
+// continue gate pipeline (task 3), not just a working
+// checkCharterComplianceGate producer in isolation -- mirroring
+// continue_antipattern_gate_test.go's wiring proof for the anti_pattern gate.
+
+func TestContinueCharterComplianceGateWiredIntoPipeline(t *testing.T) {
+	t.Run("BlocksOnUnexercisedTool", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		if err := os.WriteFile(filepath.Join(tmpDir, ".golangci.yml"), []byte("run:\n"), 0644); err != nil {
+			t.Fatalf("write golangci config: %v", err)
+		}
+
+		state := colony.ColonyState{Charter: &colony.Charter{Governance: "Linting: golangci-lint"}}
+		if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+			t.Fatal(err)
+		}
+
+		phase, manifest, assessment := minimalContinuePhaseAndAssessment()
+		verification := codexContinueVerificationReport{
+			ChecksPassed: true,
+			Passed:       true,
+			Claims:       codexClaimVerification{Present: true, Passed: true},
+			Steps: []codexVerificationStep{
+				{Name: "tests", Command: "go test ./..."},
+			},
+		}
+
+		report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), nil)
+
+		var found *gateCheck
+		for i := range report.Checks {
+			if report.Checks[i].Name == "charter_compliance" {
+				found = &report.Checks[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("charter_compliance check not present in gate report: %+v", report.Checks)
+		}
+		if found.Passed {
+			t.Fatalf("charter_compliance should have failed on an unexercised declared tool, got: %+v", found)
+		}
+		if !strings.Contains(found.Detail, "golangci-lint") {
+			t.Errorf("charter_compliance Detail should name the unexercised tool, got: %s", found.Detail)
+		}
+
+		blockingFound := false
+		for _, b := range report.BlockingIssues {
+			if strings.Contains(b, "golangci-lint") {
+				blockingFound = true
+				break
+			}
+		}
+		if !blockingFound {
+			t.Errorf("report.BlockingIssues should contain the charter_compliance detail naming golangci-lint, got: %v", report.BlockingIssues)
+		}
+	})
+
+	t.Run("ExecutedCheckAlwaysPresentEvenWhenFindingsSkipped", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		if err := s.SaveJSON("COLONY_STATE.json", colony.ColonyState{}); err != nil {
+			t.Fatal(err)
+		}
+
+		phase, manifest, assessment := minimalContinuePhaseAndAssessment()
+		verification := codexContinueVerificationReport{
+			ChecksPassed: true,
+			Passed:       true,
+			Claims:       codexClaimVerification{Present: true, Passed: true},
+		}
+
+		priorResults := []GateCheckResult{
+			{Name: "charter_compliance", Status: "passed"},
+		}
+
+		report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), priorResults)
+
+		var findingsCheck, executedCheck *gateCheck
+		for i := range report.Checks {
+			switch report.Checks[i].Name {
+			case "charter_compliance":
+				findingsCheck = &report.Checks[i]
+			case "charter_compliance_executed":
+				executedCheck = &report.Checks[i]
+			}
+		}
+		if findingsCheck == nil {
+			t.Fatalf("charter_compliance check missing: %+v", report.Checks)
+		}
+		if !strings.Contains(findingsCheck.Detail, "skipped") {
+			t.Errorf("charter_compliance should report as skipped when previously passed, got: %s", findingsCheck.Detail)
+		}
+		if executedCheck == nil {
+			t.Fatalf("charter_compliance_executed check missing even though findings was skipped as previously passed: %+v", report.Checks)
+		}
+		if !executedCheck.Passed {
+			t.Errorf("charter_compliance_executed should pass when the scan ran, got: %+v", executedCheck)
+		}
+	})
+
+	// Anti-regression test mirroring
+	// TestContinueAntiPatternGateIsWiredIntoThePipeline: compares the
+	// pipeline's checks against what checkCharterComplianceGate itself
+	// produces for the same input, so a stubbed call site (a literal
+	// gateCheck{Name: "charter_compliance", Passed: true} substituted for
+	// the producer call) would be caught even though it matches on Name and
+	// Passed.
+	t.Run("PipelineUsesRealProducer", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		state := colony.ColonyState{Charter: &colony.Charter{Governance: "Testing: pytest"}}
+		if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+			t.Fatal(err)
+		}
+
+		phase, manifest, assessment := minimalContinuePhaseAndAssessment()
+		verification := codexContinueVerificationReport{
+			ChecksPassed: true,
+			Passed:       true,
+			Claims:       codexClaimVerification{Present: true, Passed: true},
+			Steps:        []codexVerificationStep{{Name: "tests", Command: "pytest -q"}},
+		}
+
+		report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), nil)
+
+		wantFindings, wantExecuted := checkCharterComplianceGate(verification.Steps)
+
+		got := map[string]gateCheck{}
+		for _, c := range report.Checks {
+			got[c.Name] = c
+		}
+		for _, want := range []gateCheck{wantFindings, wantExecuted} {
+			have, ok := got[want.Name]
+			if !ok {
+				t.Fatalf("runCodexContinueGates report is missing the %q check — the charter gate call site has been removed from the continue pipeline", want.Name)
+			}
+			if have.Passed != want.Passed {
+				t.Errorf("%s: pipeline reported Passed=%v but checkCharterComplianceGate produced Passed=%v — the pipeline is not using the real producer", want.Name, have.Passed, want.Passed)
+			}
+			if have.Detail != want.Detail {
+				t.Errorf("%s: pipeline Detail %q does not match checkCharterComplianceGate's %q — the call site appears to be stubbed rather than calling the producer", want.Name, have.Detail, want.Detail)
+			}
+		}
+	})
 }
