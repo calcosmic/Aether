@@ -415,30 +415,59 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	updatedState = committedState
 	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
+	// Collect pheromone suggestions once the build is durably committed.
+	// Called exactly once per finalize (never inside the dispatch loop
+	// above) so re-analysis cost scales with builds, not worker count.
+	suggestAnalyzeRan, pendingSuggestionCount := collectPendingSuggestions(root)
+
 	result := map[string]interface{}{
-		"phase":             phaseNum,
-		"phase_name":        updatedPhase.Name,
-		"state":             updatedState.State,
-		"plan_only":         false,
-		"dispatch_mode":     "external-task",
-		"dispatches":        codexBuildDispatchMaps(dispatches),
-		"dispatch_count":    len(dispatches),
-		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
-		"parallel_mode":     string(effectiveParallelMode(updatedState)),
-		"selected_tasks":    selectedTaskIDs,
-		"checkpoint":        displayDataPath(checkpointRel),
-		"manifest":          displayDataPath(manifestRel),
-		"claims_path":       displayDataPath(claimsRel),
-		"attempt":           displayDataPath(attemptRel),
-		"result_collection": displayDataPath(resultCollectionRel),
-		"idempotent":        false,
-		"next":              "aether continue",
+		"phase":                    phaseNum,
+		"phase_name":               updatedPhase.Name,
+		"state":                    updatedState.State,
+		"plan_only":                false,
+		"dispatch_mode":            "external-task",
+		"dispatches":               codexBuildDispatchMaps(dispatches),
+		"dispatch_count":           len(dispatches),
+		"wave_count":               len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
+		"parallel_mode":            string(effectiveParallelMode(updatedState)),
+		"selected_tasks":           selectedTaskIDs,
+		"checkpoint":               displayDataPath(checkpointRel),
+		"manifest":                 displayDataPath(manifestRel),
+		"claims_path":              displayDataPath(claimsRel),
+		"attempt":                  displayDataPath(attemptRel),
+		"result_collection":        displayDataPath(resultCollectionRel),
+		"idempotent":               false,
+		"next":                     "aether continue",
+		"suggest_analyze_ran":      suggestAnalyzeRan,
+		"pending_suggestion_count": pendingSuggestionCount,
+	}
+	if pendingSuggestionCount > 0 {
+		result["pending_suggestions_next"] = "aether suggest-approve"
 	}
 	if len(recoveryInstructions) > 0 {
 		result["recovery_instructions"] = recoveryInstructions
 	}
 	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
 	return result, updatedState, updatedPhase, dispatches, nil
+}
+
+// collectPendingSuggestions runs suggest-analyze exactly once after a build
+// has been durably committed, and reports its outcome without ever failing
+// the caller. A suggestion-engine failure must never fail a build that
+// otherwise succeeded (T-163-15) -- the error is logged to stderr, not
+// propagated, and the distinction between "ran and found nothing" (ran=true,
+// count=0) and "never ran" (ran=false) is kept visible on the return value
+// rather than silently collapsed to the same zero.
+func collectPendingSuggestions(root string) (ran bool, count int) {
+	suggestResult, err := runSuggestAnalyze(root, false)
+	if err != nil {
+		fmt.Fprintf(stderr, "warning: suggest-analyze did not run at build finalize: %v\n", err)
+		return false, 0
+	}
+	if total, ok := suggestResult["total"].(int); ok {
+		count = total
+	}
+	return true, count
 }
 
 func validateBuildManifestPlanRevision(manifest codexBuildManifest, state colony.ColonyState) error {

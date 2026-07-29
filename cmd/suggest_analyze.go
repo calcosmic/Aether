@@ -30,6 +30,14 @@ const largeFileLineThreshold = 500
 // FEEDBACK suggestion is generated about dependency count.
 const highDependencyThreshold = 20
 
+// suggestAnalyzeInvocationCount tracks how many times runSuggestAnalyze has
+// executed in the current process. It exists purely as a test seam: tests
+// assert non-blocking callers (like build finalize) invoke it exactly once
+// per operation, not once per worker dispatch inside a loop -- the exact
+// regression class this project has shipped before. Production code never
+// reads this value.
+var suggestAnalyzeInvocationCount int
+
 var suggestAnalyzeCmd = &cobra.Command{
 	Use:   "suggest-analyze",
 	Short: "Analyze codebase for patterns worth capturing as pheromone suggestions",
@@ -59,6 +67,7 @@ var suggestAnalyzeCmd = &cobra.Command{
 // RESEARCH Pitfall 3: it returns an empty, successful result rather than an
 // error, so a suggestion-engine problem never fails a build or the CLI.
 func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, error) {
+	suggestAnalyzeInvocationCount++
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
