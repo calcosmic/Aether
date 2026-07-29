@@ -242,8 +242,14 @@ func TestSuggestAnalyze_NonBlockingOnError(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	// No store set -- triggers the nil guard path
-	store = nil
+	// Corrupt colony state forces loadActiveColonyState to fail, exercising
+	// the non-blocking error path. The store MUST come from newTestStore:
+	// without COLONY_DATA_DIR pointing at a temp dir, PersistentPreRunE
+	// re-initializes the store against the live repo's .aether/data and the
+	// analysis writes real suggestions into real colony state.
+	s, _ := newTestStore(t)
+	store = s
+	_ = store.AtomicWrite("COLONY_STATE.json", []byte("{not valid json"))
 
 	rootCmd.SetArgs([]string{"suggest-analyze", "--target", "."})
 
