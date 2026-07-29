@@ -40,6 +40,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file",
 		"/ant-continue",
+		"dispatch_manifest.context_capsule",
 	}
 
 	inOrder := []string{
