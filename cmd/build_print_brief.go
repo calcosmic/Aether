@@ -84,10 +84,15 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		out.WriteString(strings.Repeat("━", 72))
 		out.WriteString("\n\n")
 
-		// D-06: the checklist is the default and, for now, the only output —
-		// the --full raw-prompt escape hatch lands in the next task.
-		out.WriteString(renderBriefChecklist(single[0], brief, capsule))
-		out.WriteString("\n")
+		if options.Full {
+			out.WriteString(brief)
+			out.WriteString("\n")
+			out.WriteString(renderBriefComposition(brief))
+			out.WriteString("\n")
+		} else {
+			out.WriteString(renderBriefChecklist(single[0], brief, capsule))
+			out.WriteString("\n")
+		}
 	}
 
 	if matched == 0 {
@@ -219,14 +224,17 @@ func truncateSectionName(name string, max int) string {
 }
 
 // buildPrintBriefOptions mirrors the depth flags the real build path honours, so
-// a printed brief matches what would actually be dispatched.
-func buildPrintBriefOptions(workerTimeout time.Duration, force, light, heavy bool, verificationDepth string) codexBuildOptions {
+// a printed brief matches what would actually be dispatched. full threads the
+// --full flag through so printWorkerBriefs knows whether to render the raw
+// prompt or the checklist.
+func buildPrintBriefOptions(workerTimeout time.Duration, force, light, heavy, full bool, verificationDepth string) codexBuildOptions {
 	return codexBuildOptions{
 		WorkerTimeout:     workerTimeout,
 		Force:             force,
 		LightFlag:         light,
 		HeavyFlag:         heavy,
 		VerificationDepth: verificationDepth,
+		Full:              full,
 	}
 }
 

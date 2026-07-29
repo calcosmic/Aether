@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -307,6 +308,116 @@ func TestPrintBriefChecklist(t *testing.T) {
 	})
 }
 
+// TestPrintBriefFullFlagAndCoverage pins Task 2's five behaviors: --full
+// gates the raw prompt path, --worker scoping still works in both modes, and
+// an unknown worker name still errors the same way it always has.
+func TestPrintBriefFullFlagAndCoverage(t *testing.T) {
+	t.Run("print-brief alone prints the checklist and not the raw brief", func(t *testing.T) {
+		saveGlobals(t)
+		printBriefFixture(t, basePrintBriefState())
+
+		out, errOut := runPrintBriefCmd(t)
+		if errOut != "" {
+			t.Fatalf("unexpected stderr: %s", errOut)
+		}
+		if !strings.Contains(out, "CONTEXT CHECKLIST") {
+			t.Errorf("expected checklist heading, got:\n%s", out)
+		}
+		if strings.Contains(out, "COMPOSITION") {
+			t.Errorf("--print-brief without --full should not print the composition table:\n%s", out)
+		}
+	})
+
+	t.Run("print-brief --full prints the raw brief and the composition table", func(t *testing.T) {
+		saveGlobals(t)
+		printBriefFixture(t, basePrintBriefState())
+
+		out, errOut := runPrintBriefCmd(t, "--full")
+		if errOut != "" {
+			t.Fatalf("unexpected stderr: %s", errOut)
+		}
+		if !strings.Contains(out, "## Assignment") {
+			t.Errorf("--full should print the raw brief with its Assignment heading:\n%s", out)
+		}
+		if !strings.Contains(out, "COMPOSITION") {
+			t.Errorf("--full should print the composition table:\n%s", out)
+		}
+		if strings.Contains(out, "CONTEXT CHECKLIST") {
+			t.Errorf("--full should not also print the checklist:\n%s", out)
+		}
+	})
+
+	t.Run("print-brief --worker scopes to one worker in both checklist and full modes", func(t *testing.T) {
+		saveGlobals(t)
+		printBriefFixture(t, basePrintBriefState())
+
+		fullOut, errOut := runPrintBriefCmd(t)
+		if errOut != "" {
+			t.Fatalf("unexpected stderr: %s", errOut)
+		}
+		names := workerNamesFromBanners(fullOut)
+		if len(names) < 2 {
+			t.Fatalf("fixture must produce at least two dispatches to prove scoping; got names: %v\noutput:\n%s", names, fullOut)
+		}
+		target := names[0]
+
+		scopedChecklist, errOut := runPrintBriefCmd(t, "--worker", target)
+		if errOut != "" {
+			t.Fatalf("unexpected stderr: %s", errOut)
+		}
+		if got := workerNamesFromBanners(scopedChecklist); len(got) != 1 || got[0] != target {
+			t.Errorf("checklist mode --worker %q scoped to %v, want exactly [%q]", target, got, target)
+		}
+
+		scopedFull, errOut := runPrintBriefCmd(t, "--full", "--worker", target)
+		if errOut != "" {
+			t.Fatalf("unexpected stderr: %s", errOut)
+		}
+		if got := workerNamesFromBanners(scopedFull); len(got) != 1 || got[0] != target {
+			t.Errorf("--full mode --worker %q scoped to %v, want exactly [%q]", target, got, target)
+		}
+	})
+
+	t.Run("full without print-brief is inert", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		printBriefFixture(t, basePrintBriefState())
+
+		var outBuf bytes.Buffer
+		stdout = &outBuf
+		t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+		rootCmd.SetArgs([]string{"build", "1", "--full", "--synthetic"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build --full --synthetic returned error: %v", err)
+		}
+
+		var envelope map[string]interface{}
+		if err := json.Unmarshal(bytes.TrimSpace(outBuf.Bytes()), &envelope); err != nil {
+			t.Fatalf("build --full --synthetic did not produce normal build output: %v\n%s", err, outBuf.String())
+		}
+		if envelope["ok"] != true {
+			t.Fatalf("build --full --synthetic should succeed like a normal build, got: %v", envelope)
+		}
+	})
+
+	t.Run("unknown worker name still returns the existing error listing available names", func(t *testing.T) {
+		saveGlobals(t)
+		printBriefFixture(t, basePrintBriefState())
+
+		out, errOut := runPrintBriefCmd(t, "--worker", "NoSuchWorker-999")
+		if out != "" {
+			t.Errorf("expected no checklist output on worker-not-found, got:\n%s", out)
+		}
+		if !strings.Contains(errOut, "no worker named") {
+			t.Errorf("expected 'no worker named' error, got: %s", errOut)
+		}
+		if !strings.Contains(errOut, "NoSuchWorker-999") {
+			t.Errorf("error should name the requested worker: %s", errOut)
+		}
+	})
+}
+
 // lineContaining returns the first line of text containing substr, or "".
 func lineContaining(text, substr string) string {
 	for _, line := range strings.Split(text, "\n") {
@@ -315,4 +426,29 @@ func lineContaining(text, substr string) string {
 		}
 	}
 	return ""
+}
+
+// workerNamesFromBanners parses the "emoji  Name  (caste)" banner lines
+// printWorkerBriefs writes above each worker's section, in both checklist
+// and --full modes, and returns the ordered list of worker names found.
+func workerNamesFromBanners(text string) []string {
+	var names []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasSuffix(line, ")") {
+			continue
+		}
+		open := strings.LastIndex(line, "(")
+		if open < 0 {
+			continue
+		}
+		nameBody := strings.TrimSpace(line[:open])
+		fields := strings.Fields(nameBody)
+		if len(fields) < 2 {
+			continue
+		}
+		// First field is the caste emoji, the rest is the deterministic name.
+		names = append(names, strings.Join(fields[1:], " "))
+	}
+	return names
 }
