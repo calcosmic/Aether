@@ -214,6 +214,28 @@ func hookToolTargetPath(toolInput map[string]interface{}) string {
 	return ""
 }
 
+// sanctionedDataWritePrefixes lists the exact-subpath carve-outs under
+// .aether/data/ that a worker is actually ordered to write by a real runtime
+// instruction. Each entry is a full directory segment (leading and trailing
+// slash) so a substring match can never widen past a directory boundary.
+// Widening any entry to a bare "/.aether/data/" match is a regression —
+// TestHookPreToolUseBlocksProtectedPath must fail if that ever happens.
+//
+//   - /.aether/data/planning/       — D-04: planning artifacts a worker is
+//     told to persist during the plan workflow.
+//   - /.aether/data/phase-research/ — cmd/phase_research.go:124 orders the
+//     scout to write phase-N-research.md here.
+//   - /.aether/data/survey/         — pkg/codex/permission_profile.go's
+//     surveyor behavioral restriction names this directory.
+//   - /.aether/data/worker-debug/   — D-04: worker debug artifacts a worker
+//     is told to persist for diagnostics.
+var sanctionedDataWritePrefixes = []string{
+	"/.aether/data/planning/",
+	"/.aether/data/phase-research/",
+	"/.aether/data/survey/",
+	"/.aether/data/worker-debug/",
+}
+
 func protectedHookWriteReason(target, cwd string) string {
 	normalized := normalizeHookPath(target, cwd)
 	if normalized == "" {
@@ -222,9 +244,14 @@ func protectedHookWriteReason(target, cwd string) string {
 
 	slash := filepath.ToSlash(normalized)
 	base := filepath.Base(slash)
+	for _, prefix := range sanctionedDataWritePrefixes {
+		if strings.Contains(slash, prefix) {
+			return ""
+		}
+	}
 	switch {
 	case strings.Contains(slash, "/.aether/data/"):
-		return "Protected colony state path. Update `.aether/data/*` through the `aether` CLI, not direct edits."
+		return "Protected colony state path. Update `.aether/data/*` through the `aether` CLI, not direct edits. Sanctioned scratch subpaths (planning/, phase-research/, survey/, worker-debug/) are writable."
 	case strings.Contains(slash, "/.aether/dreams/"):
 		return "Protected dream journal path. Do not edit `.aether/dreams/` from a worker."
 	case strings.HasPrefix(base, ".env"):

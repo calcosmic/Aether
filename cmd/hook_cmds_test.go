@@ -63,6 +63,115 @@ func TestHookPreToolUseBlocksProtectedPath(t *testing.T) {
 	}
 }
 
+// TestHookPreToolUseAllowsSanctionedScratchDirs is the positive companion to
+// TestHookPreToolUseBlocksProtectedPath. It proves the exact-subpath allowlist
+// in sanctionedDataWritePrefixes lets a worker write the four sanctioned
+// scratch subdirectories under .aether/data/ while everything else stays
+// blocked — including behavior 6 (a protected file NOT in the allowlist) and
+// behavior 7 (a path that merely contains a sanctioned name as a substring,
+// not as a directory segment).
+func TestHookPreToolUseAllowsSanctionedScratchDirs(t *testing.T) {
+	allowed := []struct {
+		name string
+		rel  string
+	}{
+		{"planning_dir", filepath.Join(".aether", "data", "planning", "phase-plan.json")},
+		{"phase_research_dir", filepath.Join(".aether", "data", "phase-research", "phase-3-research.md")},
+		{"survey_dir", filepath.Join(".aether", "data", "survey", "BLUEPRINT.md")},
+		{"worker_debug_dir", filepath.Join(".aether", "data", "worker-debug", "worker-1.json")},
+	}
+	for _, tt := range allowed {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			resetRootCmd(t)
+
+			var buf bytes.Buffer
+			stdout = &buf
+			var errBuf bytes.Buffer
+			stderr = &errBuf
+
+			_, tmpDir := newTestStoreCmd(t)
+			defer os.RemoveAll(tmpDir)
+
+			target := filepath.Join(tmpDir, tt.rel)
+			setHookStdin(t, `{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"`+target+`"}}`)
+
+			rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("hook-pre-tool-use returned error: %v", err)
+			}
+
+			if strings.TrimSpace(buf.String()) != "" {
+				t.Fatalf("sanctioned scratch write was blocked: %s", buf.String())
+			}
+		})
+	}
+
+	// Behavior 6: a protected file that is NOT in the allowlist (pheromones.json,
+	// a direct child of .aether/data/) must still be blocked. Asserted by name so
+	// this does not merely pass incidentally via the untouched blanket case.
+	t.Run("behavior_6_pheromones_json_still_blocked", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+
+		var buf bytes.Buffer
+		stdout = &buf
+		var errBuf bytes.Buffer
+		stderr = &errBuf
+
+		_, tmpDir := newTestStoreCmd(t)
+		defer os.RemoveAll(tmpDir)
+
+		target := filepath.Join(tmpDir, ".aether", "data", "pheromones.json")
+		setHookStdin(t, `{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"`+target+`"}}`)
+
+		rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("hook-pre-tool-use returned error: %v", err)
+		}
+
+		var result map[string]interface{}
+		if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &result); err != nil {
+			t.Fatalf("unmarshal hook output: %v", err)
+		}
+		if result["decision"] != "block" {
+			t.Fatalf("decision = %v, want block", result["decision"])
+		}
+	})
+
+	// Behavior 7: a path that merely contains a sanctioned name as a substring,
+	// not as a directory segment, must still be blocked — proving the allowlist
+	// match requires full slash-delimited segments, not a bare name match.
+	t.Run("behavior_7_substring_not_segment_still_blocked", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+
+		var buf bytes.Buffer
+		stdout = &buf
+		var errBuf bytes.Buffer
+		stderr = &errBuf
+
+		_, tmpDir := newTestStoreCmd(t)
+		defer os.RemoveAll(tmpDir)
+
+		target := filepath.Join(tmpDir, ".aether", "data", "planning-notes.json")
+		setHookStdin(t, `{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"`+target+`"}}`)
+
+		rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("hook-pre-tool-use returned error: %v", err)
+		}
+
+		var result map[string]interface{}
+		if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &result); err != nil {
+			t.Fatalf("unmarshal hook output: %v", err)
+		}
+		if result["decision"] != "block" {
+			t.Fatalf("decision = %v, want block", result["decision"])
+		}
+	})
+}
+
 func TestHookPreToolUseBlocksMainBranchWhenRedirectActive(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
