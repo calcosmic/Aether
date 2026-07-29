@@ -161,3 +161,18 @@ CONTEXT-05 is now satisfied under CLAUDE.md's Definition of Done: a command exis
 ---
 *Phase: 163-context-reaches-workers*
 *Completed: 2026-07-29*
+
+## Self-Check: PASSED
+
+- FOUND: cmd/suggest_analyze.go
+- FOUND: cmd/suggest_analyze_test.go
+- FOUND: cmd/codex_build_finalize.go
+- FOUND: cmd/codex_build_finalize_test.go
+- FOUND: cmd/ceremony_cmd.go
+- FOUND: cmd/ceremony_cmd_test.go
+- FOUND: .planning/phases/163-context-reaches-workers/163-05-SUMMARY.md
+- FOUND: .planning/phases/163-context-reaches-workers/deferred-items.md
+- FOUND commit: fc06ec17 (refactor: extract runSuggestAnalyze)
+- FOUND commit: dd2c8535 (feat: live caller at build finalize)
+- FOUND commit: f62ec54b (feat: closeout tick-to-approve block)
+- FOUND commit: dd6aa3da (docs: summary + deferred items)
