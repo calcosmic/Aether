@@ -3265,6 +3265,140 @@ func TestBuildWorkerBriefIncludesCodegraphContext(t *testing.T) {
 	}
 }
 
+// TestBuildWorkerBriefIncludesSurveyAndResearch pins CONTEXT-01 and
+// CONTEXT-04: territory survey findings and phase research findings must be
+// demonstrably present in a build worker's actual prompt, not merely
+// resolvable by functions nothing calls. Neither requirement had a test
+// before this one — a grep for existing coverage
+// (`grep -n 'func Test' cmd/codex_build_test.go`) confirmed OmitsHeartbeat,
+// OmitsPlaybooks, IsMostlyTask, and IncludesCodegraphContext exist, and none
+// of them asserts on resolveSurveySection or resolvePhaseResearchSection.
+// The fixtures below are built from real files on disk in a temp colony,
+// not stubbed resolvers — the requirement is that content reaches the
+// prompt, and a stubbed resolver would prove only that a stub was called.
+func TestBuildWorkerBriefIncludesSurveyAndResearch(t *testing.T) {
+	t.Run("survey pointer list reaches the brief with real paths", func(t *testing.T) {
+		saveGlobals(t)
+
+		tmpDir := t.TempDir()
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		surveyDir := filepath.Join(dataDir, "survey")
+		if err := os.MkdirAll(surveyDir, 0755); err != nil {
+			t.Fatalf("mkdir survey dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(surveyDir, "BLUEPRINT.md"), []byte("# Blueprint\n\nThe survey found a Go monorepo with cmd/ and pkg/."), 0644); err != nil {
+			t.Fatalf("write survey doc: %v", err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		store = s
+
+		dispatch := codexBuildDispatch{Name: "Hammer-26", Caste: "builder", Task: "Wire the exporter"}
+		phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+		brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+		if !strings.Contains(brief, "### Territory Survey") {
+			t.Fatalf("worker brief missing Territory Survey section:\n%s", brief)
+		}
+		if !strings.Contains(brief, ".aether/data/survey/BLUEPRINT.md") {
+			t.Fatalf("worker brief missing the delivered repo-relative survey path:\n%s", brief)
+		}
+	})
+
+	t.Run("phase research reaches the brief with its content", func(t *testing.T) {
+		saveGlobals(t)
+
+		tmpDir := t.TempDir()
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		researchDir := filepath.Join(dataDir, "phase-research")
+		if err := os.MkdirAll(researchDir, 0755); err != nil {
+			t.Fatalf("mkdir research dir: %v", err)
+		}
+		researchBody := "## Key Patterns\n\nUse the widget factory pattern for the exporter wiring."
+		if err := os.WriteFile(filepath.Join(researchDir, "phase-1-research.md"), []byte(researchBody), 0644); err != nil {
+			t.Fatalf("write research doc: %v", err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		store = s
+
+		dispatch := codexBuildDispatch{Name: "Hammer-27", Caste: "builder", Task: "Wire the exporter"}
+		phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+		brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+		if !strings.Contains(brief, "## Phase Research") {
+			t.Fatalf("worker brief missing Phase Research section:\n%s", brief)
+		}
+		if !strings.Contains(brief, "widget factory pattern") {
+			t.Fatalf("worker brief missing the delivered research content:\n%s", brief)
+		}
+	})
+
+	t.Run("staleness notice from task 1 reaches the brief alongside the survey", func(t *testing.T) {
+		saveGlobals(t)
+
+		tmpDir := t.TempDir()
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		surveyDir := filepath.Join(dataDir, "survey")
+		if err := os.MkdirAll(surveyDir, 0755); err != nil {
+			t.Fatalf("mkdir survey dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(surveyDir, "BLUEPRINT.md"), []byte("# Blueprint\n\nsurvey content"), 0644); err != nil {
+			t.Fatalf("write survey doc: %v", err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		store = s
+		if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{}); err != nil {
+			t.Fatalf("save colony state: %v", err)
+		}
+
+		dispatch := codexBuildDispatch{Name: "Hammer-28", Caste: "builder", Task: "Wire the exporter"}
+		phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+		brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+		if !strings.Contains(brief, "never been surveyed") || !strings.Contains(brief, "/ant-colonize") {
+			t.Fatalf("worker brief missing the survey staleness notice:\n%s", brief)
+		}
+	})
+
+	t.Run("neither artifact present means neither section appears", func(t *testing.T) {
+		saveGlobals(t)
+
+		tmpDir := t.TempDir()
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			t.Fatalf("mkdir data dir: %v", err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		store = s
+
+		dispatch := codexBuildDispatch{Name: "Hammer-29", Caste: "builder", Task: "Wire the exporter"}
+		phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+		brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+		if strings.Contains(brief, "### Territory Survey") {
+			t.Errorf("worker brief has a Territory Survey heading with no survey data on disk:\n%s", brief)
+		}
+		if strings.Contains(brief, "## Phase Research") {
+			t.Errorf("worker brief has a Phase Research heading with no research data on disk:\n%s", brief)
+		}
+	})
+}
+
 func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	saveGlobals(t)
 

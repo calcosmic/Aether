@@ -24,6 +24,7 @@ These were asserted in the first draft and are now **verified false**. No work i
 | `oracle.md` was hollowed out (678 → 147 lines) | Not hollow. Its RALF loop moved into Go |
 | Dream is one of the 27 castes | Dream is a command, not a caste. No Dream worker can be dispatched |
 | Prior-colony context, council, session lifecycle, skill matching, governance detection are broken | All verified wired |
+| Context Reaches Workers (CONTEXT block): "four things are genuinely disconnected from the active build path" | Half stale by the time Phase 163 executed: `survey-load`'s replacement (`resolveSurveySection`) and phase research (`resolvePhaseResearchSection`) were already reconnected to `renderCodexBuildWorkerBrief` by commits `281dd34a` and `a2c8288e` on 2026-07-26, before Phase 160 ran. Only the colony-prime context capsule and `suggest-analyze` remained genuinely disconnected. Four CONTEXT requirement lines (survey presence, research presence, the budget list, and the staged benchmark) reworded 2026-07-29 per Phase 163 D-07/D-08 to reflect this |
 
 ---
 
@@ -66,15 +67,15 @@ These were asserted in the first draft and are now **verified false**. No work i
 
 *Four things are genuinely disconnected from the active build path, confirmed independently by two agents: the colony-prime context capsule, `survey-load`, phase research, and `suggest-analyze`. Separately, `context_capsule`, `hive_section` and `pheromone_section` exist on `internalWorkerDispatchRequest` but not on the wrapper-facing dispatch.*
 
-- [ ] **CONTEXT-01**: `build-context.md` is added to `codexBuildPlaybooks()` (`cmd/codex_build.go:894`) — it is the one build playbook Go omits
+- [ ] **CONTEXT-01**: Territory survey findings are demonstrably present in a build worker's actual prompt on both dispatch paths, delivered by the runtime brief renderer (reworded 2026-07-29 per Phase 163 D-07: the original named `build-context.md` and `codexBuildPlaybooks()`, both deleted in Phase 160, and the playbook corpus stays dead — pinned by `TestSurveyLoadAbsentAndUncalled`; the outcome is now delivered by `resolveSurveySection()` inside `renderCodexBuildWorkerBrief`)
 - [ ] **CONTEXT-02**: `context_capsule`, `hive_section` and `pheromone_section` reach wrapper-spawned workers, sourced from `resolveCodexWorkerContext()` — not a second assembly path
 - [ ] **CONTEXT-03**: Phase-scoped context is carried at **manifest** level, not duplicated per dispatch. With eight workers, a per-dispatch 8K capsule adds roughly 16K tokens to the orchestrator's own context on a milestone about running cheaply
-- [ ] **CONTEXT-04**: `survey-load` output and phase research reach worker prompts
+- [ ] **CONTEXT-04**: Phase research findings are demonstrably present in a build worker's actual prompt via `resolvePhaseResearchSection()`, and a worker is told when the survey map is stale rather than grounding on fiction (reworded 2026-07-29 per Phase 163 D-07: `survey-load` was deleted in Phase 160 and is pinned absent — see `TestSurveyLoadAbsentAndUncalled`)
 - [ ] **CONTEXT-05**: `suggest-analyze` actually runs during a build and its pheromone suggestions reach the user — it has never executed
 - [ ] **CONTEXT-06**: The approved colony charter reaches workers. Governance detection is healthy (`cmd/init_research.go:117`, with ESLint, golangci-lint and Prettier parsers), but `cmd/colony_prime_context.go` contains zero charter or governance references — so a user can approve "TDD required, ESLint enforced" and no builder ever learns of it
 - [ ] **CONTEXT-07**: `aether build <n> --print-brief` (or equivalent) makes the assembled worker prompt inspectable, so context presence is checkable by a person rather than by reading Go
-- [ ] **CONTEXT-08**: Total context is measured and bounded. Budgets currently stack — colony-prime 8K, skills 8K, playbook injection 7K — and an untested competing explanation for cheap-model degradation is that prompts are too large, not too small. This is tested before more context is added
-- [ ] **CONTEXT-09**: A before/after comparison on an inexpensive model is recorded for the same task with and without the restored context
+- [ ] **CONTEXT-08**: Total context is measured and bounded. Budgets today: colony-prime 8000/4000, skills ~8000, phase research 3500, codegraph 2200 (corrected 2026-07-29 per Phase 163 D-07: the prior budget list's "playbook 7K" figure is stale — playbook injection into worker prompts was removed entirely, measured at 5,733 of 7,485 characters before removal per the code comment near `renderCodexBuildWorkerBrief`; the requirement's substance is unchanged, only the stale figure is removed). This is tested before more context is added
+- [ ] **CONTEXT-09**: Descoped per Phase 163 D-08 (2026-07-29): the user's decision is that testing happens through real repos in real use, not a staged before/after benchmark on an inexpensive model. Replacement evidence is the brief inspector plus the automated presence and budget tests this phase ships (`TestBuildWorkerBriefIncludesSurveyAndResearch`, `TestBuildWorkerBriefIsMostlyTask`). Real-world validation is explicitly post-phase, not abandoned
 
 ## Research Feeds Planning (RESEARCH)
 
