@@ -216,6 +216,8 @@ func sectionRelevanceScore(name string) float64 {
 		return 0.75
 	case "review_depth":
 		return 0.40
+	case "charter":
+		return 0.90
 	default:
 		return 0.25
 	}
@@ -235,6 +237,8 @@ func protectedSectionPolicy(name string) (bool, string) {
 		return true, "clarified user intent"
 	case "global_queen_md":
 		return true, "cross-colony wisdom must survive trimming"
+	case "charter":
+		return true, "approved charter rules bind every worker"
 	default:
 		return false, ""
 	}

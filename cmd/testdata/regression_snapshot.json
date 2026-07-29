@@ -30,9 +30,9 @@
       "home_sync_pair_count": 7
     },
     "gate_classifications": {
-      "total_gates": 14,
-      "hard_block": 6,
-      "soft_block": 6,
+      "total_gates": 16,
+      "hard_block": 7,
+      "soft_block": 7,
       "advisory": 2
     }
   },
