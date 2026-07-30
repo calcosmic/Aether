@@ -94,8 +94,13 @@ func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, erro
 	if cs.LastAnalyzeCommit != nil && currentHead != "" && *cs.LastAnalyzeCommit != "" {
 		changedCount, err := countChangedFiles(target, *cs.LastAnalyzeCommit, currentHead)
 		if err == nil && changedCount < changeThreshold {
-			// Below threshold: skip analysis, return existing pending suggestions.
-			existing := pendingSuggestionsToMap(cs.PendingSuggestions)
+			// Below threshold: skip analysis, return existing pending
+			// suggestions. "total" means active (non-dismissed) pending
+			// suggestions (WR-02) -- pendingSuggestionsToMap does not filter
+			// Dismissed, so filter with the same predicate suggest-approve
+			// uses before counting or displaying.
+			active := filterActiveSuggestions(cs.PendingSuggestions)
+			existing := pendingSuggestionsToMap(&active)
 			return map[string]interface{}{
 				"suggestions":   existing,
 				"total":         len(existing),
@@ -159,23 +164,23 @@ func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, erro
 		})
 	}
 
+	now := time.Now().UTC().Format(time.RFC3339)
+	var newPending []colony.PendingSuggestion
+	for _, sug := range sanitized {
+		contentHash := "sha256:" + sha256Sum(sug.Content)
+		newPending = append(newPending, colony.PendingSuggestion{
+			ID:          generateSignalID(),
+			Type:        sug.Type,
+			Content:     sug.Content,
+			Reason:      sug.Reason,
+			ContentHash: contentHash,
+			CreatedAt:   now,
+			Dismissed:   false,
+		})
+	}
+
 	// --- Persist (unless dry-run) ---
 	if !dryRun {
-		now := time.Now().UTC().Format(time.RFC3339)
-		var pending []colony.PendingSuggestion
-		for _, sug := range sanitized {
-			contentHash := "sha256:" + sha256Sum(sug.Content)
-			pending = append(pending, colony.PendingSuggestion{
-				ID:          generateSignalID(),
-				Type:        sug.Type,
-				Content:     sug.Content,
-				Reason:      sug.Reason,
-				ContentHash: contentHash,
-				CreatedAt:   now,
-				Dismissed:   false,
-			})
-		}
-
 		// Read-modify-write COLONY_STATE.json as a single guarded operation
 		// (WR-01). The analysis above shells out to git and walks the whole
 		// repo tree -- a window of seconds during which another writer could
@@ -186,33 +191,50 @@ func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, erro
 		// latest committed state.
 		var updatedState colony.ColonyState
 		_ = store.UpdateJSONAtomically("COLONY_STATE.json", &updatedState, func() error {
-			// Merge with existing pending suggestions: keep any that aren't in
-			// the new set (by content hash comparison).
-			merged := append([]colony.PendingSuggestion{}, pending...)
-			if updatedState.PendingSuggestions != nil {
-				existingHashes := make(map[string]struct{}, len(pending))
-				for _, p := range pending {
-					existingHashes[p.ContentHash] = struct{}{}
-				}
-				for _, old := range *updatedState.PendingSuggestions {
-					if _, exists := existingHashes[old.ContentHash]; !exists {
-						merged = append(merged, old)
-					}
-				}
-			}
+			merged := mergePendingSuggestions(newPending, updatedState.PendingSuggestions)
 			updatedState.PendingSuggestions = &merged
 			updatedState.LastAnalyzeCommit = &currentHead
 			return nil
 		})
 	}
 
+	// "total" means active (non-dismissed) pending suggestions after merge
+	// (WR-02), not just the new suggestions this run produced -- otherwise a
+	// full analysis that finds nothing new reports total:0 and suppresses
+	// the suggest-approve hint even though older suggestions still await
+	// review. Computed from the pre-call snapshot (cs) rather than the
+	// atomic write's fresh read so the reported count is available even in
+	// dry-run mode, when nothing is persisted.
+	mergedForReport := mergePendingSuggestions(newPending, cs.PendingSuggestions)
+	activeTotal := filterActiveSuggestions(&mergedForReport)
+
 	return map[string]interface{}{
 		"suggestions":   resultSuggestions,
-		"total":         len(resultSuggestions),
+		"total":         len(activeTotal),
 		"new_count":     newCount,
 		"skipped_dedup": skippedCount,
 		"dry_run":       dryRun,
 	}, nil
+}
+
+// mergePendingSuggestions combines newly generated pending suggestions with
+// a stored slice, keeping any stored entry whose content hash isn't
+// superseded by a new entry. Shared by the persist path and the reported
+// "total" so both use the same merge definition (WR-01, WR-02).
+func mergePendingSuggestions(newPending []colony.PendingSuggestion, existing *[]colony.PendingSuggestion) []colony.PendingSuggestion {
+	merged := append([]colony.PendingSuggestion{}, newPending...)
+	if existing != nil {
+		newHashes := make(map[string]struct{}, len(newPending))
+		for _, p := range newPending {
+			newHashes[p.ContentHash] = struct{}{}
+		}
+		for _, old := range *existing {
+			if _, exists := newHashes[old.ContentHash]; !exists {
+				merged = append(merged, old)
+			}
+		}
+	}
+	return merged
 }
 
 func init() {
