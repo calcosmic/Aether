@@ -1,3 +1,15 @@
+---
+phase: 163-context-reaches-workers
+audited: 2026-07-30
+asvs_level: 1
+block_on: high
+threats_total: 18
+threats_closed: 18
+threats_open: 0
+residual_warnings: 3
+status: secured
+---
+
 # Security Audit — Phase 163: Context Reaches Workers
 
 **Audited:** 2026-07-30
