@@ -93,14 +93,17 @@ func TestAssembledContextStaysUnderBudgetCeiling(t *testing.T) {
 
 	t.Run("total assembled context stays at or under the derived ceiling", func(t *testing.T) {
 		if total > ceiling {
-			t.Errorf("assembled context (%d chars) exceeds the derived budget ceiling (%d chars = colonyPrimeBudgetChars(%d) + skillInjectNormalBudgetChars(%d) + phaseResearchBriefBudgetChars(%d) + codegraphWorkerContextBudgetChars(%d) + briefTaskContentAllowanceChars(%d)) -- this is D-03's growth guard tripping, not a number to silently retune; report the measured totals and raise it with the developer",
-				total, ceiling, colonyPrimeBudgetChars, skillInjectNormalBudgetChars, phaseResearchBriefBudgetChars, codegraphWorkerContextBudgetChars, briefTaskContentAllowanceChars)
+			t.Errorf("assembled context (%d chars) exceeds the derived budget ceiling (%d chars = colonyPrimeCompactBudgetChars(%d) + skillInjectNormalBudgetChars(%d) + phaseResearchBriefBudgetChars(%d) + codegraphWorkerContextBudgetChars(%d) + briefTaskContentAllowanceChars(%d)) -- this is D-03's growth guard tripping, not a number to silently retune; report the measured totals and raise it with the developer",
+				total, ceiling, colonyPrimeCompactBudgetChars, skillInjectNormalBudgetChars, phaseResearchBriefBudgetChars, codegraphWorkerContextBudgetChars, briefTaskContentAllowanceChars)
 		}
 	})
 
 	t.Run("no individually budgeted section exceeds its own declared constant", func(t *testing.T) {
-		if len(capsule) > colonyPrimeBudgetChars {
-			t.Errorf("capsule is %d chars, exceeds colonyPrimeBudgetChars (%d)", len(capsule), colonyPrimeBudgetChars)
+		// resolveCodexWorkerContext() always calls buildColonyPrimeOutput(true)
+		// (compact), so the delivered capsule is bound by
+		// colonyPrimeCompactBudgetChars, not the non-compact constant (WR-03).
+		if len(capsule) > colonyPrimeCompactBudgetChars {
+			t.Errorf("capsule is %d chars, exceeds colonyPrimeCompactBudgetChars (%d)", len(capsule), colonyPrimeCompactBudgetChars)
 		}
 		if skillChars > skillInjectNormalBudgetChars {
 			t.Errorf("skill section is %d chars, exceeds skillInjectNormalBudgetChars (%d)", skillChars, skillInjectNormalBudgetChars)

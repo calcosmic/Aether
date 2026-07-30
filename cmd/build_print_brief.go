@@ -253,8 +253,16 @@ const briefTaskContentAllowanceChars = 6000
 // assembled worker context: the sum of every named budget constant plus the
 // task-content allowance above. It is derived, never a literal — a literal
 // would silently drift the moment any budget constant moves.
+//
+// Sums colonyPrimeCompactBudgetChars, not colonyPrimeBudgetChars (WR-03):
+// every capsule this codebase actually delivers to a worker goes through
+// resolveCodexWorkerContext(), which always calls
+// buildColonyPrimeOutput(true) -- the compact budget. Summing the
+// non-compact constant here made the ceiling ~4000 chars looser than the
+// real delivery budget, so this guard couldn't trip until reality had
+// drifted 2x past its actual cap.
 func assembledContextBudgetCeilingChars() int {
-	return colonyPrimeBudgetChars +
+	return colonyPrimeCompactBudgetChars +
 		skillInjectNormalBudgetChars +
 		phaseResearchBriefBudgetChars +
 		codegraphWorkerContextBudgetChars +
