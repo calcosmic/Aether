@@ -85,9 +85,24 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		out.WriteString("\n\n")
 
 		if options.Full {
+			// Print every piece a wrapper-spawned worker actually receives
+			// (WR-04): the manifest-level capsule (clearly marked as such,
+			// since it is resolved once above and shared across dispatches,
+			// not per-worker), then the brief, then the skill section. The
+			// wrapper contract (.claude/commands/ant/build.md:97) prompts
+			// workers with context_capsule + brief + skill_section, so
+			// --full printing brief alone was not "exactly what the worker
+			// receives" despite the function's own doc comment promising it.
+			out.WriteString("── Context Capsule (manifest-level) ──\n\n")
+			out.WriteString(capsule)
+			out.WriteString("\n\n")
 			out.WriteString(brief)
+			if skill := single[0].SkillSection; skill != "" {
+				out.WriteString("\n\n── Skill Section ──\n\n")
+				out.WriteString(skill)
+			}
 			out.WriteString("\n")
-			out.WriteString(renderBriefComposition(brief))
+			out.WriteString(renderBriefComposition(capsule, brief, single[0].SkillSection))
 			out.WriteString("\n")
 		} else {
 			out.WriteString(renderBriefChecklist(single[0], brief, capsule))
@@ -113,12 +128,27 @@ type briefSection struct {
 	Chars int
 }
 
-// renderBriefComposition breaks a brief into its markdown sections and reports
-// the size of each as a share of the whole, largest first. The point is to make
-// it obvious when framework scaffolding outweighs the worker's actual task.
-func renderBriefComposition(brief string) string {
+// renderBriefComposition breaks the full assembled worker context -- the
+// manifest-level capsule, the composed brief, and the per-dispatch skill
+// section -- into named parts and reports the size of each as a share of the
+// whole, largest first. The point is to make it obvious when framework
+// scaffolding outweighs the worker's actual task.
+//
+// The denominator is capsule+brief+skills, not brief alone (WR-04): the
+// wrapper contract (.claude/commands/ant/build.md:97) prompts workers with
+// context_capsule + brief + skill_section, and the checklist's own TOTAL
+// line (renderBriefChecklist) already uses that same three-way sum, so
+// --full's composition table must agree with the checklist about what "the
+// total assembled context" means for the same prompt.
+func renderBriefComposition(capsule, brief, skillSection string) string {
 	sections := splitBriefSections(brief)
-	total := len(brief)
+	if len(capsule) > 0 {
+		sections = append(sections, briefSection{Name: "Context Capsule (manifest-level)", Chars: len(capsule)})
+	}
+	if len(skillSection) > 0 {
+		sections = append(sections, briefSection{Name: "Skill Section", Chars: len(skillSection)})
+	}
+	total := len(capsule) + len(brief) + len(skillSection)
 	if total == 0 {
 		return ""
 	}
