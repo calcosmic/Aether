@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -177,27 +176,34 @@ func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, erro
 			})
 		}
 
-		// Merge with existing pending suggestions: keep any that aren't in the
-		// new set (by content hash comparison).
-		if cs.PendingSuggestions != nil {
-			existingHashes := make(map[string]struct{})
-			for _, p := range pending {
-				existingHashes[p.ContentHash] = struct{}{}
-			}
-			for _, old := range *cs.PendingSuggestions {
-				if _, exists := existingHashes[old.ContentHash]; !exists {
-					pending = append(pending, old)
+		// Read-modify-write COLONY_STATE.json as a single guarded operation
+		// (WR-01). The analysis above shells out to git and walks the whole
+		// repo tree -- a window of seconds during which another writer could
+		// change state. Merging against the `cs` snapshot loaded at function
+		// entry and overwriting the file wholesale would silently clobber
+		// that change; UpdateJSONAtomically re-reads the file inside the
+		// mutation callback instead, so the merge always starts from the
+		// latest committed state.
+		var updatedState colony.ColonyState
+		_ = store.UpdateJSONAtomically("COLONY_STATE.json", &updatedState, func() error {
+			// Merge with existing pending suggestions: keep any that aren't in
+			// the new set (by content hash comparison).
+			merged := append([]colony.PendingSuggestion{}, pending...)
+			if updatedState.PendingSuggestions != nil {
+				existingHashes := make(map[string]struct{}, len(pending))
+				for _, p := range pending {
+					existingHashes[p.ContentHash] = struct{}{}
+				}
+				for _, old := range *updatedState.PendingSuggestions {
+					if _, exists := existingHashes[old.ContentHash]; !exists {
+						merged = append(merged, old)
+					}
 				}
 			}
-		}
-
-		cs.PendingSuggestions = &pending
-		cs.LastAnalyzeCommit = &currentHead
-
-		stateData, err := json.Marshal(cs)
-		if err == nil {
-			_ = store.AtomicWrite("COLONY_STATE.json", stateData)
-		}
+			updatedState.PendingSuggestions = &merged
+			updatedState.LastAnalyzeCommit = &currentHead
+			return nil
+		})
 	}
 
 	return map[string]interface{}{
