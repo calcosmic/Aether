@@ -458,7 +458,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		constraintsText := strings.TrimSpace(state.Charter.Constraints)
 		if governanceText != "" || constraintsText != "" {
 			var charterSB strings.Builder
-			writeSectionHeader(&charterSB, "charter", "## Charter -- Binding Rules\n\n")
+			writeSectionHeader(&charterSB, "charter", charterFallbackHeading+"\n\n")
 			charterSB.WriteString("The colony operator approved the following governance. These are hard rules every worker must follow, not background information:\n\n")
 			if governanceText != "" {
 				charterSB.WriteString(fmt.Sprintf("Governance: %s\n", governanceText))

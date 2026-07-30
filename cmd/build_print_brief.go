@@ -388,7 +388,7 @@ func renderBriefChecklist(dispatch codexBuildDispatch, brief, capsule string) st
 	capsulePresent := strings.TrimSpace(capsule) != ""
 	rows = append(rows, briefChecklistRow{Label: "Context Capsule (manifest-level)", Present: capsulePresent, Chars: len(capsule)})
 
-	charterPresent, charterChars := locateChecklistSection(capsule, "## Charter -- Binding Rules")
+	charterPresent, charterChars := locateChecklistSection(capsule, charterSectionHeading())
 	rows = append(rows, briefChecklistRow{Label: "Charter (inside capsule)", Present: charterPresent, Chars: charterChars})
 
 	var b strings.Builder
