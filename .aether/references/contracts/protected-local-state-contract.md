@@ -158,6 +158,46 @@ Some commands handle precious state and must never auto-clear their artifacts:
 
 These commands are exempt from session freshness auto-clearing.
 
+## Residual Risks
+
+These are known, accepted trade-offs in the current enforcement model, not
+defects — documented here so the allowlist description above does not
+overstate what is actually mechanically guaranteed.
+
+### Enforcement is asymmetric across platforms
+
+`protectedHookWriteReason` (`cmd/hook_cmds.go`) is the only *mechanical*
+enforcement of this contract, and it only runs on Claude Code via the
+`PreToolUse` hook. On OpenCode and Codex there is no equivalent hook:
+
+- `.opencode/OPENCODE.md` describes its restrictions as "conduct, not a
+  sandbox" — a worker on OpenCode is only asked, in prose, to respect
+  protected paths and the sanctioned scratch subpaths.
+- Codex native has no hook mechanism at all; the same restrictions exist
+  only as behavioral text in the worker's task brief.
+
+Concretely: removing `scout` from `repositoryReadOnlyCastes`
+(`pkg/codex/permission_profile.go`) grants `workspace_write` plus a prose
+restriction ("write phase research artifacts under
+`.aether/data/phase-research` only"). A scout on Claude Code that tries to
+write outside that scope is mechanically blocked; the identical scout on
+OpenCode or Codex is not — nothing but the model's compliance with its own
+instructions stands in the way. This is a deliberate scope trade for this
+phase (D-05), not an oversight, but it means "protected" in this document
+means "protected on Claude Code" until an equivalent hook exists for the
+other two platforms.
+
+### Symlink resolution narrows, but does not eliminate, the lexical gap
+
+`normalizeHookPath` resolves symlinks on the deepest existing ancestor
+(`filepath.EvalSymlinks`) before allowlist/blocklist matching, so a symlink
+planted inside a sanctioned scratch subdir (e.g.
+`.aether/data/planning/link -> ../COLONY_STATE.json`) can no longer redirect
+a write onto protected state through that specific vector. This only
+hardens the Claude Code hook path described above — it does nothing for
+OpenCode or Codex, which have no matching-and-resolution step to harden in
+the first place.
+
 ## Agent Obligations
 
 **Builders MUST:**

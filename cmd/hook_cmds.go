@@ -328,9 +328,39 @@ func normalizeHookPath(target, cwd string) string {
 	}
 	abs, err := filepath.Abs(target)
 	if err != nil {
-		return filepath.Clean(target)
+		abs = filepath.Clean(target)
+	} else {
+		abs = filepath.Clean(abs)
 	}
-	return filepath.Clean(abs)
+	return resolveHookPathSymlinks(abs)
+}
+
+// resolveHookPathSymlinks resolves symlinks in path before allowlist and
+// blocklist matching (WR-05). normalizeHookPath was purely lexical
+// (filepath.Clean only), so a symlink planted inside a sanctioned scratch
+// subdir (e.g. .aether/data/planning/link -> ../COLONY_STATE.json) made a
+// Write to the "allowed" path land on protected state instead.
+//
+// A Write's target frequently does not exist yet (Write creates new files),
+// so filepath.EvalSymlinks on the full path fails outright when the leaf is
+// new. Walk up to the deepest existing ancestor, resolve symlinks on that
+// ancestor, then rejoin the not-yet-created remainder — this is the standard
+// approach for symlink-safe path resolution of paths that may not exist.
+func resolveHookPathSymlinks(path string) string {
+	if path == "" {
+		return path
+	}
+	cleaned := filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(cleaned); err == nil {
+		return resolved
+	}
+	parent := filepath.Dir(cleaned)
+	if parent == cleaned {
+		// Reached the filesystem root without finding an existing,
+		// resolvable ancestor -- nothing left to resolve.
+		return cleaned
+	}
+	return filepath.Join(resolveHookPathSymlinks(parent), filepath.Base(cleaned))
 }
 
 func emitHookBlock(reason string) error {

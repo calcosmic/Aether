@@ -172,6 +172,56 @@ func TestHookPreToolUseAllowsSanctionedScratchDirs(t *testing.T) {
 	})
 }
 
+// TestHookPreToolUseSymlinkInsideSanctionedDirCannotEscape is WR-05's
+// regression proof: normalizeHookPath used to be purely lexical, so a
+// symlink planted inside an allowlisted scratch subdir (planning/) but
+// pointing OUTSIDE it, at protected colony state, would lexically match the
+// planning/ prefix and be allowed through -- even though the write actually
+// lands on COLONY_STATE.json. Resolving symlinks before allowlist matching
+// must catch this.
+func TestHookPreToolUseSymlinkInsideSanctionedDirCannotEscape(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	_, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	planningDir := filepath.Join(tmpDir, ".aether", "data", "planning")
+	if err := os.MkdirAll(planningDir, 0755); err != nil {
+		t.Fatalf("mkdir planning dir: %v", err)
+	}
+	protected := filepath.Join(tmpDir, ".aether", "data", "COLONY_STATE.json")
+	if err := os.WriteFile(protected, []byte("{}"), 0644); err != nil {
+		t.Fatalf("seed protected file: %v", err)
+	}
+
+	// Symlink target must exist for filepath.EvalSymlinks to resolve fully.
+	escape := filepath.Join(planningDir, "escape.json")
+	if err := os.Symlink(protected, escape); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	setHookStdin(t, `{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"`+escape+`"}}`)
+
+	rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-pre-tool-use returned error: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &result); err != nil {
+		t.Fatalf("expected a block decision for the symlink escape, got unparseable output: %v (%q)", err, buf.String())
+	}
+	if result["decision"] != "block" {
+		t.Fatalf("symlink escape from sanctioned planning/ dir onto COLONY_STATE.json was not blocked: %v", result)
+	}
+}
+
 // TestSanctionedScratchDirsDocumented makes the "four documents describe the
 // same sanctioned scratch subpaths as the real enforcement code" claim
 // checkable rather than prose that drifts. Deleting any one sanctioned
