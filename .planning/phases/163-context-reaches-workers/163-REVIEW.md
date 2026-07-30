@@ -50,7 +50,14 @@ findings:
   warning: 6
   info: 4
   total: 11
-status: issues_found
+fixed_at: 2026-07-30T00:00:00Z
+fix_scope: critical_warning
+fixed:
+  critical: 1
+  warning: 6
+remaining:
+  info: 4
+status: fixed
 ---
 
 # Phase 163: Code Review Report
@@ -58,7 +65,8 @@ status: issues_found
 **Reviewed:** 2026-07-29
 **Depth:** standard
 **Files Reviewed:** 41
-**Status:** issues_found
+**Status:** fixed (all critical + warning findings resolved; 4 info findings
+remain open — out of default fix scope, see individual Info sections below)
 
 ## Summary
 
@@ -135,6 +143,8 @@ to exercise the non-blocking empty-result path instead. Separately, clean the
 polluted local state (`aether suggest-approve --dismiss-all` or
 `/ant-data-clean`).
 
+**Status:** fixed (commit ac88530b)
+
 ## Warnings
 
 ### WR-01: `runSuggestAnalyze` persists colony state via non-atomic read-modify-write
@@ -156,6 +166,8 @@ now per-build rather than manual-only.
 `store.UpdateJSONAtomically("COLONY_STATE.json", ...)` mutation callback so
 the read and write are a single guarded operation.
 
+**Status:** fixed (commit c0ba13aa)
+
 ### WR-02: `total` / `pending_suggestion_count` semantics are inconsistent across branches
 
 **File:** `cmd/suggest_analyze.go:99-107, 150-209`; `cmd/codex_build_finalize.go:461-471`
@@ -173,6 +185,8 @@ tells the user to run `suggest-approve` with nothing actionable.
 **Fix:** Define one meaning (active pending suggestions after merge), filter
 with the same `Dismissed` predicate `filterActiveSuggestions` uses, and return
 that from both branches.
+
+**Status:** fixed (commit f129d72a)
 
 ### WR-03: Budget ceiling sums the non-compact capsule constant while the delivered capsule is compact
 
@@ -192,6 +206,8 @@ to prevent.
 `resolveCodexWorkerContext` take the budget it is measured against), and
 tighten the individual capsule assertion to the same constant.
 
+**Status:** fixed (commit 56306a49)
+
 ### WR-04: `--print-brief --full` does not print "exactly what the worker receives"
 
 **File:** `cmd/build_print_brief.go:87-95, 373-382`
@@ -210,6 +226,8 @@ same prompt.
 manifest-level), then the brief, then the skill section, and feed
 capsule+brief+skills into the composition denominator — or rename the output
 to state it is the brief only.
+
+**Status:** fixed (commit c1a4da97)
 
 ### WR-05: Scout elevation to `workspace_write` is prose-enforced on two of three platforms; lexical hook check is symlink-bypassable
 
@@ -234,6 +252,8 @@ platform-enforcement asymmetry to
 `.aether/references/contracts/protected-local-state-contract.md` as a named
 residual risk.
 
+**Status:** fixed (commit 6dfecc7f)
+
 ### WR-06: Checklist charter detection breaks under section-template header overrides
 
 **File:** `cmd/build_print_brief.go:353`; `cmd/prompt_template_loader.go:111-117`
@@ -255,6 +275,8 @@ producer uses (e.g. a shared `charterSectionHeading()` helper called by both
 `buildColonyPrimeOutput` and `renderBriefChecklist`), or match on the ledger
 (`colonyPrimeOutput.Ledger.Included` contains a `charter` entry) instead of
 string-searching the assembled text.
+
+**Status:** fixed (commit d9d8ca67)
 
 ## Info
 
