@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.25
 milestone_name: Switch It On
 status: planning
-stopped_at: Phase 163 complete; 163.1 inserted, not planned
-last_updated: "2026-07-31T11:59:18.385Z"
+stopped_at: Phase 163.1 context gathered
+last_updated: "2026-07-31T22:27:57.311Z"
 last_activity: 2026-07-31 -- Phase 163 closed; six M4L-diagnosis fixes landed; 163.1 inserted
 progress:
   total_phases: 28
@@ -102,6 +102,6 @@ Carried from v1.23, deferred again in v1.25 (see REQUIREMENTS.md "Deferred"):
 
 ## Session Continuity
 
-Last session: 2026-07-27T12:37:01.666Z
-Stopped at: Phase 160 context gathered
-Resume file: .planning/phases/160-fail-loudly/160-CONTEXT.md
+Last session: 2026-07-31T22:27:57.298Z
+Stopped at: Phase 163.1 context gathered
+Resume file: .planning/phases/163.1-wrapper-runtime-completion-contract/163.1-CONTEXT.md
