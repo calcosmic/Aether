@@ -3361,7 +3361,7 @@ func TestRunVerificationStepUsesConfigurableTimeout(t *testing.T) {
 		t.Skip("sleep command not available on Windows")
 	}
 
-	step := runVerificationStep(context.Background(), t.TempDir(), "tests", "sleep 5", 100*time.Millisecond)
+	step := runVerificationStep(context.Background(), t.TempDir(), "tests", false, "sleep 5", 100*time.Millisecond)
 
 	if step.Passed {
 		t.Fatal("verification step passed, want timeout failure")
@@ -3375,6 +3375,115 @@ func TestRunVerificationStepUsesConfigurableTimeout(t *testing.T) {
 	if !strings.Contains(step.Summary, "--verification-timeout") {
 		t.Fatalf("summary missing recovery flag: %q", step.Summary)
 	}
+}
+
+// TestRunVerificationStepRequiredSkipHalts locks in D-10: a check the phase's
+// own criteria require must never report Passed:true when nothing ran. Both
+// skip paths — no command resolved at all, and a resolved command that turns
+// out not to exist in this repository — must halt with Blocked:true instead
+// of quietly passing.
+func TestRunVerificationStepRequiredSkipHalts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh -c not available on Windows")
+	}
+
+	t.Run("empty command", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "tests", true, "", time.Second)
+		if step.Passed {
+			t.Fatalf("Passed = true, want false: %+v", step)
+		}
+		if !step.Blocked {
+			t.Fatalf("Blocked = false, want true: %+v", step)
+		}
+		if !step.Skipped {
+			t.Fatalf("Skipped = false, want true: %+v", step)
+		}
+		if !step.Required {
+			t.Fatalf("Required = false, want true: %+v", step)
+		}
+		for _, marker := range []string{"no verification command resolved", "AGENTS.md", "## Verification Commands", ".aether/data/codebase.md"} {
+			if !strings.Contains(step.Summary, marker) {
+				t.Fatalf("summary missing %q: %q", marker, step.Summary)
+			}
+		}
+	})
+
+	t.Run("unresolvable command", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "tests", true, "definitely-not-a-real-command-xyz-12345", 5*time.Second)
+		if step.Passed {
+			t.Fatalf("Passed = true, want false: %+v", step)
+		}
+		if !step.Blocked {
+			t.Fatalf("Blocked = false, want true: %+v", step)
+		}
+		if !step.Skipped {
+			t.Fatalf("Skipped = false, want true: %+v", step)
+		}
+		if !step.Required {
+			t.Fatalf("Required = false, want true: %+v", step)
+		}
+		if !strings.Contains(step.Summary, "definitely-not-a-real-command-xyz-12345") {
+			t.Fatalf("summary missing the command that failed: %q", step.Summary)
+		}
+		for _, marker := range []string{"AGENTS.md", "## Verification Commands", ".aether/data/codebase.md"} {
+			if !strings.Contains(step.Summary, marker) {
+				t.Fatalf("summary missing %q: %q", marker, step.Summary)
+			}
+		}
+	})
+
+	t.Run("blocked required step agrees with the criterion gate", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "tests", true, "", time.Second)
+		passed, _, issue := evaluateCriterionCheck("tests", []codexVerificationStep{step}, codexClaimVerification{}, codexWatcherVerification{})
+		if passed {
+			t.Fatalf("evaluateCriterionCheck passed a blocked required step: %+v", step)
+		}
+		if issue != "required tests check was skipped" {
+			t.Fatalf("gate issue = %q, want %q", issue, "required tests check was skipped")
+		}
+	})
+}
+
+// TestRunVerificationStepOptionalSkipWarns locks in the Phase 160 D-01
+// enrichment side of the same branch: a check not named by any of the
+// phase's bound criterion requirements still just warns and lets the
+// watcher carry verification, exactly as it did before this plan.
+func TestRunVerificationStepOptionalSkipWarns(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh -c not available on Windows")
+	}
+
+	t.Run("empty command", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "lint", false, "", time.Second)
+		if !step.Passed {
+			t.Fatalf("Passed = false, want true: %+v", step)
+		}
+		if !step.Skipped {
+			t.Fatalf("Skipped = false, want true: %+v", step)
+		}
+		if step.Blocked {
+			t.Fatalf("Blocked = true, want false: %+v", step)
+		}
+		if step.Required {
+			t.Fatalf("Required = true, want false: %+v", step)
+		}
+	})
+
+	t.Run("unresolvable command", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "lint", false, "definitely-not-a-real-command-xyz-12345", 5*time.Second)
+		if !step.Passed {
+			t.Fatalf("Passed = false, want true: %+v", step)
+		}
+		if !step.Skipped {
+			t.Fatalf("Skipped = false, want true: %+v", step)
+		}
+		if step.Blocked {
+			t.Fatalf("Blocked = true, want false: %+v", step)
+		}
+		if step.Required {
+			t.Fatalf("Required = true, want false: %+v", step)
+		}
+	})
 }
 
 func TestVerificationTimeoutBlockerUsesVerificationTimeoutRecovery(t *testing.T) {

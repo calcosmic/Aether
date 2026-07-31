@@ -255,3 +255,38 @@ func TestRunCodexContinueVerificationAllowsBoundArtifactOnlyPhase(t *testing.T) 
 		t.Fatalf("artifact-only phase was incorrectly forced to run a shell command: %+v", report.BlockingIssues)
 	}
 }
+
+// TestRunCodexContinueVerificationBlocksRequiredCheckWithNoResolvableCommand
+// wires D-10 end to end through the real call site: a phase whose task
+// criteria bind the "tests" check, run against a repo with no resolvable
+// test command (setupCriterionEvidenceTest's temp root has no go.mod,
+// package.json, or any other ecosystem marker). The "tests" step must report
+// blocked, never passed, and the criterion gate must agree.
+func TestRunCodexContinueVerificationBlocksRequiredCheckWithNoResolvableCommand(t *testing.T) {
+	phase := criterionEvidenceTestPhase()
+	root, manifest := setupCriterionEvidenceTest(t, phase)
+
+	report, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, 0, time.Second, true)
+
+	var testsStep *codexVerificationStep
+	for i := range report.Steps {
+		if report.Steps[i].Name == "tests" {
+			testsStep = &report.Steps[i]
+		}
+	}
+	if testsStep == nil {
+		t.Fatalf("no tests step in report: %+v", report.Steps)
+	}
+	if testsStep.Passed {
+		t.Fatalf("tests step reported passed with no resolvable command: %+v", testsStep)
+	}
+	if !testsStep.Blocked {
+		t.Fatalf("tests step not marked blocked: %+v", testsStep)
+	}
+	if !strings.Contains(testsStep.Summary, "blocked") {
+		t.Fatalf("tests step summary does not say blocked: %q", testsStep.Summary)
+	}
+	if report.CriteriaPassed {
+		t.Fatalf("criteria passed despite blocked required tests check: %+v", report)
+	}
+}

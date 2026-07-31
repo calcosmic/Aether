@@ -207,11 +207,12 @@ func continuePlanOnlySourceCommand(reviewDepth colony.VerificationDepth, skipWat
 
 func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manifest codexContinueManifest, now time.Time, verificationTimeout time.Duration, skipWatchers bool) codexContinueVerificationReport {
 	commands := resolveCodexVerificationCommands(root)
+	requiredChecks := requiredVerificationChecks(phase)
 	steps := []codexVerificationStep{
-		runVerificationStep(context.Background(), root, "build", commands.Build, verificationTimeout),
-		runVerificationStep(context.Background(), root, "types", commands.Type, verificationTimeout),
-		runVerificationStep(context.Background(), root, "lint", commands.Lint, verificationTimeout),
-		runVerificationStep(context.Background(), root, "tests", commands.Test, verificationTimeout),
+		runVerificationStep(context.Background(), root, "build", requiredChecks["build"], commands.Build, verificationTimeout),
+		runVerificationStep(context.Background(), root, "types", requiredChecks["types"], commands.Type, verificationTimeout),
+		runVerificationStep(context.Background(), root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
+		runVerificationStep(context.Background(), root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	watcher := evaluateContinueWatcherVerification(manifest)

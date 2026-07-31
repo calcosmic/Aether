@@ -35,6 +35,8 @@ type codexVerificationStep struct {
 	Command        string                 `json:"command,omitempty"`
 	Passed         bool                   `json:"passed"`
 	Skipped        bool                   `json:"skipped,omitempty"`
+	Required       bool                   `json:"required,omitempty"`
+	Blocked        bool                   `json:"blocked,omitempty"`
 	TimedOut       bool                   `json:"timed_out,omitempty"`
 	TimeoutSeconds int                    `json:"timeout_seconds,omitempty"`
 	ExitCode       int                    `json:"exit_code,omitempty"`
@@ -1444,11 +1446,12 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	now := time.Now().UTC()
 	verificationTimeout = effectiveContinueVerificationTimeout(verificationTimeout)
 	commands := resolveCodexVerificationCommands(root)
+	requiredChecks := requiredVerificationChecks(phase)
 	steps := []codexVerificationStep{
-		runVerificationStep(ctx, root, "build", commands.Build, verificationTimeout),
-		runVerificationStep(ctx, root, "types", commands.Type, verificationTimeout),
-		runVerificationStep(ctx, root, "lint", commands.Lint, verificationTimeout),
-		runVerificationStep(ctx, root, "tests", commands.Test, verificationTimeout),
+		runVerificationStep(ctx, root, "build", requiredChecks["build"], commands.Build, verificationTimeout),
+		runVerificationStep(ctx, root, "types", requiredChecks["types"], commands.Type, verificationTimeout),
+		runVerificationStep(ctx, root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
+		runVerificationStep(ctx, root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
@@ -2664,13 +2667,33 @@ func setVerificationCommand(commands *codexVerificationCommands, kind, command s
 	}
 }
 
-func runVerificationStep(ctx context.Context, root, name, command string, timeout time.Duration) codexVerificationStep {
+// blockedVerificationConfigGuidance names every location a user can configure
+// a real verification command. Phase 160 D-01 draws the gate-vs-enrichment
+// line at "can this halt cleanly point somewhere actionable" — this string is
+// that actionable pointer, shared by both blocked-return sites below so the
+// three locations never drift apart.
+func blockedVerificationConfigGuidance() string {
+	return `configure a real command in AGENTS.md, in CLAUDE.md under "## Verification Commands", or in .aether/data/codebase.md`
+}
+
+func runVerificationStep(ctx context.Context, root, name string, required bool, command string, timeout time.Duration) codexVerificationStep {
 	if strings.TrimSpace(command) == "" {
+		if required {
+			return codexVerificationStep{
+				Name:     name,
+				Skipped:  true,
+				Blocked:  true,
+				Required: true,
+				Passed:   false,
+				Summary:  fmt.Sprintf("blocked: no verification command resolved for %s; %s", name, blockedVerificationConfigGuidance()),
+			}
+		}
 		return codexVerificationStep{
-			Name:    name,
-			Skipped: true,
-			Passed:  true,
-			Summary: "no command resolved; skipped",
+			Name:     name,
+			Skipped:  true,
+			Passed:   true,
+			Required: false,
+			Summary:  "no command resolved; skipped",
 		}
 	}
 
@@ -2680,6 +2703,7 @@ func runVerificationStep(ctx context.Context, root, name, command string, timeou
 		Name:           name,
 		Command:        command,
 		Passed:         err == nil,
+		Required:       required,
 		TimedOut:       timedOut,
 		TimeoutSeconds: int(timeout / time.Second),
 		ExitCode:       exitCode,
@@ -2692,13 +2716,28 @@ func runVerificationStep(ctx context.Context, root, name, command string, timeou
 		// project with no lint script, or `make test` with no such target, used
 		// to hard-block phase advancement with no remedy the user could see.
 		// The absence of a tool proves nothing about the code; classify it as
-		// Skipped and let the watcher carry verification.
+		// Skipped and let the watcher carry verification — unless this check is
+		// required by the phase's own criteria, in which case reporting a pass
+		// here would directly contradict evaluateCriterionCheck's gate below.
 		if isCommandUnresolvable(output, exitCode) {
+			if required {
+				return codexVerificationStep{
+					Name:     name,
+					Command:  command,
+					Skipped:  true,
+					Blocked:  true,
+					Required: true,
+					Passed:   false,
+					ExitCode: exitCode,
+					Summary:  fmt.Sprintf("blocked: verification command %q for %s could not run (exit %d); %s", command, name, exitCode, blockedVerificationConfigGuidance()),
+				}
+			}
 			return codexVerificationStep{
 				Name:     name,
 				Command:  command,
 				Skipped:  true,
 				Passed:   true,
+				Required: false,
 				ExitCode: exitCode,
 				Summary:  fmt.Sprintf("%s: command unavailable in this repository (%s); skipped — configure a real command in CLAUDE.md to enable this check", name, command),
 			}
@@ -2711,6 +2750,25 @@ func runVerificationStep(ctx context.Context, root, name, command string, timeou
 		}
 	}
 	return step
+}
+
+// requiredVerificationChecks derives the set of shell verification checks
+// ("build", "types", "lint", "tests") that at least one of the phase's bound
+// criterion requirements names. A check absent from this set is enrichment
+// (Phase 160 D-01) and keeps warning on skip; a check present in it is a gate
+// and must halt loudly when it cannot run.
+func requiredVerificationChecks(phase colony.Phase) map[string]bool {
+	required := map[string]bool{}
+	for _, requirement := range flattenPhaseCriterionEvidenceRequirements(phase) {
+		for _, check := range requirement.Checks {
+			check = strings.ToLower(strings.TrimSpace(check))
+			if check == "" {
+				continue
+			}
+			required[check] = true
+		}
+	}
+	return required
 }
 
 // isCommandUnresolvable reports whether a verification failure means the
