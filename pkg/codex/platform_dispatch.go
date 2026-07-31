@@ -749,8 +749,24 @@ func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, 
 	return failure
 }
 
+// resolvedPreflightTimeout returns the probe budget, honoring the
+// AETHER_PREFLIGHT_TIMEOUT env var (Go duration syntax, e.g. "90s") so slow
+// hosts can widen it without a rebuild. Invalid or non-positive values fall
+// back to the compiled default — a broken env var must not brick dispatch.
+func resolvedPreflightTimeout() time.Duration {
+	envValue := strings.TrimSpace(os.Getenv("AETHER_PREFLIGHT_TIMEOUT"))
+	if envValue == "" {
+		return hostedPreflightTimeout
+	}
+	timeout, err := time.ParseDuration(envValue)
+	if err != nil || timeout <= 0 {
+		return hostedPreflightTimeout
+	}
+	return timeout
+}
+
 func attemptHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, root string, args []string, binary string) (AvailabilityStatus, bool) {
-	probeCtx, cancel := context.WithTimeout(ctx, hostedPreflightTimeout)
+	probeCtx, cancel := context.WithTimeout(ctx, resolvedPreflightTimeout())
 	defer cancel()
 
 	cmd := exec.CommandContext(probeCtx, binary, args...)

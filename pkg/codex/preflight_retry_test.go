@@ -122,3 +122,28 @@ func TestHostedPreflightGivesUpAfterAllAttempts(t *testing.T) {
 		t.Fatalf("probe ran %d times, want %d", runs, hostedPreflightAttempts)
 	}
 }
+
+// AETHER_PREFLIGHT_TIMEOUT widens the probe budget without a rebuild; invalid
+// or non-positive values fall back to the compiled default instead of
+// bricking dispatch.
+func TestResolvedPreflightTimeoutEnvOverride(t *testing.T) {
+	t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "90s")
+	if got := resolvedPreflightTimeout(); got != 90*time.Second {
+		t.Fatalf("resolvedPreflightTimeout = %v, want 90s", got)
+	}
+
+	t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "banana")
+	if got := resolvedPreflightTimeout(); got != hostedPreflightTimeout {
+		t.Fatalf("invalid env value must fall back to default, got %v", got)
+	}
+
+	t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "-5s")
+	if got := resolvedPreflightTimeout(); got != hostedPreflightTimeout {
+		t.Fatalf("non-positive env value must fall back to default, got %v", got)
+	}
+
+	t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "")
+	if got := resolvedPreflightTimeout(); got != hostedPreflightTimeout {
+		t.Fatalf("empty env value must use default, got %v", got)
+	}
+}
