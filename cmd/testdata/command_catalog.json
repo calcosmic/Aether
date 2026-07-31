@@ -1491,6 +1491,17 @@
     "stability_score": 91
   },
   {
+    "name": "contract-schema",
+    "short_description": "Generate or verify the completion-packet JSON Schema against the Go structs",
+    "flags": [
+      "check",
+      "write"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "council",
     "short_description": "Multi-perspective deliberation system",
     "flags": [],

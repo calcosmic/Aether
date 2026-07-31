@@ -974,10 +974,17 @@
       ]
     },
     "stringList": {
-      "items": {
-        "type": "string"
-      },
-      "type": "array"
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array"
+        }
+      ]
     }
   }
 }
