@@ -245,7 +245,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
-	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
+	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -482,7 +482,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
 	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
-	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
+	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, err
 	}
@@ -2594,7 +2594,28 @@ func dispatchRunStatus(dispatches []codexBuildDispatch) string {
 	return summarizeRunStatus(statuses...)
 }
 
-func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch) ([]codexBuildDispatch, error) {
+// ensureUniqueBuildDispatchNames allocates a collision-free worker name for
+// each dispatch. Names are checked against the full spawn-tree history so a
+// name reused from a genuinely different phase, or from a previously sealed
+// (finalized, i.e. successfully built) attempt of this same phase, still gets
+// a `-rN` suffix (D-09 spoofing guard, T-163.1-20).
+//
+// Spawn-tree entries carry no phase context (SpawnEntry has no phase field),
+// so re-planning the CURRENT phase's still-open attempt would otherwise see
+// its own prior names as "used" and rename every worker on every re-plan. To
+// keep names stable across re-plans, phaseNum's latest attempt record
+// (buildAttemptRecord.Dispatches) is consulted directly and its names are
+// excluded from the collision set, UNLESS that attempt already reached
+// buildAttemptBuilt -- the one status meaning workers actually ran and
+// produced attributable results under those names.
+//
+// Note this is intentionally not gated on buildAttemptStatusActive: whenever
+// this function actually runs, a same-phase prior attempt that WAS active has
+// already been forced through interruptLatestBuildAttempt by the caller (see
+// runCodexBuildPlanOnlyWithOptions / runCodexBuildWithOptions), so by the
+// time name allocation happens its status is always terminal (built, failed,
+// or interrupted) or nonexistent -- never one of the "active" enum values.
+func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch, phaseNum int) ([]codexBuildDispatch, error) {
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	entries, err := spawnTree.Parse()
 	if err != nil {
@@ -2604,6 +2625,14 @@ func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch) ([]codexBui
 	used := make(map[string]bool, len(entries)+len(dispatches))
 	for _, entry := range entries {
 		used[entry.AgentName] = true
+	}
+
+	if phaseNum > 0 {
+		if _, record, ok := loadLatestBuildAttempt(phaseNum); ok && record.Status != buildAttemptBuilt {
+			for _, dispatch := range record.Dispatches {
+				delete(used, dispatch.Name)
+			}
+		}
 	}
 
 	allocated := make([]codexBuildDispatch, len(dispatches))

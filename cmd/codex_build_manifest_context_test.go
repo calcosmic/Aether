@@ -75,7 +75,7 @@ func TestBuildManifestCarriesContextCapsuleOnce(t *testing.T) {
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
-	dispatches, err := ensureUniqueBuildDispatchNames(dispatches)
+	dispatches, err := ensureUniqueBuildDispatchNames(dispatches, phase.ID)
 	if err != nil {
 		t.Fatalf("ensureUniqueBuildDispatchNames: %v", err)
 	}

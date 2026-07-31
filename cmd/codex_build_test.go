@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -2342,6 +2345,215 @@ func TestBuildAllocatesUniqueNamesWhenSpawnHistoryCollides(t *testing.T) {
 	}
 	if !strings.HasPrefix(manifest.Dispatches[0].Name, baseDispatches[0].Name+"-r") {
 		t.Fatalf("expected retry-style suffix on renamed worker, got %q", manifest.Dispatches[0].Name)
+	}
+}
+
+// seedBuildAttemptRecord writes a minimal buildAttemptRecord and its
+// latest-attempt pointer directly to the store, bypassing beginBuildAttempt's
+// ColonyState/workspace-fingerprint requirements, so tests can construct an
+// attempt in an arbitrary status for a given phase.
+func seedBuildAttemptRecord(t *testing.T, phaseNum int, status string, dispatches []codexBuildDispatch) {
+	t.Helper()
+	attemptID := fmt.Sprintf("attempt-test-phase-%d-%s", phaseNum, status)
+	attemptRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "attempts", attemptID+".json"))
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	record := buildAttemptRecord{
+		SchemaVersion: buildAttemptSchemaVersion,
+		ID:            attemptID,
+		Phase:         phaseNum,
+		Status:        status,
+		StartedAt:     now,
+		UpdatedAt:     now,
+		Dispatches:    dispatches,
+	}
+	if err := store.SaveJSON(attemptRel, record); err != nil {
+		t.Fatalf("failed to seed build attempt record: %v", err)
+	}
+	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseNum), latestBuildAttemptPointer{
+		SchemaVersion: buildAttemptSchemaVersion,
+		AttemptID:     attemptID,
+		Path:          displayDataPath(attemptRel),
+		UpdatedAt:     now,
+	}); err != nil {
+		t.Fatalf("failed to seed latest build attempt pointer: %v", err)
+	}
+}
+
+func dispatchNames(dispatches []codexBuildDispatch) []string {
+	names := make([]string, len(dispatches))
+	for i, dispatch := range dispatches {
+		names[i] = dispatch.Name
+	}
+	sort.Strings(names)
+	return names
+}
+
+// TestEnsureUniqueBuildDispatchNamesStableAcrossRePlan is the headline D-09
+// test: planning the same phase's still-open attempt twice in a row, without
+// finalizing it, must produce identical worker names both times -- no -rN
+// suffixes -- so results never need manual remapping between re-plans.
+func TestEnsureUniqueBuildDispatchNamesStableAcrossRePlan(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Keep worker names stable across re-plans"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Re-plan stability",
+					Description: "Re-planning the same unfinalized attempt keeps worker names",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &taskID, Goal: "Implement stable naming", Status: colony.TaskPending},
+					},
+					SuccessCriteria: []string{"Names stay stable"},
+				},
+			},
+		},
+	})
+
+	_, _, _, firstDispatches, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("first plan-only run failed: %v", err)
+	}
+	_, _, _, secondDispatches, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("second plan-only run (re-plan) failed: %v", err)
+	}
+
+	firstNames := dispatchNames(firstDispatches)
+	secondNames := dispatchNames(secondDispatches)
+	if len(firstNames) == 0 {
+		t.Fatal("expected at least one dispatch from the first plan-only run")
+	}
+	if !reflect.DeepEqual(firstNames, secondNames) {
+		t.Fatalf("worker names changed across re-plan: first=%v second=%v", firstNames, secondNames)
+	}
+	retrySuffix := regexp.MustCompile(`-r[0-9]+$`)
+	for _, name := range secondNames {
+		if retrySuffix.MatchString(name) {
+			t.Fatalf("re-plan produced a retry-suffixed name %q, want stable names", name)
+		}
+	}
+}
+
+// TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase proves
+// a name reused from a genuinely different phase's attempt still forces a
+// suffix -- the phase-scoped exclusion in ensureUniqueBuildDispatchNames must
+// not leak across phases (T-163.1-20).
+func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase(t *testing.T) {
+	saveGlobals(t)
+	dataDir := t.TempDir() + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-44", "Phase 1 task", 1); err != nil {
+		t.Fatalf("failed to seed spawn tree: %v", err)
+	}
+	// Phase 1 has its own active, unfinalized attempt that used this name --
+	// that exclusion must not apply when planning a DIFFERENT phase.
+	seedBuildAttemptRecord(t, 1, buildAttemptAwaiting, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
+
+	dispatches := []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}}
+	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 2)
+	if err != nil {
+		t.Fatalf("ensureUniqueBuildDispatchNames: %v", err)
+	}
+	if allocated[0].Name == "Hammer-44" {
+		t.Fatalf("expected a same-name worker from a different phase to be renamed, still got %q", allocated[0].Name)
+	}
+	if !strings.HasPrefix(allocated[0].Name, "Hammer-44-r") {
+		t.Fatalf("expected retry-style suffix, got %q", allocated[0].Name)
+	}
+}
+
+// TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromSealedAttempt proves
+// a name collision with a worker from a previously sealed (built) attempt of
+// THIS SAME phase still forces a suffix -- reuse is scoped to unfinalized
+// attempts only (T-163.1-20).
+func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromSealedAttempt(t *testing.T) {
+	saveGlobals(t)
+	dataDir := t.TempDir() + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-44", "Phase 1 task", 1); err != nil {
+		t.Fatalf("failed to seed spawn tree: %v", err)
+	}
+	seedBuildAttemptRecord(t, 1, buildAttemptBuilt, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
+
+	dispatches := []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}}
+	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 1)
+	if err != nil {
+		t.Fatalf("ensureUniqueBuildDispatchNames: %v", err)
+	}
+	if allocated[0].Name == "Hammer-44" {
+		t.Fatalf("expected a same-name worker from a sealed (built) attempt of the same phase to be renamed, still got %q", allocated[0].Name)
+	}
+	if !strings.HasPrefix(allocated[0].Name, "Hammer-44-r") {
+		t.Fatalf("expected retry-style suffix, got %q", allocated[0].Name)
+	}
+}
+
+// TestEnsureUniqueBuildDispatchNamesDistinguishesWithinRunCollisions proves
+// the within-run collision guard survives the D-09 change: two dispatches
+// produced by the same plan run that would share a name must still end up
+// with distinct names.
+func TestEnsureUniqueBuildDispatchNamesDistinguishesWithinRunCollisions(t *testing.T) {
+	saveGlobals(t)
+	dataDir := t.TempDir() + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	dispatches := []codexBuildDispatch{
+		{Name: "Hammer-44", Caste: "builder"},
+		{Name: "Hammer-44", Caste: "watcher"},
+	}
+	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 1)
+	if err != nil {
+		t.Fatalf("ensureUniqueBuildDispatchNames: %v", err)
+	}
+	if allocated[0].Name == allocated[1].Name {
+		t.Fatalf("expected two same-named dispatches in one run to get distinct names, both got %q", allocated[0].Name)
 	}
 }
 
