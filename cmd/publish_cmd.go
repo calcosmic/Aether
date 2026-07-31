@@ -106,7 +106,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	// Read old hub version before sync for the warning message
 	oldHubVersion := readHubVersionAtPath(hubDir)
 
-	hubResult := setupInstallHub(hubDir, packageDir)
+	hubResult := setupInstallHub(hubDir, packageDir, version)
 	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
 		return fmt.Errorf("hub sync failed: %v", errVal)
 	}

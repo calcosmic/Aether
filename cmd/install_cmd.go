@@ -110,7 +110,8 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	// Set up hub directory
 	hubDir := resolveHubPathForHome(homeDir, channel)
-	hubResult := setupInstallHub(hubDir, packageDir)
+	// install resolves its own version explicitly, preserving today's behavior.
+	hubResult := setupInstallHub(hubDir, packageDir, resolveVersion(packageDir))
 	results = append(results, hubResult)
 	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
 		syncErrors = append(syncErrors, errVal)
@@ -684,7 +685,18 @@ var hubExcludeDirs = map[string]bool{
 
 // setupInstallHub creates the hub directory at ~/.aether/ and syncs companion files
 // from .aether/ to ~/.aether/system/.
-func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
+//
+// version must be the already-resolved version to write into the hub's version
+// files. Callers must resolve it themselves rather than letting this function
+// re-derive it: during publish, the source checkout's version.json is
+// authoritative, not the version baked into whichever binary happens to be
+// running (see cmd/publish_cmd.go's readRepoVersion comment) — an old binary's
+// ldflags Version would otherwise silently override a freshly bumped
+// version.json on the first publish after a version bump. If version is empty,
+// this function falls back to resolveVersion(packageDir) so no caller is left
+// writing an empty version, but callers on the publish path must never rely on
+// that fallback.
+func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} {
 	result := map[string]interface{}{
 		"label": "Hub",
 		"src":   ".aether/",
@@ -801,9 +813,13 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 		result["registry"] = "preserved"
 	}
 
-	// Write version.json using git tags or ldflags (not the hardcoded default)
+	// Write version.json using the version the caller resolved (never re-derive
+	// it here — see the function comment above for why).
 	versionPath := filepath.Join(hubDir, "version.json")
-	resolved := resolveVersion(packageDir)
+	resolved := strings.TrimSpace(version)
+	if resolved == "" {
+		resolved = resolveVersion(packageDir)
+	}
 	versionContent := fmt.Sprintf(`{"version":"%s","updated_at":"now"}`, resolved)
 	if err := os.WriteFile(versionPath, []byte(versionContent), 0644); err != nil {
 		result["version_error"] = fmt.Sprintf("failed to write version: %v", err)
