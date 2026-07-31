@@ -1,0 +1,983 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.dev/schemas/completion-packet.schema.json",
+  "$ref": "#/$defs/codexExternalBuildCompletion",
+  "$defs": {
+    "CriterionEvidenceRequirement": {
+      "properties": {
+        "criterion": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "checks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "criterion"
+      ]
+    },
+    "ExecutionBinding": {
+      "properties": {
+        "schema_version": {
+          "type": "integer"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "type": "string"
+        },
+        "workspace_fingerprint": {
+          "type": "string"
+        },
+        "execution_owner": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "run_id",
+        "attempt_id",
+        "manifest_sha256",
+        "workspace_fingerprint",
+        "execution_owner"
+      ]
+    },
+    "PermissionProfile": {
+      "properties": {
+        "schema_version": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "filesystem": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "approval": {
+          "type": "string"
+        },
+        "write_scopes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "behavioral_restrictions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "name",
+        "filesystem",
+        "shell",
+        "network",
+        "approval"
+      ]
+    },
+    "WorkerHandoff": {
+      "properties": {
+        "changed_files": {
+          "$ref": "#/$defs/stringList"
+        },
+        "commands_run": {
+          "$ref": "#/$defs/stringList"
+        },
+        "verification_status": {
+          "type": "string"
+        },
+        "known_failures": {
+          "$ref": "#/$defs/stringList"
+        },
+        "open_decisions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "assumptions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "next_worker_instructions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "do_not_repeat": {
+          "$ref": "#/$defs/stringList"
+        },
+        "freshness": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "codexBuildArtifactEvidence": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "modified_at": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "size",
+        "modified_at"
+      ]
+    },
+    "codexBuildClaims": {
+      "properties": {
+        "files_created": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "files_modified": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tests_written": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_claims": {
+          "items": {
+            "$ref": "#/$defs/codexBuildTaskClaim"
+          },
+          "type": "array"
+        },
+        "artifact_evidence": {
+          "items": {
+            "$ref": "#/$defs/codexBuildArtifactEvidence"
+          },
+          "type": "array"
+        },
+        "build_phase": {
+          "type": "integer"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "files_created",
+        "files_modified",
+        "build_phase",
+        "timestamp"
+      ]
+    },
+    "codexBuildDispatch": {
+      "properties": {
+        "stage": {
+          "type": "string"
+        },
+        "wave": {
+          "type": "integer"
+        },
+        "execution_wave": {
+          "type": "integer"
+        },
+        "caste": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "task_index": {
+          "type": "integer"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "declared_paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "blockers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "brief": {
+          "type": "string"
+        },
+        "skill_section": {
+          "type": "string"
+        },
+        "skill_count": {
+          "type": "integer"
+        },
+        "colony_skill_count": {
+          "type": "integer"
+        },
+        "domain_skill_count": {
+          "type": "integer"
+        },
+        "matched_skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "handoff_section": {
+          "type": "string"
+        },
+        "permission_profile": {
+          "$ref": "#/$defs/PermissionProfile"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "stage",
+        "caste",
+        "name",
+        "task",
+        "status",
+        "permission_profile"
+      ]
+    },
+    "codexBuildExecutionPlan": {
+      "properties": {
+        "execution_wave": {
+          "type": "integer"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "wave": {
+          "type": "integer"
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "worker_count": {
+          "type": "integer"
+        },
+        "castes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "execution_wave",
+        "stage",
+        "strategy",
+        "worker_count"
+      ]
+    },
+    "codexBuildManifest": {
+      "properties": {
+        "phase": {
+          "type": "integer"
+        },
+        "phase_name": {
+          "type": "string"
+        },
+        "phase_mode": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "colony_mode": {
+          "type": "string"
+        },
+        "plan_only": {
+          "type": "boolean"
+        },
+        "parallel_mode": {
+          "type": "string"
+        },
+        "wave_execution": {
+          "items": {
+            "$ref": "#/$defs/codexWaveExecutionPlan"
+          },
+          "type": "array"
+        },
+        "execution_plan": {
+          "items": {
+            "$ref": "#/$defs/codexBuildExecutionPlan"
+          },
+          "type": "array"
+        },
+        "colony_depth": {
+          "type": "string"
+        },
+        "dispatch_mode": {
+          "type": "string"
+        },
+        "host_platform": {
+          "type": "string"
+        },
+        "execution_owner": {
+          "type": "string"
+        },
+        "worker_dispatch_opt_in": {
+          "type": "boolean"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "plan_revision_id": {
+          "type": "string"
+        },
+        "plan_state_hash": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "attempt_path": {
+          "type": "string"
+        },
+        "execution_binding": {
+          "$ref": "#/$defs/ExecutionBinding"
+        },
+        "state": {
+          "type": "string"
+        },
+        "checkpoint": {
+          "type": "string"
+        },
+        "claims_path": {
+          "type": "string"
+        },
+        "worker_briefs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "context_capsule": {
+          "type": "string"
+        },
+        "dispatches": {
+          "items": {
+            "$ref": "#/$defs/codexBuildDispatch"
+          },
+          "type": "array"
+        },
+        "selected_tasks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/codexBuildTaskPlan"
+          },
+          "type": "array"
+        },
+        "success_criteria": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "criterion_evidence_policy": {
+          "type": "string"
+        },
+        "evidence_requirements": {
+          "items": {
+            "$ref": "#/$defs/CriterionEvidenceRequirement"
+          },
+          "type": "array"
+        },
+        "review_depth": {
+          "type": "string"
+        },
+        "dispatch_contract": {
+          "type": "object"
+        },
+        "provider_diagnostics": {
+          "type": "string"
+        },
+        "profile_contract": {
+          "$ref": "#/$defs/codexWorkflowProfileContract"
+        },
+        "queen_recommendation": {
+          "$ref": "#/$defs/codexQueenWorkflowRecommendation"
+        },
+        "queen_execution_policy": {
+          "$ref": "#/$defs/codexQueenExecutionPolicy"
+        },
+        "boundary_questions": {
+          "items": {
+            "$ref": "#/$defs/discussQuestion"
+          },
+          "type": "array"
+        },
+        "boundary_question_count": {
+          "type": "integer"
+        },
+        "boundary_questions_created": {
+          "type": "integer"
+        },
+        "boundary_questions_existing": {
+          "type": "integer"
+        },
+        "orchestrator_boundary_guidance": {
+          "$ref": "#/$defs/orchestratorBoundaryGuidance"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "phase",
+        "phase_name",
+        "root",
+        "colony_depth",
+        "generated_at",
+        "state",
+        "checkpoint",
+        "claims_path",
+        "worker_briefs",
+        "dispatches",
+        "tasks",
+        "success_criteria"
+      ]
+    },
+    "codexBuildTaskClaim": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "files_created": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "files_modified": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tests_written": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id"
+      ]
+    },
+    "codexBuildTaskPlan": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "wave": {
+          "type": "integer"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "goal",
+        "status"
+      ]
+    },
+    "codexExternalBuildCompletion": {
+      "properties": {
+        "dispatch_manifest": {
+          "$ref": "#/$defs/codexBuildManifest"
+        },
+        "manifest": {
+          "$ref": "#/$defs/codexBuildManifest"
+        },
+        "dispatches": {
+          "items": {
+            "$ref": "#/$defs/codexExternalBuildWorkerResult"
+          },
+          "type": "array"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/codexExternalBuildWorkerResult"
+          },
+          "type": "array"
+        },
+        "workers": {
+          "items": {
+            "$ref": "#/$defs/codexExternalBuildWorkerResult"
+          },
+          "type": "array"
+        },
+        "claims": {
+          "$ref": "#/$defs/codexBuildClaims"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "codexExternalBuildWorkerResult": {
+      "properties": {
+        "stage": {
+          "type": "string"
+        },
+        "wave": {
+          "type": "integer"
+        },
+        "execution_wave": {
+          "type": "integer"
+        },
+        "caste": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ant_name": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "task_index": {
+          "type": "integer"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "blockers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "tool_count": {
+          "type": "integer"
+        },
+        "files_created": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "files_modified": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tests_written": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "handoff": {
+          "$ref": "#/$defs/WorkerHandoff"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "status"
+      ]
+    },
+    "codexQueenExecutionPolicy": {
+      "properties": {
+        "verification_depth": {
+          "type": "string"
+        },
+        "review_depth": {
+          "type": "string"
+        },
+        "spawn_budget": {
+          "$ref": "#/$defs/codexQueenSpawnBudgetContract"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "codexQueenSpawnBudgetContract": {
+      "properties": {
+        "max_workers": {
+          "type": "integer"
+        },
+        "selected_workers": {
+          "type": "integer"
+        },
+        "worker_count": {
+          "type": "integer"
+        },
+        "max_selected_castes": {
+          "type": "integer"
+        },
+        "selected_castes": {
+          "type": "integer"
+        },
+        "pruned_workers": {
+          "type": "integer"
+        },
+        "pruned_castes": {
+          "type": "integer"
+        },
+        "preserved_castes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required_castes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "policy_added_castes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "selected_reasons": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "pruned_reasons": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "skipped_castes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "overflow_required_workers": {
+          "type": "integer"
+        },
+        "relevance_threshold": {
+          "type": "integer"
+        },
+        "budget_unit": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "flow_type": {
+          "type": "string"
+        },
+        "risk_level": {
+          "type": "string"
+        },
+        "castes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "codexQueenWorkflowRecommendation": {
+      "properties": {
+        "review_depth": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "codexWaveExecutionPlan": {
+      "properties": {
+        "wave": {
+          "type": "integer"
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "worker_count": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "wave",
+        "strategy",
+        "worker_count",
+        "reason"
+      ]
+    },
+    "codexWorkflowProfileContract": {
+      "properties": {
+        "review_depth": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "discussQuestion": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "hard_constraint": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "category",
+        "question",
+        "options",
+        "reasoning"
+      ]
+    },
+    "orchestratorBoundaryGuidance": {
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "workflow": {
+          "type": "string"
+        },
+        "colony_mode": {
+          "type": "string"
+        },
+        "pending_count": {
+          "type": "integer"
+        },
+        "next": {
+          "type": "string"
+        },
+        "after_discuss_next": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "question_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "question_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "question_summaries": {
+          "items": {
+            "$ref": "#/$defs/orchestratorBoundaryQuestionSummary"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "active",
+        "workflow",
+        "colony_mode",
+        "pending_count",
+        "next"
+      ]
+    },
+    "orchestratorBoundaryQuestionSummary": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hard_constraint": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "source",
+        "question"
+      ]
+    },
+    "stringList": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  }
+}
