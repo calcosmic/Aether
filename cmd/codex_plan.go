@@ -348,6 +348,9 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
+		if opts.Accept {
+			return nil, fmt.Errorf("--accept has no effect while an existing plan is active: nothing was accepted. Re-run the loop with `aether plan --refresh --accept`, or adopt a validated on-disk phase-plan.json with `aether plan --repair-artifact`")
+		}
 		// Persist resolved verification depth only for non-plan-only paths.
 		state.VerificationDepth = verificationDepth
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
