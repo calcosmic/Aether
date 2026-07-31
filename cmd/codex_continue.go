@@ -2353,7 +2353,10 @@ func resolveCodexVerificationCommands(root string) codexVerificationCommands {
 			commands.Lint = "ruff check ."
 		}
 		if commands.Test == "" {
-			commands.Test = "pytest"
+			// python -m pytest, not bare pytest: the console script does not
+			// put the repo root on sys.path, so bare pytest fails every test
+			// with ModuleNotFoundError in src-layout-less repos.
+			commands.Test = "python3 -m pytest"
 		}
 	case fileExists(filepath.Join(root, "Makefile")):
 		if commands.Build == "" {
@@ -2594,6 +2597,11 @@ func detectVerificationCommandKind(command string) string {
 		strings.HasPrefix(lower, "yarn test"),
 		strings.HasPrefix(lower, "cargo test"),
 		strings.HasPrefix(lower, "pytest"),
+		strings.HasPrefix(lower, "python -m pytest"),
+		strings.HasPrefix(lower, "python3 -m pytest"),
+		strings.HasPrefix(lower, "python -m unittest"),
+		strings.HasPrefix(lower, "python3 -m unittest"),
+		strings.HasPrefix(lower, "uv run pytest"),
 		strings.HasPrefix(lower, "make test"):
 		return "tests"
 	case strings.HasPrefix(lower, "go vet"),

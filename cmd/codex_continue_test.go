@@ -2592,6 +2592,36 @@ func TestVerificationCommandParserAcceptsBunAndNpxCommands(t *testing.T) {
 	}
 }
 
+// python3 -m pytest is the correct spelling for src-layout-less Python repos
+// (bare pytest omits the repo root from sys.path). A documented test command
+// in that spelling must be recognized, not silently discarded to the heuristic.
+func TestVerificationCommandParserAcceptsPythonModuleInvocations(t *testing.T) {
+	commands := extractVerificationCommands("## Commands\n" +
+		"- Tests: `python3 -m pytest`\n")
+	if commands.Test != "python3 -m pytest" {
+		t.Fatalf("tests command = %q, want python3 -m pytest", commands.Test)
+	}
+
+	for _, cmd := range []string{"python -m pytest -q", "python3 -m unittest", "uv run pytest"} {
+		if kind := detectVerificationCommandKind(cmd); kind != "tests" {
+			t.Fatalf("detectVerificationCommandKind(%q) = %q, want tests", cmd, kind)
+		}
+	}
+}
+
+// The pyproject heuristic must not emit bare pytest — it fails with
+// ModuleNotFoundError in every src-layout-less repo.
+func TestHeuristicVerificationCommandsUsePythonModulePytest(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname = \"x\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commands := resolveCodexVerificationCommands(root)
+	if commands.Test != "python3 -m pytest" {
+		t.Fatalf("heuristic test command = %q, want python3 -m pytest", commands.Test)
+	}
+}
+
 func TestContinueReconcileTaskDoesNotTrustOtherTasks(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
