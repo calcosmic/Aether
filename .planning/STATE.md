@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.25
 milestone_name: Switch It On
-status: planning
+status: executing
 stopped_at: Phase 163.1 context gathered
-last_updated: "2026-07-31T22:27:57.311Z"
-last_activity: 2026-07-31 -- Phase 163 closed; six M4L-diagnosis fixes landed; 163.1 inserted
+last_updated: "2026-07-31T23:07:42.183Z"
+last_activity: 2026-07-31 -- Phase 163.1 planning complete
 progress:
   total_phases: 28
   completed_phases: 2
-  total_plans: 14
+  total_plans: 21
   completed_plans: 14
-  percent: 100
+  percent: 67
 ---
 
 # Project State
@@ -30,8 +30,8 @@ See: .planning/PROJECT.md (updated 2026-07-25)
 
 Phase: 163.1 (wrapper-runtime-completion-contract) — INSERTED, not planned
 Plan: —
-Status: Phase 163 complete; ready to plan 163.1
-Last activity: 2026-07-31 -- Phase 163 closed; six M4L-diagnosis fixes landed; 163.1 inserted
+Status: Ready to execute
+Last activity: 2026-07-31 -- Phase 163.1 planning complete
 
 Progress: [░░░░░░░░░░] 0%
 
