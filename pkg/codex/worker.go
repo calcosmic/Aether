@@ -859,7 +859,7 @@ Return ONLY a single JSON object as your final response.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
 - Set status to one of: %s.
 - Report blockers truthfully. If blocked, explain why in blockers.
-- Include handoff with changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness.
+- Include handoff with changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness (an RFC3339 timestamp for when evidence was collected, or "not-run").
 - Keep summary concise and concrete.
 - Include artifacts as an object with research_file, survey_file, and plan_file. Set the one the task brief ordered you to produce (e.g. renderPhaseResearchBrief's research file path); set the rest to null.
 %s

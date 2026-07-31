@@ -42,13 +42,12 @@ func ValidateWorkerHandoff(h WorkerHandoff) error {
 	default:
 		return fmt.Errorf("verification_status must be pass, fail, partial, not_run, or unknown")
 	}
-	freshness := strings.TrimSpace(h.Freshness)
-	if freshness == "" || freshness == "not-run" {
-		return nil
-	}
-	if _, err := time.Parse(time.RFC3339, freshness); err != nil {
-		return fmt.Errorf("freshness must be RFC3339 or not-run: %w", err)
-	}
+	// freshness accepts any string. The shipped handoff contract promises
+	// "timestamp or statement", and workers (LLMs) routinely send prose like
+	// "Evidence collected after latest edit." Rejecting the whole completion
+	// packet over phrasing was the single most expensive downstream failure
+	// mode; NormalizeWorkerHandoff coerces non-RFC3339 statements to the
+	// receipt time so stored records stay lexicographically sortable.
 	return nil
 }
 
@@ -74,8 +73,18 @@ func NormalizeWorkerHandoff(root string, h WorkerHandoff) WorkerHandoff {
 	if strings.TrimSpace(h.VerificationStatus) == "" {
 		h.VerificationStatus = "unknown"
 	}
-	if strings.TrimSpace(h.Freshness) == "" {
+	freshness := strings.TrimSpace(h.Freshness)
+	switch {
+	case freshness == "":
 		h.Freshness = time.Now().UTC().Format(time.RFC3339)
+	case strings.EqualFold(freshness, "not-run"), strings.EqualFold(freshness, "not_run"), strings.EqualFold(freshness, "not run"):
+		h.Freshness = "not-run"
+	default:
+		if _, err := time.Parse(time.RFC3339, freshness); err != nil {
+			// A prose statement ("Evidence collected after latest edit.") is
+			// contract-legal but not sortable; stamp the receipt time instead.
+			h.Freshness = time.Now().UTC().Format(time.RFC3339)
+		}
 	}
 	return h
 }
