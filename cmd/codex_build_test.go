@@ -235,6 +235,201 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 }
 
+// TestWorkerBriefFileHoldsComposedBrief proves the D-12 fix: the file at
+// worker-briefs/{name}.md is byte-identical to the dispatch's manifest brief
+// field (the composed brief -- base + pheromone signals + prior handoffs),
+// not the base-only render writeCodexBuildArtifacts wrote before this change.
+func TestWorkerBriefFileHoldsComposedBrief(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	// Seed an active pheromone signal so the composed brief diverges from the
+	// base-only render -- proving the file changed, not just that a heading
+	// exists somewhere.
+	recent := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{Type: "FOCUS", Content: json.RawMessage(`{"text":"security"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: recent},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("failed to save pheromones: %v", err)
+	}
+
+	goal := "Prove worker briefs carry the composed prompt"
+	researchID := "1.1"
+	implementID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Composed brief parity",
+					Description: "Prove the worker-briefs file matches the manifest brief field byte for byte",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &researchID, Goal: "Research the missing build orchestration gaps", Status: colony.TaskPending},
+						{ID: &implementID, Goal: "Implement the Go-native build packet", Status: colony.TaskPending, DependsOn: []string{researchID}},
+					},
+					SuccessCriteria: []string{"Build artifacts exist"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	if len(manifest.Dispatches) == 0 {
+		t.Fatal("expected at least one dispatch")
+	}
+
+	sawPheromoneSection := false
+	for _, dispatch := range manifest.Dispatches {
+		if strings.TrimSpace(dispatch.Brief) == "" {
+			t.Fatalf("dispatch %s has no composed brief in the manifest", dispatch.Name)
+		}
+		if strings.TrimSpace(dispatch.BriefPath) == "" {
+			t.Fatalf("dispatch %s has no brief_path in the manifest", dispatch.Name)
+		}
+		briefRel := strings.TrimPrefix(dispatch.BriefPath, ".aether/data/")
+		fileContents, err := os.ReadFile(filepath.Join(dataDir, briefRel))
+		if err != nil {
+			t.Fatalf("failed to read worker brief file for %s: %v", dispatch.Name, err)
+		}
+		if !bytes.Equal(fileContents, []byte(dispatch.Brief)) {
+			t.Fatalf("worker brief file for %s does not byte-match manifest brief field", dispatch.Name)
+		}
+		if strings.Contains(string(fileContents), "## Pheromone Signals") {
+			sawPheromoneSection = true
+		}
+	}
+	if !sawPheromoneSection {
+		t.Fatal("expected at least one worker brief file to contain the Pheromone Signals heading")
+	}
+
+	// Prove the base-only render does NOT itself contain the pheromone
+	// section -- the file changed because writeCodexBuildArtifacts now writes
+	// the composed brief, not because the heading appears unconditionally.
+	var reloadedState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &reloadedState); err != nil {
+		t.Fatalf("failed to reload colony state: %v", err)
+	}
+	base := renderCodexBuildWorkerBrief(root, reloadedState.Plan.Phases[0], manifest.Dispatches[0], time.Now().UTC())
+	if strings.Contains(base, "## Pheromone Signals") {
+		t.Fatal("base-only render unexpectedly contains the Pheromone Signals heading")
+	}
+}
+
+// TestDispatchEntryCarriesBriefPath proves every dispatch entry in both the
+// result envelope and the persisted manifest names the file holding its
+// brief, and that the named file resolves to something on disk under the
+// store base path.
+func TestDispatchEntryCarriesBriefPath(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Prove every dispatch entry names its brief file"
+	researchID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "brief_path coverage",
+					Description: "Every manifest dispatch entry names the file holding its brief",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &researchID, Goal: "Research the missing build orchestration gaps", Status: colony.TaskPending},
+					},
+					SuccessCriteria: []string{"Build artifacts exist"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse build output: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	result := envelope["result"].(map[string]interface{})
+	dispatches := result["dispatches"].([]interface{})
+	if len(dispatches) == 0 {
+		t.Fatal("expected at least one dispatch in the build result")
+	}
+	basePath := store.BasePath()
+	for _, raw := range dispatches {
+		dispatch := raw.(map[string]interface{})
+		briefPath, ok := dispatch["brief_path"].(string)
+		if !ok || strings.TrimSpace(briefPath) == "" {
+			t.Fatalf("dispatch %v missing brief_path", dispatch["name"])
+		}
+		if strings.Contains(briefPath, "..") {
+			t.Fatalf("brief_path %s escapes the store base path", briefPath)
+		}
+		rel := strings.TrimPrefix(briefPath, ".aether/data/")
+		full := filepath.Join(basePath, rel)
+		if _, err := os.Stat(full); err != nil {
+			t.Fatalf("brief_path %s does not resolve to an existing file under %s: %v", briefPath, basePath, err)
+		}
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	for _, dispatch := range manifest.Dispatches {
+		if strings.TrimSpace(dispatch.BriefPath) == "" {
+			t.Fatalf("manifest dispatch %s missing brief_path", dispatch.Name)
+		}
+	}
+}
+
 func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

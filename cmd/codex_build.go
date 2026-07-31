@@ -41,7 +41,11 @@ type codexBuildDispatch struct {
 	// assembles (phase objective, constraints, hints, criteria, pheromone
 	// signals, survey, handoffs) never reached the workers the user actually
 	// watches spawn. Wrappers must inject this verbatim, never reconstruct it.
-	Brief             string                  `json:"brief,omitempty"`
+	Brief string `json:"brief,omitempty"`
+	// BriefPath is the repo-display path to the file holding the verbatim
+	// composed brief (the same bytes as Brief above); the wrapper may read
+	// this instead of the inline Brief field.
+	BriefPath         string                  `json:"brief_path,omitempty"`
 	SkillSection      string                  `json:"skill_section,omitempty"`
 	SkillCount        int                     `json:"skill_count,omitempty"`
 	ColonySkills      int                     `json:"colony_skill_count,omitempty"`
@@ -1749,6 +1753,9 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 		if strings.TrimSpace(dispatch.Brief) != "" {
 			entry["brief"] = dispatch.Brief
 		}
+		if strings.TrimSpace(dispatch.BriefPath) != "" {
+			entry["brief_path"] = dispatch.BriefPath
+		}
 		if strings.TrimSpace(dispatch.HandoffSection) != "" {
 			entry["handoff_section"] = dispatch.HandoffSection
 		}
@@ -1773,13 +1780,27 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 
 	for i := range dispatches {
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
-		content := renderCodexBuildWorkerBrief(root, phase, dispatches[i], startedAt)
+		// Prefer the already-composed brief (base + pheromone signals + prior
+		// handoffs) so the file on disk and the manifest's inline dispatch.brief
+		// are provably the same bytes. Some callers of writeCodexBuildArtifacts
+		// (the direct/real-dispatch path in runCodexBuildWithOptions) never run
+		// attachBuildDispatchContext, so Brief can be empty here; fall back to
+		// composing it directly rather than writing the base-only render.
+		content := dispatches[i].Brief
+		if strings.TrimSpace(content) == "" {
+			content = composeBuildManifestBrief(root, phase, dispatches[i], startedAt)
+			// Keep the manifest's inline Brief in sync with what the file holds so
+			// the byte-equality invariant holds for every dispatch, not only the
+			// ones whose caller already ran attachBuildDispatchContext.
+			dispatches[i].Brief = content
+		}
 		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
 			return nil, nil, fmt.Errorf("failed to write worker brief for %s: %w", dispatches[i].Name, err)
 		}
 		displayPath := displayDataPath(briefRel)
 		briefPaths = append(briefPaths, displayPath)
 		briefOutputs[dispatches[i].Name] = displayPath
+		dispatches[i].BriefPath = displayPath
 	}
 	sort.Strings(briefPaths)
 
