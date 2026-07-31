@@ -2345,7 +2345,9 @@ func cloneColonyState(state colony.ColonyState) (colony.ColonyState, error) {
 
 func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
 	var b strings.Builder
-	b.WriteString("# Codex Build Dispatch\n\n")
+	// Platform-neutral heading: this brief is delivered verbatim to workers on
+	// every host platform (Claude, OpenCode, Codex), so it must not claim one.
+	b.WriteString("# Build Dispatch\n\n")
 	b.WriteString(fmt.Sprintf("- Worker: %s\n", dispatch.Name))
 	b.WriteString(fmt.Sprintf("- Caste: %s\n", dispatch.Caste))
 	if dispatch.Wave > 0 {
