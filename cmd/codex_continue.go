@@ -2451,11 +2451,66 @@ func markdownHeadingLevel(line string) int {
 	return level
 }
 
+// joinFencedLineContinuations folds a backslash-continued command inside a
+// fenced code block into a single line before extractVerificationCommands
+// parses it line by line. Without this pre-pass a documented command like
+//
+//	go test ./... \
+//	  -race
+//
+// is silently reduced to its first fragment ("go test ./..."), because the
+// per-line loop below has no notion of a command spanning multiple lines.
+// Joining is restricted to inside fenced blocks (``` ... ```) — joining
+// prose lines outside a fence would corrupt table and label parsing that
+// depends on line boundaries (e.g. markdown tables, "Kind: command" labels).
+func joinFencedLineContinuations(content string) []string {
+	rawLines := strings.Split(content, "\n")
+	result := make([]string, 0, len(rawLines))
+	inFence := false
+	i := 0
+	for i < len(rawLines) {
+		line := rawLines[i]
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			result = append(result, line)
+			i++
+			continue
+		}
+		if !inFence {
+			result = append(result, line)
+			i++
+			continue
+		}
+
+		accumulated := strings.TrimRight(line, " \t")
+		i++
+		for strings.HasSuffix(accumulated, "\\") {
+			accumulated = strings.TrimRight(strings.TrimSuffix(accumulated, "\\"), " \t")
+			if i >= len(rawLines) {
+				// Trailing backslash on the last line of the content: drop it
+				// and stop, no further consumption possible.
+				break
+			}
+			next := rawLines[i]
+			if strings.HasPrefix(strings.TrimSpace(next), "```") {
+				// Trailing backslash on the last line before a closing fence:
+				// drop it and stop without consuming the fence delimiter — the
+				// outer loop must still see it to toggle inFence.
+				break
+			}
+			accumulated += " " + strings.TrimSpace(next)
+			i++
+		}
+		result = append(result, accumulated)
+	}
+	return result
+}
+
 func extractVerificationCommands(content string) codexVerificationCommands {
 	commands := codexVerificationCommands{}
 	pendingKind := ""
 
-	for _, rawLine := range strings.Split(content, "\n") {
+	for _, rawLine := range joinFencedLineContinuations(content) {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "```") {
 			continue

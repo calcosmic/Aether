@@ -2622,6 +2622,85 @@ func TestHeuristicVerificationCommandsUsePythonModulePytest(t *testing.T) {
 	}
 }
 
+// TestExtractVerificationCommandsJoinsLineContinuations locks in D-11: a
+// documented command split across two lines with a trailing backslash, in
+// this repo's own CLAUDE.md style (a `go test` invocation with `-race` on
+// the continuation), must parse as one command rather than being truncated
+// to its first fragment.
+func TestExtractVerificationCommandsJoinsLineContinuations(t *testing.T) {
+	commands := extractVerificationCommands("## Verification Commands\n\n" +
+		"```bash\n" +
+		"# Run Go tests with race detection\n" +
+		"go test ./... \\\n" +
+		"  -race\n" +
+		"```\n")
+	if commands.Test != "go test ./... -race" {
+		t.Fatalf("test command = %q, want %q", commands.Test, "go test ./... -race")
+	}
+}
+
+// TestExtractVerificationCommandsJoinsThreeLineContinuationChain proves the
+// join is not limited to a single hop — a chain of continuations must all
+// fold into one command.
+func TestExtractVerificationCommandsJoinsThreeLineContinuationChain(t *testing.T) {
+	commands := extractVerificationCommands("## Verification Commands\n\n" +
+		"```bash\n" +
+		"# Run Go tests\n" +
+		"go test ./... \\\n" +
+		"  -race \\\n" +
+		"  -run TestFoo\n" +
+		"```\n")
+	if commands.Test != "go test ./... -race -run TestFoo" {
+		t.Fatalf("test command = %q, want %q", commands.Test, "go test ./... -race -run TestFoo")
+	}
+}
+
+// TestExtractVerificationCommandsTrailingBackslashBeforeClosingFenceDoesNotPanic
+// covers the edge case where the last content line before a closing fence
+// ends with a continuation backslash and there is no further line to join —
+// the parser must drop the backslash and stop cleanly rather than panicking
+// or consuming the fence delimiter as command content.
+func TestExtractVerificationCommandsTrailingBackslashBeforeClosingFenceDoesNotPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("extractVerificationCommands panicked: %v", r)
+		}
+	}()
+	commands := extractVerificationCommands("## Verification Commands\n\n" +
+		"```bash\n" +
+		"# Run Go tests\n" +
+		"go test ./... \\\n" +
+		"```\n")
+	if commands.Test != "go test ./..." {
+		t.Fatalf("test command = %q, want %q", commands.Test, "go test ./...")
+	}
+}
+
+// TestExtractVerificationCommandsPreservesMidLineBackslash asserts a
+// backslash that is not the final character of a line (a Windows-style path
+// segment here) is ordinary content, not a continuation marker.
+func TestExtractVerificationCommandsPreservesMidLineBackslash(t *testing.T) {
+	commands := extractVerificationCommands("## Verification Commands\n\n" +
+		"```bash\n" +
+		"# Build the binary\n" +
+		"go build -o C:\\Users\\test\\aether.exe ./cmd/aether\n" +
+		"```\n")
+	if commands.Build != `go build -o C:\Users\test\aether.exe ./cmd/aether` {
+		t.Fatalf("build command = %q, want %q", commands.Build, `go build -o C:\Users\test\aether.exe ./cmd/aether`)
+	}
+}
+
+// TestJoinFencedLineContinuationsSkipsProseOutsideFences guards against
+// joining lines outside a fenced block, which would corrupt table and label
+// parsing that depends on line boundaries.
+func TestJoinFencedLineContinuationsSkipsProseOutsideFences(t *testing.T) {
+	content := "A sentence that trails off \\\nand continues on the next line.\n"
+	joined := joinFencedLineContinuations(content)
+	if strings.Join(joined, "\n") != content {
+		t.Fatalf("prose outside a fence was modified: %q, want unchanged %q", strings.Join(joined, "\n"), content)
+	}
+}
+
 func TestContinueReconcileTaskDoesNotTrustOtherTasks(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
