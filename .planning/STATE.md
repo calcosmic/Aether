@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.25
 milestone_name: Switch It On
-status: executing
-stopped_at: Phase 160 context gathered
-last_updated: "2026-07-29T16:23:01.810Z"
-last_activity: 2026-07-29 -- Phase 163 execution started
+status: planning
+stopped_at: Phase 163 complete; 163.1 inserted, not planned
+last_updated: "2026-07-31T11:59:18.385Z"
+last_activity: 2026-07-31 -- Phase 163 closed; six M4L-diagnosis fixes landed; 163.1 inserted
 progress:
-  total_phases: 27
-  completed_phases: 1
+  total_phases: 28
+  completed_phases: 2
   total_plans: 14
-  completed_plans: 8
-  percent: 57
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-25)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 163 — context-reaches-workers
+**Current focus:** Phase 163.1 — wrapper-runtime-completion-contract (next: /gsd-plan-phase 163.1)
 **Milestone:** v1.25 Switch It On — ROADMAPPED (rebuilt twice, awaiting user approval)
 **Previous milestone:** v1.24 Hybrid Architecture Salvage (shipped 2026-05-24, phases 152-159)
-**Product version:** v1.0.41
+**Product version:** v1.0.45
 
 ## Current Position
 
-Phase: 163 (context-reaches-workers) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 163
-Last activity: 2026-07-29 -- Phase 163 execution started
+Phase: 163.1 (wrapper-runtime-completion-contract) — INSERTED, not planned
+Plan: —
+Status: Phase 163 complete; ready to plan 163.1
+Last activity: 2026-07-31 -- Phase 163 closed; six M4L-diagnosis fixes landed; 163.1 inserted
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -48,6 +48,10 @@ Progress: [░░░░░░░░░░] 0%
 *v1.25 not yet started*
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 163.1 inserted after Phase 163: Wrapper-Runtime Completion Contract: completion-packet schema, batch validation, attempt recovery, verification honesty, reconcile escape hatch, brief file channel — from 2026-07-31 M4L usage diagnosis (URGENT)
 
 ### Decisions
 

@@ -3,7 +3,7 @@ status: partial
 phase: 163-context-reaches-workers
 source: [163-VERIFICATION.md]
 started: 2026-07-29T18:30:00Z
-updated: 2026-07-29T18:30:00Z
+updated: 2026-07-31T00:00:00Z
 ---
 
 ## Current Test
@@ -34,3 +34,12 @@ skipped: 0
 blocked: 0
 
 ## Gaps
+
+2026-07-31 note: phase 163 closed with these three items carried forward per
+GSD convention (no UAT gate in config; sweep point is the milestone audit).
+A real-world M4L build/verify cycle ran on 2026-07-29..31 and shipped a working
+device (1471 tests passing) — it exercised the phase's context pipeline but did
+not execute these three specific checks. Its findings were verified against
+source by four review agents and routed into six direct fixes (commits
+4b54f88e..ee0ad076) plus inserted Phase 163.1 (wrapper-runtime completion
+contract).
