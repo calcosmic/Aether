@@ -1023,7 +1023,7 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 		ReceivedResults:         len(results),
 		MatchedResults:          len(dispatches),
 		StatusCounts:            map[string]int{},
-		Policy:                  "A structurally valid completed or manually-reconciled worker result wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected.",
+		Policy:                  "A structurally valid completed or manually-reconciled worker result wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected. Claims under sanctioned .aether/data subpaths (planning/, phase-research/, survey/, worker-debug/, reviews/) are tolerated and dropped from the claim set.",
 		ApprovedTempPath:        finalizerCompletionTempPattern,
 		SensitiveOutputRedacted: true,
 	}
@@ -1173,6 +1173,24 @@ func validateAndNormalizeClaimPathsToRoot(root, field string, paths []string) ([
 	return uniqueSortedStrings(normalized), nil
 }
 
+// sanctionedDataClaimPrefixes lists the .aether/data/ subpaths a worker may
+// honestly claim because a real runtime instruction orders the write there:
+// the hook's scratch carve-outs (sanctionedDataWritePrefixes) plus the review
+// ledgers written via `aether review-ledger-write` (cmd/review_ledger.go —
+// e.g. .aether/data/reviews/history/ledger.json), which findingsInjectionForCaste
+// tells watcher/chaos/measurer/archaeologist/gatekeeper/auditor briefs to run.
+// A claim under one of these is accepted but dropped from the normalized claim
+// set: it is colony state, not repo evidence, so it must not feed claim or
+// criterion verification — and an honest declaration of a runtime-ordered
+// write must never fail the whole completion packet.
+func sanctionedDataClaimPrefixes() []string {
+	prefixes := make([]string, 0, len(sanctionedDataWritePrefixes)+1)
+	for _, prefix := range sanctionedDataWritePrefixes {
+		prefixes = append(prefixes, strings.TrimPrefix(prefix, "/"))
+	}
+	return append(prefixes, ".aether/data/reviews/")
+}
+
 func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, error) {
 	claimed = strings.TrimSpace(claimed)
 	if claimed == "" {
@@ -1186,6 +1204,11 @@ func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, e
 		return "", fmt.Errorf("invalid %s claim %q: path must be repo-relative", field, claimed)
 	}
 	if policyClaim == ".aether/data" || strings.HasPrefix(policyClaim, ".aether/data/") {
+		for _, prefix := range sanctionedDataClaimPrefixes() {
+			if strings.HasPrefix(policyClaim, prefix) {
+				return "", nil
+			}
+		}
 		return "", fmt.Errorf("invalid %s claim %q: path must not be under .aether/data", field, claimed)
 	}
 	if strings.TrimSpace(root) == "" {

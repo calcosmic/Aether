@@ -481,6 +481,36 @@ func TestClaimsOrAggregateRejectsAetherDataClaimPaths(t *testing.T) {
 	}
 }
 
+func TestClaimsOrAggregateToleratesSanctionedDataClaimPaths(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "src/real.go")
+	writeClaimFileForTest(t, root, ".aether/data/reviews/history/ledger.json")
+	writeClaimFileForTest(t, root, ".aether/data/phase-research/phase-1-research.md")
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:   "Digger-12",
+			Status: "completed",
+			FilesModified: []string{
+				"src/real.go",
+				".aether/data/reviews/history/ledger.json",
+				".aether/data/phase-research/phase-1-research.md",
+			},
+		}},
+	}
+	dispatches := []codexBuildDispatch{
+		{Name: "Digger-12", Caste: "archaeologist", Status: "completed", TaskID: ""},
+	}
+
+	claims, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err != nil {
+		t.Fatalf("sanctioned .aether/data claim must not fail the packet: %v", err)
+	}
+	modified := claims.FilesModified
+	if len(modified) != 1 || modified[0] != "src/real.go" {
+		t.Fatalf("sanctioned claims must be dropped from the claim set, got: %v", modified)
+	}
+}
+
 func TestClaimsOrAggregateRejectsMissingClaimPaths(t *testing.T) {
 	root := t.TempDir()
 	completion := codexExternalBuildCompletion{
