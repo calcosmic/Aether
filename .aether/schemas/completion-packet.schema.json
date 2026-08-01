@@ -152,6 +152,12 @@
         },
         "modified_at": {
           "type": "string"
+        },
+        "read_only": {
+          "type": "boolean"
+        },
+        "read_only_task_id": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
