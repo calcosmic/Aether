@@ -520,6 +520,16 @@ async function preflightHostWorkerDispatch(
   context: string,
   fallbackDiagnostic?: string
 ): Promise<void> {
+  // D-06: a skipped preflight must never be silent, on either the
+  // compat/test-hook path or the production Go-adapter path below.
+  const skipRaw = process.env["AETHER_SKIP_PREFLIGHT"]?.trim().toLowerCase();
+  if (skipRaw && ["1", "true", "yes", "on"].includes(skipRaw)) {
+    process.stderr.write(
+      "Warning: preflight skipped via AETHER_SKIP_PREFLIGHT — provider auth and model config were NOT verified before dispatch\n"
+    );
+    return;
+  }
+
   // Compatibility-only test hooks. Production always delegates selection and
   // provider preflight to the Go adapter boundary below.
   if (_detectAvailablePlatformsRef) {
