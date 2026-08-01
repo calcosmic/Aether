@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -297,4 +299,59 @@ func gatedProviderPreflight(ctx context.Context, preflighter codex.WorkerProvide
 		_ = recordPreflightSuccess(status, now)
 	}
 	return status, preflightOutcome{Source: preflightSourceProbe}
+}
+
+// providerAuthFailureCategories are the AvailabilityCategory values that mean
+// the provider itself, not the task, is broken -- a lapsed login, missing
+// credentials, or invalid provider config.
+var providerAuthFailureCategories = map[codex.AvailabilityCategory]bool{
+	codex.AvailabilityCategoryAuthProbeFailed:    true,
+	codex.AvailabilityCategoryAuthInactive:       true,
+	codex.AvailabilityCategoryInvalidAuthOutput:  true,
+	codex.AvailabilityCategoryCredentialsMissing: true,
+	codex.AvailabilityCategoryProviderConfig:     true,
+}
+
+// providerAuthFailureRegexp is the Go behavioural twin of
+// .aether/ts-host/src/worker-dispatch.ts isAuthError. Keep the two patterns
+// byte-identical -- this is the vocabulary both hosts agree marks a
+// provider/auth failure worth clearing the trust window for.
+var providerAuthFailureRegexp = regexp.MustCompile(`(?i)\b(auth(?:entication|orization)?|credentials?|login|permission denied|api[_ -]?key)\b`)
+
+// providerAuthFailure reports whether err represents a provider/auth failure
+// (D-03): either a workerProviderPreflightError carrying one of the five
+// provider/auth AvailabilityCategory values, or an error whose message
+// matches the auth vocabulary mirrored from the TS isAuthError classifier.
+//
+// This inspects ONLY the error value -- never a worker's self-reported report
+// text, its full captured process output, or its task description. A worker
+// whose task is literally about authentication must not invalidate the cache
+// just for describing its work.
+func providerAuthFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	var preflightErr *workerProviderPreflightError
+	if errors.As(err, &preflightErr) && providerAuthFailureCategories[preflightErr.status.Category] {
+		return true
+	}
+	return providerAuthFailureRegexp.MatchString(err.Error())
+}
+
+// invalidatePreflightCacheOnProviderFailure clears platform's cached trust
+// window when any result's Error, or its WorkerResult's Error, is a
+// provider/auth failure (D-03). Returns true when a clear was triggered. A
+// clear failure is best-effort -- log nothing and never fail the batch.
+func invalidatePreflightCacheOnProviderFailure(platform codex.Platform, results []codex.DispatchResult) bool {
+	for _, result := range results {
+		if providerAuthFailure(result.Error) {
+			_ = clearPreflightCache(platform)
+			return true
+		}
+		if result.WorkerResult != nil && providerAuthFailure(result.WorkerResult.Error) {
+			_ = clearPreflightCache(platform)
+			return true
+		}
+	}
+	return false
 }
