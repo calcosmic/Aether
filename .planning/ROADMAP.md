@@ -400,13 +400,13 @@ Plans:
   - D-06: `AETHER_SKIP_PREFLIGHT` skip switch with a loud, never-silent notice
   - D-07: the probe runs in a neutral temp directory, not the repo working tree
 **Depends on:** Phase 163
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 - [x] 163.2-01-PLAN.md -- D-01/D-02/D-06: preflight cost-policy layer (per-platform TTL success cache, skip switch, notices) (wave 1)
 - [x] 163.2-02-PLAN.md -- D-04/D-05/D-07: one Go probe runner - temp-dir cwd, shared timeout, Codex probe unified (wave 1)
 - [x] 163.2-03-PLAN.md -- D-04/D-05/D-06/D-07: TS host shared timeout knob, temp-dir probe, loud skip, dist rebuild (wave 1)
-- [ ] 163.2-04-PLAN.md -- D-01/D-06: both dispatch chokepoints on one gate, shared trust window, adapter outcome field (wave 2, needs 01)
+- [x] 163.2-04-PLAN.md -- D-01/D-06: both dispatch chokepoints on one gate, shared trust window, adapter outcome field (wave 2, needs 01)
 - [ ] 163.2-05-PLAN.md -- D-03/D-05: auth-failure invalidation, single documented knob surface, cross-host parity tests (wave 3, needs 01-04)
 
 ### Phase 163.1: Wrapper-Runtime Completion Contract (INSERTED)
