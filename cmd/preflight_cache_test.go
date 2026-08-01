@@ -236,6 +236,55 @@ func TestPreflightCacheRejectsUnknownSchemaVersion(t *testing.T) {
 	}
 }
 
+// TestPreflightCacheWritePathsRefuseFutureSchema proves an older binary
+// never downgrades a newer binary's cache file (WR-05): recording a success
+// or clearing an entry against a future schema_version must leave the file
+// byte-identical on disk and behave as a cache miss, instead of stamping
+// schema_version 1 over half-decoded future entries.
+func TestPreflightCacheWritePathsRefuseFutureSchema(t *testing.T) {
+	s := withTestPreflightStore(t)
+	now := time.Now().UTC()
+
+	future := preflightCacheFile{
+		SchemaVersion: 99,
+		Entries: map[string]preflightCacheEntry{
+			string(codex.PlatformClaude): {
+				Platform:  string(codex.PlatformClaude),
+				Available: true,
+				CheckedAt: now.Format(time.RFC3339),
+			},
+		},
+	}
+	if err := s.SaveJSON(preflightCachePathRel, &future); err != nil {
+		t.Fatalf("SaveJSON = %v, want nil", err)
+	}
+	cachePath := filepath.Join(s.BasePath(), preflightCachePathRel)
+	before, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("read future-schema cache file: %v", err)
+	}
+
+	status := codex.AvailabilityStatus{Platform: codex.PlatformClaude, Available: true}
+	if err := recordPreflightSuccess(status, now); err != nil {
+		t.Fatalf("recordPreflightSuccess against future schema = %v, want nil (skip, not error)", err)
+	}
+	if err := clearPreflightCache(codex.PlatformClaude); err != nil {
+		t.Fatalf("clearPreflightCache against future schema = %v, want nil (skip, not error)", err)
+	}
+
+	after, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("re-read cache file: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("a future-schema cache file must never be rewritten by an older binary:\nbefore: %s\nafter:  %s", before, after)
+	}
+
+	if _, _, hit := loadFreshPreflightCache(codex.PlatformClaude, now); hit {
+		t.Fatal("a future-schema file must stay a miss -- this binary never trusts entries it only partially understands")
+	}
+}
+
 func TestPreflightCacheHelpersSafeWithoutStore(t *testing.T) {
 	original := store
 	store = nil

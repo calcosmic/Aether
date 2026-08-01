@@ -148,6 +148,15 @@ func loadFreshPreflightCache(platform codex.Platform, now time.Time) (preflightC
 	return entry, remaining, true
 }
 
+// errPreflightCacheFutureSchema aborts a cache write when the on-disk file
+// was written by a newer binary (schema_version above ours). Mixed binary
+// versions against one repo are a real situation (aether vs aether-dev
+// channels): an older binary must treat the newer file as a cache miss and
+// leave it untouched, never stamp schema_version 1 over half-decoded future
+// entries (WR-05). Returned from the UpdateJSONAtomically mutation, which
+// guarantees no write occurs.
+var errPreflightCacheFutureSchema = errors.New("preflight cache: file has an unknown future schema_version; refusing to rewrite it")
+
 // preflightCacheUnmarshalError reports whether err came from failing to
 // decode an existing (corrupt) cache file, as opposed to a lock, read, or
 // write failure. UpdateJSONAtomically wraps the json error with %w, so
@@ -191,6 +200,9 @@ func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) erro
 
 	var file preflightCacheFile
 	err := store.UpdateJSONAtomically(preflightCachePathRel, &file, func() error {
+		if file.SchemaVersion != 0 && file.SchemaVersion != preflightCacheSchemaVersion {
+			return errPreflightCacheFutureSchema
+		}
 		if file.Entries == nil {
 			file.Entries = map[string]preflightCacheEntry{}
 		}
@@ -199,6 +211,12 @@ func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) erro
 		return nil
 	})
 	if err == nil {
+		return nil
+	}
+	if errors.Is(err, errPreflightCacheFutureSchema) {
+		// A future-schema file is simply not our cache to write: skip the
+		// record (the read path already treats it as a miss) and leave the
+		// newer binary's file intact.
 		return nil
 	}
 	if !preflightCacheUnmarshalError(err) {
@@ -215,7 +233,10 @@ func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) erro
 
 // clearPreflightCache removes platform's cached entry so the next command
 // re-probes (D-03 invalidation on provider failure). A missing file or a
-// missing entry is success, not an error.
+// missing entry is success, not an error. A future-schema file is left
+// untouched (WR-05): its entries were never trusted by this binary's read
+// path, so there is nothing of ours to clear — and rewriting it would splice
+// half-decoded future entries into a v1 file.
 func clearPreflightCache(platform codex.Platform) error {
 	if store == nil {
 		return nil
@@ -223,13 +244,20 @@ func clearPreflightCache(platform codex.Platform) error {
 
 	platformKey := string(platform)
 	var file preflightCacheFile
-	return store.UpdateJSONAtomically(preflightCachePathRel, &file, func() error {
+	err := store.UpdateJSONAtomically(preflightCachePathRel, &file, func() error {
+		if file.SchemaVersion != 0 && file.SchemaVersion != preflightCacheSchemaVersion {
+			return errPreflightCacheFutureSchema
+		}
 		if file.Entries == nil {
 			return nil
 		}
 		delete(file.Entries, platformKey)
 		return nil
 	})
+	if errors.Is(err, errPreflightCacheFutureSchema) {
+		return nil
+	}
+	return err
 }
 
 // preflightSkipNoticeLine returns the exact one-line text (no trailing
