@@ -1002,6 +1002,67 @@ func TestLoadExternalBuildCompletion_StringDispatchManifestReturnsStructuralViol
 	}
 }
 
+func TestLoadExternalBuildCompletion_WrongTypedDispatchManifestNotShadowedByValidManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "completion.json")
+	// WR-163.1-02: the tolerated type error on dispatch_manifest allocates a
+	// zero-valued struct that activeManifest() prefers over the valid
+	// manifest key. An either-key raw cross-check accepted this packet with
+	// a corrupt active manifest and the structural violation was never
+	// reported. The key-specific cross-check must reject it with a
+	// violation naming /dispatch_manifest.
+	packet := `{"dispatch_manifest": "bad", "manifest": ` + validCompletionManifestJSON + `}`
+	if err := os.WriteFile(path, []byte(packet), 0o644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+	_, err := loadExternalBuildCompletion(path)
+	if err == nil {
+		t.Fatal("expected a wrong-typed dispatch_manifest to be rejected even alongside a valid manifest")
+	}
+	var contractErr *completionContractError
+	if !errorsAsCompletionContractError(err, &contractErr) {
+		t.Fatalf("expected *completionContractError, got %v (%T)", err, err)
+	}
+	found := false
+	for _, v := range contractErr.Violations {
+		if v.Field == "/dispatch_manifest" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a violation with Field /dispatch_manifest, got %+v", contractErr.Violations)
+	}
+}
+
+func TestLoadExternalBuildCompletion_EnvelopeWrongTypedDispatchManifestNotShadowed(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "completion.json")
+	// Same shadowing bug on the envelope path: the wrong-typed
+	// result.dispatch_manifest must not hide behind the valid
+	// result.manifest object.
+	packet := `{"result": {"dispatch_manifest": "bad", "manifest": ` + validCompletionManifestJSON + `}}`
+	if err := os.WriteFile(path, []byte(packet), 0o644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+	_, err := loadExternalBuildCompletion(path)
+	if err == nil {
+		t.Fatal("expected a wrong-typed dispatch_manifest inside the envelope to be rejected")
+	}
+	var contractErr *completionContractError
+	if !errorsAsCompletionContractError(err, &contractErr) {
+		t.Fatalf("expected *completionContractError, got %v (%T)", err, err)
+	}
+	found := false
+	for _, v := range contractErr.Violations {
+		if v.Field == "/dispatch_manifest" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a violation with Field /dispatch_manifest, got %+v", contractErr.Violations)
+	}
+}
+
 func TestLoadExternalBuildCompletion_SubmittedRawDoesNotAffectDigest(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "completion.json")

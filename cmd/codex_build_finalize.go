@@ -273,8 +273,10 @@ func loadExternalBuildCompletion(path string) (codexExternalBuildCompletion, err
 	// that allocation back. So activeManifest() alone cannot tell "no
 	// manifest" apart from "manifest field allocated but never actually
 	// populated" -- cross-check against raw, which reflects the submitted
-	// shape with no such allocation quirk.
-	if completion.activeManifest() != nil && manifestKeyPresentAsObject(raw) {
+	// shape with no such allocation quirk. The cross-check must be
+	// key-specific (the key activeManifest() actually selected), not
+	// either-key: see manifestSelectionMatchesRaw (WR-163.1-02).
+	if completion.activeManifest() != nil && manifestSelectionMatchesRaw(completion, raw) {
 		completion.submittedRaw = raw
 		return completion, nil
 	}
@@ -314,7 +316,7 @@ func loadExternalBuildCompletion(path string) (codexExternalBuildCompletion, err
 		}
 	}
 
-	if envelope.Result.activeManifest() != nil && manifestKeyPresentAsObject(unwrappedRaw) {
+	if envelope.Result.activeManifest() != nil && manifestSelectionMatchesRaw(envelope.Result, unwrappedRaw) {
 		envelope.Result.submittedRaw = unwrappedRaw
 		return envelope.Result, nil
 	}
@@ -327,25 +329,36 @@ func loadExternalBuildCompletion(path string) (codexExternalBuildCompletion, err
 	return codexExternalBuildCompletion{}, fmt.Errorf("completion file must include dispatch_manifest")
 }
 
-// manifestKeyPresentAsObject reports whether raw is a map carrying either
-// "dispatch_manifest" or "manifest" as a genuine JSON object. This is the
-// ground truth loadExternalBuildCompletion cross-checks the decoded struct's
-// activeManifest() pointer against, since a tolerated type error on that
-// exact field leaves an allocated-but-never-populated zero-value struct
-// behind the pointer rather than nil.
-func manifestKeyPresentAsObject(raw any) bool {
+// manifestSelectionMatchesRaw reports whether the manifest key
+// activeManifest() actually selected ("dispatch_manifest" when
+// DispatchManifest is non-nil, else "manifest") is present in raw as a
+// genuine JSON object. This is the ground truth loadExternalBuildCompletion
+// cross-checks the decoded struct's activeManifest() pointer against, since
+// a tolerated type error on that exact field leaves an
+// allocated-but-never-populated zero-value struct behind the pointer rather
+// than nil. Checking the SELECTED key -- not either key -- matters
+// (WR-163.1-02): for {"dispatch_manifest": "bad", "manifest": {valid}} the
+// tolerated type error allocates a zero DispatchManifest, activeManifest()
+// prefers it over the valid Manifest, and an either-key check would accept
+// the packet with a corrupt active manifest -- suppressing the structural
+// violation for the wrong-typed key and later failing with the misleading
+// "must come from `aether build --plan-only`" message instead.
+func manifestSelectionMatchesRaw(completion codexExternalBuildCompletion, raw any) bool {
 	rawMap, ok := raw.(map[string]any)
 	if !ok {
 		return false
 	}
-	for _, key := range []string{"dispatch_manifest", "manifest"} {
-		if value, present := rawMap[key]; present {
-			if _, isObject := value.(map[string]any); isObject {
-				return true
-			}
-		}
+	var key string
+	switch {
+	case completion.DispatchManifest != nil:
+		key = "dispatch_manifest"
+	case completion.Manifest != nil:
+		key = "manifest"
+	default:
+		return false
 	}
-	return false
+	_, isObject := rawMap[key].(map[string]any)
+	return isObject
 }
 
 func (c codexExternalBuildCompletion) activeManifest() *codexBuildManifest {
