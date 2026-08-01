@@ -35,7 +35,7 @@ every dispatch.
 
 | Env var | Syntax | Default | What it does | On a malformed value |
 |---|---|---|---|---|
-| `AETHER_PREFLIGHT_TIMEOUT` | Go duration (e.g. `90s`, `1500ms`, `2m`) | `45s` | How long the probe is allowed to run before it's treated as a timeout. Applies to both the Go runtime and the TypeScript host — one knob, one value, both hosts. | Falls back to the 45s default. A broken env var never bricks dispatch. |
+| `AETHER_PREFLIGHT_TIMEOUT` | Go duration using `ms`/`s`/`m`/`h` units, compounds included (e.g. `90s`, `1500ms`, `2m`, `1m30s`, `1.5h`) | `45s` | How long the probe is allowed to run before it's treated as a timeout. Applies to both the Go runtime and the TypeScript host — one knob, one value, both hosts. | Falls back to the 45s default. A broken env var never bricks dispatch. The TS host also prints one loud stderr warning naming the bad value, and the exotic Go units (`ns`, `us`, `µs`) count as malformed there. |
 | `AETHER_PREFLIGHT_CACHE_TTL` | Go duration (e.g. `90s`, `1500ms`, `2m`) | `1h` | How long a successful probe is trusted before the next dispatch has to pay for a fresh one (the "trust window"). | Falls back to the 1h default. Same never-brick guarantee. |
 | `AETHER_SKIP_PREFLIGHT` | one of `1`, `true`, `yes`, `on` (case-insensitive) | unset (probe runs) | Skips the probe entirely for trusted setups or CI. Prints one loud warning line every time it's used — this switch is never silent, because a skipped auth check is a real risk the person running it needs to see. | Any other value (including `0`, `false`, or a typo) is treated as "not set" and the probe runs normally. |
 
@@ -79,7 +79,7 @@ Warning: preflight skipped via AETHER_SKIP_PREFLIGHT — provider auth and model
 ## Both hosts agree
 
 The Go runtime (`cmd/preflight_cache.go`, `pkg/codex/platform_dispatch.go`)
-and the TypeScript host (`.aether/ts-host/src/platform-dispatcher.ts`,
+and the TypeScript host (`.aether/ts-host/src/preflight-config.ts`,
 `.aether/ts-host/src/host.ts`) read the same env var names, share the same
 45-second default timeout, and print byte-identical skip-notice wording.
 `cmd/preflight_docs_test.go` fails the build the moment either host drifts

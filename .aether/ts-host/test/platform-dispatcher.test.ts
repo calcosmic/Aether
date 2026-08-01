@@ -30,6 +30,7 @@ import {
   type Platform,
   type WorkerConfig,
 } from "../src/platform-dispatcher.js";
+import { __resetPreflightTimeoutWarnings } from "../src/preflight-config.js";
 import { parseWorkerClaims } from "../src/claims-parser.js";
 
 import { REPO_ROOT } from "./repo-root.js";
@@ -157,6 +158,13 @@ exit 0
     ["90s", 90_000],
     ["1500ms", 1500],
     ["2m", 120_000],
+    // WR-01: Go-style compound and hour-unit durations must parse identically
+    // on both hosts — "one knob, one value, both hosts".
+    ["1m30s", 90_000],
+    ["1h", 3_600_000],
+    ["1.5h", 5_400_000],
+    ["1h30m", 5_400_000],
+    ["2m30s500ms", 150_500],
     ["", PREFLIGHT_DEFAULT_TIMEOUT_MS],
     ["banana", PREFLIGHT_DEFAULT_TIMEOUT_MS],
     ["-5s", PREFLIGHT_DEFAULT_TIMEOUT_MS],
@@ -178,6 +186,32 @@ exit 0
 
   it("resolvePreflightTimeoutMs default is exactly 45000ms, matching Go's hostedPreflightTimeout", () => {
     assert.equal(PREFLIGHT_DEFAULT_TIMEOUT_MS, 45_000);
+  });
+
+  it("resolvePreflightTimeoutMs warns loudly (once per value) when falling back on an unparseable value (WR-01)", () => {
+    __resetPreflightTimeoutWarnings();
+    const previous = process.env["AETHER_PREFLIGHT_TIMEOUT"];
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    let captured = "";
+    process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+      captured += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf-8");
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      process.env["AETHER_PREFLIGHT_TIMEOUT"] = "totally-not-a-duration";
+      assert.equal(resolvePreflightTimeoutMs(), PREFLIGHT_DEFAULT_TIMEOUT_MS);
+      assert.match(captured, /Warning: AETHER_PREFLIGHT_TIMEOUT="totally-not-a-duration"/);
+      assert.match(captured, /falling back to 45000ms/);
+
+      // Second resolve with the same bad value must not repeat the warning.
+      const firstLength = captured.length;
+      assert.equal(resolvePreflightTimeoutMs(), PREFLIGHT_DEFAULT_TIMEOUT_MS);
+      assert.equal(captured.length, firstLength, "warning must be deduped per value");
+    } finally {
+      process.stderr.write = originalWrite;
+      restoreEnv("AETHER_PREFLIGHT_TIMEOUT", previous);
+      __resetPreflightTimeoutWarnings();
+    }
   });
 
   it("platform-dispatcher.ts has no hardcoded preflight timeout literal", () => {
