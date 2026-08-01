@@ -31,6 +31,15 @@ func parseReadOnlyArtifactSpec(spec string) (taskID, path string, err error) {
 // or whose task ID was not also passed to --reconcile-task. Read-only evidence
 // is an escape hatch for a task already being reconciled, not a standalone
 // gate bypass (T-163.1-31).
+//
+// It also rejects two specs naming the same artifact path for different task
+// IDs (WR-163.1-03): codexBuildArtifactEvidence carries a single
+// ReadOnlyTaskID per path and recordReadOnlyArtifactEvidence is
+// last-spec-wins on path replacement, so such a pair is silently
+// unsatisfiable -- whichever spec records last erases the other task's
+// scope, that task's criterion blocks, and finalize's rerun hint sends the
+// operator in a circle flipping the recorded task ID back and forth. Failing
+// up front with both specs named is the only honest outcome.
 func validateReadOnlyArtifacts(phase colony.Phase, reconcileTaskIDs, specs []string) error {
 	if len(specs) == 0 {
 		return nil
@@ -48,12 +57,25 @@ func validateReadOnlyArtifacts(phase colony.Phase, reconcileTaskIDs, specs []str
 	seenUnknown := map[string]struct{}{}
 	notReconciled := make([]string, 0, len(specs))
 	seenNotReconciled := map[string]struct{}{}
+	type readOnlyPathScope struct {
+		taskID string
+		spec   string
+	}
+	pathScopes := make(map[string]readOnlyPathScope, len(specs))
 
 	for _, spec := range specs {
-		taskID, _, err := parseReadOnlyArtifactSpec(spec)
+		taskID, path, err := parseReadOnlyArtifactSpec(spec)
 		if err != nil {
 			return err
 		}
+		pathKey := filepath.ToSlash(strings.TrimSpace(path))
+		if normalized, normErr := normalizeCriterionArtifactPath(path); normErr == nil {
+			pathKey = normalized
+		}
+		if prior, exists := pathScopes[pathKey]; exists && prior.taskID != taskID {
+			return fmt.Errorf("read-only artifact specs %q and %q name the same path %q for different tasks; a path can carry read-only evidence for only one task per run (recording is last-spec-wins, so the other task's criterion would silently block) -- pass the path for a single task only", prior.spec, spec, pathKey)
+		}
+		pathScopes[pathKey] = readOnlyPathScope{taskID: taskID, spec: spec}
 		if _, ok := known[taskID]; !ok {
 			if _, dup := seenUnknown[taskID]; !dup {
 				seenUnknown[taskID] = struct{}{}

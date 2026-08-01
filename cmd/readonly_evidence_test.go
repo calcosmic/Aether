@@ -98,6 +98,47 @@ func TestValidateReadOnlyArtifacts(t *testing.T) {
 			t.Fatalf("error = %v, want malformed spec message", err)
 		}
 	})
+
+	t.Run("same path for two different tasks is rejected naming both specs", func(t *testing.T) {
+		// WR-163.1-03: evidence carries one ReadOnlyTaskID per path and
+		// recording is last-spec-wins, so this pair is unsatisfiable -- one
+		// task's criterion would always block, with a circular rerun hint.
+		taskA, taskB := "1.1", "1.2"
+		twoTaskPhase := colony.Phase{
+			ID:   1,
+			Name: "Read-only evidence flag",
+			Tasks: []colony.Task{
+				{ID: &taskA, Goal: "Task A", Status: colony.TaskCompleted},
+				{ID: &taskB, Goal: "Task B", Status: colony.TaskCompleted},
+			},
+		}
+		err := validateReadOnlyArtifacts(twoTaskPhase, []string{"1.1", "1.2"}, []string{"1.1:shared.go", "1.2:shared.go"})
+		if err == nil || !strings.Contains(err.Error(), "1.1:shared.go") || !strings.Contains(err.Error(), "1.2:shared.go") || !strings.Contains(err.Error(), "different tasks") {
+			t.Fatalf("error = %v, want conflict message naming both specs", err)
+		}
+	})
+
+	t.Run("same path repeated for the same task is accepted", func(t *testing.T) {
+		if err := validateReadOnlyArtifacts(phase, []string{"1.1"}, []string{"1.1:x", "1.1:x"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("equivalent unnormalized paths for different tasks are still rejected", func(t *testing.T) {
+		taskA, taskB := "1.1", "1.2"
+		twoTaskPhase := colony.Phase{
+			ID:   1,
+			Name: "Read-only evidence flag",
+			Tasks: []colony.Task{
+				{ID: &taskA, Goal: "Task A", Status: colony.TaskCompleted},
+				{ID: &taskB, Goal: "Task B", Status: colony.TaskCompleted},
+			},
+		}
+		err := validateReadOnlyArtifacts(twoTaskPhase, []string{"1.1", "1.2"}, []string{"1.1:./shared.go", "1.2:shared.go"})
+		if err == nil || !strings.Contains(err.Error(), "different tasks") {
+			t.Fatalf("error = %v, want conflict detected across path normalization", err)
+		}
+	})
 }
 
 func TestRecordReadOnlyArtifactEvidence(t *testing.T) {
