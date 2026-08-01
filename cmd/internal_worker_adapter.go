@@ -14,6 +14,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// internalWorkerAdapterSchemaVersion stays 1: the Preflight field on
+// internalWorkerAdapterResponse below is additive and optional, and the TS
+// host asserts schema_version === 1.
 const (
 	internalWorkerAdapterSchemaVersion = 1
 	internalWorkerRequestMaxBytes      = 2 << 20
@@ -72,6 +75,7 @@ type internalWorkerAdapterResponse struct {
 	ExecutionBinding    *codex.ExecutionBinding   `json:"execution_binding,omitempty"`
 	ProviderRunID       string                    `json:"provider_run_id,omitempty"`
 	Worker              *internalWorkerResult     `json:"worker,omitempty"`
+	Preflight           *preflightOutcome         `json:"preflight,omitempty"`
 }
 
 var internalWorkerAdapterCmd = &cobra.Command{
@@ -137,7 +141,11 @@ func runInternalWorkerAdapter(ctx context.Context, requestPath string, preflight
 	if preflight {
 		status := availability
 		if provider, ok := invoker.(codex.WorkerProviderPreflighter); ok {
-			status = provider.Preflight(ctx, root)
+			var outcome preflightOutcome
+			status, outcome = gatedProviderPreflight(ctx, provider, platform, root, time.Now())
+			if outcome.Source != "" && outcome.Notice != "" {
+				response.Preflight = &outcome
+			}
 		}
 		response.Availability = status
 		if !status.Available {

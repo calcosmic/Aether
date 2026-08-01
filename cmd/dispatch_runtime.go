@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -131,7 +132,11 @@ func preflightWorkerProvider(ctx context.Context, invoker codex.WorkerInvoker, d
 			break
 		}
 	}
-	status := preflighter.Preflight(ctx, root)
+	platform := codex.PlatformFromInvoker(invoker)
+	status, outcome := gatedProviderPreflight(ctx, preflighter, platform, root, time.Now())
+	if outcome.Notice != "" {
+		fmt.Fprintf(stderr, "%s\n", outcome.Notice)
+	}
 	if status.Available {
 		return nil
 	}
