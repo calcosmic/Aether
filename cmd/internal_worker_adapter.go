@@ -202,6 +202,12 @@ func runInternalWorkerAdapter(ctx context.Context, requestPath string, preflight
 		}
 	}
 	result, invokeErr := invokeInternalWorker(ctx, invoker, config, observer)
+	// D-03: a provider/auth-classified worker error clears this platform's
+	// trust window here too, so the TS-hosted path invalidates just like the
+	// direct-Go dispatch path in cmd/dispatch_runtime.go.
+	if providerAuthFailure(result.Error) || providerAuthFailure(invokeErr) {
+		_ = clearPreflightCache(platform)
+	}
 	if err := validateInternalWorkerResult(request, &result, invokeErr); err != nil {
 		if request.ExecutionBinding != nil && strings.EqualFold(strings.TrimSpace(request.Workflow), "build") {
 			failed := &internalWorkerResult{

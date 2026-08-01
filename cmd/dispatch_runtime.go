@@ -75,6 +75,7 @@ func dispatchBatchByWaveWithVisuals(
 	}
 	sort.Ints(waveNumbers)
 
+	platform := codex.PlatformFromInvoker(invoker)
 	results := make([]codex.DispatchResult, 0, len(dispatches))
 	for _, wave := range waveNumbers {
 		waveDispatches := waves[wave]
@@ -87,11 +88,18 @@ func dispatchBatchByWaveWithVisuals(
 
 		waveResults, err := codex.DispatchWaveWithObserver(ctx, invoker, waveDispatches, observer, parallelWithinWave)
 		if err != nil {
+			// D-03: invalidate the trust window using whatever results were
+			// collected from prior successful waves before this error.
+			invalidatePreflightCacheOnProviderFailure(platform, results)
 			return nil, err
 		}
 		results = append(results, waveResults...)
 	}
 
+	// D-03: a provider/auth-classified dispatch failure clears the trust
+	// window so the next command re-probes. Placement is after dispatch, not
+	// before -- this is the reaction to a completed dispatch.
+	invalidatePreflightCacheOnProviderFailure(platform, results)
 	return results, nil
 }
 
