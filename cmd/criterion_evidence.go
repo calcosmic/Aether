@@ -33,6 +33,19 @@ type codexBuildArtifactEvidence struct {
 	SHA256     string `json:"sha256"`
 	Size       int64  `json:"size"`
 	ModifiedAt string `json:"modified_at"`
+	// ReadOnly and ReadOnlyTaskID are runtime-set only. They are recorded
+	// exclusively by the --read-only-artifact reconcile path
+	// (recordReadOnlyArtifactEvidence) and must never be accepted from a
+	// worker's own completion packet: attachBuildArtifactEvidence replaces
+	// claims.ArtifactEvidence wholesale from the claimed file lists, which
+	// carry no ReadOnly concept, so any worker-submitted value here is
+	// discarded before it can be evaluated (D-01, Pitfall 3, T-163.1-26).
+	ReadOnly bool `json:"read_only,omitempty"`
+	// ReadOnlyTaskID scopes the bypass to a single task's criteria, keeping
+	// task claim sets disjoint (D-02): read-only evidence recorded for one
+	// task can never satisfy another task's criterion, and an empty value
+	// satisfies nothing.
+	ReadOnlyTaskID string `json:"read_only_task_id,omitempty"`
 }
 
 type codexCriterionVerification struct {
@@ -414,11 +427,17 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s has no readable current-build claims: %v", artifact, claimsErr))
 				continue
 			}
-			if !claimed[artifact] {
+			// D-01: an artifact absent from the task's claim lists can still
+			// pass the claimed gate if it has evidence explicitly recorded
+			// as read-only and scoped to this exact requirement's task. An
+			// empty ReadOnlyTaskID never matches, and a match for a
+			// different task never matches (D-02: claim sets stay disjoint).
+			recorded, ok := evidenceByPath[artifact]
+			readOnlyMatch := ok && recorded.ReadOnly && strings.TrimSpace(recorded.ReadOnlyTaskID) != "" && recorded.ReadOnlyTaskID == requirement.TaskID
+			if !claimed[artifact] && !readOnlyMatch {
 				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s was not claimed by the current build%s", artifact, criterionTaskSuffix(requirement.TaskID)))
 				continue
 			}
-			recorded, ok := evidenceByPath[artifact]
 			if !ok || strings.TrimSpace(recorded.SHA256) == "" {
 				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s has no build-time content hash", artifact))
 				continue
@@ -432,7 +451,11 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s changed after build evidence was recorded", artifact))
 				continue
 			}
-			result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s", artifact, recorded.SHA256))
+			if readOnlyMatch {
+				result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s (read-only)", artifact, recorded.SHA256))
+			} else {
+				result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s", artifact, recorded.SHA256))
+			}
 			evaluation.Deterministic = true
 		}
 		for _, check := range requirement.Checks {
