@@ -15,8 +15,17 @@ import (
 // withTestPreflightStore points the package-level store at a fresh temp-dir
 // store for the duration of the test, restoring the previous value on
 // cleanup, so no test touches the real .aether/data/.
+//
+// It also neutralizes the two preflight env knobs (WR-04): a developer or CI
+// runner with AETHER_SKIP_PREFLIGHT=1 exported (a plausible state — the knob
+// targets CI) would otherwise make every gate test fail with confusing
+// probe-count mismatches, and an ambient AETHER_PREFLIGHT_CACHE_TTL would
+// make the warm-cache tests flaky. Every cache/gate test starts from the
+// documented defaults regardless of the shell it runs in.
 func withTestPreflightStore(t *testing.T) *storage.Store {
 	t.Helper()
+	t.Setenv(envSkipPreflight, "")
+	t.Setenv(envPreflightCacheTTL, "")
 	s, _ := newTestStore(t)
 	original := store
 	store = s
