@@ -41,7 +41,11 @@ type codexBuildDispatch struct {
 	// assembles (phase objective, constraints, hints, criteria, pheromone
 	// signals, survey, handoffs) never reached the workers the user actually
 	// watches spawn. Wrappers must inject this verbatim, never reconstruct it.
-	Brief             string                  `json:"brief,omitempty"`
+	Brief string `json:"brief,omitempty"`
+	// BriefPath is the repo-display path to the file holding the verbatim
+	// composed brief (the same bytes as Brief above); the wrapper may read
+	// this instead of the inline Brief field.
+	BriefPath         string                  `json:"brief_path,omitempty"`
 	SkillSection      string                  `json:"skill_section,omitempty"`
 	SkillCount        int                     `json:"skill_count,omitempty"`
 	ColonySkills      int                     `json:"colony_skill_count,omitempty"`
@@ -241,7 +245,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
-	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
+	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -478,7 +482,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
 	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
-	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
+	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, err
 	}
@@ -1749,6 +1753,9 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 		if strings.TrimSpace(dispatch.Brief) != "" {
 			entry["brief"] = dispatch.Brief
 		}
+		if strings.TrimSpace(dispatch.BriefPath) != "" {
+			entry["brief_path"] = dispatch.BriefPath
+		}
 		if strings.TrimSpace(dispatch.HandoffSection) != "" {
 			entry["handoff_section"] = dispatch.HandoffSection
 		}
@@ -1773,13 +1780,27 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 
 	for i := range dispatches {
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
-		content := renderCodexBuildWorkerBrief(root, phase, dispatches[i], startedAt)
+		// Prefer the already-composed brief (base + pheromone signals + prior
+		// handoffs) so the file on disk and the manifest's inline dispatch.brief
+		// are provably the same bytes. Some callers of writeCodexBuildArtifacts
+		// (the direct/real-dispatch path in runCodexBuildWithOptions) never run
+		// attachBuildDispatchContext, so Brief can be empty here; fall back to
+		// composing it directly rather than writing the base-only render.
+		content := dispatches[i].Brief
+		if strings.TrimSpace(content) == "" {
+			content = composeBuildManifestBrief(root, phase, dispatches[i], startedAt)
+			// Keep the manifest's inline Brief in sync with what the file holds so
+			// the byte-equality invariant holds for every dispatch, not only the
+			// ones whose caller already ran attachBuildDispatchContext.
+			dispatches[i].Brief = content
+		}
 		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
 			return nil, nil, fmt.Errorf("failed to write worker brief for %s: %w", dispatches[i].Name, err)
 		}
 		displayPath := displayDataPath(briefRel)
 		briefPaths = append(briefPaths, displayPath)
 		briefOutputs[dispatches[i].Name] = displayPath
+		dispatches[i].BriefPath = displayPath
 	}
 	sort.Strings(briefPaths)
 
@@ -2573,7 +2594,28 @@ func dispatchRunStatus(dispatches []codexBuildDispatch) string {
 	return summarizeRunStatus(statuses...)
 }
 
-func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch) ([]codexBuildDispatch, error) {
+// ensureUniqueBuildDispatchNames allocates a collision-free worker name for
+// each dispatch. Names are checked against the full spawn-tree history so a
+// name reused from a genuinely different phase, or from a previously sealed
+// (finalized, i.e. successfully built) attempt of this same phase, still gets
+// a `-rN` suffix (D-09 spoofing guard, T-163.1-20).
+//
+// Spawn-tree entries carry no phase context (SpawnEntry has no phase field),
+// so re-planning the CURRENT phase's still-open attempt would otherwise see
+// its own prior names as "used" and rename every worker on every re-plan. To
+// keep names stable across re-plans, phaseNum's latest attempt record
+// (buildAttemptRecord.Dispatches) is consulted directly and its names are
+// excluded from the collision set, UNLESS that attempt already reached
+// buildAttemptBuilt -- the one status meaning workers actually ran and
+// produced attributable results under those names.
+//
+// Note this is intentionally not gated on buildAttemptStatusActive: whenever
+// this function actually runs, a same-phase prior attempt that WAS active has
+// already been forced through interruptLatestBuildAttempt by the caller (see
+// runCodexBuildPlanOnlyWithOptions / runCodexBuildWithOptions), so by the
+// time name allocation happens its status is always terminal (built, failed,
+// or interrupted) or nonexistent -- never one of the "active" enum values.
+func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch, phaseNum int) ([]codexBuildDispatch, error) {
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	entries, err := spawnTree.Parse()
 	if err != nil {
@@ -2583,6 +2625,14 @@ func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch) ([]codexBui
 	used := make(map[string]bool, len(entries)+len(dispatches))
 	for _, entry := range entries {
 		used[entry.AgentName] = true
+	}
+
+	if phaseNum > 0 {
+		if _, record, ok := loadLatestBuildAttempt(phaseNum); ok && record.Status != buildAttemptBuilt {
+			for _, dispatch := range record.Dispatches {
+				delete(used, dispatch.Name)
+			}
+		}
 	}
 
 	allocated := make([]codexBuildDispatch, len(dispatches))

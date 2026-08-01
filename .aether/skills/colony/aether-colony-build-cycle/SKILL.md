@@ -202,8 +202,13 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
    descriptions. Do not use background-only dispatch as the ceremony, and do not
    replace the live stack with a markdown worker table.
 11. Enforce read cache discipline for every worker: pass runtime briefs verbatim,
-   treat "File unchanged since last read" as an instruction to use earlier content,
-   and mark workers `blocked` if they keep re-reading the same unchanged file.
+   preferring `dispatch.brief_path` (a repo-display path to the file holding the
+   identical composed brief, byte for byte) over the inline `dispatch.brief` when
+   present, since inline JSON briefs of 6-22KB are subject to Read-tool long-line
+   truncation. Both carry the same bytes -- use either verbatim, never merge,
+   summarize, or reconstruct. Treat "File unchanged since last read" as an
+   instruction to use earlier content, and mark workers `blocked` if they keep
+   re-reading the same unchanged file.
 12. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
 13. After each terminal result, render `aether ceremony worker-complete`.

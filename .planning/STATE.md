@@ -4,8 +4,8 @@ milestone: v1.25
 milestone_name: Switch It On
 status: executing
 stopped_at: Phase 163.1 context gathered
-last_updated: "2026-07-31T23:07:42.183Z"
-last_activity: 2026-07-31 -- Phase 163.1 planning complete
+last_updated: "2026-07-31T23:10:25.387Z"
+last_activity: 2026-07-31 -- Phase 163.1 execution started
 progress:
   total_phases: 28
   completed_phases: 2
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-25)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 163.1 — wrapper-runtime-completion-contract (next: /gsd-plan-phase 163.1)
+**Current focus:** Phase 163.1 — wrapper-runtime-completion-contract
 **Milestone:** v1.25 Switch It On — ROADMAPPED (rebuilt twice, awaiting user approval)
 **Previous milestone:** v1.24 Hybrid Architecture Salvage (shipped 2026-05-24, phases 152-159)
 **Product version:** v1.0.45
 
 ## Current Position
 
-Phase: 163.1 (wrapper-runtime-completion-contract) — INSERTED, not planned
-Plan: —
-Status: Ready to execute
-Last activity: 2026-07-31 -- Phase 163.1 planning complete
+Phase: 163.1 (wrapper-runtime-completion-contract) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 163.1
+Last activity: 2026-07-31 -- Phase 163.1 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

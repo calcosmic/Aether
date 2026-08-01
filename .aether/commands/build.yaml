@@ -28,6 +28,7 @@ wrapper_additions:
     3. Parse `result.manifest.dispatch_manifest` for the dispatch plan.
     4. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
     5. If provider dispatch is unavailable, surface only the Go-owned structured availability message.
+    6. Each dispatch may carry `brief_path` -- a repo-display path to a file holding the identical composed brief (same bytes as inline `dispatch.brief`, byte for byte). Prefer reading `brief_path` verbatim; it is the channel that avoids Read-tool long-line truncation on 6-22KB briefs. Fall back to inline `dispatch.brief` only when `brief_path` is absent.
   post_build: |
     Close with a short colony-language synthesis:
     1. Stage the accepted temp packet with `aether build-completion-stage <phase> --completion-file <temp completion>` and finalize only the returned Go-owned `completion_path`.

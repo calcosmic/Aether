@@ -30,7 +30,7 @@ The open question: should wrappers become thin pass-throughs (just call `aether 
 
 | Layer | May | Must Not |
 |-------|-----|----------|
-| **Wrappers** | Call `aether host` for host-backed flows, spawn workers, render ceremony, add colony framing/narration | Duplicate verification/gating, mutate colony state, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output, document unimplemented future host targets as implemented |
+| **Wrappers** | Call `aether host` for host-backed flows, spawn workers, render ceremony, add colony framing/narration, read a build dispatch's brief from `brief_path` (a runtime-produced file holding the identical bytes as the inline `brief`, preferred for briefs subject to Read-tool long-line truncation) | Duplicate verification/gating, mutate colony state, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output, document unimplemented future host targets as implemented |
 | **TS Host** | Parse flags, call Go CLI via JSON, render dashboards, manage event streams | Write to `.aether/data/` directly, duplicate Go-owned logic, invent provider/auth diagnostics |
 | **Go CLI** | Own all state mutations, verification, gating, finalizers, canonical artifact writes, provider availability preflight diagnostics | Spawn platform agents (Claude/OpenCode/Codex workers) |
 
