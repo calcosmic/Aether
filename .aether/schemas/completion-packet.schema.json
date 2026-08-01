@@ -273,6 +273,9 @@
         "brief": {
           "type": "string"
         },
+        "brief_path": {
+          "type": "string"
+        },
         "skill_section": {
           "type": "string"
         },
