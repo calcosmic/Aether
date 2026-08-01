@@ -62,6 +62,16 @@ func TestBuildCompletionStageMakesWrapperResultResumableWithoutRedispatch(t *tes
 	}
 }
 
+// TestBuildCompletionStageRejectsChangedPacketWithoutDeletingRecoveryEvidence
+// originally asserted that ANY attempt rejects a changed staged packet --
+// that "any attempt" contract was the exact behavior D-08 (plan 03) removes:
+// a corrected packet may now rebind while the attempt is unsealed. This test
+// is retargeted at a `built` (sealed) attempt, where rejection is still the
+// correct contract, and keeps proving the sealed rejection does not destroy
+// the recovery evidence already on disk. The non-terminal rebind-succeeds
+// case this test used to (incorrectly) cover now lives in
+// TestStageBuildAttemptCompletionAllowsRebindWhileNonTerminal
+// (cmd/build_attempt_test.go).
 func TestBuildCompletionStageRejectsChangedPacketWithoutDeletingRecoveryEvidence(t *testing.T) {
 	root := setupExternalBuildAttemptTest(t)
 	manifest, completion := prepareExternalBuildCompletion(t, root)
@@ -70,11 +80,14 @@ func TestBuildCompletionStageRejectsChangedPacketWithoutDeletingRecoveryEvidence
 	if err != nil {
 		t.Fatalf("stage initial completion: %v", err)
 	}
+	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "simulate finalize commit", nil, nil, "external-task", nil); err != nil {
+		t.Fatalf("mark attempt built: %v", err)
+	}
 	changed := completion
 	changed.Dispatches = append([]codexExternalBuildWorkerResult{}, completion.Dispatches...)
 	changed.Dispatches[0].Summary += " tampered"
 	if _, _, err := stageBuildAttemptCompletion(attemptRel, changed); err == nil || !strings.Contains(err.Error(), "does not match") {
-		t.Fatalf("changed staged completion should be rejected, got %v", err)
+		t.Fatalf("changed staged completion should be rejected once sealed, got %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(durablePath))); err != nil {
 		t.Fatalf("rejected restage deleted valid recovery evidence: %v", err)
