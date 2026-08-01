@@ -156,6 +156,34 @@ func TestContinuePlanOnlyCriterionEvidenceRequiresReadOnlyArtifact(t *testing.T)
 	}
 }
 
+// TestContinuePlanOnlyReadOnlyArtifactRefusesClaimedArtifact proves the
+// CR-163.1-01 guard end-to-end on the plan-only path: naming an artifact the
+// build actually claimed in --read-only-artifact fails loudly instead of
+// silently re-hashing its current (possibly tampered) content over the
+// build-time evidence in last-build-claims.json. Without this refusal, a
+// claimed-then-tampered artifact's tamper block could be laundered away by a
+// flag whose whole premise (D-01) is artifacts the build did NOT claim.
+func TestContinuePlanOnlyReadOnlyArtifactRefusesClaimedArtifact(t *testing.T) {
+	root, taskID, _ := setupContinueCriterionEvidenceFinalizeFixture(t)
+
+	// unrelated_finalize_test.go IS claimed by task 1.1 in the fixture's
+	// claims (both flat and per-task). Tamper with it after the "build",
+	// then try to launder the tamper through the escape hatch.
+	if err := os.WriteFile(filepath.Join(root, "unrelated_finalize_test.go"), []byte("package main\n\n// tampered after build\n"), 0644); err != nil {
+		t.Fatalf("tamper claimed artifact: %v", err)
+	}
+
+	_, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{
+		ReconcileTaskIDs:  []string{taskID},
+		ReadOnlyArtifacts: []string{taskID + ":unrelated_finalize_test.go"},
+		LightFlag:         true,
+		SkipWatchers:      true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "claimed") {
+		t.Fatalf("expected plan-only to refuse read-only evidence for a claimed artifact, got err=%v", err)
+	}
+}
+
 // TestContinueFinalizeReadOnlyArtifactEvidenceAdvancesAndDetectsTamper is the
 // full plan-only -> continue-finalize proof for 163.1-09 Task 3. It exercises
 // three mandatory paths: the happy path (recorded evidence lets the phase

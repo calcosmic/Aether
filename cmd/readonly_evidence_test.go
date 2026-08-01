@@ -119,17 +119,82 @@ func TestRecordReadOnlyArtifactEvidence(t *testing.T) {
 		}
 	})
 
-	t.Run("replaces an existing entry for the same path instead of duplicating", func(t *testing.T) {
+	t.Run("replaces an existing read-only entry for the same path instead of duplicating", func(t *testing.T) {
 		root := t.TempDir()
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package foo\n"), 0644); err != nil {
 			t.Fatalf("write artifact: %v", err)
 		}
-		claims := &codexBuildClaims{ArtifactEvidence: []codexBuildArtifactEvidence{{Path: "foo.go", SHA256: "stale"}}}
+		// The stale entry is itself read-only (a prior plan-only recording):
+		// re-running the escape hatch legitimately re-records it. A stale
+		// NON-read-only entry is build-time evidence and is refused instead
+		// (see the claimed-artifact subtests below).
+		claims := &codexBuildClaims{ArtifactEvidence: []codexBuildArtifactEvidence{{Path: "foo.go", SHA256: "stale", ReadOnly: true, ReadOnlyTaskID: "1.1"}}}
 		if err := recordReadOnlyArtifactEvidence(root, claims, []string{"1.1:foo.go"}); err != nil {
 			t.Fatalf("record error: %v", err)
 		}
 		if len(claims.ArtifactEvidence) != 1 || claims.ArtifactEvidence[0].SHA256 == "stale" {
 			t.Fatalf("evidence = %+v, want replaced single entry", claims.ArtifactEvidence)
+		}
+	})
+
+	t.Run("refuses a claimed artifact and preserves its build-time hash", func(t *testing.T) {
+		root := t.TempDir()
+		// CR-163.1-01: shared.go was claimed by task 1.1 with build-time
+		// evidence, then tampered with after the build. Recording read-only
+		// evidence for it would re-hash the tampered content and launder the
+		// tamper past evaluatePhaseCriterionEvidence's hash check.
+		if err := os.WriteFile(filepath.Join(root, "shared.go"), []byte("package shared // tampered after build\n"), 0644); err != nil {
+			t.Fatalf("write artifact: %v", err)
+		}
+		claims := &codexBuildClaims{
+			FilesModified:    []string{"shared.go"},
+			TaskClaims:       []codexBuildTaskClaim{{TaskID: "1.1", FilesModified: []string{"shared.go"}}},
+			ArtifactEvidence: []codexBuildArtifactEvidence{{Path: "shared.go", SHA256: "build-time-hash", Size: 11}},
+		}
+		err := recordReadOnlyArtifactEvidence(root, claims, []string{"1.1:shared.go"})
+		if err == nil || !strings.Contains(err.Error(), "claimed") {
+			t.Fatalf("error = %v, want refusal naming the claimed artifact", err)
+		}
+		if len(claims.ArtifactEvidence) != 1 || claims.ArtifactEvidence[0].SHA256 != "build-time-hash" || claims.ArtifactEvidence[0].ReadOnly {
+			t.Fatalf("build-time evidence was altered by a refused spec: %+v", claims.ArtifactEvidence)
+		}
+	})
+
+	t.Run("refuses a cross-task claimed artifact", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "shared.go"), []byte("package shared\n"), 0644); err != nil {
+			t.Fatalf("write artifact: %v", err)
+		}
+		// Task 1.1 claimed shared.go; a spec naming task 1.2 must not be
+		// able to erase task 1.1's tamper evidence (D-02: disjoint claim sets).
+		claims := &codexBuildClaims{
+			TaskClaims:       []codexBuildTaskClaim{{TaskID: "1.1", FilesModified: []string{"shared.go"}}},
+			ArtifactEvidence: []codexBuildArtifactEvidence{{Path: "shared.go", SHA256: "build-time-hash", Size: 15}},
+		}
+		err := recordReadOnlyArtifactEvidence(root, claims, []string{"1.2:shared.go"})
+		if err == nil || !strings.Contains(err.Error(), "task 1.1") {
+			t.Fatalf("error = %v, want refusal naming claiming task 1.1", err)
+		}
+		if claims.ArtifactEvidence[0].SHA256 != "build-time-hash" || claims.ArtifactEvidence[0].ReadOnly {
+			t.Fatalf("cross-task spec altered task 1.1's build-time evidence: %+v", claims.ArtifactEvidence)
+		}
+	})
+
+	t.Run("refuses non-read-only evidence even when claim lists omit the path", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package foo\n"), 0644); err != nil {
+			t.Fatalf("write artifact: %v", err)
+		}
+		// Defense in depth: even if the path is somehow absent from the
+		// claim lists, existing non-read-only evidence is build-time
+		// evidence and must not be overwritten by a re-hash.
+		claims := &codexBuildClaims{ArtifactEvidence: []codexBuildArtifactEvidence{{Path: "foo.go", SHA256: "build-time-hash"}}}
+		err := recordReadOnlyArtifactEvidence(root, claims, []string{"1.1:foo.go"})
+		if err == nil || !strings.Contains(err.Error(), "build-time") {
+			t.Fatalf("error = %v, want refusal naming build-time evidence", err)
+		}
+		if claims.ArtifactEvidence[0].SHA256 != "build-time-hash" || claims.ArtifactEvidence[0].ReadOnly {
+			t.Fatalf("build-time evidence was altered by a refused spec: %+v", claims.ArtifactEvidence)
 		}
 	})
 

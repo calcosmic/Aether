@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -85,10 +86,23 @@ func validateReadOnlyArtifacts(phase colony.Phase, reconcileTaskIDs, specs []str
 // path validation is reimplemented here. It never calls
 // attachBuildArtifactEvidence, which would wipe these entries by rebuilding
 // ArtifactEvidence solely from the claimed file lists.
+//
+// CR-163.1-01 guard: the escape hatch exists only for artifacts the build did
+// NOT claim (the D-01 premise: "an artifact absent from the task's claim
+// lists"). A path that appears in any task's claim lists, or that already
+// carries non-read-only (build-time) evidence, is refused outright: re-hashing
+// its CURRENT content here would overwrite the build-time hash in
+// last-build-claims.json and silently launder any post-build tampering past
+// evaluatePhaseCriterionEvidence's current-vs-recorded hash check — the exact
+// property T-163.1-46 declares must never be destroyed. Replacing an existing
+// ReadOnly entry (a re-run of plan-only with the same spec) remains allowed:
+// that is the operator deliberately re-invoking the escape hatch, not evidence
+// laundering.
 func recordReadOnlyArtifactEvidence(root string, claims *codexBuildClaims, specs []string) error {
 	if claims == nil {
 		return fmt.Errorf("no claims available to record read-only evidence into")
 	}
+	claimSets := criterionClaimSets(*claims)
 	for _, spec := range specs {
 		taskID, path, err := parseReadOnlyArtifactSpec(spec)
 		if err != nil {
@@ -97,6 +111,15 @@ func recordReadOnlyArtifactEvidence(root string, claims *codexBuildClaims, specs
 		normalized, err := normalizeCriterionArtifactPath(path)
 		if err != nil {
 			return fmt.Errorf("invalid read-only artifact %q: %w", spec, err)
+		}
+		if owner, claimed := readOnlyArtifactClaimOwner(claimSets, normalized); claimed {
+			return fmt.Errorf("cannot record read-only evidence for %q: artifact %s was claimed by the current build (%s); --read-only-artifact is only for artifacts the build did not claim -- re-recording a claimed artifact would overwrite its build-time hash and destroy post-build tamper detection", spec, normalized, owner)
+		}
+		for i := range claims.ArtifactEvidence {
+			existingPath := filepath.ToSlash(strings.TrimSpace(claims.ArtifactEvidence[i].Path))
+			if existingPath == normalized && !claims.ArtifactEvidence[i].ReadOnly {
+				return fmt.Errorf("cannot record read-only evidence for %q: artifact %s already has build-time claimed evidence; --read-only-artifact is only for artifacts the build did not claim -- re-recording would overwrite the build-time hash and destroy post-build tamper detection", spec, normalized)
+			}
 		}
 		evidence, err := snapshotBuildArtifact(root, normalized)
 		if err != nil {
@@ -118,6 +141,30 @@ func recordReadOnlyArtifactEvidence(root string, claims *codexBuildClaims, specs
 		}
 	}
 	return nil
+}
+
+// readOnlyArtifactClaimOwner reports whether normalized appears in any of the
+// build's claim sets (as built by criterionClaimSets: the flat claim lists
+// under "" plus one set per task), and names every owning scope for the
+// refusal message so the operator can see whose tamper evidence the spec
+// would have overwritten.
+func readOnlyArtifactClaimOwner(claimSets map[string]map[string]bool, normalized string) (string, bool) {
+	owners := make([]string, 0, 2)
+	for taskID, set := range claimSets {
+		if !set[normalized] {
+			continue
+		}
+		if taskID == "" {
+			owners = append(owners, "the build's claim lists")
+		} else {
+			owners = append(owners, "task "+taskID)
+		}
+	}
+	if len(owners) == 0 {
+		return "", false
+	}
+	sort.Strings(owners)
+	return strings.Join(owners, ", "), true
 }
 
 // applyReadOnlyArtifactEvidence loads the current build claims named by
