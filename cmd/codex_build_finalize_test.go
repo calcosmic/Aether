@@ -875,6 +875,131 @@ func TestMergeExternalBuildResults_RejectsMissingManifest(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Task 1 (163.1-08): loadExternalBuildCompletion keeps the wrapper's
+// submitted bytes and no longer aborts decode on the first type mismatch.
+// ---------------------------------------------------------------------------
+
+// validCompletionManifestJSON is a minimal dispatch_manifest object literal
+// satisfying every field completion-packet.schema.json requires, for tests
+// that need a structurally valid manifest without going through
+// runCodexBuildPlanOnly.
+const validCompletionManifestJSON = `{"phase": 1, "phase_name": "x", "root": "/tmp", "colony_depth": "standard", "generated_at": "2026-01-01T00:00:00Z", "state": "ready", "checkpoint": "c", "claims_path": "p", "worker_briefs": [], "dispatches": [], "tasks": [], "success_criteria": []}`
+
+func TestLoadExternalBuildCompletion_TypeErrorTolerated(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "completion.json")
+	packet := `{"dispatch_manifest": ` + validCompletionManifestJSON + `, "dispatches": [{"name": "Hunt-1", "status": 5}]}`
+	if err := os.WriteFile(path, []byte(packet), 0o644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+	completion, err := loadExternalBuildCompletion(path)
+	if err != nil {
+		t.Fatalf("expected a single wrong-typed field to be tolerated, got error: %v", err)
+	}
+	if len(completion.Dispatches) != 1 || completion.Dispatches[0].Name != "Hunt-1" {
+		t.Fatalf("expected partial decode to preserve Name, got %+v", completion.Dispatches)
+	}
+}
+
+func TestLoadExternalBuildCompletion_CapturesSubmittedRawDirectForm(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "completion.json")
+	packet := `{"dispatch_manifest": ` + validCompletionManifestJSON + `}`
+	if err := os.WriteFile(path, []byte(packet), 0o644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+	completion, err := loadExternalBuildCompletion(path)
+	if err != nil {
+		t.Fatalf("load completion: %v", err)
+	}
+	rawMap, ok := completion.submittedRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected submittedRaw to be a map[string]any, got %T", completion.submittedRaw)
+	}
+	if _, ok := rawMap["dispatch_manifest"]; !ok {
+		t.Fatalf("expected submittedRaw to contain dispatch_manifest, got %+v", rawMap)
+	}
+}
+
+func TestLoadExternalBuildCompletion_CapturesSubmittedRawEnvelopeForm(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "completion.json")
+	packet := `{"result": {"dispatch_manifest": ` + validCompletionManifestJSON + `}}`
+	if err := os.WriteFile(path, []byte(packet), 0o644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+	completion, err := loadExternalBuildCompletion(path)
+	if err != nil {
+		t.Fatalf("load completion: %v", err)
+	}
+	rawMap, ok := completion.submittedRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected submittedRaw to be a map[string]any, got %T", completion.submittedRaw)
+	}
+	if _, ok := rawMap["dispatch_manifest"]; !ok {
+		t.Fatalf("expected unwrapped submittedRaw to contain dispatch_manifest, got %+v", rawMap)
+	}
+	if _, ok := rawMap["result"]; ok {
+		t.Fatalf("expected unwrapped submittedRaw to NOT contain the envelope's result key, got %+v", rawMap)
+	}
+}
+
+func TestLoadExternalBuildCompletion_StringDispatchManifestReturnsStructuralViolation(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "completion.json")
+	packet := `{"dispatch_manifest": "not-an-object"}`
+	if err := os.WriteFile(path, []byte(packet), 0o644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+	_, err := loadExternalBuildCompletion(path)
+	if err == nil {
+		t.Fatal("expected a string-valued dispatch_manifest to be rejected")
+	}
+	var contractErr *completionContractError
+	if !errorsAsCompletionContractError(err, &contractErr) {
+		t.Fatalf("expected *completionContractError, got %v (%T)", err, err)
+	}
+	found := false
+	for _, v := range contractErr.Violations {
+		if v.Field == "/dispatch_manifest" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a violation with Field /dispatch_manifest, got %+v", contractErr.Violations)
+	}
+}
+
+func TestLoadExternalBuildCompletion_SubmittedRawDoesNotAffectDigest(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "completion.json")
+	packet := `{"dispatch_manifest": ` + validCompletionManifestJSON + `}`
+	if err := os.WriteFile(path, []byte(packet), 0o644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+	completion, err := loadExternalBuildCompletion(path)
+	if err != nil {
+		t.Fatalf("load completion: %v", err)
+	}
+	if completion.submittedRaw == nil {
+		t.Fatal("expected submittedRaw to be captured for a file-loaded completion")
+	}
+	withRaw, err := jsonSHA256(completion)
+	if err != nil {
+		t.Fatalf("hash with submittedRaw: %v", err)
+	}
+	cleared := completion
+	cleared.submittedRaw = nil
+	withoutRaw, err := jsonSHA256(cleared)
+	if err != nil {
+		t.Fatalf("hash without submittedRaw: %v", err)
+	}
+	if withRaw != withoutRaw {
+		t.Fatalf("capturing submitted bytes changed the packet digest: %q vs %q", withRaw, withoutRaw)
+	}
+}
+
 func TestMergeExternalBuildResults_RejectsWrongRoot(t *testing.T) {
 	manifest := codexBuildManifest{
 		PlanOnly: true,
