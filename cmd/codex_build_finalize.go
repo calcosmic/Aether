@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -58,6 +59,35 @@ func (r codexExternalBuildWorkerResult) effectiveName() string {
 	return strings.TrimSpace(r.AntName)
 }
 
+// completionContractError carries every violation found while validating a
+// submitted completion packet (D-05). Returning any violation is an
+// unconditional, whole-packet rejection (D-06) -- callers must not touch
+// colony state, the attempt journal, or the completion digest binding
+// before this error (or a nil/empty violations slice) has been decided.
+type completionContractError struct {
+	Violations []contractViolation
+}
+
+// Error renders a multi-line human summary: a first line naming the
+// violation count, followed by one indented line per violation in the form
+// "  - <worker>: <field> (<rule>): <message>" (the "<worker>: " prefix is
+// omitted when Worker is empty). The machine-readable Violations slice rides
+// the error envelope's `details` field separately -- see the build-finalize
+// cobra handler below.
+func (e *completionContractError) Error() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d completion packet violation(s)", len(e.Violations))
+	for _, v := range e.Violations {
+		b.WriteString("\n  - ")
+		if worker := strings.TrimSpace(v.Worker); worker != "" {
+			b.WriteString(worker)
+			b.WriteString(": ")
+		}
+		fmt.Fprintf(&b, "%s (%s): %s", v.Field, v.Rule, v.Message)
+	}
+	return b.String()
+}
+
 var buildFinalizeCmd = &cobra.Command{
 	Use:   "build-finalize <phase>",
 	Short: "Record externally spawned wrapper build workers as the phase build packet",
@@ -76,7 +106,12 @@ var buildFinalizeCmd = &cobra.Command{
 		}
 		result, state, phase, dispatches, err := runCodexBuildFinalize(skillWorkspaceRoot(), phaseNum, completion, false)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			var contractErr *completionContractError
+			if errors.As(err, &contractErr) {
+				outputError(1, err.Error(), contractErr.Violations)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return err
 		}
 		outputWorkflow(result, renderBuildFinalizeVisual(state, phase, dispatches))
@@ -279,10 +314,14 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
-	if err := validateExternalWorkerResultClaimPaths(root, completion.workerResults()); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	// D-06: the packet is atomic. Structural, claim-path, and dispatch-level
+	// checks all accumulate into one violation list before any state is
+	// touched -- no checkpoint save, attempt begin, digest bind, or
+	// transition happens until this returns clean.
+	if violations := validateCompletionPacketSemantics(root, completion); len(violations) > 0 {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, &completionContractError{Violations: violations}
 	}
-	dispatches, err := mergeExternalBuildResults(*manifest, completion.workerResults())
+	dispatches, _, err := mergeExternalBuildResults(*manifest, completion.workerResults())
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -664,12 +703,92 @@ func appendRecoveryOutcomesToLog(phaseNum int, budget *RecoveryBudget, entries [
 	return store.SaveJSON(rel, file)
 }
 
-func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExternalBuildWorkerResult) ([]codexBuildDispatch, error) {
+// validateCompletionPacketSemantics is the single entrypoint for validating
+// a submitted completion packet. It runs, in order, accumulating into one
+// slice and never short-circuiting on the first problem:
+//
+//  1. validateCompletionPacketStructure (cmd/contract_schema.go, plan 01) --
+//     structural/type/shape problems against the generated JSON Schema.
+//  2. validateExternalWorkerResultClaimPaths (task 1) -- claim-path
+//     violations across every worker and field.
+//  3. The dispatch-level checks inside mergeExternalBuildResults (task 2).
+//
+// A non-empty return means the whole packet is rejected (D-06): the caller
+// must not mutate colony state, the attempt journal, or the completion
+// digest binding until this returns. Plan 03 calls this same entrypoint
+// from cmd/build_attempt.go's stage-time path so stage-time validation
+// equals finalize-time validation (D-07).
+func validateCompletionPacketSemantics(root string, completion codexExternalBuildCompletion) []contractViolation {
+	var violations []contractViolation
+
+	if raw, err := completionPacketAsRaw(completion); err != nil {
+		violations = append(violations, contractViolation{
+			Rule:    "schema.marshal",
+			Message: fmt.Sprintf("failed to marshal completion packet for structural validation: %v", err),
+		})
+	} else {
+		violations = append(violations, validateCompletionPacketStructure(raw)...)
+	}
+
+	violations = append(violations, validateExternalWorkerResultClaimPaths(root, completion.workerResults())...)
+
+	if manifest := completion.activeManifest(); manifest != nil {
+		_, mergeViolations, _ := mergeExternalBuildResults(*manifest, completion.workerResults())
+		violations = append(violations, mergeViolations...)
+	}
+
+	return violations
+}
+
+// completionPacketAsRaw round-trips completion through encoding/json into a
+// generic decoded value (map[string]any / []any / scalars), the shape
+// validateCompletionPacketStructure expects.
+func completionPacketAsRaw(completion codexExternalBuildCompletion) (any, error) {
+	data, err := json.Marshal(completion)
+	if err != nil {
+		return nil, err
+	}
+	var raw any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+// Rule strings for mergeExternalBuildResults's dispatch-level violations.
+// Ambiguous or already-matched name collisions (from
+// selectExternalBuildResultForDispatch) are reported under
+// worker.duplicate_result -- both are the same underlying problem, a name
+// that does not resolve to exactly one worker result.
+const (
+	violationRuleNameRequired     = "worker.name_required"
+	violationRuleDuplicateResult  = "worker.duplicate_result"
+	violationRuleResultMissing    = "worker.result_missing"
+	violationRuleIdentityMismatch = "worker.identity_mismatch"
+	violationRuleStatusTerminal   = "worker.status_terminal"
+	violationRuleHandoffValid     = "handoff.valid"
+)
+
+// mergeExternalBuildResults merges a completion packet's worker results onto
+// the plan-only manifest's dispatches, accumulating every dispatch-level
+// problem it finds into a []contractViolation instead of returning on the
+// first one (D-05/D-06). err is reserved for genuine internal failures the
+// wrapper cannot fix by resubmitting a corrected packet; every case a
+// wrapper CAN fix becomes a violation and the loop keeps going so later
+// dispatches are still checked. When a dispatch's result cannot be resolved,
+// that slot keeps its original, unmodified manifest dispatch.
+func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExternalBuildWorkerResult) ([]codexBuildDispatch, []contractViolation, error) {
+	var violations []contractViolation
 	resultByName := make(map[string]codexExternalBuildWorkerResult, len(results))
 	for _, result := range results {
 		name := result.effectiveName()
 		if name == "" {
-			return nil, fmt.Errorf("external worker result missing name")
+			violations = append(violations, contractViolation{
+				Field:   "name",
+				Rule:    violationRuleNameRequired,
+				Message: "external worker result missing name",
+			})
+			continue
 		}
 		if existing, exists := resultByName[name]; exists {
 			if useIncoming, ok := preferCompletedResultOverTimeout(existing.Status, result.Status); ok {
@@ -678,7 +797,14 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 				}
 				continue
 			}
-			return nil, fmt.Errorf("duplicate external worker result for %s", name)
+			violations = append(violations, contractViolation{
+				Worker:  name,
+				Field:   "name",
+				Value:   name,
+				Rule:    violationRuleDuplicateResult,
+				Message: fmt.Sprintf("duplicate external worker result for %s", name),
+			})
+			continue
 		}
 		resultByName[name] = result
 	}
@@ -686,23 +812,55 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 	dispatches := make([]codexBuildDispatch, len(manifest.Dispatches))
 	usedResults := make(map[string]bool, len(results))
 	for i, dispatch := range manifest.Dispatches {
+		dispatches[i] = dispatch
 		resultName, result, ok, err := selectExternalBuildResultForDispatch(dispatch.Name, resultByName, usedResults)
 		if err != nil {
-			return nil, err
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "name",
+				Rule:    violationRuleDuplicateResult,
+				Message: err.Error(),
+			})
+			continue
 		}
 		if !ok {
-			return nil, fmt.Errorf("missing external worker result for %s", dispatch.Name)
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "name",
+				Rule:    violationRuleResultMissing,
+				Message: fmt.Sprintf("missing external worker result for %s", dispatch.Name),
+			})
+			continue
 		}
 		usedResults[resultName] = true
 		if err := validateExternalResultIdentity(dispatch, result); err != nil {
-			return nil, err
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "identity",
+				Rule:    violationRuleIdentityMismatch,
+				Message: err.Error(),
+			})
+			continue
 		}
 		status := normalizeExternalBuildStatus(result.Status)
 		if !isTerminalExternalBuildStatus(status) {
-			return nil, fmt.Errorf("external worker result for %s has non-terminal status %q", dispatch.Name, result.Status)
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "status",
+				Value:   result.Status,
+				Rule:    violationRuleStatusTerminal,
+				Message: fmt.Sprintf("external worker result for %s has non-terminal status %q", dispatch.Name, result.Status),
+			})
+			continue
 		}
 		if err := codex.ValidateWorkerHandoff(result.Handoff); err != nil {
-			return nil, fmt.Errorf("external worker result for %s has invalid handoff: %w", dispatch.Name, err)
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "handoff",
+				Rule:    violationRuleHandoffValid,
+				Message: fmt.Sprintf("external worker result for %s has invalid handoff: %v", dispatch.Name, err),
+			})
+			continue
 		}
 		dispatch.Status = status
 		dispatch.Summary = strings.TrimSpace(result.Summary)
@@ -713,7 +871,7 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		}
 		dispatches[i] = dispatch
 	}
-	return dispatches, nil
+	return dispatches, violations, nil
 }
 
 func selectExternalBuildResultForDispatch(expectedName string, resultByName map[string]codexExternalBuildWorkerResult, used map[string]bool) (string, codexExternalBuildWorkerResult, bool, error) {
@@ -893,6 +1051,19 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 		if err := validateAndNormalizeBuildClaims(root, "completion claims", &claims); err != nil {
 			return codexBuildClaims{}, err
 		}
+		// codexBuildClaims.FilesCreated/FilesModified are non-omitempty --
+		// the completion-packet schema requires them present as arrays.
+		// validateAndNormalizeClaimPathsToRoot returns nil for an empty
+		// input (e.g. a legitimate verification-only submission with no
+		// file claims), which would otherwise marshal to JSON null and fail
+		// structural validation. Normalize to an empty (not nil) array so a
+		// genuinely empty claim set stays structurally valid.
+		if claims.FilesCreated == nil {
+			claims.FilesCreated = []string{}
+		}
+		if claims.FilesModified == nil {
+			claims.FilesModified = []string{}
+		}
 		return claims, nil
 	}
 
@@ -968,26 +1139,60 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 	return claims, nil
 }
 
-func validateExternalWorkerResultClaimPaths(root string, results []codexExternalBuildWorkerResult) error {
+// collectClaimPathViolations validates every path in paths against root,
+// accumulating one contractViolation per bad path instead of returning on
+// the first problem. Each violation names the worker and the concrete field
+// it came from (files_created, files_modified, tests_written, outputs) so a
+// wrapper author can act on the field, not a generic label. A claim under a
+// sanctioned .aether/data scratch prefix
+// (validateAndNormalizeClaimPathToRoot's ("", nil) branch) is accepted and
+// silently dropped, exactly as before -- never a violation.
+func collectClaimPathViolations(root, worker, field string, paths []string) []contractViolation {
+	var violations []contractViolation
+	for _, path := range uniqueSortedStrings(paths) {
+		if _, err := validateAndNormalizeClaimPathToRoot(root, field, path); err != nil {
+			violations = append(violations, contractViolation{
+				Worker:  worker,
+				Field:   field,
+				Value:   path,
+				Rule:    claimPathRuleFromError(err),
+				Message: err.Error(),
+			})
+		}
+	}
+	return violations
+}
+
+// claimPathRuleFromError extracts the machine-readable rule string a
+// validateAndNormalizeClaimPathToRoot error was wrapped with. Every return
+// path inside that function wraps its error with *claimPathRuleError, so
+// the fallback here is defensive only and should never trigger in practice.
+func claimPathRuleFromError(err error) string {
+	var ruleErr *claimPathRuleError
+	if errors.As(err, &ruleErr) {
+		return ruleErr.rule
+	}
+	return claimPathRuleEscapesRoot
+}
+
+// validateExternalWorkerResultClaimPaths validates every claimed path across
+// every worker and every claim field (outputs, files_created,
+// files_modified, tests_written), returning every violation found in one
+// pass rather than the first. Worker label comes from
+// codexExternalBuildWorkerResult.effectiveName(), falling back to "unnamed".
+func validateExternalWorkerResultClaimPaths(root string, results []codexExternalBuildWorkerResult) []contractViolation {
+	var violations []contractViolation
 	for _, result := range results {
 		name := result.effectiveName()
 		if name == "" {
 			name = "unnamed"
 		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s outputs", name), result.Outputs); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_created", name), result.FilesCreated); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_modified", name), result.FilesModified); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s tests_written", name), result.TestsWritten); err != nil {
-			return err
-		}
+		violations = append(violations, collectClaimPathViolations(root, name, "outputs", result.Outputs)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "files_created", result.FilesCreated)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "files_modified", result.FilesModified)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "tests_written", result.TestsWritten)...)
 	}
-	return nil
+	return violations
 }
 
 type codexResultCollectionReport struct {
@@ -1191,17 +1396,50 @@ func sanctionedDataClaimPrefixes() []string {
 	return append(prefixes, ".aether/data/reviews/")
 }
 
+// claimPathRuleError wraps a claim-path validation error with a
+// machine-readable rule classification. Callers (collectClaimPathViolations)
+// extract the rule via errors.As instead of string-matching the message, so
+// the rule stays correct even if the human-readable wording changes.
+type claimPathRuleError struct {
+	rule string
+	err  error
+}
+
+func (e *claimPathRuleError) Error() string { return e.err.Error() }
+func (e *claimPathRuleError) Unwrap() error { return e.err }
+
+// Rule strings for claim-path validation failures. There are exactly four:
+// a malicious null byte, a path that isn't repo-relative, a forbidden
+// .aether/data claim, and every other way a path fails to resolve inside
+// the repository boundary (escapes root, missing, symlink, directory,
+// ambiguous match, unavailable root).
+const (
+	claimPathRuleNullByte     = "claim_path.null_byte"
+	claimPathRuleRepoRelative = "claim_path.repo_relative"
+	claimPathRuleAetherData   = "claim_path.aether_data"
+	claimPathRuleEscapesRoot  = "claim_path.escapes_root"
+)
+
+// wrapClaimPathRule wraps a non-nil error with its rule classification.
+// A nil err is passed through unchanged (the ok-with-no-error success case).
+func wrapClaimPathRule(rule string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &claimPathRuleError{rule: rule, err: err}
+}
+
 func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, error) {
 	claimed = strings.TrimSpace(claimed)
 	if claimed == "" {
 		return "", nil
 	}
 	if strings.ContainsRune(claimed, 0) {
-		return "", fmt.Errorf("invalid %s claim %q: path contains a null byte", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleNullByte, fmt.Errorf("invalid %s claim %q: path contains a null byte", field, claimed))
 	}
 	policyClaim := filepath.ToSlash(filepath.Clean(filepath.FromSlash(strings.ReplaceAll(claimed, "\\", "/"))))
 	if filepath.IsAbs(claimed) || filepath.IsAbs(filepath.FromSlash(policyClaim)) || hasWindowsVolumePrefix(policyClaim) {
-		return "", fmt.Errorf("invalid %s claim %q: path must be repo-relative", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleRepoRelative, fmt.Errorf("invalid %s claim %q: path must be repo-relative", field, claimed))
 	}
 	if policyClaim == ".aether/data" || strings.HasPrefix(policyClaim, ".aether/data/") {
 		for _, prefix := range sanctionedDataClaimPrefixes() {
@@ -1209,15 +1447,15 @@ func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, e
 				return "", nil
 			}
 		}
-		return "", fmt.Errorf("invalid %s claim %q: path must not be under .aether/data", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleAetherData, fmt.Errorf("invalid %s claim %q: path must not be under .aether/data", field, claimed))
 	}
 	if strings.TrimSpace(root) == "" {
-		return "", fmt.Errorf("invalid %s claim %q: repository root is unavailable", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: repository root is unavailable", field, claimed))
 	}
 
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {
-		return "", fmt.Errorf("invalid %s claim %q: resolve repository root: %w", field, claimed, err)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: resolve repository root: %w", field, claimed, err))
 	}
 	rootEval, err := filepath.EvalSymlinks(rootAbs)
 	if err != nil {
@@ -1226,18 +1464,18 @@ func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, e
 
 	candidateAbs, directCandidate, err := candidateClaimAbsolutePath(rootAbs, claimed)
 	if err != nil {
-		return "", fmt.Errorf("invalid %s claim %q: %w", field, claimed, err)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: %w", field, claimed, err))
 	}
 	if rel, ok, err := normalizeExistingClaimPath(rootEval, candidateAbs, field, claimed); ok || err != nil {
-		return rel, err
+		return rel, wrapClaimPathRule(claimPathRuleEscapesRoot, err)
 	}
 
 	if directCandidate {
 		if rel, ok, err := findUnambiguousRepoRelativeClaimPath(rootAbs, rootEval, field, claimed); ok || err != nil {
-			return rel, err
+			return rel, wrapClaimPathRule(claimPathRuleEscapesRoot, err)
 		}
 	}
-	return "", fmt.Errorf("invalid %s claim %q: path does not exist inside repository", field, claimed)
+	return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: path does not exist inside repository", field, claimed))
 }
 
 func hasWindowsVolumePrefix(path string) bool {

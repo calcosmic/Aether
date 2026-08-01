@@ -264,14 +264,17 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	}
 
 	manifest := codexBuildManifest{
-		Phase:        1,
-		PhaseName:    "Boundary build",
-		Root:         root,
-		ColonyMode:   string(colony.ColonyModeOrchestrator),
-		PlanOnly:     true,
-		DispatchMode: "plan-only",
-		GeneratedAt:  startedAt.Format(time.RFC3339),
-		State:        string(colony.StateEXECUTING),
+		Phase:           1,
+		PhaseName:       "Boundary build",
+		Root:            root,
+		ColonyMode:      string(colony.ColonyModeOrchestrator),
+		PlanOnly:        true,
+		DispatchMode:    "plan-only",
+		GeneratedAt:     startedAt.Format(time.RFC3339),
+		State:           string(colony.StateEXECUTING),
+		WorkerBriefs:    []string{},
+		Tasks:           []codexBuildTaskPlan{},
+		SuccessCriteria: []string{},
 		Dispatches: []codexBuildDispatch{{
 			Stage:  "wave",
 			Wave:   1,
@@ -283,8 +286,9 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 		}},
 		SelectedTasks: []string{taskID},
 		BoundaryQuestions: []discussQuestion{{
-			ID:     "pd_build_finalize_boundary",
-			Source: source,
+			ID:      "pd_build_finalize_boundary",
+			Source:  source,
+			Options: []string{},
 		}},
 	}
 	completion := codexExternalBuildCompletion{
