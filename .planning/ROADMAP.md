@@ -390,13 +390,24 @@ Plans:
 
 ### Phase 163.2: ts-host preflight configurability: make the worker-platform preflight timeout configurable instead of hardcoded 20s, and reduce per-dispatch preflight cost (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** The paid provider preflight probe stops running on every dispatch and stops being un-tunable: a success is cached per platform for a configurable trust window (default 1h), both hosts honour one `AETHER_PREFLIGHT_TIMEOUT` knob with the same 45s default, the probe runs in a neutral temp directory instead of the repo, a deliberate skip announces itself, and a provider/auth failure clears the window immediately.
+**Requirements** (decision IDs from 163.2-CONTEXT.md; no REQUIREMENTS.md IDs are mapped to this inserted phase):
+  - D-01: time-based per-platform preflight success cache in a runtime state file
+  - D-02: TTL default 1h, tunable via `AETHER_PREFLIGHT_CACHE_TTL`, invalid values fall back
+  - D-03: auto-invalidation when a dispatch fails with a provider/auth-classified error
+  - D-04: the probe stays a real model round-trip; no cheap substitute, no model auto-selection
+  - D-05: one shared `AETHER_PREFLIGHT_TIMEOUT` across Go and the TS host; the hardcoded 20s is gone
+  - D-06: `AETHER_SKIP_PREFLIGHT` skip switch with a loud, never-silent notice
+  - D-07: the probe runs in a neutral temp directory, not the repo working tree
 **Depends on:** Phase 163
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 163.2 to break down)
+- [ ] 163.2-01-PLAN.md -- D-01/D-02/D-06: preflight cost-policy layer (per-platform TTL success cache, skip switch, notices) (wave 1)
+- [ ] 163.2-02-PLAN.md -- D-04/D-05/D-07: one Go probe runner - temp-dir cwd, shared timeout, Codex probe unified (wave 1)
+- [ ] 163.2-03-PLAN.md -- D-04/D-05/D-06/D-07: TS host shared timeout knob, temp-dir probe, loud skip, dist rebuild (wave 1)
+- [ ] 163.2-04-PLAN.md -- D-01/D-06: both dispatch chokepoints on one gate, shared trust window, adapter outcome field (wave 2, needs 01)
+- [ ] 163.2-05-PLAN.md -- D-03/D-05: auth-failure invalidation, single documented knob surface, cross-host parity tests (wave 3, needs 01-04)
 
 ### Phase 163.1: Wrapper-Runtime Completion Contract (INSERTED)
 
