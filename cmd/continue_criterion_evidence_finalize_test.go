@@ -184,17 +184,19 @@ func TestContinuePlanOnlyReadOnlyArtifactRefusesClaimedArtifact(t *testing.T) {
 	}
 }
 
-// TestContinueFinalizeReadOnlyArtifactEvidenceAdvancesAndDetectsTamper is the
-// full plan-only -> continue-finalize proof for 163.1-09 Task 3. It exercises
-// three mandatory paths: the happy path (recorded evidence lets the phase
-// advance, without manufacturing a false files_modified claim), the tamper
-// path (editing the artifact between plan-only and finalize re-blocks), and
-// the unrecorded-spec path (a plan manifest naming a read-only artifact that
-// was never actually recorded fails loudly instead of silently proceeding --
-// T-163.1-45). A suite containing only the happy path would pass even if
-// --read-only-artifact disabled criterion checking on this route entirely.
-func TestContinueFinalizeReadOnlyArtifactEvidenceAdvancesAndDetectsTamper(t *testing.T) {
-	t.Run("advances and preserves claims when evidence is recorded", func(t *testing.T) {
+// TestContinueFinalizeReadOnlyArtifactEvidenceCriteriaPassAndDetectsTamper is
+// the full plan-only -> continue-finalize proof for 163.1-09 Task 3. It
+// exercises three mandatory paths: the happy path (recorded evidence flips
+// the bound criteria to passing without manufacturing a false files_modified
+// claim -- the phase does NOT advance on this route, and the expected blocked
+// state is asserted explicitly below), the tamper path (editing the artifact
+// between plan-only and finalize re-blocks), and the unrecorded-spec path (a
+// plan manifest naming a read-only artifact that was never actually recorded
+// fails loudly instead of silently proceeding -- T-163.1-45). A suite
+// containing only the happy path would pass even if --read-only-artifact
+// disabled criterion checking on this route entirely.
+func TestContinueFinalizeReadOnlyArtifactEvidenceCriteriaPassAndDetectsTamper(t *testing.T) {
+	t.Run("criteria pass and claims are preserved when evidence is recorded", func(t *testing.T) {
 		root, taskID, _ := setupContinueCriterionEvidenceFinalizeFixture(t)
 
 		planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{
@@ -231,17 +233,40 @@ func TestContinueFinalizeReadOnlyArtifactEvidenceAdvancesAndDetectsTamper(t *tes
 		}
 		env := parseLifecycleEnvelope(t, outBuf.String())
 		result := env["result"].(map[string]interface{})
-		// NOTE: top-level "advanced"/"blocked" is NOT asserted here.
-		// `--reconcile-task` unconditionally appends a "manually reconciled"
-		// warning to blocking_issues (TestContinue_ReconcileDoesNotBypassClaims,
-		// documented as pre-existing/protected behavior in the 163.1-06
-		// SUMMARY's "Clarification" section) and --read-only-artifact is only
-		// usable on a task also passed to --reconcile-task (T-163.1-31), so
-		// blocked:true is unavoidable here regardless of the escape hatch.
-		// The escape hatch is proven instead by the criterion-specific fields:
-		// criteria_passed flips to true and its blocking issue disappears --
-		// exactly as 163.1-06's own end-to-end test proves it on the direct
-		// continue path.
+		// The expected top-level outcome on this route is blocked, NOT
+		// advanced: --read-only-artifact is only usable on a task also
+		// passed to --reconcile-task (T-163.1-31), and a reconcile-gated
+		// invocation cannot advance (the 163.1-06 SUMMARY documents the
+		// direct path's unconditional "manually reconciled" warning; on
+		// this external finalize path with an empty dispatch list, the
+		// block empirically surfaces through the implementation_evidence
+		// gate instead: "verification passed but no implementation
+		// evidence or reconciliation was recorded"). Assert that expected
+		// state explicitly, restricting blocking_issues to exactly those
+		// two reconcile-gating classes -- so this test fails loudly if a
+		// new, unrelated blocker (e.g. a criterion blocker reappearing)
+		// ever shows up on this path, or if the gating behavior changes
+		// and advancement becomes possible (at which point these
+		// assertions should be upgraded to prove advancement). The escape
+		// hatch itself is proven by the criterion-specific fields:
+		// criteria_passed flips to true and its blocking issue disappears
+		// -- exactly as 163.1-06's own end-to-end test proves it on the
+		// direct continue path.
+		if advanced, _ := result["advanced"].(bool); advanced {
+			t.Fatalf("expected advanced:false on the reconcile-gated finalize path; the gating behavior changed -- upgrade this test to assert advancement, got %v", result)
+		}
+		if blocked, _ := result["blocked"].(bool); !blocked {
+			t.Fatalf("expected blocked:true on the reconcile-gated finalize path, got %v", result)
+		}
+		gateBlockers := stringSliceValue(result["blocking_issues"])
+		if len(gateBlockers) == 0 {
+			t.Fatalf("expected a reconcile-gating blocker in blocking_issues, got none: %v", result)
+		}
+		for _, issue := range gateBlockers {
+			if !strings.Contains(issue, "manually reconciled") && !strings.Contains(issue, "no implementation evidence or reconciliation was recorded") {
+				t.Fatalf("unexpected blocker outside the reconcile-gating classes on the recorded-evidence path: %q (all: %v)", issue, gateBlockers)
+			}
+		}
 		verification, ok := result["verification"].(map[string]interface{})
 		if !ok {
 			t.Fatalf("expected verification field in result, got %#v", result)
