@@ -104,6 +104,20 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		return nil, state, phase, nil, fmt.Errorf("%s", summary)
 	}
 
+	// D-01 escape hatch: record hash-verified read-only evidence for the
+	// reconcile task IDs' declared artifacts BEFORE the verification snapshot
+	// (and its embedded criterion evidence evaluation) runs below, so
+	// evaluatePhaseCriterionEvidence sees the recorded evidence on this same
+	// plan-only invocation. Mirrors the direct path's ordering
+	// (cmd/codex_continue.go:577-584). Validation above already confirmed
+	// every spec's task ID both exists in the phase and was also passed to
+	// --reconcile-task.
+	if len(options.ReadOnlyArtifacts) > 0 {
+		if err := applyReadOnlyArtifactEvidence(root, manifest, options.ReadOnlyArtifacts); err != nil {
+			return nil, state, phase, nil, err
+		}
+	}
+
 	now := time.Now().UTC()
 	verificationTimeout := effectiveContinueVerificationTimeout(options.VerificationTimeout)
 	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, options.SkipWatchers)
@@ -242,6 +256,19 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 		blockers = append(blockers, summary)
 	}
 
+	// This snapshot serves BOTH runCodexContinuePlanOnly (codex_continue_plan.go:110)
+	// and runCodexContinueFinalize (codex_continue_finalize.go:175) -- the two
+	// paths an external wrapper actually drives. Its previous omission of
+	// criterion evidence evaluation is what made the criterion gate -- and
+	// therefore the --read-only-artifact escape hatch (readonly_evidence.go)
+	// -- dead on the external-review path: only the direct `aether continue`
+	// path (codex_continue.go:1596) ever called evaluatePhaseCriterionEvidence.
+	criteria := evaluatePhaseCriterionEvidence(root, phase, manifest, steps, claims, watcher)
+	if criteria.Enforced && !criteria.Passed {
+		checksPassed = false
+		blockers = append(blockers, criteria.BlockingIssues...)
+	}
+
 	return codexContinueVerificationReport{
 		Phase:                      phase.ID,
 		GeneratedAt:                now.Format(time.RFC3339),
@@ -249,6 +276,10 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 		Steps:                      steps,
 		Claims:                     claims,
 		Watcher:                    watcher,
+		CriteriaPolicy:             criteria.Policy,
+		CriteriaEnforced:           criteria.Enforced,
+		CriteriaPassed:             criteria.Passed,
+		Criteria:                   criteria.Criteria,
 		ChecksPassed:               checksPassed,
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,
