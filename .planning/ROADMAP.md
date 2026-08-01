@@ -400,7 +400,7 @@ Plans:
   6. Composed brief file channel: the "pass dispatch.brief VERBATIM" wrapper contract is unsatisfiable for 6–22KB briefs given Read-tool long-line truncation. `worker-briefs/{name}.md` files exist but hold the base brief only (missing pheromone + handoff sections vs `composeBuildManifestBrief`); write the composed brief to the file, add `brief_path` to the dispatch entry, and sanction path-handoff across the 4 contract surfaces (Claude + OpenCode wrappers, Codex skill, cmd/command_guide.go — per build.yaml's drift guard).
   7. Publish-order fix: the first `aether publish` after a version bump fails verification ("binary 1.0.44 does not match hub 1.0.43") because it verifies against the not-yet-synced hub; rerunning succeeds. Verify after sync, or sync before verify.
 **Depends on:** Phase 163
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 **Context:** The six S-size companions from the same diagnosis were fixed directly on 2026-07-31 (commits 4b54f88e, d636ad22, 1ea23e01, 4d9dae9a, 13b7b661, ee0ad076): sanctioned .aether/data claim tolerance, plan --accept fail-loudly, prose freshness coercion + contract doc fix, AETHER_PREFLIGHT_TIMEOUT, platform-neutral brief heading, python3 -m pytest recognition. This phase covers only the design-level remainder.
 
 Plans:
@@ -410,7 +410,7 @@ Plans:
 - [x] 163.1-04-PLAN.md — Composed brief written to worker-briefs/{name}.md with brief_path across all four contract surfaces, plus stable worker names across re-plans (req 6/3, D-12/D-09) [wave 1]
 - [x] 163.1-05-PLAN.md — Verification honesty: required skipped checks halt loudly; backslash line continuations parse whole (req 4, D-10/D-11) [wave 1]
 - [x] 163.1-06-PLAN.md — Read-only artifact evidence as the reconcile escape hatch, task-scoped and runtime-set only (req 5, D-01/D-02) [wave 2]
-- [ ] 163.1-07-PLAN.md — First `aether publish` after a version bump passes verification (req 7) [wave 1]
+- [x] 163.1-07-PLAN.md — First `aether publish` after a version bump passes verification (req 7) [wave 1]
 
 ### Phase 164: Research Feeds Planning
 **Goal**: Before a phase is planned, the Queen decides whether it needs research and states why; when it does, a research worker runs automatically and its findings persist and feed the plan directly -- restoring `v5.4.0` `plan.md` Step 3.6 "Phase Domain Research" choreography. Current `plan.md` contains zero references to Oracle; research is a standalone command the user must remember to run and paste in. Nothing in the review refuted this, and keeping the TS host (Phase 160's decision) makes it *easier*, not harder: `.aether/ts-host/src/confidence-loop.ts` (250 lines, with `maxIterations` already wired) is a working target-confidence loop. This phase uses it as-is; it does not reimplement a confidence loop.
