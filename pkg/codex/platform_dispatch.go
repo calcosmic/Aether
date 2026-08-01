@@ -733,6 +733,16 @@ var (
 	hostedPreflightAttempts = 2
 )
 
+// makePreflightTempDir is a var so tests can force the failure path
+// and prove a temp-dir failure never bricks dispatch.
+//
+// The probe tests provider liveness and model config, not repo config, and
+// running it in the repo pulled in that repo's provider startup cost and
+// produced false failures (163.1 deferred item, closed by D-07).
+var makePreflightTempDir = func() (string, error) {
+	return os.MkdirTemp("", "aether-preflight-")
+}
+
 func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, args []string, stdin string) AvailabilityStatus {
 	binary := strings.TrimSpace(status.Binary)
 	if binary == "" {
@@ -776,6 +786,15 @@ func attemptHostedProviderPreflight(ctx context.Context, status AvailabilityStat
 	cmd := exec.CommandContext(probeCtx, binary, args...)
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
+	}
+	// Run the probe from a neutral temp directory instead of the process
+	// working directory (D-07): a hostile or heavily configured repo cannot
+	// use the probe's cwd to load its own MCP servers, hooks or plugins. A
+	// temp-dir creation failure must never brick dispatch, so it degrades to
+	// leaving cmd.Dir unset rather than failing the probe.
+	if dir, err := makePreflightTempDir(); err == nil {
+		defer os.RemoveAll(dir)
+		cmd.Dir = dir
 	}
 	configureWorkerCommand(cmd)
 	if status.Platform == PlatformOpenCode {
