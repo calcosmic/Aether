@@ -26,6 +26,36 @@ type codexExternalBuildCompletion struct {
 	Results          []codexExternalBuildWorkerResult `json:"results,omitempty"`
 	Workers          []codexExternalBuildWorkerResult `json:"workers,omitempty"`
 	Claims           *codexBuildClaims                `json:"claims,omitempty"`
+
+	// submittedRaw holds the wrapper's original decoded JSON value
+	// (map[string]any / []any / scalars), envelope-unwrapped, exactly as
+	// submitted -- before any field this Go struct doesn't declare was
+	// silently dropped by encoding/json.Unmarshal. It is set only by
+	// loadExternalBuildCompletion. It stays nil for completions constructed
+	// in-process (no submitted bytes exist), such as
+	// stageBuildAttemptCompletionFromWorkerRuns and every test that builds a
+	// codexExternalBuildCompletion literal -- those fall back to a struct
+	// round-trip via structuralInput().
+	//
+	// Deliberately unexported: encoding/json.Marshal skips unexported
+	// fields, so packet digests via jsonSHA256 stay byte-identical, and
+	// invopop/jsonschema reflection also skips it, so the committed schema
+	// does not drift.
+	submittedRaw any
+}
+
+// structuralInput returns the JSON value structural validation
+// (validateCompletionPacketStructure) should inspect: the wrapper's
+// submitted, envelope-unwrapped JSON when this completion came from
+// loadExternalBuildCompletion, or a struct round-trip via
+// completionPacketAsRaw when no submitted bytes exist (completions built
+// in-process, e.g. stageBuildAttemptCompletionFromWorkerRuns, or a
+// codexExternalBuildCompletion literal constructed directly by a test).
+func (c codexExternalBuildCompletion) structuralInput() (any, error) {
+	if c.submittedRaw != nil {
+		return c.submittedRaw, nil
+	}
+	return completionPacketAsRaw(c)
 }
 
 type codexExternalBuildWorkerResult struct {
@@ -101,7 +131,12 @@ var buildFinalizeCmd = &cobra.Command{
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		completion, err := loadExternalBuildCompletion(completionPath)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			var contractErr *completionContractError
+			if errors.As(err, &contractErr) {
+				outputError(1, err.Error(), contractErr.Violations)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return err
 		}
 		result, state, phase, dispatches, err := runCodexBuildFinalize(skillWorkspaceRoot(), phaseNum, completion, false)
@@ -133,7 +168,12 @@ var buildCompletionStageCmd = &cobra.Command{
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		completion, err := loadExternalBuildCompletion(completionPath)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			var contractErr *completionContractError
+			if errors.As(err, &contractErr) {
+				outputError(1, err.Error(), contractErr.Violations)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return err
 		}
 		manifest := completion.activeManifest()
@@ -203,24 +243,101 @@ func loadExternalBuildCompletion(path string) (codexExternalBuildCompletion, err
 		return codexExternalBuildCompletion{}, fmt.Errorf("read completion file: %w", err)
 	}
 
-	var completion codexExternalBuildCompletion
-	if err := json.Unmarshal(data, &completion); err != nil {
+	// Decode the submitted bytes into a generic value FIRST -- this is what
+	// structural validation will ultimately see, unmodified by whatever the
+	// Go struct below does or does not know about (T-163.1-40).
+	var raw any
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return codexExternalBuildCompletion{}, fmt.Errorf("parse completion file: %w", err)
 	}
-	if completion.activeManifest() != nil {
+
+	var completion codexExternalBuildCompletion
+	typeErrorTolerated := false
+	if err := json.Unmarshal(data, &completion); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if !errors.As(err, &typeErr) {
+			return codexExternalBuildCompletion{}, fmt.Errorf("parse completion file: %w", err)
+		}
+		// encoding/json saves only the first type mismatch and keeps
+		// decoding the rest of the packet -- tolerate it here so a single
+		// wrong-typed field no longer aborts validation before it starts
+		// (T-163.1-43); remember it so a manifest-absent packet below gets a
+		// real structural violation instead of the bare
+		// "must include dispatch_manifest" message.
+		typeErrorTolerated = true
+	}
+	// A tolerated type error on the dispatch_manifest/manifest field itself
+	// still leaves activeManifest() non-nil: encoding/json allocates a
+	// zero-valued struct behind the pointer before it discovers the value
+	// it was given (e.g. a bare string) is not an object, and never rolls
+	// that allocation back. So activeManifest() alone cannot tell "no
+	// manifest" apart from "manifest field allocated but never actually
+	// populated" -- cross-check against raw, which reflects the submitted
+	// shape with no such allocation quirk.
+	if completion.activeManifest() != nil && manifestKeyPresentAsObject(raw) {
+		completion.submittedRaw = raw
 		return completion, nil
 	}
 
+	// Envelope handling: retry the struct decode against `{"result": ...}`
+	// exactly as before, tolerating the same class of type error.
 	var envelope struct {
 		Result codexExternalBuildCompletion `json:"result"`
 	}
 	if err := json.Unmarshal(data, &envelope); err != nil {
-		return codexExternalBuildCompletion{}, fmt.Errorf("parse completion envelope: %w", err)
+		var typeErr *json.UnmarshalTypeError
+		if !errors.As(err, &typeErr) {
+			return codexExternalBuildCompletion{}, fmt.Errorf("parse completion envelope: %w", err)
+		}
+		typeErrorTolerated = true
 	}
-	if envelope.Result.activeManifest() == nil {
-		return codexExternalBuildCompletion{}, fmt.Errorf("completion file must include dispatch_manifest")
+
+	// Unwrap the raw value the same way the struct decode unwraps: only
+	// when the top-level object has neither a dispatch_manifest key nor a
+	// manifest key of its own, but does have a result key.
+	unwrappedRaw := raw
+	if rawMap, ok := raw.(map[string]any); ok {
+		_, hasDispatchManifest := rawMap["dispatch_manifest"]
+		_, hasManifest := rawMap["manifest"]
+		if !hasDispatchManifest && !hasManifest {
+			if result, hasResult := rawMap["result"]; hasResult {
+				unwrappedRaw = result
+			}
+		}
 	}
-	return envelope.Result, nil
+
+	if envelope.Result.activeManifest() != nil && manifestKeyPresentAsObject(unwrappedRaw) {
+		envelope.Result.submittedRaw = unwrappedRaw
+		return envelope.Result, nil
+	}
+
+	if typeErrorTolerated {
+		if violations := validateCompletionPacketStructure(unwrappedRaw); len(violations) > 0 {
+			return codexExternalBuildCompletion{}, &completionContractError{Violations: violations}
+		}
+	}
+	return codexExternalBuildCompletion{}, fmt.Errorf("completion file must include dispatch_manifest")
+}
+
+// manifestKeyPresentAsObject reports whether raw is a map carrying either
+// "dispatch_manifest" or "manifest" as a genuine JSON object. This is the
+// ground truth loadExternalBuildCompletion cross-checks the decoded struct's
+// activeManifest() pointer against, since a tolerated type error on that
+// exact field leaves an allocated-but-never-populated zero-value struct
+// behind the pointer rather than nil.
+func manifestKeyPresentAsObject(raw any) bool {
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return false
+	}
+	for _, key := range []string{"dispatch_manifest", "manifest"} {
+		if value, present := rawMap[key]; present {
+			if _, isObject := value.(map[string]any); isObject {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (c codexExternalBuildCompletion) activeManifest() *codexBuildManifest {
@@ -713,7 +830,14 @@ func appendRecoveryOutcomesToLog(phaseNum int, budget *RecoveryBudget, entries [
 // slice and never short-circuiting on the first problem:
 //
 //  1. validateCompletionPacketStructure (cmd/contract_schema.go, plan 01) --
-//     structural/type/shape problems against the generated JSON Schema.
+//     structural/type/shape problems against the generated JSON Schema, run
+//     against completion.structuralInput(): the wrapper's submitted,
+//     envelope-unwrapped JSON when the packet came from
+//     loadExternalBuildCompletion, or a struct round-trip via
+//     completionPacketAsRaw only for packets constructed in-process
+//     (stageBuildAttemptCompletionFromWorkerRuns, and every test that builds
+//     a codexExternalBuildCompletion literal directly, where no submitted
+//     bytes exist to validate).
 //  2. validateExternalWorkerResultClaimPaths (task 1) -- claim-path
 //     violations across every worker and field.
 //  3. The dispatch-level checks inside mergeExternalBuildResults (task 2).
@@ -726,7 +850,7 @@ func appendRecoveryOutcomesToLog(phaseNum int, budget *RecoveryBudget, entries [
 func validateCompletionPacketSemantics(root string, completion codexExternalBuildCompletion) []contractViolation {
 	var violations []contractViolation
 
-	if raw, err := completionPacketAsRaw(completion); err != nil {
+	if raw, err := completion.structuralInput(); err != nil {
 		violations = append(violations, contractViolation{
 			Rule:    "schema.marshal",
 			Message: fmt.Sprintf("failed to marshal completion packet for structural validation: %v", err),

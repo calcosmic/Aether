@@ -35,6 +35,26 @@
   `go test ./cmd/... -count=1` (the package this plan actually touches) passed cleanly, and all other
   `pkg/...` packages passed under `-race`.
 
+## Plan 08
+
+### Pre-existing, out-of-scope test failure
+
+- **Test:** `TestPackedNPMReleaseCandidateContract` in `cmd/release_candidate_blackbox_test.go`
+- **Observed during:** `go test ./cmd/ -count=1` and `go test ./... -race` runs for plan 163.1-08
+  verification
+- **Failure:** `npm version "1.0.45" does not match source version "1.0.46"`
+- **Why out of scope:** This plan's `files_modified` are `cmd/codex_build_finalize.go`,
+  `cmd/codex_build_finalize_test.go`, and the new `cmd/completion_packet_submitted_bytes_test.go` --
+  all in the completion-packet decode/validation path. `TestPackedNPMReleaseCandidateContract` checks
+  that the packed npm release candidate's `package.json` version agrees with this repo's source
+  version file; it fails identically on a clean `git stash` of this plan's changes (confirmed by
+  re-running it against the unmodified worktree base before restoring the stash), proving the
+  mismatch predates this plan and is caused by the repo's npm/source version drift, not by anything
+  this plan touched.
+- **Action:** Not fixed. Logged here per the executor's scope-boundary rule rather than fixed inline.
+  Every other test in `go test ./cmd/ -count=1` passed, and every `pkg/...` package (including
+  `pkg/codex`, which plans 06/07 had flagged as flaky) passed cleanly under `go test ./... -race`.
+
 ## Plan 09
 
 ### Pre-existing, out-of-scope test failure
