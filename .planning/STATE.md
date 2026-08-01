@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.25
 milestone_name: Switch It On
-status: executing
+status: ready_to_plan
 stopped_at: Phase 163.2 context gathered
 last_updated: "2026-08-01T15:58:06.850Z"
 last_activity: 2026-08-01 -- Phase 163.2 execution started
 progress:
   total_phases: 29
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 28
   completed_plans: 23
-  percent: 82
+  percent: 14
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-25)
 
 ## Current Position
 
-Phase: 163.2 (ts-host-preflight-configurability-make-the-worker-platform-p) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 163.2
-Last activity: 2026-08-01 -- Phase 163.2 execution started
+Phase: 164
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-01
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -39,7 +39,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 9 (v1.25)
+- Total plans completed: 14 (v1.25)
 - Average duration: — (v1.24 average: 8 min)
 - Total execution time: 0 hours
 
