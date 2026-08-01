@@ -222,6 +222,48 @@ func TestNoHardcodedPreflightBudgetRemains(t *testing.T) {
 	}
 }
 
+// TestAuthFailureRegexMatchesAcrossHosts asserts the Go trust-window
+// invalidation vocabulary (providerAuthFailureRegexp in
+// cmd/preflight_cache.go) and the TS isAuthError classifier
+// (.aether/ts-host/src/worker-dispatch.ts) use byte-identical pattern
+// bodies, enforcing the "keep the two patterns byte-identical" comment the
+// code demands (WR-03). If they drift, the two hosts disagree on which
+// failures clear the trust window: one host re-probes while the other
+// trusts a stale success for up to an hour after an auth lapse.
+func TestAuthFailureRegexMatchesAcrossHosts(t *testing.T) {
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("findRepoRoot: %v", err)
+	}
+
+	// Go side: use the compiled regexp itself (not a source scrape) so the
+	// comparison covers the bytes the runtime actually matches with.
+	goPattern := providerAuthFailureRegexp.String()
+	goBody := strings.TrimPrefix(goPattern, "(?i)")
+	if goBody == goPattern {
+		t.Fatalf("providerAuthFailureRegexp %q lost its (?i) case-insensitivity flag", goPattern)
+	}
+
+	tsPath := filepath.Join(repoRoot, ".aether", "ts-host", "src", "worker-dispatch.ts")
+	tsContent, err := os.ReadFile(tsPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", tsPath, err)
+	}
+	tsMatch := regexp.MustCompile(`(?s)export function isAuthError.*?return /(.+?)/(\w*)\.test\(message\)`).FindSubmatch(tsContent)
+	if tsMatch == nil {
+		t.Fatalf("%s: could not find the isAuthError regex literal", tsPath)
+	}
+	tsBody := string(tsMatch[1])
+	tsFlags := string(tsMatch[2])
+	if !strings.Contains(tsFlags, "i") {
+		t.Fatalf("%s: isAuthError regex lost its /i case-insensitivity flag (flags = %q)", tsPath, tsFlags)
+	}
+
+	if goBody != tsBody {
+		t.Fatalf("auth-failure regex drift -- the two hosts no longer agree on which failures clear the trust window:\n  Go (cmd/preflight_cache.go): %q\n  TS (%s): %q", goBody, tsPath, tsBody)
+	}
+}
+
 // TestSkipNoticeWordingMatchesAcrossHosts extracts the skip notice line from
 // cmd/preflight_cache.go (via preflightSkipNoticeLine, the function that
 // actually produces the CLI/JSON bytes) and from .aether/ts-host/src/host.ts
