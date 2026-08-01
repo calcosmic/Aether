@@ -1053,6 +1053,94 @@ func TestMergeExternalBuildResults_RejectsNamelessResult(t *testing.T) {
 	}
 }
 
+// --- Claim-path violation accumulation (163.1-02 Task 1) ---
+
+func TestValidateExternalWorkerResultClaimPathsAccumulatesAcrossWorkersAndFields(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "src/ok.go")
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:         "Mason-67",
+			FilesCreated: []string{"/etc/passwd"},
+		},
+		{
+			Name:         "Weaver-12",
+			TestsWritten: []string{"../outside_test.go"},
+		},
+	}
+
+	violations := validateExternalWorkerResultClaimPaths(root, results)
+	if len(violations) != 2 {
+		t.Fatalf("expected exactly 2 violations, got %d: %+v", len(violations), violations)
+	}
+
+	byWorker := map[string]contractViolation{}
+	for _, v := range violations {
+		byWorker[v.Worker] = v
+	}
+	masonV, ok := byWorker["Mason-67"]
+	if !ok {
+		t.Fatalf("expected a violation attributed to Mason-67, got %+v", violations)
+	}
+	if masonV.Field != "files_created" {
+		t.Errorf("Mason-67 violation field = %q, want files_created", masonV.Field)
+	}
+	weaverV, ok := byWorker["Weaver-12"]
+	if !ok {
+		t.Fatalf("expected a violation attributed to Weaver-12, got %+v", violations)
+	}
+	if weaverV.Field != "tests_written" {
+		t.Errorf("Weaver-12 violation field = %q, want tests_written", weaverV.Field)
+	}
+	if masonV.Worker == weaverV.Worker {
+		t.Fatalf("expected distinct Worker values, got %q for both", masonV.Worker)
+	}
+}
+
+func TestCollectClaimPathViolationsToleratesSanctionedPrefixesRejectsOthers(t *testing.T) {
+	sanctioned := []string{
+		".aether/data/planning/notes.md",
+		".aether/data/phase-research/phase-1.md",
+		".aether/data/survey/survey.json",
+		".aether/data/worker-debug/debug.log",
+		".aether/data/reviews/history/ledger.json",
+	}
+	if violations := collectClaimPathViolations(t.TempDir(), "Digger-12", "files_modified", sanctioned); len(violations) != 0 {
+		t.Fatalf("expected zero violations for sanctioned .aether/data prefixes, got %+v", violations)
+	}
+
+	violations := collectClaimPathViolations(t.TempDir(), "Digger-12", "files_modified", []string{".aether/data/COLONY_STATE.json"})
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for unsanctioned .aether/data claim, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != claimPathRuleAetherData {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, claimPathRuleAetherData)
+	}
+}
+
+func TestCollectClaimPathViolationsRuleIsAlwaysOneOfFourDocumentedStrings(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "src/ok.go")
+	valid := map[string]string{
+		claimPathRuleNullByte:     "src/\x00null.go",
+		claimPathRuleRepoRelative: "/absolute/path.go",
+		claimPathRuleAetherData:   ".aether/data/COLONY_STATE.json",
+		claimPathRuleEscapesRoot:  "../escape.go",
+	}
+	for wantRule, path := range valid {
+		violations := collectClaimPathViolations(root, "Mason-67", "files_modified", []string{path})
+		if len(violations) != 1 {
+			t.Fatalf("path %q: expected exactly 1 violation, got %d: %+v", path, len(violations), violations)
+		}
+		if violations[0].Rule != wantRule {
+			t.Errorf("path %q: Rule = %q, want %q", path, violations[0].Rule, wantRule)
+		}
+		if violations[0].Value != path {
+			t.Errorf("path %q: Value = %q, want %q", path, violations[0].Value, path)
+		}
+	}
+}
+
 func gitInitForTest(t *testing.T, dir string) {
 	t.Helper()
 	cmd := exec.Command("git", "init")

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -279,8 +280,8 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
-	if err := validateExternalWorkerResultClaimPaths(root, completion.workerResults()); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	if violations := validateExternalWorkerResultClaimPaths(root, completion.workerResults()); len(violations) > 0 {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("%s", violations[0].Message)
 	}
 	dispatches, err := mergeExternalBuildResults(*manifest, completion.workerResults())
 	if err != nil {
@@ -968,26 +969,60 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 	return claims, nil
 }
 
-func validateExternalWorkerResultClaimPaths(root string, results []codexExternalBuildWorkerResult) error {
+// collectClaimPathViolations validates every path in paths against root,
+// accumulating one contractViolation per bad path instead of returning on
+// the first problem. Each violation names the worker and the concrete field
+// it came from (files_created, files_modified, tests_written, outputs) so a
+// wrapper author can act on the field, not a generic label. A claim under a
+// sanctioned .aether/data scratch prefix
+// (validateAndNormalizeClaimPathToRoot's ("", nil) branch) is accepted and
+// silently dropped, exactly as before -- never a violation.
+func collectClaimPathViolations(root, worker, field string, paths []string) []contractViolation {
+	var violations []contractViolation
+	for _, path := range uniqueSortedStrings(paths) {
+		if _, err := validateAndNormalizeClaimPathToRoot(root, field, path); err != nil {
+			violations = append(violations, contractViolation{
+				Worker:  worker,
+				Field:   field,
+				Value:   path,
+				Rule:    claimPathRuleFromError(err),
+				Message: err.Error(),
+			})
+		}
+	}
+	return violations
+}
+
+// claimPathRuleFromError extracts the machine-readable rule string a
+// validateAndNormalizeClaimPathToRoot error was wrapped with. Every return
+// path inside that function wraps its error with *claimPathRuleError, so
+// the fallback here is defensive only and should never trigger in practice.
+func claimPathRuleFromError(err error) string {
+	var ruleErr *claimPathRuleError
+	if errors.As(err, &ruleErr) {
+		return ruleErr.rule
+	}
+	return claimPathRuleEscapesRoot
+}
+
+// validateExternalWorkerResultClaimPaths validates every claimed path across
+// every worker and every claim field (outputs, files_created,
+// files_modified, tests_written), returning every violation found in one
+// pass rather than the first. Worker label comes from
+// codexExternalBuildWorkerResult.effectiveName(), falling back to "unnamed".
+func validateExternalWorkerResultClaimPaths(root string, results []codexExternalBuildWorkerResult) []contractViolation {
+	var violations []contractViolation
 	for _, result := range results {
 		name := result.effectiveName()
 		if name == "" {
 			name = "unnamed"
 		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s outputs", name), result.Outputs); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_created", name), result.FilesCreated); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_modified", name), result.FilesModified); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s tests_written", name), result.TestsWritten); err != nil {
-			return err
-		}
+		violations = append(violations, collectClaimPathViolations(root, name, "outputs", result.Outputs)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "files_created", result.FilesCreated)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "files_modified", result.FilesModified)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "tests_written", result.TestsWritten)...)
 	}
-	return nil
+	return violations
 }
 
 type codexResultCollectionReport struct {
@@ -1191,17 +1226,50 @@ func sanctionedDataClaimPrefixes() []string {
 	return append(prefixes, ".aether/data/reviews/")
 }
 
+// claimPathRuleError wraps a claim-path validation error with a
+// machine-readable rule classification. Callers (collectClaimPathViolations)
+// extract the rule via errors.As instead of string-matching the message, so
+// the rule stays correct even if the human-readable wording changes.
+type claimPathRuleError struct {
+	rule string
+	err  error
+}
+
+func (e *claimPathRuleError) Error() string { return e.err.Error() }
+func (e *claimPathRuleError) Unwrap() error { return e.err }
+
+// Rule strings for claim-path validation failures. There are exactly four:
+// a malicious null byte, a path that isn't repo-relative, a forbidden
+// .aether/data claim, and every other way a path fails to resolve inside
+// the repository boundary (escapes root, missing, symlink, directory,
+// ambiguous match, unavailable root).
+const (
+	claimPathRuleNullByte     = "claim_path.null_byte"
+	claimPathRuleRepoRelative = "claim_path.repo_relative"
+	claimPathRuleAetherData   = "claim_path.aether_data"
+	claimPathRuleEscapesRoot  = "claim_path.escapes_root"
+)
+
+// wrapClaimPathRule wraps a non-nil error with its rule classification.
+// A nil err is passed through unchanged (the ok-with-no-error success case).
+func wrapClaimPathRule(rule string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &claimPathRuleError{rule: rule, err: err}
+}
+
 func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, error) {
 	claimed = strings.TrimSpace(claimed)
 	if claimed == "" {
 		return "", nil
 	}
 	if strings.ContainsRune(claimed, 0) {
-		return "", fmt.Errorf("invalid %s claim %q: path contains a null byte", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleNullByte, fmt.Errorf("invalid %s claim %q: path contains a null byte", field, claimed))
 	}
 	policyClaim := filepath.ToSlash(filepath.Clean(filepath.FromSlash(strings.ReplaceAll(claimed, "\\", "/"))))
 	if filepath.IsAbs(claimed) || filepath.IsAbs(filepath.FromSlash(policyClaim)) || hasWindowsVolumePrefix(policyClaim) {
-		return "", fmt.Errorf("invalid %s claim %q: path must be repo-relative", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleRepoRelative, fmt.Errorf("invalid %s claim %q: path must be repo-relative", field, claimed))
 	}
 	if policyClaim == ".aether/data" || strings.HasPrefix(policyClaim, ".aether/data/") {
 		for _, prefix := range sanctionedDataClaimPrefixes() {
@@ -1209,15 +1277,15 @@ func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, e
 				return "", nil
 			}
 		}
-		return "", fmt.Errorf("invalid %s claim %q: path must not be under .aether/data", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleAetherData, fmt.Errorf("invalid %s claim %q: path must not be under .aether/data", field, claimed))
 	}
 	if strings.TrimSpace(root) == "" {
-		return "", fmt.Errorf("invalid %s claim %q: repository root is unavailable", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: repository root is unavailable", field, claimed))
 	}
 
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {
-		return "", fmt.Errorf("invalid %s claim %q: resolve repository root: %w", field, claimed, err)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: resolve repository root: %w", field, claimed, err))
 	}
 	rootEval, err := filepath.EvalSymlinks(rootAbs)
 	if err != nil {
@@ -1226,18 +1294,18 @@ func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, e
 
 	candidateAbs, directCandidate, err := candidateClaimAbsolutePath(rootAbs, claimed)
 	if err != nil {
-		return "", fmt.Errorf("invalid %s claim %q: %w", field, claimed, err)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: %w", field, claimed, err))
 	}
 	if rel, ok, err := normalizeExistingClaimPath(rootEval, candidateAbs, field, claimed); ok || err != nil {
-		return rel, err
+		return rel, wrapClaimPathRule(claimPathRuleEscapesRoot, err)
 	}
 
 	if directCandidate {
 		if rel, ok, err := findUnambiguousRepoRelativeClaimPath(rootAbs, rootEval, field, claimed); ok || err != nil {
-			return rel, err
+			return rel, wrapClaimPathRule(claimPathRuleEscapesRoot, err)
 		}
 	}
-	return "", fmt.Errorf("invalid %s claim %q: path does not exist inside repository", field, claimed)
+	return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: path does not exist inside repository", field, claimed))
 }
 
 func hasWindowsVolumePrefix(path string) bool {
