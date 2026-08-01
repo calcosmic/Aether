@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -288,5 +289,164 @@ func TestRunCodexContinueVerificationBlocksRequiredCheckWithNoResolvableCommand(
 	}
 	if report.CriteriaPassed {
 		t.Fatalf("criteria passed despite blocked required tests check: %+v", report)
+	}
+}
+
+// TestCriterionReadOnlyEvidence proves the task-scoped read-only bypass (D-01,
+// D-02): a criterion bound to an artifact the task legitimately did not
+// modify can be satisfied by hash-verified evidence marked ReadOnly and
+// scoped to that task's ID, integrity checks are unaffected, and the bypass
+// never crosses task boundaries or applies with an empty task scope.
+func TestCriterionReadOnlyEvidence(t *testing.T) {
+	taskID := "1.1"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Read-only evidence",
+		Status: colony.PhaseInProgress,
+		Tasks: []colony.Task{
+			{
+				ID:              &taskID,
+				Goal:            "Test-only task",
+				Status:          colony.TaskCompleted,
+				SuccessCriteria: []string{"Untouched source still behaves"},
+				EvidenceRequirements: []colony.CriterionEvidenceRequirement{
+					{Criterion: "Untouched source still behaves", TaskID: taskID, Artifacts: []string{"untouched.go"}},
+				},
+			},
+		},
+	}
+
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	artifactPath := filepath.Join(root, "untouched.go")
+	original := []byte("package untouched\n")
+	if err := os.WriteFile(artifactPath, original, 0644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	manifest := codexContinueManifest{
+		Present: true,
+		Path:    "build/phase-1/manifest.json",
+		Data: codexBuildManifest{
+			Phase:                   1,
+			ClaimsPath:              ".aether/data/last-build-claims.json",
+			CriterionEvidencePolicy: criterionEvidencePolicyBoundV1,
+			EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(phase),
+		},
+	}
+
+	saveClaimsWithReadOnly := func(t *testing.T, readOnlyTaskID string) {
+		t.Helper()
+		evidence, err := snapshotBuildArtifact(root, "untouched.go")
+		if err != nil {
+			t.Fatalf("snapshot artifact: %v", err)
+		}
+		evidence.ReadOnly = true
+		evidence.ReadOnlyTaskID = readOnlyTaskID
+		claims := codexBuildClaims{
+			BuildPhase:       1,
+			Timestamp:        time.Now().UTC().Format(time.RFC3339),
+			ArtifactEvidence: []codexBuildArtifactEvidence{evidence},
+		}
+		if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+			t.Fatalf("save claims: %v", err)
+		}
+	}
+
+	t.Run("matching task scoped read-only evidence satisfies the criterion", func(t *testing.T) {
+		saveClaimsWithReadOnly(t, taskID)
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		if !evaluation.Passed {
+			t.Fatalf("evaluation = %+v, want pass via read-only evidence", evaluation)
+		}
+		if len(evaluation.Criteria) != 1 || len(evaluation.Criteria[0].BlockingIssues) != 0 {
+			t.Fatalf("criteria = %+v, want zero blocking issues", evaluation.Criteria)
+		}
+		joined := strings.Join(evaluation.Criteria[0].Evidence, "\n")
+		if !strings.Contains(joined, "(read-only)") {
+			t.Fatalf("evidence = %q, want read-only marker", joined)
+		}
+	})
+
+	t.Run("tampering after recording still blocks", func(t *testing.T) {
+		saveClaimsWithReadOnly(t, taskID)
+		if err := os.WriteFile(artifactPath, []byte("package untouched\n\n// changed\n"), 0644); err != nil {
+			t.Fatalf("mutate artifact: %v", err)
+		}
+		defer func() {
+			if err := os.WriteFile(artifactPath, original, 0644); err != nil {
+				t.Fatalf("restore artifact: %v", err)
+			}
+		}()
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		issues := strings.Join(evaluation.BlockingIssues, "\n")
+		if evaluation.Passed || !strings.Contains(issues, "changed after build evidence was recorded") {
+			t.Fatalf("evaluation = %+v, want tamper block", evaluation)
+		}
+	})
+
+	t.Run("cross-task read-only evidence does not satisfy (D-02)", func(t *testing.T) {
+		saveClaimsWithReadOnly(t, "2.1")
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		issues := strings.Join(evaluation.BlockingIssues, "\n")
+		if evaluation.Passed || !strings.Contains(issues, "was not claimed by the current build for task 1.1") {
+			t.Fatalf("evaluation = %+v, want cross-task block", evaluation)
+		}
+	})
+
+	t.Run("empty read-only task id satisfies nothing", func(t *testing.T) {
+		saveClaimsWithReadOnly(t, "")
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		issues := strings.Join(evaluation.BlockingIssues, "\n")
+		if evaluation.Passed || !strings.Contains(issues, "was not claimed by the current build for task 1.1") {
+			t.Fatalf("evaluation = %+v, want block for empty read-only task id", evaluation)
+		}
+	})
+
+	t.Run("unclaimed non-read-only artifact still blocks unchanged", func(t *testing.T) {
+		claims := codexBuildClaims{BuildPhase: 1, Timestamp: time.Now().UTC().Format(time.RFC3339)}
+		if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+			t.Fatalf("save claims: %v", err)
+		}
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		issues := strings.Join(evaluation.BlockingIssues, "\n")
+		if evaluation.Passed || !strings.Contains(issues, "was not claimed by the current build for task 1.1") {
+			t.Fatalf("evaluation = %+v, want unchanged blocking behavior", evaluation)
+		}
+	})
+}
+
+// TestArtifactEvidenceReadOnlyNotSettableByWorker locks the self-attestation
+// guard (Pitfall 3, T-163.1-26): attachBuildArtifactEvidence replaces
+// claims.ArtifactEvidence wholesale from the three claim lists, so a
+// worker-submitted completion packet that sets read_only:true directly on an
+// artifact_evidence entry must never survive into stored claims.
+func TestArtifactEvidenceReadOnlyNotSettableByWorker(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "handled.go"), []byte("package handled\n"), 0644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	packetJSON := `{
+		"files_created": ["handled.go"],
+		"artifact_evidence": [
+			{"path":"x","sha256":"deadbeef","size":1,"read_only":true,"read_only_task_id":"1.1"}
+		],
+		"build_phase": 1
+	}`
+	var claims codexBuildClaims
+	if err := json.Unmarshal([]byte(packetJSON), &claims); err != nil {
+		t.Fatalf("unmarshal worker packet: %v", err)
+	}
+	if len(claims.ArtifactEvidence) != 1 || !claims.ArtifactEvidence[0].ReadOnly {
+		t.Fatalf("test setup: expected worker-submitted read_only to decode true, got %+v", claims.ArtifactEvidence)
+	}
+
+	attachBuildArtifactEvidence(root, &claims)
+
+	for _, entry := range claims.ArtifactEvidence {
+		if entry.ReadOnly {
+			t.Fatalf("worker-submitted read_only evidence survived attachBuildArtifactEvidence: %+v", claims.ArtifactEvidence)
+		}
 	}
 }
