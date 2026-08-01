@@ -342,6 +342,14 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 	if existing.ID != strings.TrimSpace(manifest.AttemptID) || existing.Phase != manifest.Phase {
 		return "", "", fmt.Errorf("build completion attempt identity does not match journal record")
 	}
+	// D-07: staging validates exactly what finalize validates, before
+	// anything is bound. A packet finalize would reject must never write the
+	// durable completion file or bind a digest/path to the attempt -- this is
+	// the same entrypoint build-finalize calls (cmd/codex_build_finalize.go),
+	// run here before any write so staging and finalizing never disagree.
+	if violations := validateCompletionPacketSemantics(buildAttemptWorkspaceRoot(), completion); len(violations) > 0 {
+		return "", "", &completionContractError{Violations: violations}
+	}
 	if existing.CompletionSHA256 != "" && existing.CompletionSHA256 != digest {
 		return "", "", fmt.Errorf("completion packet does not match the result already bound to attempt %s", existing.ID)
 	}

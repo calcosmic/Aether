@@ -157,7 +157,12 @@ var buildCompletionStageCmd = &cobra.Command{
 		}
 		durablePath, digest, err := stageBuildAttemptCompletion(binding.Path, completion)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			var contractErr *completionContractError
+			if errors.As(err, &contractErr) {
+				outputError(1, err.Error(), contractErr.Violations)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return err
 		}
 		outputWorkflow(map[string]interface{}{

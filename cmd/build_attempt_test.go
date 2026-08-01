@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,6 +124,89 @@ func TestBuildAttemptVisualShowsDurableRunAndWorkerState(t *testing.T) {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("build attempt visual missing %q:\n%s", expected, output)
 		}
+	}
+}
+
+// TestStageBuildAttemptCompletionRejectsSemanticViolations proves D-07:
+// staging runs the same semantic validation build-finalize runs, before
+// anything is written. A packet finalize would reject must never reach the
+// durable completion file or the attempt journal's digest/path binding.
+func TestStageBuildAttemptCompletionRejectsSemanticViolations(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	attemptRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+
+	corrupted := completion
+	corrupted.Dispatches = append([]codexExternalBuildWorkerResult{}, completion.Dispatches...)
+	corrupted.Dispatches[0].Handoff.VerificationStatus = "not-a-real-status"
+	corrupted.Dispatches[0].FilesModified = []string{"/etc/passwd"}
+
+	_, _, err := stageBuildAttemptCompletion(attemptRel, corrupted)
+	if err == nil {
+		t.Fatal("staging a semantically invalid packet was accepted")
+	}
+	var contractErr *completionContractError
+	if !errors.As(err, &contractErr) {
+		t.Fatalf("expected *completionContractError, got %v (%T)", err, err)
+	}
+	if len(contractErr.Violations) < 2 {
+		t.Fatalf("expected a multi-violation rejection (invalid handoff status + absolute path), got %+v", contractErr.Violations)
+	}
+
+	completionRel := durableBuildCompletionPath(manifest.Phase, manifest.AttemptID)
+	if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(completionRel))); statErr == nil {
+		t.Fatalf("rejected stage wrote a durable completion file at %s", completionRel)
+	}
+	_, reloaded, ok := loadLatestBuildAttempt(1)
+	if !ok || reloaded.CompletionSHA256 != "" || reloaded.CompletionPath != "" {
+		t.Fatalf("rejected stage bound completion data onto the attempt journal: %+v", reloaded)
+	}
+	if reloaded.Status != buildAttemptAwaiting {
+		t.Fatalf("rejected stage mutated attempt status: %+v", reloaded)
+	}
+}
+
+// TestStageBuildAttemptCompletionAcceptsValidPacket proves the clean path is
+// unchanged by D-07: a packet that passes semantic validation is durably
+// written and bound exactly as before.
+func TestStageBuildAttemptCompletionAcceptsValidPacket(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	attemptRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+
+	displayPath, digest, err := stageBuildAttemptCompletion(attemptRel, completion)
+	if err != nil {
+		t.Fatalf("stage valid completion: %v", err)
+	}
+	if displayPath == "" || digest == "" {
+		t.Fatalf("stage valid completion returned empty path/digest: %q %q", displayPath, digest)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(displayPath))); statErr != nil {
+		t.Fatalf("durable completion file missing after valid stage: %v", statErr)
+	}
+}
+
+// TestStageBuildAttemptCompletionRejectsMismatchedIdentity proves identity
+// checks still run first (D-07 ordering): a packet for the wrong attempt is
+// a routing error, not a contract violation, and must fail before semantic
+// validation runs at all.
+func TestStageBuildAttemptCompletionRejectsMismatchedIdentity(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	attemptRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+
+	mismatched := completion
+	badManifest := manifest
+	badManifest.AttemptID = "attempt-does-not-exist"
+	mismatched.DispatchManifest = &badManifest
+
+	_, _, err := stageBuildAttemptCompletion(attemptRel, mismatched)
+	if err == nil || !strings.Contains(err.Error(), "identity") {
+		t.Fatalf("mismatched attempt identity should be rejected on identity, got %v", err)
+	}
+	var contractErr *completionContractError
+	if errors.As(err, &contractErr) {
+		t.Fatalf("mismatched identity should fail before semantic validation runs, got a contract error: %+v", contractErr.Violations)
 	}
 }
 
