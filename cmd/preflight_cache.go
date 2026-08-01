@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -196,19 +197,104 @@ func clearPreflightCache(platform codex.Platform) error {
 	})
 }
 
+// preflightSkipNoticeLine returns the exact one-line text (no trailing
+// newline) stating that the preflight probe was skipped and auth/model
+// config were NOT verified. This is D-06's never-silent requirement, and the
+// same bytes are used for both the CLI notice (emitPreflightSkipNotice) and
+// the JSON preflightOutcome.Notice field so the two surfaces cannot drift.
+func preflightSkipNoticeLine() string {
+	return fmt.Sprintf("Warning: preflight skipped via %s — provider auth and model config were NOT verified before dispatch", envSkipPreflight)
+}
+
 // emitPreflightSkipNotice writes a single loud line stating that the
 // preflight probe was skipped and auth/model config were NOT verified. This
 // is D-06's never-silent requirement.
 func emitPreflightSkipNotice(w io.Writer) {
-	fmt.Fprintf(w, "Warning: preflight skipped via %s — provider auth and model config were NOT verified before dispatch\n", envSkipPreflight)
+	fmt.Fprintf(w, "%s\n", preflightSkipNoticeLine())
+}
+
+// preflightCacheHitNoticeLine returns the exact one-line text (no trailing
+// newline) reporting that a cached preflight success was reused, and how
+// much of the trust window remains. The same bytes are used for both the
+// CLI notice (emitPreflightCacheHitNotice) and the JSON
+// preflightOutcome.Notice field so the two surfaces cannot drift.
+func preflightCacheHitNoticeLine(platform codex.Platform, remaining time.Duration) string {
+	minutes := int(remaining / time.Minute)
+	if minutes < 0 {
+		minutes = 0
+	}
+	return fmt.Sprintf("preflight: cached OK for %s, %dm left in trust window", platform, minutes)
 }
 
 // emitPreflightCacheHitNotice writes a single line reporting that a cached
 // preflight success was reused, and how much of the trust window remains.
 func emitPreflightCacheHitNotice(w io.Writer, platform codex.Platform, remaining time.Duration) {
-	minutes := int(remaining / time.Minute)
-	if minutes < 0 {
-		minutes = 0
+	fmt.Fprintf(w, "%s\n", preflightCacheHitNoticeLine(platform, remaining))
+}
+
+// preflightOutcome is the source-and-notice pair returned by
+// gatedProviderPreflight, printed on the direct-Go CLI path and carried
+// across the adapter boundary in the TS host's preflight JSON field.
+type preflightOutcome struct {
+	Source string `json:"source"`
+	Notice string `json:"notice,omitempty"`
+}
+
+// Source constants for preflightOutcome. These are the exact strings the TS
+// host contract in plan 03 reads from response.preflight.source.
+const (
+	preflightSourceProbe   = "probe"
+	preflightSourceCache   = "cache"
+	preflightSourceSkipped = "skipped"
+)
+
+// gatedProviderPreflight is the single skip/cache/probe/record decision both
+// dispatch chokepoints (cmd/dispatch_runtime.go preflightWorkerProvider and
+// cmd/internal_worker_adapter.go's --preflight branch) call, so a direct-Go
+// dispatch and a TS-hosted dispatch share one trust window instead of two.
+//
+// Decision order (a skip must short-circuit everything, including the cache
+// read):
+//  1. AETHER_SKIP_PREFLIGHT -> Available/probe_skipped, source "skipped".
+//     The cache is never touched: skipping must not write a trust window.
+//  2. An empty or PlatformUnknown platform bypasses the cache entirely and
+//     goes straight to the probe (source "probe", no notice) -- an
+//     unkeyable platform must never share another platform's window.
+//  3. A fresh cache hit -> Available, source "cache". No probe is invoked.
+//  4. Otherwise the real probe runs. A success is recorded (best-effort; a
+//     cache write failure must not fail dispatch). A failure is never
+//     cached and never clears an existing entry here.
+func gatedProviderPreflight(ctx context.Context, preflighter codex.WorkerProviderPreflighter, platform codex.Platform, root string, now time.Time) (codex.AvailabilityStatus, preflightOutcome) {
+	if preflightSkipRequested() {
+		status := codex.AvailabilityStatus{
+			Platform:  platform,
+			Available: true,
+			Category:  codex.AvailabilityCategoryProbeSkipped,
+			Reason:    fmt.Sprintf("preflight skipped via %s", envSkipPreflight),
+		}
+		return status, preflightOutcome{Source: preflightSourceSkipped, Notice: preflightSkipNoticeLine()}
 	}
-	fmt.Fprintf(w, "preflight: cached OK for %s, %dm left in trust window\n", platform, minutes)
+
+	keyable := platform != "" && platform != codex.PlatformUnknown
+	if keyable {
+		if entry, remaining, hit := loadFreshPreflightCache(platform, now); hit {
+			status := codex.AvailabilityStatus{
+				Platform:  platform,
+				Binary:    entry.Binary,
+				Available: true,
+				Category:  codex.AvailabilityCategoryAvailable,
+			}
+			return status, preflightOutcome{Source: preflightSourceCache, Notice: preflightCacheHitNoticeLine(platform, remaining)}
+		}
+	}
+
+	if preflighter == nil {
+		return codex.AvailabilityStatus{}, preflightOutcome{Source: preflightSourceProbe}
+	}
+
+	status := preflighter.Preflight(ctx, root)
+	if status.Available {
+		_ = recordPreflightSuccess(status, now)
+	}
+	return status, preflightOutcome{Source: preflightSourceProbe}
 }
