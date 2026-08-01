@@ -438,6 +438,8 @@ export interface GoWorkerAdapterResponse {
   execution_binding?: ExecutionBinding;
   provider_run_id?: string;
   worker?: GoWorkerAdapterWorker;
+  /** Additive/optional: "probe" | "cache" | "skipped". Omitted when the probe ran normally with no notice. */
+  preflight?: { source: string; notice?: string };
 }
 
 function sameExecutionBinding(left: ExecutionBinding, right: ExecutionBinding): boolean {
@@ -472,11 +474,15 @@ export async function preflightGoWorkerProvider(
     // x hostedPreflightAttempts in pkg/codex/platform_dispatch.go, 45s x 2)
     // plus startup slack. At 30s Node SIGTERM'd the adapter before the Go
     // retry could ever fire, so the retry existed only on the direct-Go path.
-    return await callGoJSONAsync<GoWorkerAdapterResponse>(
+    const response = await callGoJSONAsync<GoWorkerAdapterResponse>(
       opts,
       ["internal-worker-adapter", "--preflight"],
       120_000
     );
+    if (response.preflight?.notice && response.preflight.notice.trim()) {
+      process.stderr.write(`${response.preflight.notice}\n`);
+    }
+    return response;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`${context} cannot start: ${sanitizeWorkerDiagnosticOutput(message)}`);

@@ -284,7 +284,11 @@ export async function preflightGoWorkerProvider(opts, context) {
         // x hostedPreflightAttempts in pkg/codex/platform_dispatch.go, 45s x 2)
         // plus startup slack. At 30s Node SIGTERM'd the adapter before the Go
         // retry could ever fire, so the retry existed only on the direct-Go path.
-        return await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight"], 120_000);
+        const response = await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight"], 120_000);
+        if (response.preflight?.notice && response.preflight.notice.trim()) {
+            process.stderr.write(`${response.preflight.notice}\n`);
+        }
+        return response;
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);

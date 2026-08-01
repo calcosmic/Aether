@@ -15,7 +15,7 @@
  * @deprecated Test/forensic compatibility only; not a production launcher.
  */
 import { spawn } from "node:child_process";
-import { writeFileSync, mkdtempSync } from "node:fs";
+import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 const canonicalWorkerPlatformOrder = ["codex", "claude", "opencode"];
@@ -83,17 +83,85 @@ export function formatWorkerPlatformSelectionMessage(available, env = process.en
     return `No selectable worker platform is available. Available providers: ${available.join(", ") || "none"}.`;
 }
 /**
+ * Default preflight probe budget in milliseconds. Mirrors
+ * `hostedPreflightTimeout` in pkg/codex/platform_dispatch.go so both hosts
+ * agree on the same fallback when AETHER_PREFLIGHT_TIMEOUT is unset or
+ * unparseable.
+ */
+export const PREFLIGHT_DEFAULT_TIMEOUT_MS = 45_000;
+/**
+ * Resolve the preflight probe timeout from AETHER_PREFLIGHT_TIMEOUT.
+ *
+ * Accepts the Go duration subset the knob is actually used with: a positive
+ * decimal followed by `ms`, `s`, or `m` (e.g. "90s", "1500ms", "2m"). Any
+ * other value — empty, unparseable, zero, negative, or a bare number with no
+ * unit — falls back to PREFLIGHT_DEFAULT_TIMEOUT_MS so a broken env var never
+ * bricks dispatch.
+ */
+export function resolvePreflightTimeoutMs() {
+    const raw = process.env["AETHER_PREFLIGHT_TIMEOUT"]?.trim();
+    if (!raw)
+        return PREFLIGHT_DEFAULT_TIMEOUT_MS;
+    const match = /^(\d+(?:\.\d+)?)(ms|s|m)$/.exec(raw);
+    if (!match)
+        return PREFLIGHT_DEFAULT_TIMEOUT_MS;
+    const value = Number.parseFloat(match[1]);
+    if (!Number.isFinite(value) || value <= 0)
+        return PREFLIGHT_DEFAULT_TIMEOUT_MS;
+    const unit = match[2];
+    const multiplier = unit === "ms" ? 1 : unit === "s" ? 1000 : 60_000;
+    return value * multiplier;
+}
+/**
+ * Create a fresh, throwaway working directory for the preflight probe.
+ * @internal — real implementation, swappable via __setMakePreflightTempDir
+ */
+function _realMakePreflightTempDir() {
+    return mkdtempSync(join(tmpdir(), "aether-preflight-"));
+}
+// Mutable reference for test injection.
+let _makePreflightTempDirRef = _realMakePreflightTempDir;
+/** Test-only: inject a mock temp-dir factory (e.g. to force a throw). */
+export function __setMakePreflightTempDir(fn) {
+    _makePreflightTempDirRef = fn;
+}
+/** Test-only: restore the real temp-dir factory. */
+export function __restoreMakePreflightTempDir() {
+    _makePreflightTempDirRef = _realMakePreflightTempDir;
+}
+/**
  * Run a tiny worker-provider check before dispatching expensive workers.
  * This catches account/model/provider configuration failures before the host
  * creates worker completion state or spawns expensive worker waves.
  */
-export async function preflightWorkerPlatform(platform, cwd = process.cwd()) {
+export async function preflightWorkerPlatform(platform, 
+// Intentionally no longer the probe's working directory (D-07): the probe
+// tests provider liveness, not repo config. Kept for signature
+// compatibility with existing callers and tests.
+cwd = process.cwd()) {
     const binary = resolveBinaryName(platform);
     const args = preflightArgs(platform);
-    const result = await runPreflight(binary, args, cwd, "", 20_000);
-    if (result.exitCode !== 0) {
-        const diagnostic = sanitizeDiagnostic(`${result.stdout}\n${result.stderr}`);
-        throw new Error(`${providerDisplayName(platform)} provider/model preflight failed before worker dispatch: ${diagnostic || `${platform} exited with status ${result.exitCode ?? "unknown"}`}`);
+    const timeoutMs = resolvePreflightTimeoutMs();
+    let probeDir;
+    try {
+        probeDir = _makePreflightTempDirRef();
+    }
+    catch {
+        // Degrade rather than fail the preflight: an exhausted or read-only
+        // TMPDIR must not block dispatch (mirrors plan 02 Task 2 on the Go side).
+        probeDir = undefined;
+    }
+    try {
+        const result = await runPreflight(binary, args, probeDir ?? cwd, "", timeoutMs);
+        if (result.exitCode !== 0) {
+            const diagnostic = sanitizeDiagnostic(`${result.stdout}\n${result.stderr}`);
+            throw new Error(`${providerDisplayName(platform)} provider/model preflight failed before worker dispatch: ${diagnostic || `${platform} exited with status ${result.exitCode ?? "unknown"}`}`);
+        }
+    }
+    finally {
+        if (probeDir) {
+            rmSync(probeDir, { recursive: true, force: true });
+        }
     }
 }
 function preflightArgs(platform) {

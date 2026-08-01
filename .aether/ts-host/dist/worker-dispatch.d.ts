@@ -152,6 +152,11 @@ export interface GoWorkerAdapterResponse {
     execution_binding?: ExecutionBinding;
     provider_run_id?: string;
     worker?: GoWorkerAdapterWorker;
+    /** Additive/optional: "probe" | "cache" | "skipped". Omitted when the probe ran normally with no notice. */
+    preflight?: {
+        source: string;
+        notice?: string;
+    };
 }
 /** Ask the Go-owned adapter layer to select and preflight the worker provider. */
 export declare function preflightGoWorkerProvider(opts: GoBridgeOptions, context: string): Promise<GoWorkerAdapterResponse>;
