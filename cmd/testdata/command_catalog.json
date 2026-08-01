@@ -1435,6 +1435,7 @@
       "light",
       "no-learn",
       "plan-only",
+      "read-only-artifact",
       "reconcile-task",
       "skip-watchers",
       "synthetic",

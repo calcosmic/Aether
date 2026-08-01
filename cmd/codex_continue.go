@@ -134,6 +134,12 @@ type codexVerificationCommands struct {
 
 type codexContinueOptions struct {
 	ReconcileTaskIDs    []string
+	// ReadOnlyArtifacts is an escape hatch for a task named in
+	// ReconcileTaskIDs: each entry is a "<task-id>:<path>" spec recording
+	// hash-verified read-only evidence for an artifact that task legitimately
+	// did not modify (D-01). It never widens claim satisfaction beyond the
+	// named task (D-02).
+	ReadOnlyArtifacts   []string
 	WorkerTimeout       time.Duration
 	VerificationTimeout time.Duration
 	ParentContext       context.Context
@@ -149,6 +155,7 @@ type codexContinueOptionsJSON struct {
 	VerificationTimeoutSec int      `json:"verification_timeout_sec,omitempty"`
 	WorkerTimeoutSec       int      `json:"worker_timeout_sec,omitempty"`
 	ReconcileTaskIDs       []string `json:"reconcile_task_ids,omitempty"`
+	ReadOnlyArtifacts      []string `json:"read_only_artifacts,omitempty"`
 	SkipWatchers           bool     `json:"skip_watchers,omitempty"`
 	LightFlag              bool     `json:"light_flag,omitempty"`
 	HeavyFlag              bool     `json:"heavy_flag,omitempty"`
@@ -202,6 +209,7 @@ func continueOptionsToJSON(opts codexContinueOptions) *codexContinueOptionsJSON 
 		VerificationTimeoutSec: int(opts.VerificationTimeout / time.Second),
 		WorkerTimeoutSec:       int(opts.WorkerTimeout / time.Second),
 		ReconcileTaskIDs:       opts.ReconcileTaskIDs,
+		ReadOnlyArtifacts:      opts.ReadOnlyArtifacts,
 		SkipWatchers:           opts.SkipWatchers,
 		LightFlag:              opts.LightFlag,
 		HeavyFlag:              opts.HeavyFlag,
@@ -243,6 +251,18 @@ func continueOptionsMatchCurrent(current codexContinueOptions, last *codexContin
 	lastSorted := uniqueSortedStrings(last.ReconcileTaskIDs)
 	for i := range currentSorted {
 		if currentSorted[i] != lastSorted[i] {
+			return false
+		}
+	}
+	// Compare read-only artifact specs (order-independent). A changed set
+	// invalidates a stale plan-only manifest just like reconcile task IDs.
+	if len(current.ReadOnlyArtifacts) != len(last.ReadOnlyArtifacts) {
+		return false
+	}
+	currentReadOnlySorted := uniqueSortedStrings(current.ReadOnlyArtifacts)
+	lastReadOnlySorted := uniqueSortedStrings(last.ReadOnlyArtifacts)
+	for i := range currentReadOnlySorted {
+		if currentReadOnlySorted[i] != lastReadOnlySorted[i] {
 			return false
 		}
 	}
@@ -533,6 +553,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if err := validateContinueReconcileTasks(phase, options.ReconcileTaskIDs); err != nil {
 		return nil, state, colony.Phase{}, nil, nil, false, err
 	}
+	if err := validateReadOnlyArtifacts(phase, options.ReconcileTaskIDs, options.ReadOnlyArtifacts); err != nil {
+		return nil, state, colony.Phase{}, nil, nil, false, err
+	}
 	manifest := loadCodexContinueManifest(phase.ID)
 	if !manifest.Present {
 		return missingBuildPacketBlockedResult(state, phase, options), state, phase, nil, nil, false, nil
@@ -547,6 +570,18 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return nil, state, colony.Phase{}, nil, nil, false, reconcileErr
 	} else if changed {
 		state.Plan.Phases[currentIdx] = phase
+	}
+
+	// D-01 escape hatch: record hash-verified read-only evidence for the
+	// reconcile task IDs' declared artifacts BEFORE verification (and its
+	// embedded criterion evidence evaluation) runs, so evaluatePhaseCriterionEvidence
+	// sees the recorded evidence on this same invocation. Validation above
+	// already confirmed every spec's task ID both exists in the phase and was
+	// also passed to --reconcile-task.
+	if len(options.ReadOnlyArtifacts) > 0 {
+		if err := applyReadOnlyArtifactEvidence(root, manifest, options.ReadOnlyArtifacts); err != nil {
+			return nil, state, colony.Phase{}, nil, nil, false, err
+		}
 	}
 
 	// Abandoned build detection: if all dispatches are still "spawned" and the

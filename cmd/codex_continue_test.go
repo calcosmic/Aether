@@ -3977,6 +3977,215 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 	}
 }
 
+// TestReconcileTaskReadOnlyEvidenceSatisfiesCriterion is the end-to-end proof
+// for D-01/D-02 (163.1-06 Task 3): a phase whose criterion is bound to a
+// source file the task legitimately never modified reproduces the observed
+// M4L failure (blocked on the criterion-specific issue) with
+// --reconcile-task alone, opens exactly for that artifact with
+// --read-only-artifact, records the evidence without ever manufacturing a
+// false files_modified claim, and re-blocks on tampering.
+//
+// Modelled on TestContinue_ReconcileDoesNotBypassClaims: same colony-state
+// fixture shape, seedContinueBuildPacket, rootCmd.SetArgs, and
+// parseLifecycleEnvelope assertions. --reconcile-task unconditionally adds a
+// "manually reconciled" warning to blocking_issues (proven by
+// TestContinue_ReconcileDoesNotBypassClaims and left untouched by this
+// plan — Task 2's action explicitly forbids weakening that test), so
+// "blocked" stays true across every run in this test regardless of the
+// read-only escape hatch. The escape hatch is proven instead by the
+// criterion-specific blocking issue disappearing and criteria_passed
+// flipping to true, which is what this test asserts.
+func TestReconcileTaskReadOnlyEvidenceSatisfiesCriterion(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Read-only evidence satisfies a criterion bound to an untouched file"
+	now := time.Now().UTC()
+	taskID := "1.1"
+
+	untouchedPath := filepath.Join(root, "untouched_source.go")
+	untouchedOriginal := []byte("package untouched\n")
+	if err := os.WriteFile(untouchedPath, untouchedOriginal, 0644); err != nil {
+		t.Fatalf("write untouched source: %v", err)
+	}
+
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Read-only escape hatch",
+		Status: colony.PhaseInProgress,
+		Tasks: []colony.Task{
+			{
+				ID:              &taskID,
+				Goal:            "Test-only task whose criterion binds an untouched source file",
+				Status:          colony.TaskCompleted,
+				SuccessCriteria: []string{"Untouched source still behaves"},
+				EvidenceRequirements: []colony.CriterionEvidenceRequirement{
+					{Criterion: "Untouched source still behaves", TaskID: taskID, Artifacts: []string{"untouched_source.go"}},
+				},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan:           colony.Plan{Phases: []colony.Phase{phase}},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Read-only escape hatch", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-601", Task: "Test-only task whose criterion binds an untouched source file", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-602", Task: "Independent verification before advancement", Status: "completed"},
+	})
+
+	// seedContinueBuildPacket doesn't set the bound-v1 criterion evidence
+	// contract on the manifest; add it here.
+	manifestRel := filepath.ToSlash(filepath.Join("build", "phase-1", "manifest.json"))
+	var buildManifest codexBuildManifest
+	if err := store.LoadJSON(manifestRel, &buildManifest); err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	buildManifest.CriterionEvidencePolicy = criterionEvidencePolicyBoundV1
+	buildManifest.EvidenceRequirements = flattenPhaseCriterionEvidenceRequirements(phase)
+	if err := store.SaveJSON(manifestRel, buildManifest); err != nil {
+		t.Fatalf("save manifest: %v", err)
+	}
+
+	// The task's claims legitimately never mention the untouched file --
+	// this reproduces the observed M4L failure: a test-only task whose
+	// criterion is bound to a source file it did not modify.
+	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+		BuildPhase: 1,
+		Timestamp:  now.Format(time.RFC3339),
+		TaskClaims: []codexBuildTaskClaim{{TaskID: taskID, FilesModified: []string{"unrelated_test.go"}}},
+	}); err != nil {
+		t.Fatalf("overwrite claims: %v", err)
+	}
+
+	var outBuf bytes.Buffer
+	stdout = &outBuf
+	t.Cleanup(func() { stdout = os.Stdout })
+
+	// Without --read-only-artifact: --reconcile-task alone blocks, and the
+	// block includes the untouched criterion's specific issue.
+	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue (no read-only-artifact) returned error: %v", err)
+	}
+	env := parseLifecycleEnvelope(t, outBuf.String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true without --read-only-artifact, got %v", result)
+	}
+	blockingIssuesBefore := stringSliceValue(result["blocking_issues"])
+	if !anyContains(blockingIssuesBefore, "was not claimed by the current build for task 1.1") {
+		t.Fatalf("expected the untouched-artifact blocking issue, got %v", blockingIssuesBefore)
+	}
+
+	// With --read-only-artifact: the criterion-specific blocking issue
+	// disappears and criteria_passed flips to true -- the escape hatch opens
+	// for exactly this artifact.
+	resetFlags(rootCmd)
+	outBuf.Reset()
+	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID, "--read-only-artifact", taskID + ":untouched_source.go"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue (with read-only-artifact) returned error: %v", err)
+	}
+	env2 := parseLifecycleEnvelope(t, outBuf.String())
+	result2 := env2["result"].(map[string]interface{})
+	blockingIssuesAfter := stringSliceValue(result2["blocking_issues"])
+	if anyContains(blockingIssuesAfter, "was not claimed by the current build for task 1.1") {
+		t.Fatalf("criterion-specific blocking issue survived --read-only-artifact: %v", blockingIssuesAfter)
+	}
+	if anyContains(blockingIssuesAfter, "changed after build evidence was recorded") {
+		t.Fatalf("unexpected tamper block on first recording: %v", blockingIssuesAfter)
+	}
+	verification2, ok := result2["verification"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected verification field in result, got %#v", result2)
+	}
+	if enforced, _ := verification2["criteria_enforced"].(bool); !enforced {
+		t.Fatalf("expected criteria_enforced:true, got %v", verification2)
+	}
+	if passed, _ := verification2["criteria_passed"].(bool); !passed {
+		t.Fatalf("expected criteria_passed:true once read-only evidence is recorded, got %v", verification2)
+	}
+
+	// Proof of D-01: the claims file carries a read_only entry scoped to
+	// task 1.1, and the task's files_modified claim list is unchanged -- no
+	// false modification claim was manufactured.
+	var claims codexBuildClaims
+	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
+		t.Fatalf("load claims: %v", err)
+	}
+	var recordedEvidence *codexBuildArtifactEvidence
+	for i := range claims.ArtifactEvidence {
+		if claims.ArtifactEvidence[i].Path == "untouched_source.go" {
+			recordedEvidence = &claims.ArtifactEvidence[i]
+		}
+	}
+	if recordedEvidence == nil || !recordedEvidence.ReadOnly || recordedEvidence.ReadOnlyTaskID != taskID {
+		t.Fatalf("expected read-only evidence for untouched_source.go scoped to task %s, got %+v", taskID, claims.ArtifactEvidence)
+	}
+	foundTaskClaim := false
+	for _, tc := range claims.TaskClaims {
+		if tc.TaskID != taskID {
+			continue
+		}
+		foundTaskClaim = true
+		if len(tc.FilesModified) != 1 || tc.FilesModified[0] != "unrelated_test.go" {
+			t.Fatalf("task %s files_modified changed unexpectedly: %v", taskID, tc.FilesModified)
+		}
+		for _, f := range tc.FilesModified {
+			if f == "untouched_source.go" {
+				t.Fatalf("a false files_modified claim was created for untouched_source.go")
+			}
+		}
+	}
+	if !foundTaskClaim {
+		t.Fatalf("expected a task claim entry for %s, got %+v", taskID, claims.TaskClaims)
+	}
+
+	// Tamper: edit the artifact after recording, then re-run the ORIGINAL
+	// reconcile command (no --read-only-artifact this time -- the evidence
+	// was already durably recorded above). Evaluation re-checks the current
+	// hash against the recorded one on every run, so it must block again.
+	if err := os.WriteFile(untouchedPath, []byte("package untouched\n\n// changed\n"), 0644); err != nil {
+		t.Fatalf("mutate artifact: %v", err)
+	}
+	resetFlags(rootCmd)
+	outBuf.Reset()
+	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue (tamper) returned error: %v", err)
+	}
+	env3 := parseLifecycleEnvelope(t, outBuf.String())
+	result3 := env3["result"].(map[string]interface{})
+	if blocked, _ := result3["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true after tampering, got %v", result3)
+	}
+	blockingIssues3 := stringSliceValue(result3["blocking_issues"])
+	if !anyContains(blockingIssues3, "changed after build evidence was recorded") {
+		t.Fatalf("expected tamper blocking issue after editing the artifact, got %v", blockingIssues3)
+	}
+}
+
+func anyContains(items []string, substr string) bool {
+	for _, item := range items {
+		if strings.Contains(item, substr) {
+			return true
+		}
+	}
+	return false
+}
+
 func withTestWorkspace(t *testing.T, root string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
