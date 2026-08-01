@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.25
 milestone_name: Switch It On
-status: ready_to_plan
-stopped_at: Phase 163.1 context gathered
-last_updated: "2026-08-01T10:24:37.439Z"
-last_activity: 2026-08-01 -- Phase 163.1 execution started
+status: planning
+stopped_at: Phase 163.2 context gathered
+last_updated: "2026-08-01T13:09:07.708Z"
+last_activity: 2026-08-01
 progress:
   total_phases: 29
   completed_phases: 3
   total_plans: 23
-  completed_plans: 21
-  percent: 10
+  completed_plans: 23
+  percent: 100
 ---
 
 # Project State
@@ -103,6 +103,6 @@ Carried from v1.23, deferred again in v1.25 (see REQUIREMENTS.md "Deferred"):
 
 ## Session Continuity
 
-Last session: 2026-07-31T22:27:57.298Z
-Stopped at: Phase 163.1 context gathered
-Resume file: .planning/phases/163.1-wrapper-runtime-completion-contract/163.1-CONTEXT.md
+Last session: 2026-08-01T13:09:07.699Z
+Stopped at: Phase 163.2 context gathered
+Resume file: .planning/phases/163.2-ts-host-preflight-configurability-make-the-worker-platform-p/163.2-CONTEXT.md
