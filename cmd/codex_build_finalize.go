@@ -830,7 +830,14 @@ func appendRecoveryOutcomesToLog(phaseNum int, budget *RecoveryBudget, entries [
 // slice and never short-circuiting on the first problem:
 //
 //  1. validateCompletionPacketStructure (cmd/contract_schema.go, plan 01) --
-//     structural/type/shape problems against the generated JSON Schema.
+//     structural/type/shape problems against the generated JSON Schema, run
+//     against completion.structuralInput(): the wrapper's submitted,
+//     envelope-unwrapped JSON when the packet came from
+//     loadExternalBuildCompletion, or a struct round-trip via
+//     completionPacketAsRaw only for packets constructed in-process
+//     (stageBuildAttemptCompletionFromWorkerRuns, and every test that builds
+//     a codexExternalBuildCompletion literal directly, where no submitted
+//     bytes exist to validate).
 //  2. validateExternalWorkerResultClaimPaths (task 1) -- claim-path
 //     violations across every worker and field.
 //  3. The dispatch-level checks inside mergeExternalBuildResults (task 2).
@@ -843,7 +850,7 @@ func appendRecoveryOutcomesToLog(phaseNum int, budget *RecoveryBudget, entries [
 func validateCompletionPacketSemantics(root string, completion codexExternalBuildCompletion) []contractViolation {
 	var violations []contractViolation
 
-	if raw, err := completionPacketAsRaw(completion); err != nil {
+	if raw, err := completion.structuralInput(); err != nil {
 		violations = append(violations, contractViolation{
 			Rule:    "schema.marshal",
 			Message: fmt.Sprintf("failed to marshal completion packet for structural validation: %v", err),
