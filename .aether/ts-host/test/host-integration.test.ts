@@ -282,6 +282,79 @@ describe("dispatched plan and continue runners", () => {
     assert.equal(dispatchCalled, false, "dispatchWorkers must not run after preflight failure");
   });
 
+  it("AETHER_SKIP_PREFLIGHT=1 skips the probe and prints the exact skip notice", async () => {
+    let detectCalled = false;
+    let preflightCalled = false;
+    __setDetectAvailablePlatforms(async () => {
+      detectCalled = true;
+      return ["claude"];
+    });
+    __setPreflightWorkerPlatform(async () => {
+      preflightCalled = true;
+    });
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
+
+    let stderrOutput = "";
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stderrOutput += chunk;
+      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
+    }) as typeof process.stderr.write;
+
+    const previousSkip = process.env["AETHER_SKIP_PREFLIGHT"];
+    process.env["AETHER_SKIP_PREFLIGHT"] = "1";
+    try {
+      const parsed = parseArgs(["node", "host.js", "plan"]);
+      const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+      await runDispatchedPlanCommand(bridge, parsed);
+
+      assert.equal(
+        detectCalled,
+        false,
+        "AETHER_SKIP_PREFLIGHT must short-circuit before the compat platform-detection branch runs"
+      );
+      assert.equal(
+        preflightCalled,
+        false,
+        "AETHER_SKIP_PREFLIGHT must short-circuit before the injected preflight probe runs"
+      );
+      assert.ok(
+        stderrOutput.includes(
+          "Warning: preflight skipped via AETHER_SKIP_PREFLIGHT — provider auth and model config were NOT verified before dispatch"
+        ),
+        `stderr should contain the exact skip notice, got: ${stderrOutput}`
+      );
+    } finally {
+      process.stderr.write = originalStderrWrite;
+      __restoreCreateCeremonyAdapter();
+      if (previousSkip === undefined) delete process.env["AETHER_SKIP_PREFLIGHT"];
+      else process.env["AETHER_SKIP_PREFLIGHT"] = previousSkip;
+    }
+  });
+
+  it("AETHER_SKIP_PREFLIGHT=0 does not skip -- the probe still runs", async () => {
+    let preflightCalled = false;
+    __setDetectAvailablePlatforms(async () => ["claude"]);
+    __setPreflightWorkerPlatform(async () => {
+      preflightCalled = true;
+    });
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
+
+    const previousSkip = process.env["AETHER_SKIP_PREFLIGHT"];
+    process.env["AETHER_SKIP_PREFLIGHT"] = "0";
+    try {
+      const parsed = parseArgs(["node", "host.js", "plan"]);
+      const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+      await runDispatchedPlanCommand(bridge, parsed);
+
+      assert.equal(preflightCalled, true, "AETHER_SKIP_PREFLIGHT=0 must not skip the probe");
+    } finally {
+      __restoreCreateCeremonyAdapter();
+      if (previousSkip === undefined) delete process.env["AETHER_SKIP_PREFLIGHT"];
+      else process.env["AETHER_SKIP_PREFLIGHT"] = previousSkip;
+    }
+  });
+
   it("colonize and seal still use go-json runner", async () => {
     const { getHostCommandDefinition } = await import("../src/command-registry.js");
 

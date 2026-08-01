@@ -7,7 +7,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,6 +23,10 @@ import {
   classifyPlatformError,
   preflightWorkerPlatform,
   selectWorkerPlatform,
+  resolvePreflightTimeoutMs,
+  PREFLIGHT_DEFAULT_TIMEOUT_MS,
+  __setMakePreflightTempDir,
+  __restoreMakePreflightTempDir,
   type Platform,
   type WorkerConfig,
 } from "../src/platform-dispatcher.js";
@@ -144,6 +148,115 @@ exit 0
       } finally {
         restoreEnv(pathKey, previous);
       }
+    }
+  });
+
+  // --- resolvePreflightTimeoutMs tests (D-05) ---
+
+  const preflightTimeoutCases: Array<[string, number]> = [
+    ["90s", 90_000],
+    ["1500ms", 1500],
+    ["2m", 120_000],
+    ["", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+    ["banana", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+    ["-5s", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+    ["0s", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+    ["45", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+  ];
+
+  for (const [input, expected] of preflightTimeoutCases) {
+    it(`resolvePreflightTimeoutMs resolves "${input}" to ${expected}ms`, () => {
+      const previous = process.env["AETHER_PREFLIGHT_TIMEOUT"];
+      process.env["AETHER_PREFLIGHT_TIMEOUT"] = input;
+      try {
+        assert.equal(resolvePreflightTimeoutMs(), expected);
+      } finally {
+        restoreEnv("AETHER_PREFLIGHT_TIMEOUT", previous);
+      }
+    });
+  }
+
+  it("resolvePreflightTimeoutMs default is exactly 45000ms, matching Go's hostedPreflightTimeout", () => {
+    assert.equal(PREFLIGHT_DEFAULT_TIMEOUT_MS, 45_000);
+  });
+
+  it("platform-dispatcher.ts has no hardcoded preflight timeout literal", () => {
+    const source = readFileSync(join(REPO_ROOT, ".aether", "ts-host", "src", "platform-dispatcher.ts"), "utf-8");
+    assert.ok(!source.includes("20_000"), "source must not contain the old hardcoded 20_000ms literal");
+    assert.ok(
+      !source.includes("AETHER_PREFLIGHT_TIMEOUT_MS"),
+      "source must not introduce a separate _MS env var (D-05: one knob, both hosts)"
+    );
+  });
+
+  // --- probe cwd isolation tests (D-07) ---
+
+  it("preflightWorkerPlatform isolates the probe cwd to a throwaway aether-preflight-* directory", async () => {
+    const repoLikeTempDir = mkdtempSync(join(tmpdir(), "aether-repo-like-"));
+    const providerDir = mkdtempSync(join(tmpdir(), "aether-pwd-provider-"));
+    const pwdMarkerPath = join(providerDir, "pwd.txt");
+    const codexPath = join(providerDir, "codex");
+    writeFileSync(
+      codexPath,
+      `#!/bin/sh
+pwd -P > "${pwdMarkerPath}"
+exit 0
+`,
+      { mode: 0o755 }
+    );
+    const previous = process.env["AETHER_CODEX_PATH"];
+    process.env["AETHER_CODEX_PATH"] = codexPath;
+    try {
+      await preflightWorkerPlatform("codex", repoLikeTempDir);
+      assert.ok(existsSync(pwdMarkerPath), "the pwd-recording provider should have run");
+      const recordedDir = readFileSync(pwdMarkerPath, "utf-8").trim();
+      assert.notEqual(recordedDir, repoLikeTempDir, "probe must not run in the passed cwd");
+      const baseName = recordedDir.split("/").pop() ?? "";
+      assert.ok(
+        baseName.startsWith("aether-preflight-"),
+        `probe directory should start with aether-preflight-, got ${recordedDir}`
+      );
+    } finally {
+      restoreEnv("AETHER_CODEX_PATH", previous);
+    }
+  });
+
+  it("preflight falls back to cwd when the temp dir cannot be created", async () => {
+    const repoLikeTempDir = mkdtempSync(join(tmpdir(), "aether-repo-like-"));
+    const providerDir = mkdtempSync(join(tmpdir(), "aether-pwd-provider-"));
+    const pwdMarkerPath = join(providerDir, "pwd.txt");
+    const codexPath = join(providerDir, "codex");
+    writeFileSync(
+      codexPath,
+      `#!/bin/sh
+pwd -P > "${pwdMarkerPath}"
+exit 0
+`,
+      { mode: 0o755 }
+    );
+    const previous = process.env["AETHER_CODEX_PATH"];
+    process.env["AETHER_CODEX_PATH"] = codexPath;
+    __setMakePreflightTempDir(() => {
+      throw new Error("forced mkdtemp failure");
+    });
+    try {
+      await assert.doesNotReject(
+        () => preflightWorkerPlatform("codex", repoLikeTempDir),
+        "a temp-dir creation failure must not fail the preflight"
+      );
+      assert.ok(existsSync(pwdMarkerPath), "the provider should still have run using the fallback cwd");
+      const recordedDir = readFileSync(pwdMarkerPath, "utf-8").trim();
+      // Compare canonical paths: macOS resolves TMPDIR through /private, so
+      // the subprocess's `pwd -P` may report the physical path while
+      // repoLikeTempDir is the logical mkdtempSync() return value.
+      assert.equal(
+        recordedDir,
+        realpathSync(repoLikeTempDir),
+        "probe should fall back to the passed cwd"
+      );
+    } finally {
+      __restoreMakePreflightTempDir();
+      restoreEnv("AETHER_CODEX_PATH", previous);
     }
   });
 
