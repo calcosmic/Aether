@@ -57,23 +57,7 @@ export declare function detectAvailablePlatforms(): Promise<Platform[]>;
  */
 export declare function selectWorkerPlatform(available: readonly Platform[], env?: NodeJS.ProcessEnv): Platform | undefined;
 export declare function formatWorkerPlatformSelectionMessage(available: readonly Platform[], env?: NodeJS.ProcessEnv): string;
-/**
- * Default preflight probe budget in milliseconds. Mirrors
- * `hostedPreflightTimeout` in pkg/codex/platform_dispatch.go so both hosts
- * agree on the same fallback when AETHER_PREFLIGHT_TIMEOUT is unset or
- * unparseable.
- */
-export declare const PREFLIGHT_DEFAULT_TIMEOUT_MS = 45000;
-/**
- * Resolve the preflight probe timeout from AETHER_PREFLIGHT_TIMEOUT.
- *
- * Accepts the Go duration subset the knob is actually used with: a positive
- * decimal followed by `ms`, `s`, or `m` (e.g. "90s", "1500ms", "2m"). Any
- * other value — empty, unparseable, zero, negative, or a bare number with no
- * unit — falls back to PREFLIGHT_DEFAULT_TIMEOUT_MS so a broken env var never
- * bricks dispatch.
- */
-export declare function resolvePreflightTimeoutMs(): number;
+export { PREFLIGHT_DEFAULT_TIMEOUT_MS, resolvePreflightTimeoutMs } from "./preflight-config.js";
 /** Test-only: inject a mock temp-dir factory (e.g. to force a throw). */
 export declare function __setMakePreflightTempDir(fn: () => string): void;
 /** Test-only: restore the real temp-dir factory. */

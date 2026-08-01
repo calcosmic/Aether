@@ -82,36 +82,12 @@ export function formatWorkerPlatformSelectionMessage(available, env = process.en
     }
     return `No selectable worker platform is available. Available providers: ${available.join(", ") || "none"}.`;
 }
-/**
- * Default preflight probe budget in milliseconds. Mirrors
- * `hostedPreflightTimeout` in pkg/codex/platform_dispatch.go so both hosts
- * agree on the same fallback when AETHER_PREFLIGHT_TIMEOUT is unset or
- * unparseable.
- */
-export const PREFLIGHT_DEFAULT_TIMEOUT_MS = 45_000;
-/**
- * Resolve the preflight probe timeout from AETHER_PREFLIGHT_TIMEOUT.
- *
- * Accepts the Go duration subset the knob is actually used with: a positive
- * decimal followed by `ms`, `s`, or `m` (e.g. "90s", "1500ms", "2m"). Any
- * other value — empty, unparseable, zero, negative, or a bare number with no
- * unit — falls back to PREFLIGHT_DEFAULT_TIMEOUT_MS so a broken env var never
- * bricks dispatch.
- */
-export function resolvePreflightTimeoutMs() {
-    const raw = process.env["AETHER_PREFLIGHT_TIMEOUT"]?.trim();
-    if (!raw)
-        return PREFLIGHT_DEFAULT_TIMEOUT_MS;
-    const match = /^(\d+(?:\.\d+)?)(ms|s|m)$/.exec(raw);
-    if (!match)
-        return PREFLIGHT_DEFAULT_TIMEOUT_MS;
-    const value = Number.parseFloat(match[1]);
-    if (!Number.isFinite(value) || value <= 0)
-        return PREFLIGHT_DEFAULT_TIMEOUT_MS;
-    const unit = match[2];
-    const multiplier = unit === "ms" ? 1 : unit === "s" ? 1000 : 60_000;
-    return value * multiplier;
-}
+// The AETHER_PREFLIGHT_TIMEOUT resolver moved to preflight-config.ts (a
+// production module) so worker-dispatch.ts can size its Go-adapter kill
+// budget from it without importing this retired launcher. Re-exported here
+// for compatibility with existing tests and forensic tooling.
+export { PREFLIGHT_DEFAULT_TIMEOUT_MS, resolvePreflightTimeoutMs } from "./preflight-config.js";
+import { resolvePreflightTimeoutMs } from "./preflight-config.js";
 /**
  * Create a fresh, throwaway working directory for the preflight probe.
  * @internal — real implementation, swappable via __setMakePreflightTempDir

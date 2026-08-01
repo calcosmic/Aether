@@ -94,7 +94,7 @@ func TestEveryPreflightEnvKnobIsDocumented(t *testing.T) {
 
 // TestHostsAgreeOnPreflightDefaultBudget parses hostedPreflightTimeout from
 // pkg/codex/platform_dispatch.go and PREFLIGHT_DEFAULT_TIMEOUT_MS from
-// .aether/ts-host/src/platform-dispatcher.ts and asserts the two values are
+// .aether/ts-host/src/preflight-config.ts and asserts the two values are
 // equal in milliseconds. Changing one host's default without the other must
 // fail this test (T-163.2-28).
 func TestHostsAgreeOnPreflightDefaultBudget(t *testing.T) {
@@ -118,7 +118,7 @@ func TestHostsAgreeOnPreflightDefaultBudget(t *testing.T) {
 	}
 	goMs := goSeconds * 1000
 
-	tsPath := filepath.Join(repoRoot, ".aether", "ts-host", "src", "platform-dispatcher.ts")
+	tsPath := filepath.Join(repoRoot, ".aether", "ts-host", "src", "preflight-config.ts")
 	tsContent, err := os.ReadFile(tsPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", tsPath, err)
@@ -134,6 +134,52 @@ func TestHostsAgreeOnPreflightDefaultBudget(t *testing.T) {
 
 	if goMs != tsMs {
 		t.Fatalf("preflight default budget drift: %s hostedPreflightTimeout = %dms, %s PREFLIGHT_DEFAULT_TIMEOUT_MS = %dms -- these must agree", goPath, goMs, tsPath, tsMs)
+	}
+}
+
+// TestHostsAgreeOnPreflightRetryAttempts parses hostedPreflightAttempts from
+// pkg/codex/platform_dispatch.go and PREFLIGHT_GO_ATTEMPTS from
+// .aether/ts-host/src/worker-dispatch.ts and asserts they are equal. The TS
+// host sizes its Node-side adapter kill budget as
+// resolvePreflightTimeoutMs() x PREFLIGHT_GO_ATTEMPTS + slack; if Go grows a
+// third retry attempt without the TS mirror following, Node SIGTERMs the
+// adapter mid-retry again (CR-01, the 27-July failure mode).
+func TestHostsAgreeOnPreflightRetryAttempts(t *testing.T) {
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("findRepoRoot: %v", err)
+	}
+
+	goPath := filepath.Join(repoRoot, "pkg", "codex", "platform_dispatch.go")
+	goContent, err := os.ReadFile(goPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", goPath, err)
+	}
+	goMatch := regexp.MustCompile(`hostedPreflightAttempts\s*=\s*(\d+)`).FindSubmatch(goContent)
+	if goMatch == nil {
+		t.Fatalf("%s: could not find \"hostedPreflightAttempts = N\"", goPath)
+	}
+	goAttempts, err := strconv.Atoi(string(goMatch[1]))
+	if err != nil {
+		t.Fatalf("parse Go attempts value %q: %v", goMatch[1], err)
+	}
+
+	tsPath := filepath.Join(repoRoot, ".aether", "ts-host", "src", "worker-dispatch.ts")
+	tsContent, err := os.ReadFile(tsPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", tsPath, err)
+	}
+	tsMatch := regexp.MustCompile(`PREFLIGHT_GO_ATTEMPTS\s*=\s*(\d+)`).FindSubmatch(tsContent)
+	if tsMatch == nil {
+		t.Fatalf("%s: could not find \"PREFLIGHT_GO_ATTEMPTS = N\"", tsPath)
+	}
+	tsAttempts, err := strconv.Atoi(string(tsMatch[1]))
+	if err != nil {
+		t.Fatalf("parse TS attempts value %q: %v", tsMatch[1], err)
+	}
+
+	if goAttempts != tsAttempts {
+		t.Fatalf("preflight attempts drift: %s hostedPreflightAttempts = %d, %s PREFLIGHT_GO_ATTEMPTS = %d -- these must agree", goPath, goAttempts, tsPath, tsAttempts)
 	}
 }
 
@@ -163,6 +209,8 @@ func TestNoHardcodedPreflightBudgetRemains(t *testing.T) {
 
 	checkNoLiteral(filepath.Join(".aether", "ts-host", "src", "platform-dispatcher.ts"), []string{"20_000", "20000"})
 	checkNoLiteral(filepath.Join(".aether", "ts-host", "dist", "platform-dispatcher.js"), []string{"20_000", "20000"})
+	checkNoLiteral(filepath.Join(".aether", "ts-host", "src", "preflight-config.ts"), []string{"20_000", "20000"})
+	checkNoLiteral(filepath.Join(".aether", "ts-host", "dist", "preflight-config.js"), []string{"20_000", "20000"})
 
 	workerGoPath := filepath.Join(repoRoot, "pkg", "codex", "worker.go")
 	content, err := os.ReadFile(workerGoPath)

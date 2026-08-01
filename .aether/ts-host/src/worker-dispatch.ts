@@ -23,6 +23,7 @@ import {
 import type { BuildDispatch, ExecutionBinding, PermissionProfile, WorkerResult, TerminalWorkerStatus, SpawnClaim, WorkerHandoff } from "./types.js";
 import { normalizeSpawnClaims } from "./claims-parser.js";
 import { dispatchWaves, type WaveResult } from "./wave-orchestrator.js";
+import { resolvePreflightTimeoutMs } from "./preflight-config.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -464,20 +465,45 @@ function normalizeTerminalStatus(value: string): TerminalWorkerStatus {
   }
 }
 
+/**
+ * Mirror of hostedPreflightAttempts in pkg/codex/platform_dispatch.go.
+ * Pinned by TestHostsAgreeOnPreflightRetryAttempts in
+ * cmd/preflight_docs_test.go — change one side without the other and that
+ * test fails.
+ */
+export const PREFLIGHT_GO_ATTEMPTS = 2;
+
+/** Startup slack added on top of the Go side's worst-case retry budget. */
+const PREFLIGHT_ADAPTER_SLACK_MS = 30_000;
+
+/**
+ * Node-side kill budget for the `internal-worker-adapter --preflight` call.
+ *
+ * Must exceed the Go side's full preflight budget — the resolved
+ * AETHER_PREFLIGHT_TIMEOUT (not the 45s constant: the knob is configurable)
+ * times hostedPreflightAttempts — plus startup slack. At a hardcoded 30s
+ * Node SIGTERM'd the adapter before the Go retry could ever fire (27 July
+ * incident); a hardcoded 120s reintroduced the same failure for any
+ * AETHER_PREFLIGHT_TIMEOUT above ~45s, killing the adapter mid-retry.
+ * Floored at 120s so the wrapper never gets tighter than the old constant.
+ */
+export function resolvePreflightAdapterBudgetMs(): number {
+  return Math.max(
+    120_000,
+    resolvePreflightTimeoutMs() * PREFLIGHT_GO_ATTEMPTS + PREFLIGHT_ADAPTER_SLACK_MS
+  );
+}
+
 /** Ask the Go-owned adapter layer to select and preflight the worker provider. */
 export async function preflightGoWorkerProvider(
   opts: GoBridgeOptions,
   context: string
 ): Promise<GoWorkerAdapterResponse> {
   try {
-    // Must exceed the Go side's full preflight budget (hostedPreflightTimeout
-    // x hostedPreflightAttempts in pkg/codex/platform_dispatch.go, 45s x 2)
-    // plus startup slack. At 30s Node SIGTERM'd the adapter before the Go
-    // retry could ever fire, so the retry existed only on the direct-Go path.
     const response = await callGoJSONAsync<GoWorkerAdapterResponse>(
       opts,
       ["internal-worker-adapter", "--preflight"],
-      120_000
+      resolvePreflightAdapterBudgetMs()
     );
     if (response.preflight?.notice && response.preflight.notice.trim()) {
       process.stderr.write(`${response.preflight.notice}\n`);
