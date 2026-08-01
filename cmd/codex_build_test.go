@@ -1885,7 +1885,12 @@ func TestBuildFinalizeAcceptsVerificationOnlyOutputEvidence(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Dispatches:       dispatchResults,
-		Claims:           &codexBuildClaims{},
+		// FilesCreated/FilesModified must be explicit empty arrays, not a
+		// nil zero value: the completion-packet schema (generated from
+		// codexBuildClaims's non-omitempty []string fields) requires both
+		// keys present as arrays, even for a legitimate verification-only
+		// submission with no file claims.
+		Claims: &codexBuildClaims{FilesCreated: []string{}, FilesModified: []string{}},
 	}
 
 	_, state, _, finalDispatches, err := runCodexBuildFinalize(root, 1, completion, false)

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -250,9 +251,12 @@ func TestMergeExternalBuildResultsWithCodeWritten(t *testing.T) {
 		},
 	}
 
-	dispatches, err := mergeExternalBuildResults(manifest, results)
+	dispatches, violations, err := mergeExternalBuildResults(manifest, results)
 	if err != nil {
 		t.Fatalf("mergeExternalBuildResults with code_written: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("expected no violations, got %+v", violations)
 	}
 	if dispatches[0].Status != "completed" {
 		t.Errorf("status = %q, want completed", dispatches[0].Status)
@@ -279,9 +283,12 @@ func TestMergeExternalBuildResultsWithAntName(t *testing.T) {
 		},
 	}
 
-	dispatches, err := mergeExternalBuildResults(manifest, results)
+	dispatches, violations, err := mergeExternalBuildResults(manifest, results)
 	if err != nil {
 		t.Fatalf("mergeExternalBuildResults with ant_name: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("expected no violations, got %+v", violations)
 	}
 	if dispatches[0].Status != "completed" {
 		t.Errorf("status = %q, want completed", dispatches[0].Status)
@@ -308,9 +315,12 @@ func TestMergeExternalBuildResultsMatchesRetrySuffixDrift(t *testing.T) {
 		},
 	}
 
-	dispatches, err := mergeExternalBuildResults(manifest, results)
+	dispatches, violations, err := mergeExternalBuildResults(manifest, results)
 	if err != nil {
 		t.Fatalf("mergeExternalBuildResults with retry suffix drift: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("expected no violations, got %+v", violations)
 	}
 	if dispatches[0].Status != "completed" {
 		t.Errorf("status = %q, want completed", dispatches[0].Status)
@@ -333,12 +343,18 @@ func TestMergeExternalBuildResultsRejectsAmbiguousRetrySuffixMatch(t *testing.T)
 		{Name: "Hunt-33-r3", Caste: "builder", Stage: "wave", TaskID: "1.1", Status: "completed", FilesCreated: []string{"b.go"}},
 	}
 
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected ambiguous retry suffix match to fail")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for ambiguous retry suffix match, got: %v", err)
 	}
-	if !contains(err.Error(), "ambiguous external worker result") {
-		t.Fatalf("expected ambiguous match error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for ambiguous retry suffix match, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleDuplicateResult {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleDuplicateResult)
+	}
+	if !contains(violations[0].Message, "ambiguous external worker result") {
+		t.Fatalf("expected ambiguous match violation message, got: %v", violations[0].Message)
 	}
 }
 
@@ -870,12 +886,15 @@ func TestMergeExternalBuildResults_RejectsWrongRoot(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "Mason-67", Status: "completed"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
+	_, violations, err := mergeExternalBuildResults(manifest, results)
 	// mergeExternalBuildResults itself does not validate root — that happens
 	// in runCodexBuildFinalize via validateFinalizerManifestRoot.
 	// Verify that the merge itself succeeds (root is checked upstream).
 	if err != nil {
 		t.Fatalf("mergeExternalBuildResults should not check root (upstream concern): %v", err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("expected no violations (root is checked upstream), got %+v", violations)
 	}
 }
 
@@ -889,12 +908,18 @@ func TestMergeExternalBuildResults_RejectsWrongCaste(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "Mason-67", Caste: "watcher", Status: "completed"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for wrong caste")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for wrong caste, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "caste") {
-		t.Fatalf("expected caste mismatch error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for wrong caste, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleIdentityMismatch {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleIdentityMismatch)
+	}
+	if !strings.Contains(violations[0].Message, "caste") {
+		t.Fatalf("expected caste mismatch message, got: %v", violations[0].Message)
 	}
 }
 
@@ -908,12 +933,18 @@ func TestMergeExternalBuildResults_RejectsWrongStage(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "Mason-67", Stage: "verification", Status: "completed"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for wrong stage")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for wrong stage, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "stage") {
-		t.Fatalf("expected stage mismatch error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for wrong stage, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleIdentityMismatch {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleIdentityMismatch)
+	}
+	if !strings.Contains(violations[0].Message, "stage") {
+		t.Fatalf("expected stage mismatch message, got: %v", violations[0].Message)
 	}
 }
 
@@ -927,12 +958,18 @@ func TestMergeExternalBuildResults_RejectsWrongTaskID(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "Mason-67", TaskID: "2.1", Status: "completed"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for wrong task_id")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for wrong task_id, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "task_id") {
-		t.Fatalf("expected task_id mismatch error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for wrong task_id, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleIdentityMismatch {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleIdentityMismatch)
+	}
+	if !strings.Contains(violations[0].Message, "task_id") {
+		t.Fatalf("expected task_id mismatch message, got: %v", violations[0].Message)
 	}
 }
 
@@ -946,12 +983,18 @@ func TestMergeExternalBuildResults_RejectsWrongWave(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "Mason-67", Wave: 2, Status: "completed"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for wrong wave")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for wrong wave, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "wave") {
-		t.Fatalf("expected wave mismatch error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for wrong wave, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleIdentityMismatch {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleIdentityMismatch)
+	}
+	if !strings.Contains(violations[0].Message, "wave") {
+		t.Fatalf("expected wave mismatch message, got: %v", violations[0].Message)
 	}
 }
 
@@ -965,12 +1008,18 @@ func TestMergeExternalBuildResults_RejectsWrongExecutionWave(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "Mason-67", ExecutionWave: 3, Status: "completed"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for wrong execution_wave")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for wrong execution_wave, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "execution_wave") {
-		t.Fatalf("expected execution_wave mismatch error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for wrong execution_wave, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleIdentityMismatch {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleIdentityMismatch)
+	}
+	if !strings.Contains(violations[0].Message, "execution_wave") {
+		t.Fatalf("expected execution_wave mismatch message, got: %v", violations[0].Message)
 	}
 }
 
@@ -985,12 +1034,18 @@ func TestMergeExternalBuildResults_RejectsDuplicateWorkerResult(t *testing.T) {
 		{Name: "Mason-67", Status: "completed"},
 		{Name: "Mason-67", Status: "completed"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for duplicate worker result")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for duplicate worker result, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "duplicate") {
-		t.Fatalf("expected duplicate error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for duplicate worker result, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleDuplicateResult {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleDuplicateResult)
+	}
+	if !strings.Contains(violations[0].Message, "duplicate") {
+		t.Fatalf("expected duplicate message, got: %v", violations[0].Message)
 	}
 }
 
@@ -1004,12 +1059,18 @@ func TestMergeExternalBuildResults_RejectsNonTerminalStatus(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "Mason-67", Status: "running"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for non-terminal status")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for non-terminal status, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "non-terminal") {
-		t.Fatalf("expected non-terminal status error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for non-terminal status, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleStatusTerminal {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleStatusTerminal)
+	}
+	if !strings.Contains(violations[0].Message, "non-terminal") {
+		t.Fatalf("expected non-terminal status message, got: %v", violations[0].Message)
 	}
 }
 
@@ -1025,12 +1086,18 @@ func TestMergeExternalBuildResults_RejectsMissingResult(t *testing.T) {
 		{Name: "Mason-67", Status: "completed"},
 		// Keen-33 result is missing — build should reject
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for missing worker result")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for missing worker result, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "missing") {
-		t.Fatalf("expected missing result error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for missing worker result, got %d: %+v", len(violations), violations)
+	}
+	if violations[0].Rule != violationRuleResultMissing {
+		t.Errorf("Rule = %q, want %q", violations[0].Rule, violationRuleResultMissing)
+	}
+	if !strings.Contains(violations[0].Message, "missing") {
+		t.Fatalf("expected missing result message, got: %v", violations[0].Message)
 	}
 }
 
@@ -1044,12 +1111,34 @@ func TestMergeExternalBuildResults_RejectsNamelessResult(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "", Status: "completed"},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected error for nameless result")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for nameless result, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "missing name") {
-		t.Fatalf("expected missing name error, got: %v", err)
+	// The nameless result itself is one violation (worker.name_required); the
+	// dispatch that never received a matching result is a second, independent
+	// violation (worker.result_missing) -- proving accumulation keeps
+	// checking later dispatches instead of stopping at the first problem.
+	if len(violations) != 2 {
+		t.Fatalf("expected exactly 2 violations for nameless result, got %d: %+v", len(violations), violations)
+	}
+	var sawNameRequired, sawResultMissing bool
+	for _, v := range violations {
+		switch v.Rule {
+		case violationRuleNameRequired:
+			sawNameRequired = true
+			if !strings.Contains(v.Message, "missing name") {
+				t.Errorf("name_required violation message = %q, want to contain %q", v.Message, "missing name")
+			}
+		case violationRuleResultMissing:
+			sawResultMissing = true
+		}
+	}
+	if !sawNameRequired {
+		t.Errorf("expected a %s violation, got %+v", violationRuleNameRequired, violations)
+	}
+	if !sawResultMissing {
+		t.Errorf("expected a %s violation, got %+v", violationRuleResultMissing, violations)
 	}
 }
 
@@ -1139,6 +1228,255 @@ func TestCollectClaimPathViolationsRuleIsAlwaysOneOfFourDocumentedStrings(t *tes
 			t.Errorf("path %q: Value = %q, want %q", path, violations[0].Value, path)
 		}
 	}
+}
+
+// --- One rejection, every violation (163.1-02 Task 2) ---
+
+func TestMergeExternalBuildResultsReturnsAllViolations(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+			{Name: "Keen-13", Caste: "watcher", Stage: "verification", TaskID: ""},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", Caste: "watcher", Status: "completed"},                     // identity_mismatch (caste)
+		{Name: "Keen-13", Caste: "watcher", Stage: "verification", Status: "running"}, // status_terminal
+	}
+
+	dispatches, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error, got: %v", err)
+	}
+	if len(violations) != 2 {
+		t.Fatalf("expected exactly 2 violations, got %d: %+v", len(violations), violations)
+	}
+	if len(dispatches) != 2 {
+		t.Fatalf("expected 2 dispatch slots (unresolved dispatches keep their manifest entry), got %d", len(dispatches))
+	}
+	byWorker := map[string]contractViolation{}
+	for _, v := range violations {
+		byWorker[v.Worker] = v
+	}
+	if byWorker["Mason-67"].Rule != violationRuleIdentityMismatch {
+		t.Errorf("Mason-67 Rule = %q, want %q", byWorker["Mason-67"].Rule, violationRuleIdentityMismatch)
+	}
+	if byWorker["Keen-13"].Rule != violationRuleStatusTerminal {
+		t.Errorf("Keen-13 Rule = %q, want %q", byWorker["Keen-13"].Rule, violationRuleStatusTerminal)
+	}
+}
+
+func TestValidateCompletionPacketSemanticsReturnsAllViolations(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	_ = manifest
+
+	for i := range completion.Dispatches {
+		switch completion.Dispatches[i].effectiveName() {
+		case "Forge-86":
+			// Two independent violations from two different validation
+			// layers on the SAME worker: a bad claim path (task 1) and an
+			// invalid handoff (task 2's mergeExternalBuildResults).
+			completion.Dispatches[i].FilesModified = []string{"/etc/passwd"}
+			completion.Dispatches[i].Handoff.VerificationStatus = "not-a-real-status"
+		case "Keen-6":
+			// Two more independent violations, again spanning both layers,
+			// on a second worker: an escaping claim path and a non-terminal
+			// status.
+			completion.Dispatches[i].TestsWritten = []string{"../outside.go"}
+			completion.Dispatches[i].Status = "running"
+		}
+	}
+
+	violations := validateCompletionPacketSemantics(root, completion)
+	if len(violations) != 4 {
+		t.Fatalf("expected exactly 4 violations, got %d: %+v", len(violations), violations)
+	}
+
+	rules := map[string]bool{}
+	for _, v := range violations {
+		rules[v.Rule] = true
+		if v.Worker != "Forge-86" && v.Worker != "Keen-6" {
+			t.Errorf("violation attributed to unexpected worker %q: %+v", v.Worker, v)
+		}
+	}
+	if len(rules) != 4 {
+		t.Fatalf("expected 4 distinct Rule values, got %d: %v", len(rules), rules)
+	}
+	wantRules := map[string]bool{
+		claimPathRuleRepoRelative:   true,
+		violationRuleHandoffValid:   true,
+		claimPathRuleEscapesRoot:    true,
+		violationRuleStatusTerminal: true,
+	}
+	for rule := range wantRules {
+		if !rules[rule] {
+			t.Errorf("expected rule %q among violations, got %v", rule, rules)
+		}
+	}
+}
+
+func TestValidateCompletionPacketSemanticsCleanPacketReturnsNoViolations(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	_, completion := prepareExternalBuildCompletion(t, root)
+
+	if violations := validateCompletionPacketSemantics(root, completion); len(violations) != 0 {
+		t.Fatalf("expected a clean packet to produce no violations, got %+v", violations)
+	}
+}
+
+func TestCompletionContractErrorMessageHasOneLinePerViolation(t *testing.T) {
+	err := &completionContractError{Violations: []contractViolation{
+		{Worker: "Mason-67", Field: "files_modified", Rule: claimPathRuleRepoRelative, Message: "bad path"},
+		{Worker: "Keen-13", Field: "status", Rule: violationRuleStatusTerminal, Message: "non-terminal"},
+		{Field: "", Rule: "schema.marshal", Message: "no worker attribution"},
+	}}
+	lines := strings.Split(err.Error(), "\n")
+	if len(lines) != len(err.Violations)+1 {
+		t.Fatalf("expected %d lines (1 header + 1 per violation), got %d:\n%s", len(err.Violations)+1, len(lines), err.Error())
+	}
+	if !strings.HasPrefix(lines[0], "3 completion packet violation(s)") {
+		t.Errorf("header line = %q, want to start with violation count", lines[0])
+	}
+	if !strings.Contains(lines[1], "Mason-67: ") {
+		t.Errorf("expected worker prefix on attributed violation, got %q", lines[1])
+	}
+	if strings.Contains(lines[3], ": ") && strings.HasPrefix(strings.TrimSpace(lines[3]), ":") {
+		t.Errorf("expected no dangling worker prefix for an unattributed violation, got %q", lines[3])
+	}
+}
+
+// TestCompletionPacketRejectionIsAtomic locks in D-06: a rejected completion
+// packet must leave the build attempt exactly as it found it -- no status
+// transition, no completion digest bound. Everything before the semantic
+// validation call in runCodexBuildFinalize (checkpoint save, beginBuildAttempt,
+// bindBuildAttemptCompletion, transitionBuildAttempt) must never run for a
+// packet that fails validation.
+func TestCompletionPacketRejectionIsAtomic(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	_, completion := prepareExternalBuildCompletion(t, root)
+
+	// runCodexBuildPlanOnly (inside prepareExternalBuildCompletion) already
+	// minted a "prepared" build attempt with no completion digest bound --
+	// capture that baseline so we can prove the rejected finalize call left
+	// it byte-for-byte unchanged.
+	attemptRel, before, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("expected a build attempt to exist from plan-only manifest generation")
+	}
+	if before.CompletionSHA256 != "" {
+		t.Fatalf("baseline attempt must start with no bound completion digest, got %q", before.CompletionSHA256)
+	}
+
+	// Break exactly one worker's identity so the packet is rejected.
+	for i := range completion.Dispatches {
+		if completion.Dispatches[i].effectiveName() == "Forge-86" {
+			completion.Dispatches[i].Caste = "watcher"
+		}
+	}
+
+	if _, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false); err == nil {
+		t.Fatal("expected a completion packet with a broken worker identity to be rejected")
+	} else {
+		var contractErr *completionContractError
+		if !errorsAsCompletionContractError(err, &contractErr) {
+			t.Fatalf("expected a *completionContractError, got %T: %v", err, err)
+		}
+		if len(contractErr.Violations) == 0 {
+			t.Fatal("expected at least one violation on the rejected packet")
+		}
+	}
+
+	var after buildAttemptRecord
+	if err := store.LoadJSON(attemptRel, &after); err != nil {
+		t.Fatalf("reload build attempt after rejected finalize: %v", err)
+	}
+	if after.CompletionSHA256 != "" {
+		t.Fatalf("rejected finalize must not bind a completion digest, got %q", after.CompletionSHA256)
+	}
+	if after.Status != before.Status {
+		t.Fatalf("rejected finalize must not transition attempt status: before=%q after=%q", before.Status, after.Status)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	if state.State == colony.StateBUILT {
+		t.Fatal("colony state must not advance to BUILT when the completion packet was rejected")
+	}
+}
+
+// TestBuildFinalizeCLIRejectsMultiViolationPacketWithStructuredDetails proves
+// the build-finalize CLI surface, not just the Go function: a multi-violation
+// packet produces one JSON envelope with ok:false and a details array
+// carrying every violation.
+func TestBuildFinalizeCLIRejectsMultiViolationPacketWithStructuredDetails(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	forceBuildJSONOutput(t)
+	_, completion := prepareExternalBuildCompletion(t, root)
+
+	violationCount := 0
+	for i := range completion.Dispatches {
+		switch completion.Dispatches[i].effectiveName() {
+		case "Forge-86":
+			completion.Dispatches[i].FilesModified = []string{"/etc/passwd"}
+			completion.Dispatches[i].Handoff.VerificationStatus = "not-a-real-status"
+			violationCount += 2
+		case "Keen-6":
+			completion.Dispatches[i].TestsWritten = []string{"../outside.go"}
+			completion.Dispatches[i].Status = "running"
+			violationCount += 2
+		}
+	}
+
+	completionData, err := json.MarshalIndent(completion, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	completionPath := filepath.Join(root, "multi-violation-completion.json")
+	if err := os.WriteFile(completionPath, completionData, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"build-finalize", "1", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err == nil {
+		t.Fatal("expected build-finalize to fail on a multi-violation packet")
+	}
+
+	var envelope struct {
+		OK      bool                `json:"ok"`
+		Error   string              `json:"error"`
+		Code    int                 `json:"code"`
+		Details []contractViolation `json:"details"`
+	}
+	if err := json.Unmarshal(stderr.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse build-finalize error output: %v\n%s", err, stderr.(*bytes.Buffer).String())
+	}
+	if envelope.OK {
+		t.Fatal("expected ok:false")
+	}
+	if len(envelope.Details) != violationCount {
+		t.Fatalf("expected details array of length %d, got %d: %+v", violationCount, len(envelope.Details), envelope.Details)
+	}
+}
+
+// errorsAsCompletionContractError is a tiny errors.As wrapper kept local to
+// this test file to avoid importing "errors" solely for one assertion.
+func errorsAsCompletionContractError(err error, target **completionContractError) bool {
+	for err != nil {
+		if ce, ok := err.(*completionContractError); ok {
+			*target = ce
+			return true
+		}
+		unwrapper, ok := err.(interface{ Unwrap() error })
+		if !ok {
+			return false
+		}
+		err = unwrapper.Unwrap()
+	}
+	return false
 }
 
 func gitInitForTest(t *testing.T, dir string) {

@@ -197,9 +197,12 @@ func TestBuildFinalizeIsIdempotentForBoundCompletion(t *testing.T) {
 func TestBuildFinalizeRecoversBoundTerminalAttemptWithoutRedispatch(t *testing.T) {
 	root := setupExternalBuildAttemptTest(t)
 	manifest, completion := prepareExternalBuildCompletion(t, root)
-	dispatches, err := mergeExternalBuildResults(manifest, completion.workerResults())
+	dispatches, violations, err := mergeExternalBuildResults(manifest, completion.workerResults())
 	if err != nil {
 		t.Fatalf("merge completion results: %v", err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("expected no violations, got %+v", violations)
 	}
 	startedAt := parseManifestGeneratedAt(manifest)
 	claims, err := completion.claimsOrAggregate(root, 1, startedAt, dispatches)
