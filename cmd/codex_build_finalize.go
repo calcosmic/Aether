@@ -294,12 +294,20 @@ func loadExternalBuildCompletion(path string) (codexExternalBuildCompletion, err
 
 	// Unwrap the raw value the same way the struct decode unwraps: only
 	// when the top-level object has neither a dispatch_manifest key nor a
-	// manifest key of its own, but does have a result key.
+	// manifest key of its own, but does have a result key. An explicit JSON
+	// null under either manifest key counts as ABSENT here, mirroring the
+	// struct decode (which leaves a pointer field nil for null): wrappers
+	// that serialize absent fields as null -- typical JS/TS hosts, and the
+	// ts-host path is a live producer -- were accepted via the envelope
+	// path before the submitted-bytes rework and must stay accepted
+	// (WR-163.1-01). Any other non-null value under a manifest key blocks
+	// the unwrap so the top-level shape is what structural validation
+	// reports on, instead of being silently discarded.
 	unwrappedRaw := raw
 	if rawMap, ok := raw.(map[string]any); ok {
-		_, hasDispatchManifest := rawMap["dispatch_manifest"]
-		_, hasManifest := rawMap["manifest"]
-		if !hasDispatchManifest && !hasManifest {
+		dispatchManifestValue, hasDispatchManifest := rawMap["dispatch_manifest"]
+		manifestValue, hasManifest := rawMap["manifest"]
+		if (!hasDispatchManifest || dispatchManifestValue == nil) && (!hasManifest || manifestValue == nil) {
 			if result, hasResult := rawMap["result"]; hasResult {
 				unwrappedRaw = result
 			}

@@ -945,6 +945,37 @@ func TestLoadExternalBuildCompletion_CapturesSubmittedRawEnvelopeForm(t *testing
 	}
 }
 
+func TestLoadExternalBuildCompletion_NullTopLevelManifestKeysAcceptEnvelope(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "completion.json")
+	// JS/TS serializers commonly emit absent fields as explicit null. The
+	// struct decode treats a null pointer field as absent, so the raw
+	// envelope unwrap must too (WR-163.1-01): this packet was accepted via
+	// the envelope path before the submitted-bytes rework and must stay
+	// accepted, with submittedRaw unwrapped to the result value.
+	packet := `{"dispatch_manifest": null, "manifest": null, "result": {"dispatch_manifest": ` + validCompletionManifestJSON + `}}`
+	if err := os.WriteFile(path, []byte(packet), 0o644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+	completion, err := loadExternalBuildCompletion(path)
+	if err != nil {
+		t.Fatalf("expected null top-level manifest keys to be treated as absent, got error: %v", err)
+	}
+	if completion.activeManifest() == nil {
+		t.Fatal("expected the envelope's dispatch_manifest to be active")
+	}
+	rawMap, ok := completion.submittedRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("expected submittedRaw to be a map[string]any, got %T", completion.submittedRaw)
+	}
+	if _, ok := rawMap["result"]; ok {
+		t.Fatalf("expected unwrapped submittedRaw to NOT contain the envelope's result key, got %+v", rawMap)
+	}
+	if _, ok := rawMap["dispatch_manifest"].(map[string]any); !ok {
+		t.Fatalf("expected unwrapped submittedRaw to carry the result's dispatch_manifest object, got %+v", rawMap)
+	}
+}
+
 func TestLoadExternalBuildCompletion_StringDispatchManifestReturnsStructuralViolation(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "completion.json")
