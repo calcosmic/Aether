@@ -273,9 +273,8 @@ func (r *RealInvoker) Preflight(ctx context.Context, root string) AvailabilitySt
 		return status
 	}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
+	// root is intentionally not used as the probe's working directory (D-07)
+	// — the shared runner isolates every probe into its own temp directory.
 	args := []string{
 		"--sandbox", "read-only",
 		"--ask-for-approval", "never",
@@ -284,41 +283,7 @@ func (r *RealInvoker) Preflight(ctx context.Context, root string) AvailabilitySt
 		"--ephemeral",
 		"--skip-git-repo-check",
 	}
-	cmd := exec.CommandContext(probeCtx, r.binaryName, args...)
-	if strings.TrimSpace(root) != "" {
-		cmd.Dir = root
-	}
-	cmd.Stdin = strings.NewReader("Return exactly OK.\n")
-	configureWorkerCommand(cmd)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		raw := strings.TrimSpace(combinedWorkerOutput(stdout.String(), stderr.String()))
-		reason := strings.TrimSpace(sanitizeWorkerDiagnosticOutput(raw))
-		if reason == "" {
-			reason = sanitizeWorkerDiagnosticOutput(err.Error())
-		}
-		category := AvailabilityCategoryProviderConfig
-		if probeCtx.Err() == context.DeadlineExceeded {
-			reason = "codex provider/model preflight timed out before worker dispatch"
-			category = AvailabilityCategoryAuthProbeFailed
-		}
-		return AvailabilityStatus{
-			Platform:  PlatformCodex,
-			Binary:    status.Binary,
-			Available: false,
-			Category:  category,
-			Reason:    fmt.Sprintf("codex provider/model preflight failed before worker dispatch: %s", reason),
-		}
-	}
-	return AvailabilityStatus{
-		Platform:  PlatformCodex,
-		Binary:    status.Binary,
-		Available: true,
-		Category:  AvailabilityCategoryAvailable,
-	}
+	return runHostedProviderPreflight(ctx, status, args, "Return exactly OK.\n")
 }
 
 // ValidateAgent parses and validates a TOML agent file.
