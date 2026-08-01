@@ -76,7 +76,7 @@ func TestHostedPreflightRetriesAfterTimeout(t *testing.T) {
 	binary, counter := writeCountingProbe(t, map[int]bool{1: true}, 0)
 
 	status := AvailabilityStatus{Platform: PlatformClaude, Binary: binary, Available: true}
-	result := runHostedProviderPreflight(context.Background(), status, "", []string{"-p", "Return exactly OK."})
+	result := runHostedProviderPreflight(context.Background(), status, []string{"-p", "Return exactly OK."}, "")
 
 	if !result.Available {
 		t.Fatalf("preflight failed despite a healthy second attempt: %s", result.Reason)
@@ -93,7 +93,7 @@ func TestHostedPreflightDoesNotRetryHardFailure(t *testing.T) {
 	binary, counter := writeCountingProbe(t, nil, 1)
 
 	status := AvailabilityStatus{Platform: PlatformClaude, Binary: binary, Available: true}
-	result := runHostedProviderPreflight(context.Background(), status, "", []string{"-p", "Return exactly OK."})
+	result := runHostedProviderPreflight(context.Background(), status, []string{"-p", "Return exactly OK."}, "")
 
 	if result.Available {
 		t.Fatal("preflight reported available for a probe that exited non-zero")
@@ -110,7 +110,7 @@ func TestHostedPreflightGivesUpAfterAllAttempts(t *testing.T) {
 	binary, counter := writeCountingProbe(t, map[int]bool{1: true, 2: true}, 0)
 
 	status := AvailabilityStatus{Platform: PlatformClaude, Binary: binary, Available: true}
-	result := runHostedProviderPreflight(context.Background(), status, "", []string{"-p", "Return exactly OK."})
+	result := runHostedProviderPreflight(context.Background(), status, []string{"-p", "Return exactly OK."}, "")
 
 	if result.Available {
 		t.Fatal("preflight reported available despite every attempt timing out")
