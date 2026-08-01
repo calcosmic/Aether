@@ -309,7 +309,7 @@ func bindBuildAttemptCompletion(attemptRel string, completion codexExternalBuild
 		if record.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(record.ID) == "" {
 			return fmt.Errorf("invalid build attempt record")
 		}
-		if record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
+		if buildAttemptCompletionSealed(record) && record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
 			return fmt.Errorf("completion packet does not match the result already bound to attempt %s", record.ID)
 		}
 		record.CompletionSHA256 = digest
@@ -350,10 +350,10 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 	if violations := validateCompletionPacketSemantics(buildAttemptWorkspaceRoot(), completion); len(violations) > 0 {
 		return "", "", &completionContractError{Violations: violations}
 	}
-	if existing.CompletionSHA256 != "" && existing.CompletionSHA256 != digest {
+	if buildAttemptCompletionSealed(existing) && existing.CompletionSHA256 != "" && existing.CompletionSHA256 != digest {
 		return "", "", fmt.Errorf("completion packet does not match the result already bound to attempt %s", existing.ID)
 	}
-	if existing.CompletionPath != "" && filepath.ToSlash(existing.CompletionPath) != displayPath {
+	if buildAttemptCompletionSealed(existing) && existing.CompletionPath != "" && filepath.ToSlash(existing.CompletionPath) != displayPath {
 		return "", "", fmt.Errorf("build attempt %s already points to another completion packet", existing.ID)
 	}
 	durableAbsolute := filepath.Join(store.BasePath(), filepath.FromSlash(completionRel))
@@ -369,16 +369,18 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var record buildAttemptRecord
+	var previousCompletionPath string
 	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
 		if record.ID != strings.TrimSpace(manifest.AttemptID) || record.Phase != manifest.Phase {
 			return fmt.Errorf("build completion attempt identity does not match journal record")
 		}
-		if record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
+		if buildAttemptCompletionSealed(record) && record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
 			return fmt.Errorf("completion packet does not match the result already bound to attempt %s", record.ID)
 		}
-		if record.CompletionPath != "" && filepath.ToSlash(record.CompletionPath) != displayPath {
+		if buildAttemptCompletionSealed(record) && record.CompletionPath != "" && filepath.ToSlash(record.CompletionPath) != displayPath {
 			return fmt.Errorf("build attempt %s already points to another completion packet", record.ID)
 		}
+		previousCompletionPath = strings.TrimSpace(record.CompletionPath)
 		record.CompletionSHA256 = digest
 		record.CompletionPath = displayPath
 		record.UpdatedAt = now
@@ -397,6 +399,16 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 			_ = os.Remove(durableAbsolute)
 		}
 		return "", "", fmt.Errorf("stage build completion: %w", err)
+	}
+	// D-08: while unsealed, a rebind may point the attempt at a different
+	// durable completion path (durableBuildCompletionPath is a pure function
+	// of phase+attempt ID today, so this rarely changes in practice, but
+	// nothing should be left on disk claiming to belong to this attempt once
+	// the record no longer points at it -- T-163.1-13).
+	if previousCompletionPath != "" && previousCompletionPath != displayPath {
+		if previousRel := strings.TrimPrefix(filepath.ToSlash(previousCompletionPath), ".aether/data/"); previousRel != "" {
+			_ = os.Remove(filepath.Join(store.BasePath(), filepath.FromSlash(previousRel)))
+		}
 	}
 	return displayPath, digest, nil
 }
@@ -613,6 +625,21 @@ func buildAttemptStatusTerminal(status string) bool {
 	default:
 		return false
 	}
+}
+
+// buildAttemptCompletionSealed reports whether record's completion packet
+// binding is permanently locked (D-08). It compares against
+// buildAttemptBuilt specifically -- not buildAttemptStatusTerminal and not
+// the buildAttemptTerminal status constant -- because buildAttemptTerminal
+// is written by build-finalize (cmd/codex_build_finalize.go, at the
+// "external terminal worker results recorded" transition) BEFORE finalize
+// has actually committed the built lifecycle state (cmd/codex_build_finalize.go,
+// at the "external built lifecycle state committed" transition). Gating the
+// seal on buildAttemptTerminal would close the rebind window before finalize
+// had succeeded -- the exact regression D-08 exists to prevent. `failed` and
+// `interrupted` attempts are recoverable and must stay rebindable too.
+func buildAttemptCompletionSealed(record buildAttemptRecord) bool {
+	return strings.TrimSpace(record.Status) == buildAttemptBuilt
 }
 
 func buildAttemptSummary(record buildAttemptRecord) map[string]interface{} {

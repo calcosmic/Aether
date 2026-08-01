@@ -285,7 +285,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
 	}
-	if binding.Bound && binding.Record.CompletionSHA256 != "" && binding.Record.CompletionSHA256 != completionDigest {
+	if binding.Bound && buildAttemptCompletionSealed(binding.Record) && binding.Record.CompletionSHA256 != "" && binding.Record.CompletionSHA256 != completionDigest {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion packet does not match the result already bound to attempt %s", binding.Record.ID)
 	}
 	if binding.Bound && binding.Record.Status != buildAttemptBuilt && state.State == colony.StateBUILT && state.CurrentPhase == phaseNum {

@@ -210,6 +210,158 @@ func TestStageBuildAttemptCompletionRejectsMismatchedIdentity(t *testing.T) {
 	}
 }
 
+// TestStageBuildAttemptCompletionAllowsRebindWhileNonTerminal proves D-08:
+// a corrected packet may replace the bound one while the attempt has not yet
+// finalized successfully. Correcting a packet no longer needs a new attempt.
+func TestStageBuildAttemptCompletionAllowsRebindWhileNonTerminal(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	attemptRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+	if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "workers dispatching", nil, nil, "external-task", nil); err != nil {
+		t.Fatalf("mark attempt dispatching: %v", err)
+	}
+
+	_, firstDigest, err := stageBuildAttemptCompletion(attemptRel, completion)
+	if err != nil {
+		t.Fatalf("stage first completion: %v", err)
+	}
+
+	corrected := completion
+	corrected.Dispatches = append([]codexExternalBuildWorkerResult{}, completion.Dispatches...)
+	corrected.Dispatches[0].Summary += " corrected"
+
+	secondDisplayPath, secondDigest, err := stageBuildAttemptCompletion(attemptRel, corrected)
+	if err != nil {
+		t.Fatalf("rebind while dispatching (non-terminal) should succeed, got %v", err)
+	}
+	if secondDigest == firstDigest {
+		t.Fatalf("corrected packet produced the same digest as the original")
+	}
+	_, record, ok := loadLatestBuildAttempt(1)
+	if !ok || record.CompletionSHA256 != secondDigest || record.CompletionPath != secondDisplayPath {
+		t.Fatalf("attempt did not rebind to the corrected packet: %+v", record)
+	}
+}
+
+// TestStageBuildAttemptCompletionRebindDeletesStaleDurableFile proves
+// T-163.1-13: when a rebind while unsealed points the attempt at a different
+// durable path, the superseded file is deleted rather than left orphaned.
+// durableBuildCompletionPath is a pure function of phase+attempt ID, so a
+// legitimate rebind never actually produces a different path today -- this
+// test seeds the record directly to exercise the defensive cleanup.
+func TestStageBuildAttemptCompletionRebindDeletesStaleDurableFile(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	attemptRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+
+	staleRel := "build/phase-1/attempts/stale-completion.json"
+	staleDisplay := displayDataPath(staleRel)
+	if err := store.AtomicWrite(staleRel, []byte("{}")); err != nil {
+		t.Fatalf("seed stale completion file: %v", err)
+	}
+	var seeded buildAttemptRecord
+	if err := store.UpdateJSONAtomically(attemptRel, &seeded, func() error {
+		seeded.CompletionSHA256 = "stale-digest"
+		seeded.CompletionPath = staleDisplay
+		return nil
+	}); err != nil {
+		t.Fatalf("seed stale attempt binding: %v", err)
+	}
+
+	displayPath, digest, err := stageBuildAttemptCompletion(attemptRel, completion)
+	if err != nil {
+		t.Fatalf("rebind to a different durable path while unsealed should succeed, got %v", err)
+	}
+	if displayPath == staleDisplay {
+		t.Fatalf("expected the new completion path to differ from the stale path")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(staleRel))); !os.IsNotExist(statErr) {
+		t.Fatalf("stale completion file was not removed after rebind: err=%v", statErr)
+	}
+	_, record, ok := loadLatestBuildAttempt(1)
+	if !ok || record.CompletionSHA256 != digest || record.CompletionPath != displayPath {
+		t.Fatalf("attempt did not rebind to the new completion: %+v", record)
+	}
+}
+
+// TestStageBuildAttemptCompletionAllowsRebindAtTerminalStatus proves the
+// rebind window stays open at buildAttemptTerminal -- worker results have
+// been recorded but finalize has not yet committed the built lifecycle
+// state, so this must NOT be treated as sealed (see buildAttemptCompletionSealed).
+func TestStageBuildAttemptCompletionAllowsRebindAtTerminalStatus(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	attemptRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+
+	if _, _, err := stageBuildAttemptCompletion(attemptRel, completion); err != nil {
+		t.Fatalf("stage initial completion: %v", err)
+	}
+	if err := transitionBuildAttempt(attemptRel, buildAttemptTerminal, "worker results recorded before finalize completes", nil, nil, "external-task", nil); err != nil {
+		t.Fatalf("mark attempt terminal: %v", err)
+	}
+
+	corrected := completion
+	corrected.Dispatches = append([]codexExternalBuildWorkerResult{}, completion.Dispatches...)
+	corrected.Dispatches[0].Summary += " corrected before finalize completed"
+
+	_, digest, err := stageBuildAttemptCompletion(attemptRel, corrected)
+	if err != nil {
+		t.Fatalf("a terminal (not yet built) attempt should still accept a corrected packet, got %v", err)
+	}
+	_, record, ok := loadLatestBuildAttempt(1)
+	if !ok || record.CompletionSHA256 != digest {
+		t.Fatalf("attempt did not accept the corrected packet at terminal status: %+v", record)
+	}
+}
+
+// TestBuildAttemptRejectsRebindAfterTerminal proves the other half of D-08:
+// once an attempt has finalized successfully (status built), the rebind
+// window is permanently closed and a non-identical packet is rejected.
+func TestBuildAttemptRejectsRebindAfterTerminal(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	attemptRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+
+	if _, _, err := stageBuildAttemptCompletion(attemptRel, completion); err != nil {
+		t.Fatalf("stage initial completion: %v", err)
+	}
+	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "simulate finalize commit", nil, nil, "external-task", nil); err != nil {
+		t.Fatalf("mark attempt built: %v", err)
+	}
+
+	changed := completion
+	changed.Dispatches = append([]codexExternalBuildWorkerResult{}, completion.Dispatches...)
+	changed.Dispatches[0].Summary += " tampered after seal"
+
+	if _, _, err := stageBuildAttemptCompletion(attemptRel, changed); err == nil || !strings.Contains(err.Error(), "does not match the result already bound") {
+		t.Fatalf("sealed attempt should reject a changed packet, got %v", err)
+	}
+}
+
+// TestBuildAttemptIdempotentResubmit proves a byte-identical resubmit
+// against a built (sealed) attempt still succeeds idempotently.
+func TestBuildAttemptIdempotentResubmit(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+	attemptRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+
+	displayPath, digest, err := stageBuildAttemptCompletion(attemptRel, completion)
+	if err != nil {
+		t.Fatalf("stage initial completion: %v", err)
+	}
+	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "simulate finalize commit", nil, nil, "external-task", nil); err != nil {
+		t.Fatalf("mark attempt built: %v", err)
+	}
+
+	resubmitPath, resubmitDigest, err := stageBuildAttemptCompletion(attemptRel, completion)
+	if err != nil {
+		t.Fatalf("byte-identical resubmit against a built attempt should still succeed, got %v", err)
+	}
+	if resubmitPath != displayPath || resubmitDigest != digest {
+		t.Fatalf("resubmit changed the binding: path=%q digest=%q, want %q %q", resubmitPath, resubmitDigest, displayPath, digest)
+	}
+}
+
 func TestResumeDashboardDoesNotRedispatchLiveBuildProcess(t *testing.T) {
 	saveGlobals(t)
 	setupBuildFlowTest(t)
