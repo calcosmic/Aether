@@ -388,6 +388,16 @@ Plans:
 - [x] 163-05-PLAN.md -- CONTEXT-05/D-11: suggest-analyze gets a live caller at build-finalize, tick-to-approve at closeout (wave 1)
 - [x] 163-06-PLAN.md -- CONTEXT-07/08/09, D-06/D-03/D-08: --print-brief checklist default, --full, budget invariant (wave 2, needs 01, 02, 04)
 
+### Phase 163.2: ts-host preflight configurability: make the worker-platform preflight timeout configurable instead of hardcoded 20s, and reduce per-dispatch preflight cost (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 163
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 163.2 to break down)
+
 ### Phase 163.1: Wrapper-Runtime Completion Contract (INSERTED)
 
 **Goal:** A wrapper that follows the documented completion contract succeeds on the first submission, and a rejected submission is always recoverable — the contract layer (schema → docs → brief text → validator) agrees with itself because it is generated from one source of truth. Sourced from the 2026-07-31 real-world M4L usage diagnosis, verified against source by four review agents: every P0 there was a contract-vs-runtime disagreement no phase 160–171 owned end-to-end (Phase 165 owns only the wrapper markdown side).

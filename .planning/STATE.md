@@ -4,14 +4,14 @@ milestone: v1.25
 milestone_name: Switch It On
 status: executing
 stopped_at: Phase 163.1 context gathered
-last_updated: "2026-07-31T23:10:25.387Z"
+last_updated: "2026-08-01T10:00:15.773Z"
 last_activity: 2026-07-31 -- Phase 163.1 execution started
 progress:
-  total_phases: 28
-  completed_phases: 2
+  total_phases: 29
+  completed_phases: 3
   total_plans: 21
-  completed_plans: 14
-  percent: 67
+  completed_plans: 21
+  percent: 100
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 ### Roadmap Evolution
 
 - Phase 163.1 inserted after Phase 163: Wrapper-Runtime Completion Contract: completion-packet schema, batch validation, attempt recovery, verification honesty, reconcile escape hatch, brief file channel — from 2026-07-31 M4L usage diagnosis (URGENT)
+- Phase 163.2 inserted after Phase 163.1: ts-host preflight configurability (M4L residual diagnosis item 2) (URGENT)
 
 ### Decisions
 
