@@ -4,8 +4,8 @@ milestone: v1.25
 milestone_name: Switch It On
 status: executing
 stopped_at: Phase 163.1 context gathered
-last_updated: "2026-08-01T10:23:08.609Z"
-last_activity: 2026-08-01 -- Phase 163.1 planning complete
+last_updated: "2026-08-01T10:24:37.439Z"
+last_activity: 2026-08-01 -- Phase 163.1 execution started
 progress:
   total_phases: 29
   completed_phases: 2
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-25)
 ## Current Position
 
 Phase: 163.1 (wrapper-runtime-completion-contract) — EXECUTING
-Plan: 1 of 7
-Status: Ready to execute
-Last activity: 2026-08-01 -- Phase 163.1 planning complete
+Plan: 1 of 9
+Status: Executing Phase 163.1
+Last activity: 2026-08-01 -- Phase 163.1 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

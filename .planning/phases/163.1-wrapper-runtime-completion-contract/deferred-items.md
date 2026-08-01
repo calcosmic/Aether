@@ -34,3 +34,22 @@
 - **Action:** Not fixed. Logged here per the executor's scope-boundary rule rather than fixed inline.
   `go test ./cmd/... -count=1` (the package this plan actually touches) passed cleanly, and all other
   `pkg/...` packages passed under `-race`.
+
+## Plan 09
+
+### Pre-existing, out-of-scope test failure
+
+- **Test:** `TestPackedNPMReleaseCandidateContract` in `cmd/release_candidate_blackbox_test.go`
+- **Observed during:** `go test ./cmd/... -count=1` run for plan 163.1-09 verification
+- **Failure:** `npm version "1.0.45" does not match source version "1.0.46"`
+- **Why out of scope:** This plan's `files_modified` are `cmd/codex_continue_plan.go`,
+  `cmd/codex_continue_finalize.go`, `cmd/readonly_evidence.go`, and their tests — the continue
+  plan-only/finalize verification-snapshot path. `release_candidate_blackbox_test.go` is unrelated:
+  it asserts the checked-in npm package version string matches the checked-in Go source version
+  string, both of which are release-packaging metadata this plan never touches. The drift is a
+  pre-existing version-bump bookkeeping gap, not a regression from this plan's changes.
+- **Action:** Not fixed. Logged here per the executor's scope-boundary rule rather than fixed inline.
+  Confirmed by re-running only the tests this plan's files touch (`TestContinuePlanOnly*`,
+  `TestContinueFinalize*`, `TestVerifyPlanReadOnlyArtifactEvidence`, `TestValidateReadOnlyArtifacts`,
+  `TestRecordReadOnlyArtifactEvidence`, `TestReconcileTaskReadOnlyEvidenceSatisfiesCriterion`,
+  `TestContinue_ReconcileDoesNotBypassClaims`), all of which pass.

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -144,4 +145,58 @@ func applyReadOnlyArtifactEvidence(root string, manifest codexContinueManifest, 
 		return fmt.Errorf("no state store initialized")
 	}
 	return store.SaveJSON(claimsRel, claims)
+}
+
+// verifyPlanReadOnlyArtifactEvidence is continue-finalize's loud check that
+// --read-only-artifact actually took effect on the external-review path
+// (T-163.1-45): it never records evidence itself (that already happened, or
+// should have, at `aether continue --plan-only` time via
+// applyReadOnlyArtifactEvidence) -- it only confirms every spec on the plan
+// manifest already has hash-verified, task-scoped evidence sitting in the
+// claims file. Re-recording here would re-hash the artifact's CURRENT
+// content and silently overwrite the hash captured at plan-only time,
+// destroying tamper detection across the external review window (T-163.1-46)
+// -- the one property that makes this escape hatch safe. A manifest whose
+// read_only_artifacts were hand-edited in or never actually recorded by an
+// operator-invoked plan-only run fails loudly here instead of being trusted.
+func verifyPlanReadOnlyArtifactEvidence(root string, phase colony.Phase, plan *codexContinuePlanManifest, manifest codexContinueManifest) error {
+	if plan == nil || len(plan.ReadOnlyArtifacts) == 0 {
+		return nil
+	}
+	claims, err := loadCriterionEvidenceClaims(manifest)
+	if err != nil {
+		return fmt.Errorf("cannot verify read-only artifact evidence: %w", err)
+	}
+	evidenceByPath := map[string]codexBuildArtifactEvidence{}
+	for _, item := range claims.ArtifactEvidence {
+		evidenceByPath[filepath.ToSlash(strings.TrimSpace(item.Path))] = item
+	}
+
+	missing := make([]string, 0, len(plan.ReadOnlyArtifacts))
+	for _, spec := range plan.ReadOnlyArtifacts {
+		taskID, path, parseErr := parseReadOnlyArtifactSpec(spec)
+		if parseErr != nil {
+			return parseErr
+		}
+		normalized, normalizeErr := normalizeCriterionArtifactPath(path)
+		if normalizeErr != nil {
+			return fmt.Errorf("invalid read-only artifact %q: %w", spec, normalizeErr)
+		}
+		recorded, ok := evidenceByPath[normalized]
+		if !ok || !recorded.ReadOnly || strings.TrimSpace(recorded.ReadOnlyTaskID) == "" || recorded.ReadOnlyTaskID != taskID {
+			missing = append(missing, spec)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	details := make([]string, 0, len(missing))
+	for _, spec := range missing {
+		taskID, _, _ := parseReadOnlyArtifactSpec(spec)
+		details = append(details, fmt.Sprintf(
+			"%s (rerun `aether continue --plan-only --reconcile-task %s --read-only-artifact %s`)",
+			spec, taskID, spec))
+	}
+	return fmt.Errorf("read-only artifact evidence missing or not recorded for: %s", strings.Join(details, "; "))
 }

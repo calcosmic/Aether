@@ -146,6 +146,15 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	// This finalize path only VERIFIES that read-only artifact evidence was
+	// already recorded (at `aether continue --plan-only` time); it never
+	// records or re-hashes evidence itself. Doing so here would silently
+	// overwrite the hash captured at plan-only time and destroy tamper
+	// detection across the external review window (T-163.1-46) -- the one
+	// property that makes this escape hatch safe.
+	if err := verifyPlanReadOnlyArtifactEvidence(root, phase, plan, manifest); err != nil {
+		return nil, state, phase, nil, nil, false, err
+	}
 	if abandoned, _, summary := detectAbandonedBuild(manifest, state); abandoned {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("%s", summary)
 	}
@@ -178,6 +187,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	} else {
 		verification, watcherFlow = attachExternalContinueWatcher(verification, workerFlow)
 	}
+	// ReadOnlyArtifacts is threaded into these reconstructed options for
+	// structural parity with the direct path and fail-fast validation
+	// consistency only. It is NOT how read-only evidence reaches assessment
+	// here: that already happened above, before verification ran, via the
+	// persisted claims file (recorded at plan-only time and checked by
+	// verifyPlanReadOnlyArtifactEvidence). Do not mistake this field for live
+	// wiring into evaluatePhaseCriterionEvidence -- it plays no role in that
+	// evaluation on the finalize path.
 	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, ReadOnlyArtifacts: plan.ReadOnlyArtifacts, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)

@@ -172,3 +172,84 @@ func TestRecordReadOnlyArtifactEvidence(t *testing.T) {
 		}
 	})
 }
+
+// TestVerifyPlanReadOnlyArtifactEvidence proves 163.1-09 Task 2: continue-finalize
+// (via runCodexContinueFinalize) must see hash-verified, task-scoped read-only
+// evidence already recorded in the claims file by an operator-invoked
+// plan-only run before it is honored -- a manifest-only claim (T-163.1-45)
+// must fail loudly rather than being silently trusted.
+func TestVerifyPlanReadOnlyArtifactEvidence(t *testing.T) {
+	phase := readOnlyEvidenceTestPhase()
+
+	t.Run("empty read_only_artifacts returns nil without touching claims", func(t *testing.T) {
+		setupBuildFlowTest(t)
+		plan := &codexContinuePlanManifest{}
+		manifest := codexContinueManifest{Present: true, Data: codexBuildManifest{ClaimsPath: "last-build-claims.json"}}
+		if err := verifyPlanReadOnlyArtifactEvidence("", phase, plan, manifest); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("evidence recorded for the matching task satisfies the spec", func(t *testing.T) {
+		setupBuildFlowTest(t)
+		if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+			ArtifactEvidence: []codexBuildArtifactEvidence{
+				{Path: "foo.go", SHA256: "abc", ReadOnly: true, ReadOnlyTaskID: "1.1"},
+			},
+		}); err != nil {
+			t.Fatalf("save claims: %v", err)
+		}
+		plan := &codexContinuePlanManifest{ReadOnlyArtifacts: []string{"1.1:foo.go"}}
+		manifest := codexContinueManifest{Present: true, Data: codexBuildManifest{ClaimsPath: "last-build-claims.json"}}
+		if err := verifyPlanReadOnlyArtifactEvidence("", phase, plan, manifest); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("unrecorded spec fails loudly naming the spec and the recovery command", func(t *testing.T) {
+		setupBuildFlowTest(t)
+		if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{}); err != nil {
+			t.Fatalf("save claims: %v", err)
+		}
+		plan := &codexContinuePlanManifest{ReadOnlyArtifacts: []string{"1.1:foo.go"}}
+		manifest := codexContinueManifest{Present: true, Data: codexBuildManifest{ClaimsPath: "last-build-claims.json"}}
+		err := verifyPlanReadOnlyArtifactEvidence("", phase, plan, manifest)
+		if err == nil || !strings.Contains(err.Error(), "1.1:foo.go") || !strings.Contains(err.Error(), "--read-only-artifact") {
+			t.Fatalf("error = %v, want message naming spec 1.1:foo.go and --read-only-artifact", err)
+		}
+	})
+
+	t.Run("evidence recorded for a different task does not satisfy the spec", func(t *testing.T) {
+		setupBuildFlowTest(t)
+		if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+			ArtifactEvidence: []codexBuildArtifactEvidence{
+				{Path: "foo.go", SHA256: "abc", ReadOnly: true, ReadOnlyTaskID: "1.1"},
+			},
+		}); err != nil {
+			t.Fatalf("save claims: %v", err)
+		}
+		plan := &codexContinuePlanManifest{ReadOnlyArtifacts: []string{"2.1:foo.go"}}
+		manifest := codexContinueManifest{Present: true, Data: codexBuildManifest{ClaimsPath: "last-build-claims.json"}}
+		err := verifyPlanReadOnlyArtifactEvidence("", phase, plan, manifest)
+		if err == nil || !strings.Contains(err.Error(), "2.1:foo.go") {
+			t.Fatalf("error = %v, want message naming cross-task spec 2.1:foo.go", err)
+		}
+	})
+
+	t.Run("evidence present but not marked read-only is rejected", func(t *testing.T) {
+		setupBuildFlowTest(t)
+		if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+			ArtifactEvidence: []codexBuildArtifactEvidence{
+				{Path: "foo.go", SHA256: "abc", ReadOnly: false, ReadOnlyTaskID: "1.1"},
+			},
+		}); err != nil {
+			t.Fatalf("save claims: %v", err)
+		}
+		plan := &codexContinuePlanManifest{ReadOnlyArtifacts: []string{"1.1:foo.go"}}
+		manifest := codexContinueManifest{Present: true, Data: codexBuildManifest{ClaimsPath: "last-build-claims.json"}}
+		err := verifyPlanReadOnlyArtifactEvidence("", phase, plan, manifest)
+		if err == nil || !strings.Contains(err.Error(), "1.1:foo.go") {
+			t.Fatalf("error = %v, want message naming spec 1.1:foo.go", err)
+		}
+	})
+}
