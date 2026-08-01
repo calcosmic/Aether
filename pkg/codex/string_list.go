@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	invopopjsonschema "github.com/invopop/jsonschema"
 )
 
 // stringList is a []string that also accepts a bare string when decoding JSON.
@@ -22,6 +24,24 @@ import (
 // accepted, anything else still errors, so a genuinely broken payload is not
 // laundered into silence.
 type stringList []string
+
+// JSONSchema implements invopop/jsonschema's customSchemaImpl hook so the
+// generated completion-packet schema (cmd/contract_schema.go) describes
+// what UnmarshalJSON actually accepts — null, a bare string, or an array —
+// instead of the strict "array of strings" a naive reflection over the
+// underlying []string would produce. Without this, the shipped schema would
+// reject the exact bare-string shape the doc-shipped worked example (and
+// real worker output) legitimately sends, defeating the point of generating
+// the schema from the Go types in the first place.
+func (stringList) JSONSchema() *invopopjsonschema.Schema {
+	return &invopopjsonschema.Schema{
+		OneOf: []*invopopjsonschema.Schema{
+			{Type: "null"},
+			{Type: "string"},
+			{Type: "array"},
+		},
+	}
+}
 
 // UnmarshalJSON accepts null, a string, or an array, and normalizes all three
 // to a list with blank entries dropped.
