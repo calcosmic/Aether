@@ -50,6 +50,7 @@ type codexContinuePlanManifest struct {
 	Verification              codexContinueVerificationReport `json:"verification"`
 	Assessment                codexContinueAssessment         `json:"assessment"`
 	ReconcileTaskIDs          []string                        `json:"reconcile_task_ids,omitempty"`
+	ReadOnlyArtifacts         []string                        `json:"read_only_artifacts,omitempty"`
 	WorkerTimeout             int                             `json:"worker_timeout_seconds,omitempty"`
 	VerificationTimeout       int                             `json:"verification_timeout_seconds,omitempty"`
 	SkipWatchers              bool                            `json:"skip_watchers,omitempty"`
@@ -89,6 +90,9 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		return nil, state, colony.Phase{}, nil, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}
 	if err := validateContinueReconcileTasks(phase, options.ReconcileTaskIDs); err != nil {
+		return nil, state, phase, nil, err
+	}
+	if err := validateReadOnlyArtifacts(phase, options.ReconcileTaskIDs, options.ReadOnlyArtifacts); err != nil {
 		return nil, state, phase, nil, err
 	}
 
@@ -131,6 +135,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		Verification:        verification,
 		Assessment:          assessment,
 		ReconcileTaskIDs:    append([]string{}, options.ReconcileTaskIDs...),
+		ReadOnlyArtifacts:   append([]string{}, options.ReadOnlyArtifacts...),
 		WorkerTimeout:       int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
 		VerificationTimeout: int(verificationTimeout / time.Second),
 		SkipWatchers:        effectiveSkipWatchers,

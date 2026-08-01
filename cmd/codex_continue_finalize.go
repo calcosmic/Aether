@@ -178,7 +178,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	} else {
 		verification, watcherFlow = attachExternalContinueWatcher(verification, workerFlow)
 	}
-	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, VerificationTimeout: verificationTimeout}, now)
+	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, ReadOnlyArtifacts: plan.ReadOnlyArtifacts, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)
 	if priorGateResults == nil {
@@ -504,6 +504,9 @@ func validateExternalContinueState(plan *codexContinuePlanManifest) (colony.Colo
 		return state, phase, codexContinueManifest{}, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}
 	if err := validateContinueReconcileTasks(phase, plan.ReconcileTaskIDs); err != nil {
+		return state, phase, codexContinueManifest{}, err
+	}
+	if err := validateReadOnlyArtifacts(phase, plan.ReconcileTaskIDs, plan.ReadOnlyArtifacts); err != nil {
 		return state, phase, codexContinueManifest{}, err
 	}
 	manifest := loadCodexContinueManifest(phase.ID)

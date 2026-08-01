@@ -226,6 +226,7 @@ var continueCmd = &cobra.Command{
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
 				ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+				ReadOnlyArtifacts:   normalizeCLIStringList(mustGetStringArray(cmd, "read-only-artifact")),
 				WorkerTimeout:       workerTimeout,
 				VerificationTimeout: verificationTimeout,
 				LightFlag:           lightFlag,
@@ -243,6 +244,7 @@ var continueCmd = &cobra.Command{
 
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot(), codexContinueOptions{
 			ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+			ReadOnlyArtifacts:   normalizeCLIStringList(mustGetStringArray(cmd, "read-only-artifact")),
 			WorkerTimeout:       workerTimeout,
 			VerificationTimeout: verificationTimeout,
 			LightFlag:           lightFlag,
@@ -1178,6 +1180,7 @@ func init() {
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results")
 	buildCompletionStageCmd.Flags().String("completion-file", "", "JSON file containing the accepted dispatch_manifest and external worker results")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
+	continueCmd.Flags().StringArray("read-only-artifact", nil, "Record hash-verified read-only evidence for an artifact a reconciled task did not modify, as <task-id>:<path> (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
 	continueCmd.Flags().Bool("heavy", false, "Force heavy review (full review gauntlet)")
