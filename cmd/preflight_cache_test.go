@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -164,6 +166,41 @@ func TestPreflightCacheRoundTripAndClear(t *testing.T) {
 
 	if err := clearPreflightCache(codex.PlatformClaude); err != nil {
 		t.Fatalf("clearing an already-cleared platform must return nil, got %v", err)
+	}
+}
+
+// TestPreflightCacheSelfHealsAfterCorruption proves a corrupt cache file
+// cannot permanently disable caching (WR-02): the next recorded success must
+// replace the garbage wholesale, print a loud notice, and the following load
+// must hit.
+func TestPreflightCacheSelfHealsAfterCorruption(t *testing.T) {
+	s := withTestPreflightStore(t)
+	buf := withCapturedGateStderr(t)
+	now := time.Now().UTC()
+
+	// Write garbage bytes directly: the store's own writers validate JSON, so
+	// bypass them the way a crashed partial write or a manual edit would.
+	corruptPath := filepath.Join(s.BasePath(), preflightCachePathRel)
+	if err := os.WriteFile(corruptPath, []byte("{not valid json"), 0644); err != nil {
+		t.Fatalf("write corrupt cache file: %v", err)
+	}
+
+	// Corruption is a miss on read (never a failure)...
+	if _, _, hit := loadFreshPreflightCache(codex.PlatformClaude, now); hit {
+		t.Fatal("a corrupt cache file must be a miss, not a hit")
+	}
+
+	// ...and must not block the next success from being recorded.
+	status := codex.AvailabilityStatus{Platform: codex.PlatformClaude, Available: true}
+	if err := recordPreflightSuccess(status, now); err != nil {
+		t.Fatalf("recordPreflightSuccess over a corrupt file = %v, want nil (self-heal)", err)
+	}
+	if !strings.Contains(buf.String(), "corrupt") {
+		t.Fatalf("self-heal must print a loud notice, stderr = %q", buf.String())
+	}
+
+	if _, _, hit := loadFreshPreflightCache(codex.PlatformClaude, now); !hit {
+		t.Fatal("cache must hit after self-healing from corruption -- otherwise the per-dispatch probe cost is back forever")
 	}
 }
 

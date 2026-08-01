@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -147,10 +148,27 @@ func loadFreshPreflightCache(platform codex.Platform, now time.Time) (preflightC
 	return entry, remaining, true
 }
 
+// preflightCacheUnmarshalError reports whether err came from failing to
+// decode an existing (corrupt) cache file, as opposed to a lock, read, or
+// write failure. UpdateJSONAtomically wraps the json error with %w, so
+// errors.As sees through it.
+func preflightCacheUnmarshalError(err error) bool {
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	return errors.As(err, &syntaxErr) || errors.As(err, &typeErr)
+}
+
 // recordPreflightSuccess persists a fresh success for status.Platform so a
 // later dispatch can skip the paid probe. Failures, empty platforms, and
 // PlatformUnknown are all no-ops — only successes are ever cached. Other
 // platforms' entries survive via load-merge-save.
+//
+// A corrupt existing file (partial write from a crash, manual edit) must not
+// disable caching forever: UpdateJSONAtomically refuses to mutate content it
+// cannot decode, so on an unmarshal-classified error the corrupt file is
+// replaced wholesale with a fresh single-entry cache — a cache is
+// disposable, and overwriting a corrupt one is always safe. A loud one-line
+// notice is printed so the self-heal is never silent.
 func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) error {
 	if store == nil {
 		return nil
@@ -163,21 +181,36 @@ func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) erro
 	}
 
 	platformKey := string(status.Platform)
+	entry := preflightCacheEntry{
+		Platform:  platformKey,
+		Binary:    status.Binary,
+		Available: true,
+		Category:  string(status.Category),
+		CheckedAt: now.UTC().Format(time.RFC3339),
+	}
+
 	var file preflightCacheFile
-	return store.UpdateJSONAtomically(preflightCachePathRel, &file, func() error {
+	err := store.UpdateJSONAtomically(preflightCachePathRel, &file, func() error {
 		if file.Entries == nil {
 			file.Entries = map[string]preflightCacheEntry{}
 		}
 		file.SchemaVersion = preflightCacheSchemaVersion
-		file.Entries[platformKey] = preflightCacheEntry{
-			Platform:  platformKey,
-			Binary:    status.Binary,
-			Available: true,
-			Category:  string(status.Category),
-			CheckedAt: now.UTC().Format(time.RFC3339),
-		}
+		file.Entries[platformKey] = entry
 		return nil
 	})
+	if err == nil {
+		return nil
+	}
+	if !preflightCacheUnmarshalError(err) {
+		return err
+	}
+
+	fmt.Fprintf(stderr, "preflight: cache file %s was corrupt — rewriting it fresh\n", preflightCachePathRel)
+	fresh := preflightCacheFile{
+		SchemaVersion: preflightCacheSchemaVersion,
+		Entries:       map[string]preflightCacheEntry{platformKey: entry},
+	}
+	return store.SaveJSON(preflightCachePathRel, &fresh)
 }
 
 // clearPreflightCache removes platform's cached entry so the next command
