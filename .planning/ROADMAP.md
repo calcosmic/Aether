@@ -468,7 +468,15 @@ Plans:
   3. A user reading `build.md` before running a build can describe what each stage does and what context/research a worker receives, without opening Go source
   4. `/ant-chaos`, `/ant-archaeology`, `/ant-dream`, `/ant-oracle`, `/ant-swarm`, `/ant-sage`, `/ant-colonize`, and `/ant-council` continue to work unchanged
   5. `build.md`'s structural rewrite is committed by this phase alone; the commit or a header comment states what Phase 160 fixed beforehand and reserves the trailer section Phase 168 appends afterward, so the merge order is traceable, not assumed
-**Plans**: TBD
+**Plans**: 6 plans in 3 waves
+
+Plans:
+- [ ] 165-01-PLAN.md — Contract destination + shared wrapper test toolkit + flat-mirror and retired-vocabulary invariants; resolves the three research open questions (wave 1)
+- [ ] 165-02-PLAN.md — CMD-05: build.md rewrite on both platforms with the D-08 ownership handshake, skeleton density and parity tests (wave 2, needs 01)
+- [ ] 165-03-PLAN.md — continue.md rewrite on both platforms; Classic verification beat restored, context-clear fence widened to the flat mirror (wave 2, needs 01)
+- [ ] 165-04-PLAN.md — plan.md rewrite on both platforms; termination-condition prose restored without threshold arithmetic or invented flags (wave 2, needs 01)
+- [ ] 165-05-PLAN.md — init.md rewrite on both platforms; 👑 intention beat restored, first dedicated init ceremony test (wave 2, needs 01)
+- [ ] 165-06-PLAN.md — CMD-02/CMD-04 phase gate: cross-wrapper proportion invariant, specialist-command hash fence, CMD-03 human read-through (wave 3, needs 01-05)
 
 ### Phase 166: Full Colony On Demand
 **Goal**: All 27 castes are markdown and YAML and cost nothing at rest; none are deleted or merged. Dream is a command, not a caste -- corrected on restoration, since the earlier draft's "Sage and Dream at milestone close" language implied a Dream worker that cannot exist. This phase makes phase-fit caste selection actually provable: the old success criterion ("fewer than 27 castes loaded") already passes today and proves nothing, so it is replaced with a criterion that can fail. It also gives `colony/agents/*.yaml` its first Go reader -- today only the deleted `control-ts` ever read it.
