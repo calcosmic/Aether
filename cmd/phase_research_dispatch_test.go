@@ -24,7 +24,7 @@ func TestPlanEmitsPhaseResearchDispatchesFromDraft(t *testing.T) {
 	root := t.TempDir()
 	seed := researchSeedWithDraft("Wire exporter", "Ship dashboard")
 
-	dispatches := plannedPhaseResearchDispatches(root, "balanced", "Build the exporter", phaseResearchCandidates(colony.ColonyState{}, seed))
+	dispatches := plannedPhaseResearchDispatches(root, "balanced", "Build the exporter", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false)
 	if len(dispatches) != 2 {
 		t.Fatalf("dispatches = %d, want one research Scout per draft phase (2)", len(dispatches))
 	}
@@ -55,14 +55,14 @@ func TestPlanEmitsPhaseResearchDispatchesFromDraft(t *testing.T) {
 func TestPlanFastPresetSkipsPhaseResearch(t *testing.T) {
 	root := t.TempDir()
 	seed := researchSeedWithDraft("Wire exporter")
-	if got := plannedPhaseResearchDispatches(root, "fast", "goal", phaseResearchCandidates(colony.ColonyState{}, seed)); len(got) != 0 {
+	if got := plannedPhaseResearchDispatches(root, "fast", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false); len(got) != 0 {
 		t.Fatalf("fast preset dispatched research: %d dispatches", len(got))
 	}
 }
 
 // Research runs once per phase, not once per iteration: worker-authored
 // research on disk suppresses a re-dispatch, while a finalize fallback
-// template does not.
+// template does not. This pins the reresearch=false path.
 func TestPhaseResearchDispatchedOncePerPhase(t *testing.T) {
 	root := t.TempDir()
 	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
@@ -77,13 +77,88 @@ func TestPhaseResearchDispatchedOncePerPhase(t *testing.T) {
 	}
 
 	seed := researchSeedWithDraft("Already researched", "Only templated", "Never researched")
-	dispatches := plannedPhaseResearchDispatches(root, "balanced", "goal", phaseResearchCandidates(colony.ColonyState{}, seed))
+	dispatches := plannedPhaseResearchDispatches(root, "balanced", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false)
 	if len(dispatches) != 2 {
 		t.Fatalf("dispatches = %d, want 2 (phase 1 has worker research; phases 2-3 need it)", len(dispatches))
 	}
 	gotTasks := []string{dispatches[0].TaskID, dispatches[1].TaskID}
 	if gotTasks[0] != "plan-research-phase-2" || gotTasks[1] != "plan-research-phase-3" {
 		t.Fatalf("dispatched %v, want research for phases 2 and 3 only", gotTasks)
+	}
+}
+
+// RESEARCH-04/D-05: a replan's first iteration re-researches every candidate
+// phase from scratch, ignoring stale worker-authored findings on disk. This
+// is the inverse of TestPhaseResearchDispatchedOncePerPhase.
+func TestReplanReResearchesPhases(t *testing.T) {
+	root := t.TempDir()
+	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
+	if err := os.MkdirAll(researchDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(researchDir, "phase-1-research.md"), []byte("# Phase 1 Research\nstale worker findings\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	seed := researchSeedWithDraft("Already researched")
+
+	// reresearch=true: stale findings on disk are not reused, phase 1 IS dispatched.
+	dispatches := plannedPhaseResearchDispatches(root, "balanced", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, true)
+	if len(dispatches) != 1 {
+		t.Fatalf("reresearch=true dispatches = %d, want 1 (stale findings must not be reused)", len(dispatches))
+	}
+	if dispatches[0].TaskID != "plan-research-phase-1" {
+		t.Fatalf("reresearch=true dispatched %q, want plan-research-phase-1", dispatches[0].TaskID)
+	}
+	if len(dispatches[0].Outputs) != 1 || dispatches[0].Outputs[0] != "phase-1-research.md" {
+		t.Fatalf("reresearch=true outputs = %v, want [phase-1-research.md] (overwrite in place, no timestamped sibling)", dispatches[0].Outputs)
+	}
+
+	// reresearch=false with the same file on disk: phase 1 is NOT dispatched.
+	if got := plannedPhaseResearchDispatches(root, "balanced", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false); len(got) != 0 {
+		t.Fatalf("reresearch=false dispatches = %d, want 0 (single-run iterations still research once per phase)", len(got))
+	}
+
+	// planDepth "fast" still returns zero dispatches regardless of reresearch.
+	if got := plannedPhaseResearchDispatches(root, "fast", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, true); len(got) != 0 {
+		t.Fatalf("fast preset with reresearch=true dispatched %d, want 0 — speed is fast's contract", len(got))
+	}
+}
+
+// RESEARCH-05: the research Scout's brief must name the territory survey
+// docs it should read before scanning the repo, or explicitly say none exist.
+func TestRenderPhaseResearchBriefIncludesSurvey(t *testing.T) {
+	candidate := phaseResearchCandidate{ID: 1, Name: "Wire exporter", Description: "Ship the exporter"}
+
+	populated := codexSurveyContext{
+		SurveyDocs:   []string{"nest.md", "provisions.md"},
+		Languages:    []string{"Go", "TypeScript"},
+		Frameworks:   []string{"cobra"},
+		Dependencies: []string{"cobra", "testify"},
+	}
+	brief := renderPhaseResearchBrief("Build the exporter", candidate, populated)
+	if !strings.Contains(brief, filepath.ToSlash(filepath.Join(".aether", "data", "survey", "nest.md"))) {
+		t.Errorf("brief missing survey doc nest.md:\n%s", brief)
+	}
+	if !strings.Contains(brief, filepath.ToSlash(filepath.Join(".aether", "data", "survey", "provisions.md"))) {
+		t.Errorf("brief missing survey doc provisions.md:\n%s", brief)
+	}
+	if !strings.Contains(brief, "Go") || !strings.Contains(brief, "TypeScript") || !strings.Contains(brief, "cobra") {
+		t.Errorf("brief missing already-mapped territory (Go, TypeScript, cobra):\n%s", brief)
+	}
+
+	empty := renderPhaseResearchBrief("Build the exporter", candidate, codexSurveyContext{})
+	if !strings.Contains(empty, "No territory survey available — scan the repository directly.") {
+		t.Errorf("brief with zero-value survey missing explicit fallback sentence:\n%s", empty)
+	}
+
+	for _, brief := range []string{brief, empty} {
+		if !strings.Contains(brief, "## Recommended Approach") {
+			t.Errorf("six-section output contract regressed — missing ## Recommended Approach:\n%s", brief)
+		}
+		if !strings.Contains(brief, "## Files to Study") {
+			t.Errorf("six-section output contract regressed — missing ## Files to Study:\n%s", brief)
+		}
 	}
 }
 
