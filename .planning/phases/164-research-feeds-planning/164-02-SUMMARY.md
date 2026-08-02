@@ -100,3 +100,12 @@ None - no external service configuration required. This plan produces pure Go fu
 ---
 *Phase: 164-research-feeds-planning*
 *Completed: 2026-08-02*
+
+## Self-Check: PASSED
+
+- FOUND: cmd/phase_research_decision.go
+- FOUND: cmd/phase_research_decision_test.go
+- FOUND: .planning/phases/164-research-feeds-planning/164-02-SUMMARY.md
+- FOUND: commit e18a01e6 (Task 1)
+- FOUND: commit 1adcbfed (Task 2)
+- FOUND: commit 0c3e7164 (SUMMARY)
