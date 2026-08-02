@@ -1,9 +1,10 @@
 <!-- Aether-managed: runtime spec at .aether/commands/build.yaml. Synced by aether update. -->
-<!-- PHASE-160: Fail Loudly merged first and made only narrow call-argument fixes to this file; it did not restructure it. PHASE-165 (Core Lifecycle Commands) is the sole structural owner of this file for milestone v1.25. PHASE-168 (Live Visibility) appends a visual-guidance trailer after this file lands. -->
 ---
 name: ant-build
 description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"
 ---
+
+<!-- PHASE-160: Fail Loudly merged first and made only narrow call-argument fixes to this file; it did not restructure it. PHASE-165 (Core Lifecycle Commands) is the sole structural owner of this file for milestone v1.25. PHASE-168 (Live Visibility) appends a visual-guidance trailer after this file lands. -->
 
 🐜👑 You are the **Queen**. You DIRECTLY spawn multiple workers — do not delegate to a single Prime Worker. A single agent doing everything is not a colony; "justifications" for not spawning are not accepted.
 
