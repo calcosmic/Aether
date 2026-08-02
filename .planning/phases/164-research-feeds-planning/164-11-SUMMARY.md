@@ -142,3 +142,8 @@ None - no external service configuration required.
 ---
 *Phase: 164-research-feeds-planning*
 *Completed: 2026-08-02*
+
+## Self-Check: PASSED
+
+- All created/modified files confirmed present on disk: `cmd/phase_research_escalate.go`, `cmd/phase_research_escalate_test.go`, `.aether/ts-host/src/host.ts`, `.aether/ts-host/dist/host.js`, `.aether/ts-host/test/research-escalation-degrade.test.ts`.
+- All five commit hashes (`080b6654`, `11cf9801`, `a9f49543`, `1b075d53`, `59f95a93`) confirmed present in `git log --oneline --all`.
