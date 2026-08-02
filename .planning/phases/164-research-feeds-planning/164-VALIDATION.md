@@ -1,7 +1,7 @@
 ---
 phase: 164
 slug: research-feeds-planning
-status: planned
+status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-08-02
@@ -43,26 +43,30 @@ updated: 2026-08-02
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 01-T1 | 164-01 | 1 | RESEARCH-05 | T-164-01 | Survey values interpolated into the brief are runtime-derived, never raw user free-text | unit (Go) | `go test ./cmd/... -run 'TestRenderPhaseResearchBriefIncludesSurvey\|TestPlanEmitsPhaseResearchDispatchesFromDraft\|TestPlanFastPresetSkipsPhaseResearch' -count=1` | ✅ extend | ⬜ pending |
-| 01-T2 | 164-01 | 1 | RESEARCH-04 | T-164-03 | Re-research bounded to iteration 1 of a refresh run | unit (Go) | `go test ./cmd/... -run 'TestReplanReResearchesPhases\|TestPhaseResearchDispatchedOncePerPhase\|TestPlanFastPresetSkipsPhaseResearch' -count=1` | ✅ extend | ⬜ pending |
-| 02-T1 | 164-02 | 1 | RESEARCH-01, RESEARCH-02 | T-164-04, T-164-05 | Reason text built from a fixed lookup table, not raw phase description | unit (Go) | `go test ./cmd/... -run 'TestQueenResearchDecision' -count=1` | ❌ new | ⬜ pending |
-| 02-T2 | 164-02 | 1 | RESEARCH-01 | T-164-06 | Override direction durable in `PendingDecision.Resolution` | unit (Go) | `go test ./cmd/... -run 'TestResearchProposalBatchRendersTickToApprove\|TestResearchDecisionRecordsUseExistingStore\|TestQueenResearchDecision' -count=1` | ❌ new | ⬜ pending |
-| 03-T1 | 164-03 | 1 | RESEARCH-08 | — | Depth presets are the default; CLI flags are the only override | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-confidence.test.ts` | ❌ new | ⬜ pending |
-| 03-T2 | 164-03 | 1 | RESEARCH-07 | T-164-07, T-164-08, T-164-09 | Evidence dominates the score; cited paths resolved inside repoRoot only | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-confidence.test.ts` | ❌ new | ⬜ pending |
-| 04-T1 | 164-04 | 1 | RESEARCH-09, RESEARCH-10 | T-164-10 | Goal text is measured, never interpolated into reason strings | unit (Go) | `go test ./cmd/... -run 'TestDepthProposalCardKnobs\|TestDepthProposalReasons' -count=1` | ❌ new | ⬜ pending |
-| 04-T2 | 164-04 | 1 | RESEARCH-09, RESEARCH-10 | T-164-11, T-164-12 | Card emits only fixed-set option values; no free-text prompt | unit (Go) | `go test ./cmd/... -run 'TestDepthProposal' -count=1` | ❌ new | ⬜ pending |
-| 05-T1 | 164-05 | 2 | RESEARCH-01, RESEARCH-06 | T-164-13, T-164-14 | `--flip` IDs matched against the in-scope candidate set; scope guard on read and write | unit (Go, CLI) | `go test ./cmd/... -run 'TestPlanResearchApproveRecordsDecisions' -count=1` | ✅ extend | ⬜ pending |
-| 05-T2 | 164-05 | 2 | RESEARCH-01, RESEARCH-06 | T-164-15 | Unanswered batch warns loudly and never blocks | unit (Go) | `go test ./cmd/... -run 'TestPlanManifestCarriesResearchProposal\|TestPlanManifestWarnsWhenResearchBatchUnanswered' -count=1` | ✅ extend | ⬜ pending |
-| 05-T3 | 164-05 | 2 | RESEARCH-02 | T-164-15 | Nil/empty approvals dispatch nothing | unit (Go) | `go test ./cmd/... -run 'TestResearchDispatchGatedOnApproval\|TestFastPresetSkipsUnlessUserFlipsResearchOn\|TestPhaseResearch\|TestReplanReResearchesPhases' -count=1` | ✅ extend | ⬜ pending |
-| 06-T1 | 164-06 | 2 | RESEARCH-07, RESEARCH-08 | T-164-16, T-164-17 | Iteration and budget caps enforced by `ConfidenceLoop`; flag values clamped to documented ranges | typecheck (TS) | `npm --prefix .aether/ts-host run typecheck` | ✅ exists | ⬜ pending |
-| 06-T2 | 164-06 | 2 | RESEARCH-07, RESEARCH-08 | T-164-18 | Ceremony carries metrics only, never research body text | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-confidence-loop.test.ts` | ❌ new | ⬜ pending |
-| 07-T1 | 164-07 | 3 | RESEARCH-03 | T-164-19, T-164-20 | Research injected under an explicit heading and bounded to 12000 chars | unit (Go) | `go test ./cmd/... -run 'TestRouteSetterBriefIncludesResearchContent\|TestRouteSetterBriefResearchIsBounded' -count=1` | ✅ extend | ⬜ pending |
-| 07-T2 | 164-07 | 3 | RESEARCH-03 | T-164-21 | Failure recorded in two independent places; finalize never errors | unit (Go) | `go test ./cmd/... -run 'TestResearchWorkerFailureWarnsLoudlyWithoutBlocking\|TestPhaseResearchPreserve' -count=1` | ✅ extend | ⬜ pending |
-| 08-T1 | 164-08 | 3 | RESEARCH-07 | T-164-22, T-164-23 | Oracle caste gains a scoped write restriction before escalation ships | unit (Go) | `go test ./cmd/... ./pkg/codex/... -run 'TestOracleEscalation\|TestPermissionProfile' -count=1` | ❌ new | ⬜ pending |
-| 08-T2 | 164-08 | 3 | RESEARCH-07 | T-164-24 | One escalation per phase per run; no nested loop | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-confidence-loop.test.ts` | ✅ extend | ⬜ pending |
-| 09-T1 | 164-09 | 4 | RESEARCH-09, RESEARCH-10 | T-164-25 | Only fixed-set depth values reach CLI flags | unit (Go) | `go test ./cmd/... -run 'TestPlanManifestCarriesDepthProposal\|TestDepthProposal' -count=1` | ❌ new | ⬜ pending |
-| 09-T2 | 164-09 | 4 | RESEARCH-01, RESEARCH-09 | T-164-26 | Wrapper prints runtime-emitted cards; composes none itself | CLI | `go run ./cmd/aether command-guide plan --platform codex` | ✅ exists | ⬜ pending |
-| 09-T3 | 164-09 | 4 | RESEARCH-01, RESEARCH-10 | T-164-26, T-164-27 | Ordered-heading-set equality catches one-sided wrapper drift | unit (Go) | `go test ./cmd/... -run 'TestPlanWrapperCardsParity' -count=1` | ❌ new | ⬜ pending |
+| 01-T1 | 164-01 | 1 | RESEARCH-05 | T-164-01 | Survey values interpolated into the brief are runtime-derived, never raw user free-text | unit (Go) | `go test ./cmd/... -run 'TestRenderPhaseResearchBriefIncludesSurvey\|TestPlanEmitsPhaseResearchDispatchesFromDraft\|TestPlanFastPresetSkipsPhaseResearch' -count=1` | ✅ extend | ✅ green |
+| 01-T2 | 164-01 | 1 | RESEARCH-04 | T-164-03 | Re-research bounded to iteration 1 of a refresh run | unit (Go) | `go test ./cmd/... -run 'TestReplanReResearchesPhases\|TestPhaseResearchDispatchedOncePerPhase\|TestPlanFastPresetSkipsPhaseResearch' -count=1` | ✅ extend | ✅ green |
+| 02-T1 | 164-02 | 1 | RESEARCH-01, RESEARCH-02 | T-164-04, T-164-05 | Reason text built from a fixed lookup table, not raw phase description | unit (Go) | `go test ./cmd/... -run 'TestQueenResearchDecision' -count=1` | ❌ new | ✅ green |
+| 02-T2 | 164-02 | 1 | RESEARCH-01 | T-164-06 | Override direction durable in `PendingDecision.Resolution` | unit (Go) | `go test ./cmd/... -run 'TestResearchProposalBatchRendersTickToApprove\|TestResearchDecisionRecordsUseExistingStore\|TestQueenResearchDecision' -count=1` | ❌ new | ✅ green |
+| 03-T1 | 164-03 | 1 | RESEARCH-08 | — | Depth presets are the default; CLI flags are the only override | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-confidence.test.ts` | ❌ new | ✅ green |
+| 03-T2 | 164-03 | 1 | RESEARCH-07 | T-164-07, T-164-08, T-164-09 | Evidence dominates the score; cited paths resolved inside repoRoot only | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-confidence.test.ts` | ❌ new | ✅ green |
+| 04-T1 | 164-04 | 1 | RESEARCH-09, RESEARCH-10 | T-164-10 | Goal text is measured, never interpolated into reason strings | unit (Go) | `go test ./cmd/... -run 'TestDepthProposalCardKnobs\|TestDepthProposalReasons' -count=1` | ❌ new | ✅ green |
+| 04-T2 | 164-04 | 1 | RESEARCH-09, RESEARCH-10 | T-164-11, T-164-12 | Card emits only fixed-set option values; no free-text prompt | unit (Go) | `go test ./cmd/... -run 'TestDepthProposal' -count=1` | ❌ new | ✅ green |
+| 05-T1 | 164-05 | 2 | RESEARCH-01, RESEARCH-06 | T-164-13, T-164-14 | `--flip` IDs matched against the in-scope candidate set; scope guard on read and write | unit (Go, CLI) | `go test ./cmd/... -run 'TestPlanResearchApproveRecordsDecisions' -count=1` | ✅ extend | ✅ green |
+| 05-T2 | 164-05 | 2 | RESEARCH-01, RESEARCH-06 | T-164-15 | Unanswered batch warns loudly and never blocks | unit (Go) | `go test ./cmd/... -run 'TestPlanManifestCarriesResearchProposal\|TestPlanManifestWarnsWhenResearchBatchUnanswered' -count=1` | ✅ extend | ✅ green |
+| 05-T3 | 164-05 | 2 | RESEARCH-02 | T-164-15 | Nil/empty approvals dispatch nothing | unit (Go) | `go test ./cmd/... -run 'TestResearchDispatchGatedOnApproval\|TestFastPresetSkipsUnlessUserFlipsResearchOn\|TestPhaseResearch\|TestReplanReResearchesPhases' -count=1` | ✅ extend | ✅ green |
+| 06-T1 | 164-06 | 2 | RESEARCH-07, RESEARCH-08 | T-164-16, T-164-17 | Iteration and budget caps enforced by `ConfidenceLoop`; flag values clamped to documented ranges | typecheck (TS) | `npm --prefix .aether/ts-host run typecheck` | ✅ exists | ✅ green |
+| 06-T2 | 164-06 | 2 | RESEARCH-07, RESEARCH-08 | T-164-18 | Ceremony carries metrics only, never research body text | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-confidence-loop.test.ts` | ❌ new | ✅ green |
+| 07-T1 | 164-07 | 3 | RESEARCH-03 | T-164-19, T-164-20 | Research injected under an explicit heading and bounded to 12000 chars | unit (Go) | `go test ./cmd/... -run 'TestRouteSetterBriefIncludesResearchContent\|TestRouteSetterBriefResearchIsBounded' -count=1` | ✅ extend | ✅ green |
+| 07-T2 | 164-07 | 3 | RESEARCH-03 | T-164-21 | Failure recorded in two independent places; finalize never errors | unit (Go) | `go test ./cmd/... -run 'TestResearchWorkerFailureWarnsLoudlyWithoutBlocking\|TestPhaseResearchPreserve' -count=1` | ✅ extend | ✅ green |
+| 08-T1 | 164-08 | 3 | RESEARCH-07 | T-164-22, T-164-23 | Oracle caste gains a scoped write restriction before escalation ships | unit (Go) | `go test ./cmd/... ./pkg/codex/... -run 'TestOracleEscalation\|TestPermissionProfile' -count=1` | ❌ new | ✅ green |
+| 08-T2 | 164-08 | 3 | RESEARCH-07 | T-164-24 | One escalation per phase per run; no nested loop | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-confidence-loop.test.ts` | ✅ extend | ✅ green |
+| 09-T1 | 164-09 | 4 | RESEARCH-09, RESEARCH-10 | T-164-25 | Only fixed-set depth values reach CLI flags | unit (Go) | `go test ./cmd/... -run 'TestPlanManifestCarriesDepthProposal\|TestDepthProposal' -count=1` | ❌ new | ✅ green |
+| 09-T2 | 164-09 | 4 | RESEARCH-01, RESEARCH-09 | T-164-26 | Wrapper prints runtime-emitted cards; composes none itself | CLI | `go run ./cmd/aether command-guide plan --platform codex` | ✅ exists | ✅ green |
+| 09-T3 | 164-09 | 4 | RESEARCH-01, RESEARCH-10 | T-164-26, T-164-27 | Ordered-heading-set equality catches one-sided wrapper drift | unit (Go) | `go test ./cmd/... -run 'TestPlanWrapperCardsParity' -count=1` | ❌ new | ✅ green |
+| 10-T1 | 164-10 | gap 1 | RESEARCH-04, RESEARCH-05 | 164-10/T-01 | `toWorkerDispatches` copies every Go-emitted field through; invariant test fails on any future dropped field | unit (TS) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/dispatch-field-fidelity.test.ts` | ✅ exists | ✅ green |
+| 10-T2 | 164-10 | gap 1 | RESEARCH-01, RESEARCH-02 | 164-10/T-01, 164-10/T-02 | A real plan-time research dispatch resolves at the Go permission boundary for caste scout; broadened profiles are rejected | unit (Go) | `go test ./cmd/... -run 'TestPlanResearchDispatchResolvesAtWorkerBoundary\|TestScoutReadOnlyProfileIsRejectedAtWorkerBoundary\|TestPlanResearchDispatchCarriesSixSectionMission' -count=1` | ✅ exists | ✅ green |
+| 11-T1 | 164-11 | gap 2 | RESEARCH-01, RESEARCH-02 | 164-11/T-06 | Escalate resolves phases from the in-progress planning iteration state (fresh-colony empty `Plan.Phases`), with colony-plan fallback | unit (Go, CLI) | `go test ./cmd/... -run 'TestOracleEscalation' -count=1` | ✅ exists | ✅ green |
+| 11-T2 | 164-11 | gap 2 | RESEARCH-07 | 164-11/T-05 | A failing escalation degrades to a warning; the plan run survives a real non-zero binary exit | unit (TS, real binary) | `npm --prefix .aether/ts-host exec -- tsx --test .aether/ts-host/test/research-escalation-degrade.test.ts` | ✅ exists | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -104,3 +108,20 @@ runner or dependency is installed by this phase.
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** planner-signed 2026-08-02
+
+---
+
+## Validation Audit 2026-08-02
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All 20 plan-time task rows verified green by executing their mapped automated
+commands (13 named Go tests confirmed to run individually, 17+13 TS tests pass,
+typecheck clean, `command-guide plan` probe exits zero). Four rows added for
+gap-closure plans 164-10/164-11, whose tests (7 TS + 5 Go, including a
+real-binary failure drill) all pass. Full `go test ./...` and the 555-test
+ts-host suite were green at post-merge gates earlier today.
