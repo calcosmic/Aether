@@ -80,7 +80,22 @@ var planResearchEscalateCmd = &cobra.Command{
 			return nil
 		}
 
-		candidates := phaseResearchCandidates(state, codexPlanIterationState{})
+		// Research dispatches only exist from planning iteration 2 onward,
+		// when the in-progress draft lives in planning/iteration-state.json
+		// and COLONY_STATE.json's Plan.Phases is still empty -- a fresh
+		// colony's mid-loop planning case. A zero-value seed here always
+		// fell through to that empty Plan.Phases, guaranteeing "phase N not
+		// found" in exactly the scenario escalation exists for. Seed from
+		// the same planning iteration state the plan-only path
+		// (planningManifestIterationSeed) reads from; when it is
+		// unavailable (loadPlanningIterationState ok=false), fall back to
+		// the zero value so the refresh/replan case -- where the active
+		// colony plan genuinely is the source -- keeps working.
+		seed := codexPlanIterationState{}
+		if loaded, ok := loadPlanningIterationState(); ok {
+			seed = loaded
+		}
+		candidates := phaseResearchCandidates(state, seed)
 		candidate, ok := findPhaseResearchCandidate(candidates, phase)
 		if !ok {
 			outputError(1, fmt.Sprintf("phase %d not found in the current plan", phase), nil)
