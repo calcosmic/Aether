@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -910,4 +911,142 @@ func TestResearchDispatchGatedOnApproval(t *testing.T) {
 			t.Errorf("name = %q, want deterministic name %q", d.Name, wantName)
 		}
 	})
+}
+
+// researchFailureTestPlanArtifact builds a three-phase route_setter artifact
+// for TestResearchWorkerFailureWarnsLoudlyWithoutBlocking: phase 1 and 2 are
+// dispatched for research (phase 1's worker produces nothing, phase 2's
+// worker writes real findings), phase 3 is never dispatched for research at
+// all.
+func researchFailureTestPlanArtifact() *codexWorkerPlanArtifact {
+	names := []string{"Phase one needs research", "Phase two needs research", "Phase three skips research"}
+	phases := make([]codexWorkerPlanPhase, 0, len(names))
+	for _, name := range names {
+		phases = append(phases, codexWorkerPlanPhase{
+			Name:        name,
+			Description: "Fixture phase for " + name,
+			Tasks: []codexWorkerPlanTask{{
+				Goal:            "Do the fixture work for " + name,
+				Hints:           []string{"cmd/codex_plan_finalize.go"},
+				SuccessCriteria: []string{"Fixture criterion satisfied"},
+			}},
+			SuccessCriteria: []string{"Fixture phase satisfied"},
+		})
+	}
+	artifact := &codexWorkerPlanArtifact{
+		Phases:     phases,
+		Confidence: codexPlanConfidence{Knowledge: 90, Requirements: 90, Risks: 80, Dependencies: 80, Effort: 80, Overall: 84},
+	}
+	bound := bindSyntheticPlanEvidence(buildWorkerPlanPhases(*artifact))
+	result := workerPlanArtifactFromPhases(artifact.Confidence, artifact.Gaps, bound, codexPlanningLoop{})
+	return &result
+}
+
+// TestResearchWorkerFailureWarnsLoudlyWithoutBlocking covers Plan 07 Task 2's
+// six behaviours (D-08): a research worker that produced nothing is named in
+// both the fallback artifact and the finalize result, a worker-authored
+// phase is not flagged, a never-dispatched phase is not flagged, and
+// finalize returns no error and still writes the plan.
+func TestResearchWorkerFailureWarnsLoudlyWithoutBlocking(t *testing.T) {
+	saveGlobals(t)
+	goal := "Research failure stays loud and non-blocking"
+	root, survey, baseDispatches := setupPlanFinalizeFailureFixture(t, goal)
+
+	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
+	if err := os.MkdirAll(researchDir, 0755); err != nil {
+		t.Fatalf("create research dir: %v", err)
+	}
+	// Phase 2's worker wrote real findings before finalize runs -- these must
+	// survive unchanged and must not be flagged as failed.
+	workerResearch := "# Phase 2 Research: Phase two needs research\n\n## Recommended Approach\nSENTINEL-PHASE-2-RESEARCH\n"
+	if err := os.WriteFile(filepath.Join(researchDir, "phase-2-research.md"), []byte(workerResearch), 0644); err != nil {
+		t.Fatalf("write worker research: %v", err)
+	}
+	// Phase 1 is dispatched for research but its worker produces nothing --
+	// no phase-1-research.md ever lands on disk. This is the failure case.
+	// Phase 3 is never dispatched for research at all.
+
+	dispatches := append([]codexPlanningDispatch{}, baseDispatches...)
+	dispatches = append(dispatches,
+		codexPlanningDispatch{Stage: phaseResearchStage, Wave: 1, Caste: "scout", Name: "Research-1", Task: "Research phase 1", TaskID: "plan-research-phase-1", Outputs: []string{"phase-1-research.md"}},
+		codexPlanningDispatch{Stage: phaseResearchStage, Wave: 1, Caste: "scout", Name: "Research-2", Task: "Research phase 2", TaskID: "plan-research-phase-2", Outputs: []string{"phase-2-research.md"}},
+	)
+
+	manifest := testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches)
+	manifest.Snapshots = snapshotRelativeFiles(root,
+		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
+		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
+	)
+
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = researchFailureTestPlanArtifact()
+		}
+	}
+
+	result, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: manifest,
+		Dispatches:   results,
+	})
+	if err != nil {
+		t.Fatalf("finalize should return nil error when a research worker failed, got: %v", err)
+	}
+
+	phases, ok := result["phases"].([]colony.Phase)
+	if !ok || len(phases) != 3 {
+		t.Fatalf("finalize should still write the plan phases, got: %v (%T)", result["phases"], result["phases"])
+	}
+
+	failedIDs, ok := result["research_failed_phases"].([]int)
+	if !ok {
+		t.Fatalf("research_failed_phases is not []int: %v (%T)", result["research_failed_phases"], result["research_failed_phases"])
+	}
+	if len(failedIDs) != 1 || failedIDs[0] != 1 {
+		t.Fatalf("research_failed_phases = %v, want [1] (only phase 1's worker failed)", failedIDs)
+	}
+
+	warning, _ := result["research_warning"].(string)
+	if !strings.Contains(warning, "planned WITHOUT its research") {
+		t.Fatalf("research_warning = %q, want it to name the failure", warning)
+	}
+	if !strings.Contains(warning, "1") {
+		t.Fatalf("research_warning = %q, want it to name phase 1", warning)
+	}
+
+	// The fallback template for phase 1 carries the failure status line and
+	// keeps the template marker so it stays replaceable on a future run.
+	failedContent, err := os.ReadFile(filepath.Join(researchDir, "phase-1-research.md"))
+	if err != nil {
+		t.Fatalf("read phase 1 fallback artifact: %v", err)
+	}
+	if !strings.Contains(string(failedContent), "planned WITHOUT its research — worker failed") {
+		t.Fatalf("phase 1 fallback artifact missing research status line:\n%s", string(failedContent))
+	}
+	if !strings.Contains(string(failedContent), phaseResearchTemplateMarker) {
+		t.Fatalf("phase 1 fallback artifact should still carry the template marker so it stays replaceable:\n%s", string(failedContent))
+	}
+
+	// Phase 2's worker-authored research survives unchanged and is not
+	// flagged as a failure.
+	preservedContent, err := os.ReadFile(filepath.Join(researchDir, "phase-2-research.md"))
+	if err != nil {
+		t.Fatalf("read phase 2 research: %v", err)
+	}
+	if !strings.Contains(string(preservedContent), "SENTINEL-PHASE-2-RESEARCH") {
+		t.Fatalf("phase 2 worker research was not preserved:\n%s", string(preservedContent))
+	}
+	if strings.Contains(string(preservedContent), "Research status:") {
+		t.Fatalf("phase 2 preserved research should not carry a failure status line:\n%s", string(preservedContent))
+	}
+
+	// Phase 3 was never dispatched for research -- absent from the failed
+	// list, falls through to the fallback template with no status line.
+	skippedContent, err := os.ReadFile(filepath.Join(researchDir, "phase-3-research.md"))
+	if err != nil {
+		t.Fatalf("read phase 3 fallback artifact: %v", err)
+	}
+	if strings.Contains(string(skippedContent), "Research status:") {
+		t.Fatalf("phase 3 was never dispatched for research and should not carry a failure status line:\n%s", string(skippedContent))
+	}
 }

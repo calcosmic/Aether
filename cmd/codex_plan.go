@@ -583,7 +583,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err != nil {
 		return nil, err
 	}
-	phaseResearchFiles, preservedResearchArtifacts, err := writePhaseResearchArtifacts(root, phaseResearchDir, survey, scoutReport, phases, artifactSnapshots, dispatches)
+	phaseResearchFiles, preservedResearchArtifacts, _, err := writePhaseResearchArtifacts(root, phaseResearchDir, survey, scoutReport, phases, artifactSnapshots, dispatches)
 	if err != nil {
 		return nil, err
 	}
@@ -3272,10 +3272,27 @@ func prunePhaseResearchOrphans(dir string, phases []colony.Phase) {
 	}
 }
 
-func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, report codexScoutReport, phases []colony.Phase, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) ([]string, int, error) {
+func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, report codexScoutReport, phases []colony.Phase, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) ([]string, int, []int, error) {
 	written := make([]string, 0, len(phases))
 	claimed := claimedPlanningFiles(dispatches)
 	preserved := 0
+	failed := []int{}
+	// A phase counts as "approved and dispatched" when a phase_research Scout
+	// dispatch exists for it -- the same stage+caste filter
+	// validatePlanningWorkerChain (cmd/codex_plan_finalize.go:641) already uses
+	// to identify phase_research dispatches. Only these phases can be
+	// classified as a failed research worker: a phase never dispatched for
+	// research (the user skipped it) falling through to the fallback template
+	// is expected behaviour, not a failure.
+	dispatchedResearchFiles := make(map[string]bool, len(dispatches))
+	for _, d := range dispatches {
+		if d.Stage != phaseResearchStage || !strings.EqualFold(d.Caste, "scout") {
+			continue
+		}
+		for _, out := range d.Outputs {
+			dispatchedResearchFiles[out] = true
+		}
+	}
 	for _, phase := range phases {
 		name := fmt.Sprintf("phase-%d-research.md", phase.ID)
 		path := filepath.Join(dir, name)
@@ -3292,7 +3309,16 @@ func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, re
 		b.WriteString(fmt.Sprintf("# Phase %d Research: %s\n\n", phase.ID, phase.Name))
 		b.WriteString(fmt.Sprintf("**Generated:** %s\n", time.Now().UTC().Format(time.RFC3339)))
 		b.WriteString(fmt.Sprintf("**Phase:** %d - %s\n", phase.ID, phase.Name))
-		b.WriteString("**Research scope:** synthesized from territory survey and scout findings (no dedicated research worker ran for this phase)\n\n")
+		b.WriteString("**Research scope:** synthesized from territory survey and scout findings (no dedicated research worker ran for this phase)\n")
+		if dispatchedResearchFiles[name] {
+			// D-08: a phase that was approved and sent to a research worker,
+			// but still fell through to the fallback template, means that
+			// worker produced nothing. Name the failure loudly in the
+			// artifact itself, not just in the finalize result.
+			b.WriteString(fmt.Sprintf("**Research status:** phase %d planned WITHOUT its research — worker failed\n", phase.ID))
+			failed = append(failed, phase.ID)
+		}
+		b.WriteString("\n")
 		b.WriteString("## Hive Wisdom (Pre-existing Knowledge)\n")
 		b.WriteString("No relevant hive wisdom found\n")
 		b.WriteString("\n## Key Patterns\n")
@@ -3320,10 +3346,23 @@ func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, re
 		b.WriteString(bulletList(limitStrings(uniqueSortedStrings(files), 6), "No specific file anchors were identified."))
 		b.WriteString("\n")
 		if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
-			return nil, 0, fmt.Errorf("failed to write %s: %w", name, err)
+			return nil, 0, nil, fmt.Errorf("failed to write %s: %w", name, err)
 		}
 		written = append(written, name)
 	}
 	sort.Strings(written)
-	return written, preserved, nil
+	sort.Ints(failed)
+	return written, preserved, failed, nil
+}
+
+// renderResearchFailedWarning is D-08's loud, non-blocking warning: research
+// is enrichment (Phase 160's classification), so a failed research worker
+// never errors or gates finalize -- it names the phases in the finalize
+// result so the omission is durable and visible, not silently absorbed by
+// the fallback template. Returns "" when no phase failed.
+func renderResearchFailedWarning(failed []int) string {
+	if len(failed) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("phase(s) %s planned WITHOUT its research — worker failed", joinInts(failed))
 }

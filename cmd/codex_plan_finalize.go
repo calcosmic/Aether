@@ -381,7 +381,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err != nil {
 		return nil, err
 	}
-	phaseResearchFiles, _, err := writePhaseResearchArtifacts(root, phaseResearchDir, manifest.Survey, scoutReport, phases, emptySnapshots, dispatches)
+	phaseResearchFiles, _, researchFailedPhases, err := writePhaseResearchArtifacts(root, phaseResearchDir, manifest.Survey, scoutReport, phases, emptySnapshots, dispatches)
 	if err != nil {
 		return nil, err
 	}
@@ -462,6 +462,8 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		"plan_artifact":             filepath.Base(planArtifactFile),
 		"phase_research_dir":        phaseResearchDir,
 		"phase_research_files":      phaseResearchFiles,
+		"research_failed_phases":    researchFailedPhases,
+		"research_warning":          renderResearchFailedWarning(researchFailedPhases),
 		"dispatches":                planningDispatchMaps(dispatches),
 		"dispatch_mode":             provenance.DispatchMode,
 		"dispatch_contract":         manifest.DispatchContract,
