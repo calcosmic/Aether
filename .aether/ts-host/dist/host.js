@@ -589,6 +589,11 @@ function clampResearchConfidenceTarget(value) {
 function clampResearchMaxIterations(value) {
     return Math.min(12, Math.max(2, value));
 }
+/** Depths at which a stalled phase is worth the heavier Oracle researcher. */
+function isEscalationEligibleDepth(depth) {
+    const normalised = depth.trim().toLowerCase();
+    return normalised === "deep" || normalised === "exhaustive";
+}
 /**
  * Extract the phase ID a research dispatch targets from its task_id
  * ("plan-research-phase-<ID>", cmd/phase_research.go:90). Returns undefined
@@ -646,6 +651,7 @@ export async function runResearchConfidenceLoop(bridge, parsed, researchDispatch
         }
     }
     const confidenceTarget = loopOpts.confidenceTarget ?? preset.confidenceTarget;
+    const escalationEligible = isEscalationEligibleDepth(depth);
     const evaluator = new ResearchConfidenceEvaluator();
     const phases = new Map();
     for (const dispatch of researchDispatches) {
@@ -660,6 +666,10 @@ export async function runResearchConfidenceLoop(bridge, parsed, researchDispatch
         });
     }
     const active = new Map(phases);
+    // Phases whose loop stalled below target at deep/exhaustive depth (D-04).
+    // Populated inside the round loop below, consumed by the escalation round
+    // once every phase has finished its own confidence loop.
+    const escalationCandidates = [];
     while (active.size > 0) {
         const activeStates = [...active.values()];
         const roundDispatches = toWorkerDispatches(activeStates.map((state) => state.dispatch));
@@ -706,8 +716,42 @@ export async function runResearchConfidenceLoop(bridge, parsed, researchDispatch
                 state.finalStopReason = stopReason;
                 renderIterationComplete(stopReason);
                 active.delete(state.phaseId);
+                // D-04: escalate Scout -> Oracle only when the loop truly stalled
+                // (diminishing_returns) below target, and only at deep/exhaustive
+                // depth. confidence_target_met and max_iterations_met never escalate.
+                if (escalationEligible && stopReason === "diminishing_returns" && loopResult.currentConfidence < confidenceTarget) {
+                    escalationCandidates.push(state);
+                }
             }
         }
+    }
+    // Escalation round (D-04): dispatched once, outside the per-phase
+    // ConfidenceLoop above. Oracle owns its own RALF iteration
+    // (cmd/oracle_loop.go runOracleLoop) -- nesting a second ConfidenceLoop
+    // around it here would mean two drivers for one worker.
+    const escalations = [];
+    if (escalationCandidates.length > 0) {
+        const escalationDispatches = [];
+        for (const state of escalationCandidates) {
+            const stalledAt = state.lastResult?.currentConfidence ?? 0;
+            emitCeremonyOutput(`Oracle escalation: phase ${state.phaseId} research stalled at ${stalledAt}% against a ` +
+                `${confidenceTarget}% target — escalating Scout to Oracle`);
+            const escalateResult = _callGoJSONRef(bridge, [
+                "plan-research-escalate",
+                "--phase", String(state.phaseId),
+                "--confidence", String(stalledAt),
+                "--target", String(confidenceTarget),
+            ]);
+            escalationDispatches.push(escalateResult.dispatch);
+            escalations.push(state.phaseId);
+        }
+        const escalationDispatchOpts = {
+            goBinaryPath: bridge.goBinaryPath,
+            cwd: bridge.cwd,
+            simulateWorkers: parsed.simulate,
+            workflow: "plan",
+        };
+        await _dispatchWorkersRef(escalationDispatchOpts, toWorkerDispatches(escalationDispatches));
     }
     const summaryPhases = [...phases.values()].map((state) => ({
         phaseId: state.phaseId,
@@ -715,7 +759,7 @@ export async function runResearchConfidenceLoop(bridge, parsed, researchDispatch
         finalConfidence: state.lastResult?.currentConfidence ?? 0,
         stopReason: state.finalStopReason ?? state.lastResult?.stopReason ?? "",
     }));
-    return { phases: summaryPhases, escalations: [] };
+    return { phases: summaryPhases, escalations };
 }
 /**
  * Dispatch a single build iteration, render ceremony, and write its completion
