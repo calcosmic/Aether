@@ -81,9 +81,10 @@ For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 
 - Use visible live Task/subagent calls. Do not set `run_in_background`.
 - Each worker description: `{caste emoji} {Caste} {name}: {task}`.
-- Inject phase objective, task metadata, dependencies, success criteria, active signals, and `skill_section` when present.
+- Each dispatch carries `brief` — the complete runtime-rendered worker prompt (phase objective, constraints, hints, success criteria, pheromone signals, survey paths, prior handoffs) — and, when present, `brief_path`: a repo-display path to a file holding the identical composed brief, byte for byte. Reading `brief_path` is the preferred channel — inline JSON briefs of 6-22KB are subject to Read-tool long-line truncation — but both carry the same bytes, so use either VERBATIM; never merge, summarize, or reconstruct. Read `dispatch_manifest.context_capsule` ONCE from the manifest — it is not per-dispatch data, reuse the same value for every worker this build spawns — and prepend it VERBATIM ahead of the brief, then append `dispatch.skill_section` when present. Do not summarize, reorder, or reconstruct any of it — the runtime already assembled it.
 - Inspect and preserve each dispatch `permission_profile`. A `repository_read_only` worker must use a host-enforced no-write boundary. Reject `scoped_write` or `test_write` when the host cannot enforce it. `behavioral_restrictions` inside `workspace_write` are instructions, not a sandbox claim.
-- Require terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `blockers`, `duration`.
+- Require terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `blockers`, `duration`, `handoff`.
+- The `handoff` object is mandatory for completed workers and must be concrete: `{changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, freshness}` (freshness: RFC3339 timestamp of evidence collection, or `not-run`). It is what the next phase's workers receive as context — an empty handoff will be rejected by the finalizer.
 
 Respect `execution_plan`: serial steps stay serial; parallel steps may spawn together.
 
@@ -93,7 +94,7 @@ For each manifest wave:
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each worker.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. Pass the worker brief verbatim and inject the runtime-provided `skill_section` when present.
+5. The worker's prompt = `dispatch_manifest.context_capsule` (read once, prepended verbatim) + the brief read VERBATIM from `dispatch.brief_path` when present (falling back to `dispatch.brief` inline when it is absent) + `dispatch.skill_section` when present. Nothing else, nothing invented.
 6. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`.
 

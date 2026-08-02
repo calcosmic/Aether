@@ -39,6 +39,47 @@ heavy/classic `continue`, and `seal`. The TS host also exposes `oracle`,
 `watch`, and `swarm` display/lifecycle surfaces, but canonical swarm wrappers
 still use the Go plan-only/finalizer path.
 
+## Manifest and Completion Packet Shapes
+
+This is the single place manifest field names are documented, so wrapper prose
+can name a step without enumerating a schema.
+
+| Manifest key | Producer | Wrapper obligation |
+|--------------|----------|---------------------|
+| `result.manifest.dispatch_manifest` | TS host | The sole source of worker names, castes, waves, and briefs for this build — spawn exactly what it names, nothing invented. |
+| `dispatch_manifest.execution_plan` | TS host | Respect wave order: serial steps stay serial, parallel steps may spawn together. |
+| `dispatch_manifest.context_capsule` | TS host | Read once per build; prepend verbatim once per build ahead of every worker's brief. |
+| `dispatch.brief` | TS host | Read one of brief/brief_path verbatim, never merge or reconstruct — the complete runtime-rendered worker prompt. |
+| `dispatch.brief_path` | TS host | Read one of brief/brief_path verbatim, never merge or reconstruct — prefer this channel for briefs subject to Read-tool long-line truncation; both carry the same bytes. |
+| `dispatch.skill_section` | TS host | Append verbatim after the brief when present; never summarize, reorder, or reconstruct. |
+| `dispatch.permission_profile` | TS host | Preserve, never broaden `repository_read_only`; reject `scoped_write` or `test_write` when the host cannot enforce it. |
+| `dispatch_manifest.orchestrator_boundary_guidance` | TS host | Route to `aether discuss` when active or `next` is `aether discuss`; request a fresh manifest after resolution. |
+| `result.manifest.continue_manifest` | TS host | The sole source of reviewer names, castes, waves, and briefs for heavy continue — spawn exactly what it names. |
+| `result.plan_manifest` | TS host | The sole source of `planning_run_id`, `iteration`, selected gaps, and worker briefs for one planning iteration. |
+| `result.planning_manifest` | TS host | Equivalent alias to `result.plan_manifest` depending on host response shape; treat identically. |
+| `result.depth_proposal_card` | TS host | Print verbatim, never re-reason or restate the runtime's depth recommendation. |
+| `result.research_proposal_card` | TS host | Print verbatim, never re-reason or compose a research recommendation when non-empty. |
+| `result.completion_path` | Go CLI | Finalize only the Go-owned path — the durable packet at this path, never the staged completion file directly. |
+| `result.requires_next_iteration` | Go CLI | Never treat as a completed plan when true; request the next planning iteration instead. |
+
+Wrapper prose points here once and does not restate this table.
+
+## Terminal Worker Result Belongs to the Wrapper
+
+The terminal structured result a worker must return — `name`, `caste`,
+`stage`, `execution_wave`, `task_id`, `status`, `summary`, `files_created`,
+`files_modified`, `tests_written`, `blockers`, `duration`, `handoff`, and the
+`handoff` object's own required keys (`changed_files`, `commands_run`,
+`verification_status`, `known_failures`, `open_decisions`, `assumptions`,
+`next_worker_instructions`, `do_not_repeat`, `freshness`) — is **method, not
+envelope mechanics**: it describes what a worker owes back, the opposite
+direction of data flow from manifest consumption above. It therefore stays
+inline in the lifecycle wrappers and is explicitly NOT counted as
+envelope-parsing prose by the Phase 165 CMD-02 proportion test.
+
+Direction rule: inbound manifest field shapes live in this document; outbound
+worker result obligations live in the wrapper that spawns the worker.
+
 ## Provider/Auth Boundary
 
 Provider availability preflight belongs to the Go runtime. Wrappers and the TS

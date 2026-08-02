@@ -4,8 +4,8 @@ milestone: v1.25
 milestone_name: Switch It On
 status: executing
 stopped_at: Phase 165 context gathered
-last_updated: "2026-08-02T21:52:05.602Z"
-last_activity: 2026-08-02 -- Phase 165 planning complete
+last_updated: "2026-08-02T21:55:40.900Z"
+last_activity: 2026-08-02 -- Phase 165 execution started
 progress:
   total_phases: 29
   completed_phases: 5
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-25)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 164 — research-feeds-planning
+**Current focus:** Phase 165 — core-lifecycle-commands
 **Milestone:** v1.25 Switch It On — ROADMAPPED (rebuilt twice, awaiting user approval)
 **Previous milestone:** v1.24 Hybrid Architecture Salvage (shipped 2026-05-24, phases 152-159)
 **Product version:** v1.0.45
 
 ## Current Position
 
-Phase: 165
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-02 -- Phase 165 planning complete
+Phase: 165 (core-lifecycle-commands) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 165
+Last activity: 2026-08-02 -- Phase 165 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
