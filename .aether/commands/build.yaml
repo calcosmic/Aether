@@ -36,6 +36,22 @@ wrapper_additions:
     3. Summarize what moved forward and which workers/castes actually ran.
     4. Note only the most relevant signal or risk.
     5. Route first to `/ant-continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
+  stage_skeleton: |
+    Every non-exempt stage in build.md follows one order: a colony beat, then
+    `**Purpose:**`, then `**Reads:**`, then `**Spawns:**` where the stage
+    spawns anything, then the stage's instructions, then `**Stop
+    conditions:**`. The named cross-stage state carry (`## Required
+    Cross-Stage State`) lists: `phase_id`, `verification_depth`,
+    `manifest_file`, `context_capsule`, `wave_results`,
+    `verification_status`, `next_action`.
+  ownership_chain: |
+    build.md's structural ownership is recorded in the file itself: Phase 160
+    (Fail Loudly) merged first and made only narrow call-argument fixes;
+    Phase 165 (Core Lifecycle Commands) is the sole structural owner of this
+    file for milestone v1.25; Phase 168 (Live Visibility) appends a
+    visual-guidance trailer afterward, at the reserved marker
+    `<!-- PHASE-168: visual-guidance trailer appends below this line -->`,
+    which is always the last non-empty line of the file.
 guardrails:
   - "The TS host is the sole manifest authority; always use `aether host build --dry-run` to fetch the plan, never `aether host build` alone (which dispatches workers via the TS host path, causing double-dispatch)."
   - "The wrapper is the sole conductor for interactive worker spawning; spawn workers via platform Agent tool from the manifest, not from the TS host."
@@ -52,6 +68,8 @@ guardrails:
   - "Do NOT run `aether build --synthetic` after real wrapper Task agents complete."
   - "Do NOT describe parallel workers as background agents or say you will be notified later; keep the live worker stack visible until terminal results return."
   - "Do NOT add extra option menus or recovery advice unless the runtime explicitly asks."
+  - "Do NOT hand-render any visual that `aether ceremony` already renders (spawn plans, wave starts, worker completions, closeouts, caste legends); invoke the renderer and narrate around it."
+  - "Do NOT reintroduce the retired `colony_depth` vocabulary (light/standard/deep/full); the live vocabulary is `--verification-depth <light|standard|heavy>`."
   - "If docs and runtime disagree, runtime wins."
 follow_up:
   verify: "Guide the user first to `/ant-continue`, with `aether continue` as the runtime source of truth."
