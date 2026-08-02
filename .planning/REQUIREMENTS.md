@@ -89,8 +89,8 @@ These were asserted in the first draft and are now **verified false**. No work i
 - [ ] **RESEARCH-06**: Research output feeds the existing decision, assumption and plan-revision model — no new planning store
 - [ ] **RESEARCH-07**: The existing `confidence-loop.ts` is used rather than reimplemented, and its progress is visible while it runs
 - [ ] **RESEARCH-08**: Depth binds a target and an iteration budget — fast 80%/4, balanced 90%/6, deep 95%/8, exhaustive 99%/12 — with an accept override to exit early
-- [ ] **RESEARCH-09**: The existing depth controls are reachable and explained at plan time: plan granularity (1-3 / 4-7 / 8-12 / 13-20 phases via `pkg/colony/granularity.go`), task decomposition depth, and verification depth
-- [ ] **RESEARCH-10**: The Queen proposes granularity and both depths with a plain-English reason rather than asking cold; the user accepts or changes them
+- [x] **RESEARCH-09**: The existing depth controls are reachable and explained at plan time: plan granularity (1-3 / 4-7 / 8-12 / 13-20 phases via `pkg/colony/granularity.go`), task decomposition depth, and verification depth
+- [x] **RESEARCH-10**: The Queen proposes granularity and both depths with a plain-English reason rather than asking cold; the user accepts or changes them
 
 ## Core Lifecycle Commands (CMD)
 
@@ -255,8 +255,8 @@ Carried from v1.23, still open, not addressed here: `CATALOG-01/02`, `TEST-01/02
 | RESEARCH-06 | Phase 164 | Pending |
 | RESEARCH-07 | Phase 164 | Pending |
 | RESEARCH-08 | Phase 164 | Pending |
-| RESEARCH-09 | Phase 164 | Pending |
-| RESEARCH-10 | Phase 164 | Pending |
+| RESEARCH-09 | Phase 164 | Complete |
+| RESEARCH-10 | Phase 164 | Complete |
 | CMD-01 | Phase 165 | Pending |
 | CMD-02 | Phase 165 | Pending |
 | CMD-03 | Phase 165 | Pending |
