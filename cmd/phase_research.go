@@ -55,24 +55,33 @@ func phaseResearchCandidates(state colony.ColonyState, seed codexPlanIterationSt
 }
 
 // plannedPhaseResearchDispatches emits one phase_research Scout per candidate
-// phase. Two rules govern which candidates get dispatched:
-//  1. Within a single plan run's iterations (reresearch=false), a phase that
-//     already has worker-authored research on disk is skipped — research runs
-//     once per phase, not once per iteration.
-//  2. On the first iteration of a replan (reresearch=true), the skip is
-//     lifted and every candidate is re-dispatched from scratch — stale
-//     findings from a prior run are never silently reused. The worker's
-//     Outputs entry stays the plain phase-N-research.md filename; findings
-//     overwrite the existing file in place, no timestamped archive sibling.
-//
-// The fast preset skips research entirely regardless of reresearch — speed is
-// its contract.
-func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []phaseResearchCandidate, survey codexSurveyContext, reresearch bool) []codexPlanningDispatch {
-	if planDepth == "fast" || len(candidates) == 0 {
+// phase. Three independent gates govern which candidates get dispatched, in
+// order:
+//  1. Approval (Plan 05) — a phase is dispatched only when approved[ID] is
+//     true. The Queen's fast-preset "lean skip" default now lives entirely in
+//     computePhaseResearchProposal's recommendations (Plan 02): a fast run
+//     with no approvals dispatches nothing, but a phase the user explicitly
+//     flipped on during a fast run DOES dispatch (D-15) — speed is the
+//     default, not an unconditional block.
+//  2. Re-research (Plan 01) — within a single plan run's iterations
+//     (reresearch=false), a phase that already has worker-authored research
+//     on disk is skipped — research runs once per phase, not once per
+//     iteration. On the first iteration of a replan (reresearch=true), the
+//     skip is lifted and every approved candidate is re-dispatched from
+//     scratch — stale findings from a prior run are never silently reused.
+//     The worker's Outputs entry stays the plain phase-N-research.md
+//     filename; findings overwrite the existing file in place, no
+//     timestamped archive sibling.
+//  3. Candidate availability — len(candidates) == 0 short-circuits to nil.
+func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []phaseResearchCandidate, survey codexSurveyContext, reresearch bool, approved map[int]bool) []codexPlanningDispatch {
+	if len(candidates) == 0 {
 		return nil
 	}
 	dispatches := make([]codexPlanningDispatch, 0, len(candidates))
 	for _, candidate := range candidates {
+		if !approved[candidate.ID] {
+			continue
+		}
 		fileName := fmt.Sprintf("phase-%d-research.md", candidate.ID)
 		existingPath := filepath.Join(root, ".aether", "data", "phase-research", fileName)
 		if !reresearch && hasWorkerAuthoredResearch(existingPath) {
