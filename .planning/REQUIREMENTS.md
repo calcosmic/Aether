@@ -81,13 +81,13 @@ These were asserted in the first draft and are now **verified false**. No work i
 
 *Nothing in the review refuted this, and keeping the TS host makes it easier: `.aether/ts-host/src/confidence-loop.ts` (250 lines, `maxIterations` at :84/:94/:207) is a working implementation of the target-confidence loop. Current `plan.md` contains zero references to Oracle — research is a standalone command the user must remember to run and paste in. `v5.4.0` `plan.md` Step 3.6 "Phase Domain Research" is the reference.*
 
-- [ ] **RESEARCH-01**: The Queen decides whether a phase needs research before planning it, states the decision and its reason, and the user can override either way
-- [ ] **RESEARCH-02**: When research is warranted it runs automatically before the plan is drafted — the user does not have to remember to invoke it
+- [x] **RESEARCH-01**: The Queen decides whether a phase needs research before planning it, states the decision and its reason, and the user can override either way
+- [x] **RESEARCH-02**: When research is warranted it runs automatically before the plan is drafted — the user does not have to remember to invoke it
 - [x] **RESEARCH-03**: Findings persist to a durable per-phase artifact and are injected into the planner's context, not pasted by hand
 - [x] **RESEARCH-04**: Re-planning a phase re-researches rather than reusing stale findings, as `v5.4.0` did
 - [x] **RESEARCH-05**: Territory survey context, where it exists, reaches both the research worker and the planner
 - [ ] **RESEARCH-06**: Research output feeds the existing decision, assumption and plan-revision model — no new planning store
-- [ ] **RESEARCH-07**: The existing `confidence-loop.ts` is used rather than reimplemented, and its progress is visible while it runs
+- [x] **RESEARCH-07**: The existing `confidence-loop.ts` is used rather than reimplemented, and its progress is visible while it runs
 - [ ] **RESEARCH-08**: Depth binds a target and an iteration budget — fast 80%/4, balanced 90%/6, deep 95%/8, exhaustive 99%/12 — with an accept override to exit early
 - [x] **RESEARCH-09**: The existing depth controls are reachable and explained at plan time: plan granularity (1-3 / 4-7 / 8-12 / 13-20 phases via `pkg/colony/granularity.go`), task decomposition depth, and verification depth
 - [x] **RESEARCH-10**: The Queen proposes granularity and both depths with a plain-English reason rather than asking cold; the user accepts or changes them
@@ -247,13 +247,13 @@ Carried from v1.23, still open, not addressed here: `CATALOG-01/02`, `TEST-01/02
 | CONTEXT-07 | Phase 163 | Complete |
 | CONTEXT-08 | Phase 163 | Complete |
 | CONTEXT-09 | Phase 163 | Complete |
-| RESEARCH-01 | Phase 164 | Pending (blocked on 164-11 CR-03 fix) |
-| RESEARCH-02 | Phase 164 | Pending (blocked on 164-11 CR-03 fix) |
+| RESEARCH-01 | Phase 164 | Complete |
+| RESEARCH-02 | Phase 164 | Complete |
 | RESEARCH-03 | Phase 164 | Complete |
 | RESEARCH-04 | Phase 164 | Complete |
 | RESEARCH-05 | Phase 164 | Complete |
 | RESEARCH-06 | Phase 164 | Pending |
-| RESEARCH-07 | Phase 164 | Pending (blocked on 164-11 CR-03 fix) |
+| RESEARCH-07 | Phase 164 | Complete |
 | RESEARCH-08 | Phase 164 | Pending |
 | RESEARCH-09 | Phase 164 | Complete |
 | RESEARCH-10 | Phase 164 | Complete |
