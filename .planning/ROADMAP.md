@@ -472,7 +472,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 165-01-PLAN.md — Contract destination + shared wrapper test toolkit + flat-mirror and retired-vocabulary invariants; resolves the three research open questions (wave 1)
+- [x] 165-01-PLAN.md — Contract destination + shared wrapper test toolkit + flat-mirror and retired-vocabulary invariants; resolves the three research open questions (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 165-02-PLAN.md — CMD-05: build.md rewrite on both platforms with the D-08 ownership handshake, skeleton density and parity tests (wave 2, needs 01)
@@ -589,7 +589,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
 | 164. Research Feeds Planning | v1.25 | 11/11 | Complete    | 2026-08-02 |
-| 165. Core Lifecycle Commands | v1.25 | 0/TBD | Not started | - |
+| 165. Core Lifecycle Commands | v1.25 | 1/6 | In Progress|  |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
 | 168. Your Eyes Back — Live Visibility | v1.25 | 0/TBD | Not started | - |
