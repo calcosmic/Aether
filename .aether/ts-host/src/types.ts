@@ -376,6 +376,9 @@ export interface PlanningDispatch {
   colony_skill_count?: number;
   domain_skill_count?: number;
   matched_skills?: string[];
+  /** Canonical Go-owned permission request for this caste; the host copies
+   * it through verbatim and never substitutes its own. */
+  permission_profile?: PermissionProfile;
 }
 
 export interface PlanSynthesis {
@@ -537,6 +540,9 @@ export interface ContinueExternalDispatch {
   domain_skill_count?: number;
   matched_skills?: string[];
   handoff?: WorkerHandoff;
+  /** Canonical Go-owned permission request for this caste; the host copies
+   * it through verbatim and never substitutes its own. */
+  permission_profile?: PermissionProfile;
 }
 
 export interface VerificationStep {

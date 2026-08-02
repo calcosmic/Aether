@@ -4,8 +4,8 @@ milestone: v1.25
 milestone_name: Switch It On
 status: executing
 stopped_at: Phase 164 context gathered
-last_updated: "2026-08-02T14:12:10.739Z"
-last_activity: 2026-08-02 -- Phase 164 planning complete
+last_updated: "2026-08-02T15:34:52.859Z"
+last_activity: 2026-08-02 -- Phase 164 execution started
 progress:
   total_phases: 29
   completed_phases: 4
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-25)
 ## Current Position
 
 Phase: 164 (research-feeds-planning) — EXECUTING
-Plan: 1 of 9
-Status: Ready to execute
-Last activity: 2026-08-02 -- Phase 164 planning complete
+Plan: 1 of 11
+Status: Executing Phase 164
+Last activity: 2026-08-02 -- Phase 164 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

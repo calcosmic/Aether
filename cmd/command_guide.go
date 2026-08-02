@@ -208,7 +208,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Load the aether-colony-build-cycle Codex skill.",
 			"Decision Moment 1 (depth proposal): request a first manifest with `aether host plan`, omitting `--depth`, `--planning-depth`, and `--verification-depth` unless arguments already specify them, then print `result.depth_proposal_card` verbatim — do not restate, summarize, or re-reason the recommendations. Accept on a single confirmation, or request a fresh manifest with the named knob's flag set when the user picks a different option.",
 			"Run `AETHER_OUTPUT_MODE=visual aether status` for current colony context.",
-			"Inspect every planning dispatch `permission_profile` before spawning it. The Scout repository_read_only profile must remain host-enforced; do not substitute an unrestricted agent or describe prompt wording as isolation.",
+			"Inspect every planning dispatch `permission_profile` before spawning it and pass it through verbatim from the manifest; never substitute or broaden it. Scout's canonical profile is `workspace_write`, scoped behaviorally to writing only under `.aether/data/phase-research`.",
 			"When revising future work after a completed phase, pass `--refresh --revision-type <type> --revision-reason <why>` to every host-plan iteration. Research and verification revisions also require repository-relative `--revision-evidence <path>` files.",
 			"Run `aether host plan --depth <choice> --planning-depth <choice> --verification-depth <choice>` to fetch one planning-iteration manifest via the TS host. Parse `result.plan_manifest` or `result.planning_manifest`.",
 			"Save the full JSON envelope to a temporary manifest file for later ceremony rendering.",
