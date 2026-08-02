@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -226,4 +227,220 @@ func TestPhaseResearchSectionIsBounded(t *testing.T) {
 	if !strings.Contains(section, "truncated — full research") {
 		t.Error("truncated section should point at the full file")
 	}
+}
+
+// seedPhaseResearchDecisions writes recs as fresh unresolved research
+// decisions using the exact builder plan-research-approve reconstructs from.
+func seedPhaseResearchDecisions(t *testing.T, recs []phaseResearchRecommendation) {
+	t.Helper()
+	file := PendingDecisionFile{Decisions: []PendingDecision{}}
+	for _, rec := range recs {
+		file.Decisions = append(file.Decisions, newPhaseResearchDecision(rec))
+	}
+	if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
+		t.Fatalf("seed pending decisions: %v", err)
+	}
+}
+
+func runPlanResearchApprove(t *testing.T, args ...string) map[string]interface{} {
+	t.Helper()
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	rootCmd.SetArgs(append([]string{"plan-research-approve"}, args...))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan-research-approve %v failed: %v", args, err)
+	}
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got %v", env)
+	}
+	return env["result"].(map[string]interface{})
+}
+
+func intsFromResult(t *testing.T, result map[string]interface{}, key string) []int {
+	t.Helper()
+	raw, ok := result[key].([]interface{})
+	if !ok {
+		t.Fatalf("result[%q] is not a list: %v (%T)", key, result[key], result[key])
+	}
+	ids := make([]int, 0, len(raw))
+	for _, v := range raw {
+		ids = append(ids, int(v.(float64)))
+	}
+	return ids
+}
+
+func defaultResearchSeed() []phaseResearchRecommendation {
+	return []phaseResearchRecommendation{
+		{PhaseID: 1, PhaseName: "New integration", Recommend: "research", Reason: "new external tech (api) is absent from the territory survey"},
+		{PhaseID: 2, PhaseName: "Refactor internals", Recommend: "skip", Reason: "pure refactor -- the domain is already mapped by the territory survey"},
+		{PhaseID: 3, PhaseName: "Clean up tests", Recommend: "skip", Reason: "no external technology signals found in the phase description -- the domain looks internal"},
+	}
+}
+
+// TestPlanResearchApproveRecordsDecisions covers all six behaviours of
+// `aether plan-research-approve` (RESEARCH-01, RESEARCH-02, RESEARCH-06).
+func TestPlanResearchApproveRecordsDecisions(t *testing.T) {
+	saveGlobals(t)
+
+	t.Run("approve_all_accepts_queens_recommendation", func(t *testing.T) {
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		seedPhaseResearchDecisions(t, defaultResearchSeed())
+
+		result := runPlanResearchApprove(t, "--approve-all")
+		approved := intsFromResult(t, result, "approved")
+		skipped := intsFromResult(t, result, "skipped")
+		overrides := intsFromResult(t, result, "overrides")
+		if len(approved) != 1 || approved[0] != 1 {
+			t.Fatalf("approved = %v, want [1]", approved)
+		}
+		if len(skipped) != 2 || skipped[0] != 2 || skipped[1] != 3 {
+			t.Fatalf("skipped = %v, want [2 3]", skipped)
+		}
+		if len(overrides) != 0 {
+			t.Fatalf("overrides = %v, want none (no flips)", overrides)
+		}
+
+		var file PendingDecisionFile
+		if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+			t.Fatalf("load decisions: %v", err)
+		}
+		for _, d := range file.Decisions {
+			if !d.Resolved {
+				t.Fatalf("decision %s not resolved after --approve-all", d.ID)
+			}
+			if strings.Contains(d.Resolution, "user overrode") {
+				t.Fatalf("decision %s wrongly marked as overridden: %s", d.ID, d.Resolution)
+			}
+		}
+	})
+
+	t.Run("flip_single_phase_overrides_direction", func(t *testing.T) {
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		seedPhaseResearchDecisions(t, defaultResearchSeed())
+
+		result := runPlanResearchApprove(t, "--flip", "3")
+		overrides := intsFromResult(t, result, "overrides")
+		if len(overrides) != 1 || overrides[0] != 3 {
+			t.Fatalf("overrides = %v, want [3]", overrides)
+		}
+
+		var file PendingDecisionFile
+		if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+			t.Fatalf("load decisions: %v", err)
+		}
+		found := false
+		for _, d := range file.Decisions {
+			if d.Phase == nil || *d.Phase != 3 {
+				continue
+			}
+			found = true
+			if !d.Resolved {
+				t.Fatalf("phase 3 decision not resolved")
+			}
+			if !strings.Contains(d.Resolution, "user overrode") {
+				t.Fatalf("phase 3 resolution = %q, want it to contain 'user overrode'", d.Resolution)
+			}
+		}
+		if !found {
+			t.Fatal("phase 3 decision not found in store")
+		}
+	})
+
+	t.Run("flip_comma_list_flips_named_approves_rest", func(t *testing.T) {
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		seed := append(defaultResearchSeed(), phaseResearchRecommendation{
+			PhaseID: 4, PhaseName: "Adopt new SDK", Recommend: "research", Reason: "new external tech (sdk) is absent from the territory survey",
+		})
+		seedPhaseResearchDecisions(t, seed)
+
+		result := runPlanResearchApprove(t, "--flip", "2,4")
+		approved := intsFromResult(t, result, "approved")
+		skipped := intsFromResult(t, result, "skipped")
+		overrides := intsFromResult(t, result, "overrides")
+		if len(approved) != 2 || approved[0] != 1 || approved[1] != 2 {
+			t.Fatalf("approved = %v, want [1 2] (1 unflipped research, 2 flipped skip->research)", approved)
+		}
+		if len(skipped) != 2 || skipped[0] != 3 || skipped[1] != 4 {
+			t.Fatalf("skipped = %v, want [3 4] (3 unflipped skip, 4 flipped research->skip)", skipped)
+		}
+		if len(overrides) != 2 || overrides[0] != 2 || overrides[1] != 4 {
+			t.Fatalf("overrides = %v, want [2 4]", overrides)
+		}
+	})
+
+	t.Run("auto_marks_every_resolution_auto_accepted", func(t *testing.T) {
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		seedPhaseResearchDecisions(t, defaultResearchSeed())
+
+		result := runPlanResearchApprove(t, "--auto")
+		logLine, _ := result["log_line"].(string)
+		if !strings.Contains(logLine, "auto-accepted:") {
+			t.Fatalf("log_line = %q, want it to contain 'auto-accepted:'", logLine)
+		}
+
+		var file PendingDecisionFile
+		if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+			t.Fatalf("load decisions: %v", err)
+		}
+		for _, d := range file.Decisions {
+			if !strings.HasPrefix(d.Resolution, "auto-accepted (autopilot)") {
+				t.Fatalf("decision %s resolution = %q, want prefix 'auto-accepted (autopilot)'", d.ID, d.Resolution)
+			}
+		}
+	})
+
+	t.Run("no_unresolved_decisions_returns_zero_not_crash", func(t *testing.T) {
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		result := runPlanResearchApprove(t, "--approve-all")
+		approved := intsFromResult(t, result, "approved")
+		skipped := intsFromResult(t, result, "skipped")
+		if len(approved) != 0 || len(skipped) != 0 {
+			t.Fatalf("approved/skipped = %v/%v, want both empty", approved, skipped)
+		}
+	})
+
+	t.Run("no_new_store_file_beyond_pending_decisions", func(t *testing.T) {
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		seedPhaseResearchDecisions(t, defaultResearchSeed())
+
+		before, err := os.ReadDir(store.BasePath())
+		if err != nil {
+			t.Fatalf("read store dir before: %v", err)
+		}
+		beforeNames := map[string]bool{}
+		for _, entry := range before {
+			beforeNames[entry.Name()] = true
+		}
+
+		runPlanResearchApprove(t, "--approve-all")
+
+		after, err := os.ReadDir(store.BasePath())
+		if err != nil {
+			t.Fatalf("read store dir after: %v", err)
+		}
+		for _, entry := range after {
+			if beforeNames[entry.Name()] {
+				continue
+			}
+			if entry.Name() != pendingDecisionsFile {
+				t.Fatalf("unexpected new file in store dir: %s", entry.Name())
+			}
+		}
+	})
 }
