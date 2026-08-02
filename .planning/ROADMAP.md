@@ -450,8 +450,8 @@ Plans:
 - [x] 164-02-PLAN.md -- Queen's research recommendation: hints, reasons, batch card data (wave 1)
 - [x] 164-03-PLAN.md -- Research evidence scoring and depth-to-target/iteration binding, TS (wave 1)
 - [x] 164-04-PLAN.md -- Three-knob depth proposal with computed reasons, Go (wave 1)
-- [ ] 164-05-PLAN.md -- Gate research dispatch on the approved batch; record overrides (wave 2)
-- [ ] 164-06-PLAN.md -- Wire ConfidenceLoop into the plan path: live ceremony, early accept (wave 2)
+- [x] 164-05-PLAN.md -- Gate research dispatch on the approved batch; record overrides (wave 2)
+- [x] 164-06-PLAN.md -- Wire ConfidenceLoop into the plan path: live ceremony, early accept (wave 2)
 - [ ] 164-07-PLAN.md -- Research reaches the planner's context; research failure is loud (wave 3)
 - [ ] 164-08-PLAN.md -- Oracle escalation on stall, with scoped permissions (wave 3)
 - [ ] 164-09-PLAN.md -- Two decision cards in both wrappers and the YAML source (wave 4)
@@ -573,7 +573,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
-| 164. Research Feeds Planning | v1.25 | 4/9 | In Progress|  |
+| 164. Research Feeds Planning | v1.25 | 6/9 | In Progress|  |
 | 165. Core Lifecycle Commands | v1.25 | 0/TBD | Not started | - |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
