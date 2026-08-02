@@ -83,7 +83,7 @@ These were asserted in the first draft and are now **verified false**. No work i
 
 - [ ] **RESEARCH-01**: The Queen decides whether a phase needs research before planning it, states the decision and its reason, and the user can override either way
 - [ ] **RESEARCH-02**: When research is warranted it runs automatically before the plan is drafted — the user does not have to remember to invoke it
-- [ ] **RESEARCH-03**: Findings persist to a durable per-phase artifact and are injected into the planner's context, not pasted by hand
+- [x] **RESEARCH-03**: Findings persist to a durable per-phase artifact and are injected into the planner's context, not pasted by hand
 - [ ] **RESEARCH-04**: Re-planning a phase re-researches rather than reusing stale findings, as `v5.4.0` did
 - [ ] **RESEARCH-05**: Territory survey context, where it exists, reaches both the research worker and the planner
 - [ ] **RESEARCH-06**: Research output feeds the existing decision, assumption and plan-revision model — no new planning store
@@ -249,7 +249,7 @@ Carried from v1.23, still open, not addressed here: `CATALOG-01/02`, `TEST-01/02
 | CONTEXT-09 | Phase 163 | Complete |
 | RESEARCH-01 | Phase 164 | Pending |
 | RESEARCH-02 | Phase 164 | Pending |
-| RESEARCH-03 | Phase 164 | Pending |
+| RESEARCH-03 | Phase 164 | Complete |
 | RESEARCH-04 | Phase 164 | Pending |
 | RESEARCH-05 | Phase 164 | Pending |
 | RESEARCH-06 | Phase 164 | Pending |
