@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -256,4 +257,204 @@ func TestLifecycleWrappersAvoidRetiredDepthVocabulary(t *testing.T) {
 			}
 		}
 	}
+}
+
+// wrapperMinMethodToEnvelopeRatio is the D-09/CMD-02 minimum ratio of
+// stage-skeleton method marker lines to envelope-mechanics marker lines a
+// lifecycle wrapper body must maintain.
+const wrapperMinMethodToEnvelopeRatio = 3
+
+// wrapperRatioOK reports whether methodCount is at least
+// wrapperMinMethodToEnvelopeRatio times envelopeCount.
+//
+// This is a ratio rather than a forbidden-string list deliberately: a
+// forbidden-string list is evaded by rewording ("save the envelope" becomes
+// "persist the response body"), whereas a ratio fails whenever envelope
+// prose grows back regardless of the words chosen, because it measures
+// proportion of the whole body rather than the presence of specific
+// phrases. This is the same proportion/invariant pattern
+// TestBuildWorkerBriefIsMostlyTask established and CLAUDE.md's Definition
+// of Done names as the preferred shape over a named-section grep.
+func wrapperRatioOK(methodCount, envelopeCount int) bool {
+	return methodCount >= wrapperMinMethodToEnvelopeRatio*envelopeCount
+}
+
+// wrapperHostContractPointer is the single manifest-shape reference lifecycle
+// wrappers point at instead of restating envelope mechanics inline (D-03).
+const wrapperHostContractPointer = ".aether/docs/wrapper-host-contract.md"
+
+// TestLifecycleWrappersDoNotParseEnvelopeAsPrimaryJob is the CMD-02 proportion
+// invariant: for every canonical lifecycle wrapper file, stage-skeleton
+// method marker lines must outnumber envelope-mechanics marker lines by at
+// least wrapperMinMethodToEnvelopeRatio to 1. GREEN after Waves 1 and 2;
+// fails if a future edit re-inflates envelope prose or strips method prose.
+func TestLifecycleWrappersDoNotParseEnvelopeAsPrimaryJob(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	for _, verb := range lifecycleWrapperVerbs {
+		for _, path := range canonicalWrapperPaths(repoRoot, verb) {
+			path := path
+			t.Run(verb+"_"+filepath.Base(filepath.Dir(filepath.Dir(path))), func(t *testing.T) {
+				content, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read %s: %v", path, err)
+				}
+				text := string(content)
+				methodCount := countMarkerLines(text, stageSkeletonMarkers())
+				envelopeCount := countMarkerLines(text, envelopeMechanicsMarkers())
+				if !wrapperRatioOK(methodCount, envelopeCount) {
+					t.Errorf(
+						"%s: method count %d is not at least %dx envelope count %d -- CMD-02 requires the wrapper's primary job to be method (the stage skeleton), not envelope parsing",
+						path, methodCount, wrapperMinMethodToEnvelopeRatio, envelopeCount,
+					)
+				}
+			})
+		}
+	}
+
+	// contract_pointer_is_singular: build, plan, and continue each reference
+	// the wrapper-host contract doc exactly once; init references it zero
+	// times because it has no host-manifest step at all.
+	t.Run("contract_pointer_is_singular", func(t *testing.T) {
+		for _, verb := range lifecycleWrapperVerbs {
+			wantCount := 1
+			if verb == "init" {
+				wantCount = 0
+			}
+			for _, path := range canonicalWrapperPaths(repoRoot, verb) {
+				content, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read %s: %v", path, err)
+				}
+				gotCount := strings.Count(string(content), wrapperHostContractPointer)
+				if gotCount != wantCount {
+					t.Errorf(
+						"%s: references %q %d time(s), want %d -- D-03 puts envelope mechanics in the contract doc referenced exactly once per host-backed wrapper, and init has no host-manifest step at all",
+						path, wrapperHostContractPointer, gotCount, wantCount,
+					)
+				}
+			}
+		}
+	})
+
+	// a_wrapper_dominated_by_envelope_prose_would_fail: a synthetic in-memory
+	// body with one method line and five envelope-mechanics lines must be
+	// rejected by the ratio check, mirroring
+	// cmd/plan_wrapper_cards_test.go's a_one_sided_heading_addition_would_fail
+	// negative control and proving this assertion has teeth.
+	t.Run("a_wrapper_dominated_by_envelope_prose_would_fail", func(t *testing.T) {
+		synthetic := strings.Join([]string{
+			"**Purpose:** Do the thing this stage exists for.",
+			"Parse `result.manifest.dispatch_manifest` field by field before doing anything else.",
+			"Parse `result.completion_path` the same way, one field at a time.",
+			"Save the full JSON envelope to a temp file for later inspection.",
+			"Save the JSON envelope again in a second location for safety.",
+			"Write the manifest to a temporary manifest file outside the repo before reading it back.",
+		}, "\n")
+		methodCount := countMarkerLines(synthetic, stageSkeletonMarkers())
+		envelopeCount := countMarkerLines(synthetic, envelopeMechanicsMarkers())
+		if wrapperRatioOK(methodCount, envelopeCount) {
+			t.Fatalf(
+				"expected a synthetic body with %d method line(s) and %d envelope line(s) to fail the ratio check, but it passed",
+				methodCount, envelopeCount,
+			)
+		}
+	})
+}
+
+// requiredStructuredBlockMarkers are the three structured blocks plus the
+// state-carry heading every canonical lifecycle wrapper must carry (CMD-01).
+var requiredStructuredBlockMarkers = []string{
+	"<success_criteria>",
+	"<failure_modes>",
+	"<read_only>",
+	"## Required Cross-Stage State",
+}
+
+// retiredCrossStageVocabulary are the v5.4.0 state-carry names the D-06
+// modernization replaced. A current state-carry section must name none of
+// them.
+var retiredCrossStageVocabulary = []string{
+	"colony_depth",
+	"visual_mode",
+	"verbose_mode",
+	"suggest_enabled",
+	"synthesis_status",
+}
+
+// extractStateCarrySection returns the text running from the
+// "## Required Cross-Stage State" heading (exclusive) to the next level-2
+// heading (exclusive), or "" if the heading is not present.
+func extractStateCarrySection(text string) string {
+	const heading = "## Required Cross-Stage State"
+	idx := strings.Index(text, heading)
+	if idx == -1 {
+		return ""
+	}
+	rest := text[idx+len(heading):]
+	var out []string
+	for _, line := range strings.Split(rest, "\n") {
+		if strings.HasPrefix(line, "## ") {
+			break
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+// backtickedValuePattern matches a single backtick-quoted span, used to
+// count how many concrete values a state-carry section names.
+var backtickedValuePattern = regexp.MustCompile("`[^`]+`")
+
+// TestLifecycleWrappersCarryStructuredBlocks asserts all eight canonical
+// lifecycle wrapper files contain the three structured block markers and the
+// state-carry heading (CMD-01), and that each state-carry section names
+// current vocabulary rather than retired v5.4.0 terms.
+func TestLifecycleWrappersCarryStructuredBlocks(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	for _, verb := range lifecycleWrapperVerbs {
+		for _, path := range canonicalWrapperPaths(repoRoot, verb) {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			text := string(content)
+			for _, marker := range requiredStructuredBlockMarkers {
+				if !strings.Contains(text, marker) {
+					t.Errorf("%s missing structured block marker %q", path, marker)
+				}
+			}
+		}
+	}
+
+	t.Run("state_carry_uses_current_vocabulary", func(t *testing.T) {
+		for _, verb := range lifecycleWrapperVerbs {
+			for _, path := range canonicalWrapperPaths(repoRoot, verb) {
+				content, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read %s: %v", path, err)
+				}
+				section := extractStateCarrySection(string(content))
+				if section == "" {
+					t.Errorf("%s: could not locate a '## Required Cross-Stage State' section", path)
+					continue
+				}
+				if matches := backtickedValuePattern.FindAllString(section, -1); len(matches) < 4 {
+					t.Errorf("%s: state-carry section names only %d backticked value(s), want at least 4", path, len(matches))
+				}
+				for _, retired := range retiredCrossStageVocabulary {
+					if strings.Contains(section, retired) {
+						t.Errorf("%s: state-carry section still names retired vocabulary %q", path, retired)
+					}
+				}
+			}
+		}
+	})
 }
