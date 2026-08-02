@@ -247,6 +247,191 @@ func TestPhaseResearchSectionIsBounded(t *testing.T) {
 	}
 }
 
+// routeSetterDispatchBrief finds the route_setter dispatch in a plan-only
+// result's "dispatches" list and returns its brief text.
+func routeSetterDispatchBrief(t *testing.T, dispatches []interface{}) string {
+	t.Helper()
+	for _, raw := range dispatches {
+		d, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if d["caste"] == "route_setter" {
+			brief, _ := d["brief"].(string)
+			return brief
+		}
+	}
+	t.Fatal("no route_setter dispatch found in result[\"dispatches\"]")
+	return ""
+}
+
+const routeSetterResearchPointerSentence = "\n\n## Phase Research Available\n\nParallel research Scouts are writing per-phase findings to `.aether/data/phase-research/phase-N-research.md` during wave 1. Read each phase's research before finalizing the route, and fold its Recommended Approach and Gotchas into task constraints and hints.\n"
+
+// TestRouteSetterBriefIncludesResearchContent covers Plan 07 Task 1's six
+// behaviours: the Route-Setter's brief carries research content (not just a
+// pointer) once research Scouts have written findings for a phase, stays
+// byte-identical to the old pointer-only output before any research exists
+// on disk, and the injection never leaks into any other dispatch's brief.
+func TestRouteSetterBriefIncludesResearchContent(t *testing.T) {
+	t.Run("no_research_on_disk_brief_unchanged", func(t *testing.T) {
+		saveGlobals(t)
+		setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+
+		// Approve the research batch first -- an unapproved batch dispatches
+		// no research Scouts at all (Plan 05), so the Route-Setter would
+		// never even get the pointer sentence in that state. This test
+		// covers the state that matters: dispatches are approved, but the
+		// Scouts have not written anything to disk yet.
+		runPlanOnly(t, "--refresh", "--depth", "balanced")
+		runPlanResearchApprove(t, "--approve-all")
+
+		result := runPlanOnly(t, "--refresh", "--depth", "balanced")
+		dispatches, ok := result["dispatches"].([]interface{})
+		if !ok {
+			t.Fatalf("result[\"dispatches\"] is not a list: %v", result["dispatches"])
+		}
+		brief := routeSetterDispatchBrief(t, dispatches)
+		if !strings.HasSuffix(brief, routeSetterResearchPointerSentence) {
+			t.Fatalf("brief should be byte-identical to the pointer-only output when no research exists on disk:\n%s", brief)
+		}
+		if strings.Contains(brief, "### Phase") {
+			t.Fatalf("brief should carry no research content when none exists on disk:\n%s", brief)
+		}
+	})
+
+	t.Run("research_content_and_pointer_both_present", func(t *testing.T) {
+		saveGlobals(t)
+		_, root := setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+
+		runPlanOnly(t, "--refresh", "--depth", "balanced")
+		runPlanResearchApprove(t, "--approve-all")
+
+		researchDir := filepath.Join(root, ".aether", "data", "phase-research")
+		if err := os.MkdirAll(researchDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		research := "# Phase 2 Research: Internal cleanup\n\n## Recommended Approach\nUse the existing retry helper in cmd/retry.go rather than a new loop.\n"
+		if err := os.WriteFile(filepath.Join(researchDir, "phase-2-research.md"), []byte(research), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		result := runPlanOnly(t, "--refresh", "--depth", "balanced")
+		dispatches, ok := result["dispatches"].([]interface{})
+		if !ok {
+			t.Fatalf("result[\"dispatches\"] is not a list: %v", result["dispatches"])
+		}
+		brief := routeSetterDispatchBrief(t, dispatches)
+		if !strings.Contains(brief, "Parallel research Scouts are writing per-phase findings") {
+			t.Fatalf("brief missing pointer sentence:\n%s", brief)
+		}
+		if !strings.Contains(brief, "### Phase 2: Internal cleanup") {
+			t.Fatalf("brief missing per-phase heading:\n%s", brief)
+		}
+		if !strings.Contains(brief, "cmd/retry.go") {
+			t.Fatalf("brief missing research body text:\n%s", brief)
+		}
+
+		// Behaviour 6: only the route_setter dispatch's brief is modified.
+		for _, raw := range dispatches {
+			d, ok := raw.(map[string]interface{})
+			if !ok || d["caste"] == "route_setter" {
+				continue
+			}
+			otherBrief, _ := d["brief"].(string)
+			if strings.Contains(otherBrief, "### Phase 2: Internal cleanup") {
+				t.Fatalf("non-route_setter dispatch (stage=%v caste=%v) picked up the route-setter research injection", d["stage"], d["caste"])
+			}
+		}
+	})
+
+	t.Run("three_phases_all_excerpts_appear_headed_by_number", func(t *testing.T) {
+		saveGlobals(t)
+		phases := []colony.Phase{
+			{ID: 1, Name: "Alpha phase", Description: "First phase", Status: colony.PhaseReady},
+			{ID: 2, Name: "Bravo phase", Description: "Second phase", Status: colony.PhaseReady},
+			{ID: 3, Name: "Charlie phase", Description: "Third phase", Status: colony.PhaseReady},
+		}
+		_, root := setupPhaseResearchManifestTest(t, phases)
+
+		runPlanOnly(t, "--refresh", "--depth", "balanced")
+		// None of these generic phase descriptions carry an external-tech
+		// signal, so the Queen's default recommendation is "skip" for all
+		// three -- --flip forces every phase into research regardless of
+		// the default, so this test can exercise all three excerpts.
+		runPlanResearchApprove(t, "--flip", "1,2,3")
+
+		researchDir := filepath.Join(root, ".aether", "data", "phase-research")
+		if err := os.MkdirAll(researchDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		names := []string{"Alpha phase", "Bravo phase", "Charlie phase"}
+		for i, name := range names {
+			id := i + 1
+			content := fmt.Sprintf("# Phase %d Research: %s\n\n## Recommended Approach\nFinding for phase %d.\n", id, name, id)
+			if err := os.WriteFile(filepath.Join(researchDir, fmt.Sprintf("phase-%d-research.md", id)), []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		result := runPlanOnly(t, "--refresh", "--depth", "balanced")
+		dispatches, ok := result["dispatches"].([]interface{})
+		if !ok {
+			t.Fatalf("result[\"dispatches\"] is not a list: %v", result["dispatches"])
+		}
+		brief := routeSetterDispatchBrief(t, dispatches)
+		for i, name := range names {
+			id := i + 1
+			heading := fmt.Sprintf("### Phase %d: %s", id, name)
+			if !strings.Contains(brief, heading) {
+				t.Fatalf("brief missing heading %q:\n%s", heading, brief)
+			}
+			finding := fmt.Sprintf("Finding for phase %d.", id)
+			if !strings.Contains(brief, finding) {
+				t.Fatalf("brief missing finding %q:\n%s", finding, brief)
+			}
+		}
+	})
+}
+
+// TestRouteSetterBriefResearchIsBounded pins T-164-20: appended research
+// across many phases stays within routeSetterResearchBudgetChars, and
+// phases that did not fit are named in a closing line rather than silently
+// dropped.
+func TestRouteSetterBriefResearchIsBounded(t *testing.T) {
+	root := t.TempDir()
+	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
+	if err := os.MkdirAll(researchDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	huge := "# Research\n\n" + strings.Repeat("Paragraph of findings that goes on and on.\n\n", 200)
+	candidates := make([]phaseResearchCandidate, 0, 6)
+	for i := 1; i <= 6; i++ {
+		candidates = append(candidates, phaseResearchCandidate{ID: i, Name: fmt.Sprintf("Phase %d name", i)})
+		if err := os.WriteFile(filepath.Join(researchDir, fmt.Sprintf("phase-%d-research.md", i)), []byte(huge), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	content := renderRouteSetterResearchContent(root, candidates)
+
+	maxClosingLine := len(fmt.Sprintf("_(research for phase(s) %s exceeded the shared research budget — read from `.aether/data/phase-research/`)_\n", "2, 3, 4, 5, 6"))
+	if len(content) > routeSetterResearchBudgetChars+maxClosingLine {
+		t.Fatalf("appended research = %d chars, exceeds budget %d plus one closing line (%d)", len(content), routeSetterResearchBudgetChars, maxClosingLine)
+	}
+	if !strings.Contains(content, "exceeded the shared research budget") {
+		t.Fatalf("content missing closing line naming over-budget phases:\n%s", content)
+	}
+	if !strings.Contains(content, "### Phase 1:") {
+		t.Fatalf("content missing phase 1's excerpt, which should fit within budget:\n%s", content)
+	}
+	if strings.Contains(content, "### Phase 6:") {
+		t.Fatalf("content should not inline phase 6's excerpt once the budget is exceeded:\n%s", content)
+	}
+	if !strings.Contains(content, "6") {
+		t.Fatalf("closing line should name phase 6 as over budget:\n%s", content)
+	}
+}
+
 // seedPhaseResearchDecisions writes recs as fresh unresolved research
 // decisions using the exact builder plan-research-approve reconstructs from.
 func seedPhaseResearchDecisions(t *testing.T, recs []phaseResearchRecommendation) {

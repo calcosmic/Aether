@@ -908,6 +908,55 @@ func runCodexPlanAgentDelegate(root string, state colony.ColonyState, granularit
 	return result, nil
 }
 
+// routeSetterResearchBudgetChars bounds the total phase-research content
+// appended to the Route-Setter's brief across every candidate phase in one
+// planning run. Each phase's individual excerpt is already bounded by
+// phaseResearchBriefBudgetChars (resolvePhaseResearchSection); this is the
+// separate aggregate ceiling for the sum across all phases, since a plan can
+// have far more phases than a single build brief ever touches at once.
+const routeSetterResearchBudgetChars = 12000
+
+// renderRouteSetterResearchContent renders the research excerpt for each
+// candidate phase (ascending phase order) via resolvePhaseResearchSection,
+// each under its own "### Phase N: Name" heading, accumulating until the
+// running total would exceed routeSetterResearchBudgetChars. Phases whose
+// research exists on disk but did not fit inside the budget are named in a
+// closing line rather than silently dropped. Returns "" when no candidate
+// has research on disk yet, so callers must not append an empty section --
+// that is what keeps the brief byte-identical to the pointer-only output on
+// iteration 1, before any research Scout has written anything.
+func renderRouteSetterResearchContent(root string, candidates []phaseResearchCandidate) string {
+	var b strings.Builder
+	total := 0
+	budgetExceeded := false
+	var overBudget []string
+	for _, candidate := range candidates {
+		section := resolvePhaseResearchSection(root, candidate.ID)
+		if section == "" {
+			continue
+		}
+		if budgetExceeded {
+			overBudget = append(overBudget, fmt.Sprintf("%d", candidate.ID))
+			continue
+		}
+		entry := fmt.Sprintf("### Phase %d: %s\n\n%s\n\n", candidate.ID, firstNonEmpty(candidate.Name, "unnamed phase"), section)
+		if total+len(entry) > routeSetterResearchBudgetChars {
+			budgetExceeded = true
+			overBudget = append(overBudget, fmt.Sprintf("%d", candidate.ID))
+			continue
+		}
+		b.WriteString(entry)
+		total += len(entry)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	if len(overBudget) > 0 {
+		b.WriteString(fmt.Sprintf("_(research for phase(s) %s exceeded the shared research budget — read from `.aether/data/phase-research/`)_\n", strings.Join(overBudget, ", ")))
+	}
+	return b.String()
+}
+
 func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
 	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
 		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
@@ -1008,10 +1057,18 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, researchCandidates, survey, opts.Refresh && iteration == 1, researchResult.Approved)
 	if len(researchDispatches) > 0 {
 		// The Route-Setter runs after the research wave; point it at the
-		// fresh RESEARCH.md files so findings shape the route.
+		// fresh RESEARCH.md files so findings shape the route. The pointer
+		// sentence stays first (it is what covers iteration 1, before any
+		// research has been written); the content injection below is
+		// additive and empty on iteration 1, byte-identical to the old
+		// pointer-only output.
+		researchContent := renderRouteSetterResearchContent(root, researchCandidates)
 		for i := range dispatches {
 			if dispatches[i].Caste == "route_setter" {
 				dispatches[i].Brief += "\n\n## Phase Research Available\n\nParallel research Scouts are writing per-phase findings to `.aether/data/phase-research/phase-N-research.md` during wave 1. Read each phase's research before finalizing the route, and fold its Recommended Approach and Gotchas into task constraints and hints.\n"
+				if researchContent != "" {
+					dispatches[i].Brief += "\n" + researchContent
+				}
 			}
 		}
 		dispatches = append(dispatches, researchDispatches...)
