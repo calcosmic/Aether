@@ -22,7 +22,25 @@ intent_refinement:
   - "Separate deterministic scan warnings from AI-synthesized pheromones. README/changelog/license/formatter suggestions are housekeeping, not strategic colony guidance."
   - "Suggest at most 3 synthesized pheromones, and only when they are specific to the user's clarified intent. Let the user approve each one before writing it."
   - "Run `AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\"` after approval."
+wrapper_additions:
+  stage_skeleton: |
+    Every init stage except Required Cross-Stage State and Cross-Platform Drift
+    Guard follows the same shape: a colony beat line, then Purpose, then Reads,
+    then the stage's imperative instructions, then Stop conditions. init spawns
+    no workers, so no stage carries a Spawns line -- that absence is itself
+    useful method, and it is why init.md has no host-manifest step. Required
+    Cross-Stage State carries `refined_goal`, `synthesized_charter`,
+    `synthesized_pheromones`, `selected_colony_mode`, `approved_pheromones`,
+    and `next_action` forward once each is produced.
+  intention_beat: |
+    At Approval, once the user consents, the Queen names the colony's intention
+    -- "Queen has set the colony's intention" followed by the approved
+    refined_goal -- before the runtime init call. The init banner itself is
+    runtime-rendered by init_ceremony.go; the wrapper narrates the moment, it
+    does not draw the banner.
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "Do not claim init spawned implementation workers; it is a guided setup ritual until later lifecycle commands dispatch work."
+  - "All persistence goes through the `aether init` call in Approval (with `--colony-mode` and `--charter-json`) and `aether pheromone-write`; the wrapper never writes state files."
+  - "Do not hand-render the init banner or any runtime-owned ceremony banner; init_ceremony.go owns it."
   - "If docs and runtime disagree, runtime wins."
