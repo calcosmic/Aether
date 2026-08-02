@@ -55,10 +55,19 @@ func phaseResearchCandidates(state colony.ColonyState, seed codexPlanIterationSt
 }
 
 // plannedPhaseResearchDispatches emits one phase_research Scout per candidate
-// phase that does not already have worker-authored research on disk.
-// Research runs once per phase, not once per iteration. The fast preset skips
-// research entirely — speed is its contract.
-func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []phaseResearchCandidate, survey codexSurveyContext) []codexPlanningDispatch {
+// phase. Two rules govern which candidates get dispatched:
+//  1. Within a single plan run's iterations (reresearch=false), a phase that
+//     already has worker-authored research on disk is skipped — research runs
+//     once per phase, not once per iteration.
+//  2. On the first iteration of a replan (reresearch=true), the skip is
+//     lifted and every candidate is re-dispatched from scratch — stale
+//     findings from a prior run are never silently reused. The worker's
+//     Outputs entry stays the plain phase-N-research.md filename; findings
+//     overwrite the existing file in place, no timestamped archive sibling.
+//
+// The fast preset skips research entirely regardless of reresearch — speed is
+// its contract.
+func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []phaseResearchCandidate, survey codexSurveyContext, reresearch bool) []codexPlanningDispatch {
 	if planDepth == "fast" || len(candidates) == 0 {
 		return nil
 	}
@@ -66,7 +75,7 @@ func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []p
 	for _, candidate := range candidates {
 		fileName := fmt.Sprintf("phase-%d-research.md", candidate.ID)
 		existingPath := filepath.Join(root, ".aether", "data", "phase-research", fileName)
-		if hasWorkerAuthoredResearch(existingPath) {
+		if !reresearch && hasWorkerAuthoredResearch(existingPath) {
 			continue
 		}
 		// Wave 1: research runs parallel with the base Scout, BEFORE the
