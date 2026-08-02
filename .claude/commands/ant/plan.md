@@ -8,38 +8,24 @@ You are the **Queen Ant Colony**. Plan through real wrapper-spawned planning wor
 
 Use the Go `aether` CLI as the source of truth. The runtime owns the final plan, canonical artifacts, state transitions, and next-step truth.
 
-## Depth Ceremony
+## Decision Moment 1 — Depth Proposal
 
-Before requesting a planning manifest, choose the planning depth.
+The plan flow has exactly two decision moments; this is the first. Resolve all three depth knobs — granularity, task decomposition depth, and verification depth — together as one tap-to-approve proposal instead of three separate questions.
 
-If `$ARGUMENTS` already contains one of `fast`, `balanced`, `deep`, or `exhaustive`, use that value and state the selection. Otherwise ask the user once:
+If this is a refresh after completed work, keep the current colony and pass `--refresh --revision-type <type> --revision-reason "<why>"` to every `aether host plan` call below. Research and verification revisions also require one or more repository-relative `--revision-evidence <path>` arguments.
 
-1. Fast — sprint granularity, 1-3 phases
-2. Balanced — milestone granularity, 4-7 phases. Recommended default
-3. Deep — quarter granularity, 8-12 phases
-4. Exhaustive — major granularity, 13-20 phases
+1. Request a first manifest with `aether host plan $ARGUMENTS`, omitting `--depth`, `--planning-depth`, and `--verification-depth` unless `$ARGUMENTS` already names them, so the runtime computes its smart defaults and the reason for each.
+2. Print `result.depth_proposal_card` verbatim. Do not restate, summarize, or re-reason the recommendations — the runtime computes the reasons; the wrapper only prints the card it is given (see `.aether/docs/wrapper-runtime-ux-contract.md`).
+3. Accept the recommendations on a single confirmation, or, when the user names a knob and an option number, request a fresh manifest with the corresponding `--depth` / `--planning-depth` / `--verification-depth` flag set to that option's value. Never ask the user to type a value.
 
-Do not continue until a depth is selected.
-
-## Planning Depth
-
-After selecting planning depth, choose task decomposition depth. If `$ARGUMENTS` already contains `light`, `standard`, or `deep` as planning-depth, use it. Otherwise default to `standard`:
-
-1. Light — coarse tasks, 1-3 per plan
-2. Standard — normal task breakdown. Default
-3. Deep — granular subtasks with edge cases and test coverage
+Under `/ant-run`, accept the depth recommendations without prompting.
 
 ## Planning Manifest
 
-If this is a refresh after completed work, keep the current colony and pass
-`--refresh --revision-type <type> --revision-reason "<why>"` to every host-plan
-iteration. Research and verification revisions also require one or more
-repository-relative `--revision-evidence <path>` arguments.
-
-Run the TS host to fetch the authoritative planning manifest for one planning iteration:
+Run the TS host to fetch the authoritative planning manifest for one planning iteration — the same call as Decision Moment 1, now carrying the accepted depth flags:
 
 ```
-aether host plan --depth <choice> --planning-depth <choice2> $ARGUMENTS
+aether host plan --depth <choice> --planning-depth <choice2> --verification-depth <choice3> $ARGUMENTS
 ```
 
 The TS host is the sole entry point to the Go CLI for manifest generation. See `.aether/docs/wrapper-host-contract.md`.
@@ -51,6 +37,17 @@ phases are immutable; Route-Setter must output replacement unfinished phases
 only. The Go finalizer preserves completed evidence and assigns final IDs.
 
 Save the JSON envelope to a temporary manifest file outside `.aether/data/`.
+
+## Decision Moment 2 — Research Batch
+
+The second and final decision moment. Answer the whole per-phase research batch in one interaction, before any worker spawns.
+
+1. Print `result.research_proposal_card` verbatim when it is non-empty. Do not compose your own recommendation or reason.
+2. Approve the batch with `aether plan-research-approve --approve-all`, or flip specific phases with `aether plan-research-approve --flip <ids>`.
+3. Request a fresh manifest afterward (same command as the Planning Manifest section) so the gated `phase_research` dispatches appear, and surface `result.research_warning` whenever `result.research_awaiting_approval` is true — a plan that skipped research because nobody answered must say so.
+4. Fast-depth note: on a fast run the Queen recommends skip for every phase, the batch still appears, and a flipped-on phase researches at the fast preset's 80% / 4-iteration budget.
+
+Under `/ant-run`, answer the research batch with `aether plan-research-approve --auto` and print the returned `log_line` in the run log. Autopilot never pauses for either decision moment.
 
 ## Clarification Gate
 
@@ -71,7 +68,7 @@ This output is display-only; do not parse it as state.
 
 ## Worker Spawning
 
-Dispatch every worker in `plan_manifest.dispatches`, using manifest names, castes, task IDs, briefs, `permission_profile`, and `agent_name` as `subagent_type`. The set is: one Scout in wave 1, zero or more `phase_research` Scouts also in wave 1 (parallel with the base Scout — one per drafted phase, researching its domain), then exactly one Route-Setter in wave 2. Scout's `repository_read_only` profile must remain host-enforced; never substitute an unrestricted agent or a prompt-only promise. Preserve caste-labelled descriptions: `{caste emoji} {Caste} {name}: {task}`.
+Dispatch every worker in `plan_manifest.dispatches`, using manifest names, castes, task IDs, briefs, `permission_profile`, and `agent_name` as `subagent_type`. The set is: one Scout in wave 1, zero or more `phase_research` Scouts also in wave 1 (parallel with the base Scout — one per approved research phase, researching its domain), then exactly one Route-Setter in wave 2. Scout's `repository_read_only` profile must remain host-enforced; never substitute an unrestricted agent or a prompt-only promise. Preserve caste-labelled descriptions: `{caste emoji} {Caste} {name}: {task}`. Research Scouts iterate under a confidence loop; their per-iteration confidence lines are runtime-emitted, not composed by the wrapper.
 
 - Issue parallel workers as visible Task/subagent calls. Do not set `run_in_background`.
 - Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading.
@@ -138,4 +135,7 @@ the matching Codex flow.
 - Do NOT repeat or renumber completed phases during a revision, and do not reuse packets from the superseded revision.
 - Do NOT treat `requires_next_iteration: true` as a completed colony plan.
 - Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table.
+- Do NOT add a third decision moment; the plan flow has exactly two — the depth proposal card and the research batch card.
+- Do NOT route either decision-moment card through `aether discuss`; the discuss redirect remains only for `orchestrator_boundary_guidance`.
+- Do NOT compose depth recommendations, reasons, or research recommendations in this wrapper; print the runtime-emitted card verbatim.
 - If docs and runtime disagree, runtime wins.

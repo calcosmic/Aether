@@ -87,7 +87,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".claude/commands/ant/plan.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"## Depth Ceremony",
+				"## Decision Moment 1 — Depth Proposal",
+				"## Decision Moment 2 — Research Batch",
 				"aether host plan",
 				"result.plan_manifest",
 				"result.planning_manifest",
@@ -101,6 +102,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"Update watch files for tmux visibility",
 				"Write COLONY_STATE.json",
 				".aether/aether-utils.sh",
+				"## Depth Ceremony",
+				"## Planning Depth",
 			},
 		},
 		{
@@ -398,7 +401,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".opencode/commands/ant/plan.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"## Depth Ceremony",
+				"## Decision Moment 1 — Depth Proposal",
+				"## Decision Moment 2 — Research Batch",
 				"aether host plan",
 				"result.plan_manifest",
 				"result.planning_manifest",
@@ -412,6 +416,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"Update watch files for tmux visibility",
 				"Write COLONY_STATE.json",
 				".aether/aether-utils.sh",
+				"## Depth Ceremony",
+				"## Planning Depth",
 			},
 		},
 		{
