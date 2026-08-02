@@ -446,10 +446,10 @@ Plans:
   4. During a live plan run, a confidence readout is visible while research runs, using the existing `confidence-loop.ts` rather than a reimplementation, and the loop stops at the depth-bound target/iteration budget (fast 80%/4, balanced 90%/6, deep 95%/8, exhaustive 99%/12) with an accept override to exit early
   5. At plan time, the Queen proposes plan granularity, task decomposition depth, and verification depth with a plain-English reason each, and the user can accept or change any of them before planning proceeds
 **Plans**: 9 plans in 4 waves
-- [ ] 164-01-PLAN.md -- Territory survey reaches the research Scout; replans re-research (wave 1)
-- [ ] 164-02-PLAN.md -- Queen's research recommendation: hints, reasons, batch card data (wave 1)
-- [ ] 164-03-PLAN.md -- Research evidence scoring and depth-to-target/iteration binding, TS (wave 1)
-- [ ] 164-04-PLAN.md -- Three-knob depth proposal with computed reasons, Go (wave 1)
+- [x] 164-01-PLAN.md -- Territory survey reaches the research Scout; replans re-research (wave 1)
+- [x] 164-02-PLAN.md -- Queen's research recommendation: hints, reasons, batch card data (wave 1)
+- [x] 164-03-PLAN.md -- Research evidence scoring and depth-to-target/iteration binding, TS (wave 1)
+- [x] 164-04-PLAN.md -- Three-knob depth proposal with computed reasons, Go (wave 1)
 - [ ] 164-05-PLAN.md -- Gate research dispatch on the approved batch; record overrides (wave 2)
 - [ ] 164-06-PLAN.md -- Wire ConfidenceLoop into the plan path: live ceremony, early accept (wave 2)
 - [ ] 164-07-PLAN.md -- Research reaches the planner's context; research failure is loud (wave 3)
@@ -573,7 +573,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
-| 164. Research Feeds Planning | v1.25 | 0/TBD | Not started | - |
+| 164. Research Feeds Planning | v1.25 | 4/9 | In Progress|  |
 | 165. Core Lifecycle Commands | v1.25 | 0/TBD | Not started | - |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
