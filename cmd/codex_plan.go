@@ -246,6 +246,10 @@ type codexPlanManifest struct {
 	BoundaryQuestionsCreated  int                              `json:"boundary_questions_created,omitempty"`
 	BoundaryQuestionsExisting int                              `json:"boundary_questions_existing,omitempty"`
 	OrchestratorGuidance      *orchestratorBoundaryGuidance    `json:"orchestrator_boundary_guidance,omitempty"`
+	ResearchProposal          []phaseResearchRecommendation    `json:"research_proposal,omitempty"`
+	ResearchProposalCard      string                           `json:"research_proposal_card,omitempty"`
+	ResearchAwaitingApproval  bool                             `json:"research_awaiting_approval,omitempty"`
+	ResearchWarning           string                           `json:"research_warning,omitempty"`
 }
 
 type codexPlanIterationState struct {
@@ -782,6 +786,101 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	return result, nil
 }
 
+// phaseResearchApprovalWarning is the loud, non-blocking warning D-08 and
+// T-164-15 require when the Queen's research batch has not been answered by
+// anyone yet. Research is enrichment, not a gate (Phase 160 classification):
+// this never becomes an error and never blocks manifest generation.
+const phaseResearchApprovalWarning = "research batch not answered — no phase research will run; answer with `aether plan-research-approve --approve-all`"
+
+// phaseResearchProposalResult carries the research proposal fields the
+// plan-only result map and manifest expose in both the existing-plan and
+// fresh-plan branches (RESEARCH-01, RESEARCH-02), plus the approved-phase map
+// dispatch gating consumes (Plan 05 Task 3).
+type phaseResearchProposalResult struct {
+	Proposal         phaseResearchProposal
+	Card             string
+	AwaitingApproval bool
+	Warning          string
+	Approved         map[int]bool
+}
+
+// resultFields renders r as the four json-tagged keys the plan-only result
+// map and manifest struct share: research_proposal, research_proposal_card,
+// research_awaiting_approval, research_warning.
+func (r phaseResearchProposalResult) resultFields() map[string]interface{} {
+	return map[string]interface{}{
+		"research_proposal":          r.Proposal.Phases,
+		"research_proposal_card":     r.Card,
+		"research_awaiting_approval": r.AwaitingApproval,
+		"research_warning":           r.Warning,
+	}
+}
+
+// computePhaseResearchProposalFields computes the research proposal, its
+// rendered tick-to-approve card, and the approval-state fields. When persist
+// is true, the current run's unresolved research-decisions supersede any
+// previous unresolved decisions for the same phases (D-06 -- a fresh manifest
+// re-proposes); resolved decisions are always left untouched so a second
+// manifest fetched after the batch was answered does not lose the answer.
+// Research is enrichment, never a gate (D-08 / Phase 160 classification): a
+// save failure here is swallowed, never returned as an error.
+func computePhaseResearchProposalFields(planDepth string, replan bool, survey codexSurveyContext, candidates []phaseResearchCandidate, phases []colony.Phase, persist bool) phaseResearchProposalResult {
+	proposal := computePhaseResearchProposal(planDepth, replan, survey, candidates, phases)
+
+	var file PendingDecisionFile
+	if store != nil {
+		if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+			file = PendingDecisionFile{Decisions: []PendingDecision{}}
+		}
+	}
+
+	if persist && store != nil && len(proposal.Phases) > 0 {
+		scope := loadCurrentPendingDecisionScope()
+		kept := make([]PendingDecision, 0, len(file.Decisions))
+		for _, d := range file.Decisions {
+			if d.Type == phaseResearchDecisionType && !d.Resolved && pendingDecisionMatchesScope(d, scope) {
+				continue // superseded by the fresh proposal below (D-06)
+			}
+			kept = append(kept, d)
+		}
+		for _, rec := range proposal.Phases {
+			decision := newPhaseResearchDecision(rec)
+			stampPendingDecisionScope(&decision, scope)
+			kept = append(kept, decision)
+		}
+		file.Decisions = kept
+		_ = store.SaveJSON(pendingDecisionsFile, file)
+	}
+
+	resolved := resolvePhaseResearchDecisions(file)
+	approved := map[int]bool{}
+	anyResolved := false
+	for _, rec := range proposal.Phases {
+		direction, ok := resolved[rec.PhaseID]
+		if !ok {
+			continue
+		}
+		anyResolved = true
+		if direction == "research" {
+			approved[rec.PhaseID] = true
+		}
+	}
+
+	awaitingApproval := len(proposal.Phases) > 0 && !anyResolved
+	warning := ""
+	if awaitingApproval {
+		warning = phaseResearchApprovalWarning
+	}
+
+	return phaseResearchProposalResult{
+		Proposal:         proposal,
+		Card:             renderPhaseResearchProposalBlock(proposal),
+		AwaitingApproval: awaitingApproval,
+		Warning:          warning,
+		Approved:         approved,
+	}
+}
+
 func runCodexPlanAgentDelegate(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
 	result, err := runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
 	if err != nil {
@@ -860,6 +959,13 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		}
 		addBoundaryQuestionResultFields(result, boundary)
 		addOrchestratorBoundaryGuidance(result, "plan", state, nextCommand, boundary.Questions)
+		if survey, surveyErr := loadCodexSurveyContext(root); surveyErr == nil {
+			researchCandidates := phaseResearchCandidates(state, codexPlanIterationState{})
+			researchResult := computePhaseResearchProposalFields(planDepth, false, survey, researchCandidates, state.Plan.Phases, false)
+			for k, v := range researchResult.resultFields() {
+				result[k] = v
+			}
+		}
 		return result, nil
 	}
 	revisionContext, err := buildPlanRevisionContext(root, state, opts)
@@ -897,7 +1003,9 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			dispatches[i].Brief += iterationAppendix
 		}
 	}
-	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, phaseResearchCandidates(state, iterationSeed), survey, opts.Refresh && iteration == 1)
+	researchCandidates := phaseResearchCandidates(state, iterationSeed)
+	researchResult := computePhaseResearchProposalFields(planDepth, opts.Refresh, survey, researchCandidates, state.Plan.Phases, true)
+	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, researchCandidates, survey, opts.Refresh && iteration == 1)
 	if len(researchDispatches) > 0 {
 		// The Route-Setter runs after the research wave; point it at the
 		// fresh RESEARCH.md files so findings shape the route.
@@ -914,41 +1022,45 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	)
 	dispatchContract := planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
 	manifest := codexPlanManifest{
-		Goal:                 *state.Goal,
-		Root:                 root,
-		GeneratedAt:          generatedAt.Format(time.RFC3339),
-		BaseRevisionID:       activePlanRevisionID(state.Plan),
-		BasePlanStateHash:    basePlanStateHash,
-		ColonyMode:           string(state.EffectiveColonyMode()),
-		Refresh:              opts.Refresh,
-		Revision:             revisionContext,
-		ExistingPlan:         len(state.Plan.Phases) > 0,
-		ExistingPhaseCount:   len(state.Plan.Phases),
-		Synthetic:            opts.Synthetic,
-		SyntheticWarning:     planningSyntheticWarningForMode(opts.Synthetic),
-		PlanningRunID:        iterationSeed.PlanningRunID,
-		Iteration:            iteration,
-		TargetConfidence:     planningLoop.TargetConfidence,
-		MaxIterations:        planningLoop.MaxIterations,
-		PreviousConfidence:   iterationSeed.PreviousConfidence,
-		PreviousEvidenceHash: iterationSeed.PreviousEvidenceHash,
-		SelectedGaps:         append([]string{}, iterationSeed.SelectedGaps...),
-		PreviousPlanDraft:    iterationSeed.PreviousPlanDraft,
-		ExpectedWorkers:      append([]codexPlanningDispatch{}, dispatches...),
-		Depth:                planDepth,
-		Granularity:          string(granularity),
-		GranularityMin:       granularityMin(granularity),
-		GranularityMax:       granularityMax(granularity),
-		PlanningDepth:        planningDepth,
-		VerificationDepth:    verificationDepth,
-		PlanningLoop:         planningLoop,
-		Survey:               survey,
-		Dispatches:           dispatches,
-		Snapshots:            artifactSnapshots,
-		DispatchMode:         "plan-only",
-		DispatchContract:     dispatchContract,
-		FinalizeSurface:      "pending",
-		RequiresFinalizer:    true,
+		Goal:                     *state.Goal,
+		Root:                     root,
+		GeneratedAt:              generatedAt.Format(time.RFC3339),
+		BaseRevisionID:           activePlanRevisionID(state.Plan),
+		BasePlanStateHash:        basePlanStateHash,
+		ColonyMode:               string(state.EffectiveColonyMode()),
+		Refresh:                  opts.Refresh,
+		Revision:                 revisionContext,
+		ExistingPlan:             len(state.Plan.Phases) > 0,
+		ExistingPhaseCount:       len(state.Plan.Phases),
+		Synthetic:                opts.Synthetic,
+		SyntheticWarning:         planningSyntheticWarningForMode(opts.Synthetic),
+		PlanningRunID:            iterationSeed.PlanningRunID,
+		Iteration:                iteration,
+		TargetConfidence:         planningLoop.TargetConfidence,
+		MaxIterations:            planningLoop.MaxIterations,
+		PreviousConfidence:       iterationSeed.PreviousConfidence,
+		PreviousEvidenceHash:     iterationSeed.PreviousEvidenceHash,
+		SelectedGaps:             append([]string{}, iterationSeed.SelectedGaps...),
+		PreviousPlanDraft:        iterationSeed.PreviousPlanDraft,
+		ExpectedWorkers:          append([]codexPlanningDispatch{}, dispatches...),
+		Depth:                    planDepth,
+		Granularity:              string(granularity),
+		GranularityMin:           granularityMin(granularity),
+		GranularityMax:           granularityMax(granularity),
+		PlanningDepth:            planningDepth,
+		VerificationDepth:        verificationDepth,
+		PlanningLoop:             planningLoop,
+		Survey:                   survey,
+		Dispatches:               dispatches,
+		Snapshots:                artifactSnapshots,
+		DispatchMode:             "plan-only",
+		DispatchContract:         dispatchContract,
+		FinalizeSurface:          "pending",
+		RequiresFinalizer:        true,
+		ResearchProposal:         researchResult.Proposal.Phases,
+		ResearchProposalCard:     researchResult.Card,
+		ResearchAwaitingApproval: researchResult.AwaitingApproval,
+		ResearchWarning:          researchResult.Warning,
 	}
 
 	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
@@ -992,6 +1104,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"dispatch_contract":          dispatchContract,
 		"unresolved_clarifications":  unresolvedClarifications,
 		"clarification_warning":      clarificationWarning,
+		"research_proposal":          researchResult.Proposal.Phases,
+		"research_proposal_card":     researchResult.Card,
+		"research_awaiting_approval": researchResult.AwaitingApproval,
+		"research_warning":           researchResult.Warning,
 		"next":                       "spawn wrapper planning agents, then record completion",
 		"wrapper_contract": map[string]interface{}{
 			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep> --target <70-99> --max-iterations <2-12>",

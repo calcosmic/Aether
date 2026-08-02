@@ -444,3 +444,185 @@ func TestPlanResearchApproveRecordsDecisions(t *testing.T) {
 		}
 	})
 }
+
+// researchProposalTestPhases returns two phases: one with an external-tech
+// signal absent from any survey (recommends "research" via the no_survey
+// signal) and one with no external-tech signal (recommends "skip").
+func researchProposalTestPhases() []colony.Phase {
+	return []colony.Phase{
+		{ID: 1, Name: "Wire billing API", Description: "Integrate with the external billing API", Status: colony.PhaseReady},
+		{ID: 2, Name: "Internal cleanup", Description: "Refactor internal helper functions", Status: colony.PhaseReady},
+	}
+}
+
+func setupPhaseResearchManifestTest(t *testing.T, phases []colony.Phase) (dataDir, root string) {
+	t.Helper()
+	dataDir = setupBuildFlowTest(t)
+	root = filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Wire the exporter to the new billing API"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: phases},
+	})
+	return dataDir, root
+}
+
+func runPlanOnly(t *testing.T, args ...string) map[string]interface{} {
+	t.Helper()
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	rootCmd.SetArgs(append([]string{"plan", "--plan-only"}, args...))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --plan-only %v failed: %v", args, err)
+	}
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got %v", env)
+	}
+	return env["result"].(map[string]interface{})
+}
+
+// TestPlanManifestCarriesResearchProposal covers behaviours 1, 2 and 6 of
+// Plan 05 Task 2: the plan-only result map carries a non-empty research
+// proposal and rendered card whenever candidate phases exist, in both the
+// existing-plan and fresh-plan branches, and a fast run still emits both.
+func TestPlanManifestCarriesResearchProposal(t *testing.T) {
+	t.Run("fresh_plan_branch_with_candidates", func(t *testing.T) {
+		saveGlobals(t)
+		setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+
+		result := runPlanOnly(t, "--refresh", "--depth", "balanced")
+		proposal, ok := result["research_proposal"].([]interface{})
+		if !ok || len(proposal) != 2 {
+			t.Fatalf("research_proposal = %v, want 2 entries", result["research_proposal"])
+		}
+		card, _ := result["research_proposal_card"].(string)
+		if card == "" || !strings.Contains(card, "Research proposal") {
+			t.Fatalf("research_proposal_card = %q, want non-empty proposal header", card)
+		}
+		manifest, ok := result["plan_manifest"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("plan_manifest missing from result: %+v", result)
+		}
+		if _, ok := manifest["research_proposal"].([]interface{}); !ok {
+			t.Fatalf("manifest missing research_proposal: %+v", manifest)
+		}
+		if manifestCard, _ := manifest["research_proposal_card"].(string); manifestCard == "" {
+			t.Fatalf("manifest research_proposal_card is empty")
+		}
+	})
+
+	t.Run("existing_plan_early_return_branch", func(t *testing.T) {
+		saveGlobals(t)
+		setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+
+		result := runPlanOnly(t)
+		if existing, _ := result["existing_plan"].(bool); !existing {
+			t.Fatalf("existing_plan = %v, want true (early-return branch)", result["existing_plan"])
+		}
+		proposal, ok := result["research_proposal"].([]interface{})
+		if !ok || len(proposal) != 2 {
+			t.Fatalf("research_proposal = %v, want 2 entries in early-return branch", result["research_proposal"])
+		}
+		card, _ := result["research_proposal_card"].(string)
+		if card == "" {
+			t.Fatalf("research_proposal_card empty in early-return branch")
+		}
+		if _, ok := result["research_awaiting_approval"]; !ok {
+			t.Fatalf("research_awaiting_approval missing from early-return branch result")
+		}
+		if _, ok := result["research_warning"]; !ok {
+			t.Fatalf("research_warning missing from early-return branch result")
+		}
+	})
+
+	t.Run("fast_depth_still_emits_proposal", func(t *testing.T) {
+		saveGlobals(t)
+		setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+
+		result := runPlanOnly(t, "--refresh", "--depth", "fast")
+		proposal, ok := result["research_proposal"].([]interface{})
+		if !ok || len(proposal) != 2 {
+			t.Fatalf("fast depth research_proposal = %v, want 2 entries so the user can flip one on", result["research_proposal"])
+		}
+		for _, entry := range proposal {
+			rec := entry.(map[string]interface{})
+			if rec["recommend"] != "skip" {
+				t.Fatalf("fast depth recommendation = %v, want skip (D-15)", rec["recommend"])
+			}
+		}
+		card, _ := result["research_proposal_card"].(string)
+		if !strings.Contains(card, "Flip:") {
+			t.Fatalf("fast depth card missing flip instruction: %q", card)
+		}
+	})
+}
+
+// TestPlanManifestWarnsWhenResearchBatchUnanswered covers behaviours 3, 4 and
+// 5 of Plan 05 Task 2: an unanswered batch warns loudly without erroring, a
+// resolved batch clears the warning, and re-running the manifest supersedes
+// rather than accumulates unresolved decisions for the same phase.
+func TestPlanManifestWarnsWhenResearchBatchUnanswered(t *testing.T) {
+	t.Run("unanswered_batch_warns_never_errors", func(t *testing.T) {
+		saveGlobals(t)
+		setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+
+		result := runPlanOnly(t, "--refresh", "--depth", "balanced")
+		if awaiting, _ := result["research_awaiting_approval"].(bool); !awaiting {
+			t.Fatalf("research_awaiting_approval = %v, want true before anyone answers", result["research_awaiting_approval"])
+		}
+		warning, _ := result["research_warning"].(string)
+		if warning == "" || !strings.Contains(warning, "plan-research-approve") {
+			t.Fatalf("research_warning = %q, want a non-empty warning naming plan-research-approve", warning)
+		}
+	})
+
+	t.Run("resolved_batch_clears_warning", func(t *testing.T) {
+		saveGlobals(t)
+		setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+
+		runPlanOnly(t, "--refresh", "--depth", "balanced")
+		runPlanResearchApprove(t, "--approve-all")
+
+		result := runPlanOnly(t, "--refresh", "--depth", "balanced")
+		if awaiting, _ := result["research_awaiting_approval"].(bool); awaiting {
+			t.Fatalf("research_awaiting_approval = %v, want false once decisions are resolved", result["research_awaiting_approval"])
+		}
+		if warning, _ := result["research_warning"].(string); warning != "" {
+			t.Fatalf("research_warning = %q, want empty once decisions are resolved", warning)
+		}
+	})
+
+	t.Run("rerun_supersedes_not_accumulates", func(t *testing.T) {
+		saveGlobals(t)
+		setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+
+		runPlanOnly(t, "--refresh", "--depth", "balanced")
+		runPlanOnly(t, "--refresh", "--depth", "balanced")
+
+		var file PendingDecisionFile
+		if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+			t.Fatalf("load decisions: %v", err)
+		}
+		unresolvedByPhase := map[int]int{}
+		for _, d := range file.Decisions {
+			if d.Type != phaseResearchDecisionType || d.Resolved || d.Phase == nil {
+				continue
+			}
+			unresolvedByPhase[*d.Phase]++
+		}
+		for phase, count := range unresolvedByPhase {
+			if count != 1 {
+				t.Fatalf("phase %d has %d unresolved research-decisions after two manifest runs, want 1 (no accumulation)", phase, count)
+			}
+		}
+		if len(unresolvedByPhase) != 2 {
+			t.Fatalf("expected unresolved decisions for 2 phases, got %v", unresolvedByPhase)
+		}
+	})
+}
