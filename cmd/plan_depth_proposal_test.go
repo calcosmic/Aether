@@ -154,3 +154,68 @@ func TestDepthProposalReasons(t *testing.T) {
 		t.Errorf("expected explicit verification_depth reason to mention explicit selection, got %q", explicitProposal.Knobs[2].Reason)
 	}
 }
+
+func TestDepthProposalCardIsSelectionOnly(t *testing.T) {
+	state := colony.ColonyState{Goal: strPtr("Add a login form")}
+	p := computeDepthProposal(state, colony.GranularityMilestone, "standard", "heavy", false, false)
+	card := renderDepthProposalCard(p)
+
+	if card == "" {
+		t.Fatal("expected non-empty card for a three-knob proposal")
+	}
+
+	acceptCount := strings.Count(card, "Accept all:")
+	if acceptCount != 1 {
+		t.Errorf("expected exactly 1 'Accept all:' line, got %d", acceptCount)
+	}
+	changeCount := strings.Count(card, "Change one:")
+	if changeCount != 1 {
+		t.Errorf("expected exactly 1 'Change one:' line, got %d", changeCount)
+	}
+
+	var acceptLine string
+	for _, line := range strings.Split(card, "\n") {
+		if strings.Contains(line, "Accept all:") {
+			acceptLine = line
+		}
+	}
+	if acceptLine == "" {
+		t.Fatal("could not find Accept all: line")
+	}
+	for _, flag := range []string{"--depth", "--planning-depth", "--verification-depth"} {
+		if !strings.Contains(acceptLine, flag) {
+			t.Errorf("expected accept line to contain %q, got %q", flag, acceptLine)
+		}
+	}
+	if !strings.Contains(acceptLine, "milestone") {
+		t.Errorf("expected accept line to contain concrete granularity value 'milestone', got %q", acceptLine)
+	}
+	if !strings.Contains(acceptLine, "standard") {
+		t.Errorf("expected accept line to contain concrete planning-depth value 'standard', got %q", acceptLine)
+	}
+	if !strings.Contains(acceptLine, "heavy") {
+		t.Errorf("expected accept line to contain concrete verification-depth value 'heavy', got %q", acceptLine)
+	}
+
+	reasonCount := strings.Count(card, "Reason:")
+	if reasonCount != 3 {
+		t.Errorf("expected exactly 3 'Reason:' lines for a three-knob proposal, got %d", reasonCount)
+	}
+
+	markedCount := strings.Count(card, "> ")
+	if markedCount != len(p.Knobs) {
+		t.Errorf("expected %d marked-recommended lines, got %d", len(p.Knobs), markedCount)
+	}
+
+	lowerCard := strings.ToLower(card)
+	for _, forbidden := range []string{"enter a value", "type a", "describe", "free text"} {
+		if strings.Contains(lowerCard, forbidden) {
+			t.Errorf("card must not contain free-text prompt language, found %q", forbidden)
+		}
+	}
+
+	empty := renderDepthProposalCard(depthProposal{})
+	if empty != "" {
+		t.Errorf("expected empty proposal to render as empty string, got %q", empty)
+	}
+}
