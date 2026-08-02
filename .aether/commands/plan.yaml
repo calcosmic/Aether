@@ -43,6 +43,10 @@ wrapper_additions:
     3. Summarize selected depth, planning depth, phase count, confidence, `planning_loop.stop_reason`, and which planning agents ran.
     4. Route first to `/ant-build 1` or the runtime-surfaced next build command.
     5. If finalization blocks, follow the runtime recovery command first.
+  stage_skeleton: |
+    Every stage of plan.md follows the same D-05 order: one colony beat line, then Purpose, then Reads, then Spawns where the stage spawns anything, then the stage's imperative instructions and command blocks, then Stop conditions. `## Required Cross-Stage State` sits between the opening prose and Decision Moment 1 and names the values carried across every stage of one planning iteration: `planning_run_id`, `iteration`, `target_confidence`, `manifest_file`, `selected_gaps`, `stop_reason`, `next_action`.
+  termination_conditions: |
+    The planning loop enforces four ways one `aether host plan` iteration cycle can end: the loop exits when the selected target confidence is reached; stall detection ends a loop whose confidence has stopped improving; an iteration cap bounds how many passes the loop may take; and an escape hatch lets the user accept the current best plan below target rather than continuing. No numeric thresholds are named in wrapper prose — the runtime enforces them.
 guardrails:
   - "The TS host is the sole entry point to the Go CLI; respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
   - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest — always fresh."
@@ -61,4 +65,5 @@ guardrails:
   - "Do NOT add a third decision moment; the plan flow has exactly two — the depth proposal card and the research batch card."
   - "Do NOT route either decision-moment card through `aether discuss`; the discuss redirect remains only for `orchestrator_boundary_guidance`."
   - "Do NOT compose depth recommendations, reasons, or research recommendations in the wrapper; print the runtime-emitted card verbatim."
+  - "Do NOT hand-render any visual that `aether ceremony` renders."
   - "If docs and runtime disagree, runtime wins."
