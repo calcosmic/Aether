@@ -161,3 +161,51 @@ func computeDepthProposal(state colony.ColonyState, granularity colony.PlanGranu
 		},
 	}
 }
+
+// depthProposalKnobRecommended returns the recommended value for the knob
+// with the given key, or the empty string when no such knob exists.
+func depthProposalKnobRecommended(p depthProposal, key string) string {
+	for _, k := range p.Knobs {
+		if k.Key == key {
+			return k.Recommended
+		}
+	}
+	return ""
+}
+
+// renderDepthProposalCard renders the Queen's three-knob depth proposal as
+// a single selection-only card (D-13's hard constraint): every option is a
+// numbered line, the recommended option is visibly marked, and the card
+// closes with exactly one accept line (all three recommended values
+// already filled in, zero typing required) and one change instruction
+// phrased as selecting a knob and an option number. No free-text prompt
+// ever appears in the card.
+func renderDepthProposalCard(p depthProposal) string {
+	if len(p.Knobs) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("Queen's depth proposal — three knobs, one card:\n")
+	for _, k := range p.Knobs {
+		fmt.Fprintf(&b, "\n%s\n", k.Title)
+		for i, opt := range k.Options {
+			marker := "  "
+			if opt.Recommended {
+				marker = "> "
+			}
+			fmt.Fprintf(&b, "%s%d. %s\n", marker, i+1, opt.Label)
+		}
+		fmt.Fprintf(&b, "  Reason: %s\n", k.Reason)
+	}
+
+	granularity := depthProposalKnobRecommended(p, "granularity")
+	planning := depthProposalKnobRecommended(p, "planning_depth")
+	verification := depthProposalKnobRecommended(p, "verification_depth")
+
+	fmt.Fprintf(&b, "\nAccept all: aether host plan --depth %s --planning-depth %s --verification-depth %s\n",
+		granularity, planning, verification)
+	b.WriteString("Change one: reply with the knob name and the option number (for example: verification-depth 3)\n")
+
+	return b.String()
+}
