@@ -1,14 +1,18 @@
 ---
 phase: 164-research-feeds-planning
-reviewed: 2026-08-02T13:30:43Z
+reviewed: 2026-08-02T16:28:17Z
 depth: standard
-files_reviewed: 26
+files_reviewed: 32
 files_reviewed_list:
   - .aether/commands/plan.yaml
   - .aether/ts-host/src/host.ts
   - .aether/ts-host/src/research-confidence.ts
+  - .aether/ts-host/src/types.ts
+  - .aether/ts-host/src/worker-dispatch.ts
+  - .aether/ts-host/test/dispatch-field-fidelity.test.ts
   - .aether/ts-host/test/research-confidence-loop.test.ts
   - .aether/ts-host/test/research-confidence.test.ts
+  - .aether/ts-host/test/research-escalation-degrade.test.ts
   - .claude/commands/ant-plan.md
   - .claude/commands/ant/plan.md
   - .opencode/commands/ant/plan.md
@@ -21,6 +25,7 @@ files_reviewed_list:
   - cmd/phase_research_dispatch_test.go
   - cmd/phase_research_escalate_test.go
   - cmd/phase_research_escalate.go
+  - cmd/phase_research_permission_boundary_test.go
   - cmd/phase_research_preserve_test.go
   - cmd/phase_research.go
   - cmd/plan_depth_proposal_manifest_test.go
@@ -31,179 +36,153 @@ files_reviewed_list:
   - cmd/platform_doc_hygiene_test.go
   - pkg/codex/permission_profile.go
 findings:
-  critical: 3
+  critical: 0
   warning: 7
-  info: 6
-  total: 16
+  info: 4
+  total: 11
 status: issues_found
 ---
 
-# Phase 164: Code Review Report
+# Phase 164: Code Review Report (Re-review after gap closure)
 
-**Reviewed:** 2026-08-02T13:30:43Z
+**Reviewed:** 2026-08-02T16:28:17Z
 **Depth:** standard
-**Files Reviewed:** 26
+**Files Reviewed:** 32
 **Status:** issues_found
 
 ## Summary
 
-Phase 164 wires a research decision/confidence/escalation pipeline through the Go runtime and TypeScript host: a batched research proposal (Queen recommends research/skip per phase), a `plan-research-approve` verb, approval-gated research Scout dispatches, an evidence-based per-phase confidence loop, and Scout-to-Oracle escalation on stalled deep/exhaustive research.
+Re-review of Phase 164 (research-feeds-planning) covering the original implementation plus gap-closure plans 164-10 (`toWorkerDispatches` field fidelity) and 164-11 (`plan-research-escalate` fresh-colony fix, escalation degrade-to-warning).
 
-The Go-side proposal/decision/gating logic is solid and well-tested. However, the runtime execution path — the TS host actually dispatching the research Scouts this phase gates — has three critical defects that the passing test suites cannot see, because every test mocks or simulates the dispatch boundary. This is precisely the failure class this project's own CLAUDE.md documents: the machinery exists but has never been proven by execution. Specifically: (1) the phase downgraded Scout's canonical permission profile without updating the TS-side fallback, so every real Scout dispatched through `aether host plan` now fails a strict profile-equality check in the Go adapter; (2) the TS host drops the `brief` field when converting plan dispatches, so research Scouts never receive the six-section mission the confidence scorer grades against; (3) the escalation command resolves phases from colony state, which is empty during a fresh colony's planning loop — the only time research dispatches exist — so a stalled deep/exhaustive phase crashes the entire plan run.
+**Verification performed:**
+- `go build ./cmd/aether` and `go vet ./cmd ./pkg/codex` — clean.
+- All phase-relevant Go tests (`PhaseResearch|PlanResearch|DepthProposal|PlanWrapper|OracleEscalation|...`) — pass.
+- All four TS test files (37 tests) run against real `src/` — pass.
+- `tsc --noEmit` — clean.
+- `dist/` verified in sync with `src/`: `dist/host.js` and `dist/worker-dispatch.js` carry the CR-01/CR-03 fixes (`permission_profile` copy-through at dist/host.js:412, degraded `plan-research-escalate` at dist/host.js:754-769); `dist/types.d.ts` matches `src/types.ts`.
+- All three prior critical findings (CR-01 dropped permission_profile, CR-02 dropped brief/silent field drops, CR-03 escalation crash) are confirmed fixed in source, covered by non-mocked tests (`dispatch-field-fidelity.test.ts` drives the real exported function; `research-escalation-degrade.test.ts` drives the real Go binary against a stateless cwd), and present in the compiled dist. See the verification table at the end.
 
-Warnings cover state mutation on the plan-only/dry-run path, a flip-typo failure mode that silently commits the whole batch, a dead-end approval flow on the existing-plan branch, a citation "verifier" that verifies nothing, and a convergence-free iteration loop.
-
-## Critical Issues
-
-### CR-01: Scout permission downgrade breaks every real Scout dispatch on the TS-host path
-
-**File:** `pkg/codex/permission_profile.go:53-55` (change site), `.aether/ts-host/src/host.ts:437-477` (`toWorkerDispatches`), `.aether/ts-host/src/worker-dispatch.ts:389-401` (fallback, out-of-list fix site)
-**Issue:** This phase removed `"scout"` from `repositoryReadOnlyCastes`, making Scout's canonical profile `workspace_write` (necessary so research Scouts can write `.aether/data/phase-research/`). But two consumers were not updated:
-
-1. `toWorkerDispatches` in host.ts does not copy `permission_profile` from the manifest dispatch (the Go manifest carries it — `codexPlanningDispatch.PermissionProfile`, stamped by `attachPlanningDispatchSkillAssignments`), so every plan/continue dispatch reaches `dispatchRealWorker` with `permission_profile` undefined.
-2. `dispatchRealWorker` then falls back to the TS-side `permissionProfileForCaste`, which still maps `scout` → `repository_read_only`.
-
-The Go adapter (`cmd/internal_worker_adapter.go:377` → `codex.ResolvePermissionProfile`) requires the requested profile to equal the canonical one exactly and errors otherwise ("permission profile mismatch for caste \"scout\": requested \"repository_read_only\" but canonical profile is \"workspace_write\""). Result: on any non-simulated `aether host plan` run, the base Scout and every research Scout dispatch fails immediately (marked `status: "failed"`, worker never runs). The research confidence loop then grades a nonexistent artifact at ~30 each round until it stalls. Before this phase, the TS fallback happened to match the canonical profile, which is why dropping `permission_profile` in `toWorkerDispatches` was latent rather than fatal. All ts-host tests mock `dispatchWorkers` or run `--simulate`, so nothing catches this.
-**Fix:** Copy the manifest profile through the conversion, and align the TS fallback:
-```ts
-// host.ts toWorkerDispatches
-if (dispatch.permission_profile !== undefined) {
-  workerDispatch.permission_profile = dispatch.permission_profile;
-}
-```
-```ts
-// worker-dispatch.ts permissionProfileForCaste — scout is no longer read-only
-const readOnly = normalized === "includer";
-```
-Add a non-mocked test that runs a plan dispatch request through `internalWorkerConfig`/`ResolvePermissionProfile` with the TS-built request for caste `scout` — per the project's Definition of Done, a command that fails when the two sides disagree.
-
-### CR-02: `toWorkerDispatches` drops `brief` — research Scouts and escalated Oracles never receive their mission
-
-**File:** `.aether/ts-host/src/host.ts:437-477` (`toWorkerDispatches`), consumed at `host.ts:821` and `host.ts:914` (`runResearchConfidenceLoop`), `.aether/ts-host/src/worker-dispatch.ts:278` (`task_brief: dispatch.task_brief ?? dispatch.task`)
-**Issue:** Go emits the composed research mission in `codexPlanningDispatch.Brief` (JSON key `brief`): the six-section artifact template, territory-survey framing, scope constraints, and — for escalation — the "Escalation Notice" preamble (`renderPhaseResearchBrief`, `phaseResearchEscalationDispatch`). `toWorkerDispatches` copies `task_brief` (a host-injected field that plan dispatches never have) but never maps `brief`, so `dispatchRealWorker` sends `task_brief = dispatch.task` — the one-line "Research domain knowledge for phase 2: …". The worker is therefore never told the six-section contract that `ResearchConfidenceEvaluator` grades against (`REQUIRED_SECTIONS`, citation format, Files-to-Study). The confidence loop this phase built scores workers against a spec they never saw; the Oracle escalation loses both its stall context and the entire research mission. The wrapper-platform path (Claude/OpenCode Task spawning from the manifest) passes `brief` verbatim per the .md instructions, but the confidence loop and escalation dispatches run inside the TS host on all platforms, so the loop's own dispatches are always briefless.
-**Fix:** Map the brief in the conversion:
-```ts
-if (dispatch.task_brief !== undefined) workerDispatch.task_brief = dispatch.task_brief;
-else if ((dispatch as PlanDispatchLike).brief !== undefined) {
-  workerDispatch.task_brief = (dispatch as PlanDispatchLike).brief;
-}
-```
-Pin it with a test that asserts the `GoWorkerDispatchRequest.task_brief` for a `phase_research` dispatch contains `"## Output"` and `"## Files to Study"`.
-
-### CR-03: `plan-research-escalate` cannot resolve phases during a fresh planning loop — a deep/exhaustive stall crashes the whole plan run
-
-**File:** `cmd/phase_research_escalate.go:83` (`phaseResearchCandidates(state, codexPlanIterationState{})`), `.aether/ts-host/src/host.ts:899-906` (unguarded `_callGoJSONRef` call)
-**Issue:** Research dispatches only exist from iteration 2 of a planning loop, sourced from `seed.PreviousPlanDraft` — which lives in the planning iteration state file, not in `COLONY_STATE.json` (intermediate `plan-finalize` saves `planningIterationStateRel`, not `state.Plan.Phases`; see `cmd/codex_plan_finalize.go:829-851`). The escalate command passes a zero-value `codexPlanIterationState{}`, so its candidate set falls through to `state.Plan.Phases`, which is empty for a fresh colony mid-loop. It returns `outputError(1, "phase N not found in the current plan")`; `_realCallGoJSON` throws on `ok:false`; `runResearchConfidenceLoop` has no try/catch around the escalation block, so the error propagates to `main` and the entire plan run exits 1 — after all research iterations already ran, and before `plan-finalize` is ever called. The exact scenario escalation was built for (deep/exhaustive fresh plan whose research stalls) is a guaranteed crash — directly contradicting the phase's own "research is enrichment, never a gate" invariant (D-08). On a refresh, `state.Plan.Phases` exists but iteration-≥2 draft candidates are renumbered `i+1` from the draft, so the escalate lookup can bind the wrong phase's name/description. The CLI test (`phase_research_escalate_test.go:96`) only exercises a colony state that already contains the phase, and the TS test mocks the Go call, so neither covers the live path.
-**Fix:** In `planResearchEscalateCmd`, load the planning iteration state and pass it through:
-```go
-seed := loadCodexPlanIterationState(root) // the same seed source runCodexPlanPlanOnly uses
-candidates := phaseResearchCandidates(state, seed)
-```
-And in `runResearchConfidenceLoop`, wrap each escalation call in try/catch: log a loud warning, skip that phase's escalation, and continue — a failed escalation must degrade, not gate.
+No new critical findings. The remaining findings are correctness and robustness gaps in the surrounding orchestration; several (WR-06, WR-07, IN-04) carry over from the first review and were not in scope for the gap-closure plans — they remain open and are restated here so this report is the complete current picture. The most significant cluster: the TS host fabricates `status: "completed"` for research workers regardless of actual outcome, reports escalations as sent before the dispatch actually succeeds, and the evidence scorer's "verified citations" are never actually verified.
 
 ## Warnings
 
-### WR-01: Plan-only manifest generation (including `aether host plan --dry-run`) mutates pending-decisions state
+### WR-01: Research worker results are always reported as "completed" to plan-finalize, regardless of actual outcome
 
-**File:** `cmd/codex_plan.go` (`computePhaseResearchProposalFields`, `persist=true` at the fresh-plan call site in `runCodexPlanPlanOnly`), `.aether/ts-host/src/host.ts:583-642` (`runDryRunDispatchedCommand`, "Fetch manifest (read-only)")
-**Issue:** Every manifest fetch on the fresh-plan branch deletes unresolved in-scope research decisions and appends fresh ones to `pending-decisions.json`. The TS host's `--dry-run` path calls the same `plan --plan-only` args, so a dry run writes state — violating the project's documented corollary ("An inspection or `--dry-run` command must not mutate state", locked elsewhere by dedicated tests). Additionally, after the batch is answered, every subsequent manifest fetch re-appends unresolved duplicates of already-resolved decisions (only resolved ones are kept, then a fresh unresolved decision is appended for every proposal phase). These duplicates are never resolved or cleaned, so completed plans leave permanent unresolved `research-decision` entries in the decisions file.
-**Fix:** Thread a `dryRun`/read-only flag from the host into the Go call (or have Go skip persistence when a `--dry-run` marker is present), and skip appending a fresh unresolved decision for a phase that already has a resolved decision in the current scope. Add `TestPlanPlanOnlyDryRunDoesNotMutatePendingDecisions` mirroring the existing dry-run mutation guards.
+**File:** `.aether/ts-host/src/host.ts:1342-1358`
+**Issue:** After `runResearchConfidenceLoop` finishes, `runDispatchedPlanCommand` maps every `phase_research` dispatch to a `WorkerResult` with hardcoded `status: "completed"` — even when every provider dispatch for that phase failed, timed out, or returned blockers on every iteration. The actual `DispatchResult`s from the loop (files_created, duration, blockers, real status) are discarded entirely. Go's `mergeExternalPlanResults` (cmd/codex_plan_finalize.go:928-934) hard-rejects any non-completed status, so this fabrication is what keeps a failed research Scout from aborting the whole plan — but it means the durable completion packet, spawn tree, and dispatch records all claim a worker completed work it never did. The Go-native path warns loudly on research failure (`TestResearchWorkerFailureWarnsLoudlyWithoutBlocking`); the TS host path is silent about worker failure and relies solely on the confidence score staying low.
+**Fix:** Track per-phase worker outcomes in `ResearchLoopPhaseSummary` (e.g., `lastWorkerStatus`, `dispatchFailures`). When the final round's real status is not `completed`, keep the non-gating behavior but (a) emit a loud `Warning: research worker for phase N never completed (...)` ceremony line, and (b) put the real outcome in the summary text, e.g. `"Research phase 3: worker failed on all 4 iterations; artifact scored 20% (max_iterations_met)"`, so the completion packet's summary is honest even where its status must satisfy the finalizer contract.
 
-### WR-02: An entirely-invalid `--flip` still resolves the whole batch; `approve-all` flag is dead
+### WR-02: `summary.escalations` records a phase as escalated before the Oracle dispatch is actually sent
 
-**File:** `cmd/phase_research_decision_cmd.go:118-211`
-**Issue:** `plan-research-approve --flip 33` (typo for 3) reports `invalid_flips: ["33"]` but still resolves every unresolved decision with the Queen's recommendation and returns `ok`. The user's intended override is silently lost; the decisions are now resolved and the gate is closed for this run. Separately, `approveAll` is assigned (including the no-flag default) but never read afterwards — the resolution loop unconditionally resolves everything in scope, so `--approve-all` is purely decorative and `--flip` with zero valid IDs behaves identically to `--approve-all`.
-**Fix:** When `--flip` was provided and every token is invalid, return an error without resolving anything:
+**File:** `.aether/ts-host/src/host.ts:934-960`
+**Issue:** In the escalation round, `escalations.push(state.phaseId)` happens immediately after `plan-research-escalate` returns a dispatch — before the Oracle worker is dispatched. If the subsequent `_dispatchWorkersRef(...)` wave throws (line 953), the catch only warns, and `summary.escalations` still reports every candidate phase as escalated. The `ResearchLoopSummary` doc comment promises "the escalated Oracle dispatch was sent exactly once" — after a wave failure that is false for every phase in the batch. `research-escalation-degrade.test.ts` covers the `callGoJSON` failure ("a failed escalation must not be recorded as successful") but not the dispatch-wave failure, so this path is unguarded by tests.
+**Fix:** Collect phase IDs alongside their dispatches and only append to `escalations` after the dispatch wave resolves:
+```ts
+try {
+  await _dispatchWorkersRef(escalationDispatchOpts, toWorkerDispatches(escalationDispatches));
+  escalations.push(...escalatedPhaseIds);
+} catch (err: unknown) { /* existing warning */ }
+```
+
+### WR-03: Build path parses `--max-iterations` / `--target` without the NaN guard the research path has
+
+**File:** `.aether/ts-host/src/host.ts:1160-1166`
+**Issue:** `runDispatchedBuildCommand` does `loopOpts.maxIterations = parseInt(parsed.maxIterations, 10)` with no `Number.isNaN` check and no clamping. `--max-iterations abc` stores NaN in `ConfidenceLoop`; `iterationCount >= NaN` and `confidence >= NaN` are both always false, silently disabling the iteration cap and the confidence target. The loop then only stops on budget exhaustion — up to ~20 real provider dispatch waves. The research path added exactly these guards this phase (`clampResearchConfidenceTarget` / `clampResearchMaxIterations` plus `isNaN` checks at host.ts:804-815); the build path was left inconsistent.
+**Fix:** Mirror the research path:
+```ts
+if (parsed.maxIterations) {
+  const n = parseInt(parsed.maxIterations, 10);
+  if (!Number.isNaN(n)) loopOpts.maxIterations = Math.min(12, Math.max(1, n));
+}
+```
+(Same shape for `targetConfidence` with the 70-99 clamp.)
+
+### WR-04: `plan-research-escalate` consumes planning iteration state without the staleness check every other consumer applies
+
+**File:** `cmd/phase_research_escalate.go:94-98`
+**Issue:** The 164-11 fix seeds candidates from `loadPlanningIterationState()`, but skips the `planningIterationStateMatches` guard (goal/root/depth equality, cmd/codex_plan.go:1924-1932) that `planningManifestIterationSeed` applies before trusting that file. `planning/iteration-state.json` is only removed on a *successful* finalize (cmd/codex_plan_finalize.go:429); an abandoned planning loop leaves it behind indefinitely. On a later refresh/replan for the same colony (or after the goal changed), escalation resolves phase IDs against the stale abandoned draft's `PreviousPlanDraft` instead of the active colony plan — producing an Oracle brief for the wrong phase name/description, or "phase N not found" for a phase that does exist in the active plan. The test suite's `writeFreshColonyIterationState` fixture (phase_research_escalate_test.go:165-183) demonstrates the file is trusted with nothing but a run ID and iteration count.
+**Fix:** Reject cross-run staleness before trusting the loaded state:
 ```go
-if strings.TrimSpace(flip) != "" && len(flippedSet) == 0 && len(invalidFlips) > 0 {
-    outputError(1, fmt.Sprintf("no valid phase IDs in --flip (%s); nothing was resolved", strings.Join(invalidFlips, ",")), nil)
+seed := codexPlanIterationState{}
+if loaded, ok := loadPlanningIterationState(); ok &&
+    strings.TrimSpace(loaded.Goal) == strings.TrimSpace(goal) &&
+    strings.TrimSpace(loaded.Root) == strings.TrimSpace(root) {
+    seed = loaded
+}
+```
+(Load state after `goal` is resolved; goal+root equality is available to this command even though the full loop-options match is not.)
+
+### WR-05: `plan-research-approve` clobbers a corrupt pending-decisions.json with an empty file
+
+**File:** `cmd/phase_research_decision_cmd.go:133-137,191`
+**Issue:** `store.LoadJSON(pendingDecisionsFile, &file)` failure — which includes a *parse* failure on a corrupt file, not just file-not-found — resets `file` to `PendingDecisionFile{Decisions: []}`, and the command then unconditionally `SaveJSON`s that empty struct. `pending-decisions.json` is a shared file: it also carries discuss clarifications and plan-finalize failure blocker flags (`loadPlanFinalizeFlagsFile`, cmd/codex_plan_finalize.go:188-206). One `plan-research-approve` invocation against a corrupt file silently destroys all of it, eliminating any chance of manual recovery from the raw bytes.
+**Fix:** Distinguish not-exist from parse failure:
+```go
+if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+    if !errors.Is(err, os.ErrNotExist) {
+        outputError(2, fmt.Sprintf("pending-decisions.json is unreadable, refusing to overwrite: %v", err), nil)
+        return nil
+    }
+    file = PendingDecisionFile{Decisions: []PendingDecision{}}
+}
+```
+
+### WR-06: "citationsVerified" citations are never verified — a fabricated `(Source: fake/path.ts)` earns the full 25-point bonus
+
+**File:** `.aether/ts-host/src/research-confidence.ts:189-201,246`
+**Issue:** (Carried over from the first review; not addressed by gap closure.) The module contract (D-11 header comment, lines 14-19) says the score is "dominated by checkable evidence (filled sections, verified citations, verified file paths)", and the result field is named `citationsVerified`. But `isCited` only pattern-matches that a bullet contains `(Source: ...)` with something path-shaped or URL-shaped — the path is never checked against the repo, unlike the Files-to-Study section, which does a real `fs.existsSync` with a traversal guard right below (lines 261-273). A Scout that invents `(Source: does/not/exist.go)` for every bullet collects the entire `CITATION_BONUS_MAX` (25 of 100 points) in the loop that decides whether to re-dispatch workers and whether to escalate to Oracle at deep/exhaustive depth.
+**Fix:** For path-like sources, resolve against `input.repoRoot` with the same escape guard and count only existing paths as verified (URLs stay pattern-only, since the scorer is offline by design). At minimum, rename the field/comment to `citationsPresent` so the contract stops overclaiming.
+
+### WR-07: An entirely-invalid `--flip` still resolves the whole research batch, discarding the user's override permanently
+
+**File:** `cmd/phase_research_decision_cmd.go:153-189`
+**Issue:** (Carried over from the first review; not addressed by gap closure.) `parseFlipPhaseIDs` correctly rejects unknown/unparsable tokens into `invalid_flips`, but the command then resolves every unresolved research decision per the Queen's recommendation anyway. A user who runs `aether plan-research-approve --flip 5` with a typo (phase 5 not in the batch) gets the entire batch consumed as-recommended; their intended flip was dropped, and it cannot be retried because all decisions are now `Resolved: true`. The `invalid_flips` field in the result is the only signal, and nothing pauses on it.
+**Fix:** When `--flip` was supplied, all parsed tokens were invalid, and no `--approve-all`/`--auto` accompanied it, return an error without mutating any decision:
+```go
+if strings.TrimSpace(flip) != "" && len(flippedSet) == 0 && len(invalidFlips) > 0 && !approveAll && !auto {
+    outputError(1, fmt.Sprintf("no valid phase IDs in --flip (%s); batch left unanswered", strings.Join(invalidFlips, ",")), nil)
     return nil
 }
 ```
-Either remove `approveAll` or make the batch resolution conditional on it.
-
-### WR-03: Existing-plan branch shows the research card and "not answered" warning but approval can never take effect
-
-**File:** `cmd/codex_plan.go` (existing-plan branch of `runCodexPlanPlanOnly`: `computePhaseResearchProposalFields(..., persist=false)`)
-**Issue:** With an active plan and no `--refresh`, the manifest carries a non-empty `research_proposal_card` and `research_awaiting_approval: true` with the warning telling the user to run `aether plan-research-approve --approve-all`. But `persist=false` means no decisions were written, so `plan-research-approve` finds zero candidates and returns "no phases require research"; this branch also emits no dispatches (`requires_finalizer: false`). The wrapper instruction loop ("approve, then request a fresh manifest so gated `phase_research` dispatches appear") can never complete — the user is directed into a dead end.
-**Fix:** In the existing-plan/no-refresh branch, either suppress the card and warning (set `AwaitingApproval=false`, empty card) or annotate the card that research applies only to a `--refresh` run.
-
-### WR-04: Citation "verification" verifies nothing, and file-path extraction misses common bullet formats
-
-**File:** `.aether/ts-host/src/research-confidence.ts:189-205` (`isCited`, `extractPath`)
-**Issue:** `citationsVerified` counts bullets that merely contain `(Source: …)` with a path-shaped token or URL — the cited path's existence is never checked, so a researcher (an LLM) can fabricate `(Source: made/up.ts)` on every bullet and collect the full 25-point `CITATION_BONUS_MAX`. This undercuts D-11's core claim that the score is "dominated by checkable evidence" — two of the three evidence bonuses (citations 25, self-assessment 10) are self-reportable; only sections and file existence are checked. Meanwhile `extractPath` returns the whole bullet body, so the common format ``- `cmd/foo.go` — why it matters`` never resolves to an existing file and scores 0 in the files bonus, penalizing honest, well-annotated artifacts.
-**Fix:** In `isCited`, when the source token is path-like (not a URL), resolve it against `repoRoot` with the same escape guard and require `fs.existsSync`. In `extractPath`, strip backticks and trailing annotations:
-```ts
-const stripped = bullet.replace(/^[-*]\s+/, "");
-const m = /`([^`]+)`/.exec(stripped);
-return (m ? m[1]! : stripped.split(/\s+[—–-]{1,2}\s+/)[0]!).trim();
-```
-
-### WR-05: Research loop re-dispatches an identical mission every iteration — it cannot converge, and `--accept` does not suppress escalation
-
-**File:** `.aether/ts-host/src/host.ts:819-884` (`runResearchConfidenceLoop` round loop)
-**Issue:** Unlike the build loop (which injects previous-iteration blockers into `task_brief`), each research round re-dispatches `state.dispatch` unchanged — the Scout is never told its score, unfilled sections, uncited bullets, or unverified files. With a deterministic scorer and an unchanged mission, the delta between rounds hovers near zero, so `diminishing_returns` (window 2, threshold 5) trips at iteration 3 in nearly every real run: two of the three Scout dispatches are budget spent re-running the same mission, and at deep/exhaustive depth the Oracle escalation becomes the near-certain path rather than an exception. Additionally, `parsed.accept` only converts still-continuing phases to `"accepted"` (`host.ts:866`); a phase whose loop returns `diminishing_returns` on the same iteration the user ran with `--accept` still escalates to a heavyweight Oracle, against the user's explicit accept.
-**Fix:** Before re-dispatching an active phase, append the evaluator breakdown to the brief (e.g., "Previous iteration scored 62%: sections filled 4/6 (missing Gotchas, Files to Study); 1/4 bullets cited; 0/2 files verified"). Gate the escalation-candidate push on `!parsed.accept`.
-
-### WR-06: Stale "Scout repository_read_only must remain host-enforced" instructions across YAML, wrappers, and command guide
-
-**File:** `.aether/commands/plan.yaml:50`, `.claude/commands/ant/plan.md:71`, `.claude/commands/ant-plan.md:71`, `.opencode/commands/ant/plan.md:71`, `cmd/command_guide.go:211`
-**Issue:** The same phase that changed Scout's canonical profile to `workspace_write` re-wrote all five of these files and left the mandate that "Scout's `repository_read_only` profile must remain host-enforced; never substitute … a prompt-only promise." The manifest now delivers scouts with `workspace_write` plus exactly the prompt-only behavioral restriction the guardrail forbids. A wrapper that obeys the instruction must either treat every manifest as a broadened-profile violation and refuse dispatch, or enforce a read-only boundary that prevents the research Scout from writing its only deliverable. The plan.yaml `drift_guard` explicitly requires these files to move together; they did not, and no doc-hygiene test pins the claim to the runtime (CLAUDE.md: "A documentation claim about runtime behaviour must be testable or removed").
-**Fix:** Rewrite the guardrail in all five locations to match the runtime, e.g.: "Scouts run `workspace_write` with a behavioral restriction to `.aether/data/phase-research/`; treat `behavioral_restrictions` as required behavior, not a sandbox claim; do not broaden any profile." Add an assertion to `platform_doc_hygiene_test.go` that the plan wrappers do not claim a read-only Scout sandbox.
-
-### WR-07: `resolvePhaseResearchSection` can truncate mid-rune
-
-**File:** `cmd/phase_research.go:220-226`
-**Issue:** `content[:phaseResearchBriefBudgetChars]` slices at a byte offset. When no `\n\n` exists past the midpoint, the cut lands wherever byte 3500 falls — possibly inside a multi-byte UTF-8 sequence (research artifacts routinely contain em dashes and typographic quotes), producing an invalid-UTF-8 brief that JSON marshaling mangles to U+FFFD.
-**Fix:** Back the cut off to a rune boundary before appending the truncation notice:
-```go
-cut := content[:phaseResearchBriefBudgetChars]
-for len(cut) > 0 && !utf8.ValidString(cut) {
-    cut = cut[:len(cut)-1]
-}
-```
-(or use `strings.ToValidUTF8` / walk back while `utf8.RuneStart` is false).
 
 ## Info
 
-### IN-01: Decision description parsing breaks on phase names containing "): "
+### IN-01: `planDepth` parameter of `plannedPhaseResearchDispatches` is dead
 
-**File:** `cmd/phase_research_decision_cmd.go:18-53`
-**Issue:** `parsePhaseResearchDecisionDescription` splits on the first `"): "`; a phase named `OAuth (v2): migration` yields a truncated name and a polluted reason in the resolution record. PhaseID and Recommend parse first, so flip/approve behavior is unaffected — only the durable record text is wrong.
-**Fix:** Use `strings.LastIndex(rest, "): ")` or store the recommendation as structured fields rather than re-parsing the display string.
+**File:** `cmd/phase_research.go:76`
+**Issue:** The `planDepth` parameter is never used in the function body — depth gating moved entirely into `computePhaseResearchProposal`'s recommendations (the doc comment even explains this). The dead parameter misleads readers into thinking the dispatcher is still depth-aware, and every call site threads a value through for nothing.
+**Fix:** Drop the parameter (or rename to `_` with a comment) and update the call sites/tests.
 
-### IN-02: Flip-to-research resolution reads "user overrode: research research on phase N"
+### IN-02: `extractPath` fails on realistic Files-to-Study bullets, silently forfeiting the 15-point files bonus
 
-**File:** `cmd/phase_research_decision.go:225-236`
-**Issue:** `"user overrode: %s research on phase %d"` with `oppositeRecommend("skip") == "research"` produces the doubled word. Cosmetic but this string is the durable audit record.
-**Fix:** Use direction-specific phrasing: `"user overrode: research phase %d"` / `"user overrode: skip research on phase %d"`.
+**File:** `.aether/ts-host/src/research-confidence.ts:204-206`
+**Issue:** `extractPath` strips only the bullet marker; a bullet like `` - `cmd/exporter.go` — retry entry point `` (backticks plus an annotation — the natural way an LLM Scout writes this section) resolves to a "path" containing backticks and prose, so `existsSync` always fails and `filesVerified` is 0. The 15-point bonus quietly disappears for well-formed research, biasing the loop toward extra iterations.
+**Fix:** Strip surrounding backticks and take the first whitespace-delimited token: `bullet.replace(/^[-*]\s+/, "").replace(/`/g, "").trim().split(/\s+/)[0]`.
 
-### IN-03: `omitempty` on struct-typed manifest field has no effect
+### IN-03: `parsePhaseResearchDecisionDescription` mis-splits phase names containing "): "
 
-**File:** `cmd/codex_plan.go:251` (`DepthProposal depthProposal json:"depth_proposal,omitempty"`)
-**Issue:** encoding/json never treats a struct value as empty, so the tag is dead; the field always serializes.
-**Fix:** Drop `omitempty` or make the field `*depthProposal`.
+**File:** `cmd/phase_research_decision_cmd.go:40-45`
+**Issue:** The parser finds the *first* `"): "` in the remainder, so a user-authored phase name like `"Fix exporter (v2): cleanup"` splits as name=`"Fix exporter (v2"`, reason=`"cleanup): <real reason>"`. Recommend and phase ID (parsed earlier) survive, so approve/flip still work — only the resolution record's name/reason text is mangled. Round-tripping structured data through a human-readable Description string is inherently brittle.
+**Fix:** Use `strings.LastIndex(rest, "): ")` — the reason comes from the fixed `phaseResearchReasons` lookup table and cannot contain `"): "`, so the last occurrence is always the real delimiter.
 
-### IN-04: Planning-depth and verification-depth knobs share one synthetic reason
+### IN-04: Existing-plan manifest branch shows the research warning but `plan-research-approve` cannot act on it
 
-**File:** `cmd/plan_depth_proposal.go:112-117` (`smartOrExplicitReason`)
-**Issue:** Both knobs call `renderSmartDepthReason(colony.Phase{ID: 1}, len(state.Plan.Phases))` — a fabricated phase — so the card prints the identical reason line twice, and for a fresh colony (`totalPhases == 0`) the position heuristics run on nonsense inputs. The reason also has nothing to do with task decomposition for the planning-depth knob.
-**Fix:** Give each knob its own reason source (goal-size heuristic for planning depth; the actual smart-default inputs for verification depth).
-
-### IN-05: Research dispatch results always report `status: "completed"`
-
-**File:** `.aether/ts-host/src/host.ts:1296-1311` (`researchMappedResults`)
-**Issue:** Every `phase_research` dispatch is mapped to `status: "completed"` regardless of whether its rounds actually failed (e.g., the CR-01 permission failure) or whether its `task_id` was malformed and therefore never dispatched at all (silently dropped by `researchDispatchPhaseId`). Finalize's template-marker detection catches the missing artifact, but the completion packet's per-worker record lies.
-**Fix:** Derive the status from the loop summary (missing phase summary or a `stopReason` of empty/failed → `"failed"`).
-
-### IN-06: PhaseName is interpolated unsanitized into the research card and decision records
-
-**File:** `cmd/phase_research_decision.go:194-198, 209-219`
-**Issue:** T-164-04 protects the Reason line via the fixed lookup table, but `rec.PhaseName` — Route-Setter/LLM-authored text — is interpolated verbatim into the card the wrapper prints and into `PendingDecision.Description`. A crafted phase name can inject instruction-looking lines into the card the Queen relays verbatim.
-**Fix:** Run phase names through the existing pheromone-style sanitizer (or at minimum strip newlines and cap length) before rendering into the card and decision descriptions.
+**File:** `cmd/codex_plan.go:1018-1024`, `cmd/codex_plan.go:791-795`
+**Issue:** (Carried over from the first review.) The existing-plan early-return branch calls `computePhaseResearchProposalFields(..., persist=false)`, so no `PendingDecision` records are written — yet the result still carries `research_awaiting_approval: true` and the warning telling the user to run `aether plan-research-approve --approve-all`. Running it on that path finds zero unresolved candidates and reports "no phases require research", contradicting the warning the runtime just displayed. Harmless (the refresh path re-proposes and persists), but the runtime is issuing an instruction it knows cannot take effect on this branch.
+**Fix:** On the `persist=false` branch, suppress `AwaitingApproval`/`Warning` (or swap the warning text for "run `aether plan --refresh` to open the research batch").
 
 ---
 
-_Reviewed: 2026-08-02T13:30:43Z_
+## Prior critical-finding verification (CR-01 / CR-02 / CR-03)
+
+| Prior finding | Status | Evidence |
+|---|---|---|
+| CR-01 — `toWorkerDispatches` dropped `permission_profile`; every real Scout dispatch rejected at Go's exact-equality check | Fixed | src/host.ts:477-479 copies it through; dist/host.js:412-413 matches; `dispatch-field-fidelity.test.ts` drives the real function and mirrors Go's `repositoryReadOnlyCastes` map from source; `phase_research_permission_boundary_test.go` proves a real dispatch's own emitted profile resolves through `internalWorkerConfig`/`ResolvePermissionProfile` |
+| CR-02 — `brief` and other fields silently dropped at the Go-to-worker boundary | Fixed | Test 1 of `dispatch-field-fidelity.test.ts` enforces a full-field invariant with an explicit `INTENTIONALLY_UNMAPPED` classification set; `brief` maps to `task_brief` with host-injected precedence, covered by a dedicated test |
+| CR-03 — `plan-research-escalate` crashed fresh colonies mid-loop; any escalation failure killed the plan run | Fixed | cmd/phase_research_escalate.go:94-98 seeds candidates from planning iteration state with colony-plan fallback (see WR-04 for a remaining staleness gap); host.ts:927-960 wraps both the Go call and the dispatch wave in degrade-to-warning handling; `research-escalation-degrade.test.ts` drives the real binary against a stateless cwd (see WR-02 for a remaining reporting gap on the dispatch-wave path) |
+
+---
+
+_Reviewed: 2026-08-02T16:28:17Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
