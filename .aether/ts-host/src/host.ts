@@ -907,6 +907,14 @@ export async function runResearchConfidenceLoop(
   // ConfidenceLoop above. Oracle owns its own RALF iteration
   // (cmd/oracle_loop.go runOracleLoop) -- nesting a second ConfidenceLoop
   // around it here would mean two drivers for one worker.
+  //
+  // CR-03: an unwrapped call here previously crashed the whole plan run --
+  // any plan-research-escalate failure (a phase Go can't resolve, a
+  // subprocess error, a malformed envelope) propagated straight out of
+  // runResearchConfidenceLoop and killed the node process. D-08 makes every
+  // path through this block non-fatal: research (and its escalation) is
+  // enrichment, never a gate. Both the per-candidate call and the final
+  // escalation dispatch wave below degrade to a named warning and continue.
   const escalations: number[] = [];
   if (escalationCandidates.length > 0) {
     const escalationDispatches: PlanDispatchLike[] = [];
@@ -916,22 +924,41 @@ export async function runResearchConfidenceLoop(
         `Oracle escalation: phase ${state.phaseId} research stalled at ${stalledAt}% against a ` +
           `${confidenceTarget}% target — escalating Scout to Oracle`
       );
-      const escalateResult = _callGoJSONRef<{ dispatch: PlanDispatchLike }>(bridge, [
-        "plan-research-escalate",
-        "--phase", String(state.phaseId),
-        "--confidence", String(stalledAt),
-        "--target", String(confidenceTarget),
-      ]);
-      escalationDispatches.push(escalateResult.dispatch);
-      escalations.push(state.phaseId);
+      try {
+        const escalateResult = _callGoJSONRef<{ dispatch: PlanDispatchLike }>(bridge, [
+          "plan-research-escalate",
+          "--phase", String(state.phaseId),
+          "--confidence", String(stalledAt),
+          "--target", String(confidenceTarget),
+        ]);
+        escalationDispatches.push(escalateResult.dispatch);
+        escalations.push(state.phaseId);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        emitCeremonyOutput(
+          `Warning: Oracle escalation unavailable for phase ${state.phaseId}: ${message}. ` +
+            `Planning continues -- research is enrichment, never a gate (D-08).`
+        );
+        continue;
+      }
     }
-    const escalationDispatchOpts: DispatchOptions = {
-      goBinaryPath: bridge.goBinaryPath,
-      cwd: bridge.cwd,
-      simulateWorkers: parsed.simulate,
-      workflow: "plan",
-    };
-    await _dispatchWorkersRef(escalationDispatchOpts, toWorkerDispatches(escalationDispatches));
+    if (escalationDispatches.length > 0) {
+      const escalationDispatchOpts: DispatchOptions = {
+        goBinaryPath: bridge.goBinaryPath,
+        cwd: bridge.cwd,
+        simulateWorkers: parsed.simulate,
+        workflow: "plan",
+      };
+      try {
+        await _dispatchWorkersRef(escalationDispatchOpts, toWorkerDispatches(escalationDispatches));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        emitCeremonyOutput(
+          `Warning: Oracle escalation dispatch failed: ${message}. ` +
+            `Planning continues -- research is enrichment, never a gate (D-08).`
+        );
+      }
+    }
   }
 
   const summaryPhases: ResearchLoopPhaseSummary[] = [...phases.values()].map((state) => ({
