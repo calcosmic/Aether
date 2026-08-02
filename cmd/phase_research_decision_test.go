@@ -7,6 +7,138 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+func TestResearchProposalBatchRendersTickToApprove(t *testing.T) {
+	proposal := phaseResearchProposal{
+		Depth:  "balanced",
+		Replan: false,
+		Phases: []phaseResearchRecommendation{
+			{PhaseID: 1, PhaseName: "Alpha", Recommend: "research", Reason: "new external tech (api) is absent from the territory survey"},
+			{PhaseID: 2, PhaseName: "Beta", Recommend: "skip", Reason: "pure refactor -- the domain is already mapped by the territory survey"},
+			{PhaseID: 3, PhaseName: "Gamma", Recommend: "skip", Reason: "no external technology signals found in the phase description -- the domain looks internal"},
+		},
+	}
+
+	block := renderPhaseResearchProposalBlock(proposal)
+
+	approveAllCount := strings.Count(block, "--approve-all")
+	if approveAllCount != 1 {
+		t.Fatalf("expected exactly one --approve-all occurrence, got %d in:\n%s", approveAllCount, block)
+	}
+	flipCount := strings.Count(block, "--flip")
+	if flipCount != 3 {
+		t.Fatalf("expected exactly 3 --flip occurrences, got %d in:\n%s", flipCount, block)
+	}
+	for _, want := range []string{"Phase 1: Alpha", "Phase 2: Beta", "Phase 3: Gamma", "Reason:"} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("expected block to contain %q, got:\n%s", want, block)
+		}
+	}
+
+	t.Run("empty proposal renders empty string", func(t *testing.T) {
+		empty := renderPhaseResearchProposalBlock(phaseResearchProposal{})
+		if empty != "" {
+			t.Fatalf("expected empty string for zero-phase proposal, got %q", empty)
+		}
+	})
+}
+
+func TestResearchDecisionRecordsUseExistingStore(t *testing.T) {
+	rec := phaseResearchRecommendation{
+		PhaseID:   4,
+		PhaseName: "Delta",
+		Recommend: "research",
+		Reason:    "new external tech (api) is absent from the territory survey",
+	}
+
+	t.Run("newPhaseResearchDecision returns existing PendingDecision type", func(t *testing.T) {
+		decision := newPhaseResearchDecision(rec)
+		if decision.Type != phaseResearchDecisionType {
+			t.Fatalf("expected Type=%q, got %q", phaseResearchDecisionType, decision.Type)
+		}
+		if decision.Phase == nil || *decision.Phase != rec.PhaseID {
+			t.Fatalf("expected Phase to point at %d, got %v", rec.PhaseID, decision.Phase)
+		}
+		if decision.Resolved {
+			t.Fatalf("expected Resolved=false for a freshly created decision")
+		}
+		if decision.ID == "" || decision.CreatedAt == "" {
+			t.Fatalf("expected non-empty ID and CreatedAt, got ID=%q CreatedAt=%q", decision.ID, decision.CreatedAt)
+		}
+	})
+
+	t.Run("resolvePhaseResearchDecisions returns research for a research resolution", func(t *testing.T) {
+		phaseID := 4
+		file := PendingDecisionFile{
+			Decisions: []PendingDecision{
+				{Type: phaseResearchDecisionType, Phase: &phaseID, Resolved: true, Resolution: "approved: research phase 4"},
+			},
+		}
+		result := resolvePhaseResearchDecisions(file)
+		if result[4] != "research" {
+			t.Fatalf("expected phase 4 resolved to research, got %q", result[4])
+		}
+	})
+
+	t.Run("resolvePhaseResearchDecisions returns skip for a skip resolution", func(t *testing.T) {
+		phaseID := 5
+		file := PendingDecisionFile{
+			Decisions: []PendingDecision{
+				{Type: phaseResearchDecisionType, Phase: &phaseID, Resolved: true, Resolution: "approved: skip phase 5"},
+			},
+		}
+		result := resolvePhaseResearchDecisions(file)
+		if result[5] != "skip" {
+			t.Fatalf("expected phase 5 resolved to skip, got %q", result[5])
+		}
+	})
+
+	t.Run("resolvePhaseResearchDecisions ignores unresolved decisions", func(t *testing.T) {
+		phaseID := 6
+		file := PendingDecisionFile{
+			Decisions: []PendingDecision{
+				{Type: phaseResearchDecisionType, Phase: &phaseID, Resolved: false, Resolution: ""},
+			},
+		}
+		result := resolvePhaseResearchDecisions(file)
+		if _, ok := result[6]; ok {
+			t.Fatalf("expected unresolved decision to be ignored, got %q", result[6])
+		}
+	})
+
+	t.Run("resolvePhaseResearchDecisions ignores decisions with a different Type", func(t *testing.T) {
+		phaseID := 7
+		file := PendingDecisionFile{
+			Decisions: []PendingDecision{
+				{Type: "some-other-decision", Phase: &phaseID, Resolved: true, Resolution: "approved: research phase 7"},
+			},
+		}
+		result := resolvePhaseResearchDecisions(file)
+		if _, ok := result[7]; ok {
+			t.Fatalf("expected non-research decision type to be ignored, got %q", result[7])
+		}
+	})
+
+	t.Run("flipped decision resolution names user override and direction", func(t *testing.T) {
+		resolution := phaseResearchDecisionResolution(rec, true, false)
+		if !strings.Contains(resolution, "user overrode") {
+			t.Fatalf("expected resolution to contain 'user overrode', got %q", resolution)
+		}
+		if !strings.Contains(resolution, "skip") {
+			t.Fatalf("expected flipped resolution (from research) to name skip, got %q", resolution)
+		}
+		if !strings.Contains(resolution, "4") {
+			t.Fatalf("expected resolution to name phase 4, got %q", resolution)
+		}
+	})
+
+	t.Run("auto-accepted resolution is prefixed", func(t *testing.T) {
+		resolution := phaseResearchDecisionResolution(rec, false, true)
+		if !strings.HasPrefix(resolution, "auto-accepted (autopilot)") {
+			t.Fatalf("expected auto-accepted prefix, got %q", resolution)
+		}
+	})
+}
+
 func TestQueenResearchDecision(t *testing.T) {
 	t.Run("external token absent from survey recommends research and names the token", func(t *testing.T) {
 		candidates := []phaseResearchCandidate{

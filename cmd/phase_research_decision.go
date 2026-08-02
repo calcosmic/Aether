@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -162,4 +163,130 @@ func surveyContainsSignal(entries []string, signal string) bool {
 		}
 	}
 	return false
+}
+
+// phaseResearchDecisionType is the PendingDecision.Type value used for
+// research/skip decisions and their overrides. RESEARCH-06 forbids a new
+// planning store, so these are recorded as PendingDecision entries, not in a
+// new struct or a new JSON file.
+const phaseResearchDecisionType = "research-decision"
+
+// renderPhaseResearchProposalBlock renders the batched, tick-to-approve
+// proposal (D-01): a header naming the depth and whether this is a replan,
+// then per phase a [research]/[skip] tag line, an indented reason line, and
+// an indented per-phase flip line. Exactly one approve-all line closes the
+// whole batch -- one interaction for the batch, not one per phase. Mirrors
+// renderPendingSuggestionsBlock's shape (cmd/ceremony_cmd.go).
+func renderPhaseResearchProposalBlock(p phaseResearchProposal) string {
+	if len(p.Phases) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	header := fmt.Sprintf("Research proposal (%s depth", firstNonEmpty(strings.TrimSpace(p.Depth), "standard"))
+	if p.Replan {
+		header += ", replan"
+	}
+	header += "):"
+	b.WriteString(header)
+	b.WriteString("\n")
+
+	for _, rec := range p.Phases {
+		fmt.Fprintf(&b, "[%s] Phase %d: %s\n", rec.Recommend, rec.PhaseID, rec.PhaseName)
+		fmt.Fprintf(&b, "  Reason: %s\n", rec.Reason)
+		fmt.Fprintf(&b, "  Flip: aether plan-research-approve --flip %d\n", rec.PhaseID)
+	}
+
+	b.WriteString("Approve all: aether plan-research-approve --approve-all\n")
+	return b.String()
+}
+
+// newPhaseResearchDecision builds a PendingDecision for a phase research
+// recommendation, using the same ID/CreatedAt stamping shape
+// pendingDecisionAddCmd uses (cmd/pending_decision.go). No new struct is
+// declared for decision storage -- the existing PendingDecision type carries
+// this record end to end.
+func newPhaseResearchDecision(rec phaseResearchRecommendation) PendingDecision {
+	phaseID := rec.PhaseID
+	return PendingDecision{
+		ID:          fmt.Sprintf("prd_%d_%d", rec.PhaseID, time.Now().UnixNano()),
+		Type:        phaseResearchDecisionType,
+		Description: fmt.Sprintf("%s phase %d (%s): %s", rec.Recommend, rec.PhaseID, rec.PhaseName, rec.Reason),
+		Source:      "queen-research-proposal",
+		Phase:       &phaseID,
+		Resolved:    false,
+		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// phaseResearchDecisionResolution builds the resolution string written when a
+// research decision is resolved -- the durable record of the flip (T-164-06),
+// so it carries the resulting direction, not just the fact of a flip.
+func phaseResearchDecisionResolution(rec phaseResearchRecommendation, flipped bool, auto bool) string {
+	var resolution string
+	if flipped {
+		resolution = fmt.Sprintf("user overrode: %s research on phase %d", oppositeRecommend(rec.Recommend), rec.PhaseID)
+	} else {
+		resolution = fmt.Sprintf("approved: %s phase %d", rec.Recommend, rec.PhaseID)
+	}
+	if auto {
+		resolution = "auto-accepted (autopilot) -- " + resolution
+	}
+	return resolution
+}
+
+// oppositeRecommend returns the opposite research direction of recommend.
+func oppositeRecommend(recommend string) string {
+	if recommend == "skip" {
+		return "research"
+	}
+	return "skip"
+}
+
+// resolvePhaseResearchDecisions walks a PendingDecisionFile and returns a map
+// from phase ID to the resolved direction ("research" or "skip"). Decisions
+// whose Type is not phaseResearchDecisionType, whose Phase pointer is nil, or
+// whose Resolved is false are skipped. When two resolved decisions exist for
+// the same phase, the later one in the slice wins (map assignment order),
+// matching D-06: a replan re-proposes and the newest record is the live one.
+func resolvePhaseResearchDecisions(file PendingDecisionFile) map[int]string {
+	result := make(map[int]string)
+	for _, d := range file.Decisions {
+		if d.Type != phaseResearchDecisionType {
+			continue
+		}
+		if d.Phase == nil {
+			continue
+		}
+		if !d.Resolved {
+			continue
+		}
+		direction := extractResearchDirection(d.Resolution)
+		if direction == "" {
+			continue
+		}
+		result[*d.Phase] = direction
+	}
+	return result
+}
+
+// extractResearchDirection derives "research" or "skip" from a resolution
+// string by checking the text after the first colon. "skip" is checked
+// before "research" so a flip-to-skip resolution (which also names
+// "research" as the noun being skipped, e.g. "skip research on phase N")
+// resolves to "skip", the direction that actually took effect.
+func extractResearchDirection(resolution string) string {
+	tail := resolution
+	if idx := strings.Index(resolution, ":"); idx >= 0 {
+		tail = resolution[idx+1:]
+	}
+	tail = strings.ToLower(tail)
+	switch {
+	case strings.Contains(tail, "skip"):
+		return "skip"
+	case strings.Contains(tail, "research"):
+		return "research"
+	default:
+		return ""
+	}
 }
