@@ -36,6 +36,7 @@ That means:
 
 - **v1.25 Switch It On — IN PROGRESS** (started 2026-07-25)
 - **Product version: v1.0.42**
+- Phase 164 complete (2026-08-02) — research feeds planning: Queen decides research need per phase, research Scouts dispatch automatically through the kept `confidence-loop.ts`, dispatch field fidelity fixed (permission_profile + brief now survive the Go→TS boundary), `plan-research-escalate` works on fresh colonies and degrades to a warning on failure; 11/11 plans, verification passed 5/5
 - Phase 163.2 complete (2026-08-01) — ts-host preflight configurability: per-platform TTL preflight success cache (1h default, `AETHER_PREFLIGHT_CACHE_TTL`), one shared `AETHER_PREFLIGHT_TIMEOUT` knob across Go and TS hosts (hardcoded 20s gone), neutral temp-dir probes, loud `AETHER_SKIP_PREFLIGHT` notice, auth-failure cache invalidation; 7/7 decisions verified, code review Critical+5 Warnings fixed
 - Phase 163.1 complete (2026-08-01) — wrapper-runtime completion contract: schema-validated completion packets (submitted bytes, batch rejection), stage-time validation with digest rebinding, verification honesty, read-only artifact evidence on both continue paths, composed brief file channel, publish-order fix; 7/7 requirements verified
 - v1.24 shipped: Architecture boundary defined, 27 agent YAMLs + 28 prompt MDs + 9 phase YAMLs + 7 playbooks extracted, TypeScript control plane with 68 tests, NDJSON event stream, 80% Classic parity verified, end-to-end demo flow running
@@ -402,4 +403,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-05-12 — milestone pivoted from adaptive caste orchestration to hybrid runtime recovery*
+*Last updated: 2026-08-02 — Phase 164 (research feeds planning) complete*
