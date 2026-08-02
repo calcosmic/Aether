@@ -107,12 +107,14 @@ describe("toWorkerDispatches field fidelity", () => {
     };
 
     const [output] = toWorkerDispatches([planSourceDispatch] as never);
+    assert.ok(output, "expected toWorkerDispatches to return one dispatch");
+    const outputRecord = output as unknown as Record<string, unknown>;
 
     for (const key of Object.keys(planSourceDispatch)) {
       if (INTENTIONALLY_UNMAPPED.has(key)) continue;
       const outputKey = RENAMED[key] ?? key;
       assert.deepStrictEqual(
-        (output as Record<string, unknown>)[outputKey],
+        outputRecord[outputKey],
         planSourceDispatch[key],
         `expected field "${key}" to survive toWorkerDispatches as "${outputKey}"`
       );
@@ -144,6 +146,7 @@ describe("toWorkerDispatches field fidelity", () => {
 
     const [output] = toWorkerDispatches([scoutDispatch] as never);
 
+    assert.ok(output, "expected toWorkerDispatches to return one dispatch");
     assert.deepStrictEqual(output.permission_profile, scoutProfile);
   });
 
@@ -170,6 +173,7 @@ describe("toWorkerDispatches field fidelity", () => {
     };
 
     const [briefOutput] = toWorkerDispatches([briefOnlyDispatch] as never);
+    assert.ok(briefOutput, "expected toWorkerDispatches to return one dispatch");
     const taskBrief = String(briefOutput.task_brief ?? "");
     for (const heading of [
       "## Output",
@@ -194,6 +198,7 @@ describe("toWorkerDispatches field fidelity", () => {
       task_brief: "host-injected build-path brief",
     };
     const [bothOutput] = toWorkerDispatches([bothFieldsDispatch] as never);
+    assert.ok(bothOutput, "expected toWorkerDispatches to return one dispatch");
     assert.strictEqual(bothOutput.task_brief, "host-injected build-path brief");
   });
 
@@ -205,13 +210,14 @@ describe("toWorkerDispatches field fidelity", () => {
       /var repositoryReadOnlyCastes = map\[string\]struct\{\}\{([\s\S]*?)\n\}/
     );
     assert.ok(mapLiteralMatch, "could not locate repositoryReadOnlyCastes map literal in permission_profile.go");
-    const mapBody = mapLiteralMatch![1];
+    const mapBody = mapLiteralMatch![1] ?? "";
 
     const readOnlyCastes: string[] = [];
     const entryPattern = /"([a-z_]+)":\s*\{\}/g;
     let entryMatch: RegExpExecArray | null;
     while ((entryMatch = entryPattern.exec(mapBody)) !== null) {
-      readOnlyCastes.push(entryMatch[1]);
+      const caste = entryMatch[1];
+      if (caste !== undefined) readOnlyCastes.push(caste);
     }
     assert.ok(readOnlyCastes.length > 0, "expected at least one read-only caste in permission_profile.go");
 
