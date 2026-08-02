@@ -58,7 +58,7 @@ func phaseResearchCandidates(state colony.ColonyState, seed codexPlanIterationSt
 // phase that does not already have worker-authored research on disk.
 // Research runs once per phase, not once per iteration. The fast preset skips
 // research entirely — speed is its contract.
-func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []phaseResearchCandidate) []codexPlanningDispatch {
+func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []phaseResearchCandidate, survey codexSurveyContext) []codexPlanningDispatch {
 	if planDepth == "fast" || len(candidates) == 0 {
 		return nil
 	}
@@ -81,7 +81,7 @@ func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []p
 			TaskID:    fmt.Sprintf("plan-research-phase-%d", candidate.ID),
 			Outputs:   []string{fileName},
 			Status:    "planned",
-			Brief:     renderPhaseResearchBrief(goal, candidate),
+			Brief:     renderPhaseResearchBrief(goal, candidate, survey),
 		})
 	}
 	attachPlanningDispatchSkillAssignments(dispatches)
@@ -102,7 +102,7 @@ func hasWorkerAuthoredResearch(path string) bool {
 // renderPhaseResearchBrief is the v5 Phase Domain Research mission, rebuilt on
 // the modern engine: the Scout investigates one phase's domain and writes a
 // six-section RESEARCH.md the planner and build briefs both consume.
-func renderPhaseResearchBrief(goal string, candidate phaseResearchCandidate) string {
+func renderPhaseResearchBrief(goal string, candidate phaseResearchCandidate, survey codexSurveyContext) string {
 	var b strings.Builder
 	b.WriteString("You are a Scout performing Phase Domain Research.\n\n")
 	b.WriteString("## Mission\n")
@@ -111,6 +111,8 @@ func renderPhaseResearchBrief(goal string, candidate phaseResearchCandidate) str
 	if candidate.Description != "" {
 		b.WriteString(fmt.Sprintf("Phase description: %s\n", candidate.Description))
 	}
+	b.WriteString("\n## Territory Survey\n")
+	b.WriteString(renderPhaseResearchSurveySection(survey))
 	b.WriteString("\n## Research Areas\n")
 	b.WriteString("1. Key patterns in the existing codebase relevant to this phase\n")
 	b.WriteString("2. External library/API documentation if the phase involves external tools\n")
@@ -132,6 +134,47 @@ func renderPhaseResearchBrief(goal string, candidate phaseResearchCandidate) str
 	b.WriteString("## Gotchas\n{**issue:** prevention (Source: evidence)}\n\n")
 	b.WriteString("## Recommended Approach\n{one synthesis paragraph}\n\n")
 	b.WriteString("## Files to Study\n{bullet list of file paths}\n```\n")
+	return b.String()
+}
+
+// renderPhaseResearchSurveySection mirrors the survey-injection shape
+// renderPlanningWorkerBrief uses (cmd/codex_plan.go), so the research Scout
+// and the planning workers see the same territory-survey framing. Never
+// returns an empty string — a zero-value survey renders the explicit
+// fallback sentence instead of an empty section.
+func renderPhaseResearchSurveySection(survey codexSurveyContext) string {
+	surveyDir := filepath.ToSlash(filepath.Join(".aether", "data", "survey"))
+	surveyDocs := make([]string, 0, len(survey.SurveyDocs))
+	for _, name := range survey.SurveyDocs {
+		surveyDocs = append(surveyDocs, filepath.ToSlash(filepath.Join(surveyDir, name)))
+	}
+	if len(surveyDocs) == 0 && len(survey.Languages) == 0 && len(survey.Frameworks) == 0 && len(survey.Dependencies) == 0 {
+		return "No territory survey available — scan the repository directly.\n"
+	}
+	var b strings.Builder
+	b.WriteString("Primary survey source: ")
+	b.WriteString(surveyDir)
+	b.WriteString("\n")
+	if len(surveyDocs) > 0 {
+		b.WriteString("Survey docs to read first: ")
+		b.WriteString(strings.Join(surveyDocs, ", "))
+		b.WriteString("\n")
+	}
+	mapped := make([]string, 0, 3)
+	if len(survey.Languages) > 0 {
+		mapped = append(mapped, "languages: "+strings.Join(survey.Languages, ", "))
+	}
+	if len(survey.Frameworks) > 0 {
+		mapped = append(mapped, "frameworks: "+strings.Join(survey.Frameworks, ", "))
+	}
+	if len(survey.Dependencies) > 0 {
+		mapped = append(mapped, "dependencies: "+strings.Join(survey.Dependencies, ", "))
+	}
+	if len(mapped) > 0 {
+		b.WriteString("Already-mapped territory: ")
+		b.WriteString(strings.Join(mapped, "; "))
+		b.WriteString(". Findings about already-mapped territory add no value — spend the research budget on what the survey does not cover.\n")
+	}
 	return b.String()
 }
 

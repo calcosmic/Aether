@@ -897,7 +897,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			dispatches[i].Brief += iterationAppendix
 		}
 	}
-	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, phaseResearchCandidates(state, iterationSeed))
+	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, phaseResearchCandidates(state, iterationSeed), survey)
 	if len(researchDispatches) > 0 {
 		// The Route-Setter runs after the research wave; point it at the
 		// fresh RESEARCH.md files so findings shape the route.
