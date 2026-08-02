@@ -454,7 +454,7 @@ Plans:
 - [x] 164-06-PLAN.md -- Wire ConfidenceLoop into the plan path: live ceremony, early accept (wave 2)
 - [x] 164-07-PLAN.md -- Research reaches the planner's context; research failure is loud (wave 3)
 - [x] 164-08-PLAN.md -- Oracle escalation on stall, with scoped permissions (wave 3)
-- [ ] 164-09-PLAN.md -- Two decision cards in both wrappers and the YAML source (wave 4)
+- [x] 164-09-PLAN.md -- Two decision cards in both wrappers and the YAML source (wave 4)
 
 ### Phase 165: Core Lifecycle Commands
 **Goal**: `init`, `plan`, `build`, and `continue` wrappers are rewritten to carry engineering method -- stage purpose, files to read, spawn choreography, stop conditions -- instead of protocol instructions whose primary job is parsing `result.manifest.dispatch_manifest`. Scoped by content, not line count: a short `oracle.md` is not evidence of hollowing, since its RALF loop moved into Go. **This phase is the sole structural owner of `build.md` for this milestone.** Phase 160 may only have made narrow, isolated fixes to specific broken call arguments inside it (merged first); Phase 168 may only append a "what happens next" / visual-guidance layer on top of the file this phase produces (merges after). No other phase restructures it.
@@ -573,7 +573,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
-| 164. Research Feeds Planning | v1.25 | 8/9 | In Progress|  |
+| 164. Research Feeds Planning | v1.25 | 9/9 | Complete   | 2026-08-02 |
 | 165. Core Lifecycle Commands | v1.25 | 0/TBD | Not started | - |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
