@@ -156,4 +156,120 @@ func TestOracleEscalationDispatchNamesTheStall(t *testing.T) {
 			t.Fatalf("expected ok:false for unknown phase, got %v", env)
 		}
 	})
+
+	// writeFreshColonyIterationState seeds planning/iteration-state.json the
+	// way persistIntermediatePlanningIteration does mid-loop, with an EMPTY
+	// colony Plan.Phases -- the actual fresh-colony shape where research
+	// dispatches exist. Phase IDs are assigned i+1 by phaseResearchCandidates,
+	// matching plannedPhaseResearchDispatches' own numbering.
+	writeFreshColonyIterationState := func(t *testing.T, dataDir string) {
+		t.Helper()
+		state := codexPlanIterationState{
+			PlanningRunID: "plan-test000000",
+			Goal:          goal,
+			LastIteration: 2,
+			PreviousPlanDraft: &codexWorkerPlanArtifact{
+				Phases: []codexWorkerPlanPhase{
+					{Name: "Scaffold the exporter", Description: "Set up the exporter skeleton"},
+					{Name: "Wire exporter", Description: "Ship the exporter"},
+				},
+			},
+			UpdatedAt: "2026-08-02T00:00:00Z",
+		}
+		if err := store.SaveJSON(planningIterationStateRel, state); err != nil {
+			t.Fatalf("failed to seed planning iteration state: %v", err)
+		}
+		_ = dataDir
+	}
+
+	t.Run("fresh_colony_mid_loop_resolves_phase_from_iteration_state", func(t *testing.T) {
+		saveGlobals(t)
+		dataDir := setupBuildFlowTest(t)
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version: "3.0",
+			Goal:    &goal,
+			State:   colony.StateREADY,
+			Plan:    colony.Plan{},
+		})
+		writeFreshColonyIterationState(t, dataDir)
+		resetRootCmd(t)
+		forceJSONOutputModeForTest(t)
+		var buf bytes.Buffer
+		stdout = &buf
+		rootCmd.SetArgs([]string{"plan-research-escalate", "--phase", "2", "--confidence", "82", "--target", "95"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("plan-research-escalate failed: %v", err)
+		}
+		env := parseEnvelope(t, buf.String())
+		if env["ok"] != true {
+			t.Fatalf("expected ok:true, got %v", env)
+		}
+		result, ok := env["result"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("result is not a map: %v", env["result"])
+		}
+		dispatch, ok := result["dispatch"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("result missing dispatch: %v", result)
+		}
+		if dispatch["caste"] != "oracle" {
+			t.Errorf("dispatch.caste = %v, want oracle", dispatch["caste"])
+		}
+		brief, _ := dispatch["brief"].(string)
+		if !strings.Contains(brief, "Wire exporter") {
+			t.Errorf("brief does not name the phase resolved from the draft (\"Wire exporter\"): %s", brief)
+		}
+	})
+
+	t.Run("fresh_colony_unknown_phase_still_returns_clean_error", func(t *testing.T) {
+		saveGlobals(t)
+		dataDir := setupBuildFlowTest(t)
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version: "3.0",
+			Goal:    &goal,
+			State:   colony.StateREADY,
+			Plan:    colony.Plan{},
+		})
+		writeFreshColonyIterationState(t, dataDir)
+		resetRootCmd(t)
+		forceJSONOutputModeForTest(t)
+		var outBuf, errBuf bytes.Buffer
+		stdout = &outBuf
+		stderr = &errBuf
+		rootCmd.SetArgs([]string{"plan-research-escalate", "--phase", "99", "--confidence", "82", "--target", "95"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("rootCmd.Execute() returned a cobra error rather than a JSON envelope: %v", err)
+		}
+		env := parseEnvelope(t, errBuf.String())
+		if env["ok"] != false {
+			t.Fatalf("expected ok:false for unknown phase, got %v", env)
+		}
+		errMsg, _ := env["error"].(string)
+		if !strings.Contains(errMsg, "not found in the current plan") {
+			t.Errorf("expected clean 'not found in the current plan' error, got %v", env["error"])
+		}
+	})
+
+	t.Run("no_iteration_state_falls_back_to_colony_plan", func(t *testing.T) {
+		saveGlobals(t)
+		dataDir := setupBuildFlowTest(t)
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version: "3.0",
+			Goal:    &goal,
+			State:   colony.StateREADY,
+			Plan:    colony.Plan{Phases: []colony.Phase{{ID: 3, Name: "Wire exporter", Description: "Ship the exporter", Status: colony.PhaseReady}}},
+		})
+		resetRootCmd(t)
+		forceJSONOutputModeForTest(t)
+		var buf bytes.Buffer
+		stdout = &buf
+		rootCmd.SetArgs([]string{"plan-research-escalate", "--phase", "3", "--confidence", "82", "--target", "95"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("plan-research-escalate failed: %v", err)
+		}
+		env := parseEnvelope(t, buf.String())
+		if env["ok"] != true {
+			t.Fatalf("expected ok:true (refresh/replan fallback to colony plan), got %v", env)
+		}
+	})
 }
