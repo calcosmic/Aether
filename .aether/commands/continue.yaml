@@ -20,6 +20,14 @@ codex_orchestration:
   guide: "aether command-guide continue --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 wrapper_additions:
+  stage_skeleton: |
+    D-05 stage order for `## Default Continue`, `## Heavy External Review`,
+    and `## After Continue`: one colony beat line, then `**Purpose:**`,
+    `**Reads:**`, `**Spawns:**` where applicable, then the stage's
+    imperative instructions and command blocks, then `**Stop conditions:**`.
+    `## Required Cross-Stage State` carries `phase_id`, `verification_depth`,
+    `verification_status`, `manifest_file` (heavy path only), and
+    `next_action` forward between stages.
   pre_continue: |
     Ground continue before running the runtime-owned verification path:
     1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
@@ -73,6 +81,8 @@ guardrails:
   - "Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table."
   - "Do NOT let reviewers loop on unchanged file reads; pass their brief verbatim and mark stuck reviewers blocked with the missing context."
   - "Do NOT add extra option menus or manual state surgery unless the runtime explicitly asks."
+  - "Do NOT hand-render any visual that `aether ceremony` already renders (spawn-plan, wave-start, worker-complete, closeout)."
+  - "Do NOT paraphrase or gesture at \"it's safe to clear your context now\", and do NOT route the user to `/ant-resume`; that guidance is runtime-owned and must never appear in wrapper prose."
   - "If docs and runtime disagree, runtime wins."
 follow_up:
   advance: "Guide the user first to `/ant-build N+1`, with `aether build <next_phase>` remaining the runtime source of truth beneath the wrapper."
