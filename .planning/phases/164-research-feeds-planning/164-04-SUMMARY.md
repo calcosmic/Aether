@@ -107,3 +107,10 @@ None — no external service configuration required.
 
 - `computeDepthProposal` and `renderDepthProposalCard` are ready for Plan 09 to wire into the `aether host plan` manifest and the Claude/OpenCode wrapper output, per the plan's stated split of responsibility ("Plan 09 wires it into the manifest and the wrappers")
 - No blockers. The full `cmd` package test suite (427.9s) and `go vet ./cmd/...` are both clean on top of this plan's changes.
+
+## Self-Check: PASSED
+
+- FOUND: cmd/plan_depth_proposal.go
+- FOUND: cmd/plan_depth_proposal_test.go
+- FOUND: .planning/phases/164-research-feeds-planning/164-04-SUMMARY.md
+- FOUND: c38cd690, 07dde040, c9198ebc, c1900f11, d4e94222 (all in `git log --oneline`)
