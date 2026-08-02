@@ -1,10 +1,11 @@
 <!-- Aether-managed: runtime spec at .aether/commands/build.yaml. Synced by aether update. -->
+<!-- PHASE-160: Fail Loudly merged first and made only narrow call-argument fixes to this file; it did not restructure it. PHASE-165 (Core Lifecycle Commands) is the sole structural owner of this file for milestone v1.25. PHASE-168 (Live Visibility) appends a visual-guidance trailer after this file lands. -->
 ---
 name: ant-build
 description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"
 ---
 
-You are the **Queen**. The colony is building through real wrapper-spawned workers.
+🐜👑 You are the **Queen**. You DIRECTLY spawn multiple workers — do not delegate to a single Prime Worker. A single agent doing everything is not a colony; "justifications" for not spawning are not accepted.
 
 Use the Go `aether` CLI as the source of truth.
 
@@ -21,19 +22,56 @@ If `$ARGUMENTS` is empty, show: `Usage: /ant-build <phase_number>`
 | Ceremony rendering | Wrapper (Go ceremony CLI) |
 | State mutation | Go runtime (`build-finalize`) |
 
-The wrapper is the sole conductor for interactive worker spawning. The TS host
-provides the manifest only. See `.aether/docs/wrapper-host-contract.md`.
+The wrapper is the sole conductor for interactive worker spawning. The TS host provides the manifest only.
+
+## Required Cross-Stage State
+
+Carry these values forward across stages when produced:
+
+- `phase_id`
+- `verification_depth`
+- `manifest_file`
+- `context_capsule`
+- `wave_results`
+- `verification_status`
+- `next_action`
+
+<success_criteria>
+A finished build has: every manifest dispatch spawned, every terminal result collected with a non-empty `handoff`, `build-finalize` run on the Go-owned completion path, and the closeout rendered.
+</success_criteria>
+
+<failure_modes>
+- Wave failure mid-build: do not continue to the next wave; failed dependencies cascade.
+- Provider dispatch unavailable: surface the sanitized availability message and stop.
+- Boundary guidance active: route to `aether discuss` and request a fresh manifest.
+</failure_modes>
+
+<read_only>
+This wrapper may read but never write: colony state, session files, and pheromone files. All persistence goes through the Go-owned finalizers named below.
+</read_only>
 
 ## Colony Context
 
-Before planning the dispatch, ground yourself in runtime truth:
+🐜 Before spawning anyone, the Queen grounds herself in what the colony already knows.
+
+**Purpose:** Load current colony state and phase progress so framing and dispatch decisions are made against runtime truth, not memory.
+
+**Reads:** `aether status` output (phase progress, colony health, active signals).
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
 2. Keep that runtime context in view while framing the phase.
 
+**Stop conditions:** None — this stage only observes; it never blocks the build.
+
 ## Active Signals
 
-Before spawning workers, present active pheromones as a compact steering block:
+🐜 The colony listens to its own pheromones before it moves.
+
+**Purpose:** Surface REDIRECT/FOCUS/FEEDBACK signals as a compact steering block so the Queen and the user share the same constraints before workers spawn.
+
+**Reads:** the active signal set already returned by `aether status`.
+
+Present active pheromones as a compact steering block:
 
 - `REDIRECT` first -- hard constraints.
 - `FOCUS` second -- main attention areas.
@@ -41,11 +79,27 @@ Before spawning workers, present active pheromones as a compact steering block:
 - Include strength or remaining-life context.
 - If no active signals, say so plainly.
 
+**Stop conditions:** None — signals inform framing; they never halt the build on their own.
+
 ## Phase Framing
+
+🐜 Name the work before the colony moves on it.
+
+**Purpose:** State what this build is, in one line a human can repeat back, before any worker spawns.
+
+**Reads:** the phase name and total phase count from colony state.
 
 Frame the requested work as `Phase N of M -- Name` with a one-line purpose.
 
+**Stop conditions:** None.
+
 ## Dispatch Manifest
+
+🐜 The manifest is the colony's marching order — fetch it, then spawn exactly what it names.
+
+**Purpose:** Get the dispatch plan from the TS host without dispatching workers, so the wrapper — not the host — controls interactive spawning.
+
+**Reads:** the TS host's plan-only build response.
 
 Fetch the manifest from the TS host in plan-only mode:
 
@@ -57,15 +111,31 @@ The TS host calls `aether build <phase> --plan-only` and returns JSON without di
 
 Parse `result.manifest.dispatch_manifest`. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
 
-If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output.
+See `.aether/docs/wrapper-host-contract.md` for the full field shapes this manifest carries.
+
+**Stop conditions:** If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output. Do not retry silently or fall back to a simulated dispatch.
 
 ## Guided Boundary Gate
+
+🐜 Sometimes the colony must stop and ask before it moves.
+
+**Purpose:** Catch orchestrator-level boundary guidance before any worker spawns, so a build never runs past a condition the runtime flagged as needing a decision.
+
+**Reads:** `result.manifest.dispatch_manifest`'s `orchestrator_boundary_guidance` field.
 
 Before spawning workers, inspect `result.manifest.dispatch_manifest` for `orchestrator_boundary_guidance`:
 
 - If active or `next` is `aether discuss`, stop the build flow and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
 
+**Stop conditions:** Boundary guidance active — route to `aether discuss` and request a fresh manifest; never proceed on the stale one.
+
 ## Runtime Spawn Ceremony
+
+🐜 Before the first worker moves, the colony sees its own plan.
+
+**Purpose:** Render the runtime-owned spawn plan so the user sees exactly what is about to be spawned, in the Go renderer's own caste-identity styling — never hand-rendered by the wrapper.
+
+**Reads:** the manifest file written in Dispatch Manifest.
 
 Render the runtime-owned spawn ceremony:
 
@@ -73,7 +143,19 @@ Render the runtime-owned spawn ceremony:
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>
 ```
 
+**Stop conditions:** None — this stage only renders; the plan was already fixed in Dispatch Manifest.
+
 ## Worker Spawning
+
+🐜 The Queen spawns directly. The colony requires actual parallelism.
+
+**Why this matters:** the Queen spawns workers herself because a single agent doing everything is not a colony — it is one worker wearing a costume. Builders who verify their own work fall into confirmation bias; independent castes catch what a single agent misses. "Justifications" for not spawning are not accepted.
+
+**Purpose:** Spawn every dispatch the manifest names, in wave order, carrying each worker's brief verbatim and collecting a concrete terminal result from every one.
+
+**Reads:** `dispatch_manifest.execution_plan` and each dispatch's `brief` / `brief_path` / `context_capsule` / `skill_section` / `permission_profile`.
+
+**Spawns:** every worker named in `dispatch_manifest.execution_plan`, wave by wave.
 
 The wrapper spawns workers. The TS host does NOT dispatch workers for the interactive path.
 
@@ -98,7 +180,15 @@ For each manifest wave:
 6. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`.
 
+**Stop conditions:** All workers in a wave fail — do not continue to the next wave; failed dependencies cascade into work built on broken foundations.
+
 ## Finalize
+
+🐜 The colony's work becomes durable only through the Go runtime.
+
+**Purpose:** Turn the wave results into one durable completion packet and hand it to the Go-owned finalizer — the wrapper never mutates state itself.
+
+**Reads:** each worker's terminal structured result collected during Worker Spawning.
 
 After all workers return, collect results into a temporary completion JSON and stage it in the Go-owned attempt journal:
 
@@ -118,16 +208,34 @@ Then render the user-facing closeout:
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>
 ```
 
+**Stop conditions:** `build-finalize` reports failure — do not render closeout as success; surface the runtime's own error instead.
+
 ## After the Build
+
+🐜 A build that nobody looks at again was wasted effort.
+
+**Purpose:** Hand the user back a clear picture of what moved and where to go next, using the runtime's own closeout as the source of truth.
+
+**Reads:** the visual closeout rendered in Finalize.
 
 1. Use the visual closeout's next-step line as the source of truth.
 2. Summarize what moved forward and which workers/castes ran.
 3. Note the most relevant signal or risk.
 4. Guide the user first to `/ant-continue`.
 
+**Stop conditions:** None — this stage only reports.
+
 ## Verification Depth
 
+🐜 Not every phase needs the same amount of scrutiny.
+
+**Purpose:** Explain the Queen's review-depth choice in plain terms so the user does not need to remember flag combinations.
+
+**Reads:** the `--verification-depth` flag or the Queen's smart default for this phase.
+
 The runtime supports `--verification-depth <light|standard|heavy>` for post-build review. Default is "standard". Use `--heavy` for full gates or `--light` to skip review agents.
+
+**Stop conditions:** None.
 
 ## Cross-Platform Drift Guard
 
@@ -149,3 +257,5 @@ flow.
 - Do NOT expose raw provider stdout/stderr, tokens, or auth probe output; use the Go availability category and sanitized next action.
 - Do NOT invent worker names, castes, or waves; use `dispatch_manifest`.
 - If docs and runtime disagree, runtime wins.
+
+<!-- PHASE-168: visual-guidance trailer appends below this line -->
