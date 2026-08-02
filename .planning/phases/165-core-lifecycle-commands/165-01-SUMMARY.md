@@ -107,3 +107,12 @@ None - no external service configuration required.
 ---
 *Phase: 165-core-lifecycle-commands*
 *Completed: 2026-08-02*
+
+## Self-Check: PASSED
+
+- FOUND: `.aether/docs/wrapper-host-contract.md`
+- FOUND: `cmd/lifecycle_wrapper_contract_test.go`
+- FOUND: `.planning/phases/165-core-lifecycle-commands/165-01-SUMMARY.md`
+- FOUND: commit `54b6b2ec` (Task 1)
+- FOUND: commit `0834b9d3` (Task 2)
+- FOUND: commit `ba8874e4` (Task 3)
