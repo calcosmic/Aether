@@ -1005,7 +1005,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	}
 	researchCandidates := phaseResearchCandidates(state, iterationSeed)
 	researchResult := computePhaseResearchProposalFields(planDepth, opts.Refresh, survey, researchCandidates, state.Plan.Phases, true)
-	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, researchCandidates, survey, opts.Refresh && iteration == 1)
+	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, researchCandidates, survey, opts.Refresh && iteration == 1, researchResult.Approved)
 	if len(researchDispatches) > 0 {
 		// The Route-Setter runs after the research wave; point it at the
 		// fresh RESEARCH.md files so findings shape the route.

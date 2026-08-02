@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,7 @@ func TestPlanEmitsPhaseResearchDispatchesFromDraft(t *testing.T) {
 	root := t.TempDir()
 	seed := researchSeedWithDraft("Wire exporter", "Ship dashboard")
 
-	dispatches := plannedPhaseResearchDispatches(root, "balanced", "Build the exporter", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false)
+	dispatches := plannedPhaseResearchDispatches(root, "balanced", "Build the exporter", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false, map[int]bool{1: true, 2: true})
 	if len(dispatches) != 2 {
 		t.Fatalf("dispatches = %d, want one research Scout per draft phase (2)", len(dispatches))
 	}
@@ -52,12 +53,27 @@ func TestPlanEmitsPhaseResearchDispatchesFromDraft(t *testing.T) {
 	}
 }
 
-// Fast preset skips research — speed is its contract.
-func TestPlanFastPresetSkipsPhaseResearch(t *testing.T) {
+// D-15: a fast run defaults every phase to skip (no approvals), but a phase
+// the user explicitly flips on during a fast run still dispatches — speed is
+// fast's default contract, not an unconditional block.
+func TestFastPresetSkipsUnlessUserFlipsResearchOn(t *testing.T) {
 	root := t.TempDir()
 	seed := researchSeedWithDraft("Wire exporter")
-	if got := plannedPhaseResearchDispatches(root, "fast", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false); len(got) != 0 {
-		t.Fatalf("fast preset dispatched research: %d dispatches", len(got))
+	candidates := phaseResearchCandidates(colony.ColonyState{}, seed)
+
+	if got := plannedPhaseResearchDispatches(root, "fast", "goal", candidates, codexSurveyContext{}, false, map[int]bool{}); len(got) != 0 {
+		t.Fatalf("fast preset with no approvals dispatched research: %d dispatches", len(got))
+	}
+	if got := plannedPhaseResearchDispatches(root, "fast", "goal", candidates, codexSurveyContext{}, false, nil); len(got) != 0 {
+		t.Fatalf("fast preset with nil approvals dispatched research: %d dispatches", len(got))
+	}
+
+	got := plannedPhaseResearchDispatches(root, "fast", "goal", candidates, codexSurveyContext{}, false, map[int]bool{1: true})
+	if len(got) != 1 {
+		t.Fatalf("fast preset with phase 1 flipped on dispatched %d, want 1 (D-15)", len(got))
+	}
+	if got[0].TaskID != "plan-research-phase-1" {
+		t.Fatalf("fast preset flipped-on dispatch = %q, want plan-research-phase-1", got[0].TaskID)
 	}
 }
 
@@ -78,7 +94,7 @@ func TestPhaseResearchDispatchedOncePerPhase(t *testing.T) {
 	}
 
 	seed := researchSeedWithDraft("Already researched", "Only templated", "Never researched")
-	dispatches := plannedPhaseResearchDispatches(root, "balanced", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false)
+	dispatches := plannedPhaseResearchDispatches(root, "balanced", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false, map[int]bool{1: true, 2: true, 3: true})
 	if len(dispatches) != 2 {
 		t.Fatalf("dispatches = %d, want 2 (phase 1 has worker research; phases 2-3 need it)", len(dispatches))
 	}
@@ -102,9 +118,11 @@ func TestReplanReResearchesPhases(t *testing.T) {
 	}
 
 	seed := researchSeedWithDraft("Already researched")
+	candidates := phaseResearchCandidates(colony.ColonyState{}, seed)
+	approved := map[int]bool{1: true}
 
 	// reresearch=true: stale findings on disk are not reused, phase 1 IS dispatched.
-	dispatches := plannedPhaseResearchDispatches(root, "balanced", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, true)
+	dispatches := plannedPhaseResearchDispatches(root, "balanced", "goal", candidates, codexSurveyContext{}, true, approved)
 	if len(dispatches) != 1 {
 		t.Fatalf("reresearch=true dispatches = %d, want 1 (stale findings must not be reused)", len(dispatches))
 	}
@@ -116,13 +134,13 @@ func TestReplanReResearchesPhases(t *testing.T) {
 	}
 
 	// reresearch=false with the same file on disk: phase 1 is NOT dispatched.
-	if got := plannedPhaseResearchDispatches(root, "balanced", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, false); len(got) != 0 {
+	if got := plannedPhaseResearchDispatches(root, "balanced", "goal", candidates, codexSurveyContext{}, false, approved); len(got) != 0 {
 		t.Fatalf("reresearch=false dispatches = %d, want 0 (single-run iterations still research once per phase)", len(got))
 	}
 
-	// planDepth "fast" still returns zero dispatches regardless of reresearch.
-	if got := plannedPhaseResearchDispatches(root, "fast", "goal", phaseResearchCandidates(colony.ColonyState{}, seed), codexSurveyContext{}, true); len(got) != 0 {
-		t.Fatalf("fast preset with reresearch=true dispatched %d, want 0 — speed is fast's contract", len(got))
+	// planDepth "fast" with no approval still returns zero dispatches.
+	if got := plannedPhaseResearchDispatches(root, "fast", "goal", candidates, codexSurveyContext{}, true, map[int]bool{}); len(got) != 0 {
+		t.Fatalf("fast preset with reresearch=true and no approval dispatched %d, want 0 — speed is fast's default contract", len(got))
 	}
 }
 
@@ -623,6 +641,88 @@ func TestPlanManifestWarnsWhenResearchBatchUnanswered(t *testing.T) {
 		}
 		if len(unresolvedByPhase) != 2 {
 			t.Fatalf("expected unresolved decisions for 2 phases, got %v", unresolvedByPhase)
+		}
+	})
+}
+
+// TestResearchDispatchGatedOnApproval covers Plan 05 Task 3's six behaviours:
+// dispatch is gated on approval first, and approval never overrides the
+// re-research or fast-depth rules that sit behind it.
+func TestResearchDispatchGatedOnApproval(t *testing.T) {
+	seed := researchSeedWithDraft("Phase one", "Phase two", "Phase three")
+	candidates := phaseResearchCandidates(colony.ColonyState{}, seed)
+
+	t.Run("only_approved_phase_dispatches", func(t *testing.T) {
+		root := t.TempDir()
+		dispatches := plannedPhaseResearchDispatches(root, "balanced", "goal", candidates, codexSurveyContext{}, false, map[int]bool{2: true})
+		if len(dispatches) != 1 {
+			t.Fatalf("dispatches = %d, want 1 (only phase 2 approved)", len(dispatches))
+		}
+		if dispatches[0].TaskID != "plan-research-phase-2" {
+			t.Fatalf("dispatch TaskID = %q, want plan-research-phase-2", dispatches[0].TaskID)
+		}
+	})
+
+	t.Run("empty_approved_map_dispatches_nothing", func(t *testing.T) {
+		root := t.TempDir()
+		if got := plannedPhaseResearchDispatches(root, "balanced", "goal", candidates, codexSurveyContext{}, false, map[int]bool{}); len(got) != 0 {
+			t.Fatalf("dispatches = %d, want 0 with an empty approved map", len(got))
+		}
+	})
+
+	t.Run("nil_approved_map_dispatches_nothing", func(t *testing.T) {
+		root := t.TempDir()
+		if got := plannedPhaseResearchDispatches(root, "balanced", "goal", candidates, codexSurveyContext{}, false, nil); len(got) != 0 {
+			t.Fatalf("dispatches = %d, want 0 with a nil approved map (nobody has answered yet)", len(got))
+		}
+	})
+
+	t.Run("approval_does_not_override_reresearch_rule", func(t *testing.T) {
+		root := t.TempDir()
+		researchDir := filepath.Join(root, ".aether", "data", "phase-research")
+		if err := os.MkdirAll(researchDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(researchDir, "phase-2-research.md"), []byte("# Phase 2 Research\nworker findings\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if got := plannedPhaseResearchDispatches(root, "balanced", "goal", candidates, codexSurveyContext{}, false, map[int]bool{2: true}); len(got) != 0 {
+			t.Fatalf("dispatches = %d, want 0 -- approved phase 2 already has worker-authored research and reresearch=false", len(got))
+		}
+	})
+
+	t.Run("approval_does_not_override_fast_depth_rule", func(t *testing.T) {
+		root := t.TempDir()
+		// A fast run with an approved phase DOES dispatch it (D-15) -- approval
+		// flips the default on, it does not get vetoed by depth.
+		got := plannedPhaseResearchDispatches(root, "fast", "goal", candidates, codexSurveyContext{}, false, map[int]bool{2: true})
+		if len(got) != 1 || got[0].TaskID != "plan-research-phase-2" {
+			t.Fatalf("fast depth with phase 2 approved dispatched %+v, want exactly plan-research-phase-2 (D-15)", got)
+		}
+	})
+
+	t.Run("dispatch_shape_unchanged_for_approved_phases", func(t *testing.T) {
+		root := t.TempDir()
+		got := plannedPhaseResearchDispatches(root, "balanced", "goal", candidates, codexSurveyContext{}, false, map[int]bool{2: true})
+		if len(got) != 1 {
+			t.Fatalf("dispatches = %d, want 1", len(got))
+		}
+		d := got[0]
+		if d.Stage != phaseResearchStage {
+			t.Errorf("stage = %q, want %q", d.Stage, phaseResearchStage)
+		}
+		if d.Caste != "scout" {
+			t.Errorf("caste = %q, want scout", d.Caste)
+		}
+		if d.Wave != 1 {
+			t.Errorf("wave = %d, want 1", d.Wave)
+		}
+		if len(d.Outputs) != 1 || d.Outputs[0] != "phase-2-research.md" {
+			t.Errorf("outputs = %v, want [phase-2-research.md]", d.Outputs)
+		}
+		wantName := deterministicAntName("scout", fmt.Sprintf("%s|plan-research|phase-%d", root, 2))
+		if d.Name != wantName {
+			t.Errorf("name = %q, want deterministic name %q", d.Name, wantName)
 		}
 	})
 }

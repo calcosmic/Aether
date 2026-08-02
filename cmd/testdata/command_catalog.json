@@ -5456,6 +5456,18 @@
     "stability_score": 91
   },
   {
+    "name": "plan-research-approve",
+    "short_description": "Answer the Queen's phase research proposal batch",
+    "flags": [
+      "approve-all",
+      "auto",
+      "flip"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "porter",
     "short_description": "Deliver colony work to the outside world",
     "flags": [],
