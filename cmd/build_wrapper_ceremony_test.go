@@ -42,6 +42,15 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"/ant-continue",
 		"dispatch_manifest.context_capsule",
 		"brief_path",
+		"## Required Cross-Stage State",
+		"**Purpose:**",
+		"**Reads:**",
+		"**Stop conditions:**",
+		"<success_criteria>",
+		"<failure_modes>",
+		"<read_only>",
+		"You DIRECTLY spawn multiple workers",
+		"Why this matters",
 	}
 
 	inOrder := []string{
@@ -77,6 +86,15 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 			"\nAETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only\n",
 			"Do NOT run `aether build` without `--plan-only` from this wrapper.",
 			"Do NOT run direct `aether build` from this wrapper for manifest generation",
+			// D-10 regression-fence item 9: no wrapper-driven git stash or
+			// commit. Checkpointing, if it ever returns, is runtime work.
+			// The mining source for this rewrite (build-prep.md:292-300)
+			// carries a `git stash push` checkpoint and `git stash pop`
+			// rollback verbatim next to a colony beat, so this is the one
+			// D-10 item most exposed by an executor mining that text.
+			"git stash",
+			"git add -A",
+			"git commit",
 		} {
 			if strings.Contains(text, forbidden) {
 				t.Errorf("%s still contains old pass-through contract %q", wrapperPath, forbidden)
@@ -184,4 +202,128 @@ func assertSubstringsInOrder(t *testing.T, path, content string, ordered []strin
 		}
 		cursor += idx + len(needle)
 	}
+}
+
+// TestBuildMdOwnershipHandshake pins the D-08/CMD-05 ownership chain record:
+// Phase 160 (Fail Loudly) merged first and made only narrow call-argument
+// fixes; Phase 165 is the sole structural owner of build.md for milestone
+// v1.25; Phase 168 (Live Visibility) appends a visual-guidance trailer
+// afterward. Both canonical build.md files must carry an HTML comment
+// recording the PHASE-160 fix and the exact reserved PHASE-168 trailer
+// marker, in that order, with the PHASE-168 marker as the last non-empty
+// line of the file -- an unambiguous insertion point for Phase 168.
+func TestBuildMdOwnershipHandshake(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	const phase168Marker = "<!-- PHASE-168: visual-guidance trailer appends below this line -->"
+
+	wrapperPaths := []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "build.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "build.md"),
+	}
+
+	for _, wrapperPath := range wrapperPaths {
+		content, err := os.ReadFile(wrapperPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", wrapperPath, err)
+		}
+		text := string(content)
+
+		if !strings.Contains(text, "PHASE-160:") {
+			t.Errorf("%s missing a PHASE-160: ownership comment", wrapperPath)
+		}
+		if !strings.Contains(text, phase168Marker) {
+			t.Errorf("%s missing the exact PHASE-168 trailer marker %q", wrapperPath, phase168Marker)
+		}
+
+		assertSubstringsInOrder(t, wrapperPath, text, []string{"PHASE-160:", phase168Marker})
+
+		lines := strings.Split(text, "\n")
+		lastNonEmpty := ""
+		for i := len(lines) - 1; i >= 0; i-- {
+			if strings.TrimSpace(lines[i]) != "" {
+				lastNonEmpty = strings.TrimSpace(lines[i])
+				break
+			}
+		}
+		if lastNonEmpty != phase168Marker {
+			t.Errorf("%s: last non-empty line is %q, want exactly %q", wrapperPath, lastNonEmpty, phase168Marker)
+		}
+	}
+}
+
+// TestBuildWrapperStageSkeletonAndParity is the D-05/D-09 stage-skeleton
+// invariant for build.md: every non-exempt stage carries a Purpose marker
+// (a proportion assertion that survives a stage rename, unlike a
+// named-section grep), .claude and .opencode stay in ordered heading parity,
+// the D-06 method-asset blocks are present, and method prose outweighs
+// envelope-parsing mechanics per the CMD-02 relocation to
+// wrapper-host-contract.md.
+func TestBuildWrapperStageSkeletonAndParity(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	claudePath := filepath.Join(repoRoot, ".claude", "commands", "ant", "build.md")
+	opencodePath := filepath.Join(repoRoot, ".opencode", "commands", "ant", "build.md")
+
+	claudeRaw, err := os.ReadFile(claudePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", claudePath, err)
+	}
+	opencodeRaw, err := os.ReadFile(opencodePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", opencodePath, err)
+	}
+
+	claudeText := string(claudeRaw)
+	opencodeText := string(opencodeRaw)
+
+	exemptHeadings := []string{
+		"## Ownership Split",
+		"## Required Cross-Stage State",
+		"## Cross-Platform Drift Guard",
+		"## Guardrails",
+	}
+
+	t.Run("stage_skeleton_density", func(t *testing.T) {
+		assertStageSkeletonDensity(t, claudePath, claudeText, exemptHeadings)
+		assertStageSkeletonDensity(t, opencodePath, opencodeText, exemptHeadings)
+	})
+
+	t.Run("ordered_heading_parity", func(t *testing.T) {
+		assertOrderedHeadingParity(t, "build", stripCommentLines(claudeText), stripCommentLines(opencodeText))
+	})
+
+	t.Run("structured_blocks_present", func(t *testing.T) {
+		for _, path := range []string{claudePath, opencodePath} {
+			text := claudeText
+			if path == opencodePath {
+				text = opencodeText
+			}
+			for _, marker := range []string{"<success_criteria>", "<failure_modes>", "<read_only>", "## Required Cross-Stage State"} {
+				if !strings.Contains(text, marker) {
+					t.Errorf("%s missing %q", path, marker)
+				}
+			}
+		}
+	})
+
+	t.Run("method_outweighs_envelope_mechanics", func(t *testing.T) {
+		for _, path := range []string{claudePath, opencodePath} {
+			text := claudeText
+			if path == opencodePath {
+				text = opencodeText
+			}
+			methodCount := countMarkerLines(text, stageSkeletonMarkers())
+			envelopeCount := countMarkerLines(text, envelopeMechanicsMarkers())
+			if methodCount < 3*envelopeCount {
+				t.Errorf("%s: method markers (%d) do not outweigh envelope-mechanics markers (%d) by at least 3x", path, methodCount, envelopeCount)
+			}
+		}
+	})
 }
