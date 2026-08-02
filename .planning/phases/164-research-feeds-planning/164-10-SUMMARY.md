@@ -137,3 +137,8 @@ None - no external service configuration required.
 ---
 *Phase: 164-research-feeds-planning*
 *Completed: 2026-08-02*
+
+## Self-Check: PASSED
+
+- All created/modified files confirmed present on disk (test files, source files, dist artifacts, doc surfaces).
+- All four task commit hashes (`cf261613`, `fea437a6`, `36fac006`, `d57754c3`) confirmed present in `git log --oneline --all`.
