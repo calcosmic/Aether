@@ -25,6 +25,9 @@ import { createSpawnOrchestrator } from "./spawn-orchestrator.js";
 import { createCeremonyAdapter, renderDryRunBadge, } from "./ceremony-adapter.js";
 import { ConfidenceLoop } from "./confidence-loop.js";
 import { ConfidenceEvaluator } from "./confidence-evaluator.js";
+import { ResearchConfidenceEvaluator, researchLoopOptions, researchLoopPreset, } from "./research-confidence.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 export { buildHostGoArgs } from "./command-registry.js";
 // Mutable reference for test injection.
 let _callGoJSONRef = callGoJSON;
@@ -543,10 +546,17 @@ async function runDryRunDispatchedCommand(bridge, parsed, definition) {
 // ---------------------------------------------------------------------------
 // Iteration ceremony helpers (ITER-06)
 // ---------------------------------------------------------------------------
-/** Render an iteration marker between dispatch waves. */
-function renderIterationCeremony(result) {
+/**
+ * Render an iteration marker between dispatch waves.
+ *
+ * @param result - The ConfidenceResult from the last evaluate call.
+ * @param prefix - Optional label prepended before "Iteration" (research path
+ *   passes `${scoutName} phase ${id}`). Omitting it produces a byte-identical
+ *   line to the build path's original output.
+ */
+function renderIterationCeremony(result, prefix) {
     const parts = [
-        `Iteration ${result.iterationCount}:`,
+        `${prefix ? `${prefix} ` : ""}Iteration ${result.iterationCount}:`,
         `confidence ${result.currentConfidence}%`,
         `(delta ${result.delta >= 0 ? "+" : ""}${result.delta}%,`,
         `budget ${result.budgetRemaining} workers remaining)`,
@@ -559,6 +569,153 @@ function renderIterationCeremony(result) {
 /** Render the final iteration stop reason. */
 function renderIterationComplete(stopReason) {
     emitCeremonyOutput(`\u2500\u2500 Iteration complete: ${stopReason} \u2500\u2500`);
+}
+// ---------------------------------------------------------------------------
+// Research confidence loop (RESEARCH-07 / RESEARCH-08)
+// ---------------------------------------------------------------------------
+/**
+ * Default worker budget for a single research phase's ConfidenceLoop.
+ * Mirrors the build path's `?? 20` fallback (see spawnBudget in
+ * `runDispatchedBuildCommand`) \u2014 the depth preset's maxIterations (4/6/8/12,
+ * always well under 20) is the binding cap in practice; this budget is the
+ * secondary safety net T-164-16 requires.
+ */
+const RESEARCH_LOOP_DEFAULT_BUDGET = 20;
+/** Documented range for --target (see host.ts usage text: "70-99"). */
+function clampResearchConfidenceTarget(value) {
+    return Math.min(99, Math.max(70, value));
+}
+/** Documented range for --max-iterations (see host.ts usage text: "2-12"). */
+function clampResearchMaxIterations(value) {
+    return Math.min(12, Math.max(2, value));
+}
+/**
+ * Extract the phase ID a research dispatch targets from its task_id
+ * ("plan-research-phase-<ID>", cmd/phase_research.go:90). Returns undefined
+ * when the task_id doesn't match the expected shape.
+ */
+function researchDispatchPhaseId(dispatch) {
+    const match = /^plan-research-phase-(\d+)$/.exec(dispatch.task_id ?? "");
+    if (!match)
+        return undefined;
+    return parseInt(match[1], 10);
+}
+/**
+ * Read a phase's research artifact from disk. A missing file is treated as
+ * empty markdown \u2014 the evidence scorer naturally grades an empty artifact at
+ * its base score, no special-casing needed.
+ */
+function readPhaseResearchMarkdown(cwd, phaseId) {
+    const filePath = join(cwd, ".aether", "data", "phase-research", `phase-${phaseId}-research.md`);
+    try {
+        return readFileSync(filePath, "utf8");
+    }
+    catch {
+        return "";
+    }
+}
+/** Derive a self-assessed gap count from a worker's claimed blockers, if any. */
+function selfAssessedGapsFromDispatchResult(result) {
+    return result?.blockers?.length ?? 0;
+}
+/**
+ * Give the plan path a real confidence loop (RESEARCH-07). Constructs one
+ * `ConfidenceLoop` per approved research phase \u2014 never a batch average \u2014 and
+ * iterates each phase's Scout until its depth-bound target is met or its
+ * iteration budget runs out (RESEARCH-08 / D-12), printing a ceremony line
+ * every iteration (D-09) and an early-accept prompt at most once per phase
+ * when progress stalls or nears target (D-10).
+ */
+export async function runResearchConfidenceLoop(bridge, parsed, researchDispatches) {
+    if (researchDispatches.length === 0) {
+        return { phases: [], escalations: [] };
+    }
+    const depth = parsed.depth ?? "balanced";
+    const preset = researchLoopPreset(depth);
+    const loopOpts = researchLoopOptions(depth, RESEARCH_LOOP_DEFAULT_BUDGET);
+    if (parsed.targetConfidence) {
+        const parsedTarget = parseInt(parsed.targetConfidence, 10);
+        if (!Number.isNaN(parsedTarget)) {
+            loopOpts.confidenceTarget = clampResearchConfidenceTarget(parsedTarget);
+        }
+    }
+    if (parsed.maxIterations) {
+        const parsedMax = parseInt(parsed.maxIterations, 10);
+        if (!Number.isNaN(parsedMax)) {
+            loopOpts.maxIterations = clampResearchMaxIterations(parsedMax);
+        }
+    }
+    const confidenceTarget = loopOpts.confidenceTarget ?? preset.confidenceTarget;
+    const evaluator = new ResearchConfidenceEvaluator();
+    const phases = new Map();
+    for (const dispatch of researchDispatches) {
+        const phaseId = researchDispatchPhaseId(dispatch);
+        if (phaseId === undefined)
+            continue; // Malformed dispatch; nothing to key the loop on.
+        phases.set(phaseId, {
+            dispatch,
+            phaseId,
+            loop: new ConfidenceLoop(loopOpts),
+            prompted: false,
+        });
+    }
+    const active = new Map(phases);
+    while (active.size > 0) {
+        const activeStates = [...active.values()];
+        const roundDispatches = toWorkerDispatches(activeStates.map((state) => state.dispatch));
+        const dispatchOpts = {
+            goBinaryPath: bridge.goBinaryPath,
+            cwd: bridge.cwd,
+            simulateWorkers: parsed.simulate,
+            workflow: "plan",
+        };
+        const workerResults = await _dispatchWorkersRef(dispatchOpts, roundDispatches);
+        const resultByName = new Map(workerResults.map((r) => [r.name, r]));
+        for (const state of activeStates) {
+            const markdown = readPhaseResearchMarkdown(bridge.cwd, state.phaseId);
+            const selfAssessedGaps = selfAssessedGapsFromDispatchResult(resultByName.get(state.dispatch.name));
+            const evaluated = evaluator.evaluate({
+                markdown,
+                repoRoot: bridge.cwd,
+                selfAssessedGaps,
+            });
+            const loopResult = state.loop.evaluate(evaluated.score, 1);
+            state.lastResult = loopResult;
+            renderIterationCeremony(loopResult, `${state.dispatch.name} phase ${state.phaseId}`);
+            let stopReason = loopResult.stopReason;
+            let finished = !loopResult.shouldContinue;
+            // Early-accept prompt (D-10): at most once per phase, evaluated before
+            // the --accept override below forces a stop.
+            if (!state.prompted) {
+                const stalledBelowTarget = loopResult.stopReason === "diminishing_returns" && loopResult.currentConfidence < confidenceTarget;
+                const nearTarget = loopResult.shouldContinue && loopResult.currentConfidence >= confidenceTarget - 5;
+                if (stalledBelowTarget || nearTarget) {
+                    state.prompted = true;
+                    emitCeremonyOutput(`phase ${state.phaseId} research at ${loopResult.currentConfidence}%, ` +
+                        `gaining ${loopResult.delta}%/iteration \u2014 accept now or keep digging? ` +
+                        `(re-run with --accept to accept)`);
+                }
+            }
+            // Non-interactive accept (D-10): stop every still-active phase after
+            // its current iteration. No per-iteration nagging.
+            if (parsed.accept && loopResult.shouldContinue) {
+                finished = true;
+                stopReason = "accepted";
+            }
+            if (finished) {
+                state.finalStopReason = stopReason;
+                renderIterationComplete(stopReason);
+                active.delete(state.phaseId);
+            }
+        }
+    }
+    const summaryPhases = [...phases.values()].map((state) => ({
+        phaseId: state.phaseId,
+        iterations: state.lastResult?.iterationCount ?? 0,
+        finalConfidence: state.lastResult?.currentConfidence ?? 0,
+        stopReason: state.finalStopReason ?? state.lastResult?.stopReason ?? "",
+    }));
+    return { phases: summaryPhases, escalations: [] };
 }
 /**
  * Dispatch a single build iteration, render ceremony, and write its completion
@@ -837,19 +994,48 @@ async function runDispatchedPlanCommand(bridge, parsed) {
     renderManifestCeremony(ceremony, "plan", ceremonyEnvelope, dispatches);
     // Step 3b: Hive wisdom injection summary
     emitHiveSummary(dispatches);
-    // Step 4: Dispatch planning workers
+    // Step 4: Research phases get their own confidence loop (RESEARCH-07)
+    // before the rest of the wave dispatches. This preserves today's ordering
+    // contract -- all wave-1 research completes before the wave-2 Route-Setter
+    // -- while giving research its own depth-bound iteration budget (D-12).
+    const researchPart = dispatches.filter((d) => d.stage === "phase_research");
+    const rest = dispatches.filter((d) => d.stage !== "phase_research");
+    let researchSummary = { phases: [], escalations: [] };
+    let researchMappedResults = [];
+    if (researchPart.length > 0) {
+        researchSummary = await runResearchConfidenceLoop(bridge, parsed, researchPart);
+        researchMappedResults = researchPart.map((dispatch) => {
+            const phaseId = researchDispatchPhaseId(dispatch);
+            const phaseSummary = researchSummary.phases.find((p) => p.phaseId === phaseId);
+            const summary = phaseSummary
+                ? `Research phase ${phaseSummary.phaseId} reached ${phaseSummary.finalConfidence}% confidence after ${phaseSummary.iterations} iteration(s) (${phaseSummary.stopReason}).`
+                : "Research phase completed.";
+            return {
+                name: dispatch.name,
+                status: "completed",
+                summary,
+                caste: dispatch.caste,
+                task: dispatch.task,
+                stage: "phase_research",
+            };
+        });
+    }
+    // Step 5: Dispatch the remaining planning workers (Route-Setter, etc.)
     const dispatchOpts = {
         goBinaryPath: bridge.goBinaryPath,
         cwd: bridge.cwd,
         simulateWorkers: parsed.simulate,
         workflow: "plan",
     };
-    const buildDispatches = toWorkerDispatches(dispatches);
-    const workerResults = await _dispatchWorkersRef(dispatchOpts, buildDispatches);
-    const mappedResults = toWorkerResults(buildDispatches, workerResults);
-    // Step 5: Render worker-complete ceremony
+    let mappedResults = researchMappedResults;
+    if (rest.length > 0) {
+        const buildDispatches = toWorkerDispatches(rest);
+        const workerResults = await _dispatchWorkersRef(dispatchOpts, buildDispatches);
+        mappedResults = [...researchMappedResults, ...toWorkerResults(buildDispatches, workerResults)];
+    }
+    // Step 6: Render worker-complete ceremony
     renderWorkerCeremony(ceremony, "plan", mappedResults);
-    // Step 6: Write completion file and call finalizer
+    // Step 7: Write completion file and call finalizer
     const completion = {
         plan_manifest: planManifest,
         dispatches: mappedResults,
@@ -860,9 +1046,13 @@ async function runDispatchedPlanCommand(bridge, parsed) {
         "--completion-file", completionPath,
     ]);
     cleanupCompletionDir(completionPath);
-    // Step 7: Render closeout
+    // Step 8: Render closeout
     emitCeremonyOutput(ceremony.renderCloseout("plan", completionPath));
-    process.stdout.write(JSON.stringify({ ok: true, completion_file: completionPath }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({
+        ok: true,
+        completion_file: completionPath,
+        research_iterations: researchSummary,
+    }, null, 2) + "\n");
 }
 /**
  * Run the dispatched continue pipeline: fetch continue manifest, dispatch
