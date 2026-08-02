@@ -471,11 +471,16 @@ Plans:
 **Plans**: 6 plans in 3 waves
 
 Plans:
+**Wave 1**
 - [ ] 165-01-PLAN.md — Contract destination + shared wrapper test toolkit + flat-mirror and retired-vocabulary invariants; resolves the three research open questions (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 165-02-PLAN.md — CMD-05: build.md rewrite on both platforms with the D-08 ownership handshake, skeleton density and parity tests (wave 2, needs 01)
 - [ ] 165-03-PLAN.md — continue.md rewrite on both platforms; Classic verification beat restored, context-clear fence widened to the flat mirror (wave 2, needs 01)
 - [ ] 165-04-PLAN.md — plan.md rewrite on both platforms; termination-condition prose restored without threshold arithmetic or invented flags (wave 2, needs 01)
 - [ ] 165-05-PLAN.md — init.md rewrite on both platforms; 👑 intention beat restored, first dedicated init ceremony test (wave 2, needs 01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 165-06-PLAN.md — CMD-02/CMD-04 phase gate: cross-wrapper proportion invariant, specialist-command hash fence, CMD-03 human read-through (wave 3, needs 01-05)
 
 ### Phase 166: Full Colony On Demand
