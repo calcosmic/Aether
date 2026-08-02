@@ -268,22 +268,30 @@ func level2Headings(text string) []string {
 
 **If this table is empty:** N/A — two assumptions are logged above, both flagged for the planner/discuss-phase to confirm before locking task-level scope.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+**All three were resolved during planning on 2026-08-02. The rulings are recorded
+in `165-01-PLAN.md`'s objective and are implemented by Plan 01's tasks. They are
+locked — downstream agents treat them as chosen, not open.**
+
 
 1. **Do the flat legacy mirror files (`ant-build.md`, `ant-continue.md`, `ant-init.md`, `ant-plan.md`) get rewritten in this phase's tasks, or handled by a publish/update round-trip, or explicitly descoped?**
    - What we know: two of four (`ant-continue.md`, `ant-plan.md`) are currently in sync with canonical and are already test-asserted; two (`ant-build.md`, `ant-init.md`) are already stale and untested.
    - What's unclear: whether Claude Code, when invoked inside this repo, resolves `/ant-build` to the flat file, the nested file, both (as separate commands), or whichever the platform's directory-scan order happens to prefer first.
    - Recommendation: treat this as a discuss-phase-worthy scope question if not already implicitly decided; at minimum, the plan should state explicitly which of (a)/(b)/(c) from Pitfall 1 it chose, and why, rather than silently rewriting only the nested files and leaving the flat ones exactly as stale as `ant-build.md`/`ant-init.md` are today.
+   - **RESOLVED (option a):** the flat mirrors are rewritten in lockstep with their canonical counterparts, and byte-equality is pinned permanently by `TestLifecycleFlatMirrorsMatchCanonical` (`cmd/lifecycle_wrapper_contract_test.go`, created in `165-01-PLAN.md` Task 2; the two drifted files are resynced in Task 3, and each Wave 2 plan re-syncs its own mirror as its Task 3). Rationale: the mirrors are git-tracked, two of four were already test-asserted, and the two that no test covered are the two that drifted — so the drift is caused by missing coverage, and coverage is the fix.
 
 2. **Does the "Required terminal structured result" field-by-field list in build.md/continue.md count as D-03 envelope-parsing mechanics (move to `wrapper-host-contract.md`) or D-06 method (what a worker owes back, stays inline)?**
    - What we know: D-03's own example phrasing ("fetch the manifest... spawn each worker with the runtime-composed brief verbatim... respect execution_plan waves") describes *manifest consumption*, while the terminal-result list describes *worker output shape* — arguably a different direction of data flow than what D-03 names.
    - What's unclear: whether CMD-02's grep-based test (forbidding "primary job is parsing an internal JSON envelope") is meant to catch this list at all; no current test forbids these specific bullets.
    - Recommendation: keep the terminal-result field list inline (it reads as method: "what must a worker report back," not "how does the wrapper parse JSON") but move genuinely mechanical envelope-shape documentation (temp file handling, `result.manifest.dispatch_manifest` vs `result.plan_manifest` field-name differences across the three commands) to `wrapper-host-contract.md`.
+   - **RESOLVED (method — stays inline):** the terminal structured result describes what a *worker owes back*, which is the opposite direction of data flow from manifest consumption, so it is D-06 method and remains in the wrappers. The ruling is written into `.aether/docs/wrapper-host-contract.md` as a named section `## Terminal Worker Result Belongs to the Wrapper` (`165-01-PLAN.md` Task 1) so it cannot be re-litigated silently, and the CMD-02 proportion test in `165-06-PLAN.md` Task 1 explicitly does not count it as envelope-parsing prose.
 
 3. **Should `.aether/docs/wrapper-host-contract.md` gain a new "Manifest and Completion Packet Shapes" section as part of this phase, or is a one-line pointer per wrapper sufficient without expanding the contract doc's content?**
    - What we know: D-03 names this doc as "already the named contract doc" and says envelope mechanics "move to" it.
    - What's unclear: whether "move to" requires this phase to actually author new content there, or whether the existing boundary-table content already satisfies the requirement and only the wrapper-side pointer needs adding.
    - Recommendation: default to adding a brief new section there enumerating the 2-3 field names each wrapper currently explains inline (`dispatch_manifest.execution_plan`, `dispatch.brief_path`/`dispatch.brief`, `dispatch.permission_profile`), since CMD-02's grep test is easiest to satisfy cleanly if the detail genuinely lives elsewhere rather than merely being asserted-as-fine-to-keep.
+   - **RESOLVED (yes — new content is authored):** `165-01-PLAN.md` Task 1 adds a `## Manifest and Completion Packet Shapes` section enumerating 15 manifest and completion field keys with a producer and a wrapper obligation for each, asserted by `TestWrapperHostContractDocumentsManifestShapes`. Rationale: a pointer to a document that does not contain the detail is a paper claim, which CLAUDE.md's Definition of Done rejects — the detail must genuinely live elsewhere before a wrapper points at it.
 
 ## Validation Architecture
 
