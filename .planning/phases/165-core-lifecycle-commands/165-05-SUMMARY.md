@@ -128,3 +128,16 @@ None — no external service configuration required.
 ---
 *Phase: 165-core-lifecycle-commands*
 *Completed: 2026-08-03*
+
+## Self-Check: PASSED
+
+- FOUND: `cmd/init_wrapper_ceremony_test.go`
+- FOUND: `.claude/commands/ant/init.md`
+- FOUND: `.opencode/commands/ant/init.md`
+- FOUND: `.claude/commands/ant-init.md`
+- FOUND: `.aether/commands/init.yaml`
+- FOUND: `.planning/phases/165-core-lifecycle-commands/165-05-SUMMARY.md`
+- FOUND: commit `5f46a530` (Task 1)
+- FOUND: commit `212c6811` (Task 2)
+- FOUND: commit `7dcc264e` (Task 3)
+- FOUND: commit `063cf291` (SUMMARY)
