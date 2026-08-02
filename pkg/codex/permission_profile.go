@@ -96,6 +96,8 @@ func behavioralRestrictionsForCaste(caste string) []string {
 		return []string{"write documentation artifacts only"}
 	case "architect", "route_setter", "sage":
 		return []string{"return structured analysis without repository writes"}
+	case "oracle":
+		return []string{"write escalated research findings under .aether/oracle and .aether/data/phase-research only"}
 	default:
 		return nil
 	}

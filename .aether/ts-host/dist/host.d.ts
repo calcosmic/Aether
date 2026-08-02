@@ -68,7 +68,13 @@ export interface ResearchLoopPhaseSummary {
 /** Summary returned by `runResearchConfidenceLoop`. */
 export interface ResearchLoopSummary {
     phases: ResearchLoopPhaseSummary[];
-    /** Phase IDs escalated to Oracle. Always empty here \u2014 Plan 08 populates it. */
+    /**
+     * Phase IDs escalated from Scout to Oracle (D-04). A phase appears here at
+     * most once: its loop stopped with reason "diminishing_returns" below the
+     * confidence target at deep or exhaustive depth, and the escalated Oracle
+     * dispatch was sent exactly once \u2014 Oracle's own RALF loop (runOracleLoop)
+     * drives the rest, not a second ConfidenceLoop.
+     */
     escalations: number[];
 }
 /**

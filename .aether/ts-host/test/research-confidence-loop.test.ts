@@ -21,9 +21,11 @@ import {
   parseArgs,
   __setDispatchWorkers,
   __restoreDispatchWorkers,
+  __setCallGoJSON,
+  __restoreCallGoJSON,
   runResearchConfidenceLoop,
 } from "../src/host.js";
-import type { GoBridgeOptions } from "../src/go-bridge.js";
+import type { GoBridgeOptions, callGoJSON } from "../src/go-bridge.js";
 import type { BuildDispatch } from "../src/types.js";
 import type { DispatchOptions, DispatchResult } from "../src/worker-dispatch.js";
 
@@ -339,6 +341,170 @@ describe("runResearchConfidenceLoop (RESEARCH-07 / RESEARCH-08)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Oracle escalation (D-04, RESEARCH-07 Plan 08): stall at deep/exhaustive
+// depth escalates Scout -> Oracle exactly once, via `plan-research-escalate`.
+// ---------------------------------------------------------------------------
+
+interface EscalateHarness {
+  calls: string[][];
+}
+
+/**
+ * Install a fake `_callGoJSONRef` that only answers `plan-research-escalate`
+ * calls, returning an oracle-caste dispatch shaped like the real
+ * `cmd/phase_research_escalate.go` envelope. Any other Go verb throws --
+ * the escalation path must never call anything else.
+ */
+function installEscalateMock(harness: EscalateHarness): void {
+  __setCallGoJSON((<T>(_opts: GoBridgeOptions, args: string[]): T => {
+    if (args[0] !== "plan-research-escalate") {
+      throw new Error(`unexpected callGoJSON invocation in escalation test: ${args.join(" ")}`);
+    }
+    harness.calls.push(args);
+    const phaseFlagIdx = args.indexOf("--phase");
+    const phaseId = phaseFlagIdx >= 0 ? parseInt(args[phaseFlagIdx + 1]!, 10) : 0;
+    return {
+      dispatch: {
+        stage: "phase_research",
+        caste: "oracle",
+        agent_name: "aether-oracle",
+        name: `Oracle-Escalated-phase-${phaseId}`,
+        task: `Escalated Oracle research for phase ${phaseId}`,
+        task_id: `plan-research-escalate-phase-${phaseId}`,
+        outputs: [`phase-${phaseId}-research.md`],
+        status: "planned",
+      },
+    } as T;
+  }) as typeof callGoJSON);
+}
+
+describe("Oracle escalation (D-04, Plan 08)", () => {
+  let harness: RoundHarness;
+  let restoreStderr: () => void;
+  let escalateHarness: EscalateHarness;
+
+  beforeEach(() => {
+    __restoreDispatchWorkers();
+    __restoreCallGoJSON();
+    harness = createHarness();
+    restoreStderr = captureStderr(harness);
+    escalateHarness = { calls: [] };
+  });
+
+  afterEach(() => {
+    restoreStderr();
+    __restoreDispatchWorkers();
+    __restoreCallGoJSON();
+  });
+
+  it("a deep-depth stall below target escalates exactly once, in one extra dispatch round", async () => {
+    const repoRoot = makeFixtureRepo();
+    // Constant score never moves -> trips diminishing_returns on round 3
+    // (window=2 needs 3 data points), well under deep's 8-iteration cap.
+    installDispatchMock(harness, repoRoot, new Map([[5, () => ({ markdown: MEDIUM_MARKDOWN })]]));
+    installEscalateMock(escalateHarness);
+
+    const parsed = parseArgs(["node", "host.js", "plan", "--depth", "deep", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: repoRoot };
+
+    const summary = await runResearchConfidenceLoop(bridge, parsed, [researchDispatch(5, "Scout-Antenna-05")]);
+
+    assert.equal(summary.phases[0]!.stopReason, "diminishing_returns");
+    assert.ok(summary.phases[0]!.finalConfidence < 95, "confidence should remain below the deep target (95)");
+    assert.equal(escalateHarness.calls.length, 1, "exactly one plan-research-escalate call");
+    assert.deepEqual(summary.escalations, [5], "escalated phase ID surfaces in the summary");
+
+    // 3 research rounds (stall detected on round 3) + 1 escalation dispatch round.
+    assert.equal(harness.rounds.length, 4, "expected 3 research rounds plus 1 escalation dispatch round");
+    assert.ok(
+      harness.rounds[3]!.includes("Oracle-Escalated-phase-5"),
+      "the escalation round dispatches the Oracle by its escalation-dispatch name"
+    );
+
+    const escalateArgs = escalateHarness.calls[0]!;
+    assert.ok(escalateArgs.includes("--phase") && escalateArgs.includes("5"));
+    assert.ok(escalateArgs.includes("--target") && escalateArgs.includes("95"));
+  });
+
+  it("the same stall at balanced or fast depth never escalates", async () => {
+    for (const depth of ["balanced", "fast"]) {
+      const repoRoot = makeFixtureRepo();
+      const localHarness = createHarness();
+      const stopCapture = captureStderr(localHarness);
+      installDispatchMock(localHarness, repoRoot, new Map([[6, () => ({ markdown: MEDIUM_MARKDOWN })]]));
+      const localEscalate: EscalateHarness = { calls: [] };
+      installEscalateMock(localEscalate);
+
+      const parsed = parseArgs(["node", "host.js", "plan", "--depth", depth, "--simulate"]);
+      const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: repoRoot };
+
+      const summary = await runResearchConfidenceLoop(bridge, parsed, [researchDispatch(6, "Scout-Antenna-06")]);
+
+      assert.equal(localEscalate.calls.length, 0, `${depth} depth must not escalate on the same stall`);
+      assert.deepEqual(summary.escalations, []);
+      stopCapture();
+    }
+  });
+
+  it("a phase stopping with confidence_target_met never escalates, even at deep depth", async () => {
+    const repoRoot = makeFixtureRepo();
+    // FULL_MARKDOWN with zero gaps scores 100, well above deep's 95 target,
+    // from the first round.
+    installDispatchMock(harness, repoRoot, new Map([[8, () => ({ markdown: FULL_MARKDOWN })]]));
+    installEscalateMock(escalateHarness);
+
+    const parsed = parseArgs(["node", "host.js", "plan", "--depth", "deep", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: repoRoot };
+
+    const summary = await runResearchConfidenceLoop(bridge, parsed, [researchDispatch(8, "Scout-Antenna-08")]);
+
+    assert.equal(summary.phases[0]!.stopReason, "confidence_target_met");
+    assert.equal(escalateHarness.calls.length, 0);
+    assert.deepEqual(summary.escalations, []);
+  });
+
+  it("a phase stopping with max_iterations_met never escalates, even below target", async () => {
+    const repoRoot = makeFixtureRepo();
+    // Alternating low scores (delta magnitude 5, never < the diminishing
+    // threshold) run out the clock at deep's 8-iteration cap without ever
+    // approaching the 95% target -- max_iterations_met, not diminishing_returns.
+    installDispatchMock(
+      harness,
+      repoRoot,
+      new Map([[9, (round: number) => ({ markdown: round % 2 === 0 ? MEDIUM_MARKDOWN : LOW_MARKDOWN })]])
+    );
+    installEscalateMock(escalateHarness);
+
+    const parsed = parseArgs(["node", "host.js", "plan", "--depth", "deep", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: repoRoot };
+
+    const summary = await runResearchConfidenceLoop(bridge, parsed, [researchDispatch(9, "Scout-Antenna-09")]);
+
+    assert.equal(summary.phases[0]!.stopReason, "max_iterations_met");
+    assert.equal(escalateHarness.calls.length, 0, "max_iterations_met must never escalate");
+    assert.deepEqual(summary.escalations, []);
+  });
+
+  it("announces the escalation with the phase, stalled confidence, and target -- never silently", async () => {
+    const repoRoot = makeFixtureRepo();
+    installDispatchMock(harness, repoRoot, new Map([[11, () => ({ markdown: MEDIUM_MARKDOWN })]]));
+    installEscalateMock(escalateHarness);
+
+    const parsed = parseArgs(["node", "host.js", "plan", "--depth", "exhaustive", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: repoRoot };
+
+    await runResearchConfidenceLoop(bridge, parsed, [researchDispatch(11, "Scout-Antenna-11")]);
+
+    const escalationLines = harness.stderrOutput.split("\n").filter((line) => line.includes("Oracle escalation"));
+    assert.equal(escalationLines.length, 1, "exactly one escalation announcement line");
+    assert.match(escalationLines[0]!, /phase 11/);
+    assert.match(escalationLines[0]!, /35%/, "names the stalled confidence");
+    assert.match(escalationLines[0]!, /99%/, "names the exhaustive-depth target");
+    assert.match(escalationLines[0]!, /Scout to Oracle/, "states this is a caste escalation, not a silent swap");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Construction-site invariant (regression guard for RESEARCH-07)
 // ---------------------------------------------------------------------------
 
@@ -356,6 +522,23 @@ describe("host.ts construction-site invariant", () => {
       occurrences >= 2,
       `expected at least 2 non-comment 'new ConfidenceLoop(' construction sites, found ${occurrences}. ` +
         "If this dropped to 1, the research construction site (RESEARCH-07) was deleted."
+    );
+  });
+
+  it("does not add a new ConfidenceLoop construction site for the escalation path (Plan 08)", () => {
+    const hostSource = fs.readFileSync(path.join(__dirname, "..", "src", "host.ts"), "utf8");
+    const codeLines = hostSource
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return trimmed !== "" && !trimmed.startsWith("//") && !trimmed.startsWith("*");
+      });
+    const occurrences = codeLines.filter((line) => line.includes("new ConfidenceLoop(")).length;
+    assert.equal(
+      occurrences,
+      2,
+      "escalation must add zero ConfidenceLoop construction sites -- Oracle drives its own RALF loop " +
+        `(runOracleLoop), found ${occurrences} sites`
     );
   });
 });

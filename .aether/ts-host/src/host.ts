@@ -705,8 +705,20 @@ export interface ResearchLoopPhaseSummary {
 /** Summary returned by `runResearchConfidenceLoop`. */
 export interface ResearchLoopSummary {
   phases: ResearchLoopPhaseSummary[];
-  /** Phase IDs escalated to Oracle. Always empty here \u2014 Plan 08 populates it. */
+  /**
+   * Phase IDs escalated from Scout to Oracle (D-04). A phase appears here at
+   * most once: its loop stopped with reason "diminishing_returns" below the
+   * confidence target at deep or exhaustive depth, and the escalated Oracle
+   * dispatch was sent exactly once \u2014 Oracle's own RALF loop (runOracleLoop)
+   * drives the rest, not a second ConfidenceLoop.
+   */
   escalations: number[];
+}
+
+/** Depths at which a stalled phase is worth the heavier Oracle researcher. */
+function isEscalationEligibleDepth(depth: string): boolean {
+  const normalised = depth.trim().toLowerCase();
+  return normalised === "deep" || normalised === "exhaustive";
 }
 
 /**
@@ -782,6 +794,7 @@ export async function runResearchConfidenceLoop(
     }
   }
   const confidenceTarget = loopOpts.confidenceTarget ?? preset.confidenceTarget;
+  const escalationEligible = isEscalationEligibleDepth(depth);
 
   const evaluator = new ResearchConfidenceEvaluator();
 
@@ -798,6 +811,10 @@ export async function runResearchConfidenceLoop(
   }
 
   const active = new Map(phases);
+  // Phases whose loop stalled below target at deep/exhaustive depth (D-04).
+  // Populated inside the round loop below, consumed by the escalation round
+  // once every phase has finished its own confidence loop.
+  const escalationCandidates: ResearchPhaseState[] = [];
 
   while (active.size > 0) {
     const activeStates = [...active.values()];
@@ -855,8 +872,46 @@ export async function runResearchConfidenceLoop(
         state.finalStopReason = stopReason;
         renderIterationComplete(stopReason);
         active.delete(state.phaseId);
+
+        // D-04: escalate Scout -> Oracle only when the loop truly stalled
+        // (diminishing_returns) below target, and only at deep/exhaustive
+        // depth. confidence_target_met and max_iterations_met never escalate.
+        if (escalationEligible && stopReason === "diminishing_returns" && loopResult.currentConfidence < confidenceTarget) {
+          escalationCandidates.push(state);
+        }
       }
     }
+  }
+
+  // Escalation round (D-04): dispatched once, outside the per-phase
+  // ConfidenceLoop above. Oracle owns its own RALF iteration
+  // (cmd/oracle_loop.go runOracleLoop) -- nesting a second ConfidenceLoop
+  // around it here would mean two drivers for one worker.
+  const escalations: number[] = [];
+  if (escalationCandidates.length > 0) {
+    const escalationDispatches: PlanDispatchLike[] = [];
+    for (const state of escalationCandidates) {
+      const stalledAt = state.lastResult?.currentConfidence ?? 0;
+      emitCeremonyOutput(
+        `Oracle escalation: phase ${state.phaseId} research stalled at ${stalledAt}% against a ` +
+          `${confidenceTarget}% target — escalating Scout to Oracle`
+      );
+      const escalateResult = _callGoJSONRef<{ dispatch: PlanDispatchLike }>(bridge, [
+        "plan-research-escalate",
+        "--phase", String(state.phaseId),
+        "--confidence", String(stalledAt),
+        "--target", String(confidenceTarget),
+      ]);
+      escalationDispatches.push(escalateResult.dispatch);
+      escalations.push(state.phaseId);
+    }
+    const escalationDispatchOpts: DispatchOptions = {
+      goBinaryPath: bridge.goBinaryPath,
+      cwd: bridge.cwd,
+      simulateWorkers: parsed.simulate,
+      workflow: "plan",
+    };
+    await _dispatchWorkersRef(escalationDispatchOpts, toWorkerDispatches(escalationDispatches));
   }
 
   const summaryPhases: ResearchLoopPhaseSummary[] = [...phases.values()].map((state) => ({
@@ -866,7 +921,7 @@ export async function runResearchConfidenceLoop(
     stopReason: state.finalStopReason ?? state.lastResult?.stopReason ?? "",
   }));
 
-  return { phases: summaryPhases, escalations: [] };
+  return { phases: summaryPhases, escalations };
 }
 
 // ---------------------------------------------------------------------------

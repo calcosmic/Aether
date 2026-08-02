@@ -5468,6 +5468,18 @@
     "output_mode": "unknown"
   },
   {
+    "name": "plan-research-escalate",
+    "short_description": "Build an Oracle dispatch escalating a stalled phase research Scout",
+    "flags": [
+      "confidence",
+      "phase",
+      "target"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "porter",
     "short_description": "Deliver colony work to the outside world",
     "flags": [],
