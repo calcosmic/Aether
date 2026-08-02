@@ -47,7 +47,7 @@ guardrails:
   - "The TS host is the sole entry point to the Go CLI; respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
   - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest — always fresh."
   - "Use visible live Task/subagent panels for plan ceremony. Run aether spawn-log before each dispatch and aether spawn-complete after."
-  - "Inspect each planning dispatch permission_profile. Scout repository_read_only must use a host-enforced no-write boundary; never replace it with an unrestricted agent or a prompt-only promise."
+  - "Inspect each planning dispatch permission_profile and pass it through verbatim from the manifest; never substitute or broaden it. Scout's canonical profile is workspace_write, scoped behaviorally to writing only under .aether/data/phase-research."
   - "Do NOT run direct `aether plan` from Claude/OpenCode wrapper orchestration for manifest generation; use `aether host plan`."
   - "Do NOT run `aether plan --synthetic` after real wrapper Task agents complete."
   - "Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand from this command spec."

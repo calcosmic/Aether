@@ -114,6 +114,7 @@ export interface DispatchOptions extends GoBridgeOptions {
  * @returns Dispatch result with name, status, and summary
  */
 export declare function dispatchSingleWorker(opts: DispatchOptions, dispatch: BuildDispatch): Promise<DispatchResult>;
+export declare function permissionProfileForCaste(caste: string): PermissionProfile;
 export interface PermissionDecision {
     schema_version: number;
     platform: string;

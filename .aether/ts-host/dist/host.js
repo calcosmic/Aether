@@ -85,7 +85,7 @@ export function __restoreAllMocks() {
     __restorePreflightWorkerPlatform();
 }
 // Test-only: exported runner functions for integration testing.
-export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand };
+export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand, toWorkerDispatches };
 import { runLifecycle } from "./lifecycle.js";
 import { runOracleLifecycle } from "./oracle-lifecycle.js";
 import { runWatchDisplay } from "./watch-display.js";
@@ -365,6 +365,16 @@ function renderWorkerCeremony(ceremony, workflow, workers) {
         emitCeremonyOutput(ceremony.renderWorkerComplete(workflow, worker));
     }
 }
+// This function is the Go -> worker fidelity boundary: every field a
+// dispatch carries must be explicitly copied through, renamed, or
+// consciously classified as unmapped. A field silently dropped here fails
+// loudly at Go's ResolvePermissionProfile exact-equality check (CR-01) or
+// not at all (CR-02) -- both were true for months because every test that
+// touched this function mocked it instead of calling it. `permission_profile`
+// must never be invented locally: it is copied through verbatim from the Go
+// manifest, never constructed here. test/dispatch-field-fidelity.test.ts
+// guards this function directly (no mock) so a newly added Go field that
+// isn't mapped here fails that test until someone consciously classifies it.
 function toWorkerDispatches(dispatches) {
     return dispatches.map((dispatch) => {
         const workerDispatch = {
@@ -390,8 +400,18 @@ function toWorkerDispatches(dispatches) {
         if (dispatch.skill_section !== undefined) {
             workerDispatch.skill_section = dispatch.skill_section;
         }
-        if (dispatch.task_brief !== undefined)
+        // Precedence: host-injected `task_brief` (build/continue paths) wins over
+        // Go-emitted `brief` (plan-time phase_research dispatches). Only fall
+        // back to `brief` when `task_brief` was never injected.
+        if (dispatch.task_brief !== undefined) {
             workerDispatch.task_brief = dispatch.task_brief;
+        }
+        else if (typeof dispatch.brief === "string" && dispatch.brief !== "") {
+            workerDispatch.task_brief = dispatch.brief;
+        }
+        if (dispatch.permission_profile !== undefined) {
+            workerDispatch.permission_profile = dispatch.permission_profile;
+        }
         if (dispatch.hive_section !== undefined) {
             workerDispatch.hive_section = dispatch.hive_section;
         }

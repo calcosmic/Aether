@@ -21,7 +21,7 @@ import { callGoJSON } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { HOST_COMMANDS, type ParsedHostArgs } from "./command-registry.js";
 import { dispatchWorkers } from "./worker-dispatch.js";
-import type { PlanningDispatch } from "./types.js";
+import type { BuildDispatch, ContinueExternalDispatch, PlanningDispatch } from "./types.js";
 export { buildHostGoArgs } from "./command-registry.js";
 export type { ParsedHostArgs } from "./command-registry.js";
 /** Test-only: inject a mock callGoJSON. */
@@ -45,7 +45,7 @@ export declare function __setPreflightWorkerPlatform(fn: PreflightWorkerPlatform
 export declare function __restorePreflightWorkerPlatform(): void;
 /** Restore all test mocks at once. */
 export declare function __restoreAllMocks(): void;
-export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand };
+export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand, toWorkerDispatches };
 /** Parse command-line arguments for the TS host. */
 export declare function parseArgs(argv: string[]): ParsedHostArgs;
 type HostInjectedDispatchFields = {
@@ -53,6 +53,8 @@ type HostInjectedDispatchFields = {
     task_brief?: string;
 };
 type PlanDispatchLike = PlanningDispatch & HostInjectedDispatchFields;
+type ContinueDispatchLike = ContinueExternalDispatch & HostInjectedDispatchFields;
+declare function toWorkerDispatches(dispatches: Array<PlanDispatchLike | ContinueDispatchLike>): BuildDispatch[];
 /**
  * Run the dry-run path for any dispatched command: fetch the manifest,
  * render ceremony, show DRY RUN badge, exit without dispatching workers.

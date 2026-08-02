@@ -245,9 +245,16 @@ async function dispatchRealWorker(opts, dispatch) {
 }
 // Go remains authoritative and rejects stale or broadened values. This fallback
 // covers dynamically spawned children that are not present in a Go manifest.
-function permissionProfileForCaste(caste) {
+// The read-only predicate mirrors `repositoryReadOnlyCastes` in
+// pkg/codex/permission_profile.go exactly (currently just "includer") --
+// Go's ResolvePermissionProfile rejects any mismatch outright rather than
+// downgrading, so this fallback must never grant a broader or narrower
+// profile than the canonical Go map. Exported so
+// test/dispatch-field-fidelity.test.ts can assert against it directly and
+// catch drift the next time Go's read-only set changes.
+export function permissionProfileForCaste(caste) {
     const normalized = caste.trim().toLowerCase().replace(/^aether-/, "").replaceAll("-", "_");
-    const readOnly = normalized === "scout" || normalized === "includer";
+    const readOnly = normalized === "includer";
     const filesystem = readOnly ? "repository_read_only" : "workspace_write";
     return {
         schema_version: 1,
