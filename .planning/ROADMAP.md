@@ -445,7 +445,16 @@ Plans:
   3. Re-running plan on a phase re-researches from scratch rather than reusing stale findings, and territory survey context (where it exists) reaches both the research worker and the planner
   4. During a live plan run, a confidence readout is visible while research runs, using the existing `confidence-loop.ts` rather than a reimplementation, and the loop stops at the depth-bound target/iteration budget (fast 80%/4, balanced 90%/6, deep 95%/8, exhaustive 99%/12) with an accept override to exit early
   5. At plan time, the Queen proposes plan granularity, task decomposition depth, and verification depth with a plain-English reason each, and the user can accept or change any of them before planning proceeds
-**Plans**: TBD
+**Plans**: 9 plans in 4 waves
+- [ ] 164-01-PLAN.md -- Territory survey reaches the research Scout; replans re-research (wave 1)
+- [ ] 164-02-PLAN.md -- Queen's research recommendation: hints, reasons, batch card data (wave 1)
+- [ ] 164-03-PLAN.md -- Research evidence scoring and depth-to-target/iteration binding, TS (wave 1)
+- [ ] 164-04-PLAN.md -- Three-knob depth proposal with computed reasons, Go (wave 1)
+- [ ] 164-05-PLAN.md -- Gate research dispatch on the approved batch; record overrides (wave 2)
+- [ ] 164-06-PLAN.md -- Wire ConfidenceLoop into the plan path: live ceremony, early accept (wave 2)
+- [ ] 164-07-PLAN.md -- Research reaches the planner's context; research failure is loud (wave 3)
+- [ ] 164-08-PLAN.md -- Oracle escalation on stall, with scoped permissions (wave 3)
+- [ ] 164-09-PLAN.md -- Two decision cards in both wrappers and the YAML source (wave 4)
 
 ### Phase 165: Core Lifecycle Commands
 **Goal**: `init`, `plan`, `build`, and `continue` wrappers are rewritten to carry engineering method -- stage purpose, files to read, spawn choreography, stop conditions -- instead of protocol instructions whose primary job is parsing `result.manifest.dispatch_manifest`. Scoped by content, not line count: a short `oracle.md` is not evidence of hollowing, since its RALF loop moved into Go. **This phase is the sole structural owner of `build.md` for this milestone.** Phase 160 may only have made narrow, isolated fixes to specific broken call arguments inside it (merged first); Phase 168 may only append a "what happens next" / visual-guidance layer on top of the file this phase produces (merges after). No other phase restructures it.
