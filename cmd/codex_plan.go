@@ -250,6 +250,8 @@ type codexPlanManifest struct {
 	ResearchProposalCard      string                           `json:"research_proposal_card,omitempty"`
 	ResearchAwaitingApproval  bool                             `json:"research_awaiting_approval,omitempty"`
 	ResearchWarning           string                           `json:"research_warning,omitempty"`
+	DepthProposal             depthProposal                    `json:"depth_proposal,omitempty"`
+	DepthProposalCard         string                           `json:"depth_proposal_card,omitempty"`
 }
 
 type codexPlanIterationState struct {
@@ -971,6 +973,9 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	}
 	verificationSmartDefault := opts.VerificationDepth == ""
 	planningSmartDefault := opts.PlanningDepth == ""
+	proposal := computeDepthProposal(state, granularity, planningDepth, verificationDepth,
+		planningSmartDefault, verificationSmartDefault)
+	proposalCard := renderDepthProposalCard(proposal)
 	planningPhase := colony.Phase{ID: 1}
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
@@ -1004,6 +1009,8 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"requires_finalizer":         false,
 			"unresolved_clarifications":  unresolvedClarifications,
 			"clarification_warning":      clarificationWarning,
+			"depth_proposal":             proposal,
+			"depth_proposal_card":        proposalCard,
 			"next":                       nextCommand,
 		}
 		addBoundaryQuestionResultFields(result, boundary)
@@ -1118,6 +1125,8 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		ResearchProposalCard:     researchResult.Card,
 		ResearchAwaitingApproval: researchResult.AwaitingApproval,
 		ResearchWarning:          researchResult.Warning,
+		DepthProposal:            proposal,
+		DepthProposalCard:        proposalCard,
 	}
 
 	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
@@ -1165,6 +1174,8 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"research_proposal_card":     researchResult.Card,
 		"research_awaiting_approval": researchResult.AwaitingApproval,
 		"research_warning":           researchResult.Warning,
+		"depth_proposal":             proposal,
+		"depth_proposal_card":        proposalCard,
 		"next":                       "spawn wrapper planning agents, then record completion",
 		"wrapper_contract": map[string]interface{}{
 			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep> --target <70-99> --max-iterations <2-12>",

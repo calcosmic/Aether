@@ -20,17 +20,22 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 	}
 
 	required := []string{
-		"## Depth Ceremony",
-		"Fast — sprint granularity, 1-3 phases",
-		"Balanced — milestone granularity, 4-7 phases. Recommended default",
-		"Deep — quarter granularity, 8-12 phases",
-		"Exhaustive — major granularity, 13-20 phases",
+		"## Decision Moment 1 — Depth Proposal",
+		"result.depth_proposal_card",
+		"The plan flow has exactly two decision moments",
+		"Never ask the user to type a value.",
 		"## Planning Manifest",
-		"aether host plan --depth <choice> --planning-depth <choice2> $ARGUMENTS",
+		"aether host plan --depth <choice> --planning-depth <choice2> --verification-depth <choice3> $ARGUMENTS",
 		"The TS host is the sole entry point to the Go CLI for manifest generation.",
 		"temporary manifest file outside `.aether/data/`",
 		"result.plan_manifest",
 		"result.planning_manifest",
+		"## Decision Moment 2 — Research Batch",
+		"result.research_proposal_card",
+		"aether plan-research-approve --approve-all",
+		"aether plan-research-approve --auto",
+		"result.research_awaiting_approval",
+		"result.research_warning",
 		"## Clarification Gate",
 		"unresolved_clarifications",
 		"/ant-discuss",
@@ -42,12 +47,14 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"/ant-build 1",
 		"Do NOT run direct `aether plan` from this wrapper for manifest generation; use `aether host plan`.",
 		"Do NOT run `aether plan --synthetic` after real agent workers complete.",
+		"Do NOT add a third decision moment",
 	}
 
 	inOrder := []string{
-		"## Depth Ceremony",
+		"## Decision Moment 1 — Depth Proposal",
 		"## Planning Manifest",
 		"aether host plan",
+		"## Decision Moment 2 — Research Batch",
 		"## Clarification Gate",
 		"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file",
@@ -74,6 +81,8 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 			"Do NOT run `aether plan` without `--plan-only` from this wrapper.",
 			"Update watch files for tmux visibility",
 			"Write COLONY_STATE.json",
+			"## Depth Ceremony",
+			"## Planning Depth",
 		} {
 			if strings.Contains(text, forbidden) {
 				t.Errorf("%s still contains old plan pass-through contract %q", wrapperPath, forbidden)
