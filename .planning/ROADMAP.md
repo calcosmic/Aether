@@ -455,7 +455,7 @@ Plans:
 - [x] 164-07-PLAN.md -- Research reaches the planner's context; research failure is loud (wave 3)
 - [x] 164-08-PLAN.md -- Oracle escalation on stall, with scoped permissions (wave 3)
 - [x] 164-09-PLAN.md -- Two decision cards in both wrappers and the YAML source (wave 4)
-- [ ] 164-10-PLAN.md -- Gap closure: Go-emitted permission_profile and brief reach the real worker (gap wave 1)
+- [x] 164-10-PLAN.md -- Gap closure: Go-emitted permission_profile and brief reach the real worker (gap wave 1)
 - [ ] 164-11-PLAN.md -- Gap closure: escalation resolves mid-loop phases and degrades instead of crashing (gap wave 2)
 
 ### Phase 165: Core Lifecycle Commands
@@ -575,7 +575,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
-| 164. Research Feeds Planning | v1.25 | 9/9 | Complete   | 2026-08-02 |
+| 164. Research Feeds Planning | v1.25 | 10/11 | In Progress|  |
 | 165. Core Lifecycle Commands | v1.25 | 0/TBD | Not started | - |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
