@@ -49,7 +49,12 @@ key-decisions:
   - "Task 2's Go tests required no Go source changes -- the Go side (PermissionProfileForCaste, ResolvePermissionProfile) was already correct; the gap was the absence of a test that drove the boundary from a real dispatch instead of a hand-written profile literal"
   - "All doc references to a host-enforced Scout repository_read_only sandbox replaced with an accurate claim: permission_profile passes through verbatim, and Scout's canonical profile is workspace_write scoped behaviorally to .aether/data/phase-research"
 
-requirements-completed: [RESEARCH-01, RESEARCH-02, RESEARCH-03, RESEARCH-04, RESEARCH-05, RESEARCH-07]
+requirements-completed: [RESEARCH-04, RESEARCH-05]
+# Note: RESEARCH-01, RESEARCH-02, RESEARCH-07 are NOT marked complete here even
+# though this plan's frontmatter lists them. Plan 164-11 (wave 2, depends_on
+# 164-10) also declares those same three IDs to fix CR-03 (an escalation-path
+# crash bug). Marking them complete before 164-11 lands would be a false
+# completeness claim. RESEARCH-03 was already Complete before this plan ran.
 
 # Metrics
 duration: 13min
@@ -130,9 +135,10 @@ None - no external service configuration required.
 
 ## Next Phase Readiness
 
-- RESEARCH-01, -02, -03, -04, -05, and -07 are now unblocked: a real phase_research Scout dispatch carries its correct `permission_profile` and full six-section brief end to end, both in `src/` (unit test) and in the compiled `dist/host.js` the runtime actually executes.
+- CR-01/CR-02 from `164-VERIFICATION.md` are closed: a real phase_research Scout dispatch now carries its correct `permission_profile` and full six-section brief end to end, both in `src/` (unit test) and in the compiled `dist/host.js` the runtime actually executes. RESEARCH-04 and RESEARCH-05 are fully satisfied by this alone and marked Complete in REQUIREMENTS.md.
+- RESEARCH-01, RESEARCH-02, and RESEARCH-07 remain Pending in REQUIREMENTS.md, not because this plan's fix is incomplete, but because plan 164-11 (wave 2, `depends_on: [164-10]`) still needs to close CR-03 — a separate escalation-path crash bug — before those three requirements are truthfully satisfiable. Marking them complete here would be premature.
 - The field-fidelity test (`dispatch-field-fidelity.test.ts`) will catch the next Go dispatch field silently dropped by `toWorkerDispatches`, closing the regression class that let CR-01/CR-02 hide for months.
-- No blockers for Phase 165 or later phases touching plan-time worker dispatch.
+- No blockers for 164-11 or Phase 165: this plan's fixes are self-contained and additive.
 
 ---
 *Phase: 164-research-feeds-planning*

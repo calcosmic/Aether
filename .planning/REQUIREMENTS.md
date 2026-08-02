@@ -84,8 +84,8 @@ These were asserted in the first draft and are now **verified false**. No work i
 - [ ] **RESEARCH-01**: The Queen decides whether a phase needs research before planning it, states the decision and its reason, and the user can override either way
 - [ ] **RESEARCH-02**: When research is warranted it runs automatically before the plan is drafted — the user does not have to remember to invoke it
 - [x] **RESEARCH-03**: Findings persist to a durable per-phase artifact and are injected into the planner's context, not pasted by hand
-- [ ] **RESEARCH-04**: Re-planning a phase re-researches rather than reusing stale findings, as `v5.4.0` did
-- [ ] **RESEARCH-05**: Territory survey context, where it exists, reaches both the research worker and the planner
+- [x] **RESEARCH-04**: Re-planning a phase re-researches rather than reusing stale findings, as `v5.4.0` did
+- [x] **RESEARCH-05**: Territory survey context, where it exists, reaches both the research worker and the planner
 - [ ] **RESEARCH-06**: Research output feeds the existing decision, assumption and plan-revision model — no new planning store
 - [ ] **RESEARCH-07**: The existing `confidence-loop.ts` is used rather than reimplemented, and its progress is visible while it runs
 - [ ] **RESEARCH-08**: Depth binds a target and an iteration budget — fast 80%/4, balanced 90%/6, deep 95%/8, exhaustive 99%/12 — with an accept override to exit early
@@ -247,13 +247,13 @@ Carried from v1.23, still open, not addressed here: `CATALOG-01/02`, `TEST-01/02
 | CONTEXT-07 | Phase 163 | Complete |
 | CONTEXT-08 | Phase 163 | Complete |
 | CONTEXT-09 | Phase 163 | Complete |
-| RESEARCH-01 | Phase 164 | Pending |
-| RESEARCH-02 | Phase 164 | Pending |
+| RESEARCH-01 | Phase 164 | Pending (blocked on 164-11 CR-03 fix) |
+| RESEARCH-02 | Phase 164 | Pending (blocked on 164-11 CR-03 fix) |
 | RESEARCH-03 | Phase 164 | Complete |
-| RESEARCH-04 | Phase 164 | Pending |
-| RESEARCH-05 | Phase 164 | Pending |
+| RESEARCH-04 | Phase 164 | Complete |
+| RESEARCH-05 | Phase 164 | Complete |
 | RESEARCH-06 | Phase 164 | Pending |
-| RESEARCH-07 | Phase 164 | Pending |
+| RESEARCH-07 | Phase 164 | Pending (blocked on 164-11 CR-03 fix) |
 | RESEARCH-08 | Phase 164 | Pending |
 | RESEARCH-09 | Phase 164 | Complete |
 | RESEARCH-10 | Phase 164 | Complete |
