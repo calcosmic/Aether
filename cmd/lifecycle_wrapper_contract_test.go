@@ -128,10 +128,10 @@ func assertStageSkeletonDensity(t *testing.T, path, text string, exemptHeadings 
 
 // TestLifecycleFlatMirrorsMatchCanonical pins the flat installed-consumer
 // mirrors (.claude/commands/ant-<verb>.md) as byte-identical to their
-// canonical nested sources (.claude/commands/ant/<verb>.md). This is
-// currently RED for build and init (both proven drifted by research) and
-// GREEN for plan and continue. Task 3 of this plan resyncs build and init
-// and turns this fully green.
+// canonical nested sources (.claude/commands/ant/<verb>.md). This is a
+// standing invariant, not a point-in-time state: `aether install` and
+// `aether update` copy the flat mirror from the canonical nested source and
+// never hand-edit it, so any drift between the two is always a bug.
 func TestLifecycleFlatMirrorsMatchCanonical(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
