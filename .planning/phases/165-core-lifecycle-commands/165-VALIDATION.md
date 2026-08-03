@@ -44,8 +44,12 @@ created: 2026-08-02
 | 165-06 T1 | 06 | 3 | CMD-02 | T-165-06-02 | Method marker lines outnumber envelope-mechanics marker lines by >=3:1 in all eight canonical wrappers; contract pointer referenced exactly once (zero for init) | unit | `go test ./cmd/... -run TestLifecycleWrappersDoNotParseEnvelopeAsPrimaryJob` | ✅ | ✅ green |
 | 165-06 T2 | 06 | 3 | CMD-04 | T-165-06-03 | 17 specialist/delight surfaces (7 Claude wrappers + 7 OpenCode mirrors + 3 sage agent definitions) pinned by SHA-256, count asserted at exactly 17, 7 command-guide verbs resolve in-process | unit + hash ledger | `go test ./cmd/... -run TestSpecialistCommandSurfacesUnchanged` | ✅ | ✅ green |
 | 165-02 T1 | 02 | 2 | CMD-05 | T-165-06-01 | build.md ownership header (PHASE-160 record) + Phase-168 reserved trailer marker present, in order | unit | `go test ./cmd/... -run TestBuildMdOwnershipHandshake` | ✅ | ✅ green |
+| 165-07, 165-10 | 07, 10 | GC-1, GC-2 | CMD-01 | — | init.md never hand-writes protected state; shelf IDs spent only inside the Approval-stage `aether init` call (forbidden-command list + ordering subtest) | unit | `go test ./cmd/... -run TestInitWrapperCeremonyContract` | ✅ | ✅ green |
+| 165-08 | 08 | GC-1 | CMD-01 | — | build/continue `<read_only>` blocks agree with their own Guardrails lists across all 12 surfaces | unit | `go test ./cmd/... -run TestLifecycleWrapperReadOnlyBlocksAreConsistent` | ✅ | ✅ green |
+| 165-01 T2, 165-10 | 01, 10 | 1, GC-2 | CMD-01 | — | Flat mirrors (`.claude/commands/ant-*.md`) stay byte-identical to canonical wrappers | unit | `go test ./cmd/... -run TestLifecycleFlatMirrorsMatchCanonical` | ✅ | ✅ green |
+| 165-09 | 09 | GC-1 | CMD-01 | — | Shelf promotion is atomic inside `aether init`: failed init strands nothing, revised goal never orphans a promoted entry, all-IDs-failed reports failure | unit | `go test ./cmd/... -run 'TestInitPromotesShelfEntriesAtomically|TestFailedInitLeavesShelfEntriesShelved|TestInitPromotesUnderRevisedGoal|TestInitReportsUnpromotableShelfIDs'` | ✅ | ✅ green |
 
-*Status legend: ⬜=not-yet-run · ✅=green · ❌=red · ⚠️=flaky (all rows above are ✅ green; no row is outstanding)*
+*Status legend: ⬜=not-yet-run · ✅=green · ❌=red · ⚠️=flaky (all rows above are ✅ green; no row is outstanding). GC-N = gap-closure round N (plans 07–10).*
 
 ---
 
@@ -79,3 +83,15 @@ created: 2026-08-02
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** Approved (2026-08-03) — CMD-03 human read-through checkpoint confirmed by the reviewer; no stage required another pass. All six per-task/CMD-04 automated assertions plus the CMD-03 manual verdict are recorded above with real test names, task references, and commit hashes.
+
+---
+
+## Validation Audit 2026-08-03
+
+Retroactive Nyquist audit (`/gsd-validate-phase 165`). All 24 top-level tests across the Per-Task Map — including the gap-closure tests from plans 07–10 that predated this map's last update — were re-run directly and pass. Requirements CMD-01, CMD-02, CMD-04, CMD-05 are COVERED by green automated tests; CMD-03 remains manual-only with an approved dated verdict. The Per-Task Map was extended with four rows recording gap-closure coverage (plans 07–10: init ceremony contract, read-only block consistency, flat-mirror parity, atomic shelf promotion). No new tests were needed.
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
