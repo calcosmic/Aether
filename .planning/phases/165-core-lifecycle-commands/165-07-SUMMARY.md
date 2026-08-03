@@ -115,6 +115,13 @@ None — no external service configuration required.
 - `go test ./cmd/... ./pkg/...` passes in full (run twice, both clean); `go vet ./...` clean; `go build ./cmd/aether` exits 0.
 - `.claude/commands/ant-init.md` remains byte-identical to `.claude/commands/ant/init.md`; the `.claude`/`.opencode` init.md files differ on exactly one sanctioned line pair (AskUserQuestion vs. Ask wording).
 
+## Self-Check: PASSED
+
+- All 10 files claimed as created/modified confirmed tracked via `git ls-files`
+- All 5 commit hashes (dde2cde1, 5708d394, 652b1b2e, ac49c5ad, f954c8b1) confirmed present in `git log --oneline --all`
+- `go test ./cmd/... ./pkg/...` run twice (once mid-Task-1, once after Task 3), both exit 0
+- `go vet ./...` clean, `go build ./cmd/aether` exits 0
+
 ---
 *Phase: 165-core-lifecycle-commands*
 *Completed: 2026-08-03*
