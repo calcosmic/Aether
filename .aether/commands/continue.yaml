@@ -69,6 +69,14 @@ wrapper_additions:
     The default is "standard" for intermediate phases. Final phases default to "heavy" when depth is automatic.
     Users can override any automatic depth, including final phases, with --verification-depth <light|standard|heavy>.
     Users who want the older visible review ritual can say --classic-ceremony; that asks the TS host for a heavy-review manifest (via --dry-run) and the wrapper spawns reviewers from that manifest before calling continue-finalize.
+  read_only_boundary: |
+    The wrapper never opens colony state, session, or pheromone files by hand
+    in either direction -- not reading them, not writing them. It reads
+    runtime state only through runtime commands such as `aether status` and
+    the runtime's own continue output; all persistence goes through
+    continue-finalize and the default continue command. This is the same
+    boundary the Guardrails `Do NOT read or write colony state files by hand`
+    bullet states -- the <read_only> block and the Guardrails list agree.
 guardrails:
   - "Do NOT use `--plan-only` or `continue-finalize` for default fast continue."
   - "Do NOT run `aether host continue --classic-ceremony` without `--dry-run` from the wrapper; that triggers the TS host dispatched path which duplicates the wrapper's own reviewer spawning."

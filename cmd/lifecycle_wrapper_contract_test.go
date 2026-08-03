@@ -574,3 +574,137 @@ func TestSpecialistCommandSurfacesUnchanged(t *testing.T) {
 		}
 	})
 }
+
+// extractReadOnlyBlock returns the text between <read_only> and
+// </read_only>, trimmed, or the empty string when the block is absent.
+// Models its slicing on extractStateCarrySection above.
+func extractReadOnlyBlock(text string) string {
+	const openTag = "<read_only>"
+	const closeTag = "</read_only>"
+	start := strings.Index(text, openTag)
+	if start == -1 {
+		return ""
+	}
+	start += len(openTag)
+	rest := text[start:]
+	end := strings.Index(rest, closeTag)
+	if end == -1 {
+		return ""
+	}
+	return strings.TrimSpace(rest[:end])
+}
+
+// permissiveReadOnlyReadPhrase is the WR-01 contradictory phrasing: it tells
+// the model it may read state files, while a Guardrails "Do NOT read or
+// write" bullet elsewhere in the same file forbids exactly that. plan.md
+// already carries the reconciled formulation and never uses this phrase.
+const permissiveReadOnlyReadPhrase = "may read but never write"
+
+// noHandReadWriteMarkers are the two reconciled phrasings that assert a
+// no-hand-read-or-write boundary: plan.md's prose formulation and init.md's
+// bulleted-file-list formulation.
+var noHandReadWriteMarkers = []string{
+	"never reads or writes",
+	"never writes these files by hand",
+}
+
+// guardrailsForbidsHandReadWrite is the literal Guardrails bullet fragment
+// that, when present, requires the <read_only> block to agree with it.
+const guardrailsForbidsHandReadWrite = "Do NOT read or write"
+
+// lifecycleWrapperSurfaces returns every surface for a verb: both canonical
+// paths (.claude, .opencode) plus the flat installed-consumer mirror.
+func lifecycleWrapperSurfaces(repoRoot, verb string) []string {
+	surfaces := canonicalWrapperPaths(repoRoot, verb)
+	return append(surfaces, flatMirrorPath(repoRoot, verb))
+}
+
+// relWrapperPath returns path relative to repoRoot for use in subtest names
+// and error messages, so a failure names the exact repo-relative file.
+func relWrapperPath(repoRoot, path string) string {
+	rel, err := filepath.Rel(repoRoot, path)
+	if err != nil {
+		return path
+	}
+	return rel
+}
+
+// TestLifecycleWrapperReadOnlyBlocksAreConsistent is the WR-01 fence: no
+// lifecycle wrapper may tell the model two different things about reading
+// state files. It iterates all four verbs (build, continue, plan, init)
+// across both canonical paths and the flat mirror -- 12 surfaces total.
+func TestLifecycleWrapperReadOnlyBlocksAreConsistent(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	var surfaces []string
+	for _, verb := range lifecycleWrapperVerbs {
+		surfaces = append(surfaces, lifecycleWrapperSurfaces(repoRoot, verb)...)
+	}
+
+	t.Run("read_only_block_exists", func(t *testing.T) {
+		for _, path := range surfaces {
+			path := path
+			t.Run(relWrapperPath(repoRoot, path), func(t *testing.T) {
+				content, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read %s: %v", path, err)
+				}
+				if extractReadOnlyBlock(string(content)) == "" {
+					t.Errorf("%s: missing a non-empty <read_only> block", relWrapperPath(repoRoot, path))
+				}
+			})
+		}
+	})
+
+	t.Run("no_permissive_read_phrasing", func(t *testing.T) {
+		for _, path := range surfaces {
+			path := path
+			t.Run(relWrapperPath(repoRoot, path), func(t *testing.T) {
+				content, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read %s: %v", path, err)
+				}
+				if strings.Contains(string(content), permissiveReadOnlyReadPhrase) {
+					t.Errorf(
+						"%s: <read_only> block uses the permissive phrase %q, which contradicts a Guardrails bullet elsewhere in the same file forbidding hand reads/writes of the same state -- the model receives two conflicting instructions about the same files and will follow whichever it read last. Use the reconciled formulation plan.md already carries: this wrapper never reads or writes, by hand, colony state -- it reads runtime state only through runtime commands such as `aether status`, never by opening the JSON. See Phase 165 review WR-01.",
+						relWrapperPath(repoRoot, path), permissiveReadOnlyReadPhrase,
+					)
+				}
+			})
+		}
+	})
+
+	t.Run("read_only_block_matches_guardrails", func(t *testing.T) {
+		for _, path := range surfaces {
+			path := path
+			t.Run(relWrapperPath(repoRoot, path), func(t *testing.T) {
+				content, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read %s: %v", path, err)
+				}
+				text := string(content)
+				if !strings.Contains(text, guardrailsForbidsHandReadWrite) {
+					// Conditional: only surfaces whose Guardrails forbid hand
+					// reads/writes must have a matching <read_only> body.
+					// init.md's guardrails live in its YAML source, not a
+					// "## Guardrails" heading, so it is skipped here and
+					// covered instead by no_permissive_read_phrasing.
+					return
+				}
+				block := extractReadOnlyBlock(text)
+				for _, marker := range noHandReadWriteMarkers {
+					if strings.Contains(block, marker) {
+						return
+					}
+				}
+				t.Errorf(
+					"%s: Guardrails forbid hand reads/writes (%q) but the <read_only> block does not assert a matching no-hand-read-or-write boundary (expected one of %v) -- the wrapper tells the model two different things about the same files. See Phase 165 review WR-01.",
+					relWrapperPath(repoRoot, path), guardrailsForbidsHandReadWrite, noHandReadWriteMarkers,
+				)
+			})
+		}
+	})
+}

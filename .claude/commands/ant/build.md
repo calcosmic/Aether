@@ -48,7 +48,7 @@ A finished build has: every manifest dispatch spawned, every terminal result col
 </failure_modes>
 
 <read_only>
-This wrapper may read but never write: colony state, session files, and pheromone files. All persistence goes through the Go-owned finalizers named below.
+This wrapper never reads or writes, by hand: colony state, session files, and pheromone files. It reads runtime state only through runtime commands such as `aether status`. All persistence goes through the Go-owned finalizers named below.
 </read_only>
 
 ## Colony Context

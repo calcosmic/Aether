@@ -188,7 +188,7 @@ result was fabricated by the wrapper.
 </failure_modes>
 
 <read_only>
-This wrapper may read but never write: `COLONY_STATE.json`, `session.json`, `CONTEXT.md`, `HANDOFF.md`, and pheromone files.
+This wrapper never reads or writes, by hand: `COLONY_STATE.json`, `session.json`, `CONTEXT.md`, `HANDOFF.md`, and pheromone files. Runtime state is read only through runtime commands such as `aether status` and the runtime's own continue output.
 </read_only>
 
 ## Cross-Platform Drift Guard

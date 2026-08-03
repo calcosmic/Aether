@@ -47,6 +47,19 @@ See `.aether/docs/wrapper-host-contract.md` for the full manifest field shape.
 
 **Stop conditions:** This stage ends once the manifest is saved to a temp file; a fetch failure routes to the runtime's recovery guidance instead of proceeding to a decision moment or a spawn.
 
+## Clarification Gate
+
+🐜 The colony checks for unresolved boundary guidance before it lets a single worker spawn.
+
+**Purpose:** Catch unresolved boundary guidance or clarification requests before any worker spawns, so planning never proceeds on stale assumptions. This gate sits here, ahead of the research batch, so boundary guidance is resolved before any research-approval state is mutated — a discuss redirect never throws away decisions the user already made.
+
+**Reads:** `result.orchestrator_boundary_guidance`, `unresolved_clarifications`.
+
+- If boundary guidance is active or `next` is `aether discuss`, pause and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
+- If unresolved clarifications exist, route to `/ant-discuss`. Proceed with implicit assumptions only if the user explicitly chooses to continue.
+
+**Stop conditions:** This stage ends only when boundary guidance is inactive and clarifications are resolved or explicitly waived by the user.
+
 ## Decision Moment 2 — Research Batch
 
 🐜 The second and final decision moment answers every phase's research question in one pass, before any worker spawns.
@@ -63,19 +76,6 @@ See `.aether/docs/wrapper-host-contract.md` for the full manifest field shape.
 Under `/ant-run`, answer the research batch with `aether plan-research-approve --auto` and print the returned `log_line` in the run log. Autopilot never pauses for either decision moment.
 
 **Stop conditions:** This stage ends when the batch is approved, flipped, or auto-answered under `/ant-run`; it never spawns a phase_research worker on an unanswered card.
-
-## Clarification Gate
-
-🐜 The colony checks for unresolved boundary guidance before it lets a single worker spawn.
-
-**Purpose:** Catch unresolved boundary guidance or clarification requests before any worker spawns, so planning never proceeds on stale assumptions.
-
-**Reads:** `result.orchestrator_boundary_guidance`, `unresolved_clarifications`.
-
-- If boundary guidance is active or `next` is `aether discuss`, pause and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
-- If unresolved clarifications exist, route to `/ant-discuss`. Proceed with implicit assumptions only if the user explicitly chooses to continue.
-
-**Stop conditions:** This stage ends only when boundary guidance is inactive and clarifications are resolved or explicitly waived by the user.
 
 ## Runtime Spawn Ceremony
 
