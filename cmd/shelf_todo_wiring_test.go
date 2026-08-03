@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -180,6 +182,64 @@ func TestSessionRefreshPreservesShelfTodos(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("session refresh dropped shelf todo %q: %v", want, session.ActiveTodos)
+	}
+
+	// Review WR-03: the merged todo list must also reach the human-facing
+	// recovery document, not only session.json.
+	contextData, err := os.ReadFile(filepath.Join(tmpDir, ".aether", "CONTEXT.md"))
+	if err != nil {
+		t.Fatalf("failed to read CONTEXT.md: %v", err)
+	}
+	if !strings.Contains(string(contextData), want) {
+		t.Errorf("CONTEXT.md missing shelf todo %q", want)
+	}
+}
+
+// TestInitCeremonySeedsSessionTodosFromPromotedShelf proves the Codex-facing
+// colony-creation path (init-ceremony) also seeds session todos from promoted
+// shelf entries, closing review WR-02: the capability must not exist on one
+// colony-creation path and be silently absent on the other.
+func TestInitCeremonySeedsSessionTodosFromPromotedShelf(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	t.Setenv("AETHER_ROOT", tmpDir)
+
+	sf := colony.NewShelfFile()
+	sf.Entries = []colony.ShelfEntry{
+		{ID: "shelf_1", Text: "Add rate limiting", Status: colony.ShelfShelved, Category: colony.ShelfCategoryUserNote, CreatedAt: "2024-01-01T00:00:00Z"},
+	}
+	s.SaveJSON("shelf.json", sf)
+
+	if err := promoteShelfEntry(s, "shelf_1", "Ship v2"); err != nil {
+		t.Fatalf("promoteShelfEntry failed: %v", err)
+	}
+
+	if err := createCeremonyColony("Ship v2", colony.ScopeProject, colony.ColonyModeColony, colony.Charter{}); err != nil {
+		t.Fatalf("createCeremonyColony returned error: %v", err)
+	}
+
+	var session colony.SessionFile
+	if err := store.LoadJSON("session.json", &session); err != nil {
+		t.Fatalf("failed to load session.json: %v", err)
+	}
+	want := "[shelf:user-note] Add rate limiting"
+	found := false
+	for _, todo := range session.ActiveTodos {
+		if todo == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("session.json active_todos missing %q: %v", want, session.ActiveTodos)
 	}
 }
 
