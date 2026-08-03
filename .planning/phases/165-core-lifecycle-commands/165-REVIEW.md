@@ -1,8 +1,8 @@
 ---
 phase: 165-core-lifecycle-commands
-reviewed: 2026-08-03T00:00:00Z
+reviewed: 2026-08-03T12:05:11Z
 depth: standard
-files_reviewed: 22
+files_reviewed: 27
 files_reviewed_list:
   - .aether/commands/build.yaml
   - .aether/commands/continue.yaml
@@ -23,154 +23,160 @@ files_reviewed_list:
   - .opencode/commands/ant/plan.md
   - cmd/build_wrapper_ceremony_test.go
   - cmd/continue_wrapper_ceremony_test.go
+  - cmd/init_cmd.go
   - cmd/init_wrapper_ceremony_test.go
   - cmd/lifecycle_wrapper_contract_test.go
   - cmd/plan_wrapper_ceremony_test.go
+  - cmd/recovery_snapshot.go
+  - cmd/session_cmds.go
+  - cmd/shelf_init.go
+  - cmd/shelf_todo_wiring_test.go
 findings:
   critical: 1
-  warning: 7
-  info: 7
-  total: 15
+  warning: 6
+  info: 5
+  total: 12
 status: issues_found
 ---
 
-# Phase 165: Code Review Report
+# Phase 165: Code Review Report (Re-review after gap-closure 165-07 / 165-08)
 
-**Reviewed:** 2026-08-03
+**Reviewed:** 2026-08-03T12:05:11Z
 **Depth:** standard
-**Files Reviewed:** 22
+**Files Reviewed:** 27
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the four rewritten lifecycle wrapper specs (init/plan/build/continue) across the YAML sources, both platform wrapper copies, the flat installed mirrors, the wrapper-host contract doc, and the five Go contract/ceremony test files. Verified cross-platform parity mechanically: build.md, continue.md, and plan.md are byte-identical across all copies; init.md differs by exactly the one sanctioned AskUserQuestion line, and the test locking that delta works. All Phase 165 wrapper tests pass (`go test ./cmd -run '...WrapperCeremony|Lifecycle...|SpecialistCommand...'` — PASS).
+This is the re-review after gap-closure plans 165-07 (shelf-promotion runtime wiring) and 165-08 (read_only contract alignment). The deepest scrutiny went to the newly changed files: `cmd/shelf_init.go`, `cmd/init_cmd.go`, `cmd/recovery_snapshot.go`, `cmd/session_cmds.go`, the init wrapper's Shelf Backlog/Approval stages, the read_only blocks in build/continue/plan wrappers, and `cmd/lifecycle_wrapper_contract_test.go` plus `cmd/shelf_todo_wiring_test.go`.
 
-The headline finding is a Critical one: init.md's Shelf Backlog stage still instructs the wrapper to hand-append promoted shelf items to `active_todos` "in the session file or colony state" — a direct hand-mutation of protected state that contradicts the file's own new `<read_only>` block, contradicts the guardrails, and is exactly the D-2 Frankenstein-state regression this phase's own test fence (`TestInitWrapperCeremonyContract`) was written to prevent. I traced the runtime (`cmd/shelf_init.go`) to confirm no Go path performs this write: `promoteShelfEntry` only flips shelf status, and `shelfEntryToTodo` has no callers. The remaining findings are internal contradictions between `<read_only>` blocks and guardrails, guardrail drift between the YAML sources and generated wrappers, ordering hazards, and test-quality gaps.
+**What 165-08 fixed is verified good.** The `<read_only>` blocks in all four wrappers now agree with their Guardrails ("never reads or writes, by hand" / "never writes these files by hand"), the WR-01 fence test (`TestLifecycleWrapperReadOnlyBlocksAreConsistent`) covers all 12 surfaces including flat mirrors, and mechanical checks confirm: flat mirrors are byte-identical to canonical sources for all four verbs, and `.opencode` parity holds with exactly the one sanctioned `AskUserQuestion` delta in init.md. All Phase 165 tests pass (`go test ./cmd -run 'TestLifecycle|TestShelf|...'` — PASS). The prior review's CR-01 (hand-append of shelf todos to `active_todos`) is confirmed removed from all init wrapper surfaces and fenced by `TestInitWrapperCeremonyContract`'s forbidden list.
+
+**What 165-07 fixed is only partially sound.** The runtime now seeds `session.ActiveTodos` from promoted shelf entries in `aether init` and preserves them across session refreshes via `mergeShelfTodos`. But tracing the full wrapper-to-runtime flow exposes a data-loss window the tests do not cover: the init wrapper promotes shelf entries *before* user approval, keyed on an exact goal string that the Approval stage can still change or abandon — a cancel, a revised goal, or a failed init strands promoted entries invisibly (new CR-01 below). Additionally, the wiring was closed on only one of two colony-creation paths, and the recovery documents never display the shelf todos the merge so carefully preserves.
 
 ## Critical Issues
 
-### CR-01: init.md instructs a hand-write to session file / colony state (D-2 Frankenstein-state regression path)
+### CR-01: Shelf promotion persists before Approval and is keyed on an exact goal string Approval can still change — cancel/revise/failed-init silently strands promoted backlog entries
 
-**File:** `.claude/commands/ant/init.md:257` (identical in `.opencode/commands/ant/init.md:257` and flat mirror `.claude/commands/ant-init.md:257`)
-**Issue:** The Shelf Backlog stage says:
+**File:** `.claude/commands/ant/init.md:255-257` (Shelf Backlog stage; identical in `.opencode/commands/ant/init.md` and flat mirror `.claude/commands/ant-init.md`), `cmd/shelf_init.go:124-142` (`promoteShelfEntry`), `cmd/shelf_init.go:171-194` (`promotedShelfTodos`), `cmd/init_cmd.go:214`
 
-> "Promoted items become todos: append `[shelf:{category}] {text}` to `active_todos` in the session file or colony state"
+**Issue:** The wiring only works when three fragile conditions all hold, and the wrapper's own flow can break each one:
 
-This is an instruction to the LLM wrapper to directly edit `.aether/data/session.json` or `COLONY_STATE.json`. It directly contradicts:
-- The same file's `<read_only>` block (lines 51-58: "This wrapper never writes these files by hand... session.json... COLONY_STATE.json")
-- The guardrail in `.aether/commands/init.yaml:42` ("Do not write colony state files, session files, or pheromone files by hand")
-- The repo-wide Protected Paths policy (`.claude/rules/aether-colony.md`)
+1. **Promotion runs before consent.** The Shelf Backlog stage runs `aether shelf-promote-batch --ids ... --colony "{goal}"` and `aether shelf-dismiss-batch` *before* the Approval stage. `promoteShelfEntry` immediately flips the entry's status to `promoted` and writes `shelf.json`. If the user then chooses **cancel** at Approval, or `aether init` fails (e.g., active colony present), the entries are already gone from the shelved backlog (`loadActiveShelf` filters `Status == ShelfShelved`) and no colony ever exists to carry them as todos. This directly contradicts init.md's own `<failure_modes>` ("User Cancels At Approval ... Write nothing — no charter call, no pheromone writes, nothing persisted") and the Approval stop condition ("A cancel or a failed `aether init` both end the command with nothing persisted"). The pheromone writes were correctly gated on init success (WR-05 fix, locked by `approval_writes_pheromones_only_after_init_succeeds`); the shelf writes were not.
 
-I verified the runtime provides no alternative: `cmd/shelf_init.go`'s `promoteShelfEntry` only updates the shelf file's entry status/`PromotedTo`, and `shelfEntryToTodo` (which produces exactly this `[shelf:{category}] {text}` string) has zero call sites. So either the LLM follows this line and hand-mutates protected state — the documented state-corruption bug class — or promoted items silently never become todos. Note also that this line evades the phase's own regression fence: `TestInitWrapperCeremonyContract`'s forbidden list (`Write COLONY_STATE.json`, `aether state-write`, etc.) does not match this phrasing.
+2. **The linkage key is an exact string match on a mutable value.** `promotedShelfTodos` selects entries where `e.PromotedTo == goal`, and `aether init` receives the goal at Approval. Approval offers "revise goal" as an explicit option; a revision after the Shelf Backlog stage means `PromotedTo` (old goal) never matches the init goal — todos are silently empty while the entries are stranded as promoted-to-a-goal-that-never-existed.
 
-**Fix:** Remove the hand-append instruction and route the todo creation through the runtime. Either make `aether shelf-promote-batch` (or `aether init`) append the todos itself using the already-existing `shelfEntryToTodo`, or drop the "become todos" claim until a runtime command exists. Then add the phrase to the forbidden fence, e.g.:
+3. **The wrapper's `--colony "{goal}"` placeholder is ambiguous.** The Shelf Backlog stage says `{goal}` unqualified; the cross-stage state defines `refined_goal`, and Approval passes `"<refined goal>"` to init. An LLM executing this spec can plausibly substitute raw `$ARGUMENTS` at the Shelf Backlog stage and `refined_goal` at Approval — guaranteed mismatch, same silent loss.
 
-```go
-// cmd/init_wrapper_ceremony_test.go — forbidden slice
-forbidden := []string{
-    ...,
-    "append `[shelf:",           // no wrapper-side todo writes
-    "to `active_todos`",
-}
-```
+There is no un-promote command in the reviewed code, so none of these failure paths are recoverable through the documented flow. `cmd/shelf_todo_wiring_test.go` never exercises the wrapper ordering — every test promotes with the identical literal goal it then inits with.
+
+**Fix:** Make promotion atomic with init so it cannot precede consent or diverge from the final goal. Preferred: move the mutation into the runtime — have the wrapper *collect* chosen IDs at the Shelf Backlog stage but pass them to init (`aether init --promote-shelf "id1,id2" --dismiss-shelf "id3" ...`), and have `initCmd` call `promoteShelfEntry` with the actual init goal after state creation succeeds. Then `promotedShelfTodos` cannot mismatch and a cancel/failure persists nothing, matching the documented contract. Minimum viable alternative: move the `shelf-promote-batch`/`shelf-dismiss-batch` calls into the Approval stage after `aether init` returns success (mirroring the pheromone-write gating), use `refined_goal` explicitly, and add a wiring test that inits with a *different* goal than the promoted one and asserts the behavior.
 
 ## Warnings
 
-### WR-01: `<read_only>` blocks say "may read" while guardrails say "Do NOT read" — internal contradiction in build.md and continue.md
+### WR-01: Goal-string trim asymmetry between promotion write and todo read
 
-**File:** `.claude/commands/ant/build.md:50-52` vs `:255`; `.claude/commands/ant/continue.md:190-192` vs `:205` (and byte-identical .opencode copies + flat mirrors)
-**Issue:** build.md's `<read_only>` block: "This wrapper may read but never write: colony state, session files, and pheromone files." Its Guardrails section: "Do NOT read or write colony state files by hand." Same conflict in continue.md. The YAML sources (`build.yaml:63`, `continue.yaml:77`) both say "Do NOT read or write... by hand," so the `<read_only>` blocks also drift from their sources. plan.md got this right ("This wrapper never reads or writes, by hand: ..."). An LLM given both instructions has no deterministic resolution; one path licenses direct reads of `COLONY_STATE.json`, which the guardrail forbids.
-**Fix:** Align the `<read_only>` wording with plan.md's shape: "This wrapper never reads or writes these files by hand; state is observed only through `aether status` / runtime commands." Update both platform copies and mirrors together (tests enforce byte-parity).
-
-### WR-02: continue.md dropped several guardrails present in its YAML source
-
-**File:** `.claude/commands/ant/continue.md:200-209` vs `.aether/commands/continue.yaml:72-86`
-**Issue:** The YAML source lists guardrails absent from the generated wrapper: `Do NOT run aether continue --synthetic...` (yaml:75), `Do NOT parse visual output as authoritative state` (yaml:79), the reviewer read-loop fence (yaml:82), the extra-option-menus fence (yaml:83), and the hand-render-ceremony fence (yaml:84). Notably "Do NOT parse visual output as authoritative state" is present in build.md and plan.md guardrails but missing from continue.md entirely (grep confirms zero occurrences). The YAML's own `drift_guard` requires updating "this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together" — this is drift within a single phase's deliverable.
-**Fix:** Add the missing guardrails (at minimum the `--synthetic` and parse-visual fences) to continue.md's Guardrails section on both platforms, or prune them from continue.yaml with a stated reason if intentionally retired.
-
-### WR-03: Build ceremony test never requires `build-completion-stage` — the staging step is unfenced
-
-**File:** `cmd/build_wrapper_ceremony_test.go:21-54`
-**Issue:** `TestBuildWrapperCeremonyContract` requires `build-finalize` and the closeout, but nothing in the required list mentions `aether build-completion-stage` or `result.completion_path`. The staging step is the load-bearing safety mechanism (`build.yaml:62`: "Before build-finalize, call build-completion-stage exactly once... pass only its Go-owned completion_path"). A future edit could delete the entire staging block from build.md — reverting to finalizing the raw wrapper temp file — and every test would stay green. Per the project's Definition of Done, a requirement needs a command that fails when it is unmet.
-**Fix:** Add to the `required` slice:
-
+**File:** `cmd/shelf_init.go:29-48` (batch command), `cmd/shelf_init.go:133` (`PromotedTo` assignment), `cmd/shelf_init.go:180-183` (comparison)
+**Issue:** `shelf-promote-batch` stores the `--colony` flag value into `PromotedTo` verbatim (untrimmed), but `promotedShelfTodos` trims only the *query* side (`goal := strings.TrimSpace(colonyGoal)`) and compares `e.PromotedTo == goal` against the untrimmed stored value. A `--colony " Ship v2"` (leading/trailing whitespace, easy for an LLM to produce when interpolating) promotes successfully but can never match any query — including `shelf-promote-batch`'s *own* `todos` output computed three lines later, which would report the promotion succeeded while returning an empty/incomplete todo list.
+**Fix:** Trim once at the write site:
 ```go
-"AETHER_OUTPUT_MODE=json aether build-completion-stage $ARGUMENTS --completion-file",
-"result.completion_path",
+colonyGoal = strings.TrimSpace(colonyGoal)   // in shelfPromoteBatchCmd before the loop
+// and in promoteShelfEntry:
+sf.Entries[i].PromotedTo = strings.TrimSpace(colonyGoal)
 ```
+Then both sides of the comparison are normalized. (Same normalization applies whichever fix CR-01 takes.)
 
-and add `"aether build-completion-stage"` between the manifest fetch and `build-finalize` in the `inOrder` slice.
+### WR-02: Second colony-creation path (`aether init-ceremony`) never seeds shelf todos — the CR-01 gap is closed on only one of two init surfaces
 
-### WR-04: plan.md checks boundary guidance only after Decision Moment 2 has mutated research-approval state
+**File:** `cmd/init_ceremony.go:553-563` (`createCeremonyColony` session literal, `ActiveTodos: []string{}`)
+**Issue:** 165-07 wired `promotedShelfTodos` into `cmd/init_cmd.go:214`, but `createCeremonyColony` — the runtime-native guided init used by `aether init-ceremony` (the Codex-facing path) — writes `session.json` with a hard-coded empty `ActiveTodos`. Entries promoted with `--colony <goal>` before an init-ceremony run are stranded exactly as in the pre-fix bug: marked promoted, never surfaced as todos. The phase's own doctrine (CLAUDE.md Definition of Done) warns about capability wired on one path and silently absent on the parallel one.
+**Fix:** In `createCeremonyColony`, replace the literal with the same call:
+```go
+ActiveTodos: promotedShelfTodos(store, goal),
+```
+and add an init-ceremony case to `shelf_todo_wiring_test.go`.
 
-**File:** `.claude/commands/ant/plan.md:50-78`
-**Issue:** The stage order is Decision Moment 1 → Planning Manifest → Decision Moment 2 (runs `aether plan-research-approve --approve-all/--flip/--auto`, a state-mutating command) → Clarification Gate (`orchestrator_boundary_guidance` / `unresolved_clarifications`). If boundary guidance is active in the first manifest, the wrapper still walks the user through both decision moments and applies research approvals before discovering it must route to `aether discuss` and discard the manifest. build.md gates the boundary immediately after manifest fetch and before anything else acts on the manifest (build.md:119-131). At best wasted user interaction; at worst research approvals recorded against a plan the discuss redirect is about to invalidate.
-**Fix:** Move the Clarification Gate to immediately after the first manifest fetch (before Decision Moment 1's card is presented), or add an explicit line in both decision moments: "If the manifest carries active `orchestrator_boundary_guidance`, skip both decision moments and go straight to the Clarification Gate."
+### WR-03: CONTEXT.md and HANDOFF.md recompute tasks from state and never display shelf-seeded todos
 
-### WR-05: init Approval writes pheromones before the colony exists
+**File:** `cmd/recovery_snapshot.go:417` (`activeTasks := sessionActiveTodosFromState(state)`), `cmd/recovery_snapshot.go:575` (`tasks := sessionActiveTodosFromState(state)`)
+**Issue:** `syncSessionFromState` (line 134) carefully merges shelf todos into `session.ActiveTodos` so they survive refreshes — but both recovery renderers, which receive that very `session` value as a parameter, ignore it and re-derive tasks from phase state only. Result: a promoted shelf entry exists durably in `session.json` but never appears in CONTEXT.md's "Active Todos" or HANDOFF.md's "Tasks" — the two documents the system describes as "the colony's memory" for context-collapse recovery. The stated goal of the gap closure ("a promoted shelf entry must become a durable colony todo") is met in the data file but not in either human/LLM-facing recovery artifact. (`cmd/context.go:315` gets this right for resume: it prefers `session.ActiveTodos`.)
+**Fix:** In both renderers, use the merged list, falling back to derivation only when empty:
+```go
+activeTasks := session.ActiveTodos
+if len(activeTasks) == 0 {
+    activeTasks = sessionActiveTodosFromState(state)
+}
+```
+Extend `TestSessionRefreshPreservesShelfTodos` to assert the shelf todo string appears in the written `CONTEXT.md`.
 
-**File:** `.claude/commands/ant/init.md:283-284` (same ordering in `.aether/commands/init.yaml:23-24`)
-**Issue:** Approval says: run `aether pheromone-write` for each approved pheromone, *then* run `aether init` to create colony state. If `aether init` fails (setup missing, sealed-colony conflict, bad charter JSON), approved pheromones are already persisted against the previous or nonexistent colony — a partial-persistence state the failure modes section claims cannot happen ("Write nothing — no charter call, no pheromone writes"). If `aether init` resets or replaces `pheromones.json` on colony creation, the approved signals are silently destroyed instead.
-**Fix:** Reverse the order: run `aether init` first, and write approved pheromones only after it reports success. Update init.yaml, both wrapper copies, and the flat mirror together.
+### WR-04: Broken env-var restore in shelf wiring tests — defer evaluates `os.Getenv` immediately, leaking a deleted temp dir into `AETHER_ROOT`
 
-### WR-06: Fragile shell-quoting templates in init command invocations
+**File:** `cmd/shelf_todo_wiring_test.go:30-31, 93-94, 139-140`
+**Issue:** All three integration tests contain:
+```go
+os.Setenv("AETHER_ROOT", tmpDir)
+defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+```
+Deferred function *arguments* are evaluated at `defer` time — after the `Setenv` on the previous line — so the "restore" restores `tmpDir` itself. When the test ends, `AETHER_ROOT` remains pointed at a `t.TempDir()` that Go has deleted, for the remainder of the package test run. `saveGlobals` (cmd/testing_main_test.go:116) restores package globals but not environment, so nothing else cleans this up; any later test in the run that relies on ambient `AETHER_ROOT` resolution inherits a dangling path. Other test files in the package handle this correctly (`build_flow_cmds_test.go:24-31` captures the original before setting, or uses `t.Cleanup` + `Unsetenv`).
+**Fix:** Replace both lines with `t.Setenv("AETHER_ROOT", tmpDir)` in all three tests — it saves and restores the pre-test value automatically.
 
-**File:** `.claude/commands/ant/init.md:16` and `:284`
-**Issue:** Line 16: `aether init-research --goal "$ARGUMENTS" --target .` — a goal containing a double quote breaks out of the argument. Line 284: `--charter-json '<synthesized charter JSON>'` — the charter is AI-synthesized prose (intent, vision, constraints) and will routinely contain apostrophes ("don't break the API"), which terminate the single-quoted argument and at minimum fail the command, at worst execute trailing text as shell. The LLM composes this command from user-influenced text, so the template it copies matters.
-**Fix:** Instruct writing the charter JSON to a temp file and passing a path (`--charter-file <path>`, adding runtime support if needed), or explicitly instruct the wrapper to shell-escape embedded quotes before substitution.
+### WR-05: `shelf-promote-batch` reports `ok: true` even when every requested ID fails
 
-### WR-07: build.md partial-wave-failure policy is ambiguous
+**File:** `cmd/shelf_init.go:43-63`
+**Issue:** Per-ID failures are collected into a `failed` array, but the command always terminates with `outputOK(...)` — including when `promoted` is empty and *all* IDs failed (typo'd ID, entry already dismissed, unreadable shelf). The init wrapper's Shelf Backlog stage instructs the LLM only to surface the `todos` array; nothing tells it to inspect `failed`. A total failure therefore renders as a success with an empty carry-forward list, and the user's chosen promotions vanish without any error signal. (Note also that `promoteShelfEntry`/`dismissShelfEntry` apply no status guard, so a re-run can silently retarget an entry already promoted to a different colony.)
+**Fix:** When `len(promoted) == 0 && len(failed) > 0`, return `outputError` naming the failed IDs; otherwise include a non-zero `failed_count` and have the wrapper spec surface failures ("If `failed` is non-empty, tell the user which IDs did not promote").
 
-**File:** `.claude/commands/ant/build.md:44-45` vs `:184`
-**Issue:** `<failure_modes>` says "Wave failure mid-build: do not continue to the next wave" (reads as: any failure in a wave halts). The Worker Spawning stop condition says "All workers in a wave fail — do not continue to the next wave" (reads as: only a total wave wipeout halts). Whether a wave with 1 of 3 workers failed proceeds to the next wave is exactly the "failed dependencies cascade" scenario both passages warn about, and the two passages answer it differently.
-**Fix:** Pick one policy and state it identically in both places, e.g. "If any worker in a wave ends `failed` or `blocked`, do not start the next wave; surface the failure and let `build-finalize` judge the partial packet."
+### WR-06: Stale RED/GREEN narrative in `TestLifecycleFlatMirrorsMatchCanonical` doc comment
+
+**File:** `cmd/lifecycle_wrapper_contract_test.go:129-134`
+**Issue:** The comment states the test "is currently RED for build and init (both proven drifted by research) and GREEN for plan and continue. Task 3 of this plan resyncs build and init and turns this fully green." Verified today: all four verbs' flat mirrors are byte-identical to canonical and the test passes. A comment describing a permanent invariant test as intentionally failing invites a future reader to dismiss a *real* future failure as "the known RED state." This is the same documentation-truth class the phase itself polices.
+**Fix:** Rewrite the comment to describe the standing invariant only (mirrors must be byte-identical; `aether install`/`update` copy, never hand-edit), dropping the point-in-time RED/GREEN status.
 
 ## Info
 
-### IN-01: Dead helper `sliceBetweenMarkers` in continue ceremony test
+### IN-01: Dead code in `formatShelfForInit` — `phaseStr` assigned and discarded
 
-**File:** `cmd/continue_wrapper_ceremony_test.go:270-289`
-**Issue:** `sliceBetweenMarkers` has no call sites anywhere in `cmd/` (definition only). Dead test code.
-**Fix:** Delete it, or use it where section-scoped assertions were intended.
+**File:** `cmd/shelf_init.go:249-253`
+**Issue:** The `phase == 0` branch assigns `phaseStr := "unknown"` then immediately discards it with `_ = phaseStr`; the string is never printed. Either the "unknown" phase was meant to be rendered or the two branches should collapse.
+**Fix:** Delete the two dead lines, or render the intended `(from phase unknown)` suffix.
 
-### IN-02: Stale "currently RED" comment on a now-green test
+### IN-02: `no_permissive_read_phrasing` subtest scans the whole file but its failure message claims the phrase is in the `<read_only>` block
 
-**File:** `cmd/lifecycle_wrapper_contract_test.go:129-134`
-**Issue:** The `TestLifecycleFlatMirrorsMatchCanonical` doc comment says "This is currently RED for build and init... Task 3 of this plan resyncs build and init and turns this fully green." The mirrors now match (test passes); the comment describes a completed TDD state as present-tense.
-**Fix:** Reword to past tense: "Was RED for build and init when written; Task 3 resynced them."
+**File:** `cmd/lifecycle_wrapper_contract_test.go:662-678`
+**Issue:** The check runs `strings.Contains(string(content), permissiveReadOnlyReadPhrase)` over the entire file, but the error text asserts "`<read_only>` block uses the permissive phrase." A future wrapper edit that quotes "may read but never write" anywhere else (e.g., inside a guardrail explaining what *not* to say) fails with a misleading diagnosis.
+**Fix:** Scope the check to `extractReadOnlyBlock(text)` (already available two functions up), or reword the message to say the phrase may not appear anywhere in the file.
 
-### IN-03: Ratio constant duplicated as magic number `3` in three test files
+### IN-03: Redundant entries in the init wrapper forbidden list
 
-**File:** `cmd/lifecycle_wrapper_contract_test.go:267` vs `cmd/build_wrapper_ceremony_test.go:324`, `cmd/continue_wrapper_ceremony_test.go:236`, `cmd/plan_wrapper_ceremony_test.go:198`
-**Issue:** `wrapperMinMethodToEnvelopeRatio = 3` exists with a `wrapperRatioOK` helper, but the three per-verb `method_outweighs_envelope_mechanics` subtests hardcode `methodCount < 3*envelopeCount` instead. Changing the constant would silently leave four divergent thresholds. These subtests also fully duplicate `TestLifecycleWrappersDoNotParseEnvelopeAsPrimaryJob` and the structured-blocks assertions in `TestLifecycleWrappersCarryStructuredBlocks`.
-**Fix:** Have the per-verb subtests call `wrapperRatioOK`, or delete the duplicated subtests and rely on the shared lifecycle test.
+**File:** `cmd/init_wrapper_ceremony_test.go:71-74`
+**Issue:** The forbidden markers ``"append `[shelf:"`` and ``"to `active_todos`"`` are strictly subsumed by the bare `"active_todos"` entry two lines below — any text matching the first two necessarily matches the third. Harmless, but the redundancy suggests the narrower fences predate the broad one and can confuse maintenance.
+**Fix:** Keep the broad `"active_todos"` fence and drop the two subsumed entries (or keep all three with a comment noting the subsumption is intentional belt-and-braces).
 
-### IN-04: Default continue command duplicates `--verification-depth` when the user supplies one
+### IN-04: Wrapper labels dismissal as "Delete permanently" but the runtime only marks status dismissed
 
-**File:** `.aether/commands/continue.yaml:5` and `.claude/commands/ant/continue.md:59`
-**Issue:** `aether continue --verification-depth standard $ARGUMENTS` — if the user's arguments include `--verification-depth light`, the runtime receives the flag twice. This currently works only because Cobra/pflag string flags are last-wins (`cmd/codex_workflow_cmds.go:1187` registers a plain `String` flag). A stricter parser or a switch to a slice flag would break the override silently.
-**Fix:** Instruct the wrapper to omit the hardcoded `--verification-depth standard` when `$ARGUMENTS` already names a depth.
+**File:** `.claude/commands/ant/init.md:252-256` (and mirrors), `cmd/shelf_init.go:144-161`
+**Issue:** Shelf Backlog option 3 is presented to the user as "Delete permanently," but the mapped command `shelf-dismiss-batch` sets `Status = dismissed` and the entry remains in `shelf.json` indefinitely. Overstating destruction is the safe direction, but the wording misleads a user who later expects the data to be gone (or, conversely, doesn't realize it is recoverable).
+**Fix:** Rename the option "Dismiss (remove from backlog)" or make dismissal actually delete the entry — pick one and align wrapper wording with runtime behavior.
 
-### IN-05: Vacuous negative control in flat-mirror test
+### IN-05: `mergeShelfTodos` dedupes identical derived task strings
 
-**File:** `cmd/lifecycle_wrapper_contract_test.go:164-169`
-**Issue:** `a_mirror_content_change_would_fail` appends a sentinel to the canonical bytes and asserts the mutated copy differs from the mirror. Since mutated = canonical + sentinel, this is true by construction whenever the outer assertion passed; it proves nothing beyond `bytes.Equal` working. Contrast with the ratio test's synthetic negative control, which genuinely exercises the assertion logic.
-**Fix:** Drop the subtest, or make it compare `mutated` against `canonicalBytes` through the same code path a real drift would take.
-
-### IN-06: continue.yaml step 9 path wording is self-contradictory and absent from the wrapper
-
-**File:** `.aether/commands/continue.yaml:50`
-**Issue:** "Write per-reviewer JSON and the final completion JSON under `${TMPDIR:-/tmp}/aether-continue-<run>/continue-completion.json`" — per-reviewer files cannot live "under" a `.json` file path; the directory is presumably meant. The generated continue.md drops the concrete path entirely (only "temporary worker JSON file"), so the two describe different levels of specificity.
-**Fix:** In the YAML, name the directory (`${TMPDIR:-/tmp}/aether-continue-<run>/`) for per-reviewer files and the `continue-completion.json` file within it for the packet.
-
-### IN-07: build.md describes `--light` as "skip review agents," contradicting the depth table
-
-**File:** `.claude/commands/ant/build.md:237`
-**Issue:** "Use `--heavy` for full gates or `--light` to skip review agents." Per CLAUDE.md's Queen-owned orchestration table, build light is "Builder + Watcher + Probe" — review agents still run, just fewer of them. Runtime wins over docs, but this wrapper line teaches users the wrong mental model.
-**Fix:** Reword: "`--light` runs the minimal review set (Watcher + Probe only)."
+**File:** `cmd/shelf_init.go:202-223`
+**Issue:** The `seen` map dedupes derived (phase-task) entries against each other, not just against shelf entries — two distinct incomplete tasks that happen to share identical goal text collapse to one line in `active_todos`. Cosmetic in practice, but it means the todo count can under-report open work.
+**Fix:** Only consult/populate `seen` for shelf-prefixed strings when appending derived entries, or accept and document the collapse.
 
 ---
 
-_Reviewed: 2026-08-03_
+## Verification Performed
+
+- `go test ./cmd/ -run 'TestLifecycle|TestShelf|TestInitSeeds|TestSessionRefreshPreserves|TestMergeShelfTodos|TestInitWrapper|TestBuildWrapper|TestContinueWrapper|TestPlanWrapper|TestBuildMdOwnership|TestBriefPath|TestSpecialistCommand|TestWrapperHostContract' -count=1` — **PASS**
+- `go vet ./cmd/` — clean
+- `diff` across all 12 wrapper surfaces: flat mirrors byte-identical to canonical for all four verbs; `.opencode` parity exact except init.md's single sanctioned `AskUserQuestion` line
+- Prior-review CR-01 (hand-append to `active_todos`): confirmed absent from all init wrapper surfaces; fence markers present in `TestInitWrapperCeremonyContract`
+- Prior-review WR-05 (pheromone gating): confirmed fixed in Approval stage and locked by `approval_writes_pheromones_only_after_init_succeeds`
+- Full call-chain trace: `shelf-promote-batch` → `promoteShelfEntry` → `aether init` (`promotedShelfTodos`) → `session.json` → `syncSessionFromState`/`session-update` (`mergeShelfTodos`) → recovery renderers
+
+---
+
+_Reviewed: 2026-08-03T12:05:11Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
