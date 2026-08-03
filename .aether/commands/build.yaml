@@ -52,6 +52,13 @@ wrapper_additions:
     visual-guidance trailer afterward, at the reserved marker
     `<!-- PHASE-168: visual-guidance trailer appends below this line -->`,
     which is always the last non-empty line of the file.
+  read_only_boundary: |
+    The wrapper never opens colony state, session, or pheromone files by hand
+    in either direction -- not reading them, not writing them. It reads
+    runtime state only through runtime commands such as `aether status`; all
+    persistence goes through the Go-owned finalizers. This is the same
+    boundary the Guardrails `Do NOT read or write colony state files by hand`
+    bullet states -- the <read_only> block and the Guardrails list agree.
 guardrails:
   - "The TS host is the sole manifest authority; always use `aether host build --dry-run` to fetch the plan, never `aether host build` alone (which dispatches workers via the TS host path, causing double-dispatch)."
   - "The wrapper is the sole conductor for interactive worker spawning; spawn workers via platform Agent tool from the manifest, not from the TS host."
