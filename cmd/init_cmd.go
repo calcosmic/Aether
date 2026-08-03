@@ -50,6 +50,9 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
+		promoteShelfRaw, _ := cmd.Flags().GetString("promote-shelf")
+		dismissShelfRaw, _ := cmd.Flags().GetString("dismiss-shelf")
+
 		dataDir := store.BasePath()
 		aetherDir := filepath.Dir(dataDir)
 
@@ -202,6 +205,17 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
+		// Phase 165 gap CR-01: promotion must stay below the state save and
+		// above the session build. Every refusal branch above this line
+		// (empty goal, active colony, sealed colony without --confirm-reinit,
+		// in-progress seal, invalid scope/colony-mode/charter JSON, failed
+		// state save) returns before this ever runs, so a failed `aether init`
+		// writes nothing to shelf.json. Do not move this call upward.
+		shelfPromoted, shelfDismissed, shelfFailed := applyInitShelfSelections(store, promoteShelfRaw, dismissShelfRaw, goal)
+		if len(shelfFailed) > 0 {
+			fmt.Fprintf(os.Stderr, "warning: could not apply shelf selection(s): %s\n", strings.Join(shelfFailed, ", "))
+		}
+
 		// Create session.json
 		session := colony.SessionFile{
 			SessionID:        sessionID,
@@ -256,6 +270,9 @@ var initCmd = &cobra.Command{
 			"data_dir":            dataDir,
 			"shelf_backlog":       shelfEntries,
 			"shelf_backlog_count": len(shelfEntries),
+			"shelf_promoted":      shelfPromoted,
+			"shelf_dismissed":     shelfDismissed,
+			"shelf_failed":        shelfFailed,
 		}
 		if priorStateBackup != "" {
 			result["prior_state_backup"] = priorStateBackup
@@ -290,6 +307,8 @@ func init() {
 	initCmd.Flags().String("colony-mode", string(colony.ColonyModeColony), "Colony mode: colony or orchestrator")
 	initCmd.Flags().String("charter-json", "", "Approved charter data as JSON string")
 	initCmd.Flags().Bool("confirm-reinit", false, "Confirm replacing a sealed colony's state (a timestamped backup is written to .aether/data/backups/)")
+	initCmd.Flags().String("promote-shelf", "", "Comma-separated shelf entry IDs to promote into this colony as todos")
+	initCmd.Flags().String("dismiss-shelf", "", "Comma-separated shelf entry IDs to dismiss from the backlog")
 	rootCmd.AddCommand(initCmd)
 }
 

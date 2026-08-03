@@ -37,14 +37,10 @@ var shelfPromoteBatchCmd = &cobra.Command{
 			return nil
 		}
 
-		ids := strings.Split(idsRaw, ",")
+		ids := splitShelfIDs(idsRaw)
 		var promoted []string
 		var failed []string
 		for _, id := range ids {
-			id = strings.TrimSpace(id)
-			if id == "" {
-				continue
-			}
 			if err := promoteShelfEntry(store, id, colonyGoal); err != nil {
 				failed = append(failed, id)
 			} else {
@@ -80,14 +76,10 @@ var shelfDismissBatchCmd = &cobra.Command{
 			return nil
 		}
 
-		ids := strings.Split(idsRaw, ",")
+		ids := splitShelfIDs(idsRaw)
 		var dismissed []string
 		var failed []string
 		for _, id := range ids {
-			id = strings.TrimSpace(id)
-			if id == "" {
-				continue
-			}
 			if err := dismissShelfEntry(store, id); err != nil {
 				failed = append(failed, id)
 			} else {
@@ -102,6 +94,58 @@ var shelfDismissBatchCmd = &cobra.Command{
 		})
 		return nil
 	},
+}
+
+// splitShelfIDs splits a comma-separated raw ID list, trims each element, and
+// drops empties. It always returns a non-nil slice, so callers can range over
+// the result unconditionally. This is the single definition for ID parsing
+// shared by shelf-promote-batch, shelf-dismiss-batch, and `aether init`'s
+// --promote-shelf / --dismiss-shelf flags (Phase 165 gap CR-01).
+func splitShelfIDs(raw string) []string {
+	ids := []string{}
+	for _, id := range strings.Split(raw, ",") {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// applyInitShelfSelections promotes and dismisses shelf entries by ID as part
+// of the `aether init` transaction, under colonyGoal -- the same goal string
+// the colony is created with. It never returns an error: a bad shelf ID must
+// never be able to fail colony creation, the same principle promotedShelfTodos
+// already applies to an unreadable shelf. Call it strictly after
+// COLONY_STATE.json has been saved and strictly before the session is built,
+// so every refusal branch in `aether init` returns before this ever runs
+// (Phase 165 gap CR-01, threat T-165-09-01).
+func applyInitShelfSelections(s *storage.Store, promoteRaw, dismissRaw, colonyGoal string) (promoted []string, dismissed []string, failed []string) {
+	promoted = []string{}
+	dismissed = []string{}
+	failed = []string{}
+	if s == nil {
+		return promoted, dismissed, failed
+	}
+	if strings.TrimSpace(promoteRaw) == "" && strings.TrimSpace(dismissRaw) == "" {
+		return promoted, dismissed, failed
+	}
+	for _, id := range splitShelfIDs(promoteRaw) {
+		if err := promoteShelfEntry(s, id, colonyGoal); err != nil {
+			failed = append(failed, id)
+		} else {
+			promoted = append(promoted, id)
+		}
+	}
+	for _, id := range splitShelfIDs(dismissRaw) {
+		if err := dismissShelfEntry(s, id); err != nil {
+			failed = append(failed, id)
+		} else {
+			dismissed = append(dismissed, id)
+		}
+	}
+	return promoted, dismissed, failed
 }
 
 func loadActiveShelf(s *storage.Store) ([]colony.ShelfEntry, error) {
@@ -130,7 +174,10 @@ func promoteShelfEntry(s *storage.Store, id string, colonyGoal string) error {
 	for i := range sf.Entries {
 		if sf.Entries[i].ID == id {
 			sf.Entries[i].Status = colony.ShelfPromoted
-			sf.Entries[i].PromotedTo = colonyGoal
+			// Trim to match the query-side trim in promotedShelfTodos
+			// (review WR-01): both sides of the e.PromotedTo == goal
+			// comparison must be normalized the same way.
+			sf.Entries[i].PromotedTo = strings.TrimSpace(colonyGoal)
 			found = true
 			break
 		}
