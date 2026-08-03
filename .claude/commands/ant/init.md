@@ -34,7 +34,8 @@ If `$ARGUMENTS` is empty:
 
 ### User Cancels At Approval
 If the user chooses cancel at `## Approval`:
-- Write nothing — no charter call, no pheromone writes, nothing persisted
+- Write nothing — no charter call, no pheromone writes, no shelf promotion or dismissal, nothing persisted
+- Shelf choices collected earlier are discarded; the backlog is left exactly as it was
 - Stop the command
 
 ### Previous Colony Was Sealed
@@ -66,6 +67,8 @@ Carry these values forward once produced, in current vocabulary only:
 - `selected_colony_mode` — `colony` or `orchestrator`, from Colony Mode
 - `approved_pheromones` — the subset of `synthesized_pheromones` the user approved at Approval
 - `next_action` — the next-step command the user should run after init completes
+- `promoted_shelf_ids` — the shelf entry IDs the user chose to promote, spent only in the Approval init call
+- `dismissed_shelf_ids` — the shelf entry IDs the user chose to dismiss, spent only in the Approval init call
 
 ## Codebase Summary
 
@@ -252,14 +255,14 @@ Before colony state creation:
      3. Delete permanently
      ```
    - Collect user choices
-   - If any promoted: run `aether shelf-promote-batch --ids "id1,id2" --colony "{goal}"`
-   - If any dismissed: run `aether shelf-dismiss-batch --ids "id1,id2"`
-   - Promoted items become todos: the `shelf-promote-batch` JSON result carries a `todos` array — show it back to the user as what this colony will carry forward; `aether init` records them as colony todos when it runs at Approval
+   - Record the chosen IDs as `promoted_shelf_ids` and `dismissed_shelf_ids`. Nothing is written yet.
+   - Show the chosen entries' `text` and `category` from `result.entries` back to the user as what this colony will carry forward if they approve
+   - State plainly that the shelf is not touched at this stage: `aether init` performs the promotion and dismissal itself at Approval, after consent, so a cancel, a revised goal, or a failed init leaves the backlog exactly as it was
 4. If no shelved entries exist:
    - Skip silently (no prompt)
 
-**Stop conditions:** If no shelved entries exist, skip silently. Promote and
-dismiss batch calls only run for the ids the user actually chose.
+**Stop conditions:** If no shelved entries exist, skip silently. This stage
+never writes — it only records the chosen IDs for Approval to spend.
 
 ## Cross-Platform Drift Guard
 
@@ -276,19 +279,22 @@ flow.
 **Purpose:** Get explicit user consent before any persistence happens, and
 mark the moment the colony's intention becomes real.
 **Reads:** the accumulated cross-stage state — `refined_goal`,
-`synthesized_charter`, `selected_colony_mode`, `synthesized_pheromones`.
+`synthesized_charter`, `selected_colony_mode`, `synthesized_pheromones`,
+`promoted_shelf_ids`, `dismissed_shelf_ids`.
 
 - Use AskUserQuestion with 3 options: proceed, revise goal, cancel.
 - On proceed, before calling the runtime: 👑 Queen has set the colony's intention — "{refined_goal}"
-- Then run `AETHER_OUTPUT_MODE=visual aether init --colony-mode "{selected_colony_mode}" --charter-json '<synthesized charter JSON>' "<refined goal>"`, where `<synthesized charter JSON>` is the JSON-serialized charter object from the AI synthesis.
+- Then run `AETHER_OUTPUT_MODE=visual aether init --colony-mode "{selected_colony_mode}" --charter-json '<synthesized charter JSON>' --promote-shelf "{promoted_shelf_ids}" --dismiss-shelf "{dismissed_shelf_ids}" "<refined goal>"`, where `<synthesized charter JSON>` is the JSON-serialized charter object from the AI synthesis. Omit `--promote-shelf` and `--dismiss-shelf` when the user chose nothing on the shelf. The goal in this call is the same `refined_goal` the promotion is recorded against, so a revised goal can never orphan a promoted entry.
 - Only once `aether init` has returned success, for each approved synthesized pheromone, run `aether pheromone-write --type "{type}" --content "{content}" --source "init-synthesis"`. If `aether init` failed, skip this step entirely — nothing is written.
+- If the runtime reports failed shelf IDs (`shelf_failed`), tell the user which backlog ideas did not carry forward and that they are still on the shelf.
 - Do not write `.aether/QUEEN.md`, `.aether/data/COLONY_STATE.json`, `session.json`, `constraints.json`, or `pheromones.json` by hand from this command spec.
 - Do not hand-render the init banner — `init_ceremony.go` already owns it; the runtime call above shows the banner and result.
 - If setup is missing, relay the runtime guidance exactly.
 - If docs and runtime disagree, runtime wins.
 
 **Stop conditions:** A cancel or a failed `aether init` both end the command
-with nothing persisted — no charter, no pheromones.
+with nothing persisted — no charter, no pheromones, no shelf promotion or
+dismissal.
 
 **Next steps:**
 - `/ant-colonize` — map an existing codebase before planning

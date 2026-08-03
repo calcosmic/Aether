@@ -35,6 +35,8 @@ func TestInitWrapperCeremonyContract(t *testing.T) {
 		"selected_colony_mode",
 		"aether pheromone-write",
 		"aether shelf-list",
+		"--promote-shelf",
+		"promoted_shelf_ids",
 	}
 
 	inOrder := []string{
@@ -72,6 +74,16 @@ func TestInitWrapperCeremonyContract(t *testing.T) {
 		"to `active_todos`",
 		"active_todos",
 		"in the session file or colony state",
+		// Phase 165 gap CR-01's second instance (review CR-01 / plan 165-10):
+		// promoting or dismissing a shelf entry via the standalone batch
+		// commands is an ORDERING hazard, not a vocabulary one -- both mutate
+		// shelf.json the instant they run, while the wrapper's own
+		// <failure_modes> promises a cancel or a failed init persists
+		// nothing. Promotion must happen only inside the same `aether init`
+		// call the user has already consented to, via `--promote-shelf` /
+		// `--dismiss-shelf`.
+		"aether shelf-promote-batch",
+		"aether shelf-dismiss-batch",
 	}
 
 	for _, wrapperPath := range wrapperPaths {
@@ -122,6 +134,101 @@ func TestInitWrapperCeremonyContract(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("shelf_ids_are_spent_only_inside_the_approval_init_call", func(t *testing.T) {
+		// Phase 165 gap CR-01 (plan 165-10): a shelf write placed before the
+		// Approval consent gate contradicts init.md's <failure_modes> promise
+		// and strands a promoted entry on cancel, goal revision, or failed
+		// init. Checked directly against all three surfaces -- the two
+		// canonical wrappers plus the flat installed mirror -- not only
+		// transitively through TestLifecycleFlatMirrorsMatchCanonical.
+		allPaths := append(append([]string{}, wrapperPaths...), flatMirrorPath(repoRoot, "init"))
+		for _, wrapperPath := range allPaths {
+			content, err := os.ReadFile(wrapperPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", wrapperPath, err)
+			}
+			text := string(content)
+
+			// (a) no occurrence of "aether shelf-" other than "aether shelf-list".
+			searchFrom := 0
+			for {
+				idx := strings.Index(text[searchFrom:], "aether shelf-")
+				if idx == -1 {
+					break
+				}
+				absIdx := searchFrom + idx
+				rest := text[absIdx+len("aether shelf-"):]
+				if !strings.HasPrefix(rest, "list") {
+					end := absIdx + len("aether shelf-")
+					limit := end + 20
+					if limit > len(text) {
+						limit = len(text)
+					}
+					t.Errorf("%s: found %q, a shelf write other than the read-only `aether shelf-list` -- a shelf write placed before the Approval consent gate contradicts init.md's <failure_modes> promise and strands a promoted entry on cancel, goal revision, or failed init (Phase 165 gap CR-01)", wrapperPath, text[absIdx:limit])
+				}
+				searchFrom = absIdx + len("aether shelf-")
+			}
+
+			// (b) --promote-shelf appears only after "## Approval".
+			approvalIdx := strings.Index(text, "## Approval")
+			if approvalIdx == -1 {
+				t.Fatalf("%s: missing \"## Approval\" heading", wrapperPath)
+			}
+			promoteIdx := strings.Index(text, "--promote-shelf")
+			if promoteIdx == -1 {
+				t.Errorf("%s: missing %q -- shelf promotion must be spent inside the Approval init call (Phase 165 gap CR-01)", wrapperPath, "--promote-shelf")
+			} else if promoteIdx <= approvalIdx {
+				t.Errorf("%s: %q appears at index %d, at or before \"## Approval\" at index %d -- shelf IDs must be spent only inside the Approval stage's init call, after the user has consented (Phase 165 gap CR-01)", wrapperPath, "--promote-shelf", promoteIdx, approvalIdx)
+			}
+
+			// (c) the "## Shelf Backlog" section contains "aether shelf-list"
+			// and no other "aether shelf-" occurrence.
+			section := initShelfBacklogSection(text)
+			if section == "" {
+				t.Fatalf("%s: missing \"## Shelf Backlog\" heading", wrapperPath)
+			}
+			if !strings.Contains(section, "aether shelf-list") {
+				t.Errorf("%s: \"## Shelf Backlog\" section is missing %q", wrapperPath, "aether shelf-list")
+			}
+			sectionSearchFrom := 0
+			for {
+				idx := strings.Index(section[sectionSearchFrom:], "aether shelf-")
+				if idx == -1 {
+					break
+				}
+				absIdx := sectionSearchFrom + idx
+				rest := section[absIdx+len("aether shelf-"):]
+				if !strings.HasPrefix(rest, "list") {
+					end := absIdx + len("aether shelf-")
+					limit := end + 20
+					if limit > len(section) {
+						limit = len(section)
+					}
+					t.Errorf("%s: \"## Shelf Backlog\" section contains %q, a shelf write other than the read-only `aether shelf-list` -- the Shelf Backlog stage must only collect IDs, never mutate the shelf (Phase 165 gap CR-01)", wrapperPath, section[absIdx:limit])
+				}
+				sectionSearchFrom = absIdx + len("aether shelf-")
+			}
+		}
+	})
+}
+
+// initShelfBacklogSection returns the substring from the first index of
+// "## Shelf Backlog" to the next "\n## " after it (end of file if none),
+// modelled on initApprovalSection's slicing above. Fails the calling test via
+// t.Fatalf when the heading is absent.
+func initShelfBacklogSection(text string) string {
+	const heading = "## Shelf Backlog"
+	idx := strings.Index(text, heading)
+	if idx == -1 {
+		return ""
+	}
+	rest := text[idx+len(heading):]
+	nextIdx := strings.Index(rest, "\n## ")
+	if nextIdx == -1 {
+		return text[idx:]
+	}
+	return text[idx : idx+len(heading)+nextIdx]
 }
 
 // initApprovalSection returns the substring from the first index of

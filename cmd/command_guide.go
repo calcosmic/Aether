@@ -160,6 +160,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Synthesize raw goal, user answers, and init-research output into a refined goal and charter JSON; do not echo the scan output as the final charter.",
 			"Before creating colony state, ask the user to choose Colony Mode or Orchestrator Mode. Explain that Colony Mode is the existing default, while Orchestrator Mode asks guided boundary questions at phase points for tighter user control. If the user skips the choice or the host is non-interactive, default to Colony Mode.",
 			"Separate deterministic housekeeping warnings from at most 3 strategic AI-synthesized pheromone suggestions, and ask approval before writing any signal.",
+			"Run `aether shelf-list --json --status shelved`, let the user choose per entry, and carry the chosen IDs into the init call with `--promote-shelf` / `--dismiss-shelf` -- never promote or dismiss before the user approves, since a cancel or a failed init must leave the backlog untouched.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\"",
 		PostSteps: []string{
