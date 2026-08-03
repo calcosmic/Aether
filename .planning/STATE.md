@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.25
 milestone_name: Switch It On
-status: executing
+status: ready_to_plan
 stopped_at: Phase 165 context gathered
 last_updated: "2026-08-03T14:06:11.387Z"
 last_activity: 2026-08-03 -- Phase 165 execution started
 progress:
   total_phases: 29
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 49
   completed_plans: 47
-  percent: 96
+  percent: 21
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-25)
 
 ## Current Position
 
-Phase: 165 (core-lifecycle-commands) — EXECUTING
-Plan: 1 of 10
-Status: Executing Phase 165
-Last activity: 2026-08-03 -- Phase 165 execution started
+Phase: 166
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-03
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -39,7 +39,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 25 (v1.25)
+- Total plans completed: 35 (v1.25)
 - Average duration: — (v1.24 average: 8 min)
 - Total execution time: 0 hours
 

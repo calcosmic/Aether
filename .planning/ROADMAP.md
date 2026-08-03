@@ -597,7 +597,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
 | 164. Research Feeds Planning | v1.25 | 11/11 | Complete    | 2026-08-02 |
-| 165. Core Lifecycle Commands | v1.25 | 10/10 | Complete   | 2026-08-03 |
+| 165. Core Lifecycle Commands | v1.25 | 10/10 | Complete    | 2026-08-03 |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
 | 168. Your Eyes Back — Live Visibility | v1.25 | 0/TBD | Not started | - |

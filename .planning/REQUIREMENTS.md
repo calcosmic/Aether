@@ -96,11 +96,11 @@ These were asserted in the first draft and are now **verified false**. No work i
 
 *Not refuted. `build.md` opens with an ownership-split table and instructions to parse `result.manifest.dispatch_manifest` — protocol, not method. Line counts are a weak signal (`oracle.md` shrank because its loop moved into Go), so these are scoped by content rather than length.*
 
-- [ ] **CMD-01**: `init`, `plan`, `build` and `continue` wrappers carry engineering method — stage purpose, files to read, spawn choreography, synthesis instructions, stop conditions
-- [ ] **CMD-02**: No lifecycle wrapper instructs the model to parse an internal JSON envelope or write to a temporary manifest file as its primary job
-- [ ] **CMD-03**: A user reading `build.md` can describe what each stage does without opening Go source
-- [ ] **CMD-04**: Specialist and delight commands — `chaos`, `archaeology`, `dream`, `oracle`, `swarm`, `sage`, `colonize`, `council` — keep working unchanged
-- [ ] **CMD-05**: `build.md` is edited by at most one phase of this milestone, or the merge order between phases touching it is stated explicitly
+- [x] **CMD-01**: `init`, `plan`, `build` and `continue` wrappers carry engineering method — stage purpose, files to read, spawn choreography, synthesis instructions, stop conditions
+- [x] **CMD-02**: No lifecycle wrapper instructs the model to parse an internal JSON envelope or write to a temporary manifest file as its primary job
+- [x] **CMD-03**: A user reading `build.md` can describe what each stage does without opening Go source
+- [x] **CMD-04**: Specialist and delight commands — `chaos`, `archaeology`, `dream`, `oracle`, `swarm`, `sage`, `colonize`, `council` — keep working unchanged
+- [x] **CMD-05**: `build.md` is edited by at most one phase of this milestone, or the merge order between phases touching it is stated explicitly
 
 ## Full Colony On Demand (COLONY)
 
@@ -257,11 +257,11 @@ Carried from v1.23, still open, not addressed here: `CATALOG-01/02`, `TEST-01/02
 | RESEARCH-08 | Phase 164 | Complete |
 | RESEARCH-09 | Phase 164 | Complete |
 | RESEARCH-10 | Phase 164 | Complete |
-| CMD-01 | Phase 165 | Pending |
-| CMD-02 | Phase 165 | Pending |
-| CMD-03 | Phase 165 | Pending |
-| CMD-04 | Phase 165 | Pending |
-| CMD-05 | Phase 165 | Pending |
+| CMD-01 | Phase 165 | Complete |
+| CMD-02 | Phase 165 | Complete |
+| CMD-03 | Phase 165 | Complete |
+| CMD-04 | Phase 165 | Complete |
+| CMD-05 | Phase 165 | Complete |
 | COLONY-01 | Phase 166 | Pending |
 | COLONY-02 | Phase 166 | Pending |
 | COLONY-03 | Phase 166 | Pending |
