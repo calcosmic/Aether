@@ -129,7 +129,9 @@ func syncSessionFromState(state colony.ColonyState, opts sessionSyncOptions) (co
 	session.ColonyMode = state.EffectiveColonyMode()
 	session.CurrentPhase = state.CurrentPhase
 	session.CurrentMilestone = state.Milestone
-	session.ActiveTodos = sessionActiveTodosFromState(state)
+	// Phase 165 gap CR-01: merge, don't overwrite -- a bare assignment here
+	// erases any shelf-seeded todo the moment a session refresh runs.
+	session.ActiveTodos = mergeShelfTodos(session.ActiveTodos, sessionActiveTodosFromState(state))
 	if opts.CommandName != "" {
 		session.LastCommand = opts.CommandName
 		session.LastCommandAt = now
