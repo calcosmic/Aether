@@ -62,6 +62,16 @@ func TestInitWrapperCeremonyContract(t *testing.T) {
 		".aether/aether-utils.sh",
 		"aether state-write",
 		"colony_depth",
+		// Phase 165 gap CR-01: init.md's Shelf Backlog stage instructed a
+		// hand-append of a shelf-derived entry into protected runtime state —
+		// the same D-2 Frankenstein-state class the entries above fence, just
+		// against a different field the original list happened not to match.
+		// The field named below is runtime-owned; the wrapper has no reason
+		// to name it, or to name the write target it used to describe.
+		"append `[shelf:",
+		"to `active_todos`",
+		"active_todos",
+		"in the session file or colony state",
 	}
 
 	for _, wrapperPath := range wrapperPaths {
@@ -85,6 +95,45 @@ func TestInitWrapperCeremonyContract(t *testing.T) {
 			}
 		}
 	}
+
+	t.Run("approval_writes_pheromones_only_after_init_succeeds", func(t *testing.T) {
+		// Phase 165 review WR-05: init.md's own <failure_modes> promises a
+		// cancel or failure writes nothing, so `aether pheromone-write` must not
+		// run before `aether init --colony-mode` has returned success.
+		for _, wrapperPath := range wrapperPaths {
+			content, err := os.ReadFile(wrapperPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", wrapperPath, err)
+			}
+			section := initApprovalSection(string(content))
+			if section == "" {
+				t.Fatalf("%s: missing \"## Approval\" section", wrapperPath)
+			}
+			initIdx := strings.Index(section, "aether init --colony-mode")
+			pheromoneIdx := strings.Index(section, "aether pheromone-write")
+			if initIdx == -1 {
+				t.Fatalf("%s: Approval section missing %q", wrapperPath, "aether init --colony-mode")
+			}
+			if pheromoneIdx == -1 {
+				t.Fatalf("%s: Approval section missing %q", wrapperPath, "aether pheromone-write")
+			}
+			if !(initIdx < pheromoneIdx) {
+				t.Errorf("%s: Approval section runs `aether pheromone-write` before `aether init --colony-mode` has returned success — init.md's own <failure_modes> promises a cancel or failure writes nothing, so pheromones must be gated on init success (Phase 165 review WR-05)", wrapperPath)
+			}
+		}
+	})
+}
+
+// initApprovalSection returns the substring from the first index of
+// "## Approval" to the end of the file, modelled on extractStateCarrySection's
+// slicing approach in cmd/lifecycle_wrapper_contract_test.go.
+func initApprovalSection(text string) string {
+	const heading = "## Approval"
+	idx := strings.Index(text, heading)
+	if idx == -1 {
+		return ""
+	}
+	return text[idx:]
 }
 
 // TestInitWrapperStageSkeletonAndParity covers the D-05 stage-skeleton

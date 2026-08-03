@@ -234,7 +234,9 @@ var sessionUpdateCmd = &cobra.Command{
 			if state.Milestone != "" {
 				session.CurrentMilestone = state.Milestone
 			}
-			session.ActiveTodos = sessionActiveTodosFromState(state)
+			// Phase 165 gap CR-01: merge, don't overwrite -- a bare assignment here
+			// erases any shelf-seeded todo the moment a session refresh runs.
+			session.ActiveTodos = mergeShelfTodos(session.ActiveTodos, sessionActiveTodosFromState(state))
 		}
 
 		// Update fields

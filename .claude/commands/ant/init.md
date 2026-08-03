@@ -254,7 +254,7 @@ Before colony state creation:
    - Collect user choices
    - If any promoted: run `aether shelf-promote-batch --ids "id1,id2" --colony "{goal}"`
    - If any dismissed: run `aether shelf-dismiss-batch --ids "id1,id2"`
-   - Promoted items become todos: append `[shelf:{category}] {text}` to `active_todos` in the session file or colony state
+   - Promoted items become todos: the `shelf-promote-batch` JSON result carries a `todos` array — show it back to the user as what this colony will carry forward; `aether init` records them as colony todos when it runs at Approval
 4. If no shelved entries exist:
    - Skip silently (no prompt)
 
@@ -280,15 +280,15 @@ mark the moment the colony's intention becomes real.
 
 - Use AskUserQuestion with 3 options: proceed, revise goal, cancel.
 - On proceed, before calling the runtime: 👑 Queen has set the colony's intention — "{refined_goal}"
-- After approval, for each approved synthesized pheromone, run `aether pheromone-write --type "{type}" --content "{content}" --source "init-synthesis"`.
 - Then run `AETHER_OUTPUT_MODE=visual aether init --colony-mode "{selected_colony_mode}" --charter-json '<synthesized charter JSON>' "<refined goal>"`, where `<synthesized charter JSON>` is the JSON-serialized charter object from the AI synthesis.
+- Only once `aether init` has returned success, for each approved synthesized pheromone, run `aether pheromone-write --type "{type}" --content "{content}" --source "init-synthesis"`. If `aether init` failed, skip this step entirely — nothing is written.
 - Do not write `.aether/QUEEN.md`, `.aether/data/COLONY_STATE.json`, `session.json`, `constraints.json`, or `pheromones.json` by hand from this command spec.
 - Do not hand-render the init banner — `init_ceremony.go` already owns it; the runtime call above shows the banner and result.
 - If setup is missing, relay the runtime guidance exactly.
 - If docs and runtime disagree, runtime wins.
 
-**Stop conditions:** A cancel ends the command with no state written — no
-charter call, no pheromone writes, nothing persisted.
+**Stop conditions:** A cancel or a failed `aether init` both end the command
+with nothing persisted — no charter, no pheromones.
 
 **Next steps:**
 - `/ant-colonize` — map an existing codebase before planning

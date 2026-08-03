@@ -44,3 +44,5 @@ guardrails:
   - "All persistence goes through the `aether init` call in Approval (with `--colony-mode` and `--charter-json`) and `aether pheromone-write`; the wrapper never writes state files."
   - "Do not hand-render the init banner or any runtime-owned ceremony banner; init_ceremony.go owns it."
   - "If docs and runtime disagree, runtime wins."
+  - "Promoted shelf entries are recorded as colony todos by `aether init`, never appended to a session or state file by the wrapper."
+  - "Approved pheromones are written with `aether pheromone-write` only after `aether init` returns success, so a cancelled or failed init persists nothing."

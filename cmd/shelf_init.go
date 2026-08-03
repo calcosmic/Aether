@@ -10,6 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// shelfTodoPrefix is the prefix every shelf-derived todo carries in
+// session.json's active_todos, so downstream code can distinguish shelf
+// entries from phase-derived todos without a separate field (Phase 165 gap
+// CR-01).
+const shelfTodoPrefix = "[shelf:"
+
 var shelfPromoteBatchCmd = &cobra.Command{
 	Use:   "shelf-promote-batch",
 	Short: "Promote multiple shelf entries by ID",
@@ -46,10 +52,13 @@ var shelfPromoteBatchCmd = &cobra.Command{
 			}
 		}
 
+		todos := promotedShelfTodos(store, colonyGoal)
+
 		outputOK(map[string]interface{}{
 			"promoted": promoted,
 			"failed":   failed,
 			"count":    len(promoted),
+			"todos":    todos,
 		})
 		return nil
 	},
@@ -152,7 +161,65 @@ func dismissShelfEntry(s *storage.Store, id string) error {
 }
 
 func shelfEntryToTodo(entry colony.ShelfEntry) string {
-	return fmt.Sprintf("[shelf:%s] %s", entry.Category, entry.Text)
+	return fmt.Sprintf("%s%s] %s", shelfTodoPrefix, entry.Category, entry.Text)
+}
+
+// promotedShelfTodos returns the shelf-derived todo strings for every entry
+// promoted to colonyGoal, newest-first. It never returns nil and never fails
+// colony creation: a missing or unreadable shelf yields an empty slice
+// (Phase 165 gap CR-01, threat T-165-07-05).
+func promotedShelfTodos(s *storage.Store, colonyGoal string) []string {
+	todos := []string{}
+	if s == nil {
+		return todos
+	}
+	sf, err := readShelfFile(s)
+	if err != nil {
+		return todos
+	}
+	goal := strings.TrimSpace(colonyGoal)
+	var promoted []colony.ShelfEntry
+	for _, e := range sf.Entries {
+		if e.Status == colony.ShelfPromoted && e.PromotedTo == goal {
+			promoted = append(promoted, e)
+		}
+	}
+	sort.Slice(promoted, func(i, j int) bool {
+		return promoted[i].CreatedAt > promoted[j].CreatedAt
+	})
+	for _, e := range promoted {
+		todos = append(todos, shelfEntryToTodo(e))
+	}
+	return todos
+}
+
+// mergeShelfTodos combines the shelf-prefixed entries already present in a
+// session's active_todos with a freshly derived todo list, so a session
+// refresh (which recomputes phase-derived todos from colony state) never
+// erases a shelf-seeded todo. Shelf entries from existing come first (deduped,
+// original order), then any derived entries not already present. Never
+// returns nil (Phase 165 gap CR-01).
+func mergeShelfTodos(existing, derived []string) []string {
+	merged := []string{}
+	seen := make(map[string]bool)
+	for _, e := range existing {
+		if !strings.HasPrefix(e, shelfTodoPrefix) {
+			continue
+		}
+		if seen[e] {
+			continue
+		}
+		seen[e] = true
+		merged = append(merged, e)
+	}
+	for _, d := range derived {
+		if seen[d] {
+			continue
+		}
+		seen[d] = true
+		merged = append(merged, d)
+	}
+	return merged
 }
 
 func formatShelfForInit(entries []colony.ShelfEntry) string {

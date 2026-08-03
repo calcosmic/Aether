@@ -211,7 +211,7 @@ var initCmd = &cobra.Command{
 			CurrentPhase:     0,
 			CurrentMilestone: "",
 			SuggestedNext:    "aether plan",
-			ActiveTodos:      []string{},
+			ActiveTodos:      promotedShelfTodos(store, goal),
 			Summary:          "Colony initialized",
 		}
 
