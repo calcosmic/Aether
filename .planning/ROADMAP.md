@@ -468,7 +468,7 @@ Plans:
   3. A user reading `build.md` before running a build can describe what each stage does and what context/research a worker receives, without opening Go source
   4. `/ant-chaos`, `/ant-archaeology`, `/ant-dream`, `/ant-oracle`, `/ant-swarm`, `/ant-sage`, `/ant-colonize`, and `/ant-council` continue to work unchanged
   5. `build.md`'s structural rewrite is committed by this phase alone; the commit or a header comment states what Phase 160 fixed beforehand and reserves the trailer section Phase 168 appends afterward, so the merge order is traceable, not assumed
-**Plans**: 8 plans in 4 waves (6 original + 2 gap-closure)
+**Plans**: 10 plans in 6 waves (6 original + 4 gap-closure)
 
 Plans:
 **Wave 1**
@@ -486,6 +486,10 @@ Plans:
 **Gap closure** *(from 165-VERIFICATION.md, status gaps_found; both plans are wave 1 of the gap-closure run and touch disjoint files, so they execute in parallel)*
 - [x] 165-07-PLAN.md — BLOCKER CR-01 + WR-05: route shelf promotion through the runtime (`shelfEntryToTodo` gets its first call site), remove the `active_todos` hand-write instruction from all three init.md surfaces, fence the phrasing in the init ceremony test, and write pheromones only after `aether init` succeeds
 - [x] 165-08-PLAN.md — WR-01 + WR-04: reconcile the contradictory `<read_only>` blocks in build.md and continue.md with their own Guardrails (plus a new consistency test), and move plan.md's Clarification Gate ahead of Decision Moment 2 so research approvals are never spent on a discarded manifest
+
+**Gap closure — round 2** *(from the 2026-08-03 re-verification, status gaps_found: Truth 8 / review CR-01 — 165-07's own fix left `shelf-promote-batch` running before the Approval consent gate. Sequential: the wrapper prose in 165-10 describes the runtime surface 165-09 builds)*
+- [ ] 165-09-PLAN.md — BLOCKER CR-01 (runtime half) + WR-02/WR-03/WR-04/WR-05: `aether init` gains `--promote-shelf` / `--dismiss-shelf` and performs the promotion itself after colony state is created, so a cancel, a revised goal, or a failed init can never strand a backlog entry; init-ceremony seeds shelf todos too; CONTEXT.md and HANDOFF.md display them; batch commands stop reporting total failure as success (wave 1)
+- [ ] 165-10-PLAN.md — BLOCKER CR-01 (wrapper half) + WR-06: all three init.md surfaces collect shelf IDs only and spend them inside the Approval `aether init` call, the `<failure_modes>` "write nothing on cancel" claim becomes true again, both batch commands become forbidden vocabulary fenced by a new ceremony subtest across all three surfaces, and the stale RED/GREEN test comment is retired (wave 2, needs 09)
 
 ### Phase 166: Full Colony On Demand
 **Goal**: All 27 castes are markdown and YAML and cost nothing at rest; none are deleted or merged. Dream is a command, not a caste -- corrected on restoration, since the earlier draft's "Sage and Dream at milestone close" language implied a Dream worker that cannot exist. This phase makes phase-fit caste selection actually provable: the old success criterion ("fewer than 27 castes loaded") already passes today and proves nothing, so it is replaced with a criterion that can fail. It also gives `colony/agents/*.yaml` its first Go reader -- today only the deleted `control-ts` ever read it.
