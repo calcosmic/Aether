@@ -4,8 +4,8 @@ milestone: v1.25
 milestone_name: Switch It On
 status: executing
 stopped_at: Phase 165 context gathered
-last_updated: "2026-08-03T12:46:00.768Z"
-last_activity: 2026-08-03 -- Phase 165 planning complete
+last_updated: "2026-08-03T14:06:11.387Z"
+last_activity: 2026-08-03 -- Phase 165 execution started
 progress:
   total_phases: 29
   completed_phases: 5
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-25)
 ## Current Position
 
 Phase: 165 (core-lifecycle-commands) — EXECUTING
-Plan: 1 of 8
-Status: Ready to execute
-Last activity: 2026-08-03 -- Phase 165 planning complete
+Plan: 1 of 10
+Status: Executing Phase 165
+Last activity: 2026-08-03 -- Phase 165 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

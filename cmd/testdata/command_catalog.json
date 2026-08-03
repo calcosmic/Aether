@@ -3498,6 +3498,8 @@
       "charter-json",
       "colony-mode",
       "confirm-reinit",
+      "dismiss-shelf",
+      "promote-shelf",
       "scope"
     ],
     "parent_command": "",

@@ -558,8 +558,11 @@ createFreshColony:
 		CurrentPhase:     0,
 		CurrentMilestone: "",
 		SuggestedNext:    "aether plan",
-		ActiveTodos:      []string{},
-		Summary:          "Colony initialized via ceremony",
+		// Phase 165 gap CR-01 / review WR-02: this path must stay in step
+		// with cmd/init_cmd.go -- a shelf entry already promoted to this goal
+		// must surface as a todo here too, not only on the `aether init` path.
+		ActiveTodos: promotedShelfTodos(store, goal),
+		Summary:     "Colony initialized via ceremony",
 	}
 
 	if err := store.SaveJSON("session.json", session); err != nil {
