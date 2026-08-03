@@ -489,7 +489,7 @@ Plans:
 
 **Gap closure — round 2** *(from the 2026-08-03 re-verification, status gaps_found: Truth 8 / review CR-01 — 165-07's own fix left `shelf-promote-batch` running before the Approval consent gate. Sequential: the wrapper prose in 165-10 describes the runtime surface 165-09 builds)*
 - [x] 165-09-PLAN.md — BLOCKER CR-01 (runtime half) + WR-02/WR-03/WR-04/WR-05: `aether init` gains `--promote-shelf` / `--dismiss-shelf` and performs the promotion itself after colony state is created, so a cancel, a revised goal, or a failed init can never strand a backlog entry; init-ceremony seeds shelf todos too; CONTEXT.md and HANDOFF.md display them; batch commands stop reporting total failure as success (wave 1)
-- [ ] 165-10-PLAN.md — BLOCKER CR-01 (wrapper half) + WR-06: all three init.md surfaces collect shelf IDs only and spend them inside the Approval `aether init` call, the `<failure_modes>` "write nothing on cancel" claim becomes true again, both batch commands become forbidden vocabulary fenced by a new ceremony subtest across all three surfaces, and the stale RED/GREEN test comment is retired (wave 2, needs 09)
+- [x] 165-10-PLAN.md — BLOCKER CR-01 (wrapper half) + WR-06: all three init.md surfaces collect shelf IDs only and spend them inside the Approval `aether init` call, the `<failure_modes>` "write nothing on cancel" claim becomes true again, both batch commands become forbidden vocabulary fenced by a new ceremony subtest across all three surfaces, and the stale RED/GREEN test comment is retired (wave 2, needs 09)
 
 ### Phase 166: Full Colony On Demand
 **Goal**: All 27 castes are markdown and YAML and cost nothing at rest; none are deleted or merged. Dream is a command, not a caste -- corrected on restoration, since the earlier draft's "Sage and Dream at milestone close" language implied a Dream worker that cannot exist. This phase makes phase-fit caste selection actually provable: the old success criterion ("fewer than 27 castes loaded") already passes today and proves nothing, so it is replaced with a criterion that can fail. It also gives `colony/agents/*.yaml` its first Go reader -- today only the deleted `control-ts` ever read it.
@@ -597,7 +597,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
 | 164. Research Feeds Planning | v1.25 | 11/11 | Complete    | 2026-08-02 |
-| 165. Core Lifecycle Commands | v1.25 | 9/10 | In Progress|  |
+| 165. Core Lifecycle Commands | v1.25 | 10/10 | Complete   | 2026-08-03 |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
 | 168. Your Eyes Back — Live Visibility | v1.25 | 0/TBD | Not started | - |
