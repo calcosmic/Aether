@@ -414,7 +414,14 @@ func renderContextSnapshot(state colony.ColonyState, session colony.SessionFile,
 	}
 	blockers := extractBlockerTexts()
 	recentEvents := lastEventTexts(state.Events, 5)
-	activeTasks := sessionActiveTodosFromState(state)
+	// Review WR-03: prefer the merged session list (which already carries
+	// shelf-seeded todos via mergeShelfTodos) and fall back to derivation
+	// only when it is empty -- the same precedence cmd/context.go:315 uses
+	// for resume. Do not simplify this back to a bare re-derivation.
+	activeTasks := session.ActiveTodos
+	if len(activeTasks) == 0 {
+		activeTasks = sessionActiveTodosFromState(state)
+	}
 
 	var b strings.Builder
 	b.WriteString("# Aether Colony — Current Context\n\n")
@@ -572,7 +579,12 @@ func renderHandoffSnapshot(state colony.ColonyState, session colony.SessionFile,
 
 	signals := extractSignalTexts(8)
 	blockers := extractBlockerTexts()
-	tasks := sessionActiveTodosFromState(state)
+	// Review WR-03: same precedence as renderContextSnapshot -- prefer the
+	// merged session list, fall back to derivation only when empty.
+	tasks := session.ActiveTodos
+	if len(tasks) == 0 {
+		tasks = sessionActiveTodosFromState(state)
+	}
 
 	var b strings.Builder
 	b.WriteString("# Colony Session — ")
