@@ -389,3 +389,80 @@ func TestShelfDismissBatch(t *testing.T) {
 		}
 	}
 }
+
+// TestShelfPromoteBatchFailsWhenAllIDsFail closes review WR-05: a total
+// batch failure must fail visibly instead of rendering a success envelope
+// with an empty result.
+func TestShelfPromoteBatchFailsWhenAllIDsFail(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	t.Setenv("AETHER_ROOT", tmpDir)
+
+	sf := colony.NewShelfFile()
+	sf.Entries = []colony.ShelfEntry{
+		{ID: "shelf_1", Text: "a", Status: colony.ShelfShelved, Category: colony.ShelfCategoryUserNote, CreatedAt: "2024-01-01T00:00:00Z"},
+	}
+	s.SaveJSON("shelf.json", sf)
+
+	rootCmd.SetArgs([]string{"shelf-promote-batch", "--ids", "nope_1,nope_2", "--colony", "Ship v2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("shelf-promote-batch returned unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, stderrBuf.String())
+	if env["ok"] != false {
+		t.Fatalf("expected ok:false when every requested ID fails, got: %v (stdout: %s)", env["ok"], stdoutBuf.String())
+	}
+	errMsg, _ := env["error"].(string)
+	if !strings.Contains(errMsg, "nope_1") || !strings.Contains(errMsg, "nope_2") {
+		t.Errorf("error message %q does not name both failed IDs", errMsg)
+	}
+}
+
+// TestShelfDismissBatchFailsWhenAllIDsFail is the dismiss-side counterpart
+// of TestShelfPromoteBatchFailsWhenAllIDsFail.
+func TestShelfDismissBatchFailsWhenAllIDsFail(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	t.Setenv("AETHER_ROOT", tmpDir)
+
+	sf := colony.NewShelfFile()
+	sf.Entries = []colony.ShelfEntry{
+		{ID: "shelf_1", Text: "a", Status: colony.ShelfShelved, Category: colony.ShelfCategoryUserNote, CreatedAt: "2024-01-01T00:00:00Z"},
+	}
+	s.SaveJSON("shelf.json", sf)
+
+	rootCmd.SetArgs([]string{"shelf-dismiss-batch", "--ids", "nope_1,nope_2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("shelf-dismiss-batch returned unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, stderrBuf.String())
+	if env["ok"] != false {
+		t.Fatalf("expected ok:false when every requested ID fails, got: %v (stdout: %s)", env["ok"], stdoutBuf.String())
+	}
+	errMsg, _ := env["error"].(string)
+	if !strings.Contains(errMsg, "nope_1") || !strings.Contains(errMsg, "nope_2") {
+		t.Errorf("error message %q does not name both failed IDs", errMsg)
+	}
+}
