@@ -122,3 +122,12 @@ None - no external service configuration required.
 ---
 *Phase: 165-core-lifecycle-commands*
 *Completed: 2026-08-03*
+
+## Self-Check: PASSED
+
+- FOUND: `cmd/lifecycle_wrapper_contract_test.go`
+- FOUND: `.planning/phases/165-core-lifecycle-commands/165-VALIDATION.md`
+- FOUND: `.planning/phases/165-core-lifecycle-commands/165-06-SUMMARY.md`
+- FOUND: commit `ecba3f7d` (Task 1)
+- FOUND: commit `fd5f3960` (Task 2)
+- FOUND: commit `920adeeb` (Task 3)
