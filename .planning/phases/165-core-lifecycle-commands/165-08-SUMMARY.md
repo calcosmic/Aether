@@ -113,3 +113,11 @@ None - no external service configuration required.
 ---
 *Phase: 165-core-lifecycle-commands*
 *Completed: 2026-08-03*
+
+## Self-Check: PASSED
+
+- FOUND: .planning/phases/165-core-lifecycle-commands/165-08-SUMMARY.md
+- FOUND: ce7b41f9 (Task 1 commit)
+- FOUND: 1f8a6ace (Task 2 commit)
+- FOUND: 201a5c9f (Task 3 commit)
+- FOUND: 17843eb9 (this SUMMARY.md commit)
