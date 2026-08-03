@@ -481,7 +481,7 @@ Plans:
 - [x] 165-05-PLAN.md — init.md rewrite on both platforms; 👑 intention beat restored, first dedicated init ceremony test (wave 2, needs 01)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 165-06-PLAN.md — CMD-02/CMD-04 phase gate: cross-wrapper proportion invariant, specialist-command hash fence, CMD-03 human read-through (wave 3, needs 01-05)
+- [x] 165-06-PLAN.md — CMD-02/CMD-04 phase gate: cross-wrapper proportion invariant, specialist-command hash fence, CMD-03 human read-through (wave 3, needs 01-05)
 
 ### Phase 166: Full Colony On Demand
 **Goal**: All 27 castes are markdown and YAML and cost nothing at rest; none are deleted or merged. Dream is a command, not a caste -- corrected on restoration, since the earlier draft's "Sage and Dream at milestone close" language implied a Dream worker that cannot exist. This phase makes phase-fit caste selection actually provable: the old success criterion ("fewer than 27 castes loaded") already passes today and proves nothing, so it is replaced with a criterion that can fail. It also gives `colony/agents/*.yaml` its first Go reader -- today only the deleted `control-ts` ever read it.
@@ -589,7 +589,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
 | 164. Research Feeds Planning | v1.25 | 11/11 | Complete    | 2026-08-02 |
-| 165. Core Lifecycle Commands | v1.25 | 5/6 | In Progress|  |
+| 165. Core Lifecycle Commands | v1.25 | 6/6 | Complete   | 2026-08-03 |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
 | 168. Your Eyes Back — Live Visibility | v1.25 | 0/TBD | Not started | - |
