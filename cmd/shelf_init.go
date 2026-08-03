@@ -50,11 +50,22 @@ var shelfPromoteBatchCmd = &cobra.Command{
 
 		todos := promotedShelfTodos(store, colonyGoal)
 
+		// Review WR-05: a total failure (every requested ID failed) must not
+		// render as success -- the caller would otherwise believe their
+		// chosen IDs promoted when none did.
+		if len(promoted) == 0 && len(failed) > 0 {
+			outputError(1, fmt.Sprintf("no shelf entries were promoted; failed IDs: %s", strings.Join(failed, ", ")), map[string]interface{}{
+				"failed": failed,
+			})
+			return nil
+		}
+
 		outputOK(map[string]interface{}{
-			"promoted": promoted,
-			"failed":   failed,
-			"count":    len(promoted),
-			"todos":    todos,
+			"promoted":     promoted,
+			"failed":       failed,
+			"count":        len(promoted),
+			"failed_count": len(failed),
+			"todos":        todos,
 		})
 		return nil
 	},
@@ -87,10 +98,19 @@ var shelfDismissBatchCmd = &cobra.Command{
 			}
 		}
 
+		// Review WR-05: a total failure must not render as success.
+		if len(dismissed) == 0 && len(failed) > 0 {
+			outputError(1, fmt.Sprintf("no shelf entries were dismissed; failed IDs: %s", strings.Join(failed, ", ")), map[string]interface{}{
+				"failed": failed,
+			})
+			return nil
+		}
+
 		outputOK(map[string]interface{}{
-			"dismissed": dismissed,
-			"failed":    failed,
-			"count":     len(dismissed),
+			"dismissed":    dismissed,
+			"failed":       failed,
+			"count":        len(dismissed),
+			"failed_count": len(failed),
 		})
 		return nil
 	},
