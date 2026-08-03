@@ -206,4 +206,5 @@ same change. Verify `aether command-guide continue --platform codex` still descr
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, `CONTEXT.md`, `HANDOFF.md`, or pheromone files.
 - Do NOT invent worker names, castes, or waves; use `continue_manifest` only in the heavy path.
 - Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown worker table.
+- Do NOT expose raw provider stdout/stderr, tokens, or auth probe output; use the Go availability category and sanitized next action.
 - If docs and runtime disagree, runtime wins.
