@@ -4,14 +4,14 @@ milestone: v1.25
 milestone_name: Switch It On
 status: ready_to_plan
 stopped_at: Phase 165 context gathered
-last_updated: "2026-08-03T14:06:11.387Z"
-last_activity: 2026-08-03 -- Phase 165 execution started
+last_updated: "2026-08-04T00:00:00.000Z"
+last_activity: 2026-08-04 -- Phase 160 verified (13/13) and secured (28/28), marked complete
 progress:
   total_phases: 29
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 49
-  completed_plans: 47
-  percent: 21
+  completed_plans: 49
+  percent: 24
 ---
 
 # Project State
@@ -103,6 +103,6 @@ Carried from v1.23, deferred again in v1.25 (see REQUIREMENTS.md "Deferred"):
 
 ## Session Continuity
 
-Last session: 2026-08-02T21:10:21.138Z
-Stopped at: Phase 165 context gathered
+Last session: 2026-08-04
+Stopped at: Phase 160 formally closed (verification + security); Phase 162 next by dependency order
 Resume file: .planning/phases/165-core-lifecycle-commands/165-CONTEXT.md
