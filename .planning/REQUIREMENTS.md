@@ -32,15 +32,15 @@ These were asserted in the first draft and are now **verified false**. No work i
 
 *Foundation. Nothing downstream can be trusted while calls fail into `/dev/null`. Seven playbook CLI calls were executed against a freshly built binary and failed; the project's own drift test cannot see them because its regex matches only `--flags`, never positional arguments.*
 
-- [ ] **LOUD-01**: `aether survey-load "{phase_name}"` works as the playbooks call it, or the playbooks are corrected — currently `cobra.NoArgs`, so it exits 1 (`build-context.md:45`)
-- [ ] **LOUD-02**: `aether check-antipattern "{file_path}"` works as called — currently fails, and this is the **Gatekeeper security gate** (`continue-gates.md:113`); the real flag is `--file`
-- [ ] **LOUD-03**: The remaining five confirmed-broken calls are fixed: `print-next-up`, `verify-claims`, `state-checkpoint`, `generate-progress-bar`, `skill-detect`
-- [ ] **LOUD-04**: `cmd/cli_flag_audit_test.go` detects positional-argument drift, not only `--flag` drift, and fails on all seven of the above before they are fixed
-- [ ] **LOUD-05**: Every `aether` invocation across the playbooks and wrappers is verified by **execution**, not regex — a drift audit that runs the commands
-- [ ] **LOUD-06**: Playbook and wrapper calls no longer redirect stderr to `/dev/null` where the result is load-bearing; a failed context, survey, or gate call is visible
-- [ ] **LOUD-07**: Documentation that describes behaviour which does not happen is corrected: `.aether/docs/structural-learning-stack.md:227`, `CLAUDE.md:820`, and `AGENTS.md:863` all state that `/ant-continue` runs phase-end consolidation; it never has
-- [ ] **LOUD-08**: `cmd/unblock_cmd.go:126` stops telling users to run `/ant-unblock`, a slash command that exists on no platform — either the wrapper is added or the message points at the CLI
-- [ ] **LOUD-09**: Worker failure evidence survives. Debug artifacts are written on every worker failure mode — parse failure, timeout, and non-zero exit — carrying exit code, duration and provider session id; they are capped so the directory cannot grow without bound; they are pruned via `aether data-clean`; and in worktree mode they are written to the tracking root so they survive `git worktree remove`. *(Folded into Phase 160 on 2026-07-27 from the dispatch investigation; captured as decisions D-03/D-04/D-05 in `160-CONTEXT.md`. Evidence that vanishes is the quietest silent failure there is.)*
+- [x] **LOUD-01**: `aether survey-load "{phase_name}"` works as the playbooks call it, or the playbooks are corrected — currently `cobra.NoArgs`, so it exits 1 (`build-context.md:45`)
+- [x] **LOUD-02**: `aether check-antipattern "{file_path}"` works as called — currently fails, and this is the **Gatekeeper security gate** (`continue-gates.md:113`); the real flag is `--file`
+- [x] **LOUD-03**: The remaining five confirmed-broken calls are fixed: `print-next-up`, `verify-claims`, `state-checkpoint`, `generate-progress-bar`, `skill-detect`
+- [x] **LOUD-04**: `cmd/cli_flag_audit_test.go` detects positional-argument drift, not only `--flag` drift, and fails on all seven of the above before they are fixed
+- [x] **LOUD-05**: Every `aether` invocation across the playbooks and wrappers is verified by **execution**, not regex — a drift audit that runs the commands
+- [x] **LOUD-06**: Playbook and wrapper calls no longer redirect stderr to `/dev/null` where the result is load-bearing; a failed context, survey, or gate call is visible
+- [x] **LOUD-07**: Documentation that describes behaviour which does not happen is corrected: `.aether/docs/structural-learning-stack.md:227`, `CLAUDE.md:820`, and `AGENTS.md:863` all state that `/ant-continue` runs phase-end consolidation; it never has
+- [x] **LOUD-08**: `cmd/unblock_cmd.go:126` stops telling users to run `/ant-unblock`, a slash command that exists on no platform — either the wrapper is added or the message points at the CLI
+- [x] **LOUD-09**: Worker failure evidence survives. Debug artifacts are written on every worker failure mode — parse failure, timeout, and non-zero exit — carrying exit code, duration and provider session id; they are capped so the directory cannot grow without bound; they are pruned via `aether data-clean`; and in worktree mode they are written to the tracking root so they survive `git worktree remove`. *(Folded into Phase 160 on 2026-07-27 from the dispatch investigation; captured as decisions D-03/D-04/D-05 in `160-CONTEXT.md`. Evidence that vanishes is the quietest silent failure there is.)*
 
 ## Cheap Models By Design (MODEL)
 
@@ -162,10 +162,10 @@ These were asserted in the first draft and are now **verified false**. No work i
 
 *Only one thing in this repository is safe to delete outright.*
 
-- [ ] **RETIRE-01**: `control-ts/` is deleted — zero Go references, zero CI references, not embedded, not published, and its own `package.json` describes it as "Retired experimental Aether control-plane prototype". Done standalone as the first commit of the milestone
-- [ ] **RETIRE-02**: `.aether/ts-host/` is **kept**. It holds the only playbook loader, the only confidence loop (`confidence-loop.ts`, 250 lines), and the only worker dashboard, swarm display and narrator. Deleting it also breaks `go build` outright via `//go:embed` at `embedded_assets.go:13`, and hard-fails `aether publish`, `aether integrity`, and both GitHub workflows
-- [ ] **RETIRE-03**: `.aether/ts/` (the narrator package) is not deleted by association with the other two — it is embedded, workflow-verified, and consumed by `cmd/narrator_launcher_test.go`
-- [ ] **RETIRE-04**: Any test deleted during this milestone is recorded in a ledger as dead, re-covered by a named surviving test, or knowingly uncovered. **Named explicitly: `control-ts/tests/schemas/policy.schema.test.ts` is the only thing in the repo validating `model-routing.yaml`'s schema, and `MODEL-01` makes that file load-bearing for dispatch. A replacement schema test must exist before or alongside its deletion**
+- [x] **RETIRE-01**: `control-ts/` is deleted — zero Go references, zero CI references, not embedded, not published, and its own `package.json` describes it as "Retired experimental Aether control-plane prototype". Done standalone as the first commit of the milestone
+- [x] **RETIRE-02**: `.aether/ts-host/` is **kept**. It holds the only playbook loader, the only confidence loop (`confidence-loop.ts`, 250 lines), and the only worker dashboard, swarm display and narrator. Deleting it also breaks `go build` outright via `//go:embed` at `embedded_assets.go:13`, and hard-fails `aether publish`, `aether integrity`, and both GitHub workflows
+- [x] **RETIRE-03**: `.aether/ts/` (the narrator package) is not deleted by association with the other two — it is embedded, workflow-verified, and consumed by `cmd/narrator_launcher_test.go`
+- [x] **RETIRE-04**: Any test deleted during this milestone is recorded in a ledger as dead, re-covered by a named surviving test, or knowingly uncovered. **Named explicitly: `control-ts/tests/schemas/policy.schema.test.ts` is the only thing in the repo validating `model-routing.yaml`'s schema, and `MODEL-01` makes that file load-bearing for dispatch. A replacement schema test must exist before or alongside its deletion**
 
 ## Stay Switched On (LOCK)
 
@@ -214,19 +214,19 @@ Carried from v1.23, still open, not addressed here: `CATALOG-01/02`, `TEST-01/02
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOUD-01 | Phase 160 | Pending |
-| LOUD-02 | Phase 160 | Pending |
-| LOUD-03 | Phase 160 | Pending |
-| LOUD-04 | Phase 160 | Pending |
-| LOUD-05 | Phase 160 | Pending |
-| LOUD-06 | Phase 160 | Pending |
-| LOUD-07 | Phase 160 | Pending |
-| LOUD-08 | Phase 160 | Pending |
-| LOUD-09 | Phase 160 | Pending |
-| RETIRE-01 | Phase 160 | Pending |
-| RETIRE-02 | Phase 160 | Pending |
-| RETIRE-03 | Phase 160 | Pending |
-| RETIRE-04 | Phase 160 | Pending |
+| LOUD-01 | Phase 160 | Complete |
+| LOUD-02 | Phase 160 | Complete |
+| LOUD-03 | Phase 160 | Complete |
+| LOUD-04 | Phase 160 | Complete |
+| LOUD-05 | Phase 160 | Complete |
+| LOUD-06 | Phase 160 | Complete |
+| LOUD-07 | Phase 160 | Complete |
+| LOUD-08 | Phase 160 | Complete |
+| LOUD-09 | Phase 160 | Complete |
+| RETIRE-01 | Phase 160 | Complete |
+| RETIRE-02 | Phase 160 | Complete |
+| RETIRE-03 | Phase 160 | Complete |
+| RETIRE-04 | Phase 160 | Complete |
 | MODEL-01 | Phase 161 | Pending |
 | MODEL-02 | Phase 161 | Pending |
 | MODEL-03 | Phase 161 | Pending |
