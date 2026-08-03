@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -479,6 +480,236 @@ func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 	}
 	if len(calls) != 2 {
 		t.Errorf("extracted %d calls, want 2 (%+v)", len(calls), calls)
+	}
+}
+
+// T-160-24: an unresolvable command name must be a reported violation, not a
+// silent skip. validateCallAgainstCobra deliberately returns no violation for
+// names cobra cannot resolve ("one failure per cause"), deferring to a
+// registration test — but that test scans only three of the five audited
+// corpora. This test closes the gap across ALL of auditedCorpora: a typo'd or
+// stale command name in `.aether/commands/` or `colony/playbooks/` fails here
+// as its own distinct violation category.
+func TestDocumentedCommandNamesResolve(t *testing.T) {
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	calls := collectDocumentedCalls(t, root)
+	if len(calls) == 0 {
+		t.Fatal("extracted zero documented calls — a vacuous pass proves nothing")
+	}
+
+	var violations []string
+	for _, c := range calls {
+		target, _, findErr := rootCmd.Find([]string{c.Command})
+		if findErr != nil || target == nil || target == rootCmd {
+			rel, _ := filepath.Rel(root, c.File)
+			violations = append(violations, fmt.Sprintf("%s:%d: `%s` — subcommand %q is not a registered aether command", rel, c.Line, c.Raw, c.Command))
+		}
+	}
+	if len(violations) > 0 {
+		t.Errorf("%d documented call(s) name a subcommand that does not exist (unresolvable-command violations):\n  %s",
+			len(violations), strings.Join(violations, "\n  "))
+	}
+}
+
+// knownEnrichmentSubcommands is the reviewed allowlist backing
+// TestDocumentedSubcommandsAreSeverityClassified (T-160-23). Every subcommand
+// documented anywhere in auditedCorpora must appear either in
+// gateClassifiedCommands (its failure halts a run) or here (its failure warns
+// and the run continues degraded — the D-01 enrichment tier). A new
+// safety-relevant command must NOT be added here reflexively: the point of
+// this list is that the gate-versus-enrichment judgement is made once, on
+// purpose, in review — not inherited silently from the enrichment default.
+var knownEnrichmentSubcommands = map[string]bool{
+	"activity-log":                true,
+	"assumption-list":             true,
+	"assumption-validate":         true,
+	"assumptions-analyze":         true,
+	"behavior-observe":            true,
+	"build-completion-stage":      true,
+	"build-finalize":              true,
+	"build":                       true,
+	"bump-version":                true,
+	"ceremony":                    true,
+	"changelog-append":            true,
+	"changelog-collect-plan-data": true,
+	"colonize-finalize":           true,
+	"colony-depth":                true,
+	"colony-prime":                true,
+	"command-guide":               true,
+	"context-update":              true,
+	"continue-finalize":           true,
+	"continue":                    true,
+	"council-advocate":            true,
+	"council-budget-check":        true,
+	"council-challenger":          true,
+	"council-deliberate":          true,
+	"council-history":             true,
+	"council-sage":                true,
+	"council":                     true,
+	"data-clean":                  true,
+	"discuss-analyze":             true,
+	"discuss":                     true,
+	"entomb":                      true,
+	"error-add":                   true,
+	"error-flag-pattern":          true,
+	"eternal-init":                true,
+	"export-signals":              true,
+	"feedback":                    true,
+	"flag-acknowledge":            true,
+	"flag-add":                    true,
+	"flag-auto-resolve":           true,
+	"flag-check-blockers":         true,
+	"flag-create":                 true,
+	"flag-list":                   true,
+	"flag-resolve":                true,
+	"flag":                        true,
+	"flags":                       true,
+	"focus":                       true,
+	"gate-results-write":          true,
+	"generate-ant-name":           true,
+	"generate-commit-message":     true,
+	"grave-add":                   true,
+	"grave-check":                 true,
+	"history":                     true,
+	"hive-promote":                true,
+	"hive-store":                  true,
+	"host":                        true,
+	"import-signals":              true,
+	"init-research":               true,
+	"init":                        true,
+	"insert-phase":                true,
+	"install":                     true,
+	"instinct-create":             true,
+	"lay-eggs":                    true,
+	"learning-approve-proposals":  true,
+	"load-state":                  true,
+	"maturity":                    true,
+	"medic-auto-spawn-check":      true,
+	"medic":                       true,
+	"memory-capture":              true,
+	"memory-details":              true,
+	"memory-metrics":              true,
+	"midden-recent-failures":      true,
+	"midden-write":                true,
+	"migrate-state":               true,
+	"oracle":                      true,
+	"parallel-mode":               true,
+	"patrol-check":                true,
+	"pause-colony":                true,
+	"pending-decision-list":       true,
+	"phase":                       true,
+	"pheromone-display":           true,
+	"pheromone-expire":            true,
+	"pheromone-read":              true,
+	"pheromone-write":             true,
+	"pheromones":                  true,
+	"plan-finalize":               true,
+	"plan-research-approve":       true,
+	"plan":                        true,
+	"porter":                      true,
+	"preferences":                 true,
+	"print-next-up":               true,
+	"profile-read":                true,
+	"profile-update":              true,
+	"publish":                     true,
+	"queen-compose":               true,
+	"queen-promote-instinct":      true,
+	"quick":                       true,
+	"recipes":                     true,
+	"redirect":                    true,
+	"reference-index":             true,
+	"reference-list":              true,
+	"reference-match":             true,
+	"resume-colony":               true,
+	"resume-dashboard":            true,
+	"resume":                      true,
+	"run":                         true,
+	"seal-finalize":               true,
+	"seal":                        true,
+	"session-update":              true,
+	"shelf-add":                   true,
+	"shelf-dismiss":               true,
+	"shelf-list":                  true,
+	"shelf-promote":               true,
+	"signal-housekeeping":         true,
+	"skill-cache-rebuild":         true,
+	"skill-inject":                true,
+	"skill-parse-frontmatter":     true,
+	"spawn-can-spawn":             true,
+	"spawn-complete":              true,
+	"spawn-log":                   true,
+	"state-checkpoint":            true,
+	"state-mutate":                true,
+	"state-read":                  true,
+	"status":                      true,
+	"suggest-approve":             true,
+	"swarm-finalize":              true,
+	"swarm":                       true,
+	"tunnels":                     true,
+	"unblock":                     true,
+	"unload-state":                true,
+	"update":                      true,
+	"validate-state":              true,
+	"validate-worker-response":    true,
+	"verify-castes":               true,
+	"version":                     true,
+	"watch":                       true,
+	"worktree-allocate":           true,
+	"worktree-merge-back":         true,
+}
+
+// T-160-23: no documented subcommand may sit unclassified. The enrichment
+// default in commandCallSeverityFor is deliberate for CODE (adding a command
+// doesn't force an edit here), but a command that reaches the DOCUMENTED
+// corpus is about to be executed by wrappers — at that point someone must have
+// decided which D-01 tier it belongs to. This test is what forces the
+// decision.
+func TestDocumentedSubcommandsAreSeverityClassified(t *testing.T) {
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	calls := collectDocumentedCalls(t, root)
+	if len(calls) == 0 {
+		t.Fatal("extracted zero documented calls — a vacuous pass proves nothing")
+	}
+
+	unclassified := map[string][]string{}
+	for _, c := range calls {
+		if target, _, findErr := rootCmd.Find([]string{c.Command}); findErr != nil || target == nil || target == rootCmd {
+			continue // unresolvable names are TestDocumentedCommandNamesResolve's violation
+		}
+		if _, gate := gateClassifiedCommands[c.Command]; gate {
+			continue
+		}
+		if knownEnrichmentSubcommands[c.Command] {
+			continue
+		}
+		if len(unclassified[c.Command]) < 3 {
+			rel, _ := filepath.Rel(root, c.File)
+			unclassified[c.Command] = append(unclassified[c.Command], fmt.Sprintf("%s:%d", rel, c.Line))
+		}
+	}
+
+	if len(unclassified) > 0 {
+		names := make([]string, 0, len(unclassified))
+		for name := range unclassified {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		var detail strings.Builder
+		for _, name := range names {
+			fmt.Fprintf(&detail, "  %q (e.g. %s)\n", name, strings.Join(unclassified[name], ", "))
+		}
+		t.Errorf(
+			"%d documented subcommand(s) have no D-01 severity classification. Decide deliberately for each: if its failure must halt a run, add it to gateClassifiedCommands (command_call_severity.go) with a rationale; if a loud warning suffices, add it to knownEnrichmentSubcommands in this file:\n%s",
+			len(names), detail.String(),
+		)
 	}
 }
 

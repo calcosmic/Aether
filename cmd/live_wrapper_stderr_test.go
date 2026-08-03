@@ -107,3 +107,55 @@ func TestLiveWrapperStderrSuppressionCount(t *testing.T) {
 		)
 	}
 }
+
+// TestLiveWrapperNoSwallowedAetherCalls is the exit-code half of the same
+// guarantee (T-160-21). `2>/dev/null` hides what a failure said; `|| true`
+// hides that it failed at all — an `aether` gate call swallowed this way lets
+// a run continue as if the gate had passed. The existing benign `|| true`
+// sites in the wrappers (grep fallbacks in archaeology.md) never share a line
+// with an `aether` invocation, and this test keeps it that way. It applies to
+// every `aether` call, not only gate-classified ones: an enrichment call that
+// fails must warn loudly (D-01), which a swallow also prevents.
+func TestLiveWrapperNoSwallowedAetherCalls(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	wrapperDirs := []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant"),
+	}
+
+	// Built from parts so this file never matches its own source.
+	swallowToken := "|" + "|" + "true"
+
+	for _, dir := range wrapperDirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("read %s: %v", dir, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			relName := filepath.Join(filepath.Base(filepath.Dir(filepath.Dir(dir))), filepath.Base(filepath.Dir(dir)), filepath.Base(dir), entry.Name())
+
+			for i, line := range strings.Split(string(data), "\n") {
+				// Normalize `|| true` / ||true to one token before matching.
+				normalized := strings.ReplaceAll(line, " ", "")
+				if strings.Contains(normalized, swallowToken) && strings.Contains(line, "aether") {
+					t.Errorf(
+						"%s:%d swallows an `aether` call's exit code with `|| true` — a failed gate or colony call would read as success: %q",
+						relName, i+1, strings.TrimSpace(line),
+					)
+				}
+			}
+		}
+	}
+}
