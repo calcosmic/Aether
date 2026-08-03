@@ -13,6 +13,7 @@ ceremony_contract:
   authority: "Go owns colony state creation, session files, charter persistence, and canonical init visuals."
   wrapper_role: "Ask scoping questions and synthesize an approved charter, then pass that charter to Go; do not write state files directly."
 intent_refinement:
+  - "Shelf Backlog collects the user's chosen shelf IDs only; Approval spends them inside the same `aether init` call, after consent."
   - "Do not treat init-research as the final charter. It is only a deterministic codebase scan."
   - "If prior_colonies.count > 0, show a Prior Context section (up to 3 recent colonies' goals and outcomes from prior_colonies.recent) before asking for the new goal."
   - "Before creating colony state, ask one compact batch of 4-7 AI-led scoping questions when the goal is vague or broad."
@@ -44,5 +45,5 @@ guardrails:
   - "All persistence goes through the `aether init` call in Approval (with `--colony-mode` and `--charter-json`) and `aether pheromone-write`; the wrapper never writes state files."
   - "Do not hand-render the init banner or any runtime-owned ceremony banner; init_ceremony.go owns it."
   - "If docs and runtime disagree, runtime wins."
-  - "Promoted shelf entries are recorded as colony todos by `aether init`, never appended to a session or state file by the wrapper."
+  - "Promoted shelf entries are recorded as colony todos by `aether init`, never appended to a session or state file by the wrapper. The promotion itself happens inside that `aether init` call via `--promote-shelf` / `--dismiss-shelf`, after consent -- the wrapper never runs `shelf-promote-batch` or `shelf-dismiss-batch`, so a cancel or a failed init leaves the shelf untouched."
   - "Approved pheromones are written with `aether pheromone-write` only after `aether init` returns success, so a cancelled or failed init persists nothing."
