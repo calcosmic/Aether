@@ -47,6 +47,16 @@ wrapper_additions:
     Every stage of plan.md follows the same D-05 order: one colony beat line, then Purpose, then Reads, then Spawns where the stage spawns anything, then the stage's imperative instructions and command blocks, then Stop conditions. `## Required Cross-Stage State` sits between the opening prose and Decision Moment 1 and names the values carried across every stage of one planning iteration: `planning_run_id`, `iteration`, `target_confidence`, `manifest_file`, `selected_gaps`, `stop_reason`, `next_action`.
   termination_conditions: |
     The planning loop enforces four ways one `aether host plan` iteration cycle can end: the loop exits when the selected target confidence is reached; stall detection ends a loop whose confidence has stopped improving; an iteration cap bounds how many passes the loop may take; and an escape hatch lets the user accept the current best plan below target rather than continuing. No numeric thresholds are named in wrapper prose — the runtime enforces them.
+  clarification_gate_precedence: |
+    The Clarification Gate runs after the Planning Manifest and before
+    Decision Moment 2 — Research Batch, not after it. Boundary guidance and
+    unresolved clarifications must be settled before `aether
+    plan-research-approve` mutates approval state, because the gate may
+    route to `aether discuss` and discard the very manifest that state was
+    approved against. The gate reads `orchestrator_boundary_guidance` and
+    `unresolved_clarifications` from the manifest already fetched in the
+    Planning Manifest stage, so it needs nothing new to run one stage
+    earlier.
 guardrails:
   - "The TS host is the sole entry point to the Go CLI; respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
   - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest — always fresh."

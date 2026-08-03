@@ -58,12 +58,17 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"<read_only>",
 	}
 
+	// The Clarification Gate deliberately precedes Decision Moment 2 — Phase
+	// 165 review WR-04: aether plan-research-approve mutates approval state,
+	// and the gate may route to aether discuss, which discards the very
+	// manifest that state was approved against. A future edit must not
+	// quietly restore the hazardous order and call it a cleanup.
 	inOrder := []string{
 		"## Decision Moment 1 — Depth Proposal",
 		"## Planning Manifest",
 		"aether host plan",
-		"## Decision Moment 2 — Research Batch",
 		"## Clarification Gate",
+		"## Decision Moment 2 — Research Batch",
 		"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file",
 		"## After Planning",
