@@ -468,7 +468,7 @@ Plans:
   3. A user reading `build.md` before running a build can describe what each stage does and what context/research a worker receives, without opening Go source
   4. `/ant-chaos`, `/ant-archaeology`, `/ant-dream`, `/ant-oracle`, `/ant-swarm`, `/ant-sage`, `/ant-colonize`, and `/ant-council` continue to work unchanged
   5. `build.md`'s structural rewrite is committed by this phase alone; the commit or a header comment states what Phase 160 fixed beforehand and reserves the trailer section Phase 168 appends afterward, so the merge order is traceable, not assumed
-**Plans**: 6 plans in 3 waves
+**Plans**: 8 plans in 4 waves (6 original + 2 gap-closure)
 
 Plans:
 **Wave 1**
@@ -482,6 +482,10 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [x] 165-06-PLAN.md — CMD-02/CMD-04 phase gate: cross-wrapper proportion invariant, specialist-command hash fence, CMD-03 human read-through (wave 3, needs 01-05)
+
+**Gap closure** *(from 165-VERIFICATION.md, status gaps_found; both plans are wave 1 of the gap-closure run and touch disjoint files, so they execute in parallel)*
+- [ ] 165-07-PLAN.md — BLOCKER CR-01 + WR-05: route shelf promotion through the runtime (`shelfEntryToTodo` gets its first call site), remove the `active_todos` hand-write instruction from all three init.md surfaces, fence the phrasing in the init ceremony test, and write pheromones only after `aether init` succeeds
+- [ ] 165-08-PLAN.md — WR-01 + WR-04: reconcile the contradictory `<read_only>` blocks in build.md and continue.md with their own Guardrails (plus a new consistency test), and move plan.md's Clarification Gate ahead of Decision Moment 2 so research approvals are never spent on a discarded manifest
 
 ### Phase 166: Full Colony On Demand
 **Goal**: All 27 castes are markdown and YAML and cost nothing at rest; none are deleted or merged. Dream is a command, not a caste -- corrected on restoration, since the earlier draft's "Sage and Dream at milestone close" language implied a Dream worker that cannot exist. This phase makes phase-fit caste selection actually provable: the old success criterion ("fewer than 27 castes loaded") already passes today and proves nothing, so it is replaced with a criterion that can fail. It also gives `colony/agents/*.yaml` its first Go reader -- today only the deleted `control-ts` ever read it.
