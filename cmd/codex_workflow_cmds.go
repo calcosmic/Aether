@@ -494,6 +494,27 @@ func completeSealRuntime(state colony.ColonyState) error {
 		}
 	}
 
+	// WR-03: the loop above inspects only pre-consolidation snapshot entries
+	// with Confidence >= 0.8, but pkg/memory's QueenEligible bar is
+	// POST-decay confidence >= 0.75 (plus 3 applications) -- so a
+	// pipeline-promoted instinct whose snapshot confidence sits in
+	// [0.75, 0.8) would silently vanish from sealEnrichment.InstinctsPromoted
+	// and CROWNED-ANTHILL.md's "Promoted Instincts" section. Fold every
+	// actually-pipeline-promoted ID into the reported set so the report
+	// matches what reached QUEEN.md. Hive promotion above deliberately keeps
+	// the snapshot's >= 0.8 bar: a NEW instinct created by consolidation
+	// during this very seal is absent from the snapshot and becomes
+	// hive-eligible at the next seal -- a documented one-seal lag, not a bug.
+	promotedSeen := make(map[string]struct{}, len(promotedInstinctNames))
+	for _, id := range promotedInstinctNames {
+		promotedSeen[id] = struct{}{}
+	}
+	for _, id := range sealConsolidation.QueenPromotedIDs {
+		if _, ok := promotedSeen[id]; !ok {
+			promotedInstinctNames = append(promotedInstinctNames, id)
+		}
+	}
+
 	// Render the eight-ant consolidation beats (D-06, LEARN-02) so the
 	// ceremony reads consolidation -> promotion -> hive: printed here, after
 	// the promotion loop above has run, and before the hive reporting lines

@@ -1028,6 +1028,69 @@ func TestSealStillPromotesInstinctsWithoutApplicationHistory(t *testing.T) {
 	}
 }
 
+// TestSealReportsPipelinePromotedInstinctsBelowLocalBar pins WR-03: an
+// instinct that pkg/memory's pipeline promotes into QUEEN.md (QueenEligible:
+// post-decay confidence >= 0.75 with >= 3 applications) but whose snapshot
+// confidence sits BELOW the seal loop's own 0.8 bar must still appear in
+// CROWNED-ANTHILL.md's promoted set. Before the reconciliation, the seal
+// report claimed to carry "the full promoted set" while silently omitting
+// every pipeline promotion in the [0.75, 0.8) band.
+func TestSealReportsPipelinePromotedInstinctsBelowLocalBar(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Snapshot confidence 0.78: below the seal loop's 0.8 bar, but with 3
+	// recorded applications the post-decay confidence stays >= 0.75, so the
+	// pipeline promotes it into QUEEN.md's "## Instincts" section.
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "inst-mid-001",
+				Trigger:    "pattern promoted by the pipeline below the seal bar",
+				Action:     "Report every QUEEN.md promotion in CROWNED-ANTHILL.md",
+				Domain:     "testing",
+				TrustScore: 0.9,
+				TrustTier:  "trusted",
+				Confidence: 0.78,
+				Provenance: colony.InstinctProvenance{ApplicationCount: 3},
+				Archived:   false,
+			},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	runSealCmd(t, s, tmpDir, nil)
+
+	// Precondition: the pipeline really did promote it into QUEEN.md.
+	queenData, err := os.ReadFile(filepath.Join(tmpDir, ".aether", "QUEEN.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(queenData), "Report every QUEEN.md promotion in CROWNED-ANTHILL.md") {
+		t.Fatalf("precondition: expected the pipeline to promote the instinct into QUEEN.md, got:\n%s", string(queenData))
+	}
+
+	anthillPath := filepath.Join(tmpDir, ".aether", "CROWNED-ANTHILL.md")
+	data, err := os.ReadFile(anthillPath)
+	if err != nil {
+		t.Fatalf("CROWNED-ANTHILL.md not found: %v", err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "| Instincts promoted | 1 |") {
+		t.Errorf("CROWNED-ANTHILL.md should count the pipeline-promoted instinct (WR-03), got:\n%s", content)
+	}
+	if !strings.Contains(content, "- inst-mid-001") {
+		t.Errorf("CROWNED-ANTHILL.md's Promoted Instincts section should list inst-mid-001 (WR-03), got:\n%s", content)
+	}
+}
+
 // sealNamedAntLabels are the eight curation ant labels (D-06) that must
 // appear verbatim in seal stdout once Task 3's rendering is wired in.
 var sealNamedAntLabels = []string{"Sentinel", "Nurse", "Critic", "Herald", "Janitor", "Archivist", "Librarian", "Scribe"}
