@@ -117,6 +117,6 @@ Signal housekeeping runs during `aether continue`.
 This is the final phase. Seal the colony after continue.
 
 ━━ 🐜 N E X T   U P ━━
-Run `aether continue` after the work is implemented and independently verified.
-Alternative: Run `aether status` if you want to inspect progress before advancing.
+Run `/ant-continue` after the work is implemented and independently verified.
+Alternative: Run `/ant-status` if you want to inspect progress before advancing.
 It's safe to clear your context now. Run `/ant-resume` to restore.

@@ -211,7 +211,7 @@ func TestGoldenPlanVisualOutput(t *testing.T) {
 	// Verify golden content expectations (only when not updating)
 	if !*updateGolden {
 		clean := normalizeForGolden(output)
-		for _, want := range []string{"P L A N", "P L A N   D I S P A T C H", "Planning Wave", "aether build 1"} {
+		for _, want := range []string{"P L A N", "P L A N   D I S P A T C H", "Planning Wave", "/ant-build 1"} {
 			if !strings.Contains(clean, want) {
 				t.Errorf("plan golden output missing %q", want)
 			}

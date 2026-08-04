@@ -57,5 +57,5 @@ Signals: 0 active -> 0 active after housekeeping
 Next phase ready: 2 — Next golden phase
 
 ━━ 🐜 N E X T   U P ━━
-Run `aether build 2` to start the next phase
+Run `/ant-build 2` to start the next phase
 It's safe to clear your context now. Run `/ant-resume` to restore.

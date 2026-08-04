@@ -238,5 +238,5 @@ Coordination: .aether/data/spawn-tree.txt
 
 
 ━━ 🐜 N E X T   U P ━━
-Run `aether build 1` to start the next planned phase.
-Alternative: Run `aether focus "..."` or `aether redirect "..."` if you want to adjust the colony before the first wave.
+Run `/ant-build 1` to start the next planned phase.
+Alternative: Run `/ant-focus "..."` or `/ant-redirect "..."` if you want to adjust the colony before the first wave.

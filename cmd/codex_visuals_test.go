@@ -288,7 +288,7 @@ func TestCeremonyCloseoutBlockedPathRendersBlockedNotCompletion(t *testing.T) {
 		"C O N T I N U E   B L O C K E D",
 		"Verification blocked the phase",
 		"go test ./... failed",
-		"Run `aether build 1 --force`",
+		"Run `/ant-build 1 --force`",
 	} {
 		if !strings.Contains(visual, want) {
 			t.Fatalf("blocked closeout missing %q\n%s", want, visual)
@@ -376,7 +376,7 @@ func TestPlanVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"📋", "P L A N", "P L A N   D I S P A T C H", "Planning Wave 1 starting", "✓", "aether build 1"} {
+	for _, want := range []string{"📋", "P L A N", "P L A N   D I S P A T C H", "Planning Wave 1 starting", "✓", "/ant-build 1"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("plan visual output missing %q\n%s", want, output)
 		}
@@ -422,7 +422,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "/ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -539,7 +539,7 @@ func TestColonizeVisualOutputShowsDispatchPreview(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Survey Wave 1 starting", "Surveyors", "C O L O N I Z E", "aether plan"} {
+	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Survey Wave 1 starting", "Surveyors", "C O L O N I Z E", "/ant-plan"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("colonize visual output missing %q\n%s", want, output)
 		}
@@ -843,7 +843,7 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 		"Continue Worker Flow",
 		"Continue watcher rejected the phase",
 		"blocked",
-		"Fix the blocking issues, then run `aether continue` again.",
+		"Fix the blocking issues, then run `/ant-continue` again.",
 		"A R T I F A C T S",
 		".aether/data/build/phase-1/verification.json",
 		".aether/data/build/phase-1/gates.json",
@@ -909,7 +909,7 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 		"Phase 1 verified and completed: Finish the final slice",
 		"── Colony Complete ──",
 		"All planned phases are complete. The colony is ready for Crowned Anthill.",
-		"aether seal",
+		"/ant-seal",
 		"It's safe to clear your context now.",
 	} {
 		if !strings.Contains(output, want) {
@@ -1007,7 +1007,7 @@ func TestPrintNextUpVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"N E X T   U P", "aether continue"} {
+	for _, want := range []string{"N E X T   U P", "/ant-continue"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("next-up visual output missing %q\n%s", want, output)
 		}
@@ -1124,8 +1124,8 @@ func TestRenderBinaryActionVisualPublishGuidanceSeparatesRepoSetupFromUpdate(t *
 	output := renderBinaryActionVisual("Publish Complete", "Aether v1.0.24 published", "1.0.24", "/tmp/home/.aether")
 
 	for _, want := range []string{
-		"Existing repos: run `aether update --force` to refresh companion files from the hub.",
-		"New repos: run `aether lay-eggs` to set up Aether.",
+		"Existing repos: run `/ant-update --force` to refresh companion files from the hub.",
+		"New repos: run `/ant-lay-eggs` to set up Aether.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("publish visual output missing %q\n%s", want, output)
@@ -1161,7 +1161,7 @@ func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 	if !strings.Contains(output, "Binary: already at the current hub version") {
 		t.Fatalf("expected binary-already-current message in update visual, got:\n%s", output)
 	}
-	if strings.Contains(output, "Run `aether status` to inspect the colony after the refresh.") {
+	if strings.Contains(output, "Run `/ant-status` to inspect the colony after the refresh.") {
 		t.Fatalf("expected generic next-step guidance to be suppressed, got:\n%s", output)
 	}
 }
@@ -1193,7 +1193,7 @@ func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
 	if strings.Contains(output, "No follow-up is required.") {
 		t.Fatalf("removed files should not be reported as a no-change update:\n%s", output)
 	}
-	if !strings.Contains(output, "Run `aether status` to inspect the colony after the refresh.") {
+	if !strings.Contains(output, "Run `/ant-status` to inspect the colony after the refresh.") {
 		t.Fatalf("expected post-removal status guidance, got:\n%s", output)
 	}
 }
@@ -1288,7 +1288,7 @@ func TestWorkflowSuggestionsBlockBuildAfterPlanFinalizeFailure(t *testing.T) {
 		t.Fatalf("expected active flags primary, got: %s", primary)
 	}
 	all := primary + "\n" + strings.Join(alternatives, "\n")
-	if strings.Contains(all, "aether build 1") {
+	if strings.Contains(all, "/ant-build 1") {
 		t.Fatalf("failed finalization must not suggest build:\n%s", all)
 	}
 	if !strings.Contains(all, "aether plan --repair-artifact") {
@@ -1329,7 +1329,7 @@ func TestSetupVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🥚", "L A Y   E G G S", "aether init"} {
+	for _, want := range []string{"🥚", "L A Y   E G G S", "/ant-init"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("setup visual output missing %q\n%s", want, output)
 		}
@@ -1467,8 +1467,8 @@ func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
 		}
 	}
 
-	checkVisual([]string{"pause-colony"}, "💾", "P A U S E   C O L O N Y", "HANDOFF.md", "aether resume")
-	checkVisual([]string{"resume-colony"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "aether build 1")
+	checkVisual([]string{"pause-colony"}, "💾", "P A U S E   C O L O N Y", "HANDOFF.md", "/ant-resume")
+	checkVisual([]string{"resume-colony"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "/ant-build 1")
 	checkVisual([]string{"patrol"}, "📊", "P A T R O L", "Signals: 1 active")
 	checkVisual([]string{"phase"}, "🧱", "Session UX", "Write resume-colony")
 	checkVisual([]string{"history"}, "📜", "Colony initialized", "Worker wave launched")

@@ -5,11 +5,13 @@ import (
 	"hash/fnv"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"unicode"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -427,11 +429,12 @@ func renderArtifactsSection(paths ...string) string {
 }
 
 func renderNextUp(primary string, alternatives ...string) string {
+	platform := detectPlatform()
 	var b strings.Builder
 	b.WriteString("\n")
 	b.WriteString(renderBanner(commandEmoji("next-up"), "Next Up"))
 	if strings.TrimSpace(primary) != "" {
-		b.WriteString(primary)
+		b.WriteString(translateHintCommandsForPlatform(primary, platform))
 		b.WriteString("\n")
 	}
 	for _, alt := range alternatives {
@@ -440,10 +443,43 @@ func renderNextUp(primary string, alternatives ...string) string {
 			continue
 		}
 		b.WriteString("Alternative: ")
-		b.WriteString(alt)
+		b.WriteString(translateHintCommandsForPlatform(alt, platform))
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// hintCommandRe matches an `aether <verb>` mention, capturing any preceding
+// VAR=value assignment so literal shell invocations can be left alone.
+var hintCommandRe = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*=\S*\s+)?\baether ([a-z][a-z0-9-]*)`)
+
+// translateHintCommandsForPlatform rewrites next-step hints so they name the
+// command the user actually types. In Claude Code and OpenCode the lifecycle
+// commands are slash wrappers, so "Run `aether continue`" is not a command the
+// user can run — it is the runtime describing itself to itself.
+//
+// Only verbs in wrapperCommandNames are rewritten; `aether publish`,
+// `aether host plan`, `aether flag-resolve` and friends have no wrapper and
+// must survive verbatim. Invocations carrying an env prefix
+// (AETHER_OUTPUT_MODE=visual aether ...) are literal shell commands wrappers
+// execute, never something the user types, so they are left alone too.
+func translateHintCommandsForPlatform(s, platform string) string {
+	if platform == "codex" {
+		return s
+	}
+	return hintCommandRe.ReplaceAllStringFunc(s, func(match string) string {
+		groups := hintCommandRe.FindStringSubmatch(match)
+		if len(groups) != 3 {
+			return match
+		}
+		if strings.TrimSpace(groups[1]) != "" {
+			return match
+		}
+		if !wrapperCommandNames[groups[2]] {
+			return match
+		}
+		return "/ant-" + groups[2]
+	})
 }
 
 func renderContextClearGuidance() string {
@@ -451,10 +487,20 @@ func renderContextClearGuidance() string {
 }
 
 func detectPlatform() string {
-	if os.Getenv("AETHER_PLATFORM") != "" {
-		return os.Getenv("AETHER_PLATFORM")
+	if platform := strings.TrimSpace(os.Getenv("AETHER_PLATFORM")); platform != "" {
+		return platform
 	}
-	if os.Getenv("CODEX_CLI") != "" || os.Getenv("CODEX_API_KEY") != "" {
+	// The runtime's own dispatch-layer detector knows OpenCode and Codex from a
+	// wider set of signals; prefer it over the narrow env checks below so a
+	// Codex or OpenCode session is not mistaken for Claude and shown /ant-*
+	// commands it does not have.
+	switch codex.DetectActivePlatform() {
+	case codex.PlatformCodex:
+		return "codex"
+	case codex.PlatformOpenCode:
+		return "opencode"
+	}
+	if os.Getenv("CODEX_CLI") != "" || os.Getenv("CODEX_API_KEY") != "" || os.Getenv("CODEX_HOME") != "" {
 		return "codex"
 	}
 	return "claude"
