@@ -364,7 +364,15 @@ Plans:
   3. *(Decision-shaped, not build-shaped)*: a written decision states which of `pkg/learn` or `pkg/memory` is authoritative and what happens to the other -- retired, or explicitly subordinate -- documented in the repo, not only implemented
   4. *(Decision-shaped)*: a written decision states whether the Hive Brain default changes from off to on, with the reasoning; if it stays off, the documentation stops implying it is on by default
   5. The same worker task, run once with colony memory populated and once with it wiped, produces demonstrably different output (referencing a prior instinct, wisdom entry, or pattern) -- recorded as a before/after comparison, not assumed
-**Plans**: TBD
+**Plans**: 6 plans in 4 waves
+
+Plans:
+- [ ] 162-01-PLAN.md — LEARN-04: hive default to promote, consent gate retired, AGENTS.md made true (wave 1)
+- [ ] 162-02-PLAN.md — LEARN-01/03: make consolidation's QUEEN.md promotion target reachable before wiring it (wave 1)
+- [ ] 162-03-PLAN.md — LEARN-01: phase-end consolidation on both continue paths + always-present learning beat (wave 2, needs 02)
+- [ ] 162-04-PLAN.md — LEARN-02/03: seal eight-ant pass, report artifact, no-double-promotion reconciliation (wave 3, needs 01, 02, 03)
+- [ ] 162-05-PLAN.md — LEARN-05: deterministic populated-vs-wiped brief test + recorded before/after exhibit (wave 4, needs 01-04)
+- [ ] 162-06-PLAN.md — LEARN-03/04: decision record + docs truth pass + docs-rot guard test (wave 4, needs 01, 03, 04)
 
 ### Phase 163: Context Reaches Workers
 **Goal**: Everything the colony knows demonstrably arrives in a worker's actual prompt, measured and inspectable by a person. *(Goal corrected 2026-07-29 during planning, per Phase 163 D-07 and the phase research: two of the four "confirmed disconnected" items were already reconnected by commits `281dd34a` and `a2c8288e` on 2026-07-26 -- survey findings and phase research reach build workers today. `build-context.md` and `codexBuildPlaybooks()` were deleted in Phase 160 and stay dead.)* What is genuinely missing: the colony-prime context capsule never reaches a wrapper-spawned worker, the approved charter has never reached any worker, and `suggest-analyze` has never executed. This phase carries the capsule at manifest level -- once per build, not an 8K copy per dispatch -- adds charter to the same integrity-assessed pipeline plus a compliance gate, gives `suggest-analyze` its first caller, refines the existing `--print-brief` inspector into a ten-second checklist, and fixes the three worker write-contract contradictions folded in from Phase 160 (the `.aether/data/` guardrail workers were forced to evade, scout's read-only profile versus its own write instruction, and the `{}`-only artifacts schema).
