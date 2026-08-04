@@ -39,6 +39,7 @@ var retiredLearningDocClaims = []string{
 	"Phase 162 wires this",
 	"no lifecycle command invokes",
 	"do not invoke either one yet",
+	"still have no caller",
 	"three ants only",
 	"nurse → herald → janitor",
 	"hive-opt-in",
