@@ -36,6 +36,7 @@ That means:
 
 - **v1.25 Switch It On — IN PROGRESS** (started 2026-07-25)
 - **Product version: v1.0.42**
+- Phase 162 complete (2026-08-04) — switch on learning: `consolidation-phase-end` and `consolidation-seal` got their first-ever runtime callers (both continue paths + seal ceremony), Hive Brain flipped on by default behind the single `AETHER_HIVE_POLICY` switch (consent gate retired), promotion target relocated to the worker-readable `.aether/QUEEN.md`, eight curation ants render named beats with a CURATION-REPORT.md artifact, memory injection proven by permanent CI test plus recorded 958→615-char before/after exhibit (user-approved), learning-system authority decision record written and doc claims regression-guarded; 6/6 plans, verification 7/7 (one stale doc line closed post-verification); LEARN-01..05 complete
 - Phase 160 formally closed (2026-08-04) — fail loudly: work landed 2026-07-28 (seven broken CLI calls fixed, execution-based drift audit over 882 documented invocations, load-bearing stderr suppression removed, `control-ts/` retired with test-deletion ledger, worker failure debug artifacts on every failure mode, `/ant-unblock` wrappers on both platforms) but the proof artifact was missing until the v1.25 mid-milestone audit flagged it; verification now passed 13/13 by execution, all LOUD-01..09/RETIRE-01..04 ticked, security audit closed 28/28 threats (three regression tests added during remediation: `aether`+`|| true` swallow ban, documented-subcommand severity classification, unresolvable-command detection across all five corpora)
 - Phase 165 complete (2026-08-03) — core lifecycle commands: `init`/`plan`/`build`/`continue` wrappers rewritten to carry engineering method (stage purpose, files-to-read, spawn choreography, stop conditions) instead of manifest-parsing protocol, on both platforms plus flat mirrors, fenced by wrapper ceremony contract tests; gap closure moved shelf promotion inside the `aether init` transaction (atomic, consent-gated via `--promote-shelf`/`--dismiss-shelf`); 10/10 plans, re-verification passed 10/10; one pre-existing `init-ceremony` sealed-colony risk deferred to Phase 169 (SEE-11)
 - Phase 164 complete (2026-08-02) — research feeds planning: Queen decides research need per phase, research Scouts dispatch automatically through the kept `confidence-loop.ts`, dispatch field fidelity fixed (permission_profile + brief now survive the Go→TS boundary), `plan-research-escalate` works on fresh colonies and degrades to a warning on failure; 11/11 plans, verification passed 5/5
@@ -364,7 +365,7 @@ This document evolves at phase transitions and milestone boundaries.
 - Curation ant pipeline (8-ant orchestrated pipeline)
 - Consolidation pipeline (phase-end knowledge compression)
 
-*Last updated: 2026-08-04 — Phase 160 (fail loudly) formally closed: verification 13/13, security 28/28*
+*Last updated: 2026-08-04 — Phase 162 (switch on learning) complete: verification 7/7, LEARN-01..05 done*
 
 ### v1.12 Safe Colony (shipped)
 
@@ -376,7 +377,7 @@ This document evolves at phase transitions and milestone boundaries.
 - Smart depth defaults — auto-select depth from phase position + code change risk signals
 - User depth override — tick-a-box UI at `/ant-plan` start to override either depth before plan creation
 
-*Last updated: 2026-08-04 — Phase 160 (fail loudly) formally closed: verification 13/13, security 28/28*
+*Last updated: 2026-08-04 — Phase 162 (switch on learning) complete: verification 7/7, LEARN-01..05 done*
 
 ### v1.16 Hybrid Runtime Boundary and Orchestration Recovery (shipped)
 
@@ -405,4 +406,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-08-04 — Phase 160 (fail loudly) formally closed: verification 13/13, security 28/28*
+*Last updated: 2026-08-04 — Phase 162 (switch on learning) complete: verification 7/7, LEARN-01..05 done*
