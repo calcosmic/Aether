@@ -10,7 +10,7 @@ Continue Verification 1 starting (in-repo, serial)
 
 ✓ 👁️ Watcher Worker-XX  completed 0.0s  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
 
-  Step 1/4: Verification (1s)
+  Step 1/4: Verification (0s)
 ── Dispatch ──
 Continue Review 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
@@ -22,9 +22,9 @@ Continue Review 1 starting (in-repo, serial)
 
 ✓ 🧪 Probe Worker-XX  completed 0.0s  FakeInvoker completed task continue-review-probe for worker Worker-XX (caste: probe)
 
-  Step 2/4: Housekeeping (1s)
-  Step 3/4: Advance (1s)
-Ceremony complete in 1s
+  Step 2/4: Housekeeping (0s)
+  Step 3/4: Advance (0s)
+Ceremony complete in 0s
 ━━ 👁️ C O N T I N U E ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Review depth: standard (Phase 1 of 2)
@@ -39,6 +39,7 @@ Continue Worker Flow
   - Worker-XX [watcher] completed — Watcher Worker-XX completed independent verification before advancement
   - Worker-XX [probe] completed — Probe Worker-XX completed continue review before advancement
   - Signal housekeeping [system] completed — 0 active -> 0 active
+  - Phase-end consolidation [librarian] completed — colony observed nothing new this phase
 Verification passed during continue
 ━━ 🗂️ A R T I F A C T S ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -50,6 +51,8 @@ Verification passed during continue
 Workers closed: 2
 ── Housekeeping ──
 Signals: 0 active -> 0 active after housekeeping
+── Learning ──
+🧠 Librarian  colony observed nothing new this phase
 ── Next Phase ──
 Next phase ready: 2 — Next golden phase
 
