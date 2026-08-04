@@ -253,8 +253,11 @@ func TestPhaseInsert(t *testing.T) {
 	if result["inserted"] != true {
 		t.Errorf("inserted = %v, want true", result["inserted"])
 	}
-	if result["phase_id"] != float64(3) {
-		t.Errorf("phase_id = %v, want 3", result["phase_id"])
+	// Sequential-ID invariant (H-02): the inserted phase takes the ID of its
+	// slice position (index 1 → ID 2) and later phases renumber, instead of
+	// the old max+1 assignment that produced orders like [1,3,2].
+	if result["phase_id"] != float64(2) {
+		t.Errorf("phase_id = %v, want 2", result["phase_id"])
 	}
 	if result["after"] != float64(1) {
 		t.Errorf("after = %v, want 1", result["after"])

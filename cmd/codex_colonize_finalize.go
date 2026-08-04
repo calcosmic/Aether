@@ -174,7 +174,8 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 	codegraphStats, codegraphWarning := runColonizeCodebaseGraph(root)
 
 	surveyedAt := now.Format(time.RFC3339)
-	if err := updateSurveyState(surveyedAt, len(surveyFiles)); err != nil {
+	stateRecorded, err := updateSurveyState(surveyedAt, len(surveyFiles))
+	if err != nil {
 		return nil, err
 	}
 	emitColonizeCeremonyDispatchSequence("aether-colonize-finalize", dispatches)
@@ -205,6 +206,10 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 			"directories": facts.DirectoryCount,
 		},
 		"next": "aether plan",
+	}
+	if !stateRecorded {
+		result["state_note"] = surveyWithoutColonyNote
+		result["next"] = "aether init"
 	}
 	if codegraphStats != nil {
 		result["codebase_graph"] = map[string]interface{}{

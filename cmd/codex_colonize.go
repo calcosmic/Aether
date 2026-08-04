@@ -210,7 +210,8 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 	emitColonizeCeremonyDispatchSequence("aether-colonize", dispatches)
 
 	surveyedAt := time.Now().UTC().Format(time.RFC3339)
-	if err := updateSurveyState(surveyedAt, len(surveyFiles)); err != nil {
+	stateRecorded, err := updateSurveyState(surveyedAt, len(surveyFiles))
+	if err != nil {
 		return nil, err
 	}
 	updateSessionSummary("colonize", "aether plan", fmt.Sprintf("Territory surveyed (%d documents)", len(surveyFiles)))
@@ -240,6 +241,10 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 			"directories": facts.DirectoryCount,
 		},
 		"next": "aether plan",
+	}
+	if !stateRecorded {
+		result["state_note"] = surveyWithoutColonyNote
+		result["next"] = "aether init"
 	}
 	if codegraphStats != nil {
 		result["codebase_graph"] = map[string]interface{}{
@@ -1011,37 +1016,32 @@ func writeSurveyCompatibilityJSON(surveyDir string, facts codexWorkspaceFacts) e
 	return nil
 }
 
-func updateSurveyState(surveyedAt string, docCount int) error {
+// updateSurveyState records the survey timestamp on the active colony state.
+// When no colony exists yet (colonize before init), it records nothing and
+// returns recorded=false: fabricating a goalless READY state here used to
+// poison the colony — loadActiveColonyState rejects a state without a goal,
+// leaving the user with an unusable COLONY_STATE.json. Survey documents are
+// already on disk either way; init picks them up later.
+func updateSurveyState(surveyedAt string, docCount int) (bool, error) {
 	if store == nil {
-		return nil
+		return false, nil
 	}
 
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		state = colony.ColonyState{
-			Version: "3.0",
-			Plan:    colony.Plan{Phases: []colony.Phase{}},
-			Memory: colony.Memory{
-				PhaseLearnings: []colony.PhaseLearning{},
-				Decisions:      []colony.Decision{},
-				Instincts:      []colony.Instinct{},
-			},
-			Errors: colony.Errors{
-				Records:         []colony.ErrorRecord{},
-				FlaggedPatterns: []colony.FlaggedPattern{},
-			},
-			Signals:    []colony.Signal{},
-			Graveyards: []colony.Graveyard{},
-			Events:     []string{},
-			State:      colony.StateREADY,
-		}
+		return false, nil
 	}
 
 	state.State = colony.StateREADY
 	state.TerritorySurveyed = &surveyedAt
 	state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|territory_surveyed|colonize|Territory surveyed: %d documents", surveyedAt, docCount))
-	return store.SaveJSON("COLONY_STATE.json", state)
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		return false, err
+	}
+	return true, nil
 }
+
+const surveyWithoutColonyNote = "Survey saved to .aether/data/survey/ — no active colony yet. Run /ant-init to start the colony; init will pick the survey up."
 
 func surveyDocsExist(surveyDir string) bool {
 	for _, name := range requiredSurveyMarkdownFiles {

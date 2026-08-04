@@ -149,17 +149,7 @@ var phaseInsertCmd = &cobra.Command{
 			return nil
 		}
 
-		// Compute next ID
-		maxID := 0
-		for _, p := range state.Plan.Phases {
-			if p.ID > maxID {
-				maxID = p.ID
-			}
-		}
-		newID := maxID + 1
-
 		newPhase := colony.Phase{
-			ID:          newID,
 			Name:        name,
 			Description: description,
 			Status:      colony.PhasePending,
@@ -171,9 +161,26 @@ var phaseInsertCmd = &cobra.Command{
 		// Insert after the specified index (0-based)
 		insertAt := after
 		state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
+
+		// Renumber so phase.ID == index+1 holds after every insert. Production
+		// call sites index phases by ordinal (phaseNum-1); a mid-slice insert
+		// carrying max+1 would leave orders like [1,3,2] and misroute build
+		// and continue for every phase after the insertion point.
+		oldToNew := make(map[int]int, previousPhaseCount)
+		for i := range state.Plan.Phases {
+			if state.Plan.Phases[i].ID > 0 {
+				oldToNew[state.Plan.Phases[i].ID] = i + 1
+			}
+			state.Plan.Phases[i].ID = i + 1
+		}
+		insertedID := insertAt + 1
+		if mapped, ok := oldToNew[state.CurrentPhase]; ok && state.CurrentPhase > 0 {
+			state.CurrentPhase = mapped
+		}
+
 		if shouldReopenInsertedPhase(state, insertAt, previousPhaseCount) {
 			state.State = colony.StateREADY
-			state.CurrentPhase = newID
+			state.CurrentPhase = insertedID
 			state.Plan.Phases[insertAt].Status = colony.PhaseReady
 		}
 
@@ -184,7 +191,7 @@ var phaseInsertCmd = &cobra.Command{
 
 		outputOK(map[string]interface{}{
 			"inserted": true,
-			"phase_id": newID,
+			"phase_id": insertedID,
 			"after":    after,
 		})
 		return nil
