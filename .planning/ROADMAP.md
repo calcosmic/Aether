@@ -375,7 +375,7 @@ Plans:
 - [x] 162-03-PLAN.md — LEARN-01: phase-end consolidation on both continue paths + always-present learning beat (wave 2, needs 02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 162-04-PLAN.md — LEARN-02/03: seal eight-ant pass, report artifact, no-double-promotion reconciliation (wave 3, needs 01, 02, 03)
+- [x] 162-04-PLAN.md — LEARN-02/03: seal eight-ant pass, report artifact, no-double-promotion reconciliation (wave 3, needs 01, 02, 03)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 162-05-PLAN.md — LEARN-05: deterministic populated-vs-wiped brief test + recorded before/after exhibit (wave 4, needs 01-04)
@@ -609,7 +609,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 159. End-to-End Acceptance | v1.24 | 3/3 | Complete | 2026-05-24 |
 | 160. Fail Loudly | v1.25 | 8/8 | Complete   | 2026-07-27 |
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
-| 162. Switch On Learning | v1.25 | 3/6 | In Progress|  |
+| 162. Switch On Learning | v1.25 | 4/6 | In Progress|  |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
 | 164. Research Feeds Planning | v1.25 | 11/11 | Complete    | 2026-08-02 |
 | 165. Core Lifecycle Commands | v1.25 | 10/10 | Complete    | 2026-08-03 |
