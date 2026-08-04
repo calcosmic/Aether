@@ -420,12 +420,15 @@ func TestCriterionReadOnlyEvidence(t *testing.T) {
 		}
 	})
 
-	t.Run("cross-task read-only evidence does not satisfy (D-02)", func(t *testing.T) {
+	t.Run("cross-task read-only evidence satisfies any requirement naming the path (D-01 amended)", func(t *testing.T) {
+		// Operator-recorded read-only evidence is hash-verified and attests
+		// the path's state for the whole run; scoping it to one task made a
+		// phase whose two tasks bind the same untouched file unsatisfiable
+		// (the recording guard allows one task per path per run).
 		saveClaimsWithReadOnly(t, "2.1")
 		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
-		issues := strings.Join(evaluation.BlockingIssues, "\n")
-		if evaluation.Passed || !strings.Contains(issues, "was not claimed by the current build for task 1.1") {
-			t.Fatalf("evaluation = %+v, want cross-task block", evaluation)
+		if !evaluation.Passed {
+			t.Fatalf("evaluation = %+v, want cross-task read-only evidence to satisfy", evaluation)
 		}
 	})
 
