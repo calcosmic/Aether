@@ -407,6 +407,39 @@ var sealCmd = &cobra.Command{
 }
 
 func completeSealRuntime(state colony.ColonyState) error {
+	// Snapshot the instinct entries eligible for THIS seal's own local/hive
+	// promotion loop (D-08) before consolidation below decays trust scores
+	// and archives stale instincts. Consolidation's archival floor operates
+	// on TrustScore, an independent axis from the Confidence bar this seal
+	// loop uses -- an instinct the seal ceremony judges promotion-worthy by
+	// Confidence must not be silently pulled out from under it by maintenance
+	// running earlier in the very same seal. Captured before
+	// runSealConsolidation() runs so a mutation in one axis cannot race the
+	// decision on the other.
+	sealEligibleEntries, sealEligibleErr := loadActiveInstinctEntriesFromStore(store)
+
+	// Learning consolidation (LEARN-02): run the eight-ant curation pass plus
+	// decay/archive/promotion BEFORE the local promotion loop below, so its
+	// QueenPromotedIDs are available to make that loop subordinate (D-09,
+	// Task 2) and Task 3 can render its per-ant beats.
+	sealConsolidation := runSealConsolidation()
+
+	// D-09: pkg/memory's RunConsolidation (invoked inside runSealConsolidation
+	// above) is the AUTHORITATIVE writer of QUEEN.md's "## Instincts" section
+	// at seal -- it already promoted every QueenEligible instinct (confidence
+	// >= 0.75 AND >= 3 recorded applications) before this function reached
+	// here. The loop below is explicitly SUBORDINATE: it promotes only
+	// instincts the authoritative pipeline did NOT already promote, because
+	// QueenEligible's application-history bar is one a young colony never
+	// clears, and deleting this loop would make seal promote nothing in
+	// practice for most colonies. Do not "simplify" this back into a second
+	// independent scan that double-writes an instinct pkg/memory already
+	// wrote under "## Instincts" into "## Wisdom" as well.
+	queenAlreadyPromoted := make(map[string]struct{}, len(sealConsolidation.QueenPromotedIDs))
+	for _, id := range sealConsolidation.QueenPromotedIDs {
+		queenAlreadyPromoted[id] = struct{}{}
+	}
+
 	// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md and Hive Brain (D-08, CERE-02)
 	var repoName string
 	if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
@@ -426,10 +459,18 @@ func completeSealRuntime(state colony.ColonyState) error {
 	var hiveEligibleCount int
 	var hivePromotedCount int
 	var hivePromotionFailures int
-	if entries, err := loadActiveInstinctEntriesFromStore(store); err == nil {
+	if entries, err := sealEligibleEntries, sealEligibleErr; err == nil {
 		for _, entry := range entries {
 			if entry.Confidence >= 0.8 && entry.Action != "" {
-				if err := promoteInstinctLocal(store, entry.ID, entry.Action); err == nil {
+				if _, alreadyPromoted := queenAlreadyPromoted[entry.ID]; alreadyPromoted {
+					// pkg/memory already wrote this instinct into QUEEN.md's
+					// "## Instincts" section this seal (D-09) -- the colony
+					// promoted it, a different writer did the writing. Do not
+					// call promoteInstinctLocal again, but still count it so
+					// sealEnrichment.InstinctsPromoted and CROWNED-ANTHILL.md
+					// report the full promoted set.
+					promotedInstinctNames = append(promotedInstinctNames, entry.ID)
+				} else if err := promoteInstinctLocal(store, entry.ID, entry.Action); err == nil {
 					promotedInstinctNames = append(promotedInstinctNames, entry.ID)
 				}
 			}
@@ -452,6 +493,13 @@ func completeSealRuntime(state colony.ColonyState) error {
 			}
 		}
 	}
+
+	// Render the eight-ant consolidation beats (D-06, LEARN-02) so the
+	// ceremony reads consolidation -> promotion -> hive: printed here, after
+	// the promotion loop above has run, and before the hive reporting lines
+	// below.
+	fmt.Fprint(stdout, renderSealConsolidationBeats(sealConsolidation))
+	emitSealConsolidationCeremony(sealConsolidation)
 
 	// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
 	if hivePromotedCount > 0 {
@@ -505,6 +553,7 @@ func completeSealRuntime(state colony.ColonyState) error {
 		ShelfCandidates:       candidates,
 		FinalReview:           finalReview,
 		ReviewBacklog:         reviewBacklog,
+		ConsolidationReport:   sealConsolidation.ReportPath,
 	}
 
 	summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
@@ -1000,6 +1049,10 @@ type sealEnrichment struct {
 	ShelfCandidates       []colony.ShelfEntry
 	FinalReview           *sealFinalReviewReport
 	ReviewBacklog         []colony.ReviewLedgerEntry
+	// ConsolidationReport is the path to the scribe's persisted curation
+	// report (LEARN-02, <.aether>/CURATION-REPORT.md), surfaced here so it
+	// is discoverable from CROWNED-ANTHILL.md as well as from stdout.
+	ConsolidationReport string
 }
 
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
@@ -1081,6 +1134,9 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 	}
 	b.WriteString(fmt.Sprintf("| FOCUS signals expired | %d |\n", enrichment.SignalsExpired))
 	b.WriteString(fmt.Sprintf("| Flags resolved | %d |\n", enrichment.FlagsResolved))
+	if enrichment.ConsolidationReport != "" {
+		b.WriteString(fmt.Sprintf("| Curation report | %s |\n", enrichment.ConsolidationReport))
+	}
 
 	if len(enrichment.InstinctsPromoted) > 0 {
 		b.WriteString("\n### Promoted Instincts\n")

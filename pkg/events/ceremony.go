@@ -18,6 +18,9 @@ const (
 	CeremonyTopicContinueWaveStart     = "ceremony.continue.wave.start"
 	CeremonyTopicContinueSpawn         = "ceremony.continue.spawn"
 	CeremonyTopicContinueWaveEnd       = "ceremony.continue.wave.end"
+	CeremonyTopicSealWaveStart         = "ceremony.seal.wave.start"
+	CeremonyTopicSealSpawn             = "ceremony.seal.spawn"
+	CeremonyTopicSealWaveEnd           = "ceremony.seal.wave.end"
 	CeremonyTopicPheromoneEmit         = "ceremony.pheromone.emit"
 	CeremonyTopicSkillActivate         = "ceremony.skill.activate"
 	CeremonyTopicChamberSeal           = "ceremony.chamber.seal"
@@ -86,6 +89,9 @@ func CeremonyTopics() []string {
 		CeremonyTopicContinueWaveStart,
 		CeremonyTopicContinueSpawn,
 		CeremonyTopicContinueWaveEnd,
+		CeremonyTopicSealWaveStart,
+		CeremonyTopicSealSpawn,
+		CeremonyTopicSealWaveEnd,
 		CeremonyTopicPheromoneEmit,
 		CeremonyTopicSkillActivate,
 		CeremonyTopicChamberSeal,

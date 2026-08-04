@@ -2,12 +2,16 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/agent/curation"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/learn"
 )
@@ -158,4 +162,182 @@ func attachConsolidationSummary(result map[string]interface{}, s phaseEndConsoli
 		"review_candidates":    s.ReviewCandidates,
 		"reread_candidates":    s.RereadCandidates,
 	}
+}
+
+// sealAntBeat is one curation ant's individually-reported outcome from a
+// seal consolidation pass (D-06). Name preserves the orchestrator's fixed
+// order (sentinel, nurse, critic, herald, janitor, archivist, librarian,
+// scribe) so callers can render eight distinct beats instead of one
+// collapsed aggregate string.
+type sealAntBeat struct {
+	Name    string
+	Success bool
+	Detail  string
+}
+
+// sealConsolidationSummary is the runtime-facing summary of a non-blocking
+// seal consolidation attempt: the eight-ant curation pass plus decay/archive
+// plus the scribe's written report artifact (LEARN-02). Like
+// phaseEndConsolidationSummary, it is returned by value only --
+// runSealConsolidation never returns an error type a caller could propagate
+// into an abort (D-05). The seal never stops for a learning failure.
+type sealConsolidationSummary struct {
+	Ran                 bool
+	Reason              string
+	Ants                []sealAntBeat
+	ReportPath          string
+	InstinctsDecayed    int
+	InstinctsArchived   int
+	ObservationsDecayed int
+	PromotionCandidates int
+	QueenEligible       int
+	// QueenPromotedIDs carries the actual instinct IDs pkg/memory's
+	// RunConsolidation promoted into QUEEN.md this seal -- not just a count --
+	// so Task 2's reconciliation can build an exact skip-set for the
+	// subordinate seal-side promotion loop (D-09).
+	QueenPromotedIDs []string
+	ReviewCandidates int
+	RereadCandidates int
+}
+
+// sealAntDetail derives a short, human-readable line from one curation ant's
+// StepResult for display beside its caste-styled name (Task 3). Known
+// per-ant Summary keys (e.g. archivist's "archived", janitor's "removed")
+// render as key=value pairs sorted for determinism; a failed step falls back
+// to its error text, and a step with nothing useful reported falls back to
+// "ok" / "skipped".
+func sealAntDetail(sr curation.StepResult) string {
+	if !sr.Success {
+		if sr.Error != nil {
+			return sr.Error.Error()
+		}
+		if reason, ok := sr.Summary["reason"].(string); ok && reason != "" {
+			return reason
+		}
+		return "failed"
+	}
+	if len(sr.Summary) == 0 {
+		return "ok"
+	}
+	keys := make([]string, 0, len(sr.Summary))
+	for k := range sr.Summary {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%v", k, sr.Summary[k]))
+	}
+	return strings.Join(parts, " ")
+}
+
+// runSealConsolidation is the single non-blocking runtime caller for seal
+// consolidation (LEARN-02). It runs the full eight-ant curation pass
+// (pkg/agent/curation.Orchestrator) directly -- never through the
+// consolidation-seal subcommand's own stepInfo aggregation, which collapses
+// all eight ants into one "succeeded=N failed=M" string and is exactly what
+// makes D-06's per-ant announcements impossible -- then runs the real
+// (non-dry-run) decay/archive/promotion pipeline, publishes the
+// consolidation.seal event, and persists the scribe's report to
+// <.aether>/CURATION-REPORT.md.
+//
+// This function is never a dry run: consolidationSealCmd's --dry-run branch
+// exists purely for the user-invocable inspection path. runSealConsolidation
+// always takes the real, mutating path.
+//
+// On any failure at any stage this never returns an error type the caller
+// could propagate into an abort -- it warns unmissably to stderr (D-05),
+// naming a sentinel abort explicitly when that is the cause, and returns a
+// summary with Ran: false. The seal never stops for a learning failure.
+func runSealConsolidation() sealConsolidationSummary {
+	if store == nil {
+		return sealConsolidationSummary{Ran: false, Reason: "no store initialized"}
+	}
+
+	// Self-heal a legacy local QUEEN.md that predates the Instincts section
+	// before promoting into it. Non-fatal, mirrors runPhaseEndConsolidation.
+	if healErr := ensureQueenInstinctsSection(); healErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to ensure QUEEN.md Instincts section: %v\n", healErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), consolidationLifecycleTimeout)
+	defer cancel()
+
+	bus := events.NewBus(store, events.DefaultConfig())
+
+	curResult, curErr := curation.NewOrchestrator(store, bus).Run(ctx, false)
+
+	var ants []sealAntBeat
+	var reportPath string
+	if curResult != nil {
+		ants = make([]sealAntBeat, 0, len(curResult.Steps))
+		for _, step := range curResult.Steps {
+			ants = append(ants, sealAntBeat{
+				Name:    step.Name,
+				Success: step.Success,
+				Detail:  sealAntDetail(step),
+			})
+			if step.Name == "scribe" && step.Success {
+				if report, ok := step.Summary["report"].(string); ok && report != "" {
+					path := filepath.Join(filepath.Dir(store.BasePath()), "CURATION-REPORT.md")
+					if writeErr := os.WriteFile(path, []byte(report), 0644); writeErr != nil {
+						fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", path, writeErr)
+					} else {
+						reportPath = path
+					}
+				}
+			}
+		}
+	}
+
+	pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
+	consResult, consErr := pipeline.RunConsolidation(ctx)
+	if consErr == nil && consResult != nil && len(consResult.Errors) > 0 {
+		consErr = errors.Join(consResult.Errors...)
+	}
+
+	// Publish the seal consolidation event, matching consolidationSealCmd's
+	// own literal topic. Publish failures are non-blocking.
+	if payload, err := json.Marshal(map[string]string{
+		"type":      "consolidation.seal",
+		"timestamp": time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+	}); err == nil {
+		_, _ = bus.Publish(ctx, "consolidation.seal", payload, "seal")
+	}
+
+	summary := sealConsolidationSummary{Ants: ants, ReportPath: reportPath}
+
+	var reasons []string
+	if curErr != nil {
+		reason := curErr.Error()
+		// T-162-11: a curation sentinel abort (corrupt stores detected) must
+		// be distinguishable from a transient failure in the one line the
+		// operator sees.
+		if strings.Contains(reason, "sentinel abort") {
+			reason = "curation sentinel detected corrupt stores: " + reason
+		}
+		reasons = append(reasons, reason)
+	}
+	if consErr != nil {
+		reasons = append(reasons, consErr.Error())
+	}
+
+	if len(reasons) > 0 {
+		reason := strings.Join(reasons, "; ")
+		fmt.Fprintf(os.Stderr, "colony sealed WITHOUT consolidation — %v\n", reason)
+		summary.Ran = false
+		summary.Reason = reason
+		return summary
+	}
+
+	summary.Ran = true
+	summary.InstinctsDecayed = consResult.InstinctsDecayed
+	summary.InstinctsArchived = consResult.InstinctsArchived
+	summary.ObservationsDecayed = consResult.ObservationsDecayed
+	summary.PromotionCandidates = len(consResult.PromotionCandidates)
+	summary.QueenEligible = len(consResult.QueenEligible)
+	summary.QueenPromotedIDs = append([]string{}, consResult.QueenEligible...)
+	summary.ReviewCandidates = len(consResult.ReviewCandidates)
+	summary.RereadCandidates = len(consResult.RereadCandidates)
+	return summary
 }

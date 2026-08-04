@@ -842,3 +842,207 @@ func TestSealHivePromotedCount(t *testing.T) {
 		t.Errorf("CROWNED-ANTHILL.md should show 2 hive-promoted instincts, got: %s", content)
 	}
 }
+
+// TestSealDoesNotDoublePromoteInstincts pins D-09: an instinct that is BOTH
+// pkg/memory-QueenEligible (confidence >= 0.75 AND >= 3 recorded
+// applications) AND above the seal ceremony's own local-promotion bar
+// (confidence >= 0.8) must reach .aether/QUEEN.md exactly once, written by
+// the authoritative pkg/memory pipeline under "## Instincts" -- never a
+// second time under "## Wisdom" by the seal's subordinate promoteInstinctLocal
+// loop. Removing Task 2's ID skip-set check must make this test fail.
+func TestSealDoesNotDoublePromoteInstincts(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// A real, valid (empty) observations file so runSealConsolidation's
+	// pipeline.RunConsolidation actually runs to completion instead of
+	// failing on a missing file and leaving QueenEligible empty.
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	const actionText = "Run go build ./... before every seal to catch broken compilation"
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "inst-both-001",
+				Trigger:    "dual eligibility pattern",
+				Action:     actionText,
+				Domain:     "testing",
+				TrustScore: 0.9,
+				TrustTier:  "trusted",
+				Confidence: 0.9,
+				Provenance: colony.InstinctProvenance{ApplicationCount: 3},
+				Archived:   false,
+			},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	runSealCmd(t, s, tmpDir, nil)
+
+	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(queenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+
+	count := strings.Count(text, actionText)
+	if count != 1 {
+		t.Fatalf("expected the instinct's action text to appear exactly once in QUEEN.md, got %d occurrences:\n%s", count, text)
+	}
+
+	instinctsSectionHasIt := false
+	wisdomSectionHasIt := false
+	for _, section := range strings.Split(text, "\n## ") {
+		if strings.HasPrefix(section, "Instincts") && strings.Contains(section, actionText) {
+			instinctsSectionHasIt = true
+		}
+		if strings.HasPrefix(section, "Wisdom") && strings.Contains(section, actionText) {
+			wisdomSectionHasIt = true
+		}
+	}
+	if !instinctsSectionHasIt {
+		t.Errorf("expected the action text under '## Instincts' (pkg/memory's authoritative write), got:\n%s", text)
+	}
+	if wisdomSectionHasIt {
+		t.Errorf("action text should NOT also appear under '## Wisdom' (the subordinate write must have been skipped), got:\n%s", text)
+	}
+}
+
+// TestSealStillPromotesInstinctsWithoutApplicationHistory pins D-09's other
+// half: an instinct with confidence >= 0.8 but zero recorded applications is
+// NOT pkg/memory-QueenEligible (which requires >= 3 applications), so it
+// must still reach QUEEN.md via the seal's subordinate promoteInstinctLocal
+// loop -- proving Task 2 did not delete that loop, only made it conditional.
+// Deleting the subordinate promoteInstinctLocal call must make this test fail.
+func TestSealStillPromotesInstinctsWithoutApplicationHistory(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	const actionText = "Prefer table-driven tests in new Go test files"
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "inst-young-001",
+				Trigger:    "fresh pattern with no application history",
+				Action:     actionText,
+				Domain:     "testing",
+				TrustScore: 0.9,
+				TrustTier:  "trusted",
+				Confidence: 0.9,
+				Archived:   false,
+			},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	runSealCmd(t, s, tmpDir, nil)
+
+	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(queenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, actionText) {
+		t.Fatalf("expected the young instinct (no application history) to still reach QUEEN.md via the subordinate seal-side promotion loop, got:\n%s", text)
+	}
+}
+
+// sealNamedAntLabels are the eight curation ant labels (D-06) that must
+// appear verbatim in seal stdout once Task 3's rendering is wired in.
+var sealNamedAntLabels = []string{"Sentinel", "Nurse", "Critic", "Herald", "Janitor", "Archivist", "Librarian", "Scribe"}
+
+// TestSealRendersEightNamedAnts asserts seal stdout contains all eight
+// distinct curation ant labels and that no line falls back to the generic
+// "🐜 Ant" identity casteLabel/casteEmoji return for an unmapped caste.
+func TestSealRendersEightNamedAnts(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Version: "1", Instincts: []colony.InstinctEntry{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	for _, label := range sealNamedAntLabels {
+		if !strings.Contains(out, label) {
+			t.Errorf("expected seal stdout to contain ant label %q, got:\n%s", label, out)
+		}
+	}
+	if strings.Contains(out, "🐜 Ant") {
+		t.Errorf("seal stdout contains the generic fallback '🐜 Ant' identity; a curation ant caste is unmapped:\n%s", out)
+	}
+}
+
+// TestSealRendersReportPath asserts seal stdout and CROWNED-ANTHILL.md both
+// name CURATION-REPORT.md, and that the file exists at that path after seal.
+func TestSealRendersReportPath(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Version: "1", Instincts: []colony.InstinctEntry{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	if !strings.Contains(out, "CURATION-REPORT.md") {
+		t.Errorf("expected seal stdout to name CURATION-REPORT.md, got:\n%s", out)
+	}
+
+	anthillPath := filepath.Join(tmpDir, ".aether", "CROWNED-ANTHILL.md")
+	data, err := os.ReadFile(anthillPath)
+	if err != nil {
+		t.Fatalf("CROWNED-ANTHILL.md not found: %v", err)
+	}
+	if !strings.Contains(string(data), "CURATION-REPORT.md") {
+		t.Errorf("expected CROWNED-ANTHILL.md to name CURATION-REPORT.md, got:\n%s", string(data))
+	}
+
+	reportPath := filepath.Join(tmpDir, ".aether", "CURATION-REPORT.md")
+	if _, err := os.Stat(reportPath); err != nil {
+		t.Fatalf("CURATION-REPORT.md does not exist at %s: %v", reportPath, err)
+	}
+}
+
+// TestSealRendersLoudFailure asserts that when consolidation fails, stdout
+// contains the D-05 loud warning and the seal still reaches
+// colony.StateCOMPLETED -- a learning failure never blocks a seal.
+func TestSealRendersLoudFailure(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	if err := os.WriteFile(filepath.Join(dataDir, "instincts.json"), []byte("{not valid json"), 0o644); err != nil {
+		t.Fatalf("seed invalid instincts.json: %v", err)
+	}
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	if !strings.Contains(out, "colony sealed WITHOUT consolidation —") {
+		t.Errorf("expected seal stdout to contain the D-05 loud warning, got:\n%s", out)
+	}
+
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.State != colony.StateCOMPLETED {
+		t.Errorf("expected state COMPLETED despite consolidation failure, got: %s", state.State)
+	}
+}

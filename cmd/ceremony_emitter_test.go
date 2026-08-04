@@ -238,15 +238,27 @@ func TestSealEmitsChamberCeremonyEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read event bus: %v", err)
 	}
-	if len(lines) != 1 {
-		t.Fatalf("persisted events = %d, want 1", len(lines))
-	}
+	// Since 162-04 wired runSealConsolidation into completeSealRuntime,
+	// the event bus also carries the (non-ceremony) "consolidation.phase_end"
+	// and "consolidation.seal" events published by pkg/memory's
+	// RunConsolidation and runSealConsolidation itself. This test only
+	// pins the ceremony.chamber.seal event's shape, so find it among the
+	// persisted lines rather than asserting the bus contains exactly one.
 	var persisted events.Event
-	if err := json.Unmarshal(lines[0], &persisted); err != nil {
-		t.Fatalf("unmarshal persisted event: %v", err)
+	found := false
+	for _, line := range lines {
+		var evt events.Event
+		if err := json.Unmarshal(line, &evt); err != nil {
+			t.Fatalf("unmarshal persisted event: %v", err)
+		}
+		if evt.Topic == events.CeremonyTopicChamberSeal {
+			persisted = evt
+			found = true
+			break
+		}
 	}
-	if persisted.Topic != events.CeremonyTopicChamberSeal {
-		t.Fatalf("topic = %q, want %q", persisted.Topic, events.CeremonyTopicChamberSeal)
+	if !found {
+		t.Fatalf("no %q event found among %d persisted events", events.CeremonyTopicChamberSeal, len(lines))
 	}
 	var payload events.CeremonyPayload
 	if err := json.Unmarshal(persisted.Payload, &payload); err != nil {

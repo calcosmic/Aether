@@ -374,3 +374,115 @@ func TestContinueWithoutAdvanceDoesNotConsolidate(t *testing.T) {
 		t.Fatal("a continue that did not advance mutated instincts.json; consolidation must not run without a durable advance")
 	}
 }
+
+// sealCurationAntOrder is the fixed sequential order pkg/agent/curation's
+// Orchestrator runs its eight ants in (pkg/agent/curation/orchestrator.go).
+var sealCurationAntOrder = []string{"sentinel", "nurse", "critic", "herald", "janitor", "archivist", "librarian", "scribe"}
+
+// TestRunSealConsolidationRunsAllEightAnts proves runSealConsolidation calls
+// the curation orchestrator directly and preserves all eight individual
+// StepResults, in orchestrator order, rather than collapsing them into one
+// aggregate string the way consolidationSealCmd's own stepInfo does.
+func TestRunSealConsolidationRunsAllEightAnts(t *testing.T) {
+	saveGlobals(t)
+	seedConsolidationFixture(t)
+
+	summary := runSealConsolidation()
+
+	if !summary.Ran {
+		t.Fatalf("expected Ran == true against a seeded, valid store, got: %+v", summary)
+	}
+	if len(summary.Ants) != 8 {
+		t.Fatalf("expected exactly 8 ant beats, got %d: %+v", len(summary.Ants), summary.Ants)
+	}
+	for i, name := range sealCurationAntOrder {
+		if summary.Ants[i].Name != name {
+			t.Errorf("ant beat %d: got name %q, want %q (beats collapsed or reordered)", i, summary.Ants[i].Name, name)
+		}
+	}
+}
+
+// TestRunSealConsolidationWritesReportArtifact proves the scribe's report
+// string (previously built into Summary["report"] and discarded, since
+// Summary["path"] was hardcoded to "") is now persisted to a real file whose
+// path the summary returns.
+func TestRunSealConsolidationWritesReportArtifact(t *testing.T) {
+	saveGlobals(t)
+	seedConsolidationFixture(t)
+
+	summary := runSealConsolidation()
+
+	if !summary.Ran {
+		t.Fatalf("expected Ran == true, got: %+v", summary)
+	}
+	if summary.ReportPath == "" {
+		t.Fatal("expected a non-empty ReportPath")
+	}
+	expectedPath := filepath.Join(filepath.Dir(store.BasePath()), "CURATION-REPORT.md")
+	if summary.ReportPath != expectedPath {
+		t.Errorf("ReportPath = %q, want %q", summary.ReportPath, expectedPath)
+	}
+	data, err := os.ReadFile(summary.ReportPath)
+	if err != nil {
+		t.Fatalf("CURATION-REPORT.md was not written: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("CURATION-REPORT.md is empty")
+	}
+	if !strings.Contains(string(data), "Curation Report") {
+		t.Errorf("expected report to contain the scribe's 'Curation Report' heading, got: %q", string(data))
+	}
+}
+
+// TestRunSealConsolidationNonBlockingOnFailure asserts D-05 on the seal
+// path: a corrupt instincts.json triggers a sentinel abort inside the
+// curation orchestrator, and runSealConsolidation must report Ran: false
+// with the sentinel abort named in Reason, warn loudly to stderr, and never
+// panic or exit.
+func TestRunSealConsolidationNonBlockingOnFailure(t *testing.T) {
+	saveGlobals(t)
+
+	s, _ := newTestStore(t)
+	store = s
+
+	instinctsPath := filepath.Join(s.BasePath(), "instincts.json")
+	if err := os.WriteFile(instinctsPath, []byte("{not valid json"), 0o644); err != nil {
+		t.Fatalf("seed invalid instincts.json: %v", err)
+	}
+
+	var summary sealConsolidationSummary
+	stderrOut := captureStderrForConsolidationTest(t, func() {
+		summary = runSealConsolidation()
+	})
+
+	if summary.Ran {
+		t.Fatalf("expected Ran == false on a sentinel abort, got summary: %+v", summary)
+	}
+	if !strings.Contains(summary.Reason, "sentinel abort") {
+		t.Errorf("expected Reason to name the sentinel abort, got: %q", summary.Reason)
+	}
+	if !strings.Contains(stderrOut, "colony sealed WITHOUT consolidation —") {
+		t.Fatalf("expected unmissable D-05 stderr warning, got: %q", stderrOut)
+	}
+}
+
+// TestRunSealConsolidationIsNeverDryRun proves runSealConsolidation always
+// takes the real mutating path: it never references
+// learn.NewDryRunConsolidationService, and a real run against a seeded store
+// actually mutates instincts.json.
+func TestRunSealConsolidationIsNeverDryRun(t *testing.T) {
+	saveGlobals(t)
+
+	dataDir := seedConsolidationFixture(t)
+	instinctsPath := filepath.Join(dataDir, "instincts.json")
+	before := hashFileForTest(t, instinctsPath)
+
+	summary := runSealConsolidation()
+
+	if !summary.Ran {
+		t.Fatalf("expected Ran == true on the real path, got summary: %+v", summary)
+	}
+	if after := hashFileForTest(t, instinctsPath); after == before {
+		t.Fatal("runSealConsolidation left instincts.json untouched; real path did not mutate")
+	}
+}
