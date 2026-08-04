@@ -609,7 +609,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 159. End-to-End Acceptance | v1.24 | 3/3 | Complete | 2026-05-24 |
 | 160. Fail Loudly | v1.25 | 8/8 | Complete   | 2026-07-27 |
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
-| 162. Switch On Learning | v1.25 | 6/6 | Complete   | 2026-08-04 |
+| 162. Switch On Learning | v1.25 | 6/6 | Complete    | 2026-08-04 |
 | 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
 | 164. Research Feeds Planning | v1.25 | 11/11 | Complete    | 2026-08-02 |
 | 165. Core Lifecycle Commands | v1.25 | 10/10 | Complete    | 2026-08-03 |
