@@ -466,6 +466,48 @@ func TestRunSealConsolidationNonBlockingOnFailure(t *testing.T) {
 	}
 }
 
+// TestRunSealConsolidationSentinelAbortShortCircuitsPipeline pins CR-01: when
+// the curation sentinel aborts (a corrupt store OTHER than instincts.json, so
+// the consolidation pipeline itself would run cleanly), runSealConsolidation
+// must NOT run the mutating pipeline at all. Before the short-circuit, this
+// asymmetric path decayed/archived instincts and promoted into QUEEN.md, then
+// returned Ran:false with an empty QueenPromotedIDs -- a false "WITHOUT
+// consolidation" report plus an empty D-09 skip-set.
+func TestRunSealConsolidationSentinelAbortShortCircuitsPipeline(t *testing.T) {
+	saveGlobals(t)
+
+	dataDir := seedConsolidationFixture(t)
+	// Corrupt a sentinel-checked store that the pipeline does NOT read, so
+	// curation fails while consolidation would succeed.
+	if err := os.WriteFile(filepath.Join(dataDir, "pheromones.json"), []byte("{not valid json"), 0o644); err != nil {
+		t.Fatalf("seed invalid pheromones.json: %v", err)
+	}
+
+	instinctsPath := filepath.Join(dataDir, "instincts.json")
+	before := hashFileForTest(t, instinctsPath)
+
+	var summary sealConsolidationSummary
+	stderrOut := captureStderrForConsolidationTest(t, func() {
+		summary = runSealConsolidation()
+	})
+
+	if summary.Ran {
+		t.Fatalf("expected Ran == false on a sentinel abort, got summary: %+v", summary)
+	}
+	if !strings.Contains(summary.Reason, "sentinel abort") {
+		t.Errorf("expected Reason to name the sentinel abort, got: %q", summary.Reason)
+	}
+	if !strings.Contains(stderrOut, "colony sealed WITHOUT consolidation —") {
+		t.Fatalf("expected unmissable D-05 stderr warning, got: %q", stderrOut)
+	}
+	if len(summary.QueenPromotedIDs) != 0 {
+		t.Errorf("expected empty QueenPromotedIDs when the pipeline was short-circuited, got: %v", summary.QueenPromotedIDs)
+	}
+	if after := hashFileForTest(t, instinctsPath); after != before {
+		t.Fatal("sentinel abort must short-circuit the mutating pipeline (CR-01); instincts.json was mutated after corruption was detected")
+	}
+}
+
 // TestRunSealConsolidationIsNeverDryRun proves runSealConsolidation always
 // takes the real mutating path: it never references
 // learn.NewDryRunConsolidationService, and a real run against a seeded store

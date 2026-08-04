@@ -290,6 +290,30 @@ func runSealConsolidation() sealConsolidationSummary {
 		}
 	}
 
+	summary := sealConsolidationSummary{Ants: ants, ReportPath: reportPath}
+
+	// CR-01: a curation failure must short-circuit BEFORE the mutating
+	// pipeline runs. The sentinel exists to guard the stores before anything
+	// acts on them -- running decay/archive/promotion against a colony the
+	// sentinel just flagged corrupt would defeat that guard. And if the
+	// pipeline had run anyway, returning Ran:false with an empty
+	// QueenPromotedIDs would hand completeSealRuntime an empty skip-set
+	// after QUEEN.md was already written, reintroducing the D-09
+	// double-write on the failure path.
+	if curErr != nil {
+		reason := curErr.Error()
+		// T-162-11: a curation sentinel abort (corrupt stores detected) must
+		// be distinguishable from a transient failure in the one line the
+		// operator sees.
+		if strings.Contains(reason, "sentinel abort") {
+			reason = "curation sentinel detected corrupt stores: " + reason
+		}
+		fmt.Fprintf(os.Stderr, "colony sealed WITHOUT consolidation — %v\n", reason)
+		summary.Ran = false
+		summary.Reason = reason
+		return summary
+	}
+
 	pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
 	consResult, consErr := pipeline.RunConsolidation(ctx)
 	if consErr == nil && consResult != nil && len(consResult.Errors) > 0 {
@@ -305,28 +329,18 @@ func runSealConsolidation() sealConsolidationSummary {
 		_, _ = bus.Publish(ctx, "consolidation.seal", payload, "seal")
 	}
 
-	summary := sealConsolidationSummary{Ants: ants, ReportPath: reportPath}
-
-	var reasons []string
-	if curErr != nil {
-		reason := curErr.Error()
-		// T-162-11: a curation sentinel abort (corrupt stores detected) must
-		// be distinguishable from a transient failure in the one line the
-		// operator sees.
-		if strings.Contains(reason, "sentinel abort") {
-			reason = "curation sentinel detected corrupt stores: " + reason
-		}
-		reasons = append(reasons, reason)
-	}
 	if consErr != nil {
-		reasons = append(reasons, consErr.Error())
-	}
-
-	if len(reasons) > 0 {
-		reason := strings.Join(reasons, "; ")
+		reason := consErr.Error()
 		fmt.Fprintf(os.Stderr, "colony sealed WITHOUT consolidation — %v\n", reason)
 		summary.Ran = false
 		summary.Reason = reason
+		// The pipeline's steps are individually non-blocking, so a failed run
+		// may still have written QUEEN.md promotions before the failing step.
+		// The D-09 skip-set must reflect what was actually written even when
+		// Ran is false, or completeSealRuntime double-writes on this path.
+		if consResult != nil {
+			summary.QueenPromotedIDs = append([]string{}, consResult.QueenEligible...)
+		}
 		return summary
 	}
 

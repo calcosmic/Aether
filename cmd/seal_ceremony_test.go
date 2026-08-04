@@ -913,6 +913,75 @@ func TestSealDoesNotDoublePromoteInstincts(t *testing.T) {
 	}
 }
 
+// TestSealDoesNotDoublePromoteOnCurationFailure pins CR-01's D-09 half on
+// the FAILURE path: a corrupt pheromones.json triggers a curation sentinel
+// abort while instincts.json is valid -- the asymmetric case where, before
+// the short-circuit fix, the mutating pipeline still ran, promoted the
+// dual-eligible instinct into "## Instincts", and then the seal's subordinate
+// loop (handed an empty skip-set from the Ran:false summary) wrote the SAME
+// instinct into "## Wisdom". The action text must appear exactly once in
+// QUEEN.md, and the seal must still complete (learning is never a gate).
+func TestSealDoesNotDoublePromoteOnCurationFailure(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// Valid observations so the consolidation pipeline itself would run
+	// cleanly if (wrongly) invoked despite the sentinel abort.
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	const actionText = "Run the race detector before sealing colonies with concurrent workers"
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "inst-curfail-001",
+				Trigger:    "dual eligibility pattern behind a curation failure",
+				Action:     actionText,
+				Domain:     "testing",
+				TrustScore: 0.9,
+				TrustTier:  "trusted",
+				Confidence: 0.9,
+				Provenance: colony.InstinctProvenance{ApplicationCount: 3},
+				Archived:   false,
+			},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	// Corrupt a sentinel-checked store the pipeline does not read.
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	if err := os.WriteFile(filepath.Join(dataDir, "pheromones.json"), []byte("{not valid json"), 0o644); err != nil {
+		t.Fatalf("seed invalid pheromones.json: %v", err)
+	}
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	if !strings.Contains(out, "colony sealed WITHOUT consolidation —") {
+		t.Errorf("expected the D-05 loud warning on the curation failure path, got:\n%s", out)
+	}
+
+	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(queenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if count := strings.Count(text, actionText); count != 1 {
+		t.Fatalf("expected the instinct's action text to appear exactly once in QUEEN.md on the curation-failure path (CR-01/D-09), got %d occurrences:\n%s", count, text)
+	}
+
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.State != colony.StateCOMPLETED {
+		t.Errorf("expected state COMPLETED despite the curation failure, got: %s", state.State)
+	}
+}
+
 // TestSealStillPromotesInstinctsWithoutApplicationHistory pins D-09's other
 // half: an instinct with confidence >= 0.8 but zero recorded applications is
 // NOT pkg/memory-QueenEligible (which requires >= 3 applications), so it
