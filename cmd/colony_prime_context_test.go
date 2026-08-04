@@ -167,9 +167,7 @@ section_templates:
 	}
 	store = s
 
-	// This test asserts on the custom hive_wisdom header template, so it must
-	// opt into hive retrieval explicitly — it is off by default.
-	enableHiveForTest(t)
+	// Hive retrieval is on by default (D-01/D-02); no opt-in needed.
 
 	stdout = &bytes.Buffer{}
 	stderr = &bytes.Buffer{}

@@ -21,10 +21,14 @@ func resetHivePolicyWarnOnceForTest() {
 	hivePolicyWarnOnce = sync.Once{}
 }
 
-func TestHiveWorkerReadIsOffByDefaultButManualReadRemainsAvailable(t *testing.T) {
+// TestHiveWorkerReadIsOnByDefaultAndOffSwitchDisablesIt supersedes the
+// pre-D-02 "off by default, twice-gated" test. D-02 retired the per-colony
+// consent file: AETHER_HIVE_POLICY is now the only control surface, unset
+// means promote (worker reads succeed), and explicit "off" is the sole
+// compensating control (T-162-03).
+func TestHiveWorkerReadIsOnByDefaultAndOffSwitchDisablesIt(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
-	t.Setenv(hivePolicyEnv, "")
 	hub := t.TempDir()
 	t.Setenv("AETHER_HUB_DIR", hub)
 	if err := os.MkdirAll(filepath.Join(hub, "hive"), 0o755); err != nil {
@@ -35,6 +39,7 @@ func TestHiveWorkerReadIsOffByDefaultButManualReadRemainsAvailable(t *testing.T)
 		t.Fatalf("write wisdom: %v", err)
 	}
 
+	t.Setenv(hivePolicyEnv, "")
 	resetFlags(rootCmd)
 	stdout = &bytes.Buffer{}
 	rootCmd.SetArgs([]string{"hive-read", "--for-worker"})
@@ -43,8 +48,8 @@ func TestHiveWorkerReadIsOffByDefaultButManualReadRemainsAvailable(t *testing.T)
 	}
 	workerEnvelope := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	workerResult := workerEnvelope["result"].(map[string]interface{})
-	if workerResult["enabled"] != false || int(workerResult["total"].(float64)) != 0 {
-		t.Fatalf("default worker read leaked hive wisdom: %+v", workerResult)
+	if workerResult["enabled"] != true || int(workerResult["total"].(float64)) != 1 {
+		t.Fatalf("default (unset) worker read should return hive wisdom: %+v", workerResult)
 	}
 
 	resetFlags(rootCmd)
@@ -57,6 +62,19 @@ func TestHiveWorkerReadIsOffByDefaultButManualReadRemainsAvailable(t *testing.T)
 	manualResult := manualEnvelope["result"].(map[string]interface{})
 	if int(manualResult["total"].(float64)) != 1 {
 		t.Fatalf("manual hive-read should remain inspectable: %+v", manualResult)
+	}
+
+	t.Setenv(hivePolicyEnv, "off")
+	resetFlags(rootCmd)
+	stdout = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"hive-read", "--for-worker"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("worker hive-read with policy off: %v", err)
+	}
+	offEnvelope := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	offResult := offEnvelope["result"].(map[string]interface{})
+	if offResult["enabled"] != false || int(offResult["total"].(float64)) != 0 {
+		t.Fatalf("AETHER_HIVE_POLICY=off should disable worker read: %+v", offResult)
 	}
 }
 

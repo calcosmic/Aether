@@ -639,19 +639,13 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	}
 	hiveEntries := readHiveWisdomEntriesForDomains(hubDir, 5, readRegistryDomainsForRepo(hubDir, repoRoot), &fallbacks)
 
-	// Surface why hive wisdom was withheld — but only once the colony has
-	// actually opted in. These reasons were previously collected and dropped on
-	// the floor, so the section vanished with no explanation, which contradicts
-	// the design rule that cross-project wisdom adoption is never silent.
-	//
-	// Not-opted-in is deliberately excluded: it is the default state of every
-	// colony, and warning about it on every single colony-prime call would train
-	// users to ignore warnings. The case worth reporting is the confusing one —
-	// a user who DID opt in, sees no wisdom, and needs to know whether the hub is
-	// empty, the domain did not match, or everything has decayed to dormant.
-	if hiveRetrievalOptedIn() {
-		result.Warnings = append(result.Warnings, fallbacks...)
-	}
+	// Surface why hive wisdom was withheld. Retrieval is default-on per D-02 —
+	// there is no per-colony opt-in state to distinguish anymore, so these
+	// reasons always surface unconditionally rather than being silently
+	// dropped. A colony that expects wisdom and sees none needs to know
+	// whether the hub is empty, the domain didn't match, everything decayed
+	// to dormant, or AETHER_HIVE_POLICY=off disabled retrieval entirely.
+	result.Warnings = append(result.Warnings, fallbacks...)
 
 	hiveLines := buildHiveWisdomLines(hiveEntries)
 	if len(hiveLines) > 0 {

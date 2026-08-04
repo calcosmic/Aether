@@ -19,12 +19,6 @@ func readHiveWisdomEntriesForDomains(hubDir string, limit int, domains []string,
 	if !automaticHiveReadEnabled() {
 		return nil
 	}
-	if !hiveRetrievalOptedIn() {
-		if fallbacks != nil {
-			*fallbacks = append(*fallbacks, "hive_wisdom: colony has not opted in to cross-project wisdom")
-		}
-		return nil
-	}
 	wisdomPath := filepath.Join(hubDir, "hive", "wisdom.json")
 	data, err := os.ReadFile(wisdomPath)
 	if err == nil {

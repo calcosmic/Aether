@@ -259,9 +259,7 @@ func TestColonyPrimeSectionsPresent(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	store = s
 
-	// Hive retrieval is off by default; this test asserts on hive content,
-	// so it opts in explicitly rather than relying on an implicit default.
-	enableHiveForTest(t)
+	// Hive retrieval is on by default (D-01/D-02); no opt-in needed.
 
 	// Set up hub directory
 	hubDir := filepath.Join(tmpDir, "hub")
@@ -538,8 +536,12 @@ func TestColonyPrimeGracefulWithMissingData(t *testing.T) {
 		t.Error("buildColonyPrimeOutput.Used should be > 0")
 	}
 
-	// No warnings expected
-	if len(output.Warnings) > 0 {
-		t.Errorf("buildColonyPrimeOutput.Warnings = %v, want empty for clean data", output.Warnings)
+	// Hive retrieval is on by default (D-01/D-02) and withheld-wisdom reasons
+	// surface unconditionally, so an empty hub now produces exactly one
+	// "no hive or eternal data" warning rather than none. This is the
+	// deliberate Site 3 meaning change: colony-prime is never silent about
+	// why wisdom was withheld.
+	if len(output.Warnings) != 1 || !strings.Contains(output.Warnings[0], "hive_wisdom") {
+		t.Errorf("buildColonyPrimeOutput.Warnings = %v, want exactly one hive_wisdom fallback warning for an empty hub", output.Warnings)
 	}
 }

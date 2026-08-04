@@ -376,8 +376,6 @@
     "history",
     "hive-abstract",
     "hive-init",
-    "hive-opt-in",
-    "hive-opt-out",
     "hive-promote",
     "hive-read",
     "hive-revoke",

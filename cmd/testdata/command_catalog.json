@@ -3198,56 +3198,6 @@
     "stability_score": 91
   },
   {
-    "name": "hive-opt-in",
-    "short_description": "Consent this colony to receiving cross-project wisdom in worker context",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.25",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": false,
-      "v1.17": false,
-      "v1.18": false,
-      "v1.19": false,
-      "v1.20": false,
-      "v1.21": false,
-      "v1.25": true,
-      "v5.4.0": false
-    },
-    "stability_score": 10
-  },
-  {
-    "name": "hive-opt-out",
-    "short_description": "Withdraw this colony's consent to receiving cross-project wisdom",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.25",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": false,
-      "v1.17": false,
-      "v1.18": false,
-      "v1.19": false,
-      "v1.20": false,
-      "v1.21": false,
-      "v1.25": true,
-      "v5.4.0": false
-    },
-    "stability_score": 10
-  },
-  {
     "name": "hive-promote",
     "short_description": "End-to-end abstract + store pipeline for wisdom promotion",
     "flags": [
