@@ -133,7 +133,7 @@ type codexVerificationCommands struct {
 }
 
 type codexContinueOptions struct {
-	ReconcileTaskIDs    []string
+	ReconcileTaskIDs []string
 	// ReadOnlyArtifacts is an escape hatch for a task named in
 	// ReconcileTaskIDs: each entry is a "<task-id>:<path>" spec recording
 	// hash-verified read-only evidence for an artifact that task legitimately
@@ -971,6 +971,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// in normal daily use. Gates have passed by this point; state is committed;
 	// learning failure is non-blocking inside the function.
 	captureContinueLearning(phase, workerFlow, gates, "", false, now)
+	// D-04: phase-end consolidation fires only now, beside the learning
+	// capture above, because this point is reached only after the atomic
+	// COLONY_STATE.json write (above) committed PhaseCompleted -- the phase
+	// has durably advanced. Never on a mid-phase continue. Non-blocking: a
+	// consolidation failure is reported via the summary, never propagated
+	// as an error (D-05).
+	consolidationSummary := runPhaseEndConsolidation(phase.ID)
 	emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 	flowEvents := continueWorkerFlowEvents(now, workerFlow)
 	updated.Events = append(updated.Events, flowEvents...)
@@ -1040,6 +1047,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		result["next_phase"] = nextPhase.ID
 		result["next_phase_name"] = nextPhase.Name
 	}
+	attachConsolidationSummary(result, consolidationSummary)
 	runStatus = "completed"
 	return result, updated, updated.Plan.Phases[currentIdx], nextPhase, &housekeeping, final, nil
 }

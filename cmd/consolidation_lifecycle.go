@@ -133,14 +133,14 @@ func attachConsolidationSummary(result map[string]interface{}, s phaseEndConsoli
 		return
 	}
 	result["consolidation"] = map[string]interface{}{
-		"ran":                   s.Ran,
-		"reason":                s.Reason,
-		"instincts_decayed":     s.InstinctsDecayed,
-		"instincts_archived":    s.InstinctsArchived,
-		"observations_decayed":  s.ObservationsDecayed,
-		"promotion_candidates":  s.PromotionCandidates,
-		"queen_eligible":        s.QueenEligible,
-		"review_candidates":     s.ReviewCandidates,
-		"reread_candidates":     s.RereadCandidates,
+		"ran":                  s.Ran,
+		"reason":               s.Reason,
+		"instincts_decayed":    s.InstinctsDecayed,
+		"instincts_archived":   s.InstinctsArchived,
+		"observations_decayed": s.ObservationsDecayed,
+		"promotion_candidates": s.PromotionCandidates,
+		"queen_eligible":       s.QueenEligible,
+		"review_candidates":    s.ReviewCandidates,
+		"reread_candidates":    s.RereadCandidates,
 	}
 }

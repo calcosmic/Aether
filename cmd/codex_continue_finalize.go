@@ -492,6 +492,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err != nil {
 		return nil, state, phase, nil, housekeeping, final, err
 	}
+	// D-04: phase-end consolidation fires only after advanceExternalContinue
+	// returns with err == nil, NOT colocated with captureContinueLearning
+	// above. PhaseCompleted is written INSIDE advanceExternalContinue, so
+	// only this post-return point guarantees the phase truly advanced --
+	// the stricter-correct placement (RESEARCH.md assumption A1). Do not
+	// "fix" this back to symmetry with the default continue path.
+	consolidationSummary := runPhaseEndConsolidation(phase.ID)
+	attachConsolidationSummary(result, consolidationSummary)
 	runStatus = "completed"
 	return result, updated, phase, nextPhase, housekeeping, final, nil
 }
