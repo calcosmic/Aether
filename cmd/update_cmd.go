@@ -347,6 +347,7 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 			include:              pair.include,
 			mapRelPath:           pair.mapRelPath,
 			cleanupInclude:       pair.cleanupInclude,
+			merge:                pair.merge,
 		})
 		if pair.cleanupLegacyClaude && force {
 			removed, errors := removeLegacyClaudeCommandNamespace(destDir)

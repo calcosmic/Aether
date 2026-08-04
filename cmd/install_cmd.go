@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -270,6 +271,7 @@ type syncOptions struct {
 	include              syncFilter
 	mapRelPath           syncRelPathMapper
 	cleanupInclude       syncFilter
+	merge                syncMerger
 }
 
 // syncDir copies files from src to dest, optionally preserving changed local
@@ -340,6 +342,28 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 
 		// Check if file is unchanged or locally modified
 		if _, err := os.Stat(destPath); err == nil {
+			if opts.merge != nil {
+				destData, readErr := os.ReadFile(destPath)
+				if readErr != nil {
+					result.errors = append(result.errors, fmt.Sprintf("read %s: %v", destPath, readErr))
+					continue
+				}
+				mergedData, mergeErr := opts.merge(srcData, destData)
+				if mergeErr != nil {
+					result.errors = append(result.errors, fmt.Sprintf("merge %s: %v", destPath, mergeErr))
+					continue
+				}
+				if bytes.Equal(mergedData, destData) {
+					result.skipped++
+					continue
+				}
+				if writeErr := os.WriteFile(destPath, mergedData, 0644); writeErr != nil {
+					result.errors = append(result.errors, fmt.Sprintf("write %s: %v", destPath, writeErr))
+					continue
+				}
+				result.copied++
+				continue
+			}
 			srcHash, srcErr := fileSHA256(srcPath)
 			destHash, destErr := fileSHA256(destPath)
 			if srcErr == nil && destErr == nil && srcHash == destHash {

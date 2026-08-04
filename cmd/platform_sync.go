@@ -37,11 +37,16 @@ type repoSyncPair struct {
 	cleanupInclude       syncFilter
 	cleanupLegacyClaude  bool
 	consumerOnly         bool
+	merge                syncMerger
 }
 
 type syncValidator func(srcPath, relPath string, data []byte) error
 type syncFilter func(relPath string) bool
 type syncRelPathMapper func(relPath string) string
+
+// syncMerger combines shipped template bytes with existing destination bytes.
+// Returning the destination bytes unchanged marks the file as up to date.
+type syncMerger func(templateData, existingData []byte) ([]byte, error)
 
 type codexAgentDefinition struct {
 	Name                  string   `toml:"name"`
@@ -85,7 +90,7 @@ func repoSyncPairs() []repoSyncPair {
 			cleanupInclude: isManagedAetherSystemPath,
 			consumerOnly:   true,
 		},
-		{hubRel: "settings/claude", destRel: "../.claude", label: "Settings (claude)", preserveLocalChanges: true, include: isClaudeSettingsFile},
+		{hubRel: "settings/claude", destRel: "../.claude", label: "Settings (claude)", preserveLocalChanges: true, include: isClaudeSettingsFile, merge: mergeClaudeSettings},
 		{hubRel: "rules", destRel: "../.claude/rules", label: "Rules (claude)"},
 	}
 }
