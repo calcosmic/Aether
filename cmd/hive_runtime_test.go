@@ -116,9 +116,7 @@ func TestColonyPrimeHiveWisdomFiltersByRegistryDomain(t *testing.T) {
 	}
 	store = s
 
-	// Hive retrieval is off by default; this test asserts on hive content,
-	// so it opts in explicitly rather than relying on an implicit default.
-	enableHiveForTest(t)
+	// Hive retrieval is on by default (D-01/D-02); no opt-in needed.
 
 	hubDir := t.TempDir()
 	t.Setenv("AETHER_HUB_DIR", hubDir)

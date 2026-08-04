@@ -661,15 +661,15 @@ domain, and shared across all colonies on the same machine.
 | `hive-read` | Read wisdom with domain filtering and confidence threshold |
 | `hive-abstract` | Generalize repo-specific instinct into cross-colony wisdom |
 | `hive-promote` | Orchestrate abstract + store pipeline |
-| `hive-opt-in` | Consent this colony to receiving cross-project wisdom |
-| `hive-opt-out` | Withdraw this colony's consent |
 | `hive-revoke` | Revoke a wisdom entry by id (`--unrevoke` restores it) |
 
-Automatic Hive influence is quarantined by default:
+Automatic Hive influence is on by default (D-01/D-02):
 
-- `AETHER_HIVE_POLICY=off` (default): worker retrieval and automatic promotion are disabled; manual inspection and explicitly invoked promotion remain available.
+- `AETHER_HIVE_POLICY` unset (or explicitly empty): resolves to `promote` — worker retrieval and automatic seal-time promotion are both enabled.
 - `AETHER_HIVE_POLICY=read`: workers may retrieve Hive entries, but lifecycle commands do not promote project instincts globally.
-- `AETHER_HIVE_POLICY=promote`: worker retrieval and automatic promotion are enabled explicitly.
+- `AETHER_HIVE_POLICY=promote`: worker retrieval and automatic promotion are enabled explicitly (same effective behavior as unset).
+- `AETHER_HIVE_POLICY=off`: worker retrieval and automatic promotion are both disabled; manual inspection and explicitly invoked promotion remain available.
+- An unrecognized value (a typo) is treated as `off` and emits a one-line warning to stderr naming the offending value, rather than silently promoting.
 - Automated wrapper/playbook promotion must pass `hive-promote --automatic`; the runtime then enforces this policy instead of trusting prompt instructions.
 
 ### Multi-Repo Confidence Boosting
@@ -691,19 +691,24 @@ with a 180-day half-life measured from `last_confirmed_at`. Entries whose
 effective confidence falls below 0.3 are treated as dormant and are not injected.
 The stored value is never rewritten by a read, so history stays auditable.
 
-### Retrieval is opt-in, twice over
+### Retrieval is on by default, through one switch
 
-Cross-project wisdom reaches worker context only when **both** gates are open:
+`AETHER_HIVE_POLICY` is the only control — there is no per-colony consent
+mechanism and no opt-in command. The previous double gate (machine policy AND
+a separate per-colony consent record) was retired in v1.25 Phase 162 per
+decision D-02: it silently vetoed a policy the operator had explicitly
+enabled, which is a worse security property than one honest switch.
 
-1. **Machine policy** — `AETHER_HIVE_POLICY` must be `read` or `promote`. It
-   defaults to `off`.
-2. **Colony consent** — the repository must have run `aether hive-opt-in`, which
-   writes `hive_retrieval.json` into its colony data directory.
+- Unset means `promote`: cross-colony wisdom reaches worker context and
+  high-confidence instincts promote to the Hive at seal, automatically.
+- `AETHER_HIVE_POLICY=read` enables retrieval without seal-time promotion.
+- `AETHER_HIVE_POLICY=off` disables both.
+- An unrecognized value is treated as `off` and warns on stderr naming the
+  value, so a typo cannot silently widen cross-repo data flow.
 
-The policy decides whether the feature exists; consent decides whether *this*
-repository receives other repositories' wisdom. When wisdom is withheld, the
-reason is surfaced in colony-prime's `warnings` rather than the section silently
-vanishing.
+When wisdom is withheld, the reason surfaces unconditionally in colony-prime's
+`warnings` — never silently, and no longer contingent on a consent state that
+doesn't exist anymore.
 
 ### Contradiction and revocation
 
