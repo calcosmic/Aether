@@ -901,7 +901,7 @@ Key additions:
 - JSONL event bus with pub/sub and TTL cleanup
 - Standalone instinct storage with full provenance
 - 8 curation ants with orchestrated execution
-- Lifecycle integration: `consolidation-phase-end` and `consolidation-seal` are available as `aether` subcommands; `aether continue` and `aether seal` do not invoke either one yet (Phase 162 wires this)
+- Lifecycle integration: `consolidation-phase-end` and `consolidation-seal` are available as `aether` subcommands, and both now have runtime callers — `aether continue` invokes phase-end consolidation on durable phase advance, `aether seal` invokes the full eight-ant seal pass, and both remain directly invocable as the manual inspection path. See `.aether/docs/learning-system-authority.md` for the authority decision and the named tests enforcing this
 
 ### Curation Ants
 

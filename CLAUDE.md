@@ -555,6 +555,13 @@ The Hive Brain is the intelligent layer for cross-colony knowledge sharing. It s
 generalized wisdom derived from colony instincts, scoped by domain, and shared across
 all colonies on the same machine.
 
+Cross-colony flow is controlled by a single switch, `AETHER_HIVE_POLICY`: unset or
+empty resolves to `promote` (worker retrieval AND automatic seal-time promotion
+both on by default), `read` enables retrieval only, `off` disables both, and any
+unrecognized value fails safe to `off` with a stderr warning naming it. There is no
+separate per-colony consent gate. See `.aether/docs/learning-system-authority.md`
+for the full decision record and its reasoning.
+
 ### Storage
 
 ```
@@ -835,7 +842,7 @@ Key additions:
 - Standalone instinct storage with full provenance
 - jq-based graph layer for instinct relationships
 - 8 curation ants with orchestrated execution
-- Lifecycle integration: `consolidation-phase-end` and `consolidation-seal` exist as working CLI subcommands; no lifecycle command invokes either one yet (Phase 162 wires this)
+- Lifecycle integration: both `consolidation-phase-end` and `consolidation-seal` have runtime callers — phase-end consolidation runs automatically on durable phase advance during `/ant-continue`, and the full eight-ant seal pass runs automatically during `/ant-seal`. Both remain directly invocable as the manual inspection path, and both are non-blocking. See `.aether/docs/learning-system-authority.md` for the authority decision and the named tests enforcing this
 
 ### Curation Ants
 

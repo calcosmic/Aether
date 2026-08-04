@@ -59,8 +59,8 @@ These were asserted in the first draft and are now **verified false**. No work i
 
 - [x] **LEARN-01**: `consolidation-phase-end` runs at the end of every phase, so observations become learnings and learnings become instincts
 - [x] **LEARN-02**: `consolidation-seal` runs at seal — the full eight-ant pass, `instinct-decay-all`, archivist archive, scribe report. This appeared in no requirement of the first draft
-- [ ] **LEARN-03**: The two competing learning systems are reconciled. `pkg/learn` runs live on every continue (`cmd/codex_continue_finalize.go:482-555`); `pkg/memory` is the one the documentation describes and the one that is dormant. One is authoritative and the other is retired or explicitly subordinate
-- [ ] **LEARN-04**: The Hive Brain default is decided deliberately. `cmd/hive_policy.go:18` returns `hivePolicyOff` unless an environment variable is set, and `hiveRetrievalOptedIn()` (`cmd/hive.go:303`) needs a consent file that defaults to false. Either the default changes, or the documentation and any requirement depending on hive retrieval is corrected
+- [x] **LEARN-03**: The two competing learning systems are reconciled. `pkg/learn` runs live on every continue (`cmd/codex_continue_finalize.go:482-555`); `pkg/memory` is the one the documentation describes and the one that is dormant. One is authoritative and the other is retired or explicitly subordinate
+- [x] **LEARN-04**: The Hive Brain default is decided deliberately. `cmd/hive_policy.go:18` returns `hivePolicyOff` unless an environment variable is set, and `hiveRetrievalOptedIn()` (`cmd/hive.go:303`) needs a consent file that defaults to false. Either the default changes, or the documentation and any requirement depending on hive retrieval is corrected
 - [x] **LEARN-05**: A worker's output demonstrably differs when colony memory is populated versus wiped — the learning loop is measured, not assumed
 
 ## Context Reaches Workers (CONTEXT)
@@ -235,8 +235,8 @@ Carried from v1.23, still open, not addressed here: `CATALOG-01/02`, `TEST-01/02
 | MODEL-06 | Phase 161 | Pending |
 | LEARN-01 | Phase 162 | Complete |
 | LEARN-02 | Phase 162 | Complete |
-| LEARN-03 | Phase 162 | Pending |
-| LEARN-04 | Phase 162 | Pending |
+| LEARN-03 | Phase 162 | Complete |
+| LEARN-04 | Phase 162 | Complete |
 | LEARN-05 | Phase 162 | Complete |
 | CONTEXT-01 | Phase 163 | Pending |
 | CONTEXT-02 | Phase 163 | Pending |
