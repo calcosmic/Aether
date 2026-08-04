@@ -11,6 +11,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // hasConsolidationPhaseEndEvent reports whether the real (non-dry-run)
@@ -152,6 +153,105 @@ func TestRunPhaseEndConsolidationZeroState(t *testing.T) {
 	}
 	if !summary.ZeroState() {
 		t.Fatal("expected ZeroState() == true for an empty-but-valid store")
+	}
+}
+
+// holdStaleInstinctsLock simulates a crashed process that died holding the
+// instincts.json lock: it acquires an exclusive flock through a SEPARATE
+// FileLocker on the store's locks directory and deliberately never releases
+// it. flock blocks a second acquirer even within one process when taken
+// through a separate descriptor, so any store operation touching
+// instincts.json parks indefinitely -- exactly the in-step block a context
+// deadline alone cannot cancel (WR-02). The lock is intentionally leaked for
+// the remaining life of the test binary: releasing it in cleanup would let
+// the abandoned consolidation goroutine wake up and mutate a torn-down
+// temp dir.
+func holdStaleInstinctsLock(t *testing.T, dataDir string) {
+	t.Helper()
+	locker, err := storage.NewFileLocker(filepath.Join(filepath.Dir(dataDir), "locks"))
+	if err != nil {
+		t.Fatalf("create locker: %v", err)
+	}
+	if err := locker.Lock("instincts.json"); err != nil {
+		t.Fatalf("acquire stale lock: %v", err)
+	}
+	// Pin the locker (and its open lock fd) until the test ends: os.File
+	// carries a finalizer that closes the descriptor when the locker becomes
+	// garbage, and closing the fd RELEASES the flock -- letting the "stale"
+	// lock silently evaporate mid-test whenever GC runs.
+	t.Cleanup(func() { _ = locker })
+}
+
+// TestRunPhaseEndConsolidationTimesOutOnStaleLock gives T-162-12's "can
+// never hang a phase advance" claim teeth (WR-02): with a stale exclusive
+// lock on instincts.json, runPhaseEndConsolidation must return within its
+// timeout with Ran:false and the D-05 stderr warning -- not block forever
+// inside storage.FileLocker's deadline-less flock.
+func TestRunPhaseEndConsolidationTimesOutOnStaleLock(t *testing.T) {
+	saveGlobals(t)
+	dataDir := seedConsolidationFixture(t)
+
+	origTimeout := consolidationLifecycleTimeout
+	consolidationLifecycleTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { consolidationLifecycleTimeout = origTimeout })
+
+	holdStaleInstinctsLock(t, dataDir)
+
+	var summary phaseEndConsolidationSummary
+	stderrOut := captureStderrForConsolidationTest(t, func() {
+		done := make(chan phaseEndConsolidationSummary, 1)
+		go func() { done <- runPhaseEndConsolidation(1) }()
+		select {
+		case summary = <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("runPhaseEndConsolidation hung on a stale file lock; the consolidation timeout is decorative (WR-02)")
+		}
+	})
+
+	if summary.Ran {
+		t.Fatalf("expected Ran == false on timeout, got: %+v", summary)
+	}
+	if !strings.Contains(summary.Reason, "timed out") {
+		t.Errorf("expected Reason to name the timeout, got: %q", summary.Reason)
+	}
+	if !strings.Contains(stderrOut, "phase advanced WITHOUT consolidation —") {
+		t.Fatalf("expected unmissable D-05 stderr warning, got: %q", stderrOut)
+	}
+}
+
+// TestRunSealConsolidationTimesOutOnStaleLock is WR-02's seal-path twin: the
+// curation orchestrator only polls ctx BETWEEN ant steps, so an in-step
+// block (the sentinel's read of a lock-held instincts.json) must be bounded
+// by the goroutine+select wrapper, never by cooperative cancellation.
+func TestRunSealConsolidationTimesOutOnStaleLock(t *testing.T) {
+	saveGlobals(t)
+	dataDir := seedConsolidationFixture(t)
+
+	origTimeout := consolidationLifecycleTimeout
+	consolidationLifecycleTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { consolidationLifecycleTimeout = origTimeout })
+
+	holdStaleInstinctsLock(t, dataDir)
+
+	var summary sealConsolidationSummary
+	stderrOut := captureStderrForConsolidationTest(t, func() {
+		done := make(chan sealConsolidationSummary, 1)
+		go func() { done <- runSealConsolidation() }()
+		select {
+		case summary = <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("runSealConsolidation hung on a stale file lock; the consolidation timeout is decorative (WR-02)")
+		}
+	})
+
+	if summary.Ran {
+		t.Fatalf("expected Ran == false on timeout, got: %+v", summary)
+	}
+	if !strings.Contains(summary.Reason, "timed out") {
+		t.Errorf("expected Reason to name the timeout, got: %q", summary.Reason)
+	}
+	if !strings.Contains(stderrOut, "colony sealed WITHOUT consolidation —") {
+		t.Fatalf("expected unmissable D-05 stderr warning, got: %q", stderrOut)
 	}
 }
 

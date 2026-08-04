@@ -20,8 +20,35 @@ import (
 // or very slow consolidation run can never hang a phase advance (T-162-12).
 // Consolidation is enrichment, not a gate (D-05), so it gets the same budget
 // as the general command timeout convention in cmd/timeouts.go rather than
-// the longer BuildTimeout.
-const consolidationLifecycleTimeout = 30 * time.Second
+// the longer BuildTimeout. A var (not a const) so tests can shorten it to
+// prove the bound is real. The bound is enforced by
+// runConsolidationStageBounded, NOT by context.WithTimeout alone: a context
+// deadline cannot preempt a synchronous callee that never polls ctx.Done(),
+// and storage.FileLocker's flock blocks with no deadline (WR-02).
+var consolidationLifecycleTimeout = 30 * time.Second
+
+// runConsolidationStageBounded runs fn on its own goroutine and waits for
+// either completion or ctx expiry, returning false when ctx expired first.
+// On expiry the goroutine is deliberately abandoned -- it may be parked
+// inside a blocking flock with no cancellation point (WR-02: neither
+// ConsolidationService.Run nor storage.FileLocker checks ctx mid-step).
+// That leak is the accepted cost of a hard bound: both callers warn and
+// return immediately, the process exits shortly after, and the abandoned
+// goroutine's captured results are never read after a timeout, so there is
+// no data race on them.
+func runConsolidationStageBounded(ctx context.Context, fn func()) bool {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+	select {
+	case <-done:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
 
 // phaseEndConsolidationSummary is the runtime-facing summary of a
 // non-blocking phase-end consolidation attempt (D-04, D-05). It is returned
@@ -101,11 +128,22 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 
 	// Bounded timeout so a wedged consolidation can never hang a phase
 	// advance (T-162-12); the phase-advance record is already committed by
-	// the time this function is reached.
+	// the time this function is reached. The goroutine+select wrapper is
+	// what makes the bound real: the pipeline never polls ctx between
+	// steps, and a stale flock inside storage.FileLocker blocks with no
+	// deadline (WR-02).
 	ctx, cancel := context.WithTimeout(context.Background(), consolidationLifecycleTimeout)
 	defer cancel()
 
-	result, err := pipeline.RunConsolidation(ctx)
+	var result *learn.ConsolidationResult
+	var err error
+	if !runConsolidationStageBounded(ctx, func() {
+		result, err = pipeline.RunConsolidation(ctx)
+	}) {
+		reason := fmt.Sprintf("consolidation timed out after %s", consolidationLifecycleTimeout)
+		fmt.Fprintf(os.Stderr, "phase advanced WITHOUT consolidation — %v\n", reason)
+		return phaseEndConsolidationSummary{Ran: false, Reason: reason}
+	}
 
 	// ConsolidationService.Run (pkg/memory/consolidate.go) records per-step
 	// failures (e.g. a corrupt instincts.json) into result.Errors instead of
@@ -269,7 +307,22 @@ func runSealConsolidation() sealConsolidationSummary {
 
 	bus := events.NewBus(store, events.DefaultConfig())
 
-	curResult, curErr := curation.NewOrchestrator(store, bus).Run(ctx, false)
+	// Bounded like the phase-end path (WR-02): the orchestrator checks
+	// ctx.Done() only BETWEEN ant steps, so an in-step block (e.g. a stale
+	// flock) is uncancellable without the goroutine+select wrapper. The
+	// store pointer is captured locally BEFORE the goroutine starts: an
+	// abandoned goroutine must never read the package global, which the
+	// caller (or a test teardown) may reassign after the timeout fires.
+	orchestrator := curation.NewOrchestrator(store, bus)
+	var curResult *curation.CurationResult
+	var curErr error
+	if !runConsolidationStageBounded(ctx, func() {
+		curResult, curErr = orchestrator.Run(ctx, false)
+	}) {
+		reason := fmt.Sprintf("consolidation timed out after %s", consolidationLifecycleTimeout)
+		fmt.Fprintf(os.Stderr, "colony sealed WITHOUT consolidation — %v\n", reason)
+		return sealConsolidationSummary{Ran: false, Reason: reason}
+	}
 
 	var ants []sealAntBeat
 	var reportPath string
@@ -319,7 +372,21 @@ func runSealConsolidation() sealConsolidationSummary {
 	}
 
 	pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
-	consResult, consErr := pipeline.RunConsolidation(ctx)
+	var consResult *learn.ConsolidationResult
+	var consErr error
+	if !runConsolidationStageBounded(ctx, func() {
+		consResult, consErr = pipeline.RunConsolidation(ctx)
+	}) {
+		// The abandoned pipeline goroutine may still be mid-run, so reading
+		// consResult here would race; the skip-set stays empty. A duplicate
+		// "## Wisdom" entry in this extreme case is the accepted residual
+		// cost of never hanging a seal (WR-02).
+		reason := fmt.Sprintf("consolidation timed out after %s", consolidationLifecycleTimeout)
+		fmt.Fprintf(os.Stderr, "colony sealed WITHOUT consolidation — %v\n", reason)
+		summary.Ran = false
+		summary.Reason = reason
+		return summary
+	}
 	if consErr == nil && consResult != nil && len(consResult.Errors) > 0 {
 		consErr = errors.Join(consResult.Errors...)
 	}
