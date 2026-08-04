@@ -219,3 +219,101 @@ func TestConsolidationPromotesIntoLocalQueen(t *testing.T) {
 		t.Fatalf("%s must not exist (store-relative QUEEN.md is the dead target this plan retires), stat err = %v", deadFile, err)
 	}
 }
+
+// TestPromotedInstinctReachesWorkerPrompt is the end-to-end reachability
+// proof: pipeline -> .aether/QUEEN.md -> readQUEENMd -> colony-prime prompt
+// section. Runs the real consolidation-phase-end path against a
+// QueenEligible instinct, then -- critically -- clears instincts.json
+// before assembling the prompt. The colony-prime "## Active Instincts"
+// section reads instincts.json directly and unconditionally (T-162-09;
+// this plan changes the QUEEN.md route, not that pre-existing exposure),
+// so leaving instincts.json populated would let the sentinel reach the
+// prompt through that unrelated path and make this test pass vacuously
+// even if the QUEEN.md link were cut. Clearing it isolates the link this
+// test exists to prove.
+func TestPromotedInstinctReachesWorkerPrompt(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, _ := newTestStore(t)
+	store = s
+
+	sentinel := "sentinel-action-reaches-the-worker-prompt-qzplm"
+	seedQueenEligibleInstinct(t, sentinel)
+
+	rootCmd.SetArgs([]string{"consolidation-phase-end"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("consolidation-phase-end failed: %v", err)
+	}
+
+	// Isolate the QUEEN.md route from the unrelated instincts.json ->
+	// "## Active Instincts" route by clearing instincts.json now that
+	// promotion into QUEEN.md has already happened.
+	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Instincts: []colony.InstinctEntry{}}); err != nil {
+		t.Fatalf("clear instincts.json: %v", err)
+	}
+
+	output := buildColonyPrimeOutput(true)
+	if strings.Contains(output.PromptSection, "## Active Instincts") {
+		t.Fatalf("test isolation failed: '## Active Instincts' section still present after clearing instincts.json:\n%s", output.PromptSection)
+	}
+	if !strings.Contains(output.PromptSection, sentinel) {
+		t.Fatalf("expected sentinel %q to reach buildColonyPrimeOutput(true).PromptSection via QUEEN.md, got:\n%s", sentinel, output.PromptSection)
+	}
+}
+
+// TestReadQUEENMdIngestsInstinctsSection proves readQUEENMd ingests the
+// "## Instincts" section, and that PromoteInstinct's exact entry format
+// (- [instinct] **<domain>** (<conf>): When <trigger>, then <action>)
+// yields the action text as the ingested value -- matching the existing
+// "key: value" parsing branch rather than requiring parser changes.
+func TestReadQUEENMdIngestsInstinctsSection(t *testing.T) {
+	tmpDir := t.TempDir()
+	queenPath := filepath.Join(tmpDir, "QUEEN.md")
+	content := "## Instincts\n\n- [instinct] **testing** (0.90): When trigger-condition-x, then action-outcome-y\n"
+	if err := os.WriteFile(queenPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write fixture QUEEN.md: %v", err)
+	}
+
+	result := readQUEENMd(queenPath)
+	if len(result) == 0 {
+		t.Fatalf("expected readQUEENMd to return a non-empty map for a QUEEN.md containing only ## Instincts")
+	}
+
+	found := false
+	for _, v := range result {
+		if strings.Contains(v, "action-outcome-y") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected readQUEENMd's ingested value to contain the action text 'action-outcome-y', got: %+v", result)
+	}
+}
+
+// TestReadQUEENMdInstinctsDoesNotPullUnrelatedSections confirms widening the
+// allowlist to include Instincts does not also pull User Preferences or
+// Colony Charter lines into the wisdom map.
+func TestReadQUEENMdInstinctsDoesNotPullUnrelatedSections(t *testing.T) {
+	tmpDir := t.TempDir()
+	queenPath := filepath.Join(tmpDir, "QUEEN.md")
+	content := "## Instincts\n\n- [instinct] **testing** (0.90): When trigger-condition-x, then action-outcome-y\n\n" +
+		"## User Preferences\n\n- prefer-plain-english-marker\n\n" +
+		"## Colony Charter\n\n- **Name:** charter-name-marker\n"
+	if err := os.WriteFile(queenPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write fixture QUEEN.md: %v", err)
+	}
+
+	result := readQUEENMd(queenPath)
+	for k, v := range result {
+		if strings.Contains(k, "prefer-plain-english-marker") || strings.Contains(v, "prefer-plain-english-marker") {
+			t.Fatalf("readQUEENMd must not pull User Preferences lines into the wisdom map, got key=%q val=%q", k, v)
+		}
+		if strings.Contains(k, "charter-name-marker") || strings.Contains(v, "charter-name-marker") {
+			t.Fatalf("readQUEENMd must not pull Colony Charter lines into the wisdom map, got key=%q val=%q", k, v)
+		}
+	}
+}
