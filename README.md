@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-27-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-60-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.41-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.48-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -121,15 +121,15 @@ This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
 platform, installs it locally, and then runs `aether install` for you. The npm
 package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.41` bootstraps Aether `1.0.41`.
+`aether-colony@1.0.48` bootstraps Aether `1.0.48`.
 
 **Option 1: Go binary**
 
 ```bash
-go install github.com/calcosmic/Aether@latest
+go install github.com/calcosmic/Aether/cmd/aether@latest
 ```
 
-Requires [Go 1.22+](https://go.dev/dl/).
+Requires [Go 1.26+](https://go.dev/dl/).
 
 After installing the binary, publish the bundled companion files to your local
 hub:
@@ -304,7 +304,7 @@ primary platforms.
 ├── hive/wisdom.json         Cross-colony wisdom (200 cap)
 ```
 
-**Runtime:** Go 1.22+  
+**Runtime:** Go 1.26+  
 **Distribution:** GoReleaser (Linux, macOS, Windows / amd64 + arm64)
 
   
@@ -664,7 +664,7 @@ slash commands for the same phases.
 ### 🔧 Step 0 -- Install Aether
 
 ```bash
-go install github.com/calcosmic/Aether@latest
+go install github.com/calcosmic/Aether/cmd/aether@latest
 aether install        # Publish the bundled companion files to your local hub
 ```
 
@@ -1070,7 +1070,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 <br>
 
-<code>go install github.com/calcosmic/Aether@latest</code>
+<code>go install github.com/calcosmic/Aether/cmd/aether@latest</code>
 
 <br>
 
@@ -1082,7 +1082,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.41 -- Released (Current)
+### 🎉 v1.0.41 -- Released
 
 - Restored universal classic ceremony parity across Codex lifecycle flows, including spawn plans, wave starts, worker completions, and closeouts.
 - Hardened Porter full-release readiness with persisted receipts, version agreement, binary smoke, Go/TypeScript/npm gates, and redacted failed-command diagnostics.
@@ -1159,7 +1159,7 @@ Aether is shaped by its community. Whether you are fixing a bug, adding a comman
 
 ### ✅ Prerequisites
 
-- **Go 1.22+** -- [Install Go](https://go.dev/dl/) if you don't have it
+- **Go 1.26+** -- [Install Go](https://go.dev/dl/) if you don't have it
 - **Git** -- For cloning and branching
 - **Node.js 18+** -- Optional for future rich ceremony narration and the npm
   bootstrap; the bundled narrator runtime is plain JS and does not require

@@ -8,7 +8,11 @@ updated: 2026-07-31T00:00:00Z
 
 ## Current Test
 
-[awaiting human testing]
+number: 1
+name: `aether build <n> --print-brief` ten-second charter check on a real colony
+expected: |
+  On a real, populated colony (not synthetic test fixtures), the checklist output lets a person answer "did the charter arrive?" within ten seconds — the Charter row shows PRESENT with a plausible character count when a charter is approved, and the manifest-level Context Capsule row is populated.
+awaiting: user response
 
 ## Tests
 

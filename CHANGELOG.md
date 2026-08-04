@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.48] - 2026-08-04
+
+### Fixed
+
+- Review workers that emit their results before the final turn are no longer lost, so `/ant-continue` advances at standard depth instead of blocking.
+- Next-step hints name the command you actually type (`/ant-continue` in Claude Code and OpenCode, raw CLI in Codex).
+- Recovery hints name commands that exist; a new audit checks every runtime-emitted hint against the real command tree.
+- Archive extraction is contained to its staging directory (path-traversal entries are rejected).
+- Caste keywords match on word boundaries, so an Ambassador is no longer dispatched to local-only phases.
+- Planners no longer bind "unchanged file" criteria to artifact claims, which used to block phases with no easy recovery.
+- 41 stale flat command mirrors regenerated; the guard now covers all 61 wrappers.
+
 ## [1.0.40] - 2026-05-19
 
 ### Added

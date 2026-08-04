@@ -8,10 +8,13 @@ VERSION := $(shell \
 BINARY  := aether
 LDFLAGS := -X github.com/calcosmic/Aether/cmd.Version=$(VERSION)
 
-.PHONY: build test lint clean install smoke
+.PHONY: build test lint clean install smoke version-sync
 
 smoke:
 	./scripts/smoke-daily-driver.sh
+
+version-sync:
+	./scripts/version-sync.sh
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/aether/

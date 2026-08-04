@@ -187,3 +187,5 @@ aether integrity
 # If you also need the published release runtime binary
 aether update --force --download-binary
 ```
+
+*Updated for Aether v1.0.48 — 2026-08-04*

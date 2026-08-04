@@ -461,6 +461,19 @@ Runtime note:
 | Deep research | `/ant-oracle` | `/ant-oracle` | Use the `aether-oracle` agent plus `aether skill-*` and research commands |
 | View pheromones | `/ant-pheromones` | `/ant-pheromones` | `aether pheromone-display` |
 
+### Next-step hints
+
+The runtime adapts its "Next Up" suggestions to the active platform: Claude
+Code and OpenCode see slash wrappers (`/ant-continue`), Codex sees the raw CLI
+(`aether continue`), because Codex has no slash commands. Detection reads
+`AETHER_PLATFORM` first, then the active-platform signals, then the process
+tree. If a nested or wrapped invocation is ever misdetected and you see
+`/ant-*` suggestions, export the platform explicitly:
+
+```bash
+export AETHER_PLATFORM=codex
+```
+
 ---
 
-*Updated for Aether v1.0.41 -- 2026-05-20*
+*Updated for Aether v1.0.48 — 2026-08-04*
