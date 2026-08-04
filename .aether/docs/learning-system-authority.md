@@ -133,9 +133,9 @@ this phase, the unset default was `off` (`hivePolicyOff`,
 vetoed retrieval even when an operator had explicitly set the policy to enable it.
 
 **The consent-file mechanism is retired entirely (D-02).** Its path resolution,
-read/write functions, and the `hive-opt-in`/`hive-opt-out` cobra commands were
-deleted along with all four call sites that checked it
-(`cmd/hive.go`, `cmd/context_weighting.go`, `cmd/colony_prime_context.go` twice).
+read/write functions, and the two cobra commands that let an operator record or
+clear that consent file were deleted along with all four call sites that checked
+it (`cmd/hive.go`, `cmd/context_weighting.go`, `cmd/colony_prime_context.go` twice).
 There is now exactly one control surface for cross-colony wisdom flow, not two —
 one honest switch beats two gates where the second silently overrides the first.
 
