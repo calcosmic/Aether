@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.25
 milestone_name: Switch It On
-status: ready_to_plan
-stopped_at: Phase 165 context gathered
-last_updated: "2026-08-04T00:00:00.000Z"
-last_activity: 2026-08-04 -- Phase 160 verified (13/13) and secured (28/28), marked complete
+status: planning
+stopped_at: Phase 162 context gathered
+last_updated: "2026-08-04T09:37:50.167Z"
+last_activity: 2026-08-03
 progress:
   total_phases: 29
-  completed_phases: 7
+  completed_phases: 6
   total_plans: 49
   completed_plans: 49
-  percent: 24
+  percent: 100
 ---
 
 # Project State
@@ -103,6 +103,6 @@ Carried from v1.23, deferred again in v1.25 (see REQUIREMENTS.md "Deferred"):
 
 ## Session Continuity
 
-Last session: 2026-08-04
-Stopped at: Phase 160 formally closed (verification + security); Phase 162 next by dependency order
-Resume file: .planning/phases/165-core-lifecycle-commands/165-CONTEXT.md
+Last session: 2026-08-04T09:37:50.159Z
+Stopped at: Phase 162 context gathered
+Resume file: .planning/phases/162-switch-on-learning/162-CONTEXT.md
