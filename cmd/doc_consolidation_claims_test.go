@@ -106,12 +106,14 @@ func TestDocsDoNotClaimConsolidationRunsToday(t *testing.T) {
 		}
 	}
 
-	// Guard: CLAUDE.md's honest lines (37, 44) must survive this test unmodified
-	// and must never be treated as forbidden — they are the historical record
-	// this correction answers to, not a claim to remove.
-	honestPhrase := "`consolidation-phase-end` and `consolidation-seal` still have no caller"
+	// Guard: CLAUDE.md's Definition-of-Done bullet about the learning pipeline
+	// is the historical record this correction answers to, not a claim to
+	// remove. Before Phase 162 it honestly read "still have no caller"; Phase
+	// 162 gave both subcommands real callers, so the honest form of the same
+	// sentence now records when that happened.
+	honestPhrase := "`consolidation-phase-end` and `consolidation-seal` had no caller until v1.25 (Phase 162)"
 	if !strings.Contains(fileContents[claudeMDPath], honestPhrase) {
-		t.Errorf("CLAUDE.md no longer contains the honest 'no caller' sentence (expected substring: %q) — this line must not be touched by corrections to the stale claim", honestPhrase)
+		t.Errorf("CLAUDE.md no longer contains the honest historical no-caller-until-Phase-162 sentence (expected substring: %q) — the Definition-of-Done historical record must survive doc corrections", honestPhrase)
 	}
 
 	// Assertion 2: paraphrase invariant. A line that both (a) mentions
