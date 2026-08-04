@@ -978,6 +978,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// consolidation failure is reported via the summary, never propagated
 	// as an error (D-05).
 	consolidationSummary := runPhaseEndConsolidation(phase.ID)
+	workerFlow = append(workerFlow, continueLearningFlowStep(consolidationSummary))
 	emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 	flowEvents := continueWorkerFlowEvents(now, workerFlow)
 	updated.Events = append(updated.Events, flowEvents...)
@@ -3391,6 +3392,27 @@ func continueHousekeepingFlowStep(housekeeping signalHousekeepingResult) codexCo
 		Name:    "Signal housekeeping",
 		Status:  "completed",
 		Summary: continueHousekeepingSummary(housekeeping),
+	}
+}
+
+// continueLearningFlowStep is the learning-stage analog of
+// continueHousekeepingFlowStep (D-06): it folds the phase-end consolidation
+// result into the same worker-flow / ceremony-event stream housekeeping
+// already uses, so the 🧠 learning beat reaches
+// emitContinueCeremonyFlowSequence's event stream, not only stdout.
+// Summary is LearningBeatLine() -- the exact same one-line text
+// renderLearningBeat prints -- so the two surfaces cannot drift apart.
+func continueLearningFlowStep(s phaseEndConsolidationSummary) codexContinueWorkerFlowStep {
+	status := "completed"
+	if !s.Ran {
+		status = "failed"
+	}
+	return codexContinueWorkerFlowStep{
+		Stage:   "learning",
+		Caste:   "librarian",
+		Name:    "Phase-end consolidation",
+		Status:  status,
+		Summary: s.LearningBeatLine(),
 	}
 }
 

@@ -326,6 +326,18 @@ func TestGoldenContinueVisualOutput(t *testing.T) {
 	}
 	seedContinueBuildPacket(t, dataDir, 1, "Golden phase", goal, dispatches)
 
+	// Seed empty-but-VALID instincts/observations files so phase-end
+	// consolidation (D-04) runs cleanly to a deterministic zero-state beat
+	// instead of a load failure whose error text embeds this test's
+	// t.TempDir() path -- which would make the checked-in golden fixture
+	// mismatch on every run since that path is different each time.
+	if err := store.SaveJSON("instincts.json", colony.InstinctsFile{Instincts: []colony.InstinctEntry{}}); err != nil {
+		t.Fatalf("seed instincts.json: %v", err)
+	}
+	if err := store.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatalf("seed learning-observations.json: %v", err)
+	}
+
 	stdout = &bytes.Buffer{}
 	rootCmd.SetArgs([]string{"continue"})
 	if err := rootCmd.Execute(); err != nil {

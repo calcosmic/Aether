@@ -36,6 +36,21 @@ type phaseEndConsolidationSummary struct {
 	RereadCandidates    int
 }
 
+// LearningBeatLine renders the single-line, caste-agnostic message body used
+// by both renderLearningBeat's terminal beat (cmd/codex_visuals.go) and
+// continueLearningFlowStep's ceremony summary (cmd/codex_continue.go), so
+// the two surfaces can never drift out of sync (D-06/D-07). Exactly one of
+// the four states below is reachable; there is no "silent" fifth branch.
+func (s phaseEndConsolidationSummary) LearningBeatLine() string {
+	if !s.Ran {
+		return "phase advanced WITHOUT consolidation — " + strings.TrimSpace(s.Reason)
+	}
+	if s.ZeroState() {
+		return "colony observed nothing new this phase"
+	}
+	return fmt.Sprintf("%d promotion candidate(s) -> %d queen-eligible instinct(s)", s.PromotionCandidates, s.QueenEligible)
+}
+
 // ZeroState reports whether this consolidation ran but found nothing worth
 // promoting. PromotionCandidates == 0 && QueenEligible == 0 is the planner's
 // resolution of RESEARCH.md Open Question 3: it matches D-06's example

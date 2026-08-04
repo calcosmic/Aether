@@ -500,6 +500,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// "fix" this back to symmetry with the default continue path.
 	consolidationSummary := runPhaseEndConsolidation(phase.ID)
 	attachConsolidationSummary(result, consolidationSummary)
+	// advanceExternalContinue already emitted its own ceremony flow sequence
+	// (containing the housekeeping step) before returning -- D-04 places
+	// consolidation strictly after that call, so the learning beat cannot be
+	// appended into that already-emitted batch the way the default path
+	// appends it before its single emit call. Emit it as its own follow-up
+	// ceremony step instead: it still reaches the ceremony event stream, not
+	// only stdout (D-06/D-07).
+	emitContinueCeremonyFlowSequence("aether-continue-finalize", phase, []codexContinueWorkerFlowStep{continueLearningFlowStep(consolidationSummary)})
 	runStatus = "completed"
 	return result, updated, phase, nextPhase, housekeeping, final, nil
 }

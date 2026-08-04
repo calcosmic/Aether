@@ -60,6 +60,20 @@ var casteEmojiMap = map[string]string{
 	"dreamer":       "💭",
 	"medic":         "🩹",
 	"fixer":         "\U0001F527",
+	// Curation ants (D-06): the 8 pkg/agent/curation ants
+	// (sentinel, nurse, critic, herald, janitor, archivist, librarian,
+	// scribe) plus "curator" for the aggregate orchestrator line. librarian
+	// gets the 🧠 emoji D-06 calls for -- it is the identity used by the
+	// phase-end learning beat.
+	"sentinel":  "🚨",
+	"nurse":     "🩺",
+	"critic":    "🧐",
+	"herald":    "📯",
+	"janitor":   "🧹",
+	"archivist": "🗄️",
+	"librarian": "🧠",
+	"scribe":    "🖋️",
+	"curator":   "🖼️",
 }
 
 var casteColorMap = map[string]string{
@@ -89,6 +103,16 @@ var casteColorMap = map[string]string{
 	"medic":         "96",
 	"fixer":         "33",
 	"porter":        "96",
+	// Curation ants (D-06)
+	"sentinel":  "91",
+	"nurse":     "92",
+	"critic":    "33",
+	"herald":    "94",
+	"janitor":   "90",
+	"archivist": "36",
+	"librarian": "35",
+	"scribe":    "37",
+	"curator":   "93",
 }
 
 var casteLabelMap = map[string]string{
@@ -118,6 +142,16 @@ var casteLabelMap = map[string]string{
 	"medic":         "Medic",
 	"fixer":         "Fixer",
 	"porter":        "Porter",
+	// Curation ants (D-06)
+	"sentinel":  "Sentinel",
+	"nurse":     "Nurse",
+	"critic":    "Critic",
+	"herald":    "Herald",
+	"janitor":   "Janitor",
+	"archivist": "Archivist",
+	"librarian": "Librarian",
+	"scribe":    "Scribe",
+	"curator":   "Curator",
 }
 
 var commandEmojiMap = map[string]string{
@@ -1530,6 +1564,8 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 		}
 	}
 
+	b.WriteString(renderLearningBeat(result["consolidation"]))
+
 	if final {
 		b.WriteString(renderStageMarker("Colony Complete"))
 		b.WriteString("All planned phases are complete. The colony is ready for Crowned Anthill.\n")
@@ -1544,6 +1580,38 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	}
 	b.WriteString(renderNextUpVisual(nextUpSuggestionsForState(state)))
 	b.WriteString(renderContextClearGuidance())
+	return b.String()
+}
+
+// renderLearningBeat renders phase-end consolidation's result as a single
+// caste-styled "Learning" stage beat (D-06). raw is result["consolidation"]
+// (attachConsolidationSummary's map[string]interface{}), which may be nil
+// when no consolidation result was recorded at all -- e.g. an older report,
+// or a code path that forgot to attach it. The beat is pure (no store, no
+// I/O) and always renders something in one of four states: populated, zero,
+// failed, or absent. Silence is not a reachable output (D-07).
+func renderLearningBeat(raw interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderStageMarker("Learning"))
+	prefix := casteIdentity("librarian") + "  "
+
+	consolidation, ok := raw.(map[string]interface{})
+	if !ok || consolidation == nil {
+		b.WriteString(prefix)
+		b.WriteString("no consolidation result was recorded for this phase\n")
+		return b.String()
+	}
+
+	summary := phaseEndConsolidationSummary{
+		Ran:                 boolValue(consolidation["ran"]),
+		Reason:              stringValue(consolidation["reason"]),
+		PromotionCandidates: intValue(consolidation["promotion_candidates"]),
+		QueenEligible:       intValue(consolidation["queen_eligible"]),
+	}
+
+	b.WriteString(prefix)
+	b.WriteString(summary.LearningBeatLine())
+	b.WriteString("\n")
 	return b.String()
 }
 
