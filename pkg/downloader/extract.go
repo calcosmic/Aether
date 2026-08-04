@@ -11,6 +11,42 @@ import (
 	"strings"
 )
 
+// containedExtractPath resolves an archive-supplied entry name against the
+// staging directory and proves the result stays inside it.
+//
+// Archive entry names are attacker-controlled in the general case, and this
+// code runs during `aether update` — a command users are told to run. Without
+// this proof an entry named `../../.ssh/authorized_keys` writes wherever it
+// likes, because filepath.Join happily resolves the traversal.
+func containedExtractPath(stageDir, entryName string) (string, error) {
+	name := strings.ReplaceAll(entryName, `\`, "/")
+	if name == "" {
+		return "", fmt.Errorf("archive entry has an empty name")
+	}
+	if filepath.IsAbs(name) || strings.HasPrefix(name, "/") {
+		return "", fmt.Errorf("archive entry %q uses an absolute path", entryName)
+	}
+	// Windows-style drive prefixes (`C:\evil`) are absolute too, but
+	// filepath.IsAbs only knows the host's rules.
+	if len(name) >= 2 && name[1] == ':' {
+		return "", fmt.Errorf("archive entry %q uses a drive-qualified path", entryName)
+	}
+
+	absStage, err := filepath.Abs(stageDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve staging dir: %w", err)
+	}
+	target := filepath.Join(absStage, filepath.FromSlash(name))
+	rel, err := filepath.Rel(absStage, target)
+	if err != nil {
+		return "", fmt.Errorf("archive entry %q is not resolvable inside the staging directory", entryName)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("archive entry %q escapes the staging directory", entryName)
+	}
+	return target, nil
+}
+
 // extractTarGzImpl extracts a tar.gz archive, finds the binary, and moves it to destDir.
 func extractTarGzImpl(archivePath, stageDir, destDir, bin string) error {
 	file, err := os.Open(archivePath)
@@ -48,9 +84,17 @@ func extractTarGzImpl(archivePath, stageDir, destDir, bin string) error {
 			continue
 		}
 
-		targetPath := filepath.Join(stageDir, relPath)
+		targetPath, err := containedExtractPath(stageDir, relPath)
+		if err != nil {
+			return fmt.Errorf("tar entry rejected: %w", err)
+		}
 
 		switch header.Typeflag {
+		case tar.TypeSymlink, tar.TypeLink:
+			// Links are never materialised: a link planted outside the staging
+			// directory would let a later regular-file entry be written
+			// through it, defeating the containment check above.
+			continue
 		case tar.TypeDir:
 			if err := os.MkdirAll(targetPath, 0755); err != nil {
 				return fmt.Errorf("mkdir: %w", err)
@@ -118,7 +162,14 @@ func extractZipImpl(archivePath, stageDir, destDir, bin string) error {
 			continue
 		}
 
-		targetPath := filepath.Join(stageDir, relPath)
+		targetPath, err := containedExtractPath(stageDir, relPath)
+		if err != nil {
+			return fmt.Errorf("zip entry rejected: %w", err)
+		}
+
+		if entry.Mode()&os.ModeSymlink != 0 {
+			continue // never materialise links; see the tar path
+		}
 
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return fmt.Errorf("mkdir parent: %w", err)
