@@ -134,3 +134,16 @@ No blockers. `consolidationPhaseEndCmd`/`consolidationSealCmd` (the user-invocab
 ---
 *Phase: 162-switch-on-learning*
 *Completed: 2026-08-04*
+
+## Self-Check: PASSED
+
+All created/modified files verified present on disk:
+- cmd/consolidation_lifecycle.go
+- cmd/consolidation_lifecycle_test.go
+- cmd/learning_beat_test.go
+- .planning/phases/162-switch-on-learning/162-03-SUMMARY.md
+
+All task commits verified present in `git log`:
+- 03bfd1ee (test RED), 2ea66c85 (feat GREEN), 44247c0e (Task 2), fa5bc93a (Task 3), e67f7885 (SUMMARY)
+
+Full `go build ./...` and `go test ./cmd/ -count=1` both green (264s, zero failures).
