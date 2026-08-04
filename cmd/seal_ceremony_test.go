@@ -842,3 +842,119 @@ func TestSealHivePromotedCount(t *testing.T) {
 		t.Errorf("CROWNED-ANTHILL.md should show 2 hive-promoted instincts, got: %s", content)
 	}
 }
+
+// TestSealDoesNotDoublePromoteInstincts pins D-09: an instinct that is BOTH
+// pkg/memory-QueenEligible (confidence >= 0.75 AND >= 3 recorded
+// applications) AND above the seal ceremony's own local-promotion bar
+// (confidence >= 0.8) must reach .aether/QUEEN.md exactly once, written by
+// the authoritative pkg/memory pipeline under "## Instincts" -- never a
+// second time under "## Wisdom" by the seal's subordinate promoteInstinctLocal
+// loop. Removing Task 2's ID skip-set check must make this test fail.
+func TestSealDoesNotDoublePromoteInstincts(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// A real, valid (empty) observations file so runSealConsolidation's
+	// pipeline.RunConsolidation actually runs to completion instead of
+	// failing on a missing file and leaving QueenEligible empty.
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	const actionText = "Run go build ./... before every seal to catch broken compilation"
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "inst-both-001",
+				Trigger:    "dual eligibility pattern",
+				Action:     actionText,
+				Domain:     "testing",
+				TrustScore: 0.9,
+				TrustTier:  "trusted",
+				Confidence: 0.9,
+				Provenance: colony.InstinctProvenance{ApplicationCount: 3},
+				Archived:   false,
+			},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	runSealCmd(t, s, tmpDir, nil)
+
+	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(queenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+
+	count := strings.Count(text, actionText)
+	if count != 1 {
+		t.Fatalf("expected the instinct's action text to appear exactly once in QUEEN.md, got %d occurrences:\n%s", count, text)
+	}
+
+	instinctsSectionHasIt := false
+	wisdomSectionHasIt := false
+	for _, section := range strings.Split(text, "\n## ") {
+		if strings.HasPrefix(section, "Instincts") && strings.Contains(section, actionText) {
+			instinctsSectionHasIt = true
+		}
+		if strings.HasPrefix(section, "Wisdom") && strings.Contains(section, actionText) {
+			wisdomSectionHasIt = true
+		}
+	}
+	if !instinctsSectionHasIt {
+		t.Errorf("expected the action text under '## Instincts' (pkg/memory's authoritative write), got:\n%s", text)
+	}
+	if wisdomSectionHasIt {
+		t.Errorf("action text should NOT also appear under '## Wisdom' (the subordinate write must have been skipped), got:\n%s", text)
+	}
+}
+
+// TestSealStillPromotesInstinctsWithoutApplicationHistory pins D-09's other
+// half: an instinct with confidence >= 0.8 but zero recorded applications is
+// NOT pkg/memory-QueenEligible (which requires >= 3 applications), so it
+// must still reach QUEEN.md via the seal's subordinate promoteInstinctLocal
+// loop -- proving Task 2 did not delete that loop, only made it conditional.
+// Deleting the subordinate promoteInstinctLocal call must make this test fail.
+func TestSealStillPromotesInstinctsWithoutApplicationHistory(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	const actionText = "Prefer table-driven tests in new Go test files"
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "inst-young-001",
+				Trigger:    "fresh pattern with no application history",
+				Action:     actionText,
+				Domain:     "testing",
+				TrustScore: 0.9,
+				TrustTier:  "trusted",
+				Confidence: 0.9,
+				Archived:   false,
+			},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	runSealCmd(t, s, tmpDir, nil)
+
+	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(queenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, actionText) {
+		t.Fatalf("expected the young instinct (no application history) to still reach QUEEN.md via the subordinate seal-side promotion loop, got:\n%s", text)
+	}
+}
