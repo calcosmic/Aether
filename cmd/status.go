@@ -123,10 +123,10 @@ func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 		var ph map[string]interface{}
 		if s.LoadJSON("platform-health.json", &ph) == nil {
 			if failed, ok := ph["failed_commands"].([]interface{}); ok && len(failed) > 0 {
-				warnings = append(warnings, fmt.Sprintf("Platform health: %d command(s) failed smoke test. Run `aether smoke-test` to diagnose.", len(failed)))
+				warnings = append(warnings, fmt.Sprintf("Platform health: %d command(s) failed smoke test. Run `aether medic` to diagnose.", len(failed)))
 			}
 			if mismatches, ok := ph["flag_mismatches"].([]interface{}); ok && len(mismatches) > 0 {
-				warnings = append(warnings, fmt.Sprintf("Platform health: %d CLI flag mismatch(es) detected. Run `aether cli-audit` to review.", len(mismatches)))
+				warnings = append(warnings, fmt.Sprintf("Platform health: %d CLI flag mismatch(es) detected. Run `aether audit-catalog` to review.", len(mismatches)))
 			}
 			// 5a. Doc-CLI alignment warnings
 			if dcaRaw, ok := ph["doc_cli_alignment"]; ok {

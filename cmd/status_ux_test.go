@@ -263,7 +263,7 @@ func TestComputeWarningsPlatformHealth_FailedCommands(t *testing.T) {
 
 	found := false
 	for _, w := range warnings {
-		if strings.Contains(w, "2 command(s) failed smoke test") && strings.Contains(w, "smoke-test") {
+		if strings.Contains(w, "2 command(s) failed smoke test") && strings.Contains(w, "aether medic") {
 			found = true
 			break
 		}
@@ -301,7 +301,7 @@ func TestComputeWarningsPlatformHealth_FlagMismatches(t *testing.T) {
 
 	found := false
 	for _, w := range warnings {
-		if strings.Contains(w, "1 CLI flag mismatch") && strings.Contains(w, "cli-audit") {
+		if strings.Contains(w, "1 CLI flag mismatch") && strings.Contains(w, "aether audit-catalog") {
 			found = true
 			break
 		}

@@ -1033,7 +1033,7 @@ func renderBlockerSummary(blockers []colony.FlagEntry, issues []colony.FlagEntry
 	b.WriteString(t.Render())
 	b.WriteString("\n\nBLOCKED: Resolve blockers above or use --force to override.\n")
 	for _, bl := range blockers {
-		b.WriteString(fmt.Sprintf("  aether flag %s --resolve\n", bl.ID))
+		b.WriteString(fmt.Sprintf("  aether flag-resolve --id %s\n", bl.ID))
 	}
 	if len(issues) > 0 {
 		b.WriteString(fmt.Sprintf("\nNOTE: %d issue-severity flag(s) also unresolved.\n", len(issues)))

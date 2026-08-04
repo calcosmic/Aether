@@ -253,7 +253,7 @@ func TestRenderBlockerSummary(t *testing.T) {
 	if !strings.Contains(out, "BLOCKED") {
 		t.Error("summary should contain BLOCKED message")
 	}
-	if !strings.Contains(out, "--resolve") {
+	if !strings.Contains(out, "flag-resolve --id") {
 		t.Error("summary should contain resolution hint")
 	}
 	if !strings.Contains(out, "issue-severity") {
