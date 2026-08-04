@@ -24,6 +24,7 @@ type codexBuildDispatch struct {
 	Wave          int      `json:"wave,omitempty"`
 	ExecutionWave int      `json:"execution_wave,omitempty"`
 	Caste         string   `json:"caste"`
+	AgentName     string   `json:"agent_name,omitempty"`
 	Name          string   `json:"name"`
 	Task          string   `json:"task"`
 	Status        string   `json:"status"`
@@ -2778,6 +2779,10 @@ func resolveWorkerSkillAssignmentForWorkflow(workflow, caste, task string) codex
 
 func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []codexBuildDispatch, startedAt time.Time) {
 	for i := range dispatches {
+		// The wrapper spawns each dispatch with agent_name as the subagent
+		// type; the TS host used to enrich this and the direct plan-only
+		// path must carry it too.
+		dispatches[i].AgentName = codexAgentNameForCaste(dispatches[i].Caste)
 		dispatches[i].PermissionProfile = codex.PermissionProfileForCaste(dispatches[i].Caste)
 		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section
