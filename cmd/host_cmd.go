@@ -115,7 +115,7 @@ func makeHostSubcommand(subcommand string, forwardRawArgs bool) func(cmd *cobra.
 			return fmt.Errorf("cannot determine working directory: %w", err)
 		}
 
-		tsHostPath, hint := resolveTsHostPath(cwd)
+		tsHostPath, hint := prepareTsHostForExec(cwd)
 		if tsHostPath == "" {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", hint)
 			return fmt.Errorf("ts host not found")
@@ -178,6 +178,23 @@ func discoverNode() (string, error) {
 	}
 
 	return nodePath, nil
+}
+
+// prepareTsHostForExec resolves the TS host entry point and provisions its
+// runtime dependencies before exec. This is the lazy choke point that makes
+// fresh installs and hub-fallback paths self-heal: without it, a host whose
+// node_modules was never installed (install/publish copy only dist/ and the
+// package files) dies inside node with ERR_MODULE_NOT_FOUND.
+func prepareTsHostForExec(cwd string) (string, string) {
+	tsHostPath, hint := resolveTsHostPath(cwd)
+	if tsHostPath == "" {
+		return "", hint
+	}
+	tsHostDir := filepath.Dir(filepath.Dir(tsHostPath))
+	if err := ensureTsHostDepsAt(tsHostDir); err != nil {
+		return "", fmt.Sprintf("TS host dependencies unavailable at %s: %v", tsHostDir, err)
+	}
+	return tsHostPath, ""
 }
 
 // resolveTsHostPath returns the path to the built TS host entry point and a

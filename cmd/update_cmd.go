@@ -634,7 +634,34 @@ func syncTsHostFromHub(hubDir, repoDir string) error {
 // ensureTsHostBuilt checks that TS host dependencies are installed and dist/
 // is built. Runs npm ci and npm run build when needed.
 func ensureTsHostBuilt(repoDir string) error {
-	tsHostDir := tsHostRepoDir(repoDir)
+	return ensureTsHostDepsAt(tsHostRepoDir(repoDir))
+}
+
+// tsHostLockStampRel records which package-lock.json the installed
+// node_modules was built from, so dependency drift triggers a reinstall
+// instead of a cryptic ERR_MODULE_NOT_FOUND at runtime.
+const tsHostLockStampRel = "node_modules/.aether-lock-hash"
+
+// tsHostNpmCommand runs npm in the TS host directory. Overridable in tests.
+// npm's chatter must NEVER reach stdout: with AETHER_OUTPUT_MODE=json the
+// process's stdout is a machine-readable envelope, and the first update in
+// a fresh repo used to emit npm's install summary ("added 63 packages...
+// 2 vulnerabilities") ahead of the JSON, breaking every wrapper that
+// parses it. Progress goes to stderr, where humans still see it.
+var tsHostNpmCommand = func(dir string, args ...string) error {
+	cmd := exec.Command("npm", args...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// ensureTsHostDepsAt provisions a TS host directory in place: installs
+// node_modules when missing or stale (lock hash mismatch) and builds dist/
+// when absent. It is the single choke point used by update and by every
+// `aether host` invocation, so fresh installs and hub-fallback paths
+// self-heal instead of failing inside node.
+func ensureTsHostDepsAt(tsHostDir string) error {
 	if err := requireTsHostFile(tsHostDir, "package.json"); err != nil {
 		return err
 	}
@@ -643,8 +670,9 @@ func ensureTsHostBuilt(repoDir string) error {
 	if err != nil {
 		return err
 	}
-	if !hasRuntimeDeps && fileExists(filepath.Join(tsHostDir, filepath.FromSlash(tsHostEntryRelPath))) {
-		return validateTsHostRepoArtifacts(repoDir)
+	distHostPath := filepath.Join(tsHostDir, filepath.FromSlash(tsHostEntryRelPath))
+	if !hasRuntimeDeps && fileExists(distHostPath) {
+		return validateTsHostArtifactSet(tsHostDir)
 	}
 
 	// Check npm availability
@@ -652,34 +680,32 @@ func ensureTsHostBuilt(repoDir string) error {
 		return fmt.Errorf("npm not found in PATH: %w", err)
 	}
 
-	// npm's chatter must NEVER reach stdout: with AETHER_OUTPUT_MODE=json the
-	// process's stdout is a machine-readable envelope, and the first update in
-	// a fresh repo used to emit npm's install summary ("added 63 packages...
-	// 2 vulnerabilities") ahead of the JSON, breaking every wrapper that
-	// parses it. Progress goes to stderr, where humans still see it.
-	nodeModulesDir := filepath.Join(tsHostDir, "node_modules")
-	if _, err := os.Stat(nodeModulesDir); os.IsNotExist(err) {
-		cmd := exec.Command("npm", "ci", "--no-audit", "--no-fund")
-		cmd.Dir = tsHostDir
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
+	lockPath := filepath.Join(tsHostDir, "package-lock.json")
+	lockHash, err := fileSHA256(lockPath)
+	if err != nil {
+		return fmt.Errorf("hash package-lock.json: %w", err)
+	}
+	stampPath := filepath.Join(tsHostDir, filepath.FromSlash(tsHostLockStampRel))
+	needInstall := true
+	if data, readErr := os.ReadFile(stampPath); readErr == nil && strings.TrimSpace(string(data)) == lockHash {
+		needInstall = false
+	}
+	if needInstall {
+		if err := tsHostNpmCommand(tsHostDir, "ci", "--no-audit", "--no-fund"); err != nil {
 			return fmt.Errorf("npm ci failed: %w", err)
+		}
+		if err := os.WriteFile(stampPath, []byte(lockHash+"\n"), 0644); err != nil {
+			return fmt.Errorf("write dependency stamp: %w", err)
 		}
 	}
 
-	distHostPath := filepath.Join(tsHostDir, filepath.FromSlash(tsHostEntryRelPath))
 	if _, err := os.Stat(distHostPath); os.IsNotExist(err) {
-		cmd := exec.Command("npm", "run", "build")
-		cmd.Dir = tsHostDir
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
+		if err := tsHostNpmCommand(tsHostDir, "run", "build"); err != nil {
 			return fmt.Errorf("npm run build failed: %w", err)
 		}
 	} else if err != nil {
 		return fmt.Errorf("stat TS host dist entry: %w", err)
 	}
 
-	return validateTsHostRepoArtifacts(repoDir)
+	return validateTsHostArtifactSet(tsHostDir)
 }
