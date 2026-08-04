@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -86,11 +87,27 @@ func assertConsolidationDryRunIsPure(t *testing.T, command string) {
 
 	dataDir := seedConsolidationFixture(t)
 
+	// consolidationQueenPath() (Task 1 of this plan) moved the consolidation
+	// promotion target OUT of dataDir (.aether/data) to the parent .aether
+	// directory's QUEEN.md -- the file colony-prime actually reads. Without
+	// watching it here, a dry run that wrote it would go undetected: the
+	// same class of vacuous-pass bug this file's own comment already warns
+	// about for the store-relative path.
+	//
+	// We do not widen the snapshot to a full recursive walk of the parent
+	// .aether directory: storage.Store's FileLocker creates a sibling
+	// .aether/locks/<name>.lock file the first time any path is locked, and
+	// this file legitimately appears fresh on every run (dry or not) the
+	// first time QUEEN.md is touched by the locker -- a recursive snapshot
+	// would flag that as a false-positive mutation. Watching the exact
+	// localQueenPath() file directly avoids that noise while still covering
+	// the relocated target.
 	watched := []string{
 		filepath.Join(dataDir, "instincts.json"),
 		filepath.Join(dataDir, "learning-observations.json"),
 		filepath.Join(dataDir, "QUEEN.md"),
 		filepath.Join(dataDir, "events.jsonl"),
+		filepath.Join(filepath.Dir(dataDir), "QUEEN.md"),
 	}
 	before := make(map[string]string, len(watched))
 	for _, p := range watched {
@@ -120,6 +137,48 @@ func TestConsolidationPhaseEndDryRunDoesNotMutate(t *testing.T) {
 
 func TestConsolidationSealDryRunDoesNotMutate(t *testing.T) {
 	assertConsolidationDryRunIsPure(t, "consolidation-seal")
+}
+
+// TestConsolidationDryRunDoesNotCreateInstinctsSection pins that
+// ensureQueenInstinctsSection() (Task 1) is never reached from the dry-run
+// branch of consolidation-phase-end. Starting from a local QUEEN.md in
+// legacy format (no "## Instincts" header), a dry run must leave the
+// header absent -- creating a section header is itself a mutation, and
+// "Report without modifying" must mean it.
+func TestConsolidationDryRunDoesNotCreateInstinctsSection(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	dataDir := seedConsolidationFixture(t)
+	localQueen := filepath.Join(filepath.Dir(dataDir), "QUEEN.md")
+	if err := writeLocalQueenText(legacyQueenDefaultContentFixture); err != nil {
+		t.Fatalf("seed legacy local QUEEN.md: %v", err)
+	}
+	before, err := os.ReadFile(localQueen)
+	if err != nil {
+		t.Fatalf("read seeded local QUEEN.md: %v", err)
+	}
+	if strings.Contains(string(before), "## Instincts") {
+		t.Fatalf("fixture already contains '## Instincts'; fixture is invalid for this test")
+	}
+
+	rootCmd.SetArgs([]string{"consolidation-phase-end", "--dry-run"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("consolidation-phase-end --dry-run failed: %v", err)
+	}
+
+	after, err := os.ReadFile(localQueen)
+	if err != nil {
+		t.Fatalf("read local QUEEN.md after dry run: %v", err)
+	}
+	if strings.Contains(string(after), "## Instincts") {
+		t.Fatalf("consolidation-phase-end --dry-run must not create the '## Instincts' section, got:\n%s", string(after))
+	}
+	if string(after) != string(before) {
+		t.Fatalf("consolidation-phase-end --dry-run mutated local QUEEN.md.\nbefore:\n%s\nafter:\n%s", string(before), string(after))
+	}
 }
 
 // TestConsolidationRealRunStillMutates proves two things at once: the real
