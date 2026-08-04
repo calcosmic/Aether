@@ -15,3 +15,7 @@ Use the Go `aether` CLI as the source of truth.
 - Do not use manual shell file surgery to manage signals.
 - If docs and runtime disagree, runtime wins.
 - If `$ARGUMENTS` is empty, show the runtime display directly.
+
+**Next steps:**
+- `/ant-focus` / `/ant-redirect` / `/ant-feedback` — write new steering
+- `/ant-build <phase>` — signals are injected into worker briefs

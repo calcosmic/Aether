@@ -12,3 +12,8 @@ Use the Go `aether` CLI as the source of truth.
 - If docs and runtime disagree, runtime wins.
 - Keep any wrapper summary to at most 2 short sentences.
 - Do not add extra option menus or repo archaeology unless the runtime itself explicitly asks for them.
+
+**Next steps:**
+- `/ant-build <phase>` — build the current phase
+- `/ant-continue` — verify and advance
+- `/ant-resume` — restore session context after a break

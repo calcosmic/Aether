@@ -138,10 +138,22 @@ func TestLifecycleFlatMirrorsMatchCanonical(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	for _, verb := range lifecycleWrapperVerbs {
-		verb := verb
+	// Every wrapper, not just the lifecycle five: 41 of 60 mirrors had silently
+	// drifted to a superseded generation that hand-read COLONY_STATE.json with
+	// jq — the exact boundary violation wrappers are forbidden to commit —
+	// because only the lifecycle verbs were guarded here.
+	canonicalPaths, err := filepath.Glob(filepath.Join(repoRoot, ".claude", "commands", "ant", "*.md"))
+	if err != nil {
+		t.Fatalf("glob canonical wrappers: %v", err)
+	}
+	if len(canonicalPaths) == 0 {
+		t.Fatal("no canonical wrappers found — this guard would pass vacuously")
+	}
+
+	for _, canonicalPath := range canonicalPaths {
+		verb := strings.TrimSuffix(filepath.Base(canonicalPath), ".md")
+		canonicalPath := canonicalPath
 		t.Run(verb, func(t *testing.T) {
-			canonicalPath := filepath.Join(repoRoot, ".claude", "commands", "ant", verb+".md")
 			mirrorPath := flatMirrorPath(repoRoot, verb)
 
 			canonicalBytes, err := os.ReadFile(canonicalPath)

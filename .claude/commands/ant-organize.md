@@ -18,18 +18,22 @@ Parse `$ARGUMENTS`:
 
 ### Step 1: Read State
 
-Use the Read tool to read these files (in parallel):
-- `.aether/data/COLONY_STATE.json`
-- `.aether/data/activity.log`
+Read colony state through the runtime, never the state file directly:
 
-From COLONY_STATE.json, extract:
+```bash
+AETHER_OUTPUT_MODE=json aether state-read
+```
+
+You may still Read `.aether/data/activity.log` (append-only log, not state).
+
+From the state-read result, extract:
 - `goal` from top level
 - `plan.phases` for phase data
 - `errors.records` for error patterns
 - `memory` for decisions/learnings
 - `events` for activity
 
-**Validate:** If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant-init first.` and stop.
+**Validate:** If the state result has `goal: null`, output `No colony initialized. Run /ant-init first.` and stop.
 
 ### Step 2: Compute Active Pheromones
 
@@ -53,14 +57,14 @@ If no active signals after filtering:
 
 ### Step 3: Spawn Archivist (Keeper-Ant)
 
-Read `.aether/workers.md` and extract the `## Keeper` section.
+Read `~/.aether/system/workers.md` (or the matching dev hub when using `aether-dev`) and extract the `## Keeper` section.
 
 Spawn via **Task tool** with `subagent_type="aether-keeper"`:
 # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Keeper Ant - curates knowledge and synthesizes patterns."
 
 ```
 --- WORKER SPEC ---
-{Architect section from .aether/workers.md}
+{Keeper section from installed hub workers.md}
 
 --- ACTIVE PHEROMONES ---
 {pheromone block from Step 2}
@@ -72,20 +76,20 @@ Your mission: Produce a structured HYGIENE REPORT. You are REPORT-ONLY.
 You MUST NOT delete, modify, move, or create any project files.
 You may ONLY read files and produce a report.
 
-Colony goal: "{goal from COLONY_STATE.json}"
-Colony mode: {mode from COLONY_STATE.json}
-Current phase: {current_phase from COLONY_STATE.json}
+Colony goal: "{goal from state-read}"
+Colony mode: {mode from state-read}
+Current phase: {current_phase from state-read}
 
 --- COLONY DATA ---
 
 PROJECT PLAN:
-{plan.phases from COLONY_STATE.json -- phases, tasks, their statuses}
+{plan.phases from state-read -- phases, tasks, their statuses}
 
 ERROR HISTORY:
-{errors.records and errors.flagged_patterns from COLONY_STATE.json}
+{errors.records and errors.flagged_patterns from state-read}
 
 MEMORY:
-{memory.phase_learnings and memory.decisions from COLONY_STATE.json}
+{memory.phase_learnings and memory.decisions from state-read}
 
 ACTIVITY LOG (last 50 lines):
 {tail of activity.log}
@@ -106,7 +110,7 @@ Check for files that may no longer be needed:
 
 **Category 2: Dead Code Patterns**
 Use colony data to identify dead code signals:
-- Recurring error patterns from COLONY_STATE.json errors.flagged_patterns (code that keeps breaking may be vestigial)
+- Recurring error patterns from state-read errors.flagged_patterns (code that keeps breaking may be vestigial)
 - Error categories with high counts concentrated in specific files
 - Imports or dependencies referenced in errors but possibly no longer needed
 - Read key source files and look for commented-out code blocks, unused exports, unreachable branches
@@ -227,8 +231,5 @@ All state persisted. Safe to /clear context if needed.
 
 Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
 ```bash
-state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
-current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
-total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
-aether print-next-up
+AETHER_OUTPUT_MODE=visual aether print-next-up
 ```
