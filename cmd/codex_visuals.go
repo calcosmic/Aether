@@ -1615,6 +1615,50 @@ func renderLearningBeat(raw interface{}) string {
 	return b.String()
 }
 
+// renderSealConsolidationBeats renders a seal consolidation attempt as a
+// caste-styled "Consolidation" stage beat (D-06, LEARN-02). It is pure (no
+// store, no I/O) and always renders something: eight distinct per-ant lines
+// on success, or the loud "colony sealed WITHOUT consolidation" line on
+// failure. Silence about consolidation is not a reachable output, mirroring
+// renderLearningBeat's precedent.
+func renderSealConsolidationBeats(s sealConsolidationSummary) string {
+	var b strings.Builder
+	b.WriteString(renderStageMarker("Consolidation"))
+
+	if !s.Ran {
+		b.WriteString("colony sealed WITHOUT consolidation — ")
+		b.WriteString(strings.TrimSpace(s.Reason))
+		b.WriteString("\n")
+		return b.String()
+	}
+
+	for _, ant := range s.Ants {
+		icon := "✗"
+		if ant.Success {
+			icon = "✓"
+		}
+		b.WriteString("  ")
+		b.WriteString(icon)
+		b.WriteString(" ")
+		b.WriteString(casteIdentity(ant.Name))
+		b.WriteString("  ")
+		b.WriteString(ant.Detail)
+		b.WriteString("\n")
+	}
+
+	b.WriteString(fmt.Sprintf("Instincts decayed: %d, archived: %d; observations decayed: %d\n", s.InstinctsDecayed, s.InstinctsArchived, s.ObservationsDecayed))
+
+	reportLine := s.ReportPath
+	if reportLine == "" {
+		reportLine = "(not written)"
+	}
+	b.WriteString("Curation report: ")
+	b.WriteString(reportLine)
+	b.WriteString("\n")
+
+	return b.String()
+}
+
 func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue Plan"))

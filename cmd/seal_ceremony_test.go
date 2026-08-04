@@ -958,3 +958,91 @@ func TestSealStillPromotesInstinctsWithoutApplicationHistory(t *testing.T) {
 		t.Fatalf("expected the young instinct (no application history) to still reach QUEEN.md via the subordinate seal-side promotion loop, got:\n%s", text)
 	}
 }
+
+// sealNamedAntLabels are the eight curation ant labels (D-06) that must
+// appear verbatim in seal stdout once Task 3's rendering is wired in.
+var sealNamedAntLabels = []string{"Sentinel", "Nurse", "Critic", "Herald", "Janitor", "Archivist", "Librarian", "Scribe"}
+
+// TestSealRendersEightNamedAnts asserts seal stdout contains all eight
+// distinct curation ant labels and that no line falls back to the generic
+// "🐜 Ant" identity casteLabel/casteEmoji return for an unmapped caste.
+func TestSealRendersEightNamedAnts(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Version: "1", Instincts: []colony.InstinctEntry{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	for _, label := range sealNamedAntLabels {
+		if !strings.Contains(out, label) {
+			t.Errorf("expected seal stdout to contain ant label %q, got:\n%s", label, out)
+		}
+	}
+	if strings.Contains(out, "🐜 Ant") {
+		t.Errorf("seal stdout contains the generic fallback '🐜 Ant' identity; a curation ant caste is unmapped:\n%s", out)
+	}
+}
+
+// TestSealRendersReportPath asserts seal stdout and CROWNED-ANTHILL.md both
+// name CURATION-REPORT.md, and that the file exists at that path after seal.
+func TestSealRendersReportPath(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Version: "1", Instincts: []colony.InstinctEntry{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	if !strings.Contains(out, "CURATION-REPORT.md") {
+		t.Errorf("expected seal stdout to name CURATION-REPORT.md, got:\n%s", out)
+	}
+
+	anthillPath := filepath.Join(tmpDir, ".aether", "CROWNED-ANTHILL.md")
+	data, err := os.ReadFile(anthillPath)
+	if err != nil {
+		t.Fatalf("CROWNED-ANTHILL.md not found: %v", err)
+	}
+	if !strings.Contains(string(data), "CURATION-REPORT.md") {
+		t.Errorf("expected CROWNED-ANTHILL.md to name CURATION-REPORT.md, got:\n%s", string(data))
+	}
+
+	reportPath := filepath.Join(tmpDir, ".aether", "CURATION-REPORT.md")
+	if _, err := os.Stat(reportPath); err != nil {
+		t.Fatalf("CURATION-REPORT.md does not exist at %s: %v", reportPath, err)
+	}
+}
+
+// TestSealRendersLoudFailure asserts that when consolidation fails, stdout
+// contains the D-05 loud warning and the seal still reaches
+// colony.StateCOMPLETED -- a learning failure never blocks a seal.
+func TestSealRendersLoudFailure(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	if err := os.WriteFile(filepath.Join(dataDir, "instincts.json"), []byte("{not valid json"), 0o644); err != nil {
+		t.Fatalf("seed invalid instincts.json: %v", err)
+	}
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	if !strings.Contains(out, "colony sealed WITHOUT consolidation —") {
+		t.Errorf("expected seal stdout to contain the D-05 loud warning, got:\n%s", out)
+	}
+
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.State != colony.StateCOMPLETED {
+		t.Errorf("expected state COMPLETED despite consolidation failure, got: %s", state.State)
+	}
+}

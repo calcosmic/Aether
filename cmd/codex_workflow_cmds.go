@@ -494,6 +494,13 @@ func completeSealRuntime(state colony.ColonyState) error {
 		}
 	}
 
+	// Render the eight-ant consolidation beats (D-06, LEARN-02) so the
+	// ceremony reads consolidation -> promotion -> hive: printed here, after
+	// the promotion loop above has run, and before the hive reporting lines
+	// below.
+	fmt.Fprint(stdout, renderSealConsolidationBeats(sealConsolidation))
+	emitSealConsolidationCeremony(sealConsolidation)
+
 	// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
 	if hivePromotedCount > 0 {
 		fmt.Fprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
@@ -546,6 +553,7 @@ func completeSealRuntime(state colony.ColonyState) error {
 		ShelfCandidates:       candidates,
 		FinalReview:           finalReview,
 		ReviewBacklog:         reviewBacklog,
+		ConsolidationReport:   sealConsolidation.ReportPath,
 	}
 
 	summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
@@ -1041,6 +1049,10 @@ type sealEnrichment struct {
 	ShelfCandidates       []colony.ShelfEntry
 	FinalReview           *sealFinalReviewReport
 	ReviewBacklog         []colony.ReviewLedgerEntry
+	// ConsolidationReport is the path to the scribe's persisted curation
+	// report (LEARN-02, <.aether>/CURATION-REPORT.md), surfaced here so it
+	// is discoverable from CROWNED-ANTHILL.md as well as from stdout.
+	ConsolidationReport string
 }
 
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
@@ -1122,6 +1134,9 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 	}
 	b.WriteString(fmt.Sprintf("| FOCUS signals expired | %d |\n", enrichment.SignalsExpired))
 	b.WriteString(fmt.Sprintf("| Flags resolved | %d |\n", enrichment.FlagsResolved))
+	if enrichment.ConsolidationReport != "" {
+		b.WriteString(fmt.Sprintf("| Curation report | %s |\n", enrichment.ConsolidationReport))
+	}
 
 	if len(enrichment.InstinctsPromoted) > 0 {
 		b.WriteString("\n### Promoted Instincts\n")
