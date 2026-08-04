@@ -403,7 +403,11 @@ Follow the existing pattern from `TestBuildWorkerBriefIncludesSurveyAndResearch`
 
 **If this table is empty:** N/A — see above; all three assumptions are low-to-medium risk implementation-detail choices within an otherwise fully-verified research base, not factual claims about the domain.
 
-## Open Questions
+## Open Questions (ALL RESOLVED at plan time)
+
+> Q1 → RESOLVED: refactor, not delete — see 162-04-PLAN.md Task 2.
+> Q2 → RESOLVED: narrow wiring-regression tests written in this phase — see 162-03-PLAN.md Task 2.
+> Q3 → RESOLVED: zero-state is `promotion_candidates == 0 && queen_eligible == 0` — see 162-03-PLAN.md Task 1.
 
 1. **Should `completeSealRuntime`'s existing instinct-promotion loop (lines 425-454) be deleted, or refactored to consume `consolidation-seal`'s already-computed `QueenEligible` list?**
    - What we know: Both loops promote the same underlying `instincts.json` entries to QUEEN.md, using different thresholds and different target sections. `pipeline.RunConsolidation()`'s `QueenEligible` computation (`pkg/memory/consolidate.go:149`) is more selective (requires application history) and is the "documented" pipeline.

@@ -367,10 +367,17 @@ Plans:
 **Plans**: 6 plans in 4 waves
 
 Plans:
+**Wave 1**
 - [ ] 162-01-PLAN.md — LEARN-04: hive default to promote, consent gate retired, AGENTS.md made true (wave 1)
 - [ ] 162-02-PLAN.md — LEARN-01/03: make consolidation's QUEEN.md promotion target reachable before wiring it (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 162-03-PLAN.md — LEARN-01: phase-end consolidation on both continue paths + always-present learning beat (wave 2, needs 02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 162-04-PLAN.md — LEARN-02/03: seal eight-ant pass, report artifact, no-double-promotion reconciliation (wave 3, needs 01, 02, 03)
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 162-05-PLAN.md — LEARN-05: deterministic populated-vs-wiped brief test + recorded before/after exhibit (wave 4, needs 01-04)
 - [ ] 162-06-PLAN.md — LEARN-03/04: decision record + docs truth pass + docs-rot guard test (wave 4, needs 01, 03, 04)
 
