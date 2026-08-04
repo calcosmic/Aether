@@ -1527,9 +1527,11 @@ func readQUEENMd(filePath string) map[string]string {
 			sectionName := strings.TrimPrefix(trimmed, "## ")
 			inWisdomSection = sectionName == "Wisdom" || sectionName == "Patterns" ||
 				sectionName == "Codebase Patterns" || sectionName == "Philosophies" || sectionName == "Anti-Patterns" ||
+				sectionName == "Instincts" ||
 				strings.HasPrefix(sectionName, "Wisdom") || strings.HasPrefix(sectionName, "Patterns") ||
 				strings.HasPrefix(sectionName, "Codebase Patterns") ||
-				strings.HasPrefix(sectionName, "Philosophies") || strings.HasPrefix(sectionName, "Anti-Patterns")
+				strings.HasPrefix(sectionName, "Philosophies") || strings.HasPrefix(sectionName, "Anti-Patterns") ||
+				strings.HasPrefix(sectionName, "Instincts")
 			continue
 		}
 
