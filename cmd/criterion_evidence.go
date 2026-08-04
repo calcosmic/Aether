@@ -430,11 +430,22 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 			// D-01: an artifact absent from the task's claim lists can still
 			// pass the claimed gate if it has evidence explicitly recorded
 			// as read-only and scoped to this exact requirement's task. An
-			// empty ReadOnlyTaskID never matches, and a match for a
-			// different task never matches (D-02: claim sets stay disjoint).
+			// empty ReadOnlyTaskID never matches a task-bound requirement,
+			// but a phase-level requirement (no task id) accepts read-only
+			// evidence recorded for any task — a phase criterion has no task
+			// to bind evidence to, so the operator's explicit recording is
+			// the strongest available signal. (D-02: claim sets stay
+			// disjoint; nothing here merges them.)
 			recorded, ok := evidenceByPath[artifact]
-			readOnlyMatch := ok && recorded.ReadOnly && strings.TrimSpace(recorded.ReadOnlyTaskID) != "" && recorded.ReadOnlyTaskID == requirement.TaskID
-			if !claimed[artifact] && !readOnlyMatch {
+			hasReadOnlyTask := ok && recorded.ReadOnly && strings.TrimSpace(recorded.ReadOnlyTaskID) != ""
+			readOnlyMatch := hasReadOnlyTask && (recorded.ReadOnlyTaskID == requirement.TaskID || strings.TrimSpace(requirement.TaskID) == "")
+			// A task-bound criterion may also verify against an artifact
+			// claimed by a different task in the same build: the artifact is
+			// hash-recorded at build time either way, so tamper detection is
+			// identical. TDD plans routinely bind a later task's criterion to
+			// the test file an earlier task wrote.
+			buildClaimed := claimSets[""][artifact]
+			if !claimed[artifact] && !readOnlyMatch && !buildClaimed {
 				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s was not claimed by the current build%s", artifact, criterionTaskSuffix(requirement.TaskID)))
 				continue
 			}

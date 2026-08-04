@@ -225,14 +225,48 @@ func TestEvaluatePhaseCriterionEvidenceRequiresTaskOwnedClaimsAndExecutedChecks(
 	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
 		t.Fatalf("load claims: %v", err)
 	}
+	// An artifact absent from every claim list — per-task and aggregate —
+	// must still block. (An artifact claimed by ANY task in the build may
+	// satisfy a task-bound criterion; that path is covered by
+	// TestCriterionAcceptsArtifactClaimedByAnotherTask.)
 	claims.TaskClaims = nil
+	claims.FilesCreated = nil
+	claims.FilesModified = nil
+	claims.TestsWritten = nil
 	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
-		t.Fatalf("save aggregate-only claims: %v", err)
+		t.Fatalf("save empty claims: %v", err)
 	}
 	evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, []codexVerificationStep{{Name: "tests", Skipped: true, Summary: "not resolved"}}, codexClaimVerification{Present: true, Passed: true}, codexWatcherVerification{})
 	issues := strings.Join(evaluation.BlockingIssues, "\n")
 	if evaluation.Passed || !strings.Contains(issues, "was not claimed by the current build for task 1.1") || !strings.Contains(issues, "required tests check was skipped") {
 		t.Fatalf("evaluation issues = %q", issues)
+	}
+}
+
+// TestCriterionAcceptsArtifactClaimedByAnotherTask locks the daily-driver fix
+// from the 1.0.47 acceptance run: a task-bound criterion may verify against an
+// artifact another task in the same build claimed (TDD plans bind an
+// implementation task's criterion to the test file the test task wrote). The
+// artifact is hash-recorded at build time either way, so tamper detection is
+// unchanged.
+func TestCriterionAcceptsArtifactClaimedByAnotherTask(t *testing.T) {
+	phase := criterionEvidenceTestPhase()
+	root, manifest := setupCriterionEvidenceTest(t, phase)
+	var claims codexBuildClaims
+	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
+		t.Fatalf("load claims: %v", err)
+	}
+	// Move every per-task claim to a different task id; aggregate lists keep
+	// the artifacts so the build as a whole still claims them.
+	for i := range claims.TaskClaims {
+		claims.TaskClaims[i].TaskID = "9.9"
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("save cross-task claims: %v", err)
+	}
+	evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, passingCriterionSteps(), codexClaimVerification{Present: true, Passed: true}, codexWatcherVerification{})
+	if !evaluation.Passed {
+		t.Fatalf("cross-task claimed artifact blocked: %v", evaluation.BlockingIssues)
 	}
 }
 

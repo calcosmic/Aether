@@ -1528,7 +1528,7 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	} else if shellChecksPassed && isEnvironmentBlockedWatcher(buildWatcher) {
 		continueWatcher = buildWatcher
 	} else if summary, ok := continueWatcherHostBoundarySkipSummary(manifest); ok {
-		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: summary}
+		continueWatcher = resolveHostBoundaryWatcher(buildWatcher, summary)
 	} else if shellChecksPassed {
 		invoker := newCodexWorkerInvoker()
 		if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
@@ -2180,6 +2180,18 @@ func continueNextCommandForBlocked(assessment codexContinueAssessment, blockers 
 	return next
 }
 
+// resolveHostBoundaryWatcher decides the watcher verdict when continue would
+// auto-skip its own watcher for a wrapper-mediated build. If the build packet
+// already carries a real watcher's passing terminal result, that result is
+// trusted — otherwise criteria with a `watcher` check could never pass on the
+// primary wrapper path, where continue never spawns its own watcher.
+func resolveHostBoundaryWatcher(buildWatcher codexWatcherVerification, skipSummary string) codexWatcherVerification {
+	if buildWatcher.Present && buildWatcher.Passed && !strings.EqualFold(strings.TrimSpace(buildWatcher.Status), "skipped") {
+		return buildWatcher
+	}
+	return codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: skipSummary}
+}
+
 func continueWatcherHostBoundarySkipSummary(manifest codexContinueManifest) (string, bool) {
 	if manifestUsesExternalTask(manifest) {
 		return "watcher auto-skipped; external-task build was wrapper-mediated, so continue trusts runtime verification instead of spawning an untracked watcher", true
@@ -2370,7 +2382,10 @@ func resolveCodexVerificationCommands(root string) codexVerificationCommands {
 		if commands.Build == "" {
 			commands.Build = "npm run build"
 		}
-		if commands.Type == "" {
+		// tsc without a tsconfig prints usage help and exits 1, failing
+		// verification in every plain-JavaScript repo; only default to a
+		// type check when the project actually configures TypeScript.
+		if commands.Type == "" && (fileExists(filepath.Join(root, "tsconfig.json")) || fileExists(filepath.Join(root, "tsconfig.build.json"))) {
 			commands.Type = "npx tsc --noEmit"
 		}
 		if commands.Lint == "" {

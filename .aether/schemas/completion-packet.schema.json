@@ -231,6 +231,9 @@
         "caste": {
           "type": "string"
         },
+        "agent_name": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
