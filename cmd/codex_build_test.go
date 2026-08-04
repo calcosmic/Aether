@@ -86,7 +86,10 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	result := envelope["result"].(map[string]interface{})
 	if got := int(result["dispatch_count"].(float64)); got != 6 {
 		// Modeless phase resolves to prototype: prose "Research" in a task no
-		// longer spawns an Oracle (typed phase mode).
+		// longer spawns an Oracle (typed phase mode). The keyword-gated
+		// external castes (ambassador, gatekeeper) no longer spawn either:
+		// this phase replaces internal build dispatch and has no external
+		// surface or auth boundary for them to review.
 		t.Fatalf("dispatch_count = %d, want 6", got)
 	}
 	if got := int(result["wave_count"].(float64)); got != 2 {

@@ -56,6 +56,46 @@ var casteRelevanceRegistry = []CasteRelevanceProfile{
 }
 
 // casteRelevanceScore returns a 0-100 score for how relevant a caste is to a phase.
+// keywordGatedCastes only spawn on a real keyword hit, never on base score.
+// Their value is entirely conditional on the phase touching an external
+// surface; with no such surface there is nothing for them to review.
+var keywordGatedCastes = map[string]bool{
+	"ambassador": true,
+	"gatekeeper": true,
+}
+
+// containsKeyword matches a keyword that begins at a word boundary. Plain
+// substring matching dispatched an Ambassador to a local slugify phase because
+// "api" sits inside "cAPItalize" — a false positive that spends a whole worker
+// run and makes caste selection look arbitrary.
+//
+// The match is anchored at the start only, not both ends: "structure" must
+// still match "structured" and "test" must match "tests", because those are
+// the same concept inflected. Requiring a boundary at both ends silently
+// dropped the Architect from design phases.
+func containsKeyword(text, keyword string) bool {
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return false
+	}
+	for offset := 0; offset < len(text); {
+		idx := strings.Index(text[offset:], keyword)
+		if idx < 0 {
+			return false
+		}
+		start := offset + idx
+		if start == 0 || !isWordByte(text[start-1]) {
+			return true
+		}
+		offset = start + 1
+	}
+	return false
+}
+
+func isWordByte(b byte) bool {
+	return b == '_' || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
 func casteRelevanceScore(phase colony.Phase, caste string) int {
 	profile := findProfile(caste)
 	if profile == nil {
@@ -68,11 +108,20 @@ func casteRelevanceScore(phase colony.Phase, caste string) int {
 	// Keyword matching
 	keywordMatches := 0
 	for _, kw := range profile.Keywords {
-		if strings.Contains(text, kw) {
+		if containsKeyword(text, kw) {
 			keywordMatches++
 		}
 	}
 	score += keywordMatches * 10
+
+	// Castes whose work only exists when the phase actually touches their
+	// domain must not ride in on base score alone. An ambassador dispatched to
+	// a local string-utility phase can only report that it had no work to do,
+	// which costs a worker run and reads to the user as the colony being
+	// confused.
+	if keywordMatches == 0 && keywordGatedCastes[caste] {
+		return 0
+	}
 
 	// Condition matching
 	for _, cond := range profile.Conditions {
