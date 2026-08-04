@@ -18,12 +18,12 @@ If `$ARGUMENTS` is empty, show: `Usage: /ant-build <phase_number>`
 
 | Concern | Owner |
 |---------|-------|
-| Manifest generation | TS host (`aether host build --dry-run`) |
+| Manifest generation | Go runtime (`aether build $ARGUMENTS --plan-only`) |
 | Worker spawning | Wrapper (platform Agent tool) |
 | Ceremony rendering | Wrapper (Go ceremony CLI) |
 | State mutation | Go runtime (`build-finalize`) |
 
-The wrapper is the sole conductor for interactive worker spawning. The TS host provides the manifest only.
+The wrapper is the sole conductor for interactive worker spawning. The Go runtime provides the manifest only.
 
 ## Required Cross-Stage State
 
@@ -98,19 +98,19 @@ Frame the requested work as `Phase N of M -- Name` with a one-line purpose.
 
 🐜 The manifest is the colony's marching order — fetch it, then spawn exactly what it names.
 
-**Purpose:** Get the dispatch plan from the TS host without dispatching workers, so the wrapper — not the host — controls interactive spawning.
+**Purpose:** Get the dispatch plan from the Go runtime without dispatching workers, so the wrapper — not the runtime — controls interactive spawning.
 
-**Reads:** the TS host's plan-only build response.
+**Reads:** the Go runtime's plan-only build response.
 
-Fetch the manifest from the TS host in plan-only mode:
+Fetch the manifest from the Go runtime in plan-only mode:
 
 ```
-aether host build --dry-run $ARGUMENTS
+aether build $ARGUMENTS --plan-only
 ```
 
-The TS host calls `aether build <phase> --plan-only` and returns JSON without dispatching workers. The wrapper is responsible for spawning from this manifest.
+The runtime returns JSON without dispatching workers. The wrapper is responsible for spawning from this manifest.
 
-Parse `result.manifest.dispatch_manifest`. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+Parse `result.dispatch_manifest`. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
 
 See `.aether/docs/wrapper-host-contract.md` for the full field shapes this manifest carries.
 
@@ -122,9 +122,9 @@ See `.aether/docs/wrapper-host-contract.md` for the full field shapes this manif
 
 **Purpose:** Catch orchestrator-level boundary guidance before any worker spawns, so a build never runs past a condition the runtime flagged as needing a decision.
 
-**Reads:** `result.manifest.dispatch_manifest`'s `orchestrator_boundary_guidance` field.
+**Reads:** `result.dispatch_manifest`'s `orchestrator_boundary_guidance` field.
 
-Before spawning workers, inspect `result.manifest.dispatch_manifest` for `orchestrator_boundary_guidance`:
+Before spawning workers, inspect `result.dispatch_manifest` for `orchestrator_boundary_guidance`:
 
 - If active or `next` is `aether discuss`, stop the build flow and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
 
@@ -158,7 +158,7 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 
 **Spawns:** every worker named in `dispatch_manifest.execution_plan`, wave by wave.
 
-The wrapper spawns workers. The TS host does NOT dispatch workers for the interactive path.
+The wrapper spawns workers. The runtime does NOT dispatch workers in plan-only mode.
 
 For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 
@@ -249,7 +249,7 @@ flow.
 
 ## Guardrails
 
-- Do NOT run `aether host build` without `--dry-run` from this wrapper; that triggers the TS host dispatched path which duplicates the wrapper's own worker spawning. Always use `aether host build --dry-run`.
+- Do NOT run `aether host build` from this wrapper; the TS host hop is off the interactive build path. Fetch the manifest with `aether build $ARGUMENTS --plan-only` and never run a command that dispatches workers itself.
 - Do NOT run `aether build --synthetic` after real agent workers complete.
 - Do NOT describe parallel workers as background agents or say you will be notified later.
 - Do NOT read or write colony state files by hand.

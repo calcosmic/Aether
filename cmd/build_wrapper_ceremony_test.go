@@ -29,13 +29,13 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"## Phase Framing",
 		"Phase N of M -- Name",
 		"## Dispatch Manifest",
-		"aether host build --dry-run",
+		"aether build $ARGUMENTS --plan-only",
 		"temporary manifest file outside `.aether/data/`",
-		"result.manifest.dispatch_manifest",
+		"result.dispatch_manifest",
 		"## Runtime Spawn Ceremony",
 		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
 		"Do not set `run_in_background`",
-		"Do NOT run `aether host build` without `--dry-run` from this wrapper",
+		"Do NOT run `aether host build` from this wrapper",
 		"Do NOT run `aether build --synthetic` after real",
 		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file",
@@ -59,7 +59,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"## Active Signals",
 		"## Phase Framing",
 		"## Dispatch Manifest",
-		"aether host build --dry-run",
+		"aether build $ARGUMENTS --plan-only",
 		"## Runtime Spawn Ceremony",
 		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file",
@@ -82,9 +82,8 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		assertSubstringsInOrder(t, wrapperPath, text, inOrder)
 		for _, forbidden := range []string{
 			"Do NOT load playbooks",
-			"\nAETHER_OUTPUT_MODE=visual aether build $ARGUMENTS\n",
-			"\nAETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only\n",
-			"Do NOT run `aether build` without `--plan-only` from this wrapper.",
+			"aether host build --dry-run",
+			"result.manifest.dispatch_manifest",
 			"Do NOT run direct `aether build` from this wrapper for manifest generation",
 			// D-10 regression-fence item 9: no wrapper-driven git stash or
 			// commit. Checkpointing, if it ever returns, is runtime work.

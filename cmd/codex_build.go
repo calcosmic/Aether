@@ -306,7 +306,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"queen_execution_policy":   policy,
 		"selected_tasks":           selectedTaskIDs,
 		"wrapper_contract": map[string]interface{}{
-			"source_command":          "aether host build <phase>",
+			"source_command":          "aether build <phase> --plan-only",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
 			"finalize_surface":        "awaiting_wrapper_completion",
@@ -395,7 +395,7 @@ func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, 
 	result["queen_execution_policy"] = policy
 	result["next"] = "Queen/main agent executes dispatch_manifest, then runs aether build-finalize"
 	result["wrapper_contract"] = map[string]interface{}{
-		"source_command":          "aether host build <phase>",
+		"source_command":          "aether build <phase> --plan-only",
 		"spawn_log_required":      true,
 		"spawn_complete_required": true,
 		"finalize_surface":        "awaiting_queen_completion",

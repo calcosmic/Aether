@@ -177,15 +177,15 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --complet
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status`.
 2. Surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.
-3. Run the TS host manifest command:
+3. Run the Go runtime manifest command:
 
 ```bash
-aether host build --dry-run <phase>
+aether build <phase> --plan-only
 ```
 
 4. Save the full JSON envelope to a temporary manifest file outside
    `.aether/data/`.
-5. Parse `result.manifest.dispatch_manifest`.
+5. Parse `result.dispatch_manifest`.
 6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
    build workers.
 7. Render the user-facing spawn ceremony:

@@ -306,7 +306,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		PreSteps: []string{
 			"Load the aether-colony-build-cycle Codex skill.",
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.",
-			"Run `aether host build --dry-run <phase>` to fetch the dispatch manifest via the TS host without dispatching workers. Parse `result.manifest.dispatch_manifest`; do not parse visual output.",
+			"Run `aether build <phase> --plan-only` to fetch the dispatch manifest directly from the Go runtime without dispatching workers. Parse `result.dispatch_manifest`; do not parse visual output.",
 			"Save the full JSON envelope to a temporary manifest file for later ceremony rendering.",
 			"Read `queen_execution_policy.spawn_budget` from the dispatch manifest and surface selected/pruned caste reasons so users can see why workers were or were not spawned.",
 			"If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output.",

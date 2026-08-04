@@ -496,7 +496,7 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 		t.Fatalf("dispatch_mode = %q, want plan-only", got)
 	}
 	wrapperContract := result["wrapper_contract"].(map[string]interface{})
-	if got := wrapperContract["source_command"].(string); got != "aether host build <phase>" {
+	if got := wrapperContract["source_command"].(string); got != "aether build <phase> --plan-only" {
 		t.Fatalf("wrapper_contract source_command = %q, want TS host build command", got)
 	}
 	if got := result["colony_mode"].(string); got != "colony" {
@@ -630,7 +630,7 @@ func TestBuildQueenLedWrapperContractUsesHostSourceCommand(t *testing.T) {
 		t.Fatalf("runCodexBuildQueenLed returned error: %v", err)
 	}
 	wrapperContract := result["wrapper_contract"].(map[string]interface{})
-	if got := wrapperContract["source_command"].(string); got != "aether host build <phase>" {
+	if got := wrapperContract["source_command"].(string); got != "aether build <phase> --plan-only" {
 		t.Fatalf("wrapper_contract source_command = %q, want TS host build command", got)
 	}
 }

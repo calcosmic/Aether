@@ -198,7 +198,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"aether host build",
+				"aether build $ARGUMENTS --plan-only",
 				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
@@ -510,7 +510,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"aether host build",
+				"aether build $ARGUMENTS --plan-only",
 				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
