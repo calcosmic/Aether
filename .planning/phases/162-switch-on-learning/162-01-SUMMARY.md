@@ -149,6 +149,12 @@ None — no external service configuration required.
 - Phase 170's RECLAIM-09 (`queen-seed-from-hive`) can now build on a settled hive-on-by-default posture.
 - No blockers identified for downstream plans in this phase.
 
+## Self-Check: PASSED
+
+- All 16 files listed under Files Created/Modified confirmed present on disk (`cmd/hive_test_optin.go` intentionally deleted, as documented).
+- All 6 commit hashes (`2784b53b`, `2dc1273b`, `9a5bccaf`, `b96e69fe`, `3b1f2e94`, `5fa192a1`) confirmed present in `git log --oneline --all`.
+- Final `go build ./...`, `go vet ./...`, and `go test ./cmd/... -count=1` (266.7s, `ok`) all clean on the stable, fully-committed working tree.
+
 ---
 *Phase: 162-switch-on-learning*
 *Completed: 2026-08-04*
