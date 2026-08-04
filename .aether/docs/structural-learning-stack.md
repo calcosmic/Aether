@@ -12,8 +12,14 @@ reliability, the graph records relationships between instincts, curation ants cl
 promote, and the event bus connects everything loosely.
 
 The stack is invoked through the `consolidation-phase-end` and `consolidation-seal`
-subcommands, which no lifecycle command calls yet (Phase 162 wires this) — workers
-never call it directly either.
+subcommands. Phase-end consolidation runs automatically whenever `/ant-continue`
+durably advances a phase; seal consolidation runs automatically at `/ant-seal`.
+Both invocations are owned by the Go runtime (never a wrapper-instructed step) and
+are non-blocking — a consolidation failure is reported unmissably but never stops
+the advance or the seal. Both subcommands also remain directly invocable for
+manual inspection. See `.aether/docs/learning-system-authority.md` for the full
+authority decision (which learning system is authoritative, and why) and the
+named tests that enforce every claim in this section.
 
 ---
 
@@ -202,31 +208,52 @@ All steps are non-blocking — a failure in one step is logged and execution con
 
 ### 7. Consolidation Pipeline
 
-> **Wiring status:** Both modes below exist as working CLI subcommands but neither
-> is invoked by any lifecycle command today. Wiring them into `/ant-continue` and
-> `/ant-seal` is Phase 162's scope.
-
-Two consolidation modes, each calling into the curation ants.
+Two consolidation modes. They do not call the same underlying code: phase-end runs
+`pkg/memory`'s own consolidation algorithm directly and touches no curation ant;
+seal runs the eight-ant curation orchestration in addition to that same algorithm.
+See `.aether/docs/learning-system-authority.md` for the authority decision behind
+this split.
 
 **Phase-end (lightweight) — `consolidation-phase-end`:**
 
-The lightweight mode intended for phase end, currently invoked manually only — no
-lifecycle command calls it yet (Phase 162 wires this). Executes three ants only:
-`nurse → herald → janitor`. Publishes a `consolidation.phase_end` event on the
-event bus. All three steps are non-blocking.
+Runs automatically when `/ant-continue` durably advances a phase
+(`runPhaseEndConsolidation`, `cmd/consolidation_lifecycle.go`), and remains
+directly invocable for manual inspection. It calls `pipeline.RunConsolidation`
+(`pkg/memory/pipeline.go`), which runs `pkg/memory/consolidate.go`'s consolidation
+algorithm: instinct trust decay, archival of instincts whose decayed score falls
+below the 0.2 floor, observation decay, promotion-candidate detection, and
+`QueenEligible` computation (confidence >= 0.75 AND >= 3 recorded applications) —
+**it calls no curation ant**. This section previously described phase-end as
+executing a small named subset of the curation ant sequence; that was never true
+of this code path — there is no reference to `pkg/agent/curation` anywhere in
+`pkg/memory/consolidate.go`. It publishes a `consolidation.phase_end` event on the
+event bus. Every step is
+non-blocking, and a failure is reported as "phase advanced WITHOUT consolidation —
+&lt;reason&gt;" rather than aborting the advance. Enforced by
+`TestContinueAdvanceInvokesPhaseEndConsolidation`,
+`TestExternalContinueAdvanceInvokesPhaseEndConsolidation`,
+`TestContinueWithoutAdvanceDoesNotConsolidate`, and
+`TestRunPhaseEndConsolidationIsNonBlockingOnFailure` (`cmd/consolidation_lifecycle_test.go`).
 
 **Seal (full) — `consolidation-seal`:**
 
-The full mode intended for seal, currently invoked manually only — no lifecycle
-command calls it yet (Phase 162 wires this). Executes five steps:
-
-1. `curation-run` — full 8-ant orchestration
-2. `instinct-decay-all` — final trust decay pass across all active instincts
-3. `curation-archivist --threshold 0.3` — archive borderline instincts
-4. `event-publish` — publish `consolidation.seal` event
-5. `curation-scribe` — generate final consolidation report
-
-All steps are non-blocking. The seal report path is returned in the output.
+Runs automatically at `/ant-seal` (`runSealConsolidation`,
+`cmd/consolidation_lifecycle.go`, invoked from `completeSealRuntime`), and remains
+directly invocable for manual inspection. It runs the full eight-ant curation
+orchestration (`curation.NewOrchestrator(store, bus).Run`, execution order
+`sentinel -> nurse -> critic -> herald -> janitor -> archivist -> librarian ->
+scribe`, each ant announcing itself individually in the seal output), then runs
+the same `pkg/memory` consolidation algorithm phase-end uses (decay, archive,
+promotion, `QueenEligible`), publishes a `consolidation.seal` event, and writes
+the scribe's report to `.aether/CURATION-REPORT.md`. Every step is non-blocking; a
+failure — including a sentinel-triggered abort of the curation pass — is reported
+as "colony sealed WITHOUT consolidation — &lt;reason&gt;" rather than blocking the
+seal. Enforced by `TestRunSealConsolidationRunsAllEightAnts`,
+`TestRunSealConsolidationIsNeverDryRun`,
+`TestRunSealConsolidationWritesReportArtifact`,
+`TestRunSealConsolidationNonBlockingOnFailure`,
+`TestSealRendersEightNamedAnts`, and `TestSealRendersReportPath`
+(`cmd/consolidation_lifecycle_test.go`, `cmd/seal_ceremony_test.go`).
 
 ---
 
@@ -234,8 +261,8 @@ All steps are non-blocking. The seal report path is returned in the output.
 
 | Trigger | Stack call | Effect |
 |---------|-----------|--------|
-| Manual only — not wired to any lifecycle command yet (Phase 162) | `consolidation-phase-end` | nurse + herald + janitor; phase_end event |
-| Manual only — not wired to any lifecycle command yet (Phase 162) | `consolidation-seal` | full 8-ant curation + decay + archive + seal event + report |
+| `/ant-continue` (on durable phase advance) + manual inspection | `consolidation-phase-end` | `pkg/memory` decay/archive/promotion algorithm (no curation ants); phase_end event |
+| `/ant-seal` + manual inspection | `consolidation-seal` | full 8-ant curation + the same decay/archive/promotion algorithm + seal event + report |
 | `/ant-build` (pattern capture) | `learning-observe` | Records observation with trust score |
 | `colony-prime` | `instinct-read-trusted` | Injects trusted instincts into worker prompts |
 
