@@ -1037,7 +1037,7 @@ EOF
 		t.Fatalf("failed to read captured args: %v", err)
 	}
 	argsText := string(argsData)
-	for _, want := range []string{"--output-format\njson", "--json-schema", `"ant_name"`} {
+	for _, want := range []string{"--output-format\nstream-json", "--verbose", "--json-schema", `"ant_name"`} {
 		if !strings.Contains(argsText, want) {
 			t.Fatalf("captured args missing %q:\n%s", want, argsText)
 		}

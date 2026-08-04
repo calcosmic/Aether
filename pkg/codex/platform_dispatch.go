@@ -865,7 +865,7 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 		}, err
 	}
 	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + RenderPermissionProfileSection(permission) + "\n\n" + renderResponseContract(config))
-	args := []string{"-p", prompt, "--output-format", "json", "--json-schema", string(schemaJSON), "--agent", strings.TrimSpace(config.AgentName)}
+	args := claudeBaseWorkerArgs(prompt, string(schemaJSON), config.AgentName)
 	if permission.Profile.Name == PermissionRepositoryReadOnly {
 		args = append(args, "--permission-mode", "plan")
 	} else {
@@ -877,6 +877,26 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 		args = append(args, "--permission-mode", "acceptEdits", "--settings", settingsPath)
 	}
 	return invokeHostedWorker(ctx, c, config, observer, args, "claude")
+}
+
+// claudeBaseWorkerArgs builds the invariant part of the Claude CLI vector.
+//
+// stream-json, not plain json: a worker that emits its claims in an earlier
+// assistant turn and then keeps talking leaves the plain-json envelope
+// carrying only the final prose, so the claims are unrecoverable and the run
+// fails "no worker claims found" — the deterministic v1.0.47 continue blocker.
+// stream-json emits every turn as its own NDJSON line, and
+// hostedJSONTextCandidates already scans lines newest-first, so claims survive
+// wherever the worker put them. --verbose is required by the CLI for
+// stream-json under --print.
+func claudeBaseWorkerArgs(prompt, schemaJSON, agentName string) []string {
+	return []string{
+		"-p", prompt,
+		"--output-format", "stream-json",
+		"--verbose",
+		"--json-schema", schemaJSON,
+		"--agent", strings.TrimSpace(agentName),
+	}
 }
 
 func (o *OpenCodeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {

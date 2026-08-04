@@ -820,6 +820,9 @@ func renderResponseContract(config WorkerConfig) string {
 ## Final Response Contract
 
 Return ONLY a single JSON object as your final response.
+- Your FINAL message must be the JSON object and nothing else: no prose before it, no prose after it.
+- Do not emit the JSON and then keep working. Emit it once, as the last thing you do.
+- Do not tell the user which command to run next. The orchestrator owns lifecycle decisions; advice appended after the JSON is discarded and breaks result parsing.
 - Do not wrap the JSON in markdown code fences.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
 - Set status to one of: %s.
