@@ -508,6 +508,58 @@ func TestRunSealConsolidationSentinelAbortShortCircuitsPipeline(t *testing.T) {
 	}
 }
 
+// TestRunSealConsolidationQueenPromotedIDsExcludesFailedWrites pins WR-01 at
+// the seal summary boundary: an instinct that is QueenEligible but whose
+// QUEEN.md write failed must NOT appear in QueenPromotedIDs. If it did, the
+// D-09 skip-set would suppress completeSealRuntime's promoteInstinctLocal
+// fallback AND CROWNED-ANTHILL.md would report a promotion that never
+// reached QUEEN.md.
+func TestRunSealConsolidationQueenPromotedIDsExcludesFailedWrites(t *testing.T) {
+	saveGlobals(t)
+
+	s, root := newTestStore(t)
+	store = s
+
+	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Version: "1", Instincts: []colony.InstinctEntry{{
+		ID:         "inst_queen_write_fails",
+		Trigger:    "eligible pattern behind a failing QUEEN.md write",
+		Action:     "keep QueenPromotedIDs honest about failed writes",
+		Domain:     "testing",
+		TrustScore: 0.9,
+		TrustTier:  "trusted",
+		Confidence: 0.9,
+		Provenance: colony.InstinctProvenance{ApplicationCount: 3},
+	}}}); err != nil {
+		t.Fatalf("seed instincts: %v", err)
+	}
+	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatalf("seed observations: %v", err)
+	}
+
+	// Force every QUEEN.md write to fail: put a DIRECTORY where the local
+	// QUEEN.md file lives, so AtomicWrite's rename onto it must error while
+	// the rest of the pipeline runs cleanly.
+	queenPath := filepath.Join(root, ".aether", "QUEEN.md")
+	if err := os.MkdirAll(queenPath, 0o755); err != nil {
+		t.Fatalf("mkdir queen dir: %v", err)
+	}
+
+	var summary sealConsolidationSummary
+	_ = captureStderrForConsolidationTest(t, func() {
+		summary = runSealConsolidation()
+	})
+
+	if !summary.Ran {
+		t.Fatalf("precondition: expected Ran == true (a failed queen write is log-and-continue, not a pipeline error), got: %+v", summary)
+	}
+	if summary.QueenEligible != 1 {
+		t.Fatalf("precondition: expected QueenEligible == 1, got: %+v", summary)
+	}
+	if len(summary.QueenPromotedIDs) != 0 {
+		t.Fatalf("expected QueenPromotedIDs to exclude the failed write (WR-01), got: %v", summary.QueenPromotedIDs)
+	}
+}
+
 // TestRunSealConsolidationIsNeverDryRun proves runSealConsolidation always
 // takes the real mutating path: it never references
 // learn.NewDryRunConsolidationService, and a real run against a seeded store

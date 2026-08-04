@@ -194,7 +194,11 @@ type sealConsolidationSummary struct {
 	// QueenPromotedIDs carries the actual instinct IDs pkg/memory's
 	// RunConsolidation promoted into QUEEN.md this seal -- not just a count --
 	// so Task 2's reconciliation can build an exact skip-set for the
-	// subordinate seal-side promotion loop (D-09).
+	// subordinate seal-side promotion loop (D-09). Sourced from the
+	// pipeline's QueenPromoted (writes that succeeded), never from
+	// QueenEligible: an eligible instinct whose write failed must stay OUT
+	// of the skip-set so the subordinate writer can recover it, and out of
+	// the promoted report so CROWNED-ANTHILL.md stays honest (WR-01).
 	QueenPromotedIDs []string
 	ReviewCandidates int
 	RereadCandidates int
@@ -339,7 +343,7 @@ func runSealConsolidation() sealConsolidationSummary {
 		// The D-09 skip-set must reflect what was actually written even when
 		// Ran is false, or completeSealRuntime double-writes on this path.
 		if consResult != nil {
-			summary.QueenPromotedIDs = append([]string{}, consResult.QueenEligible...)
+			summary.QueenPromotedIDs = append([]string{}, consResult.QueenPromoted...)
 		}
 		return summary
 	}
@@ -350,7 +354,7 @@ func runSealConsolidation() sealConsolidationSummary {
 	summary.ObservationsDecayed = consResult.ObservationsDecayed
 	summary.PromotionCandidates = len(consResult.PromotionCandidates)
 	summary.QueenEligible = len(consResult.QueenEligible)
-	summary.QueenPromotedIDs = append([]string{}, consResult.QueenEligible...)
+	summary.QueenPromotedIDs = append([]string{}, consResult.QueenPromoted...)
 	summary.ReviewCandidates = len(consResult.ReviewCandidates)
 	summary.RereadCandidates = len(consResult.RereadCandidates)
 	return summary
