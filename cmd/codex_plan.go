@@ -2216,6 +2216,9 @@ func renderPhasePlanSchemaGuidance() string {
 - Dependency ids must use those assigned ids only: first task in first phase is "1.1", second is "1.2", first task in second phase is "2.1".
 - depends_on must be an array of task id strings such as ["1.1"]. Do not use task text, file paths, descriptions, or custom ids like "P1-T1".
 - Bind every success criterion when using evidence_requirements. artifacts are exact repository-relative project files; checks are selected from build, types, lint, tests, claims, and watcher. Do not use .aether/data files as product evidence.
+- Only list a file under artifacts when THIS task changes it. artifacts is a claim that the task produced the file, and the runtime verifies it against the build's claim lists.
+- Never bind an "unchanged", "untouched", "still passes", or "remains dependency-free" criterion to artifacts. Those assert pre-existing state, and the task never claims those files, so the phase blocks with "artifact <path> was not claimed by the current build" and can only be recovered with manual --reconcile-task/--read-only-artifact flags.
+- Express a "nothing regressed" criterion with checks instead: {"criterion":"the suite still passes","checks":["tests"]} with no artifacts entry.
 `) + "\n"
 }
 
