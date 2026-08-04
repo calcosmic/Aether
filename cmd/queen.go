@@ -36,6 +36,9 @@ const queenDefaultContent = `# QUEEN.md — Colony Wisdom Hub
 
 ## Colony Charter
 > Colony name and goal.
+
+## Instincts
+> Instincts promoted by the consolidation pipeline.
 `
 
 // --- queen-init ---
@@ -669,6 +672,67 @@ func writeLocalQueenText(text string) error {
 		text += "\n"
 	}
 	return os.WriteFile(p, []byte(text), 0644)
+}
+
+// ensureQueenInstinctsSection self-heals a local QUEEN.md that predates the
+// "## Instincts" section by appending the header (and a short blockquote
+// description, matching the style of queenDefaultContent's other sections)
+// at the END of the file, then persisting it.
+//
+// Appending at the end is deliberate and load-bearing: the legacy local
+// template has no `---` delimiters, so pkg/memory's findSectionEnd treats
+// "no \n--- after the header" as "section runs to end of file". A mid-file
+// Instincts header would therefore cause entries meant for Instincts to be
+// appended after whatever unrelated section happened to follow it.
+//
+// Idempotent: if the local QUEEN.md on disk already contains a line equal
+// to "## Instincts", the file is left untouched. If no local QUEEN.md
+// exists yet, the in-memory default (which already contains "## Instincts")
+// is written out so the section is materialized on disk rather than merely
+// implied by the default template.
+func ensureQueenInstinctsSection() error {
+	p := localQueenPath()
+	if p == "" {
+		return fmt.Errorf("no local store")
+	}
+
+	fileExists := true
+	if _, err := os.Stat(p); err != nil {
+		if os.IsNotExist(err) {
+			fileExists = false
+		} else {
+			return err
+		}
+	}
+
+	text, err := loadLocalQueenText()
+	if err != nil {
+		return err
+	}
+
+	hasHeader := false
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "## Instincts" {
+			hasHeader = true
+			break
+		}
+	}
+
+	if hasHeader {
+		if fileExists {
+			// Already present on disk -- nothing to heal.
+			return nil
+		}
+		// No file yet, but the loaded default template already carries the
+		// section (new-colony template). Materialize it on disk.
+		return writeLocalQueenText(text)
+	}
+
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	text += "\n## Instincts\n> Instincts promoted by the consolidation pipeline.\n"
+	return writeLocalQueenText(text)
 }
 
 // promoteInstinctLocal promotes a single instinct to the local repo QUEEN.md only.
