@@ -1980,9 +1980,6 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	positiveEvidence := continueTasksSupportAdvancement(tasks, claimsSatisfied)
 
 	blockingIssues := []string{}
-	if len(options.ReconcileTaskIDs) > 0 {
-		blockingIssues = append(blockingIssues, fmt.Sprintf("Warning: %d task(s) were manually reconciled. Verification was re-run, but reconciled tasks do not bypass claim checks.", len(options.ReconcileTaskIDs)))
-	}
 	if !verification.ChecksPassed {
 		blockingIssues = append(blockingIssues, verification.BlockingIssues...)
 	}
@@ -2022,6 +2019,11 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	}
 
 	passed := verification.ChecksPassed && positiveEvidence
+	if len(options.ReconcileTaskIDs) > 0 {
+		// Visible but non-blocking: the reconcile itself is legitimate
+		// recovery (H-04); verification and evidence still gate advancement.
+		operationalIssues = append(operationalIssues, fmt.Sprintf("%d task(s) were manually reconciled; verification was re-run before advancement", len(options.ReconcileTaskIDs)))
+	}
 	summary := "Verification and task evidence support advancement"
 	if passed && len(operationalIssues) > 0 {
 		summary = "Verification passed with partial operational success"
@@ -2052,12 +2054,26 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 
 func continueTasksSupportAdvancement(tasks []codexContinueTaskAssessment, claimsSatisfied bool) bool {
 	if len(tasks) == 0 {
-		return false
+		// Phases created by `aether phase-insert` carry no task list; their
+		// implementation evidence is the build's verified claims. Requiring
+		// task-bound evidence here made every inserted phase permanently
+		// unadvanceable.
+		return claimsSatisfied
 	}
 	for _, task := range tasks {
 		switch task.Outcome {
-		case "missing", "needs_redispatch", "implemented_unverified", "simulated", "manually_reconciled":
+		case "missing", "needs_redispatch", "implemented_unverified", "simulated":
 			return false
+		case "manually_reconciled":
+			// H-04: a manually reconciled task must be able to advance when
+			// phase verification passed — the runtime's own recovery hint is
+			// `--reconcile-task <id>`, and excluding reconciled tasks here
+			// made that hint a dead loop. Reconcile is still not a bypass:
+			// builder-claim verification must also pass, so a failed dispatch
+			// with an empty claims file stays blocked.
+			if !task.Verified || !claimsSatisfied {
+				return false
+			}
 		}
 	}
 	return true
@@ -3254,6 +3270,15 @@ func applyCodexContinueWorkerClosures(closed []codexContinueClosedWorker) error 
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	for _, detail := range closed {
 		if err := spawnTree.UpdateStatusPreserveActivity(detail.Name, detail.Status, detail.Summary); err != nil {
+			// A worker missing from the spawn tree is not a state failure:
+			// the tree is a coordination/display artifact that pause/resume
+			// cycles and fresh sessions rotate. The build packet remains the
+			// truth for worker results — closing an untracked worker is a
+			// no-op, not a reason to abort the lifecycle.
+			if strings.Contains(err.Error(), "not found") {
+				fmt.Fprintf(os.Stderr, "note: worker %s absent from spawn tree; closure skipped (%v)\n", detail.Name, err)
+				continue
+			}
 			return fmt.Errorf("failed to close worker %s: %w", detail.Name, err)
 		}
 	}

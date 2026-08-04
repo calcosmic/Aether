@@ -233,39 +233,22 @@ func TestContinueFinalizeReadOnlyArtifactEvidenceCriteriaPassAndDetectsTamper(t 
 		}
 		env := parseLifecycleEnvelope(t, outBuf.String())
 		result := env["result"].(map[string]interface{})
-		// The expected top-level outcome on this route is blocked, NOT
-		// advanced: --read-only-artifact is only usable on a task also
-		// passed to --reconcile-task (T-163.1-31), and a reconcile-gated
-		// invocation cannot advance (the 163.1-06 SUMMARY documents the
-		// direct path's unconditional "manually reconciled" warning; on
-		// this external finalize path with an empty dispatch list, the
-		// block empirically surfaces through the implementation_evidence
-		// gate instead: "verification passed but no implementation
-		// evidence or reconciliation was recorded"). Assert that expected
-		// state explicitly, restricting blocking_issues to exactly those
-		// two reconcile-gating classes -- so this test fails loudly if a
-		// new, unrelated blocker (e.g. a criterion blocker reappearing)
-		// ever shows up on this path, or if the gating behavior changes
-		// and advancement becomes possible (at which point these
-		// assertions should be upgraded to prove advancement). The escape
-		// hatch itself is proven by the criterion-specific fields:
-		// criteria_passed flips to true and its blocking issue disappears
-		// -- exactly as 163.1-06's own end-to-end test proves it on the
-		// direct continue path.
-		if advanced, _ := result["advanced"].(bool); advanced {
-			t.Fatalf("expected advanced:false on the reconcile-gated finalize path; the gating behavior changed -- upgrade this test to assert advancement, got %v", result)
-		}
-		if blocked, _ := result["blocked"].(bool); !blocked {
-			t.Fatalf("expected blocked:true on the reconcile-gated finalize path, got %v", result)
+		// Upgraded per this test's original instruction: the H-04 fix made
+		// reconciled tasks with passing verification advance, so this route
+		// now proves advancement. The reconcile remains visible as a
+		// non-blocking operational note, and the reconcile-gating blockers
+		// ("manually reconciled" as a blocking issue, "no implementation
+		// evidence or reconciliation was recorded") must be gone.
+		if blocked, _ := result["blocked"].(bool); blocked {
+			t.Fatalf("expected the reconciled+verified finalize path to advance (H-04), got blocked: %v", result)
 		}
 		gateBlockers := stringSliceValue(result["blocking_issues"])
-		if len(gateBlockers) == 0 {
-			t.Fatalf("expected a reconcile-gating blocker in blocking_issues, got none: %v", result)
+		if len(gateBlockers) != 0 {
+			t.Fatalf("expected no blocking issues on the reconciled+verified finalize path, got: %v", gateBlockers)
 		}
-		for _, issue := range gateBlockers {
-			if !strings.Contains(issue, "manually reconciled") && !strings.Contains(issue, "no implementation evidence or reconciliation was recorded") {
-				t.Fatalf("unexpected blocker outside the reconcile-gating classes on the recorded-evidence path: %q (all: %v)", issue, gateBlockers)
-			}
+		operational := stringSliceValue(result["operational_issues"])
+		if !anyContains(operational, "manually reconciled") {
+			t.Fatalf("expected the reconcile to stay visible as an operational note, got: %v", operational)
 		}
 		verification, ok := result["verification"].(map[string]interface{})
 		if !ok {

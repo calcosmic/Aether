@@ -53,3 +53,35 @@ func TestResolveHostBoundaryWatcherPrefersBuildWatcher(t *testing.T) {
 		t.Fatalf("skipped build watcher not preserved as skip: %+v", got)
 	}
 }
+
+// TestTasklessPhaseAdvancesOnVerifiedClaims locks the 1.0.47 acceptance fix:
+// a phase inserted via `aether phase-insert` has no task list, and its
+// implementation evidence is the build's verified claims — requiring
+// task-bound evidence made every inserted phase permanently unadvanceable.
+func TestTasklessPhaseAdvancesOnVerifiedClaims(t *testing.T) {
+	if continueTasksSupportAdvancement(nil, true) != true {
+		t.Fatal("taskless phase with verified claims cannot advance")
+	}
+	if continueTasksSupportAdvancement(nil, false) != false {
+		t.Fatal("taskless phase without verified claims must not advance")
+	}
+}
+
+// TestReconciledTaskAdvancesWhenVerified locks the H-04 fix: the runtime's
+// own recovery hint is `--reconcile-task <id>`, so a reconciled task with
+// passing phase verification must count as advancement evidence — excluding
+// it made the hint a dead loop.
+func TestReconciledTaskAdvancesWhenVerified(t *testing.T) {
+	reconciledVerified := []codexContinueTaskAssessment{{TaskID: "2.2", Outcome: "manually_reconciled", Verified: true}}
+	if !continueTasksSupportAdvancement(reconciledVerified, true) {
+		t.Fatal("reconciled+verified task blocked advancement")
+	}
+	reconciledUnverified := []codexContinueTaskAssessment{{TaskID: "2.2", Outcome: "manually_reconciled", Verified: false}}
+	if continueTasksSupportAdvancement(reconciledUnverified, true) {
+		t.Fatal("reconciled task without verification advanced")
+	}
+	// Reconcile is not a bypass: failed builder claims still block.
+	if continueTasksSupportAdvancement(reconciledVerified, false) {
+		t.Fatal("reconciled task advanced despite failed claim verification")
+	}
+}

@@ -1950,16 +1950,29 @@ func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	blockingIssues := stringSliceValue(result["blocking_issues"])
+	// H-04: the reconcile note is visible as an operational issue, while the
+	// claim-evidence failure is what actually blocks.
+	operational := stringSliceValue(result["operational_issues"])
 	hasWarning := false
-	for _, issue := range blockingIssues {
+	for _, issue := range operational {
 		if strings.Contains(issue, "manually reconciled") {
 			hasWarning = true
 			break
 		}
 	}
 	if !hasWarning {
-		t.Fatalf("expected blocking issues to contain reconcile warning, got %v", blockingIssues)
+		t.Fatalf("expected operational issues to contain reconcile note, got %v", operational)
+	}
+	blockingIssues := stringSliceValue(result["blocking_issues"])
+	hasClaimBlock := false
+	for _, issue := range blockingIssues {
+		if strings.Contains(issue, "claim") {
+			hasClaimBlock = true
+			break
+		}
+	}
+	if !hasClaimBlock {
+		t.Fatalf("expected a claim-evidence blocking issue, got %v", blockingIssues)
 	}
 }
 
@@ -3964,16 +3977,29 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	blockingIssues := stringSliceValue(result["blocking_issues"])
-	hasReconcileWarning := false
-	for _, issue := range blockingIssues {
+	// H-04: the reconcile note lives in operational issues; the claim-evidence
+	// failure is the blocking issue.
+	operational := stringSliceValue(result["operational_issues"])
+	hasReconcileNote := false
+	for _, issue := range operational {
 		if strings.Contains(issue, "manually reconciled") {
-			hasReconcileWarning = true
+			hasReconcileNote = true
 			break
 		}
 	}
-	if !hasReconcileWarning {
-		t.Fatalf("expected blocking issues to mention reconcile, got %v", blockingIssues)
+	if !hasReconcileNote {
+		t.Fatalf("expected operational issues to mention reconcile, got %v", operational)
+	}
+	blockingIssues := stringSliceValue(result["blocking_issues"])
+	hasClaimBlock := false
+	for _, issue := range blockingIssues {
+		if strings.Contains(issue, "claim") {
+			hasClaimBlock = true
+			break
+		}
+	}
+	if !hasClaimBlock {
+		t.Fatalf("expected a claim-evidence blocking issue, got %v", blockingIssues)
 	}
 }
 
