@@ -134,6 +134,43 @@ func checkUpdateAvailable(repoDir string) updateAvailability {
 	}
 }
 
+// renderRepoVersionTransition states, in the update's own output, what this
+// repo moved from and to.
+//
+// The update visual reported hub and binary versions but never the repo's own,
+// so a user could not tell whether they had actually been behind, by how much,
+// or whether the run changed anything that mattered. That is the one question
+// `/ant-update` exists to answer.
+func renderRepoVersionTransition(previous, hubVersion string, dryRun bool) string {
+	hubVersion = normalizeVersion(strings.TrimSpace(hubVersion))
+	if hubVersion == "" || hubVersion == "unknown" {
+		return ""
+	}
+	previous = normalizeVersion(strings.TrimSpace(previous))
+
+	verb := "This repo"
+	if dryRun {
+		verb = "This repo would move"
+	}
+
+	if previous == "" {
+		if dryRun {
+			return fmt.Sprintf("%s to %s (no previous sync on record).\n", verb, hubVersion)
+		}
+		return fmt.Sprintf("%s is now on %s (first sync on record).\n", verb, hubVersion)
+	}
+	if cmp, err := compareSemver(previous, hubVersion); err == nil && cmp >= 0 {
+		if dryRun {
+			return fmt.Sprintf("This repo is already up to date at %s — nothing to fetch.\n", previous)
+		}
+		return fmt.Sprintf("This repo was already up to date at %s.\n", previous)
+	}
+	if dryRun {
+		return fmt.Sprintf("An update is available: %s -> %s.\n", previous, hubVersion)
+	}
+	return fmt.Sprintf("Updated this repo: %s -> %s.\n", previous, hubVersion)
+}
+
 // renderUpdateAvailableWarning phrases the availability as a status warning.
 // Returns "" when the repo is current.
 func renderUpdateAvailableWarning(availability updateAvailability) string {

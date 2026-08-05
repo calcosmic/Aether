@@ -2013,7 +2013,7 @@ func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCo
 	return b.String()
 }
 
-func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string, versionsMatch bool) string {
+func renderUpdateVisual(repoDir, hubVersion, localVersion, repoTransition string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string, versionsMatch bool) string {
 	var b strings.Builder
 	totalRemoved := syncDetailsRemoved(details)
 	b.WriteString(renderBanner(commandEmoji("update"), "Update"))
@@ -2027,6 +2027,12 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 	b.WriteString("Repo: ")
 	b.WriteString(repoDir)
 	b.WriteString("\n")
+	// The repo's own before/after is the question `/ant-update` exists to
+	// answer; hub and binary versions alone never told the user whether they
+	// had actually been behind.
+	if repoTransition != "" {
+		b.WriteString(repoTransition)
+	}
 	if hubVersion != "" {
 		b.WriteString("Hub version: ")
 		b.WriteString(hubVersion)

@@ -83,6 +83,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot determine working directory: %w", err)
 	}
 
+	// Captured before any sync writes the marker: this is what the repo was
+	// on when the user asked, and it is what `/ant-update` must report back.
+	repoVersionBefore := ""
+	if marker, ok := readInstalledVersionMarker(repoDir); ok {
+		repoVersionBefore = marker.Version
+	}
+
 	// Sync companion files from hub
 	if dryRun {
 		mode := "safe (new files only)"
@@ -107,7 +114,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 		staleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, []map[string]interface{}{})
 		result["stale_publish"] = staleResultToMap(staleResult)
-		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, force, true, []map[string]interface{}{
+		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, true), force, true, []map[string]interface{}{
 			{"label": "Local state scaffold", "copied": 0, "skipped": 0},
 			{"label": "Repo .aether cleanup", "copied": 0, "skipped": 0},
 			{"label": "Prune legacy repo platform assets", "copied": 0, "skipped": 0},
@@ -218,6 +225,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"message":                 message,
 			"hub_version":             hubVersion,
 			"local_version":           binaryVersion,
+			"repo_version_before":     repoVersionBefore,
+			"repo_version_after":      hubVersion,
+			"repo_was_behind":         repoVersionBefore != "" && repoVersionBefore != normalizeVersion(hubVersion),
 			"force":                   force,
 			"removed":                 removed,
 			"details":                 syncResult.details,
@@ -230,7 +240,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"codex_restart_targets":   restartTargets,
 			"stale_publish":           staleResultToMap(staleResult),
 		}
-		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode, hubVersion == binaryVersion)
+		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode, hubVersion == binaryVersion)
 		if staleResult.Classification != staleOK {
 			visual += renderStalePublishBanner(staleResult)
 		}

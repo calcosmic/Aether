@@ -1141,6 +1141,7 @@ func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 		"/tmp/example",
 		"1.0.7",
 		"1.0.7",
+		"",
 		false,
 		false,
 		[]map[string]interface{}{
@@ -1171,6 +1172,7 @@ func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
 		"/tmp/example",
 		"1.0.27",
 		"1.0.27",
+		"",
 		true,
 		false,
 		[]map[string]interface{}{

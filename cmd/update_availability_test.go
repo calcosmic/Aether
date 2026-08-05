@@ -164,3 +164,37 @@ func TestAetherSourceCheckoutIsNeverPrompted(t *testing.T) {
 		t.Fatal("the Aether source checkout was told to update from the hub it publishes")
 	}
 }
+
+// TestUpdateReportsRepoVersionTransition is the gate for the question
+// `/ant-update` exists to answer: was I behind, and where am I now? The update
+// output reported hub and binary versions but never the repo's own.
+func TestUpdateReportsRepoVersionTransition(t *testing.T) {
+	cases := []struct {
+		name     string
+		previous string
+		hub      string
+		dryRun   bool
+		want     string
+	}{
+		{"behind", "1.0.25", "1.0.48", false, "Updated this repo: 1.0.25 -> 1.0.48."},
+		{"behind dry-run", "1.0.25", "1.0.48", true, "An update is available: 1.0.25 -> 1.0.48."},
+		{"already current", "1.0.48", "1.0.48", false, "This repo was already up to date at 1.0.48."},
+		{"already current dry-run", "1.0.48", "1.0.48", true, "This repo is already up to date at 1.0.48 — nothing to fetch."},
+		{"never stamped", "", "1.0.48", false, "This repo is now on 1.0.48 (first sync on record)."},
+		{"ahead stays quiet about updating", "1.0.49", "1.0.48", false, "already up to date"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := renderRepoVersionTransition(tc.previous, tc.hub, tc.dryRun)
+			if !strings.Contains(got, tc.want) {
+				t.Fatalf("renderRepoVersionTransition(%q, %q, %v) = %q, want it to contain %q",
+					tc.previous, tc.hub, tc.dryRun, got, tc.want)
+			}
+		})
+	}
+
+	// An unknown hub version must produce nothing rather than a nonsense line.
+	if got := renderRepoVersionTransition("1.0.25", "unknown", false); got != "" {
+		t.Fatalf("unknown hub version produced %q, want empty", got)
+	}
+}
