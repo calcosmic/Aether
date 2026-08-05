@@ -2822,6 +2822,15 @@ func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBu
 		}
 	}
 
+	// Verifying castes need to know what the tree already looked like: phases
+	// do not commit between themselves, so prior phases' verified work shows
+	// up as uncommitted changes and reads as this phase overreaching.
+	if baselineAwareCastes[strings.ToLower(strings.TrimSpace(dispatch.Caste))] {
+		if section := renderPhaseBaselineSection(capturePhaseBaseline(root)); section != "" {
+			b.WriteString(section)
+		}
+	}
+
 	if handoff := strings.TrimSpace(dispatch.HandoffSection); handoff != "" {
 		b.WriteString("\n")
 		b.WriteString(handoff)
