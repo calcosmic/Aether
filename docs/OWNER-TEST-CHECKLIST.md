@@ -213,3 +213,46 @@ what was already there before the phase started.*
 correctly and that its suggestions use slash commands. You'll see a
 `gate 5: OpenCode surfaces` line. If you don't have OpenCode installed, it says
 so out loud rather than quietly skipping.
+
+---
+
+## Keeping other repos up to date
+
+### Updating a repo
+
+Either of these, in the repo you want to refresh:
+
+```
+aether update --force
+```
+
+or, inside Claude Code in that repo:
+
+```
+/ant-update --force
+```
+
+`/ant-update` is installed globally, so it works in every repo without any
+per-repo setup.
+
+### Aether now tells you when a repo is behind
+
+You no longer have to remember which repos are stale. Run:
+
+```
+aether status
+```
+
+If that repo is behind, you'll see a warning like:
+
+> Aether update available: this repo is on 1.0.25, the hub is at 1.0.48.
+> Run `aether update --force` to refresh it.
+
+Once you update, the warning disappears and stays gone until the next time you
+publish a new version.
+
+✅ **PASS** — an out-of-date repo warns you; an up-to-date one says nothing.
+❌ **FAIL** — a repo you just updated still nags you.
+
+*The Aether source repo itself never shows this, because it's the thing that
+publishes updates — telling it to update from its own output would be circular.*
