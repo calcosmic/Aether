@@ -261,4 +261,3 @@ func TestMergeClaudeSettingsNoOpIsByteIdentical(t *testing.T) {
 		t.Fatalf("no-op merge rewrote bytes:\nfirst:\n%s\nsecond:\n%s", merged, again)
 	}
 }
-

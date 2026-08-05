@@ -320,9 +320,9 @@ var contractSchemaCmd = &cobra.Command{
 		firstDiffLine := firstDifferingLine(generated, committed)
 		err = fmt.Errorf("completion-packet schema drift detected: %s no longer matches the Go structs (first differing line: %d); regenerate with `aether contract-schema --write`", completionPacketSchemaRel, firstDiffLine)
 		outputError(1, err.Error(), map[string]interface{}{
-			"path":                completionPacketSchemaRel,
+			"path":                 completionPacketSchemaRel,
 			"first_differing_line": firstDiffLine,
-			"regenerate_command":  "aether contract-schema --write",
+			"regenerate_command":   "aether contract-schema --write",
 		})
 		return err
 	},

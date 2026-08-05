@@ -464,6 +464,93 @@ func TestPhaseInsertInvalidAfter(t *testing.T) {
 	}
 }
 
+// TestPhaseInsertMissingRequiredFlagsFailLoudly locks behaviour that two
+// independent audits misread as a silent no-op. The `if name == "" { return
+// nil }` guards in phase-insert look like they swallow the failure, but
+// mustGetString (cmd/helpers.go:76-79) has already emitted an ok:false
+// envelope and set a non-zero exit code by then; the guards only stop the
+// command continuing.
+//
+// It is locked rather than left implicit because the audit reading was
+// plausible: a future refactor that switches these flags to a non-erroring
+// accessor would turn the guards into exactly the silent success that was
+// alleged, and no existing test would notice.
+//
+// Asserts all three halves of "fail loudly": exactly one ok:false envelope, a
+// non-zero process exit via the real Execute() entry point, and an unchanged
+// plan on disk.
+func TestPhaseInsertMissingRequiredFlagsFailLoudly(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"missing description", []string{"phase-insert", "--after", "1", "--name", "Handle quoted fields"}},
+		{"missing name", []string{"phase-insert", "--after", "1", "--description", "Parse quoted CSV fields"}},
+		{"missing both", []string{"phase-insert", "--after", "1"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			var buf bytes.Buffer
+			stdout = &buf
+			stderr = &buf
+
+			s, tmpDir := newTestStore(t)
+			defer os.RemoveAll(tmpDir)
+			store = s
+
+			goal := "test"
+			state := colony.ColonyState{
+				Version: "3.0",
+				Goal:    &goal,
+				Plan: colony.Plan{
+					Phases: []colony.Phase{
+						{ID: 1, Name: "Phase 1", Status: colony.PhaseCompleted, Tasks: []colony.Task{}},
+						{ID: 2, Name: "Phase 2", Status: colony.PhasePending, Tasks: []colony.Task{}},
+					},
+				},
+			}
+			s.SaveJSON("COLONY_STATE.json", state)
+
+			rootCmd.SetArgs(tc.args)
+
+			// Execute() (not rootCmd.Execute()) is the real entry point and the
+			// only place the rendered-error exit code is converted into a
+			// non-zero process result.
+			if err := Execute(); err == nil {
+				t.Errorf("expected a non-zero exit, got nil error (silent success)")
+			}
+
+			out := strings.TrimSpace(buf.String())
+			if out == "" {
+				t.Fatalf("expected an error message, got no output at all")
+			}
+			// Exactly one envelope: a second guard that re-reports the same
+			// failure produces two JSON objects and breaks every consumer that
+			// parses this output.
+			if lines := len(strings.Split(out, "\n")); lines != 1 {
+				t.Errorf("expected exactly 1 error envelope, got %d:\n%s", lines, out)
+			}
+			env := parseEnvelope(t, out)
+			if env["ok"] != false {
+				t.Errorf("expected ok:false, got: %v", env["ok"])
+			}
+
+			// The plan must be untouched — proving the command reported the
+			// same thing it actually did.
+			var after colony.ColonyState
+			if err := s.LoadJSON("COLONY_STATE.json", &after); err != nil {
+				t.Fatalf("state unreadable: %v", err)
+			}
+			if len(after.Plan.Phases) != 2 {
+				t.Errorf("plan has %d phases, want 2 unchanged", len(after.Plan.Phases))
+			}
+		})
+	}
+}
+
 // --- validate-oracle-state tests ---
 
 func TestValidateOracleState(t *testing.T) {

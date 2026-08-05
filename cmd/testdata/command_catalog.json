@@ -1500,7 +1500,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "internal_runtime",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 8
   },
   {
     "name": "council",
@@ -5417,7 +5434,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 8
   },
   {
     "name": "plan-research-escalate",
@@ -5429,7 +5463,24 @@
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown"
+    "output_mode": "unknown",
+    "classification": "internal_runtime",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 8
   },
   {
     "name": "porter",

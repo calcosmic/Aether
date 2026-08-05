@@ -128,6 +128,9 @@ var phaseInsertCmd = &cobra.Command{
 		}
 
 		after := mustGetInt(cmd, "after")
+		// mustGetString already emits an ok:false envelope and sets a non-zero
+		// exit code for an empty required flag; these guards only stop the
+		// command from continuing, they are not a silent return.
 		name := mustGetString(cmd, "name")
 		if name == "" {
 			return nil

@@ -90,7 +90,11 @@ AFTER="$(shasum -a 256 "$SETTINGS")"
 [ "$BEFORE" = "$AFTER" ] || fail "second update rewrote settings.json"
 echo "    idempotency OK"
 
-step "gate 3: TS host runs without missing-dependency errors"
+step "gate 3: TS host boots and reports the real reason it cannot plan"
+# There is no colony yet at this point, so the host MUST fail — but it must
+# fail for the colony reason, not a dependency reason, and it must say so.
+# Asserting the exact expected outcome is the point: this gate previously
+# captured HOST_STATUS and never compared it, so any exit code passed.
 HOST_OUT="$WORK/host-plan.out"
 set +e
 (cd "$REPO" && "$BIN" host plan --dry-run >"$HOST_OUT" 2>&1)
@@ -104,7 +108,15 @@ if grep -q "ts host not found\|TS host dependencies unavailable" "$HOST_OUT"; th
   sed -n '1,10p' "$HOST_OUT" >&2
   fail "TS host could not be provisioned"
 fi
-echo "    host executed (exit $HOST_STATUS, no dependency errors)"
+[ "$HOST_STATUS" -eq 1 ] || {
+  sed -n '1,10p' "$HOST_OUT" >&2
+  fail "TS host without a colony: expected exit 1, got $HOST_STATUS"
+}
+grep -q "No colony initialized" "$HOST_OUT" || {
+  sed -n '1,10p' "$HOST_OUT" >&2
+  fail "TS host without a colony did not surface the Go 'No colony initialized' error"
+}
+echo "    host booted and propagated the real error (exit 1)"
 
 step "gate 4: direct Go plan-only build emits a dispatch manifest"
 cat > "$REPO/.aether/data/COLONY_STATE.json" <<'EOF'
@@ -144,6 +156,26 @@ BUILD_OUT="$WORK/build-plan.json"
 jq -e '.ok == true and (.result.dispatch_manifest.dispatches | length) >= 1' "$BUILD_OUT" >/dev/null \
   || { head -c 400 "$BUILD_OUT" >&2; fail "plan-only build did not emit a parseable dispatch_manifest"; }
 echo "    dispatch manifest OK ($(jq '.result.dispatch_manifest.dispatches | length' "$BUILD_OUT") dispatches)"
+
+step "gate 4b: TS host plans successfully now a colony exists"
+# Gate 3 only proves the host boots and reports failure honestly. This proves
+# it does its job. The host is still on the golden path for plan/continue/
+# colonize/seal, so a host that only ever fails cleanly is not coverage.
+HOST_OK_OUT="$WORK/host-plan-ok.out"
+set +e
+(cd "$REPO" && "$BIN" host plan --dry-run >"$HOST_OK_OUT" 2>&1)
+HOST_OK_STATUS=$?
+set -e
+[ "$HOST_OK_STATUS" -eq 0 ] || {
+  sed -n '1,15p' "$HOST_OK_OUT" >&2
+  fail "TS host plan --dry-run failed with a colony present (exit $HOST_OK_STATUS)"
+}
+# The host prefixes a human dry-run banner before its JSON, so slice from the
+# first brace rather than piping the whole stream into jq.
+sed -n '/^{/,$p' "$HOST_OK_OUT" > "$WORK/host-plan-ok.json"
+jq -e '.ok == true and .dry_run == true and (.manifest | type) == "object"' "$WORK/host-plan-ok.json" >/dev/null \
+  || { head -c 400 "$HOST_OK_OUT" >&2; fail "TS host dry-run did not emit a parseable ok manifest"; }
+echo "    host produced a dry-run manifest (exit 0)"
 
 step "gate 5: OpenCode surfaces are installed and valid"
 # OpenCode is a primary platform, so its wrappers and agents must survive the
