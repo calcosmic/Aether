@@ -175,3 +175,41 @@ rm -rf ~/aether-test
 
 Tell me which step, and paste the output. Every check above maps to a specific
 guard in the test suite, so a failure here points at exactly one place.
+
+---
+
+## Extra checks added after the first pass
+
+These cover three more fixes that landed in the same release.
+
+### The security check (30 seconds)
+
+```
+cd ~/repos/Aether && make vulncheck
+```
+
+✅ **PASS** — `Your code is affected by 0 vulnerabilities.`
+
+*Aether was being built with a Go version carrying ten known security holes in
+code it actually ran. It now builds with a patched one, and this command is the
+standing check.*
+
+### Verifiers no longer cry wolf about earlier phases
+
+During a multi-phase build, watch what the reviewer says at `/ant-continue` on
+phase 3 or later.
+
+✅ **PASS** — it judges only the current phase's work.
+❌ **FAIL** — it complains about "scope creep" or files changing that were
+actually earlier phases' work.
+
+*Aether doesn't save to git between phases, so reviewers used to see all the
+earlier work sitting there and blame the current phase for it. They're now told
+what was already there before the phase started.*
+
+### OpenCode is covered by the smoke test
+
+`make smoke` now also checks that OpenCode's commands and agents install
+correctly and that its suggestions use slash commands. You'll see a
+`gate 5: OpenCode surfaces` line. If you don't have OpenCode installed, it says
+so out loud rather than quietly skipping.
