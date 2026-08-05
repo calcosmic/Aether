@@ -66,6 +66,17 @@ func renderNoColonyStatusVisual() string {
 func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 	var warnings []string
 
+	// 0. Aether itself is behind the hub. Repos rot silently — one on this
+	// machine sat 23 releases behind — so this is surfaced wherever the user
+	// already looks for the colony's health.
+	if s != nil {
+		if repoDir := repoRootFromStore(s); repoDir != "" {
+			if note := renderUpdateAvailableWarning(checkUpdateAvailable(repoDir)); note != "" {
+				warnings = append(warnings, note)
+			}
+		}
+	}
+
 	// 1. Stale state warning
 	if state.InitializedAt != nil && time.Since(*state.InitializedAt) > 7*24*time.Hour {
 		warnings = append(warnings, "Stale: colony was last active more than 7 days ago. Recent work may not be reflected.")

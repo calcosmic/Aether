@@ -206,6 +206,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
 			message += ". " + restartNote
 		}
+		// Stamp the repo with the hub version it just synced from, so a later
+		// `aether status` can tell the user when this repo has fallen behind.
+		// Non-fatal: a missing stamp costs a notification, not correctness.
+		if err := writeInstalledVersionMarker(repoDir, hubVersion); err != nil {
+			fmt.Fprintf(os.Stderr, "note: could not record synced version for this repo: %v\n", err)
+		}
+
 		staleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, syncResult.details)
 		result := map[string]interface{}{
 			"message":                 message,
