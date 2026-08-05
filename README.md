@@ -129,7 +129,7 @@ package version intentionally matches the published Aether release version, so
 go install github.com/calcosmic/Aether/cmd/aether@latest
 ```
 
-Requires [Go 1.26+](https://go.dev/dl/).
+Requires [Go 1.26.5+](https://go.dev/dl/).
 
 After installing the binary, publish the bundled companion files to your local
 hub:
@@ -304,7 +304,7 @@ primary platforms.
 ├── hive/wisdom.json         Cross-colony wisdom (200 cap)
 ```
 
-**Runtime:** Go 1.26+  
+**Runtime:** Go 1.26.5+  
 **Distribution:** GoReleaser (Linux, macOS, Windows / amd64 + arm64)
 
   
@@ -1159,7 +1159,7 @@ Aether is shaped by its community. Whether you are fixing a bug, adding a comman
 
 ### ✅ Prerequisites
 
-- **Go 1.26+** -- [Install Go](https://go.dev/dl/) if you don't have it
+- **Go 1.26.5+** -- [Install Go](https://go.dev/dl/) if you don't have it
 - **Git** -- For cloning and branching
 - **Node.js 18+** -- Optional for future rich ceremony narration and the npm
   bootstrap; the bundled narrator runtime is plain JS and does not require

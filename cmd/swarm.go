@@ -192,8 +192,15 @@ var swarmCleanupCmd = &cobra.Command{
 		// store has no delete, then reported cleaned:true having removed
 		// nothing. A cleanup report must describe the filesystem, not the
 		// intention.
+		// The id becomes a directory name and is then handed to os.RemoveAll,
+		// so it must be proven to name one directory inside the swarms dir.
+		swarmsBase := filepath.Join(store.BasePath(), "swarms")
+		swarmDirAbs, err := safeIdentifierSegment(swarmsBase, "swarm id", id)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 		swarmDirRel := fmt.Sprintf("swarms/%s", id)
-		swarmDirAbs := filepath.Join(store.BasePath(), "swarms", id)
 
 		existedBefore := false
 		if _, err := os.Stat(swarmDirAbs); err == nil {
