@@ -145,5 +145,32 @@ jq -e '.ok == true and (.result.dispatch_manifest.dispatches | length) >= 1' "$B
   || { head -c 400 "$BUILD_OUT" >&2; fail "plan-only build did not emit a parseable dispatch_manifest"; }
 echo "    dispatch manifest OK ($(jq '.result.dispatch_manifest.dispatches | length' "$BUILD_OUT") dispatches)"
 
+step "gate 5: OpenCode surfaces are installed and valid"
+# OpenCode is a primary platform, so its wrappers and agents must survive the
+# same install/update the Claude ones do. This lane is skipped LOUDLY (never
+# silently) when the opencode binary is absent, so `make smoke` stays green on
+# machines without it while never masquerading as coverage.
+OC_CMD_DIR="$HOME/.config/opencode/commands/ant"
+OC_AGENT_DIR="$HOME/.config/opencode/agents"
+OC_CMDS="$(ls "$OC_CMD_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ')"
+OC_AGENTS="$(ls "$OC_AGENT_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ')"
+[ "$OC_CMDS" -ge 60 ] || fail "OpenCode commands not installed (found $OC_CMDS in $OC_CMD_DIR, expected 60+)"
+[ "$OC_AGENTS" -ge 27 ] || fail "OpenCode agents not installed (found $OC_AGENTS in $OC_AGENT_DIR, expected 27+)"
+# The router agent OpenCode dispatch requires.
+[ -f "$OC_AGENT_DIR/aether-worker-router.md" ] || fail "OpenCode primary router agent missing"
+# Hints must render as slash wrappers on OpenCode, exactly as on Claude.
+OC_HINT="$(cd "$REPO" && AETHER_PLATFORM=opencode AETHER_OUTPUT_MODE=visual "$BIN" status 2>&1 | grep -A3 'N E X T' || true)"
+if printf '%s' "$OC_HINT" | grep -qE '`aether (init|plan|build|continue|seal|status|resume)`'; then
+  printf '%s\n' "$OC_HINT" >&2
+  fail "OpenCode hints show raw CLI where a slash wrapper exists"
+fi
+echo "    OpenCode surfaces OK ($OC_CMDS commands, $OC_AGENTS agents)"
+
+if command -v opencode >/dev/null 2>&1; then
+  echo "    opencode binary present ($(opencode --version 2>/dev/null | head -1))"
+else
+  echo "    SKIPPED: opencode binary not on PATH — install it to exercise the live OpenCode lane" >&2
+fi
+
 echo
 echo "SMOKE PASS: all daily-driver gates green"
