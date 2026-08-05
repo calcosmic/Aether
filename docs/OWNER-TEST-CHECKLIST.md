@@ -254,5 +254,19 @@ publish a new version.
 ✅ **PASS** — an out-of-date repo warns you; an up-to-date one says nothing.
 ❌ **FAIL** — a repo you just updated still nags you.
 
+### `/ant-update` tells you what it actually did
+
+Running the update now states your repo's own before/after, not just the hub's:
+
+- Behind → `Updated this repo: 1.0.25 -> 1.0.48.`
+- Already current → `This repo was already up to date at 1.0.48.`
+- Checking first with `--dry-run` → `An update is available: 1.0.25 -> 1.0.48.`
+  or `This repo is already up to date at 1.0.48 — nothing to fetch.`
+
+So you can run `/ant-update --dry-run` to *ask* whether there's anything new,
+without changing anything.
+
+✅ **PASS** — the line names your repo's versions, not just the hub's.
+
 *The Aether source repo itself never shows this, because it's the thing that
 publishes updates — telling it to update from its own output would be circular.*
