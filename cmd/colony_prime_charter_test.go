@@ -335,3 +335,85 @@ func TestColonyPrimeCharterPassesThroughPromptIntegrity(t *testing.T) {
 		t.Fatalf("assembled prompt section missing charter governance content:\n%s", output.PromptSection)
 	}
 }
+
+// TestColonyPrimeIncludesCharterIntentAndGoals pins the delivery of the five
+// charter fields that were captured and then withheld.
+//
+// /ant-init synthesizes the operator's own words into Intent, Vision, Goals,
+// TechStack and KeyRisks, shows them for approval, and stores them in colony
+// state. Nothing read them: colony-prime emitted only Governance and
+// Constraints, so a colony could record exactly what the operator wanted and
+// tell its workers none of it. On the Aether repo itself that meant five
+// populated fields silently withheld while Governance — the one field left
+// empty — was the only thing forwarded.
+//
+// The framing matters as much as the delivery, so it is asserted too: approved
+// governance is a hard rule, intent and risks are orientation. Presenting them
+// identically would make the "hard rules" sentence untrue.
+func TestColonyPrimeIncludesCharterIntentAndGoals(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "charter context test"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Phase One", Status: "in_progress"}},
+		},
+		Charter: &colony.Charter{
+			// Governance deliberately empty, mirroring the real colony that
+			// exposed this: the only forwarded field was the blank one.
+			Intent:      "Dogfood Aether on itself with real iterative planning",
+			Vision:      "Restore the useful Classic planning feel",
+			Goals:       "Identify and fix the highest-value defects first",
+			TechStack:   "Go CLI runtime, TypeScript host bridge",
+			KeyRisks:    "Local state is stale; wrapper docs drift from runtime",
+			Constraints: "Go owns .aether/data state and finalizers",
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	rootCmd.SetArgs([]string{"colony-prime"})
+	defer rootCmd.SetArgs([]string{})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colony-prime returned error: %v", err)
+	}
+
+	envelope := parseEnvelopeCmd(t, buf.String())
+	result := envelope["result"].(map[string]interface{})
+	promptSection, ok := result["prompt_section"].(string)
+	if !ok {
+		t.Fatalf("result.prompt_section not a string: %T", result["prompt_section"])
+	}
+
+	for _, want := range []string{
+		"Dogfood Aether on itself",
+		"Restore the useful Classic planning feel",
+		"Identify and fix the highest-value defects first",
+		"Go CLI runtime, TypeScript host bridge",
+		"Local state is stale",
+	} {
+		if !strings.Contains(promptSection, want) {
+			t.Errorf("charter field never reached the worker prompt: %q\n---\n%s", want, promptSection)
+		}
+	}
+
+	// Constraints stay in the hard-rules block; orientation is separate.
+	if !strings.Contains(promptSection, "hard rules every worker must follow") {
+		t.Errorf("approved constraints lost their hard-rule framing:\n%s", promptSection)
+	}
+	if !strings.Contains(promptSection, "orientation for judgement calls, not as additional hard rules") {
+		t.Errorf("context fields were not distinguished from approved rules:\n%s", promptSection)
+	}
+}

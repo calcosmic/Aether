@@ -629,9 +629,14 @@ func parseCharterGovernanceLabels(governance string) map[string][]string {
 //
 // "CI:" and "Build:" governance categories are intentionally never checked
 // here -- CI runs outside the colony's observation and build tools are not
-// conduct rules. Everything else in the charter (Intent/Vision/Goals/
-// KeyRisks, and CI/Build categories) reaches workers as prose hard rules via
-// the colony-prime charter section (task 1), not through this gate.
+// conduct rules.
+//
+// Intent, Vision, Goals, TechStack and KeyRisks reach workers through the
+// colony-prime charter section as *orientation*, not as hard rules, and are
+// not gated here. This comment previously said they arrived "as prose hard
+// rules"; they arrived as nothing at all -- colony-prime emitted only
+// Governance and Constraints -- which is why the claim went unnoticed for so
+// long. TestColonyPrimeIncludesCharterIntentAndGoals now pins the delivery.
 func checkCharterComplianceGate(steps []codexVerificationStep) (gateCheck, gateCheck) {
 	findingsCheck := gateCheck{Name: "charter_compliance"}
 	executedCheck := gateCheck{Name: "charter_compliance_executed"}

@@ -456,15 +456,62 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			governanceText = ""
 		}
 		constraintsText := strings.TrimSpace(state.Charter.Constraints)
-		if governanceText != "" || constraintsText != "" {
+
+		// Intent, Vision, Goals, TechStack and KeyRisks are synthesized from the
+		// operator's own words at init and shown for approval, then were never
+		// read by anything: only Governance and Constraints reached a worker.
+		// A colony could capture exactly what the operator wanted, store it,
+		// and tell the workers none of it — which on this repo meant five
+		// populated fields silently withheld while the one empty field was the
+		// only thing forwarded.
+		//
+		// They are emitted as context, deliberately below the hard-rules block
+		// and under their own framing. Governance and Constraints are approved
+		// rules; intent and risks are orientation. Presenting them as equally
+		// binding would make the "hard rules" sentence untrue and invite a
+		// worker to treat a vision statement as a constraint.
+		type charterContextField struct {
+			label string
+			value string
+		}
+		contextFields := []charterContextField{
+			{"Intent", strings.TrimSpace(state.Charter.Intent)},
+			{"Vision", strings.TrimSpace(state.Charter.Vision)},
+			{"Goals", strings.TrimSpace(state.Charter.Goals)},
+			{"Tech stack", strings.TrimSpace(state.Charter.TechStack)},
+			{"Key risks", strings.TrimSpace(state.Charter.KeyRisks)},
+		}
+		hasContextField := false
+		for _, field := range contextFields {
+			if field.value != "" {
+				hasContextField = true
+				break
+			}
+		}
+
+		if governanceText != "" || constraintsText != "" || hasContextField {
 			var charterSB strings.Builder
 			writeSectionHeader(&charterSB, "charter", charterFallbackHeading+"\n\n")
-			charterSB.WriteString("The colony operator approved the following governance. These are hard rules every worker must follow, not background information:\n\n")
-			if governanceText != "" {
-				charterSB.WriteString(fmt.Sprintf("Governance: %s\n", governanceText))
+			if governanceText != "" || constraintsText != "" {
+				charterSB.WriteString("The colony operator approved the following governance. These are hard rules every worker must follow, not background information:\n\n")
+				if governanceText != "" {
+					charterSB.WriteString(fmt.Sprintf("Governance: %s\n", governanceText))
+				}
+				if constraintsText != "" {
+					charterSB.WriteString(fmt.Sprintf("Constraints: %s\n", constraintsText))
+				}
 			}
-			if constraintsText != "" {
-				charterSB.WriteString(fmt.Sprintf("Constraints: %s\n", constraintsText))
+			if hasContextField {
+				if governanceText != "" || constraintsText != "" {
+					charterSB.WriteString("\n")
+				}
+				charterSB.WriteString("The operator described the work this way. Treat it as orientation for judgement calls, not as additional hard rules:\n\n")
+				for _, field := range contextFields {
+					if field.value == "" {
+						continue
+					}
+					charterSB.WriteString(fmt.Sprintf("%s: %s\n", field.label, field.value))
+				}
 			}
 			charterProtected, charterPreserveReason := protectedSectionPolicy("charter")
 			sections = append(sections, colonyPrimeSection{

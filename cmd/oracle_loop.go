@@ -1041,6 +1041,16 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			}
 			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "blocked", "no_progress", "aether oracle status")
 		}
+		if oracleDiminishingReturns(state) {
+			state.Status = "complete"
+			state.Phase = "verify"
+			state.StopReason = "diminishing_returns"
+			state.Summary = fmt.Sprintf("Oracle stopped at %d%% confidence after %d iterations: the last %d answers added no new ground.", state.OverallConfidence, iterationsRun, oracleNoveltyStallLimit)
+			if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+				return nil, err
+			}
+			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "complete", "diminishing_returns", "aether oracle status")
+		}
 		if oracleReadyForCompletion(plan, state) {
 			state.Status = "complete"
 			state.Phase = "verify"
@@ -3073,11 +3083,32 @@ func oracleProgressedSince(before oracleProgressSnapshot, plan oraclePlanFile, s
 			return true
 		}
 	}
-	// Diminishing returns check: if novelty < threshold for 3 consecutive iterations, stop
-	if state.Novelty.ConsecutiveLow >= 3 {
-		return false
-	}
 	return false
+}
+
+// oracleNoveltyStallLimit is how many consecutive low-novelty iterations end the
+// loop. Three keeps a single repetitive answer from stopping research early
+// while still catching a loop that has started circling.
+const oracleNoveltyStallLimit = 3
+
+// oracleDiminishingReturns reports whether the last few iterations added
+// nothing new.
+//
+// The loop measures novelty every iteration — Jaccard distance between this
+// answer's keywords and the last one's — and increments a counter when an
+// answer mostly repeats its predecessor. Until now the only line that read that
+// counter sat inside oracleProgressedSince and returned false either way, so
+// the measurement was computed and discarded. The effect was that the loop
+// could stop only on the confidence target, the iteration cap, or a manual
+// stop: at --depth deep that is up to thirty real worker subprocesses chasing
+// 95% confidence, unable to stop early no matter how little it was learning.
+//
+// The check is separate from oracleProgressedSince deliberately. That answers
+// "did anything change at all", which is a fault condition; this answers "is
+// what changed still worth paying for", which is a budget condition. Folding
+// the second into the first is what produced the dead branch.
+func oracleDiminishingReturns(state oracleStateFile) bool {
+	return state.Novelty.ConsecutiveLow >= oracleNoveltyStallLimit
 }
 
 func containsOracleIteration(items []int, target int) bool {

@@ -1195,23 +1195,49 @@ func TestOracleCompatibilityRejectsDuplicateActiveLoop(t *testing.T) {
 	}
 }
 
-type oracleCompletingInvoker struct{}
+type oracleCompletingInvoker struct {
+	calls int
+}
+
+// oracleDistinctAnswers gives each iteration genuinely different content.
+//
+// This invoker previously returned one identical summary and recommendation
+// every call, which no real Oracle does — each iteration targets a different
+// open question and writes a different answer. The loop now measures novelty
+// between consecutive answers and stops when three in a row add no new ground,
+// so a fixture that repeats itself verbatim trips that exit before the plan is
+// finished. Varying the text keeps this test measuring what it is named for —
+// that the autonomous loop runs to completion — rather than accidentally
+// measuring the stall detector.
+var oracleDistinctAnswers = []string{
+	"The loop controller selects the next open question and merges the reply into plan state.",
+	"Confidence is recomputed per question after every merge, then aggregated across the plan.",
+	"Sources are deduplicated by URL and given stable identifiers before findings reference them.",
+	"Stop conditions cover the iteration cap, the confidence target, operator interrupts and novelty stalls.",
+	"Per-attempt watchdogs bound each dispatch so a hung worker cannot stall the whole run.",
+	"Resumable state lets an interrupted run continue from its last recorded iteration.",
+	"Derived reports are rewritten after each merge so synthesis and gaps stay current.",
+	"Archived runs retain prior plans so a repeated topic can be compared against earlier evidence.",
+}
 
 func (i *oracleCompletingInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	answer := oracleDistinctAnswers[i.calls%len(oracleDistinctAnswers)]
+	i.calls++
+
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
 		QuestionID: oracleTestActiveQuestionID(cfg.Root),
 		Status:     "answered",
 		Confidence: 99,
-		Summary:    "Autonomous oracle loop produced a source-backed answer.",
+		Summary:    answer,
 		Findings: []oracleWorkerFinding{{
-			Text: "Autonomous oracle loop produced a source-backed answer.",
+			Text: answer,
 			Evidence: []oracleWorkerEvidence{{
 				Title:    "Oracle loop implementation",
 				Location: "cmd/oracle_loop.go",
 				Type:     "codebase",
 			}},
 		}},
-		Recommendation: "Continue until all planned questions are answered.",
+		Recommendation: answer,
 	}); err != nil {
 		return codex.WorkerResult{}, err
 	}
