@@ -548,6 +548,8 @@
     "name": "build",
     "short_description": "Dispatch a real Codex build packet with worker briefs, claims, and spawn tracking",
     "flags": [
+      "caste-reason",
+      "castes",
       "circuit-breaker-threshold",
       "force",
       "full",

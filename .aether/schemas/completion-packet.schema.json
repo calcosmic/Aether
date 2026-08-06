@@ -514,6 +514,18 @@
         },
         "orchestrator_boundary_guidance": {
           "$ref": "#/$defs/orchestratorBoundaryGuidance"
+        },
+        "caste_roster": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "caste_decision": {
+          "type": "object"
         }
       },
       "additionalProperties": false,

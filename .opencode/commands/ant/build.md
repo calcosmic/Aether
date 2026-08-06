@@ -116,6 +116,84 @@ See `.aether/docs/wrapper-host-contract.md` for the full field shapes this manif
 
 **Stop conditions:** If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output. Do not retry silently or fall back to a simulated dispatch.
 
+## Queen's Team Decision
+
+🐜 This is the step where the Queen is a Queen rather than a lookup table.
+
+**Purpose:** Decide which specialists this phase actually needs, using what you can
+read that a keyword table cannot.
+
+**Reads:** `dispatch_manifest.caste_decision` and `dispatch_manifest.caste_roster`.
+
+The manifest you just fetched already contains a team. Check where it came from:
+
+- `caste_decision.source == "queen"` — a decision was already supplied. Nothing to do.
+- `caste_decision.source == "deterministic"` — the team was picked by counting
+  keyword matches against the phase text. **Read the phase and decide whether
+  that is right.**
+
+`caste_roster` lists every dispatchable caste and what it is good at, read from
+the live registry. Choose from it — a name not on that list is reported back as
+ignored, and the phase silently runs without the specialist you intended.
+
+### When to override
+
+Override when the phase needs something its wording does not literally say.
+Keyword scoring can only match words that are present, so it systematically
+misses work described in the user's language rather than the vocabulary of the
+specialist:
+
+| The phase says | Keywords select | A reader knows it needs |
+|----------------|-----------------|-------------------------|
+| "the dashboard feels sluggish with lots of rows" | nobody | `measurer` — this is a latency problem |
+| "let people stay signed in between visits" | nobody | `gatekeeper` — this is session handling |
+| "the importer falls over on some files" | nobody | `tracker`, `chaos` — unknown root cause, bad input |
+| "swap the payment provider" | maybe `ambassador` | `ambassador`, `gatekeeper` — money and credentials |
+
+Also override in the other direction. If the deterministic team carries a
+specialist with nothing to do on this phase, leave it out — a worker that can
+only report "I found nothing here" costs a run and teaches the operator that the
+colony's choices are arbitrary.
+
+### How to override
+
+Re-fetch the manifest with your decision:
+
+```
+aether build $ARGUMENTS --plan-only \
+  --castes builder,watcher,measurer \
+  --caste-reason "the complaint is latency even though the phase never says so"
+```
+
+Spawn from **that** manifest, not the first one.
+
+### What the runtime will do to your choice
+
+Your proposal is judgement about which optional specialists help. It is not
+permission to lower the floor, and the runtime will correct you in the open:
+
+- Castes the phase requires are added back whether you omitted them on purpose
+  or overlooked them. A build always gets a Watcher. Work touching credentials,
+  auth, or a release gate always gets a security review.
+- The worker budget still applies. Over-asking trims your optional picks, never
+  the required ones.
+- Unrecognised names are reported in `caste_decision.unknown_ignored`.
+
+Read `caste_decision.summary` after re-fetching and relay it to the user in
+plain English — including anything the runtime added or dropped. A correction
+the operator cannot see is indistinguishable from the colony ignoring you.
+
+**Guardrails:**
+- Decide from the phase and the repository as they are now, not from the plan's
+  assumptions at planning time. Work may have landed since.
+- Do not pass `--castes` to justify a team you have not actually reasoned about.
+  An unexamined proposal is worse than the deterministic default, because it
+  carries a rationale the operator will trust.
+- Do not re-fetch more than once. One decision per build.
+
+**Stop conditions:** None. If you have no reason to change the team, keep the
+deterministic one and move on.
+
 ## Guided Boundary Gate
 
 🐜 Sometimes the colony must stop and ask before it moves.

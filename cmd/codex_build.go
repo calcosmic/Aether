@@ -117,6 +117,15 @@ type codexBuildManifest struct {
 	BoundaryQuestionsCreated  int                                   `json:"boundary_questions_created,omitempty"`
 	BoundaryQuestionsExisting int                                   `json:"boundary_questions_existing,omitempty"`
 	OrchestratorGuidance      *orchestratorBoundaryGuidance         `json:"orchestrator_boundary_guidance,omitempty"`
+	// CasteRoster lists every dispatchable caste and what it is good at, so a
+	// Queen deciding the team is choosing from the live registry rather than
+	// from memory. Without it the wrapper guesses at both the names and the
+	// roles, and an unrecognised name silently costs the phase a specialist.
+	CasteRoster []map[string]string `json:"caste_roster,omitempty"`
+	// CasteDecision records how the team was chosen: what the Queen proposed,
+	// what actually spawns, and every override the runtime applied. A Queen
+	// that proposes badly must produce a visible correction, not a silent one.
+	CasteDecision map[string]interface{} `json:"caste_decision,omitempty"`
 }
 
 type codexWaveExecutionPlan struct {
@@ -170,6 +179,13 @@ type codexBuildOptions struct {
 	// Full gates the raw-prompt path of --print-brief. It has no effect on any
 	// mutating build path — only printWorkerBriefs reads it.
 	Full bool
+	// QueenCastes is the team the Queen proposed after reading the phase.
+	// Empty means no judgement was offered and the deterministic keyword
+	// engine decides — the behaviour of every caller before this existed.
+	QueenCastes []string
+	// QueenCasteReason is the Queen's stated reasoning, surfaced to the
+	// operator so a team choice is never unexplained.
+	QueenCasteReason string
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -242,7 +258,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		DispatchWorkers:   options.DispatchWorkers,
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
+	dispatches := plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, options.QueenCastes, options.QueenCasteReason)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
@@ -269,6 +285,11 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	profileContract := workflowProfileContract(reviewDepth)
 	queenRecommendation := recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases))
 	manifest.QueenExecutionPolicy = policy
+	// The roster is what lets the wrapper's Queen choose from the live registry
+	// instead of from memory; the decision is the audit trail for what it chose
+	// and what the runtime overrode.
+	manifest.CasteRoster = queenCasteRoster()
+	manifest.CasteDecision = queenCasteDecisionSummary(phase, state, reviewDepth, options.QueenCastes, options.QueenCasteReason)
 	boundary, err := materializeOrchestratorBoundaryQuestions("build", state, phase, buildBoundaryQuestionCandidates(phase, selectedTaskIDs))
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -932,7 +953,14 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 	return plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
 }
 
+// plannedBuildDispatchesForSelectionWithState plans with no Queen proposal, so
+// the deterministic keyword engine decides. Callers that have the Queen's
+// judgement use the ...WithJudgement variant.
 func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+	return plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, nil, "")
+}
+
+func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string) []codexBuildDispatch {
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
 	for _, taskID := range selectedTaskIDs {
@@ -945,8 +973,9 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 	queenState := state
 	queenState.ColonyDepth = depth
 	queenState.VerificationDepth = string(reviewDepth)
-	queenCastes := queenBuildCasteSet(queenOrchestrate(phase, "build", queenState))
-	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth)
+	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState)
+	queenCastes := stringSet(queenJudgement.Final)
+	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth, stringSet(queenJudgement.Proposed))
 
 	if len(selected) == 0 {
 		dispatches = append(dispatches, queenBuildPreWaveDispatches(phase, queenCastes)...)
@@ -1040,9 +1069,24 @@ func queenBuildCasteSet(dispatches []CasteDispatch) map[string]bool {
 	return castes
 }
 
-func applyBuildDispatchPolicyCastes(queenCastes map[string]bool, phase colony.Phase, depth string, reviewDepth colony.VerificationDepth) {
-	delete(queenCastes, "measurer")
-	delete(queenCastes, "chaos")
+// applyBuildDispatchPolicyCastes applies the depth policy for the two most
+// expensive optional specialists.
+//
+// queenChose names castes the Queen asked for explicitly after reading the
+// phase. Those are exempt from the deletion below. Until they were, this
+// function ran one line after the Queen's team was computed and unconditionally
+// removed both — so a Queen that read "the dashboard feels sluggish" and asked
+// for a Measurer was overruled by a depth rule that had never seen the phase.
+// The decision record still said measurer; nothing spawned. Judgement that a
+// later line silently discards is worse than no judgement, because it reads as
+// working.
+func applyBuildDispatchPolicyCastes(queenCastes map[string]bool, phase colony.Phase, depth string, reviewDepth colony.VerificationDepth, queenChose map[string]bool) {
+	if !queenChose["measurer"] {
+		delete(queenCastes, "measurer")
+	}
+	if !queenChose["chaos"] {
+		delete(queenCastes, "chaos")
+	}
 
 	if (depth == "deep" || depth == "full") && reviewDepth == colony.VerificationDepthHeavy {
 		queenCastes["measurer"] = true

@@ -123,6 +123,8 @@ var buildCmd = &cobra.Command{
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
+		queenCastes, _ := cmd.Flags().GetStringArray("castes")
+		queenCasteReason, _ := cmd.Flags().GetString("caste-reason")
 
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			worker, _ := cmd.Flags().GetString("worker")
@@ -148,6 +150,8 @@ var buildCmd = &cobra.Command{
 				LightFlag:         lightFlag,
 				HeavyFlag:         heavyFlag,
 				VerificationDepth: verificationDepth,
+				QueenCastes:       queenCastes,
+				QueenCasteReason:  queenCasteReason,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -1251,6 +1255,11 @@ func init() {
 	buildCmd.Flags().Bool("light", false, "Force light review (skip heavy agents on intermediate phases)")
 	buildCmd.Flags().Bool("heavy", false, "Force heavy review (full quality gauntlet on any phase)")
 	buildCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
+	// The Queen's team choice. Supplied by the wrapper after it has read the
+	// phase; omitted means the deterministic keyword engine decides, which is
+	// what every caller did before judgement existed.
+	buildCmd.Flags().StringArray("castes", nil, "Queen's proposed worker castes for this phase (repeatable or comma-separated). Safety castes the phase requires are added back automatically; the worker budget still applies")
+	buildCmd.Flags().String("caste-reason", "", "Why the Queen chose that team, shown to the operator alongside the roster")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")
