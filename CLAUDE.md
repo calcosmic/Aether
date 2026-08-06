@@ -1,6 +1,6 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.51
+> **Current Version:** v1.0.52
 > **Last Updated:** 2026-07-26
 
 ---
@@ -9,7 +9,7 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.51 |
+| Version | v1.0.52 |
 | Slash commands | 60 (Claude) + 60 (OpenCode); Codex uses native CLI + 27 TOML agents |
 | Agent definitions | 27 |
 | Skills | 86 (55 colony + 31 domain) |
@@ -957,4 +957,4 @@ For Codex-specific rules and agents, see `.codex/CODEX.md`
 
 ---
 
-*Updated for Aether v1.0.51 — 2026-08-06*
+*Updated for Aether v1.0.52 — 2026-08-06*
