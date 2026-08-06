@@ -994,15 +994,24 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 		})
 	}
 
-	nextVerificationWave := lastTaskExecutionWave + 1
+	// One review wave. Probe, Auditor, Measurer and Chaos are independent
+	// reviewers of the same finished code; none reads another's output, so they
+	// spawn together. The Watcher below stays in the wave after them because it
+	// is the final gate, not another reviewer.
+	reviewWave := lastTaskExecutionWave + 1
+	nextVerificationWave := reviewWave
+	reviewersSpawned := false
 	if len(selected) == 0 && queenCastes["probe"] {
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "probe", nextVerificationWave, "probe", "Independent probe verification of builder claims"))
-		nextVerificationWave++
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "probe", reviewWave, "probe", "Independent probe verification of builder claims"))
+		reviewersSpawned = true
 	}
 	if len(selected) == 0 {
-		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, nextVerificationWave)
+		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, reviewWave)
 		dispatches = append(dispatches, postWaveDispatches...)
-		nextVerificationWave += len(postWaveDispatches)
+		reviewersSpawned = reviewersSpawned || len(postWaveDispatches) > 0
+	}
+	if reviewersSpawned {
+		nextVerificationWave = reviewWave + 1
 	}
 
 	if queenCastes["watcher"] {
@@ -1055,20 +1064,32 @@ func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool
 		wave  int
 		task  string
 	}{
+		// Wave 1 — evidence gatherers. These two write artifacts (git history
+		// findings, phase research) that a planner may consult, so they go first.
 		{"archaeologist", "prep", 1, "Git history analysis before implementation"},
-		{"oracle", "research", 2, "Phase research and implementation risks"},
-		{"architect", "design", 3, "Design boundaries before coding"},
-		{"ambassador", "integration", 4, "External integration design before implementation"},
-		{"gatekeeper", "security", 5, "Security boundaries and auth risk review before implementation"},
-		{"includer", "accessibility", 6, "Accessibility requirements and inclusive interaction review"},
-		{"weaver", "refactor", 7, "Refactoring seams and simplification plan before implementation"},
-		{"tracker", "diagnosis", 7, "Root-cause investigation and regression context before implementation"},
-		{"keeper", "knowledge", 8, "Knowledge preservation plan for reusable patterns"},
-		{"chronicler", "documentation", 8, "Documentation surface and changelog planning"},
-		{"medic", "health", 8, "Runtime health and repair risk review"},
-		{"fixer", "repair", 8, "Repair strategy and remediation boundaries"},
-		{"porter", "delivery", 8, "Delivery, packaging, and release handling review"},
-		{"sage", "wisdom", 8, "Learning synthesis and reusable pattern capture"},
+		{"oracle", "research", 1, "Phase research and implementation risks"},
+
+		// Wave 2 — planners. Every one of these reads the same phase brief and
+		// produces an independent plan; none consumes another's output.
+		// findingsInjectionForCaste only appends a *write* instruction for four
+		// castes, so there is no read dependency between any pair here.
+		//
+		// They previously occupied waves 3-8, one or two per wave, which made a
+		// build serial before a line of code was written: a real phase spawned
+		// eleven dispatches across nine waves and took an hour, mostly waiting.
+		// Same workers, same coverage — concurrent instead of queued.
+		{"architect", "design", 2, "Design boundaries before coding"},
+		{"ambassador", "integration", 2, "External integration design before implementation"},
+		{"gatekeeper", "security", 2, "Security boundaries and auth risk review before implementation"},
+		{"includer", "accessibility", 2, "Accessibility requirements and inclusive interaction review"},
+		{"weaver", "refactor", 2, "Refactoring seams and simplification plan before implementation"},
+		{"tracker", "diagnosis", 2, "Root-cause investigation and regression context before implementation"},
+		{"keeper", "knowledge", 2, "Knowledge preservation plan for reusable patterns"},
+		{"chronicler", "documentation", 2, "Documentation surface and changelog planning"},
+		{"medic", "health", 2, "Runtime health and repair risk review"},
+		{"fixer", "repair", 2, "Repair strategy and remediation boundaries"},
+		{"porter", "delivery", 2, "Delivery, packaging, and release handling review"},
+		{"sage", "wisdom", 2, "Learning synthesis and reusable pattern capture"},
 	}
 	dispatches := make([]codexBuildDispatch, 0, len(plans))
 	for _, plan := range plans {
@@ -1090,14 +1111,16 @@ func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]boo
 		{"measurer", "measurement", "Performance and cost surface review after implementation"},
 		{"chaos", "resilience", "Resilience probing after specialist verification"},
 	}
+	// All post-wave reviewers examine the same finished code and share no
+	// inputs, so they occupy one wave. Each previously took its own
+	// incrementing wave, which serialised the review phase for no reason: an
+	// Auditor cannot learn anything from waiting for a Measurer.
 	dispatches := make([]codexBuildDispatch, 0, len(plans))
-	executionWave := startExecutionWave
 	for _, plan := range plans {
 		if !queenCastes[plan.caste] {
 			continue
 		}
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, plan.stage, executionWave, plan.caste, plan.task+findingsInjectionForCaste(plan.caste)))
-		executionWave++
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, plan.stage, startExecutionWave, plan.caste, plan.task+findingsInjectionForCaste(plan.caste)))
 	}
 	return dispatches
 }
@@ -1246,7 +1269,7 @@ func buildExecutionPlans(dispatches []codexBuildDispatch, parallelMode colony.Pa
 			ExecutionWave: executionWave,
 			Stage:         stage,
 			Wave:          taskWave,
-			Strategy:      executionStrategyForBuildStep(stage, len(dispatches), parallelMode),
+			Strategy:      executionStrategyForCastes(stage, castes, parallelMode),
 			WorkerCount:   len(dispatches),
 			Castes:        castes,
 			Reason:        executionReasonForBuildStep(stage, taskWave, len(dispatches), parallelMode),
@@ -1255,11 +1278,63 @@ func buildExecutionPlans(dispatches []codexBuildDispatch, parallelMode colony.Pa
 	return plans
 }
 
-func executionStrategyForBuildStep(stage string, workerCount int, parallelMode colony.ParallelMode) string {
-	if stage == "wave" && workerCount > 1 && parallelMode == colony.ModeWorktree {
+// nonSourceWritingCastes are castes whose dispatch brief confines them to
+// analysis, review evidence, or a scoped .aether/ artifact directory — never
+// project source or tests. Two of them running at once cannot collide on a
+// file, so a step containing only these is safe to spawn concurrently even in
+// in-repo mode, where every worker shares one working tree.
+//
+// Derived from behavioralRestrictionsForCaste in pkg/codex/permission_profile.go
+// and kept deliberately conservative: castes with no restriction at all
+// (builder, weaver, fixer, medic, porter, ambassador, keeper, chaos) may touch
+// anything, and probe writes test files, so any step containing one of those
+// stays serial. Note these are prompt-level promises, not a sandbox — which is
+// exactly why the list is short and errs toward serial.
+var nonSourceWritingCastes = map[string]bool{
+	"includer":             true, // the only enforced repository_read_only caste
+	"architect":            true,
+	"route_setter":         true,
+	"sage":                 true,
+	"archaeologist":        true,
+	"auditor":              true,
+	"gatekeeper":           true,
+	"measurer":             true,
+	"tracker":              true,
+	"watcher":              true,
+	"scout":                true,
+	"oracle":               true,
+	"chronicler":           true,
+	"surveyor_nest":        true,
+	"surveyor_disciplines": true,
+	"surveyor_pathogens":   true,
+	"surveyor_provisions":  true,
+}
+
+// executionStrategyForCastes decides whether a step's workers may spawn
+// together. Collapsing independent specialists into one wave achieves nothing
+// on its own: the wrapper obeys this field, so a wave marked serial is still
+// executed one worker at a time.
+//
+// Worktree mode isolates every worker in its own checkout, so anything may run
+// concurrently. In-repo mode shares one tree, so only steps composed entirely of
+// non-source-writing castes qualify.
+func executionStrategyForCastes(stage string, castes []string, parallelMode colony.ParallelMode) string {
+	if len(castes) < 2 {
+		return "serial"
+	}
+	if parallelMode == colony.ModeWorktree {
 		return "parallel"
 	}
-	return "serial"
+	if stage == "wave" {
+		// Task waves are builders sharing one tree. Never concurrent in-repo.
+		return "serial"
+	}
+	for _, caste := range castes {
+		if !nonSourceWritingCastes[strings.ToLower(strings.TrimSpace(caste))] {
+			return "serial"
+		}
+	}
+	return "parallel"
 }
 
 func executionReasonForBuildStep(stage string, taskWave int, workerCount int, parallelMode colony.ParallelMode) string {

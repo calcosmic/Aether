@@ -98,8 +98,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if got := int(result["parallel_waves"].(float64)); got != 0 {
 		t.Fatalf("parallel_waves = %d, want 0", got)
 	}
-	if got := int(result["execution_wave_count"].(float64)); got != 6 {
-		t.Fatalf("execution_wave_count = %d, want 6 execution waves", got)
+	// Was 6 before independent specialists and independent reviewers stopped
+	// occupying one wave each. Fewer waves is the point: same workers, run
+	// concurrently instead of queued.
+	if got := int(result["execution_wave_count"].(float64)); got != 4 {
+		t.Fatalf("execution_wave_count = %d, want 4 execution waves", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
@@ -107,8 +110,10 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if waveExecution, ok := result["wave_execution"].([]interface{}); !ok || len(waveExecution) != 2 {
 		t.Fatalf("wave_execution = %#v, want 2 wave plans", result["wave_execution"])
 	}
-	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 6 {
-		t.Fatalf("execution_plan = %#v, want 6 execution stages", result["execution_plan"])
+	// Was 6 while each reviewer held its own wave. Independent reviewers now
+	// share one step; see TestIndependentSpecialistsShareAWave.
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 4 {
+		t.Fatalf("execution_plan = %#v, want 4 execution stages", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -548,10 +553,13 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	manifestDispatches := manifest["dispatches"].([]interface{})
 	assertDispatchHasRuntimeSkillAssignment(t, manifestDispatches[0].(map[string]interface{}))
 	executionPlan := manifest["execution_plan"].([]interface{})
-	if len(executionPlan) != 7 {
-		t.Fatalf("execution_plan = %d, want 7 steps: %#v", len(executionPlan), executionPlan)
+	// Was 7 steps with probe/measurement/resilience serialised one per wave.
+	// They review the same finished code and share no inputs, so they now
+	// occupy a single "mixed" step.
+	if len(executionPlan) != 5 {
+		t.Fatalf("execution_plan = %d, want 5 steps: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"design", "wave", "wave", "probe", "measurement", "resilience", "verification"}
+	wantStages := []string{"design", "wave", "wave", "mixed", "verification"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})
@@ -776,9 +784,26 @@ func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
 			t.Fatalf("execution step %+v has no workers", step)
 		}
 	}
-	wantStages := []string{"wave", "probe", "measurement", "resilience", "verification"}
+	// The reviewers (probe, measurer, chaos) previously took a wave each. They
+	// examine the same finished code and share no inputs, so they now collapse
+	// into one "mixed" step. The property this test guards — the watcher runs
+	// after every specialist — is unchanged and asserted below.
+	wantStages := []string{"wave", "mixed", "verification"}
 	if strings.Join(gotStages, ",") != strings.Join(wantStages, ",") {
 		t.Fatalf("execution stages = %v, want %v", gotStages, wantStages)
+	}
+
+	// Guard the collapse itself, not just the stage names: the reviewers must
+	// actually share one wave rather than having been dropped.
+	for _, step := range manifest.ExecutionPlan {
+		if step.Stage != "mixed" {
+			continue
+		}
+		for _, caste := range []string{"probe", "measurer", "chaos"} {
+			if !containsString(step.Castes, caste) {
+				t.Errorf("review wave lost %s: %+v", caste, step)
+			}
+		}
 	}
 
 	last := manifest.ExecutionPlan[len(manifest.ExecutionPlan)-1]
@@ -1322,7 +1347,10 @@ func TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases(t *testing.T) {
 	if ambassador == nil {
 		t.Fatalf("expected ambassador dispatch for integration phase, got %#v", manifest.Dispatches)
 	}
-	if ambassador.Stage != "integration" || ambassador.ExecutionWave != 4 {
+	// Wave 2, not 4: the planning specialists share a wave now instead of
+	// queueing one per wave. The property under test — an integration phase
+	// gets an Ambassador, in the pre-wave planning stage — is unchanged.
+	if ambassador.Stage != "integration" || ambassador.ExecutionWave != 2 {
 		t.Fatalf("ambassador dispatch = %+v, want integration execution wave 4", *ambassador)
 	}
 	if got := codexAgentNameForCaste(ambassador.Caste); got != "aether-ambassador" {
@@ -3851,5 +3879,69 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	matches, _ := filepath.Glob(filepath.Join(dataDir, "heartbeat-*.json"))
 	if len(matches) > 0 {
 		t.Errorf("expected heartbeat files cleaned up after dispatch, found: %v", matches)
+	}
+}
+
+// TestIndependentSpecialistsShareAWave guards the two halves of one fix. A real
+// phase spawned eleven dispatches across nine waves and took about an hour,
+// almost entirely waiting: the pre-wave specialists held hardcoded waves 1-8 and
+// each post-wave reviewer took its own incrementing wave, even though none of
+// them reads another's output.
+//
+// Collapsing the wave numbers alone would have changed nothing visible. The
+// wrapper obeys each step's Strategy field, so a step marked "serial" is still
+// executed one worker at a time no matter how many castes share its wave. Both
+// halves are asserted here because either alone is a no-op.
+func TestIndependentSpecialistsShareAWave(t *testing.T) {
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Integration and security review",
+		Description: "Design boundaries, review auth risk, and check accessibility before coding",
+		Mode:        colony.PhaseModeProduction,
+	}
+	queenCastes := map[string]bool{
+		"architect": true, "gatekeeper": true, "includer": true,
+		"tracker": true, "sage": true, "archaeologist": true, "oracle": true,
+	}
+
+	pre := queenBuildPreWaveDispatches(phase, queenCastes)
+	if len(pre) < 4 {
+		t.Fatalf("expected several pre-wave specialists, got %d", len(pre))
+	}
+	waves := map[int]int{}
+	for _, d := range pre {
+		waves[d.ExecutionWave]++
+	}
+	if len(waves) > 2 {
+		t.Errorf("pre-wave specialists occupy %d waves, want at most 2 (evidence, then planning): %v", len(waves), waves)
+	}
+
+	// Reviewers examine the same finished code; one wave between them.
+	post := queenBuildPostWaveDispatches(phase, map[string]bool{"auditor": true, "measurer": true, "chaos": true}, 9)
+	if len(post) != 3 {
+		t.Fatalf("expected 3 post-wave reviewers, got %d", len(post))
+	}
+	for _, d := range post {
+		if d.ExecutionWave != 9 {
+			t.Errorf("reviewer %s is on wave %d, want the single review wave 9", d.Caste, d.ExecutionWave)
+		}
+	}
+
+	// The half that actually buys wall-clock: a planning step of non-source-
+	// writing castes must be marked parallel, or the wrapper serialises it.
+	if got := executionStrategyForCastes("design", []string{"architect", "gatekeeper", "includer"}, colony.ModeInRepo); got != "parallel" {
+		t.Errorf("planning step strategy = %q, want parallel — collapsing waves without this changes nothing", got)
+	}
+
+	// And the safety half: anything that can write project source stays serial
+	// in a shared working tree, however many castes share the wave.
+	if got := executionStrategyForCastes("mixed", []string{"auditor", "chaos"}, colony.ModeInRepo); got != "serial" {
+		t.Errorf("step containing an unrestricted writer = %q, want serial in-repo", got)
+	}
+	if got := executionStrategyForCastes("wave", []string{"builder", "builder"}, colony.ModeInRepo); got != "serial" {
+		t.Errorf("builder task wave = %q, want serial in-repo", got)
+	}
+	if got := executionStrategyForCastes("mixed", []string{"auditor", "chaos"}, colony.ModeWorktree); got != "parallel" {
+		t.Errorf("worktree mode isolates workers; step = %q, want parallel", got)
 	}
 }

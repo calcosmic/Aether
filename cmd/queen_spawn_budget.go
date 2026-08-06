@@ -168,24 +168,74 @@ func queenBuildSafetyReviewRequired(phase colony.Phase) bool {
 	})
 }
 
+// queenBuildBaseWorkerBudget is the phase's own answer — derived from mode and
+// risk — before the operator's verification-depth choice is applied.
+func queenBuildBaseWorkerBudget(phase colony.Phase, mode colony.PhaseMode, riskLevel string) (int, string) {
+	if mode == colony.PhaseModeMaintenance && riskLevel == "low" && queenPhaseLooksDocumentationOrMaintenance(phase) {
+		return 4, "low-risk documentation or maintenance build"
+	}
+	if riskLevel == "high" || mode == colony.PhaseModeProduction {
+		return 8, "high-risk or production build"
+	}
+	if riskLevel == "medium" {
+		return 6, "medium-risk build"
+	}
+	if mode == colony.PhaseModeDiscovery {
+		return 5, "discovery build"
+	}
+	return 6, "standard build"
+}
+
+// applyBuildDepthToBudget binds the operator's verification-depth choice to the
+// build worker budget.
+//
+// Until this existed, the build branch consulted only mode and risk, so
+// `--verification-depth light` changed nothing about how many workers a build
+// spawned. The numbers 5/6/8 that CLAUDE.md attributed to depth were real but
+// keyed to risk instead, which inverted the promise: a light build of a
+// production phase still got 8, a heavy build of a discovery phase got 5.
+//
+// Standard deliberately does NOT clamp. "Standard" means the Queen's ordinary
+// judgement, which is exactly what mode and risk already express — imposing a
+// flat ceiling there silently weakens the phases that need the most help. An
+// earlier draft of this function capped standard at 6 and a DB-migration phase
+// promptly lost its Architect, which is the regression this comment exists to
+// stop someone reintroducing.
+//
+// Lowering the cap does not weaken safety. Castes returned by
+// queenBuildSafetyRequiredCastes bypass the budget entirely (see the isRequired
+// branch in applyQueenSpawnBudget), so a high-risk phase keeps its auditor and
+// gatekeeper even at light; what a light cap removes is optional specialists.
+func applyBuildDepthToBudget(base int, reason string, depth colony.VerificationDepth) (int, string) {
+	switch depth {
+	case colony.VerificationDepthLight:
+		if base > buildWorkerCapLight {
+			return buildWorkerCapLight, reason + ", capped by light verification depth"
+		}
+	case colony.VerificationDepthHeavy:
+		if base < buildWorkerFloorHeavy {
+			return buildWorkerFloorHeavy, reason + ", raised by heavy verification depth"
+		}
+	}
+	return base, reason
+}
+
+const (
+	// buildWorkerCapLight is the ceiling when the operator asks for a light
+	// build: enough for the required builder, watcher and probe plus headroom.
+	buildWorkerCapLight = 5
+	// buildWorkerFloorHeavy is the floor when the operator asks for a heavy
+	// build, so choosing heavy on a cheap phase actually buys extra scrutiny.
+	buildWorkerFloorHeavy = 8
+)
+
 func queenMaxWorkersForBudget(phase colony.Phase, flowType string, state colony.ColonyState, riskLevel string) (int, string) {
 	mode := effectiveQueenPhaseMode(phase)
 
 	switch flowType {
 	case "build":
-		if mode == colony.PhaseModeMaintenance && riskLevel == "low" && queenPhaseLooksDocumentationOrMaintenance(phase) {
-			return 4, "low-risk documentation or maintenance build"
-		}
-		if riskLevel == "high" || mode == colony.PhaseModeProduction {
-			return 8, "high-risk or production build"
-		}
-		if riskLevel == "medium" {
-			return 6, "medium-risk build"
-		}
-		if mode == colony.PhaseModeDiscovery {
-			return 5, "discovery build"
-		}
-		return 6, "standard build"
+		base, reason := queenBuildBaseWorkerBudget(phase, mode, riskLevel)
+		return applyBuildDepthToBudget(base, reason, stateVerificationDepth(state))
 	case "continue":
 		switch stateVerificationDepth(state) {
 		case colony.VerificationDepthLight:

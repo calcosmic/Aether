@@ -117,11 +117,27 @@ should not need to remember `--verification-depth` or timeout flag combinations.
 
 | Flow | Light | Standard | Heavy |
 |------|-------|----------|-------|
-| **Build** | Builder + Watcher + Probe (max 5 workers) | + Auditor + Gatekeeper (max 6) | Full safety castes (max 8) |
+| **Build** | max 5 workers | the phase's own budget (4–8) | at least 8 |
 | **Continue** | Watcher only (max 3 workers) | Watcher + Probe (max 4) | + Gatekeeper + Auditor + Probe (max 6) |
-| **Seal** | Auditor only (max 4 workers) | + Probe (max 4) | + Gatekeeper (max 5) |
+| **Seal** | no Gatekeeper, Auditor or Probe (max 4 workers) | max 4 | max 5 |
 
-*For dummies: The Queen looks at what kind of work the phase is doing and decides how many safety checks to run. A simple docs phase might just get a quick look (light), while a security phase gets the full team (heavy).*
+Build depth adjusts the phase's own mode/risk budget: **light** lowers it,
+**heavy** raises it, and **standard** leaves it alone — standard means the
+Queen's ordinary judgement, which mode and risk already express. A flat standard
+ceiling would weaken exactly the phases that need most help.
+
+**Castes the phase requires bypass the cap entirely** — a high-risk or
+production phase keeps its Auditor and Gatekeeper at every depth
+(`queenBuildSafetyRequiredCastes`), so choosing light removes optional
+specialists, never safety ones.
+
+These numbers are asserted by `TestBuildWorkerCapHonoursVerificationDepth`. They
+were previously documented but not implemented: the build branch consulted only
+mode and risk, so a *light* build of a production phase returned 8 and a *heavy*
+build of a discovery phase returned 5. If this table and the code disagree
+again, that test fails.
+
+*For dummies: The Queen looks at what kind of work the phase is doing and decides how many safety checks to run. A simple docs phase might just get a quick look (light), while a security phase gets the full team (heavy). Picking "light" never switches off the safety checks a risky phase needs — it only drops the optional extras.*
 
 Wrappers should explain the Queen's choice briefly in plain English and reserve
 manual depth flags for advanced overrides. If docs and runtime disagree, runtime wins.
