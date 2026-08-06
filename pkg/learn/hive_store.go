@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 const maxHiveWisdomEntries = 200
@@ -110,11 +112,15 @@ func (h *HiveStore) saveWisdom(data hiveWisdomData) error {
 // Real generalisation requires understanding the claim, which string
 // replacement cannot do. Keeping paths intact at least leaves the entry
 // falsifiable.
+// The placeholder is colony.RepoPlaceholder rather than a local literal
+// because promoted wisdom is sanitized downstream, and the sanitizer used to
+// reject the placeholder this function inserts. See
+// TestRepoPlaceholderSurvivesSanitizer.
 func (h *HiveStore) abstractContent(text string) string {
 	if h.sourceRepo == "" {
 		return text
 	}
-	return strings.ReplaceAll(text, h.sourceRepo, "<repo>")
+	return strings.ReplaceAll(text, h.sourceRepo, colony.RepoPlaceholder)
 }
 
 // Add promotes a learning entry to hive wisdom. Only hive-shareable entries

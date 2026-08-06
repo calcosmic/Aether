@@ -538,10 +538,12 @@ var hiveAbstractCmd = &cobra.Command{
 		}
 		sourceRepo, _ := cmd.Flags().GetString("source-repo")
 
-		// Simple abstraction: remove repo-specific identifiers
+		// Simple abstraction: remove repo-specific identifiers. Uses the shared
+		// colony.RepoPlaceholder because this output feeds hive-store, which
+		// sanitizes it.
 		abstracted := instinct
 		if sourceRepo != "" {
-			abstracted = strings.ReplaceAll(abstracted, sourceRepo, "<repo>")
+			abstracted = strings.ReplaceAll(abstracted, sourceRepo, colony.RepoPlaceholder)
 		}
 		// Remove common repo path prefixes
 		for _, prefix := range []string{"src/", "lib/", "pkg/", "cmd/", "internal/"} {
@@ -582,9 +584,15 @@ func promoteToHiveWithReference(text, domain, sourceRepo string, confidence floa
 	// and friends was labelled abstraction but was plain string replacement that
 	// pointed entries at paths which do not exist, making them unverifiable.
 	// Same reasoning as HiveStore.abstractContent in pkg/learn/hive_store.go.
+	//
+	// The placeholder is colony.RepoPlaceholder, not a local literal, because
+	// storeHiveWisdomEntry below sanitizes this text and the sanitizer used to
+	// reject the placeholder inserted right here — silently discarding nearly
+	// every promotion. It is defined beside the rules that judge it and locked
+	// by TestRepoPlaceholderSurvivesSanitizer.
 	abstracted := text
 	if sourceRepo != "" {
-		abstracted = strings.ReplaceAll(abstracted, sourceRepo, "<repo>")
+		abstracted = strings.ReplaceAll(abstracted, sourceRepo, colony.RepoPlaceholder)
 	}
 
 	hub := resolveHubPath()

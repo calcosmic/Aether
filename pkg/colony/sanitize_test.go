@@ -5,6 +5,44 @@ import (
 	"testing"
 )
 
+// --- The placeholder the sanitizer must never reject ---
+
+// TestRepoPlaceholderSurvivesSanitizer is the invariant that keeps cross-colony
+// learning alive.
+//
+// Hive promotion generalises a learning by swapping the source repository's
+// name for RepoPlaceholder, then sanitizes the result before storing it. If the
+// sanitizer rejects the placeholder, promotion fails for every learning that
+// mentions its own repository — which is nearly all of them — and it fails
+// silently: the hive stays empty while the read path keeps injecting an empty
+// section into every worker dispatch. That is exactly what "<repo>" did.
+//
+// The failure is invisible from either side on its own. It is only detectable
+// where the producer's output meets the validator's rules, which is here.
+func TestRepoPlaceholderSurvivesSanitizer(t *testing.T) {
+	if _, err := SanitizeSignalContent(RepoPlaceholder); err != nil {
+		t.Fatalf("RepoPlaceholder %q is rejected by the sanitizer that judges promoted wisdom: %v", RepoPlaceholder, err)
+	}
+
+	// The realistic shape: a learning that named its own repo, post-swap.
+	generalised := RepoPlaceholder + " builds fail when the hub version is stale"
+	sanitized, err := SanitizeSignalContent(generalised)
+	if err != nil {
+		t.Fatalf("a generalised learning containing the placeholder was rejected: %v", err)
+	}
+	if !strings.Contains(sanitized, RepoPlaceholder) {
+		t.Fatalf("placeholder did not survive sanitization: got %q", sanitized)
+	}
+}
+
+// TestXMLPlaceholderStillRejected proves the fix did not weaken the rule it
+// tripped over. Angle-bracket tags remain blocked; only the placeholder moved.
+func TestXMLPlaceholderStillRejected(t *testing.T) {
+	if _, err := SanitizeSignalContent("<repo> builds fail when the hub is stale"); err == nil {
+		t.Fatal("expected XML-shaped content to still be rejected; the sanitizer was weakened")
+	}
+}
+
 // --- Rule 1: Max 500 characters ---
 
 func TestSanitizeSignalContent_MaxLengthExceeded(t *testing.T) {

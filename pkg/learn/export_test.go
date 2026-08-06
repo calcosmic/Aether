@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -342,8 +343,13 @@ func TestHiveStore_AddAbstractsContent(t *testing.T) {
 	if containsString(content, "/Users/testuser/myrepo") {
 		t.Error("content still contains repo path (should be abstracted)")
 	}
-	if !containsString(content, "<repo>") {
-		t.Error("content does not contain <repo> placeholder")
+	if !containsString(content, colony.RepoPlaceholder) {
+		t.Errorf("content does not contain the %q placeholder", colony.RepoPlaceholder)
+	}
+	// The placeholder must be one the downstream sanitizer accepts; "<repo>"
+	// was not, which silently voided nearly every promotion.
+	if containsString(content, "<repo>") {
+		t.Error("content carries the sanitizer-forbidden tag-shaped placeholder")
 	}
 
 	// Source-directory prefixes are deliberately PRESERVED. Stripping "src/",
