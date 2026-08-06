@@ -27,7 +27,7 @@ var statusCmd = &cobra.Command{
 		state, err := loadActiveColonyState()
 		if err != nil {
 			if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {
-				fmt.Fprint(stdout, renderNoColonyStatusVisual())
+				writeVisualOutput(stdout, renderNoColonyStatusVisual())
 				return nil
 			}
 			renderRecoveryMenu("status", colonyStateLoadMessage(err), nil)
@@ -40,7 +40,7 @@ var statusCmd = &cobra.Command{
 			return nil
 		}
 		output := renderDashboard(state, store)
-		fmt.Fprint(stdout, output)
+		writeVisualOutput(stdout, output)
 		return nil
 	},
 }

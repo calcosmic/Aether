@@ -55,6 +55,6 @@ func renderPhaseEndSummary(summary WaveLifecycleSummary, phaseNum int) {
 
 	actionsNeeded := renderActionsNeeded(summary, recoveryLog)
 	if actionsNeeded != "" {
-		fmt.Fprint(stdout, actionsNeeded)
+		visualFprint(stdout, actionsNeeded)
 	}
 }

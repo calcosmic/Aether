@@ -397,9 +397,9 @@ var sealCmd = &cobra.Command{
 				return nil
 			}
 			// --force: warn but continue
-			fmt.Fprintln(stdout, fmt.Sprintf("WARNING: Overriding %d blocker(s) with --force", len(blockers)))
+			visualFprintln(stdout, fmt.Sprintf("WARNING: Overriding %d blocker(s) with --force", len(blockers)))
 		} else if len(issues) > 0 {
-			fmt.Fprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
+			visualFprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
 		}
 
 		return completeSealRuntime(state)
@@ -519,18 +519,18 @@ func completeSealRuntime(state colony.ColonyState) error {
 	// ceremony reads consolidation -> promotion -> hive: printed here, after
 	// the promotion loop above has run, and before the hive reporting lines
 	// below.
-	fmt.Fprint(stdout, renderSealConsolidationBeats(sealConsolidation))
+	visualFprint(stdout, renderSealConsolidationBeats(sealConsolidation))
 	emitSealConsolidationCeremony(sealConsolidation)
 
 	// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
 	if hivePromotedCount > 0 {
-		fmt.Fprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
+		visualFprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
 	}
 	if hivePromotionFailures > 0 {
-		fmt.Fprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
+		visualFprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
 	}
 	if hiveEligibleCount > 0 && !automaticHivePromotionEnabled() {
-		fmt.Fprintln(stdout, fmt.Sprintf("Hive auto-promotion is disabled; %d eligible instinct(s) remain project-local", hiveEligibleCount))
+		visualFprintln(stdout, fmt.Sprintf("Hive auto-promotion is disabled; %d eligible instinct(s) remain project-local", hiveEligibleCount))
 	}
 
 	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
@@ -550,7 +550,7 @@ func completeSealRuntime(state colony.ColonyState) error {
 	// Shelf candidate detection (before archiving)
 	candidates, _ := detectShelfCandidates(state, store)
 	if len(candidates) > 0 {
-		fmt.Fprintln(stdout, shelfCandidateSummary(candidates))
+		visualFprintln(stdout, shelfCandidateSummary(candidates))
 	}
 
 	// Scan for high-severity open findings before building summary
@@ -603,10 +603,10 @@ func completeSealRuntime(state colony.ColonyState) error {
 	outputWorkflow(result, renderSealVisual(state, summaryPath))
 
 	if shouldRenderVisualOutput(stdout) {
-		fmt.Fprint(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
+		writeVisualOutput(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
 		readinessSummary := buildPorterReadinessSummary()
-		fmt.Fprint(stdout, readinessSummary)
-		fmt.Fprintln(stdout, "\nRun `/ant-porter` or `aether porter check` to validate and deliver.")
+		writeVisualOutput(stdout, readinessSummary)
+		writeVisualOutput(stdout, "\nRun `aether porter check` to validate and deliver.\n")
 	}
 	return nil
 }

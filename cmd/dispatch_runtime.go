@@ -143,7 +143,7 @@ func preflightWorkerProvider(ctx context.Context, invoker codex.WorkerInvoker, d
 	platform := codex.PlatformFromInvoker(invoker)
 	status, outcome := gatedProviderPreflight(ctx, preflighter, platform, root, time.Now())
 	if outcome.Notice != "" {
-		fmt.Fprintf(stderr, "%s\n", outcome.Notice)
+		visualFprintf(stderr, "%s\n", outcome.Notice)
 	}
 	if status.Available {
 		return nil

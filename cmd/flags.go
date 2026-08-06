@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
@@ -107,5 +105,5 @@ func renderFlagsTable(entries []colony.FlagEntry) {
 	}
 	t.SetStyle(table.StyleRounded)
 
-	fmt.Fprintln(stdout, t.Render())
+	visualFprintln(stdout, t.Render())
 }

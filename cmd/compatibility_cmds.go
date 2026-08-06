@@ -224,7 +224,7 @@ func runLiveWatch(interval time.Duration) error {
 		_ = writeWatchArtifacts(result, visual)
 
 		frame := "\033[H\033[2J" + strings.TrimRight(visual, "\n") + "\n"
-		fmt.Fprint(stdout, frame)
+		writeVisualOutput(stdout, frame)
 
 		stateName := strings.TrimSpace(stringValue(result["state"]))
 		if intValue(result["active_count"]) == 0 && stateName != string(colony.StateEXECUTING) && stateName != string(colony.StateBUILT) {

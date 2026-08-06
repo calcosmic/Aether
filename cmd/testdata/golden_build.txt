@@ -110,9 +110,9 @@ Total planned dispatches: 4
 .aether/data/last-build-claims.json
 .aether/data/spawn-tree.txt
 ── Verification [heavy] ──
-Verification happens during `aether continue`.
+Verification happens during `/ant-continue`.
 ── Housekeeping ──
-Signal housekeeping runs during `aether continue`.
+Signal housekeeping runs during `/ant-continue`.
 ── Colony Complete ──
 This is the final phase. Seal the colony after continue.
 

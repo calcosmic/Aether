@@ -30,10 +30,10 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	state, err := loadActiveColonyState()
 	if err != nil {
 		if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {
-			fmt.Fprint(stdout, renderNoColonyRecoverVisual())
+			visualFprint(stdout, renderNoColonyRecoverVisual())
 			return nil
 		}
-		fmt.Fprintln(stdout, colonyStateLoadMessage(err))
+		visualFprintln(stdout, colonyStateLoadMessage(err))
 		return nil
 	}
 
@@ -47,7 +47,7 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	issues, scanErr := performStuckStateScan(dataDir)
 	scanDuration := time.Since(scanStart)
 	if scanErr != nil {
-		fmt.Fprintf(stdout, "Scan failed: %v\n", scanErr)
+		visualFprintf(stdout, "Scan failed: %v\n", scanErr)
 		return nil
 	}
 
@@ -55,12 +55,12 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	if apply && len(issues) > 0 {
 		repairResult, err = performRecoverRepairs(issues, dataDir, force, jsonOut)
 		if err != nil {
-			fmt.Fprintf(stdout, "Repair failed: %v\n", err)
+			visualFprintf(stdout, "Repair failed: %v\n", err)
 			if jsonOut {
 				fmt.Fprint(stdout, renderRecoverJSON(issues, state, scanDuration, nil))
 			} else {
 				output := renderRecoverDiagnosis(issues, state, nil)
-				fmt.Fprint(stdout, output)
+				visualFprint(stdout, output)
 			}
 			if recoverExitCode(issues) != 0 {
 				cmd.SilenceUsage = true
@@ -72,7 +72,7 @@ func runRecover(cmd *cobra.Command, args []string) error {
 		// Re-scan to get post-repair state (matches medic pattern).
 		postIssues, postErr := performStuckStateScan(dataDir)
 		if postErr != nil {
-			fmt.Fprintf(stdout, "Post-repair scan failed: %v\n", postErr)
+			visualFprintf(stdout, "Post-repair scan failed: %v\n", postErr)
 		} else {
 			issues = postIssues
 		}
@@ -82,7 +82,7 @@ func runRecover(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(stdout, renderRecoverJSON(issues, state, scanDuration, repairResult))
 	} else {
 		output := renderRecoverDiagnosis(issues, state, repairResult)
-		fmt.Fprint(stdout, output)
+		visualFprint(stdout, output)
 	}
 
 	if recoverExitCode(issues) != 0 {

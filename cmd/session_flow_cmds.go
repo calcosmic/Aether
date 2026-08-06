@@ -353,12 +353,12 @@ func loadResumeState(handoffText string, noHandoff bool) (colony.ColonyState, bo
 }
 
 func warnResumeHandoffFallback(currentState, handoffState colony.ColonyState) {
-	fmt.Fprintln(stderr, "warning: COLONY_STATE.json is not runnable; attempting to restore from HANDOFF.md")
+	visualFprintln(stderr, "warning: COLONY_STATE.json is not runnable; attempting to restore from HANDOFF.md")
 
 	currentGoal := colonyStateGoalText(currentState)
 	handoffGoal := colonyStateGoalText(handoffState)
 	if currentGoal != "" && handoffGoal != "" && !goalsMatch(currentGoal, handoffGoal) {
-		fmt.Fprintf(stderr, "warning: HANDOFF.md goal %q does not match current COLONY_STATE.json goal %q\n", handoffGoal, currentGoal)
+		visualFprintf(stderr, "warning: HANDOFF.md goal %q does not match current COLONY_STATE.json goal %q\n", handoffGoal, currentGoal)
 	}
 
 	warnIfHandoffOlderThanCurrentState()
@@ -380,7 +380,7 @@ func warnIfHandoffOlderThanCurrentState() {
 		return
 	}
 	if handoffInfo.ModTime().Before(stateInfo.ModTime()) {
-		fmt.Fprintf(stderr, "warning: HANDOFF.md is older than COLONY_STATE.json; verify the recovered colony before continuing\n")
+		visualFprintf(stderr, "warning: HANDOFF.md is older than COLONY_STATE.json; verify the recovered colony before continuing\n")
 	}
 }
 

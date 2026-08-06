@@ -61,7 +61,7 @@ func runMedic(cmd *cobra.Command, args []string) error {
 		if jsonOut || !shouldRenderVisualOutput(stdout) {
 			fmt.Fprint(stdout, renderTraceDiagnosticJSON(diag))
 		} else {
-			fmt.Fprint(stdout, renderTraceDiagnostic(diag))
+			writeVisualOutput(stdout, renderTraceDiagnostic(diag))
 		}
 		return nil
 	}
@@ -71,7 +71,7 @@ func runMedic(cmd *cobra.Command, args []string) error {
 		message := colonyStateLoadMessage(err)
 		if strings.Contains(message, "No colony initialized") {
 			if shouldRenderVisualOutput(stdout) {
-				fmt.Fprint(stdout, renderNoColonyMedicVisual())
+				writeVisualOutput(stdout, renderNoColonyMedicVisual())
 			} else {
 				outputOK(map[string]interface{}{"status": "no_colony", "message": message, "issues": []HealthIssue{}})
 			}
@@ -112,7 +112,7 @@ func runMedic(cmd *cobra.Command, args []string) error {
 				return nil
 			}
 			output := renderMedicReport(issues, opts, &state, nil)
-			fmt.Fprint(stdout, output)
+			writeVisualOutput(stdout, output)
 			return nil
 		}
 
@@ -140,7 +140,7 @@ func runMedic(cmd *cobra.Command, args []string) error {
 	}
 
 	output := renderMedicReport(issues, opts, &state, repairResult)
-	fmt.Fprint(stdout, output)
+	writeVisualOutput(stdout, output)
 	return nil
 }
 

@@ -59,7 +59,7 @@ or (3) dispatch the Fixer agent to investigate and apply fixes.`,
 		// Build recovery summary
 		summary := buildGateRecoverySummary(phaseNum, results)
 		if shouldRenderVisualOutput(stderr) {
-			fmt.Fprint(stderr, summary)
+			writeVisualOutput(stderr, summary)
 		} else {
 			data, _ := json.Marshal(map[string]interface{}{
 				"ok":      true,

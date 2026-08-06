@@ -72,6 +72,10 @@ func TestStatusNoColony(t *testing.T) {
 
 func TestStatusNoColonyVisual(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pinned to Codex: this test asserts output content, and Codex is the
+	// platform that names commands in the raw CLI form. Naming itself is
+	// covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "codex")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -1401,6 +1405,11 @@ func ptrFloat64(f float64) *float64 {
 
 func TestStatusShowsRecoveryDoorway(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pinned to Codex: this test asserts the recovery command is surfaced at
+	// all, and Codex names it in the raw CLI form the fixture seeds. That the
+	// same command reaches a Claude user as `/ant-build 2 --task 2.1` is
+	// covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "codex")
 	saveGlobals(t)
 	resetRootCmd(t)
 

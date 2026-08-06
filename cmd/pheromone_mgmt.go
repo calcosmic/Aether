@@ -137,11 +137,11 @@ var pheromoneDisplayCmd = &cobra.Command{
 
 		pf := loadPheromones()
 		if pf == nil {
-			outputOK(map[string]interface{}{
+			outputWorkflow(map[string]interface{}{
 				"signals": []interface{}{},
 				"count":   0,
 				"display": "No pheromone signals found.",
-			})
+			}, renderPheromoneDisplayVisual("", 0))
 			return nil
 		}
 
@@ -160,11 +160,11 @@ var pheromoneDisplayCmd = &cobra.Command{
 		}
 
 		if len(filtered) == 0 {
-			outputOK(map[string]interface{}{
+			outputWorkflow(map[string]interface{}{
 				"signals": []interface{}{},
 				"count":   0,
 				"display": "No pheromone signals found.",
-			})
+			}, renderPheromoneDisplayVisual("", 0))
 			return nil
 		}
 
@@ -199,7 +199,6 @@ var pheromoneDisplayCmd = &cobra.Command{
 		}
 
 		display := sb.String()
-		fmt.Fprintf(stdout, "%s", display)
 
 		// Build serializable signals list
 		signals := make([]map[string]interface{}, len(filtered))
@@ -218,13 +217,45 @@ var pheromoneDisplayCmd = &cobra.Command{
 			signals[i] = entry
 		}
 
-		outputOK(map[string]interface{}{
+		outputWorkflow(map[string]interface{}{
 			"signals": signals,
 			"count":   len(filtered),
 			"display": display,
-		})
+		}, renderPheromoneDisplayVisual(display, len(filtered)))
 		return nil
 	},
+}
+
+// renderPheromoneDisplayVisual renders the signal table for a human reader.
+//
+// This command used to print the bare table to stdout and then a JSON envelope
+// on top of it, in every output mode — so `/ant-pheromones` showed a user a
+// table followed by a wall of JSON, with no banner and no next step. It was the
+// only lifecycle command with no Next Up block.
+func renderPheromoneDisplayVisual(display string, count int) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("pheromones"), "Pheromone Signals"))
+	b.WriteString(visualDividerStr())
+
+	if count == 0 {
+		b.WriteString("No active signals. Workers are running on colony context alone.\n")
+		b.WriteString(renderNextUp(
+			"Run `aether focus \"<area>\"` to point the colony at something specific.",
+			"Run `aether redirect \"<pattern>\"` to set a hard constraint workers must not break.",
+			"Run `aether status` to see where the colony is before steering it.",
+		))
+		return b.String()
+	}
+
+	b.WriteString(strings.TrimRight(display, "\n"))
+	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("%d active signal(s).\n", count))
+	b.WriteString(renderNextUp(
+		"Run `aether build <phase>` — these signals are injected into every worker prompt.",
+		"Run `aether feedback \"<note>\"` to adjust behaviour without adding a hard constraint.",
+		"Run `aether redirect \"<pattern>\"` if something here needs to become a hard constraint.",
+	))
+	return b.String()
 }
 
 var pheromoneSnapshotInjectCmd = &cobra.Command{

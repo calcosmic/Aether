@@ -245,7 +245,7 @@ func ExitWithError(err error) {
 		os.Exit(renderedErr.code)
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, "Error:", err.Error())
+		visualFprintln(stderr, "Error:", err.Error())
 	}
 	os.Exit(1)
 }

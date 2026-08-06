@@ -1442,7 +1442,7 @@ func renderGateClassifyTable() {
 	for _, e := range entries {
 		t.AppendRow(table.Row{e.name, string(e.Tier), e.Rationale})
 	}
-	fmt.Fprintln(stdout, t.Render())
+	visualFprintln(stdout, t.Render())
 }
 
 var gateAutoResolveCmd = &cobra.Command{
@@ -1489,7 +1489,7 @@ func renderGateAutoResolveTableWith(thresholds map[string]gateAutoResolveThresho
 		heavy := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthHeavy))
 		t.AppendRow(table.Row{e.name, fmt.Sprintf("%.1f", e.Threshold), light, standard, heavy, e.Rationale})
 	}
-	fmt.Fprintln(stdout, t.Render())
+	visualFprintln(stdout, t.Render())
 }
 
 func init() {

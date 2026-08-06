@@ -1100,6 +1100,10 @@ func TestInstallVisualOutput(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pinned to Codex: this test asserts output content, and Codex is the
+	// platform that names commands in the raw CLI form. Naming itself is
+	// covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "codex")
 
 	var buf bytes.Buffer
 	stdout = &buf
@@ -1362,6 +1366,10 @@ func TestUpdateDryRunVisualOutput(t *testing.T) {
 	defer os.Chdir(oldDir)
 	t.Setenv("HOME", homeDir)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pinned to Codex: this test asserts output content, and Codex is the
+	// platform that names commands in the raw CLI form. Naming itself is
+	// covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "codex")
 
 	var buf bytes.Buffer
 	stdout = &buf

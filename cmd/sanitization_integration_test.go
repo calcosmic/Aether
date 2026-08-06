@@ -225,17 +225,47 @@ func TestSanitizationIntegration_AngleBracketsEscaped(t *testing.T) {
 		t.Fatalf("display failed: %v", err)
 	}
 
-	displayOutput := outBuf.String()
-	// The display should show the escaped version
-	if !strings.Contains(displayOutput, "&lt; 100") {
-		t.Errorf("display should show escaped &lt;, got:\n%s", displayOutput)
+	// JSON surface: assert on the decoded envelope rather than the raw bytes.
+	// encoding/json escapes `&` to &, so a substring match against the
+	// serialized form tests the encoder, not the sanitizer.
+	var envelope struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			Display string `json:"display"`
+		} `json:"result"`
 	}
-	if !strings.Contains(displayOutput, "&gt; 80") {
-		t.Errorf("display should show escaped &gt;, got:\n%s", displayOutput)
+	if err := json.Unmarshal(outBuf.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to decode display envelope: %v\n%s", err, outBuf.String())
 	}
-	// Must NOT contain raw angle brackets
-	if strings.Contains(displayOutput, "< 100") || strings.Contains(displayOutput, "> 80") {
-		t.Errorf("display should NOT contain raw angle brackets, got:\n%s", displayOutput)
+	if !envelope.OK {
+		t.Errorf("display should return ok:true, got:\n%s", outBuf.String())
+	}
+	assertAngleBracketsEscaped(t, "json display field", envelope.Result.Display)
+
+	// Visual surface: this is where a human would see an unescaped bracket, so
+	// assert it directly rather than trusting the JSON field to stand in for it.
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	t.Setenv("AETHER_PLATFORM", "codex")
+	outBuf.Reset()
+	rootCmd.SetArgs([]string{"pheromone-display"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("visual display failed: %v", err)
+	}
+	assertAngleBracketsEscaped(t, "visual output", outBuf.String())
+}
+
+// assertAngleBracketsEscaped checks that comparison operators survived
+// sanitization as HTML entities and that no raw bracket reached the surface.
+func assertAngleBracketsEscaped(t *testing.T, surface, got string) {
+	t.Helper()
+	if !strings.Contains(got, "&lt; 100") {
+		t.Errorf("%s should show escaped &lt;, got:\n%s", surface, got)
+	}
+	if !strings.Contains(got, "&gt; 80") {
+		t.Errorf("%s should show escaped &gt;, got:\n%s", surface, got)
+	}
+	if strings.Contains(got, "< 100") || strings.Contains(got, "> 80") {
+		t.Errorf("%s should NOT contain raw angle brackets, got:\n%s", surface, got)
 	}
 }
 

@@ -227,7 +227,7 @@ func renderFailureClassifyTable() {
 	for _, e := range entries {
 		t.AppendRow(table.Row{e.pattern, string(e.Classification), string(e.FailureType), e.Rationale})
 	}
-	fmt.Fprintln(stdout, t.Render())
+	visualFprintln(stdout, t.Render())
 }
 
 var recoveryLogReadCmd = &cobra.Command{

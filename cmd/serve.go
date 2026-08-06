@@ -70,15 +70,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 	mux.HandleFunc("/ws/agents/", server.handleWebSocketSpecificAgent)
 
 	addr := fmt.Sprintf("%s:%d", host, port)
-	fmt.Fprintf(stdout, "Starting streaming server on http://%s\n", addr)
-	fmt.Fprintf(stdout, "SSE Endpoints:\n")
-	fmt.Fprintf(stdout, "  GET /sse/agents        - Subscribe to all agent events\n")
-	fmt.Fprintf(stdout, "  GET /sse/agents/{name} - Subscribe to specific agent events\n")
-	fmt.Fprintf(stdout, "WebSocket Endpoints:\n")
-	fmt.Fprintf(stdout, "  GET /ws/agents         - WebSocket for all agent events\n")
-	fmt.Fprintf(stdout, "  GET /ws/agents/{name}  - WebSocket for specific agent events\n")
-	fmt.Fprintf(stdout, "  GET /health            - Health check\n")
-	fmt.Fprintf(stdout, "\nPress Ctrl+C to stop\n")
+	visualFprintf(stdout, "Starting streaming server on http://%s\n", addr)
+	visualFprintf(stdout, "SSE Endpoints:\n")
+	visualFprintf(stdout, "  GET /sse/agents        - Subscribe to all agent events\n")
+	visualFprintf(stdout, "  GET /sse/agents/{name} - Subscribe to specific agent events\n")
+	visualFprintf(stdout, "WebSocket Endpoints:\n")
+	visualFprintf(stdout, "  GET /ws/agents         - WebSocket for all agent events\n")
+	visualFprintf(stdout, "  GET /ws/agents/{name}  - WebSocket for specific agent events\n")
+	visualFprintf(stdout, "  GET /health            - Health check\n")
+	visualFprintf(stdout, "\nPress Ctrl+C to stop\n")
 
 	srv := &http.Server{
 		Addr:         addr,

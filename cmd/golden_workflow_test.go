@@ -190,6 +190,11 @@ func TestGoldenPlanVisualOutput(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pin the platform: command naming in visual output is platform-specific,
+	// so an unpinned golden records whatever host the suite happened to run on.
+	// Claude Code is the primary platform, so the golden locks its naming.
+	// Codex and OpenCode naming is covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "claude")
 
 	goal := "Golden workflow test colony"
 	createTestColonyState(t, dataDir, colony.ColonyState{
@@ -230,6 +235,11 @@ func TestGoldenBuildVisualOutput(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pin the platform: command naming in visual output is platform-specific,
+	// so an unpinned golden records whatever host the suite happened to run on.
+	// Claude Code is the primary platform, so the golden locks its naming.
+	// Codex and OpenCode naming is covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "claude")
 
 	goal := "Golden workflow test colony"
 	taskOneID := "g-task-1"
@@ -291,6 +301,11 @@ func TestGoldenContinueVisualOutput(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pin the platform: command naming in visual output is platform-specific,
+	// so an unpinned golden records whatever host the suite happened to run on.
+	// Claude Code is the primary platform, so the golden locks its naming.
+	// Codex and OpenCode naming is covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "claude")
 
 	goal := "Golden workflow test colony"
 	now := mustParseRFC3339(t, "2026-04-20T11:00:00Z")

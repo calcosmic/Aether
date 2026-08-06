@@ -657,7 +657,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
 	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "built lifecycle state committed", dispatches, terminalClaims, mode, nil); err != nil {
-		fmt.Fprintf(stderr, "warning: built state committed but build attempt final status could not be recorded: %v\n", err)
+		visualFprintf(stderr, "warning: built state committed but build attempt final status could not be recorded: %v\n", err)
 	}
 	attemptFinished = true
 	updatedState = committedState

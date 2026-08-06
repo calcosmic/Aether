@@ -223,7 +223,7 @@ func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) erro
 		return err
 	}
 
-	fmt.Fprintf(stderr, "preflight: cache file %s was corrupt — rewriting it fresh\n", preflightCachePathRel)
+	visualFprintf(stderr, "preflight: cache file %s was corrupt — rewriting it fresh\n", preflightCachePathRel)
 	fresh := preflightCacheFile{
 		SchemaVersion: preflightCacheSchemaVersion,
 		Entries:       map[string]preflightCacheEntry{platformKey: entry},

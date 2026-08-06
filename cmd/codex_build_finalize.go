@@ -643,7 +643,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 func collectPendingSuggestions(root string) (ran bool, count int) {
 	suggestResult, err := runSuggestAnalyze(root, false)
 	if err != nil {
-		fmt.Fprintf(stderr, "warning: suggest-analyze did not run at build finalize: %v\n", err)
+		visualFprintf(stderr, "warning: suggest-analyze did not run at build finalize: %v\n", err)
 		return false, 0
 	}
 	if total, ok := suggestResult["total"].(int); ok {

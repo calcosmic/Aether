@@ -143,7 +143,7 @@ func promoteOracleFindingAsLearning(text string, confidence int) bool {
 		Caste:          "oracle",
 	}
 	if err := learn.NewColonyStore(store).Add(entry); err != nil {
-		fmt.Fprintf(stderr, "warning: oracle promote could not store learning: %v\n", err)
+		visualFprintf(stderr, "warning: oracle promote could not store learning: %v\n", err)
 		return false
 	}
 	return true
@@ -169,7 +169,7 @@ func promoteOracleFindingAsInstinct(text string, confidence int) bool {
 	}
 	service := memory.NewPromoteService(store, events.NewBus(store, events.DefaultConfig()))
 	if _, err := service.Promote(context.Background(), obs, "oracle-promote"); err != nil {
-		fmt.Fprintf(stderr, "warning: oracle promote could not create instinct: %v\n", err)
+		visualFprintf(stderr, "warning: oracle promote could not create instinct: %v\n", err)
 		return false
 	}
 	return true

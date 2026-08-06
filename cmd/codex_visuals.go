@@ -360,10 +360,51 @@ func emitVisualProgress(visual string) {
 	writeVisualOutput(stdout, visual+"\n\n")
 }
 
+// writeVisualOutput is the single exit for every byte of human-facing visual
+// output — banners, workflow renders, progress, and the visual error branch of
+// outputError. Command naming is translated here rather than at the call sites
+// because there is no reliable way to keep ~500 prose strings scattered across
+// cmd/ individually correct: renderNextUp translated its own hints for months
+// while the error path two functions away, the welcome banner, the recovery
+// snapshot and every `Run \`aether plan\` first` message did not, so a Claude
+// Code user was still told to type commands that only exist inside the wrapper.
+//
+// Translating at the exit makes the raw form structurally unable to reach a
+// terminal on a slash-command platform, whatever new prose gets added later.
+// TestVisualOutputNeverLeaksRawWrapperCommands locks that.
 func writeVisualOutput(w io.Writer, text string) {
+	// Gated on visual mode, not applied unconditionally. Some callers (publish
+	// warnings, seal guidance) emit in both modes, and JSON is the machine
+	// surface: a wrapper reading `next` out of an envelope has to receive a
+	// command it can exec. Translation is a presentation concern and belongs
+	// only on the presentation path.
+	if shouldRenderVisualOutput(w) {
+		text = translateHintCommandsForPlatform(text, detectPlatform())
+	}
 	visualOutputMu.Lock()
 	defer visualOutputMu.Unlock()
 	fmt.Fprint(w, text)
+}
+
+// visualFprint, visualFprintf and visualFprintln are drop-in replacements for
+// the fmt equivalents at human-facing call sites. They exist so a renderer that
+// builds its output inline — rather than assembling one string and handing it
+// to writeVisualOutput — still gets platform command naming.
+//
+// Use these for anything a person reads. Machine surfaces (JSON envelopes,
+// NDJSON streams, XML exports, worker briefs, raw worker output under
+// --verbose) must keep using fmt directly, and are listed with their reasons in
+// visualWriterExemptions.
+func visualFprint(w io.Writer, a ...interface{}) {
+	writeVisualOutput(w, fmt.Sprint(a...))
+}
+
+func visualFprintf(w io.Writer, format string, a ...interface{}) {
+	writeVisualOutput(w, fmt.Sprintf(format, a...))
+}
+
+func visualFprintln(w io.Writer, a ...interface{}) {
+	writeVisualOutput(w, fmt.Sprintln(a...))
 }
 
 func spacedTitle(title string) string {
@@ -480,6 +521,17 @@ func translateHintCommandsForPlatform(s, platform string) string {
 		}
 		return "/ant-" + groups[2]
 	})
+}
+
+// platformCommandName returns the way a user on this platform types a runtime
+// verb: the slash wrapper where one exists, the raw CLI form otherwise. Use it
+// when building a command name for layout (padding, tables) — plain prose can
+// just say `aether <verb>` and let writeVisualOutput translate it.
+func platformCommandName(verb, platform string) string {
+	if platform != "codex" && wrapperCommandNames[verb] {
+		return "/ant-" + verb
+	}
+	return "aether " + verb
 }
 
 func renderContextClearGuidance() string {

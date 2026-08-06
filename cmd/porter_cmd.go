@@ -623,7 +623,7 @@ func renderPorterResult(cmd *cobra.Command, result integrityResult) error {
 		fmt.Fprintln(stdout, string(data))
 	} else {
 		visual := buildPorterVisual(result)
-		fmt.Fprint(stdout, visual)
+		visualFprint(stdout, visual)
 	}
 
 	if result.Overall == "ok" {

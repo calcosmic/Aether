@@ -202,8 +202,8 @@ func dispatchFixer(phaseNum int, fixerMode string) error {
 	}
 
 	if shouldRenderVisualOutput(stderr) {
-		fmt.Fprintf(stderr, "Fixer dispatched (attempt %d) -- %s mode\n", fileData.Attempts, fixerMode)
-		fmt.Fprintf(stderr, "Investigating %d failed gate(s) in Phase %d\n", len(failedGates), phaseNum)
+		visualFprintf(stderr, "Fixer dispatched (attempt %d) -- %s mode\n", fileData.Attempts, fixerMode)
+		visualFprintf(stderr, "Investigating %d failed gate(s) in Phase %d\n", len(failedGates), phaseNum)
 	}
 	fmt.Fprintln(stdout, string(data))
 

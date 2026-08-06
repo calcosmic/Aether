@@ -35,7 +35,10 @@ func outputOK(result interface{}) {
 func outputError(code int, message string, details interface{}) {
 	markRenderedCommandError(code)
 	if shouldRenderVisualOutput(stderr) {
-		fmt.Fprint(stderr, renderVisualError(message, details))
+		// Through writeVisualOutput, not fmt.Fprint: that is where command
+		// naming is translated for slash-command platforms, and an error is
+		// the moment a user most needs a command they can actually type.
+		writeVisualOutput(stderr, renderVisualError(message, details))
 		return
 	}
 	envelope := struct {

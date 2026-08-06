@@ -178,7 +178,7 @@ func warnBinaryCoLocation(channel runtimeChannel, homeDir string) {
 	destDir := defaultLocalBinaryDest(homeDir, channel)
 	otherPath := filepath.Join(destDir, other)
 	if _, err := os.Stat(otherPath); err == nil {
-		fmt.Fprintf(stderr, "Note: %s binary also present in %s\nNext actions:\n  - Verify the intended %s binary: %s\n  - Verify the other channel before comparing behavior: %s\n",
+		visualFprintf(stderr, "Note: %s binary also present in %s\nNext actions:\n  - Verify the intended %s binary: %s\n  - Verify the other channel before comparing behavior: %s\n",
 			other,
 			destDir,
 			defaultBinaryName(channel),
@@ -189,21 +189,21 @@ func warnBinaryCoLocation(channel runtimeChannel, homeDir string) {
 }
 
 func warnTsHostBuildSkipped(channel runtimeChannel, err error) {
-	fmt.Fprintf(stderr, "Warning: TS host build skipped: %v\nNext actions:\n  - Rebuild TS host assets: npm ci --prefix .aether/ts-host && npm run build --prefix .aether/ts-host\n  - Rerun publish from the Aether source repo: %s\n",
+	visualFprintf(stderr, "Warning: TS host build skipped: %v\nNext actions:\n  - Rebuild TS host assets: npm ci --prefix .aether/ts-host && npm run build --prefix .aether/ts-host\n  - Rerun publish from the Aether source repo: %s\n",
 		err,
 		publishRecoveryCommand(channel),
 	)
 }
 
 func warnTsHostHubSyncSkipped(channel runtimeChannel, err error) {
-	fmt.Fprintf(stderr, "Warning: TS host hub sync skipped: %v\nNext actions:\n  - Verify .aether/ts-host/dist exists after build: npm run build --prefix .aether/ts-host\n  - Rerun publish from the Aether source repo: %s\n",
+	visualFprintf(stderr, "Warning: TS host hub sync skipped: %v\nNext actions:\n  - Verify .aether/ts-host/dist exists after build: npm run build --prefix .aether/ts-host\n  - Rerun publish from the Aether source repo: %s\n",
 		err,
 		publishRecoveryCommand(channel),
 	)
 }
 
 func warnHubVersionUpdated(channel runtimeChannel, oldHubVersion, version string) {
-	fmt.Fprintf(stderr, "Warning: hub version updated from %s to %s\nNext actions:\n  - If this was unexpected, recover from the Aether source repo: %s\n  - Verify binary/hub agreement: %s\n  - Verify release metadata and hub completeness: %s\n  - Refresh downstream repos: %s\n",
+	visualFprintf(stderr, "Warning: hub version updated from %s to %s\nNext actions:\n  - If this was unexpected, recover from the Aether source repo: %s\n  - Verify binary/hub agreement: %s\n  - Verify release metadata and hub completeness: %s\n  - Refresh downstream repos: %s\n",
 		oldHubVersion,
 		version,
 		publishRecoveryCommand(channel),
