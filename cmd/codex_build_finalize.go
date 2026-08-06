@@ -717,7 +717,22 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 func reconcileCommittedExternalBuildAttempt(state colony.ColonyState, phaseNum int, binding buildAttemptManifestBinding, completionDigest string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	record := binding.Record
 	if record.CompletionSHA256 == "" || record.CompletionSHA256 != completionDigest || record.Claims == nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile its committed state without matching terminal evidence", record.ID)
+		// This is the idempotency path: re-submitting the SAME completion packet
+		// for an already-committed build returns the same result safely. A
+		// different packet is refused by design — a committed build is not
+		// superseded by a later one.
+		//
+		// The old message ("without matching terminal evidence") read as an
+		// invitation to go and produce matching evidence, which is impossible:
+		// any redispatch yields a new digest. A real session spent six worker
+		// dispatches discovering that, re-running the phase with four workers,
+		// then six, then the full eleven, before concluding it could not be
+		// done. Say what the situation is and name the path that works.
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf(
+			"build attempt %s is already committed, so this different completion packet cannot replace it. "+
+				"If files changed after the build signed off — a reviewer's findings fixed, for example — do not redispatch: "+
+				"run `aether continue`, which re-runs verification and accepts amended artifacts when it passes green",
+			record.ID)
 	}
 	manifestRel := strings.TrimPrefix(filepath.ToSlash(record.Manifest), ".aether/data/")
 	var finalManifest codexBuildManifest

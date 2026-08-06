@@ -387,3 +387,50 @@ func TestResumeDashboardDoesNotRedispatchLiveBuildProcess(t *testing.T) {
 		t.Fatalf("live build recovery = %#v, want aether watch", result["recovery"])
 	}
 }
+
+// TestCommittedAttemptRefusalNamesAWorkingPath pins the recovery hint on the
+// one refusal that has demonstrably cost real dispatches.
+//
+// reconcileCommittedExternalBuildAttempt is the idempotency path: re-submitting
+// the same completion packet for an already-committed build returns the same
+// result. A different packet is refused, correctly — a committed build is not
+// superseded by a later one.
+//
+// The refusal used to read "cannot reconcile its committed state without
+// matching terminal evidence", which invites the reader to go and produce
+// matching evidence. That is impossible: every redispatch yields a new digest.
+// A real session spent six worker dispatches finding that out, re-running the
+// phase at four workers, then six, then the full eleven, before concluding it
+// could not be done. The fix for its actual situation — files changed after
+// sign-off because a reviewer's findings were fixed — was `aether continue`,
+// which re-runs verification and accepts amended artifacts when it passes.
+//
+// An error that names no working path is how a user burns an afternoon, so the
+// message must keep naming one.
+func TestCommittedAttemptRefusalNamesAWorkingPath(t *testing.T) {
+	binding := buildAttemptManifestBinding{
+		Bound: true,
+		Path:  ".aether/data/build/phase-2/attempts/attempt-1.json",
+		Record: buildAttemptRecord{
+			ID:               "attempt-1",
+			CompletionSHA256: "committed-digest",
+			Claims:           &codexBuildClaims{},
+		},
+	}
+
+	_, _, _, _, err := reconcileCommittedExternalBuildAttempt(colony.ColonyState{}, 2, binding, "a-different-digest")
+	if err == nil {
+		t.Fatal("expected a committed attempt to refuse a different completion packet")
+	}
+
+	msg := err.Error()
+	if !strings.Contains(msg, "aether continue") {
+		t.Errorf("refusal names no working recovery path:\n  %s", msg)
+	}
+	if !strings.Contains(msg, "already committed") {
+		t.Errorf("refusal does not say what the situation actually is:\n  %s", msg)
+	}
+	if strings.Contains(msg, "without matching terminal evidence") {
+		t.Errorf("refusal still invites the reader to chase evidence that cannot be produced:\n  %s", msg)
+	}
+}
