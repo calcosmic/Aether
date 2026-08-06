@@ -181,16 +181,6 @@ func TestEvaluatePhaseCriterionEvidenceRejectsMissingAndStaleArtifacts(t *testin
 			},
 			wantIssue: "cannot be verified",
 		},
-		{
-			name: "changed after build",
-			mutate: func(t *testing.T, root string) {
-				t.Helper()
-				if err := os.WriteFile(filepath.Join(root, "docs", "guide.md"), []byte("changed\n"), 0644); err != nil {
-					t.Fatalf("change guide: %v", err)
-				}
-			},
-			wantIssue: "changed after build evidence",
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			phase := criterionEvidenceTestPhase()
@@ -202,6 +192,99 @@ func TestEvaluatePhaseCriterionEvidenceRejectsMissingAndStaleArtifacts(t *testin
 			}
 		})
 	}
+}
+
+// TestChangedArtifactAcceptedOnlyWhenVerificationReRanGreen covers the case that
+// made the review-and-fix loop impossible.
+//
+// The build hashes every artifact it claims, so continue can detect a change
+// made after sign-off. But the colony's reviewers run inside the build, and
+// fixing what they find necessarily lands afterwards — so Aether blocked on the
+// work its own Probe and Watcher had just demanded, and the only sanctioned
+// route was re-running most of the phase to re-take the hash.
+//
+// Continue re-runs the repository's real verification before advancing, so a
+// changed artifact with a green suite is an amendment. A changed artifact
+// without one is still exactly what the hash was for.
+func TestChangedArtifactAcceptedOnlyWhenVerificationReRanGreen(t *testing.T) {
+	changeGuide := func(t *testing.T, root string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, "docs", "guide.md"), []byte("fixed after review\n"), 0644); err != nil {
+			t.Fatalf("change guide: %v", err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name       string
+		steps      []codexVerificationStep
+		wantPassed bool
+		wantText   string
+	}{
+		{
+			name:       "verification re-ran green: amendment accepted",
+			steps:      passingCriterionSteps(),
+			wantPassed: true,
+			wantText:   "amended after build evidence",
+		},
+		{
+			name: "verification failed: still blocked",
+			steps: []codexVerificationStep{
+				{Name: "tests", Command: "go test ./...", Passed: false, Summary: "tests failed"},
+			},
+			wantPassed: false,
+			wantText:   "verification did not re-run green",
+		},
+		{
+			// The trap. runVerificationStep marks an optional step Passed:true
+			// when no command resolves, so trusting Passed alone would accept an
+			// amendment on the strength of checks that never executed.
+			name: "only skipped steps: still blocked",
+			steps: []codexVerificationStep{
+				{Name: "tests", Passed: true, Skipped: true, Summary: "no command resolved; skipped"},
+				{Name: "lint", Passed: true, Skipped: true, Summary: "no command resolved; skipped"},
+			},
+			wantPassed: false,
+			wantText:   "verification did not re-run green",
+		},
+		{
+			name: "blocked step disqualifies the run",
+			steps: []codexVerificationStep{
+				{Name: "tests", Command: "go test ./...", Passed: true},
+				{Name: "build", Blocked: true, Required: true, Summary: "blocked: no verification command resolved"},
+			},
+			wantPassed: false,
+			wantText:   "verification did not re-run green",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			phase := criterionEvidenceTestPhase()
+			root, manifest := setupCriterionEvidenceTest(t, phase)
+			changeGuide(t, root)
+
+			evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, tc.steps, codexClaimVerification{Present: true, Passed: true}, codexWatcherVerification{})
+
+			haystack := strings.Join(append(append([]string{}, evaluation.BlockingIssues...), collectCriterionEvidenceLines(evaluation)...), "\n")
+			if !strings.Contains(haystack, tc.wantText) {
+				t.Fatalf("evaluation did not mention %q: %+v", tc.wantText, evaluation)
+			}
+			if tc.wantPassed {
+				for _, issue := range evaluation.BlockingIssues {
+					if strings.Contains(issue, "guide.md") {
+						t.Fatalf("amended artifact still blocked: %q", issue)
+					}
+				}
+			}
+		})
+	}
+}
+
+func collectCriterionEvidenceLines(evaluation criterionEvidenceEvaluation) []string {
+	lines := []string{}
+	for _, criterion := range evaluation.Criteria {
+		lines = append(lines, criterion.Evidence...)
+		lines = append(lines, criterion.BlockingIssues...)
+	}
+	return lines
 }
 
 func TestSnapshotBuildArtifactRejectsSymlinkEscape(t *testing.T) {

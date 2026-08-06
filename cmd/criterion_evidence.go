@@ -458,7 +458,33 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 				continue
 			}
 			if current.SHA256 != recorded.SHA256 || current.Size != recorded.Size {
-				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s changed after build evidence was recorded", artifact))
+				// The build photographs every artifact it claims, and this
+				// compares the photograph to what is on disk now. Its purpose is
+				// to catch a change slipped in after the build signed off.
+				//
+				// But the colony's own reviewers run inside the build, and
+				// fixing what they find necessarily lands after finalization.
+				// With no allowance for that, Aether refused the work its own
+				// Probe and Watcher had just asked for, and the only sanctioned
+				// route was re-running most of the phase to re-take the
+				// photograph — real cost, no new information.
+				//
+				// Continue re-runs the repository's real verification commands
+				// live before advancing, so a changed artifact whose suite is
+				// still green is an amendment, not tampering. A change that
+				// breaks the suite still blocks, which is the case the hash
+				// existed to catch. The evidence line names it as amended so the
+				// substitution is visible rather than silent.
+				// Only for artifacts the build actually wrote. A read-only
+				// recording is the operator attesting "this file was NOT
+				// modified"; if it changed, that attestation is false whatever
+				// the test suite says, so it stays a hard block.
+				if proof, ok := verificationReRunProvesArtifacts(steps); ok && !readOnlyMatch {
+					result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s amended after build evidence; %s", artifact, proof))
+					evaluation.Deterministic = true
+					continue
+				}
+				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s changed after build evidence was recorded and verification did not re-run green", artifact))
 				continue
 			}
 			if readOnlyMatch {
@@ -606,4 +632,32 @@ func criterionTaskSuffix(taskID string) string {
 		return ""
 	}
 	return " for task " + strings.TrimSpace(taskID)
+}
+
+// verificationReRunProvesArtifacts reports whether this continue run actually
+// executed the repository's verification and found it green, and returns a
+// human-readable proof naming the command that ran.
+//
+// "Actually executed" is the load-bearing word. runVerificationStep marks an
+// optional step Passed:true when no command could be resolved for it — a
+// convenience so a missing linter cannot block a phase. Trusting Passed alone
+// would therefore accept an amendment on the strength of three checks that
+// never ran, which is precisely the substitution this function exists to
+// prevent. A step only counts if it carried a command, was not skipped, and
+// exited clean; and any failing or blocked step disqualifies the whole run.
+func verificationReRunProvesArtifacts(steps []codexVerificationStep) (string, bool) {
+	executed := make([]string, 0, len(steps))
+	for _, step := range steps {
+		if step.Blocked || (!step.Skipped && !step.Passed) {
+			return "", false
+		}
+		if step.Skipped || strings.TrimSpace(step.Command) == "" || !step.Passed {
+			continue
+		}
+		executed = append(executed, step.Name)
+	}
+	if len(executed) == 0 {
+		return "", false
+	}
+	return fmt.Sprintf("verification re-ran green (%s)", strings.Join(executed, ", ")), true
 }
