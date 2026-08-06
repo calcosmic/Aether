@@ -3537,6 +3537,42 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Total planned dispatches: %d\n", len(dispatches)))
+	b.WriteString(renderSpawnTeamExplanation(dispatches))
+	return b.String()
+}
+
+// renderSpawnTeamExplanation says, in one line a non-specialist can read, who
+// the Queen picked and how to ask for a different size.
+//
+// The plan above lists castes and task strings, which answers "what will run"
+// but never "why these, and how do I get fewer" — the question an operator
+// actually has when a small change appears to summon a committee. Without an
+// answer, the only discoverable lever is reading the source.
+func renderSpawnTeamExplanation(dispatches []codexBuildDispatch) string {
+	if len(dispatches) == 0 {
+		return ""
+	}
+
+	seen := map[string]bool{}
+	names := make([]string, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		caste := strings.TrimSpace(dispatch.Caste)
+		if caste == "" || seen[caste] {
+			continue
+		}
+		seen[caste] = true
+		names = append(names, casteLabel(caste))
+	}
+	if len(names) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("\nThe Queen chose this team for the phase: ")
+	b.WriteString(strings.Join(names, ", "))
+	b.WriteString(".\n")
+	b.WriteString("Want a smaller team? Add `--light`. Want every check? Add `--heavy`.\n")
+	b.WriteString("Safety castes a risky phase needs are kept at every size.\n")
 	return b.String()
 }
 

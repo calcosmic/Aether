@@ -127,9 +127,32 @@ Queen's ordinary judgement, which mode and risk already express. A flat standard
 ceiling would weaken exactly the phases that need most help.
 
 **Castes the phase requires bypass the cap entirely** — a high-risk or
-production phase keeps its Auditor and Gatekeeper at every depth
+production phase keeps its Auditor at every depth
 (`queenBuildSafetyRequiredCastes`), so choosing light removes optional
 specialists, never safety ones.
+
+**A required caste must be able to do something on this phase.** Because
+required castes bypass the budget, marking one unconditionally makes every
+depth flag a lie for that caste. Two were:
+
+| Caste | Was required when | Is required when |
+|-------|-------------------|------------------|
+| Probe | always, on every build | the phase produces testable code — not documentation-only, not discovery (`queenPhaseProducesTestableCode`) |
+| Gatekeeper | risk is high, **or mode is production**, or security wording | risk is high, or the phase names a security surface (`queenPhaseHasSecuritySignal`) |
+| Watcher | always | always — unchanged, and must stay so |
+| Auditor | risk is high, or production, or security wording | unchanged |
+
+Probe on a documentation phase has no code to cover, and the standard continue
+path required one too, so a single phase paid for two Probes that could only
+report having found nothing. Gatekeeper is a *security* specialist, and mode is
+inferred from wording — so most real phases infer production and were summoning
+a security auditor for work like "add a CSV export".
+
+Asserted by `TestProbeIsRequiredOnlyWhereItCanFindSomething`,
+`TestGatekeeperNeedsASecuritySignal`, `TestWatcherIsAlwaysRequiredOnBuild`, and
+`TestHighRiskPhaseKeepsBothReviewers`. The Watcher test exists because gating a
+caste for cost is a different decision from gating the one thing that checks
+the work: a build with no Watcher reports success by assertion.
 
 These numbers are asserted by `TestBuildWorkerCapHonoursVerificationDepth`. They
 were previously documented but not implemented: the build branch consulted only
@@ -137,7 +160,7 @@ mode and risk, so a *light* build of a production phase returned 8 and a *heavy*
 build of a discovery phase returned 5. If this table and the code disagree
 again, that test fails.
 
-*For dummies: The Queen looks at what kind of work the phase is doing and decides how many safety checks to run. A simple docs phase might just get a quick look (light), while a security phase gets the full team (heavy). Picking "light" never switches off the safety checks a risky phase needs — it only drops the optional extras.*
+*For dummies: The Queen looks at what kind of work the phase is doing and decides how many workers to send. Writing a README does not need a test-coverage specialist, and adding a CSV export does not need a security auditor — so those no longer turn up. Work that touches passwords, tokens or logins still gets the security reviewer, and every build still gets a Watcher checking it. Picking "light" never switches off the safety checks a risky phase needs — it only drops the optional extras.*
 
 Wrappers should explain the Queen's choice briefly in plain English and reserve
 manual depth flags for advanced overrides. If docs and runtime disagree, runtime wins.

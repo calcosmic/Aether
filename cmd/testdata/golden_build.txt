@@ -27,6 +27,10 @@ Persist your testing and quality findings to the domain review ledger using: aet
 
 Total planned dispatches: 4
 
+The Queen chose this team for the phase: Builder, Probe, Watcher.
+Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
+Safety castes a risky phase needs are kept at every size.
+
   Step 2/5: Context (0s)
   Step 3/5: Dispatch (0s)
 ── Dispatch ──
@@ -104,6 +108,10 @@ Post-Wave: Watcher
 Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher  ✓ completed 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
 
 Total planned dispatches: 4
+
+The Queen chose this team for the phase: Builder, Probe, Watcher.
+Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
+Safety castes a risky phase needs are kept at every size.
 ━━ 🗂️ A R T I F A C T S ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 .aether/data/build/phase-1/manifest.json

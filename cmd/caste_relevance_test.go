@@ -493,10 +493,22 @@ func TestQueenOrchestrateAppliesAdaptiveSpawnBudget(t *testing.T) {
 
 	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
 
-	for _, caste := range []string{"builder", "watcher", "probe"} {
+	// Builder and Watcher survive pruning: something has to do the work, and
+	// something has to check it.
+	for _, caste := range []string{"builder", "watcher"} {
 		if !HasCaste(dispatches, caste) {
 			t.Errorf("Low-risk docs: expected required build caste %s to survive budget pruning", caste)
 		}
+	}
+
+	// Probe is deliberately absent. This phase writes documentation — there is
+	// no new code for a test-coverage specialist to cover, so spawning one
+	// spends a worker run to report nothing. Probe used to be unconditionally
+	// required here, and required castes bypass the budget, which is why a
+	// documentation phase summoned a coverage specialist no matter what depth
+	// the operator asked for. See TestProbeIsRequiredOnlyWhereItCanFindSomething.
+	if HasCaste(dispatches, "probe") {
+		t.Errorf("Low-risk docs: Probe should not spawn on a documentation-only phase: %+v", dispatches)
 	}
 
 	const queenBudget = 4

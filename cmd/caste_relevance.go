@@ -288,9 +288,15 @@ func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.C
 		case colony.VerificationDepthLight:
 			return caste == "watcher"
 		case colony.VerificationDepthHeavy:
+			// Heavy is an explicit request for the full gauntlet, so Probe
+			// stays even where it has little to chew on.
 			return caste == "watcher" || caste == "gatekeeper" || caste == "auditor" || caste == "probe"
 		default:
-			return caste == "watcher" || caste == "probe"
+			// Standard gates Probe on the phase actually having produced code.
+			// Build requires a Probe under the same condition, so leaving this
+			// unconditional billed a documentation phase for two Probes, one on
+			// each side of the same phase.
+			return caste == "watcher" || (caste == "probe" && queenPhaseProducesTestableCode(phase))
 		}
 	case "plan":
 		return caste == "scout" || caste == "route_setter"
