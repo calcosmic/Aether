@@ -454,6 +454,7 @@ func commandGuideLiteralCommands() []string {
 		"profile",
 		"queen-compose",
 		"quick",
+		"recover",
 		"redirect",
 		"reference-index",
 		"reference-list",

@@ -620,6 +620,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"queen-promote-instinct":      true,
 	"quick":                       true,
 	"recipes":                     true,
+	"recover":                     true,
 	"redirect":                    true,
 	"reference-index":             true,
 	"reference-list":              true,

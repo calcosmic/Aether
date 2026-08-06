@@ -53,6 +53,7 @@ var wrapperCommandNames = map[string]bool{
 	"profile":         true,
 	"queen-compose":   true,
 	"quick":           true,
+	"recover":         true,
 	"redirect":        true,
 	"reference-index": true,
 	"reference-list":  true,
