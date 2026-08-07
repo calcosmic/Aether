@@ -1,0 +1,217 @@
+package codex
+
+import (
+	"encoding/json"
+	"strings"
+)
+
+// WorkerUsage is what a worker run actually cost.
+//
+// Nothing measured this before. Every budget in the codebase counts characters
+// of assembled context, which is ~6k tokens against the ~117k a real worker
+// spends — so the only thing being measured was the 5% the framework composes,
+// and the 95% it does not was invisible. A framework that cannot see where its
+// tokens go cannot be improved deliberately; every claim about efficiency was
+// unfalsifiable.
+//
+// No tokenizer is involved. Both providers already report exact counts and the
+// raw output is already captured verbatim; this only reads what was always
+// there.
+type WorkerUsage struct {
+	InputTokens       int64   `json:"input_tokens,omitempty"`
+	CachedInputTokens int64   `json:"cached_input_tokens,omitempty"`
+	OutputTokens      int64   `json:"output_tokens,omitempty"`
+	TotalTokens       int64   `json:"total_tokens,omitempty"`
+	USDCost           float64 `json:"usd_cost,omitempty"`
+	Model             string  `json:"model,omitempty"`
+
+	// Source distinguishes a provider-reported measurement from a local
+	// estimate. An estimate must never be presentable as a measurement: the
+	// whole point of this ledger is that the numbers can be trusted, and a
+	// silently-estimated row would make a regression look like an improvement.
+	// Values: "provider", "estimate".
+	Source string `json:"source,omitempty"`
+}
+
+// Measured reports whether the usage came from the provider rather than a
+// local estimate.
+func (u WorkerUsage) Measured() bool { return u.Source == UsageSourceProvider }
+
+// Empty reports whether nothing at all was recorded.
+func (u WorkerUsage) Empty() bool {
+	return u.InputTokens == 0 && u.OutputTokens == 0 && u.TotalTokens == 0 && u.Source == ""
+}
+
+const (
+	UsageSourceProvider = "provider"
+	UsageSourceEstimate = "estimate"
+)
+
+// estimateTokensPerChar is the fallback ratio when no provider usage is found.
+// It is deliberately crude: an estimate exists so a dispatch never vanishes
+// from the ledger entirely, not so it can stand in for a measurement. Rows
+// carrying it are tagged UsageSourceEstimate and must be reported as such.
+const estimateCharsPerToken = 4
+
+// EstimateUsage produces a clearly-labelled fallback for a prompt whose worker
+// reported nothing. A missing row would silently shrink the measured total and
+// make a run look cheaper than it was.
+func EstimateUsage(promptChars int) WorkerUsage {
+	if promptChars <= 0 {
+		return WorkerUsage{Source: UsageSourceEstimate}
+	}
+	tokens := int64(promptChars / estimateCharsPerToken)
+	return WorkerUsage{
+		InputTokens: tokens,
+		TotalTokens: tokens,
+		Source:      UsageSourceEstimate,
+	}
+}
+
+// ParseUsage extracts provider-reported token usage from a worker's raw stdout.
+//
+// Codex (`codex exec --json`) emits NDJSON `token_count` events carrying a
+// cumulative total; the last one wins. Claude (`--output-format stream-json`)
+// emits a terminal `{"type":"result", "usage":{...}, "total_cost_usd":...}`.
+// Both shapes are scanned regardless of the declared platform, because the
+// dispatch layer can fall back between them and a usage row attributed to the
+// wrong parser is worse than one parsed by shape.
+func ParseUsage(rawOutput string) (WorkerUsage, bool) {
+	if strings.TrimSpace(rawOutput) == "" {
+		return WorkerUsage{}, false
+	}
+
+	var found bool
+	var usage WorkerUsage
+
+	for _, line := range strings.Split(rawOutput, "\n") {
+		line = strings.TrimSpace(stripANSIEscapeCodes(line))
+		if line == "" || !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var event map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		if parsed, ok := usageFromEvent(event); ok {
+			// Later events supersede earlier ones: both providers report
+			// cumulative totals, so the last statement is the true one.
+			usage = parsed
+			found = true
+		}
+	}
+
+	if !found {
+		return WorkerUsage{}, false
+	}
+	usage.Source = UsageSourceProvider
+	if usage.TotalTokens == 0 {
+		usage.TotalTokens = usage.InputTokens + usage.OutputTokens
+	}
+	return usage, true
+}
+
+// usageFromEvent recognises the two provider shapes in one place so a new
+// transport only has to be added here.
+func usageFromEvent(event map[string]interface{}) (WorkerUsage, bool) {
+	// Claude: terminal result event.
+	if eventType, _ := event["type"].(string); eventType == "result" {
+		usage, ok := usageFromNestedMap(event, "usage")
+		if !ok {
+			return WorkerUsage{}, false
+		}
+		if cost, ok := numberValue(event["total_cost_usd"]); ok {
+			usage.USDCost = cost
+		}
+		if model, _ := event["model"].(string); model != "" {
+			usage.Model = model
+		}
+		return usage, true
+	}
+
+	// Codex: token_count events, either flat or nested under
+	// total_token_usage / info.total_token_usage.
+	if eventType, _ := event["type"].(string); eventType == "token_count" {
+		for _, key := range []string{"total_token_usage", "usage", "info"} {
+			if usage, ok := usageFromNestedMap(event, key); ok {
+				return usage, true
+			}
+		}
+		if usage, ok := usageFromFields(event); ok {
+			return usage, true
+		}
+	}
+
+	return WorkerUsage{}, false
+}
+
+func usageFromNestedMap(event map[string]interface{}, key string) (WorkerUsage, bool) {
+	nested, ok := event[key].(map[string]interface{})
+	if !ok {
+		return WorkerUsage{}, false
+	}
+	if usage, ok := usageFromFields(nested); ok {
+		return usage, true
+	}
+	// Codex nests total_token_usage one level deeper inside info.
+	for _, inner := range []string{"total_token_usage", "usage"} {
+		if deeper, ok := nested[inner].(map[string]interface{}); ok {
+			if usage, ok := usageFromFields(deeper); ok {
+				return usage, true
+			}
+		}
+	}
+	return WorkerUsage{}, false
+}
+
+// usageFromFields reads the token fields under either provider's naming.
+func usageFromFields(fields map[string]interface{}) (WorkerUsage, bool) {
+	var usage WorkerUsage
+	var any bool
+
+	for _, key := range []string{"input_tokens", "prompt_tokens"} {
+		if v, ok := numberValue(fields[key]); ok {
+			usage.InputTokens = int64(v)
+			any = true
+			break
+		}
+	}
+	for _, key := range []string{"cached_input_tokens", "cache_read_input_tokens"} {
+		if v, ok := numberValue(fields[key]); ok {
+			usage.CachedInputTokens = int64(v)
+			any = true
+			break
+		}
+	}
+	for _, key := range []string{"output_tokens", "completion_tokens"} {
+		if v, ok := numberValue(fields[key]); ok {
+			usage.OutputTokens = int64(v)
+			any = true
+			break
+		}
+	}
+	for _, key := range []string{"total_tokens", "total_token_count"} {
+		if v, ok := numberValue(fields[key]); ok {
+			usage.TotalTokens = int64(v)
+			any = true
+			break
+		}
+	}
+
+	return usage, any
+}
+
+func numberValue(value interface{}) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case int64:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
+	}
+	return 0, false
+}

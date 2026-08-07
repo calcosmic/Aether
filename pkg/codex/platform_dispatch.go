@@ -193,9 +193,34 @@ func (s *SelectedInvoker) InvokeWithProgress(ctx context.Context, config WorkerC
 		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: platform %s does not support worker dispatch", s.selected.Platform())
 	}
 	if invoker, ok := s.selected.(ProgressAwareWorkerInvoker); ok {
-		return invoker.InvokeWithProgress(ctx, config, observer)
+		result, err := invoker.InvokeWithProgress(ctx, config, observer)
+		return AttachWorkerUsage(result, config), err
 	}
-	return s.selected.Invoke(ctx, config)
+	result, err := s.selected.Invoke(ctx, config)
+	return AttachWorkerUsage(result, config), err
+}
+
+// AttachWorkerUsage records what the run cost, at the one boundary every real
+// dispatch passes through.
+//
+// Attaching at each dispatcher's return would mean eight sites and a ninth the
+// next time a transport is added; the ledger's whole value is that no dispatch
+// can quietly leave it, so it is populated where the paths converge. Usage
+// already present is left alone so a dispatcher that learns to report its own
+// is not overwritten.
+func AttachWorkerUsage(result WorkerResult, config WorkerConfig) WorkerResult {
+	if !result.Usage.Empty() {
+		return result
+	}
+	if usage, ok := ParseUsage(result.RawOutput); ok {
+		result.Usage = usage
+		return result
+	}
+	// No provider figure. Record a labelled estimate rather than nothing: an
+	// absent row shrinks the measured total and makes a regression read as an
+	// improvement.
+	result.Usage = EstimateUsage(config.assembledPromptChars())
+	return result
 }
 
 func (s *SelectedInvoker) IsAvailable(ctx context.Context) bool {
