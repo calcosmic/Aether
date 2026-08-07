@@ -138,7 +138,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	}
 	queenDecisions := queenDecide(planGates, budget, circuitBreaker, phase.ID, string(reviewDepth))
 
-	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, effectiveSkipWatchers)
+	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, effectiveSkipWatchers, options.QueenCastes, options.QueenCasteReason)
 	plan := codexContinuePlanManifest{
 		Phase:               phase.ID,
 		PhaseName:           phase.Name,
@@ -286,7 +286,7 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 	}
 }
 
-func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool) []codexContinueExternalDispatch {
+func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
 	dispatches := []codexContinueExternalDispatch{}
 	queenDispatches := queenContinueDispatches(phase, reviewDepth)
@@ -310,7 +310,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			MatchedSkills: append([]string{}, watcherSkillAssignment.MatchedNames...),
 		})
 	}
-	reviewSpecs := queenContinueReviewSpecs(phase, reviewDepth)
+	reviewSpecs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason)
 	reviewWave := 2
 	if skipWatchers {
 		reviewWave = 1

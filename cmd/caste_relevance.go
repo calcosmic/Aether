@@ -264,9 +264,35 @@ func spawnThreshold(flowType string, state colony.ColonyState) int {
 	switch flowType {
 	case "build", "continue":
 		if flowType == "continue" && stateVerificationDepth(state) == colony.VerificationDepthHeavy {
+			// Heavy is an explicit request for breadth, so the bar stays low.
 			return 25
 		}
-		return 30 // Allow more castes through; Queen filters later
+		// A base-20 caste scores 30 on a single keyword hit, so a threshold of
+		// 30 meant one incidental word bought a full agent run. The old value
+		// carried the comment "Allow more castes through; Queen filters later"
+		// — and no Queen filtered, because no Queen existed. The system
+		// deliberately over-selected on the promise of a downstream filter that
+		// was never written.
+		//
+		// Deliberately left at 30, and deliberately NOT raised. Raising it was
+		// tried and measured, and the measurement killed the idea:
+		//
+		//   phase "Migrate user data to new schema"      -> architect, 1 hit  (correct)
+		//   phase "latency and memory ... is unchanged"  -> measurer,  2 hits (waste)
+		//
+		// The false positive scores HIGHER than the true positive, because
+		// counting keyword hits is anti-correlated with correctness once
+		// negation is in play. At 40 the wasteful Measurer survived and the DB
+		// migration lost its Architect — strictly worse on both counts. No
+		// threshold separates those two phases, because the signal that
+		// distinguishes them is meaning, not word frequency.
+		//
+		// So this number is not the lever. queenApplyJudgement is: a reader can
+		// see that "unchanged" negates the words around it and that a migration
+		// needs design review whether or not it repeats the word "schema".
+		// Keep this as the floor that holds when no model intervenes, and put
+		// the effort into the judgement layer instead of retuning this.
+		return 30
 	case "plan":
 		return 40
 	case "colonize", "swarm":

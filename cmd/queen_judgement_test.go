@@ -148,16 +148,19 @@ func TestUnknownCasteIsReportedNotSwallowed(t *testing.T) {
 	phase := judgementPhase("Add CSV export", "Download the table", colony.PhaseModeProduction)
 
 	judgement := queenApplyJudgement(
-		[]string{"builder", "watcher", "security", "test-writer"},
+		[]string{"builder", "watcher", "wizard", "test-writer"},
 		"", phase, "build", colony.ColonyState{})
 
+	// "security" is deliberately NOT used here: it now resolves to gatekeeper
+	// via casteNameAliases, because a near-miss synonym should land rather than
+	// vanish. Only genuinely unrecognisable names reach Unknown.
 	if len(judgement.Unknown) != 2 {
-		t.Fatalf("unknown = %v, want both unrecognised names", judgement.Unknown)
+		t.Fatalf("unknown = %v, want both unrecognisable names", judgement.Unknown)
 	}
 	if !strings.Contains(judgement.Summary(), "Ignored unknown caste(s)") {
 		t.Errorf("summary must disclose unknown castes, got: %s", judgement.Summary())
 	}
-	for _, bogus := range []string{"security", "test-writer"} {
+	for _, bogus := range []string{"wizard", "test-writer"} {
 		if hasCasteName(judgement.Final, bogus) {
 			t.Errorf("unknown caste %q must not reach the final team: %v", bogus, judgement.Final)
 		}
@@ -190,8 +193,8 @@ func TestRosterNamesEveryDispatchableCaste(t *testing.T) {
 	names := map[string]bool{}
 	for _, entry := range roster {
 		names[entry["caste"]] = true
-		if strings.TrimSpace(entry["good_at"]) == "" {
-			t.Errorf("roster entry %q has no description of what it is good at", entry["caste"])
+		if strings.TrimSpace(entry["produces"]) == "" {
+			t.Errorf("roster entry %q has no description of what it produces", entry["caste"])
 		}
 	}
 	for _, profile := range casteRelevanceRegistry {
@@ -270,4 +273,157 @@ func casteKeys(set map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// TestQueenTrimsContinueReviewersAndKeepsTheWatcher covers the expensive flow.
+// Continue fans out to a reviewer per caste, each a full agent run — a real
+// session spent roughly 350k tokens on three of them, one of which was a
+// Measurer selected because an audio phase's vocabulary contains "latency" and
+// "memory". Nobody judged that worth doing; a word matched.
+func TestQueenTrimsContinueReviewersAndKeepsTheWatcher(t *testing.T) {
+	phase := judgementPhase(
+		"Fix envelope retrigger",
+		"The envelope re-arms once and never again when the step lane sends a steady value; latency and memory behaviour is unchanged",
+		colony.PhaseModeProduction,
+	)
+	depth := colony.VerificationDepthStandard
+
+	// Keyword scoring on this phase pulls in specialists the change does not
+	// need. The Queen reading it knows the question is correctness.
+	before := queenContinueDispatches(phase, depth)
+	after := queenContinueDispatchesWithJudgement(phase, depth, []string{"watcher"}, "this is a correctness fix, not a performance question")
+
+	if len(after) > len(before) {
+		t.Errorf("judgement should not grow the review team here: before %d, after %d", len(before), len(after))
+	}
+	if !queenContinueHasCaste(after, "watcher") {
+		t.Errorf("Watcher must survive: %v", casteNames(after))
+	}
+}
+
+// TestContinueJudgementCannotDropASecurityReview keeps the continue floor equal
+// to the build floor. Trimming reviewers is a cost decision; skipping a
+// security review on credential work is not available at any cost.
+func TestContinueJudgementCannotDropASecurityReview(t *testing.T) {
+	phase := judgementPhase("Password reset", "Rotate the emailed reset token", colony.PhaseModeProduction)
+
+	after := queenContinueDispatchesWithJudgement(
+		phase, colony.VerificationDepthStandard,
+		[]string{"watcher"}, "looks simple")
+
+	if !queenContinueHasCaste(after, "watcher") {
+		t.Errorf("Watcher must survive: %v", casteNames(after))
+	}
+	required := stringSet(queenSpawnBudgetForPhase(phase, "continue", colony.ColonyState{}).RequiredCastes)
+	for caste := range required {
+		if !queenContinueHasCaste(after, caste) {
+			t.Errorf("required continue caste %s was dropped: %v", caste, casteNames(after))
+		}
+	}
+}
+
+// TestContinueWithNoProposalIsUnchanged keeps the change additive.
+func TestContinueWithNoProposalIsUnchanged(t *testing.T) {
+	phase := judgementPhase("Add CSV export", "Download the table", colony.PhaseModeProduction)
+	depth := colony.VerificationDepthStandard
+
+	base := casteNames(queenContinueDispatches(phase, depth))
+	same := casteNames(queenContinueDispatchesWithJudgement(phase, depth, nil, ""))
+	if len(base) != len(same) {
+		t.Fatalf("no-proposal continue changed: %v vs %v", base, same)
+	}
+	for _, caste := range base {
+		if !hasCasteName(same, caste) {
+			t.Errorf("no-proposal continue dropped %s", caste)
+		}
+	}
+}
+
+// TestEveryCasteHasAWrittenCapability closes the gap that made the roster
+// useless. queenCasteRoster built its descriptions from
+// strings.Join(profile.Keywords, ", "), so the judgement layer built to
+// out-reason keyword scoring was handed the keyword table as its worldview.
+// A caste with no written capability silently falls back to that, so this
+// fails rather than shipping the fallback.
+func TestEveryCasteHasAWrittenCapability(t *testing.T) {
+	for _, profile := range casteRelevanceRegistry {
+		capability, ok := casteCapabilities[profile.Caste]
+		if !ok {
+			t.Errorf("caste %q has no written capability; the roster would fall back to its keyword list", profile.Caste)
+			continue
+		}
+		if strings.TrimSpace(capability.Produces) == "" {
+			t.Errorf("caste %q has an empty Produces description", profile.Caste)
+		}
+		// The keyword list must not be the description. That is the bug.
+		for _, keyword := range profile.Keywords {
+			if strings.EqualFold(strings.TrimSpace(capability.Produces), strings.Join(profile.Keywords, ", ")) {
+				t.Errorf("caste %q describes itself with its keyword list (%q)", profile.Caste, keyword)
+				break
+			}
+		}
+	}
+}
+
+// TestRosterNamesWhenNotToSpawn pins the half that makes disagreement possible.
+// A description saying only what a caste is good at cannot help a reader decide
+// against it; the anti-goal is what lets the Queen conclude a phase saying
+// "latency is unchanged" does not need a Measurer.
+func TestRosterNamesWhenNotToSpawn(t *testing.T) {
+	roster := queenCasteRoster()
+	withAntiGoal := 0
+	for _, entry := range roster {
+		if strings.TrimSpace(entry["avoid_for"]) != "" {
+			withAntiGoal++
+		}
+		if strings.TrimSpace(entry["produces"]) == "" {
+			t.Errorf("roster entry %q has no produces description", entry["caste"])
+		}
+	}
+	if withAntiGoal < len(roster)-1 {
+		t.Errorf("only %d of %d roster entries say when not to spawn; the anti-goal is what makes disagreeing with the keywords possible",
+			withAntiGoal, len(roster))
+	}
+
+	// The measurer entry is the one the real failure turned on.
+	for _, entry := range roster {
+		if entry["caste"] != "measurer" {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(entry["avoid_for"]), "unchanged") {
+			t.Errorf("measurer's anti-goal must name the stated-unchanged case that cost 111.8k tokens, got: %q", entry["avoid_for"])
+		}
+	}
+}
+
+// TestCasteNameResolutionSurvivesSeparatorAndSynonym covers the silent-drop
+// bug. The registry mixes separators (route_setter, surveyor-nest), so a model
+// writing "route-setter" was reported unknown and the phase ran without it.
+func TestCasteNameResolutionSurvivesSeparatorAndSynonym(t *testing.T) {
+	for _, tc := range []struct{ proposed, want string }{
+		{"route-setter", "route_setter"},
+		{"route_setter", "route_setter"},
+		{"surveyor_nest", "surveyor-nest"},
+		{"surveyor-nest", "surveyor-nest"},
+		{"security", "gatekeeper"},
+		{"performance", "measurer"},
+		{"verifier", "watcher"},
+		{"MEASURER", "measurer"},
+	} {
+		known, unknown := normalizeProposedCastes([]string{tc.proposed})
+		if len(unknown) > 0 {
+			t.Errorf("%q was reported unknown, want it to resolve to %q", tc.proposed, tc.want)
+			continue
+		}
+		if len(known) != 1 || known[0] != tc.want {
+			t.Errorf("%q resolved to %v, want [%s]", tc.proposed, known, tc.want)
+		}
+	}
+
+	// A genuinely unrecognisable name must still surface rather than resolve to
+	// something plausible-looking.
+	_, unknown := normalizeProposedCastes([]string{"wizard"})
+	if len(unknown) != 1 {
+		t.Errorf("an unrecognisable caste must still be reported, got %v", unknown)
+	}
 }

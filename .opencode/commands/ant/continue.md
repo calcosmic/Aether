@@ -82,6 +82,54 @@ from the TS host, spawn each reviewer as a visible platform agent, collect
 their terminal results, and hand the completed packet to the runtime to
 finalize.
 
+### Decide the review team before spawning
+
+🐜 Every reviewer is a full agent run — roughly 100,000 tokens and several
+minutes. This is the most expensive thing the colony does.
+
+The Watcher is not yours to decide; the runtime always includes it.
+
+For each other reviewer, find the part of the phase that concerns its domain
+and classify what the phase actually says:
+
+| What the phase says | Verdict |
+|---------------------|---------|
+| Names a symptom, bug, or complaint in this domain | **include** |
+| Asks for new or changed work in this domain | **include** |
+| No matching words, but the plain meaning clearly falls in this domain | **include** |
+| Says this property is unchanged, unaffected, or out of scope | **exclude** |
+| Does not touch this domain at all | **exclude** |
+
+**You may not write "include" against "unchanged" or "does not touch".** If you
+want to, the classification is wrong — fix the classification, not the verdict.
+
+This exists because the previous version of this instruction was prose advice
+saying much the same thing, and a real session still spent 111,800 tokens on a
+Measurer reviewing the phase *"the envelope re-arms once and never again;
+latency and memory behaviour is unchanged"*. The words were present. The
+sentence said there was nothing to review. Advice is skimmable; a
+classification with a fixed verdict is not.
+
+The trap runs the other way too: *"the dashboard feels sluggish with lots of
+rows"* names no performance vocabulary at all and is entirely a performance
+question.
+
+Re-fetch with your decision:
+
+```
+aether continue --plan-only \
+  --castes probe \
+  --caste-reason "correctness fix in the retrigger path; the phase states perf is unchanged"
+```
+
+An empty optional team — Watcher alone — is a normal, good answer.
+
+The same floors apply as on a build. The Watcher is restored if you leave it
+out, and a phase that requires a security or quality review keeps it whatever
+you propose. Trimming reviewers is a cost decision; skipping a security review
+on credential work is not available at any cost. Relay what the runtime added
+or dropped.
+
 **Reads:** the manifest returned by `aether host continue --dry-run`; each
 dispatch's runtime-provided `brief` verbatim.
 

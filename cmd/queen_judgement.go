@@ -110,8 +110,15 @@ func queenApplyJudgement(proposed []string, rationale string, phase colony.Phase
 	sort.Strings(added)
 
 	// Order the final team: required first, then the Queen's picks in the order
-	// it asked for them, so budget pressure trims its lowest priority rather
-	// than an arbitrary one.
+	// it asked for them.
+	//
+	// The trim below takes from the tail, which makes proposal order a priority
+	// ranking. That is only fair if the Queen knows it is one — a model listing
+	// alphabetically would otherwise lose its most important pick with no
+	// signal that ordering mattered. The wrapper states the contract ("list in
+	// priority order, most important first; the tail is dropped if the phase is
+	// over budget") and TestBudgetTrimsTheQueensOptionalPicksNotItsRequiredOnes
+	// asserts required castes survive it.
 	requiredSet := stringSet(required)
 	final := append([]string{}, required...)
 	sort.Strings(final)
@@ -158,7 +165,7 @@ func normalizeProposedCastes(proposed []string) (known []string, unknown []strin
 		// Accept comma-separated values in a single argument so the flag is
 		// forgiving about --castes "a,b" versus --castes a --castes b.
 		for _, part := range strings.Split(raw, ",") {
-			caste := strings.ToLower(strings.TrimSpace(part))
+			caste := resolveCasteName(strings.TrimSpace(part), valid)
 			if caste == "" || seen[caste] {
 				continue
 			}
@@ -173,6 +180,63 @@ func normalizeProposedCastes(proposed []string) (known []string, unknown []strin
 	return known, unknown
 }
 
+// casteNameAliases maps names a model plausibly writes onto the registry name.
+// The Queen is a model naming castes from a roster it read moments ago; a
+// request that misses by a synonym should land, not vanish into
+// unknown_ignored where the phase silently runs without the specialist the
+// Queen believed it had asked for.
+var casteNameAliases = map[string]string{
+	"security":     "gatekeeper",
+	"performance":  "measurer",
+	"perf":         "measurer",
+	"docs":         "chronicler",
+	"doc":          "chronicler",
+	"test":         "probe",
+	"tests":        "probe",
+	"coverage":     "probe",
+	"quality":      "auditor",
+	"refactor":     "weaver",
+	"researcher":   "scout",
+	"research":     "scout",
+	"debug":        "tracker",
+	"debugger":     "tracker",
+	"accessiblity": "includer",
+	"a11y":         "includer",
+	"verifier":     "watcher",
+	"reviewer":     "watcher",
+}
+
+// resolveCasteName normalises a proposed name to a registry caste.
+//
+// The registry mixes separators — route_setter with an underscore,
+// surveyor-nest with a hyphen — so a model writing "route-setter" was reported
+// as unknown and dropped. Separator style is not a meaningful distinction
+// between a request that landed and one that did not.
+func resolveCasteName(raw string, valid map[string]bool) string {
+	name := strings.ToLower(strings.TrimSpace(raw))
+	if name == "" {
+		return ""
+	}
+	if valid[name] {
+		return name
+	}
+	if alias, ok := casteNameAliases[name]; ok {
+		return alias
+	}
+	// Try the other separator style before giving up.
+	for _, candidate := range []string{
+		strings.ReplaceAll(name, "-", "_"),
+		strings.ReplaceAll(name, "_", "-"),
+		strings.ReplaceAll(name, " ", "_"),
+		strings.ReplaceAll(name, " ", "-"),
+	} {
+		if valid[candidate] {
+			return candidate
+		}
+	}
+	return name
+}
+
 func casteNames(dispatches []CasteDispatch) []string {
 	names := make([]string, 0, len(dispatches))
 	for _, dispatch := range dispatches {
@@ -184,16 +248,74 @@ func casteNames(dispatches []CasteDispatch) []string {
 	return names
 }
 
-// queenCasteRoster describes the castes a Queen may choose from, for inclusion
-// in the decision request handed to the wrapper. Without it the model is
-// guessing at both the names and what each one is for.
+// casteCapability describes a caste in the terms a reader needs to decide
+// whether this phase needs it: what it produces, and when it is a waste.
+//
+// The anti-goal is the load-bearing half. The first version of this roster
+// built `good_at` from strings.Join(profile.Keywords, ", ") — so the judgement
+// layer built to out-reason keyword scoring was handed the keyword table as its
+// only description of each caste. A model told Measurer means "performance,
+// optimize, latency, scale, benchmark, memory, cpu", then shown a phase saying
+// "latency and memory behaviour is unchanged", will agree with the keyword
+// engine because it was given the keyword engine's worldview. Naming the
+// anti-goal is what makes disagreeing with the words possible.
+type casteCapability struct {
+	Produces string
+	AvoidFor string
+}
+
+var casteCapabilities = map[string]casteCapability{
+	"builder":       {"Writes the implementation for the phase's tasks.", "Nothing to implement — the phase only inspects, researches, or documents."},
+	"watcher":       {"Independently verifies the work actually does what was claimed.", "Never skip. A build nobody checked reports success by assertion."},
+	"probe":         {"Finds coverage gaps and untested edge cases in new code.", "No new code was produced — documentation, research, or config-only phases."},
+	"auditor":       {"Reviews code quality and standards compliance before advancing.", "Throwaway prototypes and discovery spikes where standards are not the question."},
+	"gatekeeper":    {"Reviews a security surface: credentials, auth, tokens, permissions, supply chain.", "The phase touches no security surface. Merely naming a security word is not a surface."},
+	"measurer":      {"Establishes whether a real performance, latency, memory, or cost regression exists, with numbers.", "The phase states performance is unchanged or out of scope. A phase mentioning speed is not the same as a phase changing it."},
+	"architect":     {"Designs boundaries and interfaces before code is written.", "The design is already settled or the change is local and obvious."},
+	"chaos":         {"Probes failure modes, bad input, and resilience under stress.", "The phase has no error path worth attacking, or nothing is deployed."},
+	"tracker":       {"Finds the root cause of a defect whose cause is not yet known.", "The cause is already understood and the phase is just applying the fix."},
+	"weaver":        {"Restructures existing code without changing behaviour.", "The phase adds new behaviour rather than reshaping existing code."},
+	"chronicler":    {"Writes user-facing documentation, guides, and changelogs.", "No documentation surface changes in this phase."},
+	"keeper":        {"Captures a reusable pattern or decision worth carrying to later work.", "Routine work that teaches nothing a future phase would want."},
+	"ambassador":    {"Integrates a third-party API, SDK, or external service.", "Everything in the phase is local. An internal function named 'api' is not an integration."},
+	"includer":      {"Reviews accessibility of a user interface against WCAG criteria.", "No user interface is involved."},
+	"oracle":        {"Deep research into an unknown, producing a written recommendation.", "The approach is already known — this is expensive and slow."},
+	"scout":         {"Quick targeted research to answer a specific question.", "Nothing is unknown."},
+	"archaeologist": {"Excavates git history to explain why code is the way it is, preventing regressions.", "The area has no meaningful history, or is brand new."},
+	"medic":         {"Diagnoses and repairs corrupt or stale colony state.", "Colony state is healthy — this reviews the framework, not your project."},
+	"fixer":         {"Repairs a failing gate autonomously.", "No gate has failed."},
+	"porter":        {"Publishes, packages, or deploys finished work.", "Nothing is being released in this phase."},
+	"sage":          {"Synthesises lessons across the project's history.", "Mid-flight implementation work with nothing to retrospect on yet."},
+	"route_setter":  {"Breaks a goal into ordered phases and tasks.", "The plan already exists."},
+
+	"surveyor-nest":        {"Maps directory structure and architecture of an unfamiliar codebase.", "The codebase is already surveyed or well understood."},
+	"surveyor-disciplines": {"Documents the conventions and testing patterns a codebase follows.", "Conventions are already captured."},
+	"surveyor-pathogens":   {"Identifies technical debt and fragile areas.", "Not an assessment phase."},
+	"surveyor-provisions":  {"Inventories dependencies and external integrations.", "Dependencies are unchanged and already known."},
+}
+
+// queenCasteRoster describes the castes a Queen may choose from. It exists so a
+// decision is made against the live registry rather than the model's memory of
+// caste names, and so each choice is made against what the caste produces
+// rather than which words trigger it.
 func queenCasteRoster() []map[string]string {
 	roster := make([]map[string]string, 0, len(casteRelevanceRegistry))
 	for _, profile := range casteRelevanceRegistry {
-		roster = append(roster, map[string]string{
-			"caste":   profile.Caste,
-			"good_at": strings.Join(profile.Keywords, ", "),
-		})
+		capability, ok := casteCapabilities[profile.Caste]
+		if !ok {
+			// A caste with no written capability falls back to its keywords so
+			// it is still choosable, but TestEveryCasteHasACapability fails so
+			// the gap gets closed rather than shipped.
+			capability = casteCapability{Produces: strings.Join(profile.Keywords, ", ")}
+		}
+		entry := map[string]string{
+			"caste":    profile.Caste,
+			"produces": capability.Produces,
+		}
+		if capability.AvoidFor != "" {
+			entry["avoid_for"] = capability.AvoidFor
+		}
+		roster = append(roster, entry)
 	}
 	sort.Slice(roster, func(i, j int) bool { return roster[i]["caste"] < roster[j]["caste"] })
 	return roster

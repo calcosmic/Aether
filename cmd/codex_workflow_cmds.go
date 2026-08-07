@@ -218,6 +218,8 @@ var continueCmd = &cobra.Command{
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
+		continueCastes, _ := cmd.Flags().GetStringArray("castes")
+		continueCasteReason, _ := cmd.Flags().GetString("caste-reason")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		classicCeremony, _ := cmd.Flags().GetBool("classic-ceremony")
 		if classicCeremony {
@@ -237,6 +239,8 @@ var continueCmd = &cobra.Command{
 				HeavyFlag:           heavyFlag,
 				SkipWatchers:        skipWatchers,
 				VerificationDepth:   verificationDepth,
+				QueenCastes:         continueCastes,
+				QueenCasteReason:    continueCasteReason,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -1274,6 +1278,11 @@ func init() {
 	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
 	continueCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
+	// Continue is the expensive flow: every reviewer is a full agent run. The
+	// Queen chooses the team after reading the phase; without a proposal the
+	// keyword engine decides, as before.
+	continueCmd.Flags().StringArray("castes", nil, "Queen's proposed review castes for this phase (repeatable or comma-separated). The Watcher and any review the phase requires are added back automatically")
+	continueCmd.Flags().String("caste-reason", "", "Why the Queen chose that review team")
 	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
 	continueCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	continueCmd.Flags().Bool("classic-ceremony", false, "Emit the heavy continue review manifest for wrapper-spawned classic ceremony reviewers")

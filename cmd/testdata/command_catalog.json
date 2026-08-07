@@ -1459,6 +1459,8 @@
     "name": "continue",
     "short_description": "Verify the active build packet, close dispatched workers, and advance honestly",
     "flags": [
+      "caste-reason",
+      "castes",
       "classic-ceremony",
       "heavy",
       "light",

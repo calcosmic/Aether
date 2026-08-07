@@ -120,79 +120,93 @@ See `.aether/docs/wrapper-host-contract.md` for the full field shapes this manif
 
 🐜 This is the step where the Queen is a Queen rather than a lookup table.
 
-**Purpose:** Decide which specialists this phase actually needs, using what you can
-read that a keyword table cannot.
+**Purpose:** Decide which specialists this phase actually needs, using what you
+can read that a keyword table cannot.
 
-**Reads:** `dispatch_manifest.caste_decision` and `dispatch_manifest.caste_roster`.
+**Reads:** `dispatch_manifest.caste_roster` — every specialist, what it
+produces, and when it is a waste.
 
-The manifest you just fetched already contains a team. Check where it came from:
+Each specialist you spawn is a full agent run: roughly 100,000 tokens and
+several minutes. Spawning one with nothing to do costs exactly as much as
+spawning one that finds a real problem.
 
-- `caste_decision.source == "queen"` — a decision was already supplied. Nothing to do.
-- `caste_decision.source == "deterministic"` — the team was picked by counting
-  keyword matches against the phase text. **Read the phase and decide whether
-  that is right.**
+Builder and Watcher are not yours to decide — the runtime always includes them.
+Do not discuss them.
 
-`caste_roster` lists every dispatchable caste and what it is good at, read from
-the live registry. Choose from it — a name not on that list is reported back as
-ignored, and the phase silently runs without the specialist you intended.
+### Classify the evidence, then the verdict follows
 
-### When to override
+Do not ask yourself "does this phase feel like it needs a Measurer". That
+question is where an earlier version of this instruction failed: it was advice,
+and a model under pressure skims advice.
 
-Override when the phase needs something its wording does not literally say.
-Keyword scoring can only match words that are present, so it systematically
-misses work described in the user's language rather than the vocabulary of the
-specialist:
+For each specialist you are considering, find the part of the phase that
+concerns its domain, and classify it:
 
-| The phase says | Keywords select | A reader knows it needs |
-|----------------|-----------------|-------------------------|
-| "the dashboard feels sluggish with lots of rows" | nobody | `measurer` — this is a latency problem |
-| "let people stay signed in between visits" | nobody | `gatekeeper` — this is session handling |
-| "the importer falls over on some files" | nobody | `tracker`, `chaos` — unknown root cause, bad input |
-| "swap the payment provider" | maybe `ambassador` | `ambassador`, `gatekeeper` — money and credentials |
+| What the phase says | Verdict |
+|---------------------|---------|
+| Names a symptom, bug, or complaint in this domain | **include** |
+| Asks for new or changed work in this domain | **include** |
+| No matching words, but the plain meaning clearly falls in this domain | **include** |
+| Says this property is unchanged, unaffected, or out of scope | **exclude** |
+| Does not touch this domain at all | **exclude** |
 
-Also override in the other direction. If the deterministic team carries a
-specialist with nothing to do on this phase, leave it out — a worker that can
-only report "I found nothing here" costs a run and teaches the operator that the
-colony's choices are arbitrary.
+**You may not write "include" against "unchanged" or "does not touch".** If you
+want to, the classification is wrong — fix the classification, not the verdict.
 
-### How to override
+Two traps this exists to close, both real and both expensive:
 
-Re-fetch the manifest with your decision:
+- **A word appears, but nothing in that domain changed.** *"latency and memory
+  behaviour is unchanged"* mentions latency and memory, and is telling you
+  nothing there needs checking. A Measurer here spent 111,800 tokens confirming
+  what the sentence said for free.
+- **The domain is at stake but no keyword names it.** *"the dashboard feels
+  sluggish with lots of rows"* never says performance, latency, or slow. It is
+  still a performance problem, and word-matching would never catch it.
+
+Worked examples:
+
+| Phase | Verdict |
+|-------|---------|
+| "envelope re-arms once and never again; latency and memory unchanged" | no Measurer — explicitly unchanged |
+| "the dashboard feels sluggish with lots of rows" | Measurer — inferred, no keyword present |
+| "let people stay signed in between visits" | Gatekeeper — that is session handling |
+| "swap the payment provider" | Ambassador + Gatekeeper — money and credentials |
+| "change the button copy from Submit to Save" | nobody — Builder and Watcher suffice |
+
+**An empty team is a normal, good answer.** It is not a failure to find work.
+
+### Applying the decision
+
+Name the specialist whose absence would most likely let something real ship
+broken, then at most two more. List them in priority order — if the phase is
+over budget the tail is dropped first.
 
 ```
 aether build $ARGUMENTS --plan-only \
-  --castes builder,watcher,measurer \
-  --caste-reason "the complaint is latency even though the phase never says so"
+  --castes measurer \
+  --caste-reason "no perf vocabulary, but 'feels sluggish with lots of rows' is a latency complaint"
 ```
 
-Spawn from **that** manifest, not the first one.
+Spawn from **that** manifest. If you have no reason to change the team, keep
+what the runtime chose and move on.
 
 ### What the runtime will do to your choice
 
-Your proposal is judgement about which optional specialists help. It is not
-permission to lower the floor, and the runtime will correct you in the open:
+Your proposal is judgement about optional specialists. It is not permission to
+lower the floor:
 
 - Castes the phase requires are added back whether you omitted them on purpose
-  or overlooked them. A build always gets a Watcher. Work touching credentials,
-  auth, or a release gate always gets a security review.
-- The worker budget still applies. Over-asking trims your optional picks, never
-  the required ones.
+  or overlooked them. A build always gets a Watcher; credential, auth, and
+  release-gate work always gets a security review.
+- The worker budget still applies, trimming your lowest-priority picks.
 - Unrecognised names are reported in `caste_decision.unknown_ignored`.
 
-Read `caste_decision.summary` after re-fetching and relay it to the user in
-plain English — including anything the runtime added or dropped. A correction
-the operator cannot see is indistinguishable from the colony ignoring you.
+Read `caste_decision.summary` after re-fetching and relay it in plain English,
+including anything added or dropped. A correction the operator cannot see is
+indistinguishable from the colony ignoring you.
 
-**Guardrails:**
-- Decide from the phase and the repository as they are now, not from the plan's
-  assumptions at planning time. Work may have landed since.
-- Do not pass `--castes` to justify a team you have not actually reasoned about.
-  An unexamined proposal is worse than the deterministic default, because it
-  carries a rationale the operator will trust.
-- Do not re-fetch more than once. One decision per build.
+**Stop conditions:** None.
 
-**Stop conditions:** None. If you have no reason to change the team, keep the
-deterministic one and move on.
 
 ## Guided Boundary Gate
 

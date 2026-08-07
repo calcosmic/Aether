@@ -147,6 +147,14 @@ type codexContinueOptions struct {
 	HeavyFlag           bool
 	SkipWatchers        bool
 	VerificationDepth   string
+	// QueenCastes is the review team the Queen chose after reading the phase.
+	// Continue is the expensive flow — each reviewer is a full agent run — and
+	// until this existed the team came only from keyword scoring, so a phase
+	// whose vocabulary happened to include "latency" or "memory" bought a
+	// Measurer whether or not anything about the change was a performance
+	// question. Empty means no judgement was offered and scoring decides.
+	QueenCastes      []string
+	QueenCasteReason string
 }
 
 // codexContinueOptionsJSON is a serializable snapshot of continue options,
@@ -1183,9 +1191,27 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 }
 
 func queenContinueDispatches(phase colony.Phase, reviewDepth colony.VerificationDepth) []CasteDispatch {
-	return queenOrchestrate(phase, "continue", colony.ColonyState{
-		VerificationDepth: string(reviewDepth),
-	})
+	return queenContinueDispatchesWithJudgement(phase, reviewDepth, nil, "")
+}
+
+// queenContinueDispatchesWithJudgement applies the Queen's chosen review team,
+// bounded by the same floors as a build: the Watcher is restored if omitted,
+// and a phase that requires a security or quality review keeps it.
+func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string) []CasteDispatch {
+	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
+	if len(proposed) == 0 {
+		return queenOrchestrate(phase, "continue", state)
+	}
+	judgement := queenApplyJudgement(proposed, reason, phase, "continue", state)
+	dispatches := make([]CasteDispatch, 0, len(judgement.Final))
+	for _, caste := range judgement.Final {
+		dispatches = append(dispatches, CasteDispatch{
+			Caste:     caste,
+			Rationale: judgement.Rationale,
+			FlowType:  "continue",
+		})
+	}
+	return dispatches
 }
 
 func queenContinueHasCaste(dispatches []CasteDispatch, caste string) bool {
@@ -1198,7 +1224,11 @@ func queenContinueHasCaste(dispatches []CasteDispatch, caste string) bool {
 }
 
 func queenContinueReviewSpecs(phase colony.Phase, reviewDepth colony.VerificationDepth) []codexContinueReviewSpec {
-	queenDispatches := queenContinueDispatches(phase, reviewDepth)
+	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "")
+}
+
+func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string) []codexContinueReviewSpec {
+	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason)
 	specs := make([]codexContinueReviewSpec, 0, len(queenDispatches))
 	for _, dispatch := range queenDispatches {
 		if dispatch.Caste == "watcher" {
