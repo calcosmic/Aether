@@ -421,6 +421,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 
 func commandGuideLiteralCommands() []string {
 	return []string{
+		"abandon",
 		"archaeology",
 		"assumptions",
 		"bump-version",

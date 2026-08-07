@@ -93,10 +93,25 @@ var initCmd = &cobra.Command{
 					}
 					// Confirmed — fall through; the backup below preserves the state.
 				} else {
-					// Active (non-sealed) colony — block
-					outputError(1, fmt.Sprintf("colony already initialized (state=%s, phase=%d, goal=%q)",
-						existing.State, existing.CurrentPhase, ptrStr(existing.Goal)), nil)
-					return nil
+					// Active (non-sealed) colony. Abandoning one mid-flight is a
+					// real thing to want — a goal turns out not to be worth
+					// finishing — and there was no way to do it. Entomb requires
+					// Crowned Anthill, so the only route was to seal work you had
+					// just decided to bin, which runs the full ceremony over it
+					// and promotes its instincts to the cross-colony hive.
+					//
+					// Same confirmation and same timestamped backup as the sealed
+					// path: destroying a colony's memory requires saying so out
+					// loud, but it must be possible to say.
+					if confirmed, _ := cmd.Flags().GetBool("confirm-reinit"); !confirmed {
+						outputError(1, fmt.Sprintf(
+							"this repository has an active colony (goal: %q, state: %s, phase %d). "+
+								"Starting a new one replaces it. If the work is finished, `aether seal` then `aether entomb` archives it properly. "+
+								"To abandon it and start fresh, rerun with --confirm-reinit; the old state is backed up under .aether/data/backups/ and can be restored by copying the .bak file back over COLONY_STATE.json.",
+							ptrStr(existing.Goal), existing.State, existing.CurrentPhase), nil)
+						return nil
+					}
+					// Confirmed — fall through; the backup below preserves the state.
 				}
 			}
 		}
@@ -306,7 +321,7 @@ func init() {
 	initCmd.Flags().String("scope", string(colony.ScopeProject), "Colony scope: project or meta")
 	initCmd.Flags().String("colony-mode", string(colony.ColonyModeColony), "Colony mode: colony or orchestrator")
 	initCmd.Flags().String("charter-json", "", "Approved charter data as JSON string")
-	initCmd.Flags().Bool("confirm-reinit", false, "Confirm replacing a sealed colony's state (a timestamped backup is written to .aether/data/backups/)")
+	initCmd.Flags().Bool("confirm-reinit", false, "Confirm replacing an existing colony's state, sealed or active (a timestamped backup is written to .aether/data/backups/)")
 	initCmd.Flags().String("promote-shelf", "", "Comma-separated shelf entry IDs to promote into this colony as todos")
 	initCmd.Flags().String("dismiss-shelf", "", "Comma-separated shelf entry IDs to dismiss from the backlog")
 	rootCmd.AddCommand(initCmd)

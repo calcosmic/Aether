@@ -189,6 +189,7 @@ var commandEmojiMap = map[string]string{
 	"entomb":                 "⚰️",
 	"tunnels":                "🕳️",
 	"watch":                  "👁️",
+	"abandon":                "🗑️",
 	"pheromones":             "🎯",
 	"flags":                  "🚩",
 	"focus":                  "🔦",

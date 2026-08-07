@@ -524,6 +524,7 @@ func TestDocumentedCommandNamesResolve(t *testing.T) {
 // this list is that the gate-versus-enrichment judgement is made once, on
 // purpose, in review — not inherited silently from the enrichment default.
 var knownEnrichmentSubcommands = map[string]bool{
+	"abandon":                     true,
 	"activity-log":                true,
 	"assumption-list":             true,
 	"assumption-validate":         true,

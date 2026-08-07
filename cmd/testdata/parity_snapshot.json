@@ -1,5 +1,6 @@
 {
   "yaml_catalog": [
+    "abandon",
     "archaeology",
     "assumptions",
     "build",
@@ -64,6 +65,7 @@
     "watch"
   ],
   "claude_wrapper_catalog": [
+    "abandon",
     "archaeology",
     "assumptions",
     "build",
@@ -128,6 +130,7 @@
     "watch"
   ],
   "opencode_wrapper_catalog": [
+    "abandon",
     "archaeology",
     "assumptions",
     "build",
@@ -192,6 +195,7 @@
     "watch"
   ],
   "command_guide_catalog": [
+    "abandon",
     "archaeology",
     "assumptions",
     "build",
@@ -256,6 +260,7 @@
     "watch"
   ],
   "runtime_catalog_names": [
+    "abandon",
     "activity-log",
     "activity-log-init",
     "activity-log-read",

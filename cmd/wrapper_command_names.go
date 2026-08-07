@@ -13,6 +13,7 @@ package cmd
 // .claude/commands/ant/*.md, so adding or removing a wrapper without updating
 // this map fails the build.
 var wrapperCommandNames = map[string]bool{
+	"abandon":         true,
 	"archaeology":     true,
 	"assumptions":     true,
 	"build":           true,

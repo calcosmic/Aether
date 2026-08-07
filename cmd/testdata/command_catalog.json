@@ -1,5 +1,32 @@
 [
   {
+    "name": "abandon",
+    "short_description": "Discard the current colony and start fresh",
+    "flags": [
+      "confirm"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "public_lifecycle",
+    "since_version": "v1.0.53",
+    "historical_presence": {
+      "v1.0.53": true,
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v5.4.0": false
+    },
+    "stability_score": 8
+  },
+  {
     "name": "activity-log",
     "short_description": "Append an entry to the activity log",
     "flags": [
