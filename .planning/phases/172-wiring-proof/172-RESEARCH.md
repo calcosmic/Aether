@@ -617,7 +617,11 @@ are stable Go stdlib with no relevant version churn.
 
 **If this table is empty:** N/A — see above.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three were answered before or during planning. Each keeps its original wording so a
+future reader can see what was uncertain at research time, followed by a **Resolution**
+line naming where the answer was made.
 
 1. **Does `.aether/*.md` in WIRE-03 mean the literal top-level glob, or "anything markdown
    under `.aether/`"?**
@@ -635,6 +639,10 @@ are stable Go stdlib with no relevant version churn.
      explicitly in the plan/commit message so a future reader can see the choice was made on
      purpose, not by omission. If the planner or a downstream reviewer wants the broader
      scope, that is a one-line corpus change later, not a redesign.
+   - **Resolution:** the literal top-level glob. Decided by the user before planning:
+     the four git-tracked `.aether/*.md` files plus `.aether/docs/command-playbooks/*.md`,
+     explicitly **not** recursive over `.aether/**/*.md`. Recorded in `172-VALIDATION.md`
+     section "Resolved Scope Call" and in `172-03-PLAN.md`'s `<corpus_scope>` block.
 
 2. **What exactly counts as "Go code outside the command's own definition file" (D-01a)
    caller evidence, given the pattern has zero real examples today?**
@@ -651,6 +659,11 @@ are stable Go stdlib with no relevant version churn.
      confirm before implementation, since getting it wrong in the loose direction would
      silently clear real orphans (`skill-match`, `skill-inject`) that the phase explicitly
      wants caught.
+   - **Resolution:** implement narrowly, as recommended. Fixed in `172-02-PLAN.md`'s
+     `<caller_corpora>` block, clause (a): only a string-literal `exec.Command("aether", ...)`
+     / `exec.Command(os.Args[0], ...)` self-invocation counts, and a shared business-logic
+     function being called elsewhere explicitly does **not**. Expected to contribute zero
+     hits today, and implemented anyway so the category is honest rather than absent.
 
 3. **Exact reason-tag shape and allowlist file format (Claude's Discretion, but worth a
    concrete recommendation).**
@@ -663,6 +676,11 @@ are stable Go stdlib with no relevant version churn.
      structured fields (not one free-text string) so `TestOrphanAllowlistOnlyShrinks` and any
      future Phase 178 test can query by `owner_phase` programmatically, which a flat reason
      string would make brittle to parse.
+   - **Resolution:** adopted as recommended. The shape is fixed in `172-PATTERNS.md`
+     section `cmd/testdata/orphan_allowlist.json` and in `172-02-PLAN.md` task 1 step 5:
+     a JSON array of objects with exactly `name`, `reason`, `owner_phase`, sorted by
+     `name`, with `skill-*` orphans tagged `owner_phase: "178"` and everything else
+     `"RECLAIM"`. `172-04-PLAN.md` reuses the same shape for the flag audit's skip list.
 
 ## Environment Availability
 

@@ -625,14 +625,15 @@ Plans:
   2. `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` instructs every worker to run — exits 0. Today it exits 1 with `Error: unknown flag: --enforce`
   3. A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming the file, the line, and the offending flag when an instruction names a flag the binary does not register. Seeded to fail today against `--enforce`, and it passes only once criterion 2 does
   4. The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file
-**Plans**: 5 plans in 3 waves
+**Plans**: 6 plans in 4 waves
 
 Plans:
+- [ ] 172-00-PLAN.md — wave 1 — WIRE-03 (precondition for WIRE-01): teach the one shared audit extractor to see `x=$(aether …)` invocations and to treat redirections as terminators, before anything downstream reads the world through it
 - [ ] 172-01-PLAN.md — wave 1 — WIRE-02: make `aether spawn-can-spawn 5 --enforce` execute, with a real deny-to-non-zero-exit path
-- [ ] 172-02-PLAN.md — wave 1 — WIRE-01: the orphan ratchet, its shrink-only allowlist seeded from real scanner output, and its self-tests
-- [ ] 172-03-PLAN.md — wave 2 — WIRE-03: teach the audit to see `$(aether …)` calls and bring the top-level `.aether/*.md` corpus into scope
-- [ ] 172-04-PLAN.md — wave 2 — WIRE-01 (D-12): shrink-only guard over the flag audit's skip list, plus the written policy
-- [ ] 172-05-PLAN.md — wave 3 — D-15: named CI step, the delete-a-caller red/green proof, and correcting the phase's recorded orphan count
+- [ ] 172-02-PLAN.md — wave 2 — WIRE-01: the orphan ratchet, its shrink-only allowlist seeded from real scanner output against the fixed extractor, and its self-tests
+- [ ] 172-03-PLAN.md — wave 2 — WIRE-03: bring the top-level `.aether/*.md` corpus into scope, fix the drift it surfaces, and make the `--enforce` seed permanent
+- [ ] 172-04-PLAN.md — wave 3 — WIRE-01 (D-12): shrink-only guard over the flag audit's skip list, plus the written policy
+- [ ] 172-05-PLAN.md — wave 4 — D-15: named CI step, the delete-a-caller red/green proof, and correcting the phase's recorded orphan count
 
 ### Phase 173: Delegation Guard
 **Goal**: Recursive delegation is bounded by the runtime at the one chokepoint an LLM cannot route around — the spawn-recording call. Depth is derived from the parent's recorded entry rather than asserted by the caller, a whole-tree budget bounds what depth alone cannot, every guard fails closed, and the operator can watch the tree while it grows. **Nothing gains the ability to delegate in this phase**; enforcement lands before capability because parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs.
