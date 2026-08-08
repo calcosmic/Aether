@@ -628,11 +628,18 @@ Plans:
 **Plans**: 6 plans in 4 waves
 
 Plans:
+**Wave 1**
 - [ ] 172-00-PLAN.md — wave 1 — WIRE-03 (precondition for WIRE-01): teach the one shared audit extractor to see `x=$(aether …)` invocations and to treat redirections as terminators, before anything downstream reads the world through it
 - [ ] 172-01-PLAN.md — wave 1 — WIRE-02: make `aether spawn-can-spawn 5 --enforce` execute, with a real deny-to-non-zero-exit path
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 172-02-PLAN.md — wave 2 — WIRE-01: the orphan ratchet, its shrink-only allowlist seeded from real scanner output against the fixed extractor, and its self-tests
 - [ ] 172-03-PLAN.md — wave 2 — WIRE-03: bring the top-level `.aether/*.md` corpus into scope, fix the drift it surfaces, and make the `--enforce` seed permanent
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 172-04-PLAN.md — wave 3 — WIRE-01 (D-12): shrink-only guard over the flag audit's skip list, plus the written policy
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 172-05-PLAN.md — wave 4 — D-15: named CI step, the delete-a-caller red/green proof, and correcting the phase's recorded orphan count
 
 ### Phase 173: Delegation Guard
