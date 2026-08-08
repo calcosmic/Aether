@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration
-status: planning
-last_updated: "2026-08-08T09:38:30.340Z"
+status: roadmapped
+last_updated: "2026-08-08T00:00:00.000Z"
 last_activity: 2026-08-08
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,82 +17,87 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-25)
+See: .planning/PROJECT.md (updated 2026-08-08)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 162 — switch-on-learning
-**Milestone:** v1.25 Switch It On — ROADMAPPED (rebuilt twice, awaiting user approval)
-**Previous milestone:** v1.24 Hybrid Architecture Salvage (shipped 2026-05-24, phases 152-159)
-**Product version:** v1.0.45
+**Current focus:** Phase 172 — Wiring Proof (not yet planned)
+**Milestone:** v1.26 Intelligent Orchestration — ROADMAPPED (8 phases, 172-179, 35 requirements)
+**Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases); live intent absorbed into v1.26, remaining SEE/TYPED/RECLAIM/LOCK moved to Future Requirements
+**Product version:** v1.0.50
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 172 — Wiring Proof
 Plan: —
-Status: Defining requirements
-Last activity: 2026-08-08 — Milestone v1.26 started
+Status: Roadmapped, awaiting phase planning
+Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/8 phases)
+Last activity: 2026-08-08 — v1.26 roadmap created, 35/35 requirements mapped
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 41 (v1.25)
-- Average duration: — (v1.24 average: 8 min)
+- Total plans completed: 0 (v1.26)
+- Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 
 **By Phase:**
 
-*v1.25 not yet started*
+*v1.26 not yet started*
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
-- Phase 163.1 inserted after Phase 163: Wrapper-Runtime Completion Contract: completion-packet schema, batch validation, attempt recovery, verification honesty, reconcile escape hatch, brief file channel — from 2026-07-31 M4L usage diagnosis (URGENT)
-- Phase 163.2 inserted after Phase 163.1: ts-host preflight configurability (M4L residual diagnosis item 2) (URGENT)
+- v1.26 roadmap created 2026-08-08 from 35 requirements across 7 categories (WIRE, SPAWN, SPEND, SEEN, ROSTER, SKILL, PROOF), continuing phase numbering from v1.25's Phase 171
+- Research suggested 7 phases; the roadmap ships 8. The single deviation is splitting ROSTER into **176 Roster Reader** (ROSTER-01..02, the shipped 27 YAMLs) and **177 Operator-Authored Agents** (ROSTER-03..08, the user path), so the reader must demonstrably change dispatch output before the user-extension path is planned
+- Research's suggested "Phase 6 — Delegation Delivery" is **not** in this milestone. The SPAWN requirements cover the *guard* only; nothing gains the ability to delegate recursively in v1.26. Delivery (child result plumbing, follow-on-wave channel, parent-direct spawn) carries a research flag and belongs to a later milestone
 
 ### Decisions
 
-- **v1.25 was renamed "Working Again" → "Switch It On" and rebuilt twice.** First rebuild (58 requirements, 8 phases): six specialist review agents refuted the original draft's central diagnosis — see REQUIREMENTS.md's "Corrections carried forward" for what was actually false (playbooks were never fully orphaned, no four-mode Queen policy ever existed, caste colours already render, circuit breaker/Bayesian scoring/oracle RALF were never lost). Second correction (88 requirements, 12 phases, this state): that first rebuild over-corrected and dropped three categories no review agent had refuted — research feeding planning, lifecycle commands carrying method vs. protocol, and provable phase-fit caste selection — and compressed the rich-terminal-experience category too far. All restored
-- **The TypeScript host must be KEPT, not deleted.** `.aether/ts-host/src/` holds the only playbook loader, the only confidence loop (`confidence-loop.ts`), and the only dashboard/swarm-display/narrator. Deleting it breaks `go build` via `//go:embed` and hard-fails `aether publish`/`aether integrity`. Only `control-ts/` is safe to delete. Keeping the TS host is also what makes Research Feeds Planning (Phase 164) *easier* — `confidence-loop.ts` (250 lines) is already the target-confidence loop that phase needs
-- **The real disease is "never switched on," not "deleted."** Learning (`pkg/memory/pipeline.go`), cheap-model routing (`colony/policies/model-routing.yaml`), and colony health (`colony-vital-signs`) are all fully built with zero callers/readers. This reframes most of the milestone as wiring existing code, stated explicitly in each phase goal
-- **12 phases (160-171), up from 8**: three new phases inserted after Context Reaches Workers — Research Feeds Planning (164), Core Lifecycle Commands (165), Full Colony On Demand (166) — plus "Your Eyes Back" split into two (168 Live Visibility, 169 Charter & Standards) because its 14 requirements were too broad for one independently-verifiable phase. Reclaim (now 170) absorbed 3 more requirements (swarm state quartet, remaining Class A orphans, `queen-seed-from-hive`) without needing a new phase
-- **`build.md` ownership resolved (CMD-05)**: Phase 165 (Core Lifecycle Commands) is the sole structural owner. Phase 160 may only fix specific broken call arguments inside it (merges first — 165 depends on 160). Phase 168 (Live Visibility) may only append a next-step-guidance layer on top of Phase 165's output (165 must land first in practice, though its formal dependency is the shared Phase 160 foundation). No other phase restructures `build.md`
-- **SEE-11 (re-init preserves colony state) is data safety, not ceremony** — it lives in Phase 169 (Charter & Standards) and its success criterion is required to be a dedicated automated test, not an observation
-- RETIRE-02/03/04 remain folded into Phase 160 as constraints/guardrails, not their own phase
-- Every phase 161-170 depends on Phase 160 (shared foundation), plus real content dependencies where they exist: 164→163 (research rides the context plumbing), 165→163+164 (documents both), 170→162 (RECLAIM-09 ties to the hive-default decision). Phase 171 depends on all of 160-170
-- Several requirements remain explicitly decision-shaped, not build-shaped: SEE-03, SEE-07, LEARN-03, LEARN-04, COLONY-05 (new — Dream as 28th caste or not), PROOF-04
-- `colony/agents/` (27 caste YAMLs) and `colony/policies/` (10 policy files, including `model-routing.yaml`) already exist; Phase 161 wires readers, Phase 166 gives `colony/agents/*.yaml` its first Go reader
-- TYPED-01/02 (migration backfill) MUST precede TYPED-03 (making `mode` required) within Phase 167 — `mode` is `omitempty` today and requiring it before backfilling would brick every existing colony
+- **The organising finding: most of v1.26 already exists and was never wired to a caller.** Four independent researchers converged on this by reading and *running* this repo's code. The recursion policy engine (`.aether/ts-host/src/spawn-orchestrator.ts`), the depth guard (`spawn-can-spawn` ignores its own `--depth`), the 27-caste roster (`colony/agents/*.yaml`, zero readers), the skill lifecycle (8 of 9 commands unreferenced), the selection rationale (composed, carried to the manifest, discarded), and token measurement (parsed, never persisted). The framing is **switch on and prove**, not **design and build**
+- **Phase ordering is load-bearing, not stylistic.** WIRE first (a ratchet written after the capabilities gets shaped to whatever shipped) → SPAWN before SPEND (parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs) → SPEND before ROSTER/SKILL (extensibility changes what workers cost; without a ledger every later claim is unfalsifiable) → ROSTER reader before the user path → SKILL security inside the skill phase → PROOF last
+- **ARCHITECTURE vs PITFALLS disagreement resolved in favour of guard-before-ledger.** ARCHITECTURE argued spend must ship first because delegation budgets set without spend data are guesses; PITFALLS argued the guard must ship first because the ledger's subtree roll-up needs linkage recorded at spawn time. Synthesis: the guard enforces with a deliberately conservative default (depth 2, tree total ~20 — the TS host's already-chosen numbers), and the ledger then supplies the evidence to retune those numbers with the measurement recorded
+- **Success criteria must be able to fail.** CLAUDE.md's Definition of Done governs. Two corrections from this repo's history shaped them: a criterion reading "fewer than 27 castes loaded" already passed and proved nothing, and a token ledger's unit test asserted the same arithmetic its parser used, so a 186x undercount shipped green. The spend criteria therefore name the provider's documented figures (102,050 / 102,550), not the intent. Where possible criteria assert a proportion or invariant (grand total equals the sum of the `self` column; the ratchet allowlist may only shrink; the depth-cap numbers hold with five user agents installed)
+- **Decision-shaped, not build-shaped: SPAWN-06.** What depth 0 means. The repo contradicts itself today (`build.md` hardcodes `--depth 1` for manifest workers, `workers.md` hardcodes `--depth 0` for their children). This is a ruling to record; the number matters less than one convention existing. Once recorded it fixes the expected value in Phase 173's depth-derivation criterion
+- **Two further rulings the phases must make explicitly rather than discover:** (a) Phase 176 — whether the roster or `colony/policies/model-routing.yaml` owns model routing; both exist with zero readers, and wiring one without ruling on the other recreates the original condition. (b) Phase 177 — the user-agent namespace must be excluded from `TestCanonicalAgentSourcesRemainAligned` by decision, not by a hand-grown exemption list, or a user adding one agent either breaks CI or gets an agent that silently vanishes on two platforms
+- **The TypeScript host is still KEPT** (carried from v1.25). `.aether/ts-host/src/spawn-orchestrator.ts` is a complete, correct ~150-line specification for Phase 173's Go port — it does not need rewriting, it needs a caller
+- **Explicitly out of scope, already ruled:** automatic model routing (user decision 2026-07-28, reaffirmed — cheap-model capability means the framework carries the intelligence, not that it picks models), a compressed inter-agent language, intra-wave peer communication, a tokenizer dependency, user-configurable depth flags, an interactive agent-authoring wizard, an agent/skill marketplace, and further compression of the worker brief
 
 ### Pending Todos
 
-- [ ] Get user approval on the corrected v1.25 roadmap (12 phases, 88 requirements)
-- [ ] Plan Phase 160: Fail Loudly
-- [ ] Plan Phase 161: Cheap Models By Design
-- [ ] Plan Phase 162: Switch On Learning
-- [ ] Plan Phase 163: Context Reaches Workers
-- [ ] Plan Phase 164: Research Feeds Planning
-- [ ] Plan Phase 165: Core Lifecycle Commands (owns build.md structurally)
-- [ ] Plan Phase 166: Full Colony On Demand
-- [ ] Plan Phase 167: Typed Control (migrate mode before requiring it)
-- [ ] Plan Phase 168: Your Eyes Back — Live Visibility
-- [ ] Plan Phase 169: Your Eyes Back — Charter & Standards
-- [ ] Plan Phase 170: Reclaim The Unreachable
-- [ ] Plan Phase 171: Prove It
+- [ ] Get user approval on the v1.26 roadmap (8 phases, 35 requirements)
+- [ ] Plan Phase 172: Wiring Proof — the ratchet must land before anything else
+- [ ] Plan Phase 173: Delegation Guard (record the SPAWN-06 depth-0 convention first)
+- [ ] Plan Phase 174: Spend Ledger
+- [ ] Plan Phase 175: Orchestration Visibility
+- [ ] Plan Phase 176: Roster Reader (rule on roster-vs-model-routing ownership)
+- [ ] Plan Phase 177: Operator-Authored Agents (rule on the parity-test namespace)
+- [ ] Plan Phase 178: Skill Authoring Hardening (security lands here, not later)
+- [ ] Plan Phase 179: Proof
 
 ### Blockers/Concerns
 
-- Roadmap has been rebuilt/corrected twice and is unapproved — do not start Phase 160 planning/build until the user signs off on the 12-phase, 88-requirement structure
-- Any prior mental model referencing the 8-phase "Switch It On" draft (SEE as one 7-requirement phase, no Research/CMD/Colony phases) should be treated as superseded by this correction
-- Any prior mental model referencing the original discarded "Working Again" draft (deleting `.aether/ts-host/`, a four-mode Queen policy, "orphaned playbooks" as sole root cause) remains superseded
+- Roadmap is unapproved — do not start Phase 172 planning until the user signs off on the 8-phase, 35-requirement structure
+- **Phase 173 and Phase 178 carry research flags from the research phase.** Platform nested-spawn behaviour is MEDIUM confidence and both vendors broke it within the last quarter (Claude Code strips the Agent tool from some subagent types; OpenCode has an open "subagents can infinitely recurse, no max depth" defect). The skill supply-chain threat surface is actively evolving. Re-verify vendor docs and open issues at planning time for both
+- **OpenCode hook parity is unverified.** No confirmed equivalent to Claude Code's `PreToolUse` deny gate was found. If SPAWN-04's guard must hold on OpenCode, Go-side depth enforcement becomes mandatory rather than defence-in-depth — verify before planning that requirement
+- **Codex has no native subagent nesting.** Delegation on the Codex lane must be *off* and reported honestly, never emulated. Emulation would create a second divergent orchestration path — the exact failure v1.24 and v1.25 spent two milestones unwinding
+- Two gaps surfaced during roadmapping that have **no supporting requirement** and were deliberately not added to scope (see Coverage Notes in the roadmap return): the char-budget-vs-spend naming guardrail (Pitfall 8), and orphaned-child reaping with an operator command (Pitfall 5). Both are recorded as phase guardrails; if either is to be enforced, it needs a requirement and a user decision
+- `gopkg.in/yaml.v3` is archived and author-declared unmaintained. v1.26 makes YAML the format a non-technical user hand-writes, which changes the risk profile. The migration to `go.yaml.in/yaml/v3` is a mechanical import swap and is deliberately unbundled — it gets its own plan, not a rider on the roster work
 
 ## Deferred Items
 
-Carried from v1.23, deferred again in v1.25 (see REQUIREMENTS.md "Deferred"):
+Carried forward from v1.25 (superseded) and v1.23:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
+| Visibility | SEE (14) — rich terminal visibility beyond SEEN-01..03 | Deferred | v1.26 roadmap |
+| Typing | TYPED (8) — required `mode` field, removal of prose inference | Deferred | v1.26 roadmap |
+| Reclaim | RECLAIM (9) — wider unreachable-command sweep beyond WIRE-01's ratchet | Deferred | v1.26 roadmap |
+| Locking | LOCK (4) — state locking and lifecycle transactions | Deferred | v1.26 roadmap |
+| Models | MODEL — automatic model selection | Rejected | user decision 2026-07-28 |
+| Delegation | Recursive delegation *delivery* (child result plumbing, follow-on wave, parent-direct spawn) | Deferred | v1.26 roadmap — guard only this milestone |
+| Hygiene | `gopkg.in/yaml.v3` → `go.yaml.in/yaml/v3` migration | Tracked, unbundled | v1.26 roadmap |
 | Catalog | CATALOG-01, CATALOG-02 | Deferred | v1.25 roadmap |
 | Test coverage | TEST-01, TEST-02 | Deferred | v1.25 roadmap |
 | Workflow | WORKFLOW-01 … WORKFLOW-09 | Deferred | v1.25 roadmap |
@@ -100,6 +105,6 @@ Carried from v1.23, deferred again in v1.25 (see REQUIREMENTS.md "Deferred"):
 
 ## Session Continuity
 
-Last session: 2026-08-04T09:37:50.159Z
-Stopped at: Phase 162 context gathered
-Resume file: .planning/phases/162-switch-on-learning/162-CONTEXT.md
+Last session: 2026-08-08
+Stopped at: v1.26 roadmap written — ROADMAP.md phases 172-179, REQUIREMENTS.md traceability filled (35/35)
+Resume file: .planning/ROADMAP.md (v1.26 section) + .planning/research/SUMMARY.md

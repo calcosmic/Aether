@@ -44,6 +44,7 @@ Enforcement lands before capability: parent/depth linkage is recorded at spawn t
 - [ ] **SPAWN-05**: The runtime detects ancestor-chain repetition (a caste spawning itself on the same task) and refuses — the real hazard, since a spawn tree cannot contain a cycle
 - [ ] **SPAWN-06**: *(Decision)* A written decision records what depth 0 means, resolving the inconsistency present in the repo today
 - [ ] **SPAWN-07**: The operator can see a delegation tree as it grows — a runaway subtree is visible while running, not discovered on the bill
+- [ ] **SPAWN-08**: An abandoned child worker is reaped and its budget released, and the operator has a command to see and clear orphans — an orphan wastes money once and then progressively locks the colony out of spawning as the tree budget fills with ghosts
 
 ## Spend Ledger (SPEND)
 
@@ -53,6 +54,7 @@ Enforcement lands before capability: parent/depth linkage is recorded at spawn t
 - [ ] **SPEND-04**: A run that produced no provider figure appears in the ledger tagged as an estimate, and cannot be read as a measurement
 - [ ] **SPEND-05**: Nested child spend rolls up to its parent, so a delegating worker's true cost is visible
 - [ ] **SPEND-06**: `aether spend` reports per-worker tokens, cost and tool calls for the current run, mutating nothing
+- [ ] **SPEND-07**: No figure in the spend report derives from a character budget, and documentation stops naming a character budget a "Token Budget" — a dashboard fed by `colonyPrimeBudgetChars` can go green while real cost is unchanged, which is how the 186x undercount stayed invisible
 
 ## Orchestration Visibility (SEEN)
 
@@ -124,8 +126,50 @@ Also tracked, deliberately unbundled:
 
 ## Traceability
 
-*(filled by roadmap)*
+**Coverage: 35/35 v1.26 requirements mapped to exactly one phase. No orphans, no duplicates.**
 
-| REQ-ID | Phase |
-|--------|-------|
-| — | — |
+Phase ordering is load-bearing and argued in `research/SUMMARY.md` and `research/PITFALLS.md`:
+WIRE first (the ratchet must precede the capabilities it constrains) → SPAWN before SPEND
+(parent/depth linkage is recorded at spawn time and cannot be retrofitted) → SPEND before
+ROSTER/SKILL (extensibility changes what workers cost) → ROSTER reader before the user path →
+SKILL security inside the skill phase → PROOF last.
+
+| REQ-ID | Phase | Phase Name | Status |
+|--------|-------|------------|--------|
+| WIRE-01 | Phase 172 | Wiring Proof | Pending |
+| WIRE-02 | Phase 172 | Wiring Proof | Pending |
+| WIRE-03 | Phase 172 | Wiring Proof | Pending |
+| SPAWN-01 | Phase 173 | Delegation Guard | Pending |
+| SPAWN-02 | Phase 173 | Delegation Guard | Pending |
+| SPAWN-03 | Phase 173 | Delegation Guard | Pending |
+| SPAWN-04 | Phase 173 | Delegation Guard | Pending |
+| SPAWN-05 | Phase 173 | Delegation Guard | Pending |
+| SPAWN-06 | Phase 173 | Delegation Guard *(decision, not build)* | Pending |
+| SPAWN-07 | Phase 173 | Delegation Guard | Pending |
+| SPAWN-08 | Phase 173 | Delegation Guard | Pending |
+| SPEND-01 | Phase 174 | Spend Ledger | Pending |
+| SPEND-02 | Phase 174 | Spend Ledger | Pending |
+| SPEND-03 | Phase 174 | Spend Ledger | Pending |
+| SPEND-04 | Phase 174 | Spend Ledger | Pending |
+| SPEND-05 | Phase 174 | Spend Ledger | Pending |
+| SPEND-06 | Phase 174 | Spend Ledger | Pending |
+| SPEND-07 | Phase 174 | Spend Ledger | Pending |
+| SEEN-01 | Phase 175 | Orchestration Visibility | Pending |
+| SEEN-02 | Phase 175 | Orchestration Visibility | Pending |
+| SEEN-03 | Phase 175 | Orchestration Visibility | Pending |
+| ROSTER-01 | Phase 176 | Roster Reader | Pending |
+| ROSTER-02 | Phase 176 | Roster Reader | Pending |
+| ROSTER-03 | Phase 177 | Operator-Authored Agents | Pending |
+| ROSTER-04 | Phase 177 | Operator-Authored Agents | Pending |
+| ROSTER-05 | Phase 177 | Operator-Authored Agents | Pending |
+| ROSTER-06 | Phase 177 | Operator-Authored Agents | Pending |
+| ROSTER-07 | Phase 177 | Operator-Authored Agents | Pending |
+| ROSTER-08 | Phase 177 | Operator-Authored Agents | Pending |
+| SKILL-01 | Phase 178 | Skill Authoring Hardening | Pending |
+| SKILL-02 | Phase 178 | Skill Authoring Hardening | Pending |
+| SKILL-03 | Phase 178 | Skill Authoring Hardening | Pending |
+| SKILL-04 | Phase 178 | Skill Authoring Hardening | Pending |
+| PROOF-01 | Phase 179 | Proof | Pending |
+| PROOF-02 | Phase 179 | Proof | Pending |
+| PROOF-03 | Phase 179 | Proof | Pending |
+| PROOF-04 | Phase 179 | Proof | Pending |

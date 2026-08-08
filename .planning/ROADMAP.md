@@ -28,8 +28,39 @@
 - **v1.23 Daily Driver Reliability** - Phases 145-151 (shipped 2026-05-21) — [Archive](milestones/v1.23-ROADMAP.md)
 - **v1.24 Hybrid Architecture Salvage** - Phases 152-159 (shipped 2026-05-24) — [Archive](milestones/v1.24-ROADMAP.md)
 - **v1.25 Switch It On** - Phases 160-171 (in progress, started 2026-07-25; DRAFT ROADMAP, not yet user-approved)
+- **v1.26 Intelligent Orchestration** - Phases 172-179 (roadmapped 2026-08-08)
 
 ## Phases
+
+### v1.26 Intelligent Orchestration
+
+**Milestone Goal:** The colony reads the work, sends only the workers that work needs, hands each one what it needs to know, and can prove what it cost — so a non-technical operator gets good results on an inexpensive model without tuning anything.
+
+**Supersedes v1.25 "Switch It On"** (reached 24%, 7 of 29 phases). Its live intent is absorbed; SEE, TYPED, RECLAIM and LOCK move to Future Requirements.
+
+**The organising finding:** four independent researchers, each verifying by reading and *running* this repository's code, converged on one thing — **most of this milestone already exists and was never wired to a caller.** The recursion policy engine (`.aether/ts-host/src/spawn-orchestrator.ts`, unreachable), the depth guard (`spawn-can-spawn` takes `--depth`, ignores it, always returns true), the 27-caste roster (`colony/agents/*.yaml`, zero readers), the skill lifecycle (8 of 9 commands unreferenced), the selection rationale (composed, carried into the manifest, discarded), and token measurement (parsed at every dispatch, persisted nowhere) all exist and reach nobody. The framing is therefore **switch on and prove**, not **design and build** — which is what makes the ordering load-bearing.
+
+**Why the ordering is not negotiable:**
+
+1. **Wiring Proof is Phase 172, first.** A ratchet written after the capabilities gets shaped to whatever shipped. This repo has four verified instances of "built, documented, never called" inside this exact feature area, and CLAUDE.md records that 18 of 25 milestones were framed around restoring something previously marked done.
+2. **Delegation Guard (173) precedes Spend Ledger (174).** The ledger's subtree roll-up walks parent/depth linkage that is recorded at spawn time and cannot be retrofitted to past runs. This resolves an explicit disagreement between the ARCHITECTURE and PITFALLS reports: the guard enforces with a deliberately conservative default (depth 2, tree total ~20 — the TS host's already-chosen numbers) without needing spend data, and the ledger then supplies the evidence to retune those numbers with the measurement recorded.
+3. **Spend Ledger (174) precedes the extensibility phases.** Extensibility changes what workers cost; without a working ledger every later efficiency claim is unfalsifiable.
+4. **Roster Reader (176) precedes Operator-Authored Agents (177).** Prove the reader against the shipped 27 YAMLs first, or reproduce the `colony/agents` zero-reader outcome at larger scale with users' files in it.
+5. **Skill security lands inside Phase 178, never a phase later.** A refusal rule shipped one phase after the authoring path is a published window in which malicious skills load.
+6. **Proof (179) is last** and depends on everything.
+
+**Phase count:** 8, against the research's suggested 7. The single split is ROSTER, into **176 Roster Reader** (ROSTER-01..02, the shipped 27) and **177 Operator-Authored Agents** (ROSTER-03..08, the user path). Keeping them in one phase would put the milestone's most historically-repeated failure mode behind an in-phase ordering note rather than behind a phase gate. Split, the reader must demonstrably change dispatch output before the user path is even planned.
+
+**How success criteria are written here.** CLAUDE.md's Definition of Done governs: *a requirement is satisfied only when a command exists that someone can run, and that command fails when the requirement is unmet.* Two corrections from this repo's own history shaped the criteria below. A criterion reading "fewer than 27 castes loaded" already passed and proved nothing. A token ledger's unit test asserted the same arithmetic its parser used, so a 186x undercount shipped green — which is why the spend criteria name the expected figures (102,050 / 102,550) rather than the intent ("measure tokens"). Where possible the criteria assert a **proportion or an invariant** (grand total equals the sum of the `self` column; the allowlist may only shrink; the depth cap numbers hold with five user agents installed) rather than the presence of a named section.
+
+- [ ] **Phase 172: Wiring Proof** - A registered subcommand with no caller fails CI, and every CLI flag named in `.aether/*.md` exists — the ratchet lands before the capabilities it constrains
+- [ ] **Phase 173: Delegation Guard** - Depth is derived from the parent and refused past a cap, a whole-tree budget bounds what depth alone cannot, guards fail closed, and the operator watches the tree grow. Nothing gains the ability to delegate here
+- [ ] **Phase 174: Spend Ledger** - What a run cost is measured with stated arithmetic including cache tokens, persists past the process, separates estimates from measurements, and rolls nested children up to their parent exactly once
+- [ ] **Phase 175: Orchestration Visibility** - The operator reads which workers the Queen chose and why, which it did not call, where the runtime overrode it, and which workers actually found something
+- [ ] **Phase 176: Roster Reader** - The 27 shipped caste YAMLs become the file the runtime actually reads, proven by editing one and watching dispatch change — and they reach downstream repos for the first time
+- [ ] **Phase 177: Operator-Authored Agents** - One command adds an agent across all three platform lanes; it cannot delegate, cannot enter the safety floor, cannot vanish silently, and renders with a readable identity
+- [ ] **Phase 178: Skill Authoring Hardening** - One writer, real validation with named rules at create time and index time, security refusals at load, and selection that cannot be won by filename
+- [ ] **Phase 179: Proof** - Three real tasks on an inexpensive model with interventions counted, a downstream lifecycle run, a recorded before/after token measurement, and an interrupted task that resumes cold
 
 ### v1.25 Switch It On (DRAFT — awaiting user approval)
 
@@ -585,10 +616,102 @@ Plans:
   5. If the benchmark runs, its colony-vs-solo result is recorded in the repository as the milestone's honest verdict, including if it is unfavourable
 **Plans**: TBD
 
+### Phase 172: Wiring Proof
+**Goal**: A capability added by this milestone cannot ship without a caller. The orphan ratchet exists, runs in CI, and blocks — before any of the capabilities it constrains are built, so it is shaped by the standard rather than by whatever shipped.
+**Depends on**: Nothing (first phase of v1.26)
+**Requirements**: WIRE-01, WIRE-02, WIRE-03
+**Success Criteria** (what must be TRUE):
+  1. Registering a new cobra subcommand with no caller outside its own definition file makes `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced` fail, naming the command — proven by a fixture that registers exactly such a command. The allowlist ships seeded with today's known orphans (the 8 `skill-*` lifecycle commands) and a companion assertion fails when the allowlist gains an entry it did not have in the committed baseline: **it may only shrink**
+  2. `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` instructs every worker to run — exits 0. Today it exits 1 with `Error: unknown flag: --enforce`
+  3. A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming the file, the line, and the offending flag when an instruction names a flag the binary does not register. Seeded to fail today against `--enforce`, and it passes only once criterion 2 does
+  4. The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file
+**Plans**: TBD
+
+### Phase 173: Delegation Guard
+**Goal**: Recursive delegation is bounded by the runtime at the one chokepoint an LLM cannot route around — the spawn-recording call. Depth is derived from the parent's recorded entry rather than asserted by the caller, a whole-tree budget bounds what depth alone cannot, every guard fails closed, and the operator can watch the tree while it grows. **Nothing gains the ability to delegate in this phase**; enforcement lands before capability because parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs.
+**Depends on**: Phase 172
+**Requirements**: SPAWN-01, SPAWN-02, SPAWN-03, SPAWN-04, SPAWN-05, SPAWN-06, SPAWN-07, SPAWN-08
+**Success Criteria** (what must be TRUE):
+  1. `aether spawn-can-spawn --depth 99` returns `can_spawn: false` with a named reason, and a scripted spawn one level past the cap exits non-zero **and writes no spawn-tree entry**. Today the first returns `{"can_spawn":true}` for every input it has ever received
+  2. After a nested run in which every caller passes `--depth 0` exactly as `.aether/workers.md` instructs today, `aether spawn-tree-depth` reports the true depth (3 for a 3-deep tree), because depth is derived from the parent entry and the caller-supplied value is ignored. Today this is structurally always 0
+  3. With the wave cap at 8 and the tree budget at 20, a run that never exceeds 8 workers in any single wave is refused at worker 21, and budget consumed in wave 1 is not restored in wave 2 — the two numbers are visibly different quantities, not one doing double duty
+  4. With `COLONY_STATE.json` and the spawn tree made unreadable, **every** delegation guard denies and exits non-zero (today `spawn-can-spawn-swarm` returns `can_spawn: true` on exactly this path), and the `PreToolUse` `Agent|Task` hook denies a spawn whose requester depth cannot be resolved
+  5. A spawn whose (caste, normalised task) already appears in its own ancestor chain is refused with the ancestor named — an A→B→A cycle that never exceeds the depth cap and would otherwise never terminate
+  6. `aether spawn-tree-active` renders the delegation tree indented by depth with parent attribution **while the run is in progress**, so a runaway subtree is visible before the run ends
+**Decision (not build-shaped)**: **SPAWN-06** — a written decision records what depth 0 means, replacing today's contradiction (`build.md` hardcodes `--depth 1` for manifest workers, `workers.md` hardcodes `--depth 0` for their children). This is a ruling to record, not an implementation to plan. Once recorded, criterion 2's expected number is fixed by it and a test asserts the manifest worker's recorded depth equals the chosen convention.
+**Plans**: TBD
+
+### Phase 174: Spend Ledger
+**Goal**: What a run cost is measured rather than asserted — with the arithmetic stated, cache tokens included, estimates never presentable as measurements, and a delegating worker's nested children rolled up to it exactly once. Ships before the extensibility phases because extensibility changes what workers cost, and without a working ledger every later efficiency claim is unfalsifiable.
+**Depends on**: Phase 173 (subtree roll-up walks the parent linkage `spawn-log` records)
+**Requirements**: SPEND-01, SPEND-02, SPEND-03, SPEND-04, SPEND-05, SPEND-06, SPEND-07
+**Success Criteria** (what must be TRUE):
+  1. Feeding Anthropic's own documented example (`input_tokens: 50`, `cache_read_input_tokens: 100000`, `cache_creation_input_tokens: 2000`, `output_tokens: 500`) through the parser yields **total input 102,050 and total 102,550**, and the four counts are stored and displayed as disjoint columns. The test asserts those literal figures from the provider's documentation, **not** the arithmetic the parser performs — the previous test restated the parser and let a 186x undercount (550 reported against 102,550 processed) ship green
+  2. After a build on the **wrapper path** — the one an operator actually runs — `aether spend` reports non-zero per-worker tokens, cost and tool calls for the current run, and running it twice leaves every file byte-identical (an inspection command mutates nothing). Today `codexExternalBuildWorkerResult` has no usage field and `result.Usage` has zero readers in `cmd/`
+  3. A ledger holding two provider rows and one estimate row renders measured and estimated as **separate subtotals** with no single figure conflating them, and a derived per-phase metric over that mixed set is refused with a named reason unless `--include-estimates` is passed
+  4. For a recorded tree A→(B,C) and C→D with known per-worker spend, the report shows `self` and `subtree` as two explicit columns; A.subtree equals the sum of all four workers, and **the grand total equals the sum of the `self` column** — a test asserts that summing the `subtree` column instead produces a different number and that the report does not print that number
+**Plans**: TBD
+
+### Phase 175: Orchestration Visibility
+**Goal**: The operator can read the Queen's team choice, the castes it did not call, the points where the runtime overrode it, and which workers actually found something — in plain English, from data the runtime already computes and currently discards. The highest value-to-cost item any researcher found: the rationale strings are composed on every build, carried into the JSON dispatch manifest, and never rendered to a human.
+**Depends on**: Phase 173, Phase 174
+**Requirements**: SEEN-01, SEEN-02, SEEN-03
+**Success Criteria** (what must be TRUE):
+  1. Before workers spawn, the Dispatch stage prints one plain-English clause per selected caste **and the castes that were considered and not called** — "why didn't it use the security one?" is answerable without opening a file. Removing the rationale from the manifest makes the render test fail, so the render cannot drift into hardcoded prose
+  2. When the runtime restores a safety-required caste the Queen omitted, or trims the team to the worker cap, the output names the caste, the action and the reason. A scripted `--light` build of a production phase shows the restoration line rather than silently keeping the caste — today the correction happens and says nothing
+  3. The run summary distinguishes a worker that returned no actionable finding from one that did: a build with one finding-producing worker and one clean worker shows two different states, not two identical "completed" lines
+**Plans**: TBD
+
+### Phase 176: Roster Reader
+**Goal**: `colony/agents/*.yaml` becomes the file the runtime actually reads, proven by editing one and observing dispatch change — and it reaches downstream repos, which it does not today. Reader first, against the shipped 27, before any user-extension path exists: building the schema and directory before the reader is exactly how 27 caste YAMLs came to have zero readers.
+**Depends on**: Phase 174
+**Requirements**: ROSTER-01, ROSTER-02
+**Success Criteria** (what must be TRUE):
+  1. Editing a shipped caste's YAML (for example its declared tools) and running `aether build --plan-only` produces a manifest reflecting **the file**, with no rebuild — and corrupting that file makes a command fail naming the file, rather than silently falling back to the compiled default. Being unable to break the system by corrupting a roster file is the failure signature this criterion exists to catch
+  2. `aether roster-validate` exits non-zero on a malformed roster file and zero on the shipped set; the compiled-in `casteRelevanceRegistry` remains as fallback and a drift test fails when file and slice disagree. A companion test enumerates every caste reachable in `codex_dispatch_contract.go` and fails naming any with no roster file the loader loads — it fails today
+  3. `colony/agents` is published to the hub and installed by `aether update`, verified by resolving the shipped 27 through the loader **in a repo that is not this one**. Today the directory is not in the sync pairs at all, so a working reader would work only here
+  4. The three known name collisions are resolved and locked: `queen` is loaded by the roster but a test fails if it becomes dispatchable; `route_setter` and `route-setter.yaml` resolve to one caste rather than two; and the 35-entry visuals maps are not merged into the caste roster — a test asserts the roster count and the visuals-map count stay distinct numbers
+**Open decision this phase must make, not discover**: whether the roster owns model routing, or `colony/policies/model-routing.yaml` does. Both files exist today with zero readers; wiring a reader to one without ruling on the other recreates the original condition. Record the ruling; it is not a build task.
+**Plans**: TBD
+
+### Phase 177: Operator-Authored Agents
+**Goal**: A non-technical operator adds their own agent with one command, on all three platform lanes, and it cannot quietly weaken the colony — no delegation, no entry into the safety floor, no silent disappearance, and a readable identity in the output.
+**Depends on**: Phase 176
+**Requirements**: ROSTER-03, ROSTER-04, ROSTER-05, ROSTER-06, ROSTER-07, ROSTER-08
+**Success Criteria** (what must be TRUE):
+  1. One command creates a working agent from a name and a description without editing any Go file; the agent appears in `aether agent-list` and is dispatchable in the next build
+  2. The same command writes Claude markdown, OpenCode markdown and Codex TOML, and a round-trip test loads all three back and asserts they describe the same agent — a deliberately corrupted translation fails locally rather than in CI. `TestCanonicalAgentSourcesRemainAligned` stays green with a user agent installed (the user namespace is excluded from the parity lock by decision, not by a growing hand-maintained exemption list), and `agent-list` reports per-platform availability rather than claiming universal
+  3. With five user agents installed, `TestBuildWorkerCapHonoursVerificationDepth`'s light/standard/heavy numbers are unchanged and no user caste appears in `queenBuildSafetyRequiredCastes`; a user agent declaring delegation or a tool grant wider than its caste ceiling is refused, naming the field
+  4. A malformed user agent produces a diagnostic naming the file and the specific problem, and a test asserts the count of reported-invalid files equals the count of malformed fixtures — the run does not proceed with a quietly smaller roster the way a malformed skill does today
+  5. A user-added caste renders with a non-blank identity in dispatch output; a test fails if any dispatchable caste resolves to an empty emoji, label or colour, since those maps are hardcoded Go with no entry for a name they have never seen
+**Plans**: TBD
+
+### Phase 178: Skill Authoring Hardening
+**Goal**: One writer, real validation with named enumerable rules at create time **and** index time, security refusals at load rather than at run, and selection that cannot be won by filename. Security lands in this phase and not the next: a refusal rule shipped a phase later is a published window in which malicious skills load.
+**Depends on**: Phase 172, Phase 174
+**Requirements**: SKILL-01, SKILL-02, SKILL-03, SKILL-04
+**Success Criteria** (what must be TRUE):
+  1. Every registered `skill-*` command has a caller outside its own definition file or has been removed — Phase 172's ratchet allowlist drops from 8 skill entries to 0 and the ratchet passes with none remaining. The measurement is the allowlist, not a summary claiming the commands were reclaimed
+  2. A skill named `aaa-my-notes` declaring all nine roles does not displace a shipped single-role skill from any worker's top-3, and when displacement does happen the injection report **names the dropped skill**. A test asserts that renaming a skill changes nothing about selection order — alphabetical position is no longer a selection input
+  3. Every platform's skill-create wrapper invokes `aether skill-create` and contains no instruction to hand-write `SKILL.md`; a wrapper-contract test fails if any wrapper writes the file directly. It fails today for Claude and OpenCode, which is why validation added to the runtime command would otherwise protect only Codex users
+  4. A skill with a typo'd role, an uncompilable detect pattern, a name collision, an empty body, or `` !`curl …` `` dynamic-context syntax is refused at create time and at index time, each reported with the file and the field. The index reports invalid skills rather than skipping them, so the file count and the index count can never disagree in silence
+**Plans**: TBD
+
+### Phase 179: Proof
+**Goal**: The milestone's verdict, produced on real repositories with an inexpensive model and recorded whether or not it is favourable. Not satisfiable by tests — this phase is evidence, and the evidence is committed.
+**Depends on**: Phase 172, Phase 173, Phase 174, Phase 175, Phase 176, Phase 177, Phase 178
+**Requirements**: PROOF-01, PROOF-02, PROOF-03, PROOF-04
+**Success Criteria** (what must be TRUE):
+  1. Three real development tasks complete in real repositories on an inexpensive model, with the number of operator interventions **counted per task** and recorded in a committed artifact — a count, not a narrative
+  2. A full colony lifecycle (init → plan → build → continue → seal) runs in a downstream repo and `git status` in the Aether repo is clean at the end: Aether did not modify itself during the run
+  3. Tokens-per-phase measured by `aether spend` are recorded before and after this milestone, with the before figure taken from re-running an already-shipped phase so the two are comparable, and the record stands **including if the result is unfavourable**
+  4. A task interrupted mid-session resumes in a fresh session — new conversation, no scrollback — with the operator typing only `/ant-resume`, and the colony states what was in progress without being told
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 → 151 → 152 → 153 → 154 → 155 → 156 → 157 → 158 → 159 → 160 → 161 → 162 → 163 → 164 → 165 → 166 → 167 → 168 → 169 → 170 → 171
+Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 → 151 → 152 → 153 → 154 → 155 → 156 → 157 → 158 → 159 → 160 → 161 → 162 → 163 → 164 → 165 → 166 → 167 → 168 → 169 → 170 → 171 → 172 → 173 → 174 → 175 → 176 → 177 → 178 → 179
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -619,3 +742,11 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
+| 172. Wiring Proof | v1.26 | 0/TBD | Not started | - |
+| 173. Delegation Guard | v1.26 | 0/TBD | Not started | - |
+| 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
+| 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
+| 176. Roster Reader | v1.26 | 0/TBD | Not started | - |
+| 177. Operator-Authored Agents | v1.26 | 0/TBD | Not started | - |
+| 178. Skill Authoring Hardening | v1.26 | 0/TBD | Not started | - |
+| 179. Proof | v1.26 | 0/TBD | Not started | - |

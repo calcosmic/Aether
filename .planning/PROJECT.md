@@ -216,6 +216,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [x] v1.23 Daily Driver Reliability -- Phases 145-151 (shipped 2026-05-21)
 - [x] v1.24 Hybrid Architecture Salvage -- Phases 152-159 (shipped 2026-05-24)
 - [ ] v1.25 Switch It On -- Phases 160-171 (started 2026-07-25)
+- [ ] v1.26 Intelligent Orchestration -- Phases 172-179 (roadmapped 2026-08-08; supersedes v1.25)
 
 ## Requirements
 
