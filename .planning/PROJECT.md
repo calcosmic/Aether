@@ -48,39 +48,28 @@ That means:
 - Four parallel execution paths currently coexist: markdown wrappers + playbooks (~13k lines), `.aether/ts-host` (40 files), `control-ts` (33 files, self-described as retired), and the Go runtime
 - `v5.4.0` tag remains available as the Classic behaviour baseline for Queen orchestration archaeology
 
-## Current Milestone: v1.25 Switch It On
+## Current Milestone: v1.26 Intelligent Orchestration
 
-**Goal:** Make Aether usable daily on an inexpensive model by switching on machinery that already exists and has never run.
-
-**How this milestone was arrived at:** an initial plan was written, then subjected to six specialist review agents — claim verification, adversarial refutation, goal-backward plan checking, architectural blast-radius, completeness archaeology, and a devil's advocate. The review refuted the original diagnosis and several of its load-bearing claims. This milestone is the rebuild.
-
-**What the review established:**
-
-1. **Almost nothing was deleted; things were never switched on.** `pkg/memory/pipeline.go` wires the entire learning loop and is invoked by nothing — the colony has never learned. `colony/policies/model-routing.yaml` maps every caste to a model and has zero readers — the cheap-model mechanism exists and is inert. `colony-vital-signs` computes colony health 0-100 and is unplugged. The approved charter never reaches a worker.
-2. **The TypeScript host is an asset, not a liability.** `.aether/ts-host/src/` holds the only playbook loader, the only confidence loop, and the only worker dashboard and swarm display. The original plan deleted it in Phase 160 and rebuilt its functions in Phases 161-166. It also breaks `go build` outright via `//go:embed`.
-3. **Failures are silent.** Seven playbook CLI calls were executed against a built binary and failed — including the Gatekeeper security scan — while stderr is redirected to `/dev/null`. The project's own drift test passes because its regex sees only `--flags`, never positional arguments.
-4. **The framework's real disease is churn, not a severed wire.** Build orchestration was rearchitected at least five times in eight weeks. Several previous milestones fixed defects that later silently reverted.
+**Goal:** The colony reads the work, sends only the workers that work needs, hands each one what it needs to know, and can prove what it cost — so a non-technical operator gets good results on an inexpensive model without tuning anything.
 
 **Target features:**
-- Fail loudly — fix seven broken calls, close the drift-test blind spot, stop suppressing stderr, correct three documents that describe behaviour which has never happened
-- Cheap models by design — wire `model-routing.yaml`, give the six unread policy files readers, and distribute `colony/` so policies work outside this repo
-- Switch on learning — run the consolidation pipeline at phase end and at seal; reconcile the two competing learning systems
-- Context reaches workers — the capsule, survey, phase research, `suggest-analyze`, and the approved charter; measured, bounded, and inspectable
-- Typed control — migrate `mode` before requiring it; close ten-plus prose-to-control-flow sites, starting with the grounding-gate exemption
-- Your eyes back — wire the health meter and dashboard that already exist; decide what a live panel means on Claude Code before building one
-- Reclaim the 37 subcommands that no playbook reconnection can recover
-- Retire `control-ts` only; keep the TS host and the narrator
-- Prove it on three real tasks with an inexpensive model
+- The Queen decides the team by reading the phase, bounded by safety floors it cannot argue past, and shows its reasoning
+- Workers stop rediscovering what the colony already knows
+- Spend is measured, not asserted — per worker, including nested children
+- Workers can spawn workers, governed by an enforced depth AND a whole-tree budget
+- The operator can add their own agents and skills, on all three platforms
+- Proof on an inexpensive model: three real tasks, interventions counted
 
-**Explicitly not in scope:** deleting the TS host, a four-mode Queen policy (it never existed), collapsing castes, Codex parity, hive trust redesign, a Dream caste.
+**Supersedes v1.25 "Switch It On"** (reached 24%, 7 of 29 phases). Its live intent is absorbed; SEE, TYPED, RECLAIM and LOCK move to Future Requirements.
 
-**Previous Milestone: v1.24 Hybrid Architecture Salvage** — Shipped 2026-05-24
+**How this milestone was arrived at:** four parallel researchers (stack, features, architecture, pitfalls) verified findings by reading and *running* this repository's code. They converged independently on one organising insight: **most of this milestone already exists and was never wired to a caller.** The recursion policy engine (TypeScript, unreachable), the depth guard (`spawn-can-spawn` ignores its own `--depth`), the 27-caste roster (zero readers), the skill lifecycle (8 of 9 commands unreferenced), the selection rationale (composed, then discarded), and token measurement (parsed, never persisted) all exist and reach nobody. The correct framing is *switch on and prove*, not *build new* — which makes ordering load-bearing, and is why a wiring ratchet lands first.
 
-Key accomplishments: Architecture boundary documented with hard rule, Classic parity checklist with 16 items, 162 Go symbols classified for extraction, 27 agent YAMLs + 28 prompt MDs + 9 phase YAMLs + 7 playbooks + 8 policy YAMLs created under `colony/`, Go runtime refactored to load from files, TypeScript control plane with loaders, orchestrator, and 68 tests, NDJSON event stream shared between Go and TS, 80% Classic parity verified, end-to-end demo CLI emits 48 events per run.
+**What the research established:**
 
-**Stats:** 86 commits, 375 files changed, +45,732 / −507 lines
-
-Full details: `.planning/milestones/v1.24-ROADMAP.md`
+1. **Recursive delegation is now a native platform feature.** Claude Code defaults to three subagent layers, configured in the `settings.json` Aether already syncs. Aether builds the *governor*, not the mechanism.
+2. **Depth is not a budget.** A 2-deep 8-wide tree is 72 workers. Claude Code's own default went 5 → 1 → 3 in three releases. Every serious system pairs depth with a second bound.
+3. **The documented depth guard cannot be called and would not enforce.** `workers.md` instructs workers to pass `--enforce`, a flag that was never registered; called correctly, the guard returns `can_spawn: true` unconditionally; and child spawns hardcode `--depth 0`, so any future cap would read a structurally-zero field.
+4. **Measurement must specify its arithmetic.** A token ledger written during this research undercounted by 186x by summing input+output while ignoring cache reads — and its unit test asserted the same wrong arithmetic, so it shipped green.
 
 ## Previous Milestone: v1.23 Daily Driver Reliability — Shipped 2026-05-21
 
