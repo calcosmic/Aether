@@ -3647,8 +3647,21 @@ func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
 	taskChars := 0
 	for _, section := range splitBriefSections(brief) {
 		switch section.Name {
+		// "Verification Command" is counted with the task sections, not against
+		// them. It is the executable form of "Task Success Criteria", which is
+		// already counted: the criteria say what done looks like, the command
+		// is how the worker checks it. Both exist to serve this task, neither
+		// is colony ceremony.
+		//
+		// Stated explicitly because the alternative reading — that anything
+		// useful may be reclassified as task content — would hollow this test
+		// out entirely. The bar for adding a name here is that a worker could
+		// not complete *this* task correctly without it. Colony state, skills,
+		// pheromones and survey pointers do not meet it and stay on the
+		// scaffolding side.
 		case "Assignment", "Phase Objective", "Phase Success Criteria",
-			"Task Success Criteria", "Dependencies", "Task Constraints", "Hints":
+			"Task Success Criteria", "Dependencies", "Task Constraints", "Hints",
+			"Verification Command":
 			taskChars += section.Chars
 		}
 	}

@@ -2621,6 +2621,7 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	b.WriteString(expectedDispatchOutcome(dispatch))
 	b.WriteString("\n")
 
+	b.WriteString(renderVerificationCommandSection())
 	return b.String()
 }
 

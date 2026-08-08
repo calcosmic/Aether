@@ -1480,6 +1480,7 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 		b.WriteString(surveySection)
 		b.WriteString("\n")
 	}
+	b.WriteString(renderVerificationCommandSection())
 	return b.String()
 }
 
@@ -1791,9 +1792,14 @@ func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest co
 		ContextCapsule:   resolveCodexWorkerContext(),
 		SkillSection:     resolveSkillSectionForWorkflow("continue", "watcher", "Independent verification before advancement"),
 		PheromoneSection: resolvePheromoneSection(),
-		Root:             root,
-		Timeout:          effectiveContinueReviewTimeout(workerTimeout),
-		Wave:             1,
+		// The watcher is the most expensive single worker in the flow and was
+		// the only one dispatched without the relay — its sibling reviewers get
+		// it. Nothing in the design justified the asymmetry; it was omitted.
+		HandoffSection: renderWorkerHandoffSection("continue", phase.ID,
+			deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID))),
+		Root:    root,
+		Timeout: effectiveContinueReviewTimeout(workerTimeout),
+		Wave:    1,
 	}
 }
 
@@ -1873,6 +1879,7 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 			}
 		}
 	}
+	b.WriteString(renderVerificationCommandSection())
 	return b.String()
 }
 

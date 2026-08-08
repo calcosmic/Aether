@@ -728,7 +728,7 @@ func renderWorkerHandoffSection(workflow string, phaseID int, workerName string)
 		return ""
 	}
 	sort.SliceStable(filtered, func(i, j int) bool {
-		return filtered[i].Freshness > filtered[j].Freshness
+		return handoffFreshnessTime(filtered[i].Freshness).After(handoffFreshnessTime(filtered[j].Freshness))
 	})
 	if len(filtered) > 5 {
 		filtered = filtered[:5]
@@ -745,6 +745,10 @@ func renderWorkerHandoffSection(workflow string, phaseID int, workerName string)
 			title += " (" + record.TaskID + ")"
 		}
 		b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.WorkerHeaderFormat }, "### %s\n", title))
+		// Caste, wave and age were stored on every record and rendered on none,
+		// so a reader could not tell whether a handoff came from the worker
+		// beside it or from a build three days ago — and weighted them equally.
+		b.WriteString(fmt.Sprintf("- From: %s\n", handoffProvenance(record)))
 		if record.Status != "" || record.VerificationStatus != "" {
 			b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.StatusFormat }, "- Status: %s; verification: %s\n", firstNonEmpty(record.Status, "unknown"), firstNonEmpty(record.VerificationStatus, "unknown")))
 		}
@@ -859,11 +863,11 @@ func pruneWorkerHandoffRecords(records []workerHandoffRecord, limit int) []worke
 		return records
 	}
 	sort.SliceStable(records, func(i, j int) bool {
-		return records[i].Freshness > records[j].Freshness
+		return handoffFreshnessTime(records[i].Freshness).After(handoffFreshnessTime(records[j].Freshness))
 	})
 	pruned := append([]workerHandoffRecord(nil), records[:limit]...)
 	sort.SliceStable(pruned, func(i, j int) bool {
-		return pruned[i].Freshness < pruned[j].Freshness
+		return handoffFreshnessTime(pruned[i].Freshness).Before(handoffFreshnessTime(pruned[j].Freshness))
 	})
 	return pruned
 }
@@ -942,4 +946,62 @@ func buildToWorkerDispatches(dispatches []codexBuildDispatch) []codex.WorkerDisp
 		}
 	}
 	return result
+}
+
+// handoffFreshnessTime turns a handoff's Freshness into something orderable.
+//
+// Freshness is normally RFC3339, but pkg/codex/handoff.go deliberately
+// preserves the literal "not-run" for a worker whose verification never
+// executed. Three sorts compared the field as a raw string, and "not-run"
+// collates above every "2026-…" timestamp — so un-run handoffs took the top of
+// the five-record window a worker actually reads, and survived pruning ahead of
+// real ones. The relay built to stop workers repeating each other was
+// preferentially handing them the entries with nothing in them.
+//
+// An unparsable value sorts as the zero time, i.e. last, which is what
+// "we do not know when this happened, or it never ran" should mean.
+func handoffFreshnessTime(freshness string) time.Time {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(freshness))
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
+}
+
+// handoffProvenance states who wrote a handoff, from where in the build, and
+// how long ago — the three fields the record already carried and never showed.
+func handoffProvenance(record workerHandoffRecord) string {
+	parts := []string{}
+	if caste := strings.TrimSpace(record.Caste); caste != "" {
+		parts = append(parts, caste)
+	}
+	if record.Wave > 0 {
+		parts = append(parts, fmt.Sprintf("wave %d", record.Wave))
+	}
+	parts = append(parts, handoffAgePhrase(record.Freshness))
+	return strings.Join(parts, " · ")
+}
+
+// handoffAgePhrase renders age in the terms a reader judges relevance by.
+// An un-run or undated handoff says so plainly rather than being presented
+// with the same authority as a fresh one.
+func handoffAgePhrase(freshness string) string {
+	recorded := handoffFreshnessTime(freshness)
+	if recorded.IsZero() {
+		if strings.EqualFold(strings.TrimSpace(freshness), "not-run") {
+			return "verification never ran"
+		}
+		return "undated"
+	}
+	age := time.Since(recorded)
+	switch {
+	case age < time.Minute:
+		return "recorded just now"
+	case age < time.Hour:
+		return fmt.Sprintf("recorded %dm ago", int(age.Minutes()))
+	case age < 24*time.Hour:
+		return fmt.Sprintf("recorded %dh ago", int(age.Hours()))
+	default:
+		return fmt.Sprintf("recorded %dd ago", int(age.Hours()/24))
+	}
 }

@@ -204,6 +204,7 @@ var briefOwnedSections = map[string]bool{
 	"Pheromone Signals":        true,
 	"Territory Survey":         true,
 	"Phase Research":           true,
+	"Verification Command":     true,
 	"Codebase Graph Context":   true,
 	"Previous Worker Handoffs": true,
 	"Expected Output":          true,

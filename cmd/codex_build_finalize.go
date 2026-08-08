@@ -832,19 +832,51 @@ func buildExternalBuildRecoveryInstructions(phaseNum int, dispatches []codexBuil
 	return instructions, nil
 }
 
+// codexWorkerDispatchesForRecovery rebuilds dispatches for a retry.
+//
+// It used to set nine fields and pass dispatch.Task — the one-line task string
+// — as the whole brief. So a worker being retried *after failing* received
+// strictly less than the attempt that had already failed: no capsule, no
+// skills, no pheromones, no relay, no success criteria. Worst of all Root was
+// empty, and cmd.Dir is only set when Root is non-empty, so the retry ran in
+// the orchestrator's working directory rather than the repository it was
+// supposed to be fixing.
+//
+// A retry is the moment context matters most. It now carries everything the
+// original dispatch carried, and the handoff is re-resolved so the retry can
+// see what the failed attempt reported.
 func codexWorkerDispatchesForRecovery(dispatches []codexBuildDispatch, phaseNum int) []codex.WorkerDispatch {
+	root := resolveAetherRoot()
+	capsule := resolveCodexWorkerContext()
+	pheromones := resolvePheromoneSection()
+
 	workers := make([]codex.WorkerDispatch, 0, len(dispatches))
 	for _, dispatch := range dispatches {
+		brief := strings.TrimSpace(dispatch.Brief)
+		if brief == "" {
+			brief = dispatch.Task
+		}
+		agentName := strings.TrimSpace(dispatch.AgentName)
+		if agentName == "" {
+			agentName = codexAgentNameForCaste(dispatch.Caste)
+		}
 		workers = append(workers, codex.WorkerDispatch{
-			ID:         normalizedDispatchTaskID(dispatch),
-			WorkerName: dispatch.Name,
-			AgentName:  codexAgentNameForCaste(dispatch.Caste),
-			Caste:      dispatch.Caste,
-			TaskID:     dispatch.TaskID,
-			TaskBrief:  dispatch.Task,
-			Wave:       normalizedDispatchWave(dispatch),
-			Workflow:   "build",
-			Phase:      phaseNum,
+			ID:                normalizedDispatchTaskID(dispatch),
+			WorkerName:        dispatch.Name,
+			AgentName:         agentName,
+			Caste:             dispatch.Caste,
+			TaskID:            dispatch.TaskID,
+			TaskBrief:         brief,
+			ContextCapsule:    capsule,
+			SkillSection:      dispatch.SkillSection,
+			PheromoneSection:  pheromones,
+			HandoffSection:    renderWorkerHandoffSection("build", phaseNum, dispatch.Name),
+			PermissionProfile: dispatch.PermissionProfile,
+			DeclaredPaths:     append([]string{}, dispatch.DeclaredPaths...),
+			Root:              root,
+			Wave:              normalizedDispatchWave(dispatch),
+			Workflow:          "build",
+			Phase:             phaseNum,
 		})
 	}
 	return workers
