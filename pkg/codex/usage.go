@@ -18,12 +18,13 @@ import (
 // raw output is already captured verbatim; this only reads what was always
 // there.
 type WorkerUsage struct {
-	InputTokens       int64   `json:"input_tokens,omitempty"`
-	CachedInputTokens int64   `json:"cached_input_tokens,omitempty"`
-	OutputTokens      int64   `json:"output_tokens,omitempty"`
-	TotalTokens       int64   `json:"total_tokens,omitempty"`
-	USDCost           float64 `json:"usd_cost,omitempty"`
-	Model             string  `json:"model,omitempty"`
+	InputTokens         int64   `json:"input_tokens,omitempty"`
+	CachedInputTokens   int64   `json:"cached_input_tokens,omitempty"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens,omitempty"`
+	OutputTokens        int64   `json:"output_tokens,omitempty"`
+	TotalTokens         int64   `json:"total_tokens,omitempty"`
+	USDCost             float64 `json:"usd_cost,omitempty"`
+	Model               string  `json:"model,omitempty"`
 
 	// Source distinguishes a provider-reported measurement from a local
 	// estimate. An estimate must never be presentable as a measurement: the
@@ -106,7 +107,7 @@ func ParseUsage(rawOutput string) (WorkerUsage, bool) {
 	}
 	usage.Source = UsageSourceProvider
 	if usage.TotalTokens == 0 {
-		usage.TotalTokens = usage.InputTokens + usage.OutputTokens
+		usage.TotalTokens = usage.billedTotal()
 	}
 	return usage, true
 }
@@ -183,6 +184,13 @@ func usageFromFields(fields map[string]interface{}) (WorkerUsage, bool) {
 			break
 		}
 	}
+	for _, key := range []string{"cache_creation_input_tokens", "cache_creation_tokens"} {
+		if v, ok := numberValue(fields[key]); ok {
+			usage.CacheCreationTokens = int64(v)
+			any = true
+			break
+		}
+	}
 	for _, key := range []string{"output_tokens", "completion_tokens"} {
 		if v, ok := numberValue(fields[key]); ok {
 			usage.OutputTokens = int64(v)
@@ -214,4 +222,22 @@ func numberValue(value interface{}) (float64, bool) {
 		return f, err == nil
 	}
 	return 0, false
+}
+
+// billedTotal sums the token counts a provider actually bills for.
+//
+// Anthropic reports input, cache_read and cache_creation as DISJOINT counts —
+// total = input + cache_read + cache_creation. The first version of this file
+// derived the total as input + output, ignoring both cache figures, and never
+// parsed cache_creation at all. On a realistic run (50 input, 100,000 cache
+// read, 500 output) that reported 550 against a true 102,550: a 186x
+// undercount.
+//
+// The failure was not caught because the unit test asserted the same wrong
+// arithmetic — total == input + output — so it passed while enshrining the bug.
+// The cost figure was right throughout, which would have produced a dashboard
+// showing a correct price beside a token count 186x too small, and the token
+// count is the number anyone divides by.
+func (u WorkerUsage) billedTotal() int64 {
+	return u.InputTokens + u.CachedInputTokens + u.CacheCreationTokens + u.OutputTokens
 }

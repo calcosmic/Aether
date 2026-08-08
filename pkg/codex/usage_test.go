@@ -31,8 +31,53 @@ func TestParseUsageClaudeResultEvent(t *testing.T) {
 	if usage.Model != "claude-sonnet-5" {
 		t.Errorf("model = %q, want claude-sonnet-5", usage.Model)
 	}
-	if usage.TotalTokens != 11542+3310 {
-		t.Errorf("total = %d, want input+output when not reported", usage.TotalTokens)
+	// Anthropic's three input counts are DISJOINT: total = input + cache_read +
+	// cache_creation. The first version of this assertion said input+output, so
+	// it passed while the parser ignored 98,000 cache-read tokens.
+	if usage.TotalTokens != 11542+98000+3310 {
+		t.Errorf("total = %d, want input+cache_read+output = %d", usage.TotalTokens, 11542+98000+3310)
+	}
+}
+
+// TestClaudeUsageTotalIncludesCacheReadAndCreation is the regression test for a
+// 186x undercount that shipped green.
+//
+// billedTotal originally summed input+output only, ignoring both cache figures,
+// and cache_creation_input_tokens was never parsed at all. On a realistic run —
+// 50 input, 100,000 cache read, 2,000 cache creation, 500 output — the ledger
+// reported 550 against a true 102,550. USDCost was read correctly throughout,
+// so the first dashboard would have shown an accurate price beside a token
+// count 186x too small, and the token count is the number anyone divides by.
+//
+// The original unit test asserted the same wrong arithmetic, which is why the
+// bug was invisible: the test did not check the parser, it restated it.
+func TestClaudeUsageTotalIncludesCacheReadAndCreation(t *testing.T) {
+	raw := `{"type":"result","usage":{"input_tokens":50,"cache_read_input_tokens":100000,"cache_creation_input_tokens":2000,"output_tokens":500}}`
+
+	usage, ok := ParseUsage(raw)
+	if !ok {
+		t.Fatal("expected usage from a cache-heavy result event")
+	}
+	if usage.CacheCreationTokens != 2000 {
+		t.Errorf("cache_creation = %d, want 2000 — the field was not parsed at all", usage.CacheCreationTokens)
+	}
+	const want = 50 + 100000 + 2000 + 500
+	if usage.TotalTokens != want {
+		t.Errorf("total = %d, want %d; Anthropic's input/cache_read/cache_creation counts are disjoint",
+			usage.TotalTokens, want)
+	}
+}
+
+// TestReportedTotalIsNotOverwritten keeps the derivation from second-guessing a
+// provider that states its own total.
+func TestReportedTotalIsNotOverwritten(t *testing.T) {
+	raw := `{"type":"token_count","total_token_usage":{"input_tokens":10,"output_tokens":5,"total_tokens":999}}`
+	usage, ok := ParseUsage(raw)
+	if !ok {
+		t.Fatal("expected usage")
+	}
+	if usage.TotalTokens != 999 {
+		t.Errorf("total = %d, want the provider-reported 999", usage.TotalTokens)
 	}
 }
 
