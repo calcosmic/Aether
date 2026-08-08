@@ -292,15 +292,36 @@ whitespace-delimited token.
 
 ### Pattern 2: Extending the cobra-native flag/call audit (WIRE-03)
 
+> **⚠ CORRECTION (added during plan revision — this section's central claim was wrong).**
+> This section concludes that adding `.aether/workers.md` to the corpus is sufficient with
+> **"zero other code changes"**. That conclusion is **disproven**. It rests on a manual trace
+> that started at `validateCallAgainstCobra` and never checked whether the call reaches it.
+> It does not: `workers.md:292` reads `result=$(aether spawn-can-spawn {your_depth} --enforce)`,
+> and `tokenizeShellLike` collapses `result=$(aether` into a single token matching neither
+> `aether` nor `*/aether`, so the binary-detection test never fires and the line is skipped
+> before any validation happens. Adding the corpus alone would ship a test that passes while
+> the bug it exists to catch sits inside its declared scope.
+>
+> **Authoritative source: `172-00-PLAN.md`**, which fixes the tokenizer in wave 1 as a
+> blocking prerequisite. Read the paragraphs below as a record of what was believed at
+> research time, not as instructions. Everything else in this section — the corpus list,
+> the non-recursive-glob requirement, the failure-message shape — remains accurate.
+>
+> *Kept rather than deleted deliberately: this phase exists to catch claims that drift from
+> reality, so its own research doc records the correction instead of quietly erasing it.*
+
 **What:** `cmd/command_call_audit_test.go`'s `auditedCorpora` (lines 40-46) currently lists
 five directory trees. It does not include `.aether/workers.md` or any other top-level
 `.aether/*.md` file — confirmed by direct inspection: `.aether/workers.md`,
 `.aether/QUEEN.md`, `.aether/CONTEXT.md`, `.aether/CROWNED-ANTHILL.md` are git-tracked
 (`git ls-files .aether/*.md`) but none of their parent directory is in `auditedCorpora`.
-`workers.md:292` (`aether spawn-can-spawn {your_depth} --enforce`) sits inside a fenced
-` ```bash ` block, so `extractDocumentedCalls` would parse it correctly as a fenced
+`workers.md:292` (`result=$(aether spawn-can-spawn {your_depth} --enforce)`) sits inside a
+fenced ` ```bash ` block. ~~so `extractDocumentedCalls` would parse it correctly as a fenced
 invocation the moment the file is in scope — no extractor change needed, only a corpus
-addition.
+addition.~~ **Corrected:** the fence handling is fine, but the *tokenizer* is not — the
+`result=$(` prefix makes the first token `result=$(aether`, which fails binary detection, so
+the line is discarded before parsing. A corpus addition alone is **not** sufficient; the
+tokenizer fix in `172-00-PLAN.md` must land first.
 
 **When to use:** Add exactly one new corpus entry. Because `auditedCorpora` is walked with
 `filepath.Walk` over a directory (`cmd/command_call_audit_test.go:184-196`), and
@@ -320,11 +341,19 @@ the live `rootCmd`): `rootCmd.Find(["spawn-can-spawn", "{your_depth}", "--enforc
 `spawnCanSpawnCmd`; the loop hits `{your_depth}` first (accepted as a positional/placeholder
 token), then `--enforce`, which is not in `target.Flags()`, `target.InheritedFlags()`, or
 `rootCmd.PersistentFlags()` — the function returns `"unknown flag --enforce"` **before ever
-reaching the positional-arity check**. This means: once `.aether/workers.md` is in scope,
+reaching the positional-arity check**. ~~This means: once `.aether/workers.md` is in scope,
 the test fails today with exactly the message the roadmap wants ("naming the file, the
 line, and the offending flag") with **zero other code changes** — the existing extractor and
 validator are sufficient. This is strong evidence WIRE-03 is a one-line-corpus extension,
-not a new parser.
+not a new parser.~~
+
+**↑ STRUCK — the trace above is correct but starts one step too late.** It assumes the call
+reaches `validateCallAgainstCobra`. It never does: `tokenizeShellLike` yields
+`result=$(aether` as one token, which fails the binary-detection test, so
+`extractDocumentedCalls` discards the line before validation. The validator behaviour
+described above is real and will produce exactly that message — but only after
+`172-00-PLAN.md` repairs tokenization. WIRE-03 is a parser fix **plus** a corpus extension,
+which is why 172-00 blocks 172-02 and 172-03.
 
 **Example — the corpus list to extend:**
 ```go
