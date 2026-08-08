@@ -1,7 +1,7 @@
 ---
 phase: 172
 slug: wiring-proof
-status: draft
+status: planned
 nyquist_compliant: false
 wave_0_complete: false
 created: 2026-08-08
@@ -39,20 +39,20 @@ created: 2026-08-08
 
 ## Per-Task Verification Map
 
-Task IDs are assigned by the planner; this map is keyed by requirement until plans exist.
-The planner MUST extend this table with concrete task IDs.
+Task IDs are `{plan}.{task}` — e.g. `01.2` is plan `172-01-PLAN.md`, task 2.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | 1 | WIRE-01 | — | A registered subcommand with no caller outside its own definition file fails the ratchet, naming the command | unit (AST static analysis + fixture) | `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced -v` | ❌ W0 — new `cmd/subcommand_reachability_ratchet_test.go` | ⬜ pending |
-| TBD | TBD | 1 | WIRE-01 | — | The orphan allowlist may only shrink against the committed baseline; any addition hard-fails (D-10, D-11) | unit (baseline diff) | `go test ./cmd -run TestOrphanAllowlistOnlyShrinks -v` | ❌ W0 — same new file | ⬜ pending |
-| TBD | TBD | 1 | WIRE-01 | — | Fixture proof: a synthetic orphan command registered in-test makes the ratchet fail, naming it | unit (fixture self-test) | `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced -v` | ❌ W0 — same new file | ⬜ pending |
-| TBD | TBD | 1 | WIRE-01 (D-12) | — | The flag audit's `skipSubcommands` map gets the same shrink-only treatment, so exemption pressure cannot relocate to an unguarded list | unit | `go test ./cmd -run TestFlagAuditSkipListOnlyShrinks -v` *(name at planner discretion)* | ❌ W0 — extends `cmd/cli_flag_audit_test.go` | ⬜ pending |
-| TBD | TBD | 1 | WIRE-02 | — | `aether spawn-can-spawn 5 --enforce` exits 0 — the exact string `.aether/workers.md:292` instructs | integration (subprocess or in-package `RunE`) | `go test ./cmd -run TestSpawnCanSpawnAcceptsDocumentedInvocation -v` *(name at planner discretion)* | ❌ W0 — `cmd/spawn_test.go` or new file | ⬜ pending |
-| TBD | TBD | 1 | WIRE-02 (D-13) | — | `--enforce` carries real semantics: a deny answer produces a non-zero exit. Unreachable today (`can_spawn` hardcoded true) but the wiring must exist and be asserted | unit | test drives the deny path directly / asserts the error-exit wiring | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | WIRE-03 | — | `.aether/workers.md:292`'s `--enforce` is caught as unregistered before the WIRE-02 fix, and passes after | unit (corpus extension of an existing test) | `go test ./cmd -run TestCommandCallsMatchCobraContracts -v` | ✅ exists — `cmd/command_call_audit_test.go` | ⬜ pending |
-| TBD | TBD | 2 | WIRE-03 | — | A `.aether` markdown flag violation names **file, line, and flag** | unit | same command as above | ✅ exists — `validateCallAgainstCobra` already emits `unknown flag --%s` with file:line | ⬜ pending |
-| TBD | TBD | 3 | WIRE-01, WIRE-03 (D-15) | — | Both checks run inside the CI command the release gate already runs, under their own named step, so a failure reads as a wiring problem | CI behavioural proof | delete a caller → observe the gate go red (NOT by reading the workflow file) | ❌ W0 — `.github/workflows/ci.yml` | ⬜ pending |
+| 01.1 | 172-01 | 1 | WIRE-02 (D-13, D-14) | T-172-01, T-172-02, T-172-03 | `aether spawn-can-spawn 5 --enforce` executes; an unparseable positional depth fails loudly instead of defaulting to 0; the deny path exits non-zero via `outputError`, never `os.Exit` | integration (CLI) | `go build ./cmd/aether && go run ./cmd/aether spawn-can-spawn 5 --enforce` | ❌ W0 — `cmd/spawn.go` | ⬜ pending |
+| 01.2 | 172-01 | 1 | WIRE-02 (D-13) | T-172-01, T-172-03 | The documented invocation is read from `.aether/workers.md` at test time, not copied; `--enforce` deny exits non-zero and its absence does not gate | unit + integration | `go test ./cmd -run TestSpawnCanSpawn -count=1 -v` | ❌ W0 — `cmd/spawn_enforce_test.go` | ⬜ pending |
+| 02.1 | 172-02 | 1 | WIRE-01 (D-01..D-05, D-07, D-08, D-09) | T-172-07, T-172-08, T-172-09 | Only the three permitted caller kinds count; token-boundary matching so `skill-list-lifecycle` cannot clear `skill-list`; the allowlist is seeded from real scanner output with queryable reason tags; the ratchet never reads the regenerated catalog | unit (AST + corpus static analysis) | `go test ./cmd -run 'TestNoRegisteredSubcommandIsUnreferenced\|TestRatchetDoesNotConsultTheRegeneratedCatalog' -count=1 -v` | ❌ W0 — `cmd/subcommand_reachability_ratchet_test.go`, `cmd/testdata/orphan_allowlist{,_baseline}.json` | ⬜ pending |
+| 02.2 | 172-02 | 1 | WIRE-01 (D-10, D-11) | T-172-05, T-172-06, T-172-08 | The allowlist may only shrink by set membership (a one-out-one-in swap fails); a synthetic orphan is detected and named; suppressing a command's only caller makes the ratchet name it; no guard can be switched off at runtime | unit (baseline diff + fixture + suppression) | `go test ./cmd -run 'TestOrphanAllowlistOnlyShrinks\|TestRatchetDetectsASyntheticOrphan\|TestDeletingACallerMakesTheRatchetNameIt\|TestWiringGuardsHaveNoRuntimeEscapeHatch' -count=1 -v` | ❌ W0 — same new file | ⬜ pending |
+| 03.1 | 172-03 | 2 | WIRE-03 | T-172-11 | Command-substitution invocations (`x=$(aether …)`) are audited; shell redirections terminate an invocation instead of posing as positional arguments | unit (extractor) | `go test ./cmd -run 'TestCommandCallExtractorSeesRealInvocationsAndSkipsProse\|TestAuditDetectsPositionalDrift' -count=1 -v` | ✅ extends `cmd/command_call_audit_test.go` | ⬜ pending |
+| 03.2 | 172-03 | 2 | WIRE-03 (D-06, D-14) | T-172-10, T-172-12 | `.aether/workers.md` is proven to be read, not merely listed; every invocation in it matches the binary's real contract; line 292 is untouched; a fixture proves the corpus catches an unregistered flag forever | unit (corpus + fixture) | `go test ./cmd -run 'TestCommandCallsMatchCobraContracts\|TestAetherCorpusCatchesAnUnregisteredFlag' -count=1 -v` | ✅ extends `cmd/command_call_audit_test.go`; ❌ W0 — `.aether/workers.md` drift fixes | ⬜ pending |
+| 04.1 | 172-04 | 2 | WIRE-01 (D-12), WIRE-03 | T-172-14 | The flag audit's `skipSubcommands` map is shrink-only against a committed baseline, so exemption pressure cannot relocate to an unguarded list | unit (baseline diff) | `go test ./cmd -run 'TestCLIFlagAudit\|TestFlagAuditSkipListOnlyShrinks' -count=1 -v` | ❌ W0 — `cmd/testdata/flag_audit_skiplist_baseline.json` | ⬜ pending |
+| 04.2 | 172-04 | 2 | WIRE-01 | T-172-15 | The written policy names every guarded file, derived from the Go constants rather than from prose, and states the real seeded counts | unit (doc/code invariant) | `go test ./cmd -run TestAllowlistPolicyNamesEveryGuardedFile -count=1 -v` | ❌ W0 — `.aether/docs/orphan-allowlist-policy.md` | ⬜ pending |
+| 05.1 | 172-05 | 3 | WIRE-01, WIRE-02, WIRE-03 (D-15) | T-172-17, T-172-18 | The named CI step's `-run` filter is asserted to match every guard test that exists, and the blanket `go test ./...` step is still present | unit (workflow/code invariant) | `go test ./cmd -run TestWiringGateStepRunsEveryWiringTest -count=1 -v` | ❌ W0 — `.github/workflows/ci.yml`, `cmd/ci_wiring_gate_test.go` | ⬜ pending |
+| 05.2 | 172-05 | 3 | WIRE-01 (criterion 4) | T-172-19 | Deleting a caller and running the verbatim CI step command turns it red naming the command; the tree is restored; the phase records state the real seeded counts | scripted behavioural proof (transcript) + records check | `go test ./... -count=1 -timeout 900s` plus the ROADMAP/VALIDATION consistency check in `172-05-PLAN.md` task 2 | ❌ W0 — `.planning/ROADMAP.md`, this file | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -82,34 +82,47 @@ The planner MUST extend this table with concrete task IDs.
 
 ---
 
-## Open Scope Call (blocks the WIRE-03 corpus definition)
+## Resolved Scope Call
 
-Success criterion 3 says `.aether/*.md`. D-06 additionally locks
-`.aether/docs/command-playbooks/*.md` **into** flag-audit scope. So the corpus is at minimum
-top-level `.aether/*.md` **plus** the playbooks directory. Whether it extends to all of
-`.aether/**/*.md` (~250 tracked files) is the open call recorded in `172-RESEARCH.md`
-Open Question 1 and resolved before planning.
+Resolved by the user before planning. The flag audit's `.aether` markdown corpus is:
+the four git-tracked **top-level** `.aether/*.md` files (`CONTEXT.md`, `CROWNED-ANTHILL.md`,
+`QUEEN.md`, `workers.md` — `HANDOFF.md` is gitignored and excluded), **plus**
+`.aether/docs/command-playbooks/*.md`, which D-06 locks into scope and which
+`auditedCorpora` already covers. It is **not** recursive over `.aether/**/*.md` (~250 files);
+the recursive scope and the staged-allowlist variant were both explicitly rejected. No
+exceptions list is added for this corpus — the chosen scope is expected to be clean once
+WIRE-02 lands.
+
+Planning also found a second blocker the research did not: the extractor cannot see
+command-substitution invocations at all, so `result=$(aether spawn-can-spawn {your_depth}
+--enforce)` is skipped even with the corpus in scope. Plan `172-03` fixes that first; without
+it, extending the corpus produces a test that passes while the bug sits inside its scope.
 
 ---
 
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| The release gate actually goes red when a caller disappears | WIRE-01, criterion 4 | Criterion 4 explicitly forbids proving this by reading the workflow file. It is a claim about CI's live behaviour, which no in-repo Go test can assert about itself. | On a scratch branch: delete a caller of a currently-called command (e.g. remove the wrapper that names it), push, observe the named CI step fail and name the command. Revert. |
+**None.** The one entry previously listed here — "the release gate actually goes red when a
+caller disappears" — has been split into two automated pieces:
 
-*Everything else in this phase has automated verification — which is the point of the phase.*
+| Half of criterion 4 | How it is now covered | Where |
+|---------------------|------------------------|-------|
+| The ratchet detects a vanished caller and names the command | `TestDeletingACallerMakesTheRatchetNameIt` recomputes caller evidence with one corpus file suppressed and asserts the command flips to orphan. Runs on every CI run, hermetically, and never leaves the branch red. | task 02.2 |
+| The gate that runs in CI actually goes red | Task 05.2 deletes a real caller, runs the named CI step's command **verbatim**, records the red output naming the command, restores, and records the green run. The transcript is the evidence; `git status --porcelain` proves the tree was restored. | task 05.2 |
+
+The plan for 05.2 is a scripted verification an executor performs and reverts, not a
+checkpoint requiring the operator. Nothing in this phase asks the user to run a command.
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s for the quick command
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s for the quick command
 - [ ] The allowlist baseline was seeded from real scanner output, not the assumed count
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved by planner 2026-08-08 — every task carries an `<automated>` verify; no three consecutive tasks lack one; Wave 0 gaps are each owned by a named task.
