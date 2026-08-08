@@ -1,402 +1,630 @@
-# Architecture Research: Queen Execution Policy and Worker Spawning
+# Architecture Research — v1.26 Intelligent Orchestration
 
-**Project:** Aether v1.23 Daily Driver Reliability
-**Domain:** CLI colony framework -- Queen orchestration, execution policy, and worker spawning patterns
-**Researched:** 2026-05-20
-**Confidence:** HIGH (primary source: Go source code, command YAML specs, CLAUDE.md, and playbook files)
+**Domain:** Multi-agent orchestration runtime (Go kernel + platform wrapper control plane)
+**Researched:** 2026-08-08
+**Confidence:** HIGH for internal integration points (read from source), MEDIUM for platform nested-spawn behaviour (verified against vendor docs + open issues, changes fast)
+
+**Scope:** How four new capabilities integrate with the existing architecture. Existing structure is treated as settled and is not redesigned.
 
 ---
 
 ## Executive Summary
 
-The Queen orchestration system has **two distinct execution policy layers** that have become partially decoupled:
+All four capabilities have a **pre-existing seam** in the codebase. None require a new architectural layer. Three of the four have partial machinery already committed that has never been switched on — the same pattern the project's own Definition of Done was written against.
 
-1. **The CLAUDE.md policy** (fast / standard / final-review) -- a high-level description of how the Queen should autonomously choose execution depth. This is the design intent documented in CLAUDE.md under "Queen-Owned Orchestration."
+| Capability | Pre-existing seam | Status of that seam |
+|------------|-------------------|---------------------|
+| Recursive delegation | `cmd/spawn.go:169` `spawn-can-spawn`, `pkg/agent/spawn_tree.go` (parent+depth already modelled), `.aether/ts-host/src/spawn-orchestrator.ts` (full policy engine, depth 2, budget) | `spawn-can-spawn` is a **stub that always returns `can_spawn: true`**. The TS orchestrator is on a path the build wrapper is explicitly forbidden to use. |
+| Data-driven roster | `cmd/policy_loader.go`, `cmd/visuals_config.go`, `cmd/prompt_template_loader.go` — three working "YAML file overlays hardcoded default" loaders | Pattern proven. `colony/agents/*.yaml` and `colony/policies/model-routing.yaml` have **zero Go readers**. |
+| Survey digest | `cmd/codegraph_context.go` — task-relevant slice of a large artifact, own char budget, injected into the brief | Pattern proven and live. Survey uses `resolveSurveySection()` (`cmd/helpers.go:225`) which emits **filenames only**. |
+| Spend accounting | `pkg/codex/usage.go` `ParseUsage`, `pkg/codex/platform_dispatch.go:211` `AttachWorkerUsage`, `pkg/trace` `LogTokenUsage`, `trace-summary` | Usage is parsed, attached to `WorkerResult.Usage` — and **read by nothing**. `LogTokenUsage` has one caller, `pkg/agent/pool.go:193`, which is a different execution path. |
 
-2. **The Go runtime implementation** (`cmd/caste_relevance.go`, `cmd/codex_continue.go`) -- uses a **relevance-score + threshold + flow-type** system driven by `VerificationDepth` (light / standard / heavy). This is what actually runs.
+**The single hardest constraint** is not any of the four features. It is that the plan-only manifest is cryptographically bound to its build attempt (`cmd/build_attempt.go:193` `prepareBuildAttemptManifestBinding` → `codex.ExecutionBinding.ManifestSHA256`). Recursive delegation adds work *after* that hash is computed. That collision must be designed for explicitly, not discovered during implementation.
 
-The CLAUDE.md "fast / standard / final-review" naming does **not** map 1:1 to any Go code. The Go runtime uses `VerificationDepth` (light / standard / heavy). The CLAUDE.md description is aspirational guidance for wrapper behavior, not an implemented execution mode system. This gap is a core reliability issue: the documented policy and the runtime policy disagree on terminology, scope, and what triggers each mode.
-
-Worker spawning falls into two categories with different waste profiles:
-
-- **Deterministic commands** (status, phase, history, focus, redirect, feedback, pheromones, resume, watch) -- these are Go runtime passthroughs that never spawn agents. Zero waste here.
-- **Lifecycle commands** (build, continue, seal, plan, colonize, oracle, swarm) -- these use the caste relevance scoring system. Waste occurs when the scoring system spawns agents for phases that don't need them.
-
----
-
-## The 4 Execution Modes (CLAUDE.md Design Intent)
-
-From CLAUDE.md "Queen-Owned Orchestration" section:
-
-| Mode | When Used | Verification | Watcher | Specialist Review |
-|------|-----------|-------------|---------|-------------------|
-| **fast** | Low-risk work | Light | Skipped | None |
-| **standard** | Moderate-risk / refactor | Standard | Skipped | Focused Probe only |
-| **final-review** | Final, release, security, core runtime | Heavy | Enabled | Watcher + specialist review |
-
-**Key principle:** "The Queen chooses execution and review depth autonomously by default. Users should not need to remember `--skip-watchers`, `--verification-depth`, or timeout flag combinations."
-
-**Status:** This is **design intent only**. The Go runtime does not implement a `fast` / `standard` / `final-review` enum. The wrapper is supposed to translate between these concepts and the Go runtime's `VerificationDepth`, but the mapping is implicit and inconsistent.
+**The second hardest constraint** is the prompt budget arithmetic. The per-section budgets already sum to ~17,700 chars before the task brief, against a 24,000 global cap (`pkg/codex/prompt.go:13`). A survey digest is additive scaffolding, and `TestBuildWorkerBriefIsMostlyTask` names survey pointers explicitly as scaffolding. Adding a digest without displacing something else will fail that test — by design.
 
 ---
 
-## The Go Runtime Implementation (What Actually Runs)
+## Standard Architecture (current, as read from source)
 
-### VerificationDepth (the real control knob)
-
-Defined in `pkg/colony/colony.go`:
-
-| Value | Aliases | Effect |
-|-------|---------|--------|
-| `light` | minimal, coarse | Minimal review; watcher always required but no specialists |
-| `standard` | (default) | Standard review; watcher + probe always required |
-| `heavy` | full, thorough | Full gauntlet; watcher + gatekeeper + auditor + probe always required |
-
-Normalization function (`NormalizeVerificationDepth`): maps user input and aliases to canonical values. Empty/unknown input defaults to `standard`.
-
-### The Caste Relevance Scoring System
-
-The actual spawning decision lives in `cmd/caste_relevance.go`. It works as follows:
+### System Overview
 
 ```
-queenOrchestrate(phase, flowType, state)
-  -> applyQueenSpawnBudget(
-       queenCandidateDispatches(phase, flowType, state),
-       phase, flowType, state
-     )
+┌──────────────────────────────────────────────────────────────────────┐
+│  PLATFORM WRAPPER  (.claude/commands/ant/build.md, .opencode/…)      │
+│  Owns: spawning, narration, pacing.  Mutates: nothing.               │
+│  ┌────────────┐   ┌───────────┐   ┌────────────┐   ┌──────────────┐ │
+│  │ fetch      │→  │ Queen     │→  │ spawn per  │→  │ collect      │ │
+│  │ manifest   │   │ --castes  │   │ wave       │   │ completion   │ │
+│  └────────────┘   └───────────┘   └────────────┘   └──────────────┘ │
+├──────────────────────────────────────────────────────────────────────┤
+│  GO RUNTIME  (cmd/, pkg/)  — sole authority for state               │
+│                                                                      │
+│  aether build N --plan-only                                          │
+│   ├─ queenOrchestrate ────────── cmd/caste_relevance.go:146          │
+│   ├─ queenApplyJudgement ─────── cmd/queen_judgement.go:83           │
+│   ├─ queenSpawnBudgetForPhase ── cmd/queen_spawn_budget.go:27        │
+│   ├─ renderCodexBuildWorkerBrief cmd/codex_build.go:2487             │
+│   │    ├─ resolveSurveySection    cmd/helpers.go:225   (filenames)   │
+│   │    ├─ renderCodegraphContext  cmd/codegraph_context.go  (2200)   │
+│   │    ├─ resolvePheromoneSection cmd/codex_build.go:2963            │
+│   │    └─ renderWorkerHandoffSection cmd/codex_dispatch_contract.go  │
+│   ├─ writeCodexBuildArtifacts ── cmd/codex_build.go:1896             │
+│   │    └─ writes .aether/data/build/phase-N/worker-briefs/*.md       │
+│   └─ prepareBuildAttemptManifestBinding cmd/build_attempt.go:193     │
+│        └─ SHA-256 over the whole manifest → ExecutionBinding         │
+│                                                                      │
+│  aether build-completion-stage N   cmd/codex_build_finalize.go:158   │
+│   └─ validateCompletionPacketStructure  cmd/contract_schema.go:127   │
+│        (schema REFLECTED from Go structs, byte-compared to           │
+│         .aether/schemas/completion-packet.schema.json)               │
+│                                                                      │
+│  aether build-finalize N          cmd/codex_build_finalize.go:122    │
+│   ├─ validateCompletionPacketSemantics  :918                         │
+│   └─ persistExternalBuildHandoffs       :1122                        │
+├──────────────────────────────────────────────────────────────────────┤
+│  STORES (.aether/data/, gitignored)                                  │
+│  COLONY_STATE.json │ build/phase-N/{manifest,attempt,briefs}         │
+│  handoffs/worker-handoffs.json │ spawn-tree.txt │ trace.jsonl        │
+│  survey/*.md (~123KB, never read by a worker)                        │
+├──────────────────────────────────────────────────────────────────────┤
+│  COLONY ASSETS (colony/, distributed)                                │
+│  agents/*.yaml (27) ── NO READER   │ policies/*.yaml (10, 4 read)    │
+│  prompts/*.md (read) │ ceremony/visuals.md (read)                    │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Step 1: Score each caste** (`casteRelevanceScore`):
-- Each caste has a `BaseScore` (15-20) and `Keywords`
-- Phase name and task descriptions are matched against keywords
-- Matched keywords add to the base score
-- Phase mode conditions (e.g., `mode==discovery`, `mode==production`) add +20
+### Component Responsibilities (unchanged by this milestone)
 
-**Step 2: Always-required check** (`isAlwaysRequired`):
-Certain castes bypass the scoring threshold for certain flow types:
-
-| Flow | Always-Required Castes |
-|------|----------------------|
-| build | Determined by `queenBuildSafetyRequiredCaste` (builder always for non-discovery) |
-| continue (light) | watcher only |
-| continue (standard) | watcher + probe |
-| continue (heavy) | watcher + gatekeeper + auditor + probe |
-| plan | scout + route_setter |
-| colonize | surveyor-provisions, surveyor-nest, surveyor-disciplines, surveyor-pathogens |
-| swarm | tracker, scout, archaeologist, builder, watcher (+ gatekeeper for high-risk) |
-| seal (light) | none |
-| seal (standard) | auditor + probe |
-| seal (heavy) | gatekeeper + auditor + probe |
-
-**Step 3: Flow threshold check** (`spawnThreshold`):
-
-| Flow | Threshold (light/standard) | Threshold (heavy) |
-|------|---------------------------|-------------------|
-| build | 30 | 30 |
-| continue | 30 | 25 |
-| plan | 40 | 40 |
-| colonize | 35 | 35 |
-| swarm | 35 | 35 |
-| seal | 50 | 50 |
-
-A caste with score >= threshold gets dispatched (unless suppressed).
-
-**Step 4: Suppression** (`isCasteSuppressed`):
-- Discovery-phase builds suppress: builder, weaver, fixer, porter
-- Seal with light depth suppresses: gatekeeper, auditor, probe
-- Continue and seal suppress: builder, weaver, tracker, archaeologist, ambassador
-
-**Step 5: Flow allowlist** (`casteAllowedForFlow`):
-Each flow type has a hardcoded allowlist of castes that can participate. Castes not on the list are never dispatched regardless of score.
-
-### The Registry
-
-All 16 castes in the registry with their keywords and base scores:
-
-| Caste | Keywords | Base Score | Build | Continue | Plan | Seal |
-|-------|----------|-----------|-------|----------|------|------|
-| builder | implement, build, create, add, write, fix, code, deploy | 20 | yes | no | no | no |
-| watcher | verify, test, validate, check, review, quality | 20 | yes | always | no | no |
-| scout | research, investigate, survey, analyze, document, readme, spec, explore | 20 | yes | no | always | no |
-| route_setter | plan, route, decompose, structure, organize | 15 | yes | no | always | no |
-| architect | design, schema, architecture, interface, boundary, structure, evaluate | 20 | yes | no | yes | no |
-| oracle | research, spike, investigate, evaluate, unknown, deep dive, survey (+ discovery mode) | 20 | yes | no | yes | no |
-| chaos | resilience, failure, robustness, crash, error handling, stress test | 15 | yes | yes | no | no |
-| archaeologist | legacy, migration, modernize, rewrite, history, refactor old | 20 | yes | no | no | no |
-| gatekeeper | auth, crypto, security, token, secrets, permissions, compliance, audit | 20 | yes | yes | yes | yes |
-| auditor | compliance, audit, production, quality gate, standards (+ production mode) | 20 | yes | yes | no | yes |
-| probe | test coverage, edge case, validation, verify, missing tests, coverage gap | 15 | yes | yes | no | yes |
-| measurer | performance, optimize, latency, scale, benchmark, memory, cpu | 20 | yes | yes | no | yes |
-| ambassador | api, sdk, oauth, external service, integration, webhook, third-party, stripe, etc. | 20 | yes | no | no | no |
-| tracker | bug, fix, regression, investigate failure, root cause, issue | 20 | yes | no | no | no |
-| weaver | refactor, cleanup, modernize, extract, simplify, restructure | 20 | yes | no | no | no |
+| Component | Responsibility | Where |
+|-----------|----------------|-------|
+| Manifest generator | Decides the team, composes every brief, binds the attempt | `cmd/codex_build.go` |
+| Judgement layer | Reconciles a model-proposed team with floors and ceiling | `cmd/queen_judgement.go` |
+| Wrapper | Spawns exactly what the manifest names; never invents | `.claude/commands/ant/build.md` |
+| Dispatch executor | Runs waves for the *hosted* (non-wrapper) path only | `pkg/codex/dispatch.go` |
+| Finalizer | Validates, persists, advances | `cmd/codex_build_finalize.go` |
+| Schema | Reflected from structs, guards the wrapper→runtime boundary | `cmd/contract_schema.go` |
 
 ---
 
-## The CLAUDE.md-to-Runtime Mapping Gap
+## Capability 1: Recursive Delegation
 
-The CLAUDE.md describes three execution modes (fast, standard, final-review). The Go runtime uses `VerificationDepth` (light, standard, heavy). The mapping is:
+### The collision, stated precisely
 
-| CLAUDE.md Mode | Likely Go Equivalent | Gap |
-|---------------|---------------------|-----|
-| fast | `VerificationDepth=light` | CLAUDE.md says "watcher subprocess skipped" but Go code says watcher is **always required** even at light depth |
-| standard | `VerificationDepth=standard` | CLAUDE.md says "watcher subprocess skipped" but Go code says watcher is **always required** at standard depth too |
-| final-review | `VerificationDepth=heavy` | Closest match. CLAUDE.md says "Watcher and specialist review enabled" -- Go code agrees (watcher + gatekeeper + auditor + probe) |
+The current model is **plan-then-execute with a frozen plan**. Three things freeze at manifest time:
 
-**Critical finding:** The CLAUDE.md description of fast and standard modes as "watcher subprocess skipped" directly contradicts the Go implementation where watcher is always required for continue flow. This means:
+1. `dispatch_manifest.dispatches` — the full worker list
+2. Each `dispatch.brief` / `brief_path` — every prompt, byte-identical on disk and inline (`cmd/codex_build.go:1902-1923`)
+3. `ExecutionBinding.ManifestSHA256` — a SHA-256 over the whole manifest, validated on the way back in (`cmd/build_attempt.go:220` `bindBuildAttemptManifest`, checked at `:280`)
 
-1. The documented intent (skip watcher for fast/standard) was never implemented, OR
-2. The documentation was written aspirationally and the Go code took a different path
+A nested spawn is, definitionally, a worker that was not in the manifest and whose brief did not exist when the hash was taken. Any design that lets a child result reach `build-finalize` must answer the binding question. There are exactly three coherent answers:
 
-Either way, the CLAUDE.md "Queen-Owned Orchestration" section is misleading about what actually happens.
+| Option | Mechanism | Verdict |
+|--------|-----------|---------|
+| **A. Rebind** | Amend the manifest with child dispatches, recompute the digest, rebind the attempt mid-run | **Reject.** The digest exists so a result from a stale checkout or a superseded attempt cannot be accepted. A mutable digest is not a digest. |
+| **B. Child is invisible to the manifest** | Child result is folded into the *parent's* result before submission; the packet still contains exactly the manifest's workers | **Recommended.** The binding never moves. The parent's `handoff` and `child_results` carry the evidence. |
+| **C. Follow-on wave** | Runtime adjudicates a delegation request and emits a *new bound attempt* for a follow-on wave; the wrapper spawns it | **Recommended as the second channel.** Needed when the parent cannot spawn (see platform constraints). |
 
----
+**Recommendation: B as the default, C as the guaranteed fallback.** They share one adjudication point and one storage shape, so this is one feature with two delivery channels, not two features.
 
-## How Spawning Works: Deterministic vs Non-Deterministic Commands
+### Who spawns the child?
 
-### Deterministic Commands (No Agent Spawning)
+**The parent worker spawns it when the platform allows; the top-level wrapper spawns it otherwise. The Go runtime never spawns on the wrapper path.**
 
-These commands are Go runtime passthroughs. They read state, run deterministic logic, and return output. Zero agent spawning waste.
+This preserves the boundary exactly. A parent worker is itself a wrapper-spawned platform agent; when it calls the platform Agent tool it is the *platform* doing the spawning, not the Go runtime. Go's role is unchanged: it adjudicates and it persists.
 
-| Category | Commands | Mechanism |
-|----------|----------|-----------|
-| Display | status, phase, history, pheromones, watch | Direct Go CLI call |
-| Signal | focus, redirect, feedback | Direct Go CLI call (`aether focus`, `aether redirect`, `aether feedback`) |
-| Session | resume, pause-colony, resume-colony | Direct Go CLI call |
-| Lifecycle display | maturity, flags, memory-details | Direct Go CLI call |
-| Admin | update, publish, version, integrity | Direct Go CLI call |
+The reason a second channel is needed is platform reality, not architecture:
 
-All of these use `category: "literal"` in `classic-command-parity.json` meaning "keep as direct runtime passthrough."
+| Platform | Nested spawn support | Confidence | Source |
+|----------|---------------------|------------|--------|
+| Claude Code | Supported. Re-enabled v2.1.219 (2026-07-24), default depth 3, cap 5, `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`. Concurrent cap 20, session cap 200. **But** open bug: Agent/Task tool stripped for some subagent types, making them leaf agents (anthropics/claude-code#80036, #4182). | MEDIUM | vendor docs + open issues |
+| OpenCode | Supported, but blocked by default since v1.18.2 with a depth config. Frontmatter `task:` override has been broken by a permission rework (anomalyco/opencode#8114, #14308). | MEDIUM | open issues |
+| Aether's own agents | 25 of 28 OpenCode agents ship `task: false`; only 2 Claude agents (`aether-queen`, `aether-route-setter`) declare `Task`. `aether-route-setter.md:153` still documents "Claude Code subagents cannot reliably spawn further subagents" — **now stale**. | HIGH | repo |
 
-### Non-Deterministic Commands (Agent Spawning via Caste Relevance)
+So: build the request/grant protocol first, make the follow-on wave the channel that always works, and treat parent-direct spawn as an opportunistic optimization gated on a runtime-detected capability. Do not make the feature's correctness depend on a platform behaviour that two vendors have each broken in the last quarter.
 
-These use the scoring system above. The question is whether the scoring system produces unnecessary spawns.
-
-| Command | Category | Spawning Mechanism | Waste Risk |
-|---------|----------|-------------------|------------|
-| init | full-orchestration | Wrapper-driven, Go creates state | Low (one-time setup) |
-| discuss | semi-intelligent | Go-owned, wrapper presents | Low (interactive Q&A) |
-| colonize | full-orchestration | Manifest-based worker waves | Medium (surveyors always required) |
-| plan | full-orchestration | Manifest-based worker waves | Medium (scout + route_setter always) |
-| build | full-orchestration | Manifest-based worker waves | **HIGH** (see below) |
-| continue | semi-intelligent | Go-owned default; TS-host manifest for heavy | **HIGH** (see below) |
-| seal | semi-intelligent | Manifest-based final-review workers | Medium (depth-gated) |
-| oracle | full-orchestration | RALF loop with iterations | Low (user-initiated deep research) |
-| swarm | full-orchestration | Manifest-based investigation/fix waves | Low (user-initiated bug fix) |
-
----
-
-## Where Unnecessary Spawning Happens
-
-### Build Flow Spawning Waste
-
-**Problem 1: Oracle and Architect always considered for deep/full depth**
-
-In `build-wave.md` (Step 5.0.1 and 5.0.2), Oracle and Architect are spawned at `colony_depth` "deep" or "full". But the Go caste relevance system (`casteAllowedForFlow`) does not even allow Oracle or Architect in the build flow -- they are only allowed in plan flow.
-
-This means the **playbook instructs the wrapper to spawn Oracle and Architect**, but the **Go runtime caste relevance system would not include them**. There is a conflict between the playbook instructions and the Go scoring system.
-
-**Problem 2: Chaos always mentioned in spawn plan**
-
-`build-wave.md` Step 5 says: "Resilience testing -> Chaos (ALWAYS spawn one after Watcher)." But then Step 5.6 says: "DEPTH CHECK: Skip if colony depth is not 'full'." So Chaos is "always" spawned but only at full depth. The spawn plan announcement (Step 5) always lists Chaos in the verification section regardless of depth, which is misleading.
-
-**Problem 3: Builder-Probe Lock spawns Probe for every code_written task**
-
-Step 5.3.5 spawns a separate Probe agent for every builder that returned `status: "code_written"`. If 4 builders return code_written, that is 4 additional Probe spawns. This is the correct behavior for thorough verification, but it can be wasteful for trivial changes (e.g., a documentation phase where all tasks produce code_written status).
-
-**Problem 4: Measurer spawns on keyword match**
-
-The Measurer spawns whenever the phase name contains performance keywords. This is a simple string match that could false-positive on phases like "Refactor for better performance documentation" -- triggering a full measurement agent for a docs-only phase.
-
-**Problem 5: Ambassador spawns on keyword match**
-
-Similar to Measurer, Ambassador spawns when task descriptions contain any of 18 integration-related keywords (API, SDK, OAuth, aws, etc.). A phase titled "Add API documentation" would trigger Ambassador even though no actual integration work is needed.
-
-### Continue Flow Spawning Waste
-
-**Problem 6: Auditor always spawns for standard depth continue**
-
-Per `isAlwaysRequired` in `cmd/caste_relevance.go`, at standard depth the continue flow requires watcher + probe. But the **playbook** (`continue-gates.md` Step 1.9) marks Auditor as "MANDATORY" -- it always spawns regardless of depth. This contradicts the Go code where Auditor is only always-required at heavy depth.
-
-The playbook says: "Code quality audit -- runs on every /ant-continue for consistent coverage."
-
-The Go code says: at standard depth, only watcher + probe are always required. Auditor needs keyword match + score >= 25.
-
-**Problem 7: Gatekeeper spawns for every package.json project**
-
-`continue-gates.md` Step 1.8 spawns Gatekeeper whenever `package.json` exists. This is a file-existence check, not a relevance check. Every Node.js project gets a full supply chain security audit on every `/ant-continue`, regardless of phase content.
-
-**Problem 8: Multiple sequential spawns that could be parallel**
-
-The continue gates run sequentially: spawn gate -> anti-pattern gate -> complexity gate -> gatekeeper -> auditor -> TDD gate -> runtime gate -> flags gate -> watcher veto -> medic. Many of these are independent checks that run as separate agent spawns (gatekeeper, auditor, complexity/weaver, medic). They could run in parallel but don't.
-
-### Seal Flow Spawning Waste
-
-**Problem 9: Seal spawns heavy review workers by default**
-
-The seal manifest fetch (`aether host seal`) produces a full manifest with final-review dispatches. But the YAML spec says `category: "semi-intelligent"` and the Go `sealReviewDepthForColony` function selects depth based on colony size. Small colonies (1-3 phases) get light depth (no review workers), but medium colonies (4-10 phases) get standard (auditor + probe), and large colonies (10+ phases) get heavy (gatekeeper + auditor + probe).
-
-The waste risk is that medium colonies always get auditor + probe even for simple seal operations.
-
----
-
-## Minimal-Path Principle
-
-The minimal execution path for each command should be:
-
-### Build: Minimal Path
+### Data flow (Option B, the default path)
 
 ```
-1. Load state (Go: `aether load-state`)
-2. Validate phase
-3. Update state to EXECUTING (Go: `aether state-mutate`)
-4. Git checkpoint
-5. Analyze tasks -> group into waves
-6. [depth-dependent] Oracle research (deep/full only)
-7. [depth-dependent] Architect design (deep/full only)
-8. Spawn builders (parallel, per wave)
-9. Spawn watcher (always, 1 instance)
-10. [depth-dependent] Chaos (full only)
-11. Builder-Probe Lock (1 probe per code_written task)
-12. Synthesis + finalize
+manifest wave 1
+   └─ wrapper spawns Builder Mason-67 (depth 1)
+        │  worker decides it needs a Scout
+        │
+        ├─ aether spawn-request --parent Mason-67 --depth 1 \
+        │      --caste scout --task "..." --reason "..."      ← NEW command
+        │      ↓ Go adjudicates against depth cap + remaining budget
+        │      ↓ returns {granted, child_name, brief, brief_path, agent_name}
+        │      ↓ writes spawn-tree entry (parent, depth 2)  ← EXISTING store
+        │
+        ├─ parent spawns child via platform Agent tool with the runtime brief
+        │      (verbatim, same rule as the top-level wrapper)
+        │
+        └─ parent returns ONE result containing:
+              handoff:        { …, }                      ← unchanged shape
+              child_results:  [ { name, caste, task, status,
+                                  summary, files_created,
+                                  files_modified, handoff } ]  ← NEW field
+                    ↓
+   build-completion-stage → schema validation (regenerated, see below)
+                    ↓
+   build-finalize
+     ├─ claims: child files_created/modified merged into the PARENT's task claim
+     ├─ handoffs: persistExternalBuildHandoffs also walks child_results
+     └─ spend: child usage rows attributed to the parent's dispatch, own trace row
 ```
 
-**Minimum spawns for a 2-task discovery phase at light depth:** 2 builders + 1 watcher + 1-2 probes = 5-6 agents.
+### What breaks, and where
 
-**Actual spawns for the same phase at standard depth with the current playbook:** 2 builders + 1 watcher + 1 chaos + 2 probes + potentially ambassador/measurer = 7-9 agents.
+**Wave model.** Nothing breaks on Option B — the child is inside the parent's wall-clock, so wave semantics are untouched. The real cost is **latency compounding**: `pkg/codex/dispatch.go:132` `DispatchWaveWithObserver` runs a wave to completion before the next; a parent that blocks on a child stretches its whole wave. The per-worker `Timeout` (`WorkerDispatch.Timeout`) is now a *subtree* timeout, not a worker timeout, and nothing in the current code says so. Decide and document whether the child's time comes out of the parent's budget (recommended) or gets its own.
 
-### Continue: Minimal Path
+On Option C, wave numbering does break: `codexBuildExecutionPlan.ExecutionWave` and `codexWaveExecutionPlan.Wave` (`cmd/codex_build.go:131-143`) are computed once at manifest time. A follow-on wave needs a wave index that provably does not collide — use a separate attempt with its own wave 1 rather than appending to the bound manifest's numbering.
 
-```
-1. Load state
-2. Run verification loop (build, types, lint, tests) -- NO agents
-3. [depth-dependent] Probe coverage agent (production mode only)
-4. Check gate results from verification
-5. [standard/heavy] Spawn specialist reviewers (1-3 agents)
-6. Extract learnings
-7. Advance state
-```
+**Budget model.** This is where the current code is actively wrong for the new feature:
 
-**Minimum spawns for standard continue:** 1 probe (if production mode) + watcher if not skipped = 0-2 agents.
+- `queenSpawnBudget.MaxWorkers` (`cmd/queen_spawn_budget.go:11`) is a **caste-selection ceiling**, not a live worker counter. It is consumed once, at manifest time, by `applyQueenSpawnBudget` and `queenApplyJudgement`. There is no runtime object that knows how many workers have actually run.
+- `spawn-can-spawn` (`cmd/spawn.go:169`) takes `--depth` and unconditionally returns `can_spawn: true`. It does not read the tree, the budget, or anything else. This is the exact "documented but never implemented" shape the project's Definition of Done exists to catch — fixing it is a prerequisite, not a nice-to-have.
+- The TS host already solved this once: `spawn-orchestrator.ts` carries `totalBudget`/`consumedBudget`/`currentDepth` with `MAX_SPAWN_DEPTH = 2` and fail-closed rejection. That policy is correct and should be **ported to Go**, not re-invented, and not called through the TS host (which `build.md` forbids on this path).
+- Required castes must not be spendable. `queenBuildSafetyRequiredCastes` bypasses the budget cap at selection time; delegation must draw from the *optional* remainder only, or a chatty Builder can spend the Watcher's slot.
 
-**Actual spawns with current playbook gates:** auditor + gatekeeper (if package.json) + probe + watcher + potential weaver/medic = 3-6 agents.
+**Handoff relay.** Two concrete breakages:
+
+- `renderWorkerHandoffSection` (`cmd/codex_dispatch_contract.go:704`) takes the top 5 records sorted by freshness, after `pruneWorkerHandoffRecords(…, 100)`. Children are the *most recent* records by construction, so a build with several delegations will flood the relay and evict the parent handoffs the next phase actually needs. Children must either be excluded from the top-level relay or ranked below same-depth peers.
+- `handoffProvenance` already renders caste/wave/age. It does not render **depth or parent**. A reader given a child's handoff with no parent cannot tell whether it describes the phase or a sub-task of one dispatch. Add depth/parent to `workerHandoffRecord` and render it.
+- `IsEmptyWorkerHandoff` (`pkg/codex/handoff.go:26`) rejects content-free handoffs, and `build.md` states the finalizer rejects empty handoffs. A trivially-scoped child ("read this one file") will legitimately produce a near-empty handoff. Either exempt children from the emptiness rule or require the parent to absorb the child's findings into its own handoff. **Recommend the latter** — it keeps one rule and forces the parent to actually read what it delegated.
+
+**Schema.** `cmd/contract_schema.go:61` reflects the schema from `codexExternalBuildCompletion` and byte-compares to `.aether/schemas/completion-packet.schema.json`. Adding `ChildResults` to `codexExternalBuildWorkerResult` (`cmd/codex_build_finalize.go:62-81`) regenerates the schema automatically and *will* fail `cmd/contract_schema_test.go` until the committed file is refreshed. This is the system working. Budget one plan step for it.
+
+**Recursion self-reference.** `codexExternalBuildWorkerResult` containing `[]codexExternalBuildWorkerResult` is a recursive Go type. `invopop/jsonschema` handles this with `$ref`/`$defs`, but the byte-determinism requirement in `generateCompletionPacketSchemaBytes` makes this worth proving on a spike before committing to the shape. **Recommendation: define a distinct, flatter `codexChildWorkerResult` struct** with only the fields a child can meaningfully return. It avoids the recursion, and it makes "a child cannot itself declare children in the packet" a type-level fact rather than a validation rule.
+
+### Depth policy
+
+Adopt the TS host's `MAX_SPAWN_DEPTH = 2` (manifest worker = depth 1, child = depth 2, no grandchildren). Reasons: it matches `spawn-tree.txt`'s existing depth field and `spawn-log --depth`; it is below both platforms' current caps so it never depends on vendor defaults; and unbounded recursion is a live, filed defect on one of the two platforms (anomalyco/opencode#18100). Make the cap a named constant with a test, not an env var.
 
 ---
 
-## Command Classification for Spawning
+## Capability 2: Data-Driven Agent Roster
 
-| Command | Should Spawn Agents? | Current Behavior | Verdict |
-|---------|---------------------|-----------------|---------|
-| init | No (wrapper-driven) | Correct | OK |
-| discuss | No (Go-owned Q&A) | Correct | OK |
-| focus/redirect/feedback | No (Go CLI passthrough) | Correct | OK |
-| pheromones | No (Go CLI passthrough) | Correct | OK |
-| status/phase/history | No (Go CLI passthrough) | Correct | OK |
-| resume | No (Go CLI passthrough) | Correct | OK |
-| watch | No (Go CLI passthrough) | Correct | OK |
-| maturity/flags/memory-details | No (Go CLI passthrough) | Correct | OK |
-| version/integrity/update/publish | No (Go CLI passthrough) | Correct | OK |
-| colonize | Yes (surveyors) | Appropriate | OK |
-| plan | Yes (scout + route_setter) | Appropriate | OK |
-| oracle | Yes (RALF loop) | Appropriate | OK |
-| swarm | Yes (investigation waves) | Appropriate | OK |
-| build | Yes, but reduce | Over-spawns at standard depth | **NEEDS FIX** |
-| continue | Yes, but reduce | Over-spawns (playbook vs Go mismatch) | **NEEDS FIX** |
-| seal | Yes, depth-gated | Mostly OK, medium colonies over-reviewed | MINOR |
+### Current fragmentation (measured, not estimated)
+
+| Table | Count | Location | Purpose |
+|-------|-------|----------|---------|
+| `casteRelevanceRegistry` | **26** | `cmd/caste_relevance.go:29` | Keyword scoring, base scores, conditions |
+| `casteCapabilities` | **26** | `cmd/queen_judgement.go:267` | Queen-readable `produces` / `avoid_for` |
+| `casteEmojiMap` / `casteColorMap` / `casteLabelMap` | **35 each** | `cmd/codex_visuals.go:38,81,120` | Visual identity — a *superset* incl. queen, colonizer, guardian, dreamer, 8 curation ants |
+| `colony/agents/*.yaml` | **27** | `colony/agents/` | id, role, prompt_file, allowed_tools, tier, model, color, description — **no Go reader** |
+| Claude agents | 28 files | `.claude/agents/ant/*.md` | Frontmatter tools/model/color + body |
+| OpenCode agents | 28 files | `.opencode/agents/*.md` | Same, different frontmatter dialect |
+| Codex agents | 27 files | `.codex/agents/*.toml` | `developer_instructions` read by `pkg/codex/prompt.go:30` |
+
+Three name collisions already exist and will bite a naive migration:
+
+- `route_setter` (registry) vs `route-setter.yaml` (colony/agents) vs `route_setter` (emoji map). `resolveCasteName` (`cmd/queen_judgement.go:215`) already papers over separator style at the *proposal* boundary — the loader needs the same normalization at the *definition* boundary.
+- `queen` exists in `colony/agents/` and in the visuals maps but is **not** in `casteRelevanceRegistry` (it is not dispatchable). A loader that treats `colony/agents/` as the roster will make the Queen dispatchable.
+- `sage` is in the registry and capabilities but **not** in `casteEmojiMap`; the four `surveyor-*` castes collapse to a single `surveyor` key via `normalizeCasteKey` (`cmd/codex_visuals.go:3794`). The visuals maps are therefore not a caste roster and must not be unified with one.
+
+### Recommended migration path
+
+**Do not replace the Go slice. Overlay it.** This is the pattern the codebase already runs three times:
+
+- `cmd/policy_loader.go:25` `loadYAMLPolicy` — read file, fall back to hardcoded default on any error
+- `cmd/visuals_config.go:35` `loadVisualsConfig` — `colony/ceremony/visuals.md` frontmatter overrides `casteEmojiMap`, absent file is a no-op
+- `cmd/prompt_template_loader.go:66` — `colony/prompts/colony-prime.md` with a compiled-in default
+
+Concretely:
+
+```
+NEW  cmd/agent_roster.go
+       type agentRosterEntry struct {
+           ID, Role, Tier, Model, Color, Description string
+           PromptFile   string
+           AllowedTools []string
+           // scoring fields, additive to the YAML that exists today:
+           Keywords   []string
+           Conditions []string
+           BaseScore  int
+           Produces   string
+           AvoidFor   string
+           Dispatchable bool   // queen.yaml sets false
+       }
+       func loadAgentRoster() map[string]agentRosterEntry   // cached, sync.Once
+       func agentRosterOrDefault(caste string) agentRosterEntry
+```
+
+Resolution order, copying `cmd/oracle_loop.go:1585`'s pattern (which exists precisely because a bare CWD-relative path broke for every repo that was not the Aether checkout):
+
+1. `<cwd>/colony/agents/*.yaml` — source checkout
+2. `<root>/colony/agents/*.yaml` — repo root when cwd differs
+3. `~/.aether/system/colony/agents/*.yaml` — hub (published by `cmd/install_cmd.go:794`'s pattern; **the agents dir is not currently in `installSyncPairs()` and must be added**, or the roster works only in this repo)
+4. Compiled-in `casteRelevanceRegistry` + `casteCapabilities` — always present, always correct
+
+### What the loader must NOT own
+
+| Concern | Stays in Go | Why |
+|---------|-------------|-----|
+| `queenBuildSafetyRequiredCastes` (`cmd/queen_spawn_budget.go:139`) | Yes | A safety floor readable from a user-editable file is not a floor. The judgement layer's whole premise (`cmd/queen_judgement.go:11-27`) is that the model may propose but not lower the floor; a YAML file the model can write is a strictly worse version of the same hole. |
+| `isAlwaysRequired`, `casteAllowedForFlow`, `isCasteSuppressed` (`cmd/caste_relevance.go:308,368,387`) | Yes | Flow policy, not caste identity. |
+| `spawnThreshold` (`cmd/caste_relevance.go:263`) | Yes | Carries 30 lines of load-bearing measurement in its comment explaining why the number must not be retuned. Moving it to YAML deletes that argument. |
+| Visual identity maps | Yes, already overlaid by `visuals.md` | Superset with different semantics; unifying them is a separate, optional job. |
+
+### Validation
+
+**Validation lives in the loader and in a command that fails.** Per the Definition of Done, a roster that silently degrades is worse than one that does not exist.
+
+```
+NEW  aether roster-validate          # exit non-zero on any violation
+       - every dispatchable entry has a capability (produces + avoid_for)
+       - every entry's prompt_file resolves
+       - every entry has a platform agent file on all three surfaces
+       - no name is reachable under two separator spellings
+       - required-caste names referenced by Go all exist in the roster
+```
+
+The existing tests become the regression net rather than an obstacle:
+
+| Test | Effect of migration | Action |
+|------|--------------------|--------|
+| `TestEveryCasteHasACapability` (`cmd/queen_judgement_test.go:190`) | Compares roster length to registry length | Repoint at the loaded roster; it becomes the file-vs-code drift detector |
+| `TestRegressionSnapshot` documented_castes (`cmd/regression_test.go:76`) | Counts `casteEmojiMap` (35), not the registry | **Unaffected** if visuals stay out of scope — and they should |
+| `TestOpenCodeAgentSchema` (28 files), `TestClaudeOpenCodeAgentContentParity` | Pin platform file counts | Unaffected; add roster→platform-file cross-check to `roster-validate` |
+
+**Do not delete `casteRelevanceRegistry` in this milestone.** Ship the loader, prove the file and the slice agree via a test, and only then consider which is authoritative. The project has 18 milestones of evidence that "the old thing was removed and the new thing was never wired" is its dominant failure mode.
 
 ---
 
-## The Queen Decision Layer (Gate Resolution)
+## Capability 3: Survey Digest Reaching Workers
 
-The `queenDecide` function in `cmd/queen_decision.go` handles gate failure resolution during continue. This is separate from spawning -- it decides what to do when a gate fails.
+### Current behaviour
 
-### Gate Classification Tiers
+`resolveSurveySection()` (`cmd/helpers.go:225`) reads `.aether/data/survey/`, lists `.md`/`.json` filenames as repo-relative paths, prepends a staleness notice, and returns. That is the entire mechanism. On this repo it points at ~123KB across BLUEPRINT.md (17K), CHAMBERS.md (20K), DISCIPLINES.md (20K), PATHOGENS.md (25K), SENTINEL-PROTOCOLS.md (19K), TRAILS.md (12K), PROVISIONS.md (9K). A worker must choose to open them, and a cheap model on a narrow task usually will not.
 
-| Tier | Response | Auto-Resolve? |
-|------|----------|---------------|
-| hard_block | Always escalate | Never |
-| soft_block | Auto-resolve if budget > 0 | Yes, with budget |
-| advisory | Log and continue | N/A |
-| unclassified | Treated as advisory | N/A |
+A structured extract already exists — `loadCodexSurveyContext` (`cmd/codex_plan.go:1645`) parses the `*.json` sidecars into `codexSurveyContext` (languages, frameworks, directories, entry points, dependencies, test files, issues, source anchors) — but it is used by **planning**, not by build briefs. `renderPhaseResearchSurveySection` (`cmd/phase_research.go:163`) renders it for research Scouts only.
 
-### Budget and Circuit Breaker
+### Recommended design
 
-- **Budget:** Configurable per-phase auto-resolve attempts. Each soft_block auto-resolve consumes one unit.
-- **Circuit breaker:** If the same worker triggers 2+ soft_blocks, escalation replaces auto-resolve regardless of budget.
-- **State persistence:** Queen decisions stored in `.aether/data/queen-state-{phase}.json`.
+Copy `cmd/codegraph_context.go` exactly. It is the proven pattern for "large artifact → task-relevant slice → own char budget → brief":
 
-### Recommendations
+```
+NEW  cmd/survey_digest.go
+       const surveyDigestBudgetChars = 2500
+       func renderSurveyDigestForText(root string, textParts []string, maxChars int) string
+            // 1. loadCodexSurveyContext(root)          — already exists, reuse
+            // 2. score survey sections against textParts
+            //      (phase name + description + task goal + declared_paths)
+            // 3. render top-N as prose facts, not pointers
+            // 4. truncate to maxChars
+```
 
-| Recommendation | Meaning |
-|---------------|---------|
-| pass | All gates passed or advisory only |
-| auto-resolve | Soft block with budget remaining |
-| dispatch-fixer | Targeted fix possible |
-| escalate | Hard block, budget exhausted, or breaker tripped |
+**Generated where:** inside `renderCodexBuildWorkerBrief` (`cmd/codex_build.go:2487`), at the existing `resolveSurveySection()` call site (`cmd/codex_build.go:2607`). This is per-dispatch by necessity — the digest is task-relevant, so it cannot be hoisted to the manifest-level `ContextCapsule` the way colony-prime was.
 
-This system is sound and well-implemented. The issue is not in the decision logic but in how many gates get created (due to over-spawning agents that each produce gate results).
+**Stored where:** it does not need to be stored. It is a pure function of `survey/*.json` + the task text, and it is already persisted as part of the brief file at `.aether/data/build/phase-N/worker-briefs/<name>.md` (`cmd/codex_build.go:1902`). Adding a cache is premature; `loadCodexSurveyContext` is a handful of small JSON reads plus `surveyWorkspace(root)`.
+
+**On "an inspection command must never mutate state":** this is satisfied by construction, because nothing is written. If a digest cache is later added for performance, the rule bites in one specific place — a `aether survey-digest --task "..."` inspection command must print and exit, and the cache write must happen only on the `build --plan-only` path, which already writes brief artifacts and is not an inspection command. Lock it with a `TestSurveyDigestInspectionDoesNotMutate` in the shape of `TestConsolidationPhaseEndDryRunDoesNotMutate`.
+
+### The budget conflict — this is the real design decision
+
+Current per-section budgets:
+
+| Section | Budget | Constant |
+|---------|--------|----------|
+| Colony-prime capsule (compact) | 4,000 | `cmd/colony_prime_context.go:22` |
+| Skills | 8,000 | (skill injection, independent budget) |
+| Phase research | 3,500 | `cmd/phase_research.go:202` |
+| Codegraph | 2,200 | `cmd/codegraph_context.go:12` |
+| **Subtotal before task brief** | **17,700** | |
+| Global assembled cap | **24,000** | `pkg/codex/prompt.go:13` |
+
+A 2,500-char digest leaves ~3,800 chars for agent instructions plus the entire task brief. Two named tests will catch this, and both should be respected rather than retuned:
+
+- `TestBuildWorkerBriefIsMostlyTask` (`cmd/codex_build_test.go:3629`) — 40% floor, and its comment explicitly classifies **survey pointers as scaffolding**: *"Colony state, skills, pheromones and survey pointers do not meet it and stay on the scaffolding side."* A digest is more scaffolding than a pointer list, not less.
+- `assembledContextTaskShareFloorPercent = 5.0` (`cmd/context_budget_test.go:24`), whose comment says outright: *"If real usage shows this threshold is wrong in either direction, that is a finding to raise, not a number to silently retune."*
+
+**Recommendation: make the digest displace the pointer list, not join it.** Keep the total survey allocation at roughly its current size by replacing "here are 7 filenames" with "here are the 8 facts from those 7 files that concern your task, plus the 2 filenames worth opening." That converts dead pointers into live grounding at near-zero net cost, and it is the only version of this feature that does not require raising a cap that two invariant tests were written to defend.
+
+If measurement later shows the digest earns more room, raise `defaultPromptBudgetChars` deliberately, with the measurement recorded — the same way `spawnThreshold`'s comment records why 30 stayed 30.
 
 ---
 
-## Recommendations for v1.23
+## Capability 4: Spend Accounting
 
-### R1: Align CLAUDE.md with Go Runtime
+### Current state
 
-Either:
-- (A) Update CLAUDE.md to reflect the actual Go behavior (watcher always required at all depths), OR
-- (B) Implement the CLAUDE.md intent in Go code (actually skip watcher at light/standard continue depth)
+```
+provider stdout
+   → ParseUsage                pkg/codex/usage.go:79      (both provider shapes)
+   → AttachWorkerUsage         pkg/codex/platform_dispatch.go:211
+   → WorkerResult.Usage        pkg/codex/worker.go:84
+   → ✗ nothing reads it
+```
 
-Recommendation: (A) is safer for v1.23. The watcher-always-required invariant is well-tested and removing it risks losing independent verification.
+Meanwhile `trace.LogTokenUsage` (`pkg/trace/trace.go:132`) has exactly one caller — `pkg/agent/pool.go:193`, the in-process LLM agent pool, which is not the worker-dispatch path. `trace-summary --run-id` (`cmd/trace_cmds.go:192`) aggregates `trace.jsonl` by `run_id`. So the producer and the consumer both exist and have never been connected.
 
-### R2: Fix Playbook-Go Mismatches
+Worse for the wrapper path: `codexExternalBuildWorkerResult` (`cmd/codex_build_finalize.go:62-81`) has **no usage field at all**. On the interactive build path — the one users actually run — the token counts never leave the platform.
 
-The playbooks (`build-wave.md`, `continue-gates.md`) have instructions that contradict the Go caste relevance system:
-- Playbook says Auditor is mandatory for all continues; Go says only at heavy depth
-- Playbook spawns Oracle/Architect at deep/full depth; Go doesn't allow them in build flow
-- Playbook lists Chaos in spawn plan regardless of depth; Go only dispatches at full depth
+### Recommended design
 
-Fix: Make playbooks match Go behavior, or make Go match playbook intent. Since Go is authoritative, update playbooks.
+**Persist to `trace.jsonl` keyed on the build attempt's `run_id`. Do not invent a new store.**
 
-### R3: Reduce Default Continue Spawning
+The join already exists: `buildAttemptRecord.RunID` (`cmd/build_attempt.go:47`) is produced by `codex.NewExecutionRunID()` and is the same value carried in `ExecutionBinding.RunID`. Every worker on a build already belongs to exactly one run id, and `trace-summary --run-id` already aggregates by it. That makes the whole feature a wiring job plus one struct field.
 
-At standard depth, the continue flow should spawn at most: watcher + probe (2 agents). The current playbook gates spawn auditor + gatekeeper + probe + watcher (4 agents) plus potential weaver and medic.
+```
+MODIFIED cmd/codex_build_finalize.go
+   codexExternalBuildWorkerResult
+     + Usage *codex.WorkerUsage `json:"usage,omitempty"`      ← NEW field
+       (schema regenerates; refresh .aether/schemas/completion-packet.schema.json)
 
-Fix: Gate specialist spawns (auditor, gatekeeper, weaver, medic) behind heavy depth or explicit user request.
+NEW  cmd/build_spend.go
+       func recordBuildSpend(runID string, results []codexExternalBuildWorkerResult) error
+         per worker → tracer.LogTokenUsage(runID, model, in, out, usd, "build-worker")
+         payload MUST additionally carry: caste, worker_name, task_id, depth,
+                                          parent, source ("provider"|"estimate")
 
-### R4: Gate Ambassador and Measurer on Phase Mode
+MODIFIED cmd/codex_build.go:1610 (hosted path)
+       already has result.Usage in hand — log it there too, same function
 
-Ambassador should only spawn for phases with `mode == "production"` (not keyword match on phase name). Measurer should only spawn for phases where the phase mode is production AND the phase name contains performance keywords.
+MODIFIED pkg/trace/trace.go
+       LogTokenUsage signature is fixed at (runID, model, in, out, usd, source).
+       It cannot carry caste/worker/depth. Either widen it or add
+       LogWorkerSpend(runID string, entry WorkerSpendEntry).
+       Recommend the latter — widening breaks pkg/agent/pool.go's only caller.
 
-Fix: Add mode checks to Ambassador and Measurer spawning conditions.
+MODIFIED cmd/trace_cmds.go  summarizeTraceEntries
+       + per-caste and per-worker rollup, + measured-vs-estimated split
+```
 
-### R5: Collapse Sequential Continue Gates
+### Three rules the data model already demands
 
-The continue gates run 8+ sequential gate checks, several of which spawn agents. Gatekeeper, Auditor, and Probe could run in parallel since they are independent checks.
+1. **Never blend measured and estimated.** `WorkerUsage.Source` and `Measured()` (`pkg/codex/usage.go:38`) exist precisely so an estimate cannot be presented as a measurement. `trace-summary` must report the two totals separately, or the first cheap-model efficiency claim made from this data will be unfalsifiable — which is the exact failure `usage.go`'s own header comment was written to end.
+2. **Cost must not be double-computed.** Claude reports `total_cost_usd` directly (`usageFromEvent`, `pkg/codex/usage.go:123`); `trace.CalculateCost` (`pkg/trace/cost.go:29`) computes from a hardcoded rate table that contains **no current model names** — `claude-sonnet-4`, `gpt-4`, and nothing newer, returning 0 for anything unlisted. Prefer the provider's number; fall back to the table; label which was used. Add a test that fails when a model seen in the wild is absent from the table, rather than silently costing it at zero.
+3. **Child spend rolls up to the parent.** With recursive delegation, a child's tokens are part of the parent's task cost. Log the child as its own row with `parent` and `depth` set, and have `trace-summary` present both a flat total and a per-dispatch subtree total.
 
-Fix: Parallelize independent gate spawns where possible (post-verification, pre-advance).
+### Deliberately out of scope
+
+Per-worker budget *enforcement* (halting a run on spend). Measure first. The project has no measured baseline for what a phase costs, and a cap set from a guess will either never fire or fire on correct behaviour. Ship the ledger, run three real phases, then decide.
+
+---
+
+## NEW vs MODIFIED — complete component list
+
+### NEW
+
+| Component | Path | Purpose |
+|-----------|------|---------|
+| Spawn adjudicator | `cmd/spawn_request.go` | `aether spawn-request` — depth + budget + caste validation, returns a runtime-composed child brief or a refusal |
+| Spawn budget ledger | `pkg/codex/spawn_budget.go` | Live worker counter for a run; Go port of `spawn-orchestrator.ts` policy |
+| Child result type | `cmd/codex_build_finalize.go` | `codexChildWorkerResult` — flat, non-recursive |
+| Agent roster loader | `cmd/agent_roster.go` | `colony/agents/*.yaml` reader with 4-step resolution + compiled-in fallback |
+| Roster validator | `cmd/roster_validate.go` | `aether roster-validate`, exits non-zero |
+| Survey digest | `cmd/survey_digest.go` | Task-relevant slice of `codexSurveyContext`, own char budget |
+| Spend recorder | `cmd/build_spend.go` | Worker usage → `trace.jsonl` keyed on attempt run id |
+| Worker spend trace entry | `pkg/trace/spend.go` | `LogWorkerSpend` carrying caste/worker/depth/parent/source |
+
+### MODIFIED
+
+| Component | Path | Change |
+|-----------|------|--------|
+| `spawn-can-spawn` | `cmd/spawn.go:169` | **Stop returning `can_spawn: true` unconditionally.** Consult depth cap, spawn tree, and live budget |
+| Spawn tree render | `pkg/agent/spawn_tree.go` | Already models parent/depth; surface depth in `spawn-tree-active` output and ceremony |
+| External worker result | `cmd/codex_build_finalize.go:62` | `+ ChildResults`, `+ Usage` |
+| Committed schema | `.aether/schemas/completion-packet.schema.json` | Regenerate (byte-compared by `cmd/contract_schema_test.go`) |
+| Handoff persistence | `cmd/codex_build_finalize.go:1122` `persistExternalBuildHandoffs` | Walk `child_results`; stamp depth + parent |
+| Handoff record | `cmd/codex_dispatch_contract.go` `workerHandoffRecord` | `+ Depth`, `+ Parent`; render in `handoffProvenance` |
+| Handoff relay ranking | `cmd/codex_dispatch_contract.go:704` `renderWorkerHandoffSection` | Rank children below same-depth peers so they cannot flood the top-5 |
+| Claims aggregation | `cmd/codex_build_finalize.go` | Merge child file claims into the parent's `TaskClaimsSummary` |
+| Caste registry | `cmd/caste_relevance.go:29` | Reads through `agentRosterOrDefault`; slice stays as fallback |
+| Caste capabilities | `cmd/queen_judgement.go:267` | Same; `queenCasteRoster()` sources from the loader |
+| Hub sync pairs | `cmd/install_cmd.go:794` | Add `colony/agents` (and `colony/prompts` if not present) so the roster ships |
+| Survey section | `cmd/helpers.go:225` `resolveSurveySection` | Digest displaces the pointer list; keep the staleness notice |
+| Build brief | `cmd/codex_build.go:2487`, `:2607` | Call the digest renderer |
+| Trace summary | `cmd/trace_cmds.go:192` | Per-caste/per-worker rollup; measured-vs-estimated split |
+| Cost table | `pkg/trace/cost.go` | Prefer provider-reported cost; fail loudly on unknown model instead of returning 0 |
+| Build wrapper | `.claude/commands/ant/build.md` | Delegation protocol section; relay `spawn-request` refusals in plain English |
+| OpenCode wrapper | `.opencode/commands/ant/build.md` | Mirror |
+| Agent definitions | `.claude/agents/ant/*.md`, `.opencode/agents/*.md`, `.codex/agents/*.toml` | Delegation instructions for castes granted it; correct the stale claim at `aether-route-setter.md:153` |
+| Docs | `.aether/docs/wrapper-runtime-ux-contract.md` | Nested spawn is a wrapper/parent action under runtime adjudication — state it, or the next audit reads it as a boundary violation |
+
+### UNCHANGED — and must stay so
+
+| Component | Why |
+|-----------|-----|
+| `ExecutionBinding.ManifestSHA256` and `bindBuildAttemptManifest` | The digest must not become amendable |
+| `queenBuildSafetyRequiredCastes` | Floors stay in Go, not in a file the model can write |
+| `spawnThreshold` = 30 | Its comment records the measurement that killed retuning it |
+| `pkg/codex/dispatch.go` wave semantics | Option B keeps children inside the parent's wall-clock |
+| Wrapper prohibition on state mutation | Delegation adds no wrapper writes; `spawn-request` is a runtime call |
+
+---
+
+## Data Flow Changes
+
+### Before
+
+```
+build --plan-only ──▶ manifest{dispatches[], briefs, capsule, binding}
+                          │
+   wrapper ───────────────┴──▶ spawn wave 1 ──▶ … ──▶ spawn wave N
+                                    │
+                          results[] (one per manifest dispatch)
+                                    │
+                   build-completion-stage ──▶ build-finalize
+                                    │
+                    claims  handoffs  state advance
+                    (token usage: parsed, then discarded)
+```
+
+### After
+
+```
+build --plan-only ──▶ manifest{…, spawn_policy{max_depth, optional_budget_remaining}}
+                          │
+   wrapper ───────────────┴──▶ spawn wave 1
+                                    │
+                              worker (depth 1)
+                                    │
+                        ┌───────────┴──────────────┐
+                        │  aether spawn-request    │  ← Go adjudicates, never spawns
+                        │  → granted + child brief │
+                        │  → refused + reason      │
+                        └───────────┬──────────────┘
+                                    │ granted
+                        parent spawns child (platform Agent tool)
+                        └── or ──▶ runtime queues a follow-on bound attempt
+                                   the top-level wrapper spawns  (fallback channel)
+                                    │
+                       result{ …, child_results[], usage }
+                                    │
+                   build-completion-stage (schema now admits both fields)
+                                    │
+                            build-finalize
+                       ├── claims: child files → parent's task claim
+                       ├── handoffs: children stamped depth+parent, ranked below peers
+                       ├── spend: trace.jsonl rows keyed on attempt run_id
+                       └── state advance (unchanged)
+                                    │
+                   aether trace-summary --run-id <run> ──▶ per-caste, per-worker,
+                                                           measured vs estimated
+```
+
+**Three new persistent facts:** child lineage in `spawn-tree.txt` (existing file, existing fields, first real use at depth 2); depth/parent on handoff records; token spend rows in `trace.jsonl`.
+
+**No new store.** Every write lands in a file the runtime already owns and already locks.
+
+---
+
+## Suggested Build Order
+
+Dependencies are real and mostly one-directional. This order lets each phase ship something a command can prove.
+
+### Phase A — Spend accounting (no dependencies, unblocks measurement)
+
+Ships first because every later decision — delegation budgets, digest size, roster model routing — should be argued from measured numbers rather than estimates, and because it is the smallest end-to-end slice.
+
+1. `+ Usage` on `codexExternalBuildWorkerResult`; regenerate the committed schema
+2. `pkg/trace` `LogWorkerSpend`; wire both the wrapper path (`build-finalize`) and the hosted path (`cmd/codex_build.go:1610`)
+3. `trace-summary` rollups with a hard measured/estimated split
+4. Fix `pkg/trace/cost.go` — prefer provider cost, fail loudly on unknown models
+
+*Proof:* `aether trace-summary --run-id <run>` reports non-zero per-caste totals after a real build, and fails when a worker's usage is missing.
+
+### Phase B — Agent roster loader (no dependencies; unblocks C and D)
+
+Independent of A, sequenced second because delegation needs to look up a child caste's model, tools, and prompt from *somewhere*, and hardcoding a second lookup would be work thrown away.
+
+1. `cmd/agent_roster.go` with 4-step resolution and compiled-in fallback
+2. Extend `colony/agents/*.yaml` with the scoring and capability fields
+3. Repoint `queenCasteRoster()` and `casteRelevanceScore` through the loader
+4. `aether roster-validate`; add `colony/agents` to the hub sync pairs
+5. Keep `casteRelevanceRegistry` as fallback; add a drift test asserting file and slice agree
+
+*Proof:* `aether roster-validate` exits non-zero when a YAML entry loses its capability; deleting `colony/agents/` degrades to the compiled roster with a warning, not a crash.
+
+### Phase C — Survey digest (depends on B only for caste-aware weighting; can run parallel)
+
+1. `cmd/survey_digest.go` reusing `loadCodexSurveyContext`
+2. Displace the pointer list in `resolveSurveySection`; keep the staleness notice
+3. Measure against `TestBuildWorkerBriefIsMostlyTask` and `assembledContextTaskShareFloorPercent` — if either fails, shrink the digest, do not raise the floor
+4. Record a before/after exhibit as Phase 162 did for memory injection
+
+*Proof:* a named test asserts the brief contains a fact from a survey document that the phase text did not mention, and that the survey allocation did not grow.
+
+### Phase D — Recursive delegation (depends on A for budget data, B for child agent lookup)
+
+Largest and last. Split it:
+
+**D1 — Adjudication, no spawning.** Replace the `spawn-can-spawn` stub with a real depth+budget check. Add `spawn-request` returning granted/refused with a composed child brief. Nothing spawns yet.
+*Proof:* `spawn-can-spawn --depth 2` refuses; `--depth 1` grants; over-budget refuses with a reason.
+
+**D2 — Result plumbing.** `codexChildWorkerResult`, schema regeneration, claims merge, handoff persistence with depth/parent, relay ranking.
+*Proof:* a fixture completion packet with a child result finalizes; the child's files appear in the parent's task claims; the child's handoff does not evict a peer's from the top-5.
+
+**D3 — Follow-on wave channel.** The guaranteed path: a granted request that the parent cannot execute becomes a new bound attempt the top-level wrapper spawns.
+*Proof:* an e2e run where the parent's platform reports no Agent tool still completes the delegated work.
+
+**D4 — Parent-direct spawn.** The opportunistic path, gated on runtime capability detection. Wrapper and agent-definition updates.
+*Proof:* a real build where a Builder delegates to a Scout and the Scout's finding appears in the parent's handoff.
+
+### Ordering rationale
+
+- **A before D** — delegation budgets set without spend data are guesses, and the project has a documented history of unfalsifiable efficiency claims.
+- **B before D** — a child dispatch needs a caste's agent file, model, and tools. Two lookup paths would be built and one discarded.
+- **C is independent** — it can run alongside B or D; it touches only brief composition.
+- **D1 before D2 before D3/D4** — each is separately provable, and D1 alone closes a live "documented but never implemented" defect regardless of whether the rest ships.
+
+---
+
+## Anti-Patterns to Avoid
+
+### Making the manifest digest amendable
+
+**What people do:** add child dispatches to the bound manifest and recompute `ManifestSHA256`.
+**Why it's wrong:** the digest exists so a result from a stale checkout or superseded attempt cannot be accepted (`cmd/build_attempt.go:280`). A digest recomputed on demand authenticates nothing.
+**Instead:** children ride inside the parent's result (Option B), or the runtime issues a *new bound attempt* (Option C).
+
+### Routing delegation through the TypeScript host
+
+**What people do:** reach for `spawn-orchestrator.ts`, which already implements exactly this policy.
+**Why it's wrong:** `.claude/commands/ant/build.md` explicitly forbids `aether host build` on the interactive path. Reintroducing the hop reverses a decision that was made deliberately.
+**Instead:** port the policy — depth cap, budget accounting, fail-closed rejection — into Go. It is roughly 150 lines and the TS file is a good specification.
+
+### Deleting the hardcoded caste slice in the same change that adds the loader
+
+**What people do:** move the registry to YAML and remove the Go table in one commit.
+**Why it's wrong:** the project's dominant failure mode across 18 of 25 milestones is "the old thing was removed and the new thing was never wired." A missing `colony/` directory in a downstream repo would then produce an empty roster and a build with no workers.
+**Instead:** overlay, prove agreement with a drift test, and consider deletion in a later milestone with the test as evidence.
+
+### Letting delegation spend the safety castes' budget
+
+**What people do:** decrement one shared worker counter for both required and delegated workers.
+**Why it's wrong:** `queenBuildSafetyRequiredCastes` deliberately bypasses the cap so that choosing "light" removes optional specialists and never safety ones. A Builder that delegates three times could consume the Watcher's slot and produce a build nobody checked — the exact outcome `TestWatcherIsAlwaysRequiredOnBuild` exists to prevent.
+**Instead:** delegation draws only from the optional remainder, computed as `MaxWorkers - len(RequiredCastes)`, floored at zero.
+
+### Adding the survey digest on top of the pointer list
+
+**What people do:** keep the filenames and prepend the digest.
+**Why it's wrong:** the per-section budgets already sum to ~17,700 against a 24,000 cap, and `TestBuildWorkerBriefIsMostlyTask` names survey pointers as scaffolding.
+**Instead:** the digest replaces the pointer list, keeping at most the two or three documents actually worth opening.
+
+### Reporting estimated tokens as measured
+
+**What people do:** sum `WorkerUsage.TotalTokens` for a run total.
+**Why it's wrong:** `EstimateUsage` fills gaps with a crude chars/4 ratio, tagged `UsageSourceEstimate`. Blending makes a regression look like an improvement — the failure `pkg/codex/usage.go`'s header comment was written to end.
+**Instead:** two totals, always, with the estimated count shown as a confidence caveat.
+
+---
+
+## Open Questions for Requirements
+
+1. **Does a delegated child's time come out of the parent's timeout, or get its own?** `WorkerDispatch.Timeout` currently means "one worker." Under Option B it silently becomes "one subtree." Pick one and name it in the contract.
+2. **Which castes may delegate?** All, or an allowlist? An allowlist is smaller, safer, and matches how `casteAllowedForFlow` already restricts flows. Recommend starting with Builder and Tracker only.
+3. **Does an empty child handoff fail the build?** Current rule rejects empty handoffs. Recommend requiring the parent to absorb the child's findings rather than exempting children — one rule, and it forces the parent to read what it delegated.
+4. **Should the roster own model routing?** `colony/policies/model-routing.yaml` still has zero Go readers and `colony/agents/*.yaml` already carries a `model:` field. These overlap. Deciding which is authoritative belongs in requirements, not implementation.
+5. **Is the survey digest caste-aware?** A Gatekeeper wants SENTINEL-PROTOCOLS.md; a Builder wants CHAMBERS.md. Caste weighting is cheap once the roster loader exists (Phase B), but it is a scope decision.
 
 ---
 
 ## Sources
 
-- HIGH: `cmd/caste_relevance.go` -- caste relevance registry, scoring, threshold, always-required, suppression (primary Go source)
-- HIGH: `cmd/codex_continue.go` -- continue dispatches, review specs, always-required for continue flow
-- HIGH: `cmd/codex_continue_plan.go` -- continue plan-only manifest generation, queenDecide integration
-- HIGH: `cmd/queen_decision.go` -- gate classification, recommendations, circuit breaker, budget
-- HIGH: `pkg/colony/colony.go` -- VerificationDepth type, normalization, aliases
-- HIGH: CLAUDE.md "Queen-Owned Orchestration" section -- design intent for fast/standard/final-review
-- HIGH: `.aether/commands/build.yaml` -- build command category and ownership split
-- HIGH: `.aether/commands/continue.yaml` -- continue command category, verification depth, heavy review path
-- HIGH: `.aether/commands/seal.yaml` -- seal command category and manifest flow
-- HIGH: `.aether/references/contracts/queen-execution-policy-contract.md` -- classification tiers, auto-resolve, circuit breaker
-- HIGH: `.aether/references/examples/queen-decision-example.md` -- concrete queen-state example
-- HIGH: `.aether/commands/classic-command-parity.json` -- command categories (literal/semi-intelligent/full-orchestration)
-- MEDIUM: `.aether/docs/command-playbooks/build-wave.md` -- build spawning instructions (playbook layer)
-- MEDIUM: `.aether/docs/command-playbooks/continue-gates.md` -- continue gate spawning (playbook layer)
-- MEDIUM: `.aether/docs/command-playbooks/build-verify.md` -- build verification spawning (playbook layer)
-- MEDIUM: `.aether/docs/command-playbooks/continue-verify.md` -- continue verification loop (playbook layer)
+**Primary — repository source, read directly (HIGH confidence):**
+- `cmd/queen_judgement.go`, `cmd/queen_spawn_budget.go`, `cmd/caste_relevance.go` — team selection, floors, budget
+- `cmd/codex_build.go`, `cmd/codex_build_finalize.go`, `cmd/build_attempt.go` — manifest, binding, finalize
+- `cmd/contract_schema.go`, `.aether/schemas/completion-packet.schema.json` — reflected packet schema
+- `cmd/spawn.go`, `pkg/agent/spawn_tree.go` — spawn adjudication stub and lineage store
+- `cmd/helpers.go:225`, `cmd/codex_plan.go:1645`, `cmd/codegraph_context.go` — survey and context-slice patterns
+- `pkg/codex/usage.go`, `pkg/codex/platform_dispatch.go`, `pkg/trace/{trace,cost}.go`, `cmd/trace_cmds.go` — spend
+- `cmd/policy_loader.go`, `cmd/visuals_config.go`, `cmd/prompt_template_loader.go` — the three proven YAML-overlay loaders
+- `.aether/ts-host/src/{types,spawn-orchestrator}.ts` — prior recursive-delegation implementation (v1.21)
+- `.claude/commands/ant/build.md`, `.aether/docs/wrapper-runtime-ux-contract.md` — the boundary being respected
+- `cmd/codex_build_test.go:3629`, `cmd/context_budget_test.go:24` — the budget invariants this milestone must not retune
+
+**Secondary — platform nested-spawn behaviour (MEDIUM confidence, changes fast):**
+- [Create custom subagents — Claude Code Docs](https://code.claude.com/docs/en/sub-agents)
+- [Sub-Agent Task Tool Not Exposed When Launching Nested Agents · anthropics/claude-code#4182](https://github.com/anthropics/claude-code/issues/4182)
+- [Subagent tool stripped in nested subagent calls · anthropics/claude-code#80036](https://github.com/anthropics/claude-code/issues/80036)
+- [Task tool permission override no longer works for nested sub-agents · anomalyco/opencode#8114](https://github.com/anomalyco/opencode/issues/8114)
+- [Subagents can infinitely recurse via Task tool — no max depth limit · anomalyco/opencode#18100](https://github.com/anomalyco/opencode/issues/18100)
+- [Custom agents cannot access task tool despite frontmatter configuration · anomalyco/opencode#14308](https://github.com/anomalyco/opencode/issues/14308)
+
+*Platform caveat: nested-spawn availability and depth defaults have each changed on both platforms within the last quarter. Any requirement that depends on parent-direct spawning should carry a runtime capability check rather than a version assumption.*
 
 ---
-
-*Architecture research for: Queen execution policy and worker spawning patterns*
-*Researched: 2026-05-20*
+*Architecture research for: Aether v1.26 Intelligent Orchestration*
+*Researched: 2026-08-08*
