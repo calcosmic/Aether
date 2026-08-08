@@ -50,6 +50,41 @@ This rule exists because the project's own audits caught the alternative failing
 - Explain what changed, why it matters, and what it means for the user before going deep on implementation details.
 - Translate jargon the first time it appears. Summarize command output and error logs unless exact lines are needed for the next action.
 
+### The owner is non-technical. This repo's vocabulary is invented.
+
+Aether names things after an ant colony. **None of these words mean anything
+outside this repo**, and using one untranslated is the same as using a word
+the reader has never seen. Assume zero prior knowledge of every term below,
+every time — including in questions, option labels, and progress updates.
+
+| Repo word | What it actually means |
+|---|---|
+| Colony | One project Aether is working on, start to finish |
+| Queen | The coordinator that decides which helpers to send at a task |
+| Caste / worker | A type of AI helper with one job (write code, check the work, research) |
+| Pheromone | A note you leave that steers the helpers ("focus here", "never do this") |
+| Instinct / wisdom | A lesson the system learned and now reuses automatically |
+| Hive | Shared lessons pooled across all your projects, not just this one |
+| Hub (`~/.aether/`) | The installed copy on your machine that every project reads from |
+| Wrapper | The `/ant-…` menu commands you type; they call the real program underneath |
+| Runtime / the Go binary | The actual program that does the work and holds the truth |
+| Seal / entomb | Mark a project finished / file it away in the archive |
+| Midden | The log of things that went wrong, kept so the system stops repeating them |
+| Playbook | An old instruction document; most are no longer read by the program |
+| Orphan | A feature that was built but nothing ever calls, so it never runs |
+| Ratchet | An automatic check that can only get stricter, never looser |
+| Allowlist | The written list of known exceptions a check agrees to ignore for now |
+
+### Questions must be answerable without opening a file
+
+When asking the owner to choose between options, each option must state the
+real-world consequence in ordinary words **before** any file path, command
+name, or repo term appears. Paths and identifiers are evidence for the choice,
+not the description of it — put them at the end, or in a skippable aside.
+
+If an option cannot be understood without knowing what a word in it means,
+the option is written wrong. Rewrite it; do not expect the owner to look it up.
+
 ## UX Architecture
 
 Aether uses a hybrid UX model: the Go runtime owns truth, platform wrappers own presentation.
