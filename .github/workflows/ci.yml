@@ -96,6 +96,9 @@ jobs:
       - name: Verify command catalog classification
         run: python3 scripts/verify_catalog_classified.py --strict
 
+      - name: Verify subcommand wiring and CLI flag contracts
+        run: go test ./cmd -run 'TestNoRegisteredSubcommandIsUnreferenced|TestCallerEvidenceCreditsCommandSubstitution|TestRatchetDoesNotConsultTheRegeneratedCatalog|TestOrphanAllowlistOnlyShrinks|TestRatchetDetectsASyntheticOrphan|TestDeletingACallerMakesTheRatchetNameIt|TestWiringGuardsHaveNoRuntimeEscapeHatch|TestCommandCallsMatchCobraContracts|TestAuditDetectsPositionalDrift|TestAetherCorpusCatchesAnUnregisteredFlag|TestCommandCallExtractorSeesRealInvocationsAndSkipsProse|TestDocumentedCommandNamesResolve|TestDocumentedSubcommandsAreSeverityClassified|TestGateClassifiedCallsHaveGateWiring|TestCLIFlagAudit|TestCLIFlagAuditSubcommandsRegistered|TestFlagAuditSkipListOnlyShrinks|TestAllowlistPolicyNamesEveryGuardedFile|TestSpawnCanSpawnAcceptsDocumentedInvocation|TestSpawnCanSpawnEnforceDeniesWithNonZeroExit|TestWiringGateStepRunsEveryWiringTest' -count=1 -timeout 900s -v
+
       - name: Test summary
         if: always()
         run: |
