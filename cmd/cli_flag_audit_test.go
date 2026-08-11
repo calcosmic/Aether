@@ -34,6 +34,19 @@ var skipSubcommands = []flagAuditSkipEntry{
 	{Name: "pending-decisions", Reason: "markdown-only-shorthand", OwnerPhase: "RECLAIM"}, // playbook shorthand; actual Go subcommands are pending-decision-{add,list,resolve}
 }
 
+// guardedAllowlistFiles are the four files the two shrink-only guards read —
+// repo-root-relative, matching how a human reader would recognise them in
+// prose. TestAllowlistPolicyNamesEveryGuardedFile derives its check from
+// this slice rather than re-typing the paths inside the test body or trusting
+// the policy document's own prose, so renaming or adding a guarded file here
+// makes the policy doc go stale loudly instead of silently.
+var guardedAllowlistFiles = []string{
+	"cmd/testdata/orphan_allowlist.json",
+	"cmd/testdata/orphan_allowlist_baseline.json",
+	"cmd/cli_flag_audit_test.go",
+	"cmd/testdata/flag_audit_skiplist_baseline.json",
+}
+
 // skipSubcommandNames returns skipSubcommands as a name-only set, the shape
 // TestCLIFlagAudit's scan loop needs for its lookup.
 func skipSubcommandNames() map[string]bool {
@@ -265,5 +278,32 @@ func TestFlagAuditSkipListOnlyShrinks(t *testing.T) {
 		t.Errorf("%d command(s) were added to the tolerated skip list without being added to the committed baseline: %s\n"+
 			"The skip list may only shrink. Make the documented call correct, or delete its entry — do not edit the baseline to make this pass.",
 			len(added), strings.Join(added, ", "))
+	}
+}
+
+// TestAllowlistPolicyNamesEveryGuardedFile is T-172-15: a policy document
+// that stops naming a file it guards is worse than no policy at all, because
+// it makes the gap invisible instead of absent. This derives its expected
+// file list from guardedAllowlistFiles above — never re-typed here, never
+// copied from the document's own prose — and fails naming any guarded file
+// whose path text is missing from .aether/docs/orphan-allowlist-policy.md.
+func TestAllowlistPolicyNamesEveryGuardedFile(t *testing.T) {
+	data, err := os.ReadFile("../.aether/docs/orphan-allowlist-policy.md")
+	if err != nil {
+		t.Fatalf("read .aether/docs/orphan-allowlist-policy.md: %v", err)
+	}
+	doc := string(data)
+
+	var missing []string
+	for _, f := range guardedAllowlistFiles {
+		if !strings.Contains(doc, f) {
+			missing = append(missing, f)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		t.Errorf(".aether/docs/orphan-allowlist-policy.md does not name %d guarded file(s): %s\n"+
+			"Add each path to the document, or the policy silently drifts out of step with what the guards actually read.",
+			len(missing), strings.Join(missing, ", "))
 	}
 }
