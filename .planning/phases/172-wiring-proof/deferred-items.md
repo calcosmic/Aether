@@ -30,3 +30,23 @@ because they are unrelated to the task that found them (Scope Boundary rule).
   glued marker no longer desyncs fence parity, and
   `TestAuditedCorpusHasNoGluedFenceMarkers` fails, naming the file and
   line, if the glued shape ever returns anywhere in the audited corpus.
+
+## 172-07 (both tasks)
+
+- **`pkg/codex` `TestCodexReadOnlyProfileSelectsReadOnlySandbox` fails only
+  under full-suite load, not in isolation.** Running `go test ./... -count=1
+  -timeout 900s` twice in this worktree produced the same failure both
+  times: `permission_profile_test.go:111: worker startup failed: codex
+  login status failed: timed out; sensitive details omitted`. Running the
+  same test alone (`go test ./pkg/codex -run
+  TestCodexReadOnlyProfileSelectsReadOnlySandbox -count=1 -v`) passes in
+  under a second. The test shells out to check `codex` CLI login status,
+  which times out when run concurrently with the ~300s `cmd` package under
+  this sandboxed worktree's resource/network constraints — not something
+  this plan's changes could cause. `pkg/codex/permission_profile_test.go`
+  is untouched by this plan (last touched in an unrelated 163-03 commit,
+  confirmed via `git log`), and this plan's files (`cmd/ci_wiring_gate_test.go`,
+  `cmd/subcommand_reachability_ratchet_test.go`,
+  `.github/workflows/ci.yml`) are all in the `cmd` package, which was fully
+  green (298-332s, 0 failures) in both full-suite runs. Not fixed here —
+  out of scope per the Scope Boundary rule.

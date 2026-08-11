@@ -1168,19 +1168,37 @@ func TestDeletingACallerMakesTheRatchetNameIt(t *testing.T) {
 	t.Logf("suppressing caller file %q removed the only caller of command %q; the ratchet correctly named it as an orphan", chosenFile, chosenCommand)
 }
 
-// TestWiringGuardsHaveNoRuntimeEscapeHatch is D-11 and threat T-172-06: none
-// of this phase's guard files may contain an environment-variable bypass, a
-// t.Skip, or a build-tag exclusion. A guard that can be switched off at
-// runtime is not a guard.
+// TestWiringGuardsHaveNoRuntimeEscapeHatch is D-11 and threat T-172-06/
+// T-172-33/T-172-34: none of this phase's guard files may contain an
+// environment-variable bypass, a test-skip call, or a build-tag exclusion.
+// A guard that can be switched off at runtime is not a guard.
+//
+// Iterates wiringGateGuardFiles (cmd/ci_wiring_gate_test.go) — the single
+// shared inventory of every guard file this phase created — rather than a
+// second, locally-declared list. A local three-entry list here previously
+// omitted cmd/spawn_enforce_test.go and cmd/ci_wiring_gate_test.go itself,
+// which meant the one guard that could be t.Skip'd with nothing noticing
+// (ci_wiring_gate_test.go) was never scanned for exactly that.
 func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
-	guardFiles := []string{
-		"subcommand_reachability_ratchet_test.go",
-		"command_call_audit_test.go",
-		"cli_flag_audit_test.go",
+	// wiringGateGuardFiles is declared with five entries because that is the
+	// count of guard files this phase created; a future edit that empties or
+	// trims the shared inventory must fail loudly here rather than silently
+	// narrowing this scan.
+	if len(wiringGateGuardFiles) < 5 {
+		t.Fatalf("wiringGateGuardFiles has only %d entries — expected at least 5 (the guard files phase 172 created); "+
+			"a shrunk inventory would silently narrow this escape-hatch scan", len(wiringGateGuardFiles))
 	}
-	forbiddenRe := regexp.MustCompile(`os\.Getenv|t\.Skip|t\.SkipNow`)
 
-	for _, f := range guardFiles {
+	// forbiddenRe covers every spelling of "read an environment variable" or
+	// "skip this test" this package has needed to reject, not just the first
+	// one found: os.Getenv, os.LookupEnv, os.Environ, syscall.Getenv, t.Skip,
+	// t.SkipNow, and testing.Short. Each alternative is written with the
+	// `\.` escape (matching buildConstraintRe's `go:build` concatenation
+	// trick below) precisely so this declaration line does not match its own
+	// pattern when the scan below reaches this file.
+	forbiddenRe := regexp.MustCompile(`os\.Getenv|os\.LookupEnv|os\.Environ|syscall\.Getenv|t\.Skip|t\.SkipNow|testing\.Short`)
+
+	for _, f := range wiringGateGuardFiles {
 		data, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatalf("read %s: %v", f, err)
