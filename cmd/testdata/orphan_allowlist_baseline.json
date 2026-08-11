@@ -1,0 +1,1392 @@
+[
+  {
+    "name": "activity-log-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "activity-log-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "archive",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "audit-catalog",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autofix-checkpoint",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autofix-rollback",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autopilot-check-replan",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autopilot-headless-check",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autopilot-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autopilot-resume",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autopilot-set-headless",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autopilot-status",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autopilot-stop",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "autopilot-update",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "backup-prune-global",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "binary-download",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "bootstrap-system",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "build-reconcile",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "cache-clean",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "cache-clean-stale",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "chamber-compare",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "chamber-create",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "chamber-list",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "chamber-verify",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "changelog-append",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "changelog-collect-plan-data",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "charter-write",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "check-antipattern",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "clash-check",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "clash-setup",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "codebase-query",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "codebase-scan",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "colony-archive-xml",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "colony-depth",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "colony-name",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "colony-prime",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "colony-vital-signs",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "consolidation-phase-end",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "consolidation-seal",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "context-capsule",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "context-update",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "contract-schema",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-archivist",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-critic",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-herald",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-janitor",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-librarian",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-nurse",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-run",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-scribe",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "curation-sentinel",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "data-safety-stats",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "domain-detect",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "emoji-audit",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "entropy-score",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "error-add",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "error-flag-pattern",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "error-pattern-check",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "error-summary",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "eternal-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "eternal-store",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "event-bus-cleanup",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "event-bus-publish",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "event-bus-query",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "event-bus-replay",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "event-bus-subscribe",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "export",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "failure-classify",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "flag-auto-resolve",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "flag-check-blockers",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "force-unlock",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "gate-auto-resolve",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "gate-check",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "gate-classify",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "gate-recovery-template",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "gate-results-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "gate-results-write",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "generate-ant-name",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "generate-commit-message",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "generate-progress-bar",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "generate-threshold-bar",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "get",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "graph-cluster",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "graph-link",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "graph-neighbors",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "graph-reach",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "grave-add",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "grave-check",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hive-abstract",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hive-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hive-promote",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hive-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hive-revoke",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hive-search",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hook-pre-compact",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hook-pre-tool-use",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "hook-stop",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "immune-auto-scar",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "import",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "incident-rule-add",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "init-ceremony",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "instinct-apply",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "instinct-archive",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "instinct-create",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "instinct-decay-all",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "instinct-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "instinct-read-trusted",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "integrity",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "internal-worker-adapter",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learn-export",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learn-import",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-approve-proposals",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-check-promotion",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-defer-proposals",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-display-proposals",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-disprove",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-extract-fallback",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-inject",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-list",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-observe",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-promote",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-promote-auto",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-propose",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-select-proposals",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-undo-promotions",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "learning-validate",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "lifecycle",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "load-state",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "medic-auto-spawn-check",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "memory-capture",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-acknowledge",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-collect",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-cross-pr-analysis",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-handle-revert",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-prune",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-review",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-search",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-tag",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "midden-write",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "milestone-detect",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "normalize-args",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "oracle-iterate",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "oracle-iterate-finalize",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "parallel-mode",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pending-decision-add",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pending-decision-list",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pending-decision-resolve",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pheromone-count",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pheromone-merge-back",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pheromone-prime",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pheromone-snapshot-inject",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pheromone-validate-xml",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "plan-granularity",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "plan-research-escalate",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "pr-context",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "privacy-scan",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "proof",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "queen-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "queen-migrate",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "queen-promote",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "queen-promote-instinct",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "queen-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "queen-seed-from-hive",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "queen-thresholds",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "queen-write-learnings",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "reconcile",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "recovery-log-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "recovery-log-write",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "registry",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "registry-add",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "registry-export-xml",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "registry-import-xml",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "registry-list",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "review-ledger-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "review-ledger-resolve",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "review-ledger-summary",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "review-ledger-write",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "scar-add",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "scar-check",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "scar-list",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "serve",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "session-clear",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "session-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "session-mark-resumed",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "session-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "session-update",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "session-verify-fresh",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "set",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "setup",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "shelf-detect",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "shelf-dismiss-batch",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "shelf-promote-batch",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "should-skip-gate",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "signature-match",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "signature-scan",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-archive",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-curator-run",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-detect",
+    "reason": "skill-lifecycle",
+    "owner_phase": "178"
+  },
+  {
+    "name": "skill-diff",
+    "reason": "skill-lifecycle",
+    "owner_phase": "178"
+  },
+  {
+    "name": "skill-index",
+    "reason": "skill-lifecycle",
+    "owner_phase": "178"
+  },
+  {
+    "name": "skill-index-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-inject",
+    "reason": "skill-lifecycle",
+    "owner_phase": "178"
+  },
+  {
+    "name": "skill-is-user-created",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-list",
+    "reason": "skill-lifecycle",
+    "owner_phase": "178"
+  },
+  {
+    "name": "skill-list-lifecycle",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-manifest-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-match",
+    "reason": "skill-lifecycle",
+    "owner_phase": "178"
+  },
+  {
+    "name": "skill-patch",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-pin",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-promote",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-recover",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skill-view",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "skip-phase",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "source-check",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "spawn-can-spawn",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "spawn-can-spawn-swarm",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "spawn-efficiency",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "spawn-get-depth",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "spawn-tree-active",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "spawn-tree-depth",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "spawn-tree-load",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "state-checkpoint",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "state-mutate",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "state-read-field",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "state-write",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "suggest-analyze",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "suggest-approve",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "survey-verify",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-activity-log",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-cleanup",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-display-get",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-display-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-display-inline",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-display-render",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-display-text",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-display-update",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-findings-add",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-findings-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-findings-read",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-solution-set",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-timing-eta",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-timing-get",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "swarm-timing-start",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "temp-clean",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trace-export",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trace-inspect",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trace-replay",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trace-rotate",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trace-summary",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trophallaxis-diagnose",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trophallaxis-retry",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trust-score-compute",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trust-score-decay",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "trust-tier",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "unload-state",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "update-progress",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "validate-oracle-state",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "validate-state",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "validate-worker-response",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "verify-claims",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "version-check-cached",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "versions",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "view-state-collapse",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "view-state-expand",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "view-state-get",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "view-state-init",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "view-state-set",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "view-state-toggle",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "visuals-dump",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "wisdom",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "wisdom-export-xml",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "wisdom-import-xml",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "worktree-allocate",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "worktree-cleanup",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "worktree-create",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "worktree-list",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "worktree-merge-back",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "worktree-orphan-scan",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  }
+]
