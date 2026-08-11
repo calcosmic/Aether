@@ -346,9 +346,15 @@ func parseFencedInvocation(path string, line int, text string) (documentedCall, 
 	}, true
 }
 
-func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
+// auditedFilePaths returns every file the audit reads: the recursive walk
+// over auditedCorpora filtered to .md/.yaml/.yml, plus each existing path in
+// auditedFiles. Both collectDocumentedCalls and the corpus-wide glued-marker
+// sweep (TestAuditedCorpusHasNoGluedFenceMarkers) call this ONE enumeration,
+// so the sweep can never drift from the set the audit actually reads — a
+// hardcoded second file list would rot the moment a corpus changed shape.
+func auditedFilePaths(t *testing.T, root string) []string {
 	t.Helper()
-	var all []documentedCall
+	var paths []string
 	for _, corpus := range auditedCorpora {
 		dir := filepath.Join(root, corpus)
 		if _, err := os.Stat(dir); err != nil {
@@ -360,7 +366,7 @@ func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
 			}
 			switch strings.ToLower(filepath.Ext(p)) {
 			case ".md", ".yaml", ".yml":
-				all = append(all, extractDocumentedCalls(t, p)...)
+				paths = append(paths, p)
 			}
 			return nil
 		})
@@ -376,6 +382,15 @@ func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
 		if _, err := os.Stat(p); err != nil {
 			continue // listed file removed; matches the corpus-removal tolerance above
 		}
+		paths = append(paths, p)
+	}
+	return paths
+}
+
+func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
+	t.Helper()
+	var all []documentedCall
+	for _, p := range auditedFilePaths(t, root) {
 		all = append(all, extractDocumentedCalls(t, p)...)
 	}
 	return all
@@ -1206,4 +1221,64 @@ func TestGateClassifiedCallsHaveGateWiring(t *testing.T) {
 	if commandCallSeverityFor("status") != severityEnrichment {
 		t.Error("status should default to enrichment; halting a run because a status render failed would be its own bug")
 	}
+}
+
+// gluedFenceMarker is built by concatenation rather than as one contiguous
+// string literal, following the buildConstraintRe precedent
+// (subcommand_reachability_ratchet_test.go:72) — so this file's own source
+// never carries the bare triple-backtick marker text on a single line.
+var gluedFenceMarker = "`" + "`" + "`"
+
+// TestAuditedCorpusHasNoGluedFenceMarkers is the corpus-wide guard for
+// T-172-26 / T-172-27 / T-172-28: a triple-backtick fence marker glued to
+// the end of a content line desyncs extractDocumentedCalls' in-fence
+// tracking and hides every invocation after it from the audit — the live
+// shape that let continue-full.md:1243's positional-argument violation go
+// unaudited for the whole phase. This sweep fails, naming file:line and the
+// offending text, for any line in the audited corpus where the marker is
+// present but is NOT the line's first non-whitespace content.
+//
+// Shares auditedFilePaths with collectDocumentedCalls so this sweep can
+// never drift from the set the audit actually reads — a hardcoded second
+// file list would rot the moment a corpus changed shape, which is the whole
+// point of "sweep the audited corpus" rather than a fixed directory list.
+func TestAuditedCorpusHasNoGluedFenceMarkers(t *testing.T) {
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	paths := auditedFilePaths(t, root)
+	// Anti-vacuity (T-172-28): a sweep whose enumeration silently returns
+	// nothing — a moved corpus, a wrong root, a swallowed walk error —
+	// would pass forever while checking nothing. Measured today: 215.
+	if len(paths) < 200 {
+		t.Fatalf("auditedFilePaths returned %d path(s), want >= 200 (measured 215) — an enumeration that silently returns nothing would pass forever, checking nothing", len(paths))
+	}
+
+	var offenders []string
+	for _, p := range paths {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("read %s: %v", p, err)
+		}
+		for i, line := range strings.Split(string(raw), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), gluedFenceMarker) {
+				continue // marker is the line's own content — the correct, unglued shape
+			}
+			if strings.Contains(line, gluedFenceMarker) {
+				rel, relErr := filepath.Rel(root, p)
+				if relErr != nil {
+					rel = p
+				}
+				offenders = append(offenders, fmt.Sprintf("%s:%d: %s", rel, i+1, strings.TrimSpace(line)))
+			}
+		}
+	}
+
+	if len(offenders) > 0 {
+		t.Errorf("%d line(s) glue a fence marker to trailing content — this desyncs extractDocumentedCalls' fence tracking and hides every invocation after it from the audit, silently, the way continue-full.md:1243 sat unaudited for this whole phase:\n  %s",
+			len(offenders), strings.Join(offenders, "\n  "))
+	}
+	t.Logf("scanned %d files in the audited corpus", len(paths))
 }

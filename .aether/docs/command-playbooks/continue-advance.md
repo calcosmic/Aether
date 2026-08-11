@@ -501,7 +501,8 @@ aether pheromone-write --type FEEDBACK --content "$phase_feedback" \
   --strength 0.6 \
   --source "worker:continue" \
   --reason "Auto-emitted on phase advance: captures what worked and what was learned" \
-  --ttl "30d"```
+  --ttl "30d"
+```
 
 The strength is 0.6 (auto-emitted = lower than user-emitted 0.7). Source is "worker:continue" to distinguish from user-emitted feedback. TTL is 30d so it survives phase transitions and can guide subsequent work.
 
