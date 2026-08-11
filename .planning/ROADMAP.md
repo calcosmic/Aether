@@ -625,7 +625,7 @@ Plans:
   2. `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` instructs every worker to run — exits 0. Today it exits 1 with `Error: unknown flag: --enforce`
   3. A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming the file, the line, and the offending flag when an instruction names a flag the binary does not register. Seeded to fail today against `--enforce`, and it passes only once criterion 2 does
   4. The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file
-**Plans**: 9 plans in 6 waves (plans 06-08 added 2026-08-11 to close the two confirmed verification gaps: criterion 3's fence-parity blind spot and criterion 4's decoy-satisfiable durability check)
+**Plans**: 12 plans in 9 waves (plans 06-08 added 2026-08-11 to close the two confirmed verification gaps; plans 09-11 added 2026-08-11 after re-verification returned 2/4 — criterion 3 closed, criterion 1 REGRESSED with two live counterexamples, criterion 4's durability half still defeatable by five reproduced mutations)
 
 Plans:
 **Wave 1**
@@ -648,6 +648,15 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 - [x] 172-07-PLAN.md — wave 6 — WIRE-01, WIRE-02, WIRE-03 (gap 2, D-11, D-15): scope the blanket release-gate check to the step that can actually fail, and scan every guard file this phase created from one inventory
 - [x] 172-08-PLAN.md — wave 6 — WIRE-01, WIRE-03: make the extractor's substitution opener and closer one decision, and make the flag audit fail when it is reading nothing
+
+**Wave 7** *(gap closure — blocked on the 2026-08-11 re-verification)*
+- [ ] 172-09-PLAN.md — wave 7 — WIRE-01 (gap B): key caller evidence by the resolved cobra command path so `aether host colonize` stops crediting the unrelated top-level `aether colonize`, migrate the allowlist and baseline to path keys against a committed pre-migration snapshot that proves tolerance did not widen
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 172-10-PLAN.md — wave 8 — WIRE-01, WIRE-02, WIRE-03 (gap A, core): stop asserting on the workflow file's text — take the release gate's own command from `ci.yml`, run it against a deliberately broken tree, and require it to exit non-zero and to exit zero against an unbroken one
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 172-11-PLAN.md — wave 9 — WIRE-01, WIRE-02, WIRE-03 (gap A, complements): the disabling routes execution cannot see — a commented-out step, a conditioned step, disabled `on:` triggers, and a job-level `if:` — plus honest `-run` extraction in both directions
 
 ### Phase 173: Delegation Guard
 **Goal**: Recursive delegation is bounded by the runtime at the one chokepoint an LLM cannot route around — the spawn-recording call. Depth is derived from the parent's recorded entry rather than asserted by the caller, a whole-tree budget bounds what depth alone cannot, every guard fails closed, and the operator can watch the tree while it grows. **Nothing gains the ability to delegate in this phase**; enforcement lands before capability because parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs.
