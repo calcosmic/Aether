@@ -70,7 +70,68 @@ var (
 	// confident, wrong failures.
 	negatedCallRe = regexp.MustCompile(`(?i)do not (attempt to )?run|never run|pure prompt command|do NOT call`)
 	envPrefixRe   = regexp.MustCompile(`^[A-Z][A-Z0-9_]*=\S*$`)
+	// assignmentPrefixRe matches a leading `VAR=` shell-assignment prefix,
+	// e.g. the `result=` in `result=$(aether spawn-can-spawn 5 --enforce)`.
+	assignmentPrefixRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 )
+
+// normalizeShellToken strips a leading assignment-and-substitution prefix
+// (`result=`, then any leading run of `$(`, a backtick, or a bare `(`) from
+// tok and returns the remainder. tokenizeShellLike does not split `=`, `$`,
+// `(`, or a backtick from the token that follows them, so
+// `result=$(aether` — the exact shape at `.aether/workers.md:292` — is a
+// single token that neither `f == "aether"` nor `strings.HasSuffix(f,
+// "/aether")` can ever match. Both places that locate the `aether` binary
+// token call this ONE helper so they cannot drift apart again the way the
+// dead `prev != "$("` comparison below (a token tokenizeShellLike can never
+// produce on its own) already did once.
+func normalizeShellToken(tok string) string {
+	t := tok
+	if loc := assignmentPrefixRe.FindStringIndex(t); loc != nil {
+		t = t[loc[1]:]
+	}
+	for {
+		switch {
+		case strings.HasPrefix(t, "$("):
+			t = t[2:]
+		case strings.HasPrefix(t, "`"):
+			t = t[1:]
+		case strings.HasPrefix(t, "("):
+			t = t[1:]
+		default:
+			return t
+		}
+	}
+}
+
+// openedSubstitution reports whether tok itself begins (after an optional
+// `VAR=` assignment) with a command-substitution opener, `$(`. This is what
+// distinguishes `result=$(aether cmd)` — where THIS token opened the
+// substitution and its call's final argument therefore carries a stray
+// trailing `)` that belongs to the substitution, not to the argument —
+// from a token that merely sits somewhere inside one opened earlier.
+func openedSubstitution(tok string) bool {
+	t := tok
+	if loc := assignmentPrefixRe.FindStringIndex(t); loc != nil {
+		t = t[loc[1]:]
+	}
+	return strings.HasPrefix(t, "$(")
+}
+
+// substitutionDepth reports how many more `(` than `)` characters have been
+// seen scanning toks left to right — i.e. whether a command substitution
+// opened by an EARLIER token is still open. A candidate `aether` token
+// reached while this is positive sits inside a substitution opened by a
+// DIFFERENT word — `echo $(foo | aether cmd)` — which is a nested pipeline,
+// not a genuine invocation, even though the token immediately before
+// `aether` (`|`) looks like an ordinary, accepted pipe.
+func substitutionDepth(toks []string) int {
+	depth := 0
+	for _, tok := range toks {
+		depth += strings.Count(tok, "(") - strings.Count(tok, ")")
+	}
+	return depth
+}
 
 // extractDocumentedCalls parses `aether <cmd> [args…]` invocations out of a file.
 func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
@@ -103,10 +164,13 @@ func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 			fields := tokenizeShellLike(snippet)
 
 			// Find the `aether` token, skipping env-var prefixes and any
-			// shell plumbing before it.
+			// shell plumbing before it. normalizeShellToken lets this see
+			// through command-substitution syntax glued to the same token,
+			// e.g. `x=$(aether cmd)` tokenizes to one `x=$(aether` field.
 			idx := -1
 			for j, f := range fields {
-				if f == "aether" || strings.HasSuffix(f, "/aether") {
+				nf := normalizeShellToken(f)
+				if nf == "aether" || strings.HasSuffix(nf, "/aether") {
 					idx = j
 					break
 				}
@@ -115,10 +179,19 @@ func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 				continue
 			}
 			// Reject `FOO=bar aether ...` only when the token before `aether`
-			// is something other than an env assignment or a pipe/&&.
+			// is something other than an env assignment or a pipe/&&. A
+			// substitution still open from an EARLIER token — `echo $(foo |
+			// aether cmd)` — means `aether` is nested inside someone else's
+			// pipeline, not a genuine invocation; substitutionDepth catches
+			// that even though the immediately preceding token (`|`) looks
+			// like an ordinary, accepted pipe. The dead `prev != "$("`
+			// comparison (a token tokenizeShellLike can never produce on its
+			// own) is replaced by the shared helpers rather than left beside
+			// them.
 			if idx > 0 {
 				prev := fields[idx-1]
-				if !envPrefixRe.MatchString(prev) && prev != "|" && prev != "&&" && prev != ";" && prev != "$(" {
+				nested := substitutionDepth(fields[:idx]) > 0
+				if nested || (!envPrefixRe.MatchString(prev) && prev != "|" && prev != "&&" && prev != ";") {
 					continue
 				}
 			}
@@ -127,12 +200,23 @@ func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 			if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
 				continue
 			}
+			args := append([]string{}, fields[idx+2:]...)
+			// Trim the command substitution's own closing `)` off the last
+			// token — `--enforce)` must be reported as `--enforce`, not as a
+			// stray-character typo.
+			if openedSubstitution(fields[idx]) {
+				if len(args) > 0 {
+					args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
+				} else {
+					name = strings.TrimSuffix(name, ")")
+				}
+			}
 			calls = append(calls, documentedCall{
 				File:    path,
 				Line:    i + 1,
 				Raw:     strings.TrimSpace(snippet),
 				Command: name,
-				Args:    fields[idx+2:],
+				Args:    args,
 				InFence: false,
 			})
 		}
@@ -143,9 +227,15 @@ func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 // parseFencedInvocation parses one line inside a fenced code block.
 func parseFencedInvocation(path string, line int, text string) (documentedCall, bool) {
 	fields := tokenizeShellLike(text)
+	// normalizeShellToken lets this see through command-substitution syntax
+	// glued to the same token — `result=$(aether spawn-can-spawn {your_depth}
+	// --enforce)`, the exact shape at `.aether/workers.md:292`, tokenizes to
+	// one `result=$(aether` field that neither `f == "aether"` nor
+	// `strings.HasSuffix(f, "/aether")` can ever match on their own.
 	idx := -1
 	for j, f := range fields {
-		if f == "aether" || strings.HasSuffix(f, "/aether") {
+		nf := normalizeShellToken(f)
+		if nf == "aether" || strings.HasSuffix(nf, "/aether") {
 			idx = j
 			break
 		}
@@ -155,7 +245,11 @@ func parseFencedInvocation(path string, line int, text string) (documentedCall, 
 	}
 	if idx > 0 {
 		prev := fields[idx-1]
-		if !envPrefixRe.MatchString(prev) && prev != "|" && prev != "&&" && prev != ";" {
+		// A substitution still open from an EARLIER token means `aether` is
+		// nested inside someone else's pipeline, not a genuine invocation —
+		// see substitutionDepth's doc comment.
+		nested := substitutionDepth(fields[:idx]) > 0
+		if nested || (!envPrefixRe.MatchString(prev) && prev != "|" && prev != "&&" && prev != ";") {
 			return documentedCall{}, false
 		}
 	}
@@ -163,12 +257,23 @@ func parseFencedInvocation(path string, line int, text string) (documentedCall, 
 	if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
 		return documentedCall{}, false
 	}
+	args := append([]string{}, fields[idx+2:]...)
+	// Trim the command substitution's own closing `)` off the last token —
+	// `--enforce)` must be reported as `--enforce`, not as a stray-character
+	// typo.
+	if openedSubstitution(fields[idx]) {
+		if len(args) > 0 {
+			args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
+		} else {
+			name = strings.TrimSuffix(name, ")")
+		}
+	}
 	return documentedCall{
 		File:    path,
 		Line:    line,
 		Raw:     strings.TrimSpace(text),
 		Command: name,
-		Args:    fields[idx+2:],
+		Args:    args,
 		InFence: true,
 	}, true
 }
@@ -198,6 +303,16 @@ func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
 	return all
 }
 
+// redirectionRe matches an attached shell redirection token: an optional
+// leading file-descriptor number followed by `<` or `>` — `2>/dev/null`,
+// `>out.txt`, `>>log`, `<in`. tokenizeShellLike emits these as one token
+// since none of `<digit>`, `<`, or `>` is a split point, so once
+// command-substitution invocations become visible (normalizeShellToken),
+// a call like `$(aether skill-index 2>/dev/null)` would otherwise hand
+// `2>/dev/null` to validateCallAgainstCobra as a positional argument —
+// producing a confident, wrong failure on a correct call.
+var redirectionRe = regexp.MustCompile(`^[0-9]*[<>]`)
+
 // shellOperators end an invocation: everything after them belongs to another
 // command, not to this one. Note that `<phase>` and `"$ARGUMENTS"` are NOT
 // operators — they are argument placeholders, and treating them as redirects
@@ -214,7 +329,14 @@ func isShellOperator(tok string) bool {
 		"fi", "done", "then", "else", "elif", "do", "esac", "}":
 		return true
 	}
-	return strings.HasPrefix(tok, "2>") || strings.HasPrefix(tok, "1>")
+	// A `<phase>`-shaped placeholder starts with the same `<` character as a
+	// genuine redirection but closes its own bracket; isPlaceholder is what
+	// tells them apart, so redirectionRe never fires on the ones that must
+	// still count as positionals.
+	if isPlaceholder(tok) {
+		return false
+	}
+	return redirectionRe.MatchString(tok)
 }
 
 // isPlaceholder reports whether a token is a documentation placeholder that
@@ -539,6 +661,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"changelog-collect-plan-data": true,
 	"colonize-finalize":           true,
 	"colony-depth":                true,
+	"colony-name":                 true,
 	"colony-prime":                true,
 	"command-guide":               true,
 	"context-update":              true,
@@ -570,9 +693,12 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"flag":                        true,
 	"flags":                       true,
 	"focus":                       true,
+	"gate-recovery-template":      true,
+	"gate-results-read":           true,
 	"gate-results-write":          true,
 	"generate-ant-name":           true,
 	"generate-commit-message":     true,
+	"generate-progress-bar":       true,
 	"grave-add":                   true,
 	"grave-check":                 true,
 	"history":                     true,
@@ -587,6 +713,9 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"instinct-create":             true,
 	"lay-eggs":                    true,
 	"learning-approve-proposals":  true,
+	"learning-check-promotion":    true,
+	"learning-extract-fallback":   true,
+	"learning-promote-auto":       true,
 	"load-state":                  true,
 	"maturity":                    true,
 	"medic-auto-spawn-check":      true,
@@ -594,6 +723,8 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"memory-capture":              true,
 	"memory-details":              true,
 	"memory-metrics":              true,
+	"midden-collect":              true,
+	"midden-cross-pr-analysis":    true,
 	"midden-recent-failures":      true,
 	"midden-write":                true,
 	"migrate-state":               true,
@@ -605,6 +736,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"phase":                       true,
 	"pheromone-display":           true,
 	"pheromone-expire":            true,
+	"pheromone-merge-back":        true,
 	"pheromone-read":              true,
 	"pheromone-write":             true,
 	"pheromones":                  true,
@@ -619,6 +751,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"publish":                     true,
 	"queen-compose":               true,
 	"queen-promote-instinct":      true,
+	"queen-write-learnings":       true,
 	"quick":                       true,
 	"recipes":                     true,
 	"recover":                     true,
@@ -637,8 +770,10 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"shelf-dismiss":               true,
 	"shelf-list":                  true,
 	"shelf-promote":               true,
+	"should-skip-gate":            true,
 	"signal-housekeeping":         true,
 	"skill-cache-rebuild":         true,
+	"skill-index":                 true,
 	"skill-inject":                true,
 	"skill-parse-frontmatter":     true,
 	"spawn-can-spawn":             true,
@@ -648,6 +783,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"state-mutate":                true,
 	"state-read":                  true,
 	"status":                      true,
+	"suggest-analyze":             true,
 	"suggest-approve":             true,
 	"swarm-finalize":              true,
 	"swarm":                       true,
@@ -661,6 +797,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"version":                     true,
 	"watch":                       true,
 	"worktree-allocate":           true,
+	"worktree-list":               true,
 	"worktree-merge-back":         true,
 }
 
