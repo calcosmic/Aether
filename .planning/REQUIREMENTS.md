@@ -30,7 +30,7 @@ Four independent researchers converged on the same thing: **most of this milesto
 ## Wiring Proof (WIRE)
 
 - [ ] **WIRE-01**: A test fails when a registered subcommand has no caller outside its own definition, seeded with today's known orphans in an allowlist that may only shrink
-- [ ] **WIRE-02**: The documented invocation in `.aether/workers.md` matches a flag that exists — running the documented command succeeds rather than erroring on `--enforce`
+- [x] **WIRE-02**: The documented invocation in `.aether/workers.md` matches a flag that exists — running the documented command succeeds rather than erroring on `--enforce`
 - [ ] **WIRE-03**: A test fails when a `.aether/*.md` instruction names a CLI flag the binary does not register
 
 ## Delegation Guard (SPAWN)
