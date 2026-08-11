@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration
-status: executing
-stopped_at: Phase 172 context gathered
-last_updated: "2026-08-11T14:38:43.759Z"
-last_activity: 2026-08-11 -- Phase 172 execution started
+status: verifying
+stopped_at: Completed 172-05-PLAN.md (phase 172 complete)
+last_updated: "2026-08-11T16:27:36.960Z"
+last_activity: 2026-08-11
 progress:
-  total_phases: 1
-  completed_phases: 0
+  total_phases: 8
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 0
-  percent: 0
+  completed_plans: 61
+  percent: 100
 ---
 
 # Project State
@@ -29,22 +29,24 @@ See: .planning/PROJECT.md (updated 2026-08-08)
 ## Current Position
 
 Phase: 172 (wiring-proof) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 172
-Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/8 phases)
-Last activity: 2026-08-11 -- Phase 172 execution started
+Plan: 6 of 6
+Status: Phase complete — ready for verification
+Progress: [██████████] 100%
+Last activity: 2026-08-11
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (v1.26)
+- Total plans completed: 6 (v1.26, all Phase 172)
 - Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 
 **By Phase:**
 
-*v1.26 not yet started*
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 172 P05 | 25min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -64,6 +66,8 @@ Last activity: 2026-08-11 -- Phase 172 execution started
 - **Two further rulings the phases must make explicitly rather than discover:** (a) Phase 176 — whether the roster or `colony/policies/model-routing.yaml` owns model routing; both exist with zero readers, and wiring one without ruling on the other recreates the original condition. (b) Phase 177 — the user-agent namespace must be excluded from `TestCanonicalAgentSourcesRemainAligned` by decision, not by a hand-grown exemption list, or a user adding one agent either breaks CI or gets an agent that silently vanishes on two platforms
 - **The TypeScript host is still KEPT** (carried from v1.25). `.aether/ts-host/src/spawn-orchestrator.ts` is a complete, correct ~150-line specification for Phase 173's Go port — it does not need rewriting, it needs a caller
 - **Explicitly out of scope, already ruled:** automatic model routing (user decision 2026-07-28, reaffirmed — cheap-model capability means the framework carries the intelligence, not that it picks models), a compressed inter-agent language, intra-wave peer communication, a tokenizer dependency, user-configurable depth flags, an interactive agent-authoring wizard, an agent/skill marketplace, and further compression of the worker brief
+- [Phase 172]: Named CI step 'Verify subcommand wiring and CLI flag contracts' added alongside (not replacing) the blanket go test ./... release gate, so a wiring failure reads as a wiring problem
+- [Phase 172]: ROADMAP.md Phase 172/178 criteria corrected to the scan's real numbers: 278 seeded orphans, 6 owned by phase 178, replacing the pre-scan assumption of 8
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ Carried forward from v1.25 (superseded) and v1.23:
 
 ## Session Continuity
 
-Last session: 2026-08-08T20:52:06.506Z
-Stopped at: Phase 172 context gathered
-Resume file: .planning/phases/172-wiring-proof/172-CONTEXT.md
+Last session: 2026-08-11T16:27:36.952Z
+Stopped at: Completed 172-05-PLAN.md (phase 172 complete)
+Resume file: None
