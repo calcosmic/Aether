@@ -157,6 +157,27 @@ func substitutionDepth(toks []string) int {
 }
 
 // extractDocumentedCalls parses `aether <cmd> [args…]` invocations out of a file.
+//
+// Fence-marker tolerance (T-172-26 / T-172-27): a closing (or opening) triple-
+// backtick marker glued to the end of a content line — `  --ttl "30d"` ```` — is
+// not on its own line, so a naive `strings.HasPrefix(strings.TrimSpace(line),
+// "```")` check never sees it, desyncing in-fence/out-of-fence parity for the
+// rest of the file. Three cases, in order of precedence:
+//
+//  1. No marker on the line at all: process the line under the current
+//     inFence state, unchanged from before this tolerance existed.
+//  2. The marker is the first non-whitespace content on the line (the
+//     established, unambiguous case): toggle inFence and skip the line
+//     entirely. Unchanged.
+//  3. The marker appears after other content (the glued case): process the
+//     substring BEFORE the marker as an ordinary line under the CURRENT
+//     inFence state — running processDocumentedCallLine exactly as case 1
+//     does — and only then toggle. The remainder of the line after the
+//     marker is discarded: an opening fence's info string (`bash`, `yaml`)
+//     never carries an invocation. A line carrying two markers toggles
+//     exactly once, at the first; TestAuditedCorpusHasNoGluedFenceMarkers
+//     forbids the glued shape outright, so that shape cannot accumulate in
+//     the corpus unnoticed. This is a bound, not a general CommonMark parser.
 func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 	t.Helper()
 	raw, err := os.ReadFile(path)
@@ -167,84 +188,104 @@ func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 	var calls []documentedCall
 	inFence := false
 	for i, line := range strings.Split(string(raw), "\n") {
+		lineNum := i + 1
 		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			// Case 2: marker is the line's only non-whitespace content.
 			inFence = !inFence
 			continue
 		}
-		if negatedCallRe.MatchString(line) {
+		if idx := strings.Index(line, "```"); idx != -1 {
+			// Case 3: marker glued to trailing content. Process what comes
+			// before it under the CURRENT fence state, then toggle.
+			calls = append(calls, processDocumentedCallLine(path, lineNum, line[:idx], inFence)...)
+			inFence = !inFence
 			continue
 		}
-		// Inside a fence the whole line is the command; outside, only
-		// backticked spans are.
-		if inFence {
-			if c, ok := parseFencedInvocation(path, i+1, line); ok {
-				calls = append(calls, c)
+		// Case 1: no marker on this line.
+		calls = append(calls, processDocumentedCallLine(path, lineNum, line, inFence)...)
+	}
+	return calls
+}
+
+// processDocumentedCallLine is the single per-line extraction body shared by
+// both the ordinary and glued-marker paths in extractDocumentedCalls, so the
+// backtick-span loop exists in exactly one place rather than two copies that
+// could drift apart.
+func processDocumentedCallLine(path string, lineNum int, line string, inFence bool) []documentedCall {
+	if negatedCallRe.MatchString(line) {
+		return nil
+	}
+	// Inside a fence the whole line is the command; outside, only
+	// backticked spans are.
+	if inFence {
+		if c, ok := parseFencedInvocation(path, lineNum, line); ok {
+			return []documentedCall{c}
+		}
+		return nil
+	}
+	var calls []documentedCall
+	for _, m := range backtickCallRe.FindAllStringSubmatch(line, -1) {
+		snippet := m[1]
+		fields := tokenizeShellLike(snippet)
+
+		// Find the `aether` token, skipping env-var prefixes and any
+		// shell plumbing before it. normalizeShellToken lets this see
+		// through command-substitution syntax glued to the same token,
+		// e.g. `x=$(aether cmd)` tokenizes to one `x=$(aether` field.
+		idx := -1
+		for j, f := range fields {
+			nf := normalizeShellToken(f)
+			if nf == "aether" || strings.HasSuffix(nf, "/aether") {
+				idx = j
+				break
 			}
+		}
+		if idx == -1 || idx+1 >= len(fields) {
 			continue
 		}
-		for _, m := range backtickCallRe.FindAllStringSubmatch(line, -1) {
-			snippet := m[1]
-			fields := tokenizeShellLike(snippet)
-
-			// Find the `aether` token, skipping env-var prefixes and any
-			// shell plumbing before it. normalizeShellToken lets this see
-			// through command-substitution syntax glued to the same token,
-			// e.g. `x=$(aether cmd)` tokenizes to one `x=$(aether` field.
-			idx := -1
-			for j, f := range fields {
-				nf := normalizeShellToken(f)
-				if nf == "aether" || strings.HasSuffix(nf, "/aether") {
-					idx = j
-					break
-				}
-			}
-			if idx == -1 || idx+1 >= len(fields) {
+		// Reject `FOO=bar aether ...` only when the token before `aether`
+		// is something other than an env assignment or a pipe/&&. A
+		// substitution still open from an EARLIER token — `echo $(foo |
+		// aether cmd)` — means `aether` is nested inside someone else's
+		// pipeline, not a genuine invocation; substitutionDepth catches
+		// that even though the immediately preceding token (`|`) looks
+		// like an ordinary, accepted pipe. The dead `prev != "$("`
+		// comparison (a token tokenizeShellLike can never produce on its
+		// own) is replaced by the shared helpers rather than left beside
+		// them.
+		if idx > 0 {
+			prev := fields[idx-1]
+			nested := substitutionDepth(fields[:idx]) > 0
+			if nested || (!envPrefixRe.MatchString(prev) && prev != "|" && prev != "&&" && prev != ";") {
 				continue
 			}
-			// Reject `FOO=bar aether ...` only when the token before `aether`
-			// is something other than an env assignment or a pipe/&&. A
-			// substitution still open from an EARLIER token — `echo $(foo |
-			// aether cmd)` — means `aether` is nested inside someone else's
-			// pipeline, not a genuine invocation; substitutionDepth catches
-			// that even though the immediately preceding token (`|`) looks
-			// like an ordinary, accepted pipe. The dead `prev != "$("`
-			// comparison (a token tokenizeShellLike can never produce on its
-			// own) is replaced by the shared helpers rather than left beside
-			// them.
-			if idx > 0 {
-				prev := fields[idx-1]
-				nested := substitutionDepth(fields[:idx]) > 0
-				if nested || (!envPrefixRe.MatchString(prev) && prev != "|" && prev != "&&" && prev != ";") {
-					continue
-				}
-			}
-
-			name := fields[idx+1]
-			args := append([]string{}, fields[idx+2:]...)
-			// Trim the command substitution's own closing `)` off the last
-			// token — `--enforce)` must be reported as `--enforce`, not as a
-			// stray-character typo — BEFORE the name-shape check below, so a
-			// zero-argument call like `$(aether status)` doesn't get its
-			// command name rejected as `"status)"`.
-			if openedSubstitution(fields[idx]) {
-				if len(args) > 0 {
-					args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
-				} else {
-					name = strings.TrimSuffix(name, ")")
-				}
-			}
-			if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
-				continue
-			}
-			calls = append(calls, documentedCall{
-				File:    path,
-				Line:    i + 1,
-				Raw:     strings.TrimSpace(snippet),
-				Command: name,
-				Args:    args,
-				InFence: false,
-			})
 		}
+
+		name := fields[idx+1]
+		args := append([]string{}, fields[idx+2:]...)
+		// Trim the command substitution's own closing `)` off the last
+		// token — `--enforce)` must be reported as `--enforce`, not as a
+		// stray-character typo — BEFORE the name-shape check below, so a
+		// zero-argument call like `$(aether status)` doesn't get its
+		// command name rejected as `"status)"`.
+		if openedSubstitution(fields[idx]) {
+			if len(args) > 0 {
+				args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
+			} else {
+				name = strings.TrimSuffix(name, ")")
+			}
+		}
+		if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
+			continue
+		}
+		calls = append(calls, documentedCall{
+			File:    path,
+			Line:    lineNum,
+			Raw:     strings.TrimSpace(snippet),
+			Command: name,
+			Args:    args,
+			InFence: false,
+		})
 	}
 	return calls
 }
@@ -794,6 +835,79 @@ func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 
 	if len(calls) != 6 {
 		t.Errorf("extracted %d calls, want 6 (%+v)", len(calls), calls)
+	}
+}
+
+// TestExtractorDoesNotDesyncOnGluedFenceMarker pins T-172-26 / T-172-27: a
+// triple-backtick marker glued to the end of a content line must not desync
+// extractDocumentedCalls' in-fence/out-of-fence parity, and the content
+// before a glued marker must still be processed rather than silently
+// dropped by a toggle-and-skip shortcut. The fixture reproduces the exact
+// corpus shapes at continue-full.md:1194 (marker glued to non-invocation
+// content) and :1759 (marker glued directly to an invocation), plus a prose
+// line that merely mentions a marker mid-sentence next to a genuine
+// backticked call.
+func TestExtractorDoesNotDesyncOnGluedFenceMarker(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "glued.md")
+	content := strings.Join([]string{
+		"Step X: emit feedback.",
+		"```bash",
+		"  --ttl \"30d\"```",
+		"",
+		"```bash",
+		"aether midden-recent-failures --limit 50",
+		"```",
+		"",
+		"```bash",
+		"aether backup-prune-global```",
+		"",
+		"Here is a call: `aether status --json` — a marker looks like this: ```.",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	calls := extractDocumentedCalls(t, path)
+	byCommand := map[string]documentedCall{}
+	for _, c := range calls {
+		byCommand[c.Command] = c
+	}
+
+	// Case: closing marker glued to non-invocation content (`  --ttl "30d"`
+	// + marker). A toggle that only recognises a marker on its own line
+	// never re-syncs, so the SECOND fenced block — the real invocation —
+	// becomes invisible. This is the live shape of continue-full.md:1194
+	// hiding continue-full.md:1243.
+	mrf, ok := byCommand["midden-recent-failures"]
+	if !ok {
+		t.Fatalf("extractor did not see midden-recent-failures: a closing marker glued to non-invocation content (`  --ttl \"30d\"` + marker) desynced fence parity and hid the fenced block that follows it; calls = %+v", calls)
+	}
+	if !mrf.InFence {
+		t.Errorf("midden-recent-failures call InFence = false, want true")
+	}
+
+	// Case: closing marker glued directly to an invocation line
+	// (`aether backup-prune-global` + marker, continue-full.md:1759). A
+	// toggle-and-skip shortcut — recognise the glued marker, toggle, then
+	// discard the whole line — drops this call outright.
+	bpg, ok := byCommand["backup-prune-global"]
+	if !ok {
+		t.Fatalf("extractor did not see backup-prune-global: a closing marker glued directly to an invocation line must still yield that invocation, not be silently discarded; calls = %+v", calls)
+	}
+	if !bpg.InFence || len(bpg.Args) != 0 {
+		t.Errorf("backup-prune-global call = %+v, want InFence true and zero args", bpg)
+	}
+
+	// Case: a prose line outside any fence that merely mentions a marker
+	// mid-sentence, alongside a genuine backticked call. The tolerance must
+	// not make ordinary prose calls disappear.
+	if _, ok := byCommand["status"]; !ok {
+		t.Error("extractor lost a backticked call on a prose line that merely mentions a marker mid-sentence — the glued-marker tolerance must not make ordinary prose calls disappear")
+	}
+
+	if len(calls) != 3 {
+		t.Errorf("extracted %d calls, want 3 (%+v)", len(calls), calls)
 	}
 }
 
