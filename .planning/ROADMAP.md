@@ -53,7 +53,7 @@
 
 **How success criteria are written here.** CLAUDE.md's Definition of Done governs: *a requirement is satisfied only when a command exists that someone can run, and that command fails when the requirement is unmet.* Two corrections from this repo's own history shaped the criteria below. A criterion reading "fewer than 27 castes loaded" already passed and proved nothing. A token ledger's unit test asserted the same arithmetic its parser used, so a 186x undercount shipped green — which is why the spend criteria name the expected figures (102,050 / 102,550) rather than the intent ("measure tokens"). Where possible the criteria assert a **proportion or an invariant** (grand total equals the sum of the `self` column; the allowlist may only shrink; the depth cap numbers hold with five user agents installed) rather than the presence of a named section.
 
-- [ ] **Phase 172: Wiring Proof** (6/6 plans built, verification found gaps 2026-08-11 — criteria 3 and 4 unmet, see 172-VERIFICATION.md) - A registered subcommand with no caller fails CI, and every CLI flag named in `.aether/*.md` exists — the ratchet lands before the capabilities it constrains
+- [ ] **Phase 172: Wiring Proof** (6/6 plans built, verification found gaps 2026-08-11 — criteria 3 and 4 unmet, see 172-VERIFICATION.md; gap-closure plans 172-06..08 written 2026-08-11, waves 5-6) - A registered subcommand with no caller fails CI, and every CLI flag named in `.aether/*.md` exists — the ratchet lands before the capabilities it constrains
 - [ ] **Phase 173: Delegation Guard** - Depth is derived from the parent and refused past a cap, a whole-tree budget bounds what depth alone cannot, guards fail closed, and the operator watches the tree grow. Nothing gains the ability to delegate here
 - [ ] **Phase 174: Spend Ledger** - What a run cost is measured with stated arithmetic including cache tokens, persists past the process, separates estimates from measurements, and rolls nested children up to their parent exactly once
 - [ ] **Phase 175: Orchestration Visibility** - The operator reads which workers the Queen chose and why, which it did not call, where the runtime overrode it, and which workers actually found something
@@ -625,7 +625,7 @@ Plans:
   2. `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` instructs every worker to run — exits 0. Today it exits 1 with `Error: unknown flag: --enforce`
   3. A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming the file, the line, and the offending flag when an instruction names a flag the binary does not register. Seeded to fail today against `--enforce`, and it passes only once criterion 2 does
   4. The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file
-**Plans**: 6 plans in 4 waves
+**Plans**: 9 plans in 6 waves (plans 06-08 added 2026-08-11 to close the two confirmed verification gaps: criterion 3's fence-parity blind spot and criterion 4's decoy-satisfiable durability check)
 
 Plans:
 **Wave 1**
@@ -641,6 +641,13 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 172-05-PLAN.md — wave 4 — D-15: named CI step, the delete-a-caller red/green proof, and correcting the phase's recorded orphan count
+
+**Wave 5** *(gap closure — blocked on Wave 4 verification)*
+- [ ] 172-06-PLAN.md — wave 5 — WIRE-03 (gap 1): make the audit see the region a glued closing fence marker hid, fix the two live violations inside it, and fail a test when the defect shape returns anywhere in the corpus
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 172-07-PLAN.md — wave 6 — WIRE-01, WIRE-02, WIRE-03 (gap 2, D-11, D-15): scope the blanket release-gate check to the step that can actually fail, and scan every guard file this phase created from one inventory
+- [ ] 172-08-PLAN.md — wave 6 — WIRE-01, WIRE-03: make the extractor's substitution opener and closer one decision, and make the flag audit fail when it is reading nothing
 
 ### Phase 173: Delegation Guard
 **Goal**: Recursive delegation is bounded by the runtime at the one chokepoint an LLM cannot route around — the spawn-recording call. Depth is derived from the parent's recorded entry rather than asserted by the caller, a whole-tree budget bounds what depth alone cannot, every guard fails closed, and the operator can watch the tree while it grows. **Nothing gains the ability to delegate in this phase**; enforcement lands before capability because parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs.
