@@ -127,18 +127,36 @@ func normalizeShellToken(tok string) string {
 	}
 }
 
-// openedSubstitution reports whether tok itself begins (after an optional
-// `VAR=` assignment) with a command-substitution opener, `$(`. This is what
-// distinguishes `result=$(aether cmd)` — where THIS token opened the
-// substitution and its call's final argument therefore carries a stray
-// trailing `)` that belongs to the substitution, not to the argument —
-// from a token that merely sits somewhere inside one opened earlier.
-func openedSubstitution(tok string) bool {
+// substitutionOpener reports the command-substitution opener tok itself
+// begins with (after an optional `VAR=` assignment prefix) and the
+// delimiter that closes it: `$(` closed by `)`, a backtick closed by a
+// backtick, a bare `(` closed by `)`. It returns two empty strings when tok
+// opens no substitution.
+//
+// This is the other half of the decision normalizeShellToken makes when
+// stripping openers, and the two functions must recognise exactly the same
+// three cases in the same order: normalizeShellToken strips three openers
+// while the trim-the-closing-delimiter decision below used to recognise
+// only one (`$(`), so a backtick substitution's command name carried a
+// stray trailing backtick and a bare-subshell call's final token carried a
+// stray trailing `)` — both silently dropped or misreported (CR-05).
+// Adding an opener to one function without the other reproduces that gap;
+// keep them adjacent and keep them in the same order.
+func substitutionOpener(tok string) (open, closeDelim string) {
 	t := tok
 	if loc := assignmentPrefixRe.FindStringIndex(t); loc != nil {
 		t = t[loc[1]:]
 	}
-	return strings.HasPrefix(t, "$(")
+	switch {
+	case strings.HasPrefix(t, "$("):
+		return "$(", ")"
+	case strings.HasPrefix(t, "`"):
+		return "`", "`"
+	case strings.HasPrefix(t, "("):
+		return "(", ")"
+	default:
+		return "", ""
+	}
 }
 
 // substitutionDepth reports how many more `(` than `)` characters have been
@@ -263,16 +281,16 @@ func processDocumentedCallLine(path string, lineNum int, line string, inFence bo
 
 		name := fields[idx+1]
 		args := append([]string{}, fields[idx+2:]...)
-		// Trim the command substitution's own closing `)` off the last
-		// token — `--enforce)` must be reported as `--enforce`, not as a
-		// stray-character typo — BEFORE the name-shape check below, so a
-		// zero-argument call like `$(aether status)` doesn't get its
+		// Trim the command substitution's own closing delimiter off the
+		// last token — `--enforce)` must be reported as `--enforce`, not
+		// as a stray-character typo — BEFORE the name-shape check below,
+		// so a zero-argument call like `$(aether status)` doesn't get its
 		// command name rejected as `"status)"`.
-		if openedSubstitution(fields[idx]) {
+		if _, closeDelim := substitutionOpener(fields[idx]); closeDelim != "" {
 			if len(args) > 0 {
-				args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
+				args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], closeDelim)
 			} else {
-				name = strings.TrimSuffix(name, ")")
+				name = strings.TrimSuffix(name, closeDelim)
 			}
 		}
 		if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
@@ -321,16 +339,16 @@ func parseFencedInvocation(path string, line int, text string) (documentedCall, 
 	}
 	name := fields[idx+1]
 	args := append([]string{}, fields[idx+2:]...)
-	// Trim the command substitution's own closing `)` off the last token —
-	// `--enforce)` must be reported as `--enforce`, not as a stray-character
-	// typo — BEFORE the name-shape check below, so a zero-argument call like
-	// `$(aether status)` doesn't get its command name rejected as
-	// `"status)"`.
-	if openedSubstitution(fields[idx]) {
+	// Trim the command substitution's own closing delimiter off the last
+	// token — `--enforce)` must be reported as `--enforce`, not as a
+	// stray-character typo — BEFORE the name-shape check below, so a
+	// zero-argument call like `$(aether status)` doesn't get its command
+	// name rejected as `"status)"`.
+	if _, closeDelim := substitutionOpener(fields[idx]); closeDelim != "" {
 		if len(args) > 0 {
-			args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
+			args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], closeDelim)
 		} else {
-			name = strings.TrimSuffix(name, ")")
+			name = strings.TrimSuffix(name, closeDelim)
 		}
 	}
 	if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
@@ -773,8 +791,11 @@ func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 		"The manual's own shape: `result=$(aether spawn-can-spawn 5 --enforce)` checks the depth.",
 		"Redirected output: `$(aether skill-index 2>/dev/null)` is still a valid call.",
 		"Nested pipeline, must NOT be extracted: `echo $(foo | aether cmd)`.",
+		"Bare subshell form: `(aether colony-name)` returns just the name.",
+		"Grouped invocation: `(aether midden-recent-failures --limit 5)` trims recent failures.",
 		"```bash",
 		"NAME=$(aether cmd --flag)",
+		"RESULT=`aether skill-list`",
 		"```",
 	}, "\n")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
@@ -848,8 +869,61 @@ func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 		t.Errorf("fenced cmd call = %+v, want Args [\"--flag\"] and InFence true", fc)
 	}
 
-	if len(calls) != 6 {
-		t.Errorf("extracted %d calls, want 6 (%+v)", len(calls), calls)
+	// CR-05, form 1: a backtick-substitution assignment. Before the
+	// substitutionOpener fix, normalizeShellToken strips the leading
+	// backtick to find `aether`, but the name-shape check never gets a
+	// trimmed trailing backtick off the command name, so `skill-list``
+	// (with a stray backtick) fails `^[a-z][a-z0-9-]*$` and the whole call
+	// is silently dropped.
+	if sl, ok := byCommand["skill-list"]; !ok {
+		t.Error("extractor missed the backtick-substitution invocation `RESULT=`aether skill-list``")
+	} else {
+		if len(sl.Args) != 0 {
+			t.Errorf("skill-list call has unexpected args %v, want none", sl.Args)
+		}
+		if strings.Contains(sl.Command, "`") {
+			t.Errorf("skill-list command name %q retains a stray backtick", sl.Command)
+		}
+		for _, a := range sl.Args {
+			if strings.Contains(a, "`") {
+				t.Errorf("skill-list arg %q retains a stray backtick", a)
+			}
+		}
+	}
+
+	// CR-05, form 2: a bare-subshell invocation, `(aether colony-name)`.
+	// Before the fix, the trim decision recognises only `$(`, so the
+	// trailing `)` is never trimmed and the command name is reported as
+	// `colony-name)`, which fails the name-shape check and is dropped.
+	if cn, ok := byCommand["colony-name"]; !ok {
+		t.Error("extractor missed the bare-subshell invocation `(aether colony-name)`")
+	} else if len(cn.Args) != 0 {
+		t.Errorf("colony-name call has unexpected args %v, want none", cn.Args)
+	}
+
+	// CR-05, form 3: a bare-subshell invocation with a trailing flag value,
+	// `(aether midden-recent-failures --limit 5)`. Before the fix, the
+	// untrimmed trailing `)` produces a false-positive flag violation
+	// against a call nobody wrote wrong: the last argument is reported as
+	// `5)` rather than `5`.
+	if mr, ok := byCommand["midden-recent-failures"]; !ok {
+		t.Error("extractor missed the bare-subshell invocation `(aether midden-recent-failures --limit 5)`")
+	} else {
+		if len(mr.Args) != 2 || mr.Args[0] != "--limit" || mr.Args[1] != "5" {
+			t.Errorf("midden-recent-failures args = %v, want [\"--limit\" \"5\"] (trailing `)` must not survive)", mr.Args)
+		}
+		for _, a := range mr.Args {
+			if strings.Contains(a, ")") {
+				t.Errorf("midden-recent-failures arg %q retains a stray closing paren", a)
+			}
+		}
+		if v := validateCallAgainstCobra(mr); v != "" {
+			t.Errorf("midden-recent-failures call flagged a violation: %s (it really does accept --limit, cmd/midden_cmds.go:492)", v)
+		}
+	}
+
+	if len(calls) != 9 {
+		t.Errorf("extracted %d calls, want 9 (%+v)", len(calls), calls)
 	}
 }
 

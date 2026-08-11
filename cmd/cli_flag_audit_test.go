@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -65,10 +66,20 @@ func skipSubcommandNames() map[string]bool {
 // .aether/docs/command-playbooks/*.md for "aether <subcommand> --flag value"
 // patterns, then verifies each subcommand and flag exists in the Go runtime.
 func TestCLIFlagAudit(t *testing.T) {
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	// Root-resolved, not `..`-relative: a `..`-relative path silently
+	// mis-scopes the corpus depending on the test binary's working
+	// directory, and cannot be told apart from "directory legitimately
+	// moved" (T-172-38). The three directories stay exactly the three D-06
+	// puts in scope.
 	markdownDirs := []string{
-		"../.claude/commands/ant/",
-		"../.opencode/commands/ant/",
-		"../.aether/docs/command-playbooks/",
+		filepath.Join(root, ".claude", "commands", "ant"),
+		filepath.Join(root, ".opencode", "commands", "ant"),
+		filepath.Join(root, ".aether", "docs", "command-playbooks"),
 	}
 
 	// Regex to extract "aether <subcommand>" calls with optional flags.
@@ -108,19 +119,46 @@ func TestCLIFlagAudit(t *testing.T) {
 	// Track which subcommands were found in markdown
 	foundSubcommands := make(map[string]bool)
 
+	// scannedFiles counts every .md file actually read into the audit. This
+	// is the anti-vacuity floor's numerator: a directory that moves or is
+	// renamed must not silently reduce this to zero and still pass — see
+	// the floor check after the loop.
+	scannedFiles := 0
+
 	for _, dir := range markdownDirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			continue // directory may not exist in test environment
+			// A declared input directory is not optional. Reported loudly
+			// (not a silent `continue`) so moving or renaming a corpus
+			// directory cannot switch this audit off with no code change
+			// and no red test (T-172-38) — 172-04's shrink-only skip-list
+			// guard is built on this test staying non-vacuous.
+			t.Errorf("read declared corpus directory %s: %v — a declared input directory that cannot be read is a loud failure for this audit, not a silent skip", dir, err)
+			continue
 		}
 		for _, entry := range entries {
 			if !strings.HasSuffix(entry.Name(), ".md") {
 				continue
 			}
-			data, err := os.ReadFile(dir + entry.Name())
+			filePath := filepath.Join(dir, entry.Name())
+			data, err := os.ReadFile(filePath)
 			if err != nil {
+				t.Errorf("read %s: %v — a .md entry the directory listing just reported must be readable", filePath, err)
 				continue
 			}
+			scannedFiles++
+
+			// filepath.Rel-derived repo-relative path, not entry.Name(): a
+			// bare basename does not identify the file when the same name
+			// exists in more than one corpus — build.md exists in both
+			// .claude/commands/ant/ and .opencode/commands/ant/ — and
+			// ROADMAP criterion 3 requires a failure to name the file
+			// (T-172-39).
+			relPath, relErr := filepath.Rel(root, filePath)
+			if relErr != nil {
+				relPath = filePath
+			}
+
 			lines := strings.Split(string(data), "\n")
 			for lineNum, line := range lines {
 				matches := re.FindAllStringSubmatch(line, -1)
@@ -146,7 +184,7 @@ func TestCLIFlagAudit(t *testing.T) {
 					}
 					if !exists {
 						mismatches = append(mismatches, mismatch{
-							file:    entry.Name(),
+							file:    relPath,
 							lineNum: lineNum + 1,
 							message: fmt.Sprintf("subcommand %q not registered in Go runtime", subcmd),
 						})
@@ -160,7 +198,7 @@ func TestCLIFlagAudit(t *testing.T) {
 						flagName := fm[1]
 						if !flagSet[flagName] {
 							mismatches = append(mismatches, mismatch{
-								file:    entry.Name(),
+								file:    relPath,
 								lineNum: lineNum + 1,
 								message: fmt.Sprintf("subcommand %q missing flag --%s", canonical, flagName),
 							})
@@ -169,6 +207,17 @@ func TestCLIFlagAudit(t *testing.T) {
 				}
 			}
 		}
+	}
+
+	// Anti-vacuity floor (T-172-38): a guard that can pass while reading
+	// zero files is indistinguishable from success. The measured count
+	// today is 141 .md files across the three corpora (63 + 63 + 15); 120
+	// leaves room for ordinary churn while still failing if a directory
+	// disappears or comes back empty. scannedFiles=0, foundSubcommands=0 is
+	// exactly the historical bug: a guard reading nothing passes forever.
+	if scannedFiles < 120 || len(foundSubcommands) == 0 {
+		t.Fatalf("flag audit read too little to trust: scannedFiles=%d (want >= 120), foundSubcommands=%d — a guard reading nothing passes forever, silently, the moment its declared corpus directories move, are renamed, or come back empty",
+			scannedFiles, len(foundSubcommands))
 	}
 
 	if len(mismatches) > 0 {
@@ -190,6 +239,7 @@ func TestCLIFlagAudit(t *testing.T) {
 	// Log coverage summary
 	t.Logf("Audit coverage: %d unique subcommands found in markdown", len(foundSubcommands))
 	t.Logf("Registered subcommands in Go runtime: %d", len(registered))
+	t.Logf("scanned %d files across %d corpora", scannedFiles, len(markdownDirs))
 }
 
 // TestCLIFlagAuditSubcommandsRegistered verifies the 5 specific subcommands
