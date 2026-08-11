@@ -1,0 +1,12 @@
+[
+  {
+    "name": "pending-decisions",
+    "reason": "markdown-only-shorthand",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "verify-castes",
+    "reason": "markdown-only-shorthand",
+    "owner_phase": "RECLAIM"
+  }
+]
