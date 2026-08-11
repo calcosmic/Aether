@@ -385,7 +385,8 @@ Run using the Bash tool with description "Capturing chaos resilience success..."
 ```bash
 aether memory-capture \
   --type "success" \
-  --content "Chaos resilience strong: ${summary}"```
+  --content "Chaos resilience strong: ${summary}"
+```
 
 This records the resilience success in learning-observations.json via the existing memory pipeline (observe + pheromone + auto-promotion + rolling-summary).
 
@@ -422,7 +423,8 @@ aether midden-write --category "verification" --message "Watcher verification fa
 # Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Verification failed: ${issue_title} - ${issue_description}"```
+  --content "Verification failed: ${issue_title} - ${issue_description}"
+```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
 

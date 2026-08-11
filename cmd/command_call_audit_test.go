@@ -157,6 +157,27 @@ func substitutionDepth(toks []string) int {
 }
 
 // extractDocumentedCalls parses `aether <cmd> [args…]` invocations out of a file.
+//
+// Fence-marker tolerance (T-172-26 / T-172-27): a closing (or opening) triple-
+// backtick marker glued to the end of a content line — `  --ttl "30d"` ```` — is
+// not on its own line, so a naive `strings.HasPrefix(strings.TrimSpace(line),
+// "```")` check never sees it, desyncing in-fence/out-of-fence parity for the
+// rest of the file. Three cases, in order of precedence:
+//
+//  1. No marker on the line at all: process the line under the current
+//     inFence state, unchanged from before this tolerance existed.
+//  2. The marker is the first non-whitespace content on the line (the
+//     established, unambiguous case): toggle inFence and skip the line
+//     entirely. Unchanged.
+//  3. The marker appears after other content (the glued case): process the
+//     substring BEFORE the marker as an ordinary line under the CURRENT
+//     inFence state — running processDocumentedCallLine exactly as case 1
+//     does — and only then toggle. The remainder of the line after the
+//     marker is discarded: an opening fence's info string (`bash`, `yaml`)
+//     never carries an invocation. A line carrying two markers toggles
+//     exactly once, at the first; TestAuditedCorpusHasNoGluedFenceMarkers
+//     forbids the glued shape outright, so that shape cannot accumulate in
+//     the corpus unnoticed. This is a bound, not a general CommonMark parser.
 func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 	t.Helper()
 	raw, err := os.ReadFile(path)
@@ -167,84 +188,104 @@ func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 	var calls []documentedCall
 	inFence := false
 	for i, line := range strings.Split(string(raw), "\n") {
+		lineNum := i + 1
 		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			// Case 2: marker is the line's only non-whitespace content.
 			inFence = !inFence
 			continue
 		}
-		if negatedCallRe.MatchString(line) {
+		if idx := strings.Index(line, "```"); idx != -1 {
+			// Case 3: marker glued to trailing content. Process what comes
+			// before it under the CURRENT fence state, then toggle.
+			calls = append(calls, processDocumentedCallLine(path, lineNum, line[:idx], inFence)...)
+			inFence = !inFence
 			continue
 		}
-		// Inside a fence the whole line is the command; outside, only
-		// backticked spans are.
-		if inFence {
-			if c, ok := parseFencedInvocation(path, i+1, line); ok {
-				calls = append(calls, c)
+		// Case 1: no marker on this line.
+		calls = append(calls, processDocumentedCallLine(path, lineNum, line, inFence)...)
+	}
+	return calls
+}
+
+// processDocumentedCallLine is the single per-line extraction body shared by
+// both the ordinary and glued-marker paths in extractDocumentedCalls, so the
+// backtick-span loop exists in exactly one place rather than two copies that
+// could drift apart.
+func processDocumentedCallLine(path string, lineNum int, line string, inFence bool) []documentedCall {
+	if negatedCallRe.MatchString(line) {
+		return nil
+	}
+	// Inside a fence the whole line is the command; outside, only
+	// backticked spans are.
+	if inFence {
+		if c, ok := parseFencedInvocation(path, lineNum, line); ok {
+			return []documentedCall{c}
+		}
+		return nil
+	}
+	var calls []documentedCall
+	for _, m := range backtickCallRe.FindAllStringSubmatch(line, -1) {
+		snippet := m[1]
+		fields := tokenizeShellLike(snippet)
+
+		// Find the `aether` token, skipping env-var prefixes and any
+		// shell plumbing before it. normalizeShellToken lets this see
+		// through command-substitution syntax glued to the same token,
+		// e.g. `x=$(aether cmd)` tokenizes to one `x=$(aether` field.
+		idx := -1
+		for j, f := range fields {
+			nf := normalizeShellToken(f)
+			if nf == "aether" || strings.HasSuffix(nf, "/aether") {
+				idx = j
+				break
 			}
+		}
+		if idx == -1 || idx+1 >= len(fields) {
 			continue
 		}
-		for _, m := range backtickCallRe.FindAllStringSubmatch(line, -1) {
-			snippet := m[1]
-			fields := tokenizeShellLike(snippet)
-
-			// Find the `aether` token, skipping env-var prefixes and any
-			// shell plumbing before it. normalizeShellToken lets this see
-			// through command-substitution syntax glued to the same token,
-			// e.g. `x=$(aether cmd)` tokenizes to one `x=$(aether` field.
-			idx := -1
-			for j, f := range fields {
-				nf := normalizeShellToken(f)
-				if nf == "aether" || strings.HasSuffix(nf, "/aether") {
-					idx = j
-					break
-				}
-			}
-			if idx == -1 || idx+1 >= len(fields) {
+		// Reject `FOO=bar aether ...` only when the token before `aether`
+		// is something other than an env assignment or a pipe/&&. A
+		// substitution still open from an EARLIER token — `echo $(foo |
+		// aether cmd)` — means `aether` is nested inside someone else's
+		// pipeline, not a genuine invocation; substitutionDepth catches
+		// that even though the immediately preceding token (`|`) looks
+		// like an ordinary, accepted pipe. The dead `prev != "$("`
+		// comparison (a token tokenizeShellLike can never produce on its
+		// own) is replaced by the shared helpers rather than left beside
+		// them.
+		if idx > 0 {
+			prev := fields[idx-1]
+			nested := substitutionDepth(fields[:idx]) > 0
+			if nested || (!envPrefixRe.MatchString(prev) && prev != "|" && prev != "&&" && prev != ";") {
 				continue
 			}
-			// Reject `FOO=bar aether ...` only when the token before `aether`
-			// is something other than an env assignment or a pipe/&&. A
-			// substitution still open from an EARLIER token — `echo $(foo |
-			// aether cmd)` — means `aether` is nested inside someone else's
-			// pipeline, not a genuine invocation; substitutionDepth catches
-			// that even though the immediately preceding token (`|`) looks
-			// like an ordinary, accepted pipe. The dead `prev != "$("`
-			// comparison (a token tokenizeShellLike can never produce on its
-			// own) is replaced by the shared helpers rather than left beside
-			// them.
-			if idx > 0 {
-				prev := fields[idx-1]
-				nested := substitutionDepth(fields[:idx]) > 0
-				if nested || (!envPrefixRe.MatchString(prev) && prev != "|" && prev != "&&" && prev != ";") {
-					continue
-				}
-			}
-
-			name := fields[idx+1]
-			args := append([]string{}, fields[idx+2:]...)
-			// Trim the command substitution's own closing `)` off the last
-			// token — `--enforce)` must be reported as `--enforce`, not as a
-			// stray-character typo — BEFORE the name-shape check below, so a
-			// zero-argument call like `$(aether status)` doesn't get its
-			// command name rejected as `"status)"`.
-			if openedSubstitution(fields[idx]) {
-				if len(args) > 0 {
-					args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
-				} else {
-					name = strings.TrimSuffix(name, ")")
-				}
-			}
-			if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
-				continue
-			}
-			calls = append(calls, documentedCall{
-				File:    path,
-				Line:    i + 1,
-				Raw:     strings.TrimSpace(snippet),
-				Command: name,
-				Args:    args,
-				InFence: false,
-			})
 		}
+
+		name := fields[idx+1]
+		args := append([]string{}, fields[idx+2:]...)
+		// Trim the command substitution's own closing `)` off the last
+		// token — `--enforce)` must be reported as `--enforce`, not as a
+		// stray-character typo — BEFORE the name-shape check below, so a
+		// zero-argument call like `$(aether status)` doesn't get its
+		// command name rejected as `"status)"`.
+		if openedSubstitution(fields[idx]) {
+			if len(args) > 0 {
+				args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
+			} else {
+				name = strings.TrimSuffix(name, ")")
+			}
+		}
+		if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
+			continue
+		}
+		calls = append(calls, documentedCall{
+			File:    path,
+			Line:    lineNum,
+			Raw:     strings.TrimSpace(snippet),
+			Command: name,
+			Args:    args,
+			InFence: false,
+		})
 	}
 	return calls
 }
@@ -305,9 +346,15 @@ func parseFencedInvocation(path string, line int, text string) (documentedCall, 
 	}, true
 }
 
-func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
+// auditedFilePaths returns every file the audit reads: the recursive walk
+// over auditedCorpora filtered to .md/.yaml/.yml, plus each existing path in
+// auditedFiles. Both collectDocumentedCalls and the corpus-wide glued-marker
+// sweep (TestAuditedCorpusHasNoGluedFenceMarkers) call this ONE enumeration,
+// so the sweep can never drift from the set the audit actually reads — a
+// hardcoded second file list would rot the moment a corpus changed shape.
+func auditedFilePaths(t *testing.T, root string) []string {
 	t.Helper()
-	var all []documentedCall
+	var paths []string
 	for _, corpus := range auditedCorpora {
 		dir := filepath.Join(root, corpus)
 		if _, err := os.Stat(dir); err != nil {
@@ -319,7 +366,7 @@ func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
 			}
 			switch strings.ToLower(filepath.Ext(p)) {
 			case ".md", ".yaml", ".yml":
-				all = append(all, extractDocumentedCalls(t, p)...)
+				paths = append(paths, p)
 			}
 			return nil
 		})
@@ -335,6 +382,15 @@ func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
 		if _, err := os.Stat(p); err != nil {
 			continue // listed file removed; matches the corpus-removal tolerance above
 		}
+		paths = append(paths, p)
+	}
+	return paths
+}
+
+func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
+	t.Helper()
+	var all []documentedCall
+	for _, p := range auditedFilePaths(t, root) {
 		all = append(all, extractDocumentedCalls(t, p)...)
 	}
 	return all
@@ -797,6 +853,79 @@ func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 	}
 }
 
+// TestExtractorDoesNotDesyncOnGluedFenceMarker pins T-172-26 / T-172-27: a
+// triple-backtick marker glued to the end of a content line must not desync
+// extractDocumentedCalls' in-fence/out-of-fence parity, and the content
+// before a glued marker must still be processed rather than silently
+// dropped by a toggle-and-skip shortcut. The fixture reproduces the exact
+// corpus shapes at continue-full.md:1194 (marker glued to non-invocation
+// content) and :1759 (marker glued directly to an invocation), plus a prose
+// line that merely mentions a marker mid-sentence next to a genuine
+// backticked call.
+func TestExtractorDoesNotDesyncOnGluedFenceMarker(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "glued.md")
+	content := strings.Join([]string{
+		"Step X: emit feedback.",
+		"```bash",
+		"  --ttl \"30d\"```",
+		"",
+		"```bash",
+		"aether midden-recent-failures --limit 50",
+		"```",
+		"",
+		"```bash",
+		"aether backup-prune-global```",
+		"",
+		"Here is a call: `aether status --json` — a marker looks like this: ```.",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	calls := extractDocumentedCalls(t, path)
+	byCommand := map[string]documentedCall{}
+	for _, c := range calls {
+		byCommand[c.Command] = c
+	}
+
+	// Case: closing marker glued to non-invocation content (`  --ttl "30d"`
+	// + marker). A toggle that only recognises a marker on its own line
+	// never re-syncs, so the SECOND fenced block — the real invocation —
+	// becomes invisible. This is the live shape of continue-full.md:1194
+	// hiding continue-full.md:1243.
+	mrf, ok := byCommand["midden-recent-failures"]
+	if !ok {
+		t.Fatalf("extractor did not see midden-recent-failures: a closing marker glued to non-invocation content (`  --ttl \"30d\"` + marker) desynced fence parity and hid the fenced block that follows it; calls = %+v", calls)
+	}
+	if !mrf.InFence {
+		t.Errorf("midden-recent-failures call InFence = false, want true")
+	}
+
+	// Case: closing marker glued directly to an invocation line
+	// (`aether backup-prune-global` + marker, continue-full.md:1759). A
+	// toggle-and-skip shortcut — recognise the glued marker, toggle, then
+	// discard the whole line — drops this call outright.
+	bpg, ok := byCommand["backup-prune-global"]
+	if !ok {
+		t.Fatalf("extractor did not see backup-prune-global: a closing marker glued directly to an invocation line must still yield that invocation, not be silently discarded; calls = %+v", calls)
+	}
+	if !bpg.InFence || len(bpg.Args) != 0 {
+		t.Errorf("backup-prune-global call = %+v, want InFence true and zero args", bpg)
+	}
+
+	// Case: a prose line outside any fence that merely mentions a marker
+	// mid-sentence, alongside a genuine backticked call. The tolerance must
+	// not make ordinary prose calls disappear.
+	if _, ok := byCommand["status"]; !ok {
+		t.Error("extractor lost a backticked call on a prose line that merely mentions a marker mid-sentence — the glued-marker tolerance must not make ordinary prose calls disappear")
+	}
+
+	if len(calls) != 3 {
+		t.Errorf("extracted %d calls, want 3 (%+v)", len(calls), calls)
+	}
+}
+
 // T-160-24: an unresolvable command name must be a reported violation, not a
 // silent skip. validateCallAgainstCobra deliberately returns no violation for
 // names cobra cannot resolve ("one failure per cause"), deferring to a
@@ -838,11 +967,17 @@ func TestDocumentedCommandNamesResolve(t *testing.T) {
 // this list is that the gate-versus-enrichment judgement is made once, on
 // purpose, in review — not inherited silently from the enrichment default.
 var knownEnrichmentSubcommands = map[string]bool{
-	"abandon":                     true,
-	"activity-log":                true,
-	"assumption-list":             true,
-	"assumption-validate":         true,
-	"assumptions-analyze":         true,
+	"abandon":             true,
+	"activity-log":        true,
+	"assumption-list":     true,
+	"assumption-validate": true,
+	"assumptions-analyze": true,
+	// backup-prune-global and temp-clean judged here, deliberately, at the
+	// point the 172-06 fence repair (Task 3) makes them visible for the
+	// first time: both are housekeeping/cleanup commands whose failure
+	// degrades tidiness only — no verification result, security scan, or
+	// gate outcome depends on either — so both are enrichment, not a gate.
+	"backup-prune-global":         true,
 	"behavior-observe":            true,
 	"build-completion-stage":      true,
 	"build-finalize":              true,
@@ -982,18 +1117,24 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"swarm-finalize":              true,
 	"swarm":                       true,
 	"swarm-display-update":        true,
-	"tunnels":                     true,
-	"unblock":                     true,
-	"unload-state":                true,
-	"update":                      true,
-	"validate-state":              true,
-	"validate-worker-response":    true,
-	"verify-castes":               true,
-	"version":                     true,
-	"watch":                       true,
-	"worktree-allocate":           true,
-	"worktree-list":               true,
-	"worktree-merge-back":         true,
+	// temp-clean judged here, deliberately, at the point the 172-06 fence
+	// repair (Task 3) makes it visible for the first time: it is a
+	// housekeeping/cleanup command whose failure degrades tidiness only —
+	// no verification result, security scan, or gate outcome depends on it
+	// — so it is enrichment, not a gate.
+	"temp-clean":               true,
+	"tunnels":                  true,
+	"unblock":                  true,
+	"unload-state":             true,
+	"update":                   true,
+	"validate-state":           true,
+	"validate-worker-response": true,
+	"verify-castes":            true,
+	"version":                  true,
+	"watch":                    true,
+	"worktree-allocate":        true,
+	"worktree-list":            true,
+	"worktree-merge-back":      true,
 }
 
 // T-160-23: no documented subcommand may sit unclassified. The enrichment
@@ -1080,4 +1221,64 @@ func TestGateClassifiedCallsHaveGateWiring(t *testing.T) {
 	if commandCallSeverityFor("status") != severityEnrichment {
 		t.Error("status should default to enrichment; halting a run because a status render failed would be its own bug")
 	}
+}
+
+// gluedFenceMarker is built by concatenation rather than as one contiguous
+// string literal, following the buildConstraintRe precedent
+// (subcommand_reachability_ratchet_test.go:72) — so this file's own source
+// never carries the bare triple-backtick marker text on a single line.
+var gluedFenceMarker = "`" + "`" + "`"
+
+// TestAuditedCorpusHasNoGluedFenceMarkers is the corpus-wide guard for
+// T-172-26 / T-172-27 / T-172-28: a triple-backtick fence marker glued to
+// the end of a content line desyncs extractDocumentedCalls' in-fence
+// tracking and hides every invocation after it from the audit — the live
+// shape that let continue-full.md:1243's positional-argument violation go
+// unaudited for the whole phase. This sweep fails, naming file:line and the
+// offending text, for any line in the audited corpus where the marker is
+// present but is NOT the line's first non-whitespace content.
+//
+// Shares auditedFilePaths with collectDocumentedCalls so this sweep can
+// never drift from the set the audit actually reads — a hardcoded second
+// file list would rot the moment a corpus changed shape, which is the whole
+// point of "sweep the audited corpus" rather than a fixed directory list.
+func TestAuditedCorpusHasNoGluedFenceMarkers(t *testing.T) {
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	paths := auditedFilePaths(t, root)
+	// Anti-vacuity (T-172-28): a sweep whose enumeration silently returns
+	// nothing — a moved corpus, a wrong root, a swallowed walk error —
+	// would pass forever while checking nothing. Measured today: 215.
+	if len(paths) < 200 {
+		t.Fatalf("auditedFilePaths returned %d path(s), want >= 200 (measured 215) — an enumeration that silently returns nothing would pass forever, checking nothing", len(paths))
+	}
+
+	var offenders []string
+	for _, p := range paths {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("read %s: %v", p, err)
+		}
+		for i, line := range strings.Split(string(raw), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), gluedFenceMarker) {
+				continue // marker is the line's own content — the correct, unglued shape
+			}
+			if strings.Contains(line, gluedFenceMarker) {
+				rel, relErr := filepath.Rel(root, p)
+				if relErr != nil {
+					rel = p
+				}
+				offenders = append(offenders, fmt.Sprintf("%s:%d: %s", rel, i+1, strings.TrimSpace(line)))
+			}
+		}
+	}
+
+	if len(offenders) > 0 {
+		t.Errorf("%d line(s) glue a fence marker to trailing content — this desyncs extractDocumentedCalls' fence tracking and hides every invocation after it from the audit, silently, the way continue-full.md:1243 sat unaudited for this whole phase:\n  %s",
+			len(offenders), strings.Join(offenders, "\n  "))
+	}
+	t.Logf("scanned %d files in the audited corpus", len(paths))
 }

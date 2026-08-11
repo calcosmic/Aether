@@ -22,3 +22,11 @@ because they are unrelated to the task that found them (Scope Boundary rule).
   independently of command-substitution recognition, and was already
   invisible to the pre-fix extractor too. Not fixed here because repairing
   it touches unrelated markdown formatting, not the tokenizer.
+
+  **Closed by plan 172-06.** `continue-advance.md`'s glued `--ttl "30d"`
+  marker (and thirteen others of the same shape across six sibling
+  playbook files) is repaired: the marker now sits on its own line.
+  `extractDocumentedCalls` also gained fence-marker tolerance so a future
+  glued marker no longer desyncs fence parity, and
+  `TestAuditedCorpusHasNoGluedFenceMarkers` fails, naming the file and
+  line, if the glued shape ever returns anywhere in the audited corpus.
