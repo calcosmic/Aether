@@ -979,7 +979,7 @@ After processing all wave results, check if any midden error category has reache
 
 Run using the Bash tool with description "Checking midden thresholds...":
 ```bash
-midden_result=$(aether midden-recent-failures 50 2>/dev/null || echo '{"count":0,"failures":[]}')
+midden_result=$(aether midden-recent-failures --limit 50 2>/dev/null || echo '{"count":0,"failures":[]}')
 midden_count=$(echo "$midden_result" | jq '.count // 0')
 
 if [[ "$midden_count" -gt 0 ]]; then

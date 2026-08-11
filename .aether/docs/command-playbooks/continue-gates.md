@@ -872,7 +872,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
 1. **Retrieve Watcher results** from the most recent build:
    Run using the Bash tool with description "Retrieving Watcher results...":
    ```bash
-   watcher_result=$(aether state-read '.build_synthesis.watcher' 2>/dev/null || echo "{}")
+   watcher_result=$(aether state-read 2>/dev/null | jq -c '.build_synthesis.watcher // {}' 2>/dev/null || echo "{}")
    quality_score=$(echo "$watcher_result" | jq -r '.quality_score // 0')
    critical_count=$(echo "$watcher_result" | jq '[.issues_found[]? | select(.severity == "CRITICAL")] | length')
    echo "{\"quality_score\": $quality_score, \"critical_count\": $critical_count}"
