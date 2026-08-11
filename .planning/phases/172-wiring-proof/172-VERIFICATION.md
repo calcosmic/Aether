@@ -1,78 +1,114 @@
 ---
 phase: 172-wiring-proof
-verified: 2026-08-11T16:56:42Z
+verified: 2026-08-11T22:10:00Z
 status: gaps_found
-score: 2/4 roadmap success criteria fully verified (criteria 1 and 2); criteria 3 and 4 each have a confirmed, reproduced defect
+score: 2/4 roadmap success criteria fully verified (criteria 2 and 3); criterion 1 has a newly confirmed, live counterexample; criterion 4's durability half remains defeatable by three independently reproduced mutations
 overrides_applied: 0
+re_verification:
+  previous_status: gaps_found
+  previous_score: 2/4 (previous run: criteria 1 and 2 verified; criteria 3 and 4 failed/partial)
+  gaps_closed:
+    - "Success criterion 3 (fence-parsing blind spot hiding a live `midden-recent-failures 50` positional-argument violation at continue-full.md:1243) — closed by plan 172-06: extractDocumentedCalls now tolerates a marker glued to trailing content, the two hidden invocations are fixed, and TestAuditedCorpusHasNoGluedFenceMarkers sweeps the whole corpus. Independently re-verified below."
+  gaps_remaining:
+    - "Success criterion 4's durability half (the guard that is supposed to keep the CI gate durable over time) — plan 172-07 replaced the whole-file substring check with a step-scoped one, closing the specific decoy this phase's own prior verification had reproduced, but the replacement is itself a substring/first-match check with three new, independently reproduced bypasses (`; true` / `|| exit 0` / extra `-run` / `| cat` / commented-out run line; a commented-out step in a minimal workflow; first-`-run`-wins vs go test's last-`-run`-wins). The property criterion 4 asks for — that the gate cannot be silently narrowed without the guard going red — is still false."
+  regressions:
+    - "Success criterion 1 — previously marked VERIFIED. A code review completed after that verification, and independently reproduced here, demonstrates that the ratchet's caller-evidence map is keyed by bare command name with no parent path, and that two real, currently registered commands (top-level `aether colonize` and `aether closeout`) have zero direct callers anywhere in the audited corpus today, yet are not reported as orphans — confirmed absent from the live-generated 278-entry `cmd/testdata/orphan_allowlist.json`. The criterion's central claim (a subcommand with no caller makes the test fail, naming the command) is false for these two real commands right now, not hypothetically."
 gaps:
-  - truth: "Success criterion 3 — a test enumerates every `aether …` invocation in the in-scope `.aether` markdown corpus and fails naming the file, the line and the offending flag when an instruction names a flag the binary does not register"
+  - truth: "Success criterion 1 — registering a new cobra subcommand with no caller outside its own definition file makes TestNoRegisteredSubcommandIsUnreferenced fail, naming the command"
     status: failed
     reason: >
-      `.aether/docs/command-playbooks/continue-full.md` — squarely inside the audited corpus
-      (`auditedCorpora`, in scope since before this phase, required by D-06) — contains a
-      malformed fence closer at line 1194 (`  --ttl "30d"` immediately followed by the closing
-      ``` fence marker on the SAME line, no newline). `extractDocumentedCalls`'s fence toggle
-      (`strings.HasPrefix(strings.TrimSpace(line), "```")`) does not fire on that line because
-      the line does not START with the marker, so it desyncs in-fence/out-of-fence parity for
-      the rest of the file (confirmed: 149 fence-marker lines total, an odd count; parser state
-      entering line 1243 is `inFence=false` when it should be `true`). The line at 1243,
-      `midden_result=$(aether midden-recent-failures 50 2>/dev/null || echo '{"count":0,...}')`,
-      passes a bare positional `50` to `midden-recent-failures`, whose real contract is
-      `Args: cobra.NoArgs` plus `--limit` (`cmd/midden_cmds.go:20,486`) — the exact bug class
-      (and, in fact, the exact same command) that plan 172-00 fixed at four sibling call sites
-      in build-full.md, build-wave.md (x2) and continue-advance.md. This one occurrence was
-      never fixed and is invisible to `TestCommandCallsMatchCobraContracts`, which still
-      reports "audited 954 documented invocations across 6 corpora" with zero violations.
-      Independently reproduced: calling `extractDocumentedCalls` directly on the file extracts
-      zero calls at line 1243. This is not a hypothetical — it is a live, present-tense,
-      unaudited, unfixed violation of exactly the shape success criterion 3 exists to catch,
-      inside the corpus the criterion names. The phase's own 172-00-SUMMARY.md documents the
-      identical bug shape (glued fence closer, same consequence) in the sibling file
-      `continue-advance.md` and explicitly defers it (`deferred-items.md`) — but that
-      documented finding was never generalized to check other files in the same corpus for the
-      same defect, so this second, still-live instance was never found or disclosed by any
-      plan in this phase.
+      The ratchet's caller-evidence collection (`credit()` / `singleFileCallerNames`,
+      `cmd/subcommand_reachability_ratchet_test.go:365-426`) records evidence keyed by
+      bare leaf command name only — no parent command path. `computeOrphanNames`
+      (same file, lines 713-739) looks evidence up the same way: `evidence[c.Name]`.
+      The registered cobra tree has commands that share a leaf name across different
+      parents. Two are live, present-tense, unreviewed false negatives today:
+      `aether colonize` (top-level, registered at `cmd/codex_workflow_cmds.go:29`,
+      not hidden, real functioning surveyor command) and `aether closeout` (top-level,
+      registered at `cmd/ceremony_cmd.go:118`). Every documented invocation in the
+      three audited corpora (`.claude/commands/ant`, `.opencode/commands/ant`,
+      `.aether/commands`) calls only `aether host colonize` (a distinct command
+      registered under the `host` parent, `cmd/host_cmd.go:32`) and
+      `aether ceremony closeout` (registered under the `ceremony` parent,
+      `cmd/ceremony_cmd.go`) — confirmed by grep across all three corpora: zero
+      occurrences of a bare `aether colonize` or `aether closeout` invocation exist
+      anywhere in them. Because `credit()` records only the bare token `colonize` /
+      `closeout`, crediting `host colonize` also (wrongly) clears the unrelated
+      top-level `colonize`, and crediting `ceremony closeout` also clears the
+      unrelated top-level `closeout`. Independently reproduced by inspecting the
+      live-generated `cmd/testdata/orphan_allowlist.json` (278 entries, produced by
+      the ratchet's own `-update-orphan-allowlist` regeneration path): `colonize` and
+      `closeout` are both absent from it. These are exactly the "works, and nothing
+      calls it" commands the ratchet's own file header says it exists to catch, and
+      it does not catch them. TestRatchetDetectsASyntheticOrphan (a synthetic,
+      uniquely-named fixture) still passes, so the narrow fixture-level guarantee
+      holds — but the criterion's actual wording is about the general property
+      ("no caller ... makes the test fail, naming the command"), and that general
+      property is demonstrably false for two real commands in the codebase today.
     artifacts:
-      - path: "cmd/command_call_audit_test.go"
-        issue: "extractDocumentedCalls's fence-toggle test only recognizes a closing fence marker when it is the first non-whitespace content on its own line; a marker glued to the end of a content line does not toggle, silently desyncing fence parity for the remainder of the file and hiding every subsequent full-line invocation from parseFencedInvocation."
-      - path: ".aether/docs/command-playbooks/continue-full.md"
-        issue: "Line 1194 glues the closing ``` fence marker to the preceding content (`--ttl \"30d\"````), desyncing fence parity. Line 1243 (`midden-recent-failures 50`, a bare positional against a cobra.NoArgs + --limit command) is a live, unfixed, unaudited violation as a direct consequence."
+      - path: "cmd/subcommand_reachability_ratchet_test.go"
+        issue: "credit()/singleFileCallerNames record caller evidence keyed by bare command name with no parent path; computeOrphanNames looks evidence up the same way. Any two commands sharing a leaf name under different parents share evidence, so a call to one silently clears orphan status for the other."
     missing:
-      - "Fix line 1194 in continue-full.md so the closing fence marker is on its own line (matching the fix pattern already applied to the sibling file continue-advance.md's line 503 per 172-00's deviation record), or make extractDocumentedCalls tolerant of a marker glued to trailing content."
-      - "Fix .aether/docs/command-playbooks/continue-full.md:1243 to pass --limit 50 instead of the bare positional 50, matching the four sibling fixes already made by 172-00."
-      - "Add a pinning test asserting the extractor does not desync fence parity when a closing marker is glued to content on the same line — the class of defect that let this specific violation hide, and that the phase's own deferred-items.md already flagged once for a sibling file without generalizing the fix."
-      - "Sweep the rest of the audited corpus (auditedCorpora + auditedFiles) for the same glued-fence-marker shape to rule out further hidden violations before closing this gap."
+      - "Key caller evidence by resolved command path (cobra CommandPath(), e.g. 'aether host colonize' vs 'aether colonize'), not by bare leaf name — resolve each documented invocation through rootCmd.Find (already used by the sibling audit in command_call_audit_test.go:533) before crediting it."
+      - "Update computeOrphanNames and enumerateRegisteredCommands to carry and compare the full command path, not just Name/Aliases."
+      - "Regenerate cmd/testdata/orphan_allowlist.json after the fix and add real callers or explicit baseline entries for aether colonize and aether closeout (and audit the other name-collision pairs the review lists as currently benign: build, continue, plan, seal, swarm, watch, oracle, pheromones/registry/wisdom export-vs-import, get/set across colony-depth/parallel-mode/plan-granularity) before this can be called closed."
   - truth: "Success criterion 4 — the ratchet and the flag test run in the same CI command the release gate already runs, verified by deleting a caller and observing the gate go red, not by reading the workflow file"
-    status: partial
+    status: failed
     reason: >
-      The specific proof recorded in 172-05-SUMMARY.md (delete skill-create's only caller,
-      run the named CI step's command verbatim, observe it fail naming skill-create, restore,
-      observe it pass) is genuine and independently reproduced by both the orchestrator and
-      this verification (TestDeletingACallerMakesTheRatchetNameIt passes with the same
-      skill-create/skill-create.yaml pairing). That half of criterion 4 is solid.
-      However, TestWiringGateStepRunsEveryWiringTest's own stated second purpose — "or if the
-      blanket `go test ./...` release-gate step it sits alongside has been narrowed or
-      removed" (the function's own doc comment) — is not actually enforced. Its check is
-      `strings.Contains(workflow, "go test ./... -count=1 -timeout 900s")` applied to the
-      WHOLE workflow file text, not scoped to a specific, failing step. That exact substring
-      also appears inside the "Test summary" step (ci.yml:105), which runs `if: always()` and
-      pipes its `go test` invocation through `grep -c '--- PASS' || echo 'unknown'` — a
-      construction that cannot itself fail. Independently reproduced: with the real, blocking
-      "Run Go tests" step (ci.yml:41-42) deleted entirely from the workflow file (and only that
-      step deleted — the harmless "Test summary" step and its decoy substring left in place),
-      `go test ./cmd -run TestWiringGateStepRunsEveryWiringTest -count=1 -v` still PASSES.
-      This directly contradicts 172-05-SUMMARY.md's own threat-register claim ("T-172-18 ...
-      Mitigated by the assertion that the blanket step is still present") — the assertion does
-      not detect this exact narrowing. The change was reverted immediately after the
-      reproduction (`git checkout HEAD -- .github/workflows/ci.yml`); working tree confirmed
-      clean and the pre-existing 115-line `git status --porcelain` count was unchanged before
-      and after.
+      The specific proof this phase's own summaries rely on (delete skill-create's
+      only caller, run the named CI step's exact command, observe it fail naming
+      skill-create, restore, observe it pass) is genuine and re-confirmed here
+      (TestDeletingACallerMakesTheRatchetNameIt passes on the current tree, naming
+      skill-create / skill-create.yaml). Plan 172-07 also genuinely fixed the specific
+      decoy this phase's own prior verification had reproduced (a `Test summary` step
+      with `if: always()` piping the blanket command's text through
+      `|| echo 'unknown'` used to satisfy a whole-file substring check even with the
+      real `Run Go tests` step deleted; `blanketReleaseGateProblem` now scopes to the
+      named step's block and that specific bypass is closed — reconfirmed here).
+      However, the replacement check is itself built from substring/first-match logic
+      over one line of YAML rather than a structural parse, and three new, independent
+      bypasses of the *replacement* were reproduced directly against the current
+      `blanketReleaseGateProblem` and `extractWiringGateRunArg` functions using
+      synthetic workflow strings (not hypothetical — run against the actual current
+      source in this repo):
+      (1) `blanketReleaseGateProblem` returns nil (passes) for a `Run Go tests` step
+      whose run line is `go test ./... -count=1 -timeout 900s; true`, or
+      `... || exit 0`, or `... -run TestNothing` (the release gate then executes zero
+      tests and exits 0), or `... | cat`, or a shell-commented-out command
+      (`echo skip # go test ./... -count=1 -timeout 900s`) — none of these are among
+      the three specific fallback strings the function checks for (`|| true`,
+      `|| echo`, `|| :`), and it never rejects a `#`-commented run line or a bare
+      trailing `; true`/extra `-run`.
+      (2) `blanketReleaseGateProblem` returns nil against a minimal synthetic workflow
+      whose only "Run Go tests" line is commented out (`# - name: Run Go tests`) —
+      `stepBlock`'s marker match does not check that the matched text is not preceded
+      only by a comment-prefix indent, so a commented-out step is read as a present,
+      capable-of-failing step.
+      (3) `extractWiringGateRunArg` uses `runFlagArgRe.FindStringSubmatch`, which
+      returns the *first* `-run '<regex>'` on the line; `go test` itself honours the
+      *last*. Given a run line with two `-run` flags
+      (`go test ./cmd -run '<real filter>' -count=1 -timeout 900s -v -run 'TestNothingAtAll'`),
+      the guard extracts and validates the first (real) filter and passes, while the
+      step itself would actually run only `TestNothingAtAll` — a filter matching
+      nothing, and the wiring step would report success while running zero guard
+      tests.
+      All three reproductions were run directly against the current
+      `cmd/ci_wiring_gate_test.go` functions with synthetic input strings (the same
+      technique the phase's own `TestBlanketGateCheckRejectsADecoyStep` uses), not
+      against a mutated copy of the real ci.yml file, and were not persisted to disk.
+      The property criterion 4 requires — that the gate cannot be silently narrowed
+      without the durability guard going red — remains false, one round of
+      gap-closure after the same underlying substring-matching root cause was first
+      identified.
     artifacts:
       - path: "cmd/ci_wiring_gate_test.go"
-        issue: "TestWiringGateStepRunsEveryWiringTest's blanket-step-presence check is a bare substring match against the entire workflow file, satisfiable by an unrelated line inside a step that is structurally incapable of failing (if: always(), piped through || echo 'unknown'). It does not verify the blanket step is present AS A GATE, only that the string exists SOMEWHERE in the file."
+        issue: "blanketReleaseGateProblem checks strings.Contains(runLine, blanketGateRunSubstring) and only three named exit-status fallback strings, rather than requiring the run line to equal (not merely contain) the exact command; and stepBlock's marker match does not verify the matched '- name:' text is not itself inside a comment. extractWiringGateRunArg's runFlagArgRe.FindStringSubmatch returns the first -run match on a line where go test honours the last, and never asserts there is exactly one -run flag or that the run line invokes 'go test ./cmd'."
     missing:
-      - "Scope the blanket-step-presence check to the named step whose run: line is exactly `go test ./... -count=1 -timeout 900s` (matching the precision already used to locate the named wiring step by its `- name:` value), so a decoy occurrence elsewhere in the file cannot satisfy it."
-      - "Alternatively, assert the containing step lacks `if: always()` and does not pipe its exit status through a fallback that can never fail, so the check verifies the step can actually gate the pipeline."
+      - "Require the blanket gate step's run line to equal blanketGateRunSubstring exactly (after trimming), not merely contain it, and explicitly reject a line whose trimmed content starts with '#'."
+      - "Anchor stepBlock's step-name match to require the character(s) before '- name:' on its line to be pure whitespace, so a commented-out step (# - name: ...) cannot satisfy it."
+      - "Use FindAllStringSubmatch for the -run extraction in extractWiringGateRunArg, fail if more than one -run is present on the line, and assert the run line actually invokes 'go test ./cmd'."
+      - "Extend TestBlanketGateCheckRejectsADecoyStep with table rows for each of the five new bypasses (; true, || exit 0, extra -run, | cat, commented-out run line, commented-out step) so the fix is pinned rather than asserted once by a verifier."
+deferred: []
 human_verification: []
 ---
 
@@ -82,9 +118,9 @@ human_verification: []
 ratchet exists, runs in CI, and blocks — before any of the capabilities it constrains are
 built, so it is shaped by the standard rather than by whatever shipped.
 
-**Verified:** 2026-08-11T16:56:42Z
+**Verified:** 2026-08-11T22:10:00Z
 **Status:** gaps_found
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after gap-closure plans 172-06/07/08, and after independently checking a code review (172-REVIEW.md, 4 critical findings) completed against the post-gap-closure state.
 
 ## Goal Achievement
 
@@ -92,116 +128,66 @@ built, so it is shaped by the standard rather than by whatever shipped.
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Registering a new cobra subcommand with no caller makes `TestNoRegisteredSubcommandIsUnreferenced` fail, naming the command; allowlist seeded from real scanner output (278 orphans, 6 tagged `owner_phase: "178"`); shrink-only against a committed baseline | ✓ VERIFIED | Independently re-ran `TestNoRegisteredSubcommandIsUnreferenced`, `TestOrphanAllowlistOnlyShrinks`, `TestRatchetDetectsASyntheticOrphan`, `TestDeletingACallerMakesTheRatchetNameIt` — all pass. Log line confirms "enumerated 405 registered commands, found 278 orphans", matching the SUMMARY's claim exactly. `TestDeletingACallerMakesTheRatchetNameIt` names `skill-create` / `.aether/commands/skill-create.yaml` at runtime, matching the SUMMARY's own transcript. |
-| 2 | `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` documents — exits 0 | ✓ VERIFIED | Ran `go run ./cmd/aether spawn-can-spawn 5 --enforce` directly: `{"ok":true,"result":{"can_spawn":true,"depth":5}}`, exit 0. Also confirmed the flag-form playbook invocation (`--depth 3`) still works. `.aether/workers.md:292` itself is byte-identical to before (per 172-03's own `git diff` confirmation, cross-checked by reading the current file). |
-| 3 | A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming file/line/flag when an instruction names a flag the binary does not register | ✗ FAILED | `.aether/docs/command-playbooks/continue-full.md:1243` is a live, unfixed, unaudited `midden-recent-failures 50` positional-argument violation (same bug class 172-00 fixed at four sibling sites) sitting inside the audited corpus, invisible because a malformed fence closer at line 1194 desyncs the extractor's fence-parity state for the rest of the file. `TestCommandCallsMatchCobraContracts` reports green (954 invocations, 0 violations) despite this. Independently reproduced by direct extraction (see below). |
-| 4 | The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file | ⚠️ PARTIAL | The specific behavioural proof (delete `skill-create`'s caller, run the named step's exact command, observe red, restore, observe green) is genuine and independently reproduced. However the companion test that is supposed to keep this guarantee durable over time (`TestWiringGateStepRunsEveryWiringTest`) does not actually detect deletion of the blanket `go test ./...` gate step — a decoy substring inside a non-blocking `if: always()` step satisfies its check. Independently reproduced: deleting the real gate step leaves the guard test green. |
+| 1 | Registering a new cobra subcommand with no caller makes `TestNoRegisteredSubcommandIsUnreferenced` fail, naming the command; allowlist seeded from real scanner output (278 orphans, 6 tagged `owner_phase: "178"`); shrink-only against a committed baseline | ✗ FAILED (regression) | Re-ran `TestNoRegisteredSubcommandIsUnreferenced` — still logs "enumerated 405 registered commands, found 278 orphans" and passes, and the count/shrink-only mechanics are unchanged and correct. But independently reproduced CR-04 from the code review: `computeOrphanNames`/`credit()` key caller evidence by bare command name with no parent path. `aether colonize` (top-level) and `aether closeout` (top-level) are real, non-hidden, currently registered commands with zero direct callers anywhere in the three audited corpora — confirmed by grep (only `aether host colonize` and `aether ceremony closeout` appear, never the bare top-level forms) — yet both are absent from the live-generated `cmd/testdata/orphan_allowlist.json` (278 entries), meaning the ratchet currently believes they have callers. This is the exact failure mode the criterion exists to prevent, live in the codebase today. |
+| 2 | `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` documents — exits 0 | ✓ VERIFIED | Re-ran `go run ./cmd/aether spawn-can-spawn 5 --enforce` directly: `{"ok":true,"result":{"can_spawn":true,"depth":5}}`, exit 0. |
+| 3 | A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming file/line/flag when an instruction names a flag the binary does not register | ✓ VERIFIED | Gap closed by plan 172-06. Re-ran `TestExtractorDoesNotDesyncOnGluedFenceMarker`, `TestAuditedCorpusHasNoGluedFenceMarkers` (scans 215 files, passes), `TestCommandCallsMatchCobraContracts` (audited 988 documented invocations, up from 954 — the fourteen previously-hidden glued-marker regions are now visible), `TestCLIFlagAudit` (scanned 141 files across 3 corpora, coverage 126 subcommands) — all pass. The specific live violation this gap was opened for (`continue-full.md:1243`'s bare positional to `midden-recent-failures`) is fixed to `--limit 50` and now visible to the audit. |
+| 4 | The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file | ✗ FAILED (gap not closed, defect class recurred) | The specific decoy this phase's prior verification reproduced (a non-blocking `Test summary` step's text satisfying a whole-file substring check) is genuinely closed by plan 172-07's `blanketReleaseGateProblem`/`stepBlock`, reconfirmed here. But three new, independently reproduced bypasses of the *replacement* check exist against the current source: (a) `; true`, `|| exit 0`, an appended `-run TestNothing`, `| cat`, or a `#`-commented run line all make `blanketReleaseGateProblem` return nil against a `Run Go tests` step carrying them; (b) a `# - name: Run Go tests` commented-out step in a minimal synthetic workflow also returns nil; (c) `extractWiringGateRunArg` extracts the *first* `-run` argument on a line where `go test` honours the *last*, so a run line with two `-run` flags validates the real filter while the step itself would run a different (or empty-matching) one. All three reproduced directly against the live functions with synthetic input, not asserted from the code review's prose. |
 
-**Score:** 2/4 fully verified; 1 failed; 1 partial (base proof solid, self-protecting durability test defective).
-
-### Required Artifacts
-
-| Artifact | Expected | Status | Details |
-|----------|----------|--------|---------|
-| `cmd/spawn.go` | `spawn-can-spawn` accepts positional depth + `--enforce` with real deny semantics | ✓ VERIFIED | Confirmed by direct execution; `spawnCanSpawnDecision` seam present and reachable by test. |
-| `cmd/spawn_enforce_test.go` | Tests for documented invocation + deny-to-exit wiring | ✓ VERIFIED | `TestSpawnCanSpawnAcceptsDocumentedInvocation`, `TestSpawnCanSpawnEnforceDeniesWithNonZeroExit` both pass. |
-| `cmd/subcommand_reachability_ratchet_test.go` | Orphan ratchet + shrink-only guard + self-tests | ✓ VERIFIED | All 7 tests pass; 278-entry allowlist confirmed. |
-| `cmd/testdata/orphan_allowlist.json` / `_baseline.json` | Shrink-only allowlist, seeded honestly | ✓ VERIFIED | 278 entries, byte-identical live/baseline, 6 tagged `owner_phase: "178"` confirmed via direct `python3 -c` count. |
-| `cmd/command_call_audit_test.go` | Extractor sees `$(aether …)` calls; `.aether` corpus audited; catches unregistered flags | ⚠️ **HOLLOW in one confirmed spot** | `normalizeShellToken`/`isShellOperator` work correctly for the `$(` case they were built for (independently confirmed via unit probe). But the pre-existing fence-toggle logic this file relies on has a live blind spot (see gap 1) that lets a real violation inside the declared corpus go unaudited. |
-| `.aether/docs/orphan-allowlist-policy.md` | Plain-English policy naming all four guarded files | ✓ VERIFIED | `TestAllowlistPolicyNamesEveryGuardedFile` passes; states 278 / 6 matching the real JSON. |
-| `.github/workflows/ci.yml` | Named step running the wiring/flag guards alongside the blanket suite | ⚠️ **Guard test protecting it is incomplete** | Named step present and correctly filtered (21 tests). But `TestWiringGateStepRunsEveryWiringTest`'s blanket-step-presence assertion is satisfiable by a decoy substring (see gap 2). |
-| `cmd/ci_wiring_gate_test.go` | `TestWiringGateStepRunsEveryWiringTest` keeps the named step's filter from falling behind | ⚠️ Partially effective | The filter-coverage half works correctly (independently reproduced: removing a test name from the regex fails the guard). The blanket-step-narrowing half does not (see gap 2). |
-
-### Key Link Verification
-
-| From | To | Via | Status | Details |
-|------|-----|-----|--------|---------|
-| `.aether/workers.md:292` | `cmd/spawn.go spawnCanSpawnCmd` | cobra resolution + `--enforce` flag | ✓ WIRED | Confirmed by direct execution and by `TestSpawnCanSpawnAcceptsDocumentedInvocation` reading the manual at runtime. |
-| `cmd/subcommand_reachability_ratchet_test.go` | `rootCmd` | recursive `Commands()` walk | ✓ WIRED | 405 commands enumerated, matches SUMMARY. |
-| `cmd/subcommand_reachability_ratchet_test.go` | `cmd/testdata/orphan_allowlist_baseline.json` | set-membership diff | ✓ WIRED | Independently proved shrink-only by re-running the existing self-tests (did not re-mutate the JSON files; relied on the phase's own recorded red/green transcripts plus a live pass of the guard tests). |
-| `.github/workflows/ci.yml` named step | guard test files | `-run` regex, AST-enumerated | ✓ WIRED (coverage half) / ✗ **NOT WIRED (blanket-step-narrowing half)** | Coverage half independently reproduced red-then-green. Narrowing-detection half independently reproduced to silently pass when the real gate step is deleted. |
-
-### Data-Flow Trace (Level 4)
-
-Not applicable in the conventional sense — this phase produces static-analysis test infrastructure and CI configuration, not a UI or a data-rendering path. The equivalent trace performed here is the extractor's real read-path over real files, covered above and in the gaps.
-
-### Behavioral Spot-Checks
-
-| Behavior | Command | Result | Status |
-|----------|---------|--------|--------|
-| `spawn-can-spawn 5 --enforce` exits 0 | `go run ./cmd/aether spawn-can-spawn 5 --enforce` | `{"ok":true,"result":{"can_spawn":true,"depth":5}}`, exit 0 | ✓ PASS |
-| `spawn-can-spawn --depth 3` still works | `go run ./cmd/aether spawn-can-spawn --depth 3` | `{"ok":true,"result":{"can_spawn":true,"depth":3}}`, exit 0 | ✓ PASS |
-| Ratchet fires on synthetic orphan / real caller deletion | `go test ./cmd -run 'TestNoRegisteredSubcommandIsUnreferenced\|TestRatchetDetectsASyntheticOrphan\|TestDeletingACallerMakesTheRatchetNameIt'` | All PASS, 278 orphans, skill-create correctly named when its caller is suppressed | ✓ PASS |
-| Extractor sees a real invocation inside the declared corpus | direct call to `extractDocumentedCalls` on `continue-full.md` | Returns 34 calls total but **zero at line 1243** (`midden-recent-failures 50`) — the exact defect class this phase exists to catch, still live | ✗ **FAIL** |
-| Wiring-gate guard detects a deleted CI gate step | delete "Run Go tests" step from `ci.yml`, run `TestWiringGateStepRunsEveryWiringTest` | Test still **PASSES** | ✗ **FAIL** |
-
-### Probe Execution
-
-No `scripts/*/tests/probe-*.sh` probes exist for this phase or this repo; this is a Go-native testing project, not a migration/tooling phase with shell probes. `Step 7c` is SKIPPED (no runnable probe scripts declared or discovered).
+**Score:** 2/4 fully verified (criteria 2, 3); 2 failed (criterion 1 — regression discovered by review, independently confirmed; criterion 4 — gap-closure attempt did not close the underlying substring-matching defect class, independently confirmed with three new bypasses).
 
 ### Requirements Coverage
 
-| Requirement | Source Plan | Description | Status | Evidence |
-|-------------|-------------|--------------|--------|----------|
-| WIRE-01 | 172-02, 172-04 | A test fails when a registered subcommand has no caller outside its own definition, seeded with today's known orphans in an allowlist that may only shrink | ✓ SATISFIED | Ratchet exists, fires (synthetic + real deletion), shrink-only against baseline (both lists), all independently re-verified. |
-| WIRE-02 | 172-01 | The documented invocation in `.aether/workers.md` matches a flag that exists — running the documented command succeeds rather than erroring on `--enforce` | ✓ SATISFIED | Directly executed; exits 0; deny path independently reachable via `spawnCanSpawnDecision` seam and its tests. |
-| WIRE-03 | 172-00, 172-03, 172-04 | A test fails when a `.aether/*.md` instruction names a CLI flag the binary does not register | ✗ **BLOCKED** | The audit is not actually blind to the flags it was built to catch in principle, but it IS blind, today, to a live violation of exactly this shape inside the declared corpus (`continue-full.md:1243`), because of an unrelated but real fence-parsing bug. A requirement that "a test fails when ... a flag the binary does not register" is named is not satisfied while a real such instance sits undetected. |
+| Requirement | Source Plan(s) | Description | Status | Evidence |
+|---|---|---|---|---|
+| WIRE-01 | 172-00, 172-02, 172-04, 172-05, 172-07, 172-08 | A test fails when a registered subcommand has no caller outside its own definition, seeded with today's known orphans in a shrink-only allowlist | ✗ BLOCKED | Same defect as truth 1: the ratchet does not fail for `aether colonize` / `aether closeout`, which have no caller today. REQUIREMENTS.md marks WIRE-01 `[x]` in its checklist prose but `Pending` in its traceability table (lines 32 and 139) — the traceability table is the more accurate of the two today. |
+| WIRE-02 | 172-01, 172-05, 172-07 | The documented `.aether/workers.md` invocation matches a real flag; running it succeeds rather than erroring on `--enforce` | ✓ SATISFIED | Confirmed by direct execution above. |
+| WIRE-03 | 172-00, 172-03, 172-04, 172-05, 172-06, 172-07, 172-08 | A test fails when a `.aether/*.md` instruction names a CLI flag the binary does not register | ✓ SATISFIED | Confirmed via re-run of the full named guard-test set (below) and the closed fence-parsing gap. |
 
-REQUIREMENTS.md lines 139-141 list all three as "Pending" status in that table (not yet flipped to a completion marker), which is consistent with this verification's outcome — WIRE-03 should not be marked complete.
+No orphaned requirements: WIRE-01/02/03 are the only IDs REQUIREMENTS.md maps to Phase 172, and all three appear in at least one plan's `requirements` field.
 
-### Anti-Patterns Found
+### Full Named CI Guard-Test Set (re-run against current tree)
 
-| File | Line | Pattern | Severity | Impact |
-|------|------|---------|----------|--------|
-| `.aether/docs/command-playbooks/continue-full.md` | 1194, 1243 | Malformed fence closer glued to content; unfixed `midden-recent-failures 50` bare-positional call hidden by it | 🛑 Blocker | Live, unaudited violation of the exact class WIRE-03 exists to catch. |
-| `cmd/ci_wiring_gate_test.go` | 67 | `strings.Contains(workflow, ...)` unscoped substring check, satisfiable by a decoy line in a step that cannot fail | 🛑 Blocker | Undermines the durability half of criterion 4 / D-15's stated guarantee (T-172-18), though the base behavioural proof for criterion 4 is genuine. |
-| `cmd/cli_flag_audit_test.go` | 111-115 | `TestCLIFlagAudit`'s `os.ReadDir(dir)` error path silently `continue`s with no anti-vacuity `t.Fatal`, unlike every other guard test this phase added | ⚠️ Warning | Pre-existing (predates phase 172); not exploited today (directories exist and are read), but is now load-bearing for the shrink-only skip-list guard built on top of it in 172-04. Worth hardening for consistency with the phase's own stated anti-vacuity discipline. |
-| `cmd/command_call_audit_test.go` | 130-142 (`openedSubstitution`) | Only recognises `$(` as an opener for trailing-`)` trimming; a bare `(aether …)` subshell form is silently dropped entirely (independently reproduced: `ok=false`), and a backtick-substitution form (`` x=`aether cmd` ``) is recognised but its last token retains a stray trailing backtick | ⚠️ Warning | Confirmed via direct probe. Not currently exploited — a repo-wide grep for both shapes across every audited corpus found zero real occurrences today — but it is a real, latent completeness gap in the extractor this phase is centrally about. |
-| `cmd/subcommand_reachability_ratchet_test.go` | 1176-1180 (`TestWiringGuardsHaveNoRuntimeEscapeHatch`) | `guardFiles` lists only 3 of the 5 guard files this phase created (`spawn_enforce_test.go` and `ci_wiring_gate_test.go` are absent), and `forbiddenRe` does not cover `os.LookupEnv`, `os.Environ`, or `testing.Short()` | ℹ️ Info | Disclosed by the phase's own 172-05-SUMMARY.md as a known, narrow gap. Confirmed both missing files are currently clean of any escape-hatch pattern. Not currently exploited. |
-| `cmd/subcommand_reachability_ratchet_test.go` + `cmd/cli_flag_audit_test.go` | — | Two shrink-only set-membership diffs (orphan allowlist, flag skip-list) implemented independently rather than via a shared comparator | ℹ️ Info | Disclosed by 172-04-SUMMARY.md as a deliberate, documented follow-up. Not a functional defect today — both were independently red/green-tested. |
+The exact `-run` filter from `.github/workflows/ci.yml`'s "Verify subcommand wiring and CLI flag contracts" step (24 test names) was re-run directly:
 
-No `TBD`, `FIXME`, or `XXX` markers found in any file this phase modified.
+```
+go test ./cmd -run '<24-name filter copied verbatim from ci.yml:100>' -count=1 -timeout 900s -v
+```
 
-### Human Verification Required
+All 24 pass. This confirms the phase's own summaries did not fabricate green test output — the guard suite is genuinely green. The finding in this report is that green does not equal correct: the code review's four critical issues are defects in what the guard tests *check*, not claims that the tests fail today.
 
-None. Every claim above was checked by running the actual code and tests, not by reading documentation or trusting SUMMARY narration.
+### Independent Reproductions (this verification, not inherited from 172-REVIEW.md)
+
+| Claim (from 172-REVIEW.md) | Reproduction method | Result |
+|---|---|---|
+| CR-01: blanket-gate substring check defeatable by `; true` / `\|\| exit 0` / extra `-run` / `\| cat` / `#`-commented run line | Called `blanketReleaseGateProblem` directly (package-internal test, synthetic workflow strings, no files mutated) with each of the five mutated run lines | All five returned `nil` (pass) — confirmed |
+| CR-02: a commented-out `Run Go tests` step satisfies the check against a minimal workflow | Called `blanketReleaseGateProblem` with a workflow containing only a `# - name: Run Go tests` / `#   run: ...` block, no other steps | Returned `nil` (pass) — confirmed |
+| CR-03: `extractWiringGateRunArg` reads the first `-run`, `go test` honours the last | Called `extractWiringGateRunArg` with a synthetic run line carrying two `-run` flags | Extracted the first (real) filter, `err=nil` — confirmed; the step itself would actually run the second filter |
+| CR-04: caller evidence keyed by bare name credits `aether host colonize` as proof `aether colonize` (top-level) is used, and `aether ceremony closeout` as proof `aether closeout` (top-level) is used | Confirmed both are separately registered (`cmd/codex_workflow_cmds.go:29` vs `cmd/host_cmd.go:32`; `cmd/ceremony_cmd.go:118` vs its `ceremony` parent), confirmed by grep that only the parented forms appear anywhere in the three audited corpora, and confirmed both bare names are absent from the live-generated 278-entry `orphan_allowlist.json` | Confirmed on all three points |
+
+All reproductions used synthetic in-memory strings passed directly to the unexported functions (the same technique `TestBlanketGateCheckRejectsADecoyStep` uses) or read-only inspection of committed files. No repository file was mutated during this verification; `git status --porcelain cmd/ .github/` was empty before and after.
+
+### Anti-Patterns / Additional Findings (not blocking the 4 roadmap criteria, but load-bearing for the phase's stated purpose)
+
+| File | Finding | Severity | Impact |
+|---|---|---|---|
+| `cmd/subcommand_reachability_ratchet_test.go:39,902-906` | `-update-orphan-allowlist` flag returns before the unallowed-orphan and D-08 owner-phase assertions run; the escape-hatch scanner does not look for `flag.Bool`-style overrides | ⚠️ Warning (WR-01 in review) | A command-line flag inside a guard file can suppress the very assertion the guard exists to make |
+| `cmd/ci_wiring_gate_test.go` | Named wiring step is never checked for `if:`/`continue-on-error`/swallowed exit status (only the blanket step is) | ⚠️ Warning (WR-02) | Legibility loss only — the blanket step still provides coverage |
+| `.github/workflows/ci.yml` | Nothing asserts the workflow's `on:` block or job-level `if:` — a job that never runs would still pass every step-scoped guard | ⚠️ Warning (WR-03) | A gate the workflow never reaches is not a gate |
+| `.aether/docs/command-playbooks/continue-full.md:1244-1246` | `midden-recent-failures --limit 50`'s arity is now correct, but the surrounding `jq '.count'` / `.failures[]` parsing does not match the command's real `{"result":{"entries":...,"total":...}}` response shape — `midden_count` is always 0 | ⚠️ Warning (WR-08) | Outside the audit's stated scope (arity, not response-shape), but the described auto-REDIRECT block is dead code as written |
+
+These are recorded here for traceability but do not change the pass/fail status of the four roadmap success criteria — none of them is the specific mechanism those criteria name.
 
 ### Gaps Summary
 
-Two of the four roadmap success criteria are not fully met, and both failures are independently
-reproduced against the live codebase, not inferred from the code review:
+Two of the four roadmap success criteria are not met on the current tree, independently confirmed by direct reproduction against the live source (not inherited from SUMMARY.md or 172-REVIEW.md claims):
 
-1. **Criterion 3 is false as stated.** The flag/call audit does not, in fact, "enumerate every
-   `aether …` invocation" in its declared corpus — `.aether/docs/command-playbooks/continue-full.md`
-   contains a malformed fence closer that silently desyncs the parser's fence-tracking state,
-   and a live, unfixed `midden-recent-failures 50` positional-argument violation sits invisible
-   inside that desynced region. This is not a theoretical edge case: it is the exact bug class
-   (and the exact command) that plan 172-00 fixed at four sibling call sites in the same
-   milestone, in a sibling file with the identical fence-parity defect that was found and
-   explicitly deferred — but never checked for elsewhere in the same corpus. The audit reports
-   green while a real instance of the bug it exists to catch sits inside its own declared scope.
+1. **Criterion 1 (orphan ratchet correctness) has a live, present-tense counterexample.** `aether colonize` and `aether closeout` (both real, registered, non-hidden top-level commands) have zero direct callers in the audited corpus today, and the ratchet does not flag either — because caller evidence is credited by bare command name, so a call to the differently-parented `aether host colonize` / `aether ceremony closeout` wrongly clears the top-level command's orphan status. This was VERIFIED in the prior verification pass; it is now FAILED, having been discovered by code review and independently reproduced here against the current code.
 
-2. **Criterion 4's durability guarantee is false as claimed.** The behavioural proof recorded in
-   172-05-SUMMARY.md (delete a caller, watch the named CI step go red) is real and reproduces
-   cleanly. But the test written to keep that guarantee from eroding over time —
-   `TestWiringGateStepRunsEveryWiringTest`, whose own doc comment states it exists partly to
-   catch the blanket release-gate step being "narrowed or removed" — does not actually detect
-   that removal. Its check is an unscoped substring search across the whole workflow file, and
-   an identical substring exists inside a step (`Test summary`) that is structurally incapable
-   of failing. Deleting the real, blocking "Run Go tests" step leaves this guard green.
+2. **Criterion 4 (CI-gate durability) is still not met**, one gap-closure round after the same underlying defect class (a substring match standing in for a structural check) was first identified. Plan 172-07 closed the exact bypass this phase's own prior verification reproduced, but the replacement check is built from the same category of weak match (`strings.Contains`, first-match-wins) and three new, independently reproduced bypasses exist against the code as it stands right now.
 
-Both gaps are grouped by a common root cause worth flagging to the closure plan: this phase's
-guard tests are, in several places, doing exactly what CLAUDE.md's "Definition of Done" warns
-against — a check that reads as protection but is satisfiable without the thing it claims to
-verify actually being true. The phase caught and fixed several instances of this pattern in the
-*target* documentation (the four `midden-recent-failures` fixes, the `swarm-display-update`
-fixes) but two instances of the same pattern survive inside the *guards themselves*.
-
-Neither gap is deferred to a later milestone phase — no phase in 173-179 names markdown
-fence-parsing correctness or CI-gate self-protection as in scope, so both remain live, actionable
-gaps for this phase (or an immediate follow-up plan) rather than items a later phase will pick up.
+Both gaps are precisely the shape the phase's own goal statement describes wanting to prevent: "a capability added ... cannot ship without a caller," and a gate "shaped by the standard rather than by whatever shipped." The phase's own two most safety-critical guards are themselves currently shaped by what a substring-matching implementation happened to catch, not by the structural property the roadmap criteria describe.
 
 ---
 
-_Verified: 2026-08-11T16:56:42Z_
+_Verified: 2026-08-11T22:10:00Z_
 _Verifier: Claude (gsd-verifier)_
