@@ -197,19 +197,21 @@ func extractDocumentedCalls(t *testing.T, path string) []documentedCall {
 			}
 
 			name := fields[idx+1]
-			if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
-				continue
-			}
 			args := append([]string{}, fields[idx+2:]...)
 			// Trim the command substitution's own closing `)` off the last
 			// token — `--enforce)` must be reported as `--enforce`, not as a
-			// stray-character typo.
+			// stray-character typo — BEFORE the name-shape check below, so a
+			// zero-argument call like `$(aether status)` doesn't get its
+			// command name rejected as `"status)"`.
 			if openedSubstitution(fields[idx]) {
 				if len(args) > 0 {
 					args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
 				} else {
 					name = strings.TrimSuffix(name, ")")
 				}
+			}
+			if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
+				continue
 			}
 			calls = append(calls, documentedCall{
 				File:    path,
@@ -254,19 +256,21 @@ func parseFencedInvocation(path string, line int, text string) (documentedCall, 
 		}
 	}
 	name := fields[idx+1]
-	if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
-		return documentedCall{}, false
-	}
 	args := append([]string{}, fields[idx+2:]...)
 	// Trim the command substitution's own closing `)` off the last token —
 	// `--enforce)` must be reported as `--enforce`, not as a stray-character
-	// typo.
+	// typo — BEFORE the name-shape check below, so a zero-argument call like
+	// `$(aether status)` doesn't get its command name rejected as
+	// `"status)"`.
 	if openedSubstitution(fields[idx]) {
 		if len(args) > 0 {
 			args[len(args)-1] = strings.TrimSuffix(args[len(args)-1], ")")
 		} else {
 			name = strings.TrimSuffix(name, ")")
 		}
+	}
+	if !regexp.MustCompile(`^[a-z][a-z0-9-]*$`).MatchString(name) {
+		return documentedCall{}, false
 	}
 	return documentedCall{
 		File:    path,
@@ -572,6 +576,13 @@ func TestAuditDetectsPositionalDrift(t *testing.T) {
 
 // The extractor is the part most likely to rot into vacuous success: if its
 // regex stops matching, every other assertion here passes trivially.
+//
+// 172-00 / Task 2: pins the three command-substitution behaviours added in
+// Task 1 — normalizeShellToken seeing through `x=$(aether ...)` in BOTH the
+// fenced and backtick branches, the trailing `)` trim, and redirection
+// tokens no longer posing as positional arguments — plus the two negative
+// cases proving change 1 did not widen detection past what it was meant to
+// fix.
 func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sample.md")
@@ -580,6 +591,13 @@ func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 		"> **Important:** This is a pure prompt command. Do NOT attempt to run `aether dream`.",
 		"Use `AETHER_OUTPUT_MODE=visual aether pheromones --type FOCUS` for signals.",
 		"The aether status command is nice in prose but not backticked.",
+		"Backtick command substitution: `x=$(aether skill-detect)` runs the detector.",
+		"The manual's own shape: `result=$(aether spawn-can-spawn 5 --enforce)` checks the depth.",
+		"Redirected output: `$(aether skill-index 2>/dev/null)` is still a valid call.",
+		"Nested pipeline, must NOT be extracted: `echo $(foo | aether cmd)`.",
+		"```bash",
+		"NAME=$(aether cmd --flag)",
+		"```",
 	}, "\n")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -588,9 +606,16 @@ func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 	calls := extractDocumentedCalls(t, path)
 
 	got := map[string]bool{}
+	byCommand := map[string]documentedCall{}
+	nestedPipelineCount := 0
 	for _, c := range calls {
 		got[c.Command] = true
+		byCommand[c.Command] = c
+		if strings.Contains(c.Raw, "foo | aether cmd") {
+			nestedPipelineCount++
+		}
 	}
+
 	if !got["status"] {
 		t.Error("extractor missed a plain backticked invocation")
 	}
@@ -600,8 +625,53 @@ func TestCommandCallExtractorSeesRealInvocationsAndSkipsProse(t *testing.T) {
 	if got["dream"] {
 		t.Error("extractor treated a 'Do NOT attempt to run' line as an invocation — pure prompt commands are not CLI calls")
 	}
-	if len(calls) != 2 {
-		t.Errorf("extracted %d calls, want 2 (%+v)", len(calls), calls)
+
+	// Backticked `x=$(aether cmd)`: the backtick branch's binary-detection
+	// call site must see through the substitution too, not just the fenced
+	// branch.
+	if sd, ok := byCommand["skill-detect"]; !ok {
+		t.Error("extractor missed a backticked command-substitution invocation (`x=$(aether skill-detect)`)")
+	} else if len(sd.Args) != 0 {
+		t.Errorf("skill-detect call has unexpected args %v, want none", sd.Args)
+	}
+
+	// The verbatim shape from .aether/workers.md:292: the trailing `)` must
+	// be trimmed off the last argument, not carried into the flag name.
+	if sc, ok := byCommand["spawn-can-spawn"]; !ok {
+		t.Error("extractor missed the verbatim manual invocation `result=$(aether spawn-can-spawn 5 --enforce)`")
+	} else if len(sc.Args) != 2 || sc.Args[0] != "5" || sc.Args[1] != "--enforce" {
+		t.Errorf("spawn-can-spawn args = %v, want [\"5\" \"--enforce\"] (trailing `)` must not survive)", sc.Args)
+	}
+
+	// `2>/dev/null` inside a command substitution must terminate the
+	// invocation as a redirection, not be validated as a positional.
+	if !isShellOperator("2>/dev/null") {
+		t.Error("isShellOperator(\"2>/dev/null\") = false, want true")
+	}
+	if si, ok := byCommand["skill-index"]; !ok {
+		t.Error("extractor missed the redirected command substitution `$(aether skill-index 2>/dev/null)`")
+	} else if v := validateCallAgainstCobra(si); v != "" {
+		t.Errorf("skill-index call flagged a violation: %s (the redirection must not be treated as a positional argument)", v)
+	}
+
+	// A genuinely nested pipeline — `aether` appears after a `|` that is
+	// itself inside a DIFFERENT, still-open substitution — must not be
+	// extracted as an invocation, even though the token immediately before
+	// `aether` (`|`) looks like an ordinary, accepted pipe.
+	if nestedPipelineCount != 0 {
+		t.Errorf("extractor treated a nested pipeline (`echo $(foo | aether cmd)`) as a real invocation: %d matching call(s)", nestedPipelineCount)
+	}
+
+	// The fenced branch must resolve the same command-substitution syntax as
+	// the backtick branch.
+	if fc, ok := byCommand["cmd"]; !ok {
+		t.Error("extractor missed the fenced command-substitution invocation `NAME=$(aether cmd --flag)`")
+	} else if len(fc.Args) != 1 || fc.Args[0] != "--flag" || !fc.InFence {
+		t.Errorf("fenced cmd call = %+v, want Args [\"--flag\"] and InFence true", fc)
+	}
+
+	if len(calls) != 6 {
+		t.Errorf("extracted %d calls, want 6 (%+v)", len(calls), calls)
 	}
 }
 
@@ -773,6 +843,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"should-skip-gate":            true,
 	"signal-housekeeping":         true,
 	"skill-cache-rebuild":         true,
+	"skill-detect":                true,
 	"skill-index":                 true,
 	"skill-inject":                true,
 	"skill-parse-frontmatter":     true,
@@ -785,6 +856,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"status":                      true,
 	"suggest-analyze":             true,
 	"suggest-approve":             true,
+	"survey-verify":               true,
 	"swarm-finalize":              true,
 	"swarm":                       true,
 	"tunnels":                     true,
