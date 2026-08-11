@@ -45,6 +45,29 @@ var auditedCorpora = []string{
 	filepath.Join("colony", "playbooks"),
 }
 
+// auditedFiles are individual top-level markdown files, audited WITHOUT
+// recursing into their directory. WIRE-03 (172-CONTEXT.md <corpus_scope>)
+// resolves the ".aether markdown corpus" as the literal top-level
+// `.aether/*.md` files, not `.aether/**/*.md` (~250 files under docs/,
+// skills/, templates/, references/) — that broader recursive scope was
+// explicitly rejected. `auditedCorpora` entries are directories walked
+// recursively by collectDocumentedCalls via filepath.Walk, which cannot
+// express "this one directory, non-recursively" — hence a second, disjoint
+// list of exact file paths instead of adding ".aether" itself as a corpus
+// entry.
+//
+// `.aether/HANDOFF.md` is deliberately excluded: it is gitignored
+// (.gitignore:87), so it exists locally but not in a fresh CI checkout —
+// auditing it would make the test's pass/fail behavior depend on whether a
+// session-local file happens to be present, which must never differ between
+// CI and a local run.
+var auditedFiles = []string{
+	filepath.Join(".aether", "CONTEXT.md"),
+	filepath.Join(".aether", "CROWNED-ANTHILL.md"),
+	filepath.Join(".aether", "QUEEN.md"),
+	filepath.Join(".aether", "workers.md"),
+}
+
 type documentedCall struct {
 	File    string
 	Line    int
@@ -304,6 +327,16 @@ func collectDocumentedCalls(t *testing.T, root string) []documentedCall {
 			t.Fatalf("walk %s: %v", dir, err)
 		}
 	}
+	// auditedFiles is a second, non-recursive corpus: exact top-level
+	// `.aether/*.md` files rather than a directory walk. See auditedFiles'
+	// doc comment for why this can't just be another auditedCorpora entry.
+	for _, f := range auditedFiles {
+		p := filepath.Join(root, f)
+		if _, err := os.Stat(p); err != nil {
+			continue // listed file removed; matches the corpus-removal tolerance above
+		}
+		all = append(all, extractDocumentedCalls(t, p)...)
+	}
 	return all
 }
 
@@ -512,6 +545,25 @@ func TestCommandCallsMatchCobraContracts(t *testing.T) {
 		t.Fatal("extracted zero documented calls — the audit is not looking at anything, which would pass vacuously forever")
 	}
 
+	// T-172-10 (anti-vacuity): a corpus that is listed but never actually read
+	// produces a test that passes while the bug it exists to catch sits
+	// inside its declared scope — precisely the state `.aether/workers.md`
+	// was in before this corpus was wired up. The overall len(calls) != 0
+	// check above cannot catch this: the other four corpora keep the total
+	// non-zero even if auditedFiles silently contributed nothing. This
+	// asserts the scan actually opened `.aether/workers.md`, not just that
+	// something, somewhere, was extracted.
+	foundWorkersMd := false
+	for _, c := range calls {
+		if strings.HasSuffix(filepath.ToSlash(c.File), ".aether/workers.md") {
+			foundWorkersMd = true
+			break
+		}
+	}
+	if !foundWorkersMd {
+		t.Fatal(".aether/workers.md contributed zero extracted calls — the corpus is listed but not being read, which is the exact vacuous-pass failure mode this test exists to catch")
+	}
+
 	var violations []string
 	for _, c := range calls {
 		// A bare `aether focus` in prose is naming the command, not calling it.
@@ -528,7 +580,10 @@ func TestCommandCallsMatchCobraContracts(t *testing.T) {
 		t.Errorf("%d documented CLI call(s) violate the command's real argument contract:\n  %s",
 			len(violations), strings.Join(violations, "\n  "))
 	}
-	t.Logf("audited %d documented invocations across %d corpora", len(calls), len(auditedCorpora))
+	// +1: auditedFiles is a second, non-recursive corpus (the top-level
+	// `.aether/*.md` file list) alongside the five directory trees in
+	// auditedCorpora.
+	t.Logf("audited %d documented invocations across %d corpora", len(calls), len(auditedCorpora)+1)
 }
 
 // LOUD-04: the audit must actually detect positional-argument drift. Without
@@ -571,6 +626,73 @@ func TestAuditDetectsPositionalDrift(t *testing.T) {
 	}
 	if v := validateCallAgainstCobra(badFlag); v == "" {
 		t.Error("the audit did not flag an unknown flag")
+	}
+}
+
+// TestAetherCorpusCatchesAnUnregisteredFlag is WIRE-03's permanent proof.
+// Success criterion 3 required the audit to be "seeded to fail today against
+// --enforce" — but once 172-01 registered --enforce on the real
+// spawn-can-spawn, that seed is gone from the live tree. This test replaces
+// the seed with something that runs forever: a function-local fixture
+// mirroring the PRE-172-01 spawn-can-spawn contract (no --enforce, no
+// positional depth), fed the REAL `.aether/workers.md:292` text (name
+// swapped to the fixture's), proving the corpus, the extractor and the
+// validator together still catch exactly the bug this phase was created for
+// — on every CI run, without a red commit ever landing on this branch.
+//
+// The fixture is registered and removed inside this function body only
+// (never at package scope): a package-scope registration would become a
+// real, permanent orphan requiring an entry in 172-02's shrink-only
+// allowlist, and "test fixture" is not debt.
+func TestAetherCorpusCatchesAnUnregisteredFlag(t *testing.T) {
+	preFixSpawnCanSpawn := &cobra.Command{
+		Use:  "audit-selftest-preenforce-spawn-can-spawn",
+		Args: cobra.NoArgs, // the pre-172-01 contract: no positional depth
+		Run:  func(*cobra.Command, []string) {},
+	}
+	preFixSpawnCanSpawn.Flags().Int("depth", 0, "Spawn depth to check (required)")
+	// Deliberately no --enforce flag: this is the exact absence 172-01 fixed.
+	rootCmd.AddCommand(preFixSpawnCanSpawn)
+	defer rootCmd.RemoveCommand(preFixSpawnCanSpawn)
+
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	// Run the real extractor over the real file — not a hand-built call —
+	// so this proves the live corpus and extractor, not just the validator.
+	workersPath := filepath.Join(root, ".aether", "workers.md")
+	calls := extractDocumentedCalls(t, workersPath)
+
+	var real *documentedCall
+	for i := range calls {
+		if calls[i].Command == "spawn-can-spawn" {
+			real = &calls[i]
+			break
+		}
+	}
+	if real == nil {
+		t.Fatal("the extractor found no `spawn-can-spawn` invocation in .aether/workers.md — a fixture test that silently found nothing to validate is the vacuous pass this whole phase exists to make impossible")
+	}
+
+	// Swap the command name to the fixture's so resolution hits the pre-fix
+	// contract instead of the real (now-fixed) spawn-can-spawn, then
+	// re-parse through the real extractor rather than hand-constructing the
+	// documentedCall struct — a hand-built struct would prove only that the
+	// validator works, which was never in doubt.
+	fixtureRaw := strings.Replace(real.Raw, "spawn-can-spawn", preFixSpawnCanSpawn.Use, 1)
+	fixtureCall, ok := parseFencedInvocation(real.File, real.Line, fixtureRaw)
+	if !ok {
+		t.Fatalf("could not re-parse the name-swapped .aether/workers.md:292 text (%q) through the real extractor", fixtureRaw)
+	}
+
+	v := validateCallAgainstCobra(fixtureCall)
+	if v == "" {
+		t.Fatal("the corpus + extractor + validator chain did not flag the pre-172-01 fixture at all — the .aether/workers.md:292 shape must be caught as it was before 172-01 fixed the real command")
+	}
+	if !strings.Contains(v, "--enforce") {
+		t.Errorf("violation = %q, want it to name --enforce", v)
 	}
 }
 
@@ -859,6 +981,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"survey-verify":               true,
 	"swarm-finalize":              true,
 	"swarm":                       true,
+	"swarm-display-update":        true,
 	"tunnels":                     true,
 	"unblock":                     true,
 	"unload-state":                true,
