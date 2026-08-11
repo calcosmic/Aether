@@ -7743,7 +7743,8 @@
     "name": "spawn-can-spawn",
     "short_description": "Check if spawning is allowed at given depth",
     "flags": [
-      "depth"
+      "depth",
+      "enforce"
     ],
     "parent_command": "",
     "has_subcommands": false,
