@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/events"
@@ -166,15 +167,50 @@ func latestSpawnEntryByName(st *agent.SpawnTree, name string) *agent.SpawnEntry 
 	return nil
 }
 
+// spawnCanSpawnDecision is the allow/deny seam Phase 173 (SPAWN-01) replaces
+// with a real decision. Today it unconditionally allows every depth. It is a
+// package-level function variable (not a plain func) specifically so a test
+// can substitute a deny answer for the duration of a single test case,
+// driving --enforce's deny-to-non-zero-exit path without waiting for
+// Phase 173 to implement the real cap logic.
+var spawnCanSpawnDecision = func(depth int) (bool, string) {
+	return true, ""
+}
+
 var spawnCanSpawnCmd = &cobra.Command{
 	Use:   "spawn-can-spawn",
 	Short: "Check if spawning is allowed at given depth",
-	Args:  cobra.NoArgs,
+	// D-14: accept the positional depth exactly as .aether/workers.md:292
+	// sends it (`aether spawn-can-spawn {your_depth} --enforce`), while still
+	// accepting the flag-only form the build playbooks send
+	// (`aether spawn-can-spawn --depth {depth}`).
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		depth := mustGetInt(cmd, "depth")
+		if len(args) == 1 {
+			parsed, err := strconv.Atoi(args[0])
+			if err != nil {
+				outputError(1, fmt.Sprintf("invalid depth %q: must be an integer", args[0]), nil)
+				return nil
+			}
+			// Positional wins over --depth when both are present.
+			depth = parsed
+		}
+
+		enforce, _ := cmd.Flags().GetBool("enforce")
+		canSpawn, reason := spawnCanSpawnDecision(depth)
+
+		if enforce && !canSpawn {
+			msg := fmt.Sprintf("spawn denied at depth %d", depth)
+			if reason != "" {
+				msg = fmt.Sprintf("%s: %s", msg, reason)
+			}
+			outputError(1, msg, nil)
+			return nil
+		}
 
 		outputOK(map[string]interface{}{
-			"can_spawn": true,
+			"can_spawn": canSpawn,
 			"depth":     depth,
 		})
 		return nil
@@ -368,6 +404,7 @@ func init() {
 	spawnCompleteCmd.Flags().String("summary", "", "Completion summary (optional)")
 
 	spawnCanSpawnCmd.Flags().Int("depth", 0, "Spawn depth to check (required)")
+	spawnCanSpawnCmd.Flags().Bool("enforce", false, "Exit non-zero when spawning is denied")
 
 	validateWorkerResponseCmd.Flags().String("response", "", "Response to validate (required)")
 	validateWorkerResponseCmd.Flags().Bool("expect-json", false, "Check if response is valid JSON")
