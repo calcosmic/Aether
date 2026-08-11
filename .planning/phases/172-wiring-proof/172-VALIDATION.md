@@ -1,12 +1,18 @@
 ---
 phase: 172
 slug: wiring-proof
-status: complete
+status: gap_closure_planned
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-08-08
 updated: 2026-08-11
 ---
+
+> **Reopened 2026-08-11 by gap-closure planning.** `172-VERIFICATION.md` recorded two
+> confirmed, independently reproduced gaps against ROADMAP success criteria 3 and 4. Waves 5
+> and 6 (plans `172-06`, `172-07`, `172-08`) exist to close them. Waves 1–4 remain green; the
+> rows for waves 5–6 below are ⬜ pending until those plans execute. The "Closed out" note at
+> the foot of this file describes the wave-4 close only and no longer means the phase is done.
 
 # Phase 172 — Validation Strategy
 
@@ -46,6 +52,8 @@ updated: 2026-08-11
 | 2 | `172-02` (orphan ratchet + seeded allowlist), `172-03` (`.aether` corpus + drift fixes) | Both depend on `172-00`. `172-03` additionally depends on `172-01`, so the branch is never knowingly red. No file overlap between them. |
 | 3 | `172-04` (skip-list guard + policy doc) | Reuses `172-02`'s comparator and states its real seeded counts. |
 | 4 | `172-05` (named CI step + criterion-4 proof + records) | Enumerates every guard test that exists, so it must run last. |
+| 5 | `172-06` (fence-parity blind spot: the two live violations it hid, the tolerant toggle, the corpus sweep) | Gap 1. Must precede waves 6 because both later plans read the world through `extractDocumentedCalls`, and the audited-invocation count is only stable (988) once the blind region is visible. Content is fixed *before* the extractor gains sight, so the tree is green at the end of every task. |
+| 6 | `172-07` (step-scoped release-gate check + shared guard-file inventory), `172-08` (symmetric substitution opener/closer + flag-audit anti-vacuity floor) | Gap 2 and the reinforcing hardening. Both depend on `172-06`. Disjoint `files_modified` — `172-07` owns `cmd/ci_wiring_gate_test.go` + `cmd/subcommand_reachability_ratchet_test.go` + `.github/workflows/ci.yml`; `172-08` owns `cmd/command_call_audit_test.go` + `cmd/cli_flag_audit_test.go`. |
 
 ---
 
@@ -68,12 +76,29 @@ Task IDs are `{plan}.{task}` — e.g. `01.2` is plan `172-01-PLAN.md`, task 2.
 | 05.1 | 172-05 | 4 | WIRE-01, WIRE-02, WIRE-03 (D-15) | T-172-17, T-172-18 | The named CI step's `-run` filter is asserted to match every guard test that exists, and the blanket `go test ./...` step is still present | unit (workflow/code invariant) | `go test ./cmd -run TestWiringGateStepRunsEveryWiringTest -count=1 -v` | ❌ W0 — `.github/workflows/ci.yml`, `cmd/ci_wiring_gate_test.go` | ✅ green |
 | 05.2 | 172-05 | 4 | WIRE-01 (criterion 4) | T-172-19 | Deleting a caller and running the verbatim CI step command turns it red naming the command; the tree is restored; the phase records state the real seeded counts | scripted behavioural proof (transcript) + records check | `go test ./... -count=1 -timeout 900s` plus the ROADMAP/VALIDATION consistency check in `172-05-PLAN.md` task 2 | ❌ W0 — `.planning/ROADMAP.md`, this file | ✅ green |
 
-*Legend: ⬜ = pending · ✅ = green · ❌ = red · ⚠️ = flaky. All rows above are ✅ green as of 2026-08-11 (plan 172-05, phase close).*
+### Gap-closure rows (waves 5–6)
 
-**Latency note (task 05.2):** this row's automated command is the full release-gate suite
-(~300–600s), well above the 15s guidance for per-task feedback. That is deliberate — 05.2 is
-the phase-closing gate and matches the "Phase gate" tier in the Sampling Rate section above,
-not the per-task tier. Every other row completes inside the quick-run budget.
+| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
+|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
+| 06.1 | 172-06 | 5 | WIRE-03 (gap 1) | T-172-26, T-172-27 | The two live violations hidden inside the desynced fence region are repaired at source (`midden-recent-failures --limit 50`; `generate-commit-message` flag form copied from its already-correct split sibling) and two commands gain their D-01 severity classification — done *before* the extractor can see them, so the audited count is provably unchanged (954) and the fix is not self-masking | unit (corpus) | `go test ./cmd -run 'TestCommandCallsMatchCobraContracts\|TestDocumentedSubcommandsAreSeverityClassified\|TestDocumentedCommandNamesResolve\|TestGateClassifiedCallsHaveGateWiring\|TestCLIFlagAudit' -count=1 -v` (asserts log reads `audited 954 …`) | ✅ extends `cmd/command_call_audit_test.go`, 7 playbook files | ⬜ pending |
+| 06.2 | 172-06 | 5 | WIRE-03 (gap 1) | T-172-28, T-172-29 | A closing fence marker glued to trailing content no longer desyncs in-fence parity, so no invocation after it is invisible; pinned by `TestExtractorDoesNotDesyncOnGluedFenceMarker`, whose red proof must name `midden-recent-failures` under the old toggle **and** name `backup-prune-global` under the tempting toggle-and-skip shortcut, so one blind spot cannot be traded for another | unit (extractor, two red proofs) | `go test ./cmd -run 'TestExtractorDoesNotDesyncOnGluedFenceMarker\|TestCommandCallsMatchCobraContracts' -count=1 -v` (asserts log reads `audited 988 …`) | ✅ same file | ⬜ pending |
+| 06.3 | 172-06 | 5 | WIRE-03 (gap 1) | T-172-30 | A single command fails when any file in the audited corpus gains a fence marker glued to trailing content, naming file and line — the defect class cannot return unnoticed, and the equivalence invariant (988 with the tolerant toggle *and* with repaired markdown) is asserted rather than assumed | unit (corpus sweep) + phase gate | `go test ./cmd -run 'TestAuditedCorpusHasNoGluedFenceMarkers\|TestCommandCallsMatchCobraContracts\|TestWiringGateStepRunsEveryWiringTest' -count=1 -v && go test ./... -count=1 -timeout 900s` | ✅ same file | ⬜ pending |
+| 07.1 | 172-07 | 6 | WIRE-01, WIRE-02, WIRE-03 (gap 2, criterion 4) | T-172-18 (re-opened), T-172-31, T-172-32, T-172-33 | The blanket release-gate check is scoped to the step whose `run:` line is exactly `go test ./... -count=1 -timeout 900s`, resolved by an end-of-line-anchored `- name:` lookup so `Run Go tests` cannot silently resolve to `Run Go tests with race detection`, and the step is verified *capable of failing* (no `if: always()`, no `\|\| true` / `\|\| echo` fallback) — a decoy substring can no longer satisfy it | unit (workflow invariant) + hermetic fixture table | `go test ./cmd -run 'TestWiringGateStepRunsEveryWiringTest\|TestBlanketGateCheckRejectsADecoyStep' -count=1 -v` | ✅ extends `cmd/ci_wiring_gate_test.go` | ⬜ pending |
+| 07.2 | 172-07 | 6 | WIRE-01 (gap 2, hardening) | T-172-34, T-172-35 | All five guard files this phase created are scanned for a runtime escape hatch from one shared `wiringGateGuardFiles` inventory (previously 3 of 5), with `os.LookupEnv`, `os.Environ`, `syscall.Getenv` and `testing.Short` added — and an anti-self-trip proof, because exempting the scanner from its own scan trades a false red for a real hole | unit (AST/source scan) + phase gate | `go test ./cmd -run 'TestWiringGuardsHaveNoRuntimeEscapeHatch\|TestWiringGateStepRunsEveryWiringTest' -count=1 -v && go test ./... -count=1 -timeout 900s` | ✅ extends `cmd/subcommand_reachability_ratchet_test.go` | ⬜ pending |
+| 08.1 | 172-08 | 6 | WIRE-01, WIRE-03 (hardening) | T-172-36, T-172-37 | Substitution opener and closer become one symmetric `substitutionOpener` decision shared by both extraction call sites, so a bare `(aether …)` subshell is no longer silently dropped and a backtick form no longer carries a stray delimiter into a flag name; fixture cases are written and red *before* the implementation change | unit (extractor fixtures) | `go test ./cmd -run 'TestCommandCallExtractorSeesRealInvocationsAndSkipsProse\|TestCommandCallsMatchCobraContracts' -count=1 -v` (988 unchanged from 06.2) | ✅ extends `cmd/command_call_audit_test.go` | ⬜ pending |
+| 08.2 | 172-08 | 6 | WIRE-01, WIRE-03 (hardening) | T-172-38, T-172-39, T-172-40 | The flag audit fails loudly instead of passing when a declared corpus directory cannot be read (today it silently `continue`s), enforces a scanned-file floor, and names failures by repo-relative path rather than a basename two corpora share — criterion 3's "naming the file, the line, and the offending flag" demonstrated, not asserted | unit (anti-vacuity + naming proof) + phase gate | `go test ./cmd -run 'TestCLIFlagAudit\|TestCLIFlagAuditSubcommandsRegistered\|TestFlagAuditSkipListOnlyShrinks\|TestAllowlistPolicyNamesEveryGuardedFile' -count=1 -v && go test ./... -count=1 -timeout 900s` | ✅ extends `cmd/cli_flag_audit_test.go` | ⬜ pending |
+
+*Legend: ⬜ = pending · ✅ = green · ❌ = red · ⚠️ = flaky. Rows 00.1–05.2 are ✅ green as of 2026-08-11 (plan 172-05, wave-4 close). Rows 06.1–08.2 are ⬜ pending gap-closure execution.*
+
+**Latency note (tasks 05.2, 06.3, 07.2, 08.2):** each of these rows ends its automated verify
+chain with the full release-gate suite (`go test ./... -count=1 -timeout 900s`, ~300–600s),
+well above the 15s guidance for per-task feedback. That is deliberate and matches the "Phase
+gate" tier in the Sampling Rate section above, not the per-task tier: each is the closing task
+of its plan, and every one of them changes a guard that the release gate itself runs — a
+narrower command could not detect a guard that passes in isolation but breaks a sibling. Each
+task's earlier, fast assertions (the `go test ./cmd -run …` alternations, ~10–15s) provide the
+per-task feedback; the blanket suite is the gate, not the loop. Every other row completes
+inside the quick-run budget.
 
 ---
 
@@ -178,5 +203,19 @@ copied verbatim out of `.github/workflows/ci.yml`, with both the red and green t
 recorded in `172-05-SUMMARY.md`. `git status --porcelain` on the caller file used for the proof
 (`.aether/commands/skill-create.yaml`) is clean after restoration. `nyquist_compliant`,
 `wave_0_complete` and `status` are all set to their completed values in this file's
-frontmatter. Phase 172 is complete.
+frontmatter. **Waves 1–4 are complete.**
+
+**Reopened:** 2026-08-11, gap-closure planning. `172-VERIFICATION.md` found success criterion 3
+false as stated (a glued fence closer hid a live `midden-recent-failures 50` violation inside
+the declared corpus) and criterion 4's durability guarantee false as claimed (a decoy substring
+in a non-blocking step satisfies the blanket-gate presence check; deleting the real gate step
+leaves the guard green). The wave-4 close above stands as an accurate record of what was
+verified *then* — it was not, and is not, a claim that the phase goal is met. Waves 5–6
+(`172-06`, `172-07`, `172-08`) close both gaps; this file returns to `status: complete` only
+when rows 06.1–08.2 are green and re-verification passes.
+
+**Latency exception, restated for the new waves:** rows 06.3, 07.2 and 08.2 each end in the
+full release-gate suite for the reason given in the latency note above. Recorded here so the
+exception is a decision on the record rather than an unexplained deviation from the 15s
+guidance.
 </content>
