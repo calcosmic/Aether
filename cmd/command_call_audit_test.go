@@ -838,11 +838,17 @@ func TestDocumentedCommandNamesResolve(t *testing.T) {
 // this list is that the gate-versus-enrichment judgement is made once, on
 // purpose, in review — not inherited silently from the enrichment default.
 var knownEnrichmentSubcommands = map[string]bool{
-	"abandon":                     true,
-	"activity-log":                true,
-	"assumption-list":             true,
-	"assumption-validate":         true,
-	"assumptions-analyze":         true,
+	"abandon":             true,
+	"activity-log":        true,
+	"assumption-list":     true,
+	"assumption-validate": true,
+	"assumptions-analyze": true,
+	// backup-prune-global and temp-clean judged here, deliberately, at the
+	// point the 172-06 fence repair (Task 3) makes them visible for the
+	// first time: both are housekeeping/cleanup commands whose failure
+	// degrades tidiness only — no verification result, security scan, or
+	// gate outcome depends on either — so both are enrichment, not a gate.
+	"backup-prune-global":         true,
 	"behavior-observe":            true,
 	"build-completion-stage":      true,
 	"build-finalize":              true,
@@ -982,18 +988,24 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"swarm-finalize":              true,
 	"swarm":                       true,
 	"swarm-display-update":        true,
-	"tunnels":                     true,
-	"unblock":                     true,
-	"unload-state":                true,
-	"update":                      true,
-	"validate-state":              true,
-	"validate-worker-response":    true,
-	"verify-castes":               true,
-	"version":                     true,
-	"watch":                       true,
-	"worktree-allocate":           true,
-	"worktree-list":               true,
-	"worktree-merge-back":         true,
+	// temp-clean judged here, deliberately, at the point the 172-06 fence
+	// repair (Task 3) makes it visible for the first time: it is a
+	// housekeeping/cleanup command whose failure degrades tidiness only —
+	// no verification result, security scan, or gate outcome depends on it
+	// — so it is enrichment, not a gate.
+	"temp-clean":               true,
+	"tunnels":                  true,
+	"unblock":                  true,
+	"unload-state":             true,
+	"update":                   true,
+	"validate-state":           true,
+	"validate-worker-response": true,
+	"verify-castes":            true,
+	"version":                  true,
+	"watch":                    true,
+	"worktree-allocate":        true,
+	"worktree-list":            true,
+	"worktree-merge-back":      true,
 }
 
 // T-160-23: no documented subcommand may sit unclassified. The enrichment
