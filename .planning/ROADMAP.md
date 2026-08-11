@@ -53,7 +53,7 @@
 
 **How success criteria are written here.** CLAUDE.md's Definition of Done governs: *a requirement is satisfied only when a command exists that someone can run, and that command fails when the requirement is unmet.* Two corrections from this repo's own history shaped the criteria below. A criterion reading "fewer than 27 castes loaded" already passed and proved nothing. A token ledger's unit test asserted the same arithmetic its parser used, so a 186x undercount shipped green — which is why the spend criteria name the expected figures (102,050 / 102,550) rather than the intent ("measure tokens"). Where possible the criteria assert a **proportion or an invariant** (grand total equals the sum of the `self` column; the allowlist may only shrink; the depth cap numbers hold with five user agents installed) rather than the presence of a named section.
 
-- [ ] **Phase 172: Wiring Proof** - A registered subcommand with no caller fails CI, and every CLI flag named in `.aether/*.md` exists — the ratchet lands before the capabilities it constrains
+- [x] **Phase 172: Wiring Proof** (6/6 plans) — completed 2026-08-11 - A registered subcommand with no caller fails CI, and every CLI flag named in `.aether/*.md` exists — the ratchet lands before the capabilities it constrains
 - [ ] **Phase 173: Delegation Guard** - Depth is derived from the parent and refused past a cap, a whole-tree budget bounds what depth alone cannot, guards fail closed, and the operator watches the tree grow. Nothing gains the ability to delegate here
 - [ ] **Phase 174: Spend Ledger** - What a run cost is measured with stated arithmetic including cache tokens, persists past the process, separates estimates from measurements, and rolls nested children up to their parent exactly once
 - [ ] **Phase 175: Orchestration Visibility** - The operator reads which workers the Queen chose and why, which it did not call, where the runtime overrode it, and which workers actually found something
@@ -621,7 +621,7 @@ Plans:
 **Depends on**: Nothing (first phase of v1.26)
 **Requirements**: WIRE-01, WIRE-02, WIRE-03
 **Success Criteria** (what must be TRUE):
-  1. Registering a new cobra subcommand with no caller outside its own definition file makes `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced` fail, naming the command — proven by a fixture that registers exactly such a command. The allowlist ships seeded with today's known orphans (the 8 `skill-*` lifecycle commands) and a companion assertion fails when the allowlist gains an entry it did not have in the committed baseline: **it may only shrink**
+  1. Registering a new cobra subcommand with no caller outside its own definition file makes `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced` fail, naming the command — proven by a fixture that registers exactly such a command. The allowlist ships seeded with the scan's real output: 278 pre-existing orphans, 6 of them tagged `owner_phase: "178"` (the reviewed `skill-*` lifecycle set) — correcting the originally assumed count of eight `skill-*` lifecycle commands, which predated the scan and (wrongly) credited documentation mentions as caller evidence. A companion assertion fails when the allowlist gains an entry it did not have in the committed baseline: **it may only shrink**
   2. `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` instructs every worker to run — exits 0. Today it exits 1 with `Error: unknown flag: --enforce`
   3. A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming the file, the line, and the offending flag when an instruction names a flag the binary does not register. Seeded to fail today against `--enforce`, and it passes only once criterion 2 does
   4. The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file
@@ -640,7 +640,7 @@ Plans:
 - [x] 172-04-PLAN.md — wave 3 — WIRE-01 (D-12): shrink-only guard over the flag audit's skip list, plus the written policy
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 172-05-PLAN.md — wave 4 — D-15: named CI step, the delete-a-caller red/green proof, and correcting the phase's recorded orphan count
+- [x] 172-05-PLAN.md — wave 4 — D-15: named CI step, the delete-a-caller red/green proof, and correcting the phase's recorded orphan count
 
 ### Phase 173: Delegation Guard
 **Goal**: Recursive delegation is bounded by the runtime at the one chokepoint an LLM cannot route around — the spawn-recording call. Depth is derived from the parent's recorded entry rather than asserted by the caller, a whole-tree budget bounds what depth alone cannot, every guard fails closed, and the operator can watch the tree while it grows. **Nothing gains the ability to delegate in this phase**; enforcement lands before capability because parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs.
@@ -706,7 +706,7 @@ Plans:
 **Depends on**: Phase 172, Phase 174
 **Requirements**: SKILL-01, SKILL-02, SKILL-03, SKILL-04
 **Success Criteria** (what must be TRUE):
-  1. Every registered `skill-*` command has a caller outside its own definition file or has been removed — Phase 172's ratchet allowlist drops from 8 skill entries to 0 and the ratchet passes with none remaining. The measurement is the allowlist, not a summary claiming the commands were reclaimed
+  1. Every registered `skill-*` command has a caller outside its own definition file or has been removed — Phase 172's ratchet allowlist drops from 6 skill entries (tagged `owner_phase: "178"` in `cmd/testdata/orphan_allowlist.json`; corrected from the originally assumed 8 after Phase 172's honest scan) to 0, and the ratchet passes with none remaining. The measurement is the allowlist, not a summary claiming the commands were reclaimed
   2. A skill named `aaa-my-notes` declaring all nine roles does not displace a shipped single-role skill from any worker's top-3, and when displacement does happen the injection report **names the dropped skill**. A test asserts that renaming a skill changes nothing about selection order — alphabetical position is no longer a selection input
   3. Every platform's skill-create wrapper invokes `aether skill-create` and contains no instruction to hand-write `SKILL.md`; a wrapper-contract test fails if any wrapper writes the file directly. It fails today for Claude and OpenCode, which is why validation added to the runtime command would otherwise protect only Codex users
   4. A skill with a typo'd role, an uncompilable detect pattern, a name collision, an empty body, or `` !`curl …` `` dynamic-context syntax is refused at create time and at index time, each reported with the file and the field. The index reports invalid skills rather than skipping them, so the file count and the index count can never disagree in silence
