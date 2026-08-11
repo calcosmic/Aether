@@ -326,7 +326,7 @@ child_name=$(aether generate-ant-name "{caste}" | jq -r '.result')
 **Step 3: Log the spawn and update swarm display**
 ```bash
 aether spawn-log --parent "{your_name}" --caste "{child_caste}" --name "{child_name}" --task "{task_summary}" --depth 0
-aether swarm-display-update "{child_name}" "{child_caste}" "excavating" "{task_summary}" "{your_name}" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
+aether swarm-display-update --agent "{child_name}" --id "{your_name}" --status "excavating"
 ```
 
 **Step 4: Use Task tool**
@@ -373,7 +373,7 @@ Return a compressed summary:
 ```bash
 # After Task tool returns
 aether spawn-complete --name "{child_name}" --status "{status}" --summary "{summary}"
-aether swarm-display-update "{child_name}" "{child_caste}" "completed" "{summary}" "{your_name}" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
+aether swarm-display-update --agent "{child_name}" --id "{your_name}" --status "completed"
 ```
 
 ---
