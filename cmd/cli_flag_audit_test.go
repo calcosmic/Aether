@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -10,6 +11,38 @@ import (
 
 	"github.com/spf13/pflag"
 )
+
+// flagAuditSkipEntry is one tolerated skip-list entry. Same shape as
+// orphanAllowlistEntry (cmd/subcommand_reachability_ratchet_test.go) —
+// name, reason, owner_phase — so the two guarded lists (D-12) are
+// queryable the same way, even though this file cannot import that
+// unexported type's test-only helpers directly.
+type flagAuditSkipEntry struct {
+	Name       string `json:"name"`
+	Reason     string `json:"reason"`
+	OwnerPhase string `json:"owner_phase"`
+}
+
+// skipSubcommands lists subcommands known to be called from markdown but
+// intentionally not registered as direct subcommands (they are shell-only,
+// aliases, or handled by other mechanisms). Promoted from a
+// TestCLIFlagAudit-local map[string]bool to a package-level declaration
+// (D-12) so TestFlagAuditSkipListOnlyShrinks can read it without
+// duplicating the list.
+var skipSubcommands = []flagAuditSkipEntry{
+	{Name: "verify-castes", Reason: "markdown-only-shorthand", OwnerPhase: "RECLAIM"},     // markdown-only command, no Go subcommand
+	{Name: "pending-decisions", Reason: "markdown-only-shorthand", OwnerPhase: "RECLAIM"}, // playbook shorthand; actual Go subcommands are pending-decision-{add,list,resolve}
+}
+
+// skipSubcommandNames returns skipSubcommands as a name-only set, the shape
+// TestCLIFlagAudit's scan loop needs for its lookup.
+func skipSubcommandNames() map[string]bool {
+	names := make(map[string]bool, len(skipSubcommands))
+	for _, e := range skipSubcommands {
+		names[e.Name] = true
+	}
+	return names
+}
 
 // TestCLIFlagAudit systematically compares markdown CLI calls against Go
 // registrations. This resolves RESEARCH.md open questions 1 and 2 with
@@ -31,13 +64,7 @@ func TestCLIFlagAudit(t *testing.T) {
 	//   aether build $ARGUMENTS --plan-only
 	re := regexp.MustCompile(`aether\s+([\w][\w-]*)\s+((?:--[\w][\w-]*(?:=\S*|\s+\S*)?\s*)*)`)
 
-	// Subcommands known to be called from markdown but intentionally not
-	// registered as direct subcommands (they are shell-only, aliases, or
-	// handled by other mechanisms).
-	skipSubcommands := map[string]bool{
-		"verify-castes":     true, // markdown-only command, no Go subcommand
-		"pending-decisions": true, // playbook shorthand; actual Go subcommands are pending-decision-{add,list,resolve}
-	}
+	skipSet := skipSubcommandNames()
 
 	// Build lookup: subcommand name -> set of registered flags
 	registered := make(map[string]map[string]bool)
@@ -90,7 +117,7 @@ func TestCLIFlagAudit(t *testing.T) {
 
 					foundSubcommands[subcmd] = true
 
-					if skipSubcommands[subcmd] {
+					if skipSet[subcmd] {
 						continue
 					}
 
@@ -184,5 +211,59 @@ func TestCLIFlagAuditSubcommandsRegistered(t *testing.T) {
 	}
 	if !flagCreateFound {
 		t.Error("missing alias: flag-create should be an alias for flag-add")
+	}
+}
+
+// loadFlagAuditSkipBaseline reads the committed baseline JSON for the flag
+// audit's skip list. Same shape as loadOrphanAllowlist
+// (cmd/subcommand_reachability_ratchet_test.go, same package) — a
+// [{"name","reason","owner_phase"}, ...] array read by relative testdata
+// path — implemented as its own function rather than a shared call because
+// that file's shrink-only diff (TestOrphanAllowlistOnlyShrinks) is inlined
+// in the test body, not extracted into a callable comparator this file could
+// import. Documented in this plan's SUMMARY as a follow-up: the two
+// set-membership diffs below and in TestOrphanAllowlistOnlyShrinks must be
+// kept in step by hand until a later phase unifies them.
+func loadFlagAuditSkipBaseline(t *testing.T, path string) []flagAuditSkipEntry {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var entries []flagAuditSkipEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	return entries
+}
+
+// TestFlagAuditSkipListOnlyShrinks is D-12: the flag audit's skipSubcommands
+// list gets the identical shrink-only treatment
+// TestOrphanAllowlistOnlyShrinks (cmd/subcommand_reachability_ratchet_test.go)
+// applies to the orphan allowlist — a pure set-membership diff against a
+// committed baseline copy. Same rules, same reasons: no count comparison (a
+// one-out-one-in swap must fail), no git-history comparison (CI
+// shallow-clones), no override field, no sign-off path, no environment
+// variable (D-10/D-11, applied here per D-12).
+func TestFlagAuditSkipListOnlyShrinks(t *testing.T) {
+	baseline := loadFlagAuditSkipBaseline(t, "testdata/flag_audit_skiplist_baseline.json")
+
+	baselineNames := map[string]bool{}
+	for _, e := range baseline {
+		baselineNames[e.Name] = true
+	}
+
+	var added []string
+	for _, e := range skipSubcommands {
+		if !baselineNames[e.Name] {
+			added = append(added, e.Name)
+		}
+	}
+
+	if len(added) > 0 {
+		sort.Strings(added)
+		t.Errorf("%d command(s) were added to the tolerated skip list without being added to the committed baseline: %s\n"+
+			"The skip list may only shrink. Make the documented call correct, or delete its entry — do not edit the baseline to make this pass.",
+			len(added), strings.Join(added, ", "))
 	}
 }
