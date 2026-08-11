@@ -646,8 +646,8 @@ Plans:
 - [x] 172-06-PLAN.md — wave 5 — WIRE-03 (gap 1): make the audit see the region a glued closing fence marker hid, fix the two live violations inside it, and fail a test when the defect shape returns anywhere in the corpus
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 172-07-PLAN.md — wave 6 — WIRE-01, WIRE-02, WIRE-03 (gap 2, D-11, D-15): scope the blanket release-gate check to the step that can actually fail, and scan every guard file this phase created from one inventory
-- [ ] 172-08-PLAN.md — wave 6 — WIRE-01, WIRE-03: make the extractor's substitution opener and closer one decision, and make the flag audit fail when it is reading nothing
+- [x] 172-07-PLAN.md — wave 6 — WIRE-01, WIRE-02, WIRE-03 (gap 2, D-11, D-15): scope the blanket release-gate check to the step that can actually fail, and scan every guard file this phase created from one inventory
+- [x] 172-08-PLAN.md — wave 6 — WIRE-01, WIRE-03: make the extractor's substitution opener and closer one decision, and make the flag audit fail when it is reading nothing
 
 ### Phase 173: Delegation Guard
 **Goal**: Recursive delegation is bounded by the runtime at the one chokepoint an LLM cannot route around — the spawn-recording call. Depth is derived from the parent's recorded entry rather than asserted by the caller, a whole-tree budget bounds what depth alone cannot, every guard fails closed, and the operator can watch the tree while it grows. **Nothing gains the ability to delegate in this phase**; enforcement lands before capability because parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs.
@@ -764,7 +764,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
-| 172. Wiring Proof | v1.26 | 7/9 | In Progress|  |
+| 172. Wiring Proof | v1.26 | 9/9 | Complete   | 2026-08-11 |
 | 173. Delegation Guard | v1.26 | 0/TBD | Not started | - |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
