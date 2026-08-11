@@ -629,6 +629,73 @@ func TestAuditDetectsPositionalDrift(t *testing.T) {
 	}
 }
 
+// TestAetherCorpusCatchesAnUnregisteredFlag is WIRE-03's permanent proof.
+// Success criterion 3 required the audit to be "seeded to fail today against
+// --enforce" — but once 172-01 registered --enforce on the real
+// spawn-can-spawn, that seed is gone from the live tree. This test replaces
+// the seed with something that runs forever: a function-local fixture
+// mirroring the PRE-172-01 spawn-can-spawn contract (no --enforce, no
+// positional depth), fed the REAL `.aether/workers.md:292` text (name
+// swapped to the fixture's), proving the corpus, the extractor and the
+// validator together still catch exactly the bug this phase was created for
+// — on every CI run, without a red commit ever landing on this branch.
+//
+// The fixture is registered and removed inside this function body only
+// (never at package scope): a package-scope registration would become a
+// real, permanent orphan requiring an entry in 172-02's shrink-only
+// allowlist, and "test fixture" is not debt.
+func TestAetherCorpusCatchesAnUnregisteredFlag(t *testing.T) {
+	preFixSpawnCanSpawn := &cobra.Command{
+		Use:  "audit-selftest-preenforce-spawn-can-spawn",
+		Args: cobra.NoArgs, // the pre-172-01 contract: no positional depth
+		Run:  func(*cobra.Command, []string) {},
+	}
+	preFixSpawnCanSpawn.Flags().Int("depth", 0, "Spawn depth to check (required)")
+	// Deliberately no --enforce flag: this is the exact absence 172-01 fixed.
+	rootCmd.AddCommand(preFixSpawnCanSpawn)
+	defer rootCmd.RemoveCommand(preFixSpawnCanSpawn)
+
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	// Run the real extractor over the real file — not a hand-built call —
+	// so this proves the live corpus and extractor, not just the validator.
+	workersPath := filepath.Join(root, ".aether", "workers.md")
+	calls := extractDocumentedCalls(t, workersPath)
+
+	var real *documentedCall
+	for i := range calls {
+		if calls[i].Command == "spawn-can-spawn" {
+			real = &calls[i]
+			break
+		}
+	}
+	if real == nil {
+		t.Fatal("the extractor found no `spawn-can-spawn` invocation in .aether/workers.md — a fixture test that silently found nothing to validate is the vacuous pass this whole phase exists to make impossible")
+	}
+
+	// Swap the command name to the fixture's so resolution hits the pre-fix
+	// contract instead of the real (now-fixed) spawn-can-spawn, then
+	// re-parse through the real extractor rather than hand-constructing the
+	// documentedCall struct — a hand-built struct would prove only that the
+	// validator works, which was never in doubt.
+	fixtureRaw := strings.Replace(real.Raw, "spawn-can-spawn", preFixSpawnCanSpawn.Use, 1)
+	fixtureCall, ok := parseFencedInvocation(real.File, real.Line, fixtureRaw)
+	if !ok {
+		t.Fatalf("could not re-parse the name-swapped .aether/workers.md:292 text (%q) through the real extractor", fixtureRaw)
+	}
+
+	v := validateCallAgainstCobra(fixtureCall)
+	if v == "" {
+		t.Fatal("the corpus + extractor + validator chain did not flag the pre-172-01 fixture at all — the .aether/workers.md:292 shape must be caught as it was before 172-01 fixed the real command")
+	}
+	if !strings.Contains(v, "--enforce") {
+		t.Errorf("violation = %q, want it to name --enforce", v)
+	}
+}
+
 // The extractor is the part most likely to rot into vacuous success: if its
 // regex stops matching, every other assertion here passes trivially.
 //
