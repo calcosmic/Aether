@@ -1,775 +1,589 @@
 ---
 phase: 172-wiring-proof
-reviewed: 2026-08-11T16:47:07Z
+reviewed: 2026-08-11T00:00:00Z
 depth: standard
-files_reviewed: 17
+files_reviewed: 18
 files_reviewed_list:
-  - cmd/spawn.go
-  - cmd/spawn_enforce_test.go
-  - cmd/command_call_audit_test.go
-  - cmd/subcommand_reachability_ratchet_test.go
-  - cmd/cli_flag_audit_test.go
-  - cmd/ci_wiring_gate_test.go
-  - cmd/testdata/orphan_allowlist.json
-  - cmd/testdata/orphan_allowlist_baseline.json
-  - cmd/testdata/flag_audit_skiplist_baseline.json
-  - cmd/testdata/command_catalog.json
-  - .github/workflows/ci.yml
-  - .aether/workers.md
-  - .aether/docs/orphan-allowlist-policy.md
+  - .aether/docs/command-playbooks/build-complete.md
   - .aether/docs/command-playbooks/build-full.md
+  - .aether/docs/command-playbooks/build-verify.md
   - .aether/docs/command-playbooks/build-wave.md
   - .aether/docs/command-playbooks/continue-advance.md
+  - .aether/docs/command-playbooks/continue-finalize.md
+  - .aether/docs/command-playbooks/continue-full.md
   - .aether/docs/command-playbooks/continue-gates.md
+  - .aether/docs/orphan-allowlist-policy.md
+  - .aether/workers.md
+  - .github/workflows/ci.yml
+  - cmd/ci_wiring_gate_test.go
+  - cmd/cli_flag_audit_test.go
+  - cmd/command_call_audit_test.go
+  - cmd/subcommand_reachability_ratchet_test.go
+  - cmd/testdata/flag_audit_skiplist_baseline.json
+  - cmd/testdata/orphan_allowlist_baseline.json
+  - cmd/testdata/orphan_allowlist.json
 findings:
-  critical: 7
-  warning: 13
-  info: 4
-  total: 24
+  critical: 4
+  warning: 14
+  info: 5
+  total: 23
 status: issues_found
 ---
 
 # Phase 172: Code Review Report
 
-**Reviewed:** 2026-08-11T16:47:07Z
+**Reviewed:** 2026-08-11
 **Depth:** standard
-**Files Reviewed:** 17
+**Files Reviewed:** 18
 **Status:** issues_found
 
 ## Summary
 
-The whole suite is green (`go test ./cmd -run '<the CI regex>'` passes in 2.3s), and the
-structural design is sound: both shrink-only comparators `t.Fatalf` on a missing or
-unparseable data file, so neither can be disabled by deleting a file; neither compares counts,
-so a one-out-one-in swap fails in both; and the CI-gate guard genuinely derives its expected
-test list from the guard files' ASTs rather than from a second hand-written copy.
+This phase's claim is that Aether's wiring guards are actually wired into CI and
+cannot pass vacuously. The guard suite is green (`go test ./cmd -run '<the CI
+filter>'` passes, 24 tests). It is not, however, undefeatable, and it does not
+establish the property it advertises.
 
-It is still defeatable in seven distinct ways, and the most serious is not theoretical. **The
-exact bug class this phase exists to catch survives, live, in the audited corpus, with the
-audit reporting green:** `.aether/docs/command-playbooks/continue-full.md:1243` still reads
-`aether midden-recent-failures 50` — a bare positional handed to a `cobra.NoArgs` command,
-byte-identical in shape to the four calls this phase fixed in `build-full.md`,
-`build-wave.md` (×2) and `continue-advance.md`. It survives because the extractor's code-fence
-tracker is inverted from line 1194 onward by a closing fence glued to the end of a content
-line (`--ttl "30d"` + fence). A guard that misses a live instance of its own founding bug is
-the phase's central claim failing on its own terms.
+Four defects are demonstrated, not inferred. Three of them let the CI gate be
+switched off while every guard still reports green; I reproduced all three
+against the live `.github/workflows/ci.yml` by feeding mutated copies of the
+real file to the phase's own checking function. The fourth is a false negative
+in the orphan ratchet — its headline claim ("nothing calls it") is already wrong
+today for at least two registered commands, which I identified by re-running the
+phase's own evidence collector with the ambiguity removed.
 
-The other blockers cluster in three places: (a) guard-on-guard checks that can be satisfied by
-text that cannot fail (`ci.yml`'s `Test summary` step), (b) the escape-hatch scan being narrower
-than the set of guard files and narrower than the set of ways to read an environment variable,
-and (c) two of the phase's own remediations to shipped instruction files (`workers.md`,
-`continue-gates.md`) that make the audit green while leaving the instruction unable to work —
-which is worse than the broken call, because the audit can no longer see it.
+The common root cause across the CI findings is that `blanketReleaseGateProblem`
+and `extractWiringGateRunArg` assert on **substrings of a line of YAML** rather
+than on the structure of the command. The phase's own file comment says the
+step must be checked "structurally … not merely have the command's text appear
+somewhere in the file". It replaced a whole-file substring check with a
+step-scoped substring check; the substring class of bug survived the fix.
 
-Verified explicitly and found **correct** (recorded so they are not re-litigated): the two
-shrink-only comparators are behaviourally equivalent on the swap case; `--enforce` really does
-reach a non-zero process exit (`outputError` → `markRenderedCommandError` →
-`Execute`/`renderedErrorExit`), and its presence changes nothing on the allow path;
-`repoRootForCommandSourceTest` fails loudly rather than silently mis-scoping. The known
-duplication of the shrink comparator is out of scope per the brief and is not reported.
+Plain-English version, for the owner: the safety check that is supposed to prove
+"the tests really run in CI" only reads the text of the command in the settings
+file. Anyone can leave the text exactly as it is and add three characters after
+it that throw away the result — the check still says everything is fine. And the
+"is anything actually using this command?" check matches commands by name only,
+ignoring which menu they sit under, so `aether host colonize` is counted as proof
+that the unrelated top-level `aether colonize` is in use. It isn't.
 
 ## Critical Issues
 
-### CR-01: A live instance of the phase's founding bug survives the audit, unseen
+### CR-01: The blanket CI gate check is a substring test — `; true` or an extra `-run` neuters the gate and the guard still passes
 
-**File:** `cmd/command_call_audit_test.go:169-184` (fence tracking); evidence at
-`.aether/docs/command-playbooks/continue-full.md:1194` and `:1243`
+**File:** `cmd/ci_wiring_gate_test.go:214-251` (`blanketReleaseGateProblem`)
 
-**Issue:** `extractDocumentedCalls` toggles `inFence` only when a line *starts* with a fence
-marker:
+**Issue:** The function checks only that the step's single `run:` line
+*contains* `go test ./... -count=1 -timeout 900s`, has no `-race`, no `if:`, no
+`continue-on-error`, and none of exactly three fallbacks (`|| true`, `|| echo`,
+`|| :`). Anything appended after the required substring is invisible to it.
+
+Reproduced by passing mutated copies of the real `.github/workflows/ci.yml` to
+`blanketReleaseGateProblem`:
+
+| Mutation of the live gate step's run line | `blanketReleaseGateProblem` returns |
+|---|---|
+| `… -timeout 900s; true` | `nil` (passes) |
+| `… -timeout 900s \|\| exit 0` | `nil` (passes) |
+| `… -timeout 900s -run TestNothing` | `nil` (passes) |
+| `… -timeout 900s \| cat` | `nil` (passes) |
+| `run: echo skip # go test ./... -count=1 -timeout 900s` | `nil` (passes) |
+
+The `-run TestNothing` case is the worst: the blanket release gate then executes
+zero tests and exits 0, while the guard that exists to prove the gate is intact
+reports it intact. The shell-comment case passes because the required text is
+matched inside a `#` comment while the actual command is something else.
+
+**Fix:** Stop matching a substring; parse and constrain the whole command.
+Minimum viable hardening:
 
 ```go
-if strings.HasPrefix(strings.TrimSpace(line), "```") {
-    inFence = !inFence
-    continue
+// Require the run line to BE the command, not merely contain it.
+cmd := strings.TrimSpace(strings.TrimPrefix(trimmedRunLine, "run:"))
+if cmd != blanketGateRunSubstring {
+    return fmt.Errorf("CI step %q's run line must be exactly %q (no appended "+
+        "arguments, redirections, or fallbacks); found: %s",
+        blanketGateStepName, blanketGateRunSubstring, cmd)
+}
+// Reject shell comments outright — the command must not be commented out.
+if strings.HasPrefix(cmd, "#") {
+    return fmt.Errorf("CI step %q's run line is commented out: %s", blanketGateStepName, cmd)
 }
 ```
 
-`continue-full.md:1194` closes a block with the marker glued to the end of a content line
-(`  --ttl "30d"` immediately followed by the fence). That line does not start with the marker,
-so the fence never closes and every fence-parity decision from line 1194 to EOF is inverted.
-Two files in the audited corpus have an odd fence count for exactly this reason
-(`continue-advance.md`, 49 markers; `continue-full.md`, 149 markers — the latter has ~600
-inverted lines).
-
-The consequence is a proven false negative. At `continue-full.md:1243` the extractor computes
-`inFence == false`, the line carries no backticks, so `backtickCallRe` does not match and the
-call is never extracted at all:
-
-```
-midden_result=$(aether midden-recent-failures 50 2>/dev/null || ...)
-```
-
-`midden-recent-failures` is `Args: cobra.NoArgs` (`cmd/midden_cmds.go:20`). This is the same
-positional-to-NoArgs shape the phase's own comment calls "the exact shape of all seven of the
-phase's confirmed-broken calls" — and `TestCommandCallsMatchCobraContracts` passes.
-
-**Fix:** treat a fence marker anywhere on a line as a delimiter, and split the line at it, so
-a glued close still closes:
-
-```go
-trimmed := strings.TrimSpace(line)
-if idx := strings.Index(trimmed, "```"); idx >= 0 {
-    if idx > 0 && inFence {
-        // content before a glued closing fence is still a fenced line
-        if c, ok := parseFencedInvocation(path, i+1, trimmed[:idx]); ok {
-            calls = append(calls, c)
-        }
-    }
-    inFence = !inFence
-    continue
-}
-```
-
-Add a regression assertion that fence parity is even for every audited file, so an unbalanced
-fence fails loudly instead of silently halving coverage:
-
-```go
-if inFence {
-    t.Errorf("%s ends inside an unclosed code fence — every fence-parity decision after the "+
-        "unbalanced marker is inverted and invocations are silently dropped", path)
-}
-```
-
-Then fix `continue-full.md:1243` to `--limit 50` alongside the four already corrected.
+Then extend `TestBlanketGateCheckRejectsADecoyStep` with table rows for
+`; true`, `|| exit 0`, `| cat`, a trailing `-run`, and a `#`-commented command.
+Those five rows are the cases the existing six-row table does not cover.
 
 ---
 
-### CR-02: The "CI coverage was not narrowed" guard is satisfied by a step that cannot fail
+### CR-02: A commented-out blanket gate step satisfies the check
 
-**File:** `cmd/ci_wiring_gate_test.go:67-71`; evidence at `.github/workflows/ci.yml:42` and
-`:105`
+**File:** `cmd/ci_wiring_gate_test.go:156-190` (`stepBlock`)
 
-**Issue:** The guard asserts the blanket release-gate step still exists by substring:
-
-```go
-if !strings.Contains(workflow, "go test ./... -count=1 -timeout 900s") {
-```
-
-Two lines in `ci.yml` contain that substring. Line 42 is the real gate. Line 105 is the
-`Test summary` step:
+**Issue:** `stepBlock` locates the step by searching for the raw text
+`- name: Run Go tests` anywhere in the file and requires only that it be
+followed by end-of-line. It never checks that the marker begins the line (after
+whitespace). A YAML comment satisfies it:
 
 ```yaml
-      - name: Test summary
-        if: always()
-        run: |
-          echo "Go tests: $(go test ./... -count=1 -timeout 900s -v 2>&1 | grep -c '--- PASS' || echo 'unknown') passed"
+      # - name: Run Go tests
+      #   run: go test ./... -count=1 -timeout 900s
 ```
 
-That step runs under `if: always()`, its exit status is `echo`'s, and the `|| echo 'unknown'`
-swallows any failure — it can never fail a build. So deleting line 42 (the actual release
-gate) leaves this guard passing. The guard's stated purpose — "it must never be mistaken for a
-replacement that narrows CI coverage" — does not hold.
+Verified against a minimal synthetic workflow: `blanketReleaseGateProblem`
+returns `nil` — the release gate has been deleted and the guard passes.
 
-**Fix:** parse the workflow structurally and require a *failing-capable* step, not a substring.
-Minimum viable fix: locate the `- name: Run Go tests` step and assert its own `run:` line,
-and assert the summary step is excluded:
+Against the *current* `ci.yml` this mutation happens to fail, but only by
+accident and with a wrong diagnosis: because no later `- name:` exists at the
+matched (comment) indent, the block runs to end-of-file and picks up the
+unrelated `Test summary` step's `if: always()`. The reported error is
+`CI step "Run Go tests" has a conditional if: always()`, which is false — that
+step does not exist at all. Deleting or reordering `Test summary` removes even
+this accidental protection.
+
+**Fix:** Anchor the marker to the start of the line's content, and reject a
+match whose line prefix is not pure whitespace:
 
 ```go
-runGoTests, err := stepRunLine(workflow, "Run Go tests")
-if err != nil || !strings.Contains(runGoTests, "go test ./... -count=1 -timeout 900s") {
-    t.Fatalf("the `Run Go tests` release-gate step no longer runs the blanket suite: %v / %q", err, runGoTests)
-}
-if strings.Contains(stepBlock(workflow, "Run Go tests"), "if: always()") {
-    t.Fatal("the blanket release gate must be able to fail the build; it must not be `if: always()`")
+lineStart := strings.LastIndexByte(workflow[:absIdx], '\n') + 1
+indent := workflow[lineStart:absIdx]
+if strings.TrimSpace(indent) != "" {
+    // e.g. a "# " prefix — a commented-out step is not a step.
+    searchFrom = afterEnd
+    continue
 }
 ```
 
-(`stepRunLine` can reuse the existing `extractWiringGateRunArg` scanning logic, parameterised
-on the step name.)
+Also bound the block: if no next `- name:` at the same indent is found, stop at
+the first line whose indentation is less than the step's, rather than running to
+EOF — so the `if:`/`continue-on-error` scan can never inspect an unrelated
+later step.
 
 ---
 
-### CR-03: The escape-hatch guard misses `os.LookupEnv` and does not cover two of the five guard files
+### CR-03: The named wiring step's `-run` filter is read from the first `-run`, but `go test` honours the last
 
-**File:** `cmd/subcommand_reachability_ratchet_test.go:1175-1210`
+**File:** `cmd/ci_wiring_gate_test.go:67, 357-373` (`runFlagArgRe`, `extractWiringGateRunArg`)
 
-**Issue:** Two independent holes in the same test.
+**Issue:** `runFlagArgRe.FindStringSubmatch(runLine)` returns the **first**
+`-run '<regex>'` on the line. `go test` uses the **last** `-run` it is given.
+Appending a second flag to the live wiring step:
 
-1. The forbidden pattern is `os\.Getenv|t\.Skip|t\.SkipNow`. `os.LookupEnv("AETHER_SKIP_WIRING")`
-   is the idiomatic alternative and is **not** matched; neither is `os.Environ()`,
-   `syscall.Getenv`, `testing.Short()`, or a `runtime.GOOS` bail-out. The test's own failure
-   message claims it catches "an environment-variable read"; it catches one spelling of one.
-2. `guardFiles` lists three files:
-
-```go
-guardFiles := []string{
-    "subcommand_reachability_ratchet_test.go",
-    "command_call_audit_test.go",
-    "cli_flag_audit_test.go",
-}
+```yaml
+run: go test ./cmd -run 'TestNoRegisteredSubcommandIsUnreferenced|…' -count=1 -timeout 900s -v -run 'TestNothingAtAll'
 ```
 
-   `ci_wiring_gate_test.go` and `spawn_enforce_test.go` — both added by this phase, both listed
-   as guard files by `wiringGateGuardFiles` in `cmd/ci_wiring_gate_test.go:36-42` — are not
-   scanned. `ci_wiring_gate_test.go` is the test that keeps the CI `-run` filter honest, and it
-   is the one guard here that can be switched off with a `t.Skip` and nothing will notice.
+`extractWiringGateRunArg` returns the full 947-character original filter and
+`TestWiringGateStepRunsEveryWiringTest` passes, while the step itself runs zero
+guard tests. Verified against the live `ci.yml`.
 
-**Fix:** widen the pattern and share one file list:
+The same class applies to the whole line: nothing asserts the run line even
+begins with `go test ./cmd`, so `run: echo "-run '…'"` also passes.
 
-```go
-forbiddenRe := regexp.MustCompile(`os\.Getenv|os\.LookupEnv|os\.Environ|syscall\.Getenv|t\.Skip|t\.SkipNow|testing\.Short`)
-
-for _, f := range wiringGateGuardFiles { // the single, shared inventory
-    ...
-}
-```
-
-`wiringGateGuardFiles` already exists in the same package; use it in both places and delete
-the local `guardFiles` slice (see WR-06).
-
----
-
-### CR-04: `TestCLIFlagAudit` passes vacuously when its input directories are absent
-
-**File:** `cmd/cli_flag_audit_test.go:67-72`, `:111-115`, `:190-192`
-
-**Issue:** Every other guard in this phase has an anti-vacuity assertion. This one has none.
+**Fix:** Use `FindAllStringSubmatch` and fail if more than one `-run` is
+present; assert the command shape as well:
 
 ```go
-markdownDirs := []string{
-    "../.claude/commands/ant/",
-    "../.opencode/commands/ant/",
-    "../.aether/docs/command-playbooks/",
+ms := runFlagArgRe.FindAllStringSubmatch(runLine, -1)
+if len(ms) == 0 {
+    return "", fmt.Errorf("CI step %q's run line has no `-run '<regex>'`: %s", wiringGateStepName, strings.TrimSpace(runLine))
 }
-...
-entries, err := os.ReadDir(dir)
-if err != nil {
-    continue // directory may not exist in test environment
+if len(ms) > 1 {
+    return "", fmt.Errorf("CI step %q's run line carries %d `-run` flags; go test honours only the last, so this guard would validate a filter that never executes: %s",
+        wiringGateStepName, len(ms), strings.TrimSpace(runLine))
 }
-```
-
-If all three directories are renamed, moved, or removed (the ratchet's own comments
-contemplate exactly this: "corpus removed by a later phase"), the loop reads nothing,
-`mismatches` stays empty, and the test **passes**. The only signal is a `t.Logf` nobody reads.
-The paths are also `..`-relative rather than resolved through `repoRootForCommandSourceTest()`,
-so any change to the test working directory silently disables it too.
-
-This test is named in `.aether/docs/orphan-allowlist-policy.md:90` as one of the tests
-enforcing the policy, and it is one of the tests the CI wiring step exists to make legible. A
-guard that no-ops when its input is missing is a guard that can be disabled by moving a
-directory.
-
-**Fix:**
-
-```go
-root, err := repoRootForCommandSourceTest()
-if err != nil {
-    t.Fatalf("resolve repo root: %v", err)
+if !strings.Contains(runLine, "go test ./cmd ") {
+    return "", fmt.Errorf("CI step %q's run line does not invoke `go test ./cmd`: %s", wiringGateStepName, strings.TrimSpace(runLine))
 }
-markdownDirs := []string{
-    filepath.Join(root, ".claude", "commands", "ant"),
-    filepath.Join(root, ".opencode", "commands", "ant"),
-    filepath.Join(root, ".aether", "docs", "command-playbooks"),
-}
-...
-scannedFiles := 0   // increment per file actually read
-...
-if scannedFiles == 0 || len(foundSubcommands) == 0 {
-    t.Fatalf("the flag audit read %d file(s) and found %d subcommand(s) — it is not looking at "+
-        "anything, which would pass vacuously forever", scannedFiles, len(foundSubcommands))
-}
+return ms[0][1], nil
 ```
 
 ---
 
-### CR-05: `openedSubstitution` recognises one of the three openers `normalizeShellToken` accepts
+### CR-04: Caller evidence is keyed by bare command name with no parent path — `aether host colonize` credits the unrelated top-level `colonize`
 
-**File:** `cmd/command_call_audit_test.go:111-142`, use sites `:229-235` and `:288-294`
+**File:** `cmd/subcommand_reachability_ratchet_test.go:365-426` (`singleFileCallerNames`), `713-739` (`computeOrphanNames`)
 
-**Issue:** `normalizeShellToken` strips three substitution openers:
+**Issue:** `credit()` records `names[command] = true` plus every following
+bareword that looks like a command name, and `computeOrphanNames` asks only
+`evidence[c.Name]`. Neither carries the parent path. The registered cobra tree
+has **20 leaf names that exist at more than one path**, so a documented call to
+one silently clears the other.
+
+Measured on the live tree and the live caller corpora:
+
+| Name | Registered at | Distinct commands? | A direct `aether <name>` call exists? |
+|---|---|---|---|
+| `colonize` | `aether colonize`, `aether host colonize` | yes | **no** |
+| `closeout` | `aether closeout`, `aether ceremony closeout` | yes | **no** |
+
+`.claude/commands/ant/colonize.md:16` documents `aether host colonize
+$ARGUMENTS`; that credits the token `colonize`, which clears the top-level
+`aether colonize` command. Nothing in any permitted corpus invokes
+`aether colonize` or `aether closeout` directly, neither is in
+`cmd/testdata/orphan_allowlist.json`, and the ratchet reports both as wired.
+These are exactly the "works, and nothing calls it" commands the file's own
+header (lines 3-12) says it exists to catch.
+
+Other collisions currently benign but latent: `build`, `continue`, `plan`,
+`seal`, `swarm`, `watch`, `oracle` (top-level vs `host …`), `pheromones` /
+`registry` / `wisdom` (`export …` vs `import …`), `get` / `set`
+(`colony-depth` vs `parallel-mode` vs `plan-granularity`). Any of these becoming
+orphaned at one path will be invisible.
+
+`computeOrphanNames`'s own comment acknowledges the name-collision problem for
+*reporting* ("they collapse into one allowlist entry") but the same collision in
+*crediting* is not handled.
+
+**Fix:** Key evidence by the resolved command path, not the leaf name. Resolve
+each documented invocation through `rootCmd.Find` (which the sibling audit in
+`command_call_audit_test.go:533` already does) and record the `CommandPath()` of
+the target; then compare against `CommandPath()` when computing orphans:
 
 ```go
-case strings.HasPrefix(t, "$("): t = t[2:]
-case strings.HasPrefix(t, "`"):  t = t[1:]
-case strings.HasPrefix(t, "("):  t = t[1:]
-```
-
-`openedSubstitution` — the function that decides whether to trim the matching closing
-delimiter off the last token — recognises only `$(`:
-
-```go
-return strings.HasPrefix(t, "$(")
-```
-
-So for the other two openers the closing delimiter is never trimmed. Verified against a
-standalone reproduction of both functions:
-
-| Input | Extracted | Result |
-|---|---|---|
-| `` x=`aether status` `` | name `` status` `` | fails the `^[a-z][a-z0-9-]*$` shape check → **call silently dropped** |
-| `(aether status)` | name `status)` | **call silently dropped** |
-| `(aether status --json)` | name `status`, args `[--json)]` | **false positive**: reported as `unknown flag --json)` |
-
-The doc comment on `normalizeShellToken` explicitly claims the two call sites "cannot drift
-apart again". They have not drifted from each other — but `normalizeShellToken` and
-`openedSubstitution` have, and they are two halves of the same decision. No live instance
-exists in the corpus today, which is precisely why this will not be noticed until it produces
-a wrong answer.
-
-**Fix:** make the two functions symmetric by construction:
-
-```go
-// substitutionOpener returns the opener tok begins with (after an optional
-// VAR= prefix) and the closing delimiter that matches it, or "" for neither.
-func substitutionOpener(tok string) (open, closeDelim string) {
-	t := tok
-	if loc := assignmentPrefixRe.FindStringIndex(t); loc != nil {
-		t = t[loc[1]:]
-	}
-	switch {
-	case strings.HasPrefix(t, "$("):
-		return "$(", ")"
-	case strings.HasPrefix(t, "`"):
-		return "`", "`"
-	case strings.HasPrefix(t, "("):
-		return "(", ")"
-	}
-	return "", ""
+// credit: resolve the token run through cobra rather than trusting the name.
+if target, _, err := rootCmd.Find(append([]string{command}, args...)); err == nil &&
+    target != nil && target != rootCmd {
+    names[target.CommandPath()] = true
 }
 ```
 
-and trim `closeDelim` (not a hardcoded `")"`) at both use sites. Add table-driven cases for
-`` `aether status` ``, `(aether status)` and `(aether status --json)` to
-`TestCommandCallExtractorSeesRealInvocationsAndSkipsProse`.
-
----
-
-### CR-06: The `workers.md` remediation makes the audit green with a call that can only ever fail
-
-**File:** `.aether/workers.md:329` and `:376`; contract at `cmd/swarm.go:261-287`
-
-**Issue:** This phase rewrote both `swarm-display-update` calls from a positional form (which
-the audit correctly rejected) to:
-
-```bash
-aether swarm-display-update --agent "{child_name}" --id "{your_name}" --status "excavating"
-```
-
-`--id` is not the caller's identity. It is the **swarm id**, used as a storage path segment
-(`cmd/swarm.go:283`):
-
-```go
-path := fmt.Sprintf("swarms/%s/display.json", id)
-if err := store.LoadJSON(path, &df); err != nil {
-    outputError(1, fmt.Sprintf("display not found for swarm %s: %v", id, err), nil)
-```
-
-Passing `{your_name}` (a worker name like `Mason-67`) makes the runtime look for
-`swarms/Mason-67/display.json`. Worse, `swarm-display-init` — the only thing that creates that
-file — appears **nowhere** in the entire `.claude`/`.opencode`/`.aether` corpus (verified by
-grep: the only two hits for `swarm-display-*` in the whole tree are these two `workers.md`
-lines). Every execution of this documented step therefore exits non-zero with
-`display not found for swarm {your_name}`.
-
-The rewrite also silently dropped the caste, task summary, tool counts, progress and chamber
-that the previous form carried — those are not flags on this command at all, so the
-information has nowhere to go.
-
-Net effect: the call went from "detectably broken" to "undetectably broken". The audit checks
-arity and flag existence; it has no way to see that the value is the wrong identity. This is
-the failure mode CLAUDE.md's Definition of Done section describes.
-
-**Fix:** either supply the real swarm id and initialise the display, or remove the step:
-
-```bash
-# only valid inside a swarm, where {swarm_id} was created by swarm-display-init
-aether swarm-display-update --id "{swarm_id}" --agent "{child_name}" --status "excavating"
-```
-
-If the generic spawn protocol has no swarm id (it does not — spawns are logged via
-`spawn-log`), delete both lines rather than leaving an instruction that always errors.
-
----
-
-### CR-07: The `continue-gates.md` remediation reads the wrong JSON level and can only return `{}`
-
-**File:** `.aether/docs/command-playbooks/continue-gates.md:875`
-
-**Issue:** The phase rewrote a broken `aether state-read '.build_synthesis.watcher'` (a
-positional to a `cobra.NoArgs` command) into:
-
-```bash
-watcher_result=$(aether state-read 2>/dev/null | jq -c '.build_synthesis.watcher // {}' 2>/dev/null || echo "{}")
-quality_score=$(echo "$watcher_result" | jq -r '.quality_score // 0')
-critical_count=$(echo "$watcher_result" | jq '[.issues_found[]? | select(.severity == "CRITICAL")] | length')
-```
-
-`state-read` emits the standard envelope (`cmd/state_cmds.go:883` → `outputOK(state)` →
-`{"ok":true,"result":{…}}`). Verified against the real binary:
-
-```
-$ aether state-read | jq -c 'keys'
-["ok","result"]
-```
-
-`.build_synthesis.watcher` at the top level is structurally always `null`, so `// {}` always
-yields `{}`, `quality_score` is always `0` and `critical_count` is always `0`. The quality gate
-that reads Watcher results now reports a clean pass unconditionally. (`.result.build_synthesis`
-does not exist either — `build_synthesis` appears nowhere in the Go sources — so the state key
-itself is stale, but that is a separate, pre-existing problem; the introduced defect is the
-missing `.result` level in a newly written expression.)
-
-Like CR-06, the audit now reports this line as correct, so the breakage is no longer visible to
-the machinery built to find it.
-
-**Fix:** use the purpose-built subcommand, which exists (`cmd/state_cmds.go:889`):
-
-```bash
-watcher_result=$(aether state-read-field --field 'build_synthesis.watcher' 2>/dev/null | jq -c '.result.value // {}' || echo "{}")
-```
-
-and separately confirm whether `build_synthesis` is written by anything; if it is not, the whole
-step is dead and should be removed rather than repaired.
-
----
+and in `computeOrphanNames`, walk with the parent path so `c` is identified as
+`aether host colonize` vs `aether colonize`. Regenerating
+`testdata/orphan_allowlist.json` afterwards will surface the newly-visible
+orphans; each needs a real caller or a baseline entry added in the same review.
+`enumerateRegisteredCommands` must also start carrying the path — today
+`registeredCommandInfo` has only `Name`, `Aliases`, `Hidden`.
 
 ## Warnings
 
-### WR-01: Only the first `aether` invocation on a line is ever extracted
+### WR-01: `-update-orphan-allowlist` is an override switch inside a guard file, and the escape-hatch scan does not look for flags
+
+**File:** `cmd/subcommand_reachability_ratchet_test.go:39, 902-906`; `.aether/docs/orphan-allowlist-policy.md:34-38, 95-97`
+
+**Issue:** `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced
+-update-orphan-allowlist` regenerates the live list and `return`s **before** the
+unallowed-orphan assertion and before the D-08 owner-phase assertion. That is a
+command-line flag in a guard file that turns the guard's assertions off.
+`TestWiringGuardsHaveNoRuntimeEscapeHatch`'s regex covers `os.Getenv`,
+`os.LookupEnv`, `os.Environ`, `syscall.Getenv`, `t.Skip`, `t.SkipNow`,
+`testing.Short` — not `flag.Bool`. The policy document states "There is no
+override switch, no setting to turn the check off" and that the escape-hatch
+test "fails if any of the guard files above ever grow a setting, **flag**, or
+environment variable that could switch the check off." Both claims are false as
+written. CLAUDE.md's own rule: "A documentation claim about runtime behaviour
+must be testable or removed."
+
+**Fix:** Either (a) make the update path assert first and write second, so the
+flag cannot suppress a failure, or (b) narrow the doc to describe what the test
+actually checks and add `flag.Bool|flag.String|flag.Int` to `forbiddenRe` with
+an explicit, commented exemption for `updateOrphanAllowlist` — so a *second*
+such flag fails loudly.
+
+### WR-02: The named wiring step is never checked for `if:`, `continue-on-error`, or a swallowed exit status
+
+**File:** `cmd/ci_wiring_gate_test.go:100-108`
+
+**Issue:** `blanketReleaseGateProblem` hardens the blanket step; the named wiring
+step gets only `extractWiringGateRunArg`, which reads the `-run` argument and
+nothing else. `continue-on-error: true` on the wiring step passes the guard.
+Coverage is preserved by the blanket step, so this is a legibility loss rather
+than a coverage loss — but the phase's stated purpose for that step is
+legibility.
+
+**Fix:** Factor the structural checks out of `blanketReleaseGateProblem` into a
+`stepCanFailTheBuild(block, stepName) error` helper and call it for both steps.
+
+### WR-03: Nothing asserts the workflow runs at all
+
+**File:** `.github/workflows/ci.yml:3-11`; `cmd/ci_wiring_gate_test.go`
+
+**Issue:** Every guard inspects steps. None inspects `on:` (currently
+`pull_request`/`push` on `main`) or job-level keys. Changing `on:` to
+`workflow_dispatch` only, or adding `if: false` to the `go` job, disables all of
+it while `TestWiringGateStepRunsEveryWiringTest` and
+`TestBlanketGateCheckRejectsADecoyStep` stay green. A gate the workflow never
+reaches is not a gate.
+
+**Fix:** Assert in the same test that the workflow's `on:` block contains both
+`pull_request:` and `push:`, and that the `go:` job has no `if:` key.
+
+### WR-04: The `-run` ↔ guard-test check is one-directional; a stale name in the CI filter is undetected
+
+**File:** `cmd/ci_wiring_gate_test.go:110-139`
+
+**Issue:** The test proves every guard test is matched by the filter. It does not
+prove every alternative in the filter matches a guard test. `go test -run` exits
+0 when the pattern matches nothing, so deleting or renaming
+`TestSpawnCanSpawnEnforceDeniesWithNonZeroExit` while leaving its name in the
+filter silently removes it from the named step with no red test. (Checked: no
+alternative is stale today — 24 alternatives, all resolving.)
+
+**Fix:** After the `uncovered` loop, split `runArg` on `|` and fail for any
+alternative that matches none of `testNames`.
+
+### WR-05: `TestCallerEvidenceCreditsCommandSubstitution/half_b` fails when the phase's own goal is reached
+
+**File:** `cmd/subcommand_reachability_ratchet_test.go:974-979`
+
+**Issue:** `if len(allowlist) == 0 { t.Fatal("allowlist is empty …") }`. The
+allowlist shrinking to zero is the stated objective of the policy document and of
+Phase 178. Reaching it turns this guard red. A guard whose failure condition
+includes success is a guard that will be edited under pressure at the worst time.
+
+**Fix:** Build the synthetic fixture from a name that is *registered but not
+allowlisted* (or a throwaway command registered inside the test body, as
+`TestRatchetDetectsASyntheticOrphan` already does at line 1059), so the assertion
+is independent of allowlist contents.
+
+### WR-06: `TestAllowlistPolicyNamesEveryGuardedFile` breaks two of the phase's own rules
+
+**File:** `cmd/cli_flag_audit_test.go:44-49, 340-359`
+
+**Issue:** Three problems in one test:
+1. It reads `"../.aether/docs/orphan-allowlist-policy.md"` — the exact
+   `..`-relative pattern the same file's comment at lines 74-79 says must not be
+   used ("a `..`-relative path silently mis-scopes … and cannot be told apart
+   from 'directory legitimately moved' (T-172-38)"). Every other test in this
+   phase resolves through `repoRootForCommandSourceTest()`.
+2. `guardedAllowlistFiles` is a hand-maintained list. A fifth guarded file added
+   later is silently exempt from the policy-naming rule — the same "the list
+   must be updated by hand" failure the phase attacks elsewhere.
+3. The assertion is `strings.Contains(doc, path)`. The document could name every
+   path while describing the opposite policy and still pass.
+
+**Fix:** (1) resolve via `repoRootForCommandSourceTest()`; (2) derive the guarded
+file list from the testdata directory listing plus the files that literally read
+them, or at minimum add a floor assertion (`len(guardedAllowlistFiles) >= 4`)
+mirroring the `wiringGateGuardFiles` floor at
+`subcommand_reachability_ratchet_test.go:1187`; (3) accept that (3) is inherent
+and say so in the test's doc comment rather than implying behavioural coverage.
 
-**File:** `cmd/command_call_audit_test.go:193-200` and `:260-267`
+### WR-07: The policy document's numbers are unguarded and will go stale by design
 
-**Issue:** Both binary-detection loops `break` at the first match, so
-`aether continue && aether build 2` yields one call (`continue`, with `&& aether build 2` as
-args, truncated at `&&`). The second invocation is never contract-checked, and in
-`singleFileCallerNames` it gets no caller credit either — `credit()` stops at the `&&`
-operator. The `.sh`/`.js` branch of `singleFileCallerNames` (`:408-423`) does **not** break and
-handles multiple invocations per line, so the markdown and shell paths disagree.
+**File:** `.aether/docs/orphan-allowlist-policy.md:56-66, 29-32`
 
-**Fix:** replace the `break` with a scan that yields every binary token on the line, and have
-`validateCallAgainstCobra` truncate each at its own operator boundary.
+**Issue:** The doc records "278 commands", "6 … skill-related", "272 … wider
+backlog", "exactly 2 entries" — verified accurate today. Nothing asserts them,
+and the entire purpose of the ratchet is that 278 goes down. This document is
+guaranteed to become wrong. Separately, "A name can never be added to either
+list … the automated check … fails immediately, by name" is not true of the two
+*baseline* files: adding a name to `orphan_allowlist_baseline.json` and to the
+live list passes every test. The doc concedes this two paragraphs later
+("The only way either list changes is by editing the saved copy"), so the page
+contradicts itself on its own headline rule.
 
----
+**Fix:** Either assert the counts from the JSON in
+`TestAllowlistPolicyNamesEveryGuardedFile` (making the doc fail loudly when it
+drifts), or replace the hard numbers with a pointer to the file. Reword line
+29-32 to state plainly that the baseline is human-reviewed, not machine-enforced.
 
-### WR-02: Quoted command substitution `X="$(aether …)"` is invisible
+### WR-08: `continue-full.md`'s midden call had its arity fixed but still cannot work — the response shape is wrong
 
-**File:** `cmd/command_call_audit_test.go:111-128`
+**File:** `.aether/docs/command-playbooks/continue-full.md:1244-1246`
 
-**Issue:** `tokenizeShellLike` keeps quoted runs together, so `RESULT="$(aether state-read --json)"`
-is a single token beginning with `"`. `normalizeShellToken` strips `VAR=`, `$(`, `` ` `` and
-`(` — but not a leading quote — so the token never normalises to `aether` and the invocation is
-dropped entirely (verified by reproduction). This is the same blind-spot class 172-00 claims to
-have closed; the fix was applied to the unquoted form only. No live instance in the corpora
-today.
-
-**Fix:** strip leading `"`/`'` in `normalizeShellToken` before the opener loop, and add
-`RESULT="$(aether skill-detect)"` to the extractor's fixture.
-
----
-
-### WR-03: A commented-out invocation in a shell script counts as caller evidence
-
-**File:** `cmd/subcommand_reachability_ratchet_test.go:401-423`
-
-**Issue:** The `.sh`/`.js` branch tokenises every line with no comment handling, so a `#`-prefixed
-line credits its command. Live instances:
-
-```
-scripts/smoke-daily-driver.sh:7  #   1. `aether update --force` in a repo with foreign (GSD) Claude settings
-scripts/smoke-daily-driver.sh:10 #   3. `aether host plan --dry-run` runs the TS host without any
-```
-
-These credit `update`, `host` and `plan` as "having a caller". The markdown branch correctly
-rejects the equivalent (a fenced `# aether foo` is rejected by the preceding-token check at
-`command_call_audit_test.go:271-280`); the shell branch does not. The policy document promises
-"code that actually invokes it" — a comment is not code. No command is masked by this today
-(all three have real callers), but the mechanism is live and the corpus is small enough that one
-new script comment could clear a genuine orphan.
-
-**Fix:** skip lines whose first token starts with `#` (and JS `//` / `/*`) in the `.js`/`.sh`
-branch of `singleFileCallerNames`.
-
----
-
-### WR-04: `credit()` grants caller credit to positional values that happen to be command names
-
-**File:** `cmd/subcommand_reachability_ratchet_test.go:374-388`
-
-**Issue:** After crediting the command, `credit` walks forward crediting every following token
-that matches `^[a-z][a-z0-9-]*$`, stopping only at a flag, placeholder or operator. So
-`aether export pheromones` credits both `export` and `pheromones` — and because
-`computeOrphanNames` is keyed by bare name (`:713-739`), the top-level `pheromones` command is
-cleared by a call that only ever reaches `export pheromones`. Any documented
-`aether <parent> <word>` where `<word>` is also a top-level command name has the same effect.
-
-**Fix:** credit multi-word paths as paths, not as independent names — resolve
-`[command, args…]` through `rootCmd.Find` and credit the resolved command's full path, so a
-leaf only clears the parent it actually sits under.
-
----
-
-### WR-05: Menu-entry evidence recognises only a field literally named `command:`, and only the first one
-
-**File:** `cmd/subcommand_reachability_ratchet_test.go:85`, `:274-300`
-
-**Issue:** `yamlRuntimeCommandRe` is `^\s*command:\s*"(.*)"\s*$` and
-`extractYAMLRuntimeCommand` uses `FindStringSubmatch` (first match only). The two flagship menu
-specs do not use that field name:
-
-```yaml
-# .aether/commands/build.yaml:5-6
-  manifest_command:  "aether build $ARGUMENTS --plan-only"
-  finalizer_command: "aether build-finalize $ARGUMENTS --completion-file <…>"
-```
-
-`continue.yaml` is the same shape. So D-03's "a menu entry counts as a caller" contributes zero
-evidence for `build`, `build-finalize`, `continue` and `continue-finalize` — they are saved only
-by incidental backticked mentions in the wrapper markdown. Any spec that grows a second
-`command:` field also loses the second one.
-
-**Fix:** match `^\s*[a-z_]*command:\s*"(.*)"\s*$` and use `FindAllStringSubmatch`, crediting
-every hit.
-
----
-
-### WR-06: Three overlapping, hand-maintained "guard file" inventories that can drift apart
-
-**Files:** `cmd/subcommand_reachability_ratchet_test.go:1176-1180` (3 entries),
-`cmd/ci_wiring_gate_test.go:36-42` (5 entries), `cmd/cli_flag_audit_test.go:43-48` (4 paths)
-
-**Issue:** The same concept — "the files this phase's guards live in" — is written down three
-times with three different memberships, and nothing asserts the three are consistent or
-complete. Adding a sixth guard file is invisible to all three: its tests are not required in the
-CI `-run` filter, it is not escape-hatch scanned, and it need not appear in the policy document.
-This is the drift vector the phase exists to eliminate, reproduced inside the phase's own code.
-CR-03 is the first concrete consequence.
-
-**Fix:** declare one exported-within-package inventory (e.g. `wiringGuardFiles`) and derive all
-three uses from it; assert it covers every `*_test.go` in `cmd/` that declares a test named in
-the CI step's `-run` regex.
-
----
-
-### WR-07: The policy document hardcodes counts nothing asserts, which go stale on the first success
-
-**File:** `.aether/docs/orphan-allowlist-policy.md:56-66`
-
-**Issue:** "The unused-command list currently holds **278 commands** … **6** are tagged … The
-flag-check exceptions list holds exactly 2 entries." `TestAllowlistPolicyNamesEveryGuardedFile`
-checks only that four *paths* appear in the document; the numbers are unchecked prose. The first
-time the list shrinks — the entire point of the ratchet — the document becomes wrong and nothing
-fails. CLAUDE.md: "A documentation claim about runtime behaviour must be testable or removed."
-
-**Fix:** either assert the numbers, or remove them:
-
-```go
-live := loadOrphanAllowlist(t, "testdata/orphan_allowlist.json")
-if !strings.Contains(doc, fmt.Sprintf("**%d commands**", len(live))) {
-    t.Errorf("policy doc states a stale entry count; the live list holds %d", len(live))
-}
-```
-
----
-
-### WR-08: The policy document's absolutist guarantees are stronger than the guards
-
-**File:** `.aether/docs/orphan-allowlist-policy.md:29-38`
-
-**Issue:** Two claims overstate what is enforced:
-
-- *"A name can never be added to either list."* It can: edit `orphan_allowlist.json` **and**
-  `orphan_allowlist_baseline.json` in the same commit and `TestOrphanAllowlistOnlyShrinks`
-  passes. The design intent (D-11) is that this is a *visible* edit, not an impossible one — but
-  the document states impossibility.
-- *"There is no override switch, no setting to turn the check off."* `-update-orphan-allowlist`
-  (`cmd/subcommand_reachability_ratchet_test.go:39`, `:902-906`) causes
-  `TestNoRegisteredSubcommandIsUnreferenced` to write the live list and `return` **before any
-  assertion runs**. It is a Go test flag rather than an environment variable, and
-  `TestOrphanAllowlistOnlyShrinks` still catches the additions afterwards — but "no switch" is
-  not accurate.
-
-**Fix:** restate honestly: "the only way a name is added is by editing both checked-in files in
-the same commit, which shows up in review", and name the regeneration flag and what it does and
-does not bypass.
-
----
-
-### WR-09: The skill-lifecycle tag covers 6 names, the code says 8, and the D-08 loop is a no-op for the other 2
-
-**File:** `cmd/subcommand_reachability_ratchet_test.go:97-106`, `:936-942`;
-`.aether/docs/orphan-allowlist-policy.md:60`
-
-**Issue:** `skillLifecycleOrphanCandidates` holds 8 names and the comment calls it "the set
-Phase 178's success criterion measures reaching zero". Only 6 are in the allowlist —
-`skill-parse-frontmatter` and `skill-cache-rebuild` have callers. The D-08 verification loop only
-fires for names it *finds* in the allowlist, so for those two it does nothing at all, silently.
-The policy doc says 6, the code comment says 8. Phase 178's finish line is therefore ambiguous.
-
-**Fix:** assert the intended relationship rather than only checking present entries:
-
-```go
-for name := range skillLifecycleOrphanCandidates {
-    entry := findAllowlistEntry(allowlist, name)
-    if entry == nil {
-        continue // already has a caller — record it, don't silently skip
-    }
-    if entry.OwnerPhase != "178" { t.Errorf(...) }
-}
-t.Logf("skill-lifecycle set: %d of %d still orphaned", n, len(skillLifecycleOrphanCandidates))
-```
-
-and reconcile the two documents on one number.
-
----
-
-### WR-10: `workers.md` documents a `spawn-can-spawn` payload the command does not emit, and a deny flow `--enforce` makes impossible
-
-**File:** `.aether/workers.md:292-296`; `cmd/spawn.go:200-216`
-
-**Issue:** Line 293 states:
-
-```
-# Returns: {"can_spawn": true/false, "depth": N, "max_spawns": N, "current_total": N}
-```
-
-The command returns only `can_spawn` and `depth`. `max_spawns` and `current_total` are never
-emitted by any code path.
-
-Line 296 then says "If `can_spawn` is false, complete the work inline." With `--enforce` — which
-line 292 now passes — a deny writes an error envelope to **stderr** and nothing to stdout, so
-`result` is empty and the worker cannot read `can_spawn` at all. Under a `set -e` shell the
-capture aborts the script. The documented read-the-answer flow and the enforce-and-exit flow are
-mutually exclusive, and the manual describes both.
-
-The phase's own test only asserts `can_spawn` and `depth`, so the documented-but-absent fields
-are not caught.
-
-**Fix:** delete `max_spawns`/`current_total` from line 293 (or emit them), and rewrite 294-296 to
-describe the enforce contract: non-zero exit means stop, there is no payload to read. Extend
-`TestSpawnCanSpawnAcceptsDocumentedInvocation` to assert the documented key set matches the
-emitted key set exactly.
-
----
-
-### WR-11: `spawn-can-spawn` fails open on a missing or negative depth
-
-**File:** `cmd/spawn.go:189-198`, `:406`
-
-**Issue:** `--depth` is registered with help text "(required)" but nothing enforces it. With no
-positional and no flag, `mustGetInt` returns the zero value and the command answers for depth
-`0` — the most permissive value — with no indication the caller forgot the argument. A negative
-depth is likewise accepted silently. Today the decision seam returns `true` unconditionally so
-nothing observable changes; the moment Phase 173 implements a real cap, a caller that omits the
-argument gets an allow rather than an error.
-
-**Fix:** require the depth explicitly:
-
-```go
-if len(args) == 0 && !cmd.Flags().Changed("depth") {
-    outputError(1, "depth is required: pass it positionally (`spawn-can-spawn 3`) or as --depth", nil)
-    return nil
-}
-if depth < 0 {
-    outputError(1, fmt.Sprintf("invalid depth %d: must be >= 0", depth), nil)
-    return nil
-}
-```
-
----
-
-### WR-12: The command-call audit's anti-vacuity guard is pinned to one file, not to each corpus
-
-**File:** `cmd/command_call_audit_test.go:311-315`, `:548-565`
-
-**Issue:** `collectDocumentedCalls` silently `continue`s past any missing corpus, and the
-anti-vacuity check requires only that (a) total calls > 0 and (b) `.aether/workers.md`
-contributed at least one. Deleting or renaming `.claude/commands/ant` — the live surface where a
-broken call reaches a user today — silently removes it from the audit while both checks still
-pass. The comment at `:548-555` states exactly why this matters ("a corpus that is listed but
-never actually read produces a test that passes…") and then applies the remedy to one file.
-
-**Fix:** track per-corpus contribution and fail on any corpus that is present-but-silent or
-absent:
-
-```go
-if contributed[corpus] == 0 {
-    t.Fatalf("corpus %s contributed zero extracted calls — listed but not read", corpus)
-}
-```
-
----
-
-### WR-13: The midden playbook lines were arity-fixed but their consumers still cannot read the output
-
-**File:** `.aether/docs/command-playbooks/build-full.md:982`,
-`build-wave.md:511`, `:803`, `continue-advance.md:151`, `:553`
-
-**Issue:** The phase corrected `midden-recent-failures 50` → `--limit 50` on five lines. The very
-next line in each block is unchanged and cannot read the result. Verified against the real
-binary:
-
-```
-$ aether midden-recent-failures --limit 3
-{"ok":true,"result":{"entries":[],"total":0}}
-$ … | jq '.count // 0'
-0
-```
-
-The playbooks read `.count` and `.failures[]`; the real fields are `.result.total` and
-`.result.entries`. `midden_count` is therefore `0` on every run, and all four midden-threshold
-blocks (the auto-REDIRECT learning loop) are dead. The `|| echo '{"count":0,"failures":[]}'`
-fallback makes the dead path indistinguishable from a genuinely empty midden.
-
-This parsing bug predates the phase, but the phase edited these exact lines and left them in a
-state where the call succeeds and the caller still gets nothing — the "wired but dead" pattern.
-
-**Fix:** on each of the five sites:
+**Issue:** This phase changed `aether midden-recent-failures 50` to
+`aether midden-recent-failures --limit 50`, which satisfies the cobra contract
+audit. The surrounding shell was not changed:
 
 ```bash
-midden_result=$(aether midden-recent-failures --limit 50 2>/dev/null | jq -c '.result // {"entries":[],"total":0}' || echo '{"entries":[],"total":0}')
-midden_count=$(echo "$midden_result" | jq '.total // 0')
+midden_result=$(aether midden-recent-failures --limit 50 2>/dev/null || echo '{"count":0,"failures":[]}')
+midden_count=$(echo "$midden_result" | jq '.count // 0')
+… jq -r '[.failures[] | .category] …'
 ```
 
-and update the downstream `.failures[]` references to `.entries[]`.
+`cmd/midden_cmds.go:45` emits `{"entries": …, "total": N}`, wrapped by
+`outputOK` (`cmd/helpers.go:27`) as `{"ok":true,"result":{…}}`. There is no
+`.count` and no `.failures` at any level. `midden_count` is always `0`, so the
+entire PHER-02 auto-REDIRECT block is dead. The `|| echo '{"count":0,…}'`
+fallback guarantees the failure is silent. This is precisely the class of bug
+the phase exists to eliminate, one line away from the line it fixed — and the
+audit is structurally unable to see it (`command_call_audit_test.go:26-30`
+states this limitation honestly).
 
----
+**Fix:**
+
+```bash
+midden_result=$(aether midden-recent-failures --limit 50 2>/dev/null || echo '{"ok":true,"result":{"entries":[],"total":0}}')
+midden_count=$(echo "$midden_result" | jq '.result.total // 0')
+recurring_categories=$(echo "$midden_result" | jq -r '[.result.entries[] | .category] | group_by(.) | …')
+```
+
+### WR-09: The `generate-commit-message` disclaimer contradicts the five lines under it
+
+**File:** `.aether/docs/command-playbooks/continue-full.md:1535-1541, 1560-1580`
+
+**Issue:** The new line reads "This command returns `message` only — the other
+fields below are not produced by this command." It is immediately followed by
+"Parse the returned JSON to extract:" listing `message`, `body`,
+`files_changed`, `subsystem`, `scope` — and by downstream steps that interpolate
+them for real: `git commit -m "{message}" -m "{body}"` and
+`Committed: {message} ({files_changed} files)`. Confirmed against
+`cmd/generate_cmds.go:118-121`: the command emits `{"message": …}` and folds
+`--body` into `message`. Following the doc produces a commit with a duplicated
+or empty body. A disclaimer that the next paragraph overrides is worse than no
+disclaimer.
+
+**Fix:** Delete the four unproduced bullets, delete the disclaimer, and change
+the commit step to `git commit -m "{message}"` (the body is already inside
+`message`). Replace `{files_changed}` in the display with the value already
+captured from `git diff --stat` two steps earlier.
+
+### WR-10: The fence repair fixed marker placement but left the mangled shell inside the same blocks
+
+**File:** `.aether/docs/command-playbooks/continue-full.md:1274, 1281`
+
+**Issue:** Plan 172-06 repaired glued triple-backtick markers so the audit could
+see the blocks. Inside two of the blocks it made visible, statements are still
+glued onto continuation lines:
+
+```
+        --ttl "30d"      emit_count=$((emit_count + 1))
+        --content "Recurring error pattern: $category ($count occurrences)"    fi
+```
+
+Both are pre-existing (present at `642e39b3`), but both sit in blocks this phase
+touched, and both are unrunnable shell: the `\` continuations were lost and the
+next statement absorbed into the flag value. `TestAuditedCorpusHasNoGluedFenceMarkers`
+cannot detect them — it only looks for the ``` marker. The corpus sweep therefore
+certifies a file whose documented commands do not parse.
+
+**Fix:** Repair both lines (restore the `\` continuation and put `emit_count=…`
+/ `fi` on their own lines) while in the file. Longer term, consider extending
+the sweep to flag a line inside a fenced block where a `--flag "value"` is
+followed by further non-flag content with no `\`.
+
+### WR-11: The AST enumeration floor is 8 against 24 actual guard tests
+
+**File:** `cmd/ci_wiring_gate_test.go:119-123`
+
+**Issue:** `if len(testNames) < 8` guards against a silent AST walk. The real
+count across the five guard files is 24 (7 + 9 + 4 + 2 + 2). Two-thirds of the
+guard tests could be deleted and the floor would still pass. Compare the sibling
+floors, which are set just under the measured value: `scannedFiles < 120` for a
+measured 141 (`cli_flag_audit_test.go:218`), `len(paths) < 200` for a measured
+215 (`command_call_audit_test.go:1329`).
+
+**Fix:** Raise to `< 20` and record the measured 24 in the message, matching the
+convention the other two floors already use.
+
+### WR-12: `extractYAMLRuntimeCommand` reads only the first `command:` field per file
+
+**File:** `cmd/subcommand_reachability_ratchet_test.go:85, 279-281`
+
+**Issue:** `yamlRuntimeCommandRe.FindStringSubmatch` returns the first match. A
+`.aether/commands/*.yaml` that declares more than one `command:` line (a
+multi-step spec, or a nested key that happens to be named `command`) credits only
+the first, so a real menu-driven caller is dropped and its command can be
+reported as an orphan. Fails in the safe direction, but produces a false alarm
+that a future editor is likely to "fix" by adding an allowlist entry.
+
+**Fix:** Use `FindAllStringSubmatch` and credit every match.
+
+### WR-13: The escape-hatch scan is line-based over five files and is evadable
+
+**File:** `cmd/subcommand_reachability_ratchet_test.go:1199-1228`
+
+**Issue:** `forbiddenRe` is applied per line to comment-stripped source. `os.\n\tGetenv("X")`
+(legal, gofmt-stable Go) evades it, as does any helper defined in a
+non-guard file, as does any early `return` that makes an assertion unreachable.
+The test's doc comment claims "A guard that can be switched off at runtime is
+not a guard", which overstates what a five-file line regex can establish.
+
+**Fix:** No cheap complete fix exists; the honest move is to say so in the doc
+comment ("this catches the common spellings; it is not a proof") so a future
+reader does not over-trust it. Optionally strengthen by scanning the parsed AST
+for calls to `os.Getenv`/`t.Skip` rather than raw text, which removes the
+line-splitting evasion.
+
+### WR-14: `buildCommandDefinitionIndex` misses cobra commands declared after the first spec of a grouped `var (…)` block
+
+**File:** `cmd/subcommand_reachability_ratchet_test.go:168-265` via `declNameAndBody` (`cmd/visual_writer_discipline_test.go`)
+
+**Issue:** `declNameAndBody` returns on the **first** `ValueSpec` of a `GenDecl`.
+For
+
+```go
+var (
+    aCmd = &cobra.Command{Use: "a"}
+    bCmd = &cobra.Command{Use: "b"}   // never walked
+)
+```
+
+`bCmd` is invisible to the definition index. Two consequences: (a) the command is
+reported as "unattributed" in `TestNoRegisteredSubcommandIsUnreferenced`
+(fails loudly — acceptable); (b) the self-reference exclusion in
+`collectGoSelfInvocationCallers:512` compares `defIndex[name]` against the file
+basename, so with an empty index a command that only ever invokes *itself* from
+its own definition file would be credited as having an external caller. No such
+declaration exists today, so this is latent.
+
+**Fix:** Iterate all `ValueSpec`s. Since `declNameAndBody` is shared, add a
+local `allDeclBodies(decl) []ast.Node` in the ratchet file rather than changing
+the shared helper's signature.
 
 ## Info
 
-### IN-01: `--` terminator is not honoured in the cobra validator
+### IN-01: The flag audit's regex cannot see a zero-flag invocation at end of line
 
-**File:** `cmd/command_call_audit_test.go:482`
+**File:** `cmd/cli_flag_audit_test.go:89`
 
-`case a == "--": continue` skips the terminator but keeps treating subsequent `--x` tokens as
-flags. Everything after `--` should be classified as a positional. No live instance today.
+**Issue:** `aether\s+([\w][\w-]*)\s+(…)` requires whitespace after the
+subcommand name. `aether backup-prune-global` at end of line does not match, so
+it never reaches `foundSubcommands` or the registration check. (It is still
+covered by the cobra contract audit in the sibling file.)
+
+**Fix:** Change the trailing `\s+` to `(?:\s+|$)`.
+
+### IN-02: `substitutionDepth` counts parentheses inside quoted strings
+
+**File:** `cmd/command_call_audit_test.go:169-175`
+
+**Issue:** `strings.Count(tok, "(")` runs over whole tokens including quoted
+values. `aether pheromone-write --content "recurring (3 times" && aether status`
+leaves depth at 1, so the second, genuine invocation is discarded as "nested".
+A false negative in the audit.
+
+**Fix:** Strip quoted spans before counting, or count only on tokens that
+`substitutionOpener` recognises.
+
+### IN-03: Duplicated rationale comment in `knownEnrichmentSubcommands`
+
+**File:** `cmd/command_call_audit_test.go:1051-1056, 1194-1199`
+
+**Issue:** The same four-line justification is written twice — once above
+`backup-prune-global` covering both commands, once above `temp-clean` covering
+one. Two copies of a rationale drift.
+
+**Fix:** Keep one, and reference it from the second entry.
+
+### IN-04: Two path conventions for the one shared guard-file inventory
+
+**File:** `cmd/subcommand_reachability_ratchet_test.go:1202` vs `cmd/ci_wiring_gate_test.go:112`
+
+**Issue:** `wiringGateGuardFiles` holds bare basenames. One consumer does
+`os.ReadFile(f)` (cwd-relative), the other `filepath.Join(repoRoot, "cmd", f)`.
+Both work only because `go test` sets cwd to the package directory — the same
+assumption `TestCLIFlagAudit`'s comment (lines 74-79) explicitly refuses to make.
+
+**Fix:** Resolve both through `repoRootForCommandSourceTest()`.
+
+### IN-05: `stepBlock` runs to EOF when the target step is last, producing wrong diagnoses
+
+**File:** `cmd/ci_wiring_gate_test.go:182-186`
+
+**Issue:** When no next `- name:` at the same indent exists, the block is the
+remainder of the file, so the `if:` and `continue-on-error` scans read unrelated
+later steps. This is what produced the false message
+`CI step "Run Go tests" has a conditional if: always()` in CR-02, for a step
+that had been deleted. Misleading failure text on a safety guard costs debugging
+time at exactly the wrong moment.
+
+**Fix:** Covered by the CR-02 fix (bound the block by indentation).
 
 ---
 
-### IN-02: `tokenizeShellLike` swallows the rest of a line on an unmatched `<` or `{`
-
-**File:** `cmd/command_call_audit_test.go:425-430`
-
-`<` sets `quote = '>'` and `{` sets `quote = '}'` with no fallback, so
-`aether phase <n --json` produces the single token `<n --json`. Documented placeholders are the
-motivation and are handled; an unbalanced metacharacter merges arbitrary arguments.
-
----
-
-### IN-03: A test writes into the checked-in source tree
-
-**File:** `cmd/subcommand_reachability_ratchet_test.go:769-787`
-
-`writeOrphanAllowlist` does `os.WriteFile("testdata/orphan_allowlist.json", …)` with a hardcoded
-relative path from inside a running test. It is opt-in behind a flag and D-11 justifies the
-design, but a test that mutates tracked files deserves a guard that the path resolves under the
-repo root it was asked about.
-
----
-
-### IN-04: Minor hygiene in `cli_flag_audit_test.go`
-
-**File:** `cmd/cli_flag_audit_test.go:120`, `:157`, `:291`
-
-`dir + entry.Name()` relies on every entry in `markdownDirs` carrying a trailing slash (use
-`filepath.Join`); `flagRe` is `regexp.MustCompile`d inside the innermost loop rather than at
-package scope; and `../.aether/docs/orphan-allowlist-policy.md` is `..`-relative while the rest
-of the phase resolves through `repoRootForCommandSourceTest()`. The same in-loop
-`regexp.MustCompile(`^[a-z][a-z0-9-]*$`)` appears twice in
-`cmd/command_call_audit_test.go:236` and `:295`; `subcommandNameShapeRe` already exists for this.
-
----
-
-_Reviewed: 2026-08-11T16:47:07Z_
+_Reviewed: 2026-08-11_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
