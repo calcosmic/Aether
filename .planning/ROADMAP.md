@@ -643,7 +643,7 @@ Plans:
 - [x] 172-05-PLAN.md — wave 4 — D-15: named CI step, the delete-a-caller red/green proof, and correcting the phase's recorded orphan count
 
 **Wave 5** *(gap closure — blocked on Wave 4 verification)*
-- [ ] 172-06-PLAN.md — wave 5 — WIRE-03 (gap 1): make the audit see the region a glued closing fence marker hid, fix the two live violations inside it, and fail a test when the defect shape returns anywhere in the corpus
+- [x] 172-06-PLAN.md — wave 5 — WIRE-03 (gap 1): make the audit see the region a glued closing fence marker hid, fix the two live violations inside it, and fail a test when the defect shape returns anywhere in the corpus
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 172-07-PLAN.md — wave 6 — WIRE-01, WIRE-02, WIRE-03 (gap 2, D-11, D-15): scope the blanket release-gate check to the step that can actually fail, and scan every guard file this phase created from one inventory
@@ -764,7 +764,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
-| 172. Wiring Proof | v1.26 | 6/6 | Gaps Found  | 2026-08-11 |
+| 172. Wiring Proof | v1.26 | 7/9 | In Progress|  |
 | 173. Delegation Guard | v1.26 | 0/TBD | Not started | - |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
