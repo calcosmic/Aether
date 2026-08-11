@@ -4,8 +4,8 @@ milestone: v1.26
 milestone_name: Intelligent Orchestration
 status: executing
 stopped_at: Phase 172 context gathered
-last_updated: "2026-08-08T21:59:22.576Z"
-last_activity: 2026-08-08 -- Phase 172 planning complete
+last_updated: "2026-08-11T14:38:43.759Z"
+last_activity: 2026-08-11 -- Phase 172 execution started
 progress:
   total_phases: 1
   completed_phases: 0
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-08)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 172 — Wiring Proof (not yet planned)
+**Current focus:** Phase 172 — wiring-proof
 **Milestone:** v1.26 Intelligent Orchestration — ROADMAPPED (8 phases, 172-179, 35 requirements)
 **Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases); live intent absorbed into v1.26, remaining SEE/TYPED/RECLAIM/LOCK moved to Future Requirements
 **Product version:** v1.0.50
 
 ## Current Position
 
-Phase: 172 — Wiring Proof
-Plan: —
-Status: Ready to execute
+Phase: 172 (wiring-proof) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 172
 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/8 phases)
-Last activity: 2026-08-08 -- Phase 172 planning complete
+Last activity: 2026-08-11 -- Phase 172 execution started
 
 ## Performance Metrics
 
