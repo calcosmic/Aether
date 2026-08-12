@@ -621,3 +621,110 @@ func TestReleaseGateCommandFailsATreeWithAFailingTest(t *testing.T) {
 		t.Fatalf("%v", discErr)
 	}
 }
+
+// TestGateProbeCatchesEveryKnownGateNeutering is EVIDENCE that the execution
+// mechanism above (gateCommandDiscriminates) works — it is NOT the
+// mechanism itself, and must never be read as one. Do not extend this table
+// to "fix" a future bypass; a bypass this table does not yet name is still
+// caught, because every row below is caught by RUNNING the mutated command
+// and observing it fail to discriminate, not by matching its text against a
+// list of known-bad spellings. The control row (the unmutated command)
+// exists so a future reader can confirm the harness is not simply rejecting
+// everything it is given.
+//
+// Each row's mutated command is built from the command extracted live from
+// ci.yml, never a literal copy, so the table cannot drift from what CI
+// actually runs.
+func TestGateProbeCatchesEveryKnownGateNeutering(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	workflowPath := filepath.Join(repoRoot, ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+
+	command, err := releaseGateCommandFromWorkflow(string(data))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	// One passing and one failing probe module directory, built once and
+	// reused across every row below, so the table stays bounded (Go's build
+	// cache is warm after the first row) rather than rebuilding a module
+	// seven times.
+	root := t.TempDir()
+	passDir := filepath.Join(root, "pass")
+	failDir := filepath.Join(root, "fail")
+	if mkErr := os.Mkdir(passDir, 0o755); mkErr != nil {
+		t.Fatalf("mkdir %s: %v", passDir, mkErr)
+	}
+	if mkErr := os.Mkdir(failDir, 0o755); mkErr != nil {
+		t.Fatalf("mkdir %s: %v", failDir, mkErr)
+	}
+	writeGateProbeModule(t, passDir, false)
+	writeGateProbeModule(t, failDir, true)
+
+	rows := []struct {
+		name    string
+		mutate  func(string) string
+		wantErr bool
+	}{
+		{
+			name:    "control: the unmutated command still discriminates",
+			mutate:  func(c string) string { return c },
+			wantErr: false,
+		},
+		{
+			name:    "appended semicolon-true swallows the exit status",
+			mutate:  func(c string) string { return c + "; true" },
+			wantErr: true,
+		},
+		{
+			name:    "appended or-exit-zero swallows the exit status",
+			mutate:  func(c string) string { return c + " || exit 0" },
+			wantErr: true,
+		},
+		{
+			name:    "an appended -run filter matches nothing, so zero tests execute",
+			mutate:  func(c string) string { return c + " -run TestNothingAtAll" },
+			wantErr: true,
+		},
+		{
+			name:    "piping through cat discards the real exit status",
+			mutate:  func(c string) string { return c + " | cat" },
+			wantErr: true,
+		},
+		{
+			name:    "the whole command commented out never runs",
+			mutate:  func(c string) string { return "# " + c },
+			wantErr: true,
+		},
+		{
+			name:    "the required text is present but sits inside a comment",
+			mutate:  func(c string) string { return "echo skip # " + c },
+			wantErr: true,
+		},
+	}
+
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			mutated := row.mutate(command)
+			discErr := gateCommandDiscriminates(t, mutated, passDir, failDir)
+			if row.wantErr {
+				if discErr == nil {
+					t.Fatalf("mutated command %q was expected to fail discrimination but gateCommandDiscriminates returned nil — "+
+						"this mutation slipped through, which is exactly the defect this phase has failed on twice before", mutated)
+				}
+				t.Logf("mutated command %q correctly caught: %v", mutated, discErr)
+			} else if discErr != nil {
+				t.Fatalf("control row (unmutated command %q) failed to discriminate: %v — the harness itself is broken, not just failing to catch a mutation", mutated, discErr)
+			} else {
+				t.Logf("control row (unmutated command %q) correctly discriminates", mutated)
+			}
+		})
+	}
+}
