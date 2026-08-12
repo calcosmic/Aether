@@ -1,251 +1,277 @@
 ---
 phase: 172-wiring-proof
-verified: 2026-08-12T14:00:00Z
-status: gaps_found
-score: 2/4 roadmap success criteria fully verified (criteria 2 and 3); criterion 1's originally-reported regression is closed but a distinct, independently-confirmed defect in the same shrink-only mechanism remains; criterion 4's step- and workflow-level bypasses from the prior round are closed, but three new, independently-confirmed job-level/trigger-level bypasses remain
-overrides_applied: 0
+verified: 2026-08-12T16:10:00Z
+status: passed
+score: 4/4 roadmap success criteria hold in substance (2 hold as written; 2 hold only under narrower wording, with the residue named explicitly per 172-STOP-RULE.md)
+overrides_applied: 1
+overrides:
+  - must_have: "Success criteria 1 and 4 hold exactly as originally worded (absolute: 'the allowlist may only shrink', 'the ratchet ... runs ... and blocks')"
+    reason: >
+      172-STOP-RULE.md, agreed with the user on 2026-08-12, is itself the governing
+      instruction for this verification: round 4's own code review found CR-06, a
+      NEW class of bypass (not among the five defects round 4 was scoped to close).
+      Per the stop rule's own binding text, this triggers narrowing of criteria 1
+      and 4 rather than a round 5. The narrower wording proposed below is what this
+      verification found to be actually, independently proven; the residue (CR-06)
+      is named explicitly rather than left implied, and a follow-up phase is
+      recommended to carry it forward as a tracked limit.
+    accepted_by: "user (via 172-STOP-RULE.md, agreed 2026-08-12)"
+    accepted_at: "2026-08-12T14:16:00Z"
 re_verification:
   previous_status: gaps_found
-  previous_score: "2/4 (previous run: criteria 2 and 3 verified; criterion 1 regressed to failed; criterion 4 failed)"
+  previous_score: "2/4 (criteria 2 and 3 verified; criterion 1 and criterion 4 each had one independently-confirmed defect: CR-04/CR-05 and CR-01/CR-02/CR-03)"
   gaps_closed:
-    - "Success criterion 1's specific reported regression — the bare-leaf-name caller-evidence collision that let a call to `aether host colonize` silently vouch for the unrelated top-level `aether colonize` (and the same for `aether ceremony closeout` / `aether closeout`) — is closed by 172-09. Caller evidence, orphan computation, and every allowlist consumer are now keyed by the resolved cobra `CommandPath()`. Independently re-confirmed below by construction: `aether colonize` and `aether closeout` are now present in the live allowlist tagged `path-collision-revealed`/`RECLAIM`, and removing both entries from `cmd/testdata/orphan_allowlist.json` and re-running `TestNoRegisteredSubcommandIsUnreferenced` makes it fail, naming both commands by their full path — then restoring the file makes it pass again."
-    - "Success criterion 4's five previously-reproduced step-scoped text-check bypasses (`; true`, `|| exit 0`, an appended second `-run`, `| cat`, a shell-commented-out run line) and the workflow-level gaps identified in the same round (a commented-out gate step, `if:`/`continue-on-error` on either gate step, a disabled `pull_request:`/`push:` trigger, a job-level `if: false`) are closed by 172-10 (an execution-based harness that runs the release gate's own command, read live from ci.yml, against a passing and a deliberately-failing probe module) and 172-11 (structural, indentation-bounded step-block anchoring plus `TestReleaseGateWorkflowActuallyRuns`). This is not narration: the orchestrator's own direct mutation of the live `.github/workflows/ci.yml` (recorded in the task context, not re-derived here) confirmed the guard suite goes red for all seven of: `; true`, `|| exit 0`, two genuinely novel mutations no plan enumerated (`if ! CMD; then true; fi` and `(CMD) ; echo done`), a commented-out `Run Go tests` step, `continue-on-error: true` at the STEP level, and removal of the `pull_request:` trigger. The execution harness generalizing to two unenumerated mutations is real evidence it is checking a property, not matching a blocklist."
+    - "CR-01 (job-level continue-on-error invisible to the gate check) — closed by gateJobAllowedKeys whitelist + auditWorkflowShape"
+    - "CR-02 (env: GOFLAGS at job/step/workflow scope) — closed at all three scopes by the same whitelist mechanism"
+    - "CR-03 (paths-ignore under on: triggers) — closed by releaseTriggerAllowedKeys whitelist rejecting any trigger key by absence, not by name"
+    - "CR-04 (shrink-only guard compared bare leaf names, letting a same-leaf newcomer through) — closed by TestPathMigrationDidNotWidenTolerance's rewrite to full-path comparison, proven by TestPathMigrationRejectsASameLeafNewcomer including a generality loop over all 278 frozen leaves"
+    - "CR-05 (frozen pre-migration anchor file had no integrity pin) — closed by preMigrationSnapshotSHA256 + TestPreMigrationSnapshotIsFrozen"
   gaps_remaining:
-    - "None of the previously-open items survive verbatim, but the underlying category — a check that establishes only a piece of the intended property while a nearby, structurally similar route remains open — recurs in both criteria this round, in a different specific location than before. See the two new gaps below."
+    - "CR-06 (new, this round's own review): the workflow-shape whitelist, the exact-equality run-line pin, and the execution harness all inspect only the two named gate steps' own YAML/text. None of the other ~18 steps in the same `go:` job (Checkout, Setup Go, Setup Node, Install goreleaser, Validate goreleaser config, Build, Vet, and the rest) is inspected at all. Any of them can write GOFLAGS/GOTOOLCHAIN to $GITHUB_ENV or shadow the go binary on $PATH — both standard, documented GitHub Actions mechanisms available to any step sharing the job's runner and filesystem — reproducing CR-02's outcome by a route none of this phase's three mechanisms was built to see. Per 172-STOP-RULE.md this is a NEW class, not one of the five the round was scoped to close, so it is not fixed in this round; it is named as residue in the narrowed criterion 4 below and should be carried by a tracked follow-up phase."
   regressions: []
-gaps:
-  - truth: "Success criterion 1 — the companion assertion fails when the allowlist gains an entry it did not have in the committed baseline; the list may only shrink"
-    status: failed
-    reason: >
-      Independently confirmed by construction (not inherited from 172-REVIEW.md's
-      CR-04 prose): registered a genuinely new, real, permanently-orphaned command,
-      `aether colony-depth setup` (a throwaway child added to the existing,
-      already-called `colony-depth` parent, via the same `rootCmd.AddCommand`
-      technique the ratchet's own self-tests use, so it resolves for real through
-      `rootCmd.Find`, not as a fictional string), added one matching entry for it to
-      BOTH `cmd/testdata/orphan_allowlist.json` and
-      `cmd/testdata/orphan_allowlist_baseline.json` in the same operation (as a real
-      committer adding a new feature commit would do), and re-ran the full four-test
-      chain this criterion's shrink-only guarantee depends on:
-      `TestOrphanAllowlistOnlyShrinks` PASSED (live is a subset of baseline — both
-      files were edited together), `TestOrphanAllowlistIsPathKeyed` PASSED (the
-      command genuinely resolves), `TestPathMigrationDidNotWidenTolerance` PASSED,
-      and — critically — `TestNoRegisteredSubcommandIsUnreferenced`, the actual
-      ratchet named in the criterion's own wording, also PASSED. Nothing went red.
-      The reason: `TestPathMigrationDidNotWidenTolerance`
-      (`cmd/subcommand_reachability_ratchet_test.go:1433-1460`) anchors the
-      migration's shrink-only guarantee by comparing each baseline entry's LEAF name
-      (`e.Name[strings.LastIndex(e.Name," ")+1:]`) against the frozen pre-migration
-      snapshot's leaf-name set — not the full path. The frozen snapshot contains 14
-      completely generic single-word leaves (`archive`, `export`, `get`, `import`,
-      `integrity`, `lifecycle`, `proof`, `reconcile`, `registry`, `serve`, `set`,
-      `setup`, `versions`, `wisdom` — independently confirmed present via direct
-      inspection of `cmd/testdata/orphan_allowlist_baseline_pre_path_migration.json`).
-      Any brand-new command whose leaf matches one of these 14 words launders past
-      the check that exists specifically to prevent the allowlist from widening. This
-      directly falsifies both the roadmap's own criterion 1 wording ("it may only
-      shrink") and `.aether/docs/orphan-allowlist-policy.md`'s unqualified claim that
-      "the automated check that runs on every change fails immediately, by name" —
-      under CLAUDE.md's own Definition of Done ("A documentation claim about runtime
-      behaviour must be testable or removed"), that sentence is false today, not
-      hypothetically.
-    artifacts:
-      - path: "cmd/subcommand_reachability_ratchet_test.go"
-        issue: "TestPathMigrationDidNotWidenTolerance (lines 1433-1460) compares baseline entries to the frozen pre-migration snapshot by bare leaf name, not by full resolved path, so any new command sharing a leaf with one of the 278 pre-migration entries passes as 'carried forward' even when it is a genuinely new, unrelated command added in the same commit as its own allowlist entry."
-    missing:
-      - "Replace the leaf-based comparison with an explicit accounting: every baseline entry must be either (a) the exact single path a pre-migration leaf entry expanded to 1:1, (b) a member of a small, in-source, reviewed pathMigrationExpansion map for the 4 known collapsed leaves (get/set/registry/wisdom, each expanding to a fixed, named set of real paths), or (c) a member of the already-reviewed pathCollisionRevealedOrphans set. Anything else fails by full path name, including a same-leaf newcomer."
-      - "Reconfirm with the same reproduction after the fix: register a new orphan sharing a tolerated leaf, add matching entries to both files, and require TestPathMigrationDidNotWidenTolerance (or its replacement) to fail naming it."
-  - truth: "Success criterion 1 (supporting property) — the frozen pre-migration snapshot that every shrink-only claim is anchored to cannot be silently edited"
-    status: failed
-    reason: >
-      Independently confirmed by construction: appended one fabricated entry
-      (`{"name": "brandnewleaf", ...}`) to
-      `cmd/testdata/orphan_allowlist_baseline_pre_path_migration.json` — the file
-      `.aether/docs/orphan-allowlist-policy.md` and the code's own doc comments
-      describe as "frozen, never-edited-again" and "byte-identical" — then re-ran
-      the complete named CI wiring step's 30-test `-run` filter, copied verbatim
-      from `.github/workflows/ci.yml:100`, against the live tree. All 30 tests
-      PASSED, including every orphan-ratchet and path-migration guard. The file is
-      referenced in exactly three places in the whole repository (two
-      `loadOrphanAllowlist` calls and one string in `guardedAllowlistFiles`) and by
-      no hash check, no immutability test, and no `git`-blob assertion. Combined
-      with the prior gap, this means the entire "the allowlist can only shrink"
-      property currently rests on a mutable, unverified file plus human review at
-      commit-review time — the exact standard CLAUDE.md's Definition of Done exists
-      to replace ("Not a commit. Not a checked box in a summary."). The file was
-      restored byte-for-byte immediately after the reproduction; `git status
-      --porcelain` was confirmed empty before and after.
-    artifacts:
-      - path: "cmd/testdata/orphan_allowlist_baseline_pre_path_migration.json"
-        issue: "No test asserts this file's content hash or otherwise detects a hand edit. Any addition to it silently raises the tolerance ceiling for every future entry sharing that leaf (compounding the previous gap) or, once the previous gap is fixed, for every future entry with that exact path."
-    missing:
-      - "Pin the file's content (e.g. a SHA-256 constant declared in Go source, matching the pattern the review suggested) and add a test that fails naming the file when the hash no longer matches, wired into the same named CI step."
-  - truth: "Success criterion 4 — the ratchet and the flag test run in the same CI command the release gate already runs, verified by deleting a caller and observing the gate go red, not by reading the workflow file"
-    status: failed
-    reason: >
-      Genuine, substantial progress this round: the step-scoped and workflow-shape
-      bypasses identified in the prior verification and the prior review round are
-      closed (see gaps_closed above). What remains, per the orchestrator's own
-      direct mutation of the live `.github/workflows/ci.yml` (authoritative for this
-      report — not re-derived, per this task's instructions) is three bypasses none
-      of the current guards check for, because they operate one YAML level higher
-      than every check 172-10/172-11 added:
-      (1) `continue-on-error: true` set at the JOB level (`jobs.go.continue-on-error`,
-      not inside any step). `stepCanFailTheBuild`
-      (`cmd/ci_wiring_gate_test.go:333-348`) only scans the text INSIDE a step's
-      indentation-bounded block for `continue-on-error`; a job-level key sits above
-      every step block and is invisible to it. Independently confirmed by direct
-      source inspection: `stepBlock`'s bounds never include text before the first
-      step marker, and `TestReleaseGateWorkflowActuallyRuns` checks only a job-level
-      `if:`, never `continue-on-error` or `env:`.
-      (2) `env: {GOFLAGS: "-run=TestNothingZZZ"}` at the job level. The run line
-      stays byte-identical to the pinned command (`blanketGateRunCommand`'s exact
-      equality check still passes), nothing reads the job's `env:` block, and the
-      execution harness (`runGateCommand`) inherits the LOCAL process environment
-      rather than the workflow's declared one — so neither the text check nor the
-      execution check sees it. CI would run zero tests and still report success.
-      (3) `paths-ignore: ['**']` nested under a trigger in the `on:` block.
-      `TestReleaseGateWorkflowActuallyRuns`'s check
-      (`cmd/ci_wiring_gate_test.go:1027-1031`) is `strings.Contains(onBlock,
-      "pull_request:")` and the same for `"push:"` — both substrings remain present
-      alongside a `paths-ignore` filter that excludes every path, so the assertion
-      passes while the workflow never actually fires for a real change.
-      This is the third round of attempts at this criterion, and the honest
-      assessment is that the underlying property — "the gate cannot be silently
-      narrowed" — is closer to true than at any prior round (four distinct classes
-      of bypass are now closed: step-text mutation, step-conditional, workflow-step
-      absence, and trigger/job-`if:`-level disabling) but is still not fully true,
-      because the checks so far have been added one YAML scope at a time
-      (step-text, then step-conditional, then job-`if:`/trigger-presence) rather
-      than as a complete enumeration of "every YAML key between the workflow root
-      and the command text that can disable or redirect execution."
-    artifacts:
-      - path: "cmd/ci_wiring_gate_test.go"
-        issue: "stepCanFailTheBuild only scans within a step's own indentation-bounded block, never the enclosing job's top-level keys; TestReleaseGateWorkflowActuallyRuns checks job-level if: but not job-level continue-on-error or env:; the on:-block check is a substring presence test for trigger names, not an absence test for paths-ignore/paths/branches-ignore filters that could exclude everything."
-    missing:
-      - "Extend TestReleaseGateWorkflowActuallyRuns (or a sibling test) to reject a job-level continue-on-error key anywhere between `jobs: go:` and the first step marker."
-      - "Either assert the job carries no job-level env: key that could override GOFLAGS/GOTEST-affecting variables, or make the execution harness invoke the command through the same environment composition the real workflow would use (a deliberately narrower, riskier option given this file's own escape-hatch scanner forbids os.Environ) — the job-level assertion is the safer fix."
-      - "Reject any paths-ignore, paths, branches-ignore, or branches key nested under pull_request:/push: in the on: block, or explicitly assert the trigger fires unconditionally for the whole repository — a presence-of-trigger-name check is not a fires-for-every-change check."
-deferred: []
-human_verification: []
+gaps: []
+deferred:
+  - truth: "The release gate cannot be silently switched off by any route (absolute form of success criterion 4)"
+    addressed_in: "Recommended new follow-up phase (none currently scheduled in ROADMAP.md) — CR-06's fix options are architectural (move the gate step to its own job/workflow with nothing untrusted ahead of it) or an extension of the shape whitelist to scan every step's run: block for $GITHUB_ENV/$GITHUB_PATH writes, per 172-REVIEW.md's Fix section"
+    evidence: "172-STOP-RULE.md step 3: 'Open a tracked follow-up phase carrying the residue, so later phases that depend on this ratchet inherit a documented limit rather than a false guarantee.' No phase in the current ROADMAP.md yet claims this residue — it is not deferred to an already-planned phase, it is flagged here for the user/orchestrator to schedule one."
 ---
 
-# Phase 172: Wiring Proof Verification Report
+# Phase 172: Wiring Proof Verification Report (Round 4 — FINAL, per agreed stop rule)
 
-**Phase Goal:** A capability added by this milestone cannot ship without a caller. The orphan
-ratchet exists, runs in CI, and blocks — before any of the capabilities it constrains are
-built, so it is shaped by the standard rather than by whatever shipped.
+**Phase Goal:** A capability added by this milestone cannot ship without a caller. The orphan ratchet exists, runs in CI, and blocks — before any of the capabilities it constrains are built, so it is shaped by the standard rather than by whatever shipped.
+**Verified:** 2026-08-12T16:10:00Z
+**Status:** passed (governed by 172-STOP-RULE.md — see rationale below)
+**Re-verification:** Yes — fourth round, after gap-closure plans 172-12 and 172-13
 
-**Verified:** 2026-08-12T14:00:00Z
-**Status:** gaps_found
-**Re-verification:** Yes — after gap-closure plans 172-09 (wave 7), 172-10 (wave 8), and 172-11
-(wave 9), and after independently checking a code review (172-REVIEW.md, re-review, 5 critical
-findings) completed against the post-gap-closure state.
+## Why status is `passed` and not `gaps_found`
+
+This phase has run three prior build-verify rounds, each closing real defects
+and each review finding new ones over the same adversarial surface (GitHub
+Actions workflow semantics). The user agreed a binding stop rule
+(`172-STOP-RULE.md`, 2026-08-12) before this round started: round 4 is the
+**last** build round under criteria 1 and 4 as originally (absolutely)
+worded. If round 4's review found a NEW class of bypass — not among the five
+defects (CR-01..CR-05) the round was scoped to close — the phase closes
+against **narrowed** criteria instead of triggering a round 5.
+
+Round 4's own code review (`172-REVIEW.md`) found exactly this: CR-01
+through CR-05 are all independently confirmed CLOSED (I re-ran all 34 named
+guard tests myself — all green — and independently re-hashed the pinned
+anchor file, matching the constant in source). But the review also found
+**CR-06**, a genuinely new class of bypass (steps other than the two named
+gate steps can poison the job's environment or toolchain, unaudited by any
+of this phase's three mechanisms). I independently confirmed CR-06's
+structural premise by reading `auditWorkflowShape` end to end: the
+step-scope whitelist loop (`cmd/ci_wiring_gate_test.go:1427-1454`) iterates
+only over `[]string{blanketGateStepName, wiringGateStepName}` — the two
+named gate steps — and never inspects any other step's `run:` content. I
+also independently confirmed `.github/workflows/ci.yml` has 18 steps
+(Checkout through "Verify command catalog classification") ahead of the
+first gate step ("Run Go tests", line 41) and the wiring step (line 99),
+none of which any guard in this phase scans.
+
+Per the stop rule's own binding instruction, this is the STOP condition:
+narrow criteria 1 and 4 to name the residue explicitly, mark the phase
+complete against the narrowed criteria, and recommend a tracked follow-up
+phase for the residue — not plan a round 5. That is what this report does.
 
 ## Goal Achievement
 
-### Observable Truths (ROADMAP.md § Phase 172 Success Criteria, verbatim)
+### Observable Truths — the four ROADMAP Success Criteria
 
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 1 | Registering a new cobra subcommand with no caller makes `TestNoRegisteredSubcommandIsUnreferenced` fail, naming the command; allowlist seeded from real scanner output (now 293 path-keyed entries); shrink-only against a committed baseline | ✗ FAILED | The specific regression reported last round (`aether colonize`/`aether closeout` bare-leaf collision) is genuinely closed — re-confirmed by removing both entries from the live allowlist and observing the test fail naming both, then restoring it and observing it pass. But a distinct, independently-constructed defect in the same shrink-only mechanism is confirmed live: a real, newly-registered orphan command sharing a generic leaf name (`aether colony-depth setup`) added to both allowlist files in one operation passes every relevant guard, including the ratchet itself. See gaps. |
-| 2 | `aether spawn-can-spawn 5 --enforce` exits 0 | ✓ VERIFIED | Re-ran `go run ./cmd/aether spawn-can-spawn 5 --enforce` directly: `{"ok":true,"result":{"can_spawn":true,"depth":5}}`, exit 0. |
-| 3 | A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming file/line/flag when an instruction names a flag the binary does not register | ✓ VERIFIED | Re-ran `TestCLIFlagAudit` (141 files across 3 corpora, 126 subcommands audited), `TestCommandCallsMatchCobraContracts` (988 documented invocations across 6 corpora), `TestAuditedCorpusHasNoGluedFenceMarkers` (215 files scanned) — all pass. No regression from the prior round's closed fence-parsing gap. |
-| 4 | The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file | ✗ FAILED | Substantial, real progress this round: the prior round's five step-text bypasses and the workflow-shape gaps found alongside them (commented-out step, step-level `if:`/`continue-on-error`, disabled trigger, job-level `if:`) are closed by 172-10's execution-based harness and 172-11's structural checks — confirmed by the orchestrator's direct mutation of the live workflow catching all seven tested variants, including two genuinely novel mutations no plan enumerated. But three new bypasses one YAML scope higher than any current check remain live today, also confirmed by the orchestrator's direct mutation of the live workflow: job-level `continue-on-error`, job-level `env: GOFLAGS`, and `paths-ignore` under a trigger. See gaps. |
-
-**Score:** 2/4 fully verified (criteria 2, 3); 2 failed (criterion 1 — original regression closed, new defect in the same mechanism confirmed; criterion 4 — four bypass classes closed, three new ones confirmed one scope higher).
-
-### Independent Reproductions Performed In This Verification
-
-All reproductions below were constructed directly against the live source in this repository —
-not read from 172-REVIEW.md's prose — using the same technique the codebase's own self-tests
-use (`rootCmd.AddCommand` for a real, resolvable synthetic fixture). Every file touched was
-restored byte-for-byte immediately afterward; `git status --porcelain` was confirmed empty
-before and after each reproduction and at the end of this verification.
-
-| # | Claim | Method | Result |
+| # | Criterion (paraphrased) | Judgment | Evidence |
 |---|---|---|---|
-| 1 | CR-04 (shrink-only guarantee is launderable) | Registered a real cobra command `aether colony-depth setup` (child of the existing, already-called `colony-depth` parent) via package `init()` in a throwaway `_test.go` file; added a matching entry to both `orphan_allowlist.json` and `orphan_allowlist_baseline.json`; ran `TestOrphanAllowlistOnlyShrinks`, `TestOrphanAllowlistIsPathKeyed`, `TestPathMigrationDidNotWidenTolerance`, `TestNoRegisteredSubcommandIsUnreferenced` | All four PASSED — confirmed. (A first attempt using a brand-new fictional parent `aether newthing get` correctly failed on the bare parent `aether newthing`, which is itself enumerated as a registered command with no caller — that variant does not demonstrate the laundering path; the corrected reproduction using an existing, already-vouched-for parent isolates the actual defect.) |
-| 2 | CR-05 (frozen pre-migration snapshot has no integrity pin) | Appended one fabricated entry to `orphan_allowlist_baseline_pre_path_migration.json`; ran the full named CI wiring step's 30-test `-run` filter copied verbatim from `.github/workflows/ci.yml:100` | All 30 tests PASSED — confirmed. Nothing detects the edit. |
-| 3 | Criterion 1's specific prior regression is closed | Removed `aether colonize`/`aether closeout` from the live allowlist; ran `TestNoRegisteredSubcommandIsUnreferenced` | FAILED, naming both by full path, as expected. Restored the file; re-ran; PASSED. |
-| 4 | Criterion 2 still holds | `go run ./cmd/aether spawn-can-spawn 5 --enforce` | Exit 0, `{"ok":true,...}` — confirmed. |
-| 5 | CR-01/CR-02/CR-03 (job-level and trigger-level bypasses) | Not re-mutated in this verification (already independently confirmed live by direct mutation of the real `.github/workflows/ci.yml`, per the orchestrator's findings supplied with this task) | Corroborated by direct source inspection: `stepCanFailTheBuild` (`cmd/ci_wiring_gate_test.go:333-348`) scans only within a step's own indentation-bounded block, never the job's top-level keys; `TestReleaseGateWorkflowActuallyRuns` checks job-level `if:` only, never `continue-on-error` or `env:`; the `on:`-block check is `strings.Contains(onBlock, "pull_request:")`/`"push:"`, a presence test with no check for `paths-ignore`/`paths`/`branches-ignore` filters. The source confirms exactly the mechanism the orchestrator's live mutations exploited. |
+| 1 | Orphan ratchet fails naming an unwired command; allowlist seeded with 293 real orphans; a companion assertion means the allowlist "may only shrink"; caller evidence cannot leak between same-leaf commands | **TRUE ONLY IF NARROWED** | See narrowed wording below. Mechanism proven correct in isolation; residue is CR-06 (shared with criterion 4) |
+| 2 | `aether spawn-can-spawn 5 --enforce` exits 0 | **TRUE AS WRITTEN** | Ran live: `{"ok":true,"result":{"can_spawn":true,"depth":5}}`, exit 0 |
+| 3 | A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming file/line/flag for an unregistered flag; passes only once criterion 2 does | **TRUE AS WRITTEN** | `TestAetherCorpusCatchesAnUnregisteredFlag`, `TestCLIFlagAudit`, `TestCLIFlagAuditSubcommandsRegistered` all pass; no absolute-over-adversarial-surface framing, no CR-06 exposure |
+| 4 | The ratchet and flag test run in the same CI command the release gate already runs, verified by deleting a caller and observing the gate go red | **TRUE ONLY IF NARROWED** | See narrowed wording below. The literal claim is proven; the implied absolute ("cannot be silently switched off") is defeated by CR-06 |
 
-### Full Named CI Guard-Test Set (re-run against current tree, unmutated)
-
-```
-go test ./cmd -run '<30-name filter copied verbatim from ci.yml:100>' -count=1 -timeout 900s -v
-```
-
-All 30 tests pass in ~7.1s. `go build ./...` and `go vet ./cmd/...` are clean. This confirms the
-gap-closure summaries did not fabricate green output — the guard suite is genuinely green on the
-unmutated tree. The findings in this report are about what the green suite does *not* yet check,
-demonstrated by construction, not about the suite lying regarding what it does check.
-
-### Requirements Coverage
-
-| Requirement | Source Plan(s) | Description | Status | Evidence |
-|---|---|---|---|---|
-| WIRE-01 | 172-00, 172-02, 172-04, 172-05, 172-07, 172-08, 172-09 | A test fails when a registered subcommand has no caller outside its own definition, seeded with today's known orphans in a shrink-only allowlist | ✗ BLOCKED | The prior blocking defect (colonize/closeout bare-leaf collision) is fixed. A new, independently-confirmed defect (CR-04/CR-05: the shrink-only guarantee is launderable by a same-leaf newcomer, and its anchor file is unpinned) blocks this requirement today. REQUIREMENTS.md's checklist prose marks WIRE-01 `[x]` (line 32) while its traceability table still marks it `Pending` (line 139) — unchanged since the prior verification round; the traceability table remains the more accurate of the two. |
-| WIRE-02 | 172-01, 172-05, 172-07, 172-10, 172-11 | The documented `.aether/workers.md` invocation matches a real flag; running it succeeds rather than erroring on `--enforce` | ✓ SATISFIED | Confirmed by direct execution above. |
-| WIRE-03 | 172-00, 172-03, 172-04, 172-05, 172-06, 172-07, 172-08 | A test fails when a `.aether/*.md` instruction names a CLI flag the binary does not register | ✓ SATISFIED | Confirmed via re-run of the full named guard-test set and the (still closed) fence-parsing gap. |
-
-No orphaned requirements: WIRE-01/02/03 are the only IDs REQUIREMENTS.md maps to Phase 172, and
-all three appear in at least one plan's `requirements` field (172-09/10/11 all declare all
-three, reflecting that the gap-closure plans touch shared guard infrastructure).
-
-### Anti-Patterns / Additional Findings (not blocking the 4 roadmap criteria on their own, but load-bearing for the phase's stated purpose)
-
-| File | Finding | Severity | Impact |
-|---|---|---|---|
-| `cmd/ci_wiring_gate_test.go:376` | The blanket step's `blanketGateRunCommand` exact-equality check is explicitly documented in its own doc comment as "not the proof" — `TestReleaseGateCommandFailsATreeWithAFailingTest` is named as the actual proof. This is good practice (prevents a future reader from mistaking a whitelist for a guarantee) and is noted here as a positive finding, not a gap. | ℹ️ Info | Reduces the risk of a fourth premature "wired" claim resting on the wrong check. |
-| `.aether/docs/orphan-allowlist-policy.md:43-46` | States without qualification that the allowlist "can only get shorter... the automated check that runs on every change fails immediately, by name." This is currently false per the CR-04 reproduction above. | 🛑 Blocker (documentation claim about runtime behavior that is not currently testable-true) | Under CLAUDE.md's own Definition of Done, this sentence must be corrected or the underlying check must be fixed before the claim is accurate again. |
-| `cmd/ci_wiring_gate_test.go` (job-level scope) | No test inspects `jobs.go`'s own top-level keys (`continue-on-error`, `env`) independent of its steps. | ⚠️ Warning | This is the direct mechanism behind CR-01/CR-02, both confirmed live by direct mutation. |
-
-### Gaps Summary
-
-Two of the four roadmap success criteria remain unmet on the current tree, but both are
-materially closer to met than in the prior verification round, and both failures are now
-narrower and better-characterized than before:
-
-1. **Criterion 1's originally-reported regression (colonize/closeout) is genuinely fixed.**
-   Path-keyed caller evidence closes the specific defect this phase's own prior verification
-   found. In its place, an independently-constructed reproduction confirms a different defect
-   in the same shrink-only mechanism: `TestPathMigrationDidNotWidenTolerance` compares by bare
-   leaf name rather than full path, so a brand-new orphan sharing one of 14 generic tolerated
-   leaves (`get`, `set`, `setup`, `export`, etc.) passes every guard, including the ratchet
-   itself, when its allowlist entry is added in the same commit — which is exactly how a real
-   contributor would add both a feature and its (temporary or permanent) allowlist entry
-   together. Compounding this, the frozen snapshot file the whole migration's shrink-only claim
-   is anchored to has no integrity pin and can be hand-edited with nothing noticing.
-
-2. **Criterion 4 has closed four distinct bypass classes since the last verification round**
-   (step-text mutation via the new execution-based harness; step-level `if:`/`continue-on-error`;
-   workflow-step absence; and disabled triggers/job-level `if:`, via new structural checks) —
-   this is real, substantive engineering, not narration, and the execution-based harness in
-   particular is evidence-backed as generalizing beyond its enumerated mutation list (it caught
-   two mutations no plan wrote down). What remains is three bypasses one YAML scope higher than
-   any current check operates at: job-level `continue-on-error`, job-level `env:` overrides, and
-   `paths-ignore` filters under a trigger. This is the third round of work on this criterion;
-   an honest read is that each round has correctly closed what it targeted but has not yet
-   enumerated the full set of YAML scopes between the workflow root and the command text that
-   can disable or redirect execution.
-
-**Is the execution-based harness (172-10) the right foundation to keep building on?** Yes, for
-what it can see. `gateCommandDiscriminates` makes no assumption about how a mutation is spelled
-— it runs the real command against a passing and a failing probe and checks exit codes — which
-is why it caught two mutations nobody enumerated. It is not, however, a substitute for asserting
-that the command is *reached at all* by the workflow; job-level `continue-on-error`, job-level
-`env:` overrides, and trigger-path filtering all prevent the command from running in a form the
-harness would ever see, because the harness only runs when a human (or CI) invokes `go test ./cmd
--run TestReleaseGateCommandFailsATreeWithAFailingTest` directly — it does not simulate GitHub
-Actions' own job/trigger evaluation. The correct next step is the same direction 172-11 already
-took (structural, workflow-shape assertions in `TestReleaseGateWorkflowActuallyRuns`), extended
-to cover the job's own top-level keys and the trigger's path/branch filters — not a fourth
-attempt at a smarter text check on the step's run line, and not a replacement for the execution
-harness. Both mechanisms are complementary and both should be kept.
+**Score:** 4/4 — substance delivered on all four; two require narrower wording to avoid overclaiming, per the stop rule's own design (an absolute over an unbounded adversarial surface has no defined edge, and a narrower true claim beats a broader unproven one — CLAUDE.md's Definition of Done).
 
 ---
 
-_Verified: 2026-08-12T14:00:00Z_
+### Criterion 1 — Proposed narrowed wording
+
+> Registering a new cobra subcommand with no caller outside its own definition
+> file makes `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced`
+> fail, naming the command — proven by a fixture that registers exactly such
+> a command. The allowlist ships seeded with the scan's real output: 293
+> pre-existing orphans (274 carried forward one-to-one from the pre-migration
+> baseline including all 6 entries tagged `owner_phase: "178"`, 10 from
+> splitting 4 collapsed leaf entries into the real commands each was
+> invisibly covering, and 9 newly revealed and tagged
+> `reason: "path-collision-revealed"`). A companion assertion, comparing
+> **full command paths** (not bare leaf names) against a SHA-256-pinned
+> pre-migration snapshot (`preMigrationSnapshotSHA256`,
+> `TestPreMigrationSnapshotIsFrozen`), fails when the allowlist gains an
+> entry it did not have in the committed baseline — proven both by
+> `TestPathMigrationRejectsASameLeafNewcomer` (a same-leaf-name newcomer,
+> including the reviewer's own `aether colony-depth setup` counterexample)
+> and by a generality loop rejecting newcomer paths built from all 278
+> frozen tolerated leaves at once. `TestCallerEvidenceIsNotSharedBetweenSameLeafNames`
+> proves caller evidence for one command path can never leak to a
+> same-leaf-name command at a different path.
+> **Residue, named explicitly and not closed by this phase:** this
+> guarantees the allowlist can only shrink whenever the guard test actually
+> executes inside CI. It does not by itself guarantee the guard always
+> executes — CR-06 (below, shared with criterion 4) shows any of the ~18
+> steps that run before the gate step in the same CI job can alter the
+> environment or replace the `go` binary the whole test run depends on,
+> which would silence this assertion along with every other guard test in
+> the same job, undetected by any mechanism this phase built.
+
+**Why the residue is shared with criterion 1, not just criterion 4:** the
+"may only shrink" property is enforced by a Go test
+(`TestPathMigrationDidNotWidenTolerance`) that only has teeth when it
+actually runs as part of `go test ./cmd -run '...'` inside the CI job. CR-06
+is a route to making that whole `go test` invocation report success without
+genuinely executing — so the absolute form of criterion 1 rests on the same
+unaudited surface as criterion 4's absolute form, even though CR-06 itself
+was found while reviewing criterion 4's mechanisms.
+
+### Criterion 4 — Proposed narrowed wording
+
+> The ratchet and the flag test run in the same CI command the release gate
+> already runs, under a named step
+> (`Verify subcommand wiring and CLI flag contracts`, `.github/workflows/ci.yml:99-100`)
+> — proven by deleting a caller and observing
+> `TestDeletingACallerMakesTheRatchetNameIt` name it, not by reading the
+> workflow file. A whitelist of the workflow's root keys
+> (`workflowRootAllowedKeys`), the `go` job's keys (`gateJobAllowedKeys`),
+> each trigger's keys (`releaseTriggerAllowedKeys`), and the two gate steps'
+> own keys (`gateStepAllowedKeys`) rejects any key outside a reviewed set by
+> default, closing three independently-reproduced job/trigger-level
+> disabling routes: `continue-on-error` at job scope, `env: GOFLAGS` at
+> workflow/job/step scope, and `paths-ignore` under `on:` triggers.
+> **Residue, tracked and explicitly not closed by this phase (CR-06):** the
+> other ~18 steps that run earlier in the same `go:` job — Checkout, Setup
+> Go, Setup Node, Install goreleaser, Validate goreleaser config, Build,
+> Vet, and the rest — are not inspected by any mechanism this phase built.
+> Any of them can write `GOFLAGS`/`GOTOOLCHAIN` to `$GITHUB_ENV`, or write a
+> fake `go` earlier on `$PATH` via `$GITHUB_PATH`, or overwrite the `go`
+> binary directly — all standard, documented GitHub Actions mechanisms
+> available to any step sharing the job's runner and filesystem — and
+> reproduce CR-02's outcome (the gate running zero tests and exiting 0) by a
+> route the exact-equality pin, the execution harness, and the shape
+> whitelist were each built to inspect the wrong text for. The gate step's
+> command text is provably tamper-evident; the gate step's **execution
+> environment**, inherited from every step that ran before it in the same
+> job, is not.
+
+---
+
+### Required Artifacts
+
+| Artifact | Expected | Status | Details |
+|---|---|---|---|
+| `cmd/ci_wiring_gate_test.go` | Execution-based release-gate harness + workflow-shape whitelist | ✓ VERIFIED | 1946 lines; `auditWorkflowShape`, `gateJobAllowedKeys`, `gateStepAllowedKeys`, `releaseTriggerAllowedKeys`, `workflowRootAllowedKeys` present and wired into `TestReleaseGateWorkflowShapeIsWhitelisted` / `TestWorkflowShapeWhitelistRejectsUnenumeratedKeys` |
+| `cmd/subcommand_reachability_ratchet_test.go` | Orphan ratchet, path-keyed shrink-only guard, pinned anchor | ✓ VERIFIED | 1956 lines; `preMigrationSnapshotSHA256` constant matches independently re-computed SHA-256 of the anchor file; `TestPathMigrationDidNotWidenTolerance` compares full paths |
+| `cmd/cli_flag_audit_test.go` | Flag-audit corpus scan | ✓ VERIFIED | 374 lines; `TestAetherCorpusCatchesAnUnregisteredFlag`, `TestCLIFlagAudit` pass |
+| `.github/workflows/ci.yml` | Ratchet + flag test wired into the release-gate CI job | ✓ VERIFIED | Line 99-100: `Verify subcommand wiring and CLI flag contracts` step runs the exact 34-test `-run` filter, in the same `go:` job as `Run Go tests` (line 41-42) |
+| `.aether/docs/orphan-allowlist-policy.md` | Written policy, arithmetic matches code | ✓ VERIFIED | 274+10=284, 284+9=293 accounting matches both JSON files and the independently re-derived arithmetic |
+| `cmd/testdata/orphan_allowlist_baseline_pre_path_migration.json` | Frozen anchor, pinned | ✓ VERIFIED | `shasum -a 256` → `873cad5a20e472af7050e69042be9faf8527a2c3e1d34907762b37e6a5845e0e`, byte-identical to `preMigrationSnapshotSHA256` |
+
+### Key Link Verification
+
+| From | To | Via | Status | Details |
+|---|---|---|---|---|
+| `.github/workflows/ci.yml:99-100` | `cmd/*_test.go` guard suite | `go test ./cmd -run '<34-name filter>'` | WIRED | Filter string in ci.yml matches the 34 test names verified to exist and pass; `TestDeletingACallerMakesTheRatchetNameIt` proves deletion of a caller is observable through this exact chain |
+| `.aether/workers.md:292` | `cmd/spawn.go` `spawn-can-spawn --enforce` | direct CLI invocation | WIRED | Live run confirms exit 0, matches documented invocation exactly |
+| `.aether/*.md` corpus | `cmd/cli_flag_audit_test.go` | static enumeration + cobra flag-set lookup | WIRED | `TestAetherCorpusCatchesAnUnregisteredFlag` passes against the live corpus |
+
+### Data-Flow Trace (Level 4)
+
+Not applicable in the usual sense — this phase produces CI guard tests, not
+a UI/data-rendering artifact. The equivalent check is "does the guard
+actually run inside the release gate CI job", which is verified under Key
+Link Verification above (the `-run` filter is textually present in the same
+job as the release gate, and `TestDeletingACallerMakesTheRatchetNameIt`
+proves the ratchet's own logic fires). The residue named in criteria 1 and 4
+above (CR-06) is precisely the gap in this trace: the guard's *presence* in
+the job is proven, but the job's *environment integrity* up to that point
+is not.
+
+### Behavioral Spot-Checks
+
+| Behavior | Command | Result | Status |
+|---|---|---|---|
+| `spawn-can-spawn --enforce` exits 0 (criterion 2) | `go run ./cmd/aether spawn-can-spawn 5 --enforce` | `{"ok":true,"result":{"can_spawn":true,"depth":5}}`, exit 0 | ✓ PASS |
+| All 34 named guard tests pass (criteria 1, 3, 4) | `go test ./cmd -run '<34-name filter, verbatim from ci.yml:100>' -count=1 -v` | `ok github.com/calcosmic/Aether/cmd 7.075s`, zero FAILs | ✓ PASS |
+| Frozen anchor's pin matches its actual contents (CR-05 closure) | `shasum -a 256 cmd/testdata/orphan_allowlist_baseline_pre_path_migration.json` | `873cad5a...45e0e` — matches `preMigrationSnapshotSHA256` in source | ✓ PASS |
+| CR-06's structural premise (unaudited steps ahead of the gate) | Read `.github/workflows/ci.yml` step list + `cmd/ci_wiring_gate_test.go:1427-1454` | 18 steps precede the wiring-gate step; `gateStepAllowedKeys` loop iterates only the 2 named gate steps | ✓ CONFIRMED (residue, not a defect closed this round) |
+
+No source files were mutated to produce this report; `git diff --stat`
+before and after this verification session shows no changes to any
+tracked file this phase touches (the only diffs present are pre-existing,
+unrelated deletions under `.planning/phases/160-*` through `165-*` that
+predate this verification session).
+
+### Requirements Coverage
+
+| Requirement | Source Plans | Description | Status | Evidence |
+|---|---|---|---|---|
+| WIRE-01 | 172-00, 172-02, 172-04, 172-05, 172-07, 172-08, 172-09, 172-10, 172-11, 172-12, 172-13 | Orphan ratchet fails on an unwired command, shrink-only allowlist | ✓ SATISFIED (narrowed per criterion 1 above) | `TestNoRegisteredSubcommandIsUnreferenced` + full-path shrink-only chain, all green |
+| WIRE-02 | 172-01, 172-05, 172-07, 172-10, 172-11, 172-12, 172-13 | `aether spawn-can-spawn 5 --enforce` succeeds | ✓ SATISFIED | Live run confirmed, exit 0 |
+| WIRE-03 | 172-00, 172-03, 172-04, 172-05, 172-06, 172-07, 172-08, 172-10, 172-11, 172-12, 172-13 | Flag-audit test over `.aether/*.md` corpus | ✓ SATISFIED | `TestAetherCorpusCatchesAnUnregisteredFlag` et al. green |
+
+No orphaned requirements — all three IDs declared in `REQUIREMENTS.md`'s
+Wiring Proof section are claimed by at least one 172 plan's frontmatter, and
+vice versa. (Note, informational only: `REQUIREMENTS.md`'s later
+traceability table at lines 137-141 still shows WIRE-01/02/03 as `Pending`
+even though the WIRE section's own checklist above it has them `[x]`
+checked — a stale-status doc mismatch, not a coverage gap. Not fixed here;
+out of scope for a verification pass, flagged for whoever next edits
+`REQUIREMENTS.md`.)
+
+### Anti-Patterns Found
+
+No `TBD`/`FIXME`/`XXX` markers in any file this round's plans (172-12,
+172-13) touched (`cmd/ci_wiring_gate_test.go`, `cmd/subcommand_reachability_ratchet_test.go`,
+`.aether/docs/orphan-allowlist-policy.md`, the two testdata JSON files) —
+confirmed by direct grep.
+
+The round-4 code review (`172-REVIEW.md`) lists 9 Warning-level and 8
+Info-level findings carried forward unchanged from prior rounds (WR-01,
+WR-02, WR-03, WR-05, WR-07, WR-08, WR-09, WR-10, IN-01..IN-08). None of
+these were must-haves of any 172 plan — they are pre-existing, previously
+documented, out-of-scope-for-this-round findings (e.g. WR-02:
+`-update-orphan-allowlist` flag skips core assertions before returning;
+WR-08: anti-vacuity floor allows up to 41% of guard tests to be deleted
+without tripping). They do not block this verification's `passed`
+determination because no plan's own must_haves claim to close them, but
+they remain real and are appropriately documented for whoever plans the
+CR-06 follow-up phase to fold in alongside it if in scope.
+
+| File | Pattern | Severity | Impact |
+|---|---|---|---|
+| `cmd/ci_wiring_gate_test.go:612-636` | WR-01: wiring step's run-line check tolerates trailing `\|\| true`/`; true`/`\| cat`/`&&` | Warning | Pre-existing, not this round's scope |
+| `cmd/subcommand_reachability_ratchet_test.go:1164` | WR-02: `-update-orphan-allowlist` returns before core assertions | Warning | Pre-existing, not this round's scope |
+| `cmd/ci_wiring_gate_test.go:801-828` | WR-03: `sh -c` executes workflow-sourced string with only a substring sanity floor | Warning | Pre-existing, not this round's scope |
+| `cmd/cli_flag_audit_test.go:356` | WR-05: `../`-relative path used despite a same-file ban 270 lines earlier | Warning | Pre-existing, not this round's scope |
+| `cmd/ci_wiring_gate_test.go:171` | WR-08: anti-vacuity floor tolerates 14/34 (41%) guard tests deleted | Warning | Pre-existing, margin widened in absolute terms as suite grew, not tightened |
+
+### Human Verification Required
+
+None. Every truth in this report was verified by reading source, running
+the actual guard-test suite, and live-executing the documented CLI
+invocation — no visual, real-time, or subjective judgment call remains
+open.
+
+### Gaps Summary
+
+No gaps in the "unmet must-have" sense: every plan's own must_haves are
+verified true in the code, and all 34 named guard tests pass. The one
+substantive finding — CR-06 — is not a gap against any plan's must-haves;
+it is a newly-discovered residue against the *original, absolute* wording
+of ROADMAP success criteria 1 and 4, which is precisely the situation
+`172-STOP-RULE.md` was written in advance to govern. This report proposes
+the narrowed wording the stop rule requires and recommends the user/
+orchestrator schedule a tracked follow-up phase (not currently in
+`ROADMAP.md`) to carry CR-06 forward — most directly by moving the release
+gate to a job/workflow with no untrusted step ahead of it, per
+`172-REVIEW.md`'s Fix section, option 1.
+
+---
+
+_Verified: 2026-08-12T16:10:00Z_
 _Verifier: Claude (gsd-verifier)_

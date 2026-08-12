@@ -136,9 +136,9 @@ SKILL security inside the skill phase → PROOF last.
 
 | REQ-ID | Phase | Phase Name | Status |
 |--------|-------|------------|--------|
-| WIRE-01 | Phase 172 | Wiring Proof | Pending |
-| WIRE-02 | Phase 172 | Wiring Proof | Pending |
-| WIRE-03 | Phase 172 | Wiring Proof | Pending |
+| WIRE-01 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
+| WIRE-02 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
+| WIRE-03 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
 | SPAWN-01 | Phase 173 | Delegation Guard | Pending |
 | SPAWN-02 | Phase 173 | Delegation Guard | Pending |
 | SPAWN-03 | Phase 173 | Delegation Guard | Pending |
