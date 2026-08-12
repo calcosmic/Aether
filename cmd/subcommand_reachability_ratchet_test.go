@@ -1416,7 +1416,9 @@ func TestOrphanAllowlistIsPathKeyed(t *testing.T) {
 		}
 	}
 	t.Run("live", func(t *testing.T) { check(t, "testdata/orphan_allowlist.json", "testdata/orphan_allowlist.json") })
-	t.Run("baseline", func(t *testing.T) { check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json") })
+	t.Run("baseline", func(t *testing.T) {
+		check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json")
+	})
 }
 
 // pathMigrationExpansion is the FROZEN, one-time record of what each of the
@@ -1581,6 +1583,108 @@ func TestPathMigrationDidNotWidenTolerance(t *testing.T) {
 			"Remove the dead exemption from pathCollisionRevealedOrphans — its command was already fixed or deleted.",
 			len(deadExemptions), strings.Join(deadExemptions, ", "))
 	}
+}
+
+// TestPathMigrationRejectsASameLeafNewcomer proves by construction that
+// CR-04 is closed: a brand-new, genuinely unwired command sharing a last
+// word with any of the 278 tolerated frozen leaves is rejected BY FULL
+// PATH, even though the old bare-leaf rule would have accepted it. Hermetic
+// and table-driven: pathMigrationToleratedPaths is called on the real
+// frozen snapshot (which is frozen, so this stays deterministic), and
+// pathMigrationWideningProblems is called on synthetic baseline slices
+// built entirely in this test's own body. No file is written and no JSON
+// is edited.
+func TestPathMigrationRejectsASameLeafNewcomer(t *testing.T) {
+	pre := loadOrphanAllowlist(t, "testdata/orphan_allowlist_baseline_pre_path_migration.json")
+	tolerated, err := pathMigrationToleratedPaths(pre)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	assertRejected := func(t *testing.T, path string) {
+		t.Helper()
+		baseline := []orphanAllowlistEntry{{Name: path, Reason: "test", OwnerPhase: "test"}}
+		problems := pathMigrationWideningProblems(baseline, tolerated)
+		if len(problems) != 1 || problems[0] != path {
+			t.Errorf("pathMigrationWideningProblems did not reject %q by full path; got %v", path, problems)
+		}
+	}
+	assertAccepted := func(t *testing.T, path string) {
+		t.Helper()
+		baseline := []orphanAllowlistEntry{{Name: path, Reason: "test", OwnerPhase: "test"}}
+		problems := pathMigrationWideningProblems(baseline, tolerated)
+		if len(problems) != 0 {
+			t.Errorf("pathMigrationWideningProblems wrongly rejected %q: %v", path, problems)
+		}
+	}
+
+	// Rejection rows: a brand-new command sharing a last word with a
+	// tolerated frozen leaf must never be carried forward, no matter which
+	// kind of frozen leaf (collapsed, relocated, generic-but-trivial, or
+	// absent from the snapshot entirely) it borrows from.
+	t.Run("rejected", func(t *testing.T) {
+		rows := []string{
+			"aether newthing get",           // the review's own example; "get" is a collapsed leaf whose three real expansions are named
+			"aether colony-depth setup",     // the verifier's live reproduction; "setup" is a generic frozen leaf
+			"aether newthing archive",       // a relocated leaf whose single expansion is "aether export archive"
+			"aether newthing set",           // collapsed leaf
+			"aether newthing registry",      // collapsed leaf
+			"aether newthing wisdom",        // collapsed leaf
+			"aether newthing lifecycle",     // relocated leaf
+			"aether newthing audit-catalog", // GENERALITY: a frozen leaf that is not one of the 14 generic single words and is not in the expansion map
+			"aether totally-new-command",    // a leaf absent from the snapshot entirely — the case the old rule already caught, kept so a regression there is visible
+		}
+		for _, path := range rows {
+			path := path
+			t.Run(path, func(t *testing.T) { assertRejected(t, path) })
+		}
+	})
+
+	// Acceptance rows: every path a frozen leaf legitimately expanded to
+	// must NOT be reported, including a member of pathCollisionRevealedOrphans.
+	// Without these rows a guard that rejects everything would look like a
+	// working guard.
+	t.Run("accepted", func(t *testing.T) {
+		rows := []string{
+			"aether colony-depth get", "aether parallel-mode get", "aether plan-granularity get",
+			"aether colony-depth set", "aether parallel-mode set", "aether plan-granularity set",
+			"aether export registry", "aether import registry",
+			"aether export wisdom", "aether import wisdom",
+			"aether export archive",
+			"aether host lifecycle",
+			"aether audit-catalog", // a trivial one-to-one path
+			"aether host build",    // pathCollisionRevealedOrphans member
+			"aether colonize",      // pathCollisionRevealedOrphans member
+		}
+		for _, path := range rows {
+			path := path
+			t.Run(path, func(t *testing.T) { assertAccepted(t, path) })
+		}
+	})
+
+	// Generality loop: for EVERY leaf in the frozen snapshot (not just the
+	// 14 generic single words picked out above), a newcomer command built
+	// from that leaf under an unrelated new parent must be rejected. This
+	// establishes the rejection holds for all 278 tolerated last words at
+	// once — not because a hand-picked list of generic ones was named.
+	t.Run("generality_loop_all_frozen_leaves", func(t *testing.T) {
+		baseline := make([]orphanAllowlistEntry, 0, len(pre))
+		for _, e := range pre {
+			baseline = append(baseline, orphanAllowlistEntry{
+				Name:       "aether zzz-unwired-newcomer " + e.Name,
+				Reason:     "test",
+				OwnerPhase: "test",
+			})
+		}
+		problems := pathMigrationWideningProblems(baseline, tolerated)
+		t.Logf("generality loop: built %d newcomer paths from all %d frozen leaves; %d reported as widening problems", len(baseline), len(pre), len(problems))
+		if len(pre) != preMigrationSnapshotEntryCount {
+			t.Fatalf("frozen snapshot has %d entries, want %d — the generality loop would silently walk the wrong number of iterations", len(pre), preMigrationSnapshotEntryCount)
+		}
+		if len(problems) != len(pre) {
+			t.Errorf("generality loop: expected all %d newcomer paths (one per frozen leaf) to be rejected, got %d rejected", len(pre), len(problems))
+		}
+	})
 }
 
 // TestRatchetDetectsASyntheticOrphan is success criterion 1's fixture: a
