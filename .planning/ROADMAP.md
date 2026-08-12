@@ -625,7 +625,7 @@ Plans:
   2. `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` instructs every worker to run — exits 0. Today it exits 1 with `Error: unknown flag: --enforce`
   3. A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming the file, the line, and the offending flag when an instruction names a flag the binary does not register. Seeded to fail today against `--enforce`, and it passes only once criterion 2 does
   4. The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file
-**Plans**: 12 plans in 9 waves (plans 06-08 added 2026-08-11 to close the two confirmed verification gaps; plans 09-11 added 2026-08-11 after re-verification returned 2/4 — criterion 3 closed, criterion 1 REGRESSED with two live counterexamples, criterion 4's durability half still defeatable by five reproduced mutations)
+**Plans**: 14 plans in 11 waves (plans 06-08 added 2026-08-11 to close the two confirmed verification gaps; plans 09-11 added 2026-08-11 after re-verification returned 2/4; plans 12-13 added 2026-08-12 as the FINAL build round under the agreed stop rule in `172-STOP-RULE.md` — five independently reproduced defects only: three job/trigger-level release-gate bypasses closed by a whitelist of workflow shape rather than more string searches, plus the launderable last-word tolerance rule and its unpinned frozen anchor)
 
 Plans:
 **Wave 1**
@@ -657,6 +657,12 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 - [x] 172-11-PLAN.md — wave 9 — WIRE-01, WIRE-02, WIRE-03 (gap A, complements): the disabling routes execution cannot see — a commented-out step, a conditioned step, disabled `on:` triggers, and a job-level `if:` — plus honest `-run` extraction in both directions
+
+**Wave 10** *(gap closure — final round, blocked on the 2026-08-12 re-verification and code review)*
+- [ ] 172-12-PLAN.md — wave 10 — WIRE-01, WIRE-02, WIRE-03 (CR-01, CR-02, CR-03): close the job-level and trigger-level bypasses with a whitelist of workflow shape — the workflow's root keys, the `go` job's keys, the trigger names and each trigger's keys, and the two gate steps' keys must be exactly a reviewed set in Go source, so `continue-on-error`, `env: GOFLAGS`, `paths-ignore` and every key nobody enumerated fail by default; plus the source stating plainly that the execution harness never sees the workflow's environment
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [ ] 172-13-PLAN.md — wave 11 — WIRE-01 (CR-04, CR-05): compare allowlist entries by full command path against an explicit 272 + 12 + 9 = 293 accounting of the 172-09 migration instead of by bare last word, proven by re-running the verifier's own `aether colony-depth setup` counterexample red; and pin the frozen pre-migration snapshot's contents with a SHA-256 constant in Go source
 
 ### Phase 173: Delegation Guard
 **Goal**: Recursive delegation is bounded by the runtime at the one chokepoint an LLM cannot route around — the spawn-recording call. Depth is derived from the parent's recorded entry rather than asserted by the caller, a whole-tree budget bounds what depth alone cannot, every guard fails closed, and the operator can watch the tree while it grows. **Nothing gains the ability to delegate in this phase**; enforcement lands before capability because parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs.
