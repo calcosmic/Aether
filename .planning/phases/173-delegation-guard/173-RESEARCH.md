@@ -575,6 +575,12 @@ rewritten, not merely have their two `--depth 0` lines patched (see Pitfall 1).
 
 ## Open Questions
 
+> **Status as of planning, 2026-08-12:** all three are resolved. Q1 and Q3 are resolved
+> *factually* — a plan implements a specific answer. Q2 is resolved **procedurally, not
+> factually**: we now have a defined way to obtain the answer and a defined response to each
+> possible answer, but we do not yet know what the answer is. Do not read Q2 as settled
+> knowledge about how the hook behaves.
+
 1. **Should `spawn-can-spawn` gain a `--name` flag so its own report can be verified against a
    recorded entry, rather than trusting the caller's self-declared depth outright?**
    - What we know: today it takes a bare integer with no identity attached, so it cannot
@@ -585,6 +591,13 @@ rewritten, not merely have their two `--depth 0` lines patched (see Pitfall 1).
      an acceptable bounded gap to name and defer.
    - Recommendation: treat as Claude's discretion at planning time; either is defensible, but
      whichever is chosen must be stated as a decision in the plan, not left implicit.
+   - **RESOLVED (factually) by plan 04.** `--name` is added as an optional flag on
+     `spawn-can-spawn`, registered in `init()` with help text
+     `Requester's recorded agent name; when it resolves, the recorded depth overrides --depth`.
+     When it resolves via `latestSpawnEntryByName`, `RequesterDepth` comes from the recorded
+     entry and `DepthIsAuthoritative` is true; omitting it keeps the documented invocation
+     working and stays advisory. The residual advisory gap is carried as residue 1 in
+     `173-RESIDUE.md` (plan 10 task 4) and as Known Residue 1 in `173-VALIDATION.md`.
 
 2. **Does the `PreToolUse` hook actually fire for genuinely nested (depth-1 worker spawning a
    depth-2 helper) Task calls in the Claude Code version this repo's users run, and does
@@ -600,6 +613,18 @@ rewritten, not merely have their two `--depth 0` lines patched (see Pitfall 1).
      shape before finalizing the hook's matching logic. This is exactly the kind of empirical
      check the project's Definition of Done culture expects before locking in a mechanism whose
      correctness depends on an external platform's undocumented-until-now behavior.
+   - **RESOLVED PROCEDURALLY by plan 01 — not factually.** Plan 01 is this phase's Wave 0
+     gate: it dispatches a real two-level nested spawn in a scratch colony, captures the actual
+     `hook-pre-tool-use` stdin JSON, and writes a dated `VERDICT:` line to
+     `173-HOOK-FINDINGS.md`. Plan 07 task 1 opens by reading that verdict and branching on it:
+     `INCONCLUSIVE` stops the plan and reports to the operator rather than implementing;
+     `HOOK_DOES_NOT_FIRE_IN_SUBAGENT` implements but bounds every comment and test name to the
+     coordinator's own dispatches; `HOOK_FIRES_IN_SUBAGENT` uses the field names the capture
+     actually shows, correcting `claudeHookInput`'s struct tags before any logic is written
+     against them. So the *process* is settled and the stop condition is explicit. **The
+     ground-truth answer is still unknown** and stays unknown until plan 01 runs — which is why
+     `wave_0_complete` remains false in `173-VALIDATION.md`, and why the identity-bridge gap is
+     carried as residue 3 in `173-RESIDUE.md` regardless of which way the verdict lands.
 
 3. **Where should the reaper's configurable threshold (D-17) live?**
    - What we know: no existing colony-level runtime config file/pattern exists for this kind of
@@ -612,6 +637,10 @@ rewritten, not merely have their two `--depth 0` lines patched (see Pitfall 1).
      `SpawnReapThresholdMinutes *int`, `omitempty`, defaulting to a generous value such as 120
      minutes when unset) is the more consistent choice, since it's colony-scoped state exactly
      like the fields it would sit beside.
+   - **RESOLVED (factually) by plan 09.** The recommendation was taken: the threshold lives on
+     `colony.ColonyState` as `SpawnReapThresholdMinutes`, read by
+     `spawnReapThresholdMinutes()` with a generous default when unset. No new config file was
+     added. Recorded as settled in `173-VALIDATION.md` § Wave 0 Requirements.
 
 ## Environment Availability
 
