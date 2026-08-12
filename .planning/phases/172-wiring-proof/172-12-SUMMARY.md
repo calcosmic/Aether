@@ -294,3 +294,13 @@ None of Rule 1–3 auto-fix scope; one intra-execution correction and one clarif
 ---
 *Phase: 172-wiring-proof*
 *Completed: 2026-08-12*
+
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/172-wiring-proof/172-12-SUMMARY.md`
+- FOUND: `cmd/ci_wiring_gate_test.go`
+- FOUND: `.github/workflows/ci.yml`
+- FOUND commit: `181af014` (Task 1)
+- FOUND commit: `fda00d83` (Task 2)
+- FOUND commit: `05652337` (Task 3)
+- FOUND commit: `3e2e639e` (this SUMMARY.md)
