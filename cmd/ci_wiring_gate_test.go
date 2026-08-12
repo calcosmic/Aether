@@ -45,18 +45,29 @@ const blanketGateStepName = "Run Go tests"
 // blanketGateRunCommand is the exact command the blanket release-gate
 // step's run line must EQUAL, once the leading `run:` token is stripped —
 // not merely contain. This is a whitelist of the one accepted command, not
-// a blocklist of known-bad spellings, and it exists only as a cheap sanity
-// check on the run line's shape.
+// a blocklist of known-bad spellings.
 //
-// It is NOT the proof that the release gate cannot be neutered, and must
-// never be mistaken for one — that is exactly the mistake that produced two
-// failed attempts at this criterion (172-VERIFICATION.md GAP A). The proof
-// is TestReleaseGateCommandFailsATreeWithAFailingTest, which executes this
-// command, read live from ci.yml, against a passing and a deliberately
-// failing probe tree and requires the exit codes to discriminate. A
-// weakened pin (this constant itself edited to something permissive) would
-// still be caught by that execution-based test, because it reads the
-// command from ci.yml at test time rather than trusting this constant.
+// It is NOT the whole proof that the release gate cannot be neutered, and
+// must never be mistaken for one on its own — that is exactly the mistake
+// that produced two failed attempts at this criterion (172-VERIFICATION.md
+// GAP A). The behavioural half is TestReleaseGateCommandFailsATreeWithAFailingTest,
+// which executes this command, read live from ci.yml, against a passing and
+// a deliberately failing probe tree and requires the exit codes to
+// discriminate. A weakened pin (this constant itself edited to something
+// permissive) would still be caught by that execution-based test, because
+// it reads the command from ci.yml at test time rather than trusting this
+// constant.
+//
+// The pin IS load-bearing, though, for one specific class of narrowing:
+// gateCommandDiscriminates runs against writeGateProbeModule's throwaway
+// module, which declares exactly one test of its own (TestGateProbe). A
+// narrowing that keeps that single probe test running while excluding this
+// repository's own tests — a `-skip` pattern, or a `-run` that names only
+// the probe's test — would still make the probe module pass and fail
+// exactly as expected, so gateCommandDiscriminates alone cannot see it.
+// This exact-equality pin catches that class, because the narrowed command
+// no longer equals blanketGateRunCommand. Neither mechanism substitutes for
+// the other.
 const blanketGateRunCommand = "go test ./... -count=1 -timeout 900s"
 
 // nameMarkerPrefix is the YAML step-name marker every step block begins
@@ -150,12 +161,12 @@ func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 	}
 
 	// Anti-vacuity floor (mirrors the convention cli_flag_audit_test.go:225
-	// and command_call_audit_test.go:1329 already use): measured 30 top-level
-	// Test functions across the five guard files as of plan 172-11; 20 is set
+	// and command_call_audit_test.go:1329 already use): measured 32 top-level
+	// Test functions across the five guard files as of plan 172-12; 20 is set
 	// just under that so ordinary churn does not trip it while a silent AST
 	// walk, or two-thirds of the guard tests being deleted, still does.
 	if len(testNames) < 20 {
-		t.Fatalf("AST enumeration over %d guard file(s) found only %d top-level Test function(s) — expected at least 20 (measured 30); "+
+		t.Fatalf("AST enumeration over %d guard file(s) found only %d top-level Test function(s) — expected at least 20 (measured 32); "+
 			"a walk that silently finds nothing would pass forever, so this is treated as a fatal enumeration failure",
 			len(wiringGateGuardFiles), len(testNames))
 	}
@@ -668,10 +679,26 @@ func testFuncNamesIn(t *testing.T, path string) []string {
 // gateCommandDiscriminates requires the command to exit 0 on the passing
 // module and non-zero on the failing one. Every mutation above collapses
 // that discrimination and is therefore caught by running the command, not
-// by recognising its spelling — including whatever the sixth mutation turns
-// out to be. TestGateProbeCatchesEveryKnownGateNeutering (below, plan
-// 172-10 task 2) is evidence that this mechanism works; it is not the
-// mechanism itself.
+// by recognising its spelling. TestGateProbeCatchesEveryKnownGateNeutering
+// (below, plan 172-10 task 2) is evidence that this mechanism works; it is
+// not the mechanism itself.
+//
+// This execution proof and blanketGateRunCommand's exact-equality pin
+// (above) only ever see mutations expressed IN THE COMMAND STRING itself —
+// what gets typed after `run:`. Neither can see a mutation that changes
+// what the workflow does WITHOUT touching that string: a job-level or
+// step-level `env:` declaring a `GOFLAGS` is the reproduced example (CR-02,
+// plan 172-12) — the run line stays byte-identical, so the pin still
+// matches and this harness still executes the same command text and still
+// discriminates. Division of labour across the three mechanisms, named
+// explicitly rather than implied: the exact-equality pin establishes the
+// command is unnarrowed; this execution harness establishes that the
+// unnarrowed command discriminates between a passing and a failing tree;
+// auditWorkflowShape's reviewed key whitelist (plan 172-12) establishes
+// that the workflow reaches that command at all, with no key at workflow,
+// job, trigger or gate-step scope able to redirect or disable it. A
+// mutation outside the command string is caught by the third mechanism and
+// by neither of the first two.
 
 // releaseGateCommandFromWorkflow locates the blanket release-gate step
 // (blanketGateStepName) via the existing stepBlock/runLineOf locators and
@@ -752,12 +779,22 @@ const gateCommandTimeout = 120 * time.Second
 
 // runGateCommand executes command via `sh -c` with cmd.Dir set to dir,
 // bounded by the gateCommandTimeout context deadline, and returns its exit
-// code. cmd.Env is left nil so the subprocess inherits the parent
-// environment implicitly — this file may not name os.Environ
-// (TestWiringGuardsHaveNoRuntimeEscapeHatch rejects it). A command that
-// fails to start, errors for a reason other than a non-zero exit, or hits
-// the deadline is a defect in the harness or the gate command itself, not a
-// pass, so those cases t.Fatalf rather than returning a code.
+// code. cmd.Env is left nil, so the subprocess inherits the LOCAL process
+// environment — the developer's machine or the CI runner's own shell
+// environment — and never the workflow's own declared environment. A
+// `GOFLAGS`, `GOTOOLCHAIN` or `GOEXPERIMENT` set in ci.yml's `env:` would
+// therefore change what CI actually runs while this harness, executing the
+// identical command string, observes nothing — this file may not name
+// os.Environ to go read the workflow's declared env and forward it
+// (TestWiringGuardsHaveNoRuntimeEscapeHatch rejects that). auditWorkflowShape's
+// reviewed key whitelist is the thing that closes that route (`env` is
+// absent from workflowRootAllowedKeys, gateJobAllowedKeys and
+// gateStepAllowedKeys at every scope it can appear), and it is the ONLY
+// thing that does — not "also covered by" this execution harness. A
+// command that fails to start, errors for a reason other than a non-zero
+// exit, or hits the deadline is a defect in the harness or the gate
+// command itself, not a pass, so those cases t.Fatalf rather than
+// returning a code.
 func runGateCommand(t *testing.T, command, dir string) int {
 	t.Helper()
 
@@ -840,11 +877,17 @@ func TestReleaseGateCommandFailsATreeWithAFailingTest(t *testing.T) {
 		t.Fatalf("sh not found on PATH — cannot execute the release gate command: %v", lookErr)
 	}
 
-	// Sanity floor only — NOT the proof, and must never be allowed to become
-	// the proof. A command that contains "go test" could still be neutered
-	// by any of the mutations this plan exists to catch (or by one nobody
-	// has thought of yet); the actual proof is the discrimination assertion
-	// below, which executes the command against both trees.
+	// Sanity floor only — NOT the whole proof, and must never be allowed to
+	// become the proof on its own. A command that contains "go test" could
+	// still be neutered by any of the mutations this plan exists to catch
+	// (or by one nobody has thought of yet); the discrimination assertion
+	// below, which executes the command against both trees, is what
+	// actually proves the command fails on a failing tree. This substring
+	// check IS load-bearing for the same narrow class blanketGateRunCommand's
+	// doc comment names: a narrowing that leaves the probe module's own
+	// single test running (a `-skip` or a `-run` naming only the probe)
+	// would still discriminate correctly and so would not be caught by the
+	// assertion below alone.
 	if command == "" || !strings.Contains(command, "go test") {
 		t.Fatalf("extracted release gate command %q does not look like a go test invocation — refusing to proceed", command)
 	}
