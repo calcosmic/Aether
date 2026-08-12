@@ -1471,3 +1471,430 @@ func TestReleaseGateWorkflowShapeIsWhitelisted(t *testing.T) {
 		t.Fatalf("audit found only %d step(s) in the %q job (measured 20 today) — expected at least 10; a shrunken audit means the whitelist stopped looking, which passes forever, and is therefore fatal", audit.StepCount, gateJobName)
 	}
 }
+
+// Plan 172-12 task 2 (T-172-62, T-172-63).
+//
+// TestReleaseGateWorkflowShapeIsWhitelisted above proves the audit accepts
+// the live workflow and rejects the five known defects it was written
+// against. That alone would not distinguish a genuine whitelist from a
+// disguised blocklist that happens to name exactly those five keys. The
+// test below is the generality proof: it is hermetic (synthetic workflow
+// strings built in the test body, never the live file, so it cannot be
+// quietly satisfied by a change to ci.yml) and it rejects mutations this
+// plan's own source never names — including a loop over invented key
+// names generated at runtime — which is the property that decides whether
+// this phase terminates per 172-STOP-RULE.md.
+
+// testShapeBaseWorkflow is the one minimal, valid synthetic workflow every
+// row below mutates. It is built from the real blanketGateStepName,
+// blanketGateRunCommand and wiringGateStepName constants (never a literal
+// duplicate of them) so it cannot silently drift from what
+// auditWorkflowShape actually looks for.
+var testShapeBaseWorkflow = fmt.Sprintf(`name: Test Workflow
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - name: %s
+        run: %s
+      - name: %s
+        run: go test ./cmd -run 'TestSomething' -count=1 -v
+`, blanketGateStepName, blanketGateRunCommand, wiringGateStepName)
+
+// testShapeBlanketStepNameLine and testShapeWiringStepNameLine are the
+// exact `- name: ...` lines the base workflow carries for the two gate
+// steps, used as insertion markers by the step-scope mutations below.
+var (
+	testShapeBlanketStepNameLine = fmt.Sprintf("      - name: %s\n", blanketGateStepName)
+	testShapeWiringStepNameLine  = fmt.Sprintf("      - name: %s\n", wiringGateStepName)
+)
+
+// testShapeMustInsertAfter inserts insertion immediately after the single
+// occurrence of marker in workflow. It fails the (sub)test immediately if
+// marker is missing or not unique, rather than silently mutating the wrong
+// spot — the hermetic table must stay in sync with its own base template.
+func testShapeMustInsertAfter(t *testing.T, workflow, marker, insertion string) string {
+	t.Helper()
+	if strings.Count(workflow, marker) != 1 {
+		t.Fatalf("test workflow template marker %q does not appear exactly once — the hermetic table is out of sync with its own base template", marker)
+	}
+	idx := strings.Index(workflow, marker)
+	pos := idx + len(marker)
+	return workflow[:pos] + insertion + workflow[pos:]
+}
+
+// testShapeMustReplaceOnce replaces the single occurrence of old in
+// workflow with replacement, failing immediately if old is missing or not
+// unique.
+func testShapeMustReplaceOnce(t *testing.T, workflow, old, replacement string) string {
+	t.Helper()
+	if strings.Count(workflow, old) != 1 {
+		t.Fatalf("test workflow template substring %q does not appear exactly once — the hermetic table is out of sync with its own base template", old)
+	}
+	return strings.Replace(workflow, old, replacement, 1)
+}
+
+// joinAuditErrs renders a slice of auditWorkflowShape errors as one string
+// for substring assertions in the table below.
+func joinAuditErrs(errs []error) string {
+	msgs := make([]string, 0, len(errs))
+	for _, e := range errs {
+		msgs = append(msgs, e.Error())
+	}
+	return strings.Join(msgs, "\n")
+}
+
+// TestWorkflowShapeWhitelistRejectsUnenumeratedKeys is hermetic and
+// table-driven over synthetic workflow strings built in the test body
+// (never the live file), so the guarantee that an unenumerated key is
+// rejected keeps holding on every CI run rather than resting on a
+// one-time transcript against ci.yml.
+func TestWorkflowShapeWhitelistRejectsUnenumeratedKeys(t *testing.T) {
+	type shapeRow struct {
+		name    string
+		mutate  func(t *testing.T, workflow string) string
+		wantErr bool
+		wantSub []string
+		zeroMsg string
+	}
+
+	rows := []shapeRow{
+		{
+			// Row 1: the control. Without this row, a whitelist that
+			// rejects everything would look like a working whitelist —
+			// this proves the base template itself is accepted.
+			name:    "control: the unmutated base workflow returns zero errors",
+			mutate:  func(t *testing.T, wf string) string { return wf },
+			wantErr: false,
+			zeroMsg: "the harness itself is broken (the base template does not even satisfy its own audit), not that a mutation slipped through",
+		},
+
+		// The five known defects (CR-01, CR-02 at two scopes, CR-03), each
+		// mutating the base string.
+		{
+			name: "known defect: job-level continue-on-error",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "    runs-on: ubuntu-latest\n", "    continue-on-error: true\n")
+			},
+			wantErr: true,
+			wantSub: []string{"continue-on-error", `job "go"`},
+		},
+		{
+			name: "known defect: job-level env with GOFLAGS",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "    runs-on: ubuntu-latest\n", "    env:\n      GOFLAGS: -run=TestNothingZZZ\n")
+			},
+			wantErr: true,
+			wantSub: []string{"env", `job "go"`},
+		},
+		{
+			name: "known defect: workflow-root env",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "name: Test Workflow\n", "env:\n  GOFLAGS: -run=TestNothingZZZ\n")
+			},
+			wantErr: true,
+			wantSub: []string{"env", "scope: workflow"},
+		},
+		{
+			name: "known defect: gate-step env",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, testShapeBlanketStepNameLine, "        env:\n          GOFLAGS: -run=TestNothingZZZ\n")
+			},
+			wantErr: true,
+			wantSub: []string{"env", fmt.Sprintf("step %q", blanketGateStepName)},
+		},
+		{
+			name: "known defect: paths-ignore under pull_request",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "  pull_request:\n    branches: [main]\n", "    paths-ignore: ['**']\n")
+			},
+			wantErr: true,
+			wantSub: []string{"paths-ignore", `trigger "pull_request"`},
+		},
+
+		// Generality rows: mutations that are not one of the five known
+		// defects, are not named anywhere in auditWorkflowShape, and would
+		// each be missed by a blocklist.
+		{
+			name: "generality: root concurrency",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "name: Test Workflow\n", "concurrency: ci-${{ github.ref }}\n")
+			},
+			wantErr: true,
+			wantSub: []string{"concurrency", "scope: workflow"},
+		},
+		{
+			name: "generality: root defaults",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "name: Test Workflow\n", "defaults:\n  run:\n    shell: bash\n")
+			},
+			wantErr: true,
+			wantSub: []string{"defaults", "scope: workflow"},
+		},
+		{
+			name: "generality: root permissions",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "name: Test Workflow\n", "permissions: read-all\n")
+			},
+			wantErr: true,
+			wantSub: []string{"permissions", "scope: workflow"},
+		},
+		{
+			name: "generality: trigger types",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "  pull_request:\n    branches: [main]\n", "    types: [opened]\n")
+			},
+			wantErr: true,
+			wantSub: []string{"types", `trigger "pull_request"`},
+		},
+		{
+			name: "generality: trigger branches-ignore",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "  pull_request:\n    branches: [main]\n", "    branches-ignore: [dev]\n")
+			},
+			wantErr: true,
+			wantSub: []string{"branches-ignore", `trigger "pull_request"`},
+		},
+		{
+			name: "generality: trigger paths",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "  pull_request:\n    branches: [main]\n", "    paths: ['**.go']\n")
+			},
+			wantErr: true,
+			wantSub: []string{"paths", `trigger "pull_request"`},
+		},
+		{
+			name: "generality: branches value is not exactly [main]",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustReplaceOnce(t, wf, "  pull_request:\n    branches: [main]\n", "  pull_request:\n    branches: [main-disabled]\n")
+			},
+			wantErr: true,
+			wantSub: []string{"branches:", `trigger "pull_request"`},
+		},
+		{
+			name: "generality: job timeout-minutes",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "    runs-on: ubuntu-latest\n", "    timeout-minutes: 1\n")
+			},
+			wantErr: true,
+			wantSub: []string{"timeout-minutes", `job "go"`},
+		},
+		{
+			name: "generality: job strategy",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "    runs-on: ubuntu-latest\n", "    strategy:\n      matrix:\n        os: [ubuntu-latest]\n")
+			},
+			wantErr: true,
+			wantSub: []string{"strategy", `job "go"`},
+		},
+		{
+			name: "generality: job needs",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "    runs-on: ubuntu-latest\n", "    needs: []\n")
+			},
+			wantErr: true,
+			wantSub: []string{"needs", `job "go"`},
+		},
+		{
+			name: "generality: job if",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "    runs-on: ubuntu-latest\n", "    if: success()\n")
+			},
+			wantErr: true,
+			wantSub: []string{`"if"`, `job "go"`},
+		},
+		{
+			name: "generality: gate-step working-directory",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, testShapeBlanketStepNameLine, "        working-directory: .\n")
+			},
+			wantErr: true,
+			wantSub: []string{"working-directory", fmt.Sprintf("step %q", blanketGateStepName)},
+		},
+		{
+			name: "generality: gate-step shell",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, testShapeWiringStepNameLine, "        shell: bash\n")
+			},
+			wantErr: true,
+			wantSub: []string{"shell", fmt.Sprintf("step %q", wiringGateStepName)},
+		},
+		{
+			name: "generality: gate-step continue-on-error (step-level, not job-level)",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, testShapeBlanketStepNameLine, "        continue-on-error: true\n")
+			},
+			wantErr: true,
+			wantSub: []string{"continue-on-error", fmt.Sprintf("step %q", blanketGateStepName)},
+		},
+		{
+			name: "generality: on key missing entirely",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustReplaceOnce(t, wf, "\non:\n  pull_request:\n    branches: [main]\n  push:\n    branches: [main]\n", "\n")
+			},
+			wantErr: true,
+			wantSub: []string{`"on"`},
+		},
+		{
+			name: "generality: extra workflow_dispatch trigger",
+			mutate: func(t *testing.T, wf string) string {
+				return testShapeMustInsertAfter(t, wf, "on:\n", "  workflow_dispatch: {}\n")
+			},
+			wantErr: true,
+			wantSub: []string{"workflow_dispatch"},
+		},
+		{
+			name: "generality: a second step also named the blanket gate step's name",
+			mutate: func(t *testing.T, wf string) string {
+				return wf + fmt.Sprintf("      - name: %s\n        run: echo decoy\n", blanketGateStepName)
+			},
+			wantErr: true,
+			wantSub: []string{fmt.Sprintf("named %q", blanketGateStepName), "found 2"},
+		},
+
+		{
+			// Negative control: only the two gate steps are audited. A
+			// non-gate step carrying uses/with/env must not trip the
+			// audit, or a whitelist scoped wider than the gate steps
+			// would break ordinary CI work that has nothing to do with
+			// the release gate.
+			name: "negative control: a non-gate step with uses/with/env returns zero errors",
+			mutate: func(t *testing.T, wf string) string {
+				return wf + "      - name: Some Other Step\n        uses: actions/checkout@v4\n        with:\n          foo: bar\n        env:\n          BAZ: qux\n"
+			},
+			wantErr: false,
+			zeroMsg: "a whitelist scoped wider than the gate steps would break ordinary CI work that has nothing to do with the release gate",
+		},
+	}
+
+	if len(rows) < 24 {
+		t.Fatalf("shapeRow table has only %d row(s) — expected at least 24 (control + 5 known defects + 17 generality rows + negative control)", len(rows))
+	}
+
+	notKnownDefectCount := 0
+	for _, row := range rows {
+		if strings.HasPrefix(row.name, "generality:") || strings.HasPrefix(row.name, "negative control:") {
+			notKnownDefectCount++
+		}
+	}
+	if notKnownDefectCount < 17 {
+		t.Fatalf("only %d row(s) are NOT among the five known defects — expected at least 17", notKnownDefectCount)
+	}
+
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			workflow := row.mutate(t, testShapeBaseWorkflow)
+			_, errs := auditWorkflowShape(workflow)
+			if row.wantErr {
+				if len(errs) == 0 {
+					t.Fatalf("mutation %q was expected to be rejected but auditWorkflowShape returned zero errors", row.name)
+				}
+				joined := joinAuditErrs(errs)
+				for _, sub := range row.wantSub {
+					if !strings.Contains(joined, sub) {
+						t.Fatalf("mutation %q errors do not contain %q:\n%s", row.name, sub, joined)
+					}
+				}
+			} else if len(errs) != 0 {
+				msg := row.zeroMsg
+				if msg == "" {
+					msg = "expected zero errors"
+				}
+				t.Fatalf("mutation %q was expected to return zero errors but got %d — %s:\n%s", row.name, len(errs), msg, joinAuditErrs(errs))
+			}
+		})
+	}
+
+	// Row 25: the strongest generality proof, as a loop rather than a
+	// table entry. Twelve invented key names, fixed and written directly
+	// in this file, plus one built by string concatenation at runtime so
+	// its exact value never appears as a literal anywhere in source, are
+	// each injected at all four scopes this audit inspects (job, workflow
+	// root, trigger, gate step) and every single injection must be
+	// rejected, with the key named in the error. This establishes that
+	// the whitelist rejects a key BECAUSE it is absent from a reviewed
+	// list, not because anyone predicted it — the property that decides
+	// whether this phase terminates (172-STOP-RULE.md).
+	t.Run("generality loop: twelve-plus invented key names rejected at all four scopes", func(t *testing.T) {
+		fixedNames := []string{
+			"zzz-unreviewed-key-1", "zzz-unreviewed-key-2", "zzz-unreviewed-key-3",
+			"zzz-unreviewed-key-4", "zzz-unreviewed-key-5", "zzz-unreviewed-key-6",
+			"zzz-unreviewed-key-7", "zzz-unreviewed-key-8", "zzz-unreviewed-key-9",
+			"zzz-unreviewed-key-10", "zzz-unreviewed-key-11", "zzz-unreviewed-key-12",
+		}
+		// extraName is built by concatenating a prefix and an index at
+		// runtime, rather than written as a single literal string
+		// anywhere in this file — so this specific injected value could
+		// not have been anticipated by reading the file's literals.
+		extraPrefix := "zzz-unreviewed-key-extra-"
+		extraName := extraPrefix + fmt.Sprintf("%d", 13)
+		names := append(append([]string{}, fixedNames...), extraName)
+
+		if len(names) < 12 {
+			t.Fatalf("only %d invented key name(s) — expected at least 12", len(names))
+		}
+
+		type scopeInjector struct {
+			scope  string
+			inject func(t *testing.T, wf, key string) string
+		}
+		scopes := []scopeInjector{
+			{
+				scope: "job",
+				inject: func(t *testing.T, wf, key string) string {
+					return testShapeMustInsertAfter(t, wf, "    runs-on: ubuntu-latest\n", fmt.Sprintf("    %s: true\n", key))
+				},
+			},
+			{
+				scope: "workflow-root",
+				inject: func(t *testing.T, wf, key string) string {
+					return testShapeMustInsertAfter(t, wf, "name: Test Workflow\n", fmt.Sprintf("%s: true\n", key))
+				},
+			},
+			{
+				scope: "trigger",
+				inject: func(t *testing.T, wf, key string) string {
+					return testShapeMustInsertAfter(t, wf, "  pull_request:\n    branches: [main]\n", fmt.Sprintf("    %s: true\n", key))
+				},
+			},
+			{
+				scope: "gate-step",
+				inject: func(t *testing.T, wf, key string) string {
+					return testShapeMustInsertAfter(t, wf, testShapeBlanketStepNameLine, fmt.Sprintf("        %s: true\n", key))
+				},
+			},
+		}
+
+		attempted := 0
+		rejected := 0
+		for _, key := range names {
+			for _, sc := range scopes {
+				attempted++
+				mutated := sc.inject(t, testShapeBaseWorkflow, key)
+				_, errs := auditWorkflowShape(mutated)
+				joined := joinAuditErrs(errs)
+				if len(errs) > 0 && strings.Contains(joined, key) {
+					rejected++
+				} else {
+					t.Errorf("invented key %q at scope %q was NOT rejected naming that key — this injection slipped through:\n%s", key, sc.scope, joined)
+				}
+			}
+		}
+
+		t.Logf("invented-key generality loop: %d name(s) x %d scope(s) = %d injection(s) attempted, %d rejected", len(names), len(scopes), attempted, rejected)
+
+		if attempted < 48 {
+			t.Fatalf("attempted only %d injection(s) — expected at least 48 (twelve names x four scopes); a loop that silently walks fewer iterations must fail", attempted)
+		}
+		if rejected != attempted {
+			t.Fatalf("%d of %d injection(s) were rejected — expected all %d to be rejected", rejected, attempted, attempted)
+		}
+	})
+}
