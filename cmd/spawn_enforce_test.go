@@ -118,7 +118,12 @@ func TestSpawnCanSpawnAcceptsDocumentedInvocation(t *testing.T) {
 
 	// Now actually execute it in-process, with the concrete depth the
 	// placeholder {your_depth} stands in for, and confirm the observable
-	// behaviour workers.md:292 promises: it runs and exits 0.
+	// behaviour workers.md:292 promises: it runs and exits 0. Depth 1 is
+	// used (not the pre-Task-1-cap value of 5) because it is a real,
+	// legal requester depth under D-01's cap (spawnMaxDelegationDepth=2):
+	// this test proves the documented invocation SHAPE resolves, not any
+	// particular depth value, and a value the real cap would now deny
+	// would make this test indistinguishable from a cap regression.
 	var buf, errBuf bytes.Buffer
 	stdout = &buf
 	stderr = &errBuf
@@ -128,9 +133,9 @@ func TestSpawnCanSpawnAcceptsDocumentedInvocation(t *testing.T) {
 	store = s
 
 	renderedCommandExitCode.Store(0)
-	rootCmd.SetArgs([]string{"spawn-can-spawn", "5", "--enforce"})
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "1", "--enforce"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("documented invocation (depth 5, --enforce) failed: %v\nstderr: %s", err, errBuf.String())
+		t.Fatalf("documented invocation (depth 1, --enforce) failed: %v\nstderr: %s", err, errBuf.String())
 	}
 	if code := int(renderedCommandExitCode.Load()); code != 0 {
 		t.Fatalf("documented invocation set exit code %d; workers.md:292 promises it exits 0: %s", code, errBuf.String())
@@ -144,8 +149,8 @@ func TestSpawnCanSpawnAcceptsDocumentedInvocation(t *testing.T) {
 	if result["can_spawn"] != true {
 		t.Fatalf("expected can_spawn true, got: %s", buf.String())
 	}
-	if depth, _ := result["depth"].(float64); depth != 5 {
-		t.Fatalf("expected depth 5, got: %s", buf.String())
+	if depth, _ := result["depth"].(float64); depth != 1 {
+		t.Fatalf("expected depth 1, got: %s", buf.String())
 	}
 }
 
@@ -161,8 +166,8 @@ func TestSpawnCanSpawnEnforceDeniesWithNonZeroExit(t *testing.T) {
 
 	origDecision := spawnCanSpawnDecision
 	defer func() { spawnCanSpawnDecision = origDecision }()
-	spawnCanSpawnDecision = func(depth int) (bool, string) {
-		return false, "depth exceeds cap"
+	spawnCanSpawnDecision = func(in spawnDecisionInput) spawnDecisionResult {
+		return spawnDecisionResult{Allowed: false, Reason: "depth", Detail: "depth exceeds cap"}
 	}
 
 	s, tmpDir := newTestStore(t)
@@ -251,9 +256,16 @@ func runSpawnLogExpectingSuccess(t *testing.T, buf, errBuf *bytes.Buffer, args [
 }
 
 // TestSpawnLogDerivesDepthFromRecordedParent is the direct SPAWN-02 proof:
-// a three-level tree recorded entirely with --depth 0 on every call must
-// still report the true derived depths (1, 2, 3) once parsed back out of
-// the spawn tree — the recorder, not the caller, is the authority.
+// a two-level tree recorded entirely with --depth 0 on every call must
+// still report the true derived depths (1, 2) once parsed back out of the
+// spawn tree — the recorder, not the caller, is the authority.
+//
+// A third level (X1, would-be depth 3) is deliberately NOT attempted here:
+// Phase 173's spawnMaxDelegationDepth cap (D-01, introduced in this plan)
+// now refuses any spawn past depth 2, so a three-level tree can no longer
+// be constructed via spawn-log at all. That refusal is proven directly by
+// TestSpawnLogRefusesPastCapAndWritesNoEntry below; this test's remaining
+// job is derivation correctness within the levels the cap still permits.
 func TestSpawnLogDerivesDepthFromRecordedParent(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -268,7 +280,6 @@ func TestSpawnLogDerivesDepthFromRecordedParent(t *testing.T) {
 
 	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "W1", "0"))
 	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("W1", "H1", "0"))
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("H1", "X1", "0"))
 
 	st := agent.NewSpawnTree(store, "spawn-tree.txt")
 	entries, err := st.Parse()
@@ -285,9 +296,6 @@ func TestSpawnLogDerivesDepthFromRecordedParent(t *testing.T) {
 	}
 	if got, want := depthByName["H1"], 2; got != want {
 		t.Fatalf("H1 recorded depth = %d, want %d", got, want)
-	}
-	if got, want := depthByName["X1"], 3; got != want {
-		t.Fatalf("X1 recorded depth = %d, want %d", got, want)
 	}
 }
 
@@ -401,6 +409,260 @@ func TestSpawnLogRefusesAnUnknownParentAndWritesNothing(t *testing.T) {
 	}
 	if afterLen != beforeLen {
 		t.Fatalf("spawn-tree.txt byte length changed after a refused spawn: before=%d after=%d — a refusal must write nothing", beforeLen, afterLen)
+	}
+}
+
+// Plan 173-04, task 2 (SPAWN-01 red-proofs).
+//
+// The five tests below prove the real depth-cap decision (task 1) by
+// execution: the guard has never returned can_spawn: false for any input it
+// has received, until now.
+
+// TestSpawnCanSpawnDeniesPastDepthCap is SPAWN-01 verbatim: no substitution
+// — this drives the real spawnCanSpawnDecision. A requester depth of 99 must
+// deny both with and without --enforce, and the reason/detail must reach the
+// caller both ways (exit code + message under --enforce; JSON payload
+// without it).
+func TestSpawnCanSpawnDeniesPastDepthCap(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "99", "--enforce"})
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("spawn-can-spawn 99 --enforce did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	env := parseEnvelope(t, errBuf.String())
+	errMsg, _ := env["error"].(string)
+	if !strings.Contains(errMsg, fmt.Sprintf("%d", spawnMaxDelegationDepth)) {
+		t.Fatalf("deny message does not name the cap %d: %s", spawnMaxDelegationDepth, errBuf.String())
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	if err := spawnCanSpawnCmd.Flags().Set("enforce", "false"); err != nil {
+		t.Fatalf("reset --enforce flag: %v", err)
+	}
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "99"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-can-spawn 99 (no --enforce) should still succeed as a report: %v\nstderr: %s", err, errBuf.String())
+	}
+	if code := int(renderedCommandExitCode.Load()); code != 0 {
+		t.Fatalf("spawn-can-spawn 99 without --enforce set exit code %d; absence of --enforce must not silently gate: %s", code, errBuf.String())
+	}
+	okEnv := parseEnvelope(t, buf.String())
+	result, _ := okEnv["result"].(map[string]interface{})
+	if result == nil || result["can_spawn"] != false {
+		t.Fatalf("spawn-can-spawn 99 without --enforce does not report can_spawn false: %s", buf.String())
+	}
+	if result["reason"] != "depth" {
+		t.Fatalf("expected reason %q, got %v: %s", "depth", result["reason"], buf.String())
+	}
+	detail, _ := result["detail"].(string)
+	if detail == "" {
+		t.Fatalf("expected a non-empty detail explaining the denial: %s", buf.String())
+	}
+}
+
+// TestSpawnCanSpawnAllowsWithinCap is the negative control: without it,
+// TestSpawnCanSpawnDeniesPastDepthCap could also be satisfied by a guard
+// that denies every input, cap or no cap.
+func TestSpawnCanSpawnAllowsWithinCap(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	for _, depth := range []string{"0", "1"} {
+		buf.Reset()
+		errBuf.Reset()
+		renderedCommandExitCode.Store(0)
+		rootCmd.SetArgs([]string{"spawn-can-spawn", depth, "--enforce"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("spawn-can-spawn %s --enforce failed: %v\nstderr: %s", depth, err, errBuf.String())
+		}
+		if code := int(renderedCommandExitCode.Load()); code != 0 {
+			t.Fatalf("spawn-can-spawn %s --enforce exited %d, want 0: %s", depth, code, errBuf.String())
+		}
+		env := parseEnvelope(t, buf.String())
+		result, _ := env["result"].(map[string]interface{})
+		if result == nil || result["can_spawn"] != true {
+			t.Fatalf("spawn-can-spawn %s --enforce did not report can_spawn true: %s", depth, buf.String())
+		}
+	}
+}
+
+// TestSpawnLogRefusesPastCapAndWritesNoEntry is ROADMAP criterion 1's second
+// half and D-09 together: a spawn attempted past the cap must exit
+// non-zero, name the would-be parent and the reason, and leave
+// spawn-tree.txt byte-identical to before the attempt — not merely the
+// entry count, the bytes.
+func TestSpawnLogRefusesPastCapAndWritesNoEntry(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	// Queen -> W1 (depth 1) -> H1 (depth 2): reaching the cap legitimately.
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "W1", "0"))
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("W1", "H1", "0"))
+
+	before, err := store.ReadFile("spawn-tree.txt")
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt before attempt: %v", err)
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("H1", "X1", "0"))
+	_ = rootCmd.Execute()
+
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("spawn-log past the cap did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	env := parseEnvelope(t, errBuf.String())
+	errMsg, _ := env["error"].(string)
+	if !strings.Contains(errMsg, "H1") {
+		t.Fatalf("error message does not name the would-be parent %q: %s", "H1", errBuf.String())
+	}
+	if !strings.Contains(errMsg, fmt.Sprintf("%d", spawnMaxDelegationDepth)) {
+		t.Fatalf("error message does not name the cap %d: %s", spawnMaxDelegationDepth, errBuf.String())
+	}
+
+	after, err := store.ReadFile("spawn-tree.txt")
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt after attempt: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("spawn-tree.txt bytes changed after a refused spawn:\nbefore=%q\nafter=%q", before, after)
+	}
+}
+
+// TestSpawnCanSpawnPositionalStillWinsOverFlag locks the dual-input contract
+// against the widening: the positional depth argument must still win over
+// --depth when both are present (D-14 / .aether/workers.md:292).
+func TestSpawnCanSpawnPositionalStillWinsOverFlag(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	// Positional 5 (past the cap) with --depth 0 (within the cap): must
+	// deny, proving the positional value was used, not the flag's.
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "5", "--depth", "0", "--enforce"})
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("spawn-can-spawn 5 --depth 0 --enforce did not deny; positional 5 should have won over --depth 0: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+
+	// Positional 0 (within the cap) with --depth 5 (past the cap): must
+	// allow, proving the same thing from the other direction.
+	buf.Reset()
+	errBuf.Reset()
+	if err := spawnCanSpawnCmd.Flags().Set("enforce", "false"); err != nil {
+		t.Fatalf("reset --enforce flag: %v", err)
+	}
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "0", "--depth", "5", "--enforce"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-can-spawn 0 --depth 5 --enforce failed: %v\nstderr: %s", err, errBuf.String())
+	}
+	if code := int(renderedCommandExitCode.Load()); code != 0 {
+		t.Fatalf("spawn-can-spawn 0 --depth 5 --enforce exited %d, want 0; positional 0 should have won over --depth 5: %s", code, errBuf.String())
+	}
+}
+
+// TestSpawnCanSpawnNameOverridesClaimedDepth is the bounded RESIDUE proof:
+// spawn-can-spawn without --name is advisory (reports on a depth the caller
+// states about itself); with --name resolving to a recorded entry, the
+// recorded depth overrides the claim and the answer is authoritative.
+func TestSpawnCanSpawnNameOverridesClaimedDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	// Queen -> W1 (depth 1) -> H1 (depth 2).
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "W1", "0"))
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("W1", "H1", "0"))
+
+	// H1's recorded depth (2) beats its claimed depth (0): --name H1 must
+	// deny even though the caller claimed 0.
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "0", "--name", "H1", "--enforce"})
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("spawn-can-spawn 0 --name H1 --enforce did not deny; H1's recorded depth (2) should have overridden the claimed 0: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	env := parseEnvelope(t, errBuf.String())
+	errMsg, _ := env["error"].(string)
+	if !strings.Contains(errMsg, "H1") {
+		t.Fatalf("deny message does not name the requester %q: %s", "H1", errBuf.String())
+	}
+
+	// Without --name, the same claimed depth (0) is trusted advisory input
+	// and allows — the bounded statement of the residue.
+	buf.Reset()
+	errBuf.Reset()
+	if err := spawnCanSpawnCmd.Flags().Set("enforce", "false"); err != nil {
+		t.Fatalf("reset --enforce flag: %v", err)
+	}
+	if err := spawnCanSpawnCmd.Flags().Set("name", ""); err != nil {
+		t.Fatalf("reset --name flag: %v", err)
+	}
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "0", "--enforce"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-can-spawn 0 --enforce (no --name) failed: %v\nstderr: %s", err, errBuf.String())
+	}
+	if code := int(renderedCommandExitCode.Load()); code != 0 {
+		t.Fatalf("spawn-can-spawn 0 --enforce (no --name) exited %d, want 0: %s", code, errBuf.String())
+	}
+	okEnv := parseEnvelope(t, buf.String())
+	result, _ := okEnv["result"].(map[string]interface{})
+	if result == nil || result["can_spawn"] != true {
+		t.Fatalf("spawn-can-spawn 0 --enforce (no --name) did not report can_spawn true: %s", buf.String())
+	}
+	if result["authoritative"] != false {
+		t.Fatalf("spawn-can-spawn 0 --enforce (no --name) reported authoritative %v, want false: %s", result["authoritative"], buf.String())
 	}
 }
 

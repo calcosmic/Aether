@@ -964,7 +964,13 @@ func TestSpawnCanSpawn(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	store = s
 
-	rootCmd.SetArgs([]string{"spawn-can-spawn", "--depth", "3"})
+	// Depth 1 (not 3): Phase 173's spawnMaxDelegationDepth cap denies a
+	// requester depth of 3 (prospective child depth 4, past the cap of 2).
+	// This test's purpose is confirming the flag-only form resolves and
+	// reports a result, not exercising the cap itself — see
+	// cmd/spawn_enforce_test.go's TestSpawnCanSpawnDeniesPastDepthCap and
+	// TestSpawnCanSpawnAllowsWithinCap for the dedicated cap proofs.
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "--depth", "1"})
 
 	err := rootCmd.Execute()
 	if err != nil {

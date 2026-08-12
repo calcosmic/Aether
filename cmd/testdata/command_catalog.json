@@ -7744,7 +7744,8 @@
     "short_description": "Check if spawning is allowed at given depth",
     "flags": [
       "depth",
-      "enforce"
+      "enforce",
+      "name"
     ],
     "parent_command": "",
     "has_subcommands": false,
