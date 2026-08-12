@@ -91,9 +91,12 @@ var yamlRuntimeCommandRe = regexp.MustCompile(`(?m)^\s*command:\s*"(.*)"\s*$`)
 var binPathAssignRe = regexp.MustCompile(`^\s*([A-Za-z_][A-Za-z0-9_]*)=.*/aether"?\s*$`)
 
 // skillLifecycleOrphanCandidates carries D-08's queryable reason tag: any of
-// these eight names the scanner actually reports as an orphan is tagged
+// these eight LEAF names the scanner actually reports as an orphan is tagged
 // "skill-lifecycle" / owner_phase "178", because Phase 178's success
-// criterion measures this exact set reaching zero.
+// criterion measures this exact set reaching zero. This is the reviewed
+// source list, kept leaf-keyed because that is how the set was reviewed and
+// named in CONTEXT.md ("8 skill entries") — resolveSkillLifecyclePaths turns
+// it into the path-keyed map every consumer actually looks up against.
 var skillLifecycleOrphanCandidates = map[string]bool{
 	"skill-index":             true,
 	"skill-detect":            true,
@@ -103,6 +106,26 @@ var skillLifecycleOrphanCandidates = map[string]bool{
 	"skill-diff":              true,
 	"skill-parse-frontmatter": true,
 	"skill-cache-rebuild":     true,
+}
+
+// resolveSkillLifecyclePaths resolves every reviewed leaf name in
+// skillLifecycleOrphanCandidates through the real cobra tree and returns the
+// path-keyed set writeOrphanAllowlist and the D-08 assertion block both look
+// up against. Never hand-written: a leaf name that fails to resolve to a
+// real, non-root command t.Fatalf's by name, because a silently unresolvable
+// name would make the D-08 assertion (and Phase 178's finish line, which
+// measures this exact set reaching zero) vacuous.
+func resolveSkillLifecyclePaths(t *testing.T) map[string]bool {
+	t.Helper()
+	paths := make(map[string]bool, len(skillLifecycleOrphanCandidates))
+	for leaf := range skillLifecycleOrphanCandidates {
+		target, _, err := rootCmd.Find([]string{leaf})
+		if err != nil || target == nil || target == rootCmd {
+			t.Fatalf("reviewed skill-lifecycle leaf name %q did not resolve to a real, registered command via rootCmd.Find — the D-08 assertion would be vacuous", leaf)
+		}
+		paths[target.CommandPath()] = true
+	}
+	return paths
 }
 
 // orphanAllowlistEntry is one committed exemption. D-08: every entry carries
@@ -317,16 +340,21 @@ func extractYAMLRuntimeCommand(path string) (string, []string, bool) {
 	return name, fields[idx+2:], true
 }
 
-// collectYAMLRuntimeCommandNames returns every command name reachable via a
-// `runtime.command` field in dir, used only by the non-vacuity guard in
-// TestNoRegisteredSubcommandIsUnreferenced to prove the evidence set is
-// resolved at runtime rather than hardcoded.
-func collectYAMLRuntimeCommandNames(dir string) []string {
+// collectYAMLRuntimeCommandPaths returns every resolved command PATH
+// reachable via a `runtime.command` field in dir, used only by the
+// non-vacuity guard in TestNoRegisteredSubcommandIsUnreferenced to prove the
+// evidence set is resolved at runtime rather than hardcoded. Renamed from
+// collectYAMLRuntimeCommandNames and resolved through rootCmd.Find (the same
+// truncation rule credit() uses) so its output vocabulary matches the
+// path-keyed evidence set it is compared against — a bare-name comparison
+// against a path-keyed set would report the non-vacuity check as broken for
+// a vocabulary-mismatch reason that has nothing to do with a real regression.
+func collectYAMLRuntimeCommandPaths(dir string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
-	var names []string
+	var paths []string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -335,11 +363,28 @@ func collectYAMLRuntimeCommandNames(dir string) []string {
 		if ext != ".yaml" && ext != ".yml" {
 			continue
 		}
-		if name, _, ok := extractYAMLRuntimeCommand(filepath.Join(dir, e.Name())); ok {
-			names = append(names, name)
+		name, args, ok := extractYAMLRuntimeCommand(filepath.Join(dir, e.Name()))
+		if !ok {
+			continue
+		}
+		argv := []string{name}
+		for _, a := range args {
+			if isShellOperator(a) || isPlaceholder(a) {
+				break
+			}
+			if strings.HasPrefix(a, "-") {
+				break
+			}
+			if !subcommandNameShapeRe.MatchString(a) {
+				break
+			}
+			argv = append(argv, a)
+		}
+		if target, _, ferr := rootCmd.Find(argv); ferr == nil && target != nil && target != rootCmd {
+			paths = append(paths, target.CommandPath())
 		}
 	}
-	return names
+	return paths
 }
 
 // discoverBinaryPathVars finds shell variables assigned a value ending in
@@ -690,8 +735,24 @@ func collectSubstitutionCallerNames(t *testing.T, root string) map[string]bool {
 				continue
 			}
 			for _, c := range extractDocumentedCalls(t, filepath.Join(dir, e.Name())) {
-				if strings.Contains(c.Raw, "$(") {
-					names[c.Command] = true
+				if !strings.Contains(c.Raw, "$(") {
+					continue
+				}
+				argv := []string{c.Command}
+				for _, a := range c.Args {
+					if isShellOperator(a) || isPlaceholder(a) {
+						break
+					}
+					if strings.HasPrefix(a, "-") {
+						break
+					}
+					if !subcommandNameShapeRe.MatchString(a) {
+						break
+					}
+					argv = append(argv, a)
+				}
+				if target, _, ferr := rootCmd.Find(argv); ferr == nil && target != nil && target != rootCmd {
+					names[target.CommandPath()] = true
 				}
 			}
 		}
@@ -725,8 +786,25 @@ func collectSubstitutionCallerNames(t *testing.T, root string) map[string]bool {
 						continue
 					}
 					name := normalizeShellToken(fields[j+1])
-					if subcommandNameShapeRe.MatchString(name) {
-						names[name] = true
+					if !subcommandNameShapeRe.MatchString(name) {
+						continue
+					}
+					argv := []string{name}
+					for k := j + 2; k < len(fields); k++ {
+						a := fields[k]
+						if isShellOperator(a) || isPlaceholder(a) {
+							break
+						}
+						if strings.HasPrefix(a, "-") {
+							break
+						}
+						if !subcommandNameShapeRe.MatchString(a) {
+							break
+						}
+						argv = append(argv, a)
+					}
+					if target, _, ferr := rootCmd.Find(argv); ferr == nil && target != nil && target != rootCmd {
+						names[target.CommandPath()] = true
 					}
 				}
 			}
@@ -811,10 +889,11 @@ func loadOrphanAllowlist(t *testing.T, path string) []orphanAllowlistEntry {
 // testdata/orphan_allowlist.json ONLY — never the baseline (D-11).
 func writeOrphanAllowlist(t *testing.T, orphans []string) {
 	t.Helper()
+	skillPaths := resolveSkillLifecyclePaths(t)
 	entries := make([]orphanAllowlistEntry, 0, len(orphans))
 	for _, name := range orphans {
 		reason, owner := "unreviewed-pre-existing", "RECLAIM"
-		if skillLifecycleOrphanCandidates[name] {
+		if skillPaths[name] {
 			reason, owner = "skill-lifecycle", "178"
 		}
 		entries = append(entries, orphanAllowlistEntry{Name: name, Reason: reason, OwnerPhase: owner})
@@ -920,22 +999,22 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 		t.Fatal("caller-evidence set is empty — the scan is not looking at anything, which would pass vacuously forever")
 	}
 
-	// Non-vacuity: the evidence set must contain a name resolved at runtime
+	// Non-vacuity: the evidence set must contain a path resolved at runtime
 	// from a real .aether/commands/*.yaml runtime.command field, not a
 	// hardcoded string.
-	yamlNames := collectYAMLRuntimeCommandNames(filepath.Join(root, ".aether", "commands"))
-	if len(yamlNames) == 0 {
-		t.Fatal("found zero .aether/commands/*.yaml runtime.command fields — cannot prove caller evidence is resolved at runtime")
+	yamlPaths := collectYAMLRuntimeCommandPaths(filepath.Join(root, ".aether", "commands"))
+	if len(yamlPaths) == 0 {
+		t.Fatal("found zero .aether/commands/*.yaml runtime.command fields resolving to a real command — cannot prove caller evidence is resolved at runtime")
 	}
 	foundYAMLEvidence := false
-	for _, n := range yamlNames {
-		if evidence[n] {
+	for _, p := range yamlPaths {
+		if evidence[p] {
 			foundYAMLEvidence = true
 			break
 		}
 	}
 	if !foundYAMLEvidence {
-		t.Fatal("caller-evidence set contains none of the commands named by a .aether/commands/*.yaml runtime.command field — the menu-spec scan is not working")
+		t.Fatal("caller-evidence set contains none of the command paths named by a .aether/commands/*.yaml runtime.command field — the menu-spec scan is not working")
 	}
 
 	// T-172-07 / token-boundary proof: "skill-list" is a literal substring of
@@ -950,10 +1029,10 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 			t.Fatalf("write token-boundary fixture: %v", err)
 		}
 		boundaryNames := singleFileCallerNames(t, boundaryFile)
-		if boundaryNames["skill-list"] {
-			t.Error("a documented call to skill-list-lifecycle incorrectly credited skill-list as having a caller — this is the exact substring-match failure T-172-07 guards against")
+		if boundaryNames["aether skill-list"] {
+			t.Error("a documented call to skill-list-lifecycle incorrectly credited aether skill-list as having a caller — this is the exact substring-match failure T-172-07 guards against")
 		}
-		if !boundaryNames["skill-list-lifecycle"] {
+		if !boundaryNames["aether skill-list-lifecycle"] {
 			t.Error("a documented call to skill-list-lifecycle was not credited at all")
 		}
 	}
@@ -994,10 +1073,11 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 	// unrelated authoring commands (skill-archive, skill-patch, skill-pin,
 	// skill-promote, skill-view, skill-list-lifecycle) are a different
 	// subsystem and correctly fall through to "unreviewed-pre-existing".
-	for name := range skillLifecycleOrphanCandidates {
+	skillPaths := resolveSkillLifecyclePaths(t)
+	for path := range skillPaths {
 		for _, e := range allowlist {
-			if e.Name == name && e.OwnerPhase != "178" {
-				t.Errorf("%q is one of the eight reviewed skill-lifecycle orphan candidates but carries owner_phase %q, want \"178\"", name, e.OwnerPhase)
+			if e.Name == path && e.OwnerPhase != "178" {
+				t.Errorf("%q is one of the eight reviewed skill-lifecycle orphan candidates but carries owner_phase %q, want \"178\"", path, e.OwnerPhase)
 			}
 		}
 	}
@@ -1091,6 +1171,10 @@ func TestCallerEvidenceCreditsCommandSubstitution(t *testing.T) {
 	}
 
 	t.Run("half_a_real_corpora", func(t *testing.T) {
+		// allowlist entries are (post-migration) path-keyed strings, matching
+		// collectSubstitutionCallerNames's now path-keyed output directly —
+		// no resolution needed on this half, since both sides are already in
+		// the same vocabulary.
 		allowlist := loadOrphanAllowlist(t, "testdata/orphan_allowlist.json")
 		subNames := collectSubstitutionCallerNames(t, root)
 
@@ -1112,21 +1196,36 @@ func TestCallerEvidenceCreditsCommandSubstitution(t *testing.T) {
 		if len(allowlist) == 0 {
 			t.Fatal("allowlist is empty — half B cannot pick a name to build the synthetic caller from, which would make this half vacuous")
 		}
-		name := allowlist[0].Name
+		// Resolve the chosen allowlist entry through rootCmd.Find — the same
+		// entry point credit() uses — to get its real, canonical
+		// CommandPath(). This tolerates the allowlist entry being either a
+		// bare leaf name (pre-migration) or a full "aether ..." path
+		// (post-migration): TrimPrefix is a no-op on a bare name, and Find
+		// resolves either shape to the one real command it names. The
+		// synthetic invocation text is built from that resolved path, and
+		// the assertion below checks evidence for that same resolved path —
+		// proving the synthetic caller shape is credited under the exact key
+		// computeOrphanNames will look up, regardless of allowlist key format.
+		entryName := allowlist[0].Name
+		target, _, ferr := rootCmd.Find(strings.Fields(strings.TrimPrefix(entryName, "aether ")))
+		if ferr != nil || target == nil || target == rootCmd {
+			t.Fatalf("allowlist entry %q did not resolve via rootCmd.Find — half B cannot build a synthetic caller for it", entryName)
+		}
+		invocation := target.CommandPath()
 
 		tmp := t.TempDir()
 		wrapperDir := filepath.Join(tmp, ".claude", "commands", "ant")
 		if err := os.MkdirAll(wrapperDir, 0755); err != nil {
 			t.Fatalf("mkdir synthetic wrapper dir: %v", err)
 		}
-		content := "```bash\nresult=$(aether " + name + " --some-flag)\n```\n"
+		content := "```bash\nresult=$(" + invocation + " --some-flag)\n```\n"
 		if err := os.WriteFile(filepath.Join(wrapperDir, "substitution-fixture.md"), []byte(content), 0644); err != nil {
 			t.Fatalf("write synthetic fixture: %v", err)
 		}
 
 		evidence := collectCallerEvidence(t, tmp, nil)
-		if !evidence[name] {
-			t.Errorf("collectCallerEvidence did not credit %q from a synthetic `result=$(aether %s --some-flag)` caller — the seeding scan would be blind to this shape", name, name)
+		if !evidence[invocation] {
+			t.Errorf("collectCallerEvidence did not credit %q from a synthetic `result=$(%s --some-flag)` caller — the seeding scan would be blind to this shape", invocation, invocation)
 		}
 	})
 }
@@ -1191,8 +1290,9 @@ func TestRatchetDetectsASyntheticOrphan(t *testing.T) {
 		t.Fatalf("resolve repo root: %v", err)
 	}
 
-	const orphanName = "ratchet-selftest-orphan"
-	selftest := &cobra.Command{Use: orphanName, Run: func(*cobra.Command, []string) {}}
+	const orphanLeaf = "ratchet-selftest-orphan"
+	const orphanPath = "aether " + orphanLeaf
+	selftest := &cobra.Command{Use: orphanLeaf, Run: func(*cobra.Command, []string) {}}
 	rootCmd.AddCommand(selftest)
 	defer rootCmd.RemoveCommand(selftest)
 
@@ -1202,18 +1302,18 @@ func TestRatchetDetectsASyntheticOrphan(t *testing.T) {
 
 	found := false
 	for _, o := range orphans {
-		if o == orphanName {
+		if o == orphanPath {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("the ratchet did not detect the synthetic orphan %q, which appears nowhere in the repo as a caller", orphanName)
+		t.Fatalf("the ratchet did not detect the synthetic orphan %q, which appears nowhere in the repo as a caller", orphanPath)
 	}
 
 	msg := formatOrphanFailureMessage(orphans)
-	if !strings.Contains(msg, orphanName) {
-		t.Errorf("the ratchet's own failure-message formatter did not name %q: %s", orphanName, msg)
+	if !strings.Contains(msg, orphanPath) {
+		t.Errorf("the ratchet's own failure-message formatter did not name %q: %s", orphanPath, msg)
 	}
 }
 
@@ -1229,57 +1329,59 @@ func TestDeletingACallerMakesTheRatchetNameIt(t *testing.T) {
 	}
 
 	registered := enumerateRegisteredCommands(rootCmd)
-	registeredNames := map[string]bool{}
+	registeredPaths := map[string]bool{}
 	for _, c := range registered {
-		registeredNames[c.Name] = true
+		registeredPaths[c.Path] = true
 	}
 
-	// Cheap per-file pre-scan: which files mention which command names.
+	// Cheap per-file pre-scan: which files mention which command paths.
 	// Building this directly (rather than by repeatedly calling the
 	// expensive, full collectCallerEvidence per candidate file) is what keeps
 	// this test fast; the actual behavioural assertion below still goes
-	// through the real parameterised function.
-	nameToFiles := map[string][]string{}
+	// through the real parameterised function. singleFileCallerNames already
+	// returns path-keyed evidence (credit() resolves through rootCmd.Find),
+	// so this map is naturally path-keyed too.
+	pathToFiles := map[string][]string{}
 	files := listCallerCorpusFiles(root)
 	for _, f := range files {
 		abs := filepath.Join(root, filepath.FromSlash(f))
-		for name := range singleFileCallerNames(t, abs) {
-			nameToFiles[name] = append(nameToFiles[name], f)
+		for path := range singleFileCallerNames(t, abs) {
+			pathToFiles[path] = append(pathToFiles[path], f)
 		}
 	}
 
-	names := make([]string, 0, len(nameToFiles))
-	for name := range nameToFiles {
-		names = append(names, name)
+	paths := make([]string, 0, len(pathToFiles))
+	for path := range pathToFiles {
+		paths = append(paths, path)
 	}
-	sort.Strings(names)
+	sort.Strings(paths)
 
-	var chosenCommand, chosenFile string
-	for _, name := range names {
-		if !registeredNames[name] {
+	var chosenPath, chosenFile string
+	for _, path := range paths {
+		if !registeredPaths[path] {
 			continue
 		}
-		fs := nameToFiles[name]
+		fs := pathToFiles[path]
 		if len(fs) != 1 {
 			continue
 		}
-		chosenCommand = name
+		chosenPath = path
 		chosenFile = fs[0]
 		break
 	}
 
-	if chosenCommand == "" {
+	if chosenPath == "" {
 		t.Fatal("no registered command has exactly one caller file across the permitted corpora — nothing to test, which would make this assertion vacuous")
 	}
 
 	before := collectCallerEvidence(t, root, nil)
-	if !before[chosenCommand] {
-		t.Fatalf("pre-scan chose %q as single-caller via %q, but the real collectCallerEvidence does not credit it — pre-scan and real scan disagree", chosenCommand, chosenFile)
+	if !before[chosenPath] {
+		t.Fatalf("pre-scan chose %q as single-caller via %q, but the real collectCallerEvidence does not credit it — pre-scan and real scan disagree", chosenPath, chosenFile)
 	}
 	orphansBefore := computeOrphanNames(registered, before)
 	for _, o := range orphansBefore {
-		if o == chosenCommand {
-			t.Fatalf("chosen command %q is already an orphan with all files present — the search picked a bad candidate", chosenCommand)
+		if o == chosenPath {
+			t.Fatalf("chosen command %q is already an orphan with all files present — the search picked a bad candidate", chosenPath)
 		}
 	}
 
@@ -1287,21 +1389,21 @@ func TestDeletingACallerMakesTheRatchetNameIt(t *testing.T) {
 	orphansAfter := computeOrphanNames(registered, after)
 	found := false
 	for _, o := range orphansAfter {
-		if o == chosenCommand {
+		if o == chosenPath {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("suppressing %q — the only file that calls %q — did not make the ratchet name it as an orphan", chosenFile, chosenCommand)
+		t.Fatalf("suppressing %q — the only file that calls %q — did not make the ratchet name it as an orphan", chosenFile, chosenPath)
 	}
 
 	msg := formatOrphanFailureMessage(orphansAfter)
-	if !strings.Contains(msg, chosenCommand) {
-		t.Errorf("failure message did not name %q after its only caller (%s) was removed", chosenCommand, chosenFile)
+	if !strings.Contains(msg, chosenPath) {
+		t.Errorf("failure message did not name %q after its only caller (%s) was removed", chosenPath, chosenFile)
 	}
 
-	t.Logf("suppressing caller file %q removed the only caller of command %q; the ratchet correctly named it as an orphan", chosenFile, chosenCommand)
+	t.Logf("suppressing caller file %q removed the only caller of command %q; the ratchet correctly named it as an orphan", chosenFile, chosenPath)
 }
 
 // TestWiringGuardsHaveNoRuntimeEscapeHatch is D-11 and threat T-172-06/
@@ -1325,14 +1427,26 @@ func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
 			"a shrunk inventory would silently narrow this escape-hatch scan", len(wiringGateGuardFiles))
 	}
 
-	// forbiddenRe covers every spelling of "read an environment variable" or
-	// "skip this test" this package has needed to reject, not just the first
-	// one found: os.Getenv, os.LookupEnv, os.Environ, syscall.Getenv, t.Skip,
-	// t.SkipNow, and testing.Short. Each alternative is written with the
-	// `\.` escape (matching buildConstraintRe's `go:build` concatenation
+	// forbiddenRe covers every spelling of "read an environment variable",
+	// "skip this test", or "declare a new flag" this package has needed to
+	// reject, not just the first one found: os.Getenv, os.LookupEnv,
+	// os.Environ, syscall.Getenv, t.Skip, t.SkipNow, testing.Short, and (WR-01)
+	// flag.Bool, flag.String, flag.Int — a flag is a runtime-switchable
+	// bypass exactly like an environment-variable read, and the escape-hatch
+	// scan previously did not look for one. Each alternative is written with
+	// the `\.` escape (matching buildConstraintRe's `go:build` concatenation
 	// trick below) precisely so this declaration line does not match its own
 	// pattern when the scan below reaches this file.
-	forbiddenRe := regexp.MustCompile(`os\.Getenv|os\.LookupEnv|os\.Environ|syscall\.Getenv|t\.Skip|t\.SkipNow|testing\.Short`)
+	forbiddenRe := regexp.MustCompile(`os\.Getenv|os\.LookupEnv|os\.Environ|syscall\.Getenv|t\.Skip|t\.SkipNow|testing\.Short|flag\.Bool|flag\.String|flag\.Int`)
+
+	// exemptedFlagLineCount counts, across every scanned guard file, how many
+	// lines were skipped by the single reviewed exemption below. WR-01's
+	// -update-orphan-allowlist flag is the one, deliberately reviewed
+	// regeneration switch this phase keeps (documented in
+	// .aether/docs/orphan-allowlist-policy.md); asserting the count is
+	// exactly 1 after the loop means a second flag can neither hide behind
+	// the exemption nor silently retire it without this test noticing.
+	exemptedFlagLineCount := 0
 
 	for _, f := range wiringGateGuardFiles {
 		data, err := os.ReadFile(f)
@@ -1357,10 +1471,30 @@ func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
 
 		stripped := stripGoComments(raw)
 		for i, line := range strings.Split(stripped, "\n") {
-			if forbiddenRe.MatchString(line) {
-				t.Errorf("%s:%d contains a runtime escape hatch (an environment-variable read or a test-skip call): %s", f, i+1, strings.TrimSpace(line))
+			if !forbiddenRe.MatchString(line) {
+				continue
 			}
+			// The single reviewed exemption: the line declaring the
+			// updateOrphanAllowlist flag itself. See
+			// .aether/docs/orphan-allowlist-policy.md for why this one
+			// regeneration flag is tolerated — it can rewrite the live
+			// allowlist but (per the baselineWriteRe assertion below) can
+			// never write the baseline, so it cannot silently widen
+			// tolerance. Scoped to lines that already match forbiddenRe (not
+			// every line mentioning the identifier) so this file's own later
+			// prose about the exemption — including this test's own error
+			// message — cannot inflate the count.
+			if strings.Contains(line, "updateOrphanAllowlist") {
+				exemptedFlagLineCount++
+				continue
+			}
+			t.Errorf("%s:%d contains a runtime escape hatch (an environment-variable read, a test-skip call, or a flag declaration): %s", f, i+1, strings.TrimSpace(line))
 		}
+	}
+
+	if exemptedFlagLineCount != 1 {
+		t.Errorf("expected exactly 1 line exempted as the single reviewed regeneration flag's own declaration, found %d — "+
+			"either a second flag is hiding behind the exemption, or the exempted one was deleted without updating this guard", exemptedFlagLineCount)
 	}
 
 	// The -update-orphan-allowlist flag must never be able to write the
