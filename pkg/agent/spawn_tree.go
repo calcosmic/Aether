@@ -68,6 +68,19 @@ const (
 	spawnRunStatusStale  = "superseded"
 )
 
+// SpawnStatusAbandoned is the status a reaper (SPAWN-08) writes onto a spawn
+// entry once a configured amount of wall-clock time has passed since the
+// entry's last activity with no completion reported. It is registered as a
+// terminal status (IsTerminalSpawnStatus) and explicitly NOT a live one
+// (IsLiveSpawnStatus), so it stops counting against the whole-run helper
+// budget the moment it is applied.
+//
+// It does NOT mean the helper was confirmed dead. Nothing in this system can
+// confirm that: there is no heartbeat, no liveness signal, no process check.
+// It means only that the configured elapsed time passed with no completion —
+// the honest, bounded claim this status is allowed to make.
+const SpawnStatusAbandoned = "abandoned"
+
 // NewSpawnTree creates a spawn tree backed by the given store.
 // filePath defaults to "spawn-tree.txt" if empty.
 // Existing entries are loaded from the file on creation (graceful: empty if missing).
@@ -678,7 +691,7 @@ func IsLiveSpawnStatus(status string) bool {
 // IsTerminalSpawnStatus reports whether a worker status should be treated as finished.
 func IsTerminalSpawnStatus(status string) bool {
 	switch normalizeSpawnStatus(status) {
-	case "completed", "failed", "blocked", "timeout", "superseded", "manually-reconciled", "skipped":
+	case "completed", "failed", "blocked", "timeout", "superseded", "manually-reconciled", "skipped", SpawnStatusAbandoned:
 		return true
 	default:
 		return false

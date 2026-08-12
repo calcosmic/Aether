@@ -677,3 +677,22 @@ func TestSpawnTreeEmpty(t *testing.T) {
 		t.Errorf("empty total_count = %d, want 0", result.Metadata.TotalCount)
 	}
 }
+
+// TestSpawnStatusAbandonedIsTerminalNotLive is plan 09's Task 1 proof
+// (SPAWN-08/D-15..D-18): the reaper's "abandoned" status must stop counting
+// as live work the moment it is applied, and must never be mistaken for
+// in-flight work by any code that branches on IsLiveSpawnStatus.
+func TestSpawnStatusAbandonedIsTerminalNotLive(t *testing.T) {
+	if !IsTerminalSpawnStatus(SpawnStatusAbandoned) {
+		t.Errorf("IsTerminalSpawnStatus(%q) = false, want true", SpawnStatusAbandoned)
+	}
+	if IsLiveSpawnStatus(SpawnStatusAbandoned) {
+		t.Errorf("IsLiveSpawnStatus(%q) = true, want false", SpawnStatusAbandoned)
+	}
+	// Mixed-case / whitespace input must normalize the same way every other
+	// status already does (normalizeSpawnStatus's generic lowercase+trim
+	// path), not via a special-cased comparison that could drift.
+	if !IsTerminalSpawnStatus("  Abandoned ") {
+		t.Errorf("IsTerminalSpawnStatus(mixed-case/whitespace) = false, want true")
+	}
+}
