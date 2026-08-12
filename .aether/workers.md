@@ -43,7 +43,8 @@ Always log spawns to the spawn tree for visualization:
 
 ```bash
 # When spawning a worker
-aether spawn-log --parent "Prime-1" --caste "builder" --name "Hammer-42" --task "implementing auth module" --depth 0
+aether spawn-log --parent "Prime-1" --caste "builder" --name "Hammer-42" --task "implementing auth module" --depth 1
+# --depth is advisory only; the recorded depth is derived from --parent.
 
 # When worker completes
 aether spawn-complete --name "Hammer-42" --status "completed" --summary "auth module with 5 tests"
@@ -264,15 +265,25 @@ Every spawn must display its caste emoji:
 
 | Depth | Role | Can Spawn? | Max Sub-Spawns | Behavior |
 |-------|------|------------|----------------|----------|
-| 0 | Queen | Yes | 4 | Dispatch initial workers |
-| 1 | Prime Worker / Builder | Yes | 4 | Orchestrate phase, spawn specialists |
-| 2 | Specialist | Yes (if surprised) | 2 | Focused work, spawn only for unexpected complexity |
-| 3 | Deep Specialist | No | 0 | Complete work inline, no further delegation |
+| 0 | Coordinator (Queen) | Yes | 4 | Dispatch initial workers |
+| 1 | Worker | Yes | 4 | Orchestrate phase, spawn helpers for genuine surprises |
+| 2 | Helper | No | 0 | Complete work inline, no further delegation |
 
-**Global Cap:** Maximum 10 workers per phase to prevent runaway spawning.
+A worker's depth can go no deeper than 2 (its helpers). A helper cannot spawn
+anyone — there is no depth 3.
 
-**Spawn Decision Criteria (Depth 2+):**
-Only spawn if you encounter genuine surprise:
+**Spawn Budgets:** Two separate limits work together, and neither one does the
+other's job. In any single wave the coordinator sends at most 4 to 8 workers
+at once. Across the whole run, no more than 20 helpers may ever be spawned in
+total — that count includes the coordinator's own workers, not just their
+helpers — and budget spent in one wave is not given back in the next. Depth
+alone cannot be the safety limit: a coordinator sending 8 workers, each of
+whom sends helpers of their own, is 8 workers wide and 2 levels deep — 73
+workers in total — while never once breaking the depth rule above. That is
+why one number cannot do both jobs.
+
+**Spawn Decision Criteria (Depth 1):**
+Only spawn a helper if you encounter genuine surprise:
 - Task is 3x larger than expected
 - Discovered a sub-domain requiring different expertise
 - Found blocking dependency that needs parallel investigation
@@ -325,7 +336,8 @@ child_name=$(aether generate-ant-name "{caste}" | jq -r '.result')
 
 **Step 3: Log the spawn and update swarm display**
 ```bash
-aether spawn-log --parent "{your_name}" --caste "{child_caste}" --name "{child_name}" --task "{task_summary}" --depth 0
+aether spawn-log --parent "{your_name}" --caste "{child_caste}" --name "{child_name}" --task "{task_summary}" --depth 1
+# --depth is advisory only; the recorded depth is derived from --parent.
 aether swarm-display-update --agent "{child_name}" --id "{your_name}" --status "excavating"
 ```
 

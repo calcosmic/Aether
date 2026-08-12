@@ -5,11 +5,51 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
+
+// spawnRootParentNames is the coordinator sentinel set under D-05: a spawn
+// naming one of these as --parent is a child of the depth-0 coordinator (the
+// coordinator itself is never recorded in the spawn tree, so its absence
+// from spawn-tree.txt is expected and is the one legitimate not-found case)
+// and is therefore recorded at depth 1.
+var spawnRootParentNames = []string{"Queen", "Prime-1", "Swarm"}
+
+// spawnParentIsRoot reports whether parent case-insensitively matches one of
+// spawnRootParentNames.
+func spawnParentIsRoot(parent string) bool {
+	for _, root := range spawnRootParentNames {
+		if strings.EqualFold(parent, root) {
+			return true
+		}
+	}
+	return false
+}
+
+// deriveSpawnDepth is the D-05/SPAWN-02 authority on recorded depth: the
+// caller's claimed --depth is never trusted. It returns the depth to record
+// and, on the D-19 fail-closed branch, a non-empty deny reason (in which
+// case the returned depth is meaningless and must not be recorded).
+//
+// Rules, in order:
+//  1. parent is a coordinator sentinel (spawnParentIsRoot) -> depth 1.
+//  2. parent is a name already recorded in the spawn tree -> that entry's
+//     own depth + 1.
+//  3. otherwise -> deny. An unresolvable parent must never default to 0;
+//     that would let a caller invent a parent to gain depth for free.
+func deriveSpawnDepth(st *agent.SpawnTree, parent string) (int, string) {
+	if spawnParentIsRoot(parent) {
+		return 1, ""
+	}
+	if entry := latestSpawnEntryByName(st, parent); entry != nil {
+		return entry.Depth + 1, ""
+	}
+	return 0, fmt.Sprintf("unknown parent %q: not a recorded spawn and not a coordinator sentinel (%s)", parent, strings.Join(spawnRootParentNames, ", "))
+}
 
 var spawnLogCmd = &cobra.Command{
 	Use:   "spawn-log",
@@ -48,9 +88,14 @@ var spawnLogCmd = &cobra.Command{
 			outputError(1, "flag --task is required", nil)
 			return nil
 		}
-		depth, _ := cmd.Flags().GetInt("depth")
+		claimedDepth, _ := cmd.Flags().GetInt("depth")
 
 		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		depth, denyReason := deriveSpawnDepth(st, parent)
+		if denyReason != "" {
+			outputError(1, denyReason, nil)
+			return nil
+		}
 		if err := st.RecordSpawn(parent, caste, name, task, depth); err != nil {
 			outputError(2, fmt.Sprintf("failed to record spawn: %v", err), nil)
 			return nil
@@ -64,12 +109,14 @@ var spawnLogCmd = &cobra.Command{
 		})
 
 		result := map[string]interface{}{
-			"recorded": true,
-			"parent":   parent,
-			"caste":    caste,
-			"name":     name,
-			"task":     task,
-			"depth":    depth,
+			"recorded":      true,
+			"parent":        parent,
+			"caste":         caste,
+			"name":          name,
+			"task":          task,
+			"depth":         depth,
+			"claimed_depth": claimedDepth,
+			"depth_source":  "derived",
 		}
 		if eventID != "" {
 			result["event_id"] = eventID
@@ -397,7 +444,7 @@ func init() {
 	spawnLogCmd.Flags().String("id", "", "Legacy alias for child agent name")
 	spawnLogCmd.Flags().String("task", "", "Task description (required)")
 	spawnLogCmd.Flags().String("description", "", "Legacy alias for task description")
-	spawnLogCmd.Flags().Int("depth", 0, "Spawn depth (required)")
+	spawnLogCmd.Flags().Int("depth", 0, "Advisory only; the recorded depth is derived from --parent")
 
 	spawnCompleteCmd.Flags().String("name", "", "Agent name to complete (required)")
 	spawnCompleteCmd.Flags().String("status", "", "Status: completed, failed, blocked (default: completed)")
