@@ -278,8 +278,12 @@ func TestSpawnLogDerivesDepthFromRecordedParent(t *testing.T) {
 	stdout = &buf
 	stderr = &errBuf
 
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "W1", "0"))
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("W1", "H1", "0"))
+	// Plan 173-06's ancestor-cycle check (SPAWN-05) refuses a repeated
+	// caste-and-task pair along a chain, so W1 and H1 must be given
+	// genuinely different task text here — this test's own subject is
+	// depth derivation, not ancestor-cycle detection.
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("Queen", "W1", "builder", "coordinate the initial request"))
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("W1", "H1", "builder", "carry out the coordinated request"))
 
 	st := agent.NewSpawnTree(store, "spawn-tree.txt")
 	entries, err := st.Parse()
@@ -313,8 +317,11 @@ func TestSpawnTreeDepthReportsTwoForAThreeLevelTree(t *testing.T) {
 	stdout = &buf
 	stderr = &errBuf
 
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "W1", "0"))
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("W1", "H1", "0"))
+	// See TestSpawnLogDerivesDepthFromRecordedParent above: distinct task
+	// text avoids tripping plan 173-06's ancestor-cycle check, which this
+	// test does not exercise.
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("Queen", "W1", "builder", "coordinate the initial request"))
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("W1", "H1", "builder", "carry out the coordinated request"))
 
 	buf.Reset()
 	errBuf.Reset()
@@ -526,8 +533,11 @@ func TestSpawnLogRefusesPastCapAndWritesNoEntry(t *testing.T) {
 	stderr = &errBuf
 
 	// Queen -> W1 (depth 1) -> H1 (depth 2): reaching the cap legitimately.
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "W1", "0"))
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("W1", "H1", "0"))
+	// Distinct task text for W1/H1 (both different from the X1 attempt's "t"
+	// below) avoids tripping plan 173-06's ancestor-cycle check — this test
+	// isolates the depth cap, not ancestor-cycle detection.
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("Queen", "W1", "builder", "coordinate the initial request"))
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("W1", "H1", "builder", "carry out the coordinated request"))
 
 	before, err := store.ReadFile("spawn-tree.txt")
 	if err != nil {
@@ -618,9 +628,11 @@ func TestSpawnCanSpawnNameOverridesClaimedDepth(t *testing.T) {
 	stdout = &buf
 	stderr = &errBuf
 
-	// Queen -> W1 (depth 1) -> H1 (depth 2).
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "W1", "0"))
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("W1", "H1", "0"))
+	// Queen -> W1 (depth 1) -> H1 (depth 2). Distinct task text avoids
+	// tripping plan 173-06's ancestor-cycle check, which this test does not
+	// exercise.
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("Queen", "W1", "builder", "coordinate the initial request"))
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("W1", "H1", "builder", "carry out the coordinated request"))
 
 	// H1's recorded depth (2) beats its claimed depth (0): --name H1 must
 	// deny even though the caller claimed 0.
