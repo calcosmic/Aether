@@ -779,7 +779,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
-| 172. Wiring Proof | v1.26 | 12/12 | Gaps found | - |
+| 172. Wiring Proof | v1.26 | 12/14 | Gaps found | - |
 | 173. Delegation Guard | v1.26 | 0/TBD | Not started | - |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
