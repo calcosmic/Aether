@@ -389,8 +389,12 @@ func TestBudgetCeilingWritesMiddenButDepthRefusalDoesNot(t *testing.T) {
 		t.Fatalf("begin run: %v", err)
 	}
 
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "D1", "0")) // depth 1
-	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("D1", "D2", "0"))    // depth 2
+	// Distinct task text down the D1 -> D2 chain (both different from the D3
+	// attempt's "t" below) avoids tripping plan 173-06's ancestor-cycle check.
+	// This half's subject is the depth cap's midden silence, not ancestor-cycle
+	// detection — a cycle refusal here would assert nothing about D-11's split.
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("Queen", "D1", "builder", "coordinate the initial request")) // depth 1
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("D1", "D2", "builder", "carry out the coordinated request")) // depth 2
 
 	middenBeforeDepth := readMiddenBytesOrNilForTest()
 
