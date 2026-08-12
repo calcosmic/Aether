@@ -1181,16 +1181,23 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"spawn-can-spawn":             true,
 	"spawn-complete":              true,
 	"spawn-log":                   true,
-	"state-checkpoint":            true,
-	"state-mutate":                true,
-	"state-read":                  true,
-	"status":                      true,
-	"suggest-analyze":             true,
-	"suggest-approve":             true,
-	"survey-verify":               true,
-	"swarm-finalize":              true,
-	"swarm":                       true,
-	"swarm-display-update":        true,
+	// spawn-orphans (173-09/SPAWN-08): a patrol/health-check listing of
+	// stale spawn-tree entries, plus an operator --clear path. Its failure
+	// degrades visibility into ghost helpers only -- no verification
+	// result, security scan, or gate outcome depends on it -- so this is
+	// enrichment, not a gate, judged deliberately here per this test's own
+	// review requirement.
+	"spawn-orphans":        true,
+	"state-checkpoint":     true,
+	"state-mutate":         true,
+	"state-read":           true,
+	"status":               true,
+	"suggest-analyze":      true,
+	"suggest-approve":      true,
+	"survey-verify":        true,
+	"swarm-finalize":       true,
+	"swarm":                true,
+	"swarm-display-update": true,
 	// temp-clean judged here, deliberately, at the point the 172-06 fence
 	// repair (Task 3) makes it visible for the first time: it is a
 	// housekeeping/cleanup command whose failure degrades tidiness only —

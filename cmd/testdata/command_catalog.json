@@ -7902,6 +7902,16 @@
     "stability_score": 91
   },
   {
+    "name": "spawn-orphans",
+    "short_description": "List helpers that have exceeded the reap threshold, or clear them",
+    "flags": [
+      "clear"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "spawn-track",
     "short_description": "Track agent spawn times for timeout enforcement",
     "flags": [

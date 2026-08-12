@@ -564,6 +564,7 @@
     "spawn-efficiency",
     "spawn-get-depth",
     "spawn-log",
+    "spawn-orphans",
     "spawn-plan",
     "spawn-track",
     "spawn-tree-active",

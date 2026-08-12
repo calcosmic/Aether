@@ -693,6 +693,50 @@ func TestColonyDepthField(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// SpawnReapThresholdMinutes field (SPAWN-08/D-17: the one configurable knob)
+// ---------------------------------------------------------------------------
+
+// TestSpawnReapThresholdMinutesRoundTrips proves the field round-trips
+// through marshal/unmarshal when set, and that a state file written before
+// this field existed still loads cleanly with it nil -- an unset value must
+// stay distinguishable from a deliberate zero.
+func TestSpawnReapThresholdMinutesRoundTrips(t *testing.T) {
+	threshold := 45
+	state := ColonyState{Version: "3.0", State: "READY", SpawnReapThresholdMinutes: &threshold}
+
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var roundTripped ColonyState
+	if err := json.Unmarshal(data, &roundTripped); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if roundTripped.SpawnReapThresholdMinutes == nil {
+		t.Fatalf("SpawnReapThresholdMinutes is nil after round-trip, want %d", threshold)
+	}
+	if *roundTripped.SpawnReapThresholdMinutes != threshold {
+		t.Errorf("SpawnReapThresholdMinutes = %d, want %d", *roundTripped.SpawnReapThresholdMinutes, threshold)
+	}
+}
+
+// TestSpawnReapThresholdMinutesNilWhenAbsent proves a state file written
+// before this field existed (no spawn_reap_threshold_minutes key at all)
+// still loads with the field nil, not a zero value that would be
+// indistinguishable from an operator deliberately setting it to 0.
+func TestSpawnReapThresholdMinutesNilWhenAbsent(t *testing.T) {
+	raw := `{"version":"3.0","state":"READY","current_phase":0}`
+	var state ColonyState
+	if err := json.Unmarshal([]byte(raw), &state); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if state.SpawnReapThresholdMinutes != nil {
+		t.Errorf("SpawnReapThresholdMinutes = %v, want nil for a state file predating this field", *state.SpawnReapThresholdMinutes)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // AdvancePhase updates phase status
 // ---------------------------------------------------------------------------
 

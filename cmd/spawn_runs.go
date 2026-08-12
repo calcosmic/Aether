@@ -21,6 +21,14 @@ func beginRuntimeSpawnRun(command string, startedAt time.Time) (*runtimeSpawnRun
 	if err != nil {
 		return nil, err
 	}
+	// SPAWN-08/D-15: reap ghosts automatically at the start of every run,
+	// before any spawn decision consults the whole-run budget (cmd/spawn.go's
+	// spawnCanSpawnDecision), so a fresh run never inherits a budget already
+	// full of entries that will never complete. A reaping failure must never
+	// stop a run from beginning -- its error is deliberately ignored here;
+	// the operator's `aether spawn-orphans` command surfaces any that
+	// remain.
+	_, _ = spawnReapStaleEntries(tree, time.Now().UTC())
 	return &runtimeSpawnRun{Tree: tree, Run: run}, nil
 }
 

@@ -318,6 +318,20 @@ type ColonyState struct {
 	Events             []string             `json:"events"`
 	ColonyDepth        string               `json:"colony_depth,omitempty"`
 	VerificationDepth  string               `json:"verification_depth,omitempty"`
+	// SpawnReapThresholdMinutes is how long a live spawn-tree entry may go
+	// without activity before the automatic reaper (SPAWN-08) marks it
+	// abandoned and releases its whole-run budget slot. A pointer with
+	// omitempty so an unset value is distinguishable from a deliberate zero,
+	// and so state files written before this field existed still round-trip
+	// unchanged. When nil, the reaper uses a default of 120 minutes.
+	//
+	// The default is generous on purpose: this system has no liveness
+	// signal for a spawned helper (no heartbeat, no periodic "still working"
+	// touch), so a shorter threshold would reap slow-but-working helpers
+	// indistinguishably from abandoned ones. Killing live work is a worse
+	// failure than a ghost holding a budget slot for a while — the failure
+	// modes are not symmetric, so the default leans conservative.
+	SpawnReapThresholdMinutes *int `json:"spawn_reap_threshold_minutes,omitempty"`
 	PlanGranularity    PlanGranularity      `json:"plan_granularity,omitempty"`
 	ParallelMode       ParallelMode         `json:"parallel_mode,omitempty"`
 	TerritorySurveyed  *string              `json:"territory_surveyed,omitempty"`
