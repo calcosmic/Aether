@@ -147,8 +147,13 @@ func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 		testNames = append(testNames, testFuncNamesIn(t, path)...)
 	}
 
-	if len(testNames) < 8 {
-		t.Fatalf("AST enumeration over %d guard file(s) found only %d top-level Test function(s) — expected at least 8; "+
+	// Anti-vacuity floor (mirrors the convention cli_flag_audit_test.go:225
+	// and command_call_audit_test.go:1329 already use): measured 30 top-level
+	// Test functions across the five guard files as of plan 172-11; 20 is set
+	// just under that so ordinary churn does not trip it while a silent AST
+	// walk, or two-thirds of the guard tests being deleted, still does.
+	if len(testNames) < 20 {
+		t.Fatalf("AST enumeration over %d guard file(s) found only %d top-level Test function(s) — expected at least 20 (measured 30); "+
 			"a walk that silently finds nothing would pass forever, so this is treated as a fatal enumeration failure",
 			len(wiringGateGuardFiles), len(testNames))
 	}
@@ -167,6 +172,35 @@ func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 		t.Errorf("CI step %q's -run filter does not match %d guard test(s) — they would silently stop running under the named step "+
 			"even though `go test ./...` still finds them, which is exactly the illegible-failure mode D-15 exists to prevent:\n  %s",
 			wiringGateStepName, len(uncovered), strings.Join(uncovered, "\n  "))
+	}
+
+	// The reverse direction (WR-04 / T-172-56): every alternative actually
+	// present in the filter must match at least one real guard test name.
+	// `go test -run` exits 0 when a pattern matches nothing, so a renamed or
+	// deleted guard test left as a stale alternative silently stops running
+	// under the named step with nothing going red.
+	var stale []string
+	for _, alt := range strings.Split(runArg, "|") {
+		altRe, compileErr := regexp.Compile(alt)
+		if compileErr != nil {
+			t.Fatalf("CI step %q's -run filter alternative %q does not compile as a regex: %v", wiringGateStepName, alt, compileErr)
+		}
+		matched := false
+		for _, name := range testNames {
+			if altRe.MatchString(name) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			stale = append(stale, alt)
+		}
+	}
+	if len(stale) > 0 {
+		sort.Strings(stale)
+		t.Errorf("CI step %q's -run filter contains %d alternative(s) that match no guard test — go test -run exits 0 when a pattern matches "+
+			"nothing, so a renamed or deleted guard test left in the filter would silently stop running with nothing going red:\n  %s",
+			wiringGateStepName, len(stale), strings.Join(stale, "\n  "))
 	}
 }
 
@@ -549,6 +583,16 @@ func TestBlanketGateCheckRejectsADecoyStep(t *testing.T) {
 
 // extractWiringGateRunArg locates the step whose `- name:` value is exactly
 // wiringGateStepName and returns its `run:` line's -run argument.
+//
+// Three distinct failure modes are named rather than folded into one
+// generic error (CR-03):
+//   - zero `-run '<regex>'` occurrences on the line;
+//   - MORE than one — `go test` honours only the LAST `-run` flag it is
+//     given, so a second, appended `-run` would silently make this guard
+//     validate a filter that never actually executes;
+//   - a run line that does not invoke `go test ./cmd` at all, so an
+//     unrelated command that merely contains the right-looking text (e.g.
+//     `echo "-run '...'"`) cannot satisfy this check.
 func extractWiringGateRunArg(workflow string) (string, error) {
 	block, err := stepBlock(workflow, wiringGateStepName)
 	if err != nil {
@@ -559,12 +603,20 @@ func extractWiringGateRunArg(workflow string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("CI step %q has no run: line", wiringGateStepName)
 	}
+	trimmedRunLine := strings.TrimSpace(runLine)
 
-	m := runFlagArgRe.FindStringSubmatch(runLine)
-	if m == nil {
-		return "", fmt.Errorf("CI step %q's run line does not contain a `-run '<regex>'` argument: %s", wiringGateStepName, strings.TrimSpace(runLine))
+	if !strings.Contains(runLine, "go test ./cmd ") {
+		return "", fmt.Errorf("CI step %q's run line does not invoke `go test ./cmd`: %s", wiringGateStepName, trimmedRunLine)
 	}
-	return m[1], nil
+
+	ms := runFlagArgRe.FindAllStringSubmatch(runLine, -1)
+	if len(ms) == 0 {
+		return "", fmt.Errorf("CI step %q's run line does not contain a `-run '<regex>'` argument: %s", wiringGateStepName, trimmedRunLine)
+	}
+	if len(ms) > 1 {
+		return "", fmt.Errorf("CI step %q's run line carries %d `-run` flags; go test honours only the last, so this guard would validate a filter that never executes: %s", wiringGateStepName, len(ms), trimmedRunLine)
+	}
+	return ms[0][1], nil
 }
 
 // testFuncNamesIn enumerates every top-level `func Test…` name declared in
@@ -917,5 +969,130 @@ func TestGateProbeCatchesEveryKnownGateNeutering(t *testing.T) {
 				t.Logf("control row (unmutated command %q) correctly discriminates", mutated)
 			}
 		})
+	}
+}
+
+// Plan 172-11 task 2 (T-172-54).
+//
+// Every guard above — blanketReleaseGateProblem, stepCanFailTheBuild,
+// TestReleaseGateCommandFailsATreeWithAFailingTest — inspects a STEP. None
+// of them can see the one route that disables all of them at once: the
+// workflow simply never being invoked (its `on:` triggers narrowed to
+// something that never fires on a pull request or push), or the job that
+// contains every step being switched off with a job-level `if:`. A step
+// that is perfectly structured to fail the build is not a gate if GitHub
+// Actions never runs it.
+
+// TestReleaseGateWorkflowActuallyRuns fails by name when the workflow's
+// on: block no longer names both pull_request and push, when the go: job
+// carries a job-level if: condition, or when the go: job is missing its
+// steps: key or a non-empty runs-on: value — each of which would leave
+// every step-scoped guard in this file green while nothing in the workflow
+// ever executes.
+func TestReleaseGateWorkflowActuallyRuns(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	workflowPath := filepath.Join(repoRoot, ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+	lines := strings.Split(string(data), "\n")
+
+	// Locate the top-level `on:` and `jobs:` keys (column 0, no indent) so a
+	// nested key that happens to be spelled "on:" elsewhere is never
+	// mistaken for the workflow-level trigger block.
+	onLineIdx, jobsLineIdx := -1, -1
+	for i, line := range lines {
+		switch strings.TrimRight(line, " ") {
+		case "on:":
+			if onLineIdx == -1 {
+				onLineIdx = i
+			}
+		case "jobs:":
+			jobsLineIdx = i
+		}
+		if onLineIdx != -1 && jobsLineIdx != -1 {
+			break
+		}
+	}
+	if onLineIdx == -1 || jobsLineIdx == -1 || jobsLineIdx <= onLineIdx {
+		t.Fatalf(".github/workflows/ci.yml does not have the expected top-level on:/jobs: shape")
+	}
+	onBlock := strings.Join(lines[onLineIdx:jobsLineIdx], "\n")
+
+	if !strings.Contains(onBlock, "pull_request:") {
+		t.Fatalf("the check that is supposed to run on every change would no longer run: .github/workflows/ci.yml's on: block no longer names the pull_request trigger")
+	}
+	if !strings.Contains(onBlock, "push:") {
+		t.Fatalf("the check that is supposed to run on every change would no longer run: .github/workflows/ci.yml's on: block no longer names the push trigger")
+	}
+
+	// Locate the `go:` job key at 2-space indent under `jobs:`.
+	goJobLineIdx := -1
+	for i := jobsLineIdx; i < len(lines); i++ {
+		if strings.TrimRight(lines[i], " ") == "  go:" {
+			goJobLineIdx = i
+			break
+		}
+	}
+	if goJobLineIdx == -1 {
+		t.Fatalf(".github/workflows/ci.yml has no top-level %q job", "go")
+	}
+
+	// The job header runs from the line after `go:` up to (but excluding)
+	// whichever comes first: a line back at 2-space indent or shallower (a
+	// sibling job, or the end of the jobs: block), or the job's own
+	// `steps:` key. Scanning only this header — never the steps below it —
+	// is what stops a step-level `if:` (already handled by
+	// stepCanFailTheBuild) from being double-reported here as a job-level
+	// condition.
+	stepsLineIdx := -1
+	headerEndIdx := len(lines)
+	for i := goJobLineIdx + 1; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" {
+			continue
+		}
+		indent := len(lines[i]) - len(strings.TrimLeft(lines[i], " "))
+		if indent <= 2 {
+			headerEndIdx = i
+			break
+		}
+		if trimmed == "steps:" {
+			stepsLineIdx = i
+			headerEndIdx = i
+			break
+		}
+	}
+
+	var jobHeaderLines []string
+	if goJobLineIdx+1 < headerEndIdx {
+		jobHeaderLines = lines[goJobLineIdx+1 : headerEndIdx]
+	}
+
+	for _, line := range jobHeaderLines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "if:") {
+			t.Fatalf("the check that is supposed to run on every change would no longer run: the %q job carries a job-level condition (%s) that can switch it off entirely", "go", trimmed)
+		}
+	}
+
+	if stepsLineIdx == -1 {
+		t.Fatalf("the %q job has no steps: key — a hollowed-out job would otherwise satisfy every step-scoped guard while running nothing", "go")
+	}
+
+	runsOnValue := ""
+	for _, line := range jobHeaderLines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "runs-on:") {
+			runsOnValue = strings.TrimSpace(strings.TrimPrefix(trimmed, "runs-on:"))
+		}
+	}
+	if runsOnValue == "" {
+		t.Fatalf("the %q job has no non-empty runs-on: value — a hollowed-out job would otherwise satisfy every step-scoped guard while running nothing", "go")
 	}
 }
