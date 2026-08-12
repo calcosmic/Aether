@@ -784,8 +784,12 @@ func TestSpawnLogLegacyFlagAliases(t *testing.T) {
 	if got, want := result["task"], "implementing auth"; got != want {
 		t.Fatalf("task = %v, want %q", got, want)
 	}
-	if got := int(result["depth"].(float64)); got != 0 {
-		t.Fatalf("depth = %d, want 0", got)
+	// "Queen" is a coordinator sentinel (spawnRootParentNames, D-05): a spawn
+	// naming it as parent is recorded at depth 1, not the caller's unset
+	// (zero-value) --depth flag. See TestSpawnLogIgnoresCallerSuppliedDepth
+	// for the direct proof that the claimed --depth is never trusted.
+	if got := int(result["depth"].(float64)); got != 1 {
+		t.Fatalf("depth = %d, want 1 (Queen is a coordinator sentinel under D-05)", got)
 	}
 }
 
