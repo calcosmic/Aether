@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Phase 172, plan 05 (D-15), hardened by plan 07.
@@ -1094,5 +1096,378 @@ func TestReleaseGateWorkflowActuallyRuns(t *testing.T) {
 	}
 	if runsOnValue == "" {
 		t.Fatalf("the %q job has no non-empty runs-on: value — a hollowed-out job would otherwise satisfy every step-scoped guard while running nothing", "go")
+	}
+}
+
+// Plan 172-12 (round 4, CR-01/CR-02/CR-03).
+//
+// Every guard above inspects the workflow by searching for TEXT it already
+// knows to look for — a step's name, a run line's exact command, a
+// trigger's substring presence. Each of those is a blocklist: it catches
+// the mutations someone thought to name. CR-01 (`jobs.go.continue-on-error:
+// true`), CR-02 (`jobs.go.env.GOFLAGS`, and its step-level spelling), and
+// CR-03 (`paths-ignore: ['**']` under pull_request) each landed a key that
+// none of the checks above were looking for, at a scope none of them
+// inspect (job-level and trigger-level, not step-level).
+//
+// auditWorkflowShape is the generalising move: instead of searching for
+// known-bad keys, it asserts the workflow's root, its triggers, the go
+// job, and the two gate steps carry EXACTLY a reviewed set of keys —
+// declared in the five whitelists below — so any key absent from that set
+// fails by default, including one nobody has enumerated yet. Adding a
+// legitimate key later is then a one-line, reviewed, visible diff to a
+// named slice in this file, not a silent behavioural change.
+
+// workflowRootAllowedKeys is a WHITELIST of every key permitted at the
+// root of .github/workflows/ci.yml. Anything absent from this list fails
+// by default (auditWorkflowShape rule b) — the check that is supposed to
+// run on every change could otherwise be switched off or redirected by an
+// unreviewed root key. Adding a member here is a deliberate, reviewed code
+// change whose diff is visible in this file.
+var workflowRootAllowedKeys = []string{"jobs", "name", "on"}
+
+// gateJobAllowedKeys is a WHITELIST of every key permitted on the `go` job
+// (gateJobName) under `jobs:`. `continue-on-error` (CR-01) and `env`
+// (CR-02) are absent and therefore rejected by rule g, along with `if`,
+// `strategy`, `timeout-minutes`, `container`, `services`, `defaults`,
+// `outputs`, `permissions`, `concurrency` and `needs` — none of them named
+// anywhere in this file. Adding a member here is a deliberate, reviewed
+// code change.
+var gateJobAllowedKeys = []string{"runs-on", "steps"}
+
+// releaseTriggerAllowedNames is a WHITELIST of the trigger names permitted
+// under the workflow's `on:` block — exactly these, both required, none
+// extra (rule d). Adding `workflow_dispatch` later is a one-line reviewed
+// change to this list.
+var releaseTriggerAllowedNames = []string{"pull_request", "push"}
+
+// releaseTriggerAllowedKeys is a WHITELIST of every key permitted on each
+// trigger's own value. `paths-ignore`, `paths`, `types` and
+// `branches-ignore` are absent and therefore rejected by rule e — CR-03 is
+// closed because the key is missing from this list, not because
+// `paths-ignore` is named anywhere. Adding a member here is a deliberate,
+// reviewed code change.
+var releaseTriggerAllowedKeys = []string{"branches"}
+
+// gateStepAllowedKeys is a WHITELIST of every key permitted on the two
+// audited gate steps (blanketGateStepName and wiringGateStepName). `env`
+// (CR-02's step-level spelling) is absent and therefore rejected by rule
+// h, along with step-level `if`, `continue-on-error`, `working-directory`,
+// `shell` and `timeout-minutes`. Only these two steps are audited — every
+// other step (`uses:`, `with:`, `id:`, the goreleaser step's own `env:`)
+// is deliberately untouched; a whitelist scoped wider than the gate steps
+// would break ordinary CI work that has nothing to do with the release
+// gate.
+var gateStepAllowedKeys = []string{"name", "run"}
+
+// gateJobName is the job key under `jobs:` this audit inspects.
+const gateJobName = "go"
+
+// workflowShapeAudit records what auditWorkflowShape actually inspected —
+// not just the errors it found — so a caller can prove the audit is not
+// vacuous. A parser that silently walked nothing would otherwise report
+// "no problems" forever, which is the same failure shape as the substring
+// checks this plan replaces.
+type workflowShapeAudit struct {
+	RootKeys      []string
+	TriggerNames  []string
+	TriggerKeys   map[string][]string
+	GateJobKeys   []string
+	GateStepNames []string
+	StepCount     int
+}
+
+// yamlMappingPair is one key/value pair from a yaml.Node mapping, kept as
+// nodes (rather than resolved strings) so callers can report `.Line` in
+// failure messages.
+type yamlMappingPair struct {
+	key   *yaml.Node
+	value *yaml.Node
+}
+
+// yamlMappingPairs returns the key/value pairs of mapping node m. m must
+// already be known to have Kind == yaml.MappingNode; callers check that
+// before calling this.
+func yamlMappingPairs(m *yaml.Node) []yamlMappingPair {
+	var out []yamlMappingPair
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		out = append(out, yamlMappingPair{key: m.Content[i], value: m.Content[i+1]})
+	}
+	return out
+}
+
+// describeYAMLSequence renders a yaml.Node for a failure message: its
+// scalar elements if it is a sequence, or a description naming its actual
+// kind and value otherwise. Used only for error text.
+func describeYAMLSequence(n *yaml.Node) string {
+	if n == nil {
+		return "<missing>"
+	}
+	if n.Kind != yaml.SequenceNode {
+		return fmt.Sprintf("a non-sequence value %q", n.Value)
+	}
+	vals := make([]string, 0, len(n.Content))
+	for _, c := range n.Content {
+		vals = append(vals, c.Value)
+	}
+	return fmt.Sprintf("%v", vals)
+}
+
+// auditWorkflowShape parses workflow — the raw text of a GitHub Actions
+// workflow file — into a yaml.Node tree (gopkg.in/yaml.v3 decodes the `on:`
+// key as the plain string "on", not the YAML-1.1 boolean true; verified
+// against the live file during planning) and checks it against the five
+// reviewed whitelists declared above. It returns every violation found,
+// never stopping at the first, plus a workflowShapeAudit recording what it
+// actually inspected. Failure prose is written for a non-technical
+// operator: each message names the offending key, the scope it was found
+// at, the source line, and states that the check meant to run on every
+// change could be switched off or redirected by that key.
+func auditWorkflowShape(workflow string) (workflowShapeAudit, []error) {
+	var audit workflowShapeAudit
+	audit.TriggerKeys = map[string][]string{}
+	var errs []error
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(workflow), &doc); err != nil {
+		return audit, []error{fmt.Errorf("workflow shape audit: could not parse YAML: %w", err)}
+	}
+	if len(doc.Content) == 0 || doc.Content[0] == nil {
+		return audit, []error{fmt.Errorf("workflow shape audit: document has no content — a parse that silently produces nothing must not be treated as a pass")}
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return audit, []error{fmt.Errorf("workflow shape audit: root node (line %d) is not a mapping", root.Line)}
+	}
+
+	var onNode, jobsNode *yaml.Node
+	foundOn, foundJobs := false, false
+	for _, p := range yamlMappingPairs(root) {
+		audit.RootKeys = append(audit.RootKeys, p.key.Value)
+		if !stringSliceContains(workflowRootAllowedKeys, p.key.Value) {
+			errs = append(errs, fmt.Errorf(
+				"workflow root key %q (line %d, scope: workflow) is not on the reviewed whitelist workflowRootAllowedKeys %v — the check that is supposed to run on every change could be switched off or redirected by this key; add it to workflowRootAllowedKeys as a deliberate, reviewed change if it belongs",
+				p.key.Value, p.key.Line, workflowRootAllowedKeys))
+		}
+		if p.key.Value == "on" {
+			foundOn = true
+			onNode = p.value
+		}
+		if p.key.Value == "jobs" {
+			foundJobs = true
+			jobsNode = p.value
+		}
+	}
+
+	// Rule c: the root mapping must contain a key node whose .Value is
+	// exactly "on" — a hazard warning distinct from rule b's whitelist
+	// check, guarding against a future library or schema change silently
+	// re-resolving a bare `on` key to the YAML-1.1 boolean true, which
+	// would make every trigger check below silently inspect nothing.
+	if !foundOn {
+		errs = append(errs, fmt.Errorf(
+			"workflow root (line %d, scope: workflow) has no key node whose value is exactly \"on\" — some YAML readers resolve a bare `on` key to the boolean true, which would make every trigger check below silently inspect nothing",
+			root.Line))
+	}
+
+	if onNode != nil {
+		if onNode.Kind != yaml.MappingNode {
+			errs = append(errs, fmt.Errorf("workflow trigger block \"on\" (line %d, scope: workflow) is not a mapping", onNode.Line))
+		} else {
+			triggerPairs := yamlMappingPairs(onNode)
+			for _, p := range triggerPairs {
+				audit.TriggerNames = append(audit.TriggerNames, p.key.Value)
+			}
+
+			// Rule d: EXACTLY releaseTriggerAllowedNames — both required,
+			// none extra. An extra trigger is rejected the same way an
+			// extra key is; adding workflow_dispatch later is a one-line
+			// reviewed change to the list.
+			for _, p := range triggerPairs {
+				if !stringSliceContains(releaseTriggerAllowedNames, p.key.Value) {
+					errs = append(errs, fmt.Errorf(
+						"workflow trigger %q (line %d, scope: workflow) is not on the reviewed whitelist releaseTriggerAllowedNames %v",
+						p.key.Value, p.key.Line, releaseTriggerAllowedNames))
+				}
+			}
+			for _, want := range releaseTriggerAllowedNames {
+				if !stringSliceContains(audit.TriggerNames, want) {
+					errs = append(errs, fmt.Errorf(
+						"workflow trigger block (line %d, scope: workflow) is missing the required trigger %q named in releaseTriggerAllowedNames %v",
+						onNode.Line, want, releaseTriggerAllowedNames))
+				}
+			}
+
+			// Rule e: each trigger's own keys, and the branches: value.
+			for _, p := range triggerPairs {
+				triggerName, triggerVal := p.key.Value, p.value
+				scope := fmt.Sprintf("trigger %q", triggerName)
+				if triggerVal.Kind != yaml.MappingNode {
+					errs = append(errs, fmt.Errorf("%s value (line %d, scope: %s) is not a mapping", scope, triggerVal.Line, scope))
+					continue
+				}
+				var branchesNode *yaml.Node
+				for _, tp := range yamlMappingPairs(triggerVal) {
+					audit.TriggerKeys[triggerName] = append(audit.TriggerKeys[triggerName], tp.key.Value)
+					if !stringSliceContains(releaseTriggerAllowedKeys, tp.key.Value) {
+						errs = append(errs, fmt.Errorf(
+							"%s key %q (line %d, scope: %s) is not on the reviewed whitelist releaseTriggerAllowedKeys %v — paths-ignore, paths, types, branches-ignore and every other unreviewed trigger key are each rejected by absence from this list, not by name",
+							scope, tp.key.Value, tp.key.Line, scope, releaseTriggerAllowedKeys))
+					}
+					if tp.key.Value == "branches" {
+						branchesNode = tp.value
+					}
+				}
+				if branchesNode == nil {
+					errs = append(errs, fmt.Errorf("%s (line %d, scope: %s) has no branches: key", scope, triggerVal.Line, scope))
+				} else if branchesNode.Kind != yaml.SequenceNode || len(branchesNode.Content) != 1 || branchesNode.Content[0].Value != "main" {
+					errs = append(errs, fmt.Errorf(
+						"%s's branches: value (line %d, scope: %s) must be a sequence of exactly one scalar \"main\" — found %s",
+						scope, branchesNode.Line, scope, describeYAMLSequence(branchesNode)))
+				}
+			}
+		}
+	}
+
+	if !foundJobs {
+		errs = append(errs, fmt.Errorf("workflow root (line %d, scope: workflow) has no %q key", root.Line, "jobs"))
+	} else if jobsNode.Kind != yaml.MappingNode {
+		errs = append(errs, fmt.Errorf("workflow %q key (line %d, scope: workflow) is not a mapping", "jobs", jobsNode.Line))
+	} else {
+		// Rule f: the jobs value must contain gateJobName. Sibling jobs are
+		// not whitelisted — a sibling job cannot disable the go job, only
+		// the go job's own keys can, and a sibling's own `needs:` on the go
+		// job is itself caught by rule g below.
+		var goJobNode *yaml.Node
+		for _, p := range yamlMappingPairs(jobsNode) {
+			if p.key.Value == gateJobName {
+				goJobNode = p.value
+			}
+		}
+		if goJobNode == nil {
+			errs = append(errs, fmt.Errorf("workflow %q block (line %d, scope: workflow) has no %q job", "jobs", jobsNode.Line, gateJobName))
+		} else if goJobNode.Kind != yaml.MappingNode {
+			errs = append(errs, fmt.Errorf("job %q (line %d, scope: job %q) is not a mapping", gateJobName, goJobNode.Line, gateJobName))
+		} else {
+			scope := fmt.Sprintf("job %q", gateJobName)
+			var stepsNode, runsOnNode *yaml.Node
+			for _, p := range yamlMappingPairs(goJobNode) {
+				audit.GateJobKeys = append(audit.GateJobKeys, p.key.Value)
+				if !stringSliceContains(gateJobAllowedKeys, p.key.Value) {
+					errs = append(errs, fmt.Errorf(
+						"%s key %q (line %d, scope: %s) is not on the reviewed whitelist gateJobAllowedKeys %v — the check that is supposed to run on every change could be switched off or redirected by this key",
+						scope, p.key.Value, p.key.Line, scope, gateJobAllowedKeys))
+				}
+				if p.key.Value == "runs-on" {
+					runsOnNode = p.value
+				}
+				if p.key.Value == "steps" {
+					stepsNode = p.value
+				}
+			}
+
+			if runsOnNode == nil || runsOnNode.Kind != yaml.ScalarNode || strings.TrimSpace(runsOnNode.Value) == "" {
+				errs = append(errs, fmt.Errorf("%s (line %d, scope: %s) has no non-empty runs-on: scalar value", scope, goJobNode.Line, scope))
+			}
+
+			if stepsNode == nil || stepsNode.Kind != yaml.SequenceNode || len(stepsNode.Content) == 0 {
+				errs = append(errs, fmt.Errorf("%s (line %d, scope: %s) has no non-empty steps: sequence", scope, goJobNode.Line, scope))
+			} else {
+				audit.StepCount = len(stepsNode.Content)
+
+				// Rule h: each of the two gate steps must appear exactly
+				// once, and its own key set must be a subset of
+				// gateStepAllowedKeys.
+				for _, wantStepName := range []string{blanketGateStepName, wiringGateStepName} {
+					var matches []*yaml.Node
+					for _, stepNode := range stepsNode.Content {
+						if stepNode.Kind != yaml.MappingNode {
+							continue
+						}
+						for _, sp := range yamlMappingPairs(stepNode) {
+							if sp.key.Value == "name" && sp.value.Value == wantStepName {
+								matches = append(matches, stepNode)
+							}
+						}
+					}
+					stepScope := fmt.Sprintf("step %q", wantStepName)
+					if len(matches) != 1 {
+						errs = append(errs, fmt.Errorf(
+							"%s (line %d, scope: %s) must contain exactly one step named %q — found %d",
+							scope, stepsNode.Line, scope, wantStepName, len(matches)))
+						continue
+					}
+					audit.GateStepNames = append(audit.GateStepNames, wantStepName)
+					for _, sp := range yamlMappingPairs(matches[0]) {
+						if !stringSliceContains(gateStepAllowedKeys, sp.key.Value) {
+							errs = append(errs, fmt.Errorf(
+								"%s key %q (line %d, scope: %s) is not on the reviewed whitelist gateStepAllowedKeys %v — the check that is supposed to run on every change could be switched off or redirected by this key",
+								stepScope, sp.key.Value, sp.key.Line, stepScope, gateStepAllowedKeys))
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return audit, errs
+}
+
+// TestReleaseGateWorkflowShapeIsWhitelisted is the structural complement
+// to TestReleaseGateCommandFailsATreeWithAFailingTest (the behavioural
+// proof) and TestReleaseGateWorkflowActuallyRuns (the trigger-presence
+// proof): it asserts the live .github/workflows/ci.yml carries EXACTLY the
+// reviewed key shape at workflow, job, trigger and gate-step scope, so
+// CR-01 (`jobs.go.continue-on-error`), CR-02 (`jobs.go.env` and its
+// step-level spelling) and CR-03 (`paths-ignore`) each fail because the
+// key is absent from a reviewed whitelist, not because any of them is
+// individually named in a check.
+func TestReleaseGateWorkflowShapeIsWhitelisted(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	workflowPath := filepath.Join(repoRoot, ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+
+	audit, errs := auditWorkflowShape(string(data))
+	if len(errs) > 0 {
+		var msgs []string
+		for _, e := range errs {
+			msgs = append(msgs, e.Error())
+		}
+		t.Fatalf("auditWorkflowShape found %d problem(s) with the live workflow's shape:\n  %s", len(errs), strings.Join(msgs, "\n  "))
+	}
+
+	// Anti-vacuity pins (T-172-63): a parser that silently walked nothing
+	// would report zero errors forever, which is the same failure shape as
+	// the substring checks this plan replaces. Pinning the measured counts
+	// against the live file means a shrunken audit — one that stopped
+	// looking — is fatal here, not silently passing.
+	t.Logf("audited root keys: %v", audit.RootKeys)
+	t.Logf("audited trigger names: %v", audit.TriggerNames)
+	t.Logf("audited trigger keys: %v", audit.TriggerKeys)
+	t.Logf("audited go job keys: %v", audit.GateJobKeys)
+	t.Logf("audited gate step names: %v", audit.GateStepNames)
+	t.Logf("audited step count: %d", audit.StepCount)
+
+	if len(audit.RootKeys) != 3 {
+		t.Fatalf("audit inspected %d root key(s) (%v), expected exactly 3 — a shrunken audit means the whitelist stopped looking, which passes forever, and is therefore fatal", len(audit.RootKeys), audit.RootKeys)
+	}
+	if len(audit.TriggerNames) != 2 {
+		t.Fatalf("audit inspected %d trigger name(s) (%v), expected exactly 2 — a shrunken audit means the whitelist stopped looking, which passes forever, and is therefore fatal", len(audit.TriggerNames), audit.TriggerNames)
+	}
+	if len(audit.GateJobKeys) != 2 {
+		t.Fatalf("audit inspected %d go-job key(s) (%v), expected exactly 2 — a shrunken audit means the whitelist stopped looking, which passes forever, and is therefore fatal", len(audit.GateJobKeys), audit.GateJobKeys)
+	}
+	if len(audit.GateStepNames) != 2 {
+		t.Fatalf("audit found %d gate step name(s) (%v), expected exactly 2 (%q and %q) — a shrunken audit means the whitelist stopped looking, which passes forever, and is therefore fatal", len(audit.GateStepNames), audit.GateStepNames, blanketGateStepName, wiringGateStepName)
+	}
+	if audit.StepCount < 10 {
+		t.Fatalf("audit found only %d step(s) in the %q job (measured 20 today) — expected at least 10; a shrunken audit means the whitelist stopped looking, which passes forever, and is therefore fatal", audit.StepCount, gateJobName)
 	}
 }
