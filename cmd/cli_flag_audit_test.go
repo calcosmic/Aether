@@ -46,6 +46,13 @@ var guardedAllowlistFiles = []string{
 	"cmd/testdata/orphan_allowlist_baseline.json",
 	"cmd/cli_flag_audit_test.go",
 	"cmd/testdata/flag_audit_skiplist_baseline.json",
+	// Added by 172-09: the frozen, byte-identical, name-keyed snapshot of
+	// orphan_allowlist_baseline.json as it stood immediately before the
+	// path-key migration. TestPathMigrationDidNotWidenTolerance diffs the
+	// migrated baseline against this file forever, so the migration itself
+	// stays auditable — this is also a guarded file, and the policy document
+	// must name it too.
+	"cmd/testdata/orphan_allowlist_baseline_pre_path_migration.json",
 }
 
 // skipSubcommandNames returns skipSubcommands as a name-only set, the shape
@@ -338,6 +345,14 @@ func TestFlagAuditSkipListOnlyShrinks(t *testing.T) {
 // copied from the document's own prose — and fails naming any guarded file
 // whose path text is missing from .aether/docs/orphan-allowlist-policy.md.
 func TestAllowlistPolicyNamesEveryGuardedFile(t *testing.T) {
+	// Mirrors wiringGateGuardFiles's floor pattern
+	// (subcommand_reachability_ratchet_test.go's TestWiringGuardsHaveNoRuntimeEscapeHatch):
+	// a future edit that trims guardedAllowlistFiles must fail loudly here
+	// rather than silently narrowing this policy-naming check.
+	if len(guardedAllowlistFiles) < 5 {
+		t.Fatalf("guardedAllowlistFiles has only %d entries — expected at least 5; a shrunk inventory would silently narrow this check", len(guardedAllowlistFiles))
+	}
+
 	data, err := os.ReadFile("../.aether/docs/orphan-allowlist-policy.md")
 	if err != nil {
 		t.Fatalf("read .aether/docs/orphan-allowlist-policy.md: %v", err)

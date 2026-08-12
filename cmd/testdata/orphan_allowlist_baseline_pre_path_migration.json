@@ -1,1466 +1,1391 @@
 [
   {
-    "name": "aether activity-log-init",
+    "name": "activity-log-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether activity-log-read",
+    "name": "activity-log-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether audit-catalog",
+    "name": "archive",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autofix-checkpoint",
+    "name": "audit-catalog",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autofix-rollback",
+    "name": "autofix-checkpoint",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-check-replan",
+    "name": "autofix-rollback",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-headless-check",
+    "name": "autopilot-check-replan",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-init",
+    "name": "autopilot-headless-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-resume",
+    "name": "autopilot-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-set-headless",
+    "name": "autopilot-resume",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-status",
+    "name": "autopilot-set-headless",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-stop",
+    "name": "autopilot-status",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-update",
+    "name": "autopilot-stop",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether backup-prune-global",
+    "name": "autopilot-update",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether binary-download",
+    "name": "backup-prune-global",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether bootstrap-system",
+    "name": "binary-download",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether build-reconcile",
+    "name": "bootstrap-system",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether cache-clean",
+    "name": "build-reconcile",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether cache-clean-stale",
+    "name": "cache-clean",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether chamber-compare",
+    "name": "cache-clean-stale",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether chamber-create",
+    "name": "chamber-compare",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether chamber-list",
+    "name": "chamber-create",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether chamber-verify",
+    "name": "chamber-list",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether changelog-append",
+    "name": "chamber-verify",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether changelog-collect-plan-data",
+    "name": "changelog-append",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether charter-write",
+    "name": "changelog-collect-plan-data",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether check-antipattern",
+    "name": "charter-write",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether clash-check",
+    "name": "check-antipattern",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether clash-setup",
+    "name": "clash-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether closeout",
-    "reason": "path-collision-revealed",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether codebase-query",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether codebase-scan",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether colonize",
-    "reason": "path-collision-revealed",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether colony-archive-xml",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether colony-depth",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether colony-depth get",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether colony-depth set",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether colony-name",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether colony-prime",
+    "name": "clash-setup",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether colony-vital-signs",
+    "name": "codebase-query",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether consolidation-phase-end",
+    "name": "codebase-scan",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether consolidation-seal",
+    "name": "colony-archive-xml",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether context-capsule",
+    "name": "colony-depth",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether context-update",
+    "name": "colony-name",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether contract-schema",
+    "name": "colony-prime",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-archivist",
+    "name": "colony-vital-signs",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-critic",
+    "name": "consolidation-phase-end",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-herald",
+    "name": "consolidation-seal",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-janitor",
+    "name": "context-capsule",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-librarian",
+    "name": "context-update",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-nurse",
+    "name": "contract-schema",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-run",
+    "name": "curation-archivist",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-scribe",
+    "name": "curation-critic",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether curation-sentinel",
+    "name": "curation-herald",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether data-safety-stats",
+    "name": "curation-janitor",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether domain-detect",
+    "name": "curation-librarian",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether emoji-audit",
+    "name": "curation-nurse",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether entropy-score",
+    "name": "curation-run",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether error-add",
+    "name": "curation-scribe",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether error-flag-pattern",
+    "name": "curation-sentinel",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether error-pattern-check",
+    "name": "data-safety-stats",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether error-summary",
+    "name": "domain-detect",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether eternal-init",
+    "name": "emoji-audit",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether eternal-store",
+    "name": "entropy-score",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether event-bus-cleanup",
+    "name": "error-add",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether event-bus-publish",
+    "name": "error-flag-pattern",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether event-bus-query",
+    "name": "error-pattern-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether event-bus-replay",
+    "name": "error-summary",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether event-bus-subscribe",
+    "name": "eternal-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether export",
+    "name": "eternal-store",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether export archive",
+    "name": "event-bus-cleanup",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether export pheromones",
-    "reason": "path-collision-revealed",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether export registry",
+    "name": "event-bus-publish",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether export wisdom",
+    "name": "event-bus-query",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether failure-classify",
+    "name": "event-bus-replay",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether flag-auto-resolve",
+    "name": "event-bus-subscribe",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether flag-check-blockers",
+    "name": "export",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether force-unlock",
+    "name": "failure-classify",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether gate-auto-resolve",
+    "name": "flag-auto-resolve",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether gate-check",
+    "name": "flag-check-blockers",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether gate-classify",
+    "name": "force-unlock",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether gate-recovery-template",
+    "name": "gate-auto-resolve",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether gate-results-read",
+    "name": "gate-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether gate-results-write",
+    "name": "gate-classify",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether generate-ant-name",
+    "name": "gate-recovery-template",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether generate-commit-message",
+    "name": "gate-results-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether generate-progress-bar",
+    "name": "gate-results-write",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether generate-threshold-bar",
+    "name": "generate-ant-name",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether graph-cluster",
+    "name": "generate-commit-message",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether graph-link",
+    "name": "generate-progress-bar",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether graph-neighbors",
+    "name": "generate-threshold-bar",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether graph-reach",
+    "name": "get",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether grave-add",
+    "name": "graph-cluster",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether grave-check",
+    "name": "graph-link",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hive-abstract",
+    "name": "graph-neighbors",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hive-init",
+    "name": "graph-reach",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hive-promote",
+    "name": "grave-add",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hive-read",
+    "name": "grave-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hive-revoke",
+    "name": "hive-abstract",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hive-search",
+    "name": "hive-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hook-pre-compact",
+    "name": "hive-promote",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hook-pre-tool-use",
+    "name": "hive-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hook-stop",
+    "name": "hive-revoke",
     "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether host",
-    "reason": "path-collision-revealed",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether host build",
-    "reason": "path-collision-revealed",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether host lifecycle",
+    "name": "hive-search",
     "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether host oracle",
-    "reason": "path-collision-revealed",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether host swarm",
-    "reason": "path-collision-revealed",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether host watch",
-    "reason": "path-collision-revealed",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether immune-auto-scar",
+    "name": "hook-pre-compact",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether import",
+    "name": "hook-pre-tool-use",
     "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether import pheromones",
-    "reason": "path-collision-revealed",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether import registry",
+    "name": "hook-stop",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether import wisdom",
+    "name": "immune-auto-scar",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether incident-rule-add",
+    "name": "import",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether init-ceremony",
+    "name": "incident-rule-add",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether instinct-apply",
+    "name": "init-ceremony",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether instinct-archive",
+    "name": "instinct-apply",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether instinct-create",
+    "name": "instinct-archive",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether instinct-decay-all",
+    "name": "instinct-create",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether instinct-read",
+    "name": "instinct-decay-all",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether instinct-read-trusted",
+    "name": "instinct-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether integrity",
+    "name": "instinct-read-trusted",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether internal-worker-adapter",
+    "name": "integrity",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learn-export",
+    "name": "internal-worker-adapter",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learn-import",
+    "name": "learn-export",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-approve-proposals",
+    "name": "learn-import",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-check-promotion",
+    "name": "learning-approve-proposals",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-defer-proposals",
+    "name": "learning-check-promotion",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-display-proposals",
+    "name": "learning-defer-proposals",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-disprove",
+    "name": "learning-display-proposals",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-extract-fallback",
+    "name": "learning-disprove",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-inject",
+    "name": "learning-extract-fallback",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-list",
+    "name": "learning-inject",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-observe",
+    "name": "learning-list",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-promote",
+    "name": "learning-observe",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-promote-auto",
+    "name": "learning-promote",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-propose",
+    "name": "learning-promote-auto",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-select-proposals",
+    "name": "learning-propose",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-undo-promotions",
+    "name": "learning-select-proposals",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether learning-validate",
+    "name": "learning-undo-promotions",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether load-state",
+    "name": "learning-validate",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether medic-auto-spawn-check",
+    "name": "lifecycle",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether memory-capture",
+    "name": "load-state",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-acknowledge",
+    "name": "medic-auto-spawn-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-collect",
+    "name": "memory-capture",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-cross-pr-analysis",
+    "name": "midden-acknowledge",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-handle-revert",
+    "name": "midden-collect",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-prune",
+    "name": "midden-cross-pr-analysis",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-review",
+    "name": "midden-handle-revert",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-search",
+    "name": "midden-prune",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-tag",
+    "name": "midden-review",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether midden-write",
+    "name": "midden-search",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether milestone-detect",
+    "name": "midden-tag",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether normalize-args",
+    "name": "midden-write",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether oracle-iterate",
+    "name": "milestone-detect",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether oracle-iterate-finalize",
+    "name": "normalize-args",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether parallel-mode",
+    "name": "oracle-iterate",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether parallel-mode get",
+    "name": "oracle-iterate-finalize",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether parallel-mode set",
+    "name": "parallel-mode",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pending-decision-add",
+    "name": "pending-decision-add",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pending-decision-list",
+    "name": "pending-decision-list",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pending-decision-resolve",
+    "name": "pending-decision-resolve",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pheromone-count",
+    "name": "pheromone-count",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pheromone-merge-back",
+    "name": "pheromone-merge-back",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pheromone-prime",
+    "name": "pheromone-prime",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pheromone-snapshot-inject",
+    "name": "pheromone-snapshot-inject",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pheromone-validate-xml",
+    "name": "pheromone-validate-xml",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether plan-granularity",
+    "name": "plan-granularity",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether plan-granularity get",
+    "name": "plan-research-escalate",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether plan-granularity set",
+    "name": "pr-context",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether plan-research-escalate",
+    "name": "privacy-scan",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether pr-context",
+    "name": "proof",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether privacy-scan",
+    "name": "queen-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether proof",
+    "name": "queen-migrate",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether queen-init",
+    "name": "queen-promote",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether queen-migrate",
+    "name": "queen-promote-instinct",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether queen-promote",
+    "name": "queen-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether queen-promote-instinct",
+    "name": "queen-seed-from-hive",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether queen-read",
+    "name": "queen-thresholds",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether queen-seed-from-hive",
+    "name": "queen-write-learnings",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether queen-thresholds",
+    "name": "reconcile",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether queen-write-learnings",
+    "name": "recovery-log-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether reconcile",
+    "name": "recovery-log-write",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether recovery-log-read",
+    "name": "registry",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether recovery-log-write",
+    "name": "registry-add",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether registry-add",
+    "name": "registry-export-xml",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether registry-export-xml",
+    "name": "registry-import-xml",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether registry-import-xml",
+    "name": "registry-list",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether registry-list",
+    "name": "review-ledger-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether review-ledger-read",
+    "name": "review-ledger-resolve",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether review-ledger-resolve",
+    "name": "review-ledger-summary",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether review-ledger-summary",
+    "name": "review-ledger-write",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether review-ledger-write",
+    "name": "scar-add",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether scar-add",
+    "name": "scar-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether scar-check",
+    "name": "scar-list",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether scar-list",
+    "name": "serve",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether serve",
+    "name": "session-clear",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether session-clear",
+    "name": "session-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether session-init",
+    "name": "session-mark-resumed",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether session-mark-resumed",
+    "name": "session-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether session-read",
+    "name": "session-update",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether session-update",
+    "name": "session-verify-fresh",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether session-verify-fresh",
+    "name": "set",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether setup",
+    "name": "setup",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether shelf-detect",
+    "name": "shelf-detect",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether shelf-dismiss-batch",
+    "name": "shelf-dismiss-batch",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether shelf-promote-batch",
+    "name": "shelf-promote-batch",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether should-skip-gate",
+    "name": "should-skip-gate",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether signature-match",
+    "name": "signature-match",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether signature-scan",
+    "name": "signature-scan",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-archive",
+    "name": "skill-archive",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-curator-run",
+    "name": "skill-curator-run",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-detect",
+    "name": "skill-detect",
     "reason": "skill-lifecycle",
     "owner_phase": "178"
   },
   {
-    "name": "aether skill-diff",
+    "name": "skill-diff",
     "reason": "skill-lifecycle",
     "owner_phase": "178"
   },
   {
-    "name": "aether skill-index",
+    "name": "skill-index",
     "reason": "skill-lifecycle",
     "owner_phase": "178"
   },
   {
-    "name": "aether skill-index-read",
+    "name": "skill-index-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-inject",
+    "name": "skill-inject",
     "reason": "skill-lifecycle",
     "owner_phase": "178"
   },
   {
-    "name": "aether skill-is-user-created",
+    "name": "skill-is-user-created",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-list",
+    "name": "skill-list",
     "reason": "skill-lifecycle",
     "owner_phase": "178"
   },
   {
-    "name": "aether skill-list-lifecycle",
+    "name": "skill-list-lifecycle",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-manifest-read",
+    "name": "skill-manifest-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-match",
+    "name": "skill-match",
     "reason": "skill-lifecycle",
     "owner_phase": "178"
   },
   {
-    "name": "aether skill-patch",
+    "name": "skill-patch",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-pin",
+    "name": "skill-pin",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-promote",
+    "name": "skill-promote",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-recover",
+    "name": "skill-recover",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-view",
+    "name": "skill-view",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skip-phase",
+    "name": "skip-phase",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether source-check",
+    "name": "source-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether spawn-can-spawn",
+    "name": "spawn-can-spawn",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether spawn-can-spawn-swarm",
+    "name": "spawn-can-spawn-swarm",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether spawn-efficiency",
+    "name": "spawn-efficiency",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether spawn-get-depth",
+    "name": "spawn-get-depth",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether spawn-tree-active",
+    "name": "spawn-tree-active",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether spawn-tree-depth",
+    "name": "spawn-tree-depth",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether spawn-tree-load",
+    "name": "spawn-tree-load",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether state-checkpoint",
+    "name": "state-checkpoint",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether state-mutate",
+    "name": "state-mutate",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether state-read-field",
+    "name": "state-read-field",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether state-write",
+    "name": "state-write",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether suggest-analyze",
+    "name": "suggest-analyze",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether suggest-approve",
+    "name": "suggest-approve",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether survey-verify",
+    "name": "survey-verify",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-activity-log",
+    "name": "swarm-activity-log",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-cleanup",
+    "name": "swarm-cleanup",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-display-get",
+    "name": "swarm-display-get",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-display-init",
+    "name": "swarm-display-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-display-inline",
+    "name": "swarm-display-inline",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-display-render",
+    "name": "swarm-display-render",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-display-text",
+    "name": "swarm-display-text",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-display-update",
+    "name": "swarm-display-update",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-findings-add",
+    "name": "swarm-findings-add",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-findings-init",
+    "name": "swarm-findings-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-findings-read",
+    "name": "swarm-findings-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-solution-set",
+    "name": "swarm-solution-set",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-timing-eta",
+    "name": "swarm-timing-eta",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-timing-get",
+    "name": "swarm-timing-get",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-timing-start",
+    "name": "swarm-timing-start",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether temp-clean",
+    "name": "temp-clean",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trace-export",
+    "name": "trace-export",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trace-inspect",
+    "name": "trace-inspect",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trace-replay",
+    "name": "trace-replay",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trace-rotate",
+    "name": "trace-rotate",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trace-summary",
+    "name": "trace-summary",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trophallaxis-diagnose",
+    "name": "trophallaxis-diagnose",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trophallaxis-retry",
+    "name": "trophallaxis-retry",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trust-score-compute",
+    "name": "trust-score-compute",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trust-score-decay",
+    "name": "trust-score-decay",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trust-tier",
+    "name": "trust-tier",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether unload-state",
+    "name": "unload-state",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether update-progress",
+    "name": "update-progress",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether validate-oracle-state",
+    "name": "validate-oracle-state",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether validate-state",
+    "name": "validate-state",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether validate-worker-response",
+    "name": "validate-worker-response",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether verify-claims",
+    "name": "verify-claims",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether version-check-cached",
+    "name": "version-check-cached",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether versions",
+    "name": "versions",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether view-state-collapse",
+    "name": "view-state-collapse",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether view-state-expand",
+    "name": "view-state-expand",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether view-state-get",
+    "name": "view-state-get",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether view-state-init",
+    "name": "view-state-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether view-state-set",
+    "name": "view-state-set",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether view-state-toggle",
+    "name": "view-state-toggle",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether visuals-dump",
+    "name": "visuals-dump",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether wisdom-export-xml",
+    "name": "wisdom",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether wisdom-import-xml",
+    "name": "wisdom-export-xml",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether worktree-allocate",
+    "name": "wisdom-import-xml",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether worktree-cleanup",
+    "name": "worktree-allocate",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether worktree-create",
+    "name": "worktree-cleanup",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether worktree-list",
+    "name": "worktree-create",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether worktree-merge-back",
+    "name": "worktree-list",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether worktree-orphan-scan",
+    "name": "worktree-merge-back",
+    "reason": "unreviewed-pre-existing",
+    "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "worktree-orphan-scan",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   }

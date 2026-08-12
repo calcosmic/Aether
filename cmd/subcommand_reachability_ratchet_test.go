@@ -128,6 +128,74 @@ func resolveSkillLifecyclePaths(t *testing.T) map[string]bool {
 	return paths
 }
 
+// pathCollisionRevealedOrphans is 172-09's one deliberate, on-the-record
+// D-07 disposition (2026-08-12): the nine command paths the path-keying
+// migration in this plan newly reveals as orphaned, because the pre-migration
+// name-keyed scanner collapsed each of them onto a same-leaf-name sibling
+// that DOES have a real caller. D-07 requires every orphan the scan finds to
+// go into the baseline honestly — these are recorded, not repaired (no
+// caller is invented, no command is deleted). Each is a genuinely different,
+// separately-registered command from the sibling that used to (incorrectly)
+// vouch for it:
+//
+//   - aether colonize (cmd/codex_workflow_cmds.go:30) — previously credited by
+//     a documented call to aether host colonize (cmd/host_cmd.go:32).
+//   - aether closeout (cmd/ceremony_cmd.go:118) — previously credited by a
+//     documented call to aether ceremony closeout.
+//   - aether host (cmd/host_cmd.go:16) — the bare parent command with no
+//     subcommand. Previously credited by ANY "aether host <subcommand>"
+//     invocation, because the old scheme credited the first token ("host")
+//     bare, regardless of which subcommand followed. Nothing calls bare
+//     "aether host" with no subcommand.
+//   - aether host build (cmd/host_cmd.go:56) — previously credited by a
+//     documented call to the unrelated top-level aether build
+//     (cmd/codex_workflow_cmds.go:106).
+//   - aether host oracle (cmd/host_cmd.go:80) — previously credited by a
+//     documented call to the unrelated top-level aether oracle
+//     (cmd/compatibility_cmds.go:55).
+//   - aether host swarm (cmd/host_cmd.go:96) — previously credited by a
+//     documented call to the unrelated top-level aether swarm
+//     (cmd/swarm_cmd.go:103).
+//   - aether host watch (cmd/host_cmd.go:88) — previously credited by a
+//     documented call to the unrelated top-level aether watch
+//     (cmd/compatibility_cmds.go:31).
+//   - aether export pheromones (cmd/exchange.go:46) — previously credited by
+//     a documented call to aether import pheromones (cmd/exchange.go:344),
+//     which shares the bare leaf "pheromones". Neither is actually called
+//     directly today: /ant-export-signals and /ant-import-signals invoke the
+//     separate flat commands aether export-signals / aether import-signals
+//     (cmd/codex_signals_cmds.go), not the nested "export pheromones" /
+//     "import pheromones" subcommands.
+//   - aether import pheromones (cmd/exchange.go:344) — previously credited by
+//     a documented call to aether export pheromones, the mirror image of the
+//     entry above.
+var pathCollisionRevealedOrphans = map[string]bool{
+	"aether colonize":          true,
+	"aether closeout":          true,
+	"aether host":              true,
+	"aether host build":        true,
+	"aether host oracle":       true,
+	"aether host swarm":        true,
+	"aether host watch":        true,
+	"aether export pheromones": true,
+	"aether import pheromones": true,
+}
+
+// loadPreMigrationReasonByLeaf reads the frozen, byte-identical,
+// name-keyed pre-migration snapshot and returns leaf name -> (reason,
+// owner_phase), so writeOrphanAllowlist can carry forward exactly the
+// reason/owner_phase each pre-existing entry already had rather than
+// re-deriving it (which could silently drift the D-08 count).
+func loadPreMigrationReasonByLeaf(t *testing.T) map[string]orphanAllowlistEntry {
+	t.Helper()
+	pre := loadOrphanAllowlist(t, "testdata/orphan_allowlist_baseline_pre_path_migration.json")
+	byLeaf := make(map[string]orphanAllowlistEntry, len(pre))
+	for _, e := range pre {
+		byLeaf[e.Name] = e
+	}
+	return byLeaf
+}
+
 // orphanAllowlistEntry is one committed exemption. D-08: every entry carries
 // a reason and an owning phase, so a later phase's "this list drops to 0"
 // criterion stays measurable. D-09: this lives in its own dedicated file,
@@ -890,11 +958,28 @@ func loadOrphanAllowlist(t *testing.T, path string) []orphanAllowlistEntry {
 func writeOrphanAllowlist(t *testing.T, orphans []string) {
 	t.Helper()
 	skillPaths := resolveSkillLifecyclePaths(t)
+	preByLeaf := loadPreMigrationReasonByLeaf(t)
 	entries := make([]orphanAllowlistEntry, 0, len(orphans))
 	for _, name := range orphans {
 		reason, owner := "unreviewed-pre-existing", "RECLAIM"
-		if skillPaths[name] {
+		switch {
+		case skillPaths[name]:
+			// Path-keyed skill-lifecycle set: keeps skill-lifecycle / 178
+			// regardless of migration status.
 			reason, owner = "skill-lifecycle", "178"
+		case pathCollisionRevealedOrphans[name]:
+			// 172-09's one deliberate, on-the-record disposition (D-07):
+			// newly revealed by the path-keying migration, recorded honestly
+			// rather than repaired.
+			reason, owner = "path-collision-revealed", "RECLAIM"
+		default:
+			// Carried forward from before the migration: keep exactly the
+			// reason/owner_phase the pre-migration snapshot already recorded
+			// for this leaf, rather than re-deriving it.
+			leaf := name[strings.LastIndex(name, " ")+1:]
+			if pre, ok := preByLeaf[leaf]; ok {
+				reason, owner = pre.Reason, pre.OwnerPhase
+			}
 		}
 		entries = append(entries, orphanAllowlistEntry{Name: name, Reason: reason, OwnerPhase: owner})
 	}
@@ -1079,6 +1164,27 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 			if e.Name == path && e.OwnerPhase != "178" {
 				t.Errorf("%q is one of the eight reviewed skill-lifecycle orphan candidates but carries owner_phase %q, want \"178\"", path, e.OwnerPhase)
 			}
+		}
+	}
+
+	// D-08 count survives the migration: exactly 6 live entries carry
+	// owner_phase 178, and each one is one of the reviewed skill-lifecycle
+	// paths. Phase 178's success criterion is that this set reaches zero; if
+	// the path-key migration silently changed the count, that criterion
+	// becomes unmeasurable.
+	var phase178 []string
+	for _, e := range allowlist {
+		if e.OwnerPhase == "178" {
+			phase178 = append(phase178, e.Name)
+		}
+	}
+	if len(phase178) != 6 {
+		sort.Strings(phase178)
+		t.Errorf("expected exactly 6 live entries with owner_phase \"178\", found %d: %s", len(phase178), strings.Join(phase178, ", "))
+	}
+	for _, name := range phase178 {
+		if !skillPaths[name] {
+			t.Errorf("%q carries owner_phase \"178\" but is not one of the eight reviewed skill-lifecycle paths", name)
 		}
 	}
 }
@@ -1277,6 +1383,93 @@ func TestOrphanAllowlistOnlyShrinks(t *testing.T) {
 		t.Errorf("%d command(s) were added to the tolerated orphan list without being added to the committed baseline: %s\n"+
 			"The allowlist may only shrink. Give the command a real caller, or delete its entry — do not edit the baseline to make this pass.",
 			len(added), strings.Join(added, ", "))
+	}
+}
+
+// TestOrphanAllowlistIsPathKeyed is 172-09's guard against a silent revert to
+// leaf-name keys (or a stale entry for a command that no longer exists):
+// every entry name in BOTH the live list and the baseline must contain a
+// space, carry the "aether " prefix, and resolve through rootCmd.Find to a
+// command whose CommandPath() equals the entry name exactly.
+func TestOrphanAllowlistIsPathKeyed(t *testing.T) {
+	check := func(t *testing.T, path, listPath string) {
+		t.Helper()
+		entries := loadOrphanAllowlist(t, listPath)
+		var bad []string
+		for _, e := range entries {
+			if !strings.Contains(e.Name, " ") || !strings.HasPrefix(e.Name, "aether ") {
+				bad = append(bad, fmt.Sprintf("%q (not a space-containing \"aether \"-prefixed path)", e.Name))
+				continue
+			}
+			target, _, err := rootCmd.Find(strings.Fields(strings.TrimPrefix(e.Name, "aether ")))
+			if err != nil || target == nil || target == rootCmd {
+				bad = append(bad, fmt.Sprintf("%q (does not resolve via rootCmd.Find)", e.Name))
+				continue
+			}
+			if got := target.CommandPath(); got != e.Name {
+				bad = append(bad, fmt.Sprintf("%q (resolves to %q instead)", e.Name, got))
+			}
+		}
+		if len(bad) > 0 {
+			sort.Strings(bad)
+			t.Errorf("%s has %d entry name(s) that are not real, path-keyed command paths: %s", path, len(bad), strings.Join(bad, ", "))
+		}
+	}
+	t.Run("live", func(t *testing.T) { check(t, "testdata/orphan_allowlist.json", "testdata/orphan_allowlist.json") })
+	t.Run("baseline", func(t *testing.T) { check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json") })
+}
+
+// TestPathMigrationDidNotWidenTolerance is the invariant that makes "the
+// allowlist may only shrink" (D-10) true ACROSS a key-format change. A pure
+// set-membership diff (TestOrphanAllowlistOnlyShrinks) cannot do this on its
+// own, because every one of the 278 pre-migration entries changed its own
+// key text (leaf name -> full path) in this exact migration — a naive diff
+// against the old baseline would report all 278 as "added" even though
+// nothing was actually widened. Instead: every baseline entry's LEAF name
+// must appear in the frozen pre-migration snapshot's name set, unless the
+// entry's full PATH is explicitly reviewed in pathCollisionRevealedOrphans.
+// The converse is asserted too, so a reviewed exemption cannot silently
+// linger after its command is deleted from the baseline.
+func TestPathMigrationDidNotWidenTolerance(t *testing.T) {
+	baseline := loadOrphanAllowlist(t, "testdata/orphan_allowlist_baseline.json")
+	pre := loadOrphanAllowlist(t, "testdata/orphan_allowlist_baseline_pre_path_migration.json")
+
+	preLeaves := make(map[string]bool, len(pre))
+	for _, e := range pre {
+		preLeaves[e.Name] = true
+	}
+
+	var unreviewedWidening []string
+	baselinePaths := make(map[string]bool, len(baseline))
+	for _, e := range baseline {
+		baselinePaths[e.Name] = true
+		leaf := e.Name[strings.LastIndex(e.Name, " ")+1:]
+		if preLeaves[leaf] {
+			continue
+		}
+		if pathCollisionRevealedOrphans[e.Name] {
+			continue
+		}
+		unreviewedWidening = append(unreviewedWidening, e.Name)
+	}
+	if len(unreviewedWidening) > 0 {
+		sort.Strings(unreviewedWidening)
+		t.Errorf("%d baseline entry/entries are neither carried forward from the pre-migration snapshot nor an explicitly reviewed path-collision exemption: %s\n"+
+			"The path-key migration must not widen tolerance. Add a real caller, or if this is a genuine newly-revealed orphan, review it into pathCollisionRevealedOrphans.",
+			len(unreviewedWidening), strings.Join(unreviewedWidening, ", "))
+	}
+
+	var deadExemptions []string
+	for path := range pathCollisionRevealedOrphans {
+		if !baselinePaths[path] {
+			deadExemptions = append(deadExemptions, path)
+		}
+	}
+	if len(deadExemptions) > 0 {
+		sort.Strings(deadExemptions)
+		t.Errorf("%d entry/entries in pathCollisionRevealedOrphans no longer appear in the baseline: %s\n"+
+			"Remove the dead exemption from pathCollisionRevealedOrphans — its command was already fixed or deleted.",
+			len(deadExemptions), strings.Join(deadExemptions, ", "))
 	}
 }
 
