@@ -53,7 +53,7 @@
 
 **How success criteria are written here.** CLAUDE.md's Definition of Done governs: *a requirement is satisfied only when a command exists that someone can run, and that command fails when the requirement is unmet.* Two corrections from this repo's own history shaped the criteria below. A criterion reading "fewer than 27 castes loaded" already passed and proved nothing. A token ledger's unit test asserted the same arithmetic its parser used, so a 186x undercount shipped green — which is why the spend criteria name the expected figures (102,050 / 102,550) rather than the intent ("measure tokens"). Where possible the criteria assert a **proportion or an invariant** (grand total equals the sum of the `self` column; the allowlist may only shrink; the depth cap numbers hold with five user agents installed) rather than the presence of a named section.
 
-- [ ] **Phase 172: Wiring Proof** (9/9 plans built; re-verification 2026-08-11 after gap-closure waves 5-6 still finds gaps — criterion 3 now CLOSED, criterion 4's durability half still defeatable, and criterion 1 REGRESSED with two live counterexamples; see 172-VERIFICATION.md and 172-REVIEW.md) - A registered subcommand with no caller fails CI, and every CLI flag named in `.aether/*.md` exists — the ratchet lands before the capabilities it constrains
+- [ ] **Phase 172: Wiring Proof** (12/12 plans built; re-verification 2026-08-12 after gap-closure waves 7-9 still finds gaps — criteria 2 and 3 CLOSED; criterion 1's colonize/closeout regression CLOSED but the shrink-only guard compares leaf names and its frozen anchor file is unpinned, so a new unwired command can still be added to both lists undetected; criterion 4's step- and workflow-level bypasses CLOSED by an execution-based harness that generalises to unenumerated mutations, but three job-level bypasses remain — `jobs.<id>.continue-on-error`, `jobs.<id>.env.GOFLAGS`, and `paths-ignore` on the triggers. All five remaining defects independently reproduced; see 172-VERIFICATION.md and 172-REVIEW.md) - A registered subcommand with no caller fails CI, and every CLI flag named in `.aether/*.md` exists — the ratchet lands before the capabilities it constrains
 - [ ] **Phase 173: Delegation Guard** - Depth is derived from the parent and refused past a cap, a whole-tree budget bounds what depth alone cannot, guards fail closed, and the operator watches the tree grow. Nothing gains the ability to delegate here
 - [ ] **Phase 174: Spend Ledger** - What a run cost is measured with stated arithmetic including cache tokens, persists past the process, separates estimates from measurements, and rolls nested children up to their parent exactly once
 - [ ] **Phase 175: Orchestration Visibility** - The operator reads which workers the Queen chose and why, which it did not call, where the runtime overrode it, and which workers actually found something
@@ -773,7 +773,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
-| 172. Wiring Proof | v1.26 | 12/12 | Complete   | 2026-08-12 |
+| 172. Wiring Proof | v1.26 | 12/12 | Gaps found | - |
 | 173. Delegation Guard | v1.26 | 0/TBD | Not started | - |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
