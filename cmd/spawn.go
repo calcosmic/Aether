@@ -96,6 +96,24 @@ var spawnLogCmd = &cobra.Command{
 			outputError(1, denyReason, nil)
 			return nil
 		}
+
+		// SPAWN-01/D-09: the authoritative decision runs here, before
+		// RecordSpawn, so a refusal leaves no spawn-tree entry and consumes
+		// no budget. RequesterDepth is the PARENT's own depth (derivedDepth
+		// - 1), not the prospective child's — the decision itself computes
+		// the prospective child's depth as RequesterDepth + 1.
+		decision := spawnCanSpawnDecision(spawnDecisionInput{
+			RequesterName:        parent,
+			RequesterDepth:       depth - 1,
+			DepthIsAuthoritative: true,
+			Caste:                caste,
+			Task:                 task,
+		})
+		if !decision.Allowed {
+			outputError(1, decision.Detail, nil)
+			return nil
+		}
+
 		if err := st.RecordSpawn(parent, caste, name, task, depth); err != nil {
 			outputError(2, fmt.Sprintf("failed to record spawn: %v", err), nil)
 			return nil
@@ -214,14 +232,74 @@ func latestSpawnEntryByName(st *agent.SpawnTree, name string) *agent.SpawnEntry 
 	return nil
 }
 
-// spawnCanSpawnDecision is the allow/deny seam Phase 173 (SPAWN-01) replaces
-// with a real decision. Today it unconditionally allows every depth. It is a
-// package-level function variable (not a plain func) specifically so a test
-// can substitute a deny answer for the duration of a single test case,
-// driving --enforce's deny-to-non-zero-exit path without waiting for
-// Phase 173 to implement the real cap logic.
-var spawnCanSpawnDecision = func(depth int) (bool, string) {
-	return true, ""
+// spawnMaxDelegationDepth is the deepest depth a spawn-tree entry may hold
+// (D-01/D-05): the coordinator is depth 0, its own workers are depth 1, and
+// their helpers are depth 2. A spawn that would be recorded at depth 3 is
+// refused, so the refusal test is prospectiveDepth > spawnMaxDelegationDepth.
+const spawnMaxDelegationDepth = 2
+
+// spawnDecisionInput is what a caller (or the recorder itself) knows about a
+// prospective spawn at decision time. RequesterName/RequesterDepth describe
+// the WOULD-BE PARENT, not the child being proposed — the decision computes
+// the child's own prospective depth as RequesterDepth + 1.
+//
+// DepthIsAuthoritative distinguishes spawn-log's call (true — RequesterDepth
+// came from the parent's own recorded spawn-tree entry, per deriveSpawnDepth)
+// from spawn-can-spawn's advisory call without --name (false — RequesterDepth
+// is whatever the caller claims about itself). This is the RESIDUE named in
+// this plan's must_haves: spawn-can-spawn without --name reports on a depth
+// the caller states about itself; only spawn-log is authoritative, because a
+// caller can lie to the checker but cannot avoid the recorder.
+type spawnDecisionInput struct {
+	RequesterName        string
+	RequesterDepth       int
+	DepthIsAuthoritative bool
+	Caste                string
+	Task                 string
+}
+
+// spawnDecisionResult is the outcome of a spawnCanSpawnDecision call. Reason
+// is one of the exact strings "depth", "budget", "ancestor-cycle",
+// "unresolved", or empty when Allowed is true. Detail is the human-readable
+// sentence D-10 requires — naming which helper, whose child, and why — and is
+// what reaches the operator through --enforce's error message.
+type spawnDecisionResult struct {
+	Allowed bool
+	Reason  string
+	Detail  string
+}
+
+// spawnCanSpawnDecision is the single chokepoint SPAWN-01 makes real: depth,
+// then whole-run budget, then ancestor-cycle, each named and each denying on
+// the first hit. It is a package-level function variable (not a plain func)
+// specifically so a test can substitute a deny answer for the duration of a
+// single test case, driving --enforce's deny-to-non-zero-exit path.
+var spawnCanSpawnDecision = func(in spawnDecisionInput) spawnDecisionResult {
+	prospectiveDepth := in.RequesterDepth + 1
+	if prospectiveDepth > spawnMaxDelegationDepth {
+		requesterName := in.RequesterName
+		if requesterName == "" {
+			requesterName = "the requester"
+		}
+		return spawnDecisionResult{
+			Allowed: false,
+			Reason:  "depth",
+			Detail: fmt.Sprintf(
+				"%s is at depth %d; a helper spawned from here would be depth %d, past the cap of %d",
+				requesterName, in.RequesterDepth, prospectiveDepth, spawnMaxDelegationDepth,
+			),
+		}
+	}
+
+	if reason := spawnTreeBudgetReason(in); reason != "" {
+		return spawnDecisionResult{Allowed: false, Reason: "budget", Detail: reason}
+	}
+
+	if reason := spawnAncestorCycleReason(in); reason != "" {
+		return spawnDecisionResult{Allowed: false, Reason: "ancestor-cycle", Detail: reason}
+	}
+
+	return spawnDecisionResult{Allowed: true}
 }
 
 var spawnCanSpawnCmd = &cobra.Command{
@@ -245,21 +323,46 @@ var spawnCanSpawnCmd = &cobra.Command{
 		}
 
 		enforce, _ := cmd.Flags().GetBool("enforce")
-		canSpawn, reason := spawnCanSpawnDecision(depth)
+		name, _ := cmd.Flags().GetString("name")
 
-		if enforce && !canSpawn {
+		in := spawnDecisionInput{RequesterDepth: depth}
+		// Set RequesterName from --name whenever --name is non-empty,
+		// whether or not it resolves to a recorded entry: the ancestor
+		// check keys off RequesterName, so dropping it on a failed lookup
+		// would silently skip that check for exactly the caller whose
+		// identity could not be confirmed.
+		if name != "" {
+			in.RequesterName = name
+			if store != nil {
+				st := agent.NewSpawnTree(store, "spawn-tree.txt")
+				if entry := latestSpawnEntryByName(st, name); entry != nil {
+					in.RequesterDepth = entry.Depth
+					in.DepthIsAuthoritative = true
+				}
+			}
+		}
+
+		decision := spawnCanSpawnDecision(in)
+
+		if enforce && !decision.Allowed {
 			msg := fmt.Sprintf("spawn denied at depth %d", depth)
-			if reason != "" {
-				msg = fmt.Sprintf("%s: %s", msg, reason)
+			if decision.Detail != "" {
+				msg = fmt.Sprintf("%s: %s", msg, decision.Detail)
 			}
 			outputError(1, msg, nil)
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
-			"can_spawn": canSpawn,
-			"depth":     depth,
-		})
+		result := map[string]interface{}{
+			"can_spawn":     decision.Allowed,
+			"depth":         depth,
+			"authoritative": in.DepthIsAuthoritative,
+		}
+		if !decision.Allowed {
+			result["reason"] = decision.Reason
+			result["detail"] = decision.Detail
+		}
+		outputOK(result)
 		return nil
 	},
 }
@@ -452,6 +555,7 @@ func init() {
 
 	spawnCanSpawnCmd.Flags().Int("depth", 0, "Spawn depth to check (required)")
 	spawnCanSpawnCmd.Flags().Bool("enforce", false, "Exit non-zero when spawning is denied")
+	spawnCanSpawnCmd.Flags().String("name", "", "Requester's recorded agent name; when it resolves, the recorded depth overrides --depth")
 
 	validateWorkerResponseCmd.Flags().String("response", "", "Response to validate (required)")
 	validateWorkerResponseCmd.Flags().Bool("expect-json", false, "Check if response is valid JSON")
