@@ -29,13 +29,6 @@ const spawnTreeBudgetMax = 20
 // have to watch a second window for it.
 const spawnTreeBudgetWarnFraction = 0.75
 
-// spawnTreeBudgetAbandonedStatus is the one spawn status excluded from the
-// budget count (D-18: reaping releases budget back to the run). Plan 09
-// (D-15..D-18) is the authority on the reaped/"abandoned" status name and its
-// release-on-reap behaviour; until plan 09 lands, this compares against the
-// literal string below.
-const spawnTreeBudgetAbandonedStatus = "abandoned"
-
 // spawnTreeBudget is the whole-run tree-budget result. The "...Budget" struct
 // shape with a Reason string is borrowed from cmd/queen_spawn_budget.go's
 // per-wave selection type's naming convention on purpose — that is where the
@@ -85,7 +78,7 @@ func spawnTreeBudgetState() (spawnTreeBudget, error) {
 
 	consumed := 0
 	for _, e := range entries {
-		if strings.EqualFold(strings.TrimSpace(e.Status), spawnTreeBudgetAbandonedStatus) {
+		if strings.EqualFold(strings.TrimSpace(e.Status), agent.SpawnStatusAbandoned) {
 			continue
 		}
 		consumed++
