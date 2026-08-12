@@ -117,10 +117,21 @@ type orphanAllowlistEntry struct {
 }
 
 // registeredCommandInfo is one node of the real, registered cobra tree.
+//
+// Path and AliasPaths carry the full resolved cobra command path
+// (CommandPath(), e.g. "aether host colonize") rather than the bare leaf
+// name. This is the fix for CR-04/GAP B: two commands sharing a leaf name at
+// different parents (`aether colonize` vs `aether host colonize`) used to
+// collapse onto the same bare-name key, so a documented call to one silently
+// credited the other as wired. Name is kept only for the AST-based
+// definition-file attribution check and for reason-tagging, both of which are
+// leaf-based by design.
 type registeredCommandInfo struct {
-	Name    string
-	Aliases []string
-	Hidden  bool
+	Name       string
+	Path       string
+	AliasPaths []string
+	Aliases    []string
+	Hidden     bool
 }
 
 // ---------------------------------------------------------------------------
@@ -139,10 +150,17 @@ func enumerateRegisteredCommands(root *cobra.Command) []registeredCommandInfo {
 			if child.Name() == "help" || child.Name() == "completion" {
 				continue
 			}
+			path := child.CommandPath()
+			aliasPaths := make([]string, 0, len(child.Aliases))
+			for _, alias := range child.Aliases {
+				aliasPaths = append(aliasPaths, strings.TrimSuffix(path, child.Name())+alias)
+			}
 			out = append(out, registeredCommandInfo{
-				Name:    child.Name(),
-				Aliases: append([]string{}, child.Aliases...),
-				Hidden:  child.Hidden,
+				Name:       child.Name(),
+				Path:       path,
+				AliasPaths: aliasPaths,
+				Aliases:    append([]string{}, child.Aliases...),
+				Hidden:     child.Hidden,
 			})
 			walk(child)
 		}
@@ -366,13 +384,20 @@ func singleFileCallerNames(t *testing.T, path string) map[string]bool {
 	t.Helper()
 	names := map[string]bool{}
 
-	// credit records command as having a caller, plus — per D-03's "menu
-	// entry counts" and the multi-word invocation shape (`export pheromones`,
-	// `host build`) — every immediately-following token that still looks like
-	// a subcommand name, stopping at the first flag, placeholder, or shell
-	// operator.
+	// credit resolves command plus its immediately-following args through the
+	// real cobra tree and records the resolved CommandPath() as the evidence
+	// key — never the bare leaf name. This is the CR-04/GAP B fix: the old
+	// version credited the bare command token PLUS every following bareword
+	// (`aether host colonize` credited both the parent token "host" and the
+	// bare trailing token "colonize"), which is exactly what let a documented
+	// call to `aether host colonize` silently clear the unrelated top-level
+	// `aether colonize`. rootCmd.Find consumes precisely the tokens that
+	// resolve to a real command and returns the one node they resolve to, so
+	// resolving once and keying on CommandPath() is the correct, narrower
+	// replacement: `aether host colonize` now credits only
+	// "aether host colonize", never bare "colonize".
 	credit := func(command string, args []string) {
-		names[command] = true
+		argv := []string{command}
 		for _, a := range args {
 			if isShellOperator(a) || isPlaceholder(a) {
 				break
@@ -383,7 +408,10 @@ func singleFileCallerNames(t *testing.T, path string) map[string]bool {
 			if !subcommandNameShapeRe.MatchString(a) {
 				break
 			}
-			names[a] = true
+			argv = append(argv, a)
+		}
+		if target, _, err := rootCmd.Find(argv); err == nil && target != nil && target != rootCmd {
+			names[target.CommandPath()] = true
 		}
 	}
 
@@ -512,10 +540,14 @@ func collectGoSelfInvocationCallers(t *testing.T, root string, defIndex map[stri
 				if sub == "cmd" && defIndex[name] == filepath.Base(p) {
 					// Self-reference from the command's own definition file
 					// is not caller evidence (D-01: "outside its own
-					// definition file").
+					// definition file"). Deliberately leaf-based: defIndex is
+					// keyed by leaf name, and a command can only be defined
+					// once, so no path ambiguity applies here.
 					return true
 				}
-				evidence[name] = true
+				if target, _, ferr := rootCmd.Find([]string{name}); ferr == nil && target != nil && target != rootCmd {
+					evidence[target.CommandPath()] = true
+				}
 				return true
 			})
 			return nil
@@ -708,30 +740,41 @@ func collectSubstitutionCallerNames(t *testing.T, root string) map[string]bool {
 // Orphan computation and allowlist I/O
 // ---------------------------------------------------------------------------
 
-// computeOrphanNames returns, sorted, every registered command whose name and
-// every alias have no caller evidence.
+// computeOrphanNames returns, sorted, every registered command whose full
+// command path and every alias path have no caller evidence.
 func computeOrphanNames(registered []registeredCommandInfo, evidence map[string]bool) []string {
-	// A handful of leaf names are legitimately reused under different
-	// parents (`export pheromones` / `import pheromones`, `flag get` /
-	// `colony get` / `parallel-mode get`, ...). The allowlist's JSON shape is
-	// keyed by bare name only, so if two differently-parented commands share
-	// a name and BOTH are orphaned, they collapse into one allowlist entry
-	// rather than being reported (and written to the JSON) twice.
+	// seen is keyed by Path now, not by bare Name. Command paths are unique
+	// by construction (cobra does not allow two commands to register the
+	// same path), so nothing collapses any more — the old collapsing of two
+	// differently-parented commands sharing a leaf name into one allowlist
+	// entry was itself part of the CR-04/GAP B defect: `aether colonize` and
+	// `aether host colonize` used to share one "colonize" entry, so crediting
+	// either cleared both.
 	seen := map[string]bool{}
 	var orphans []string
 	for _, c := range registered {
-		credited := evidence[c.Name]
+		credited := evidence[c.Path]
 		if !credited {
-			for _, a := range c.Aliases {
+			for _, a := range c.AliasPaths {
 				if evidence[a] {
 					credited = true
 					break
 				}
 			}
 		}
-		if !credited && !seen[c.Name] {
-			seen[c.Name] = true
-			orphans = append(orphans, c.Name)
+		if !credited {
+			if seen[c.Path] {
+				// Unreachable: c.Path is unique per registered command, so
+				// no two loop iterations can ever produce the same Path.
+				// Kept as a defensive no-op rather than deleted, so a future
+				// change to enumerateRegisteredCommands that reintroduces
+				// path collisions fails by silently skipping an orphan
+				// rather than by a panic — visible in a shrinking orphan
+				// count, not a crash.
+				continue
+			}
+			seen[c.Path] = true
+			orphans = append(orphans, c.Path)
 		}
 	}
 	sort.Strings(orphans)
@@ -841,6 +884,24 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 		t.Fatalf("enumerated only %d registered commands, want >= 100 — the enumeration is broken and would pass vacuously forever", len(registered))
 	}
 
+	// Anti-vacuity: every enumerated Path must be a real, resolved cobra
+	// command path with the "aether " prefix. A silent degradation back to
+	// bare names (or an empty Path) would make every evidence-set comparison
+	// miss and report all ~405 commands as orphans — this states that
+	// specific failure mode in one line instead of a wall of 405 individually
+	// unhelpful diffs.
+	var badPaths []string
+	for _, c := range registered {
+		if c.Path == "" || !strings.HasPrefix(c.Path, "aether ") {
+			badPaths = append(badPaths, fmt.Sprintf("%q (Path=%q)", c.Name, c.Path))
+		}
+	}
+	if len(badPaths) > 0 {
+		sort.Strings(badPaths)
+		t.Fatalf("%d registered command(s) have an empty or malformed Path (want the \"aether \" prefix from CommandPath()): %s",
+			len(badPaths), strings.Join(badPaths, ", "))
+	}
+
 	defIndex := buildCommandDefinitionIndex(t, ".")
 	var unattributed []string
 	for _, c := range registered {
@@ -939,6 +1000,81 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 				t.Errorf("%q is one of the eight reviewed skill-lifecycle orphan candidates but carries owner_phase %q, want \"178\"", name, e.OwnerPhase)
 			}
 		}
+	}
+}
+
+// TestCallerEvidenceIsNotSharedBetweenSameLeafNames is the permanent,
+// hermetic regression test for CR-04/GAP B. It is deliberately NOT pinned to
+// the two real commands the gap was discovered against (`aether colonize` vs
+// `aether host colonize`, `aether closeout` vs `aether ceremony closeout`) —
+// those are expected to be repaired later (given a real caller or removed),
+// and a guard whose own failure condition includes its target's eventual
+// success is a guard that gets edited under pressure the day that happens.
+// Instead this registers a throwaway same-leaf-name collision entirely inside
+// its own body, so the property it proves — caller evidence for one path
+// never leaks to a same-named command at a different path — survives the
+// repair of colonize and closeout indefinitely.
+func TestCallerEvidenceIsNotSharedBetweenSameLeafNames(t *testing.T) {
+	const leaf = "ratchet-selftest-collide"
+	const parent = "ratchet-selftest-parent"
+
+	topLevel := &cobra.Command{Use: leaf, Run: func(*cobra.Command, []string) {}}
+	parentCmd := &cobra.Command{Use: parent, Run: func(*cobra.Command, []string) {}}
+	child := &cobra.Command{Use: leaf, Run: func(*cobra.Command, []string) {}}
+	parentCmd.AddCommand(child)
+
+	rootCmd.AddCommand(topLevel)
+	rootCmd.AddCommand(parentCmd)
+	defer rootCmd.RemoveCommand(topLevel)
+	defer rootCmd.RemoveCommand(parentCmd)
+
+	wantChildPath := "aether " + parent + " " + leaf
+	wantTopLevelPath := "aether " + leaf
+
+	// Sanity-check cobra actually resolves the two fixtures the way this test
+	// assumes, before trusting any assertion built on top of that — via the
+	// same rootCmd.Find entry point credit() itself uses, not just via
+	// CommandPath() directly.
+	if got := child.CommandPath(); got != wantChildPath {
+		t.Fatalf("fixture child.CommandPath() = %q, want %q", got, wantChildPath)
+	}
+	if got := topLevel.CommandPath(); got != wantTopLevelPath {
+		t.Fatalf("fixture topLevel.CommandPath() = %q, want %q", got, wantTopLevelPath)
+	}
+	if resolved, _, err := rootCmd.Find([]string{parent, leaf}); err != nil || resolved != child {
+		t.Fatalf("rootCmd.Find([%q, %q]) = %v, %v, want the child fixture command", parent, leaf, resolved, err)
+	}
+	if resolved, _, err := rootCmd.Find([]string{leaf}); err != nil || resolved != topLevel {
+		t.Fatalf("rootCmd.Find([%q]) = %v, %v, want the top-level fixture command", leaf, resolved, err)
+	}
+
+	tmp := t.TempDir()
+	fixtureFile := filepath.Join(tmp, "collision.md")
+	content := "```bash\naether " + parent + " " + leaf + "\n```\n"
+	if err := os.WriteFile(fixtureFile, []byte(content), 0644); err != nil {
+		t.Fatalf("write collision fixture: %v", err)
+	}
+
+	names := singleFileCallerNames(t, fixtureFile)
+	if !names[wantChildPath] {
+		t.Errorf("singleFileCallerNames did not credit %q from a documented call to %q", wantChildPath, parent+" "+leaf)
+	}
+	if names[wantTopLevelPath] {
+		t.Errorf("singleFileCallerNames credited %q (the unrelated top-level command) from a call to %q — caller evidence leaked across a same-leaf-name collision, exactly the CR-04/GAP B defect", wantTopLevelPath, parent+" "+leaf)
+	}
+
+	registered := enumerateRegisteredCommands(rootCmd)
+	orphans := computeOrphanNames(registered, names)
+
+	orphanSet := map[string]bool{}
+	for _, o := range orphans {
+		orphanSet[o] = true
+	}
+	if !orphanSet[wantTopLevelPath] {
+		t.Errorf("computeOrphanNames did not report %q as an orphan; it has no caller of its own and must be named", wantTopLevelPath)
+	}
+	if orphanSet[wantChildPath] {
+		t.Errorf("computeOrphanNames reported %q as an orphan, but it has a direct documented caller", wantChildPath)
 	}
 }
 
