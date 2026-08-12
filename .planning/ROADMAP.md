@@ -653,7 +653,7 @@ Plans:
 - [x] 172-09-PLAN.md — wave 7 — WIRE-01 (gap B): key caller evidence by the resolved cobra command path so `aether host colonize` stops crediting the unrelated top-level `aether colonize`, migrate the allowlist and baseline to path keys against a committed pre-migration snapshot that proves tolerance did not widen
 
 **Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 172-10-PLAN.md — wave 8 — WIRE-01, WIRE-02, WIRE-03 (gap A, core): stop asserting on the workflow file's text — take the release gate's own command from `ci.yml`, run it against a deliberately broken tree, and require it to exit non-zero and to exit zero against an unbroken one
+- [x] 172-10-PLAN.md — wave 8 — WIRE-01, WIRE-02, WIRE-03 (gap A, core): stop asserting on the workflow file's text — take the release gate's own command from `ci.yml`, run it against a deliberately broken tree, and require it to exit non-zero and to exit zero against an unbroken one
 
 **Wave 9** *(blocked on Wave 8 completion)*
 - [ ] 172-11-PLAN.md — wave 9 — WIRE-01, WIRE-02, WIRE-03 (gap A, complements): the disabling routes execution cannot see — a commented-out step, a conditioned step, disabled `on:` triggers, and a job-level `if:` — plus honest `-run` extraction in both directions
@@ -773,7 +773,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
-| 172. Wiring Proof | v1.26 | 10/12 | In Progress|  |
+| 172. Wiring Proof | v1.26 | 11/12 | In Progress|  |
 | 173. Delegation Guard | v1.26 | 0/TBD | Not started | - |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
