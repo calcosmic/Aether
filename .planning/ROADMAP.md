@@ -659,7 +659,7 @@ Plans:
 - [x] 172-11-PLAN.md — wave 9 — WIRE-01, WIRE-02, WIRE-03 (gap A, complements): the disabling routes execution cannot see — a commented-out step, a conditioned step, disabled `on:` triggers, and a job-level `if:` — plus honest `-run` extraction in both directions
 
 **Wave 10** *(gap closure — final round, blocked on the 2026-08-12 re-verification and code review)*
-- [ ] 172-12-PLAN.md — wave 10 — WIRE-01, WIRE-02, WIRE-03 (CR-01, CR-02, CR-03): close the job-level and trigger-level bypasses with a whitelist of workflow shape — the workflow's root keys, the `go` job's keys, the trigger names and each trigger's keys, and the two gate steps' keys must be exactly a reviewed set in Go source, so `continue-on-error`, `env: GOFLAGS`, `paths-ignore` and every key nobody enumerated fail by default; plus the source stating plainly that the execution harness never sees the workflow's environment
+- [x] 172-12-PLAN.md — wave 10 — WIRE-01, WIRE-02, WIRE-03 (CR-01, CR-02, CR-03): close the job-level and trigger-level bypasses with a whitelist of workflow shape — the workflow's root keys, the `go` job's keys, the trigger names and each trigger's keys, and the two gate steps' keys must be exactly a reviewed set in Go source, so `continue-on-error`, `env: GOFLAGS`, `paths-ignore` and every key nobody enumerated fail by default; plus the source stating plainly that the execution harness never sees the workflow's environment
 
 **Wave 11** *(blocked on Wave 10 completion)*
 - [ ] 172-13-PLAN.md — wave 11 — WIRE-01 (CR-04, CR-05): compare allowlist entries by full command path against an explicit 272 + 12 + 9 = 293 accounting of the 172-09 migration instead of by bare last word, proven by re-running the verifier's own `aether colony-depth setup` counterexample red; and pin the frozen pre-migration snapshot's contents with a SHA-256 constant in Go source
@@ -779,7 +779,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
-| 172. Wiring Proof | v1.26 | 12/14 | Gaps found | - |
+| 172. Wiring Proof | v1.26 | 13/14 | In Progress|  |
 | 173. Delegation Guard | v1.26 | 0/TBD | Not started | - |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
