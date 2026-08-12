@@ -1,15 +1,19 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Phase 172, plan 05 (D-15), hardened by plan 07.
@@ -397,4 +401,330 @@ func testFuncNamesIn(t *testing.T, path string) []string {
 		}
 	}
 	return names
+}
+
+// Plan 172-10 (gap closure, third attempt at ROADMAP success criterion 4's
+// durability half).
+//
+// Two prior attempts asserted on the TEXT of .github/workflows/ci.yml and
+// were each defeated in turn: attempt 1 was a whole-file substring search,
+// defeated by a decoy line elsewhere in the file; attempt 2 (plan 172-07,
+// blanketReleaseGateProblem above) was a step-scoped substring/first-match
+// check, defeated by five independently reproduced mutations (`; true`,
+// `|| exit 0`, an appended `-run` filter, `| cat`, and a commented-out run
+// line — 172-VERIFICATION.md GAP A). A third, cleverer text check would only
+// be defeated by a sixth mutation nobody has enumerated yet, because a
+// blocklist of known-bad spellings cannot establish the property the
+// criterion actually asks for.
+//
+// This block instead EXECUTES the release gate's own command — read from
+// ci.yml at test time, never a hardcoded copy — against two throwaway probe
+// modules: one with a passing test, one with a deliberately failing one.
+// gateCommandDiscriminates requires the command to exit 0 on the passing
+// module and non-zero on the failing one. Every mutation above collapses
+// that discrimination and is therefore caught by running the command, not
+// by recognising its spelling — including whatever the sixth mutation turns
+// out to be. TestGateProbeCatchesEveryKnownGateNeutering (below, plan
+// 172-10 task 2) is evidence that this mechanism works; it is not the
+// mechanism itself.
+
+// releaseGateCommandFromWorkflow locates the blanket release-gate step
+// (blanketGateStepName) via the existing stepBlock/runLineOf locators and
+// returns its run line's command verbatim — with only the leading `run:`
+// token and surrounding whitespace stripped. Nothing else is filtered,
+// rewritten, or sanitised: the point is to run exactly what the workflow
+// actually runs, so the workflow and this guard cannot silently drift apart.
+func releaseGateCommandFromWorkflow(workflow string) (string, error) {
+	block, err := stepBlock(workflow, blanketGateStepName)
+	if err != nil {
+		return "", fmt.Errorf("%v — cannot extract the release gate's own command to execute it", err)
+	}
+
+	runLine, ok := runLineOf(block)
+	if !ok {
+		return "", fmt.Errorf("CI step %q has no run: line", blanketGateStepName)
+	}
+
+	cmd := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(runLine), "run:"))
+	if cmd == "" {
+		return "", fmt.Errorf("CI step %q's run line is empty after stripping the leading run: token", blanketGateStepName)
+	}
+	return cmd, nil
+}
+
+// writeGateProbeModule writes a throwaway, dependency-free, single-package
+// Go module into dir: a go.mod declaring module aethergateprobe with the
+// same `go` directive as the repo's own go.mod (read and parsed at test
+// time, never hardcoded, so a future toolchain bump cannot silently break
+// the probe), and gateprobe_test.go declaring package gateprobe with a
+// single func TestGateProbe(t *testing.T). When failing is false, the test
+// body is empty and the module's own test suite passes; when true, the body
+// calls t.Fatal so `go test` against this module exits non-zero.
+func writeGateProbeModule(t *testing.T, dir string, failing bool) {
+	t.Helper()
+
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	goModData, err := os.ReadFile(filepath.Join(repoRoot, "go.mod"))
+	if err != nil {
+		t.Fatalf("read repo go.mod: %v", err)
+	}
+
+	var goDirective string
+	for _, line := range strings.Split(string(goModData), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "go ") {
+			goDirective = strings.TrimSpace(strings.TrimPrefix(trimmed, "go"))
+			break
+		}
+	}
+	if goDirective == "" {
+		t.Fatalf("repo go.mod has no `go <version>` directive — cannot declare a matching toolchain requirement for the probe module")
+	}
+
+	goModContent := fmt.Sprintf("module aethergateprobe\n\ngo %s\n", goDirective)
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goModContent), 0o644); err != nil {
+		t.Fatalf("write probe go.mod in %s: %v", dir, err)
+	}
+
+	var body string
+	if failing {
+		body = "\tt.Fatal(\"deliberate failure: the release gate command must report this\")\n"
+	}
+	testContent := fmt.Sprintf("package gateprobe\n\nimport \"testing\"\n\nfunc TestGateProbe(t *testing.T) {\n%s}\n", body)
+	if err := os.WriteFile(filepath.Join(dir, "gateprobe_test.go"), []byte(testContent), 0o644); err != nil {
+		t.Fatalf("write probe test file in %s: %v", dir, err)
+	}
+}
+
+// gateCommandTimeout bounds every probe-module execution below. A gate
+// command that hangs past this deadline is treated as a defect, never a
+// silent pass — see runGateCommand.
+const gateCommandTimeout = 120 * time.Second
+
+// runGateCommand executes command via `sh -c` with cmd.Dir set to dir,
+// bounded by the gateCommandTimeout context deadline, and returns its exit
+// code. cmd.Env is left nil so the subprocess inherits the parent
+// environment implicitly — this file may not name os.Environ
+// (TestWiringGuardsHaveNoRuntimeEscapeHatch rejects it). A command that
+// fails to start, errors for a reason other than a non-zero exit, or hits
+// the deadline is a defect in the harness or the gate command itself, not a
+// pass, so those cases t.Fatalf rather than returning a code.
+func runGateCommand(t *testing.T, command, dir string) int {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), gateCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+
+	if err == nil {
+		t.Logf("command %q in %s exited 0\noutput:\n%s", command, dir, output)
+		return 0
+	}
+
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatalf("command %q in %s did not complete within 120s — a gate command that hangs or cannot start is a defect, not a pass\noutput so far:\n%s", command, dir, output)
+	}
+
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		t.Logf("command %q in %s exited %d\noutput:\n%s", command, dir, ee.ExitCode(), output)
+		return ee.ExitCode()
+	}
+
+	t.Fatalf("command %q in %s failed to run (not an ordinary non-zero exit): %v\noutput so far:\n%s", command, dir, err, output)
+	return -1
+}
+
+// gateCommandDiscriminates returns nil ONLY when command exits 0 in passDir
+// (the clean tree) AND non-zero in failDir (the tree carrying a
+// deliberately failing test). Either half breaking alone means the gate
+// cannot be relied on: exiting non-zero on a clean tree is a false alarm
+// that would redden every good build, and exiting zero on a tree with a
+// failing test is exactly the silent-narrowing failure mode this plan
+// exists to catch — the release gate reporting success while a test failed.
+func gateCommandDiscriminates(t *testing.T, command, passDir, failDir string) error {
+	t.Helper()
+
+	passExit := runGateCommand(t, command, passDir)
+	failExit := runGateCommand(t, command, failDir)
+
+	if passExit != 0 {
+		return fmt.Errorf("command %q reported failure (exit %d) on a tree containing no failing test — a false alarm that would make every clean build report red", command, passExit)
+	}
+	if failExit == 0 {
+		return fmt.Errorf("command %q reported success (exit %d) on a tree containing a deliberately failing test — it cannot fail the build when a test fails", command, failExit)
+	}
+	return nil
+}
+
+// TestReleaseGateCommandFailsATreeWithAFailingTest is the behavioural half
+// of ROADMAP Phase 172 success criterion 4: it takes the release gate's own
+// command, read from ci.yml at test time via releaseGateCommandFromWorkflow,
+// and proves BY EXECUTION that it fails a tree with a failing test and
+// passes a tree without one — the discrimination the criterion names,
+// established by running the command and watching it go red, not by
+// reading the workflow file.
+func TestReleaseGateCommandFailsATreeWithAFailingTest(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	workflowPath := filepath.Join(repoRoot, ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+
+	command, err := releaseGateCommandFromWorkflow(string(data))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	if _, lookErr := exec.LookPath("go"); lookErr != nil {
+		t.Fatalf("go toolchain not found on PATH — cannot execute the release gate command: %v", lookErr)
+	}
+	if _, lookErr := exec.LookPath("sh"); lookErr != nil {
+		t.Fatalf("sh not found on PATH — cannot execute the release gate command: %v", lookErr)
+	}
+
+	// Sanity floor only — NOT the proof, and must never be allowed to become
+	// the proof. A command that contains "go test" could still be neutered
+	// by any of the mutations this plan exists to catch (or by one nobody
+	// has thought of yet); the actual proof is the discrimination assertion
+	// below, which executes the command against both trees.
+	if command == "" || !strings.Contains(command, "go test") {
+		t.Fatalf("extracted release gate command %q does not look like a go test invocation — refusing to proceed", command)
+	}
+	t.Logf("release gate command extracted from ci.yml: %s", command)
+
+	root := t.TempDir()
+	passDir := filepath.Join(root, "pass")
+	failDir := filepath.Join(root, "fail")
+	if mkErr := os.Mkdir(passDir, 0o755); mkErr != nil {
+		t.Fatalf("mkdir %s: %v", passDir, mkErr)
+	}
+	if mkErr := os.Mkdir(failDir, 0o755); mkErr != nil {
+		t.Fatalf("mkdir %s: %v", failDir, mkErr)
+	}
+	writeGateProbeModule(t, passDir, false)
+	writeGateProbeModule(t, failDir, true)
+
+	if discErr := gateCommandDiscriminates(t, command, passDir, failDir); discErr != nil {
+		t.Fatalf("%v", discErr)
+	}
+}
+
+// TestGateProbeCatchesEveryKnownGateNeutering is EVIDENCE that the execution
+// mechanism above (gateCommandDiscriminates) works — it is NOT the
+// mechanism itself, and must never be read as one. Do not extend this table
+// to "fix" a future bypass; a bypass this table does not yet name is still
+// caught, because every row below is caught by RUNNING the mutated command
+// and observing it fail to discriminate, not by matching its text against a
+// list of known-bad spellings. The control row (the unmutated command)
+// exists so a future reader can confirm the harness is not simply rejecting
+// everything it is given.
+//
+// Each row's mutated command is built from the command extracted live from
+// ci.yml, never a literal copy, so the table cannot drift from what CI
+// actually runs.
+func TestGateProbeCatchesEveryKnownGateNeutering(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	workflowPath := filepath.Join(repoRoot, ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+
+	command, err := releaseGateCommandFromWorkflow(string(data))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	// One passing and one failing probe module directory, built once and
+	// reused across every row below, so the table stays bounded (Go's build
+	// cache is warm after the first row) rather than rebuilding a module
+	// seven times.
+	root := t.TempDir()
+	passDir := filepath.Join(root, "pass")
+	failDir := filepath.Join(root, "fail")
+	if mkErr := os.Mkdir(passDir, 0o755); mkErr != nil {
+		t.Fatalf("mkdir %s: %v", passDir, mkErr)
+	}
+	if mkErr := os.Mkdir(failDir, 0o755); mkErr != nil {
+		t.Fatalf("mkdir %s: %v", failDir, mkErr)
+	}
+	writeGateProbeModule(t, passDir, false)
+	writeGateProbeModule(t, failDir, true)
+
+	rows := []struct {
+		name    string
+		mutate  func(string) string
+		wantErr bool
+	}{
+		{
+			name:    "control: the unmutated command still discriminates",
+			mutate:  func(c string) string { return c },
+			wantErr: false,
+		},
+		{
+			name:    "appended semicolon-true swallows the exit status",
+			mutate:  func(c string) string { return c + "; true" },
+			wantErr: true,
+		},
+		{
+			name:    "appended or-exit-zero swallows the exit status",
+			mutate:  func(c string) string { return c + " || exit 0" },
+			wantErr: true,
+		},
+		{
+			name:    "an appended -run filter matches nothing, so zero tests execute",
+			mutate:  func(c string) string { return c + " -run TestNothingAtAll" },
+			wantErr: true,
+		},
+		{
+			name:    "piping through cat discards the real exit status",
+			mutate:  func(c string) string { return c + " | cat" },
+			wantErr: true,
+		},
+		{
+			name:    "the whole command commented out never runs",
+			mutate:  func(c string) string { return "# " + c },
+			wantErr: true,
+		},
+		{
+			name:    "the required text is present but sits inside a comment",
+			mutate:  func(c string) string { return "echo skip # " + c },
+			wantErr: true,
+		},
+	}
+
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			mutated := row.mutate(command)
+			discErr := gateCommandDiscriminates(t, mutated, passDir, failDir)
+			if row.wantErr {
+				if discErr == nil {
+					t.Fatalf("mutated command %q was expected to fail discrimination but gateCommandDiscriminates returned nil — "+
+						"this mutation slipped through, which is exactly the defect this phase has failed on twice before", mutated)
+				}
+				t.Logf("mutated command %q correctly caught: %v", mutated, discErr)
+			} else if discErr != nil {
+				t.Fatalf("control row (unmutated command %q) failed to discriminate: %v — the harness itself is broken, not just failing to catch a mutation", mutated, discErr)
+			} else {
+				t.Logf("control row (unmutated command %q) correctly discriminates", mutated)
+			}
+		})
+	}
 }
