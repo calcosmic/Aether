@@ -161,12 +161,15 @@ func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 	}
 
 	// Anti-vacuity floor (mirrors the convention cli_flag_audit_test.go:225
-	// and command_call_audit_test.go:1329 already use): measured 32 top-level
-	// Test functions across the five guard files as of plan 172-12; 20 is set
-	// just under that so ordinary churn does not trip it while a silent AST
-	// walk, or two-thirds of the guard tests being deleted, still does.
+	// and command_call_audit_test.go:1329 already use): measured 34 top-level
+	// Test functions across the five guard files as of plan 172-13 (172-13
+	// added TestPathMigrationRejectsASameLeafNewcomer and
+	// TestPreMigrationSnapshotIsFrozen to the 32 measured as of 172-12); 20
+	// is set well under that so ordinary churn does not trip it while a
+	// silent AST walk, or two-thirds of the guard tests being deleted,
+	// still does.
 	if len(testNames) < 20 {
-		t.Fatalf("AST enumeration over %d guard file(s) found only %d top-level Test function(s) — expected at least 20 (measured 32); "+
+		t.Fatalf("AST enumeration over %d guard file(s) found only %d top-level Test function(s) — expected at least 20 (measured 34); "+
 			"a walk that silently finds nothing would pass forever, so this is treated as a fatal enumeration failure",
 			len(wiringGateGuardFiles), len(testNames))
 	}
