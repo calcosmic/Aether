@@ -148,9 +148,11 @@ commit:
 ## Newly revealed orphans (Task 3, D-07 disposition: recorded, not repaired)
 
 Regenerating the allowlist against the path-keyed scanner raised the entry count from
-278 (pre-migration, leaf-keyed) to 293 (post-migration, path-keyed): 278 carried
-forward unchanged (just renamed to their full path), 6 unchanged skill-lifecycle
-entries (`owner_phase: "178"`), and 9 genuinely new discoveries — tagged
+278 (pre-migration, leaf-keyed) to 293 (post-migration, path-keyed): 274 carried
+forward one-to-one (just renamed to their full path, including the 6 unchanged
+skill-lifecycle entries tagged `owner_phase: "178"`), 10 produced by splitting 4
+collapsed leaf entries into the real commands they covered (see the correction under
+"Pre- and post-migration counts"), and 9 genuinely new discoveries — tagged
 `reason: "path-collision-revealed"`, `owner_phase: "RECLAIM"` — each previously
 vouched for by an unrelated, same-leaf-name sibling that does have a real caller:
 
@@ -177,10 +179,45 @@ future work, tracked by their allowlist entries.
 | | Count |
 |---|---|
 | Pre-migration (leaf-keyed) baseline, frozen forever in `orphan_allowlist_baseline_pre_path_migration.json` | 278 |
+| — of which unreviewed-pre-existing (`owner_phase: "RECLAIM"`) | 272 |
+| — of which skill-lifecycle (`owner_phase: "178"`) | 6 |
 | Post-migration (path-keyed) live allowlist / baseline | 293 |
-| — carried forward unchanged (renamed to full path) | 278 |
+| — carried forward one-to-one (renamed to full path) | 274 |
+| — produced by splitting 4 collapsed leaf entries into their real paths | 10 |
 | — newly revealed (`path-collision-revealed`) | 9 |
-| — skill-lifecycle (`owner_phase: "178"`) | 6 |
+
+Reconciliation: 274 + 10 + 9 = 293. The 6 skill-lifecycle entries are a subset of the
+274 carried one-to-one, not a separate addend.
+
+### Correction — the split entries (orchestrator note, post-merge)
+
+The table above originally read "carried forward unchanged | 278" alongside a separate
+"skill-lifecycle | 6" row, which double-counted the 6 and left the +15 change
+unreconciled (278 + 9 = 287, not 293). The missing 6 are **split entries**: under the
+old leaf keying, one allowlist entry silently covered every command sharing that leaf.
+Path keying correctly expands 4 such entries into the 10 real commands they were
+standing in for:
+
+| Pre-migration leaf entry | Post-migration path entries |
+|---|---|
+| `get` | `aether colony-depth get`, `aether parallel-mode get`, `aether plan-granularity get` |
+| `set` | `aether colony-depth set`, `aether parallel-mode set`, `aether plan-granularity set` |
+| `registry` | `aether export registry`, `aether import registry` |
+| `wisdom` | `aether export wisdom`, `aether import wisdom` |
+
+These 6 extra entries are legitimate — each names a real registered command that was
+already tolerated, just tolerated invisibly under a shared leaf. No tolerance was
+widened: 0 pre-migration leaves lost their entry, and every post-migration entry's leaf
+appears in the frozen snapshot or in the reviewed `pathCollisionRevealedOrphans` set.
+
+This is the exact blind spot the plan-checker flagged as non-blocking warning 1 before
+execution: `TestPathMigrationDidNotWidenTolerance` compares by **leaf**, so a legitimate
+one-to-many split is accepted as "carried forward" without being classified as newly
+revealed. The warning predicted it was unlikely to manifest; it manifested, on 4 leaves.
+The guard is not defeated — the split is visible in the committed baseline's diff, which
+is D-11's stated human backstop, and that is how it was caught here. But the automated
+classification remains coarser than the entry counts imply, and a future tightening
+should compare full paths where the pre-migration path is determinable.
 
 `python3` verification (pasted output):
 ```
