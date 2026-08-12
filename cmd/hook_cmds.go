@@ -22,6 +22,16 @@ type claudeHookInput struct {
 	CustomInstructions   string                 `json:"custom_instructions"`
 	StopHookActive       bool                   `json:"stop_hook_active"`
 	LastAssistantMessage string                 `json:"last_assistant_message"`
+	// AgentID, AgentType, and SessionID are Phase 173 (SPAWN-04) additions.
+	// These field names come from current official Claude Code hooks
+	// documentation and are a hypothesis, not a confirmed contract — Task 3
+	// of the 173-01 plan runs a real nested dispatch and records the actual
+	// observed field names in 173-HOOK-FINDINGS.md. If the observed names
+	// differ, plan 07 corrects them. All three are plain strings so an
+	// absent field decodes to the empty string rather than failing decode.
+	AgentID   string `json:"agent_id"`
+	AgentType string `json:"agent_type"`
+	SessionID string `json:"session_id"`
 }
 
 const postResumeStopGracePeriod = 15 * time.Minute
@@ -32,7 +42,8 @@ var hookPreToolUseCmd = &cobra.Command{
 	Hidden: true,
 	Args:   cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		input := readClaudeHookInput()
+		input, raw := readClaudeHookInput()
+		captureRawHookPayload(raw)
 
 		toolName := input.ToolName
 		if toolName == "" && len(args) > 0 {
@@ -95,7 +106,7 @@ var hookStopCmd = &cobra.Command{
 	Hidden: true,
 	Args:   cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		input := readClaudeHookInput()
+		input, _ := readClaudeHookInput()
 		if input.StopHookActive {
 			return nil
 		}
@@ -140,7 +151,7 @@ var hookPreCompactCmd = &cobra.Command{
 	Hidden: true,
 	Args:   cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		input := readClaudeHookInput()
+		input, _ := readClaudeHookInput()
 		if store == nil {
 			return nil
 		}
@@ -183,23 +194,45 @@ func allowStopAfterRecentResume() bool {
 	return age >= 0 && age <= postResumeStopGracePeriod
 }
 
-func readClaudeHookInput() claudeHookInput {
+func readClaudeHookInput() (claudeHookInput, []byte) {
 	var input claudeHookInput
 
 	info, err := os.Stdin.Stat()
 	if err != nil {
-		return input
+		return input, nil
 	}
 	if (info.Mode() & os.ModeCharDevice) != 0 {
-		return input
+		return input, nil
 	}
 
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil || len(strings.TrimSpace(string(data))) == 0 {
-		return input
+		return input, nil
 	}
 	_ = json.Unmarshal(data, &input)
-	return input
+	return input, data
+}
+
+// captureRawHookPayload appends the raw stdin bytes received by a hook to the
+// file named by AETHER_HOOK_CAPTURE_FILE, when that environment variable is
+// set. This is Phase 173 (SPAWN-04) Wave 0's opt-in evidence recorder: it
+// exists so the field names a future deny path matches on are copied from an
+// observed payload rather than assumed from documentation. It is off by
+// default (empty env var short-circuits immediately) and every error path
+// returns silently -- a capture failure must never affect the hook's
+// allow/deny answer (T-173-02).
+func captureRawHookPayload(raw []byte) {
+	path := strings.TrimSpace(os.Getenv("AETHER_HOOK_CAPTURE_FILE"))
+	if path == "" {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(raw)
+	_, _ = f.Write([]byte("\n"))
 }
 
 func hookToolTargetPath(toolInput map[string]interface{}) string {

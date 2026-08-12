@@ -257,6 +257,88 @@ func TestSanctionedScratchDirsDocumented(t *testing.T) {
 	}
 }
 
+// TestHookPreToolUseCapturesRawPayloadOnlyWhenCaptureFileIsSet is Phase 173
+// (SPAWN-04) Wave 0's proof that the AETHER_HOOK_CAPTURE_FILE recorder is
+// off by default and, when on, never changes the hook's allow/deny answer.
+// Run twice: once with the env var unset (no file, no capture) and once with
+// it set to a path under t.TempDir() (file exists, contents parse as JSON,
+// round-tripped tool_name matches). Both runs assert no block decision.
+func TestHookPreToolUseCapturesRawPayloadOnlyWhenCaptureFileIsSet(t *testing.T) {
+	payload := `{"hook_event_name":"PreToolUse","tool_name":"Task","tool_input":{}}`
+
+	t.Run("capture_off_by_default", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+
+		var buf bytes.Buffer
+		stdout = &buf
+		var errBuf bytes.Buffer
+		stderr = &errBuf
+
+		_, tmpDir := newTestStoreCmd(t)
+		defer os.RemoveAll(tmpDir)
+
+		t.Setenv("AETHER_HOOK_CAPTURE_FILE", "")
+		setHookStdin(t, payload)
+
+		rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("hook-pre-tool-use returned error: %v", err)
+		}
+
+		if strings.TrimSpace(buf.String()) != "" {
+			t.Fatalf("expected no stdout (no decision) when capture is off, got %q", buf.String())
+		}
+
+		captureCandidate := filepath.Join(tmpDir, "hook-capture.jsonl")
+		if _, err := os.Stat(captureCandidate); err == nil {
+			t.Fatalf("capture file was created even though AETHER_HOOK_CAPTURE_FILE was unset")
+		}
+	})
+
+	t.Run("capture_on_when_env_set", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+
+		var buf bytes.Buffer
+		stdout = &buf
+		var errBuf bytes.Buffer
+		stderr = &errBuf
+
+		_, tmpDir := newTestStoreCmd(t)
+		defer os.RemoveAll(tmpDir)
+
+		captureFile := filepath.Join(t.TempDir(), "hook-capture.jsonl")
+		t.Setenv("AETHER_HOOK_CAPTURE_FILE", captureFile)
+		setHookStdin(t, payload)
+
+		rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("hook-pre-tool-use returned error: %v", err)
+		}
+
+		if strings.TrimSpace(buf.String()) != "" {
+			t.Fatalf("capture must never change the hook's answer, got stdout %q", buf.String())
+		}
+
+		data, err := os.ReadFile(captureFile)
+		if err != nil {
+			t.Fatalf("expected capture file to exist: %v", err)
+		}
+		var captured map[string]interface{}
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		if len(lines) != 1 {
+			t.Fatalf("expected exactly one captured line, got %d: %q", len(lines), data)
+		}
+		if err := json.Unmarshal([]byte(lines[0]), &captured); err != nil {
+			t.Fatalf("captured content did not parse as JSON: %v (%q)", err, data)
+		}
+		if captured["tool_name"] != "Task" {
+			t.Fatalf("captured tool_name = %v, want Task", captured["tool_name"])
+		}
+	})
+}
+
 func TestHookPreToolUseBlocksMainBranchWhenRedirectActive(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
