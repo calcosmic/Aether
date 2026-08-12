@@ -40,9 +40,22 @@ const wiringGateStepName = "Verify subcommand wiring and CLI flag contracts"
 // step, and must remain structurally capable of failing the build.
 const blanketGateStepName = "Run Go tests"
 
-// blanketGateRunSubstring is the exact `go test` invocation the blanket
-// release-gate step's run line must contain.
-const blanketGateRunSubstring = "go test ./... -count=1 -timeout 900s"
+// blanketGateRunCommand is the exact command the blanket release-gate
+// step's run line must EQUAL, once the leading `run:` token is stripped —
+// not merely contain. This is a whitelist of the one accepted command, not
+// a blocklist of known-bad spellings, and it exists only as a cheap sanity
+// check on the run line's shape.
+//
+// It is NOT the proof that the release gate cannot be neutered, and must
+// never be mistaken for one — that is exactly the mistake that produced two
+// failed attempts at this criterion (172-VERIFICATION.md GAP A). The proof
+// is TestReleaseGateCommandFailsATreeWithAFailingTest, which executes this
+// command, read live from ci.yml, against a passing and a deliberately
+// failing probe tree and requires the exit codes to discriminate. A
+// weakened pin (this constant itself edited to something permissive) would
+// still be caught by that execution-based test, because it reads the
+// command from ci.yml at test time rather than trusting this constant.
+const blanketGateRunCommand = "go test ./... -count=1 -timeout 900s"
 
 // nameMarkerPrefix is the YAML step-name marker every step block begins
 // with. Declared once here so stepBlock is the single step locator in this
@@ -71,15 +84,17 @@ var wiringGateGuardFiles = []string{
 var runFlagArgRe = regexp.MustCompile(`-run\s+'([^']*)'`)
 
 // TestWiringGateStepRunsEveryWiringTest fails if the named CI step's -run
-// filter has fallen behind the guard tests it exists to run, if the step is
-// missing entirely, or if the blanket `go test ./...` release-gate step it
-// sits alongside has been narrowed, disabled, or removed. "Narrowed or
-// disabled" is checked structurally by blanketReleaseGateProblem — the step
-// must exist under its exact name, its run line must still contain the real
-// command, and the step must have no `if:` condition, no
-// `continue-on-error`, and no exit-status-swallowing fallback such as
-// `|| true` — not merely have the command's text appear somewhere in the
-// file, which a non-blocking decoy step can also satisfy.
+// filter has fallen behind the guard tests it exists to run (in either
+// direction — a guard test missing from the filter, or a stale alternative
+// in the filter matching no guard test), if the step is missing entirely or
+// carries an `if:`/`continue-on-error` of its own, or if the blanket
+// `go test ./...` release-gate step it sits alongside has been narrowed,
+// disabled, or removed. "Narrowed or disabled" is checked structurally by
+// blanketReleaseGateProblem — the step must exist under its exact name, its
+// run line must equal the real command exactly, and the step must have no
+// `if:` condition, no `continue-on-error`, and no exit-status-swallowing
+// fallback such as `|| true` — not merely have the command's text appear
+// somewhere in the file, which a non-blocking decoy step can also satisfy.
 func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
@@ -98,6 +113,18 @@ func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 	// blanket step must be present as a gate that can fail, not present as a
 	// string.
 	if err := blanketReleaseGateProblem(workflow); err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	// The named wiring step itself must also be held to the failing-
+	// capability standard, per D-15's own stated purpose (WR-02 / T-172-57)
+	// — a `continue-on-error` here would pass every other check while the
+	// step's own failure never fails the job.
+	wiringBlock, err := stepBlock(workflow, wiringGateStepName)
+	if err != nil {
+		t.Fatalf("%v — add it per D-15 so a wiring failure reads as a wiring problem, not one anonymous failure among hundreds", err)
+	}
+	if err := stepCanFailTheBuild(wiringBlock, wiringGateStepName); err != nil {
 		t.Fatalf("%v", err)
 	}
 
@@ -144,9 +171,11 @@ func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 }
 
 // stepBlock locates the step whose `- name:` value is exactly stepName,
-// anchored to the end of the line, and returns the block of workflow text
-// running from that name line up to (but excluding) the next line at the
-// same step indentation that begins a `- name:` entry, or to end of file.
+// anchored so a comment can never satisfy it, and returns the block of
+// workflow text running from that name line up to (but excluding) whichever
+// comes first: the next line at the same step indentation that begins a
+// `- name:` entry, or the first subsequent non-blank line whose indentation
+// is strictly less than the step marker's own indentation.
 //
 // Anchoring to end-of-line is load-bearing: "Run Go tests" is a strict
 // prefix of "Run Go tests with race detection" (ci.yml:44), so an
@@ -154,9 +183,23 @@ func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 // real gate step is deleted — replacing one decoy with another and
 // re-creating the exact bug this function exists to fix.
 //
-// This is the single step locator in the package; extractWiringGateRunArg
-// and blanketReleaseGateProblem both call it rather than each scanning the
-// workflow text independently.
+// The marker must ALSO be preceded on its own line by pure whitespace
+// (CR-02). Without that, `# - name: Run Go tests` — a step commented out of
+// existence — satisfies a plain substring search and is counted as present.
+// A match whose line prefix is not pure whitespace is rejected and the
+// search continues past it, so a real step further down (or nothing at all)
+// is what actually gets found.
+//
+// Bounding the block by indentation, rather than running to end of file
+// when no next same-indent marker exists, is what stops the `if:` /
+// `continue-on-error` scan in stepCanFailTheBuild from reading an unrelated
+// LATER step and misdiagnosing it as belonging to the step being checked —
+// the false "CI step \"Run Go tests\" has a conditional if: always()"
+// produced against a deleted step, recorded as IN-05.
+//
+// This is the single step locator in the package; extractWiringGateRunArg,
+// blanketReleaseGateProblem, and releaseGateCommandFromWorkflow all call it
+// rather than each scanning the workflow text independently.
 func stepBlock(workflow, stepName string) (string, error) {
 	marker := nameMarkerPrefix + stepName
 
@@ -173,24 +216,67 @@ func stepBlock(workflow, stepName string) (string, error) {
 		// or end of file) — otherwise this is a prefix collision like
 		// "Run Go tests" matching inside "Run Go tests with race
 		// detection", and the search continues past it.
-		if afterEnd == len(workflow) || workflow[afterEnd] == '\n' {
-			lineStart := strings.LastIndexByte(workflow[:absIdx], '\n') + 1
-			indent := workflow[lineStart:absIdx]
-			rest := workflow[absIdx:]
-
-			firstNL := strings.IndexByte(rest, '\n')
-			if firstNL == -1 {
-				return rest, nil
-			}
-			tail := rest[firstNL:]
-			nextMarker := "\n" + indent + nameMarkerPrefix
-			if nextIdx := strings.Index(tail, nextMarker); nextIdx != -1 {
-				return rest[:firstNL+nextIdx], nil
-			}
-			return rest, nil
+		if afterEnd != len(workflow) && workflow[afterEnd] != '\n' {
+			searchFrom = afterEnd
+			continue
 		}
-		searchFrom = afterEnd
+
+		lineStart := strings.LastIndexByte(workflow[:absIdx], '\n') + 1
+		indent := workflow[lineStart:absIdx]
+
+		// The marker must be the first non-whitespace content on its line.
+		// A "# - name: ..." comment has non-whitespace (the "#") before the
+		// marker and is not a step — keep searching past it rather than
+		// treating the comment as a present step (CR-02).
+		if strings.TrimSpace(indent) != "" {
+			searchFrom = afterEnd
+			continue
+		}
+
+		rest := workflow[absIdx:]
+		return rest[:blockEnd(rest, indent)], nil
 	}
+}
+
+// blockEnd returns the offset within rest — which begins at the step
+// marker's own `- name:` line — where that step's block ends. The block
+// ends at whichever comes first: the next line at the same indent (indent)
+// beginning `- name: `, or the first subsequent non-blank line whose
+// indentation is strictly less than indent. If neither occurs, the block
+// runs to the end of rest.
+func blockEnd(rest, indent string) int {
+	firstNL := strings.IndexByte(rest, '\n')
+	if firstNL == -1 {
+		return len(rest)
+	}
+
+	nextMarker := indent + nameMarkerPrefix
+	pos := firstNL + 1
+	for pos < len(rest) {
+		lineEnd := strings.IndexByte(rest[pos:], '\n')
+		var line string
+		if lineEnd == -1 {
+			line = rest[pos:]
+		} else {
+			line = rest[pos : pos+lineEnd]
+		}
+
+		if strings.TrimSpace(line) != "" {
+			if strings.HasPrefix(line, nextMarker) {
+				return pos
+			}
+			lineIndent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+			if len(lineIndent) < len(indent) {
+				return pos
+			}
+		}
+
+		if lineEnd == -1 {
+			return len(rest)
+		}
+		pos += lineEnd + 1
+	}
+	return len(rest)
 }
 
 // runLineOf extracts the single-line `run:` value out of a step block,
@@ -208,13 +294,36 @@ func runLineOf(block string) (string, bool) {
 	return runLine, true
 }
 
+// stepCanFailTheBuild returns nil if block — the text of one step, as
+// returned by stepBlock — is structurally capable of failing the build: no
+// `if:` condition and no `continue-on-error`. A step wearing either
+// property can be arranged never to redden the job regardless of what its
+// run line does, so neither is a gate. Applied to both the blanket
+// release-gate step and the named wiring step (WR-02 / T-172-57) — D-15's
+// stated purpose for the named step is legibility, which a
+// `continue-on-error` on that step alone would already silently defeat.
+func stepCanFailTheBuild(block, stepName string) error {
+	for _, line := range strings.Split(block, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "if:") {
+			return fmt.Errorf("CI step %q has a conditional %s — a conditional step can be arranged not to run, so it cannot be relied on to gate", stepName, trimmed)
+		}
+	}
+
+	if strings.Contains(block, "continue-on-error") {
+		return fmt.Errorf("CI step %q has continue-on-error set — a step whose failure does not fail the job is not a gate", stepName)
+	}
+
+	return nil
+}
+
 // blanketReleaseGateProblem returns nil if the blanket release-gate step
 // named exactly blanketGateStepName is present in workflow, its run line
-// contains blanketGateRunSubstring (and is not the race-detection step's
-// run line), and the step is structurally capable of failing the build —
-// no `if:` condition, no `continue-on-error`, and no exit-status-swallowing
-// fallback on its run line. Any other outcome returns a distinct, named
-// error describing exactly which of those properties is missing.
+// (once the leading `run:` token is stripped) is EXACTLY
+// blanketGateRunCommand — no appended arguments, redirections, or
+// fallbacks — and the step is structurally capable of failing the build.
+// Any other outcome returns a distinct, named error describing exactly
+// which of those properties is missing.
 func blanketReleaseGateProblem(workflow string) error {
 	block, err := stepBlock(workflow, blanketGateStepName)
 	if err != nil {
@@ -226,29 +335,17 @@ func blanketReleaseGateProblem(workflow string) error {
 		return fmt.Errorf("CI step %q has no run: line", blanketGateStepName)
 	}
 	trimmedRunLine := strings.TrimSpace(runLine)
+	cmd := strings.TrimSpace(strings.TrimPrefix(trimmedRunLine, "run:"))
 
-	if !strings.Contains(runLine, blanketGateRunSubstring) {
-		return fmt.Errorf("CI step %q's run line does not contain %q — found: %s", blanketGateStepName, blanketGateRunSubstring, trimmedRunLine)
+	if strings.HasPrefix(cmd, "#") {
+		return fmt.Errorf("CI step %q's run line is commented out: %s", blanketGateStepName, trimmedRunLine)
 	}
-	if strings.Contains(runLine, "-race") {
-		return fmt.Errorf("CI step %q's run line contains -race — the step locator resolved to the race-detection step instead of the blanket gate: %s", blanketGateStepName, trimmedRunLine)
-	}
-
-	for _, line := range strings.Split(block, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "if:") {
-			return fmt.Errorf("CI step %q has a conditional %s — a conditional step can be arranged not to run, so it cannot be relied on to gate", blanketGateStepName, trimmed)
-		}
+	if cmd != blanketGateRunCommand {
+		return fmt.Errorf("CI step %q's run line must be exactly %q (no appended arguments, redirections, or fallbacks) — found: %s", blanketGateStepName, blanketGateRunCommand, cmd)
 	}
 
-	if strings.Contains(block, "continue-on-error") {
-		return fmt.Errorf("CI step %q has continue-on-error set — a step whose failure does not fail the job is not a gate", blanketGateStepName)
-	}
-
-	for _, fallback := range []string{"|| true", "|| echo", "|| :"} {
-		if strings.Contains(runLine, fallback) {
-			return fmt.Errorf("CI step %q's run line routes its exit status through %q, a fallback that cannot fail: %s", blanketGateStepName, fallback, trimmedRunLine)
-		}
+	if err := stepCanFailTheBuild(block, blanketGateStepName); err != nil {
+		return err
 	}
 
 	return nil
@@ -296,11 +393,59 @@ func TestBlanketGateCheckRejectsADecoyStep(t *testing.T) {
         run: go test ./... -count=1 -timeout 900s || true
 `
 
+	// The five remaining CR-01 bypasses of the old "contains" check — each
+	// appends something after the required substring, which a contains
+	// check cannot see but the new exact-equality check must reject.
+	const semicolonTrueStep = `      - name: Run Go tests
+        run: go test ./... -count=1 -timeout 900s; true
+`
+
+	const orExitZeroStep = `      - name: Run Go tests
+        run: go test ./... -count=1 -timeout 900s || exit 0
+`
+
+	const pipeCatStep = `      - name: Run Go tests
+        run: go test ./... -count=1 -timeout 900s | cat
+`
+
+	const secondRunFlagStep = `      - name: Run Go tests
+        run: go test ./... -count=1 -timeout 900s -run TestNothing
+`
+
+	// The required text is present but sits inside a comment; the actual
+	// command the shell would run is "echo skip" — CR-01's shell-comment
+	// case.
+	const commentedRunLineStep = `      - name: Run Go tests
+        run: echo skip # go test ./... -count=1 -timeout 900s
+`
+
+	// A fully commented-out step in a minimal workflow with no other step
+	// at all (CR-02's core reproduction).
+	const commentedStepAlone = `      # - name: Run Go tests
+      #   run: go test ./... -count=1 -timeout 900s
+`
+
+	// The commented-out step is followed by a REAL later step carrying its
+	// own if: always() — reproducing IN-05's misdiagnosis directly. Before
+	// the indentation-bounded block fix, stepBlock had no real match here
+	// either, but if it had spuriously matched the comment line, an
+	// unbounded block would have run to EOF and picked up this later step's
+	// if: always(), reporting "has a conditional if: always()" for a step
+	// that had been deleted. wantNotSub asserts that misdiagnosis cannot
+	// happen.
+	const commentedStepThenUnrelatedIfStep = `      # - name: Run Go tests
+      #   run: go test ./... -count=1 -timeout 900s
+      - name: Test summary
+        if: always()
+        run: echo done
+`
+
 	tests := []struct {
-		name     string
-		workflow string
-		wantErr  bool
-		wantSub  string
+		name       string
+		workflow   string
+		wantErr    bool
+		wantSub    string
+		wantNotSub string
 	}{
 		{
 			name:     "decoy step alone does not satisfy the blanket gate",
@@ -337,6 +482,49 @@ func TestBlanketGateCheckRejectsADecoyStep(t *testing.T) {
 			wantErr:  true,
 			wantSub:  "|| true",
 		},
+		{
+			name:     "appended semicolon-true is invisible to a contains check but not to equality",
+			workflow: stepsPreamble + semicolonTrueStep,
+			wantErr:  true,
+			wantSub:  "; true",
+		},
+		{
+			name:     "appended or-exit-zero is invisible to a contains check but not to equality",
+			workflow: stepsPreamble + orExitZeroStep,
+			wantErr:  true,
+			wantSub:  "|| exit 0",
+		},
+		{
+			name:     "piping through cat is invisible to a contains check but not to equality",
+			workflow: stepsPreamble + pipeCatStep,
+			wantErr:  true,
+			wantSub:  "| cat",
+		},
+		{
+			name:     "a second appended -run flag is invisible to a contains check but not to equality",
+			workflow: stepsPreamble + secondRunFlagStep,
+			wantErr:  true,
+			wantSub:  "-run TestNothing",
+		},
+		{
+			name:     "the required text is present but sits inside a comment",
+			workflow: stepsPreamble + commentedRunLineStep,
+			wantErr:  true,
+			wantSub:  "echo skip",
+		},
+		{
+			name:     "a fully commented-out step in a minimal workflow with no other step",
+			workflow: stepsPreamble + commentedStepAlone,
+			wantErr:  true,
+			wantSub:  "Run Go tests",
+		},
+		{
+			name:       "a commented-out step followed by an unrelated later step's if: is not misdiagnosed as that step's condition",
+			workflow:   stepsPreamble + commentedStepThenUnrelatedIfStep,
+			wantErr:    true,
+			wantSub:    "Run Go tests",
+			wantNotSub: "if: always()",
+		},
 	}
 
 	for _, tt := range tests {
@@ -348,6 +536,9 @@ func TestBlanketGateCheckRejectsADecoyStep(t *testing.T) {
 				}
 				if !strings.Contains(err.Error(), tt.wantSub) {
 					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantSub)
+				}
+				if tt.wantNotSub != "" && strings.Contains(err.Error(), tt.wantNotSub) {
+					t.Fatalf("error %q incorrectly contains %q — this is exactly the misdiagnosis bug (IN-05) being guarded against", err.Error(), tt.wantNotSub)
 				}
 			} else if err != nil {
 				t.Fatalf("expected nil, got: %v", err)
