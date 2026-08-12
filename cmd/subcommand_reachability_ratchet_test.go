@@ -1419,46 +1419,156 @@ func TestOrphanAllowlistIsPathKeyed(t *testing.T) {
 	t.Run("baseline", func(t *testing.T) { check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json") })
 }
 
+// pathMigrationExpansion is the FROZEN, one-time record of what each of the
+// 278 pre-migration leaf names legitimately became once 172-09 switched the
+// allowlist to whole-command-path keys. Every key here is a leaf that did
+// NOT become the trivial "aether "+leaf: 4 leaves (get, set, registry,
+// wisdom) had quietly been standing in for more than one real command and
+// collapsed onto several distinct commands; 2 leaves (archive, lifecycle)
+// resolved to a single command that lives under a different parent menu
+// than the trivial form would predict.
+//
+// This map describes a one-time historical key-format change made by
+// 172-09. A command created after that migration can never legitimately be
+// added to it: doing so would raise the tolerance ceiling for a command
+// nobody reviewed — the CR-04 defect this rewrite exists to close. Widening
+// this map is exactly the widening TestPathMigrationDidNotWidenTolerance
+// exists to prevent, so any addition here must be reviewed as carefully as
+// an addition to the allowlist itself.
+var pathMigrationExpansion = map[string][]string{
+	"get":       {"aether colony-depth get", "aether parallel-mode get", "aether plan-granularity get"},
+	"set":       {"aether colony-depth set", "aether parallel-mode set", "aether plan-granularity set"},
+	"registry":  {"aether export registry", "aether import registry"},
+	"wisdom":    {"aether export wisdom", "aether import wisdom"},
+	"archive":   {"aether export archive"},
+	"lifecycle": {"aether host lifecycle"},
+}
+
+// preMigrationSnapshotEntryCount pins the frozen pre-migration snapshot's
+// entry count (278). This pin is not redundant with the file itself: it is
+// what lets pathMigrationToleratedPaths detect a snapshot that has silently
+// grown or shrunk (e.g. a hand-added or hand-removed line) even though the
+// SHA-256 pin (preMigrationSnapshotSHA256, below) would already catch a
+// single-character edit — the count check is what a reader sees explained
+// in the error message, without needing to know what a hash mismatch means.
+const preMigrationSnapshotEntryCount = 278
+
+// pathMigrationExpandedPathCount pins the number of full command paths the
+// 278 frozen leaves legitimately expand to (272 trivial "aether "+leaf +
+// 2 relocated + 10 collapsed = 284). Widening pathMigrationExpansion
+// therefore requires editing this second, clearly-labelled number in the
+// same review — a two-place diff that cannot be mistaken for routine
+// maintenance, and a set-size check that catches a silently vacuous
+// (empty or over-grown) tolerated set the same way an empty allowlist would
+// otherwise slip past a shrink-only comparison forever.
+const pathMigrationExpandedPathCount = 284
+
+// pathMigrationToleratedPaths expands the frozen 278 pre-migration leaves
+// into the exact 284 full command paths they legitimately became. It is a
+// pure function over its argument (no *testing.T, no file reads) so
+// TestPathMigrationRejectsASameLeafNewcomer can feed it the real frozen
+// snapshot and then test pathMigrationWideningProblems against synthetic
+// baseline input.
+//
+// Every returned error is an anti-vacuity guard: a tolerance set that
+// silently grows or silently empties would make TestPathMigrationDidNotWidenTolerance
+// pass forever, which is the same failure shape as the bare-last-word rule
+// this function replaces.
+func pathMigrationToleratedPaths(pre []orphanAllowlistEntry) (map[string]bool, error) {
+	if len(pre) != preMigrationSnapshotEntryCount {
+		return nil, fmt.Errorf("frozen pre-migration snapshot has %d entries, want exactly %d (preMigrationSnapshotEntryCount) — "+
+			"the frozen anchor must never change size", len(pre), preMigrationSnapshotEntryCount)
+	}
+
+	seenLeaves := make(map[string]bool, len(pre))
+	tolerated := make(map[string]bool, pathMigrationExpandedPathCount)
+	for _, e := range pre {
+		if seenLeaves[e.Name] {
+			return nil, fmt.Errorf("leaf %q appears twice in the frozen pre-migration snapshot — a duplicate leaf would silently inflate the tolerated path set", e.Name)
+		}
+		seenLeaves[e.Name] = true
+		if paths, ok := pathMigrationExpansion[e.Name]; ok {
+			for _, p := range paths {
+				tolerated[p] = true
+			}
+			continue
+		}
+		tolerated["aether "+e.Name] = true
+	}
+
+	for leaf := range pathMigrationExpansion {
+		if !seenLeaves[leaf] {
+			return nil, fmt.Errorf("pathMigrationExpansion key %q is absent from the frozen pre-migration snapshot — a dead expansion entry would tolerate paths nothing in the frozen snapshot ever earned", leaf)
+		}
+	}
+
+	if len(tolerated) != pathMigrationExpandedPathCount {
+		return nil, fmt.Errorf("tolerated path set has %d entries, want exactly %d (pathMigrationExpandedPathCount) — "+
+			"the expansion map and the frozen snapshot have drifted out of sync", len(tolerated), pathMigrationExpandedPathCount)
+	}
+
+	return tolerated, nil
+}
+
+// pathMigrationWideningProblems returns the full path of every baseline
+// entry that is neither in tolerated nor in pathCollisionRevealedOrphans,
+// sorted. A pure function over slices and maps with no *testing.T and no
+// file reads, so TestPathMigrationRejectsASameLeafNewcomer can feed it
+// synthetic input built entirely in the test body.
+func pathMigrationWideningProblems(baseline []orphanAllowlistEntry, tolerated map[string]bool) []string {
+	var problems []string
+	for _, e := range baseline {
+		if tolerated[e.Name] {
+			continue
+		}
+		if pathCollisionRevealedOrphans[e.Name] {
+			continue
+		}
+		problems = append(problems, e.Name)
+	}
+	sort.Strings(problems)
+	return problems
+}
+
 // TestPathMigrationDidNotWidenTolerance is the invariant that makes "the
 // allowlist may only shrink" (D-10) true ACROSS a key-format change. A pure
 // set-membership diff (TestOrphanAllowlistOnlyShrinks) cannot do this on its
 // own, because every one of the 278 pre-migration entries changed its own
 // key text (leaf name -> full path) in this exact migration — a naive diff
 // against the old baseline would report all 278 as "added" even though
-// nothing was actually widened. Instead: every baseline entry's LEAF name
-// must appear in the frozen pre-migration snapshot's name set, unless the
-// entry's full PATH is explicitly reviewed in pathCollisionRevealedOrphans.
-// The converse is asserted too, so a reviewed exemption cannot silently
-// linger after its command is deleted from the baseline.
+// nothing was actually widened.
+//
+// This is the CR-04 fix: every baseline entry's FULL PATH must be one of the
+// 284 paths pathMigrationToleratedPaths says the 278 frozen leaves
+// legitimately expand to, or one of the 9 explicitly reviewed exemptions in
+// pathCollisionRevealedOrphans. Comparing full paths (not bare last words)
+// is what stops a brand-new, genuinely unwired command from being carried
+// forward just because it happens to share a last word — like "get" or
+// "setup" — with an older tolerated command. The converse is asserted too,
+// so a reviewed exemption cannot silently linger after its command is
+// deleted from the baseline.
 func TestPathMigrationDidNotWidenTolerance(t *testing.T) {
 	baseline := loadOrphanAllowlist(t, "testdata/orphan_allowlist_baseline.json")
 	pre := loadOrphanAllowlist(t, "testdata/orphan_allowlist_baseline_pre_path_migration.json")
 
-	preLeaves := make(map[string]bool, len(pre))
-	for _, e := range pre {
-		preLeaves[e.Name] = true
+	tolerated, err := pathMigrationToleratedPaths(pre)
+	if err != nil {
+		t.Fatalf("%v", err)
 	}
+	t.Logf("tolerated path set size = %d (want %d); baseline size = %d", len(tolerated), pathMigrationExpandedPathCount, len(baseline))
 
-	var unreviewedWidening []string
-	baselinePaths := make(map[string]bool, len(baseline))
-	for _, e := range baseline {
-		baselinePaths[e.Name] = true
-		leaf := e.Name[strings.LastIndex(e.Name, " ")+1:]
-		if preLeaves[leaf] {
-			continue
-		}
-		if pathCollisionRevealedOrphans[e.Name] {
-			continue
-		}
-		unreviewedWidening = append(unreviewedWidening, e.Name)
-	}
+	unreviewedWidening := pathMigrationWideningProblems(baseline, tolerated)
 	if len(unreviewedWidening) > 0 {
-		sort.Strings(unreviewedWidening)
-		t.Errorf("%d baseline entry/entries are neither carried forward from the pre-migration snapshot nor an explicitly reviewed path-collision exemption: %s\n"+
-			"The path-key migration must not widen tolerance. Add a real caller, or if this is a genuine newly-revealed orphan, review it into pathCollisionRevealedOrphans.",
+		t.Errorf("%d command(s) were added to the tolerated list without ever having been tolerated before, by full path: %s\n"+
+			"Sharing a last word with an older tolerated command does not carry a new command forward — that is exactly the gap this check exists to close. "+
+			"Give the command a real caller, or delete its entry — never edit the frozen snapshot or the expansion map to make this pass.",
 			len(unreviewedWidening), strings.Join(unreviewedWidening, ", "))
 	}
 
+	baselinePaths := make(map[string]bool, len(baseline))
+	for _, e := range baseline {
+		baselinePaths[e.Name] = true
+	}
 	var deadExemptions []string
 	for path := range pathCollisionRevealedOrphans {
 		if !baselinePaths[path] {
