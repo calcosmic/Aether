@@ -139,6 +139,17 @@ var spawnLogCmd = &cobra.Command{
 		if eventID != "" {
 			result["event_id"] = eventID
 		}
+		// D-13: a passive-awareness line in the run's own output, not a
+		// second window. A reporting failure here must never turn a spawn
+		// that already succeeded into an error, so the budget state error
+		// (if any) is ignored.
+		if state, err := spawnTreeBudgetState(); err == nil {
+			result["budget_consumed"] = state.Consumed
+			result["budget_max"] = state.Max
+			if warning := spawnTreeBudgetWarning(state); warning != "" {
+				result["budget_warning"] = warning
+			}
+		}
 		outputOK(result)
 		return nil
 	},
