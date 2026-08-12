@@ -689,7 +689,17 @@ Plans:
   5. A spawn whose (caste, normalised task) already appears in its own ancestor chain is refused with the ancestor named — an A→B→A cycle that never exceeds the depth cap and would otherwise never terminate
   6. `aether spawn-tree-active` renders the delegation tree indented by depth with parent attribution **while the run is in progress**, so a runaway subtree is visible before the run ends
 **Decision (not build-shaped)**: **SPAWN-06** — a written decision records what depth 0 means, replacing today's contradiction (`build.md` hardcodes `--depth 1` for manifest workers, `workers.md` hardcodes `--depth 0` for their children). This is a ruling to record, not an implementation to plan. Once recorded, criterion 2's expected number is fixed by it and a test asserts the manifest worker's recorded depth equals the chosen convention.
-**Plans**: TBD
+**Plans**: 10 plans in 5 waves
+- [ ] 173-01-PLAN.md — Empirical PreToolUse subagent check (blocking Wave 0 gate for SPAWN-04)
+- [ ] 173-02-PLAN.md — Depth derived at the recorder, and workers.md corrected to one convention
+- [ ] 173-03-PLAN.md — Fail-closed inversion of spawn-can-spawn-swarm (D-19's named defect)
+- [ ] 173-04-PLAN.md — Widened decision seam and the two-level depth cap
+- [ ] 173-05-PLAN.md — Whole-run tree budget of 20, midden on ceiling, 75% warning line
+- [ ] 173-06-PLAN.md — Ancestor-chain cycle refusal with the ancestor named
+- [ ] 173-07-PLAN.md — PreToolUse Task deny path, bounded to the observed hook coverage
+- [ ] 173-08-PLAN.md — Readable, indented, live delegation tree
+- [ ] 173-09-PLAN.md — Orphan reaping, budget release, and the operator's orphans command
+- [ ] 173-10-PLAN.md — CI registration, cross-guard fail-closed proof, allowlist shrink, named residue
 
 ### Phase 174: Spend Ledger
 **Goal**: What a run cost is measured rather than asserted — with the arithmetic stated, cache tokens included, estimates never presentable as measurements, and a delegating worker's nested children rolled up to it exactly once. Ships before the extensibility phases because extensibility changes what workers cost, and without a working ledger every later efficiency claim is unfalsifiable.
