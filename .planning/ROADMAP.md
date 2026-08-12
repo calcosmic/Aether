@@ -693,7 +693,7 @@ Plans:
 - [ ] 173-01-PLAN.md — Empirical PreToolUse subagent check (blocking Wave 0 gate for SPAWN-04)
 - [x] 173-02-PLAN.md — Depth derived at the recorder, and workers.md corrected to one convention
 - [x] 173-03-PLAN.md — Fail-closed inversion of spawn-can-spawn-swarm (D-19's named defect)
-- [ ] 173-04-PLAN.md — Widened decision seam and the two-level depth cap
+- [x] 173-04-PLAN.md — Widened decision seam and the two-level depth cap
 - [ ] 173-05-PLAN.md — Whole-run tree budget of 20, midden on ceiling, 75% warning line
 - [ ] 173-06-PLAN.md — Ancestor-chain cycle refusal with the ancestor named
 - [ ] 173-07-PLAN.md — PreToolUse Task deny path, bounded to the observed hook coverage
@@ -803,7 +803,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
 | 172. Wiring Proof | v1.26 | 14/14 | Complete    | 2026-08-12 |
-| 173. Delegation Guard | v1.26 | 2/10 | In Progress|  |
+| 173. Delegation Guard | v1.26 | 3/10 | In Progress|  |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
 | 176. Roster Reader | v1.26 | 0/TBD | Not started | - |
