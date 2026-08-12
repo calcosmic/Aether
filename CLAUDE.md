@@ -3,6 +3,23 @@
 > **Current Version:** v1.0.53
 > **Last Updated:** 2026-07-26
 
+> ## READ THIS BEFORE YOU WRITE ANYTHING TO THE OWNER
+>
+> The owner is non-technical. Every word this repo invented — ratchet, residue,
+> caste, pheromone, colony, seal, midden, orphan, allowlist, hub, wrapper, Queen —
+> means nothing to him. Translate each one inline, every single time, including in
+> questions and option labels. Test output is jargon too: say "I ran the full test
+> suite and everything passed", never "18/18 packages, race detection, vet clean".
+> Finding IDs (CR-06, WR-04) and criterion numbers are internal bookkeeping — say
+> what the problem *is* instead of naming its code.
+>
+> **The check:** re-read your message as someone who has never opened a file here.
+> If any sentence needs a file, a code, or a repo word to make sense, rewrite it.
+>
+> Full guidance in "Communication Style" below. This has been restated three times
+> because it kept being missed — the fix is behaviour, not more text. Do not edit
+> this file in response to a too-technical answer. Rewrite the answer.
+
 ---
 
 ## Quick Reference
