@@ -98,11 +98,16 @@ To keep that migration honest and auditable, the list as it stood
 immediately before this change was frozen into a permanent, never-edited-
 again copy: `cmd/testdata/orphan_allowlist_baseline_pre_path_migration.json`.
 An automatic check compares every entry in the current, whole-command-named
-list against this frozen copy forever — the last word of every new entry must
-have already appeared somewhere in the frozen copy, unless it is one of the
-handful of genuinely new discoveries named below. This is what makes "the
-list can only shrink" still true across a change to how entries are written,
-not just across ordinary edits.
+list against this frozen copy forever — every entry in the current list must
+be one of the exact whole commands the frozen copy's entries became, or one
+of the handful of separately reviewed discoveries named below. Sharing a last
+word with an older tolerated command no longer carries a new command
+forward: an earlier version of this check only compared last words, and that
+meant a brand-new command nobody had ever reviewed could slip through simply
+because its last word — a common word like `get` or `setup` — matched an
+older, already-tolerated command sitting under a completely different menu.
+This is what makes "the list can only shrink" still true across a change to
+how entries are written, not just across ordinary edits.
 
 Naming commands by their whole path (rather than by last word) revealed 9
 commands that were being wrongly vouched for by an unrelated same-named
@@ -131,17 +136,25 @@ fixing them is separate work:
 
 The unused-command list currently holds **293 commands** (whole-command
 names, measured after the 172-09 migration; the previous count of 278 was
-measured under the old last-word-only naming). Of those 293:
+measured under the old last-word-only naming). The real arithmetic behind
+that 293, exactly as the automatic check enforces it:
 
-- **6** are tagged as belonging to a specific future cleanup effort (the
-  skill-related commands), because that effort's finish line is defined as
-  this exact set of 6 reaching zero.
+- Of the 278 frozen, pre-migration entries: **274** each became exactly one
+  whole-command name (272 of them trivially — the same word with "aether "
+  in front — and 2 relocated under a different menu than that trivial form
+  would predict). The other **4** were last words that had quietly been
+  standing in for more than one real command (`get`, `set`, `registry`,
+  `wisdom`), and became **10** whole-command names between them. So the 278
+  frozen entries legitimately expand to 274 + 10 = **284** whole-command
+  names — never fewer, never more, without a reviewed edit to both the
+  frozen copy and the code that describes the expansion.
 - **9** are the newly revealed commands listed above, tagged as a reviewed
   finding of this migration rather than a pre-existing, unreviewed one.
-- The remaining **278** are carried forward unchanged from before the
-  migration (just renamed to their whole-command form), tracked as a wider
-  backlog of pre-existing unused commands, not yet assigned to any specific
-  piece of work.
+- 284 + 9 = **293**. Exactly.
+- **6** of the 284 are tagged as belonging to a specific future cleanup
+  effort (the skill-related commands), because that effort's finish line is
+  defined as this exact set of 6 reaching zero — they are already counted
+  inside the 284 above, not an addition to it.
 
 The flag-check exceptions list holds exactly 2 entries.
 
@@ -162,7 +175,11 @@ rules above:
   frozen, never-edited-again copy of the baseline exactly as it stood before
   the 172-09 whole-command migration (278 entries, last-word-only names).
   `TestPathMigrationDidNotWidenTolerance` diffs the current baseline against
-  this file forever, so the migration itself stays auditable.
+  this file forever, so the migration itself stays auditable. Its exact
+  contents are also written down inside the checking code as a SHA-256
+  hash — `TestPreMigrationSnapshotIsFrozen` fails the moment this file
+  differs by a single character, so a hand-added or hand-removed line can
+  no longer pass unnoticed.
 - `cmd/cli_flag_audit_test.go` — holds the live flag-check exceptions list
   (`skipSubcommands`) and both tests that enforce this document:
   `TestFlagAuditSkipListOnlyShrinks` and
@@ -182,8 +199,21 @@ Tests enforcing the rules on this page:
 - `TestOrphanAllowlistIsPathKeyed` — fails if any entry in either list stops
   being a real, whole-command name.
 - `TestPathMigrationDidNotWidenTolerance` — the shrink-only guard that
-  survives the whole-command migration, comparing against the frozen
-  pre-migration snapshot.
+  survives the whole-command migration: every current entry must be one of
+  the 284 whole-command names the frozen snapshot's 278 entries legitimately
+  expand to, or one of the 9 separately reviewed discoveries, compared by
+  full command path rather than by last word alone. This is the check that
+  makes it true that the headline claim above — "both lists can only get
+  shorter" — actually holds, even across a change to how entries are named.
+- `TestPathMigrationRejectsASameLeafNewcomer` — the by-construction proof
+  that a brand-new, never-before-tolerated command sharing a last word with
+  an older tolerated one (for example a made-up `aether newthing get`, or
+  the real `aether colony-depth setup`) is rejected by its full path, for
+  every one of the 278 frozen last words at once.
+- `TestPreMigrationSnapshotIsFrozen` — fails if the frozen pre-migration
+  snapshot's contents no longer match the SHA-256 hash pinned in Go source,
+  catching a hand-edit to the one file every shrink-only guarantee above
+  rests on.
 - `TestCLIFlagAudit` — checks that documented commands and flags are real.
 - `TestFlagAuditSkipListOnlyShrinks` — the shrink-only guard on the
   flag-check exceptions list.

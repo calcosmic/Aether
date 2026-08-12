@@ -15,6 +15,8 @@ package cmd
 // record (D-01 through D-15) this file implements.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -194,6 +196,41 @@ func loadPreMigrationReasonByLeaf(t *testing.T) map[string]orphanAllowlistEntry 
 		byLeaf[e.Name] = e
 	}
 	return byLeaf
+}
+
+// preMigrationSnapshotSHA256 is the SHA-256 of
+// testdata/orphan_allowlist_baseline_pre_path_migration.json as committed —
+// the frozen anchor every "the allowlist can only shrink" claim rests on
+// (CR-05). Editing that file by even a single character — the exact defect
+// the verifier reproduced, which passed all 30 named guard tests at the
+// time — silently raises the tolerance ceiling for every future entry,
+// because pathMigrationToleratedPaths trusts whatever leaves the file
+// currently contains. Pinning the hash in Go source rather than leaving the
+// anchor as a bare JSON file is what makes changing it an obvious,
+// reviewable code edit instead of a line buried in a 278-entry list — D-11's
+// "visible, on-the-record edit to a checked-in file." If this file genuinely
+// must change, the change is a reviewed edit to this constant, verified by
+// TestPreMigrationSnapshotIsFrozen, never a silent JSON edit.
+const preMigrationSnapshotSHA256 = "873cad5a20e472af7050e69042be9faf8527a2c3e1d34907762b37e6a5845e0e"
+
+// TestPreMigrationSnapshotIsFrozen is CR-05's fix: hash the frozen
+// pre-migration anchor at test time and fail if it no longer matches
+// preMigrationSnapshotSHA256. Uses no environment read, no skip, and no
+// flag, so TestWiringGuardsHaveNoRuntimeEscapeHatch stays green.
+func TestPreMigrationSnapshotIsFrozen(t *testing.T) {
+	const path = "testdata/orphan_allowlist_baseline_pre_path_migration.json"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	sum := sha256.Sum256(data)
+	got := hex.EncodeToString(sum[:])
+	if got != preMigrationSnapshotSHA256 {
+		t.Errorf("%s has SHA-256 %s, want %s (preMigrationSnapshotSHA256)\n"+
+			"This file is the anchor every \"the list can only shrink\" guarantee rests on and must never be edited. "+
+			"If it genuinely must change, that is a reviewed edit to the preMigrationSnapshotSHA256 constant in Go source, not a silent JSON edit.",
+			path, got, preMigrationSnapshotSHA256)
+	}
 }
 
 // orphanAllowlistEntry is one committed exemption. D-08: every entry carries
