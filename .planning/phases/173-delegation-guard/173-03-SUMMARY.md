@@ -98,6 +98,17 @@ None — no external service configuration required.
 - `cmd/spawn_failclosed_test.go` and its three test names are deliberately NOT yet added to `.github/workflows/ci.yml`'s named wiring-gate `-run` filter, per this plan's explicit scope boundary — plan 10 registers this file in `wiringGateGuardFiles` and adds all three names in one consistent change, alongside the other guard files from plans 05, 06, 08, 09. Until then, these tests still run under the blanket `go test ./...` release-gate step, which was confirmed green in this plan's own full-suite run.
 - No blockers for plan 10's cross-guard consolidation work.
 
+## Self-Check: PASSED
+
+- FOUND: `cmd/spawn_failclosed_test.go`
+- FOUND: `.planning/phases/173-delegation-guard/173-03-SUMMARY.md`
+- FOUND commit: `a9ef09fc` (Task 1)
+- FOUND commit: `0c9b9450` (Task 2)
+- FOUND commit: `0f6b469c` (this summary)
+- `go build ./cmd/aether`, `go vet ./cmd` clean
+- `go test ./cmd -run 'TestSpawnCanSpawnSwarm' -count=1 -v` — 3/3 green
+- `go test ./... -count=1 -timeout 900s` — 18/18 packages green
+
 ---
 *Phase: 173-delegation-guard*
 *Completed: 2026-08-12*
