@@ -52,9 +52,10 @@ Enforcement lands before capability: parent/depth linkage is recorded at spawn t
 - [ ] **SPEND-02**: The wrapper path reports token usage — today `codexExternalBuildWorkerResult` has no usage field, so the path an operator actually runs measures nothing
 - [ ] **SPEND-03**: A total includes cache-read and cache-creation tokens — the counts are disjoint, and deriving `input + output` undercounted a real run by 186x
 - [ ] **SPEND-04**: A run that produced no provider figure appears in the ledger tagged as an estimate, and cannot be read as a measurement
-- [ ] **SPEND-05**: Nested child spend rolls up to its parent, so a delegating worker's true cost is visible
-- [ ] **SPEND-06**: `aether spend` reports per-worker tokens, cost and tool calls for the current run, mutating nothing
+- [ ] **SPEND-05**: Nested child spend rolls up to its parent, so a delegating worker's true cost is visible — parent attribution per row and a no-double-count invariant; the full self/subtree dual-column view is deferred until worker delegation exists (Phase 177)
+- [ ] **SPEND-06**: `aether spend` reports per-worker tokens and tool calls for the current run, mutating nothing — dollars never headline and no model-price table is ever built; USD appears only where the provider itself reported it, labelled as hypothetical API price *(reworded 2026-08-13: the owner is on subscription billing — tokens are the unit that draws their limits)*
 - [ ] **SPEND-07**: No figure in the spend report derives from a character budget, and documentation stops naming a character budget a "Token Budget" — a dashboard fed by `colonyPrimeBudgetChars` can go green while real cost is unchanged, which is how the 186x undercount stayed invisible
+- [ ] **SPEND-08**: *(added 2026-08-13)* The normal end of a build or continue prints one plain-English token line sourced from the ledger ("This phase used ~N tokens (measured)") — the primary surface for a non-technical operator who does not run inspection commands
 
 ## Orchestration Visibility (SEEN)
 
@@ -62,18 +63,20 @@ Enforcement lands before capability: parent/depth linkage is recorded at spawn t
 - [ ] **SEEN-02**: When the runtime overrides the Queen's choice — restoring a required caste, trimming to budget — the override and its reason are stated, not applied silently
 - [ ] **SEEN-03**: A worker that returned no actionable finding is distinguishable in the run summary from one that did
 
-## Agent Roster (ROSTER)
+## Agent Roster (ROSTER) — reshaped 2026-08-13
 
-The reader is proven against the shipped 27 before any user-extension path is built.
+ROSTER-01/02 reframed as a wire-or-delete ruling (Phase 176). ROSTER-03..08 (operator-authored agents) **shelved to Future Requirements** by the owner-approved reshape: the owner selects among the 27 existing castes, they do not author new ones.
 
-- [ ] **ROSTER-01**: `colony/agents/*.yaml` has a working Go reader, verified by editing a shipped caste's YAML and observing the change take effect without a rebuild
-- [ ] **ROSTER-02**: `colony/agents` is published and installed to the hub — it is not distributed at all today, so downstream repos see nothing
-- [ ] **ROSTER-03**: The operator can add a new agent to a repo with one command, without editing Go
-- [ ] **ROSTER-04**: A user-added agent is written to all three platform lanes (Claude markdown, OpenCode markdown, Codex TOML) and a round-trip test proves the translation, so a bad translation fails locally rather than in CI
-- [ ] **ROSTER-05**: A user-added agent cannot delegate by default
-- [ ] **ROSTER-06**: A user-added agent cannot enter the safety-caste floor, so the light/standard/heavy worker guarantees continue to hold
-- [ ] **ROSTER-07**: A malformed user agent produces a diagnostic naming the file and the problem — it does not vanish silently the way a malformed skill does today
-- [ ] **ROSTER-08**: A user-added caste renders with a readable identity rather than blank, since the colour/emoji/label maps are hardcoded Go
+- [ ] **ROSTER-01**: The `colony/agents/*.yaml` zero-reader contradiction is resolved by an explicit recorded ruling — wired with executable proof, or deleted with the compiled registry documented as authoritative *(reworded 2026-08-13; original: "has a working Go reader")*
+- [ ] **ROSTER-02**: After the ruling, no file remains that claims to define agents and defines nothing — including `colony/policies/model-routing.yaml`, ruled in the same breath *(reworded 2026-08-13; original: hub distribution — applies only under a "wire" ruling)*
+
+## Worker Delegation Grant (SPAWN, continued) — added 2026-08-13
+
+Phase 173 built the complete guard system and deliberately granted nothing. These grant the capability, per-caste, under those guards (Phase 177).
+
+- [ ] **SPAWN-09**: An ordinary worker of a granted caste can actually spawn a helper when its task needs one, on the wrapper path the operator runs — today only Queen and Route-Setter carry the dispatch tool, so workers.md's spawn protocol is unreachable for every ordinary worker
+- [ ] **SPAWN-10**: A worker-spawned helper is recorded in the spawn tree with correct parent linkage and derived depth, counted by the whole-run budget, and visible under its parent in the live tree — the Phase 173 guards demonstrably bound worker-originated spawns
+- [ ] **SPAWN-11**: The grant is per-caste and recorded: a written list states which castes carry the tool and why, a test asserts non-granted castes carry none, and the third delegation level is re-verified refused after the grant makes that path reachable
 
 ## Skill Authoring (SKILL)
 
@@ -104,6 +107,7 @@ Carried from v1.25, out of scope for v1.26:
 - **RECLAIM** (9) — the wider unreachable-command sweep beyond WIRE-01's ratchet
 - **LOCK** (4) — state locking and lifecycle transactions
 - **MODEL** — revised per the 2026-07-28 decision: automatic model selection is rejected; cheap-model capability means the framework carries the intelligence, not that it picks models
+- **ROSTER-03..08** (6) — operator-authored agents (one-command creation, three-lane translation, safety exclusions, identity rendering). Shelved 2026-08-13 by the owner-approved reshape: the owner selects among the 27 existing castes and has never asked to author a 28th. Revisit only if that changes
 
 Also tracked, deliberately unbundled:
 - `gopkg.in/yaml.v3` is archived and author-declared unmaintained. v1.26 makes YAML the format a non-technical user hand-writes, which changes the risk profile. Migration to `go.yaml.in/yaml/v3` is a mechanical import swap and gets its own plan.
@@ -154,17 +158,21 @@ SKILL security inside the skill phase → PROOF last.
 | SPEND-05 | Phase 174 | Spend Ledger | Pending |
 | SPEND-06 | Phase 174 | Spend Ledger | Pending |
 | SPEND-07 | Phase 174 | Spend Ledger | Pending |
+| SPEND-08 | Phase 174 | Spend Ledger | Pending |
 | SEEN-01 | Phase 175 | Orchestration Visibility | Pending |
 | SEEN-02 | Phase 175 | Orchestration Visibility | Pending |
 | SEEN-03 | Phase 175 | Orchestration Visibility | Pending |
-| ROSTER-01 | Phase 176 | Roster Reader | Pending |
-| ROSTER-02 | Phase 176 | Roster Reader | Pending |
-| ROSTER-03 | Phase 177 | Operator-Authored Agents | Pending |
-| ROSTER-04 | Phase 177 | Operator-Authored Agents | Pending |
-| ROSTER-05 | Phase 177 | Operator-Authored Agents | Pending |
-| ROSTER-06 | Phase 177 | Operator-Authored Agents | Pending |
-| ROSTER-07 | Phase 177 | Operator-Authored Agents | Pending |
-| ROSTER-08 | Phase 177 | Operator-Authored Agents | Pending |
+| ROSTER-01 | Phase 176 | Roster Ruling | Pending |
+| ROSTER-02 | Phase 176 | Roster Ruling | Pending |
+| ROSTER-03 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
+| ROSTER-04 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
+| ROSTER-05 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
+| ROSTER-06 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
+| ROSTER-07 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
+| ROSTER-08 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
+| SPAWN-09 | Phase 177 | Worker Delegation Grant | Pending |
+| SPAWN-10 | Phase 177 | Worker Delegation Grant | Pending |
+| SPAWN-11 | Phase 177 | Worker Delegation Grant | Pending |
 | SKILL-01 | Phase 178 | Skill Authoring Hardening | Pending |
 | SKILL-02 | Phase 178 | Skill Authoring Hardening | Pending |
 | SKILL-03 | Phase 178 | Skill Authoring Hardening | Pending |
