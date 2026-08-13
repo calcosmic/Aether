@@ -226,11 +226,11 @@ func TestSpawnAncestorCheckFailsClosedOnUnreadableTree(t *testing.T) {
 		t.Fatalf("expected a readable tree with no matching ancestor to allow, got deny reason: %q", allowReason)
 	}
 
-	// Corrupt the tree on disk directly (bypassing store writes) so A1's
-	// own entry becomes unparseable and drops out of Parse()'s results: a
-	// non-numeric depth field is skipped entirely by parseSpawnTreeBytes,
-	// making "A1" an unresolvable name — the same failure mode a
-	// hand-edited or corrupted tree would produce.
+	// Corrupt the tree on disk directly (bypassing store writes): a
+	// non-numeric depth field on a 7-field line now makes the whole ledger
+	// fail to parse at all (it returns a non-nil error wrapping
+	// agent.ErrSpawnTreeCorrupt), so the ancestor chain is unreadable —
+	// the same failure mode a hand-edited or corrupted tree would produce.
 	treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
 	if err := os.WriteFile(treePath, []byte("not-a-timestamp|Queen|builder|A1|fix the login form|not-a-number|spawned\n"), 0644); err != nil {
 		t.Fatalf("corrupt spawn-tree.txt: %v", err)
