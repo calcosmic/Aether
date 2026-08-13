@@ -90,6 +90,15 @@ var wiringGateGuardFiles = []string{
 	"cli_flag_audit_test.go",
 	"spawn_enforce_test.go",
 	"ci_wiring_gate_test.go",
+	// Plan 173-10: this phase's five new guard files. hook_cmds_test.go is
+	// deliberately NOT added -- it predates this phase, it is not a wiring
+	// guard, and adding it would drag every pre-existing hook test into the
+	// filter for no gain.
+	"spawn_failclosed_test.go",
+	"spawn_budget_test.go",
+	"spawn_ancestor_test.go",
+	"spawn_tree_view_test.go",
+	"spawn_reap_test.go",
 }
 
 // runFlagArgRe pulls the single-quoted argument that follows `-run` out of a
@@ -1943,4 +1952,46 @@ func TestWorkflowShapeWhitelistRejectsUnenumeratedKeys(t *testing.T) {
 			t.Fatalf("%d of %d injection(s) were rejected — expected all %d to be rejected", rejected, attempted, attempted)
 		}
 	})
+}
+
+// Plan 173-10 task 1.
+//
+// Plans 05 and 06 each planted a contract-stub marker comment
+// (CONTRACT-STUB-PLAN-05 in cmd/spawn_budget.go, CONTRACT-STUB-PLAN-06 in
+// cmd/spawn_ancestor.go) and were each required to delete their own once the
+// real budget/ancestor check landed. TestNoDelegationGuardContractStubSurvives
+// is this phase's own proof that neither marker survived -- the invariant
+// that stops a half-finished phase shipping an always-allow guard behind a
+// real-looking call site, which is the exact shape of defect this repo's own
+// audits keep finding (CLAUDE.md's Definition of Done).
+//
+// A plain grep -c would also catch a marker reintroduced as a comment; this
+// check deliberately does the same (an unfiltered byte-substring search),
+// because a stub marker left as a comment is exactly as dishonest as one left
+// live -- it would make TestOrphanAllowlistOnlyShrinks-style bookkeeping
+// claim a plan finished a task it did not.
+func TestNoDelegationGuardContractStubSurvives(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	markers := map[string]string{
+		"spawn_budget.go":   "CONTRACT-STUB-PLAN-05",
+		"spawn_ancestor.go": "CONTRACT-STUB-PLAN-06",
+	}
+
+	// Keys iterated in a fixed order so failures are reported deterministically.
+	files := []string{"spawn_budget.go", "spawn_ancestor.go"}
+	for _, f := range files {
+		marker := markers[f]
+		path := filepath.Join(repoRoot, "cmd", f)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if strings.Contains(string(data), marker) {
+			t.Fatalf("cmd/%s still contains %q — a contract stub marker surviving in code OR a comment means the real check may never have replaced the always-allow stub", f, marker)
+		}
+	}
 }
