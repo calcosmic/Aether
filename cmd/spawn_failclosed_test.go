@@ -24,19 +24,33 @@ import (
 // These tests are fault-injection red-proofs: they must go red the moment
 // either fail-open branch returns.
 //
-// Bounded residue, discovered while writing these tests: agent.SpawnTree's
-// Parse() (pkg/agent/spawn_tree.go) treats a store.ReadFile error on
-// spawn-tree.txt identically to a missing file -- it swallows the error
-// inside parseFile() and always returns a nil error, and malformed
-// pipe-delimited lines are silently skipped rather than surfaced as an
-// error. Parse() itself can therefore never return a non-nil error, and no
-// byte content exists that makes it do so. cmd/internal_cmds.go's Task 1 fix
-// works around this by checking existence and type (os.Stat) ahead of
-// calling Parse(), which is what
-// TestSpawnCanSpawnSwarmFailsClosedOnUnreadableSpawnTree exercises below: it
-// makes the tree path genuinely unreadable by putting a directory there
-// (store.ReadFile / os.ReadFile fail on a directory), which is a real input
-// Parse()'s caller rejects, even though Parse() would not reject it itself.
+// Bounded residue, discovered while writing these tests, and corrected
+// 2026-08-13 by plan 173-11: at the time these tests were first written,
+// agent.SpawnTree's Parse() (pkg/agent/spawn_tree.go) treated a
+// store.ReadFile error on spawn-tree.txt the same as a missing file -- it
+// swallowed the error inside parseFile() and always returned a nil error,
+// and a malformed pipe-delimited line was silently skipped rather than
+// surfaced as an error. No byte content could make Parse() return an error
+// at that time. cmd/internal_cmds.go's Task 1 fix worked around this by
+// checking existence and type (os.Stat) ahead of calling Parse(), which is
+// what TestSpawnCanSpawnSwarmFailsClosedOnUnreadableSpawnTree exercises
+// below: it makes the tree path unreadable by putting a directory there
+// (store.ReadFile / os.ReadFile fail on a directory), a real input Parse()'s
+// caller rejected even though Parse() would have accepted it.
+//
+// What changed in plan 173-11: parseFile() now draws a three-way
+// distinction instead of collapsing everything into "empty, no error". An
+// absent file, a zero-byte file, or a whitespace-only file still parse to
+// empty with a nil error -- the one narrow, justified exception (T-173-24),
+// so a fresh colony is never locked out of spawning. Every other outcome --
+// a read failure that is not "file does not exist" (a directory at the
+// path, a permission denial), or content that does not parse as valid
+// pipe-delimited spawn-tree format -- now returns a non-nil error wrapping
+// agent.ErrSpawnTreeCorrupt. The identical three-way distinction now applies
+// to spawn-runs.json (loadRunStateLocked). The "ledger-corrupt" axes added
+// by plan 173-13 below, on every guard that reads spawn-tree.txt, and the
+// "run-state-obstructed" axis on spawn-log, are the proof that each guard
+// actually turns this new error into a deny.
 
 func writeValidColonyState(t *testing.T, s interface {
 	SaveJSON(string, interface{}) error
@@ -99,10 +113,18 @@ func TestSpawnCanSpawnSwarmFailsClosedOnUnreadableColonyState(t *testing.T) {
 
 // TestSpawnCanSpawnSwarmFailsClosedOnUnreadableSpawnTree is the T-173-13
 // assertion: an unreadable spawn-tree.txt must deny rather than be counted
-// as zero live spawns with the full budget free. See the bounded-residue
-// note above the file's top: this test makes the tree unreadable by putting
-// a directory at its path, since agent.SpawnTree.Parse() cannot itself be
-// made to return an error.
+// as zero live spawns with the full budget free. This test makes the tree
+// unreadable by putting a directory at its path.
+//
+// Corrected 2026-08-13 (plan 173-11 gave agent.SpawnTree.Parse() a real
+// error return): before 173-11, the directory route was the ONLY fault this
+// guard could be exercised against, because no byte content written over
+// spawn-tree.txt made Parse() return an error. The directory route and a
+// corrupted-content route are now two distinct, separately exercised
+// faults -- this test proves the directory route (an os.Stat rejection
+// ahead of Parse()); the "ledger-corrupt" axis on this same command in
+// delegationGuardFaultTable below proves the content route (Parse() itself
+// rejecting a present-but-unparseable file).
 func TestSpawnCanSpawnSwarmFailsClosedOnUnreadableSpawnTree(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -220,12 +242,19 @@ type delegationGuardFaultAxis struct {
 	// Name identifies the axis in test names and failure output.
 	Name string
 	// NotExercisable, when non-empty, states why this axis cannot currently
-	// be injected (e.g. agent.SpawnTree.Parse() can never itself return an
-	// error -- see the bounded-residue note atop this file). The axis is
+	// be injected -- for example, a fault whose only known trigger requires
+	// production code this repository does not have yet. The axis is
 	// recorded with its reason rather than deleted, so
 	// TestDelegationGuardTableCoversEveryGuardCommand can see it was
 	// considered rather than silently dropped. Verify must be nil when this
 	// is set.
+	//
+	// Corrected 2026-08-13 (plan 173-13): this comment's worked example used
+	// to assert a specific claim about agent.SpawnTree.Parse()'s runtime
+	// behaviour. Plan 173-11 made that claim false, and an example that
+	// asserts current runtime behaviour is exactly how the drift happened --
+	// described further in the file-top note above. The example here is now
+	// abstract on purpose.
 	NotExercisable string
 	// Verify sets up its own isolated store, injects the fault, executes the
 	// guard, and asserts both a deny outcome and a non-empty deny reason.
@@ -285,6 +314,54 @@ var delegationGuardFaultTable = []delegationGuardTableEntry{
 					msg, _ := env["error"].(string)
 					if !strings.Contains(msg, "budget") {
 						t.Fatalf("deny message does not name the budget: %s", errBuf.String())
+					}
+				},
+			},
+			{
+				// A single line of non-pipe-format text written directly over
+				// spawn-tree.txt as a regular file -- 173-VERIFICATION.md's
+				// Gap 1 reproduction, byte-for-byte. The ledger is present but
+				// its content is not a valid spawn ledger, so st.Parse() inside
+				// spawnTreeBudgetState (cmd/spawn_budget.go) returns a non-nil
+				// error wrapping agent.ErrSpawnTreeCorrupt, and
+				// spawnTreeBudgetReason denies rather than treating the
+				// corruption as an empty, fresh tree. This is deliberately NOT
+				// the run-state-unreadable axis above (which corrupts
+				// spawn-runs.json, a different file) and not a directory at
+				// the path (which is what an unreadable-tree axis would use,
+				// were one needed here) -- this axis proves content rejection
+				// specifically, which is the fault the exploit actually used.
+				Name: "ledger-corrupt",
+				Verify: func(t *testing.T) {
+					saveGlobals(t)
+					resetRootCmd(t)
+
+					s, tmpDir := newTestStore(t)
+					defer os.RemoveAll(tmpDir)
+					store = s
+
+					treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
+					if err := os.WriteFile(treePath, []byte("garbage not pipe format"), 0644); err != nil {
+						t.Fatalf("corrupt spawn-tree.txt: %v", err)
+					}
+
+					var buf, errBuf bytes.Buffer
+					stdout = &buf
+					stderr = &errBuf
+					renderedCommandExitCode.Store(0)
+					rootCmd.SetArgs([]string{"spawn-can-spawn", "--enforce"})
+					_ = rootCmd.Execute()
+
+					if code := int(renderedCommandExitCode.Load()); code == 0 {
+						t.Fatalf("spawn-can-spawn --enforce against a corrupted ledger did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
+					}
+					env := parseEnvelope(t, errBuf.String())
+					if env["ok"] != false {
+						t.Fatalf("expected ok:false, got: %s", errBuf.String())
+					}
+					msg, _ := env["error"].(string)
+					if !strings.Contains(msg, "budget") || !strings.Contains(msg, "unverifiable") {
+						t.Fatalf("deny message does not name the budget as unverifiable: %s", errBuf.String())
 					}
 				},
 			},
@@ -379,6 +456,117 @@ var delegationGuardFaultTable = []delegationGuardTableEntry{
 
 					if code := int(renderedCommandExitCode.Load()); code == 0 {
 						t.Fatalf("spawn-log with an unreadable run state did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
+					}
+					env := parseEnvelope(t, errBuf.String())
+					if env["ok"] != false {
+						t.Fatalf("expected ok:false, got: %s", errBuf.String())
+					}
+					msg, _ := env["error"].(string)
+					if !strings.Contains(msg, "budget") || !strings.Contains(msg, "unverifiable") {
+						t.Fatalf("deny message does not name the budget as unverifiable: %s", errBuf.String())
+					}
+				},
+			},
+			{
+				// The same single line of non-pipe-format text as the
+				// ledger-corrupt axis on spawn-can-spawn, exercised on the
+				// guard that actually consumes budget rather than the
+				// advisory one. Named specifically as Queen-parented: a
+				// coordinator sentinel makes deriveSpawnDepth's sentinel
+				// branch (spawnParentIsRoot) skip the tree lookup entirely and
+				// return depth 1 without ever reading spawn-tree.txt, so the
+				// budget check inside spawnCanSpawnDecision is the only guard
+				// left standing against this fault -- which is exactly why
+				// 173-VERIFICATION.md's Gap 1 reproduction worked against a
+				// Queen-parented spawn-log call and not against a
+				// non-sentinel-parented one (see parent-not-recorded below,
+				// which denies via a different guard for a different reason).
+				Name: "ledger-corrupt",
+				Verify: func(t *testing.T) {
+					saveGlobals(t)
+					resetRootCmd(t)
+
+					s, tmpDir := newTestStore(t)
+					defer os.RemoveAll(tmpDir)
+					store = s
+
+					treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
+					corruptBytes := []byte("garbage not pipe format")
+					if err := os.WriteFile(treePath, corruptBytes, 0644); err != nil {
+						t.Fatalf("corrupt spawn-tree.txt: %v", err)
+					}
+
+					var buf, errBuf bytes.Buffer
+					stdout = &buf
+					stderr = &errBuf
+					renderedCommandExitCode.Store(0)
+					rootCmd.SetArgs(spawnLogArgs("Queen", "W1", "0"))
+					_ = rootCmd.Execute()
+
+					if code := int(renderedCommandExitCode.Load()); code == 0 {
+						t.Fatalf("spawn-log against a corrupted ledger did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
+					}
+					env := parseEnvelope(t, errBuf.String())
+					if env["ok"] != false {
+						t.Fatalf("expected ok:false, got: %s", errBuf.String())
+					}
+					msg, _ := env["error"].(string)
+					if !strings.Contains(msg, "budget") || !strings.Contains(msg, "unverifiable") {
+						t.Fatalf("deny message does not name the budget as unverifiable: %s", errBuf.String())
+					}
+
+					after, err := store.ReadFile("spawn-tree.txt")
+					if err != nil {
+						t.Fatalf("read spawn-tree.txt after refused spawn: %v", err)
+					}
+					if !bytes.Equal(corruptBytes, after) {
+						t.Fatalf("spawn-tree.txt bytes changed after a refused spawn (D-09 requires the refusal to leave no trace):\nbefore=%q\nafter=%q", corruptBytes, after)
+					}
+				},
+			},
+			{
+				// A directory obstructing spawn-runs.json's path -- the
+				// second route to a free budget 173-VERIFICATION.md's
+				// planning phase found, needing no tampering with the ledger
+				// at all. spawn-tree.txt is deliberately left absent (a
+				// fresh, valid, empty ledger): the point of this axis is that
+				// the LEDGER is fine and the RUN RECORD is not. Distinct from
+				// the run-state-unreadable axis above: that axis injects
+				// unparseable CONTENT (invalid JSON) into spawn-runs.json;
+				// this one makes the FILE itself unreadable by putting a
+				// directory at its path. Before plan 173-11,
+				// loadRunStateLocked's collapsed condition treated a
+				// directory-obstructed spawn-runs.json identically to "no
+				// runs have ever been recorded" and returned a nil error --
+				// this axis is that route, now closed. The sharper variant,
+				// where a run genuinely WAS active and its record is then
+				// deleted mid-run against a FULL ledger, is proven instead by
+				// cmd/spawn_budget_test.go's
+				// TestErasingTheRunRecordDoesNotResetTheWholeRunBudget, which
+				// this axis's comment names rather than duplicates.
+				Name: "run-state-obstructed",
+				Verify: func(t *testing.T) {
+					saveGlobals(t)
+					resetRootCmd(t)
+
+					s, tmpDir := newTestStore(t)
+					defer os.RemoveAll(tmpDir)
+					store = s
+
+					runStatePath := filepath.Join(store.BasePath(), "spawn-runs.json")
+					if err := os.MkdirAll(runStatePath, 0755); err != nil {
+						t.Fatalf("create directory at spawn-runs.json path: %v", err)
+					}
+
+					var buf, errBuf bytes.Buffer
+					stdout = &buf
+					stderr = &errBuf
+					renderedCommandExitCode.Store(0)
+					rootCmd.SetArgs(spawnLogArgs("Queen", "W1", "0"))
+					_ = rootCmd.Execute()
+
+					if code := int(renderedCommandExitCode.Load()); code == 0 {
+						t.Fatalf("spawn-log against an obstructed run record did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
 					}
 					env := parseEnvelope(t, errBuf.String())
 					if env["ok"] != false {
@@ -497,12 +685,68 @@ var delegationGuardFaultTable = []delegationGuardTableEntry{
 				},
 			},
 			{
+				// This guard needs no production change to close this axis:
+				// its parseErr branch (cmd/internal_cmds.go, ahead of the
+				// os.Stat check below) has denied on a non-nil Parse() error
+				// since this guard's own D-19 fix -- it was simply waiting for
+				// an error the parser could not yet produce. Plan 173-11 gave
+				// it one. This is deliberately NOT the directory-at-path fault
+				// the spawn-tree-unreadable axis below uses -- that axis
+				// proves the os.Stat route, this one proves Parse() itself
+				// rejecting a present-but-unparseable regular file, and the
+				// whole point of this gap closure is that the two are
+				// different faults, not the same one reached two ways.
+				Name: "ledger-corrupt",
+				Verify: func(t *testing.T) {
+					saveGlobals(t)
+					resetRootCmd(t)
+
+					s, tmpDir := newTestStore(t)
+					defer os.RemoveAll(tmpDir)
+					store = s
+
+					writeValidColonyState(t, store)
+
+					treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
+					if err := os.WriteFile(treePath, []byte("garbage not pipe format"), 0644); err != nil {
+						t.Fatalf("corrupt spawn-tree.txt: %v", err)
+					}
+
+					var buf, errBuf bytes.Buffer
+					stdout = &buf
+					stderr = &errBuf
+					renderedCommandExitCode.Store(0)
+					rootCmd.SetArgs([]string{"spawn-can-spawn-swarm"})
+					_ = rootCmd.Execute()
+
+					if code := int(renderedCommandExitCode.Load()); code == 0 {
+						t.Fatalf("spawn-can-spawn-swarm against a corrupted ledger did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
+					}
+					env := parseEnvelope(t, errBuf.String())
+					if env["ok"] != false {
+						t.Fatalf("expected ok:false, got: %s", errBuf.String())
+					}
+					details, _ := env["details"].(map[string]interface{})
+					if details == nil || details["can_spawn"] != false {
+						t.Fatalf("expected can_spawn:false in details, got: %s", errBuf.String())
+					}
+					msg, _ := env["error"].(string)
+					if !strings.Contains(msg, "cannot verify spawn budget") {
+						t.Fatalf("deny message does not name the unverifiable budget: %s", errBuf.String())
+					}
+				},
+			},
+			{
 				// A directory at spawn-tree.txt's path is a real input this
 				// guard's cmd/internal_cmds.go os.Stat check rejects ahead of
-				// calling Parse() -- Parse() itself cannot be made to error
-				// (see the bounded-residue note atop this file), so this
-				// axis is exercisable via the directory route, not via
-				// Parse() rejecting content.
+				// calling Parse().
+				//
+				// Corrected 2026-08-13 (plan 173-11 gave Parse() a real error
+				// return): the directory route and a corrupted-content route
+				// are now two distinct faults, both exercised in this table --
+				// this axis proves the directory route; the "ledger-corrupt"
+				// axis above proves the content route, which Parse() would
+				// have accepted as an empty tree before 173-11.
 				Name: "spawn-tree-unreadable",
 				Verify: func(t *testing.T) {
 					saveGlobals(t)

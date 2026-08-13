@@ -570,11 +570,19 @@ var spawnCanSpawnSwarmCmd = &cobra.Command{
 			}
 		}
 
-		// agent.SpawnTree.Parse() swallows a missing file as "empty" (nil
-		// error) exactly like an unreadable one -- it cannot tell the two
-		// apart. A fresh colony with no spawn-tree.txt yet must still count
-		// zero and be allowed to spawn, so existence and type are checked
-		// here, ahead of Parse(), rather than trusting its error return.
+		// Before plan 173-11, agent.SpawnTree.Parse() treated a missing file
+		// as "empty" (nil error) the same way it treated an unreadable one --
+		// it had no way to distinguish the two. Corrected 2026-08-13:
+		// Parse() now returns a distinct, non-nil error whenever
+		// spawn-tree.txt exists but cannot be read or does not parse as
+		// valid spawn-tree content; only the file's genuine absence (or
+		// zero/whitespace-only content) still parses to empty. This os.Stat
+		// check stays anyway -- it is a cheap, explicit check that names its
+		// own "tree-unreadable" reason before Parse() ever runs, not a
+		// workaround for something Parse() itself now handles correctly. A
+		// fresh colony with no spawn-tree.txt yet must still count zero and
+		// be allowed to spawn, which the os.IsNotExist branch below still
+		// guarantees.
 		currentSpawns := 0
 		treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
 		info, statErr := os.Stat(treePath)
