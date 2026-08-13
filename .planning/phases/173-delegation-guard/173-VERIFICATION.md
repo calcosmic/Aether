@@ -1,47 +1,20 @@
 ---
 phase: 173-delegation-guard
-verified: 2026-08-13T12:55:31Z
-status: gaps_found
-score: 5/6 ROADMAP success criteria fully verified; 1 falsified with a demonstrated exploit
+verified: 2026-08-13T17:08:32Z
+status: human_needed
+score: 6/6 ROADMAP success criteria verified (up from 5/6); the one demonstrated exploit and a second exploit found during gap-closure planning are both independently reproduced-and-refused in this re-verification
 overrides_applied: 0
-gaps:
-  - truth: "Every delegation guard fails closed when its inputs are unreadable (ROADMAP Phase 173 success criterion 4, and the phase's own goal statement: 'every guard fails closed')"
-    status: failed
-    reason: >
-      Empirically demonstrated: a worker (or any process with Bash access — no Write/Edit
-      tool needed, since the PreToolUse hook only matches Write|Edit|Agent|Task, not Bash)
-      can defeat the whole-run spawn budget (SPAWN-03) entirely by overwriting
-      .aether/data/spawn-tree.txt with a single line of non-pipe-format text. After
-      exhausting the real 20-helper budget and confirming the 21st spawn is correctly
-      refused, corrupting spawn-tree.txt with `echo "garbage" > spawn-tree.txt` and
-      retrying the identical spawn succeeds and records normally, reporting
-      budget_consumed:1 as if the run had never happened. pkg/agent/spawn_tree.go's
-      parseFile() swallows every read error AND silently discards unparseable lines,
-      always returning a nil error — so a corrupted (not merely absent) tree is
-      indistinguishable from a fresh one to spawnTreeBudgetState(), and the recording
-      chokepoint (spawn-log, "the one chokepoint an LLM cannot route around" per the
-      phase's own goal) allows and writes. The depth cap and ancestor-cycle checks are
-      NOT bypassed by this same technique for non-sentinel-parented spawns (they
-      correctly deny "unknown parent" once the tree is emptied), but any Queen-parented
-      spawn only needs the budget check to pass, and that check has no corruption
-      detection at all — only a directory-at-path check exists (cmd/internal_cmds.go's
-      spawn-can-spawn-swarm fix from plan 03), and it was never applied to the
-      spawn-log/spawn-can-spawn path the budget actually gates.
-    artifacts:
-      - path: "pkg/agent/spawn_tree.go"
-        issue: "parseFile() (line 328) treats every store.ReadFile error identically to 'file absent, no history' and always returns a nil error; parseSpawnTreeBytes silently skips any line that fails to parse rather than surfacing a partial-parse signal. No caller of Parse()/parseFile() can distinguish 'legitimately empty colony' from 'corrupted file'."
-      - path: "cmd/spawn_budget.go"
-        issue: "spawnTreeBudgetState() (line 58) computes Consumed purely from EntriesForRun()'s returned slice; a corrupted spawn-tree.txt yields an empty slice with no error, so the whole-run ceiling silently resets to 0 instead of denying per D-19's own stated fail-closed intent."
-      - path: "cmd/spawn.go"
-        issue: "deriveSpawnDepth's sentinel branch (spawnParentIsRoot) never reads the tree at all, so a Queen/Prime-1/Swarm-parented spawn's depth derivation cannot be affected by corruption either way — meaning the budget check is the ONLY guard standing between a corrupted tree and unlimited depth-1 spawning, and it is exactly the one guard proven not to fail closed on this input."
-    missing:
-      - "A corruption-detection layer at the Parse()/parseFile() boundary that distinguishes 'file absent (0 bytes / not found)' — the T-173-24 justified exception — from 'file present but content does not parse as valid spawn-tree pipe format' — which must propagate as an error."
-      - "spawnTreeBudgetReason (and, for defense in depth, spawnAncestorCycleReason) must turn that propagated error into a deny, matching the D-19 posture already implemented for spawn-runs.json corruption and for a directory obstructing spawn-tree.txt's path."
-      - "A regression test proving that a spawn-log call against a corrupted-but-regular-file spawn-tree.txt is refused, mirroring TestSpawnTreeBudgetFailsClosedWhenTheTreeIsUnreadable's existing shape but targeting spawn-tree.txt's content instead of spawn-runs.json's."
+re_verification:
+  previous_status: gaps_found
+  previous_score: "5/6 ROADMAP success criteria fully verified; 1 falsified with a demonstrated exploit"
+  gaps_closed:
+    - "Every delegation guard fails closed when its inputs are unreadable (ROADMAP Phase 173 success criterion 4, and the phase's own goal statement: 'every guard fails closed') — the corrupted-ledger route this verifier demonstrated is now refused, byte-identically re-reproduced in this session"
+  gaps_remaining: []
+  regressions: []
 human_verification:
-  - test: "Run a real /ant-build that hits the whole-run spawn budget or depth cap, and read the operator-visible output (not raw JSON) to confirm the refusal reason is visible without opening a file."
-    expected: "The refusal names the helper, its would-be parent, and the reason, inside the /ant-build or /ant-continue ceremony narration a non-technical operator actually reads."
-    why_human: "173-RESIDUE.md residue 8 states explicitly this is unproven: the Go runtime's Detail field is proven correct, but no plan in this phase touches build.md/continue.md, so whether it surfaces in the wrapper ceremony (as opposed to a raw CLI error) has never been observed."
+  - test: "Run a real /ant-build (or /ant-continue) that hits either the depth cap or the whole-run budget ceiling, and read the output as the owner would — not the raw JSON, the narration shown in the terminal."
+    expected: "The refusal names the helper, its would-be parent, and the reason, in plain English, inside the ceremony narration."
+    why_human: "173-RESIDUE.md residue 8 states this explicitly as unproven: no plan in this phase, including the three gap-closure plans, touches build.md or continue.md. The Go-level Detail/error string is proven correct and present in the CLI's own JSON/error output (confirmed again in this re-verification's manual reproductions), but whether it reaches the wrapper-level narration a non-technical operator actually reads has never been observed. Carried forward unchanged from the initial verification — no plan since has addressed it."
 ---
 
 # Phase 173: Delegation Guard Verification Report
@@ -53,30 +26,44 @@ every guard fails closed, and the operator can watch the tree while it grows. No
 ability to delegate in this phase; enforcement lands before capability because parent/depth
 linkage is recorded at spawn time and cannot be retrofitted to past runs.
 
-**Verified:** 2026-08-13T12:55:31Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-08-13T17:08:32Z
+**Status:** human_needed
+**Re-verification:** Yes — after gap closure (plans 173-11, 173-12, 173-13)
 
 ## Summary For The Owner (plain English)
 
-This phase built five separate checks that are supposed to stop an AI helper from spawning
-too many other helpers, or spawning helpers too many levels deep, or asking a helper to redo
-work a level above it already started (a loop that would never stop on its own). Four of those
-five checks hold up under real testing, including me deliberately trying to break them. The
-fifth — the one that limits the *total number* of helpers a single run can create — can be
-switched off by any helper simply overwriting one internal record file with one line of garbage
-text, something a helper can already do with an ordinary shell command (no special access
-required). After that one write, the "you've used all 20 helpers you're allowed" limit resets to
-zero and stays broken for the rest of the run. I proved this by actually doing it: I ran a
-program up to its real limit, watched it correctly refuse the 21st helper, then overwrote the
-record file, and watched the exact same request succeed as if nothing had happened.
+This morning I found a real hole in this phase's work: an AI helper could reset the "you've used
+all 20 helpers you're allowed this run" limit back to zero just by overwriting one internal record
+file with a line of garbage text — no special permissions needed, just an ordinary command. I
+proved it by doing it myself.
 
-The team that built this phase was unusually honest about a related, narrower version of this
-same weak spot — they wrote it down in their own residue notes before I ever tested it. What I
-found goes further than what they wrote down: I turned their disclosed limitation into a working
-demonstration that the count-based limit can be reset to zero on demand, not just "undercounted
-in an edge case." That is worth fixing, or worth a deliberate, written decision to accept the
-risk, before this phase is called done.
+The team fixed it, and while planning the fix they found a second, even easier way to cause the
+same problem — deleting a *different* internal file (the one that says which batch of work is
+currently running), with no tampering of the first file at all. They fixed that too.
+
+I did not take their word for it. I rebuilt the program from the fixed code and, in a disposable
+test folder well away from this repository, personally repeated my exact original attack — filled
+the 20-helper limit, watched the 21st helper get correctly refused, then overwrote the record file
+with garbage, and tried the same request again. This time it was refused too, and it named the
+exact reason ("the spawn ledger is present but its content is not a valid spawn ledger"). The
+record file was left untouched — the broken evidence wasn't quietly erased and replaced with a
+clean one, which is what happened before. I then built a fresh test colony, gave it a valid,
+completely full 20-helper record, and tried the second attack — deleting the "which batch is
+running" file, and separately replacing it with a folder instead of a file. Both were refused too.
+I also confirmed the fix didn't overcorrect: a brand-new colony with no record files at all can
+still spawn its first helper normally, so nobody is locked out by mistake.
+
+Every one of the program's own automated checks for this fix passes, and so does the complete test
+suite for the whole codebase (over 5,000 tests, all packages, nothing broken by this fix). The
+team also went back and fixed five comments in the code that used to say "this kind of corruption
+can never happen" — those comments were true when written and are now false, so leaving them would
+have misled the next person to read the code.
+
+One thing from my first check is still true and still needs a human to look at it, because nothing
+about it changed in this round of fixes: when a helper actually gets refused during a real project
+build, does the plain-English explanation of why show up in the normal on-screen narration you'd
+read, or only in a technical error message you'd have to go looking for? Nobody has watched that
+happen yet. That's the only reason this report isn't an unqualified "done."
 
 ## Goal Achievement
 
@@ -84,189 +71,246 @@ risk, before this phase is called done.
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | `spawn-can-spawn --depth 99` denies; a spawn one level past the cap exits non-zero and writes no spawn-tree entry | VERIFIED | `go test ./cmd -run 'TestSpawnCanSpawnDeniesPastDepthCap\|TestSpawnLogRefusesPastCapAndWritesNoEntry'` passes. Manually reproduced: `spawn-can-spawn --depth 99` → `can_spawn:false`, reason `depth`. Built a 2-level tree, attempted a 3rd-level spawn → exit 1, entry count unchanged (2 before, 2 after). |
-| 2 | `spawn-tree-depth` reports depth 2 for a three-level tree built entirely with `--depth 0`, because depth is derived from the parent's own entry | VERIFIED | `go test ./cmd -run 'TestSpawnTreeDepthReportsTwoForAThreeLevelTree\|TestSpawnLogDerivesDepthFromRecordedParent\|TestWorkersMdStatesOneDepthConvention'` passes. Manually reproduced: built Queen→L1→L2 all with `--depth 0`; `spawn-tree-depth` reported `max_depth:2`. |
-| 3 | With the wave cap at 8 and the tree budget at 20, a run never exceeding 8 per wave is refused at helper 21; wave-1 consumption is not restored in wave 2 | VERIFIED (for the non-adversarial case the wording describes) | `go test ./cmd -run 'TestSpawnTreeBudgetRefusesTheTwentyFirstHelper\|TestSpawnTreeBudgetIsNotRestoredBetweenWaves\|TestSpawnTreeBudgetAndWaveCapAreSeparateQuantities'` passes. Manually reproduced: two waves of 8 (16 total), budget reported 17/20 after the 17th; a third wave of 4 reached 20/20; the 21st was refused by name. **See the criterion-4 gap below: this same budget is trivially resettable to 0 by any process that can write a single line to `spawn-tree.txt`, which undermines the "bounds what depth alone cannot" framing this criterion sits inside of, even though the criterion's own literal wording (about wave-shape independence) holds under normal operation.** |
-| 4 | With `COLONY_STATE.json` and the spawn tree made unreadable, every delegation guard denies and exits non-zero, and the hook denies an unresolvable requester | **FAILED** | See Gap 1 below. Three of four guards never read `COLONY_STATE.json` (this is disclosed, bounded residue, not new). The hook's own unresolved-requester deny is VERIFIED (`TestHookPreToolUseDeniesUnresolvedRequesterDepth` passes; the hook doesn't touch either file). `spawn-can-spawn-swarm` correctly denies on both a corrupted `COLONY_STATE.json` and a directory obstructing `spawn-tree.txt`'s path (manually reproduced, exit 1 both times). **But the authoritative recorder, `spawn-log`, and the advisory `spawn-can-spawn`, do NOT deny when `spawn-tree.txt` is a corrupted-but-regular file** — they silently treat it as an empty, fresh tree and allow. This is not a directory-obstruction edge case; it is a plain `echo "garbage" > spawn-tree.txt`, and it demonstrably resets the whole-run budget to 0 (see Gap 1). |
-| 5 | A spawn whose (caste, normalised task) already appears in its own ancestor chain is refused, naming the ancestor | VERIFIED | `go test ./cmd -run 'TestSpawnCanSpawnDeniesAncestorCycle\|TestSpawnAncestorCheckAllowsDifferentTaskSameCaste\|TestSpawnAncestorCheckAllowsSameTaskDifferentCaste'` passes. Manually reproduced: A1 (builder, "fix the login form") spawns C1 with the identical caste+task → denied, message names A1 by depth. Also confirmed the ancestor check correctly denies (does not silently allow) when the tree is corrupted and the direct, non-sentinel parent can no longer be resolved. |
-| 6 | `spawn-tree-active` renders the tree indented by depth with parent attribution while a run is in progress, and mutates nothing | VERIFIED | `go test ./cmd -run 'TestSpawnTreeActiveRendersIndentedByDepthMidRun\|TestSpawnTreeActiveShowsNoRawIdentifiersOrJSON\|TestSpawnTreeActiveMutatesNothing\|TestSpawnTreeActiveKeepsItsJSONContract'` passes. Manually reproduced against a live (uncompleted) two-level tree: correct two-space-per-level indentation, English caste labels, "sent here by" parent attribution; file hashes identical before/after two consecutive runs. |
+| 1 | `spawn-can-spawn --depth 99` denies; a spawn one level past the cap exits non-zero and writes no spawn-tree entry | VERIFIED (regression check) | Unaffected by the gap-closure plans (no file touched by plans 11-13 sits on this code path). `go test ./... -count=1 -timeout 900s` passes all 20 packages, including `TestSpawnCanSpawnDeniesPastDepthCap`/`TestSpawnLogRefusesPastCapAndWritesNoEntry`. |
+| 2 | `spawn-tree-depth` reports depth 2 for a three-level tree built entirely with `--depth 0` | VERIFIED (regression check) | Unaffected by the gap-closure plans. Full suite passes, including `TestSpawnTreeDepthReportsTwoForAThreeLevelTree`/`TestSpawnLogDerivesDepthFromRecordedParent`/`TestWorkersMdStatesOneDepthConvention`. |
+| 3 | With the wave cap at 8 and the tree budget at 20, a run never exceeding 8 per wave is refused at helper 21; wave-1 consumption is not restored in wave 2 — **and now also: neither corrupting the ledger nor deleting the run record can reset the count** | VERIFIED (no longer asterisked) | `go test ./cmd -run 'TestSpawnTreeBudgetRefusesTheTwentyFirstHelper|TestSpawnTreeBudgetIsNotRestoredBetweenWaves|TestSpawnTreeBudgetAndWaveCapAreSeparateQuantities|TestCorruptingTheLedgerDoesNotResetTheWholeRunBudget|TestErasingTheRunRecordDoesNotResetTheWholeRunBudget|TestAFreshColonyWithNoLedgerIsStillAllowedToSpawn'` — all pass. The undercutting caveat from the initial verification report no longer applies: the whole-run budget genuinely bounds the tree now, not just under non-adversarial wave shapes. |
+| 4 | With `COLONY_STATE.json` and the spawn tree made unreadable, every delegation guard denies and exits non-zero, and the hook denies an unresolvable requester | **VERIFIED — the falsified criterion, now closed by building** | See "The Decisive Re-Reproduction" below. Both the originally-demonstrated exploit (ledger corruption) and the second exploit found during gap-closure planning (run-record erasure/obstruction) are independently reproduced by me in this session and confirmed refused. `go test ./cmd -run 'TestEveryDelegationGuardFailsClosedOnItsOwnUnreadableInputs|TestDelegationGuardTableCoversEveryGuardCommand|TestCorruptingTheLedgerDoesNotResetTheWholeRunBudget|TestErasingTheRunRecordDoesNotResetTheWholeRunBudget|TestAFreshColonyWithNoLedgerIsStillAllowedToSpawn'` all pass; all 16 subtests of the cross-guard table pass, including the 3 new `ledger-corrupt` and 1 new `run-state-obstructed` subtests. |
+| 5 | A spawn whose (caste, normalised task) already appears in its own ancestor chain is refused, naming the ancestor | VERIFIED (regression check) | Unaffected by the gap-closure plans' production logic (only a fixture comment in `cmd/spawn_ancestor_test.go` changed, no assertion). Full suite passes, including `TestSpawnCanSpawnDeniesAncestorCycle`/`TestSpawnAncestorCheckFailsClosedOnUnreadableTree`. |
+| 6 | `spawn-tree-active` renders the tree indented by depth with parent attribution while a run is in progress, and mutates nothing | VERIFIED (regression check) | Unaffected by the gap-closure plans. Full suite passes, including `TestSpawnTreeActiveRendersIndentedByDepthMidRun`/`TestSpawnTreeActiveMutatesNothing`. |
 
-**Score:** 5/6 criteria hold as literally worded; criterion 4 is falsified by a reproducible exploit that also undercuts the spirit of criterion 3 and the phase's own goal statement ("every guard fails closed").
+**Score:** 6/6 criteria verified. Criterion 4, the one falsified in the initial verification, is now
+closed — not by narrowing its wording, but by building a fix and independently re-attacking it.
 
-### The Decisive Reproduction (Gap 1)
+### The Decisive Re-Reproduction
 
-Run from a clean scratch colony store, using the phase's own built binary:
+Performed from a disposable scratch colony store (`COLONY_DATA_DIR` pointed at a temp directory
+well outside this repository), against the actual binary rebuilt from the current, committed source
+tree (`go build ./cmd/aether`).
+
+**Step 1 — the fresh-colony invariant still holds (the fix did not overcorrect):**
+
+```
+$ COLONY_DATA_DIR=<scratch>/data aether spawn-log --parent Queen --caste builder --name W1 --task "task 1" --depth 0
+{"ok":true,"result":{"budget_consumed":1,"budget_max":20,...,"recorded":true,...}}
+exit: 0
+```
+A colony with no ledger file and no run-state file at all can still spawn its first helper.
+
+**Step 2 — my original exploit, re-run against the fixed binary:**
 
 ```
 # Legitimately exhaust the 20-helper whole-run budget
-for i in 1..20: aether spawn-log --parent Queen --caste builder --name "W$i" --task "task $i" --depth 0
+$ for i in 1..20: aether spawn-log --parent Queen --caste builder --name "W$i" --task "task $i" --depth 0
 
-# Confirm the 21st is correctly refused
-$ aether spawn-log --parent Queen --caste builder --name W21 --task "..." --depth 0
+# Confirm the 21st is correctly refused (control)
+$ aether spawn-log --parent Queen --caste builder --name W21 --task "task 21" --depth 0
 {"ok":false,"error":"whole-run helper budget exhausted: 20 of 20 helpers already spawned
-in this run; Queen may not spawn another","code":1}
+(counted across the entire ledger because no run is recorded); Queen may not spawn another","code":1}
 exit: 1
 
-# A worker corrupts the record with one shell line -- no Write/Edit tool needed,
-# since .claude/settings.json's PreToolUse hook only matches Write|Edit|Agent|Task,
-# never Bash:
-$ echo "garbage not pipe format" > .aether/data/spawn-tree.txt
+# The exact attack that worked this morning
+$ echo "garbage not pipe format" > <scratch>/data/spawn-tree.txt
 
-# The identical, already-refused request now succeeds:
-$ aether spawn-log --parent Queen --caste builder --name W22-BYPASS --task "..." --depth 0
-{"ok":true,"result":{"budget_consumed":1,"budget_max":20,"depth":1,"depth_source":"derived",
-"name":"W22-BYPASS","parent":"Queen","recorded":true, ...}}
-exit: 0
+# Retry the identical, already-refused request
+$ aether spawn-log --parent Queen --caste builder --name W22-BYPASS --task "task 22" --depth 0
+{"ok":false,"error":"whole-run helper budget unverifiable (verify spawn-tree.txt: spawn_tree:
+spawn-tree.txt: spawn ledger is present but its content is not a valid spawn ledger: line 1 has
+1 fields, expected 7 (spawn) or 4 (completion)): refusing to spawn","code":1}
+exit: 1
+
+# The tampering evidence was NOT erased -- the file is still exactly the garbage I wrote
+$ cat <scratch>/data/spawn-tree.txt
+garbage not pipe format
 ```
 
-This is not the same finding as 173-RESIDUE.md's own disclosed residue #7 (which frames the gap
-as "the fail-closed proof is narrower than the criterion's literal wording, per-guard"). This
-reproduction goes further: it demonstrates that the disclosed gap is not merely a proof-scope
-limitation but a working, low-effort exploit path with a concrete, damaging effect — the
-whole-run budget (the mechanism the phase's goal statement calls out by name as bounding "what
-depth alone cannot") can be reset to zero, repeatedly, by any process able to write one line to
-one file, at any point during a run.
+This morning's identical sequence returned `{"ok":true,"result":{"budget_consumed":1,...}}` and
+`exit: 0` at this exact step. It now refuses, names the corruption specifically, and leaves the
+tampered file untouched as evidence.
 
-**This looks unintentional**, unlike CR-01 (which the team caught and fixed same-day) — no
-plan text, review finding, or residue entry names this specific reset-to-zero consequence,
-though 173-03-SUMMARY.md's "Bounded Residue" section and 173-RESIDUE.md residue #7 both name the
-underlying mechanism (`Parse()` cannot distinguish absent from corrupted) that makes it possible.
-To accept this as a scoped, honestly-narrowed limitation rather than close it, add an override to
-this file's frontmatter recording that decision explicitly; otherwise this is a build gap for a
-follow-up plan.
+**Step 3 — the second exploit (found during gap-closure planning, not part of my original
+reproduction), re-run against the fixed binary, both variants:**
+
+```
+# A valid, genuinely active run, fully exhausted at 20 helpers (started_at set in the past so
+# the entries fall inside the run's own window, confirmed by the control refusal below)
+$ for i in 1..20: aether spawn-log --parent Queen --caste builder --name "V$i" --task "task $i" --depth 0
+$ aether spawn-log --parent Queen --caste builder --name V21 --task "task 21" --depth 0
+{"ok":false,"error":"whole-run helper budget exhausted: 20 of 20 helpers already spawned in
+this run; Queen may not spawn another","code":1}
+exit: 1   # control: budget genuinely full, counted via the run window this time
+
+# Variant A: delete the run-record file entirely, leaving the valid, full ledger untouched
+$ rm <scratch>/data/spawn-runs.json
+$ aether spawn-log --parent Queen --caste builder --name V22-BYPASS --task "task 22" --depth 0
+{"ok":false,"error":"whole-run helper budget exhausted: 20 of 20 helpers already spawned
+(counted across the entire ledger because no run is recorded); Queen may not spawn another","code":1}
+exit: 1
+
+# Variant B (fresh scratch colony, same setup): replace the run-record file with a directory
+$ rm <scratch2>/data/spawn-runs.json && mkdir <scratch2>/data/spawn-runs.json
+$ aether spawn-log --parent Queen --caste builder --name D21-BYPASS --task "task 21" --depth 0
+{"ok":false,"error":"whole-run helper budget unverifiable (resolve current run: spawn_tree: read
+\"spawn-runs.json\": ... is a directory): refusing to spawn","code":1}
+exit: 1
+
+# The harder combined variant: corrupt the ledger too, in the same already-run-record-deleted colony
+$ echo "more garbage" > <scratch>/data/spawn-tree.txt
+$ aether spawn-log --parent Queen --caste builder --name V23-BYPASS --task "task 23" --depth 0
+{"ok":false,"error":"whole-run helper budget unverifiable (verify spawn-tree.txt: ... line 1 has
+1 fields, expected 7 (spawn) or 4 (completion)): refusing to spawn","code":1}
+exit: 1
+```
+
+Both routes — the one I demonstrated this morning, and the second one the team found while planning
+the fix — are refused, independently, by me, against the actual built binary, in a clean environment
+with no pre-existing state. All four command outputs above were captured directly in this
+verification session, not copied from a plan summary.
+
+**Automated coverage matches the manual reproduction exactly:**
+`go test ./pkg/agent -run 'TestSpawnTreeParseTreatsAnAbsentLedgerAsEmptyButACorruptOneAsAnError|TestSpawnTreeParseAcceptsEveryShapeTheWriterProduces|TestSpawnTreeRefusesToRewriteACorruptLedger|TestSpawnRunStateTellsAnAbsentRunFileApartFromAnUnreadableOne'`
+and
+`go test ./cmd -run 'TestCorruptingTheLedgerDoesNotResetTheWholeRunBudget|TestErasingTheRunRecordDoesNotResetTheWholeRunBudget|TestAFreshColonyWithNoLedgerIsStillAllowedToSpawn|TestEveryDelegationGuardFailsClosedOnItsOwnUnreadableInputs|TestDelegationGuardTableCoversEveryGuardCommand'`
+all pass (transcripts confirmed in this session, not merely re-read from a SUMMARY.md).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `cmd/spawn.go` | Depth cap, decision chokepoint, sentinel resolution | VERIFIED | `spawnMaxDelegationDepth=2`, `spawnCanSpawnDecision` real 3-check chain, `deriveSpawnDepth` parent-lookup authority — all present, tested, wired |
-| `cmd/spawn_budget.go` | Whole-run budget of 20, midden write on ceiling only, 75% warning | VERIFIED (mechanism); gap noted above (integrity of its input) | Present, tested; `spawnTreeBudgetState` has no corruption detection (Gap 1) |
-| `cmd/spawn_ancestor.go` | Ancestor-chain cycle check | VERIFIED | Present, tested, correctly fails closed on an unresolvable non-sentinel chain |
-| `cmd/spawn_reap.go` | Staleness scan, reap mutation, `spawn-orphans` command | VERIFIED | Present, tested, wired into `beginRuntimeSpawnRun` and `/ant-patrol` |
-| `cmd/hook_cmds.go` | Fail-closed PreToolUse Agent/Task deny path; env-var-only capture (CR-01 fix) | VERIFIED | `hookSpawnDenyReason` present and tested; `TestHookCaptureHasNoFileBasedSwitch` passes, confirming CR-01's fix holds |
-| `.planning/phases/173-delegation-guard/173-HOOK-FINDINGS.md` | Dated empirical verdict | VERIFIED | Contains `VERDICT: HOOK_FIRES_IN_SUBAGENT`, raw payloads, named residue |
-| `.aether/workers.md` | States one depth convention agreeing with D-01/D-05 | PARTIAL — see WR-01 below | The behaviour table and both `spawn-log` examples were corrected (verified); the separate "SPAWN CAPABILITY" child-prompt template block (lines 364-369) still tells a depth-2 helper it MAY spawn and cites a nonexistent "Depth 3" — contradicts D-05/D-01 in the exact block workers paste into child prompts |
-| `.planning/phases/173-delegation-guard/173-RESIDUE.md` | Named, bounded residue mapped to success criteria and requirements | VERIFIED | Present; nine residues named; residue 7 explicitly anticipates the question this verification resolves against criterion 4 |
+| `pkg/agent/spawn_tree.go` | Three-way parse contract (absent/valid/corrupt), write-closure abort on corruption | VERIFIED | `ErrSpawnTreeCorrupt` sentinel present and wrapped with `%w`; `parseFile`, `loadRunStateLocked`, `RecordSpawn`, `updateStatus` all confirmed edited and tested; four new package tests pass |
+| `cmd/spawn_budget.go` | Ledger-integrity check ahead of the no-run-yet shortcut; whole-ledger counting when no run resolves | VERIFIED | `st.Parse()` called before `CurrentRun()`; non-empty ledger with no run counts the whole ledger instead of reporting `Consumed: 0`; three new tests pass and were independently manually reproduced above |
+| `cmd/spawn_failclosed_test.go` | Cross-guard proof extended with `ledger-corrupt` (3 guards) and `run-state-obstructed` (1 guard) axes; five stale "impossible" comments corrected | VERIFIED | All 16 subtests of `TestEveryDelegationGuardFailsClosedOnItsOwnUnreadableInputs` pass, including the 4 new ones by name; repo-wide grep for the six stale phrasings returns nothing |
+| `cmd/internal_cmds.go` | Comment corrected to stop claiming `Parse()` cannot distinguish absent from unreadable | VERIFIED | Confirmed comment-only change; the `os.Stat` guard logic itself is unchanged (still a valid, independent defense-in-depth check) |
+| `.github/workflows/ci.yml` | All three new plan-12 budget-guard tests registered in the wiring ratchet's `-run` filter | VERIFIED | `grep` confirms all three test names present; `TestWiringGateStepRunsEveryWiringTest` passes, proving the filter matches every guard test with no stale alternatives |
+| `.planning/phases/173-delegation-guard/173-RESIDUE.md` | Rewritten to record both exploit routes, their closure, and newly-found bounds (10-13) | VERIFIED | Read in full; residue 7's table gained the 4 new (guard, axis) rows; the "to be judged against evidence at verification time" hedge is gone, replaced with a dated, sequenced account of what verification found, what planning additionally found, and what closed both; four new numbered residues (10-13) are present, each with a bounded claim, a wrong inference, and a "what would close it" line, matching what actually exists in the code (`recordCodexBuildDispatches` confirmed by direct code read to call `RecordSpawn` without consulting `spawnCanSpawnDecision`) |
+| `.aether/workers.md` | States one depth convention | PARTIAL — unchanged, carried forward | The "SPAWN CAPABILITY" child-prompt template block (line 366-369) still tells a depth-2 helper it MAY spawn and cites a "Depth 3" that the recorded convention says cannot exist. Not touched by any gap-closure plan (out of scope); runtime still denies the attempt regardless (fail-closed holds), so this is a documentation warning, not a guard failure |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| `.claude/settings.json` | `aether hook-pre-tool-use` | `Agent\|Task` PreToolUse matcher | WIRED | Matcher present; confirmed the hook does NOT also match `Bash`, which is load-bearing for Gap 1's reproduction (a worker doesn't need Write/Edit to corrupt `spawn-tree.txt`) |
-| `cmd/spawn.go spawnLogCmd` | `spawnCanSpawnDecision` | pre-record enforcement | WIRED | Confirmed: a denied decision never reaches `RecordSpawn` |
-| `cmd/ci_wiring_gate_test.go wiringGateGuardFiles` | `.github/workflows/ci.yml` `-run` filter | `TestWiringGateStepRunsEveryWiringTest` | WIRED | All five of this phase's new guard test files, and every test function inside them, are present in the CI filter (`go test` confirms the ratchet passes) |
-| `.claude/commands/ant/patrol.md` | `aether spawn-orphans` | patrol health-check bullet | WIRED (but see WR-06) | The wrapper markdown calls it; the declared YAML source (`patrol.yaml`) does not mention it, so a future regeneration from the YAML spec would silently drop this the only user-facing call site for the reaper |
+| `pkg/agent/spawn_tree.go Parse()` | `cmd/spawn_budget.go spawnTreeBudgetState` | integrity check taken before the no-run-yet early return | WIRED | Confirmed by code read (`st.Parse()` precedes `CurrentRun()`), by the passing test suite, and by my own manual reproduction above — corrupting the ledger now denies before the budget check's shortcut can be taken |
+| `pkg/agent/spawn_tree.go CurrentRun`/`loadRunStateLocked` | `cmd/spawn_budget.go` no-run-yet branch | whole-ledger counting when the run window cannot be resolved | WIRED | Confirmed: deleting or obstructing `spawn-runs.json` against a full ledger now counts the whole ledger rather than reporting zero, in both the automated test and my manual reproduction |
+| `cmd/spawn_budget_test.go` (3 new tests) | `.github/workflows/ci.yml -run` filter | `TestWiringGateStepRunsEveryWiringTest` | WIRED | All three new test names present in the filter; the ratchet test passes |
+| `cmd/spawn_failclosed_test.go delegationGuardFaultTable` (4 new axes) | `TestEveryDelegationGuardFailsClosedOnItsOwnUnreadableInputs` | table-driven subtests | WIRED | Verbose test output shows all 4 new subtests (`ledger-corrupt` ×3, `run-state-obstructed` ×1) running and passing |
 
 ### Data-Flow Trace (Level 4)
 
-Not applicable in the conventional sense (this phase is CLI/guard logic, not a UI rendering
-pipeline) — the equivalent trace performed here is the exploit reproduction above, which follows
-the data from a corrupted on-disk record through `Parse()` → `spawnTreeBudgetState()` →
-`spawnTreeBudgetReason()` → `spawnCanSpawnDecision` → `spawnLogCmd.RunE` → `RecordSpawn`, and
-confirms the corruption is silently absorbed at the first step and never surfaces as a deny at
-any later one.
+Same conventional-sense caveat as the initial verification (this is guard logic, not a UI rendering
+pipeline) — the trace here follows the corrupted byte sequence from disk through the fixed chain:
+`Parse()` (now returns a non-nil error wrapping `ErrSpawnTreeCorrupt`) → `spawnTreeBudgetState()`
+(now calls `Parse()` before `CurrentRun()`'s shortcut and propagates the error) →
+`spawnTreeBudgetReason()` (already turned any non-nil state error into a deny sentence) →
+`spawnCanSpawnDecision` → `spawnLogCmd.RunE` → **denied before `RecordSpawn` is ever reached**. This
+is the corrected version of the exact chain the initial verification traced as silently absorbing
+the corruption at the first step; it now denies at the first step instead, and my manual
+reproduction confirms the deny sentence and the untouched file bytes at the end of that chain.
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
-| Depth cap denies at 99 | `spawn-can-spawn --depth 99` | `can_spawn:false`, reason `depth` | PASS |
-| 3rd-level spawn refused, writes nothing | `spawn-log` past 2-level cap | exit 1, entry count unchanged | PASS |
-| `spawn-tree-depth` derives true depth | 3-level tree, all `--depth 0` | `max_depth:2` | PASS |
-| Whole-run budget refuses at 21, wave-independent | 3 waves (8/8/4), then a 21st | 21st refused by name; 17/20 correctly reported after wave 2 | PASS |
-| Ancestor cycle refused, ancestor named | A1 repeats its own caste+task one level down | denied, names A1 and its depth | PASS |
-| `spawn-tree-active` renders live, mutates nothing | mid-run 2-level tree | correct indentation/attribution; file hashes identical across two runs | PASS |
-| `spawn-can-spawn-swarm` fails closed | corrupted `COLONY_STATE.json`; directory at `spawn-tree.txt` | both denied, exit 1 | PASS |
-| **Recorder fails closed on tree corruption** | `spawn-log`/`spawn-can-spawn` against a garbled (regular-file) `spawn-tree.txt` | **allowed; budget silently reset to 0** | **FAIL — Gap 1** |
-| CR-01 regression lock | `TestHookCaptureHasNoFileBasedSwitch` | passes | PASS |
+| Fresh colony (no ledger, no run file) can still spawn | `spawn-log` with empty scratch store | `recorded:true`, exit 0 | PASS |
+| Legitimate 21st helper refused before any tampering (control) | `spawn-log` after 20 successful spawns | exit 1, names the budget | PASS |
+| **Ledger corruption no longer resets the budget** | corrupt `spawn-tree.txt` with one garbage line, retry the refused spawn | **exit 1, names the corruption, file bytes unchanged** | **PASS — this morning's exploit is closed** |
+| **Run-record deletion no longer resets the budget** | valid full ledger, `rm spawn-runs.json`, retry | **exit 1, whole ledger counted instead of a free budget** | **PASS — the second exploit is closed** |
+| **Run-record directory obstruction denies outright** | valid full ledger, directory at `spawn-runs.json`'s path, retry | **exit 1, names the budget as unverifiable** | **PASS** |
+| **Combined harder variant (corrupt ledger + deleted run record)** | both faults present simultaneously, retry | **exit 1, corruption named, bytes unchanged** | **PASS** |
+| Full repository test suite | `go test ./... -count=1 -timeout 900s` | all 20 packages pass, exit 0 | PASS |
+| CI wiring ratchet includes the 3 new budget tests | `go test ./cmd -run TestWiringGateStepRunsEveryWiringTest` | passes | PASS |
 
 ### Probe Execution
 
-No `scripts/*/tests/probe-*.sh` probes are declared by this phase's PLAN/SUMMARY files, and none
-exist under that convention for this phase's subject area. Skipped: no runnable probe artifacts
-found (`find scripts -path '*/tests/probe-*.sh'` returns nothing relevant; this phase's own
-verification method is Go's test runner plus manual CLI reproduction, both exercised above).
+No `scripts/*/tests/probe-*.sh` probes are declared by this phase's plans or exist under that
+convention for this phase's subject area (unchanged from the initial verification). Skipped —
+verification method is Go's test runner plus manual CLI reproduction, both exercised above.
 
 ### Requirements Coverage
 
 | Requirement | Source Plan(s) | Description | Status | Evidence |
 |---|---|---|---|---|
-| SPAWN-01 | 173-04 | Refuse at a configured depth | SATISFIED | Verified above; unaffected by Gap 1 (the exploit does not defeat the depth cap for non-sentinel parents, and sentinel-parented spawns are always depth 1 regardless) |
-| SPAWN-02 | 173-02 | A spawned child records its true depth | SATISFIED | Verified above |
-| SPAWN-03 | 173-05 | Whole-tree budget bounds what depth alone cannot | **BLOCKED** | The budget mechanism is correct under normal operation but is not a genuine bound against an adversarial or buggy worker — see Gap 1. A "bound" that any process can reset to zero with one shell write does not satisfy the requirement's own framing ("bounds what depth alone cannot") |
-| SPAWN-04 | 173-01, 173-03, 173-07, 173-10 | PreToolUse hook denies before platform acts; fails closed on unresolved requester | SATISFIED | The hook itself is fully verified and does not depend on either corrupted file; `spawn-can-spawn-swarm`'s named D-19 defect is fixed and tested |
-| SPAWN-05 | 173-06 | Ancestor-chain repetition detected and refused | SATISFIED | Verified above, including under tree corruption (denies, does not silently allow, for non-sentinel-parented spawns) |
-| SPAWN-06 | 173-02, 173-10 | Decision: what depth 0 means | SATISFIED (decision recorded); PARTIAL on its documentation consequence | D-05 recorded in 173-CONTEXT.md; `TestWorkersMdStatesOneDepthConvention` passes, but see WR-01 below — the child-prompt template block was not covered by that test and still contradicts the recorded convention |
-| SPAWN-07 | 173-08 | Operator watches the tree grow | SATISFIED | Verified above, including operator sign-off recorded in 173-08-SUMMARY.md |
-| SPAWN-08 | 173-09 | Abandoned child reaped, budget released, operator command | SATISFIED | Verified above via tests; not directly exercised manually but automated coverage is thorough and specific (later-timestamp rule, threshold configurability, mutation purity) |
+| SPAWN-01 | 173-04 | Refuse at a configured depth | SATISFIED | Unaffected by gap closure; regression-verified |
+| SPAWN-02 | 173-02 | A spawned child records its true depth | SATISFIED | Unaffected by gap closure; regression-verified |
+| SPAWN-03 | 173-05, 173-11, 173-12 | Whole-tree budget bounds what depth alone cannot | **SATISFIED (upgraded from BLOCKED)** | Both reset routes are independently reproduced-and-refused in this session; the budget now genuinely bounds the tree against tampering, not just under normal wave shapes |
+| SPAWN-04 | 173-01, 173-03, 173-07, 173-10, 173-13 | PreToolUse hook denies before platform acts; fails closed on unresolved requester; every guard proven to fail closed on its own unreadable inputs | SATISFIED | The hook itself was already fully verified and untouched by this gap closure; the cross-guard table now also proves the recorder, the advisory checker, and the swarm checker each independently deny a corrupted or obstructed ledger/run-record, closing the exact defense-in-depth gap the initial verification flagged |
+| SPAWN-05 | 173-06 | Ancestor-chain repetition detected and refused | SATISFIED | Unaffected by gap closure (only a fixture comment changed); regression-verified |
+| SPAWN-06 | 173-02, 173-10 | Decision: what depth 0 means | SATISFIED (decision recorded); PARTIAL on its documentation consequence, unchanged | `.aether/workers.md`'s child-prompt template block (WR-01) still contradicts the recorded convention; not addressed by any gap-closure plan; fail-closed enforcement is unaffected |
+| SPAWN-07 | 173-08 | Operator watches the tree grow | SATISFIED | Unaffected by gap closure; regression-verified |
+| SPAWN-08 | 173-09 | Abandoned child reaped, budget released, operator command | SATISFIED | Unaffected by gap closure; regression-verified |
 
 No orphaned requirements: REQUIREMENTS.md lists SPAWN-01 through SPAWN-08 for Phase 173, and every
-one is claimed by at least one plan's frontmatter `requirements:` field (cross-referenced above).
+one is claimed by at least one plan's frontmatter `requirements:` field across all 13 plans
+(cross-referenced above; plans 11-13 additionally claim SPAWN-03 and SPAWN-04 for the gap-closure
+work).
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |---|---|---|---|---|
-| `pkg/agent/spawn_tree.go` | 328-339 | Silent error-swallowing (`parseFile` always returns nil error) | 🛑 Blocker (via Gap 1's exploit chain) | Root cause of the whole-run budget bypass |
-| `.aether/workers.md` | 364-369 | Stale/contradictory prose (WR-01, open) | ⚠️ Warning | Child-prompt template still tells a depth-2 helper it MAY spawn and cites a "Depth 3" the recorded convention says cannot exist. Runtime still denies the attempt (fail-closed holds), but a worker following this text wastes a turn and the SPAWN-06 decision is not honestly reflected everywhere in the one document workers actually read from |
-| `.aether/workers.md` | 304 | Stale documented return shape (WR-02, open) | ⚠️ Warning | Documents `max_spawns`/`current_total` keys that do not exist in `spawn-can-spawn`'s real JSON output |
-| `cmd/spawn_budget.go` | 99-117 | Inspection command mutates state (WR-03, open) | ⚠️ Warning | `spawn-can-spawn` (no `--enforce`, purely advisory) writes to `midden.json` when called at the budget ceiling, violating CLAUDE.md's own Definition-of-Done corollary that inspection/dry-run commands must not mutate state. Confirmed by code reading: `spawnCanSpawnCmd`'s `RunE` calls `spawnCanSpawnDecision` unconditionally, which calls `spawnTreeBudgetReason`, which calls `spawnTreeBudgetCeilingToMidden` on every call once the ceiling is reached, regardless of `--enforce` |
-| `cmd/hook_cmds.go` | 177-201 | Two-sided heuristic weakness (WR-04, open) | ⚠️ Warning | Named, bounded, and disclosed by the phase's own team; not independently exploited further in this verification since `spawn-log` remains the authoritative backstop even when the hook's heuristic is fooled |
-| `cmd/spawn.go` | 94-121 | Check-then-act race across processes (WR-05, open) | ⚠️ Warning | Not independently reproduced here (requires genuine concurrent processes); code-confirmed still present. Compounds Gap 1's severity: even without deliberate corruption, concurrent spawns near the ceiling can already exceed it by race |
-| `cmd/spawn_ancestor.go` | 69-77 | Silent truncation on unresolvable mid-chain ancestor (WR-07, open) | ⚠️ Warning | Named, bounded, disclosed; not independently reproduced here |
-| `.aether/commands/patrol.yaml` vs 3 wrapper files | — | Spec/wrapper drift (WR-06, open) | ⚠️ Warning | Confirmed: `patrol.yaml` (the declared source of truth) does not mention `spawn-orphans`; all three wrapper markdown files do |
+| `pkg/agent/spawn_tree.go` | 328-339 (pre-fix) | Silent error-swallowing (`parseFile` always returned nil error) | **RESOLVED** | This was the root cause of the whole-run budget bypass; now returns a distinguishable error. No longer a blocker. |
+| `.aether/workers.md` | 364-369 | Stale/contradictory prose (WR-01, still open) | ⚠️ Warning, carried forward unchanged | Child-prompt template still tells a depth-2 helper it MAY spawn and cites a "Depth 3" the recorded convention says cannot exist. Not in scope for any of the three gap-closure plans. Runtime still denies the attempt (fail-closed holds). |
+| `.aether/workers.md` | 304 | Stale documented return shape (WR-02, still open) | ⚠️ Warning, carried forward unchanged | Not addressed by gap closure; out of scope. |
+| `cmd/spawn_budget.go` | ~99-117 | Inspection command mutates state (WR-03, still open) | ⚠️ Warning, carried forward unchanged | `spawn-can-spawn` (no `--enforce`) still writes to `midden.json` at the budget ceiling on an advisory call. Not touched by any gap-closure plan; the plan explicitly stated it would not call `spawnTreeBudgetCeilingToMidden` from the new error branch, but did not revisit this pre-existing issue. |
+| `cmd/hook_cmds.go` | 177-201 | Two-sided heuristic weakness (WR-04, still open) | ⚠️ Warning, carried forward unchanged | Named, bounded, disclosed by the phase's own team; not in scope for gap closure. |
+| `cmd/spawn.go` | 94-121 | Check-then-act race across processes (WR-05, still open) | ⚠️ Warning, carried forward unchanged | Explicitly named as still-open in 173-RESIDUE.md's new residue 13. Not attempted by any of the three gap-closure plans. |
+| `cmd/spawn_ancestor.go` | 69-77 | Silent truncation on unresolvable mid-chain ancestor (WR-07, still open) | ⚠️ Warning, carried forward unchanged | Not in scope for gap closure. |
+| `.aether/commands/patrol.yaml` vs 3 wrapper files | — | Spec/wrapper drift (WR-06, still open) | ⚠️ Warning, carried forward unchanged | Not in scope for gap closure; confirmed still present by a fresh grep in this session. |
+| `cmd/codex_build.go` | 2700-2708 | `recordCodexBuildDispatches` calls `RecordSpawn` directly, bypassing `spawnCanSpawnDecision`/the budget check entirely | ℹ️ Info — newly named as residue 11, accurately disclosed | Confirmed by direct code read in this session: the function calls `spawnTree.RecordSpawn` with no call to the decision chokepoint. This is pre-existing behavior (not introduced or worsened by the gap closure) and is now honestly named in 173-RESIDUE.md rather than left undocumented. Spawns via this path are still counted by anything reading the ledger afterward, but are never asked permission first. |
 
-No unreferenced `TBD`/`FIXME`/`XXX` markers found in the files this phase modified.
+No unreferenced `TBD`/`FIXME`/`XXX` markers found in any file touched by the gap-closure plans
+(`pkg/agent/spawn_tree.go`, `pkg/agent/spawn_tree_test.go`, `cmd/spawn_budget.go`,
+`cmd/spawn_budget_test.go`, `cmd/spawn_failclosed_test.go`, `cmd/internal_cmds.go`,
+`cmd/spawn_ancestor_test.go`) — confirmed by a direct grep in this session.
 
 ### Human Verification Required
 
-**1. Refusal reason visible to the non-technical operator inside the real ceremony**
+**1. Refusal reason visible to the non-technical operator inside the real ceremony (carried forward, unchanged)**
 
 **Test:** Run a real `/ant-build` (or `/ant-continue`) that hits either the depth cap or the
 whole-run budget ceiling, and read the output as the owner would — not the raw JSON, the
 narration shown in the terminal.
 **Expected:** The refusal names the helper, its would-be parent, and the reason, in plain
 English, inside the ceremony narration.
-**Why human:** 173-RESIDUE.md residue 8 states this explicitly as unproven: no plan in this
-phase touches `build.md`/`continue.md`. The Go-level `Detail` string is proven correct and
-present in the CLI's own JSON/error output, but whether it reaches the wrapper-level narration a
-non-technical operator actually reads has never been observed.
+**Why human:** None of the three gap-closure plans touch `build.md` or `continue.md` — confirmed
+by diffing the gap-closure commit range against those files in this session (no changes). The
+Go-level `Detail`/error string is proven correct and present in the CLI's own JSON/error output
+(re-confirmed by my own manual reproductions above), but whether it reaches the wrapper-level
+narration a non-technical operator actually reads has never been observed, in either verification
+pass. Per CLAUDE.md, the owner of this repo is non-technical, so a refusal they cannot see is a
+refusal that does not help them.
 
 ### Gaps Summary
 
-Five of the six ROADMAP success criteria for this phase hold under both the phase's own
-extensive automated test suite (all named tests re-run here and passing) and independent manual
-CLI reproduction performed during this verification, including several deliberate attempts to
-break each guard. The depth cap, the ancestor-cycle check, the reap/orphan system, the live tree
-view, and the PreToolUse hook's own fail-closed behavior are all genuinely built and working —
-this is unusually well-tested code, and the CR-01 critical finding from the phase's own code
-review is fixed and locked by a passing regression test (`TestHookCaptureHasNoFileBasedSwitch`).
+The one gap from the initial verification — the whole-run spawn budget being resettable to zero by
+tampering with `spawn-tree.txt` — is closed. I did not accept the gap-closure plans' summaries as
+proof of this; I rebuilt the binary from the current source tree and personally re-ran my exact
+original attack in a disposable scratch environment, and it now fails where it previously
+succeeded, with the tampered file preserved as evidence rather than silently replaced. I also
+personally attempted the second exploit route the team found while planning the fix (deleting, and
+separately obstructing with a directory, the file that records which run is current) against a
+valid, full ledger, and both attempts were refused. I confirmed the fix did not overcorrect by
+checking that a genuinely fresh colony — no ledger file at all — can still spawn its first helper.
 
-The one gap is serious: the whole-run spawn budget — the mechanism the phase's own goal
-statement singles out as bounding "what depth alone cannot" — can be reset to zero at any point
-during a run by any process that writes one line of non-conforming text to
-`.aether/data/spawn-tree.txt`. This does not require the Write or Edit tool (which the hook
-guards); an ordinary Bash redirect is sufficient, and Bash is not covered by the
-`PreToolUse` `Write|Edit|Agent|Task` matcher. The phase's own team came close to finding this —
-`pkg/agent/spawn_tree.go`'s error-swallowing `parseFile()` is named as residue in both
-173-03-SUMMARY.md and 173-RESIDUE.md's residue #7 — but the residue was framed as a proof-scope
-limitation ("fail-closed is proven per-guard, against inputs it actually reads"), not as the
-demonstrated, working budget-reset exploit this verification reproduces.
+Every automated test named in the gap-closure plans and summaries was independently re-run in this
+session and passed, including the full repository test suite (20 packages, no regressions). The
+five comments that used to claim this kind of corruption "could never happen" are corrected and
+dated, and a repo-wide grep confirms none of the six stale phrasings remain anywhere in the tree.
 
-The depth cap and ancestor-cycle checks are NOT defeated by the same technique for
-non-sentinel-parented spawns (they correctly deny "unknown parent" once the tree is emptied by
-corruption) — only the budget check, and only for the common Queen-parented case, since depth
-derivation for a coordinator sentinel never needs to read the tree at all.
+Five previously-flagged warnings (`.aether/workers.md`'s two documentation drifts, the advisory
+`spawn-can-spawn` command's midden write, the hook's heuristic weakness, the check-then-act race,
+the ancestor-chain silent-truncation edge case, and the `patrol.yaml`/wrapper drift) remain open —
+none were in scope for any of the three gap-closure plans, and none of them are the criterion-4
+guard-failure gap this re-verification was specifically checking. They are carried forward as
+informational warnings, not blockers, exactly as in the initial verification.
 
-Given this project's own precedent for exactly this situation (Phase 172's CR-06, and this
-phase's own RESIDUE.md explicitly leaving criterion 4 "to be judged against evidence at
-verification time"), the two honest paths forward are: (a) close the gap with a scoped fix — make
-`parseFile()`/`Parse()` distinguish "absent" from "corrupted" and have `spawnTreeBudgetReason`
-deny on the latter, or (b) accept this as a named, documented risk via an explicit override
-recorded in this file's frontmatter with a human's sign-off. This verification does not make that
-call — it surfaces the evidence needed to make it.
+The one remaining human-verification item is unchanged from the initial verification: whether a
+refusal's plain-English reason actually surfaces in the `/ant-build`/`/ant-continue` narration a
+non-technical operator reads, as opposed to only the raw CLI JSON error. No plan in this phase, in
+either wave, has touched the wrapper files that would answer this. This is why the overall status
+is `human_needed` rather than `passed`, even though all six ROADMAP success criteria and all eight
+requirements are now independently verified: a human still needs to watch one real build hit a
+guard and confirm the reason is visible where the owner would actually look.
 
 ---
 
-_Verified: 2026-08-13T12:55:31Z_
+_Verified: 2026-08-13T17:08:32Z_
 _Verifier: Claude (gsd-verifier)_
