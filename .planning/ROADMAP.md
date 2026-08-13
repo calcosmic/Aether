@@ -690,7 +690,7 @@ Plans:
   6. `aether spawn-tree-active` renders the delegation tree indented by depth with parent attribution **while the run is in progress**, so a runaway subtree is visible before the run ends
 **Decision (not build-shaped)**: **SPAWN-06** — a written decision records what depth 0 means, replacing today's contradiction (`build.md` hardcodes `--depth 1` for manifest workers, `workers.md` hardcodes `--depth 0` for their children). This is a ruling to record, not an implementation to plan. Once recorded, criterion 2's expected number is fixed by it and a test asserts the manifest worker's recorded depth equals the chosen convention.
 **Plans**: 10 plans in 5 waves
-- [ ] 173-01-PLAN.md — Empirical PreToolUse subagent check (blocking Wave 0 gate for SPAWN-04)
+- [x] 173-01-PLAN.md — Empirical PreToolUse subagent check (blocking Wave 0 gate for SPAWN-04)
 - [x] 173-02-PLAN.md — Depth derived at the recorder, and workers.md corrected to one convention
 - [x] 173-03-PLAN.md — Fail-closed inversion of spawn-can-spawn-swarm (D-19's named defect)
 - [x] 173-04-PLAN.md — Widened decision seam and the two-level depth cap
@@ -803,7 +803,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
 | 172. Wiring Proof | v1.26 | 14/14 | Complete    | 2026-08-12 |
-| 173. Delegation Guard | v1.26 | 7/10 | In Progress|  |
+| 173. Delegation Guard | v1.26 | 8/10 | In Progress|  |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
 | 176. Roster Reader | v1.26 | 0/TBD | Not started | - |
