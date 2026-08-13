@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -733,4 +734,103 @@ func TestAFreshColonyWithNoLedgerIsStillAllowedToSpawn(t *testing.T) {
 	store = s3
 	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("Queen", "W1", "builder", "coordinate the initial request"))
 	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("W1", "H1", "builder", "carry out the coordinated request"))
+}
+
+// TestAnEndedRunRecordDoesNotResetTheWholeRunBudget is 173-REVIEW.md WR-08's
+// regression lock: the third budget-reset route, after ledger corruption
+// (Gap A) and run-record erasure (Gap B). Here spawn-runs.json stays PRESENT
+// and VALID, and spawn-tree.txt is never touched -- the run record is merely
+// edited so the current run is already over and its closed window predates
+// every live entry. Before the fix, EntriesForRun scoped the count to that
+// stale window and a full 20-helper ledger reported Consumed:0, letting the
+// previously-refused spawn through. After it, a non-active run's window is
+// untrusted and the whole ledger is counted instead.
+func TestAnEndedRunRecordDoesNotResetTheWholeRunBudget(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	if _, err := beginRuntimeSpawnRun("test-run", time.Now().UTC()); err != nil {
+		t.Fatalf("begin run: %v", err)
+	}
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	for i := 1; i <= spawnTreeBudgetRedProofLiteralMax; i++ {
+		name := fmt.Sprintf("E%d", i)
+		runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", name, "0"))
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "E21", "0"))
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("the 21st spawn-log did not exit non-zero against a valid full ledger: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+
+	ledgerBefore, err := store.ReadFile("spawn-tree.txt")
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt before editing the run record: %v", err)
+	}
+
+	// The WR-08 edit: rewrite spawn-runs.json in place -- still valid JSON,
+	// still naming the same current run -- but with the run marked completed
+	// and a [2h ago, 1h ago] window that predates every live entry above.
+	runStatePath := filepath.Join(store.BasePath(), "spawn-runs.json")
+	raw, err := os.ReadFile(runStatePath)
+	if err != nil {
+		t.Fatalf("read spawn-runs.json: %v", err)
+	}
+	var runState map[string]interface{}
+	if err := json.Unmarshal(raw, &runState); err != nil {
+		t.Fatalf("unmarshal spawn-runs.json: %v", err)
+	}
+	runs, _ := runState["runs"].([]interface{})
+	if len(runs) == 0 {
+		t.Fatalf("expected at least one recorded run in spawn-runs.json: %s", raw)
+	}
+	for _, r := range runs {
+		m, ok := r.(map[string]interface{})
+		if !ok {
+			t.Fatalf("unexpected run entry shape in spawn-runs.json: %s", raw)
+		}
+		m["status"] = "completed"
+		m["started_at"] = time.Now().UTC().Add(-2 * time.Hour).Format(time.RFC3339)
+		m["ended_at"] = time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
+	}
+	edited, err := json.Marshal(runState)
+	if err != nil {
+		t.Fatalf("marshal edited spawn-runs.json: %v", err)
+	}
+	if err := os.WriteFile(runStatePath, edited, 0o644); err != nil {
+		t.Fatalf("write edited spawn-runs.json: %v", err)
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "E21-ENDED", "0"))
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("an ended run record with a stale window reset the whole-run budget -- the WR-08 route is open: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	env := parseEnvelope(t, errBuf.String())
+	if msg, _ := env["error"].(string); !strings.Contains(msg, "budget") {
+		t.Fatalf("deny message does not name the budget: %s", errBuf.String())
+	}
+
+	ledgerAfter, err := store.ReadFile("spawn-tree.txt")
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt after the ended-run refusal: %v", err)
+	}
+	if !bytes.Equal(ledgerBefore, ledgerAfter) {
+		t.Fatalf("spawn-tree.txt bytes changed merely from editing spawn-runs.json:\nbefore=%q\nafter=%q", ledgerBefore, ledgerAfter)
+	}
 }

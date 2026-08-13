@@ -782,6 +782,16 @@ func (st *SpawnTree) ToJSON() ([]byte, error) {
 	return json.MarshalIndent(result, "", "  ")
 }
 
+// IsActiveSpawnRunStatus reports whether a run-record status marks the run
+// as still in progress. Anything else -- ended, failed, stale, empty, or an
+// unrecognised value -- is NOT active. This exists for 173-REVIEW.md WR-08:
+// a budget window scoped to a non-active run is not trustworthy (its closed
+// [StartedAt, EndedAt] window can exclude every live ledger entry), so
+// callers widen to the whole ledger instead of trusting the window.
+func IsActiveSpawnRunStatus(status string) bool {
+	return strings.ToLower(strings.TrimSpace(status)) == spawnRunStatusActive
+}
+
 // IsLiveSpawnStatus reports whether a worker status should be treated as in-flight.
 func IsLiveSpawnStatus(status string) bool {
 	switch normalizeSpawnStatus(status) {

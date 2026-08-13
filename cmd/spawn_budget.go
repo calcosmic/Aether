@@ -146,12 +146,61 @@ func spawnTreeBudgetState() (spawnTreeBudget, error) {
 		consumed++
 	}
 
+	// WR-08 (173-REVIEW.md): a resolved run is a trustworthy counting window
+	// only while it is ACTIVE. CurrentRun() returns the recorded run whether
+	// or not it has ended, and an ended run's closed [StartedAt, EndedAt]
+	// window can exclude every live entry in the ledger -- hand-editing
+	// spawn-runs.json's status or timestamps (no deletion, no ledger
+	// tampering) used to make a full 20-helper ledger report Consumed:0.
+	// The two rules below only ever RAISE the count, so a legitimately
+	// active run -- whose own spawns always land inside its open-ended
+	// window -- is never penalised:
+	//
+	//   - run not active: there is no live window at all. Count the whole
+	//     ledger's non-abandoned entries, exactly as the no-run branch
+	//     above does.
+	//   - run active, but live entries exist outside its window: count
+	//     every live entry in the whole ledger as a floor. Unreaped ghosts
+	//     counting against the budget is sanctioned behaviour (plan 09) --
+	//     spawn-reap, not window scoping, is how budget is legitimately
+	//     freed.
+	countedWholeLedger := false
+	if !agent.IsActiveSpawnRunStatus(run.Status) {
+		whole := 0
+		for _, e := range entries {
+			if strings.EqualFold(strings.TrimSpace(e.Status), agent.SpawnStatusAbandoned) {
+				continue
+			}
+			whole++
+		}
+		if whole > consumed {
+			consumed = whole
+			countedWholeLedger = true
+		}
+	} else {
+		liveWhole, liveWindow := 0, 0
+		for _, e := range entries {
+			if agent.IsLiveSpawnStatus(e.Status) {
+				liveWhole++
+			}
+		}
+		for _, e := range entriesForRun {
+			if agent.IsLiveSpawnStatus(e.Status) {
+				liveWindow++
+			}
+		}
+		if liveWhole > liveWindow && liveWhole > consumed {
+			consumed = liveWhole
+			countedWholeLedger = true
+		}
+	}
+
 	remaining := spawnTreeBudgetMax - consumed
 	if remaining < 0 {
 		remaining = 0
 	}
 
-	return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: consumed, Remaining: remaining}, nil
+	return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: consumed, Remaining: remaining, CountedWholeLedger: countedWholeLedger}, nil
 }
 
 // spawnTreeBudgetReason is the whole-run tree-budget check contract
