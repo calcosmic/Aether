@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -423,6 +424,16 @@ var spawnTreeActiveCmd = &cobra.Command{
 			active = []agent.SpawnEntry{}
 		}
 
+		// D-14: a non-technical operator reads this command's own terminal
+		// output, live, while a build is still running -- not a JSON array.
+		// The JSON payload below is untouched (same keys, same shape), so
+		// this branch is purely additive and every existing reader keeps
+		// working.
+		if shouldRenderVisualOutput(stdout) {
+			writeVisualOutput(stdout, renderSpawnTreeActiveVisual(active))
+			return nil
+		}
+
 		type entryJSON struct {
 			Name      string `json:"name"`
 			Parent    string `json:"parent"`
@@ -452,6 +463,82 @@ var spawnTreeActiveCmd = &cobra.Command{
 		})
 		return nil
 	},
+}
+
+// renderSpawnTreeActiveVisual is the D-14 English rendering of the active
+// spawn tree: depth-indented, parent-attributed, and safe to call while a
+// run is still writing spawn-tree.txt -- Active() already reads through the
+// shared read-lock path, and this function performs no write, create,
+// publish or update of its own (T-173-40/T-173-41).
+//
+// Indentation is driven directly by each entry's own recorded Depth (D-05's
+// authority, not a tree walk this command would have to re-derive), two
+// spaces per level. Ordering is depth-ascending, then spawn-time ascending,
+// so two calls over an unchanged tree render byte-identical output --
+// required by TestSpawnTreeActiveMutatesNothing and by an operator who runs
+// the command twice in a row.
+func renderSpawnTreeActiveVisual(active []agent.SpawnEntry) string {
+	var b strings.Builder
+
+	// D-13: reuse the same budget state spawn-log's own warning line already
+	// computes, so this view and that warning never disagree. This is an
+	// inspection command, so a budget-state read failure must not fail the
+	// whole command -- the header is skipped, not the tree.
+	state, budgetErr := spawnTreeBudgetState()
+
+	if budgetErr == nil {
+		fmt.Fprintf(&b, "This run has used %d of the %d helpers it is allowed to spawn.\n\n", state.Consumed, state.Max)
+	}
+
+	if len(active) == 0 {
+		b.WriteString("No helpers are currently working.\n")
+	} else {
+		sorted := make([]agent.SpawnEntry, len(active))
+		copy(sorted, active)
+		sort.SliceStable(sorted, func(i, j int) bool {
+			if sorted[i].Depth != sorted[j].Depth {
+				return sorted[i].Depth < sorted[j].Depth
+			}
+			return sorted[i].Timestamp < sorted[j].Timestamp
+		})
+
+		byName := make(map[string]agent.SpawnEntry, len(sorted))
+		for _, e := range sorted {
+			byName[e.AgentName] = e
+		}
+
+		for _, e := range sorted {
+			indent := strings.Repeat("  ", e.Depth)
+			who := casteIdentity(e.Caste) + " " + e.AgentName
+			task := strings.TrimSpace(e.Task)
+			if task == "" {
+				task = "a task with no description"
+			}
+			fmt.Fprintf(&b, "%s%s is still working -- %s, sent here by %s\n", indent, who, task, spawnTreeActiveParentPhrase(e.ParentName, byName))
+		}
+	}
+
+	b.WriteString("\n")
+	if budgetErr == nil {
+		fmt.Fprintf(&b, "In one round, the Queen sends at most a handful of helpers; across the whole run, no more than %d helpers may ever spawn.\n", state.Max)
+	} else {
+		b.WriteString("In one round, the Queen sends at most a handful of helpers; the whole run has its own separate limit on how many it may ever spawn.\n")
+	}
+
+	return b.String()
+}
+
+// spawnTreeActiveParentPhrase names the caller in words. When the parent is
+// itself still active it is shown with its own caste identity; when the
+// parent is a coordinator sentinel or has already completed (and so dropped
+// out of the active set), it is still named by the plain string it
+// recorded -- losing that name would be exactly the runaway-subtree blind
+// spot D-14/T-173-44 exists to close.
+func spawnTreeActiveParentPhrase(parent string, byName map[string]agent.SpawnEntry) string {
+	if p, ok := byName[parent]; ok {
+		return casteIdentity(p.Caste) + " " + p.AgentName
+	}
+	return parent
 }
 
 var spawnTreeDepthCmd = &cobra.Command{
