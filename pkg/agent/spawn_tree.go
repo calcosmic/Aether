@@ -2,7 +2,9 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"strconv"
 	"strings"
 	"sync"
@@ -10,6 +12,15 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/storage"
 )
+
+// ErrSpawnTreeCorrupt is returned when a spawn ledger file is present on
+// disk but its content does not parse as valid spawn-tree pipe format. It is
+// distinct from the file simply being absent, which is never an error (see
+// parseFile and loadRunStateLocked below). Every corruption error returned
+// by this package wraps this sentinel with %w, so callers can test for it
+// with errors.Is and deny a spawn rather than silently treat a tampered
+// ledger as an empty one.
+var ErrSpawnTreeCorrupt = errors.New("spawn ledger is present but its content is not a valid spawn ledger")
 
 // SpawnEntry represents a single agent spawn record, matching the shell
 // spawn-tree.txt format with exactly 7 pipe-delimited fields plus an
@@ -51,6 +62,11 @@ type spawnRunState struct {
 
 // SpawnTree tracks running agents in the same pipe-delimited format as the
 // shell spawn-tree.txt, enabling Go and shell to coexist.
+//
+// Both files this type owns (spawn-tree.txt and spawn-runs.json) answer the
+// same three-way question the same way: absent means empty (nil error),
+// unreadable for any other reason means error, and present-but-unparseable
+// means error. See parseFile and loadRunStateLocked for the exact contract.
 type SpawnTree struct {
 	store       *storage.Store
 	mu          sync.Mutex
@@ -84,6 +100,11 @@ const SpawnStatusAbandoned = "abandoned"
 // NewSpawnTree creates a spawn tree backed by the given store.
 // filePath defaults to "spawn-tree.txt" if empty.
 // Existing entries are loaded from the file on creation (graceful: empty if missing).
+//
+// This is a constructor with no error return, so a parse error here is
+// necessarily swallowed. It is NOT the guard boundary — Parse(),
+// EntriesForRun() and RecordSpawn() are the calls whose errors delegation
+// enforcement actually depends on.
 func NewSpawnTree(store *storage.Store, filePath string) *SpawnTree {
 	if filePath == "" {
 		filePath = "spawn-tree.txt"
@@ -218,7 +239,12 @@ func (st *SpawnTree) RecordSpawn(parent, caste, name, task string, depth int) er
 	}
 
 	if err := st.store.UpdateFile(st.filePath, func(existing []byte) ([]byte, error) {
-		entries, completions := parseSpawnTreeBytes(existing)
+		entries, completions, err := parseSpawnTreeBytes(existing)
+		if err != nil {
+			// Abort the write: the corrupt bytes stay on disk as evidence
+			// and no new entry is appended over them.
+			return nil, err
+		}
 		entry := SpawnEntry{
 			Timestamp:  time.Now().UTC().Format(time.RFC3339),
 			ParentName: sanitizeSpawnField(parent),
@@ -265,7 +291,12 @@ func (st *SpawnTree) updateStatus(name string, status string, summary string, pr
 	}
 
 	if err := st.store.UpdateFile(st.filePath, func(existing []byte) ([]byte, error) {
-		entries, completions := parseSpawnTreeBytes(existing)
+		entries, completions, err := parseSpawnTreeBytes(existing)
+		if err != nil {
+			// Abort the write: the corrupt bytes stay on disk as evidence
+			// and no status update is applied over them.
+			return nil, err
+		}
 
 		found := false
 		completionTimestamp := updatedAt
@@ -324,42 +355,88 @@ func (st *SpawnTree) persistLocked() error {
 }
 
 // parseFile reads and parses the spawn tree file.
-// Returns spawn entries, completion lines, and any error.
+//
+// Three distinguishable outcomes, not two: the file is absent (nil error,
+// empty ledger — the one narrow, justified exception, T-173-24, so a fresh
+// colony is never locked out of spawning); the file exists but cannot be
+// read for any other reason, such as a directory at the path or a
+// permission denial (a non-nil error naming the file); or the file exists
+// and its content does not parse as valid spawn-tree pipe format (a
+// non-nil error wrapping ErrSpawnTreeCorrupt). A caller that cannot tell
+// these apart cannot fail closed on tampering.
 func (st *SpawnTree) parseFile() ([]SpawnEntry, []completionLine, error) {
 	if st.store == nil {
 		return nil, nil, nil
 	}
 	data, err := st.store.ReadFile(st.filePath)
 	if err != nil {
-		// File doesn't exist -- return empty
-		return nil, nil, nil
+		if errors.Is(err, fs.ErrNotExist) {
+			// The one legitimate absent case (T-173-24): nothing has been
+			// written yet, and that must never be treated as a fault.
+			return nil, nil, nil
+		}
+		return nil, nil, fmt.Errorf("spawn_tree: read %q: %w", st.filePath, err)
 	}
-	entries, completions := parseSpawnTreeBytes(data)
+	entries, completions, err := parseSpawnTreeBytes(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("spawn_tree: %s: %w", st.filePath, err)
+	}
 	return entries, completions, nil
 }
 
-func parseSpawnTreeBytes(data []byte) ([]SpawnEntry, []completionLine) {
+// parseSpawnTreeBytes parses raw spawn-tree.txt bytes into spawn entries and
+// completion lines, or returns a non-nil error wrapping ErrSpawnTreeCorrupt
+// the moment it finds a line that is not a shape this package's own writer
+// (formatSpawnTreeLines) can produce.
+//
+// Classification is decided once per line, from the TRUE field count taken
+// with an unbounded strings.Split on "|" — never from a bounded SplitN. A
+// bounded split can merge extra pipes into a trailing field and make a
+// corrupt 7-field line (a non-numeric depth, say) "pass" as a 4-field
+// completion line by accident, with its caste field landing on the status
+// field and normalising non-empty. Every field this package's own writer
+// emits has already been sanitised (sanitizeSpawnField strips "|"), so a
+// legitimately written line's field count is exact, not a lower bound —
+// which is what makes a true field count a sound classifier.
+//
+// One invariant outranks strictness: every shape formatSpawnTreeLines can
+// emit — including a completion line with an empty status field, and a
+// spawn line with an empty task or status field — must keep parsing with a
+// nil error. Rejecting the writer's own output would turn a corruption
+// guard into a way to brick a live colony.
+//
+// Classification is by shape only, and does not close everything: a
+// well-formed but forged line (a hand-written 4-field line, for instance)
+// is still accepted. Closing that needs integrity data this file format
+// does not carry — an append-only log or a signature — which is out of
+// scope here (T-173-67).
+//
+// No error message returned from this function interpolates a line's own
+// content: only the 1-based line number and the observed field count are
+// named, because a spawn-tree line can carry worker task text that must
+// never leak into an error string.
+func parseSpawnTreeBytes(data []byte) ([]SpawnEntry, []completionLine, error) {
 	var entries []SpawnEntry
 	var completions []completionLine
 
 	// Build index from agent name to entry for status merging
 	nameToIdx := make(map[string]int)
 
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	rawLines := strings.Split(string(data), "\n")
+	for i, rawLine := range rawLines {
+		lineNum := i + 1
+		line := strings.TrimSpace(rawLine)
 		if line == "" {
 			continue
 		}
 
-		fields := strings.SplitN(line, "|", 7)
-		fieldCount := len(fields)
-
-		if fieldCount == 7 {
+		fields := strings.Split(line, "|")
+		switch len(fields) {
+		case 7:
 			// Spawn entry: timestamp|parent|caste|name|task|depth|status
 			depth, err := strconv.Atoi(fields[5])
 			if err != nil {
-				continue // skip malformed
+				return nil, nil, fmt.Errorf("%w: line %d has 7 fields but a non-numeric depth field", ErrSpawnTreeCorrupt, lineNum)
 			}
 			entry := SpawnEntry{
 				Timestamp:         fields[0],
@@ -373,36 +450,39 @@ func parseSpawnTreeBytes(data []byte) ([]SpawnEntry, []completionLine) {
 			}
 			nameToIdx[fields[3]] = len(entries)
 			entries = append(entries, entry)
-			continue
-		}
-
-		completionFields := strings.SplitN(line, "|", 4)
-		if len(completionFields) >= 4 {
+		case 4:
 			// Completion line: timestamp|name|status|summary
 			// Old format (no summary): timestamp|name|status|  -> field[3] = ""
 			// New format (with summary): timestamp|name|status|summary -> field[3] = summary
-			status := normalizeSpawnStatus(completionFields[2])
+			status := normalizeSpawnStatus(fields[2])
 			if status != "" {
-				summary := completionFields[3]
+				summary := fields[3]
 				completions = append(completions, completionLine{
-					Timestamp: completionFields[0],
-					Name:      completionFields[1],
+					Timestamp: fields[0],
+					Name:      fields[1],
 					Status:    status,
 					Summary:   summary,
 				})
 				// Merge status and summary into the matching spawn entry
-				if idx, ok := nameToIdx[completionFields[1]]; ok {
+				if idx, ok := nameToIdx[fields[1]]; ok {
 					entries[idx].Status = status
-					entries[idx].ActivityTimestamp = completionFields[0]
+					entries[idx].ActivityTimestamp = fields[0]
 					if summary != "" {
 						entries[idx].Summary = summary
 					}
 				}
 			}
+			// An empty normalised status is ignored WITHOUT error -- this
+			// is today's required behaviour: updateStatus legitimately
+			// writes a completion line whose status field is empty, and the
+			// writer round-trip guarantee above depends on this branch
+			// staying a silent ignore, not a corruption error.
+		default:
+			return nil, nil, fmt.Errorf("%w: line %d has %d fields, expected 7 (spawn) or 4 (completion)", ErrSpawnTreeCorrupt, lineNum, len(fields))
 		}
 	}
 
-	return entries, completions
+	return entries, completions, nil
 }
 
 func formatSpawnTreeLines(entries []SpawnEntry, completions []completionLine) []byte {
@@ -541,13 +621,32 @@ func spawnEntryActivityTime(entry SpawnEntry) time.Time {
 	return parseSpawnRunTime(entry.Timestamp)
 }
 
+// loadRunStateLocked reads and parses the run-state file (spawn-runs.json).
+// Caller must hold the mutex.
+//
+// The same three-way contract as parseFile applies to this file: absent
+// means a colony that has never begun a run (nil error, empty state —
+// BeginRun must still be able to create the very first one, so this case
+// cannot become an error); present but unreadable for any other reason,
+// such as a directory at the path or a permission denial, is an error
+// naming the file (not an empty run history); and present but invalid JSON
+// is an error, exactly as before this change.
 func (st *SpawnTree) loadRunStateLocked() (spawnRunState, error) {
 	if st.store == nil {
 		return spawnRunState{}, nil
 	}
 
 	data, err := st.store.ReadFile(defaultSpawnRunFile)
-	if err != nil || len(strings.TrimSpace(string(data))) == 0 {
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			// A colony that has never begun a run legitimately has no
+			// run-state file yet; BeginRun must be able to create the
+			// first one, so this case can never be a denial.
+			return spawnRunState{}, nil
+		}
+		return spawnRunState{}, fmt.Errorf("spawn_tree: read %q: %w", defaultSpawnRunFile, err)
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
 		return spawnRunState{}, nil
 	}
 
@@ -582,6 +681,11 @@ func (st *SpawnTree) Parse() ([]SpawnEntry, error) {
 }
 
 // Active returns entries with Status "spawned" or "active".
+//
+// This is a read-only operator view, not the guard boundary: it swallows a
+// parse error so the rest of a live tree still renders instead of going
+// blank. Parse(), EntriesForRun() and RecordSpawn() are the calls whose
+// errors delegation enforcement actually depends on.
 func (st *SpawnTree) Active() []SpawnEntry {
 	st.mu.Lock()
 	defer st.mu.Unlock()

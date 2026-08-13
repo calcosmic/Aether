@@ -2,6 +2,9 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -695,4 +698,302 @@ func TestSpawnStatusAbandonedIsTerminalNotLive(t *testing.T) {
 	if !IsTerminalSpawnStatus("  Abandoned ") {
 		t.Errorf("IsTerminalSpawnStatus(mixed-case/whitespace) = false, want true")
 	}
+}
+
+// TestSpawnTreeParseTreatsAnAbsentLedgerAsEmptyButACorruptOneAsAnError is
+// plan 11's Task 1 red-proof (T-173-50/T-173-52): a spawn ledger that has
+// never been written, a zero-byte one, and a whitespace-only one must all
+// parse as an empty ledger with a nil error -- the T-173-24 exception a
+// fresh colony depends on to spawn at all. A ledger with content that is
+// not valid spawn-tree pipe format must instead return a non-nil error
+// wrapping ErrSpawnTreeCorrupt, naming the file and the offending line
+// number, and MUST NOT contain the offending line's own text -- a
+// spawn-tree line carries worker task text, and that must never leak
+// through an error string.
+func TestSpawnTreeParseTreatsAnAbsentLedgerAsEmptyButACorruptOneAsAnError(t *testing.T) {
+	cases := []struct {
+		name      string
+		writeFile bool
+		content   string
+		wantErr   bool
+	}{
+		{name: "absent", writeFile: false},
+		{name: "zero-byte", writeFile: true, content: ""},
+		{name: "whitespace-only", writeFile: true, content: "   \n\n\t\n  "},
+		{name: "corrupt", writeFile: true, content: "garbage not pipe format LEDGER-CONTENT-CANARY", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			store, err := storage.NewStore(dir)
+			if err != nil {
+				t.Fatalf("create store: %v", err)
+			}
+			if tc.writeFile {
+				if err := store.AtomicWrite("spawn-tree.txt", []byte(tc.content)); err != nil {
+					t.Fatalf("write fixture: %v", err)
+				}
+			}
+
+			st := NewSpawnTree(store, "spawn-tree.txt")
+			entries, err := st.Parse()
+
+			if !tc.wantErr {
+				if err != nil {
+					t.Fatalf("Parse() error = %v, want nil", err)
+				}
+				if len(entries) != 0 {
+					t.Fatalf("Parse() returned %d entries, want 0", len(entries))
+				}
+				return
+			}
+
+			if err == nil {
+				t.Fatal("Parse() error = nil, want a corruption error")
+			}
+			if !errors.Is(err, ErrSpawnTreeCorrupt) {
+				t.Fatalf("errors.Is(err, ErrSpawnTreeCorrupt) = false for err: %v", err)
+			}
+			if !strings.Contains(err.Error(), "spawn-tree.txt") {
+				t.Errorf("error %q does not name the file", err.Error())
+			}
+			if !strings.Contains(err.Error(), "line 1") {
+				t.Errorf("error %q does not name the line number", err.Error())
+			}
+			if strings.Contains(err.Error(), "LEDGER-CONTENT-CANARY") {
+				t.Errorf("error %q leaks the offending line's own content", err.Error())
+			}
+		})
+	}
+}
+
+// TestSpawnTreeParseAcceptsEveryShapeTheWriterProduces is plan 11's Task 1
+// red-proof (T-173-66): the negative control that stops an always-error
+// parser from passing, and the guard against the parser rejecting bytes its
+// own writer produced.
+func TestSpawnTreeParseAcceptsEveryShapeTheWriterProduces(t *testing.T) {
+	t.Run("valid entries, completions, legacy empty-summary and blank lines all parse cleanly", func(t *testing.T) {
+		dir := t.TempDir()
+		store, err := storage.NewStore(dir)
+		if err != nil {
+			t.Fatalf("create store: %v", err)
+		}
+
+		content := strings.Join([]string{
+			"2026-04-01T12:00:00Z|colony-prime|builder|worker-1|build task|1|spawned",
+			"2026-04-01T12:00:01Z|colony-prime|watcher|worker-2|watch task|1|spawned",
+			"",
+			"2026-04-01T12:05:00Z|worker-1|completed|a summary",
+			"2026-04-01T12:06:00Z|worker-2|completed|",
+		}, "\n") + "\n"
+		if err := store.AtomicWrite("spawn-tree.txt", []byte(content)); err != nil {
+			t.Fatalf("write fixture: %v", err)
+		}
+
+		st := NewSpawnTree(store, "spawn-tree.txt")
+		entries, err := st.Parse()
+		if err != nil {
+			t.Fatalf("Parse() error = %v, want nil", err)
+		}
+		if len(entries) != 2 {
+			t.Fatalf("Parse() returned %d entries, want 2", len(entries))
+		}
+		if entries[0].Status != "completed" {
+			t.Errorf("entries[0].Status = %q, want completed (merged from completion line)", entries[0].Status)
+		}
+		if entries[0].Summary != "a summary" {
+			t.Errorf("entries[0].Summary = %q, want %q", entries[0].Summary, "a summary")
+		}
+		if entries[1].Status != "completed" {
+			t.Errorf("entries[1].Status = %q, want completed (merged from legacy empty-summary completion line)", entries[1].Status)
+		}
+	})
+
+	t.Run("writer round-trip never gets rejected by the guard it feeds", func(t *testing.T) {
+		entries := []SpawnEntry{
+			{
+				Timestamp:  "2026-04-01T12:00:00Z",
+				ParentName: "colony-prime",
+				Caste:      "builder",
+				AgentName:  "worker-1",
+				Task:       "",
+				Depth:      1,
+				Status:     "",
+			},
+		}
+		completions := []completionLine{
+			{
+				Timestamp: "2026-04-01T12:05:00Z",
+				Name:      "worker-1",
+				Status:    "",
+				Summary:   "",
+			},
+		}
+
+		data := formatSpawnTreeLines(entries, completions)
+		parsedEntries, _, err := parseSpawnTreeBytes(data)
+		if err != nil {
+			t.Fatalf("parseSpawnTreeBytes(writer output) error = %v, want nil -- a corruption guard must never reject bytes its own writer emits", err)
+		}
+		if len(parsedEntries) != 1 {
+			t.Fatalf("parseSpawnTreeBytes(writer output) returned %d entries, want 1", len(parsedEntries))
+		}
+
+		emptyData := formatSpawnTreeLines(nil, nil)
+		emptyEntries, _, err := parseSpawnTreeBytes(emptyData)
+		if err != nil {
+			t.Fatalf("parseSpawnTreeBytes(empty tree) error = %v, want nil", err)
+		}
+		if len(emptyEntries) != 0 {
+			t.Fatalf("parseSpawnTreeBytes(empty tree) returned %d entries, want 0", len(emptyEntries))
+		}
+	})
+
+	t.Run("a non-numeric depth field is corrupt, never a bogus completion", func(t *testing.T) {
+		content := "2026-04-01T12:00:00Z|colony-prime|builder|worker-1|build task|not-a-number|spawned\n"
+		_, _, err := parseSpawnTreeBytes([]byte(content))
+		if err == nil {
+			t.Fatal("parseSpawnTreeBytes() error = nil, want a corruption error for a non-numeric depth field")
+		}
+		if !errors.Is(err, ErrSpawnTreeCorrupt) {
+			t.Fatalf("errors.Is(err, ErrSpawnTreeCorrupt) = false for err: %v", err)
+		}
+		if !strings.Contains(err.Error(), "line 1") {
+			t.Errorf("error %q does not name the line number", err.Error())
+		}
+	})
+}
+
+// TestSpawnTreeRefusesToRewriteACorruptLedger is plan 11's Task 1 red-proof
+// (T-173-51): recording a spawn or a status update onto a corrupt ledger
+// must fail instead of silently discarding the corrupt line and writing a
+// clean file over it -- the second half of 173-VERIFICATION.md's
+// reproduction, where the recorder replaced tampered bytes with a fresh
+// file carrying a single new entry.
+func TestSpawnTreeRefusesToRewriteACorruptLedger(t *testing.T) {
+	corruptContent := []byte("garbage not pipe format\n")
+
+	t.Run("RecordSpawn", func(t *testing.T) {
+		dir := t.TempDir()
+		store, err := storage.NewStore(dir)
+		if err != nil {
+			t.Fatalf("create store: %v", err)
+		}
+		if err := store.AtomicWrite("spawn-tree.txt", corruptContent); err != nil {
+			t.Fatalf("write corrupt fixture: %v", err)
+		}
+		treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
+		before, err := os.ReadFile(treePath)
+		if err != nil {
+			t.Fatalf("read fixture before RecordSpawn: %v", err)
+		}
+
+		st := NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("colony-prime", "builder", "worker-1", "build task", 1); err == nil {
+			t.Fatal("RecordSpawn() error = nil, want non-nil against a corrupt ledger")
+		}
+
+		after, err := os.ReadFile(treePath)
+		if err != nil {
+			t.Fatalf("read fixture after RecordSpawn: %v", err)
+		}
+		if string(before) != string(after) {
+			t.Errorf("RecordSpawn() rewrote the corrupt ledger:\nbefore: %q\nafter:  %q", before, after)
+		}
+	})
+
+	t.Run("UpdateStatus", func(t *testing.T) {
+		dir := t.TempDir()
+		store, err := storage.NewStore(dir)
+		if err != nil {
+			t.Fatalf("create store: %v", err)
+		}
+		if err := store.AtomicWrite("spawn-tree.txt", corruptContent); err != nil {
+			t.Fatalf("write corrupt fixture: %v", err)
+		}
+		treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
+		before, err := os.ReadFile(treePath)
+		if err != nil {
+			t.Fatalf("read fixture before UpdateStatus: %v", err)
+		}
+
+		st := NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.UpdateStatus("worker-1", "completed", ""); err == nil {
+			t.Fatal("UpdateStatus() error = nil, want non-nil against a corrupt ledger")
+		}
+
+		after, err := os.ReadFile(treePath)
+		if err != nil {
+			t.Fatalf("read fixture after UpdateStatus: %v", err)
+		}
+		if string(before) != string(after) {
+			t.Errorf("UpdateStatus() rewrote the corrupt ledger:\nbefore: %q\nafter:  %q", before, after)
+		}
+	})
+}
+
+// TestSpawnRunStateTellsAnAbsentRunFileApartFromAnUnreadableOne is plan 11's
+// Task 1 red-proof (T-173-69): spawn-runs.json draws the same three-way
+// distinction as spawn-tree.txt. An absent file must still mean "no run has
+// begun yet" with a nil error, because BeginRun must be able to create the
+// very first one for a fresh colony. A directory obstructing the path, or
+// content that fails to unmarshal as JSON, must both be errors instead of
+// an empty run history.
+func TestSpawnRunStateTellsAnAbsentRunFileApartFromAnUnreadableOne(t *testing.T) {
+	t.Run("absent run-state file is empty with a nil error, and BeginRun can still create the first run", func(t *testing.T) {
+		dir := t.TempDir()
+		store, err := storage.NewStore(dir)
+		if err != nil {
+			t.Fatalf("create store: %v", err)
+		}
+
+		st := NewSpawnTree(store, "spawn-tree.txt")
+		_, ok, err := st.CurrentRun()
+		if err != nil {
+			t.Fatalf("CurrentRun() error = %v, want nil for an absent run-state file", err)
+		}
+		if ok {
+			t.Fatal("CurrentRun() ok = true, want false for an absent run-state file")
+		}
+
+		if _, err := st.BeginRun("test", time.Now()); err != nil {
+			t.Fatalf("BeginRun() error = %v, want nil -- a fresh colony must be able to start its first run", err)
+		}
+	})
+
+	t.Run("a directory obstructing spawn-runs.json's path is an error, not an empty history", func(t *testing.T) {
+		dir := t.TempDir()
+		store, err := storage.NewStore(dir)
+		if err != nil {
+			t.Fatalf("create store: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "spawn-runs.json"), 0755); err != nil {
+			t.Fatalf("create obstructing directory: %v", err)
+		}
+
+		st := NewSpawnTree(store, "spawn-tree.txt")
+		if _, _, err := st.CurrentRun(); err == nil {
+			t.Fatal("CurrentRun() error = nil, want non-nil when spawn-runs.json's path is obstructed by a directory")
+		}
+	})
+
+	t.Run("invalid JSON in spawn-runs.json is still an error, exactly as before this change", func(t *testing.T) {
+		dir := t.TempDir()
+		store, err := storage.NewStore(dir)
+		if err != nil {
+			t.Fatalf("create store: %v", err)
+		}
+		// store.AtomicWrite validates JSON for .json paths and would refuse
+		// to write invalid content, so this fixture is written directly.
+		runFilePath := filepath.Join(dir, "spawn-runs.json")
+		if err := os.WriteFile(runFilePath, []byte("not valid json"), 0644); err != nil {
+			t.Fatalf("write invalid JSON fixture: %v", err)
+		}
+
+		st := NewSpawnTree(store, "spawn-tree.txt")
+		if _, _, err := st.CurrentRun(); err == nil {
+			t.Fatal("CurrentRun() error = nil, want non-nil for invalid JSON in spawn-runs.json")
+		}
+	})
 }
