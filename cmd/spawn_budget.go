@@ -40,6 +40,13 @@ type spawnTreeBudget struct {
 	Consumed  int
 	Remaining int
 	Reason    string
+	// CountedWholeLedger is true when Consumed came from counting every live
+	// entry across the WHOLE ledger (Gap B, see spawnTreeBudgetState) rather
+	// than from the current run's own time window, because no run could be
+	// resolved. spawnTreeBudgetReason uses this to say so in the exhausted-
+	// budget deny sentence, so an operator is not left wondering why the
+	// count is higher than the run they are watching.
+	CountedWholeLedger bool
 }
 
 // spawnTreeBudgetState computes the current run's consumption against
@@ -49,35 +56,90 @@ type spawnTreeBudget struct {
 // spawnTreeBudgetReason turns every such error into a deny — this function
 // never assumes the budget is free when something cannot be read.
 //
-// The one deliberate exception is a colony that has never begun a run:
-// CurrentRun() returning ok=false. That is treated as Consumed 0, not as a
-// denial, because a colony that has never begun a run legitimately has no
-// spawns yet, and denying here would lock a fresh colony out of spawning
-// entirely (T-173-24). This is the one place this budget does not fail
-// closed, and it is a named, justified decision, not an accident.
+// Ledger integrity (Gap A, 173-VERIFICATION.md's Gap 1) is established with
+// st.Parse() BEFORE the run window is resolved at all — this ordering is the
+// whole point and must never move later "for efficiency". If the integrity
+// check sits after CurrentRun()'s !ok early return, then corrupting
+// spawn-tree.txt AND deleting spawn-runs.json — two ordinary shell commands —
+// takes the no-run-yet exception below and manufactures a fresh budget: the
+// same exploit wearing one extra step.
+//
+// The absent-ledger exception is narrower than it looks at first read (Gap
+// B): it applies ONLY when the ledger itself is absent, zero-byte, or
+// whitespace-only — the same three cases the parser treats as "no ledger
+// yet" — not merely when no run is recorded. A ledger that already holds
+// entries proves the colony is not fresh, whether or not a run was ever
+// begun, so when CurrentRun() reports ok=false against a NON-EMPTY ledger,
+// this function counts every live entry across the WHOLE ledger instead of
+// reporting a free budget. 173-VERIFICATION.md's second reset route — `rm
+// .aether/data/spawn-runs.json` against a valid, full ledger — used to take
+// this branch and report Consumed:0; it now counts the ledger instead.
+//
+// This does NOT deny when no run resolves against a non-empty ledger, and
+// that is a deliberate choice, not an oversight: nothing begins a run except
+// beginRuntimeSpawnRun (cmd/spawn_runs.go), so "the ledger has entries and no
+// run was ever recorded" is ROUTINE legitimate use — cmd/spawn_enforce_test.go
+// and cmd/spawn_ancestor_test.go both build multi-hop spawn chains this way
+// with no run ever begun, and .aether/workers.md:292 documents workers
+// calling this guard directly, outside any lifecycle command. Refusing there
+// would brick ordinary use to stop an attack that whole-ledger counting
+// already stops on its own: the whole-ledger count is never LOWER than the
+// correct run-scoped count (the ledger is a superset of any one run's
+// window), so deleting spawn-runs.json can only make the budget stricter,
+// never free it (T-173-70). The residual bound is T-173-67 (named in plan
+// 11's summary): an attacker who rewrites the ledger in well-formed pipe
+// format can still drop entries, and no counting rule here can detect that.
 func spawnTreeBudgetState() (spawnTreeBudget, error) {
 	if store == nil {
 		return spawnTreeBudget{}, fmt.Errorf("no store initialized")
 	}
 	st := agent.NewSpawnTree(store, "spawn-tree.txt")
 
+	// Gap A: establish ledger integrity before anything else touches the run
+	// window. See the doc comment above — this ordering is load-bearing.
+	entries, err := st.Parse()
+	if err != nil {
+		return spawnTreeBudget{}, fmt.Errorf("verify spawn-tree.txt: %w", err)
+	}
+
+	// CurrentRun()'s own error path already fails closed (plan 11): an
+	// obstructed or unreadable spawn-runs.json (a directory at its path, a
+	// permission denial, invalid JSON) returns a non-nil error here, not an
+	// empty run history.
 	run, ok, err := st.CurrentRun()
 	if err != nil {
 		return spawnTreeBudget{}, fmt.Errorf("resolve current run: %w", err)
 	}
 	if !ok {
-		// No run has ever begun for this colony: a legitimately empty run,
-		// not an unverifiable one. See the function comment above.
-		return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: 0, Remaining: spawnTreeBudgetMax}, nil
+		// Gap B: no run has ever been recorded for this colony. The
+		// fresh-colony exception (T-173-24) applies only when the ledger
+		// itself is empty — see the doc comment above for why a non-empty
+		// ledger is counted rather than refused here.
+		if len(entries) == 0 {
+			return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: 0, Remaining: spawnTreeBudgetMax}, nil
+		}
+
+		consumed := 0
+		for _, e := range entries {
+			if strings.EqualFold(strings.TrimSpace(e.Status), agent.SpawnStatusAbandoned) {
+				continue
+			}
+			consumed++
+		}
+		remaining := spawnTreeBudgetMax - consumed
+		if remaining < 0 {
+			remaining = 0
+		}
+		return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: consumed, Remaining: remaining, CountedWholeLedger: true}, nil
 	}
 
-	entries, err := st.EntriesForRun(run.ID)
+	entriesForRun, err := st.EntriesForRun(run.ID)
 	if err != nil {
 		return spawnTreeBudget{}, fmt.Errorf("load spawns for run %q: %w", run.ID, err)
 	}
 
 	consumed := 0
-	for _, e := range entries {
+	for _, e := range entriesForRun {
 		if strings.EqualFold(strings.TrimSpace(e.Status), agent.SpawnStatusAbandoned) {
 			continue
 		}
@@ -109,6 +171,17 @@ func spawnTreeBudgetReason(in spawnDecisionInput) string {
 		requesterName := in.RequesterName
 		if requesterName == "" {
 			requesterName = "the requester"
+		}
+		if state.CountedWholeLedger {
+			// Gap B: no run window could be resolved, so the count came
+			// from the whole ledger rather than the current run. Say so
+			// plainly — otherwise an operator watching one run sees a
+			// number higher than that run's own activity and has no way to
+			// tell why.
+			return fmt.Sprintf(
+				"whole-run helper budget exhausted: %d of %d helpers already spawned (counted across the entire ledger because no run is recorded); %s may not spawn another",
+				state.Consumed, state.Max, requesterName,
+			)
 		}
 		return fmt.Sprintf(
 			"whole-run helper budget exhausted: %d of %d helpers already spawned in this run; %s may not spawn another",
