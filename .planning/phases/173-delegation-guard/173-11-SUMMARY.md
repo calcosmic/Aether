@@ -205,3 +205,13 @@ None.
 ## Threat Flags
 
 None -- this plan closes threats already named in the phase's own threat register (T-173-50, T-173-51, T-173-52, T-173-53, T-173-54, T-173-66, T-173-69) and does not introduce new network endpoints, auth paths, or schema changes at a trust boundary.
+
+## Self-Check: PASSED
+
+- FOUND: pkg/agent/spawn_tree.go
+- FOUND: pkg/agent/spawn_tree_test.go
+- FOUND: cmd/spawn_ancestor_test.go
+- FOUND: .planning/phases/173-delegation-guard/173-11-SUMMARY.md
+- FOUND commit: d2591c48 (fix(173-11): distinguish absent from corrupt spawn ledger)
+- FOUND commit: 743102d9 (test(173-11): red-proof absent-vs-corrupt spawn ledger detection)
+- FOUND commit: dd4ccb09 (docs(173-11): add plan summary for spawn ledger corruption detection)
