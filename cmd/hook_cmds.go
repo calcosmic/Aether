@@ -213,16 +213,42 @@ func readClaudeHookInput() (claudeHookInput, []byte) {
 	return input, data
 }
 
-// captureRawHookPayload appends the raw stdin bytes received by a hook to the
-// file named by AETHER_HOOK_CAPTURE_FILE, when that environment variable is
-// set. This is Phase 173 (SPAWN-04) Wave 0's opt-in evidence recorder: it
+// hookCapturePath resolves the opt-in capture destination. The primary
+// switch is the AETHER_HOOK_CAPTURE_FILE environment variable. The fallback
+// is a sentinel file at ~/.aether/hook-capture-path whose first line names
+// the destination. The fallback exists because the hook process inherits
+// Claude Code's launch environment, which the operator cannot reliably
+// inject a variable into (Phase 173: three relaunch attempts failed to
+// deliver it), while a file on disk is readable no matter how the session
+// was started. Both switches are files/variables only the operator can
+// create, so the trust boundary of T-173-03 is unchanged, and an absent
+// switch still means capture is off.
+func hookCapturePath() string {
+	if path := strings.TrimSpace(os.Getenv("AETHER_HOOK_CAPTURE_FILE")); path != "" {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".aether", "hook-capture-path"))
+	if err != nil {
+		return ""
+	}
+	line, _, _ := strings.Cut(string(data), "\n")
+	return strings.TrimSpace(line)
+}
+
+// captureRawHookPayload appends the raw stdin bytes received by a hook to
+// the file named by hookCapturePath (env var first, sentinel file second).
+// This is Phase 173 (SPAWN-04) Wave 0's opt-in evidence recorder: it
 // exists so the field names a future deny path matches on are copied from an
 // observed payload rather than assumed from documentation. It is off by
-// default (empty env var short-circuits immediately) and every error path
+// default (no switch set short-circuits immediately) and every error path
 // returns silently -- a capture failure must never affect the hook's
 // allow/deny answer (T-173-02).
 func captureRawHookPayload(raw []byte) {
-	path := strings.TrimSpace(os.Getenv("AETHER_HOOK_CAPTURE_FILE"))
+	path := hookCapturePath()
 	if path == "" {
 		return
 	}

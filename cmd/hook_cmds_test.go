@@ -279,6 +279,9 @@ func TestHookPreToolUseCapturesRawPayloadOnlyWhenCaptureFileIsSet(t *testing.T) 
 		defer os.RemoveAll(tmpDir)
 
 		t.Setenv("AETHER_HOOK_CAPTURE_FILE", "")
+		// Point HOME at an empty temp dir so a real ~/.aether/hook-capture-path
+		// sentinel on the developer's machine cannot leak into this subtest.
+		t.Setenv("HOME", t.TempDir())
 		setHookStdin(t, payload)
 
 		rootCmd.SetArgs([]string{"hook-pre-tool-use"})
@@ -337,6 +340,68 @@ func TestHookPreToolUseCapturesRawPayloadOnlyWhenCaptureFileIsSet(t *testing.T) 
 			t.Fatalf("captured tool_name = %v, want Task", captured["tool_name"])
 		}
 	})
+}
+
+// TestHookPreToolUseCapturesViaSentinelFileWhenEnvUnset is Phase 173
+// (SPAWN-04)'s proof of the file-based fallback switch: when the
+// AETHER_HOOK_CAPTURE_FILE environment variable is unset but
+// ~/.aether/hook-capture-path names a destination, the recorder captures
+// there. The fallback exists because the hook inherits Claude Code's launch
+// environment, which the operator cannot reliably inject a variable into.
+// Like the env switch, it must never change the hook's allow/deny answer.
+func TestHookPreToolUseCapturesViaSentinelFileWhenEnvUnset(t *testing.T) {
+	payload := `{"hook_event_name":"PreToolUse","tool_name":"Task","tool_input":{}}`
+
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	_, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_HOOK_CAPTURE_FILE", "")
+
+	captureFile := filepath.Join(t.TempDir(), "hook-capture.jsonl")
+	if err := os.MkdirAll(filepath.Join(home, ".aether"), 0o755); err != nil {
+		t.Fatalf("could not create fake ~/.aether: %v", err)
+	}
+	// Trailing newline and surrounding whitespace must be trimmed.
+	if err := os.WriteFile(filepath.Join(home, ".aether", "hook-capture-path"), []byte(" "+captureFile+"\n"), 0o600); err != nil {
+		t.Fatalf("could not write sentinel file: %v", err)
+	}
+
+	setHookStdin(t, payload)
+
+	rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-pre-tool-use returned error: %v", err)
+	}
+
+	if strings.TrimSpace(buf.String()) != "" {
+		t.Fatalf("capture must never change the hook's answer, got stdout %q", buf.String())
+	}
+
+	data, err := os.ReadFile(captureFile)
+	if err != nil {
+		t.Fatalf("expected sentinel-routed capture file to exist: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected exactly one captured line, got %d: %q", len(lines), data)
+	}
+	var captured map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &captured); err != nil {
+		t.Fatalf("captured content did not parse as JSON: %v (%q)", err, data)
+	}
+	if captured["tool_name"] != "Task" {
+		t.Fatalf("captured tool_name = %v, want Task", captured["tool_name"])
+	}
 }
 
 func TestHookPreToolUseBlocksMainBranchWhenRedirectActive(t *testing.T) {
