@@ -699,7 +699,7 @@ Plans:
 - [x] 173-07-PLAN.md — PreToolUse Task deny path, bounded to the observed hook coverage
 - [x] 173-08-PLAN.md — Readable, indented, live delegation tree
 - [x] 173-09-PLAN.md — Orphan reaping, budget release, and the operator's orphans command
-- [ ] 173-10-PLAN.md — CI registration, cross-guard fail-closed proof, allowlist shrink, named residue
+- [x] 173-10-PLAN.md — CI registration, cross-guard fail-closed proof, allowlist shrink, named residue
 
 ### Phase 174: Spend Ledger
 **Goal**: What a run cost is measured rather than asserted — with the arithmetic stated, cache tokens included, estimates never presentable as measurements, and a delegating worker's nested children rolled up to it exactly once. Ships before the extensibility phases because extensibility changes what workers cost, and without a working ledger every later efficiency claim is unfalsifiable.
@@ -803,7 +803,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
 | 172. Wiring Proof | v1.26 | 14/14 | Complete    | 2026-08-12 |
-| 173. Delegation Guard | v1.26 | 9/10 | In Progress|  |
+| 173. Delegation Guard | v1.26 | 10/10 | Complete   | 2026-08-13 |
 | 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
 | 176. Roster Reader | v1.26 | 0/TBD | Not started | - |
