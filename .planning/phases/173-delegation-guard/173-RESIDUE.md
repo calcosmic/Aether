@@ -19,16 +19,21 @@ repo root against package `./cmd` unless stated otherwise.
 2. `aether spawn-tree-depth` reports depth 2 for a three-level tree with every caller passing
    `--depth 0`, because depth is derived from the parent's own recorded entry —
    `go test ./cmd -run 'TestSpawnTreeDepthReportsTwoForAThreeLevelTree|TestSpawnLogDerivesDepthFromRecordedParent|TestWorkersMdStatesOneDepthConvention'`.
-3. The whole-run budget of 20 refuses the 21st helper regardless of wave shape, and consumption is
-   not restored between waves —
-   `go test ./cmd -run 'TestSpawnTreeBudgetRefusesTheTwentyFirstHelper|TestSpawnTreeBudgetIsNotRestoredBetweenWaves|TestSpawnTreeBudgetAndWaveCapAreSeparateQuantities'`.
-4. **Partially, with a named bound.** `go test ./cmd -run TestEveryDelegationGuardFailsClosedOnItsOwnUnreadableInputs`
-   proves every delegation guard denies with a non-empty reason against the inputs it actually
-   reads. It does NOT prove the criterion's literal framing that all four guards deny *because*
-   both `COLONY_STATE.json` and the spawn tree are unreadable — three of the four guards never read
-   `COLONY_STATE.json` at all (see residue 7 below for the exact bounded claim and the (guard,
-   axis) pairs proven). Per this plan's own instruction, criterion 4 is left unnarrowed and
-   whether this evidence satisfies it as written is verification's call, not this document's.
+3. The whole-run budget of 20 refuses the 21st helper regardless of wave shape, consumption is not
+   restored between waves, and neither corrupting the spawn ledger (the file that records which
+   helpers were started) nor deleting the run record (the file that says which batch of work is
+   currently running) can reset the count to zero —
+   `go test ./cmd -run 'TestSpawnTreeBudgetRefusesTheTwentyFirstHelper|TestSpawnTreeBudgetIsNotRestoredBetweenWaves|TestSpawnTreeBudgetAndWaveCapAreSeparateQuantities|TestCorruptingTheLedgerDoesNotResetTheWholeRunBudget|TestErasingTheRunRecordDoesNotResetTheWholeRunBudget|TestAFreshColonyWithNoLedgerIsStillAllowedToSpawn'`.
+4. **Yes, with one bound named plainly.**
+   `go test ./cmd -run 'TestEveryDelegationGuardFailsClosedOnItsOwnUnreadableInputs|TestDelegationGuardTableCoversEveryGuardCommand'`
+   proves every delegation guard (every check that can refuse to let a helper be spawned) denies
+   with a non-empty reason against every input it actually reads, including a spawn ledger that is
+   present but tampered with, and a run record that is present but blocked (see residue 7 below for
+   the exact bounded claim and the (guard, axis) pairs proven). This closes the gap
+   `173-VERIFICATION.md` found on 2026-08-13 by actually defeating the budget, not merely by
+   reasoning about it. The one bound that remains, named as residue 10 below: a helper record that
+   is shaped correctly but simply omits real helpers is not detected by anything in this phase,
+   because every check here verifies shape, not truth.
 5. A spawn whose (caste, normalised task) already appears in its own ancestor chain is refused,
    naming the ancestor —
    `go test ./cmd -run 'TestSpawnCanSpawnDeniesAncestorCycle|TestSpawnAncestorCheckAllowsDifferentTaskSameCaste|TestSpawnAncestorCheckAllowsSameTaskDifferentCaste'`.
@@ -146,17 +151,32 @@ denial they produce in that scenario comes from their own missing spawn-tree ent
 from `COLONY_STATE.json` at all.
 
 The exact (guard, axis) pairs `TestEveryDelegationGuardFailsClosedOnItsOwnUnreadableInputs` proves,
-all exercisable (no axis in this table was declared non-exercisable):
+all exercisable (no axis in this table was declared non-exercisable). "The spawn ledger" below
+means `spawn-tree.txt`, the file that records which helpers were started; "the run record" means
+`spawn-runs.json`, the file that says which batch of work is currently running; a "guard" is a
+check that can refuse to let a helper be spawned:
 
 | Guard | Axis | Fault injected | Deny path reached |
 |---|---|---|---|
-| `spawn-can-spawn` | `run-state-unreadable` | invalid JSON in `spawn-runs.json` | `spawnTreeBudgetReason` |
-| `spawn-can-spawn` | `requester-not-recorded` | `--name` resolves to nothing (corrupted tree line) | `spawnAncestorCycleReason` |
-| `spawn-log` | `run-state-unreadable` | invalid JSON in `spawn-runs.json` | `spawnTreeBudgetReason` |
-| `spawn-log` | `parent-not-recorded` | `--parent` names a corrupted, unresolvable tree line | `deriveSpawnDepth` |
+| `spawn-can-spawn` | `run-state-unreadable` | invalid JSON in the run record | `spawnTreeBudgetReason` |
+| `spawn-can-spawn` | `ledger-corrupt` | one line of non-pipe-format text written over the spawn ledger | `spawnTreeBudgetReason` |
+| `spawn-can-spawn` | `requester-not-recorded` | the named agent is genuinely absent from a spawn ledger that reads cleanly | `spawnAncestorCycleReason` |
+| `spawn-log` | `run-state-unreadable` | invalid JSON in the run record | `spawnTreeBudgetReason` |
+| `spawn-log` | `ledger-corrupt` | one line of non-pipe-format text written over the spawn ledger | `spawnTreeBudgetReason` |
+| `spawn-log` | `run-state-obstructed` | a directory blocking the run record's own path | `spawnTreeBudgetReason` |
+| `spawn-log` | `parent-not-recorded` | `--parent` names a corrupted, unresolvable ledger line | `deriveSpawnDepth` |
 | `spawn-can-spawn-swarm` | `colony-state-unreadable` | invalid JSON in `COLONY_STATE.json` | direct `LoadJSON` error branch |
-| `spawn-can-spawn-swarm` | `spawn-tree-unreadable` | a directory at `spawn-tree.txt`'s path | `os.Stat`/`os.IsDir` guard ahead of `Parse()` |
+| `spawn-can-spawn-swarm` | `ledger-corrupt` | one line of non-pipe-format text written over the spawn ledger | the existing parser-error deny branch already inside this guard's own code |
+| `spawn-can-spawn-swarm` | `spawn-tree-unreadable` | a directory at the spawn ledger's own path | `os.Stat`/`os.IsDir` guard ahead of `Parse()` |
 | `hook-pre-tool-use` | `requester-identity-unresolvable` | `agent_id` present, `agent_type` "general-purpose" | `hookSpawnDenyReason` |
+
+The four new rows — `ledger-corrupt` on all three guards that read the spawn ledger, and
+`run-state-obstructed` on `spawn-log` — are this gap closure's addition (plan 173-13), proving the
+exact gap named in the corrected criterion 4 above. The `requester-not-recorded` row's fault
+description also changed from an earlier draft of this table: plan 173-12 re-pointed that axis at a
+spawn ledger that is well-formed but simply does not mention the named agent, because a genuinely
+corrupted ledger is now caught by the budget check first (the `ledger-corrupt` row immediately
+above it), before the ancestor check this row proves is ever reached.
 
 `TestDelegationGuardTableCoversEveryGuardCommand` fails if a guard later starts reading colony
 state (it AST-parses `cmd/spawn.go`, `cmd/spawn_budget.go` and `cmd/spawn_ancestor.go` for a
@@ -165,10 +185,35 @@ state (it AST-parses `cmd/spawn.go`, `cmd/spawn_budget.go` and `cmd/spawn_ancest
 zero exercisable entries — so this residue line cannot go stale silently; the same test that would
 catch the drift also names exactly what needs to widen here.
 
-**ROADMAP success criterion 4 is deliberately left at its original absolute wording for this
-phase, to be judged against evidence at verification time rather than pre-emptively narrowed; if
-the evidence then shows it unprovable, narrowing is the correct response at that point, and this
-residue is the record of why.**
+**ROADMAP success criterion 4, closed by building, dated 2026-08-13.** This criterion used to be
+left at its original absolute wording on purpose, until real evidence existed to judge it against.
+That evidence now exists, and the criterion was closed by building a fix, not by softening the
+words to fit whatever got built — the direction `172-STOP-RULE.md` requires, and the opposite of
+narrowing a claim in advance of evidence. What happened, in order:
+
+1. Checking this phase's own work (`173-VERIFICATION.md`, run 2026-08-13) actually broke the
+   whole-run helper budget — the limit of 20 helpers a single run is allowed to create. Overwriting
+   the spawn ledger with one line of garbage text made the count reset to zero, and the next helper
+   spawned as if the limit had never been reached.
+2. While planning the fix, a second way to reach the identical outcome was found — one that needs
+   no tampering with the spawn ledger at all. Simply deleting the run record, while leaving a
+   perfectly valid, full spawn ledger in place, made the budget check unable to tell which helpers
+   belonged to the current run, and it fell back to reporting zero used.
+3. Three plans closed both routes. Plan 173-11 taught the file-reading code the difference between
+   "this file has never been written" (fine, allow) and "this file exists but is broken or
+   unreadable" (not fine, refuse). Plan 173-12 made the helper-limit check itself refuse to answer
+   when either file could not be trusted, instead of quietly assuming a fresh, empty run. Plan
+   173-13 (this plan) proved every guard that reads either file now refuses correctly on both
+   routes, and corrected five comments that used to say this could not happen.
+4. The commands that now fail if either route reopens:
+   `go test ./cmd -run 'TestCorruptingTheLedgerDoesNotResetTheWholeRunBudget|TestErasingTheRunRecordDoesNotResetTheWholeRunBudget|TestAFreshColonyWithNoLedgerIsStillAllowedToSpawn'`
+   together with
+   `go test ./pkg/agent -run 'TestSpawnTreeParseTreatsAnAbsentLedgerAsEmptyButACorruptOneAsAnError|TestSpawnTreeRefusesToRewriteACorruptLedger|TestSpawnRunStateTellsAnAbsentRunFileApartFromAnUnreadableOne'`.
+
+Criterion 4 is now proven for both ways this phase found to defeat the whole-run helper limit, with
+one bound named plainly rather than left implicit: a helper record that is shaped correctly but
+simply lies about what happened is still not caught by anything in this phase. See residue 10
+below.
 
 ### 8. The refusal reason is proven present in the runtime's output, not in the operator's narration
 
@@ -205,6 +250,60 @@ evidence class (a real architectural change, out of scope for this plan), or a r
 call site being added for one of these five commands in a later phase. No caller was invented here
 to make the number look better, per this plan's own instruction.
 
+### 10. A spawn ledger that is shaped correctly but false is still believed
+
+**The bounded claim:** every check this phase adds looks at whether a line in the spawn ledger (the
+file that records which helpers were started) is in the right *shape* — the right number of fields,
+in the right format. None of them check whether the line is *true*. Someone who writes a
+hand-crafted line in exactly the right shape — one that never actually corresponded to a real
+helper being spawned — passes every check in this phase, because nothing here can tell a genuine
+record from a well-forged one. **The wrong inference:** that a spawn ledger passing every guard in
+this phase is guaranteed to be an honest record of every helper actually spawned. **What would
+close it:** proof against forgery that shape alone cannot give — for example, a record that can
+only ever be added to and never rewritten, or a cryptographic signature covering the file's
+contents. That is a change to how the record itself is stored, not to any of the checks (guards)
+this phase adds, and remains out of scope here. First named in plan 173-11's own summary as
+T-173-67; still unclosed by every plan in this phase, including this one.
+
+### 11. The whole-run limit gates two commands, not the coordinator's own dispatch
+
+**The bounded claim:** the 20-helper whole-run limit is only consulted by two commands built to ask
+it a question first — the one that records a helper (`spawn-log`) and the one that checks in
+advance whether a helper could be recorded (`spawn-can-spawn`). Everywhere else in the program that
+starts a wave of helpers writes straight into the spawn ledger without asking the limit check
+first — including the coordinator's own build dispatch, in the function named
+`recordCodexBuildDispatches`, and the equivalent code in the plan, colonize, and continue paths.
+**The wrong inference:** that the 20-helper whole-run limit bounds every way helpers can be created.
+It bounds the two commands built to consult it; the other paths' spawns are still *counted* by
+anything that reads the spawn ledger afterward (so they still consume the budget for whoever checks
+next), but they are never *asked permission* first. **What would close it:** routing every one of
+those direct-write call sites through the same permission check `spawn-log` uses — a change to how
+the coordinator's own dispatch works, not a guard fix, and deliberately not attempted in this
+gap-closure plan.
+
+### 12. A tampered ledger makes the operator's live view quieter, not louder
+
+**The bounded claim:** the live view an operator watches while helpers are running
+(`spawn-tree-active`) shows no header, no helper list, and no error the moment the spawn ledger
+becomes unreadable — it simply goes quiet, rather than saying the record is broken. This is the
+opposite failure from the checks this gap closure fixes: those now correctly *refuse* on a broken
+ledger; this view just stops showing anything. **The wrong inference:** that a blank or
+empty-looking live view means nothing is currently running. **What would close it:** one
+plain-English line added to that view's own code, naming the unreadable file when this happens — a
+change to what the operator sees, not to any guard, and out of scope for this plan.
+
+### 13. Nothing here addresses two processes racing near the limit
+
+**The bounded claim:** nothing in this phase, including this gap closure, stops two processes from
+checking the whole-run helper limit at nearly the same moment, both seeing "room for one more," and
+both recording a helper — pushing the true count one or more past the stated limit of 20. **The
+wrong inference:** that 20 is a hard ceiling under every condition. It is a hard ceiling for one
+process checking at a time; under genuine concurrency it is a strong deterrent, not a guarantee.
+**What would close it:** holding an exclusive lock across the "may I spawn" check and the "record
+this spawn" write, so the two steps happen as one action nothing else can interrupt — a different
+kind of fix, aimed at a different part of the code, and not attempted here. Still open as WR-05 in
+`173-VERIFICATION.md`'s own findings.
+
 ## Stop rule
 
 This phase applies `172-STOP-RULE.md`'s reasoning under the same condition it applied there: **the
@@ -213,7 +312,7 @@ completed build-verify rounds before its stop rule fired on the fifth attempted 
 narrowing it recorded (ROADMAP line 671, criteria 1 and 4) happened *after* a verifier found a real,
 demonstrated gap.
 
-If verification of this phase finds a NEW class of bypass not named in the nine residues above, the
+If verification of this phase finds a NEW class of bypass not named in the thirteen residues above, the
 correct response is to narrow the affected criterion, record the residue here, and mark the phase
 complete against the narrowed criterion — not to open another build round chasing an unbounded
 absolute. A narrower true claim beats a broader unproven one.
