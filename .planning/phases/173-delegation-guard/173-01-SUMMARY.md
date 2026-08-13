@@ -12,7 +12,7 @@ provides:
   - a dated, evidence-backed verdict that Claude Code's PreToolUse hook DOES fire when a subagent calls the dispatch tool (VERDICT HOOK_FIRES_IN_SUBAGENT in 173-HOOK-FINDINGS.md)
   - the observed payload contract plan 07's deny path matches on — tool_name is "Agent" (not "Task"); subagent-originated dispatches carry agent_id/agent_type; coordinator dispatches carry neither
   - agent_id proven to identify the REQUESTER (exact match with the platform-returned agent id of the dispatching subagent)
-  - an opt-in raw payload recorder with two operator-created switches — AETHER_HOOK_CAPTURE_FILE env var, or sentinel file ~/.aether/hook-capture-path — proven to never change the hook's answer
+  - an opt-in raw payload recorder switched ONLY by the AETHER_HOOK_CAPTURE_FILE env var, proven to never change the hook's answer (a same-day sentinel-file fallback used for the capture run was removed after 173-REVIEW.md CR-01 showed a worker-writable switch; locked by TestHookCaptureHasNoFileBasedSwitch)
 affects: [173-07, 173-10]
 
 # Tech tracking

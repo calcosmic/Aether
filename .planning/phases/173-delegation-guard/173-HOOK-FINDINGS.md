@@ -32,6 +32,13 @@ captured line via the sentinel route.
 The capture file lived outside the repository (session scratch directory) and
 is not committed; its full contents are quoted verbatim below.
 
+*Post-capture note:* the sentinel-file fallback was removed the same day,
+after the phase code review (173-REVIEW.md CR-01) showed a home-directory
+switch file is creatable by any worker's ordinary Write tool. The evidence
+below was captured while the fallback existed and is unaffected; the
+recorder is once again env-var-only, locked by
+`TestHookCaptureHasNoFileBasedSwitch`.
+
 ## Raw captured payloads (verbatim, in capture order)
 
 ```json

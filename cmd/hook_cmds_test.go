@@ -279,9 +279,6 @@ func TestHookPreToolUseCapturesRawPayloadOnlyWhenCaptureFileIsSet(t *testing.T) 
 		defer os.RemoveAll(tmpDir)
 
 		t.Setenv("AETHER_HOOK_CAPTURE_FILE", "")
-		// Point HOME at an empty temp dir so a real ~/.aether/hook-capture-path
-		// sentinel on the developer's machine cannot leak into this subtest.
-		t.Setenv("HOME", t.TempDir())
 		setHookStdin(t, payload)
 
 		rootCmd.SetArgs([]string{"hook-pre-tool-use"})
@@ -342,14 +339,14 @@ func TestHookPreToolUseCapturesRawPayloadOnlyWhenCaptureFileIsSet(t *testing.T) 
 	})
 }
 
-// TestHookPreToolUseCapturesViaSentinelFileWhenEnvUnset is Phase 173
-// (SPAWN-04)'s proof of the file-based fallback switch: when the
-// AETHER_HOOK_CAPTURE_FILE environment variable is unset but
-// ~/.aether/hook-capture-path names a destination, the recorder captures
-// there. The fallback exists because the hook inherits Claude Code's launch
-// environment, which the operator cannot reliably inject a variable into.
-// Like the env switch, it must never change the hook's allow/deny answer.
-func TestHookPreToolUseCapturesViaSentinelFileWhenEnvUnset(t *testing.T) {
+// TestHookCaptureHasNoFileBasedSwitch is 173-REVIEW.md CR-01's regression
+// lock: the raw-payload recorder must be switchable ONLY by the
+// AETHER_HOOK_CAPTURE_FILE environment variable, never by a file a worker
+// could write with its ordinary Write tool. A sentinel file at
+// ~/.aether/hook-capture-path briefly existed (2026-08-13) and let capture
+// be aimed at protected state or the spawn ledger; this test fails if any
+// change makes the hook honor that file again.
+func TestHookCaptureHasNoFileBasedSwitch(t *testing.T) {
 	payload := `{"hook_event_name":"PreToolUse","tool_name":"Task","tool_input":{}}`
 
 	saveGlobalsCmd(t)
@@ -371,8 +368,7 @@ func TestHookPreToolUseCapturesViaSentinelFileWhenEnvUnset(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".aether"), 0o755); err != nil {
 		t.Fatalf("could not create fake ~/.aether: %v", err)
 	}
-	// Trailing newline and surrounding whitespace must be trimmed.
-	if err := os.WriteFile(filepath.Join(home, ".aether", "hook-capture-path"), []byte(" "+captureFile+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".aether", "hook-capture-path"), []byte(captureFile+"\n"), 0o600); err != nil {
 		t.Fatalf("could not write sentinel file: %v", err)
 	}
 
@@ -387,20 +383,8 @@ func TestHookPreToolUseCapturesViaSentinelFileWhenEnvUnset(t *testing.T) {
 		t.Fatalf("capture must never change the hook's answer, got stdout %q", buf.String())
 	}
 
-	data, err := os.ReadFile(captureFile)
-	if err != nil {
-		t.Fatalf("expected sentinel-routed capture file to exist: %v", err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 1 {
-		t.Fatalf("expected exactly one captured line, got %d: %q", len(lines), data)
-	}
-	var captured map[string]interface{}
-	if err := json.Unmarshal([]byte(lines[0]), &captured); err != nil {
-		t.Fatalf("captured content did not parse as JSON: %v (%q)", err, data)
-	}
-	if captured["tool_name"] != "Task" {
-		t.Fatalf("captured tool_name = %v, want Task", captured["tool_name"])
+	if _, err := os.Stat(captureFile); err == nil {
+		t.Fatalf("capture file was written via the sentinel file: the file-based switch is back (CR-01)")
 	}
 }
 
