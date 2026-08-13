@@ -1,343 +1,300 @@
 ---
 phase: 173-delegation-guard
-reviewed: 2026-08-13T12:33:42Z
+reviewed: 2026-08-13T17:12:33Z
 depth: standard
-files_reviewed: 31
+review_type: update
+files_reviewed: 8
 files_reviewed_list:
-  - .aether/workers.md
-  - .claude/commands/ant-patrol.md
-  - .claude/commands/ant/patrol.md
-  - .claude/settings.json
-  - .github/workflows/ci.yml
-  - .opencode/commands/ant/patrol.md
-  - cmd/ci_wiring_gate_test.go
-  - cmd/command_call_audit_test.go
-  - cmd/hook_cmds_test.go
-  - cmd/hook_cmds.go
-  - cmd/internal_cmds.go
-  - cmd/spawn_ancestor_test.go
-  - cmd/spawn_ancestor.go
-  - cmd/spawn_budget_test.go
-  - cmd/spawn_budget.go
-  - cmd/spawn_enforce_test.go
-  - cmd/spawn_failclosed_test.go
-  - cmd/spawn_reap_test.go
-  - cmd/spawn_reap.go
-  - cmd/spawn_runs.go
-  - cmd/spawn_tree_view_test.go
-  - cmd/spawn.go
-  - cmd/testdata/command_catalog.json
-  - cmd/testdata/parity_snapshot.json
-  - cmd/testdata/regression_snapshot.json
-  - cmd/visual_writer_discipline_test.go
-  - cmd/write_cmds_test.go
-  - pkg/agent/spawn_tree_test.go
   - pkg/agent/spawn_tree.go
-  - pkg/colony/colony_test.go
-  - pkg/colony/colony.go
+  - pkg/agent/spawn_tree_test.go
+  - cmd/spawn_ancestor_test.go
+  - cmd/spawn_budget.go
+  - cmd/spawn_budget_test.go
+  - cmd/spawn_failclosed_test.go
+  - cmd/internal_cmds.go
+  - .github/workflows/ci.yml
 findings:
-  critical: 1
-  warning: 7
+  critical: 0
+  warning: 8
   info: 6
   total: 14
 status: issues_found
 ---
 
-# Phase 173: Code Review Report
+# Phase 173: Code Review Report (Update — post gap-closure)
 
-**Reviewed:** 2026-08-13T12:33:42Z
+**Reviewed:** 2026-08-13T17:12:33Z
 **Depth:** standard
-**Files Reviewed:** 31
+**Files Reviewed:** 8 (gap-closure scope) + prior findings re-verified against current code
 **Status:** issues_found
 
 ## Summary
 
-Phase 173 (delegation guard) adds a depth cap, a whole-run spawn budget, an
-ancestor-cycle check, a stale-spawn reaper, a hook-level dispatch deterrent,
-and fail-closed behavior across every guard. The core guard logic in
-`cmd/spawn.go`, `cmd/spawn_budget.go`, `cmd/spawn_ancestor.go`, and
-`cmd/spawn_reap.go` is well-structured, and the red-proof test discipline is
-genuinely strong (deny paths, negative controls, byte-identical no-trace
-assertions, purity hashing). `go build`, `go vet`, and every new test were
-executed during this review and pass.
+This is an update review after plans 173-11..13 closed two budget-reset routes:
+(1) a corrupt spawn ledger (`spawn-tree.txt`) that used to be silently treated
+as empty, and (2) an erased run record (`spawn-runs.json`) that used to reset
+the whole-run helper budget to zero. The gap-closure work is genuinely strong.
+`spawn_tree.go` now draws a clean three-way distinction on both files it owns
+(absent → empty, unreadable-otherwise → error, present-but-unparseable →
+error wrapping `ErrSpawnTreeCorrupt`); `RecordSpawn`/`UpdateStatus` refuse to
+rewrite a corrupt ledger and leave the tampered bytes on disk as evidence;
+`spawnTreeBudgetState` establishes ledger integrity via `st.Parse()` *before*
+resolving the run window and counts the whole ledger when no run resolves
+against a non-empty ledger. The new tests are red-proofs with negative
+controls, byte-identical no-trace assertions, and canary strings guarding
+against task-text leakage. `go build`, `go vet`, `go test ./pkg/agent`, and the
+`cmd` gap-closure/guard suite were all run during this review and pass, and the
+CI wiring gate (`TestWiringGateStepRunsEveryWiringTest`) confirms the three new
+`spawn_budget_test.go` tests are pinned into the named CI step, not merely
+carried by the blanket `go test ./...` run.
 
-However, the review found one critical issue and several warnings. The
-critical finding is that the hook payload capture mechanism added in Wave 0
-(`captureRawHookPayload` + the `~/.aether/hook-capture-path` sentinel) is an
-unvalidated write primitive that any agent in a session can activate and aim
-at protected colony state — including `spawn-tree.txt` itself, where crafted
-payload content parses as spawn-tree completion lines. That inverts the trust
-model this exact phase was built to enforce. The warnings cluster around
-residue the phase's own tests miss (a stale depth-3 spawn-capability block in
-workers.md), a two-sided weakness in the hook's `agent_type` heuristic, an
-inspection command that mutates state at the budget ceiling, a check-then-act
-race in `spawn-log`, and wrapper/spec drift in the patrol command.
+**CR-01 is resolved.** The worker-writable capture switch
+(`~/.aether/hook-capture-path`) was removed the same day; capture is now gated
+solely by the `AETHER_HOOK_CAPTURE_FILE` environment variable, which a worker's
+Write tool cannot set for the hook process, and the boundary is locked by
+`TestHookCaptureHasNoFileBasedSwitch`.
 
-## Critical Issues
+**One new warning (WR-08).** The whole-ledger safety net the gap-closure added
+for the "no run resolves" case does **not** cover a run that resolves but has
+already ended (or whose window otherwise excludes the live ledger entries). In
+that case the budget is scoped to an empty/stale window and reports zero
+consumed against a full ledger — a third route to the exact outcome plans
+173-11..13 set out to eliminate, reachable by editing (not deleting)
+`spawn-runs.json`. Reproduced live during this review.
 
-### CR-01: Hook payload capture is an unvalidated write primitive that can forge spawn-tree records and corrupt protected colony state
-
-**File:** `cmd/hook_cmds.go:335-381` (`hookCapturePath`, `captureRawHookPayload`); enforcement gap in `protectedHookWriteReason` at `cmd/hook_cmds.go:417-444`
-**Issue:** `captureRawHookPayload` appends the raw hook stdin bytes to whatever
-path is named by `AETHER_HOOK_CAPTURE_FILE` or by the first line of
-`~/.aether/hook-capture-path`, with **no validation of the destination**. The
-comment claims "Both switches are files/variables only the operator can
-create" — this is false. `~/.aether/hook-capture-path` is an ordinary file in
-the user's home directory; `protectedHookWriteReason` does not protect it (it
-guards `/.aether/data/`, `/.aether/dreams/`, `.env*`, `.codex/config.toml`,
-and `.github/workflows/` only), so any worker with the Write tool can create
-it. Once created, **every subsequent hook invocation** (the hook fires on all
-Write/Edit/Agent/Task calls per `.claude/settings.json`) appends the raw JSON
-payload to the named path. Consequences:
-
-1. **Protected-state corruption:** pointing the sentinel at
-   `.aether/data/COLONY_STATE.json` or `pheromones.json` appends garbage JSON
-   lines, corrupting the files the Write/Edit branch of this same hook exists
-   to protect. The hook's own writes bypass the hook's own guard.
-2. **Spawn-tree record forgery:** pointing it at `.aether/data/spawn-tree.txt`
-   lets an agent inject parseable lines. `parseSpawnTreeBytes` validates only
-   that field 6 of a 7-field line is numeric, and a 4-field completion line
-   needs only a recognized status in field 3. A crafted tool argument such as
-   a `file_path` of `x|VictimWorker|abandoned|done` produces a captured line
-   that splits into a valid completion record — marking a live worker
-   abandoned, releasing its budget slot, and falsifying the exact records
-   `deriveSpawnDepth` and the whole-run budget treat as authority.
-3. **Silent exfiltration/append to arbitrary user files** as a lesser variant.
-
-The capture was a Wave-0 evidence instrument (173-HOOK-FINDINGS.md is already
-recorded), yet it ships permanently in the production hook path.
-**Fix:**
-```go
-// In hookCapturePath / captureRawHookPayload:
-// 1. Refuse any destination that resolves inside an .aether data tree or the
-//    current repo:
-resolved := resolveHookPathSymlinks(filepath.Clean(path))
-if strings.Contains(filepath.ToSlash(resolved), "/.aether/") ||
-    !strings.HasPrefix(resolved, filepath.Join(home, ".aether-captures")+string(os.PathSeparator)) {
-    return "" // capture destination must live under ~/.aether-captures/
-}
-```
-Better: remove the sentinel-file fallback entirely now that the findings are
-captured (keep only the env var, which an agent cannot set for the hook
-process), or gate capture behind a build tag / hidden debug flag. At minimum,
-add `~/.aether/hook-capture-path` (and the configured capture destination) to
-the protected-path deny list so the switch cannot be flipped by a worker.
+**Prior warnings WR-01..WR-07 and info IN-01..IN-06 remain open** — each was
+re-checked against current code and is unchanged by the gap-closure (they touch
+`workers.md`, the patrol wrappers, the hook heuristic, the ancestor walk, and
+the advisory-command midden write, none of which plans 173-11..13 modified).
 
 ## Warnings
 
-### WR-01: workers.md still ships the old three-level spawn convention inside the child-prompt template — and the guard test cannot see it
+### WR-08 (NEW): The whole-ledger budget safety net is bypassed when the current run has ended — a full budget reset via ordinary `spawn-runs.json` editing
+
+**File:** `cmd/spawn_budget.go:109-134` (`spawnTreeBudgetState`), together with
+`pkg/agent/spawn_tree.go:196-211` (`CurrentRun`) and `:583-615`
+(`filterEntriesForRun`)
+**Issue:** The gap-closure's Gap B defense counts the whole ledger **only** on
+the `!ok` branch (no run resolves). But `CurrentRun()` returns the run named by
+`current_run_id` regardless of whether that run has ended, so a run with
+`status: completed` and a past `ended_at` still resolves `ok=true`. The budget
+then counts only `EntriesForRun(run.ID)`, whose window is `[StartedAt,
+EndedAt]`. Any live entries recorded outside that window — for example after
+the run ended — are silently excluded, and the whole-ledger fallback never
+fires. A full ledger can therefore report `budget_consumed: 0`.
+
+This is the same failure class as the two routes plans 173-11..13 closed, and
+it is reachable by editing an ordinary writable file (`spawn-runs.json`) rather
+than deleting it. The `!ok` deletion route was hardened to count the whole
+ledger; the `ok=true, run ended, window excludes the ledger` route was not.
+Reproduced live during this review against a freshly built binary:
+
+```
+spawn-runs.json: current_run_id "build-1", status completed,
+                 started_at 2h ago, ended_at 1h ago
+spawn-tree.txt:  25 live "spawned" entries, all timestamped "now"
+
+$ aether spawn-log --parent Queen --caste builder --name P26 --task "..." --depth 0
+{"ok":true,"result":{"budget_consumed":0,"budget_max":20,...,"recorded":true}}
+exit=0
+```
+
+25 live helpers in a valid ledger, whole-run cap of 20, and the 26th spawn is
+allowed with `budget_consumed:0`. The `spawnReapStaleEntries` call at
+`beginRuntimeSpawnRun` masks this in ordinary steady-state operation (old
+ghosts get reaped when the next lifecycle run begins), but it does not close
+the window a direct `spawn-log`/`spawn-can-spawn` call hits between an ended run
+and the next `beginRuntimeSpawnRun`, and it does not stop an operator or
+compromised worker from editing `spawn-runs.json`'s timestamps to free the
+budget deliberately. The code comment at `cmd/spawn_budget.go:86-89` reasons
+that "deleting spawn-runs.json can only make the budget stricter" — true for
+deletion, but the sibling case (a valid file naming an ended/stale run) is not
+covered by that reasoning and has no test.
+**Fix:** In the `ok=true` branch, treat an ended or window-excluded run as
+untrusted and fall back to the whole-ledger count. Concretely: if the resolved
+run's status is not active, or if any live (`IsLiveSpawnStatus`) entry falls
+outside `[StartedAt, EndedAt]`, count the whole ledger's non-abandoned live
+entries as a floor rather than trusting the window — a legitimately active run
+always contains its own spawns in-window, so this only tightens the anomalous
+case. Add a red-proof mirroring
+`TestErasingTheRunRecordDoesNotResetTheWholeRunBudget` but with
+`spawn-runs.json` left present and valid, naming an ended run whose window
+predates a full live ledger. At minimum, if a fix is deferred, extend the
+residual-bound note (T-173-67) to explicitly concede that well-formed
+`spawn-runs.json` window manipulation also defeats the count, so the gap is
+documented rather than silently implied closed.
+
+### WR-01: workers.md still ships the old three-level spawn convention inside the child-prompt template (carried forward — OPEN)
 
 **File:** `.aether/workers.md:364-369`
-**Issue:** The Step 4 child-prompt template still reads:
-```
---- SPAWN CAPABILITY ---
-You are at depth {your_depth + 1}.
-{if depth < 3: "You MAY spawn sub-workers if you encounter genuine surprise (3x complexity)."}
-{if depth >= 3: "You are at max depth. Complete all work inline, no spawning."}
-
-Spawn limits: Depth 1→4, Depth 2→2, Depth 3→0
-```
-This tells a depth-2 helper it MAY spawn (`depth < 3`), states a depth-2
-sub-spawn allowance of 2, and references a depth 3 that line 272-273 of the
-same file says cannot exist ("A helper cannot spawn anyone — there is no
-depth 3"). This is exactly the residue SPAWN-06 set out to remove, sitting in
-the one block workers literally paste into child prompts.
-`TestWorkersMdStatesOneDepthConvention` (cmd/spawn_enforce_test.go:784)
-checks only markdown table rows, `spawn-log --depth 0` lines, the "global
-cap" phrase, and the substring "20" — none of which match this prose block,
-so the test passes while the contradiction ships.
+**Issue:** Re-verified unchanged. The Step 4 child-prompt "SPAWN CAPABILITY"
+block still reads `{if depth < 3: "You MAY spawn sub-workers..."}` and
+`Spawn limits: Depth 1→4, Depth 2→2, Depth 3→0`, contradicting the same file's
+"there is no depth 3" statement (workers.md:272-273) and the two-level guard
+this phase enforces. `TestWorkersMdStatesOneDepthConvention` still does not
+match this prose block, so the contradiction ships green.
 **Fix:** Rewrite the block to the two-level convention (depth 1 may spawn
-helpers; depth 2 completes inline) and delete the `Depth 1→4, Depth 2→2,
-Depth 3→0` line. Extend `TestWorkersMdStatesOneDepthConvention` to fail on
+helpers; depth 2 completes inline) and delete the `Depth 1→4, Depth 2→2, Depth
+3→0` line. Extend `TestWorkersMdStatesOneDepthConvention` to fail on
 `"depth < 3"`, `"Depth 3"`, and any `Depth 2→N` allowance where N > 0.
 
-### WR-02: workers.md documents a spawn-can-spawn return shape the runtime does not produce
+### WR-02: workers.md documents a spawn-can-spawn return shape the runtime does not produce (carried forward — OPEN)
 
-**File:** `.aether/workers.md:304`
-**Issue:** The line updated by this phase at 303 is immediately followed by a
-stale contract claim:
+**File:** `.aether/workers.md:353-354`
+**Issue:** Re-verified unchanged. Step 1 still documents
 `# Returns: {"can_spawn": true/false, "depth": N, "max_spawns": N, "current_total": N}`.
-The actual command returns `can_spawn`, `depth`, `authoritative`, and (on
-deny) `reason`/`detail` (cmd/spawn.go:368-376). `max_spawns` and
-`current_total` do not exist; a worker parsing them gets null. CLAUDE.md's own
-corollary: "A documentation claim about runtime behaviour must be testable or
-removed."
-**Fix:** Replace with the real shape:
-`# Returns: {"can_spawn": true/false, "depth": N, "authoritative": true/false}` (+ `reason`/`detail` on deny). Consider having
-`TestSpawnCanSpawnAcceptsDocumentedInvocation` also assert the documented
-return keys are a subset of the actual result keys.
+The actual command returns `can_spawn`, `depth`, `authoritative` (+
+`reason`/`detail` on deny) — see `cmd/spawn.go:368-376`. `max_spawns` and
+`current_total` do not exist; a worker parsing them gets null.
+**Fix:** Replace with the real shape and have
+`TestSpawnCanSpawnAcceptsDocumentedInvocation` assert the documented return
+keys are a subset of the actual result keys.
 
-### WR-03: spawn-can-spawn (an inspection command) mutates midden.json when the budget is exhausted
+### WR-03: spawn-can-spawn (an inspection command) mutates midden.json when the budget is exhausted (carried forward — OPEN)
 
-**File:** `cmd/spawn_budget.go:107-117` (`spawnTreeBudgetReason` →
-`spawnTreeBudgetCeilingToMidden`), reached from `cmd/spawn.go:357`
-**Issue:** `spawnTreeBudgetCeilingToMidden` fires from inside
-`spawnTreeBudgetReason`, which runs on **every** `spawnCanSpawnDecision` call
-— including the purely advisory `spawn-can-spawn` report path (no
-`--enforce`, no spawn attempted). Once the run is at the ceiling, every
-advisory check appends a midden entry. This violates the repo's own
-Definition-of-Done corollary ("an inspection or --dry-run command must not
-mutate state" — the same defect class as the `consolidation-*-dry-run` bug
-CLAUDE.md documents), and a worker polling `spawn-can-spawn` in a loop at the
-ceiling floods midden.json with duplicate entries.
+**File:** `cmd/spawn_budget.go:169-170` (`spawnTreeBudgetReason` →
+`spawnTreeBudgetCeilingToMidden`), reached from `cmd/spawn.go:306` on every
+`spawnCanSpawnDecision` call, including the advisory `spawn-can-spawn` path
+(`cmd/spawn.go:357`, no `--enforce`)
+**Issue:** Re-verified unchanged. `spawnTreeBudgetCeilingToMidden` still fires
+from inside `spawnTreeBudgetReason`, which runs on every decision — so an
+advisory `spawn-can-spawn` report at the ceiling still appends a midden entry.
+This is the same "inspection command must not mutate state" defect class
+CLAUDE.md documents for the `consolidation-*-dry-run` bug, and a worker polling
+`spawn-can-spawn` at the ceiling floods midden.json.
 `TestBudgetCeilingWritesMiddenButDepthRefusalDoesNot` only exercises the
-spawn-log path, so this is untested.
-**Fix:** Move the midden write out of `spawnTreeBudgetReason` and into
-spawn-log's deny branch (the actual refused spawn attempt), or pass an
-`attempting bool` through `spawnDecisionInput` and write midden only when
-true. Add a purity test: `spawn-can-spawn` at the ceiling changes no file
-hashes.
+spawn-log path, so the advisory path stays untested.
+**Fix:** Pass an `attempting bool` through `spawnDecisionInput` and write midden
+only on a genuine refused spawn attempt (spawn-log's deny branch), not on the
+advisory report. Add a purity test: `spawn-can-spawn` at the ceiling changes no
+file hashes.
 
-### WR-04: The hook's agent_type heuristic fails both ways — an aether-*-typed second-tier helper bypasses it, and legitimate non-Aether nested dispatches are blocked
+### WR-04: the hook's agent_type heuristic fails both ways (carried forward — OPEN)
 
-**File:** `cmd/hook_cmds.go:177-201` (`hookSpawnDenyReason`)
-**Issue:** The requester-depth resolution keys entirely on the `agent_type`
-prefix:
-```go
-case strings.HasPrefix(strings.ToLower(agentType), hookAetherAgentTypePrefix):
-    requesterDepth = 1
-```
-(a) **Under-block:** nothing forces a first-tier worker to dispatch its
-helper with `subagent_type="general-purpose"`. If it dispatches with any
-registered `aether-*` type (all 27 exist in `.claude/agents/ant/`), the
-helper's own subsequent dispatch carries `agent_type: "aether-builder"`, is
-classified depth 1, and the hook allows a **third-level platform dispatch**.
-`spawn-log` will refuse to record it, but the depth-3 subagent still runs —
-the invisible-runaway blind spot this phase exists to close. The function's
-bounded-claims comment does not name this bypass, and no test covers an
-aether-*-typed second-tier requester.
-(b) **Over-block:** every non-`aether-*` subagent in this repo that
-legitimately dispatches its own subagent (including non-Aether dev tooling —
-e.g. GSD workflow agents — and any user-defined agent) is denied with
-"cannot resolve who is asking to delegate", because the hook is installed
-repo-wide via `.claude/settings.json` for all Agent/Task calls, not only
-Aether colony dispatches.
-**Fix:** For (a), treat an `aether-*` agent_type as depth 1 only when the
-dispatch **target** (`tool_input.subagent_type`) is `general-purpose` or
-non-aether; deny when an aether-typed requester dispatches another
-aether-typed agent, or record/consult a session-scoped depth marker. At
-minimum, document the bypass in the bounded-claims comment and add a test
-pinning current behavior for an aether-*-typed requester. For (b), consider
-scoping the deny to sessions with an active colony (state file present) so
-non-Aether tooling in the repo is not collateral.
+**File:** `cmd/hook_cmds.go:177-201` (`hookSpawnDenyReason`,
+`hookAetherAgentTypePrefix` at :131)
+**Issue:** Re-verified unchanged. Requester depth still keys entirely on the
+`agent_type` prefix (`aether-*` → depth 1). (a) Under-block: a first-tier
+worker that dispatches its helper with any registered `aether-*` type makes the
+helper's subsequent dispatch classify as depth 1, allowing a third-level
+platform dispatch (spawn-log then refuses to record it, but the subagent still
+runs). (b) Over-block: every non-`aether-*` subagent in the repo that
+legitimately dispatches its own subagent is denied with "cannot resolve who is
+asking to delegate", because the hook is installed repo-wide for all Agent/Task
+calls.
+**Fix:** Treat an `aether-*` agent_type as depth 1 only when the dispatch target
+(`tool_input.subagent_type`) is `general-purpose` or non-aether; deny (or
+consult a session-scoped depth marker) when an aether-typed requester
+dispatches another aether-typed agent. Scope the deny to sessions with an
+active colony so non-Aether tooling is not collateral. At minimum, document the
+bypass and add a test pinning current behavior for an aether-*-typed requester.
 
-### WR-05: spawn-log's guard decision and RecordSpawn are not atomic — concurrent spawns can exceed the whole-run budget
+### WR-05: spawn-log's guard decision and RecordSpawn are not atomic (carried forward — OPEN)
 
-**File:** `cmd/spawn.go:94-121`
-**Issue:** `deriveSpawnDepth`, `spawnCanSpawnDecision` (budget + ancestor
-checks), and `st.RecordSpawn` each re-read `spawn-tree.txt` /
-`spawn-runs.json` independently; no lock spans check-then-record. Parallel
-first-tier workers each running `aether spawn-log` for their helpers is the
-system's normal operating mode (separate processes). Two processes that both
-observe `Consumed == 19` both pass `spawnTreeBudgetReason` and both record,
-yielding 21+ entries — the "limit that gets raised under pressure" D-02
-explicitly forbids, raised by race instead of by config. The same window
-exists for the ancestor-cycle check.
-**Fix:** Perform the decision inside the same `store.UpdateFile` critical
-section that writes the entry (compute budget/ancestors from the `existing`
-bytes passed to the update callback and return an error to abort the write),
-or take the store's file lock across decision + record. A test spawning N
-concurrent spawn-log invocations at `Consumed == Max-1` and asserting exactly
-one succeeds would pin it.
+**File:** `cmd/spawn.go:94-118`
+**Issue:** Re-verified unchanged. `deriveSpawnDepth`, `spawnCanSpawnDecision`
+(budget + ancestor checks), and `st.RecordSpawn` each re-read the ledger
+independently; no lock spans check-then-record. Two parallel processes that
+both observe `Consumed == 19` both pass the budget check and both record,
+yielding 21+ entries — the budget raised by race rather than by config. The
+gap-closure moved the *integrity* check earlier but did not close this
+check-then-act window.
+**Fix:** Perform the budget/ancestor decision inside the same
+`store.UpdateFile` critical section that writes the entry (compute from the
+`existing` bytes and return an error to abort the write), or hold the store's
+file lock across decision + record. A test spawning N concurrent spawn-log
+invocations at `Consumed == Max-1` asserting exactly one succeeds would pin it.
 
-### WR-06: Patrol wrapper markdown edited directly while its declared YAML source was not updated — the spawn-orphans instruction can be silently dropped
+### WR-06: patrol wrapper markdown edited while its declared YAML source was not (carried forward — OPEN)
 
-**File:** `.aether/commands/patrol.yaml` (unchanged) vs
-`.claude/commands/ant-patrol.md:12`, `.claude/commands/ant/patrol.md:12`,
-`.opencode/commands/ant/patrol.md:12`
-**Issue:** All three patrol wrappers gained the "also run `aether
-spawn-orphans`" step, and each carries the header "Aether-managed: runtime
-spec at `.aether/commands/patrol.yaml`. Synced by aether update." — but
-`patrol.yaml` (the declared source of truth per CLAUDE.md's YAML Source
-Chain) says nothing about spawn-orphans. Any regeneration or sync from the
-YAML spec will clobber the wrappers and silently remove the orphan-listing
-step, which is the only user-facing surfacing of the reaper this phase built.
-This is the exact "documented but not wired" decay mode the repo's audits
-keep finding.
-**Fix:** Add the spawn-orphans guidance to `patrol.yaml` (e.g., a `runtime`
-follow-up command or a guardrail line) so spec and wrappers agree, or update
-the wrapper header if wrappers are now canonical for patrol.
+**File:** `.aether/commands/patrol.yaml` (still no spawn-orphans step) vs
+`.claude/commands/ant/patrol.md:12` (and the ant-patrol/opencode mirrors)
+**Issue:** Re-verified unchanged. The wrappers still carry the "also run
+`aether spawn-orphans`" step and the "Aether-managed: runtime spec at
+`.aether/commands/patrol.yaml`. Synced by aether update." header, but
+`patrol.yaml` says nothing about spawn-orphans. Any regeneration/sync from the
+YAML spec will silently drop the only user-facing surfacing of the reaper this
+phase built.
+**Fix:** Add the spawn-orphans guidance to `patrol.yaml` so spec and wrappers
+agree, or update the wrapper header if wrappers are now canonical for patrol.
 
-### WR-07: spawnAncestorChain silently truncates on a dangling mid-chain parent instead of failing closed
+### WR-07: spawnAncestorChain silently truncates on a dangling mid-chain parent (carried forward — OPEN)
 
-**File:** `cmd/spawn_ancestor.go:69-77`
-**Issue:** The walk breaks silently when an ancestor's parent name is not in
-the tree (`parent, ok := byName[current.ParentName]; if !ok ... break`) and
-the loop only terminates cleanly on a coordinator sentinel. An unresolvable
-*startName* denies (D-19 fail-closed), but an unresolvable *ancestor* — the
-same "corrupted or hand-edited tree" hazard, e.g. a parent whose line was
-corrupted and skipped by `parseSpawnTreeBytes` — yields a shortened chain and
-an allow, with no signal that the guard examined less than the full ancestry.
-The two branches apply opposite policies to the same class of unreadable
-evidence, and neither the function comment nor
-`TestSpawnAncestorCheckFailsClosedOnUnreadableTree` covers the mid-chain
-case.
+**File:** `cmd/spawn_ancestor.go:67-77`
+**Issue:** Re-verified unchanged. The walk still breaks silently when an
+ancestor's parent name is not in the tree (`parent, ok := byName[...]; if !ok
+... break`). An unresolvable *startName* denies (fail-closed), but an
+unresolvable *ancestor* yields a shortened chain and an allow — opposite
+policies applied to the same class of unreadable evidence. Note the gap-closure
+did tighten one related path: a *corrupt* ledger now makes `st.Parse()` return
+an error, so a corrupt mid-chain line makes the *whole* walk deny; but a
+well-formed ledger that simply omits a named mid-chain parent still truncates
+silently.
 **Fix:** Distinguish "reached a root sentinel" (complete chain, allow) from
-"parent named but unresolvable" (incomplete chain): return an error for the
-latter so `spawnAncestorCycleReason` denies with the existing "ancestor chain
-unreadable" message, and add a test with a corrupted middle ancestor.
+"parent named but unresolvable" (incomplete chain, return an error so
+`spawnAncestorCycleReason` denies with "ancestor chain unreadable"). Add a test
+with a well-formed tree missing a middle ancestor.
 
 ## Info
 
-### IN-01: "73 workers" arithmetic counts the coordinator as a spawned worker
+### IN-01: "73 workers" arithmetic counts the coordinator as a spawned worker (carried forward — OPEN)
 
-**File:** `.aether/workers.md:280-283`; `cmd/spawn_budget.go:19-20`
-**Issue:** "8 workers wide and 2 levels deep — 73 workers in total" is 1
-coordinator + 8 workers + 64 helpers. The budget's own rule (D-03) counts
-only spawned helpers — 72 — and the coordinator "is never recorded in the
-spawn tree". Both the doc and the code comment call all 73 "workers".
+**File:** `.aether/workers.md:280-283`; `cmd/spawn_budget.go:16-19`
+**Issue:** Re-verified unchanged. "8 workers wide and 2 levels deep — 73
+workers in total" counts 1 coordinator + 8 + 64; the budget rule counts only
+the 72 spawned helpers, and the coordinator is never recorded.
 **Fix:** Say "72 spawned helpers (73 agents counting the coordinator)".
 
-### IN-02: spawn-orphans --clear reports partial success as pure failure
+### IN-02: spawn-orphans --clear reports partial success as pure failure (carried forward — OPEN)
 
 **File:** `cmd/spawn_reap.go:277-281`
-**Issue:** `spawnReapStaleEntries` deliberately continues past per-entry
-failures and returns both the reaped names and a joined error, but the
-command's `--clear` path discards the names on any error and reports only
-"reap encountered an error" — entries were mutated and budget released
-without the output naming what changed.
+**Issue:** Re-verified unchanged. On a partial per-entry failure the `--clear`
+path discards the reaped names and reports only "reap encountered an error",
+even though entries were mutated and budget released.
 **Fix:** On partial failure, still render the reaped list and budget delta
 alongside the error.
 
-### IN-03: Midden entry IDs can collide, and ceiling refusals grow midden.json unboundedly
+### IN-03: midden entry IDs can collide, and ceiling refusals grow midden.json unboundedly (carried forward — OPEN)
 
-**File:** `cmd/spawn_budget.go:148`
-**Issue:** `midden_%d_%d` (unix seconds + pid) collides for two refusals in
-the same second in one process, and every refused attempt at the ceiling
-appends a new entry with no dedup — a retry loop at the ceiling floods the
-failure log (compounded by WR-03).
-**Fix:** Add a nanosecond or counter component to the ID; dedup consecutive
-identical ceiling entries (or reinforce a single entry, as pheromones do).
+**File:** `cmd/spawn_budget.go:221`
+**Issue:** Re-verified unchanged. `midden_%d_%d` (unix seconds + pid) collides
+for two refusals in the same second in one process, and every ceiling refusal
+appends a new entry with no dedup (compounded by WR-03).
+**Fix:** Add a nanosecond/counter component to the ID; dedup or reinforce a
+single ceiling entry as pheromones do.
 
-### IN-04: SessionID is decoded but never used
+### IN-04: claudeHookInput.SessionID is decoded but never read (carried forward — OPEN)
 
 **File:** `cmd/hook_cmds.go:34`
-**Issue:** `claudeHookInput.SessionID` is populated from the payload but no
-code path reads it.
-**Fix:** Drop the field, or note the intended future use where it is
-declared.
+**Issue:** Re-verified unchanged. `claudeHookInput.SessionID` is populated from
+the payload but no code path reads it (the only `SessionID:` assignment at
+`cmd/hook_cmds.go:603` is on a different `colony.SessionFile`).
+**Fix:** Drop the field, or note the intended future use where it is declared.
 
-### IN-05: Sentinel-coverage test walks gitignored local data, making it environment-sensitive
+### IN-05: sentinel-coverage test walks gitignored local data (carried forward — OPEN)
 
-**File:** `cmd/spawn_enforce_test.go:696-748`
-**Issue:** `TestSpawnRootSentinelsCoverEveryDocumentedCoordinatorParent`
-walks all of `.aether/`, which includes the gitignored, local-only
-`.aether/data/` tree. A developer's local artifacts containing a
-`spawn-log --parent "..."` line (e.g. captured briefs or handoffs) can fail
-the test locally while CI stays green.
-**Fix:** Skip `.aether/data/`, `.aether/dreams/`, and `.aether/oracle/`
-during the walk.
+**File:** `cmd/spawn_enforce_test.go:695-716`
+**Issue:** Re-verified unchanged. `TestSpawnRootSentinelsCoverEveryDocumentedCoordinatorParent`
+still walks all of `.aether` (dirs list includes
+`filepath.Join(repoRoot, ".aether")`) without excluding the gitignored,
+local-only `.aether/data/`, `.aether/dreams/`, `.aether/oracle/` trees. A
+developer's local artifacts containing a `spawn-log --parent "..."` line can
+fail the test locally while CI stays green.
+**Fix:** Skip `.aether/data/`, `.aether/dreams/`, and `.aether/oracle/` during
+the walk.
 
-### IN-06: Capture appends a bare newline when stdin is empty
+### IN-06: capture appends a bare newline when stdin is empty (carried forward — OPEN, reduced scope)
 
-**File:** `cmd/hook_cmds.go:369-381`
-**Issue:** `captureRawHookPayload` is called with `raw == nil` when stdin is
-a TTY or empty; with capture enabled it still opens the file and writes a
-blank line per invocation.
+**File:** `cmd/hook_cmds.go:354-368`
+**Issue:** Re-verified. `captureRawHookPayload` now short-circuits on an empty
+path (the CR-01 fix removed the file-based switch), but when
+`AETHER_HOOK_CAPTURE_FILE` is set and the raw payload is empty it still opens
+the file and writes a lone `"\n"` per invocation. Scope is now operator-only
+(the env var cannot be set by a worker), so impact is minor.
 **Fix:** `if path == "" || len(raw) == 0 { return }`.
 
 ---
 
-_Reviewed: 2026-08-13T12:33:42Z_
+_Reviewed: 2026-08-13T17:12:33Z_
 _Reviewer: Claude (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: standard (update review — gap-closure scope + prior-finding re-verification)_
