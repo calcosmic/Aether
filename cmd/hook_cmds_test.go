@@ -479,6 +479,151 @@ func TestHookPreToolUseBlocksMainBranchWhenRedirectActive(t *testing.T) {
 	}
 }
 
+// TestHookPreToolUseDeniesUnresolvedRequesterDepth is D-20's direct proof: a
+// subagent-originated dispatch (agent_id present) whose agent_type is
+// "general-purpose" -- the exact value 173-HOOK-FINDINGS.md observed on the
+// real captured inner payload -- cannot be classified by the resolution rule
+// (it is indistinguishable from a first-tier worker using the documented
+// general-purpose fallback), so the hook must deny rather than guess.
+func TestHookPreToolUseDeniesUnresolvedRequesterDepth(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	_, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	setHookStdin(t, `{"session_id":"sess_1","agent_id":"ae93ff782863d564f","agent_type":"general-purpose","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"Dispatch leaf agent","prompt":"Reply with the single word: leaf","subagent_type":"general-purpose"}}`)
+
+	rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-pre-tool-use returned error: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &result); err != nil {
+		t.Fatalf("unmarshal hook output: %v (%q)", err, buf.String())
+	}
+	if result["decision"] != "block" {
+		t.Fatalf("decision = %v, want block", result["decision"])
+	}
+	reason, _ := result["reason"].(string)
+	if !strings.Contains(reason, "cannot resolve who is asking") {
+		t.Fatalf("reason = %q, want it to name the inability to identify the requester", reason)
+	}
+}
+
+// TestHookPreToolUseAllowsMainSessionDispatch is the negative control D-20
+// requires: a dispatch payload carrying the same tool_name but NO
+// agent_id/agent_type field at all -- the coordinator's own dispatch shape,
+// exactly as 173-HOOK-FINDINGS.md's first captured payload showed it (no
+// agent_id, no agent_type). Without this control, a hook that blocks every
+// dispatch unconditionally would also satisfy the deny tests, which would
+// stop the coordinator dispatching its own workers and break every build.
+func TestHookPreToolUseAllowsMainSessionDispatch(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	_, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	setHookStdin(t, `{"session_id":"sess_1","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"Nested dispatch experiment level 1","subagent_type":"general-purpose"}}`)
+
+	rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-pre-tool-use returned error: %v", err)
+	}
+
+	if strings.TrimSpace(buf.String()) != "" {
+		t.Fatalf("main session dispatch was blocked: %s", buf.String())
+	}
+}
+
+// TestHookPreToolUseAllowsFirstTierWorkerDispatch proves D-01: the
+// coordinator's own workers may each call one round of helpers. A subagent
+// requester whose agent_type carries the repo's aether-* worker naming
+// convention resolves to depth 1, and a depth-1 requester's own dispatch
+// (the child would be depth 2) is within the cap.
+func TestHookPreToolUseAllowsFirstTierWorkerDispatch(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	_, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	setHookStdin(t, `{"session_id":"sess_1","agent_id":"agent_first_tier_1","agent_type":"aether-builder","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"Dispatch a helper","subagent_type":"general-purpose"}}`)
+
+	rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-pre-tool-use returned error: %v", err)
+	}
+
+	if strings.TrimSpace(buf.String()) != "" {
+		t.Fatalf("first-tier worker's own dispatch was blocked: %s", buf.String())
+	}
+}
+
+// TestHookPreToolUseDeniesPastTheDepthCap is D-01's other half: a
+// second-tier helper must not be able to spawn a third level.
+//
+// Which case the findings actually supported: 173-HOOK-FINDINGS.md's
+// capture could not produce a payload that resolves to an authoritative
+// depth-2 requester -- agent_type names the REQUESTER's own dispatched
+// type, and a first-tier worker following .aether/workers.md's documented
+// "subagent_type=general-purpose" fallback verbatim is, on this one field,
+// indistinguishable from a second-tier helper doing the same thing. So this
+// test exercises the case the findings actually proved: the general-purpose
+// value is treated as unresolved (fail-closed) rather than silently
+// classified as an allowed depth-1 requester -- which is exactly what would
+// let a real depth-2 helper spawn a third level undetected. A genuine
+// resolved-depth-2 cap denial is not demonstrated by the capture and is not
+// claimed here.
+func TestHookPreToolUseDeniesPastTheDepthCap(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	_, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	setHookStdin(t, `{"session_id":"sess_1","agent_id":"agent_second_tier_1","agent_type":"general-purpose","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"A second-tier helper attempting to spawn a third level","subagent_type":"general-purpose"}}`)
+
+	rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-pre-tool-use returned error: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &result); err != nil {
+		t.Fatalf("unmarshal hook output: %v (%q)", err, buf.String())
+	}
+	if result["decision"] != "block" {
+		t.Fatalf("decision = %v, want block", result["decision"])
+	}
+	reason, _ := result["reason"].(string)
+	if !strings.Contains(reason, "cannot resolve") && !strings.Contains(reason, "past the cap") {
+		t.Fatalf("reason = %q, want it to name the cap or the unresolvability", reason)
+	}
+}
+
 func TestHookStopBlocksActiveExecution(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
