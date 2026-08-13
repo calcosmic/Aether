@@ -412,3 +412,325 @@ func TestBudgetCeilingWritesMiddenButDepthRefusalDoesNot(t *testing.T) {
 		t.Fatalf("midden.json changed after a routine depth-cap refusal — D-11 requires only budget-ceiling refusals to write to the midden:\nbefore=%q\nafter=%q", middenBeforeDepth, middenAfterDepth)
 	}
 }
+
+// Plan 173-12 (SPAWN-03, T-173-55/T-173-70/T-173-71). 173-VERIFICATION.md's
+// Gap 1 reproduced the whole-run budget being reset to zero by overwriting
+// spawn-tree.txt with one line of garbage. Planning found a second,
+// tampering-free route to the identical outcome: deleting spawn-runs.json
+// against a perfectly valid ledger. The three tests below prove both routes
+// are closed, and that closing them does not lock ordinary use out.
+
+// TestCorruptingTheLedgerDoesNotResetTheWholeRunBudget reproduces
+// 173-VERIFICATION.md's Gap 1 reproduction step for step, then asserts the
+// opposite outcome: a spawn already refused for an exhausted whole-run
+// budget is STILL refused after the ledger is overwritten with one line of
+// garbage, whether or not spawn-runs.json is also removed alongside it.
+func TestCorruptingTheLedgerDoesNotResetTheWholeRunBudget(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	if _, err := beginRuntimeSpawnRun("test-run", time.Now().UTC()); err != nil {
+		t.Fatalf("begin run: %v", err)
+	}
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	// Control: legitimately exhaust the budget first, exactly as
+	// TestSpawnTreeBudgetRefusesTheTwentyFirstHelper does, so the tampering
+	// below is proven against a genuinely full budget, not an empty one.
+	for i := 1; i <= spawnTreeBudgetRedProofLiteralMax; i++ {
+		name := fmt.Sprintf("W%d", i)
+		runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", name, "0"))
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "W21", "0"))
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("the 21st spawn-log did not exit non-zero before any tampering: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	controlEnv := parseEnvelope(t, errBuf.String())
+	if msg, _ := controlEnv["error"].(string); !strings.Contains(msg, "budget") {
+		t.Fatalf("legitimate ceiling refusal does not name the budget: %s", errBuf.String())
+	}
+
+	// Capture midden.json AFTER the legitimate ceiling refusal has already
+	// written its own entry (D-11), so the comparison below isolates the
+	// tampered-ledger refusal specifically.
+	middenBeforeTamper := readMiddenBytesOrNilForTest()
+
+	// Inject the exploit: 173-VERIFICATION.md's exact reproduction --
+	// `echo "garbage" > spawn-tree.txt`, with a canary string the deny
+	// message must never echo.
+	treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
+	if err := os.WriteFile(treePath, []byte("garbage not pipe format LEDGER-CONTENT-CANARY"), 0644); err != nil {
+		t.Fatalf("inject corrupt spawn-tree.txt: %v", err)
+	}
+	corruptedBytes, err := os.ReadFile(treePath)
+	if err != nil {
+		t.Fatalf("read injected spawn-tree.txt: %v", err)
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "W22-BYPASS", "0"))
+	_ = rootCmd.Execute()
+
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("the identical spawn-log request succeeded against a corrupted ledger -- the exploit still works: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	env := parseEnvelope(t, errBuf.String())
+	msg, _ := env["error"].(string)
+	for _, want := range []string{"budget", "unverifiable", "spawn-tree.txt"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("deny message %q does not contain %q", msg, want)
+		}
+	}
+	if strings.Contains(msg, "LEDGER-CONTENT-CANARY") {
+		t.Fatalf("deny message leaks the tampered ledger's own content: %s", msg)
+	}
+
+	afterTamperBytes, err := os.ReadFile(treePath)
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt after the tampered-ledger refusal: %v", err)
+	}
+	if !bytes.Equal(corruptedBytes, afterTamperBytes) {
+		t.Fatalf("spawn-tree.txt bytes changed after the tampered-ledger refusal:\nbefore=%q\nafter=%q", corruptedBytes, afterTamperBytes)
+	}
+
+	middenAfterTamper := readMiddenBytesOrNilForTest()
+	if !bytes.Equal(middenBeforeTamper, middenAfterTamper) {
+		t.Fatalf("midden.json changed after the tampered-ledger refusal -- D-11 reserves the midden for the budget-ceiling event, not a tampered ledger:\nbefore=%q\nafter=%q", middenBeforeTamper, middenAfterTamper)
+	}
+
+	// Harder variant: with the ledger STILL corrupt, also remove
+	// spawn-runs.json. This is the assertion that fails if the integrity
+	// check is ever moved below the no-run-yet early return -- without it,
+	// this combination takes the no-run-yet exception and reports a fresh
+	// budget.
+	//
+	// The assertion below checks the deny message names the BUDGET
+	// specifically, not merely a non-zero exit code: RecordSpawn's own
+	// write-time guard (plan 11) would ALSO refuse a write against this
+	// corrupted content and produce a non-zero exit on its own, which would
+	// make a bare exit-code check pass even if Gap A's integrity call were
+	// removed from spawnTreeBudgetState (the decision would then reach
+	// RecordSpawn instead of denying earlier at the budget check). Naming
+	// "budget" and "unverifiable" pins the refusal to the budget check
+	// specifically, which is the one this red-proof is about.
+	runStatePath := filepath.Join(store.BasePath(), "spawn-runs.json")
+	if err := os.Remove(runStatePath); err != nil {
+		t.Fatalf("remove spawn-runs.json: %v", err)
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "W23-BYPASS", "0"))
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("the identical spawn-log request succeeded against a corrupted ledger AND a removed run-state file: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	harderEnv := parseEnvelope(t, errBuf.String())
+	harderMsg, _ := harderEnv["error"].(string)
+	if !strings.Contains(harderMsg, "budget") || !strings.Contains(harderMsg, "unverifiable") {
+		t.Fatalf("deny message does not name the budget as unverifiable (the refusal must come from the budget check, not merely from RecordSpawn's separate write guard): %s", errBuf.String())
+	}
+}
+
+// TestErasingTheRunRecordDoesNotResetTheWholeRunBudget is the new test for
+// the second reset route, and it must NOT touch the ledger at all -- that is
+// the whole point, because TestCorruptingTheLedgerDoesNotResetTheWholeRunBudget
+// always corrupts the ledger first and so never exercises this path alone.
+func TestErasingTheRunRecordDoesNotResetTheWholeRunBudget(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	if _, err := beginRuntimeSpawnRun("test-run", time.Now().UTC()); err != nil {
+		t.Fatalf("begin run: %v", err)
+	}
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	for i := 1; i <= spawnTreeBudgetRedProofLiteralMax; i++ {
+		name := fmt.Sprintf("W%d", i)
+		runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", name, "0"))
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "W21", "0"))
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("the 21st spawn-log did not exit non-zero against a valid full ledger: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+
+	ledgerBefore, err := store.ReadFile("spawn-tree.txt")
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt before erasing the run record: %v", err)
+	}
+
+	// Case 1: delete spawn-runs.json entirely, against a VALID, full ledger.
+	// This does not touch spawn-tree.txt at all. Before this plan, this
+	// request would succeed with budget_consumed:1 -- the no-run-yet
+	// exception reporting a fresh budget against 20 live, un-abandoned
+	// entries. After it, the whole ledger is counted and the ceiling still
+	// holds.
+	runStatePath := filepath.Join(store.BasePath(), "spawn-runs.json")
+	if err := os.Remove(runStatePath); err != nil {
+		t.Fatalf("remove spawn-runs.json: %v", err)
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "W22-BYPASS", "0"))
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("erasing spawn-runs.json against a full valid ledger let the identical request succeed -- budget_consumed reset: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	env := parseEnvelope(t, errBuf.String())
+	if msg, _ := env["error"].(string); !strings.Contains(msg, "budget") {
+		t.Fatalf("deny message does not name the budget: %s", errBuf.String())
+	}
+
+	ledgerAfter, err := store.ReadFile("spawn-tree.txt")
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt after erasing the run record: %v", err)
+	}
+	if !bytes.Equal(ledgerBefore, ledgerAfter) {
+		t.Fatalf("spawn-tree.txt bytes changed merely from erasing spawn-runs.json:\nbefore=%q\nafter=%q", ledgerBefore, ledgerAfter)
+	}
+
+	// Case 2: a fresh store, a full VALID ledger, and a DIRECTORY
+	// obstructing spawn-runs.json's path -- a file that exists and cannot be
+	// read is a fault, not an absent history, and must deny outright. This
+	// case depends on plan 11's loadRunStateLocked change.
+	s2, tmpDir2 := newTestStore(t)
+	defer os.RemoveAll(tmpDir2)
+	store = s2
+
+	if _, err := beginRuntimeSpawnRun("test-run", time.Now().UTC()); err != nil {
+		t.Fatalf("begin run (second store): %v", err)
+	}
+	for i := 1; i <= spawnTreeBudgetRedProofLiteralMax; i++ {
+		name := fmt.Sprintf("V%d", i)
+		runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", name, "0"))
+	}
+
+	runStatePath2 := filepath.Join(store.BasePath(), "spawn-runs.json")
+	if err := os.Remove(runStatePath2); err != nil {
+		t.Fatalf("remove spawn-runs.json (second store): %v", err)
+	}
+	if err := os.MkdirAll(runStatePath2, 0755); err != nil {
+		t.Fatalf("obstruct spawn-runs.json with a directory: %v", err)
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "V22-BYPASS", "0"))
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("an obstructed spawn-runs.json (directory at its path) did not deny: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	env2 := parseEnvelope(t, errBuf.String())
+	msg2, _ := env2["error"].(string)
+	if !strings.Contains(msg2, "budget") || !strings.Contains(msg2, "unverifiable") {
+		t.Fatalf("deny message does not name the budget as unverifiable: %s", errBuf.String())
+	}
+}
+
+// TestAFreshColonyWithNoLedgerIsStillAllowedToSpawn is the negative control
+// that stops an always-deny implementation from passing the two tests above.
+// Three states, none of which may be refused: an absent ledger, a zero-byte
+// ledger, and a small ledger with no run ever recorded -- the exact shape
+// cmd/spawn_enforce_test.go's and cmd/spawn_ancestor_test.go's own chains
+// depend on, and the one .aether/workers.md:292 documents workers calling
+// directly. A budget that refuses a colony which has genuinely never spawned
+// anything -- or one that has simply never run a lifecycle command -- is not
+// fail-closed, it is broken.
+func TestAFreshColonyWithNoLedgerIsStillAllowedToSpawn(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	// Case 1: no spawn-tree.txt at all.
+	s1, tmpDir1 := newTestStore(t)
+	defer os.RemoveAll(tmpDir1)
+	store = s1
+	if _, err := beginRuntimeSpawnRun("test-run", time.Now().UTC()); err != nil {
+		t.Fatalf("begin run (case 1): %v", err)
+	}
+	if _, err := store.ReadFile("spawn-tree.txt"); err == nil {
+		t.Fatalf("spawn-tree.txt unexpectedly exists before the first spawn in case 1")
+	}
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "W1", "0"))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-log against an absent ledger failed: %v\nstderr: %s", err, errBuf.String())
+	}
+	if code := int(renderedCommandExitCode.Load()); code != 0 {
+		t.Fatalf("spawn-log against an absent ledger was refused: %s", errBuf.String())
+	}
+	if _, err := store.ReadFile("spawn-tree.txt"); err != nil {
+		t.Fatalf("spawn-tree.txt was not created by the successful spawn: %v", err)
+	}
+
+	// Case 2: a zero-byte spawn-tree.txt.
+	s2, tmpDir2 := newTestStore(t)
+	defer os.RemoveAll(tmpDir2)
+	store = s2
+	if _, err := beginRuntimeSpawnRun("test-run", time.Now().UTC()); err != nil {
+		t.Fatalf("begin run (case 2): %v", err)
+	}
+	treePath2 := filepath.Join(store.BasePath(), "spawn-tree.txt")
+	if err := os.WriteFile(treePath2, []byte{}, 0644); err != nil {
+		t.Fatalf("write zero-byte spawn-tree.txt: %v", err)
+	}
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "W1", "0"))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-log against a zero-byte ledger failed: %v\nstderr: %s", err, errBuf.String())
+	}
+	if code := int(renderedCommandExitCode.Load()); code != 0 {
+		t.Fatalf("spawn-log against a zero-byte ledger was refused: %s", errBuf.String())
+	}
+
+	// Case 3: a small ledger holding two recorded helpers, and no run ever
+	// begun at all -- the exact shape cmd/spawn_enforce_test.go and
+	// cmd/spawn_ancestor_test.go both depend on, and the one
+	// .aether/workers.md:292 documents workers calling directly. This is the
+	// case that fails if the no-run branch is ever "hardened" into a deny.
+	// Distinct task text on the two calls avoids tripping the unrelated
+	// ancestor-cycle check (same caste + same normalised task would deny on
+	// its own terms, which would prove nothing about this budget branch).
+	s3, tmpDir3 := newTestStore(t)
+	defer os.RemoveAll(tmpDir3)
+	store = s3
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("Queen", "W1", "builder", "coordinate the initial request"))
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgsWithCasteTask("W1", "H1", "builder", "carry out the coordinated request"))
+}

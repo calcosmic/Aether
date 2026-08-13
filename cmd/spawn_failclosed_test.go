@@ -291,8 +291,16 @@ var delegationGuardFaultTable = []delegationGuardTableEntry{
 			{
 				// --name populates RequesterName even when the lookup fails
 				// (cmd/spawn.go's spawnCanSpawnCmd), so a --name naming an
-				// agent that has been dropped from spawn-tree.txt reaches
+				// agent absent from a READABLE spawn-tree.txt reaches
 				// spawnAncestorCycleReason's unresolvable-startName branch.
+				// Plan 173-12 task 1 moved the ledger-integrity check
+				// (st.Parse()) ahead of the budget's no-run-yet exception, so
+				// a genuinely CORRUPT tree is now caught -- and denied -- by
+				// the budget check first, before this ancestor path is ever
+				// reached. The fault this axis injects is therefore a
+				// WELL-FORMED tree that simply does not mention A1, so the
+				// ancestor guard's own proof stays pinned to the ancestor
+				// guard rather than being satisfied by the budget instead.
 				Name: "requester-not-recorded",
 				Verify: func(t *testing.T) {
 					saveGlobals(t)
@@ -306,13 +314,18 @@ var delegationGuardFaultTable = []delegationGuardTableEntry{
 					stdout = &buf
 					stderr = &errBuf
 
-					// Record a real A1 first, so the corruption below is a
+					// Record a real A1 first, so the overwrite below is a
 					// genuine "was recorded, now isn't" case.
 					runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "A1", "0"))
 
+					// Overwrite the tree with a well-formed 7-field spawn
+					// line for a DIFFERENT agent: the ledger parses cleanly
+					// (one helper of twenty, well under the whole-run
+					// budget), and A1 is genuinely absent from a READABLE
+					// tree rather than dropped by a parse failure.
 					treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
-					if err := os.WriteFile(treePath, []byte("not-a-timestamp|Queen|builder|A1|t|not-a-number|spawned\n"), 0644); err != nil {
-						t.Fatalf("corrupt spawn-tree.txt: %v", err)
+					if err := os.WriteFile(treePath, []byte("2026-04-01T12:00:00Z|Queen|builder|B9|t|1|spawned\n"), 0644); err != nil {
+						t.Fatalf("overwrite spawn-tree.txt: %v", err)
 					}
 
 					buf.Reset()
@@ -322,7 +335,7 @@ var delegationGuardFaultTable = []delegationGuardTableEntry{
 					_ = rootCmd.Execute()
 
 					if code := int(renderedCommandExitCode.Load()); code == 0 {
-						t.Fatalf("spawn-can-spawn --enforce --name A1 with A1 dropped from the tree did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
+						t.Fatalf("spawn-can-spawn --enforce --name A1 with A1 absent from a readable tree did not exit non-zero: stdout=%s stderr=%s", buf.String(), errBuf.String())
 					}
 					env := parseEnvelope(t, errBuf.String())
 					if env["ok"] != false {
