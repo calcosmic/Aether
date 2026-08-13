@@ -96,8 +96,127 @@ var hookPreToolUseCmd = &cobra.Command{
 			}
 		}
 
+		// SPAWN-04/D-20: 173-HOOK-FINDINGS.md (2026-08-13) observed the
+		// dispatch tool's name as "Agent", not "Task". Accept "Task" too for
+		// forward compatibility -- .claude/settings.json's matcher already
+		// covers both, so a future runtime that reverts to "Task" must not
+		// silently stop being covered here.
+		if strings.EqualFold(toolName, "Agent") || strings.EqualFold(toolName, "Task") {
+			if reason := hookSpawnDenyReason(input); reason != "" {
+				if tracer != nil {
+					var state colony.ColonyState
+					if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
+						_ = tracer.LogIntervention(*state.RunID, "hook.pre-tool-use.spawn-deny", "hook-cmd", map[string]interface{}{
+							"hook":       "pre-tool-use",
+							"reason":     reason,
+							"tool":       toolName,
+							"agent_id":   input.AgentID,
+							"agent_type": input.AgentType,
+						})
+					}
+				}
+				return emitHookBlock(reason)
+			}
+		}
+
 		return nil
 	},
+}
+
+// hookAetherAgentTypePrefix is the naming convention every one of the repo's
+// named worker castes follows (aether-builder, aether-watcher, ...,
+// confirmed by `ls .claude/agents/ant/`). A requester whose agent_type
+// carries this prefix was dispatched as one of Aether's own first-tier
+// workers.
+const hookAetherAgentTypePrefix = "aether-"
+
+// hookSpawnDenyReason is Phase 173's SPAWN-04/D-20 guard: the PreToolUse
+// hook's fail-closed answer for a delegation dispatch (an "Agent"/"Task" tool
+// call) BEFORE the platform acts on it. It follows protectedHookWriteReason's
+// shape -- a reason string on deny, the empty string on allow, one dispatch
+// point -- but DELIBERATELY INVERTS that function's unresolvable-input
+// branch (`if normalized == "" { return "" }`, which fails open). Here,
+// failing to resolve who is asking must fail closed.
+//
+// Empirically observed coverage (173-HOOK-FINDINGS.md, captured 2026-08-13,
+// a real two-level nested dispatch performed live inside this repo): the
+// hook fired for BOTH the coordinator's own dispatch (tool_name "Agent", no
+// agent_id -- a depth-0 requester) AND a subagent's dispatch of its own
+// helper (tool_name "Agent", agent_id present, agent_type carrying the
+// REQUESTER's own dispatched type, not the target's). No third-level
+// (helper-of-helper) dispatch was captured in that run. This function's
+// claims and comments are bounded to those two observed levels; nothing
+// here asserts coverage of a dispatch depth the capture did not demonstrate.
+// See 173-HOOK-FINDINGS.md for the raw payloads and the four answers derived
+// from them.
+//
+// There is no mapping from Claude Code's own agent_id (e.g.
+// "ae93ff782863d564f") to Aether's spawn-tree AgentName -- 173-HOOK-FINDINGS.md
+// recorded which fields the platform supplies, not an identity bridge. Every
+// rule below is therefore a heuristic over agent_id/agent_type's
+// presence/absence and value, not a lookup into Aether's own spawn records.
+// The AUTHORITATIVE depth enforcement remains spawn-log's deriveSpawnDepth,
+// which derives depth from the parent's own recorded spawn-tree entry and
+// cannot be fooled by a caller's claimed identity; this hook is a
+// before-the-fact deterrent layered in front of it, not a replacement for it.
+func hookSpawnDenyReason(in claudeHookInput) string {
+	agentID := strings.TrimSpace(in.AgentID)
+	agentType := strings.TrimSpace(in.AgentType)
+
+	if agentID == "" {
+		// D-20's deliberate exception to fail-closed: absence of a subagent
+		// identifier is positive evidence this dispatch originates from the
+		// main session (depth 0), not an unresolved lookup --
+		// 173-HOOK-FINDINGS.md confirmed this by direct comparison of the
+		// two captured payloads: the coordinator's own dispatch carried
+		// neither agent_id nor agent_type at all. Depth 0 is always
+		// permitted to dispatch its own first-tier workers.
+		return ""
+	}
+
+	var requesterDepth int
+	switch {
+	case strings.HasPrefix(strings.ToLower(agentType), hookAetherAgentTypePrefix):
+		// A named first-tier worker, dispatched by the coordinator with one
+		// of the repo's own aether-* castes as its subagent_type.
+		requesterDepth = 1
+	default:
+		// Covers the observed "general-purpose" value and every other
+		// unclassified value. 173-HOOK-FINDINGS.md showed agent_type names
+		// the REQUESTER's own dispatched type, not the target's -- and
+		// .aether/workers.md's own spawn protocol instructs every worker to
+		// dispatch its own helper with subagent_type="general-purpose". A
+		// first-tier worker that followed that documented fallback verbatim
+		// would ALSO carry agent_type "general-purpose" on its own dispatch,
+		// so this single value cannot distinguish "first-tier worker using
+		// the documented fallback" (should resolve depth 1) from "second-tier
+		// helper spawning past the cap" (should resolve depth 2). Inventing
+		// a resolution the capture never demonstrated would be exactly the
+		// identity-lookup mistake this function's own comment warns against
+		// -- so every unclassified value denies, not just this one.
+		return fmt.Sprintf(
+			"cannot resolve who is asking to delegate (agent_id=%q agent_type=%q); refusing the spawn",
+			agentID, agentType,
+		)
+	}
+
+	// This branch is reachable only if a future, better-resolved requester
+	// type pushes requesterDepth to spawnMaxDelegationDepth or beyond; today
+	// the one resolvable value (an aether-* type) always yields
+	// requesterDepth 1, and 1+1 never exceeds the cap of 2. It is kept
+	// because the resolution rule above is deliberately bounded to what
+	// 173-HOOK-FINDINGS.md demonstrated and may widen later, and because this
+	// is the one place the hook must use spawnMaxDelegationDepth directly --
+	// the same cap constant the CLI guards use, not a second number.
+	prospectiveDepth := requesterDepth + 1
+	if prospectiveDepth > spawnMaxDelegationDepth {
+		return fmt.Sprintf(
+			"requester type %q resolved to depth %d; a helper spawned from here would be depth %d, past the cap of %d",
+			agentType, requesterDepth, prospectiveDepth, spawnMaxDelegationDepth,
+		)
+	}
+
+	return ""
 }
 
 var hookStopCmd = &cobra.Command{
