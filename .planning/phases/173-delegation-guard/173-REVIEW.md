@@ -71,6 +71,14 @@ the advisory-command midden write, none of which plans 173-11..13 modified).
 
 ### WR-08 (NEW): The whole-ledger budget safety net is bypassed when the current run has ended — a full budget reset via ordinary `spawn-runs.json` editing
 
+**RESOLVED (2026-08-13, commit 1f9ca5a1):** implemented per the fix suggestion
+below — a non-active run's window is untrusted (whole-ledger non-abandoned
+count applies, as in the no-run branch), and for an active run any live
+entries outside the window raise the count to the whole-ledger live floor.
+Locked by `TestAnEndedRunRecordDoesNotResetTheWholeRunBudget` (red-proof
+performed: test fails with the fix reverted, passes with it), registered in
+the CI wiring-ratchet `-run` filter. Open warnings are now WR-01..WR-07.
+
 **File:** `cmd/spawn_budget.go:109-134` (`spawnTreeBudgetState`), together with
 `pkg/agent/spawn_tree.go:196-211` (`CurrentRun`) and `:583-615`
 (`filterEntriesForRun`)
