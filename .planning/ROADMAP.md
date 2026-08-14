@@ -840,6 +840,7 @@ context part-way costs one phase, not the sequence.
 ### Phase 181: Reading Material Chosen By The Task
 **Goal**: What a worker is given to read is decided by what the task is, not by the worker's job title. Today the scoring weights expected-output-type at 4 points and job title at 3, while "does this match the actual task" is worth 2 — the lowest-weighted signal in the system. When nothing scores well, nothing is sent. Absorbs the one live finding rescued from cut Phase 178: selection must not be winnable by filename.
 **Depends on**: Phase 180
+**Status**: COMPLETE 2026-08-14. Evidence: `cmd/task_relevance_test.go` (six tests covering all five criteria), plus live `skill-match` and `reference-match` runs from a non-Aether directory showing 5 references and the AI design skill before, zero after, with controls proving genuine matches still land.
 **Success Criteria** (what must be TRUE):
   1. Using the real CalVault task text ("copy 110 markdown files into a new folder tree"), a builder receives no design guide, no architecture contract, and no AI-integration material. Asserted with that literal task text, not a paraphrase.
   2. Task relevance outranks job title and output type in the scoring, asserted directly rather than inferred from an outcome.
@@ -950,8 +951,8 @@ Remaining, in this order — **not** numeric order:
 | 177. Worker Delegation Grant | v1.26 | — | **Cut** | 2026-08-14 |
 | 178. Skill Authoring Hardening | v1.26 | — | **Cut** | 2026-08-14 |
 | 180. Aether Stays Out Of Other Projects | v1.26 | 1/1 | **Complete** | 2026-08-14 |
-| **181. Reading Material Chosen By The Task** | v1.26 | 0/TBD | **Next** | - |
-| 182. Specialists Earn Their Seat | v1.26 | 0/TBD | Not started | - |
+| 181. Reading Material Chosen By The Task | v1.26 | 1/1 | **Complete** | 2026-08-14 |
+| **182. Specialists Earn Their Seat** | v1.26 | 0/TBD | **Next** | - |
 | 183. The Worker Limit Actually Limits | v1.26 | 0/TBD | Not started | - |
 | 184. One Worker Owns A Run Of File Work | v1.26 | 0/TBD | Not started | - |
 | 185. One Honest Cost Line | v1.26 | 0/TBD | Not started | - |
