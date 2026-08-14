@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: prompt-budget-trim-field-guide
 kind: field-guide
 category: field-guides
+scope: aether-internal
 title: Prompt Budget And Trim Field Guide
 description: "Context capsule budget system, trim order, and weighted scoring for worker prompt assembly."
 output_types: [context-review, prompt-review, architecture-review]

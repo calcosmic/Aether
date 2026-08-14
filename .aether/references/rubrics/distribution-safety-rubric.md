@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: distribution-safety-rubric
 kind: rubric
 category: rubrics
+scope: aether-internal
 title: Distribution Safety Rubric
 description: "Rubric for reviewing publish, install, update, embedded assets, and hub sync changes."
 output_types: [distribution-review, safety-review, publish-review]

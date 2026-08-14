@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: command-wrapper-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Command Wrapper Contract
 description: "Contract for Claude/OpenCode command wrappers and their YAML sources."
 output_types: [wrapper-review, source-audit, platform-parity, wrapper-plan]

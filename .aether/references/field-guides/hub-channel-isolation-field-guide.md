@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: hub-channel-isolation-field-guide
 kind: field-guide
 category: field-guides
+scope: aether-internal
 title: Hub Channel Isolation Field Guide
 description: "Stable and dev channel separation, hub directory naming, and binary naming conventions."
 output_types: [distribution-review, architecture-review, publish-plan]

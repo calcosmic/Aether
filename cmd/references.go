@@ -16,6 +16,7 @@ type referenceMeta struct {
 	ID               string   `yaml:"id" json:"id"`
 	Kind             string   `yaml:"kind" json:"kind"`
 	Category         string   `yaml:"category" json:"category"`
+	Scope            string   `yaml:"scope" json:"scope,omitempty"`
 	Title            string   `yaml:"title" json:"title"`
 	Description      string   `yaml:"description" json:"description,omitempty"`
 	OutputTypes      []string `yaml:"output_types" json:"output_types,omitempty"`
@@ -187,14 +188,19 @@ func appendMarkdownSections(base, additional string) string {
 
 func matchReferences(req referenceMatchRequest) ([]referenceDocument, string) {
 	refs, root := loadReferenceLibrary()
+	allowInternal := referenceRootIsAetherSource(root)
 	for i := range refs {
 		refs[i].Score, refs[i].Reasons = scoreReference(refs[i], req)
 	}
 	filtered := refs[:0]
 	for _, ref := range refs {
-		if ref.Score > 0 {
-			filtered = append(filtered, ref)
+		if ref.Score <= 0 {
+			continue
 		}
+		if referenceIsAetherInternal(ref) && !allowInternal {
+			continue
+		}
+		filtered = append(filtered, ref)
 	}
 	sort.Slice(filtered, func(i, j int) bool {
 		if filtered[i].Score != filtered[j].Score {
@@ -213,6 +219,55 @@ func matchReferences(req referenceMatchRequest) ([]referenceDocument, string) {
 		filtered = filtered[:limit]
 	}
 	return filtered, root
+}
+
+// referenceScopeAetherInternal marks a reference that describes how Aether
+// itself is built -- its Go/TypeScript boundary, its wrapper chain, its hub
+// layout, how it composes worker prompts. These are useful to a worker changing
+// Aether and are noise everywhere else.
+//
+// The cost of getting this wrong is not theoretical. A worker in an Obsidian
+// notes vault, asked to create twelve folders, was handed the Runtime Boundary
+// Contract and spent 51,914 tokens on the job. References are read from the
+// shared hub -- they are never copied into downstream repos -- so one
+// mis-scoped document is charged to every project on the machine.
+const referenceScopeAetherInternal = "aether-internal"
+
+func referenceIsAetherInternal(ref referenceDocument) bool {
+	return strings.EqualFold(strings.TrimSpace(ref.Meta.Scope), referenceScopeAetherInternal)
+}
+
+// referenceRootIsAetherSource reports whether the loaded library is Aether's own
+// authored copy rather than the shared hub copy.
+//
+// The check is the directory the library came from, not the repository's name or
+// module path: `.aether/references` is where the library is authored, and
+// `aether update` deliberately leaves references global instead of copying them
+// into each repo (see update_cmd.go). So a workspace holding that directory is
+// the source repo, and any other workspace resolves to the hub.
+func referenceRootIsAetherSource(root string) bool {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return false
+	}
+	workspace := strings.TrimSpace(skillWorkspaceRoot())
+	if workspace == "" {
+		return false
+	}
+	source := filepath.Join(workspace, ".aether", "references")
+	if root == source {
+		return true
+	}
+	// Compare resolved paths so a symlinked or relative workspace still matches.
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	resolvedSource, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		return false
+	}
+	return resolvedRoot == resolvedSource
 }
 
 func loadReferenceLibrary() ([]referenceDocument, string) {

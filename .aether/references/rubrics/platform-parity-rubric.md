@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: platform-parity-rubric
 kind: rubric
 category: rubrics
+scope: aether-internal
 title: Platform Parity Rubric
 description: "Rubric for evaluating whether Claude, OpenCode, and Codex behavior remain aligned."
 output_types: [platform-parity, parity-review]

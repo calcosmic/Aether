@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: reference-library-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Reference Library Contract
 description: "Structural contract for Aether global references."
 output_types: [reference-system, distribution-review, architecture-review]
