@@ -716,8 +716,8 @@ Plans:
   4. Every ledger row records its parent attribution (the linkage `spawn-log` already stores), a per-parent roll-up is derivable, and no worker's spend is ever counted twice in any total — the grand total equals the sum of individual worker rows, asserted as an invariant. (The full self/subtree dual-column accountant view is deferred until worker delegation actually exists — Phase 177 grants it; a simple roll-up line suffices this phase)
   5. The normal end of a build or continue prints **one plain-English line** sourced from the ledger — e.g., "This phase used ~N tokens (measured)" or "(partly estimated)" — with no figure derived from any character budget. This line, not `aether spend`, is the primary surface: a non-technical operator does not run inspection commands
 **Plans**: 9 plans (5 waves)
-- [ ] 174-01-PLAN.md — Usage source tier and direct-path persistence
-- [ ] 174-02-PLAN.md — Hook transcript-path capture and the wrapper usage-claim refusal
+- [x] 174-01-PLAN.md — Usage source tier and direct-path persistence
+- [x] 174-02-PLAN.md — Hook transcript-path capture and the wrapper usage-claim refusal
 - [ ] 174-03-PLAN.md — Ledger persistence, measured/estimated subtotals, roll-up invariant
 - [ ] 174-04-PLAN.md — Claude Code session transcript parser
 - [ ] 174-05-PLAN.md — OpenCode session store parser
@@ -817,7 +817,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
 | 172. Wiring Proof | v1.26 | 14/14 | Complete    | 2026-08-12 |
 | 173. Delegation Guard | v1.26 | 13/13 | Complete   | 2026-08-13 |
-| 174. Spend Ledger | v1.26 | 0/TBD | Not started | - |
+| 174. Spend Ledger | v1.26 | 2/9 | In Progress|  |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
 | 176. Roster Reader | v1.26 | 0/TBD | Not started | - |
 | 177. Operator-Authored Agents | v1.26 | 0/TBD | Not started | - |
