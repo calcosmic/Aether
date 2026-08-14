@@ -118,3 +118,10 @@ None - no external service configuration required.
 ---
 *Phase: 174-spend-ledger*
 *Completed: 2026-08-14*
+
+## Self-Check: PASSED
+
+All claimed files exist (`pkg/codex/usage.go`, `pkg/codex/usage_test.go`,
+`cmd/internal_worker_adapter.go`, `cmd/internal_worker_usage_test.go`,
+this SUMMARY.md) and all claimed commit hashes (`d6cf0c2f`, `f237df2f`,
+`4b8c8497`) are present in `git log --oneline --all`.
