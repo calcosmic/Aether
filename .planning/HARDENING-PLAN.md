@@ -1,8 +1,13 @@
 # Aether Hardening Plan
 
 **Written:** 2026-08-14
-**Status:** AWAITING OWNER APPROVAL
+**Status:** APPROVED by owner 2026-08-14 — "go ahead, cut them all"
+**Applied to:** `.planning/ROADMAP.md` and `.planning/STATE.md` on 2026-08-14
 **Supersedes:** phases 175–179 of milestone v1.26 "Intelligent Orchestration"
+
+Hardening items H1–H5 in this document became roadmap phases **180–184**.
+The rescued cost line became phase **185**. Order: 180 → 181 → 182 → 183 →
+184 → 185 → 175 → 179.
 
 ---
 

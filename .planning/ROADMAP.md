@@ -715,16 +715,22 @@ Plans:
   3. A ledger holding two provider rows and one estimate row renders measured and estimated as **separate subtotals** with no single figure conflating them, and a derived per-phase metric over that mixed set is refused with a named reason unless `--include-estimates` is passed
   4. Every ledger row records its parent attribution (the linkage `spawn-log` already stores), a per-parent roll-up is derivable, and no worker's spend is ever counted twice in any total — the grand total equals the sum of individual worker rows, asserted as an invariant. (The full self/subtree dual-column accountant view is deferred until worker delegation actually exists — Phase 177 grants it; a simple roll-up line suffices this phase)
   5. The normal end of a build or continue prints **one plain-English line** sourced from the ledger — e.g., "This phase used ~N tokens (measured)" or "(partly estimated)" — with no figure derived from any character budget. This line, not `aether spend`, is the primary surface: a non-technical operator does not run inspection commands
-**Plans**: 9 plans (5 waves)
+**Plans**: 2 of 9 shipped; remainder CUT 2026-08-14 by owner decision (see `.planning/HARDENING-PLAN.md`)
 - [x] 174-01-PLAN.md — Usage source tier and direct-path persistence
 - [x] 174-02-PLAN.md — Hook transcript-path capture and the wrapper usage-claim refusal
-- [ ] 174-03-PLAN.md — Ledger persistence, measured/estimated subtotals, roll-up invariant
-- [ ] 174-04-PLAN.md — Claude Code session transcript parser
-- [ ] 174-05-PLAN.md — OpenCode session store parser
-- [ ] 174-06-PLAN.md — Spend resolution wired into build-finalize and continue-finalize
-- [ ] 174-07-PLAN.md — `aether spend` detail view and its command wrappers
-- [ ] 174-08-PLAN.md — One plain-English token line at the end of build and continue
-- [ ] 174-09-PLAN.md — Character-budget naming correction and its guards
+- [~] 174-03..07, 174-09 — **CUT.** Ledger persistence, two transcript parsers, the
+      `aether spend` detail view, and the naming guards. This is bookkeeping
+      machinery around a number the operator can already obtain. The owner's
+      stated need is one line at the end of a run, not an inspection surface.
+- [→] 174-08 — **MOVED to Phase 185.** The one plain-English cost line is the only
+      user-visible part of this phase and survives the cut. It carries whatever
+      minimum persistence it turns out to need; if that reintroduces part of
+      174-03, that part is in scope for 185 and nothing else is.
+
+**Closure note (2026-08-14):** criteria 1 and 4 above are satisfied by the
+shipped plans. Criteria 2, 3 and 5 are NOT met and are not claimed — 5 moves to
+Phase 185, 2 and 3 are abandoned with the ledger. This phase is closed partial
+and honestly, not marked complete.
 
 ### Phase 175: Orchestration Visibility
 **Goal**: The operator can read the Queen's team choice, the castes it did not call, the points where the runtime overrode it, and which workers actually found something — in plain English, from data the runtime already computes and currently discards. The highest value-to-cost item any researcher found: the rationale strings are composed on every build, carried into the JSON dispatch manifest, and never rendered to a human.
@@ -736,7 +742,15 @@ Plans:
   3. The run summary distinguishes a worker that returned no actionable finding from one that did: a build with one finding-producing worker and one clean worker shows two different states, not two identical "completed" lines
 **Plans**: TBD
 
-### Phase 176: Roster Ruling (shrunk 2026-08-13 from "Roster Reader")
+### Phase 176: Roster Ruling — **CUT 2026-08-14**
+
+**Cut reason:** housekeeping. Deciding whether to wire or delete 27 files that
+nothing reads changes nothing a person using Aether can see. The compiled
+registry already works and is locked by tests. Revisit only if something
+concrete needs to read those files.
+
+<details><summary>Original definition (retained for reference)</summary>
+
 **Goal**: The zero-reader contradiction is resolved by an explicit, recorded, executed ruling — not by building a subsystem. 27 caste YAMLs in `colony/agents/` claim to define agents and define nothing; the Queen's selection already works from the compiled registry and is locked by named tests. The owner will never hot-edit a caste YAML, and the reader's real purpose was to enable the now-shelved user-authoring path. **Wire or delete — and the review's finding is that delete is the honest default** unless planning uncovers a concrete near-term consumer.
 **Depends on**: Phase 174
 **Requirements**: ROSTER-01, ROSTER-02
@@ -746,7 +760,23 @@ Plans:
   3. Either way: no file remains in the repo that claims to define agents and defines nothing — asserted by a test or by the ratchet, not by a summary
 **Plans**: TBD
 
-### Phase 177: Worker Delegation Grant (replaces Operator-Authored Agents, 2026-08-13; ROSTER-03..08 shelved to Future Requirements)
+</details>
+
+### Phase 177: Worker Delegation Grant — **CUT 2026-08-14**
+
+**Cut reason:** points the wrong way. This grants ordinary workers the ability
+to spawn their own helpers. The measured problem is that Aether already spawns
+far too many workers for the size of the job — one file-copy phase produced ten
+workers and 256k tokens for zero files copied. Adding a mechanism for more
+workers is the opposite of the correction being made.
+
+This also strands Phase 173's guards, which were built to bound a capability
+that now stays ungranted. That is accepted: the guards are cheap to keep and
+harmless while unused. It is recorded here so nobody later reads 173 as
+unfinished work.
+
+<details><summary>Original definition (retained for reference)</summary>
+
 **Goal**: The capability Phase 173 built its complete guard system around is actually granted. Today, on the owner's platform, only the Queen and Route-Setter agent definitions carry the dispatch tool — every ordinary worker (Builder, Watcher, Scout, Tracker, …) physically cannot spawn a helper, so `.aether/workers.md`'s spawn protocol is unreachable for them and the owner's "spawning where it's necessary" traces to nothing. This phase grants delegation **per-caste, deliberately, under the existing guards** — the depth cap, whole-run budget, cycle refusal, fail-closed checks and live tree from Phase 173 all apply from the first granted spawn.
 **Depends on**: Phase 173 (the guards MUST precede the grant — that ordering was the point of 173)
 **Requirements**: SPAWN-09, SPAWN-10, SPAWN-11
@@ -757,7 +787,21 @@ Plans:
   4. A granted worker attempting a third delegation level (its helper spawning a helper) is refused by the existing guards — re-verified live after the grant, since the grant is exactly the change that makes this path reachable for the first time
 **Plans**: TBD
 
-### Phase 178: Skill Authoring Hardening
+</details>
+
+### Phase 178: Skill Authoring Hardening — **CUT 2026-08-14**
+
+**Cut reason:** letting people author their own skills is a new feature, not
+hardening, despite the name. Nobody is asking for it.
+
+**One piece is rescued into Phase 181:** the finding that a skill can win a slot
+in a worker's instructions by its filename rather than its relevance. That is a
+live cause of workers receiving irrelevant material, which is exactly what 181
+fixes. The security-refusal work is deferred with the authoring feature it
+protects — there is no user-authoring path to attack while none exists.
+
+<details><summary>Original definition (retained for reference)</summary>
+
 **Goal**: One writer, real validation with named enumerable rules at create time **and** index time, security refusals at load rather than at run, and selection that cannot be won by filename. Security lands in this phase and not the next: a refusal rule shipped a phase later is a published window in which malicious skills load.
 **Depends on**: Phase 172, Phase 174
 **Requirements**: SKILL-01, SKILL-02, SKILL-03, SKILL-04
@@ -768,9 +812,83 @@ Plans:
   4. A skill with a typo'd role, an uncompilable detect pattern, a name collision, an empty body, or `` !`curl …` `` dynamic-context syntax is refused at create time and at index time, each reported with the file and the field. The index reports invalid skills rather than skipping them, so the file count and the index count can never disagree in silence
 **Plans**: TBD
 
+</details>
+
+---
+
+## Hardening phases (added 2026-08-14)
+
+Every phase below **removes** something. None adds a capability. They exist
+because a real job in a real project — copying 110 markdown files in an
+Obsidian vault with no program code in it — cost 256,292 tokens and 12.5
+minutes across three workers and copied zero files. Full evidence in
+`.planning/HARDENING-PLAN.md`.
+
+Each phase is independently completable and independently verifiable. Losing
+context part-way costs one phase, not the sequence.
+
+### Phase 180: Aether Stays Out Of Other People's Projects
+**Goal**: A worker running in a project that is not Aether never receives a document about Aether's own architecture, its Go runtime, its TypeScript host, or its internal contracts. Aether currently ships 73 internal reference documents (380KB) to a shared location every project reads from; one of them — describing which parts of Aether are written in Go versus TypeScript — is tagged `priority: critical` and addressed to every worker with the job title "builder", in every project.
+**Depends on**: nothing
+**Success Criteria** (what must be TRUE):
+  1. A worker dispatched in a repository that is not Aether receives zero Aether-internal reference documents. Asserted by a test that composes a real worker's instructions against a non-Aether project fixture and fails if any Aether-internal document appears.
+  2. The same worker dispatched *inside* the Aether repo still receives the ones that genuinely apply — this is a scoping fix, not a deletion.
+  3. The test names the offending document when it fails, so a future addition that reintroduces the problem says which file did it.
+**Plans**: TBD
+
+### Phase 181: Reading Material Chosen By The Task
+**Goal**: What a worker is given to read is decided by what the task is, not by the worker's job title. Today the scoring weights expected-output-type at 4 points and job title at 3, while "does this match the actual task" is worth 2 — the lowest-weighted signal in the system. When nothing scores well, nothing is sent. Absorbs the one live finding rescued from cut Phase 178: selection must not be winnable by filename.
+**Depends on**: Phase 180
+**Success Criteria** (what must be TRUE):
+  1. Using the real CalVault task text ("copy 110 markdown files into a new folder tree"), a builder receives no design guide, no architecture contract, and no AI-integration material. Asserted with that literal task text, not a paraphrase.
+  2. Task relevance outranks job title and output type in the scoring, asserted directly rather than inferred from an outcome.
+  3. A worker whose task matches nothing receives an empty reading section rather than a filler selection — proven by a case that produces zero injected documents.
+  4. Renaming a skill or reference file changes nothing about what gets selected.
+  5. Nothing is ever injected mid-sentence: if a document must be truncated to fit, it is dropped instead. A test asserts no truncation marker can appear in composed worker instructions.
+
+### Phase 182: Specialists Earn Their Seat
+**Goal**: A specialist is dispatched because of what the phase *changes*, not because a word appeared in its description. Today a security specialist is summoned by any of *security, auth, crypto, secret, token, permission, credential, password, compliance, release, sign-off* occurring anywhere in the phase text, including in task constraints — so a phase that warns workers about a risk reads identically to one that creates it. The test-coverage specialist has a skip rule that cannot fire in practice: a phase must contain one of eight documentation words AND none of thirteen disqualifiers, and "build" is a disqualifier while the command that runs a phase is called build.
+**Depends on**: nothing (parallel with 180/181)
+**Success Criteria** (what must be TRUE):
+  1. A file-copying phase whose text says its sources are "read-only" and warns about a plugin summons no security specialist. Asserted with the real CalVault phase text.
+  2. A phase that genuinely changes login, passwords, tokens or permissions still summons one. Both directions asserted — this must not become a blanket removal.
+  3. A phase that writes no program code summons no test-coverage specialist, and this holds for a repository of markdown notes, not only for text containing the word "documentation".
+  4. When the runtime overrides the Queen's team choice, it says which caste, what it did, and why — in one line. Today the correction happens silently, which is how the CalVault override went unexplained.
+**Plans**: TBD
+
+### Phase 183: The Worker Limit Actually Limits
+**Goal**: The cap on how many workers a run may spawn is checked before dispatch and refuses or trims, instead of counting past itself and reporting the overrun afterwards. The count must also reset per command rather than carrying over — a build that inherits 17 of 20 already spent from the preceding continue cannot run.
+**Depends on**: nothing
+**Success Criteria** (what must be TRUE):
+  1. A run whose planned worker count exceeds the remaining budget is trimmed or refused **before** the first worker spawns, with a plain-English line saying what was dropped and why.
+  2. The counter resets when a new command begins; a build following a continue starts from its own budget. Asserted directly.
+  3. The failure log stops recording counts above the cap. The existing entries showing 27 and 37 workers against a cap of 20 are the regression case.
+  4. Recording a spawned worker either fully succeeds or fully fails; a partial write cannot consume budget for a worker that was never registered. This is the observed defect where re-registering the same worker cost a second budget slot.
+**Plans**: TBD
+
+### Phase 184: One Worker Owns A Run Of File Work
+**Goal**: A sequence of dependent operations over the same list is done by one worker, not split across several that each pay full startup cost and re-read the same source. Observed: six file-copy batches became six separate workers, and one operation was split into "the first six categories" and "the remaining six" for no stated reason.
+**Depends on**: nothing
+**Success Criteria** (what must be TRUE):
+  1. A phase of six dependent file operations over one source list dispatches one worker, not six. Asserted on the real task shape.
+  2. Independent work is still parallelised — this must not collapse into "always one worker". A phase with genuinely independent tasks still fans out.
+  3. The rule that decides "same run of work" is stated in one place and is readable, not spread across the planner's prose.
+**Plans**: TBD
+
+### Phase 185: One Honest Cost Line
+**Goal**: The end of a build or continue prints one plain-English line saying what it cost — "This phase used ~N tokens (measured)" or "(partly estimated)". Rescued from cut Phase 174 plan 08; it is the only user-visible part of that phase. Carries whatever minimum persistence it needs and nothing more. No ledger, no inspection command, no price table, no dollars.
+**Depends on**: Phase 174 plans 01–02 (shipped)
+**Success Criteria** (what must be TRUE):
+  1. A build on the wrapper path — the one actually typed — ends with one plain-English token line. Not an inspection command the operator must know to run.
+  2. A figure relayed by the orchestrating model is never labelled measured. Measured means it came from a real artifact; anything else says estimated. This is carried forward unchanged from Phase 174 because it is the honesty property that phase existed for.
+  3. No figure in the line derives from a character budget, and no model-price table exists anywhere in the new code. Asserted by a search that fails if one appears.
+**Plans**: TBD
+
+---
+
 ### Phase 179: Proof
 **Goal**: The milestone's verdict, produced on real repositories with an inexpensive model and recorded whether or not it is favourable. Not satisfiable by tests — this phase is evidence, and the evidence is committed.
-**Depends on**: Phase 172, Phase 173, Phase 174, Phase 175, Phase 176, Phase 177, Phase 178
+**Depends on**: Phase 180, 181, 182, 183, 184, 185, then 175. (Rewritten 2026-08-14: dependencies on cut phases 176/177/178 removed; 172/173 already shipped.)
 **Requirements**: PROOF-01, PROOF-02, PROOF-03, PROOF-04
 **Success Criteria** (what must be TRUE):
   1. Three real development tasks complete in real repositories on an inexpensive model, with the number of operator interventions **counted per task** and recorded in a committed artifact — a count, not a narrative
@@ -783,8 +901,17 @@ Plans:
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 → 151 → 152 → 153 → 154 → 155 → 156 → 157 → 158 → 159 → 160 → 161 → 162 → 163 → 164 → 165 → 166 → 167 → 168 → 169 → 170 → 171 → 172 → 173 → 174 → 175 → 176 → 177 → 178 → 179
+**Execution Order (revised 2026-08-14):**
+
+Shipped: 145 → … → 172 → 173 → 174 *(closed partial at plan 2 of 9)*
+
+Remaining, in this order — **not** numeric order:
+
+**180** → **181** → **182** → **183** → **184** → **185** → **175** → **179**
+
+180–184 are the hardening phases and each is independently completable; 180/182/183/184 have no dependencies on each other and may run in any order if that suits. 185 is the rescued cost line. 175 is the plain-English explanation of who was dispatched and why. 179 is the finish line — real tasks in real repositories on an inexpensive model.
+
+**Cut 2026-08-14 by owner decision:** 176 (Roster Ruling), 177 (Worker Delegation Grant), 178 (Skill Authoring Hardening), and Phase 174 plans 03–07 and 09. Rationale in `.planning/HARDENING-PLAN.md`. Never-started v1.25 phases 161 and 166–171 remain not started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -817,9 +944,15 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
 | 172. Wiring Proof | v1.26 | 14/14 | Complete    | 2026-08-12 |
 | 173. Delegation Guard | v1.26 | 13/13 | Complete   | 2026-08-13 |
-| 174. Spend Ledger | v1.26 | 2/9 | In Progress|  |
+| 174. Spend Ledger | v1.26 | 2/9 | **Closed partial** — rest cut | 2026-08-14 |
+| 176. Roster Ruling | v1.26 | — | **Cut** | 2026-08-14 |
+| 177. Worker Delegation Grant | v1.26 | — | **Cut** | 2026-08-14 |
+| 178. Skill Authoring Hardening | v1.26 | — | **Cut** | 2026-08-14 |
+| **180. Aether Stays Out Of Other Projects** | v1.26 | 0/TBD | **Next** | - |
+| 181. Reading Material Chosen By The Task | v1.26 | 0/TBD | Not started | - |
+| 182. Specialists Earn Their Seat | v1.26 | 0/TBD | Not started | - |
+| 183. The Worker Limit Actually Limits | v1.26 | 0/TBD | Not started | - |
+| 184. One Worker Owns A Run Of File Work | v1.26 | 0/TBD | Not started | - |
+| 185. One Honest Cost Line | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
-| 176. Roster Reader | v1.26 | 0/TBD | Not started | - |
-| 177. Operator-Authored Agents | v1.26 | 0/TBD | Not started | - |
-| 178. Skill Authoring Hardening | v1.26 | 0/TBD | Not started | - |
 | 179. Proof | v1.26 | 0/TBD | Not started | - |

@@ -1,17 +1,24 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.26
-milestone_name: Intelligent Orchestration
+milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
 status: executing
-stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
-last_updated: "2026-08-14T11:57:52.443Z"
-last_activity: 2026-08-14 -- Phase 174 execution started
+stopped_at: Phase 174 closed partial; phases 176-178 cut; hardening phases 180-185 added
+last_updated: "2026-08-14T00:00:00.000Z"
+last_activity: 2026-08-14 -- roadmap rescoped by owner decision; Phase 180 is next
 progress:
-  total_phases: 38
-  completed_phases: 2
-  total_plans: 36
-  completed_plans: 82
-  percent: 100
+  total_phases: 11
+  completed_phases: 3
+  total_plans: 29
+  completed_plans: 29
+  percent: 27
+  note: >
+    Counts cover milestone v1.26 only (phases 172, 173, 174, 180-185, 175, 179).
+    174 counts as complete because it is closed partial and will not be resumed;
+    2 of its 9 plans shipped, the rest were cut. The previous values in this
+    block were self-contradictory (2 of 38 phases at 100%; 82 plans completed
+    out of a total of 36) and were reporting on a phase set that no longer
+    exists.
 ---
 
 # Project State
@@ -21,18 +28,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-08)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 174 — spend-ledger
-**Milestone:** v1.26 Intelligent Orchestration — ROADMAPPED (8 phases, 172-179, 35 requirements)
-**Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases); live intent absorbed into v1.26, remaining SEE/TYPED/RECLAIM/LOCK moved to Future Requirements
-**Product version:** v1.0.50
+**Current focus:** Phase 180 — keep Aether's own internals out of other people's projects
+**Milestone:** v1.26 — rescoped 2026-08-14 from "Intelligent Orchestration" to hardening. The governing document is now `.planning/HARDENING-PLAN.md`; it overrides ROADMAP.md for anything numbered 175 and above.
+**Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases)
+**Product version:** v1.0.53 *(corrected — this file said v1.0.50, PROJECT.md says v1.0.42, the binary reports 1.0.53; the binary is authoritative)*
 
 ## Current Position
 
-Phase: 174 (spend-ledger) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 174
-Progress: [██████████] 100%
-Last activity: 2026-08-14 -- Phase 174 execution started
+Phase: 180 — Aether Stays Out Of Other People's Projects
+Plan: not yet planned
+Status: ready to plan
+Progress: 3 of 11 phases in this milestone
+Last activity: 2026-08-14 -- roadmap rescoped by owner decision
+
+**Order from here:** 180 → 181 → 182 → 183 → 184 → 185 → 175 → 179.
+Each of 180-184 is independently completable and independently verifiable, so
+losing context part-way costs one phase, not the sequence.
+
+**The finish line (from HARDENING-PLAN.md):** a small job costs one or two
+workers and finishes in minutes; one screen says who was dispatched, why, and
+what it cost; Aether never sends its own internals into someone else's project.
+When those are true, building stops.
 
 ## Performance Metrics
 
@@ -74,19 +90,24 @@ Last activity: 2026-08-14 -- Phase 174 execution started
 
 ### Pending Todos
 
-- [ ] Get user approval on the v1.26 roadmap (8 phases, 35 requirements)
-- [ ] Plan Phase 172: Wiring Proof — the ratchet must land before anything else
-- [ ] Plan Phase 173: Delegation Guard (record the SPAWN-06 depth-0 convention first)
-- [ ] Plan Phase 174: Spend Ledger
+- [x] Get user approval on the rescope — given 2026-08-14 ("go ahead, cut them all")
+- [x] Plan Phase 172: Wiring Proof — shipped
+- [x] Plan Phase 173: Delegation Guard — shipped
+- [x] Plan Phase 174: Spend Ledger — closed partial at plan 2, rest cut
+- [ ] Plan Phase 180: Aether Stays Out Of Other People's Projects ← **next**
+- [ ] Plan Phase 181: Reading Material Chosen By The Task
+- [ ] Plan Phase 182: Specialists Earn Their Seat
+- [ ] Plan Phase 183: The Worker Limit Actually Limits
+- [ ] Plan Phase 184: One Worker Owns A Run Of File Work
+- [ ] Plan Phase 185: One Honest Cost Line
 - [ ] Plan Phase 175: Orchestration Visibility
-- [ ] Plan Phase 176: Roster Reader (rule on roster-vs-model-routing ownership)
-- [ ] Plan Phase 177: Operator-Authored Agents (rule on the parity-test namespace)
-- [ ] Plan Phase 178: Skill Authoring Hardening (security lands here, not later)
 - [ ] Plan Phase 179: Proof
+- ~~Plan Phases 176, 177, 178~~ — cut 2026-08-14
 
 ### Blockers/Concerns
 
-- Roadmap is unapproved — do not start Phase 172 planning until the user signs off on the 8-phase, 35-requirement structure
+- ~~Roadmap is unapproved~~ — resolved 2026-08-14. This line was stale: it said not to start Phase 172 until sign-off, and 172, 173 and part of 174 were then executed anyway. Recorded because a gate that gets ignored without anyone noticing is the failure mode this project keeps rediscovering.
+- **Phases 176, 177 and 178 are cut, not deferred.** If a future session finds Phase 173's delegation guards bounding a capability nobody has, that is expected and accepted — Phase 177 was the grant, and it was cut deliberately. Do not "restore" it.
 - **Phase 173 and Phase 178 carry research flags from the research phase.** Platform nested-spawn behaviour is MEDIUM confidence and both vendors broke it within the last quarter (Claude Code strips the Agent tool from some subagent types; OpenCode has an open "subagents can infinitely recurse, no max depth" defect). The skill supply-chain threat surface is actively evolving. Re-verify vendor docs and open issues at planning time for both
 - **OpenCode hook parity is unverified.** No confirmed equivalent to Claude Code's `PreToolUse` deny gate was found. If SPAWN-04's guard must hold on OpenCode, Go-side depth enforcement becomes mandatory rather than defence-in-depth — verify before planning that requirement
 - **Codex has no native subagent nesting.** Delegation on the Codex lane must be *off* and reported honestly, never emulated. Emulation would create a second divergent orchestration path — the exact failure v1.24 and v1.25 spent two milestones unwinding
