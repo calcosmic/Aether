@@ -715,7 +715,16 @@ Plans:
   3. A ledger holding two provider rows and one estimate row renders measured and estimated as **separate subtotals** with no single figure conflating them, and a derived per-phase metric over that mixed set is refused with a named reason unless `--include-estimates` is passed
   4. Every ledger row records its parent attribution (the linkage `spawn-log` already stores), a per-parent roll-up is derivable, and no worker's spend is ever counted twice in any total — the grand total equals the sum of individual worker rows, asserted as an invariant. (The full self/subtree dual-column accountant view is deferred until worker delegation actually exists — Phase 177 grants it; a simple roll-up line suffices this phase)
   5. The normal end of a build or continue prints **one plain-English line** sourced from the ledger — e.g., "This phase used ~N tokens (measured)" or "(partly estimated)" — with no figure derived from any character budget. This line, not `aether spend`, is the primary surface: a non-technical operator does not run inspection commands
-**Plans**: TBD
+**Plans**: 9 plans (5 waves)
+- [ ] 174-01-PLAN.md — Usage source tier and direct-path persistence
+- [ ] 174-02-PLAN.md — Hook transcript-path capture and the wrapper usage-claim refusal
+- [ ] 174-03-PLAN.md — Ledger persistence, measured/estimated subtotals, roll-up invariant
+- [ ] 174-04-PLAN.md — Claude Code session transcript parser
+- [ ] 174-05-PLAN.md — OpenCode session store parser
+- [ ] 174-06-PLAN.md — Spend resolution wired into build-finalize and continue-finalize
+- [ ] 174-07-PLAN.md — `aether spend` detail view and its command wrappers
+- [ ] 174-08-PLAN.md — One plain-English token line at the end of build and continue
+- [ ] 174-09-PLAN.md — Character-budget naming correction and its guards
 
 ### Phase 175: Orchestration Visibility
 **Goal**: The operator can read the Queen's team choice, the castes it did not call, the points where the runtime overrode it, and which workers actually found something — in plain English, from data the runtime already computes and currently discards. The highest value-to-cost item any researcher found: the rationale strings are composed on every build, carried into the JSON dispatch manifest, and never rendered to a human.
