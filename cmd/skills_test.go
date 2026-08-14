@@ -1056,8 +1056,14 @@ func TestRenderSkillInjectResultEnforcesStandaloneBudget(t *testing.T) {
 	if len(result.Section) > skillInjectBudgetChars {
 		t.Fatalf("skill section length = %d, want <= %d", len(result.Section), skillInjectBudgetChars)
 	}
-	if !strings.Contains(result.Section, "[truncated]") {
-		t.Fatalf("expected truncated marker in oversized skill section")
+	// Phase 181 changed what "enforce the budget" means. It used to mean slicing
+	// the section at a character count and appending a marker, which ended a live
+	// worker's brief mid-sentence. A skill that does not fit is now dropped whole.
+	if strings.Contains(result.Section, "[truncated]") {
+		t.Fatalf("oversized skill was sliced rather than dropped:\n%s", result.Section)
+	}
+	if strings.Contains(result.Section, "skill guidance") {
+		t.Fatalf("oversized skill should have been dropped entirely, got:\n%s", result.Section)
 	}
 }
 
@@ -1083,8 +1089,10 @@ func TestRenderSkillInjectResultUsesCompactBudget(t *testing.T) {
 	if len(result.Section) > skillInjectCompactBudgetChars {
 		t.Fatalf("skill section length = %d, want <= %d", len(result.Section), skillInjectCompactBudgetChars)
 	}
-	if !strings.Contains(result.Section, "[truncated]") {
-		t.Fatalf("expected truncated marker in compact skill section")
+	// See the standalone-budget test above: over-budget skills are dropped whole,
+	// not sliced mid-sentence.
+	if strings.Contains(result.Section, "[truncated]") {
+		t.Fatalf("oversized skill was sliced rather than dropped:\n%s", result.Section)
 	}
 }
 

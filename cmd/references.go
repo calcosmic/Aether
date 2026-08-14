@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -200,6 +202,14 @@ func matchReferences(req referenceMatchRequest) ([]referenceDocument, string) {
 		if referenceIsAetherInternal(ref) && !allowInternal {
 			continue
 		}
+		// Task relevance is required, not merely rewarded. A document that
+		// matches only the worker's job title, the workflow, or the expected
+		// output type says nothing about the work in hand, and a worker with no
+		// task-relevant reading is better served by an empty section than by a
+		// filler selection it still pays for.
+		if !referenceHasReason(ref, "task") {
+			continue
+		}
 		filtered = append(filtered, ref)
 	}
 	sort.Slice(filtered, func(i, j int) bool {
@@ -209,7 +219,10 @@ func matchReferences(req referenceMatchRequest) ([]referenceDocument, string) {
 		if priorityWeight(filtered[i].Meta.Priority) != priorityWeight(filtered[j].Meta.Priority) {
 			return priorityWeight(filtered[i].Meta.Priority) > priorityWeight(filtered[j].Meta.Priority)
 		}
-		return filtered[i].Meta.ID < filtered[j].Meta.ID
+		// Ties break on content, never on identifier. Sorting by ID made
+		// alphabetical position a selection input, so a document could win a
+		// slot by being renamed.
+		return referenceTieBreak(filtered[i]) < referenceTieBreak(filtered[j])
 	})
 	limit := req.Limit
 	if limit <= 0 {
@@ -232,6 +245,22 @@ func matchReferences(req referenceMatchRequest) ([]referenceDocument, string) {
 // shared hub -- they are never copied into downstream repos -- so one
 // mis-scoped document is charged to every project on the machine.
 const referenceScopeAetherInternal = "aether-internal"
+
+func referenceHasReason(ref referenceDocument, want string) bool {
+	for _, reason := range ref.Reasons {
+		if reason == want {
+			return true
+		}
+	}
+	return false
+}
+
+// referenceTieBreak orders equally-scored documents by their content rather than
+// their name, so renaming a file cannot change what a worker receives.
+func referenceTieBreak(ref referenceDocument) string {
+	sum := sha256.Sum256([]byte(ref.Meta.Title + "\x00" + ref.Body))
+	return hex.EncodeToString(sum[:8])
+}
 
 func referenceIsAetherInternal(ref referenceDocument) bool {
 	return strings.EqualFold(strings.TrimSpace(ref.Meta.Scope), referenceScopeAetherInternal)
@@ -371,44 +400,138 @@ func splitReferenceFrontmatter(content string) (string, string, bool) {
 	return frontmatter, body, true
 }
 
+// Reference scoring weights. Task relevance is deliberately worth more than
+// every other signal combined.
+//
+// It used to be the lowest: output type 4, job title 3, workflow 1, task 2. A
+// document therefore needed no connection to the work to be selected, and a
+// builder copying markdown files in a notes vault was handed the playbook for
+// publishing Aether releases. Task relevance is also now a requirement, not a
+// bonus -- see matchReferences.
+const (
+	referenceScoreTask       = 6
+	referenceScoreOutputType = 3
+	referenceScoreRole       = 2
+	referenceScoreWorkflow   = 1
+)
+
 func scoreReference(ref referenceDocument, req referenceMatchRequest) (int, []string) {
 	score := 0
 	var reasons []string
 
+	if referenceTaskMatches(ref, req.Task) {
+		score += referenceScoreTask
+		reasons = append(reasons, "task")
+	}
 	if tokenListContains(ref.Meta.OutputTypes, req.OutputType) {
-		score += 4
+		score += referenceScoreOutputType
 		reasons = append(reasons, "output_type")
 	}
 	if tokenListContains(ref.Meta.AgentRoles, req.Role) {
-		score += 3
+		score += referenceScoreRole
 		reasons = append(reasons, "role")
 	}
 	if tokenListContains(ref.Meta.WorkflowTriggers, req.Workflow) {
-		score++
+		score += referenceScoreWorkflow
 		reasons = append(reasons, "workflow")
-	}
-	if referenceTaskMatches(ref, req.Task) {
-		score += 2
-		reasons = append(reasons, "task")
 	}
 	return score, reasons
 }
 
+// referenceTaskMatches compares a document's declared task vocabulary against
+// the words of the actual task.
+//
+// The previous implementation stripped every space from both the task and the
+// candidate and then asked whether either contained the other. "copy 110
+// markdown files into a new folder tree" became one 46-character word, so
+// "folder" matched "old" and short keywords matched at random. Whole-word
+// comparison replaces it, and only the declared task vocabulary is consulted --
+// title, description and identifier are no longer matchable, because matching on
+// the identifier makes the filename a selection input.
 func referenceTaskMatches(ref referenceDocument, task string) bool {
-	taskNorm := normalizeReferenceToken(task)
-	if taskNorm == "" {
+	tokens := referenceTaskTokens(task)
+	if len(tokens) == 0 {
 		return false
 	}
 	candidates := append([]string{}, ref.Meta.TaskTypes...)
 	candidates = append(candidates, ref.Meta.TaskKeywords...)
-	candidates = append(candidates, ref.Meta.Title, ref.Meta.Description, ref.Meta.ID)
 	for _, candidate := range candidates {
-		candidateNorm := normalizeReferenceToken(candidate)
-		if candidateNorm == "" {
+		candidate = strings.ToLower(strings.TrimSpace(candidate))
+		if candidate == "" {
 			continue
 		}
-		if strings.Contains(taskNorm, candidateNorm) || strings.Contains(candidateNorm, taskNorm) {
-			return true
+		// A multi-word keyword must appear as a phrase.
+		if strings.ContainsAny(candidate, " -_") {
+			if referenceTaskPhraseMatches(tokens, candidate) {
+				return true
+			}
+			continue
+		}
+		for token := range tokens {
+			if referenceTokensAlike(token, candidate) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func referenceTaskTokens(task string) map[string]bool {
+	tokens := map[string]bool{}
+	for _, field := range strings.FieldsFunc(strings.ToLower(task), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
+	}) {
+		if len(field) < 2 {
+			continue
+		}
+		tokens[field] = true
+	}
+	return tokens
+}
+
+func referenceTaskPhraseMatches(tokens map[string]bool, candidate string) bool {
+	parts := strings.FieldsFunc(candidate, func(r rune) bool {
+		return r == ' ' || r == '-' || r == '_'
+	})
+	if len(parts) == 0 {
+		return false
+	}
+	for _, part := range parts {
+		if len(part) < 2 {
+			continue
+		}
+		matched := false
+		for token := range tokens {
+			if referenceTokensAlike(token, part) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+// referenceTokensAlike treats a word and its simple plural as the same word, so
+// a document declaring "file" matches a task that says "files". It deliberately
+// does no other stemming: aggressive stemming is how the previous matcher
+// became noise.
+func referenceTokensAlike(token, candidate string) bool {
+	if token == candidate {
+		return true
+	}
+	for _, pair := range [][2]string{{token, candidate}, {candidate, token}} {
+		long, short := pair[0], pair[1]
+		if len(short) < 3 || len(long) <= len(short) {
+			continue
+		}
+		switch long[len(short):] {
+		case "s", "es":
+			if long[:len(short)] == short {
+				return true
+			}
 		}
 	}
 	return false

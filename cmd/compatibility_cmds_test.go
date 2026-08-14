@@ -1433,7 +1433,12 @@ description: "Reference used to verify Oracle worker prompt injection."
 output_types: [prd]
 agent_roles: [architect]
 task_types: [requirements]
-task_keywords: [requirements]
+# Phase 181: this fixture used to match on output type alone, which is the
+# behaviour that put an AI design guide in front of a worker creating folders.
+# The keywords now match the topic this test actually asks about ("release
+# parity"), so the test still proves Oracle workers receive reference injection
+# rather than proving that irrelevant documents are injected.
+task_keywords: [requirements, release, parity]
 workflow_triggers: [plan]
 priority: high
 version: "1.0"
