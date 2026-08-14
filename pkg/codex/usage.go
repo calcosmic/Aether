@@ -27,16 +27,30 @@ type WorkerUsage struct {
 	Model               string  `json:"model,omitempty"`
 
 	// Source distinguishes a provider-reported measurement from a local
-	// estimate. An estimate must never be presentable as a measurement: the
-	// whole point of this ledger is that the numbers can be trusted, and a
+	// estimate, or from a platform-harness measurement that is real but not
+	// provider-grade. An estimate must never be presentable as a measurement:
+	// the whole point of this ledger is that the numbers can be trusted, and a
 	// silently-estimated row would make a regression look like an improvement.
-	// Values: "provider", "estimate".
+	// Values: "provider", "session-transcript", "estimate".
 	Source string `json:"source,omitempty"`
 }
 
-// Measured reports whether the usage came from the provider rather than a
-// local estimate.
+// Measured reports whether the usage is provider-grade: parsed directly from
+// a raw provider API event by ParseUsage. Nothing outside ParseUsage may ever
+// set UsageSourceProvider.
+//
+// A UsageSourceSessionTranscript row is a genuine measurement — the platform
+// harness itself wrote it, not the model narrating its own behavior — and it
+// still returns false here, because its accounting semantics are undocumented
+// by the vendor (see 174-RESEARCH.md Assumptions A1/A2) and conflating it with
+// a fully-verified provider event would erode the exact trust boundary this
+// type exists to hold. The ledger's measured/estimated split therefore uses
+// Estimated(), not Measured(), to decide what counts as a guess.
 func (u WorkerUsage) Measured() bool { return u.Source == UsageSourceProvider }
+
+// Estimated reports whether the usage is a local character-count guess rather
+// than a real measurement of any kind (provider or session-transcript).
+func (u WorkerUsage) Estimated() bool { return u.Source == UsageSourceEstimate }
 
 // Empty reports whether nothing at all was recorded.
 func (u WorkerUsage) Empty() bool {
@@ -45,6 +59,20 @@ func (u WorkerUsage) Empty() bool {
 
 const (
 	UsageSourceProvider = "provider"
+
+	// UsageSourceSessionTranscript tags a usage row read from a platform-
+	// harness-written session artifact — a Claude Code `.jsonl` transcript or
+	// an OpenCode session store — rather than parsed from a raw provider API
+	// event. It is written by the Go runtime reading that artifact itself,
+	// never by the orchestrating LLM relaying a number it read. It is not
+	// "provider" because its accounting semantics (whether the harness sums
+	// cache tokens the same way billedTotal does, whether the format is
+	// stable across CLI versions) are undocumented by both vendors — see
+	// 174-RESEARCH.md Assumptions A1/A2. Nothing outside ParseUsage may ever
+	// set UsageSourceProvider; this tier exists precisely so a real
+	// measurement never has to borrow that constant to be taken seriously.
+	UsageSourceSessionTranscript = "session-transcript"
+
 	UsageSourceEstimate = "estimate"
 )
 
@@ -240,4 +268,31 @@ func numberValue(value interface{}) (float64, bool) {
 // count is the number anyone divides by.
 func (u WorkerUsage) billedTotal() int64 {
 	return u.InputTokens + u.CachedInputTokens + u.CacheCreationTokens + u.OutputTokens
+}
+
+// TotalInputTokens is the figure the spend report displays beside the four
+// disjoint columns: the three input-side counts summed, excluding output.
+// For Anthropic's documented example (50 input, 100,000 cache read, 2,000
+// cache creation, 500 output) this returns 102,050 (ROADMAP Phase 174
+// criterion 1).
+func (u WorkerUsage) TotalInputTokens() int64 {
+	return u.InputTokens + u.CachedInputTokens + u.CacheCreationTokens
+}
+
+// BilledTotalTokens is the single exported entry point every consumer in this
+// phase must use for a row's token count. No caller anywhere may re-derive a
+// total by adding fields itself — that is Pitfall 1 (the 186x undercount),
+// and pkg/trace/cost.go's CalculateCost is a live second instance of the same
+// shape today.
+//
+// It returns TotalTokens when the provider reported one, otherwise falls back
+// to billedTotal(). The TotalTokens preference exists because Claude Code's
+// transcript reports one aggregate subagent_tokens figure with no disjoint
+// breakdown: a provider-reported aggregate with no disjoint breakdown is
+// preferred over a zero sum.
+func (u WorkerUsage) BilledTotalTokens() int64 {
+	if u.TotalTokens > 0 {
+		return u.TotalTokens
+	}
+	return u.billedTotal()
 }
