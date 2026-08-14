@@ -57,11 +57,17 @@ type internalWorkerResult struct {
 	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
 	ScoutReport   json.RawMessage            `json:"scout_report,omitempty"`
 	ToolCount     int                        `json:"tool_count,omitempty"`
-	Blockers      []string                   `json:"blockers,omitempty"`
-	Spawns        []string                   `json:"spawns,omitempty"`
-	Duration      float64                    `json:"duration,omitempty"`
-	Error         string                     `json:"error,omitempty"`
-	Handoff       codex.WorkerHandoff        `json:"handoff,omitempty"`
+	// Usage is populated only by codex.AttachWorkerUsage on the real
+	// dispatch boundary (pkg/codex/platform_dispatch.go). It was silently
+	// dropped by mapInternalWorkerResult before Phase 174 (SPEND-01) --
+	// a genuine provider measurement already existed in memory and never
+	// reached this durable adapter result.
+	Usage    codex.WorkerUsage   `json:"usage,omitempty"`
+	Blockers []string            `json:"blockers,omitempty"`
+	Spawns   []string            `json:"spawns,omitempty"`
+	Duration float64             `json:"duration,omitempty"`
+	Error    string              `json:"error,omitempty"`
+	Handoff  codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
 type internalWorkerAdapterResponse struct {
@@ -490,6 +496,7 @@ func mapInternalWorkerResult(result codex.WorkerResult, invokeErr error) *intern
 		Artifacts:     result.Artifacts,
 		ScoutReport:   result.ScoutReport,
 		ToolCount:     result.ToolCount,
+		Usage:         result.Usage,
 		Blockers:      append([]string(nil), result.Blockers...),
 		Spawns:        append([]string(nil), result.Spawns...),
 		Duration:      result.Duration.Seconds(),
