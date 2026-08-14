@@ -32,6 +32,16 @@ type claudeHookInput struct {
 	AgentID   string `json:"agent_id"`
 	AgentType string `json:"agent_type"`
 	SessionID string `json:"session_id"`
+	// TranscriptPath is a Phase 174 (SPEND-02) addition. Unlike AgentID,
+	// AgentType and SessionID above -- which were a hypothesis Phase 173
+	// confirmed after the fact -- this field name was empirically confirmed
+	// FIRST, by the real captured payloads in
+	// .planning/phases/173-delegation-guard/173-HOOK-FINDINGS.md
+	// (2026-08-13). It is the platform's own record of where this session's
+	// transcript lives, and is the one thing an orchestrating LLM cannot
+	// fabricate: the runtime reads it from the platform, not from anything
+	// a wrapper typed.
+	TranscriptPath string `json:"transcript_path"`
 }
 
 const postResumeStopGracePeriod = 15 * time.Minute
@@ -44,6 +54,7 @@ var hookPreToolUseCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		input, raw := readClaudeHookInput()
 		captureRawHookPayload(raw)
+		recordSpendSessionFromHook(input)
 
 		toolName := input.ToolName
 		if toolName == "" && len(args) > 0 {
