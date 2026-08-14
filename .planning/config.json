@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "workflow": {
+    "_auto_chain_active": false,
+    "verifier": false,
+    "nyquist_validation": false,
+    "research": false,
+    "post_planning_gaps": false,
+    "security_enforcement": false,
+    "ai_integration_phase": false,
+    "plan_checker": true,
+    "context_window": 1000000
+  }
+}
