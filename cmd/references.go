@@ -508,6 +508,11 @@ func referenceSummaries(refs []referenceDocument) []map[string]interface{} {
 			"path":        ref.RelPath,
 			"priority":    ref.Meta.Priority,
 		}
+		// Surfaced so an operator can see why a document is or is not in a
+		// worker's reading list without opening the file.
+		if scope := strings.TrimSpace(ref.Meta.Scope); scope != "" {
+			entry["scope"] = scope
+		}
 		if ref.Score > 0 {
 			entry["score"] = ref.Score
 			entry["reasons"] = ref.Reasons

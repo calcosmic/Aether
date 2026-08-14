@@ -830,6 +830,7 @@ context part-way costs one phase, not the sequence.
 ### Phase 180: Aether Stays Out Of Other People's Projects
 **Goal**: A worker running in a project that is not Aether never receives a document about Aether's own architecture, its Go runtime, its TypeScript host, or its internal contracts. Aether currently ships 73 internal reference documents (380KB) to a shared location every project reads from; one of them — describing which parts of Aether are written in Go versus TypeScript — is tagged `priority: critical` and addressed to every worker with the job title "builder", in every project.
 **Depends on**: nothing
+**Status**: COMPLETE 2026-08-14. 22 of 73 documents marked `scope: aether-internal`. Evidence: `TestAetherInternalReferencesStayOutOfOtherProjects`, `TestUniversalReferencesStillReachOtherProjects`, `TestAetherInternalReferencesStillLoadInsideAether`, `TestShippedInternalReferencesAreMarked` in `cmd/references_scope_test.go`, plus a live run of `aether reference-match` from a non-Aether directory before and after.
 **Success Criteria** (what must be TRUE):
   1. A worker dispatched in a repository that is not Aether receives zero Aether-internal reference documents. Asserted by a test that composes a real worker's instructions against a non-Aether project fixture and fails if any Aether-internal document appears.
   2. The same worker dispatched *inside* the Aether repo still receives the ones that genuinely apply — this is a scoping fix, not a deletion.
@@ -948,8 +949,8 @@ Remaining, in this order — **not** numeric order:
 | 176. Roster Ruling | v1.26 | — | **Cut** | 2026-08-14 |
 | 177. Worker Delegation Grant | v1.26 | — | **Cut** | 2026-08-14 |
 | 178. Skill Authoring Hardening | v1.26 | — | **Cut** | 2026-08-14 |
-| **180. Aether Stays Out Of Other Projects** | v1.26 | 0/TBD | **Next** | - |
-| 181. Reading Material Chosen By The Task | v1.26 | 0/TBD | Not started | - |
+| 180. Aether Stays Out Of Other Projects | v1.26 | 1/1 | **Complete** | 2026-08-14 |
+| **181. Reading Material Chosen By The Task** | v1.26 | 0/TBD | **Next** | - |
 | 182. Specialists Earn Their Seat | v1.26 | 0/TBD | Not started | - |
 | 183. The Worker Limit Actually Limits | v1.26 | 0/TBD | Not started | - |
 | 184. One Worker Owns A Run Of File Work | v1.26 | 0/TBD | Not started | - |

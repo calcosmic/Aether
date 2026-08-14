@@ -243,4 +243,5 @@ Append one line per completed item. Keep it short.
 
 | Date | Item | Result |
 |---|---|---|
-| 2026-08-14 | Plan written | Awaiting owner approval |
+| 2026-08-14 | Plan written | Approved by owner; applied to ROADMAP.md and STATE.md |
+| 2026-08-14 | **H1 / Phase 180 — Aether stays out of other projects** | **Done.** 22 of 73 reference documents marked `scope: aether-internal`; they now load only from Aether's own authored library. Verified by running the real command from a non-Aether directory: before, all five documents a builder received were about building and shipping Aether, including the release-publishing playbook; after, none are. Aether's own workers still receive them — asserted in both directions. Full test suite green. Published to the hub, so it reaches CalVault. |
