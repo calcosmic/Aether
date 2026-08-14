@@ -4,8 +4,8 @@ milestone: v1.26
 milestone_name: Intelligent Orchestration
 status: executing
 stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
-last_updated: "2026-08-14T11:52:30.135Z"
-last_activity: 2026-08-14 -- Phase 174 planning complete
+last_updated: "2026-08-14T11:57:52.443Z"
+last_activity: 2026-08-14 -- Phase 174 execution started
 progress:
   total_phases: 38
   completed_phases: 2
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-08)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 173 — delegation-guard
+**Current focus:** Phase 174 — spend-ledger
 **Milestone:** v1.26 Intelligent Orchestration — ROADMAPPED (8 phases, 172-179, 35 requirements)
 **Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases); live intent absorbed into v1.26, remaining SEE/TYPED/RECLAIM/LOCK moved to Future Requirements
 **Product version:** v1.0.50
 
 ## Current Position
 
-Phase: 173 (delegation-guard) — EXECUTING
-Plan: 2 of 10
-Status: Ready to execute
+Phase: 174 (spend-ledger) — EXECUTING
+Plan: 1 of 9
+Status: Executing Phase 174
 Progress: [██████████] 100%
-Last activity: 2026-08-14 -- Phase 174 planning complete
+Last activity: 2026-08-14 -- Phase 174 execution started
 
 ## Performance Metrics
 

@@ -226,3 +226,84 @@ func TestAttachWorkerUsageDoesNotOverwriteAProviderFigure(t *testing.T) {
 		t.Errorf("input = %d, want the pre-existing 999 preserved", got.Usage.InputTokens)
 	}
 }
+
+// TestSessionTranscriptUsageIsNeverProviderGrade pins D-06: a figure read from
+// a platform-harness session artifact (a Claude Code .jsonl transcript or an
+// OpenCode session store) is a real measurement, but it must never be
+// readable as a provider-grade one, and it must never be confused with a pure
+// local estimate either — it is a distinct third tier.
+func TestSessionTranscriptUsageIsNeverProviderGrade(t *testing.T) {
+	transcript := WorkerUsage{Source: UsageSourceSessionTranscript}
+	if transcript.Measured() {
+		t.Error("a session-transcript figure must not report itself as provider-grade")
+	}
+	if transcript.Estimated() {
+		t.Error("a session-transcript figure is not a guess either")
+	}
+
+	estimate := WorkerUsage{Source: UsageSourceEstimate}
+	if !estimate.Estimated() {
+		t.Error("an estimate must report itself as estimated")
+	}
+	if estimate.Measured() {
+		t.Error("an estimate must not report itself as provider-grade")
+	}
+}
+
+// TestUsageTotalsExposeDisjointInputAndBilledTotal pins the two exported
+// totals the spend report must display, using Anthropic's documented example
+// (50 input, 100,000 cache read, 2,000 cache creation, 500 output), which
+// yields total input 102050 and billed total 102550. Every expected value
+// here is a literal arithmetic expression of the externally-sourced numbers,
+// never a call back into billedTotal(), BilledTotalTokens() or
+// TotalInputTokens() — restating the parser's own formula in its test is
+// exactly how the 186x undercount shipped green.
+func TestUsageTotalsExposeDisjointInputAndBilledTotal(t *testing.T) {
+	usage := WorkerUsage{
+		InputTokens:         50,
+		CachedInputTokens:   100000,
+		CacheCreationTokens: 2000,
+		OutputTokens:        500,
+	}
+
+	const wantInput = 50 + 100000 + 2000 // == 102050
+	if got := usage.TotalInputTokens(); got != wantInput {
+		t.Errorf("TotalInputTokens() = %d, want %d", got, wantInput)
+	}
+
+	const wantBilled = 50 + 100000 + 2000 + 500 // == 102550
+	if got := usage.BilledTotalTokens(); got != wantBilled {
+		t.Errorf("BilledTotalTokens() = %d, want %d", got, wantBilled)
+	}
+
+	// A provider-reported aggregate with no disjoint breakdown is preferred
+	// over a zero sum — Claude Code's transcript reports one aggregate
+	// subagent_tokens figure with no breakdown at all.
+	aggregate := WorkerUsage{TotalTokens: 110790}
+	if got := aggregate.BilledTotalTokens(); got != 110790 {
+		t.Errorf("BilledTotalTokens() = %d, want the provider-reported aggregate 110790", got)
+	}
+}
+
+// TestParseUsageStillTagsProviderAndYieldsDocumentedTotal re-confirms that
+// extending WorkerUsage with a third source tier did not disturb ParseUsage's
+// existing provider-tagging or its regression-tested totals for Anthropic's
+// documented example.
+func TestParseUsageStillTagsProviderAndYieldsDocumentedTotal(t *testing.T) {
+	raw := `{"type":"result","usage":{"input_tokens":50,"cache_read_input_tokens":100000,"cache_creation_input_tokens":2000,"output_tokens":500}}`
+
+	usage, ok := ParseUsage(raw)
+	if !ok {
+		t.Fatal("expected usage from a cache-heavy result event")
+	}
+	if usage.Source != UsageSourceProvider {
+		t.Errorf("source = %q, want %q", usage.Source, UsageSourceProvider)
+	}
+	const wantTotal = 50 + 100000 + 2000 + 500
+	if usage.TotalTokens != wantTotal {
+		t.Errorf("total = %d, want %d", usage.TotalTokens, wantTotal)
+	}
+	if usage.CacheCreationTokens != 2000 {
+		t.Errorf("cache_creation = %d, want 2000", usage.CacheCreationTokens)
+	}
+}
