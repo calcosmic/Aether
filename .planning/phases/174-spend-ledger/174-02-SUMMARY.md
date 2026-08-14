@@ -105,3 +105,14 @@ None - no external service configuration required.
 ---
 *Phase: 174-spend-ledger*
 *Completed: 2026-08-14*
+
+## Self-Check: PASSED
+
+- FOUND: cmd/hook_cmds.go
+- FOUND: cmd/spend_session_capture.go
+- FOUND: cmd/spend_session_capture_test.go
+- FOUND: cmd/spend_packet_guard_test.go
+- FOUND: .planning/phases/174-spend-ledger/174-02-SUMMARY.md
+- FOUND commit: 388ae20b (Task 1)
+- FOUND commit: 359c33e7 (Task 2)
+- FOUND commit: f6b58bec (SUMMARY)
