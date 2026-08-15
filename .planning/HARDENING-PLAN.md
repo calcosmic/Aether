@@ -67,12 +67,16 @@ Causes, all confirmed in Aether's own code:
    tagged `priority: critical` and sent to every worker with the job title
    "builder", in every project.
 
-4. **Specialists are summoned by keyword-matching the phase description.** If
-   the text contains any of *security, auth, crypto, secret, token, permission,
-   credential, password, compliance, release, sign-off*, a security specialist
-   is dispatched. The CalVault phase said its source folders were "read-only"
-   and warned workers about a plugin. That was enough to summon a 107,155-token
-   security review of a file-copying job.
+4. ~~**Specialists are summoned by keyword-matching the phase description.**~~
+   **CORRECTED 2026-08-15 — this diagnosis was wrong.** It was written from
+   reading the code. Measuring the live runtime against the real CalVault phase
+   text showed the opposite: the security signal was **false**, the runtime
+   scored the security specialist at **0**, and it did **not** require it. The
+   Queen asked for it anyway, and nothing refused it — the relevance rule
+   existed but only the automatic path consulted it, never the model's request.
+   A caste with nothing to do is now refused and named. Recorded here because a
+   plausible diagnosis that survives into a plan is how the wrong thing gets
+   built.
 
 5. **The rule that should have skipped the test-coverage specialist cannot
    fire in practice.** To be classified "no code here", a phase must contain one
@@ -83,10 +87,14 @@ Causes, all confirmed in Aether's own code:
    Even if it did, the word "build" in the second list would disqualify it — and
    the command that runs a phase is called build.
 
-6. **The worker limit does not limit.** The count carries over between
-   commands instead of resetting, and it reports going over rather than
-   stopping. The failure log shows 27 workers and 37 workers against a cap of
-   20.
+6. **The worker limit does not limit.** True, but **the "carries over between
+   commands" half was wrong** (corrected 2026-08-15). Each command already
+   starts its own budget. The carry-over came from workers whose completion
+   failed to record: those stay marked live, and live workers outside the
+   current window deliberately count against it, so one failed completion taxes
+   every command afterwards. The "reports going over rather than stopping" half
+   was right — the cap was checked one worker at a time and never against the
+   whole plan.
 
 7. **One job gets split across many workers.** Six file-copy batches became six
    separate workers, each a fresh ~100,000-token agent re-reading the same list
