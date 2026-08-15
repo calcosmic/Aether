@@ -203,6 +203,60 @@ func spawnTreeBudgetState() (spawnTreeBudget, error) {
 	return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: consumed, Remaining: remaining, CountedWholeLedger: countedWholeLedger}, nil
 }
 
+// spawnBudgetPreflight answers, before a single worker is dispatched, whether
+// the whole plan fits in what is left.
+//
+// The per-spawn check below is a ceiling, and a ceiling checked one worker at a
+// time lets a ten-worker build begin with three slots free and stall on the
+// fourth -- which is what happened on 2026-08-14, twice, and is why the failure
+// record holds "27 of 20" and "37 of 20". Refusing up front costs nothing;
+// stalling half way costs every worker that already ran.
+//
+// Refuse rather than trim: the dispatch list is ordered by wave, so trimming
+// its tail drops later tasks and returns a build that looks finished and is not.
+// A refusal the operator can act on is honest; a silent partial build is not.
+func spawnBudgetPreflight(planned int, state spawnTreeBudget) (bool, string) {
+	if planned <= 0 {
+		return true, ""
+	}
+	if planned <= state.Remaining {
+		return true, ""
+	}
+	return false, fmt.Sprintf(
+		"This phase needs %d workers and only %d of the %d for this run are left. "+
+			"Nothing has been started. Helpers from an earlier command that never reported "+
+			"finishing still count — run `aether spawn-orphans` to see them, or start a new session.",
+		planned, state.Remaining, state.Max,
+	)
+}
+
+// spawnCompleteTolerant records a worker's completion even when the ledger has
+// no matching entry.
+//
+// Returning an error here is what leaked the budget. A live run recorded
+// Chip-49 with recorded:true, the matching completion answered `spawn_tree:
+// agent "Chip-49" not found`, and the retry consumed a second slot for the same
+// worker. Worse, the entry stayed live, and a live entry outside the current
+// window raises the next command's consumed count -- so one failed completion
+// taxes every command after it.
+//
+// A completion for a worker nobody recorded is not a fault worth stopping for:
+// the worker is finished either way, and the only question is whether the
+// colony keeps paying for it.
+func spawnCompleteTolerant(tree *agent.SpawnTree, name, status, summary string, _ time.Time) error {
+	if tree == nil {
+		return nil
+	}
+	err := tree.UpdateStatus(name, status, summary)
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "not found") {
+		return nil
+	}
+	return err
+}
+
 // spawnTreeBudgetReason is the whole-run tree-budget check contract
 // (D-02/D-03/D-04): called from spawnCanSpawnDecision as the second of its
 // three checks, after depth and before ancestor-cycle. A non-empty return is

@@ -508,6 +508,16 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if err != nil {
 		return nil, err
 	}
+	// Check the whole plan against the remaining helper budget before the first
+	// worker starts. The per-spawn ceiling is checked one worker at a time, so a
+	// ten-worker build with three slots left used to begin and stall in the
+	// middle -- paying for every worker that had already run. A budget that
+	// cannot be read is not treated as free.
+	if budgetState, budgetErr := spawnTreeBudgetState(); budgetErr == nil {
+		if fits, reason := spawnBudgetPreflight(len(dispatches), budgetState); !fits {
+			return nil, fmt.Errorf("%s", reason)
+		}
+	}
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
 	executionPlan := buildExecutionPlans(dispatches, parallelMode)

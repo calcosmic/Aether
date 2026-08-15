@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/events"
@@ -177,7 +178,13 @@ var spawnCompleteCmd = &cobra.Command{
 		summary, _ := cmd.Flags().GetString("summary")
 
 		st := agent.NewSpawnTree(store, "spawn-tree.txt")
-		if err := st.UpdateStatus(name, status, summary); err != nil {
+		// A completion for a worker the ledger has no record of used to be a
+		// hard error. That is what leaked the budget on 2026-08-14: the entry
+		// stayed live, live entries outside the current window raise the next
+		// command's consumed count, and the operator's retry spent a second slot
+		// on the same worker. The worker has finished either way; refusing to
+		// record it only makes the colony keep paying for it.
+		if err := spawnCompleteTolerant(st, name, status, summary, time.Now().UTC()); err != nil {
 			outputError(1, fmt.Sprintf("failed to update status: %v", err), nil)
 			return nil
 		}
