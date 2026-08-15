@@ -476,4 +476,4 @@ export AETHER_PLATFORM=codex
 
 ---
 
-*Updated for Aether v1.0.53 — 2026-08-07*
+*Updated for Aether v1.0.54 — 2026-08-15*
