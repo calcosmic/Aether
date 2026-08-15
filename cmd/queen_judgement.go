@@ -37,6 +37,10 @@ type queenCasteJudgement struct {
 	Added []string
 	// Dropped lists proposed castes removed to fit the worker budget.
 	Dropped []string
+	// Refused lists proposed castes the phase gives no work to. Distinct from
+	// Dropped: a dropped caste was affordable-but-last, a refused one had
+	// nothing to do at any budget.
+	Refused []string
 	// Unknown lists proposed names that are not dispatchable castes.
 	Unknown []string
 	// Rationale is the Queen's stated reasoning, carried through for display.
@@ -67,6 +71,10 @@ func (j queenCasteJudgement) Summary() string {
 		b.WriteString(fmt.Sprintf(" Dropped %s — over the worker budget.",
 			strings.Join(j.Dropped, ", ")))
 	}
+	if len(j.Refused) > 0 {
+		b.WriteString(fmt.Sprintf(" Refused %s — nothing in this phase for it to do.",
+			strings.Join(j.Refused, ", ")))
+	}
 	if len(j.Unknown) > 0 {
 		b.WriteString(fmt.Sprintf(" Ignored unknown caste(s): %s.",
 			strings.Join(j.Unknown, ", ")))
@@ -94,6 +102,31 @@ func queenApplyJudgement(proposed []string, rationale string, phase colony.Phase
 
 	budget := queenSpawnBudgetForPhase(phase, flowType, state)
 	required := budget.RequiredCastes
+
+	// A proposal is judgement about which optional specialists help. It is not
+	// permission to summon one the phase gives no work to.
+	//
+	// casteRelevanceScore already returns 0 for a keyword-gated caste with no
+	// match, for exactly this reason -- but only the deterministic engine
+	// consulted it, so the Queen's proposal walked straight past the check. On a
+	// phase copying markdown files the runtime scored the security specialist at
+	// 0, did not require it, and dispatched it anyway for 107,155 tokens because
+	// the Queen asked.
+	//
+	// Required castes are exempt. Cost control and the thing that checks the
+	// work are different decisions, and this floor must never touch the second.
+	requiredForExemption := stringSet(required)
+	refused := []string{}
+	kept := normalized[:0]
+	for _, caste := range normalized {
+		if !requiredForExemption[caste] && casteRelevanceScore(phase, caste) == 0 {
+			refused = append(refused, caste)
+			continue
+		}
+		kept = append(kept, caste)
+	}
+	normalized = kept
+	sort.Strings(refused)
 
 	// Required castes are not negotiable. They are restored whether the Queen
 	// left them out on purpose or overlooked them — the runtime cannot tell the
@@ -144,6 +177,7 @@ func queenApplyJudgement(proposed []string, rationale string, phase colony.Phase
 		Final:     final,
 		Added:     added,
 		Dropped:   dropped,
+		Refused:   refused,
 		Unknown:   unknown,
 		Rationale: strings.TrimSpace(rationale),
 		Source:    "queen",

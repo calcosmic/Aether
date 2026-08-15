@@ -344,7 +344,45 @@ func queenPhaseProducesTestableCode(phase colony.Phase) bool {
 	if effectiveQueenPhaseMode(phase) == colony.PhaseModeDiscovery {
 		return false
 	}
+	// A repository with no program code in it cannot have test coverage, so a
+	// test-coverage specialist can only report that it found nothing.
+	//
+	// This check exists because the wording check below is not enough on its
+	// own. queenPhaseIsDocumentationOnly requires one of eight documentation
+	// words to be present, and a real phase -- "copy 110 markdown files into a
+	// new folder tree" in an Obsidian vault -- contains none of them, so it was
+	// classified as code work and a Probe was made mandatory. Asking what is in
+	// the repository does not depend on the phase happening to use the right
+	// vocabulary.
+	if !workspaceContainsProgramCode() {
+		return false
+	}
 	return !queenPhaseIsDocumentationOnly(phase)
+}
+
+// programCodeFilePatterns is deliberately a list of source extensions rather
+// than "anything that is not markdown": a repository of notes, prose or data
+// should read as having no code, and adding a language here is a one-line
+// change with an obvious meaning.
+var programCodeFilePatterns = []string{
+	"*.go", "*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.rb", "*.java",
+	"*.rs", "*.c", "*.h", "*.cc", "*.cpp", "*.cs", "*.php", "*.swift",
+	"*.kt", "*.scala", "*.ex", "*.exs", "*.dart", "*.m", "*.sh",
+}
+
+func workspaceContainsProgramCode() bool {
+	root := strings.TrimSpace(skillWorkspaceRoot())
+	if root == "" {
+		// Unknown workspace: assume code. Failing open here costs one worker;
+		// failing closed would silently remove test coverage from real code.
+		return true
+	}
+	for _, pattern := range programCodeFilePatterns {
+		if repoMatchesFilePattern(root, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 // containsDocumentationWord matches a documentation noun as a whole word,

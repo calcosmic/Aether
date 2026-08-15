@@ -31,6 +31,15 @@ func setupBuildFlowTest(t *testing.T) string {
 		os.Setenv("AETHER_ROOT", origRoot)
 	})
 
+	// These fixtures stand in for a software project, so they must contain
+	// software. Phase 182 made the test-coverage specialist conditional on the
+	// repository actually holding program code -- a repository of markdown notes
+	// gives it nothing to find -- and without this file every build-flow fixture
+	// would read as a notes vault and quietly lose a worker it should have.
+	if err := os.WriteFile(tmpDir+"/main.go", []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+		t.Fatalf("failed to write fixture source file: %v", err)
+	}
+
 	s, err := storage.NewStore(dataDir)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
