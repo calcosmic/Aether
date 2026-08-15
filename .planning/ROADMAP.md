@@ -952,9 +952,9 @@ Remaining, in this order — **not** numeric order:
 | 178. Skill Authoring Hardening | v1.26 | — | **Cut** | 2026-08-14 |
 | 180. Aether Stays Out Of Other Projects | v1.26 | 1/1 | **Complete** | 2026-08-14 |
 | 181. Reading Material Chosen By The Task | v1.26 | 1/1 | **Complete** | 2026-08-14 |
-| **182. Specialists Earn Their Seat** | v1.26 | 0/TBD | **Next** | - |
-| 183. The Worker Limit Actually Limits | v1.26 | 0/TBD | Not started | - |
-| 184. One Worker Owns A Run Of File Work | v1.26 | 0/TBD | Not started | - |
+| 182. Specialists Earn Their Seat | v1.26 | 1/1 | **Complete** | 2026-08-15 |
+| 183. The Worker Limit Actually Limits | v1.26 | 1/1 | **Complete (partial)** | 2026-08-15 |
+| **184. One Worker Owns A Run Of File Work** | v1.26 | 0/TBD | **Next** | - |
 | 185. One Honest Cost Line | v1.26 | 0/TBD | Not started | - |
 | 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
 | 179. Proof | v1.26 | 0/TBD | Not started | - |
