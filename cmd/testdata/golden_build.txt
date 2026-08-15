@@ -9,11 +9,7 @@ Phase: Golden phase
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨 Builder Worker-XX  First golden task
-
-Wave 2
-  Execution: serial — single task in this wave
-  🔨 Builder Worker-XX  Second golden task
+  🔨 Builder Worker-XX  First golden task (+1 more step)
 
 Post-Wave: Probe
   Execution: serial — post-wave independent verification of builder claims
@@ -25,7 +21,7 @@ Post-Wave: Watcher
 
 Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher
 
-Total planned dispatches: 4
+Total planned dispatches: 3
 
 The Queen chose this team for the phase: Builder, Probe, Watcher.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
@@ -42,16 +38,6 @@ Wave 11 starting (in-repo, serial)
 … 🔨 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
 
 ✓ 🔨 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
-
-── Dispatch ──
-Wave 12 starting (in-repo, serial)
-  Execution: serial — single task in this wave
-
-… 🔨 Builder Worker-XX  starting wave 12  Worker: Worker-XX
-
-… 🔨 Builder Worker-XX  running wave 12  Worker: Worker-XX  [simulated worker heartbeat observed]
-
-✓ 🔨 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-2 for worker Worker-XX (caste: builder)
 
 ── Dispatch ──
 Wave 13 starting (in-repo, serial)
@@ -91,11 +77,7 @@ Review depth: heavy (final phase)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨 Builder Worker-XX  First golden task  ✓ completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
-
-Wave 2
-  Execution: serial — single task in this wave
-  🔨 Builder Worker-XX  Second golden task  ✓ completed 0.0s  FakeInvoker completed task g-task-2 for worker Worker-XX (caste: builder)
+  🔨 Builder Worker-XX  First golden task (+1 more step)  ✓ completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
 
 Post-Wave: Probe
   Execution: serial — post-wave independent verification of builder claims
@@ -107,7 +89,7 @@ Post-Wave: Watcher
 
 Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher  ✓ completed 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
 
-Total planned dispatches: 4
+Total planned dispatches: 3
 
 The Queen chose this team for the phase: Builder, Probe, Watcher.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.

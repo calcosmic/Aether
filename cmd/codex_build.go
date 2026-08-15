@@ -31,6 +31,12 @@ type codexBuildDispatch struct {
 	Summary       string   `json:"summary,omitempty"`
 	TaskID        string   `json:"task_id,omitempty"`
 	TaskIndex     int      `json:"task_index,omitempty"`
+	// CoveredTaskIDs lists every task this one worker took on. It holds more
+	// than one entry when a chain of dependent steps was merged into a single
+	// dispatch (see coalesceSequentialDispatches). TaskID stays the first of
+	// them so result matching and evidence keep working unchanged; this field
+	// exists so nothing downstream can believe the later steps were unassigned.
+	CoveredTaskIDs []string `json:"covered_task_ids,omitempty"`
 	DependsOn     []string `json:"depends_on,omitempty"`
 	DeclaredPaths []string `json:"declared_paths,omitempty"`
 	Outputs       []string `json:"outputs,omitempty"`
@@ -963,6 +969,108 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 	return plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
 }
 
+// coalesceSequentialDispatches merges a chain of dependent single-task steps
+// into one worker.
+//
+// This is the one place the rule lives, so it can be read in full:
+//
+//	Two consecutive wave dispatches merge when the second is the only task in
+//	its wave, the first was the only task in its wave, they share a caste, and
+//	the second depends on the first and on nothing else.
+//
+// Everything else stays as it is. A wave holding more than one task is genuine
+// parallel work and is never touched; a chain that changes caste part way
+// through is two kinds of job and is left as two.
+//
+// The cost this removes is not theoretical. A phase of six dependent copy steps
+// became six workers -- "waves 11-16 each contain exactly one builder, reason:
+// single task in this wave" -- and each was a fresh agent that re-read the same
+// source list from scratch before doing its share. One of those pairs was
+// literally "copy the first six categories" and "copy the remaining six".
+func coalesceSequentialDispatches(dispatches []codexBuildDispatch) []codexBuildDispatch {
+	if len(dispatches) < 2 {
+		return dispatches
+	}
+
+	// A wave is eligible only if it holds exactly one dispatch. Count first.
+	perWave := map[int]int{}
+	for _, d := range dispatches {
+		if d.Stage == "wave" {
+			perWave[d.Wave]++
+		}
+	}
+
+	out := make([]codexBuildDispatch, 0, len(dispatches))
+	// chainEnd is the wave of the last step folded into the dispatch currently
+	// at the end of out. Read from the struct instead, a three-step chain would
+	// merge steps 1 and 2 and then reject step 3, because the merged dispatch
+	// still reports wave 1.
+	chainEnd := -1
+	for _, d := range dispatches {
+		if d.Stage != "wave" || len(out) == 0 {
+			out = append(out, d)
+			chainEnd = d.Wave
+			continue
+		}
+		prev := &out[len(out)-1]
+		if !dispatchesFormOneJob(*prev, d, perWave, chainEnd) {
+			out = append(out, d)
+			chainEnd = d.Wave
+			continue
+		}
+		mergeDispatchInto(prev, d)
+		chainEnd = d.Wave
+	}
+	return out
+}
+
+func dispatchesFormOneJob(prev, next codexBuildDispatch, perWave map[int]int, chainEnd int) bool {
+	if prev.Stage != "wave" || next.Stage != "wave" {
+		return false
+	}
+	if prev.Caste != next.Caste {
+		return false
+	}
+	if next.Wave != chainEnd+1 {
+		return false
+	}
+	if perWave[next.Wave] != 1 || perWave[chainEnd] != 1 {
+		return false
+	}
+	// The chain must be explicit. A task that declares no dependency may simply
+	// have been listed in order, and merging it would serialise work that was
+	// free to run alongside something else.
+	if len(next.DependsOn) != 1 {
+		return false
+	}
+	prevIDs := prev.CoveredTaskIDs
+	if len(prevIDs) == 0 {
+		prevIDs = []string{prev.TaskID}
+	}
+	for _, id := range prevIDs {
+		if next.DependsOn[0] == id {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeDispatchInto(target *codexBuildDispatch, next codexBuildDispatch) {
+	if len(target.CoveredTaskIDs) == 0 {
+		target.CoveredTaskIDs = []string{target.TaskID}
+		// Number the first step only once, and only when a second joins it.
+		target.Task = "1. " + strings.TrimSpace(target.Task)
+	}
+	target.CoveredTaskIDs = append(target.CoveredTaskIDs, next.TaskID)
+	target.Task = strings.TrimSpace(target.Task) + "\n" +
+		fmt.Sprintf("%d. %s", len(target.CoveredTaskIDs), strings.TrimSpace(next.Task))
+	target.DeclaredPaths = uniqueSortedStrings(append(append([]string{}, target.DeclaredPaths...), next.DeclaredPaths...))
+	// Wave and ExecutionWave stay at the first step's. The merged worker can
+	// start as soon as the chain's first step could, and it does the rest in
+	// order itself. Moving it to the last step's wave would make it wait for
+	// nothing.
+}
+
 // plannedBuildDispatchesForSelectionWithState plans with no Queen proposal, so
 // the deterministic keyword engine decides. Callers that have the Queen's
 // judgement use the ...WithJudgement variant.
@@ -1015,6 +1123,17 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 				DeclaredPaths: declaredPathsForTask(task),
 			})
 		}
+	}
+
+	// Worktree mode is deliberately excluded. There each worker gets its own
+	// copy of the repository and its changes are reconciled back per worker,
+	// with conflict detection keyed to the paths a task declared. Folding
+	// several tasks into one worker changes what "this worker produced this
+	// file" means, and the isolation model is the thing that makes worktree mode
+	// worth having. The saving this phase exists for lands in the default
+	// in-repo mode, which is what the CalVault run used.
+	if effectiveParallelMode(state) != colony.ModeWorktree {
+		dispatches = coalesceSequentialDispatches(dispatches)
 	}
 
 	if len(waves) == 0 && len(selected) == 0 {
@@ -2004,13 +2123,37 @@ func reconcilePriorCompletedPhaseTasksForPlanOnly(root string, state colony.Colo
 func completedBuildTaskIDs(dispatches []codexBuildDispatch) map[string]struct{} {
 	completed := map[string]struct{}{}
 	for _, dispatch := range dispatches {
-		taskID := strings.TrimSpace(dispatch.TaskID)
-		if taskID == "" || strings.TrimSpace(dispatch.Status) != "completed" {
+		if strings.TrimSpace(dispatch.Status) != "completed" {
 			continue
 		}
-		completed[taskID] = struct{}{}
+		// A worker that owns a merged chain finishes every step in it, so every
+		// step it covered is complete. Reading TaskID alone left the later steps
+		// marked unfinished forever: the phase could never advance, and the one
+		// worker that did the work looked like it had only done the first bit.
+		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+			completed[taskID] = struct{}{}
+		}
 	}
 	return completed
+}
+
+// dispatchCoveredTaskIDs returns every task a dispatch is responsible for. For
+// an ordinary dispatch that is just its own task; for a merged chain it is all
+// of them.
+func dispatchCoveredTaskIDs(dispatch codexBuildDispatch) []string {
+	if len(dispatch.CoveredTaskIDs) > 0 {
+		out := make([]string, 0, len(dispatch.CoveredTaskIDs))
+		for _, id := range dispatch.CoveredTaskIDs {
+			if trimmed := strings.TrimSpace(id); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	}
+	if taskID := strings.TrimSpace(dispatch.TaskID); taskID != "" {
+		return []string{taskID}
+	}
+	return nil
 }
 
 func reconcilePriorCompletedPhaseTasksFromTrustedManifests(root string, state colony.ColonyState, phaseNum int) (colony.ColonyState, []string, error) {

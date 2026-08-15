@@ -84,16 +84,19 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 
 	result := envelope["result"].(map[string]interface{})
-	if got := int(result["dispatch_count"].(float64)); got != 6 {
+	// Phase 184: the two golden tasks form a dependent chain of single-task
+	// waves with the same caste, so they are now one worker rather than two.
+	if got := int(result["dispatch_count"].(float64)); got != 5 {
 		// Modeless phase resolves to prototype: prose "Research" in a task no
 		// longer spawns an Oracle (typed phase mode). The keyword-gated
 		// external castes (ambassador, gatekeeper) no longer spawn either:
 		// this phase replaces internal build dispatch and has no external
 		// surface or auth boundary for them to review.
-		t.Fatalf("dispatch_count = %d, want 6", got)
+		t.Fatalf("dispatch_count = %d, want 5", got)
 	}
-	if got := int(result["wave_count"].(float64)); got != 2 {
-		t.Fatalf("wave_count = %d, want 2 task waves", got)
+	// Phase 184: the two chained tasks are one worker, so one task wave.
+	if got := int(result["wave_count"].(float64)); got != 1 {
+		t.Fatalf("wave_count = %d, want 1 task wave", got)
 	}
 	if got := int(result["parallel_waves"].(float64)); got != 0 {
 		t.Fatalf("parallel_waves = %d, want 0", got)
@@ -101,19 +104,22 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	// Was 6 before independent specialists and independent reviewers stopped
 	// occupying one wave each. Fewer waves is the point: same workers, run
 	// concurrently instead of queued.
-	if got := int(result["execution_wave_count"].(float64)); got != 4 {
-		t.Fatalf("execution_wave_count = %d, want 4 execution waves", got)
+	// Phase 184: one fewer execution wave, because the two chained tasks are one
+	// worker rather than two waves of one.
+	if got := int(result["execution_wave_count"].(float64)); got != 3 {
+		t.Fatalf("execution_wave_count = %d, want 3 execution waves", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
 	}
-	if waveExecution, ok := result["wave_execution"].([]interface{}); !ok || len(waveExecution) != 2 {
-		t.Fatalf("wave_execution = %#v, want 2 wave plans", result["wave_execution"])
+	// Phase 184: one wave plan, because the two chained tasks became one worker.
+	if waveExecution, ok := result["wave_execution"].([]interface{}); !ok || len(waveExecution) != 1 {
+		t.Fatalf("wave_execution = %#v, want 1 wave plan", result["wave_execution"])
 	}
 	// Was 6 while each reviewer held its own wave. Independent reviewers now
 	// share one step; see TestIndependentSpecialistsShareAWave.
-	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 4 {
-		t.Fatalf("execution_plan = %#v, want 4 execution stages", result["execution_plan"])
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 3 {
+		t.Fatalf("execution_plan = %#v, want 3 execution stages", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -136,17 +142,18 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 6 {
-		t.Fatalf("expected 6 manifest dispatches, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 5 {
+		t.Fatalf("expected 5 manifest dispatches, got %d", len(manifest.Dispatches))
 	}
-	if len(manifest.WorkerBriefs) != 6 {
-		t.Fatalf("expected 6 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	// Phase 184: five workers, so five briefs. The two chained tasks share one.
+	if len(manifest.WorkerBriefs) != 5 {
+		t.Fatalf("expected 5 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
 	}
-	if len(manifest.WaveExecution) != 2 {
-		t.Fatalf("expected 2 manifest wave execution plans, got %d", len(manifest.WaveExecution))
+	if len(manifest.WaveExecution) != 1 {
+		t.Fatalf("expected 1 manifest wave execution plan, got %d", len(manifest.WaveExecution))
 	}
 	for _, plan := range manifest.WaveExecution {
 		if plan.Strategy != "serial" {
@@ -510,12 +517,14 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if got := result["colony_mode"].(string); got != "colony" {
 		t.Fatalf("colony_mode = %q, want colony", got)
 	}
-	if got := int(result["dispatch_count"].(float64)); got != 7 {
-		t.Fatalf("dispatch_count = %d, want 7", got)
+	// Phase 184: a dependent chain of single-task waves sharing a caste is now
+	// one worker instead of several.
+	if got := int(result["dispatch_count"].(float64)); got != 6 {
+		t.Fatalf("dispatch_count = %d, want 6", got)
 	}
 	dispatches := result["dispatches"].([]interface{})
-	if len(dispatches) != 7 {
-		t.Fatalf("dispatches = %d, want 7", len(dispatches))
+	if len(dispatches) != 6 {
+		t.Fatalf("dispatches = %d, want 6", len(dispatches))
 	}
 	for _, raw := range dispatches {
 		dispatch := raw.(map[string]interface{})
@@ -556,10 +565,12 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	// Was 7 steps with probe/measurement/resilience serialised one per wave.
 	// They review the same finished code and share no inputs, so they now
 	// occupy a single "mixed" step.
-	if len(executionPlan) != 5 {
-		t.Fatalf("execution_plan = %d, want 5 steps: %#v", len(executionPlan), executionPlan)
+	// Phase 184 removed one more: the two chained task waves are now a single
+	// worker, so there is one "wave" step rather than two.
+	if len(executionPlan) != 4 {
+		t.Fatalf("execution_plan = %d, want 4 steps: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"design", "wave", "wave", "mixed", "verification"}
+	wantStages := []string{"design", "wave", "mixed", "verification"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})

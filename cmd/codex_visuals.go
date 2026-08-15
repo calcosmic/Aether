@@ -884,7 +884,7 @@ func renderColonizeVisual(result map[string]interface{}) string {
 				b.WriteString(" ")
 				b.WriteString(d.Name)
 				b.WriteString("  ")
-				b.WriteString(d.Task)
+				b.WriteString(dispatchTaskLine(d.Task))
 				b.WriteString("\n")
 			}
 		}
@@ -929,7 +929,7 @@ func renderColonizeDispatchPreview(root string, dispatches []codexSurveyorDispat
 		b.WriteString(" ")
 		b.WriteString(dispatch.Name)
 		b.WriteString("  ")
-		b.WriteString(dispatch.Task)
+		b.WriteString(dispatchTaskLine(dispatch.Task))
 		b.WriteString("\n")
 	}
 	b.WriteString("\nCoordination: ")
@@ -1255,7 +1255,7 @@ func renderPlanVisual(result map[string]interface{}) string {
 				b.WriteString(" ")
 				b.WriteString(d.Name)
 				b.WriteString("  ")
-				b.WriteString(d.Task)
+				b.WriteString(dispatchTaskLine(d.Task))
 				b.WriteString("\n")
 			}
 		}
@@ -1408,7 +1408,7 @@ func renderPlanDispatchPreview(goal string, dispatches []codexPlanningDispatch) 
 		b.WriteString(" ")
 		b.WriteString(dispatch.Name)
 		b.WriteString("  ")
-		b.WriteString(dispatch.Task)
+		b.WriteString(dispatchTaskLine(dispatch.Task))
 		b.WriteString("\n")
 	}
 	b.WriteString("\nCoordination: ")
@@ -1786,7 +1786,7 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 			b.WriteString(" ")
 			b.WriteString(dispatch.Name)
 			b.WriteString("  ")
-			b.WriteString(strings.TrimSpace(dispatch.Task))
+			b.WriteString(dispatchTaskLine(dispatch.Task))
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
@@ -3530,7 +3530,7 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 			b.WriteString(" ")
 			b.WriteString(dispatch.Name)
 			b.WriteString("  ")
-			b.WriteString(strings.TrimSpace(dispatch.Task))
+			b.WriteString(dispatchTaskLine(dispatch.Task))
 			writeDispatchExecutionStatus(&b, dispatch)
 			b.WriteString("\n")
 		}
@@ -4107,4 +4107,47 @@ func truncateLines(text string, maxLines int) []string {
 		return lines
 	}
 	return append(lines[:maxLines], "...")
+}
+
+// dispatchTaskLine renders a dispatch's task for a one-line display.
+//
+// Phase 184 lets one worker own a chain of dependent steps, so a task can now
+// be a numbered list. Written straight into the dispatch line that produced
+// output like:
+//
+//	🔨 Builder Mason-67  1. Copy the daily-note templates
+//	2. Copy the meeting templates
+//
+// with the continuation unindented and the layout broken. The worker still
+// receives every step in full; only this display is summarised.
+func dispatchTaskLine(task string) string {
+	task = strings.TrimSpace(task)
+	if !strings.Contains(task, "\n") {
+		return task
+	}
+	lines := []string{}
+	for _, line := range strings.Split(task, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			lines = append(lines, trimmed)
+		}
+	}
+	if len(lines) <= 1 {
+		return strings.Join(lines, "")
+	}
+	// Only a merged chain is summarised, and it is recognised by the exact shape
+	// the merge writes: every line numbered from 1 in order. Plenty of ordinary
+	// task text runs to several lines -- a watcher's brief carries a follow-up
+	// instruction on its own line -- and reporting that as "+1 more step" would
+	// be a lie about how many things the worker was asked to do.
+	for i, line := range lines {
+		if !strings.HasPrefix(line, fmt.Sprintf("%d. ", i+1)) {
+			// Not a merged chain: leave it exactly as it was rendered before.
+			return task
+		}
+	}
+	first := strings.TrimSpace(strings.TrimPrefix(lines[0], "1."))
+	if len(lines) == 2 {
+		return fmt.Sprintf("%s (+1 more step)", first)
+	}
+	return fmt.Sprintf("%s (+%d more steps)", first, len(lines)-1)
 }
