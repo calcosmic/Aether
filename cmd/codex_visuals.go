@@ -1980,6 +1980,30 @@ func mapValue(raw interface{}) map[string]interface{} {
 	return value
 }
 
+// renderProjectComplete is the classic v5.4.0 project-complete celebration.
+// It fires once, when the final phase advances — from the autopilot loop and
+// from a final `aether continue` — and the runtime owns it: wrappers must not
+// hand-render this banner.
+func renderProjectComplete(state colony.ColonyState, phasesCompleted int) string {
+	goal := "(no goal recorded)"
+	if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	total := phasesCompleted
+	if len(state.Plan.Phases) > total {
+		total = len(state.Plan.Phases)
+	}
+	var b strings.Builder
+	rule := strings.Repeat("━", 50)
+	b.WriteString(rule + "\n")
+	b.WriteString("   🎉 " + spacedTitle("Project Complete") + " 🎉\n")
+	b.WriteString(rule + "\n\n")
+	b.WriteString(fmt.Sprintf("👑 Goal Achieved: %s\n", goal))
+	b.WriteString(fmt.Sprintf("📍 Phases Completed: %d\n\n", total))
+	b.WriteString("🐜 The colony rests. Well done!")
+	return b.String()
+}
+
 func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("seal"), "Seal"))

@@ -299,7 +299,7 @@ func init() {
 	watchCmd.Flags().Duration("interval", 2*time.Second, "Refresh interval for live watch output")
 
 	runCompatibilityCmd.Flags().Int("max-phases", 0, "Run at most N phases before pausing")
-	runCompatibilityCmd.Flags().Int("replan-interval", 0, "Pause for replanning every N completed phases")
+	runCompatibilityCmd.Flags().Int("replan-interval", 2, "Pause for replanning every N completed phases (0 disables; classic default is 2)")
 	runCompatibilityCmd.Flags().Bool("continue", false, "Ignore the next replan pause and keep running")
 	runCompatibilityCmd.Flags().Bool("dry-run", false, "Preview the autopilot steps without mutating state")
 	runCompatibilityCmd.Flags().Bool("headless", false, "Record headless mode in autopilot state")
@@ -404,9 +404,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 	steps := make([]map[string]interface{}, 0, len(state.Plan.Phases)*2)
 	phasesCompleted := 0
 
+	emitVisualProgress(renderRunEngageLine(state, opts))
+
 	for {
 		if err := ctx.Err(); err != nil {
-			_ = syncRunAutopilotState(state, opts, "paused")
+			_ = syncRunAutopilotState(state, opts, "paused", "")
 			reason := "cancelled"
 			if err == context.DeadlineExceeded {
 				reason = "timeout"
@@ -418,36 +420,39 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			}
 			return result, nil
 		}
-		if err := syncRunAutopilotState(state, opts, "running"); err != nil {
+		if err := syncRunAutopilotState(state, opts, "running", ""); err != nil {
 			return nil, err
 		}
 
 		switch state.State {
 		case colony.StateCOMPLETED:
-			_ = syncRunAutopilotState(state, opts, "completed")
+			_ = syncRunAutopilotState(state, opts, "completed", "")
 			return buildRunExecutionResult(state, opts, steps, phasesCompleted, "completed", "aether seal"), nil
 
 		case colony.StateREADY:
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "max_phases_reached")
+				emitVisualLine(fmt.Sprintf("--- Autopilot: paused after %d phase(s) — max reached ---", phasesCompleted))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "max_phases_reached", nextCommandFromState(state)), nil
 			}
 
 			phase := recoveryPhase(&state)
 			if phase == nil {
-				_ = syncRunAutopilotState(state, opts, "completed")
+				_ = syncRunAutopilotState(state, opts, "completed", "")
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "completed", "aether seal"), nil
 			}
+
+			emitVisualProgress(renderRunPhaseHeader(phase, len(state.Plan.Phases)))
 
 			buildResult, err := runCodexBuildWithOptions(root, phase.ID, nil, false, codexBuildOptions{
 				WorkerTimeout: opts.WorkerTimeout,
 				ParentContext: ctx,
 			})
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "⚠ Build failed for phase %d, attempting single retry...\n", phase.ID)
+				emitVisualLine(fmt.Sprintf("⚠ Build failed for phase %d, attempting single retry...", phase.ID))
 				select {
 				case <-ctx.Done():
-					_ = syncRunAutopilotState(state, opts, "paused")
+					_ = syncRunAutopilotState(state, opts, "paused", "")
 					result := buildRunExecutionResult(state, opts, steps, phasesCompleted, "cancelled", nextCommandFromState(state))
 					result["error"] = ctx.Err().Error()
 					return result, nil
@@ -458,7 +463,7 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 					ParentContext: ctx,
 				})
 				if err != nil {
-					_ = syncRunAutopilotState(state, opts, "paused")
+					_ = syncRunAutopilotState(state, opts, "paused", "")
 					return nil, err
 				}
 			}
@@ -477,13 +482,19 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				return nil, err
 			}
 
+			// Classic pause check between build and verification: the run
+			// stops on purpose, with the reason on screen, not mid-flight.
+			if reason := checkAutopilotPauseConditions(); reason != "" {
+				return pauseAutopilotRun(state, opts, steps, phasesCompleted, reason), nil
+			}
+
 		case colony.StateEXECUTING, colony.StateBUILT:
 			continueResult, updatedState, phase, _, _, final, err := runCodexContinue(root, codexContinueOptions{
 				WorkerTimeout: opts.WorkerTimeout,
 				ParentContext: ctx,
 			})
 			if err != nil {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "")
 				return nil, err
 			}
 
@@ -499,25 +510,37 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			state = updatedState
 
 			if blocked, _ := continueResult["blocked"].(bool); blocked {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "blocked")
 				next := strings.TrimSpace(stringValue(continueResult["next"]))
 				if next == "" {
 					next = "aether continue"
 				}
+				if opts.Headless {
+					queueAutopilotPauseDecision("blocked", state.CurrentPhase)
+				}
+				emitVisualProgress(renderRunPauseBlock("blocked", next))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "blocked", next), nil
 			}
 
 			phasesCompleted++
 			if final {
-				_ = syncRunAutopilotState(state, opts, "completed")
+				_ = syncRunAutopilotState(state, opts, "completed", "")
+				emitVisualProgress(renderAutopilotComplete(phasesCompleted))
+				emitVisualProgress(renderProjectComplete(state, phasesCompleted))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "completed", "aether seal"), nil
 			}
+			emitVisualProgress(renderRunPhaseAdvancement(phase, continueResult, phasesCompleted, len(state.Plan.Phases)))
+			if reason := checkAutopilotPauseConditions(); reason != "" {
+				return pauseAutopilotRun(state, opts, steps, phasesCompleted, reason), nil
+			}
 			if opts.ReplanInterval > 0 && phasesCompleted > 0 && phasesCompleted%opts.ReplanInterval == 0 && !opts.ContinueWithoutReplan {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "replan_due")
+				emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "replan_due", "aether plan"), nil
 			}
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "max_phases_reached")
+				emitVisualLine(fmt.Sprintf("--- Autopilot: paused after %d phase(s) — max reached ---", phasesCompleted))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "max_phases_reached", nextCommandFromState(state)), nil
 			}
 
@@ -680,7 +703,7 @@ func buildRunExecutionResult(state colony.ColonyState, opts runCompatibilityOpti
 	}
 }
 
-func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOptions, status string) error {
+func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOptions, status, reason string) error {
 	if store == nil {
 		return nil
 	}
@@ -690,6 +713,7 @@ func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOption
 		TotalPhases:    len(state.Plan.Phases),
 		CurrentPhase:   state.CurrentPhase,
 		Status:         status,
+		Reason:         reason,
 		Headless:       opts.Headless,
 		ReplanInterval: opts.ReplanInterval,
 		Phases:         make([]autopilotPhaseStatus, 0, len(state.Plan.Phases)),
@@ -741,23 +765,47 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 		b.WriteString(fmt.Sprintf("Phases Planned: %d\n", phasesPlanned))
 	}
 
-	if steps, ok := result["steps"].([]interface{}); ok && len(steps) > 0 {
-		b.WriteString("\nSteps\n")
+	// The result reaches this renderer both in-process (steps is
+	// []map[string]interface{}) and after a JSON round trip (steps is
+	// []interface{}); handle both or the visual silently drops the section.
+	var stepMaps []map[string]interface{}
+	switch steps := result["steps"].(type) {
+	case []map[string]interface{}:
+		stepMaps = steps
+	case []interface{}:
 		for _, raw := range steps {
-			step, _ := raw.(map[string]interface{})
+			if step, ok := raw.(map[string]interface{}); ok {
+				stepMaps = append(stepMaps, step)
+			}
+		}
+	}
+	if len(stepMaps) > 0 {
+		b.WriteString("\nSteps\n")
+		for _, step := range stepMaps {
 			if step == nil {
 				continue
 			}
 			b.WriteString("  - ")
 			b.WriteString(stringValue(step["command"]))
 			if phase := intValue(step["phase"]); phase > 0 {
-				b.WriteString(fmt.Sprintf(" [phase %d]", phase))
+				if name := strings.TrimSpace(stringValue(step["phase_name"])); name != "" {
+					b.WriteString(fmt.Sprintf(" [phase %d: %s]", phase, name))
+				} else {
+					b.WriteString(fmt.Sprintf(" [phase %d]", phase))
+				}
 			}
 			if state := strings.TrimSpace(stringValue(step["state"])); state != "" {
 				b.WriteString(" -> ")
 				b.WriteString(state)
 			}
 			b.WriteString("\n")
+		}
+	}
+
+	if dryRun, _ := result["dry_run"].(bool); dryRun {
+		b.WriteString("\nPause Triggers (the run stops on purpose when one fires)\n")
+		for _, trigger := range autopilotPauseTriggerCatalog() {
+			b.WriteString(fmt.Sprintf("  %s — %s\n", trigger.Condition, trigger.Meaning))
 		}
 	}
 
