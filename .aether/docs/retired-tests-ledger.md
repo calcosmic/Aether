@@ -56,3 +56,28 @@ phase/plan that removed it).
   used check-replan as a probe for status normalization, was rewritten in the
   same change to assert normalization through `autopilot-update` state.
 - **Removed in:** v5.4.0-richness restoration, Stage 2 (autopilot).
+
+### Interactive `init-ceremony` tests (functions in `cmd/init_ceremony_test.go` and `cmd/shelf_todo_wiring_test.go`)
+
+- **Original path:** `cmd/init_ceremony_test.go` (7 functions:
+  `TestInitCeremonyRegistered`, `TestInitCeremonyProceed`,
+  `TestInitCeremonyOrchestratorSelection`, `TestInitCeremonyCancel`,
+  `TestInitCeremonyRejectThenApprove`, `TestInitCeremonyApproveBrief`,
+  `TestInitCeremonyRejectBrief`) and `cmd/shelf_todo_wiring_test.go`
+  (`TestInitCeremonySeedsSessionTodosFromPromotedShelf`). Files survive.
+- **What they covered:** the interactive `aether init-ceremony` command — a
+  TTY-gated approve/edit/cancel prompt loop and its parallel colony-creation
+  path (`createCeremonyColony`).
+- **Disposition:** the *command* was retired 2026-08-16: it was an orphan (no
+  wrapper called it, allowlist entry removed in the same change), demanded an
+  interactive terminal no wrapper platform provides, auto-approved pheromone
+  suggestions — the exact "click-through" failure SEE-10 forbids — and its
+  stderr output evaded the visual-writer discipline. Its *renderers* survived
+  and gained live callers: `recovered-by:cmd/init_wrapper_ceremony_test.go`
+  (wrapper approve/edit/cancel contract), `TestInitRendersCharterCeremony`
+  (charter panel + colony-born close on the real `aether init` path),
+  `TestInitResearchRendersScanPanels` (research panels + consent-framed signal
+  suggestions on `aether init-research`), and
+  `TestInitPromotesShelfEntriesAtomically` (shelf-todo seeding on the one
+  remaining colony-creation path).
+- **Removed in:** v5.4.0-richness restoration, Stage 3 (ceremonies).

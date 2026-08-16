@@ -320,7 +320,7 @@ var initCmd = &cobra.Command{
 			result["prior_state_backup"] = priorStateBackup
 			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
 		}
-		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, researchDocs...))
+		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, researchDocs...))
 		return nil
 	},
 }

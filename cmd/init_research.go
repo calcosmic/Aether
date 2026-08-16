@@ -2070,7 +2070,13 @@ var initResearchCmd = &cobra.Command{
 		charter := generateCharter(goal, detected, governance, readmeSummary, gitHistory, languages, frameworks, isGitRepo, pheromoneSuggestions, markdownCount)
 		contextSummary := generateColonyContextSummary(detected, languages, dirClass, techStackDetail, governance, pheromoneSuggestions, isGitRepo, fileCount)
 
-		outputOK(map[string]interface{}{
+		researchDisplayData := ceremonyResearchData{
+			TechStackDetail:      techStackDetail,
+			DirClassification:    dirClass,
+			GovernanceDetails:    governanceDetails,
+			ColonyContextSummary: contextSummary,
+		}
+		outputWorkflow(map[string]interface{}{
 			"detected_type":          detected,
 			"languages":              languages,
 			"frameworks":             frameworks,
@@ -2089,9 +2095,33 @@ var initResearchCmd = &cobra.Command{
 			"dir_classification":     dirClass,
 			"governance_details":     governanceDetails,
 			"colony_context_summary": contextSummary,
-		})
+			"launch_brief":           synthesizeLaunchBrief(goal, &charter, researchDisplayData),
+		}, renderInitResearchVisual(charter, pheromoneSuggestions, researchDisplayData))
 		return nil
 	},
+}
+
+// renderInitResearchVisual is the human rendering of the research scan: the
+// proposed charter, the codebase findings, and the suggested steering signals
+// — proposals only; nothing here is written until it is explicitly approved.
+func renderInitResearchVisual(charter colony.Charter, suggestions []pheromoneSuggestion, data ceremonyResearchData) string {
+	var b strings.Builder
+	b.WriteString(renderCharterDisplay(charter))
+	if research := renderResearchDisplay(data); research != "" {
+		b.WriteString(research)
+	}
+	if len(suggestions) > 0 {
+		b.WriteString(renderStageMarker("Suggested Signals"))
+		b.WriteString("Proposed steering signals — nothing is written until you approve it:\n")
+		for i, s := range suggestions {
+			b.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, strings.ToUpper(strings.TrimSpace(s.Type)), s.Content))
+			if reason := strings.TrimSpace(s.Reason); reason != "" {
+				b.WriteString(fmt.Sprintf("     └── %s\n", reason))
+			}
+		}
+		b.WriteString("Approve one with `aether focus`, `aether redirect`, or `aether feedback`.\n")
+	}
+	return b.String()
 }
 
 func init() {

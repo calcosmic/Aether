@@ -3496,34 +3496,6 @@
     "stability_score": 91
   },
   {
-    "name": "init-ceremony",
-    "short_description": "Run the full colony init ceremony (scan, charter, brief, approve)",
-    "flags": [
-      "colony-mode",
-      "scope",
-      "target"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_lifecycle",
-    "since_version": "v1.11",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 82
-  },
-  {
     "name": "init-research",
     "short_description": "Perform initial research for colony setup",
     "flags": [

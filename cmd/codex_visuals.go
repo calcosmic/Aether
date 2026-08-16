@@ -690,10 +690,16 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	}
 }
 
-func renderInitVisual(goal, scope, sessionID, dataDir string, researchDocs ...string) string {
+func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Charter, researchDocs ...string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
 	b.WriteString(visualDividerStr())
+	if charter != nil {
+		// The classic birth ceremony: the approved charter is shown at the
+		// moment the colony is created, not stored silently.
+		b.WriteString(renderStageMarker("Charter"))
+		b.WriteString(renderCharterFields(*charter))
+	}
 	b.WriteString(renderStageMarker("Colony"))
 	b.WriteString("Queen charter accepted.\n")
 	b.WriteString("Goal: ")
@@ -713,6 +719,10 @@ func renderInitVisual(goal, scope, sessionID, dataDir string, researchDocs ...st
 		b.WriteString(strings.Join(researchDocs, ", "))
 		b.WriteString("\n")
 	}
+	// The classic colony-born close — the moment the colony exists.
+	b.WriteString("\n👑 Queen has set the colony's intention\n\n")
+	b.WriteString(fmt.Sprintf("   %q\n\n", goal))
+	b.WriteString("   🟢 Colony Status: READY\n")
 	b.WriteString(renderNextUp(
 		`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
 		`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,
@@ -722,12 +732,10 @@ func renderInitVisual(goal, scope, sessionID, dataDir string, researchDocs ...st
 	return b.String()
 }
 
-// renderCharterDisplay produces a visual rendering of the 7-section colony charter.
-func renderCharterDisplay(ch colony.Charter) string {
+// renderCharterFields renders the seven charter fields as an aligned block —
+// shared by the standalone charter display and the init birth ceremony.
+func renderCharterFields(ch colony.Charter) string {
 	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("init"), "Colony Charter"))
-	b.WriteString(visualDividerStr())
-	b.WriteString(renderStageMarker("Charter"))
 	b.WriteString("  Intent:      ")
 	b.WriteString(emptyFallback(ch.Intent, "(none)"))
 	b.WriteString("\n")
@@ -749,6 +757,16 @@ func renderCharterDisplay(ch colony.Charter) string {
 	b.WriteString("  Constraints: ")
 	b.WriteString(emptyFallback(ch.Constraints, "(none)"))
 	b.WriteString("\n")
+	return b.String()
+}
+
+// renderCharterDisplay produces a visual rendering of the 7-section colony charter.
+func renderCharterDisplay(ch colony.Charter) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("init"), "Colony Charter"))
+	b.WriteString(visualDividerStr())
+	b.WriteString(renderStageMarker("Charter"))
+	b.WriteString(renderCharterFields(ch))
 	b.WriteString(visualDividerStr())
 	return b.String()
 }
@@ -1703,7 +1721,8 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 
 	if final {
 		b.WriteString(renderStageMarker("Colony Complete"))
-		b.WriteString("All planned phases are complete. The colony is ready for Crowned Anthill.\n")
+		b.WriteString(renderProjectComplete(state, len(state.Plan.Phases)))
+		b.WriteString("\n\nAll planned phases are complete. The colony is ready for Crowned Anthill.\n")
 		b.WriteString(renderNextUpVisual(nextUpSuggestionsForState(state)))
 		b.WriteString(renderContextClearGuidance())
 		return b.String()
@@ -2004,10 +2023,35 @@ func renderProjectComplete(state colony.ColonyState, phasesCompleted int) string
 	return b.String()
 }
 
+// crownedAnthillArt is the classic v5.4.0 seal ceremony drawing (seal.yaml
+// Step 7), byte-faithful to the original.
+const crownedAnthillArt = `        .     .
+       /|\   /|\
+      / | \ / | \
+     /  |  X  |  \
+    /   | / \ |   \
+   /    |/   \|    \
+  /     /     \     \
+ /____ /  ___  \ ____\
+      / /   \ \
+     / /     \ \
+    /_/       \_\
+     |  CROWNED |
+     | ANTHILL  |
+     |__________|`
+
 func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("seal"), "Seal"))
 	b.WriteString(visualDividerStr())
+	// The classic crowning ceremony: the anthill drawing, the letter-spaced
+	// title with the colony's version, then the facts.
+	b.WriteString(crownedAnthillArt)
+	b.WriteString("\n\n")
+	rule := strings.Repeat("━", 50)
+	b.WriteString(rule + "\n")
+	b.WriteString(fmt.Sprintf("   %s   v%d\n", spacedTitle("Crowned Anthill"), state.ColonyVersion))
+	b.WriteString(rule + "\n\n")
 	b.WriteString(renderStageMarker("Summary"))
 	b.WriteString("Colony sealed at Crowned Anthill.\n")
 	if state.Goal != nil {
@@ -2018,7 +2062,10 @@ func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	b.WriteString(fmt.Sprintf("Completed phases: %d\n", len(state.Plan.Phases)))
 	b.WriteString("Summary: ")
 	b.WriteString(summaryPath)
-	b.WriteString("\n")
+	b.WriteString("\n\n")
+	b.WriteString("The colony stands crowned and sealed.\n")
+	b.WriteString("Its wisdom lives on in QUEEN.md.\n")
+	b.WriteString("The anthill has reached its final form.\n")
 	b.WriteString(renderNextUp(
 		`Run `+"`aether entomb`"+` to archive this completed colony into chambers.`,
 		`Run `+"`aether init \"next goal\"`"+` if you want to start the next colony immediately.`,
