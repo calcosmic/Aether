@@ -131,6 +131,18 @@ var initCmd = &cobra.Command{
 			charter = &ch
 		}
 
+		// --research records a pointer to work the operator already had done,
+		// most often a saved Oracle run. It is stored on state rather than
+		// folded into the charter: charter fields are capped at 2000 characters
+		// and reach workers as hard rules, while research is evidence a worker
+		// may argue with.
+		researchDocs, _ := cmd.Flags().GetStringArray("research")
+		researchDocs, researchErr := validateColonyResearchDocs(skillWorkspaceRoot(), researchDocs)
+		if researchErr != nil {
+			outputError(1, researchErr.Error(), nil)
+			return nil
+		}
+
 		// Rotate trace file if it has grown too large
 		if rotated, rotateErr := trace.RotateTraceFile(store, 50); rotateErr == nil && rotated {
 			fmt.Fprintf(os.Stderr, "warning: rotated trace.jsonl before init\n")
@@ -214,6 +226,7 @@ var initCmd = &cobra.Command{
 			ParallelMode: colony.ModeInRepo,
 		}
 		state.Charter = charter
+		state.ResearchDocs = researchDocs
 
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			outputError(1, fmt.Sprintf("failed to create COLONY_STATE.json: %v", err), nil)
@@ -289,11 +302,16 @@ var initCmd = &cobra.Command{
 			"shelf_dismissed":     shelfDismissed,
 			"shelf_failed":        shelfFailed,
 		}
+		if len(researchDocs) > 0 {
+			// Echo what was accepted so the operator can see the pointer landed
+			// rather than trusting that it did.
+			result["research_docs"] = researchDocs
+		}
 		if priorStateBackup != "" {
 			result["prior_state_backup"] = priorStateBackup
 			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
 		}
-		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir))
+		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, researchDocs...))
 		return nil
 	},
 }
@@ -321,6 +339,7 @@ func init() {
 	initCmd.Flags().String("scope", string(colony.ScopeProject), "Colony scope: project or meta")
 	initCmd.Flags().String("colony-mode", string(colony.ColonyModeColony), "Colony mode: colony or orchestrator")
 	initCmd.Flags().String("charter-json", "", "Approved charter data as JSON string")
+	initCmd.Flags().StringArray("research", nil, "Repository-relative path to a research document this colony should be planned from, e.g. a saved Oracle run under .aether/research (repeatable)")
 	initCmd.Flags().Bool("confirm-reinit", false, "Confirm replacing an existing colony's state, sealed or active (a timestamped backup is written to .aether/data/backups/)")
 	initCmd.Flags().String("promote-shelf", "", "Comma-separated shelf entry IDs to promote into this colony as todos")
 	initCmd.Flags().String("dismiss-shelf", "", "Comma-separated shelf entry IDs to dismiss from the backlog")

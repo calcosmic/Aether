@@ -20,28 +20,28 @@ import (
 )
 
 type codexBuildDispatch struct {
-	Stage         string   `json:"stage"`
-	Wave          int      `json:"wave,omitempty"`
-	ExecutionWave int      `json:"execution_wave,omitempty"`
-	Caste         string   `json:"caste"`
-	AgentName     string   `json:"agent_name,omitempty"`
-	Name          string   `json:"name"`
-	Task          string   `json:"task"`
-	Status        string   `json:"status"`
-	Summary       string   `json:"summary,omitempty"`
-	TaskID        string   `json:"task_id,omitempty"`
-	TaskIndex     int      `json:"task_index,omitempty"`
+	Stage         string `json:"stage"`
+	Wave          int    `json:"wave,omitempty"`
+	ExecutionWave int    `json:"execution_wave,omitempty"`
+	Caste         string `json:"caste"`
+	AgentName     string `json:"agent_name,omitempty"`
+	Name          string `json:"name"`
+	Task          string `json:"task"`
+	Status        string `json:"status"`
+	Summary       string `json:"summary,omitempty"`
+	TaskID        string `json:"task_id,omitempty"`
+	TaskIndex     int    `json:"task_index,omitempty"`
 	// CoveredTaskIDs lists every task this one worker took on. It holds more
 	// than one entry when a chain of dependent steps was merged into a single
 	// dispatch (see coalesceSequentialDispatches). TaskID stays the first of
 	// them so result matching and evidence keep working unchanged; this field
 	// exists so nothing downstream can believe the later steps were unassigned.
 	CoveredTaskIDs []string `json:"covered_task_ids,omitempty"`
-	DependsOn     []string `json:"depends_on,omitempty"`
-	DeclaredPaths []string `json:"declared_paths,omitempty"`
-	Outputs       []string `json:"outputs,omitempty"`
-	Blockers      []string `json:"blockers,omitempty"`
-	Duration      float64  `json:"duration,omitempty"`
+	DependsOn      []string `json:"depends_on,omitempty"`
+	DeclaredPaths  []string `json:"declared_paths,omitempty"`
+	Outputs        []string `json:"outputs,omitempty"`
+	Blockers       []string `json:"blockers,omitempty"`
+	Duration       float64  `json:"duration,omitempty"`
 	// Brief is the fully rendered worker prompt for wrapper-spawned workers.
 	// Build was the only workflow whose plan-only manifest carried no brief —
 	// colonize, plan, and heavy-continue all do — so everything the runtime
@@ -2766,6 +2766,14 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	if researchSection := resolvePhaseResearchSection(root, phase.ID); researchSection != "" {
 		b.WriteString("\n")
 		b.WriteString(researchSection)
+		b.WriteString("\n")
+	}
+
+	// A smaller share than planning gets: the task must stay the bulk of a
+	// build brief (TestBuildWorkerBriefIsMostlyTask).
+	if colonyResearch := resolveColonyResearchSection(root, loadColonyResearchDocs(root), colonyResearchBuildBudgetChars); colonyResearch != "" {
+		b.WriteString("\n")
+		b.WriteString(colonyResearch)
 		b.WriteString("\n")
 	}
 

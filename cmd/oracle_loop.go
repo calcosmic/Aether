@@ -1346,6 +1346,21 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 	// is the one place that can promise a terminal line for anyone following.
 	emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventRunEnd, state))
 
+	// A run that reached a conclusion gets its write-up saved somewhere the
+	// next run cannot destroy. Blocked and manually stopped runs do not --
+	// `aether oracle save` keeps those on request.
+	researchDocument := ""
+	if status == "complete" || stopReason == "max_iterations_reached" {
+		saved, saveErr := saveOracleResearchDocument(paths, state, plan, "")
+		if saveErr != nil {
+			// Worth saying out loud: the run succeeded but its write-up is
+			// still only in the workspace, where the next run will sweep it.
+			emitVisualLine(fmt.Sprintf("⚠ research completed but could not be saved durably (%v) — run `aether oracle save` before starting another run", saveErr))
+		} else {
+			researchDocument = saved
+		}
+	}
+
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
 	result := map[string]interface{}{
 		"mode":               "run",
@@ -1394,10 +1409,21 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"original_prompt":    strings.TrimSpace(state.Topic),
 		"synthesized_prompt": buildSynthesizedPrompt(plan, state),
 	}
+	if researchDocument != "" {
+		result["research_document"] = researchDocument
+		result["next"] = fmt.Sprintf("aether init --research %s \"<goal>\"", researchDocument)
+	}
 	if status == "complete" {
-		evidencePath, err := filepath.Rel(paths.Root, paths.SynthesisPath)
-		if err != nil {
-			return nil, fmt.Errorf("resolve Oracle synthesis evidence path: %w", err)
+		// Cite the durable copy when there is one: synthesis.md is swept into
+		// the archive the moment the next research question is asked, so a
+		// pointer to it goes stale immediately.
+		evidencePath := researchDocument
+		if evidencePath == "" {
+			rel, err := filepath.Rel(paths.Root, paths.SynthesisPath)
+			if err != nil {
+				return nil, fmt.Errorf("resolve Oracle synthesis evidence path: %w", err)
+			}
+			evidencePath = rel
 		}
 		evidencePath = filepath.ToSlash(evidencePath)
 		result["plan_revision_option"] = planRevisionRecommendation(

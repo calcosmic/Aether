@@ -177,6 +177,7 @@ type codexPlanOptions struct {
 	RevisionType      string
 	RevisionReason    string
 	RevisionEvidence  []string
+	ResearchDocs      []string
 }
 
 type codexPlanningLoop struct {
@@ -309,6 +310,22 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err != nil {
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
+
+	// --research is additive and persistent: point once, and every later plan
+	// run keeps the document. A bad path fails the run rather than being
+	// dropped -- a silently ignored research document is the failure this
+	// whole handoff exists to prevent.
+	merged, changed, researchErr := mergeColonyResearchDocs(root, state.ResearchDocs, opts.ResearchDocs)
+	if researchErr != nil {
+		return nil, researchErr
+	}
+	if changed {
+		state.ResearchDocs = merged
+		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+			return nil, fmt.Errorf("record research documents on colony state: %w", err)
+		}
+	}
+
 	revisionContext, err := buildPlanRevisionContext(root, state, opts)
 	if err != nil {
 		return nil, err
@@ -2135,6 +2152,16 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString("\n")
 	}
 	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
+	// Research the operator pointed this colony at. This is the only injection
+	// point that works on a fresh colony's first plan -- phase research cannot
+	// run until phases exist -- and it covers both the Scout and the
+	// Route-Setter, and both the in-process and host-manifest paths, because
+	// both call this function.
+	if researchSection := resolveColonyResearchSection(root, loadColonyResearchDocs(root)); researchSection != "" {
+		b.WriteString("\n")
+		b.WriteString(researchSection)
+		b.WriteString("\n\n")
+	}
 	if len(survey.SourceAnchors) > 0 {
 		b.WriteString(fmt.Sprintf("- Source anchors available: %d repo-owned files from survey. Prefer referencing these files in task goals.\n", len(survey.SourceAnchors)))
 	}

@@ -3498,6 +3498,7 @@
       "confirm-reinit",
       "dismiss-shelf",
       "promote-shelf",
+      "research",
       "scope"
     ],
     "parent_command": "",
@@ -4790,6 +4791,7 @@
       "from-brief",
       "max-iterations",
       "min-confidence",
+      "name",
       "scope",
       "success-criteria",
       "template",
@@ -5379,11 +5381,14 @@
       "accept",
       "depth",
       "force",
+      "full",
       "max-iterations",
       "plan-only",
       "planning-depth",
+      "print-brief",
       "refresh",
       "repair-artifact",
+      "research",
       "revision-evidence",
       "revision-reason",
       "revision-type",
@@ -6358,6 +6363,14 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "research",
+    "short_description": "Browse research documents saved from completed Oracle runs",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "resume-colony",

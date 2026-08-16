@@ -130,6 +130,14 @@ goal is broad, vague, or missing implementation boundaries.
 For beginners: this is the part where you turn "build my app" into a clear
 mission the colony can plan from.
 
+**Check for existing research first.** Run `aether research list`. If a saved
+research document looks related to this goal, offer it to the user, and on their
+say-so pass it to init as `--research <path>`. The runtime then carries that
+research into the planning workers' briefs, so the plan is built on work already
+done instead of rediscovering it. Never attach a document the user has not
+agreed to — and never paste its contents into the charter, which is for
+governance, not evidence.
+
 Ask about:
 - target users and the user-visible outcome
 - must-have success criteria

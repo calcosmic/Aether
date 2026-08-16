@@ -120,6 +120,18 @@ var oracleCmd = &cobra.Command{
 			return nil
 		}
 
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "save") {
+			name, _ := cmd.Flags().GetString("name")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			result, err := runOracleSave(skillWorkspaceRoot(), name, dryRun)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			outputOK(result)
+			return nil
+		}
+
 		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "selftest") {
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
 			result, err := runOracleSelftest(skillWorkspaceRoot(), dryRun)
@@ -296,11 +308,13 @@ func init() {
 	oracleCmd.Flags().String("context", "", "For `oracle brief`: why this research is happening and what decision it feeds")
 	oracleCmd.Flags().StringArray("success-criteria", nil, "For `oracle brief`: what a finished answer contains (repeatable)")
 	oracleCmd.Flags().Bool("from-brief", false, "Start the Oracle loop from the approved research brief; fails when no brief has been approved")
+	oracleCmd.Flags().String("name", "", "For `oracle save`: filename slug for the saved research document")
 	oracleCmd.Flags().Bool("follow", false, "Stream one line per research round until the run ends")
 	oracleCmd.Flags().Duration("follow-interval", defaultOracleFollowInterval, "How often `--follow` checks for new rounds")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)
+	rootCmd.AddCommand(researchCmd)
 	rootCmd.AddCommand(runCompatibilityCmd)
 	rootCmd.AddCommand(versionsCmd)
 }

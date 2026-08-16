@@ -99,7 +99,7 @@ func plannedPhaseResearchDispatches(root, planDepth, goal string, candidates []p
 			TaskID:    fmt.Sprintf("plan-research-phase-%d", candidate.ID),
 			Outputs:   []string{fileName},
 			Status:    "planned",
-			Brief:     renderPhaseResearchBrief(goal, candidate, survey),
+			Brief:     renderPhaseResearchBrief(root, goal, candidate, survey),
 		})
 	}
 	attachPlanningDispatchSkillAssignments(dispatches)
@@ -120,7 +120,7 @@ func hasWorkerAuthoredResearch(path string) bool {
 // renderPhaseResearchBrief is the v5 Phase Domain Research mission, rebuilt on
 // the modern engine: the Scout investigates one phase's domain and writes a
 // six-section RESEARCH.md the planner and build briefs both consume.
-func renderPhaseResearchBrief(goal string, candidate phaseResearchCandidate, survey codexSurveyContext) string {
+func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidate, survey codexSurveyContext) string {
 	var b strings.Builder
 	b.WriteString("You are a Scout performing Phase Domain Research.\n\n")
 	b.WriteString("## Mission\n")
@@ -131,6 +131,13 @@ func renderPhaseResearchBrief(goal string, candidate phaseResearchCandidate, sur
 	}
 	b.WriteString("\n## Territory Survey\n")
 	b.WriteString(renderPhaseResearchSurveySection(survey))
+	// Research the operator already had done. Findings it already covers add
+	// no value if rediscovered here — extend it instead.
+	if colonyResearch := resolveColonyResearchSection(root, loadColonyResearchDocs(root)); colonyResearch != "" {
+		b.WriteString("\n")
+		b.WriteString(colonyResearch)
+		b.WriteString("\n")
+	}
 	b.WriteString("\n## Research Areas\n")
 	b.WriteString("1. Key patterns in the existing codebase relevant to this phase\n")
 	b.WriteString("2. External library/API documentation if the phase involves external tools\n")

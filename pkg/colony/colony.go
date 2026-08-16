@@ -345,6 +345,13 @@ type ColonyState struct {
 	Charter            *Charter             `json:"charter,omitempty"`
 	PendingSuggestions *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
 	LastAnalyzeCommit  *string              `json:"last_analyze_commit,omitempty"`
+	// ResearchDocs are repository-relative paths the operator pointed this
+	// colony at, typically saved Oracle runs under .aether/research. They are
+	// pointers, not content: the runtime reads them when composing worker
+	// briefs. Deliberately not folded into Charter, whose fields are capped at
+	// 2000 characters and are rendered to workers as hard rules -- research is
+	// evidence, not governance. omitempty keeps older state files round-tripping.
+	ResearchDocs []string `json:"research_docs,omitempty"`
 }
 
 // EffectiveScope returns the compatibility-safe colony scope.

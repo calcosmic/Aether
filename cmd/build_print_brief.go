@@ -381,6 +381,7 @@ func renderBriefChecklist(dispatch codexBuildDispatch, brief, capsule string) st
 	rows = append(rows, territoryRow)
 
 	rows = append(rows, checklistRowFor(brief, "Phase Research", "## Phase Research"))
+	rows = append(rows, checklistRowFor(brief, "Colony Research", "## Colony Research"))
 	rows = append(rows, checklistRowFor(brief, "Codegraph Context", "## Codebase Graph Context"))
 	rows = append(rows, checklistRowFor(brief, "Pheromone Signals", "## Pheromone Signals"))
 	rows = append(rows, checklistRowFor(brief, "Previous Worker Handoffs", "## Previous Worker Handoffs"))

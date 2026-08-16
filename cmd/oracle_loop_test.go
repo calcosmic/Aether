@@ -830,10 +830,19 @@ func TestFinalizeOracleLoopRubricOutput(t *testing.T) {
 	if !ok {
 		t.Fatalf("finalizeOracleLoop output missing plan_revision_option: %#v", result["plan_revision_option"])
 	}
-	if command := stringValue(revisionOption["command"]); !strings.Contains(command, "--revision-evidence \".aether/oracle/synthesis.md\"") {
-		t.Fatalf("Oracle revision command points at the wrong synthesis artifact: %q", command)
+	// The evidence must be the durable saved document, not the workspace copy.
+	// .aether/oracle/synthesis.md is swept into archive/<timestamp>/ the moment
+	// the next research question is asked, so a plan-revision command citing it
+	// goes stale as soon as the operator researches anything else.
+	evidence := stringValue(revisionOption["command"])
+	if !strings.Contains(evidence, "--revision-evidence \".aether/research/") {
+		t.Fatalf("Oracle revision command should cite the durable research document, got: %q", evidence)
 	}
-	if _, err := os.Stat(paths.SynthesisPath); err != nil {
+	savedDocument := stringValue(result["research_document"])
+	if savedDocument == "" {
+		t.Fatal("a completed run did not save a durable research document")
+	}
+	if _, err := os.Stat(filepath.Join(paths.Root, savedDocument)); err != nil {
 		t.Fatalf("Oracle revision evidence does not exist: %v", err)
 	}
 

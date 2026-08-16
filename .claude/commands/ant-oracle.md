@@ -221,7 +221,31 @@ For each approved finding:
 
 **Do NOT suggest persistence for:** low-confidence findings, obvious observations, or findings already captured as pheromones.
 
+## Keeping The Research
+
+A completed run saves its write-up to `.aether/research/<date>-<slug>.md`, with
+front matter recording the core question, the confidence reached, and how many
+rounds it took. That directory is durable: the next research run archives the
+working files but never touches it.
+
+Use `aether research list` to browse saved research, and `aether oracle save` to
+keep the current run's write-up even when it stopped early.
+
+Point a later colony at one of those documents so its planners read the research
+instead of rediscovering it:
+
+```bash
+aether init --research .aether/research/<file>.md "<goal>"
+aether plan --research .aether/research/<file>.md
+aether plan --print-brief
+```
+
+`plan --research` attaches a document to a colony that already exists, and
+`plan --print-brief` confirms the research reaches the planners before a plan
+run is paid for.
+
 **Next steps:**
+- `aether research list` — browse research saved from completed runs
 - `aether oracle status` — check a running loop without touching it
 - `aether oracle status --follow` — reattach to a run and watch its rounds
 - `aether oracle recover` — clear a run whose controller died

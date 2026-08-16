@@ -38,3 +38,4 @@ guardrails:
   - "Do not fake Oracle worker completion; if no real dispatcher is available, surface the runtime error and preserve the Oracle workspace."
 follow_up:
   persistence: "After oracle completes, suggest persisting high-value findings as pheromone signals (aether pheromone-write) or hive wisdom (aether hive-store). User approves each suggestion."
+  research_document: "A completed run saves its write-up to `.aether/research/<date>-<slug>.md`, which survives later runs. Use `aether research list` to browse saved research and `aether oracle save` to keep a run that stopped early. Point a colony at one with `aether init --research <path> \"<goal>\"` or `aether plan --research <path>`, then confirm delivery with `aether plan --print-brief`."

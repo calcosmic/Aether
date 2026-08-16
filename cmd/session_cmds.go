@@ -34,9 +34,12 @@ func commandFileMap() map[string]commandFileEntry {
 			dir:   ".aether/data/survey",
 			files: []string{"PROVISIONS.md", "TRAILS.md", "BLUEPRINT.md", "CHAMBERS.md", "DISCIPLINES.md", "SENTINEL-PROTOCOLS.md", "PATHOGENS.md"},
 		},
+		// Workspace files only. Saved research lives in .aether/research and is
+		// never cleared here -- it is the deliverable the operator keeps and
+		// points later colonies at.
 		"oracle": {
 			dir:   ".aether/oracle",
-			files: []string{"state.json", "plan.json", "gaps.md", "synthesis.md", "research-plan.md", ".stop", ".last-topic"},
+			files: []string{"state.json", "plan.json", "gaps.md", "synthesis.md", "research-plan.md", "progress.jsonl", "pending-brief.json", ".stop", ".last-topic"},
 		},
 		"watch": {
 			dir:   ".aether/data",

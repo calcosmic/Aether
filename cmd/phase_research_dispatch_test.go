@@ -156,7 +156,7 @@ func TestRenderPhaseResearchBriefIncludesSurvey(t *testing.T) {
 		Frameworks:   []string{"cobra"},
 		Dependencies: []string{"cobra", "testify"},
 	}
-	brief := renderPhaseResearchBrief("Build the exporter", candidate, populated)
+	brief := renderPhaseResearchBrief(t.TempDir(), "Build the exporter", candidate, populated)
 	if !strings.Contains(brief, filepath.ToSlash(filepath.Join(".aether", "data", "survey", "nest.md"))) {
 		t.Errorf("brief missing survey doc nest.md:\n%s", brief)
 	}
@@ -167,7 +167,7 @@ func TestRenderPhaseResearchBriefIncludesSurvey(t *testing.T) {
 		t.Errorf("brief missing already-mapped territory (Go, TypeScript, cobra):\n%s", brief)
 	}
 
-	empty := renderPhaseResearchBrief("Build the exporter", candidate, codexSurveyContext{})
+	empty := renderPhaseResearchBrief(t.TempDir(), "Build the exporter", candidate, codexSurveyContext{})
 	if !strings.Contains(empty, "No territory survey available — scan the repository directly.") {
 		t.Errorf("brief with zero-value survey missing explicit fallback sentence:\n%s", empty)
 	}

@@ -690,7 +690,7 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	}
 }
 
-func renderInitVisual(goal, scope, sessionID, dataDir string) string {
+func renderInitVisual(goal, scope, sessionID, dataDir string, researchDocs ...string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
 	b.WriteString(visualDividerStr())
@@ -708,6 +708,11 @@ func renderInitVisual(goal, scope, sessionID, dataDir string) string {
 	b.WriteString("Nest: ")
 	b.WriteString(dataDir)
 	b.WriteString("\n")
+	if len(researchDocs) > 0 {
+		b.WriteString("Research: ")
+		b.WriteString(strings.Join(researchDocs, ", "))
+		b.WriteString("\n")
+	}
 	b.WriteString(renderNextUp(
 		`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
 		`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,

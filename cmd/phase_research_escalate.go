@@ -35,7 +35,7 @@ func phaseResearchEscalationDispatch(root, goal string, candidate phaseResearchC
 		TaskID:    fmt.Sprintf("plan-research-escalate-phase-%d", candidate.ID),
 		Outputs:   []string{fileName},
 		Status:    "planned",
-		Brief:     preamble + renderPhaseResearchBrief(goal, candidate, survey),
+		Brief:     preamble + renderPhaseResearchBrief(root, goal, candidate, survey),
 	}
 	dispatches := []codexPlanningDispatch{dispatch}
 	attachPlanningDispatchSkillAssignments(dispatches)

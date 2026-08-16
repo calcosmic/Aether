@@ -72,6 +72,16 @@ var planCmd = &cobra.Command{
 		revisionType, _ := cmd.Flags().GetString("revision-type")
 		revisionReason, _ := cmd.Flags().GetString("revision-reason")
 		revisionEvidence, _ := cmd.Flags().GetStringArray("revision-evidence")
+		researchDocs, _ := cmd.Flags().GetStringArray("research")
+
+		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
+			fullFlag, _ := cmd.Flags().GetBool("full")
+			if err := printPlanningBriefs(skillWorkspaceRoot(), fullFlag); err != nil {
+				outputError(1, err.Error(), nil)
+			}
+			return nil
+		}
+
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -92,6 +102,7 @@ var planCmd = &cobra.Command{
 			RevisionType:      revisionType,
 			RevisionReason:    revisionReason,
 			RevisionEvidence:  revisionEvidence,
+			ResearchDocs:      researchDocs,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -1244,6 +1255,9 @@ func init() {
 	planCmd.Flags().String("revision-type", "", "Why a refreshed plan is needed: manual, user_feedback, research, verification_failure, or scope_change")
 	planCmd.Flags().String("revision-reason", "", "Traceable explanation for refreshing a plan after completed work")
 	planCmd.Flags().StringArray("revision-evidence", nil, "Repository-relative evidence file supporting the revision (repeatable)")
+	planCmd.Flags().StringArray("research", nil, "Repository-relative research document to plan from, e.g. a saved Oracle run under .aether/research (repeatable; persisted so later plan runs keep it)")
+	planCmd.Flags().Bool("print-brief", false, "Print which context sections the planning workers would receive (present/absent, size). Reads state; mutates nothing")
+	planCmd.Flags().Bool("full", false, "With --print-brief, also print each planning worker's assembled brief")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results")

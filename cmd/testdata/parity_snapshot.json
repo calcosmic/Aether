@@ -504,6 +504,7 @@
     "registry-export-xml",
     "registry-import-xml",
     "registry-list",
+    "research",
     "resume-colony",
     "resume-dashboard",
     "review-ledger-read",
