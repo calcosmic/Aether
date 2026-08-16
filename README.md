@@ -477,7 +477,9 @@ aether resume
 
 `/ant-run` chains the build-verify-advance loop across multiple phases with intelligent pause conditions. Instead of running each command by hand, you engage autopilot and it handles the cycle automatically.
 
-It pauses — not crashes — when something needs attention: test failures, critical findings, new blockers, or runtime verification. Fix the issue, run `/ant-run` again, and it resumes.
+It streams its progress in your terminal as it works — an engage banner, live worker lines during each build, a phase-advancement block with a momentum ticker between phases, and a celebration when everything is done.
+
+It pauses — not crashes — when something needs attention: failed verification, unresolved blocker decisions, test-failure signals, failed quality/security gates, critical resilience findings, an uncommitted-changes marker, or the replan checkpoint (every 2 phases by default; `--continue` skips it). The pause prints its reason and the suggested next command. Fix the issue, run `/ant-run` again, and it resumes. (`aether run --dry-run` previews the plan and lists every pause trigger.)
 
 ```bash
 # Run all remaining phases automatically

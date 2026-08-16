@@ -195,7 +195,7 @@ Plans:
   2. Workers spawned during build receive pheromone signals, matched skills, survey data, colony goal, and phase description in their context -- nothing is silently dropped
   3. Oracle findings flow end-to-end: research results become instincts, instincts become learnings, learnings promote to QUEEN.md, and high-confidence instincts reach the Hive Brain
   4. All 9 flagship workflows (build, continue, plan, colonize, autopilot, seal, entomb, swarm, oracle) produce correct state mutations and ceremony output when run sequentially
-  5. Autopilot (`aether run`) respects all 10 Classic pause conditions -- it stops appropriately on test failures, critical chaos findings, quality gate failures, and other trigger events
+  5. Autopilot (`aether run`) respects all 10 Classic pause conditions -- it stops appropriately on test failures, critical chaos findings, quality gate failures, and other trigger events. *(Closed 2026-08-16: the pause engine is wired into the real run loop and proven by `TestGoldenAutopilotPauseConditions`; per-condition dispositions — including the retirement of the classic auditor-score condition, which has no Go counterpart — recorded in `.planning/decisions/autopilot-pause-conditions.md`.)*
 **Plans**: 3 plans
 
 ### Phase 149: Queen Execution Policy

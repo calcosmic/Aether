@@ -301,9 +301,15 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
       phase) and `TestCLIContinueEnforcesFreshCriterionEvidence` (stale evidence
       is rejected, not silently accepted).
 - [x] WORKFLOW-06: Run (autopilot) workflow restored and verified end-to-end
-      Evidence: `TestRunCompatibilityExecutesSinglePhase` runs the real autopilot
-      command through one phase; `TestRunCompatibilityDryRunPlansLifecycle` locks
-      the dry-run plan; pause behaviour in `cmd/autopilot_pause_test.go`.
+      Evidence: `TestRunAutopilotCompletesMultiPhase` completes a two-phase
+      colony through the real loop (build → continue → advance → completed);
+      `TestGoldenAutopilotPauseConditions` proves the pause engine fires inside
+      that same loop; `TestRunAutopilotReplanDue` locks the replan checkpoint;
+      `TestRunCompatibilityExecutesSinglePhase` covers the blocked path;
+      `TestRunCompatibilityDryRunPlansLifecycle` + `TestRunDryRunDoesNotMutateState`
+      lock the dry-run plan and its read-only guarantee.
+      (Re-evidenced 2026-08-16: the earlier evidence completed zero phases and
+      cited a pause suite wired to a path `aether run` never called.)
 - [x] WORKFLOW-07: Swarm workflow restored and verified end-to-end
       Evidence: `TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult` runs
       the real swarm command with worker waves and asserts the structured result;
