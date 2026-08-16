@@ -4785,6 +4785,8 @@
       "core-question",
       "depth",
       "dry-run",
+      "follow",
+      "follow-interval",
       "from-brief",
       "max-iterations",
       "min-confidence",

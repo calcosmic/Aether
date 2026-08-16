@@ -40,6 +40,8 @@ var visualWriterExemptions = map[string]string{
 	"audit_catalog.go:outputCatalogMarkdown":     "markdown audit artifact, normally piped to a file",
 	"audit_catalog.go:outputReliabilityMarkdown": "markdown audit artifact, normally piped to a file",
 
+	"oracle_progress.go:appendOracleProgressEvent": "diagnostics for a failed progress-log write; the log itself is machine-read by --follow and the line the operator sees goes through emitVisualLine",
+
 	"gate.go:gateResultsReadCmd":            "JSON gate results for scripts and wrappers",
 	"gate.go:gateResultsWriteCmd":           "JSON write acknowledgement",
 	"gate.go:shouldSkipGateCmd":             "bare boolean consumed by scripts",

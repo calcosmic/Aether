@@ -13,80 +13,88 @@ Use the Go `aether` CLI as the source of truth.
 
 ## Intent Refinement
 
-When the user provides a research topic, do a short AI-led scoping pass before
-starting the runtime loop.
+When the user provides a research topic, run a short scoping pass before
+starting the loop. The runtime owns the proposals; you conduct the conversation.
 
 For beginners: this is the part where you turn "look into this" into a useful
 research brief, so Oracle does not spend iterations answering the wrong
 question.
 
-Ask one compact batch of 3-6 questions if any of these are unclear:
+**Step 1 — ask the runtime what it suggests.** This writes nothing:
+
+```bash
+AETHER_OUTPUT_MODE=json aether oracle propose --topic "<the user's raw topic>"
+```
+
+It returns a suggested output shape, evidence sources, depth, accuracy target,
+and how many clarifying questions the topic needs, alongside every option the
+user can pick from with its round count and rough duration. Every suggestion is
+derived from keywords — present them as pre-selected choices the user can
+change, never as decisions already made.
+
+**Step 2 — ask how much scoping the user wants** before asking anything else.
+Offer these as selectable options, pre-selecting the `clarifying_questions`
+count from the proposal:
+
+- **Skip** — I know exactly what I want (0 questions)
+- **Quick** — 3 questions
+- **Standard** — 6 questions
+- **Thorough** — 10 questions
+
+**Step 3 — ask that many questions**, drawn from whichever of these are still
+unclear, most decision-shaping first:
 - the decision the user needs to make
-- the desired output shape, such as PRD, tech evaluation, architecture review,
-  bug investigation, or research brief
+- the desired output shape (PRD, tech evaluation, architecture review, bug
+  investigation, research brief)
 - target users or affected worker roles
 - constraints, non-goals, deadlines, or risk tolerance
 - evidence sources to prefer: repo, web/current docs, or both
 - what would make the answer actionable
 
-After the user answers, synthesize:
-- a precise Oracle prompt
-- the template to pass to the runtime
-- the scope flag if it is obvious
+**Step 4 — confirm depth and target accuracy** as selectable options, seeded
+from the proposal:
 
-Template mapping:
-- PRD, requirements, user stories, acceptance criteria, product scope:
-  `--template prd`
-- technology/library/tool comparison: `--template tech-eval`
-- system design or architecture review: `--template architecture-review`
-- bug, regression, failure, or root cause: `--template bug-investigation`
-- best practices, conventions, or patterns: `--template research-brief`
-- otherwise: `--template custom`
+| Depth | Rounds |
+|---|---|
+| `quick` | up to 5 |
+| `balanced` | up to 15 |
+| `deep` | up to 30 |
+| `exhaustive` | up to 50 |
 
-Present research depth as selectable options unless the user already gave one:
-- `quick` — fast first pass, up to 5 iterations
-- `balanced` or `standard` — normal thoroughness, up to 15 iterations
-- `deep` — comprehensive investigation, up to 30 iterations
-- `exhaustive` or `marathon` — near-complete convergence, up to 50 iterations
-
-If the user gives an exact iteration cap, pass `--max-iterations <1-50>`.
-
-Ask the user to choose target confidence unless they already gave one:
-- **80% confidence** — good enough for a first pass
-- **90% confidence** — solid understanding
-- **95% confidence (recommended)** — thorough, few gaps remaining
-- **99% confidence** — near-exhaustive
-
-Pass the selected target as `--confidence-target <percent>`. Oracle should keep
-iterating until it reaches that target, hits max iterations, or reports a hard
-blocker.
+Accuracy targets are 80% (first pass), 90% (solid), 95% (thorough,
+recommended), 99% (near-exhaustive). If the user gives an exact round cap, pass
+`--max-iterations <1-50>`.
 
 The PRD template/reference is automatic. Do not ask the user to run
 `aether reference-match`; that command is only diagnostic.
 
 ## Research Brief Gate
 
-Before any tokens burn on the loop, present the synthesized brief as an
-approvable artifact — this is the gate that prevents the Oracle from spending
-thirty iterations answering a malformed question:
+Before any tokens burn on the loop, record the synthesized brief. The runtime
+renders the approval panel — do not hand-draw it:
 
-```
-╭─ 🔮 Research Brief ─────────────────────────────╮
-  Topic:            {one-line topic}
-  Core Question:    {the single question the loop must answer}
-  Context:          {2-3 lines: why now, what decision this feeds}
-  Success Criteria: {what a done answer contains — bullet list}
-
-  Template: {template}   Depth: {depth}   Target: {confidence}%
-╰─────────────────────────────────────────────────╯
+```bash
+AETHER_OUTPUT_MODE=visual aether oracle brief \
+  --topic "<one-line topic>" \
+  --core-question "<the single question the loop must answer>" \
+  --context "<why now, what decision this feeds>" \
+  --success-criteria "<what a done answer contains>" \
+  --success-criteria "<another criterion>" \
+  --depth <depth> --confidence-target <percent> --template <template> --dry-run
 ```
 
-Ask: **approve**, **edit** (revise a field and re-present), or **cancel**.
-Maximum 2 edit rounds — after the second, run with the latest brief or cancel.
-Do not start the runtime loop until the brief is approved. The Core Question
-must be a genuine question, scoped to one decision — never a directory listing,
-a task list, or "everything about X". If the user's topic is that broad, split
-it into focused briefs and gate each one.
+Show the rendered panel and ask: **approve**, **edit** (revise a field and
+re-present), or **cancel**. Maximum 2 edit rounds — after the second, run with
+the latest brief or cancel. On approval, run the same command **without**
+`--dry-run` to record it.
+
+The Core Question must be a genuine question, scoped to one decision — never a
+directory listing, a task list, or "everything about X". The runtime rejects a
+question with no question mark or one longer than 240 characters. If the user's
+topic is that broad, split it into focused briefs and gate each one.
+
+The approved question becomes the loop's first research question, and the brief
+is recorded with the finished research so it says what it set out to answer.
 
 **Focus signal:** if the approved brief names a specific area of the codebase
 or a constraint the colony should honor during upcoming builds, offer once to
@@ -94,25 +102,41 @@ record it: `aether focus "<area or constraint from the brief>"`. Write it only
 with the user's approval — research topics are not automatically colony
 steering.
 
-Run the Oracle after the brief is approved, passing the synthesized prompt
-built from the approved brief:
+## Running The Loop
+
+Start from the approved brief and stream its progress:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> --background "<synthesized prompt>"
+AETHER_OUTPUT_MODE=visual aether oracle --from-brief --background --follow
 ```
 
-Use `--background` for long-running research, especially from OpenCode. The
-runtime detaches a controller, writes progress under `.aether/oracle`, and
-`aether oracle status` remains the inspection path. Omit `--background` only
-when the user explicitly wants foreground execution — and if they do, tell them
-first: foreground Oracle runs its research workers through the **Go subprocess
-path**, not the Agent tool. There is no visible per-worker ceremony while it
-runs; progress is CLI output and `.aether/oracle` files only.
+`--from-brief` takes the topic, depth, accuracy target, sources and output shape
+from the approved brief, and **fails if no brief has been approved** — that
+refusal is the gate, so do not work around it by passing the topic directly
+unless the user explicitly asks to skip scoping.
+
+`--background` detaches the controller so a long run cannot time out this tool
+call. `--follow` then streams one line per round — phase, round number, current
+confidence against the target, and the question being investigated — until the
+run ends. Both together are the normal path.
+
+`aether oracle status` remains the inspection path and never modifies the run.
+If it reports a stale controller, `aether oracle recover` clears it.
 
 When the runtime detects a hosted Claude/OpenCode agent session and the command
 is not already backgrounded, it auto-detaches the Oracle controller. Treat that
-as a normal background run: report the PID/log path and inspect progress through
-`aether oracle status`.
+as a normal background run.
+
+**Before a long run, prove the machinery works:**
+
+```bash
+aether oracle selftest --dry-run   # setup checks only; spawns nothing
+aether oracle selftest             # one real round end to end
+```
+
+`selftest` reports which dispatcher it picked, resolves the agent definition,
+runs a single real research round in a throwaway workspace, and exits non-zero
+if any part of that fails. Use it whenever the user doubts Oracle is working.
 
 ## Promoting Findings Into Colony Memory
 
@@ -198,6 +222,9 @@ For each approved finding:
 **Do NOT suggest persistence for:** low-confidence findings, obvious observations, or findings already captured as pheromones.
 
 **Next steps:**
-- `aether oracle status` — check a running loop
+- `aether oracle status` — check a running loop without touching it
+- `aether oracle status --follow` — reattach to a run and watch its rounds
+- `aether oracle recover` — clear a run whose controller died
+- `aether oracle selftest` — prove the research machinery works
 - `aether oracle promote --dry-run` — preview capturing findings into colony memory
 - `/ant-plan` (refresh with `--revision-evidence`) — fold findings into the plan

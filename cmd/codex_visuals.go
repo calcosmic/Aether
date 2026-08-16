@@ -350,6 +350,21 @@ func outputWorkflow(result interface{}, visual string) {
 	outputOK(result)
 }
 
+// emitVisualLine writes a single progress line with one trailing newline, so
+// repeated calls stack as readable scrollback. emitVisualProgress adds a blank
+// line after each block, which is right for banners and wrong for a run that
+// emits fifty rounds.
+func emitVisualLine(line string) {
+	if !shouldRenderVisualOutput(stdout) {
+		return
+	}
+	line = strings.TrimRight(line, "\n")
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+	writeVisualOutput(stdout, line+"\n")
+}
+
 func emitVisualProgress(visual string) {
 	if !shouldRenderVisualOutput(stdout) {
 		return

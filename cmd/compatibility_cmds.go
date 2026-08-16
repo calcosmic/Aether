@@ -53,7 +53,7 @@ var watchCmd = &cobra.Command{
 }
 
 var oracleCmd = &cobra.Command{
-	Use:   "oracle [topic|status|stop]",
+	Use:   "oracle [topic|propose|brief|status|stop|recover|promote|selftest]",
 	Short: "Run the autonomous Oracle RALF research loop",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -120,6 +120,39 @@ var oracleCmd = &cobra.Command{
 			return nil
 		}
 
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "selftest") {
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			result, err := runOracleSelftest(skillWorkspaceRoot(), dryRun)
+			if result != nil {
+				outputWorkflow(result, renderOracleSelftest(result))
+			}
+			if err != nil {
+				return renderedErrorExit(1)
+			}
+			return nil
+		}
+
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "recover") {
+			result, err := oracleRecoverStaleRun(skillWorkspaceRoot())
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			outputOK(result)
+			return nil
+		}
+
+		// `status --follow` streams the round log and never touches state.
+		follow, _ := cmd.Flags().GetBool("follow")
+		followInterval, _ := cmd.Flags().GetDuration("follow-interval")
+		if follow && (len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status")) {
+			if err := followOracleProgress(skillWorkspaceRoot(), followInterval); err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			return nil
+		}
+
 		depth, _ := cmd.Flags().GetString("depth")
 		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
 		scope, _ := cmd.Flags().GetString("scope")
@@ -157,6 +190,16 @@ var oracleCmd = &cobra.Command{
 			return renderedErrorExit(1)
 		}
 		outputWorkflow(result, renderOracleCompatibilityVisual(result))
+
+		// `--background --follow` is the wrapper's normal path: detach the
+		// controller so a long run cannot time out the host's tool call, then
+		// stream its rounds back so the operator can still watch it work.
+		if follow {
+			if err := followOracleProgress(skillWorkspaceRoot(), followInterval); err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+		}
 		return nil
 	},
 }
@@ -253,6 +296,8 @@ func init() {
 	oracleCmd.Flags().String("context", "", "For `oracle brief`: why this research is happening and what decision it feeds")
 	oracleCmd.Flags().StringArray("success-criteria", nil, "For `oracle brief`: what a finished answer contains (repeatable)")
 	oracleCmd.Flags().Bool("from-brief", false, "Start the Oracle loop from the approved research brief; fails when no brief has been approved")
+	oracleCmd.Flags().Bool("follow", false, "Stream one line per research round until the run ends")
+	oracleCmd.Flags().Duration("follow-interval", defaultOracleFollowInterval, "How often `--follow` checks for new rounds")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)

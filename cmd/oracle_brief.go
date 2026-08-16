@@ -387,7 +387,7 @@ func runOracleBriefApprove(root string, opts oracleBriefOptions, dryRun bool) (m
 		"brief":    brief,
 		"dry_run":  dryRun,
 		"panel":    renderOracleBriefPanel(brief),
-		"next":     "aether oracle --from-brief --background",
+		"next":     "aether oracle --from-brief --background --follow",
 		"approved": !dryRun,
 	}
 	if dryRun {

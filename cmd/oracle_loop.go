@@ -375,6 +375,7 @@ type oraclePaths struct {
 	GapsPath         string
 	SynthesisPath    string
 	ResearchPlanPath string
+	ProgressPath     string
 	StopPath         string
 	LoopPath         string
 	AgentName        string
@@ -475,6 +476,16 @@ func oracleTruthyValue(value string) bool {
 	}
 }
 
+// oracleStateHasStaleController reports whether a run claims to be active
+// behind a controller process that is gone. It only reads.
+func oracleStateHasStaleController(state oracleStateFile) bool {
+	status := strings.TrimSpace(state.Status)
+	if !strings.EqualFold(status, "active") && !strings.EqualFold(status, "planned") {
+		return false
+	}
+	return state.ControllerPID > 0 && !oracleProcessExists(state.ControllerPID)
+}
+
 func oracleStatusResult(root string) (map[string]interface{}, error) {
 	paths := oracleWorkspacePaths(root)
 	state, _ := loadOracleStateFile(paths.StatePath)
@@ -482,17 +493,24 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
 	active := strings.EqualFold(state.Status, "active") || strings.EqualFold(state.Status, "planned")
-	if active && state.ControllerPID > 0 && !oracleProcessExists(state.ControllerPID) {
+
+	// Detect a dead controller, but do not repair one. Status is the
+	// inspection command, and inspection must not mutate -- `--follow` polls
+	// this state every couple of seconds, and a PID race here would have it
+	// rewriting state.json underneath a live run. `aether oracle recover`
+	// performs the repair when the operator asks for it.
+	staleController := false
+	if active && oracleStateHasStaleController(state) {
+		staleController = true
+		active = false
 		state.Status = "blocked"
 		state.StopReason = "stale_controller"
-		state.Summary = fmt.Sprintf("Oracle controller PID %d is no longer running; saved research files are preserved.", state.ControllerPID)
-		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
-		_ = writeOracleStateFile(paths.StatePath, state)
-		_ = os.Remove(paths.LoopPath)
-		active = false
+		state.Summary = fmt.Sprintf("Oracle controller PID %d is no longer running; saved research files are preserved. Run `aether oracle recover` to clear the run.", state.ControllerPID)
 	}
 	next := "aether oracle \"research topic\""
 	switch {
+	case staleController:
+		next = "aether oracle recover"
 	case active:
 		next = "aether oracle stop"
 	case fileExists(paths.ResearchPlanPath):
@@ -500,43 +518,44 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"mode":               "status",
-		"active":             active,
-		"status":             emptyFallback(strings.TrimSpace(state.Status), "idle"),
-		"topic":              strings.TrimSpace(state.Topic),
-		"scope":              emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
-		"template":           emptyFallback(strings.TrimSpace(state.Template), "custom"),
-		"platform":           emptyFallback(strings.TrimSpace(state.Platform), oracleDetectedPlatform()),
-		"phase":              emptyFallback(strings.TrimSpace(state.Phase), "idle"),
-		"iteration":          state.Iteration,
-		"max_iterations":     state.MaxIterations,
-		"overall_confidence": state.OverallConfidence,
-		"target_confidence":  state.TargetConfidence,
-		"question_count":     questionCount,
-		"answered_count":     answeredCount,
-		"touched_count":      touchedCount,
-		"focus_areas":        append([]string(nil), state.FocusAreas...),
-		"active_question_id": strings.TrimSpace(state.ActiveQuestionID),
-		"active_question":    strings.TrimSpace(state.ActiveQuestionText),
-		"active_attempt":     state.ActiveAttempt,
-		"active_reasoning":   strings.TrimSpace(state.ActiveReasoning),
-		"active_timeout_sec": state.ActiveTimeoutSec,
-		"active_elapsed_sec": state.ActiveElapsedSec,
-		"active_started_at":  strings.TrimSpace(state.ActiveStartedAt),
-		"active_deadline_at": strings.TrimSpace(state.ActiveDeadlineAt),
-		"last_artifact_path": strings.TrimSpace(state.LastArtifactPath),
-		"controller_pid":     state.ControllerPID,
-		"stop_reason":        strings.TrimSpace(state.StopReason),
-		"summary":            strings.TrimSpace(state.Summary),
-		"state_path":         paths.StatePath,
-		"plan_path":          paths.PlanPath,
-		"synthesis_path":     paths.SynthesisPath,
-		"research_plan":      paths.ResearchPlanPath,
-		"has_state":          fileExists(paths.StatePath),
-		"has_plan":           fileExists(paths.PlanPath),
-		"has_synthesis":      fileExists(paths.SynthesisPath),
-		"has_research_plan":  fileExists(paths.ResearchPlanPath),
-		"next":               next,
+		"mode":                   "status",
+		"active":                 active,
+		"state_repair_available": staleController,
+		"status":                 emptyFallback(strings.TrimSpace(state.Status), "idle"),
+		"topic":                  strings.TrimSpace(state.Topic),
+		"scope":                  emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
+		"template":               emptyFallback(strings.TrimSpace(state.Template), "custom"),
+		"platform":               emptyFallback(strings.TrimSpace(state.Platform), oracleDetectedPlatform()),
+		"phase":                  emptyFallback(strings.TrimSpace(state.Phase), "idle"),
+		"iteration":              state.Iteration,
+		"max_iterations":         state.MaxIterations,
+		"overall_confidence":     state.OverallConfidence,
+		"target_confidence":      state.TargetConfidence,
+		"question_count":         questionCount,
+		"answered_count":         answeredCount,
+		"touched_count":          touchedCount,
+		"focus_areas":            append([]string(nil), state.FocusAreas...),
+		"active_question_id":     strings.TrimSpace(state.ActiveQuestionID),
+		"active_question":        strings.TrimSpace(state.ActiveQuestionText),
+		"active_attempt":         state.ActiveAttempt,
+		"active_reasoning":       strings.TrimSpace(state.ActiveReasoning),
+		"active_timeout_sec":     state.ActiveTimeoutSec,
+		"active_elapsed_sec":     state.ActiveElapsedSec,
+		"active_started_at":      strings.TrimSpace(state.ActiveStartedAt),
+		"active_deadline_at":     strings.TrimSpace(state.ActiveDeadlineAt),
+		"last_artifact_path":     strings.TrimSpace(state.LastArtifactPath),
+		"controller_pid":         state.ControllerPID,
+		"stop_reason":            strings.TrimSpace(state.StopReason),
+		"summary":                strings.TrimSpace(state.Summary),
+		"state_path":             paths.StatePath,
+		"plan_path":              paths.PlanPath,
+		"synthesis_path":         paths.SynthesisPath,
+		"research_plan":          paths.ResearchPlanPath,
+		"has_state":              fileExists(paths.StatePath),
+		"has_plan":               fileExists(paths.PlanPath),
+		"has_synthesis":          fileExists(paths.SynthesisPath),
+		"has_research_plan":      fileExists(paths.ResearchPlanPath),
+		"next":                   next,
 	}, nil
 }
 
@@ -873,6 +892,8 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		return nil, err
 	}
 
+	emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventRunStart, state))
+
 	iterationsRun := 0
 	for state.Iteration < state.MaxIterations {
 		if ctx.Err() != nil {
@@ -887,6 +908,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		state.Phase = nextOraclePhase(plan, state)
 		if previousPhase != "" && previousPhase != state.Phase {
 			emitOraclePhaseTransition(previousPhase, state.Phase, state.Iteration)
+			transition := newOracleProgressEvent(oracleProgressEventPhaseTransition, state)
+			transition.PreviousPhase = previousPhase
+			appendOracleProgressEvent(paths.ProgressPath, transition)
 		}
 		target := selectOracleQuestionSmart(plan, state)
 		emitOracleIteration(state.Iteration, target.Text, state.Phase)
@@ -913,7 +937,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			return nil, err
 		}
 
-		emitVisualProgress(renderOracleIterationPreview(state, plan))
+		// One line per round rather than a repeated banner: a deep run is
+		// thirty of these, and the operator wants to watch confidence climb.
+		emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventIterationStart, state))
 
 		before := snapshotOracleProgress(plan, state)
 		iterationsRun++
@@ -947,6 +973,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			if err := writeOracleResearchPlan(paths.ResearchPlanPath, state, plan); err != nil {
 				return nil, err
 			}
+			attemptEvent := newOracleProgressEvent(oracleProgressEventAttemptStart, state)
+			attemptEvent.Attempt = attempt
+			appendOracleProgressEvent(paths.ProgressPath, attemptEvent)
 
 			result, invokeErr = runOracleIterationAttempt(ctx, invoker, paths, state, plan, detectedType, languages, frameworks, target, attempt, policy, responsePath)
 			if ctx.Err() != nil {
@@ -1045,6 +1074,7 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		}
 
 		state.OverallConfidence = oracleOverallConfidence(plan)
+		appendOracleProgressEvent(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventIterationEnd, state))
 		state.Platform = oracleInvokerPlatform(invoker)
 		state.ActiveAttempt = 0
 		state.ActiveReasoning = ""
@@ -1310,6 +1340,11 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 	if err := writeOracleDerivedReports(paths, state, plan); err != nil {
 		return nil, err
 	}
+
+	// Every exit funnels through here -- target reached, iteration cap,
+	// diminishing returns, no progress, manual stop, worker failure -- so this
+	// is the one place that can promise a terminal line for anyone following.
+	emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventRunEnd, state))
 
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
 	result := map[string]interface{}{
@@ -1677,6 +1712,7 @@ func oracleWorkspacePaths(root string) oraclePaths {
 		GapsPath:         filepath.Join(dir, "gaps.md"),
 		SynthesisPath:    filepath.Join(dir, "synthesis.md"),
 		ResearchPlanPath: filepath.Join(dir, "research-plan.md"),
+		ProgressPath:     filepath.Join(dir, "progress.jsonl"),
 		StopPath:         filepath.Join(dir, ".stop"),
 		LoopPath:         filepath.Join(dir, ".loop-active"),
 		AgentName:        "aether-oracle",
