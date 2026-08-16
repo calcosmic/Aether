@@ -299,25 +299,25 @@ type PendingSuggestion struct {
 
 // ColonyState is the top-level colony state matching COLONY_STATE.json.
 type ColonyState struct {
-	Version            string               `json:"version"`
-	Goal               *string              `json:"goal"`
-	Scope              ColonyScope          `json:"scope,omitempty"`
-	ColonyMode         ColonyMode           `json:"colony_mode,omitempty"`
-	ColonyName         *string              `json:"colony_name"`
-	ColonyVersion      int                  `json:"colony_version"`
-	State              State                `json:"state"`
-	CurrentPhase       int                  `json:"current_phase"`
-	SessionID          *string              `json:"session_id"`
-	InitializedAt      *time.Time           `json:"initialized_at"`
-	BuildStartedAt     *time.Time           `json:"build_started_at"`
-	Plan               Plan                 `json:"plan"`
-	Memory             Memory               `json:"memory"`
-	Errors             Errors               `json:"errors"`
-	Signals            []Signal             `json:"signals"`
-	Graveyards         []Graveyard          `json:"graveyards"`
-	Events             []string             `json:"events"`
-	ColonyDepth        string               `json:"colony_depth,omitempty"`
-	VerificationDepth  string               `json:"verification_depth,omitempty"`
+	Version           string      `json:"version"`
+	Goal              *string     `json:"goal"`
+	Scope             ColonyScope `json:"scope,omitempty"`
+	ColonyMode        ColonyMode  `json:"colony_mode,omitempty"`
+	ColonyName        *string     `json:"colony_name"`
+	ColonyVersion     int         `json:"colony_version"`
+	State             State       `json:"state"`
+	CurrentPhase      int         `json:"current_phase"`
+	SessionID         *string     `json:"session_id"`
+	InitializedAt     *time.Time  `json:"initialized_at"`
+	BuildStartedAt    *time.Time  `json:"build_started_at"`
+	Plan              Plan        `json:"plan"`
+	Memory            Memory      `json:"memory"`
+	Errors            Errors      `json:"errors"`
+	Signals           []Signal    `json:"signals"`
+	Graveyards        []Graveyard `json:"graveyards"`
+	Events            []string    `json:"events"`
+	ColonyDepth       string      `json:"colony_depth,omitempty"`
+	VerificationDepth string      `json:"verification_depth,omitempty"`
 	// SpawnReapThresholdMinutes is how long a live spawn-tree entry may go
 	// without activity before the automatic reaper (SPAWN-08) marks it
 	// abandoned and releases its whole-run budget slot. A pointer with
@@ -331,20 +331,20 @@ type ColonyState struct {
 	// indistinguishably from abandoned ones. Killing live work is a worse
 	// failure than a ghost holding a budget slot for a while — the failure
 	// modes are not symmetric, so the default leans conservative.
-	SpawnReapThresholdMinutes *int `json:"spawn_reap_threshold_minutes,omitempty"`
-	PlanGranularity    PlanGranularity      `json:"plan_granularity,omitempty"`
-	ParallelMode       ParallelMode         `json:"parallel_mode,omitempty"`
-	TerritorySurveyed  *string              `json:"territory_surveyed,omitempty"`
-	Milestone          string               `json:"milestone"`
-	MilestoneUpdatedAt *string              `json:"milestone_updated_at,omitempty"`
-	Paused             bool                 `json:"paused,omitempty"`
-	PausedAt           *string              `json:"paused_at,omitempty"`
-	Worktrees          []WorktreeEntry      `json:"worktrees,omitempty"`
-	RunID              *string              `json:"run_id,omitempty"`
-	GateResults        []GateResultEntry    `json:"gate_results,omitempty"`
-	Charter            *Charter             `json:"charter,omitempty"`
-	PendingSuggestions *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
-	LastAnalyzeCommit  *string              `json:"last_analyze_commit,omitempty"`
+	SpawnReapThresholdMinutes *int                 `json:"spawn_reap_threshold_minutes,omitempty"`
+	PlanGranularity           PlanGranularity      `json:"plan_granularity,omitempty"`
+	ParallelMode              ParallelMode         `json:"parallel_mode,omitempty"`
+	TerritorySurveyed         *string              `json:"territory_surveyed,omitempty"`
+	Milestone                 string               `json:"milestone"`
+	MilestoneUpdatedAt        *string              `json:"milestone_updated_at,omitempty"`
+	Paused                    bool                 `json:"paused,omitempty"`
+	PausedAt                  *string              `json:"paused_at,omitempty"`
+	Worktrees                 []WorktreeEntry      `json:"worktrees,omitempty"`
+	RunID                     *string              `json:"run_id,omitempty"`
+	GateResults               []GateResultEntry    `json:"gate_results,omitempty"`
+	Charter                   *Charter             `json:"charter,omitempty"`
+	PendingSuggestions        *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
+	LastAnalyzeCommit         *string              `json:"last_analyze_commit,omitempty"`
 	// ResearchDocs are repository-relative paths the operator pointed this
 	// colony at, typically saved Oracle runs under .aether/research. They are
 	// pointers, not content: the runtime reads them when composing worker
