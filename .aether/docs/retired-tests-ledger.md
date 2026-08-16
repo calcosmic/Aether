@@ -40,3 +40,19 @@ phase/plan that removed it).
   (`aether host build` → `dispatch_manifest` → `build-finalize`) instead of
   playbook injection, so there is no successor test to name.
 - **Removed in:** commit `b2b41486`.
+
+### `TestAutopilotCheckReplan` (function in `cmd/autopilot_test.go`)
+
+- **Original path:** `cmd/autopilot_test.go` (single function removed; file
+  survives)
+- **What it covered:** the `autopilot-check-replan` subcommand's interval
+  arithmetic — replan recommended after N completed phases.
+- **Disposition:** `recovered-by:cmd/compatibility_cmds_test.go
+  (TestRunAutopilotReplanDue)`. The subcommand was retired 2026-08-16: it had
+  no caller anywhere (orphan allowlist entry removed in the same change), and
+  the real autopilot loop in `runCompatibilityAutopilot` owns the replan
+  arithmetic directly. The replacement test asserts the same behaviour where
+  it actually runs. `TestAutopilotSuccessStatusCountsAsCompleted`, which had
+  used check-replan as a probe for status normalization, was rewritten in the
+  same change to assert normalization through `autopilot-update` state.
+- **Removed in:** v5.4.0-richness restoration, Stage 2 (autopilot).

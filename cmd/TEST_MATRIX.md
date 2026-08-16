@@ -18,7 +18,7 @@ coverage for the critical data-persistence paths targeted by Phase 147.
 
 | Source File | Test File | Commands Tested | Coverage |
 |-------------|-----------|-----------------|----------|
-| `cmd/autopilot.go` | `cmd/autopilot_test.go` | autopilot-init, autopilot-update, autopilot-status, autopilot-stop, autopilot-check-replan | FULL |
+| `cmd/autopilot.go` | `cmd/autopilot_test.go` | autopilot-init, autopilot-update, autopilot-status, autopilot-stop (autopilot-check-replan retired 2026-08-16 — the run loop owns replan arithmetic, covered by TestRunAutopilotReplanDue) | FULL |
 | `cmd/council.go` | `cmd/council_test.go` | council-deliberate, council-advocate, council-challenger, council-sage, council-history, council-budget-check | FULL |
 
 ## Flags & Shelf (Wave 3 — Extended)

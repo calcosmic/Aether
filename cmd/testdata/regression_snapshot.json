@@ -1,7 +1,7 @@
 {
   "audit_dimensions": {
     "command_contracts": {
-      "command_count": 402,
+      "command_count": 401,
       "lifecycle_contracts": 18,
       "output_modes": [
         "json",

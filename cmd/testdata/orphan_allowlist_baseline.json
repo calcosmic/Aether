@@ -25,11 +25,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-check-replan",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether autopilot-headless-check",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"

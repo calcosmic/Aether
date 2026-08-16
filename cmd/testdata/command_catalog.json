@@ -262,32 +262,6 @@
     "stability_score": 91
   },
   {
-    "name": "autopilot-check-replan",
-    "short_description": "Check if replan is recommended",
-    "flags": [
-      "interval"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "autopilot-headless-check",
     "short_description": "Check if running in headless mode",
     "flags": [],

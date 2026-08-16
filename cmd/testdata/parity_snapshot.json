@@ -271,7 +271,6 @@
     "audit-catalog",
     "autofix-checkpoint",
     "autofix-rollback",
-    "autopilot-check-replan",
     "autopilot-headless-check",
     "autopilot-init",
     "autopilot-resume",

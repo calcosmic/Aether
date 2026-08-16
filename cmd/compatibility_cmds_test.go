@@ -430,16 +430,18 @@ func TestAutopilotSuccessStatusCountsAsCompleted(t *testing.T) {
 		t.Fatalf("autopilot-update returned error: %v", err)
 	}
 
-	buf.Reset()
-	rootCmd.SetArgs([]string{"autopilot-check-replan", "--interval", "1"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-check-replan returned error: %v", err)
-	}
-
 	env := parseEnvelope(t, buf.String())
 	result := env["result"].(map[string]interface{})
-	if result["replan"] != true {
-		t.Fatalf("expected replan:true after success status normalization, got %v", result)
+	if result["status"] != "completed" {
+		t.Fatalf("expected success status normalized to completed, got %v", result["status"])
+	}
+
+	var state autopilotState
+	if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
+		t.Fatalf("load autopilot state: %v", err)
+	}
+	if len(state.Phases) != 1 || state.Phases[0].Status != "completed" {
+		t.Fatalf("expected phase 1 recorded as completed, got %+v", state.Phases)
 	}
 }
 
