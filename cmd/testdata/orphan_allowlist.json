@@ -531,7 +531,7 @@
   },
   {
     "name": "aether host oracle",
-    "reason": "path-collision-revealed",
+    "reason": "superseded-2026-08-16: Go owns the entire Oracle loop; host.ts refuses to drive it (host.ts:906) and oracle.yaml wrapper_role records the ownership. Retire in a dedicated deletion change with the test-deletion ledger pattern.",
     "owner_phase": "RECLAIM"
   },
   {
@@ -776,12 +776,12 @@
   },
   {
     "name": "aether oracle-iterate",
-    "reason": "unreviewed-pre-existing",
+    "reason": "superseded-2026-08-16: TS-host Oracle iteration path replaced by the Go RALF loop (cmd/oracle_loop.go); uses the dead .aether/data/oracle/ store. Retire with host oracle.",
     "owner_phase": "RECLAIM"
   },
   {
     "name": "aether oracle-iterate-finalize",
-    "reason": "unreviewed-pre-existing",
+    "reason": "superseded-2026-08-16: finalizer for the retired TS-host Oracle iteration path. Retire with oracle-iterate.",
     "owner_phase": "RECLAIM"
   },
   {
@@ -990,11 +990,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether session-clear",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether session-init",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
@@ -1011,11 +1006,6 @@
   },
   {
     "name": "aether session-update",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether session-verify-fresh",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
@@ -1361,7 +1351,7 @@
   },
   {
     "name": "aether validate-oracle-state",
-    "reason": "unreviewed-pre-existing",
+    "reason": "superseded-2026-08-16: validates the dead .aether/data/oracle/ store, not the live .aether/oracle/ workspace. Retire with oracle-iterate.",
     "owner_phase": "RECLAIM"
   },
   {

@@ -20,4 +20,20 @@ Use the Go `aether` CLI as the source of truth.
 
 **Exit codes:** 0 = healthy, 1 = warnings found, 2 = critical issues found.
 
+**Stale session files:** when the diagnosis points at leftover per-command
+session state (an old research run, a dead watch, stale swarm files), inspect
+before clearing and clear only the named command's scope:
+
+```bash
+aether session-verify-fresh --command oracle
+aether session-clear --command oracle --dry-run
+aether session-clear --command oracle
+```
+
+First check whether the named command's state is stale, then preview what a
+clear would remove, then clear it for real once the preview looks right.
+
+Protected scopes (`init`, `seal`, `entomb`) refuse to clear — their state is
+precious and the runtime enforces that; do not work around it.
+
 **YAML source:** `.aether/commands/medic.yaml`

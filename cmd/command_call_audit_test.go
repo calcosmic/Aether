@@ -1164,13 +1164,20 @@ var knownEnrichmentSubcommands = map[string]bool{
 	// colony at one. It reads a directory and prints it: no verification
 	// result, gate outcome, or state mutation depends on it, and a colony
 	// plans perfectly well with no research attached. Enrichment, not a gate.
-	"research":                true,
-	"resume-colony":           true,
-	"resume-dashboard":        true,
-	"resume":                  true,
-	"run":                     true,
-	"seal-finalize":           true,
-	"seal":                    true,
+	"research":         true,
+	"resume-colony":    true,
+	"resume-dashboard": true,
+	"resume":           true,
+	"run":              true,
+	"seal-finalize":    true,
+	"seal":             true,
+	// session-clear and session-verify-fresh are the medic wrapper's
+	// stale-session tools (2026-08-16 wiring). Both are inspection/cleanup of
+	// per-command scratch: a failure degrades tidiness, no gate outcome or
+	// verification result depends on either, and protected scopes refuse to
+	// clear inside the command itself. Enrichment, not a gate.
+	"session-clear":           true,
+	"session-verify-fresh":    true,
 	"session-update":          true,
 	"shelf-add":               true,
 	"shelf-dismiss":           true,

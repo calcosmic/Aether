@@ -72,10 +72,21 @@ TestNotCalledCastesRenderAsOneShortClause, TestLightBuildOfProductionPhaseShowsS
 TestRunSummaryDistinguishesFindingFromCleanWorkers,
 TestStatusHealthLineReflectsComputedVitals.
 
-## Item 4 — ORPHAN RECLAMATION: **not started**
+## Item 4 — ORPHAN RECLAMATION: **DONE** (round 1, bounded slice)
 
-Highest-value entries in cmd/testdata/orphan_allowlist.json: wire with a test,
-retire per existing pattern, or record dated disposition. Shrink, never grow.
+- WIRED: session-verify-fresh + session-clear — the documented session
+  freshness pattern (CLAUDE.md) had no caller anywhere. Now reachable from the
+  medic wrapper (stale-session section, all three mirrors + medic.yaml), both
+  removed from the allowlist: 293 -> 291 entries. Ratchet green.
+- DISPOSITIONED (dated, evidence-backed): the four TS-host Oracle orphans
+  (host oracle, oracle-iterate, oracle-iterate-finalize, validate-oracle-state)
+  marked superseded-2026-08-16 by the Go RALF loop; full retirement deferred to
+  a dedicated deletion change using the test-deletion ledger pattern — too much
+  deletion risk to bundle into a restoration round.
+- Both new subcommand references severity-classified as enrichment
+  (knownEnrichmentSubcommands) with rationale.
+Remaining 287 unreviewed entries stay for the RECLAIM phase — this item's
+mandate was highest-value, not exhaustive.
 
 ## Item 5 — RELEASE READINESS: **not started**
 

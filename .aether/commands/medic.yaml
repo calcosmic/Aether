@@ -24,6 +24,7 @@ flags:
     description: "Analyze a trace export JSON file instead of active colony data"
     type: string
 guardrails:
+  - "For stale per-command session state, inspect with `aether session-verify-fresh --command <name>`, preview with `aether session-clear --command <name> --dry-run`, then clear the named scope only. Protected scopes (init, seal, entomb) refuse to clear; do not work around that."
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."
   - "Read-only by default; --fix required for any mutation."
