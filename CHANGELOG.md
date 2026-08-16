@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.56] - 2026-08-16
+
+The v5.4.0 richness restoration: the colony you can watch work, back on the
+modern runtime. Almost everything here is reconnection — machinery that
+existed, computed, and rendered for nobody.
+
+### Added
+
+- **The classic caste identity is back.** Every worker renders glyph-plus-ant
+  (`🔨🐜 Builder Mason-67`), the v5.4.0 house style, locked by test. Continue
+  worker lines carry full identity instead of a bare `[caste]` tag, and the
+  moment of dispatch announces itself again (`──── 🔨🐜 Spawning 3 Builders in
+  parallel ────`).
+- **The autopilot narrates the whole run.** `/ant-run` streams an AUTOPILOT
+  ENGAGED banner, a header per phase, live worker lines, a PHASE ADVANCEMENT
+  block with a momentum ticker between phases, a framed pause block with the
+  reason and next step, and two celebrations at the end — including the classic
+  `🎉 P R O J E C T   C O M P L E T E` with "The colony rests. Well done!".
+  The classic pause engine is wired into the real loop (it had been connected
+  to a code path the run never called), the replan checkpoint is back on its
+  classic every-2-phases default, `--headless` queues the pause as a reviewable
+  decision, and `--dry-run` previews every phase plus the full pause-trigger
+  list. Proven end to end by a test that completes a multi-phase colony —
+  the previous evidence completed zero phases.
+- **The great ceremonies are back.** `aether init` shows the approved charter
+  and closes with the colony-born banner (👑 intention, 🟢 READY, 🧠 hive
+  wisdom seeded); the final `aether continue` celebrates project completion;
+  `aether seal` draws the CROWNED ANTHILL and speaks the closing incantation.
+- **Sectioned displays everywhere.** The pheromone view returns to its classic
+  form — emoji headings that explain themselves (`🎯 FOCUS (Pay attention
+  here)`), `[85%]` strengths, nested age/decay detail, a plain-English decay
+  footer — and the same house style now covers flags, blockers, gate and
+  failure classifications, memory health, review findings, and the loop-safety
+  feed. An invariant test fails on the next machine-table anywhere.
+- **Status explains its health score.** The five component signals (build
+  velocity, error rate, signal health, memory, colony age) render beneath the
+  health line, with real values where placeholders used to sit.
+- **History reads like the classic activity feed** — `[time] ⚡ worker_spawned`
+  with per-action icons, and continue shows what each worker actually found as
+  nested detail with honest overflow counts.
+- **Init does its cross-colony bookkeeping again.** A new colony registers
+  itself in the machine-level registry with detected domain tags and seeds
+  QUEEN.md from hive wisdom, both announced in the birth ceremony. Sealing
+  marks the entry inactive. Medic's `--fix` creates a named rollback
+  checkpoint and prints the undo command.
+
+### Fixed
+
+- `autofix-rollback` restored the checkpoint *envelope* over the colony state
+  file — corrupting exactly what it promised to restore. Never caught because
+  nothing called it. Fixed and wired into the medic flow.
+- Autopilot's dry-run steps section silently vanished in visual mode (a type
+  mismatch between the in-process and JSON-round-trip result shapes).
+- The ceremony-level taxonomy (`worker_theatre`/`guided_ritual`/`dashboard`/
+  `progress`/`quiet`), written and tested with zero callers, now gates
+  streaming: plumbing commands stay quiet, lifecycle commands narrate.
+- The clear-context advice only claims "Handoff saved" when the handoff file
+  actually exists on disk.
+- Three redundant swarm state mutators (`swarm-findings-init/add`,
+  `swarm-solution-set`) retired — the swarm run has recorded its own findings
+  in-process for some time; `swarm-findings-read` and `swarm-cleanup` are now
+  documented as the inspection and housekeeping paths. Orphan allowlist
+  291 → 279, with dated dispositions for the XML archival lane and the
+  zero-reader policy files recorded in `.planning/decisions/`.
+
 ## [1.0.55] - 2026-08-16
 
 ### Added
