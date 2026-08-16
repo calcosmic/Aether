@@ -740,7 +740,7 @@ and honestly, not marked complete.
   1. Before workers spawn, the Dispatch stage prints one plain-English clause per selected caste **and the castes that were considered and not called** — "why didn't it use the security one?" is answerable without opening a file. Removing the rationale from the manifest makes the render test fail, so the render cannot drift into hardcoded prose. **Brevity guard (2026-08-13):** the not-called castes render as one short clause naming only the castes a reader might expect (or a count), never a 20+-row absentee table per build — 27 castes exist and listing them all every run is exactly the ceremony this reshape removes
   2. When the runtime restores a safety-required caste the Queen omitted, or trims the team to the worker cap, the output names the caste, the action and the reason. A scripted `--light` build of a production phase shows the restoration line rather than silently keeping the caste — today the correction happens and says nothing
   3. The run summary distinguishes a worker that returned no actionable finding from one that did: a build with one finding-producing worker and one clean worker shows two different states, not two identical "completed" lines
-**Plans**: TBD
+**Plans**: shipped outside the phase system, 2026-08-16 (SHIP-PROGRESS Item 3 "Phase 168 spirit + Phase 175"). Criterion 1: `renderQueenTeamChoice` with `TestQueenTeamChoiceRendersManifestRationaleVerbatim` (blanking the manifest rationale blanks the render — no hardcoded prose). Criterion 2: safety-restoration line, `TestQuietBuildDoesNotAnnounceSafetyInterventions` guards the negative direction. Criterion 3: `writeDispatchExecutionStatus` renders "— flagged N issue(s)" vs "— nothing to flag". Status table marked Complete 2026-08-16.
 
 ### Phase 176: Roster Ruling — **CUT 2026-08-14**
 
@@ -956,5 +956,5 @@ Remaining, in this order — **not** numeric order:
 | 183. The Worker Limit Actually Limits | v1.26 | 1/1 | **Complete (partial)** | 2026-08-15 |
 | 184. One Worker Owns A Run Of File Work | v1.26 | 1/1 | **Complete** | 2026-08-15 |
 | **185. One Honest Cost Line** | v1.26 | 0/TBD | **Next** | - |
-| 175. Orchestration Visibility | v1.26 | 0/TBD | Not started | - |
+| 175. Orchestration Visibility | v1.26 | 1/1 | **Complete** | 2026-08-16 |
 | 179. Proof | v1.26 | 0/TBD | Not started | - |

@@ -158,22 +158,21 @@ func TestPheromoneDisplayWithSignals(t *testing.T) {
 
 	output := buf.String()
 
-	// Should contain the table header
-	if !strings.Contains(output, "TYPE") || !strings.Contains(output, "CONTENT") || !strings.Contains(output, "LIFE") {
-		t.Errorf("expected table header in output, got: %s", output)
+	// Classic sectioned house style: emoji heading with plain-English framing
+	if !strings.Contains(output, "A C T I V E   P H E R O M O N E S") {
+		t.Errorf("expected classic banner in output, got: %s", output)
 	}
-
-	// Should show the active FOCUS signal
-	if !strings.Contains(output, "FOCUS") {
-		t.Errorf("expected FOCUS signal in output, got: %s", output)
+	if !strings.Contains(output, "FOCUS (Pay attention here)") {
+		t.Errorf("expected FOCUS heading in output, got: %s", output)
 	}
 	if !strings.Contains(output, "phase-scoped") {
 		t.Errorf("expected lifespan context in output, got: %s", output)
 	}
 
-	// Should NOT show inactive REDIRECT (active-only defaults true)
-	if strings.Contains(output, "REDIRECT") {
-		t.Errorf("expected REDIRECT to be filtered out (inactive), got: %s", output)
+	// Should NOT show the inactive REDIRECT's section heading (active-only
+	// defaults true); the decay footer legitimately names REDIRECT's window.
+	if strings.Contains(output, "REDIRECT (Hard constraints") {
+		t.Errorf("expected inactive REDIRECT section to be filtered out, got: %s", output)
 	}
 }
 

@@ -15,7 +15,6 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -1036,21 +1035,22 @@ func checkSealBlockers(s *storage.Store) (blockers []colony.FlagEntry, issues []
 	return blockers, issues
 }
 
-// renderBlockerSummary formats blocker and issue flags as a table with resolution hints.
+// renderBlockerSummary formats blocker and issue flags in the classic headed
+// style with resolution hints.
 func renderBlockerSummary(blockers []colony.FlagEntry, issues []colony.FlagEntry) string {
 	var b strings.Builder
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"ID", "Description", "Type", "Created"})
 	for _, entry := range blockers {
-		desc := entry.Description
-		if len(desc) > 40 {
-			desc = desc[:37] + "..."
+		b.WriteString(fmt.Sprintf("🚩 %s\n", strings.TrimSpace(entry.Description)))
+		detail := entry.ID
+		if entry.Type != "" {
+			detail += ", " + entry.Type
 		}
-		t.AppendRow(table.Row{entry.ID, desc, entry.Type, entry.CreatedAt})
+		if entry.CreatedAt != "" {
+			detail += ", created " + entry.CreatedAt
+		}
+		b.WriteString("   └── " + detail + "\n")
 	}
-	t.SetStyle(table.StyleRounded)
-	b.WriteString(t.Render())
-	b.WriteString("\n\nBLOCKED: Resolve blockers above or use --force to override.\n")
+	b.WriteString("\nBLOCKED: Resolve blockers above or use --force to override.\n")
 	for _, bl := range blockers {
 		b.WriteString(fmt.Sprintf("  aether flag-resolve --id %s\n", bl.ID))
 	}

@@ -32,6 +32,7 @@ Safety castes a risky phase needs are kept at every size.
 ── Dispatch ──
 Wave 11 starting (in-repo, serial)
   Execution: serial — single task in this wave
+──── 🔨🐜 Spawning Worker-XX — Worker: Worker-XX ────
 
 … 🔨🐜 Builder Worker-XX  starting wave 11  Worker: Worker-XX
 
@@ -42,6 +43,7 @@ Wave 11 starting (in-repo, serial)
 ── Dispatch ──
 Wave 13 starting (in-repo, serial)
   Execution: serial — single task in this wave
+──── 🧪🐜 Spawning Worker-XX — Worker: Worker-XX ────
 
 … 🧪🐜 Probe Worker-XX  starting wave 13  Worker: Worker-XX
 
@@ -52,6 +54,7 @@ Wave 13 starting (in-repo, serial)
 ── Dispatch ──
 Wave 14 starting (in-repo, serial)
   Execution: serial — single task in this wave
+──── 👁️🐜 Spawning Worker-XX — Worker: Worker-XX ────
 
 … 👁️🐜 Watcher Worker-XX  starting wave 14  Worker: Worker-XX
 
@@ -114,4 +117,4 @@ This is the final phase. Seal the colony after continue.
 ━━ 🐜 N E X T   U P ━━
 Run `/ant-continue` after the work is implemented and independently verified.
 Alternative: Run `/ant-status` if you want to inspect progress before advancing.
-It's safe to clear your context now. Run `/ant-resume` to restore.
+Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant-resume` to restore.

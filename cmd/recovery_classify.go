@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -206,9 +205,6 @@ var failureClassifyCmd = &cobra.Command{
 }
 
 func renderFailureClassifyTable() {
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Pattern", "Classification", "Failure Type", "Rationale"})
-
 	type entry struct {
 		pattern string
 		failureClassificationEntry
@@ -224,10 +220,15 @@ func renderFailureClassifyTable() {
 		return entries[i].pattern < entries[j].pattern
 	})
 
+	// Classic headed style: one line per pattern, rationale nested beneath.
+	var b strings.Builder
 	for _, e := range entries {
-		t.AppendRow(table.Row{e.pattern, string(e.Classification), string(e.FailureType), e.Rationale})
+		b.WriteString(fmt.Sprintf("🔧 %s → %s (%s)\n", e.pattern, string(e.Classification), string(e.FailureType)))
+		if rationale := strings.TrimSpace(e.Rationale); rationale != "" {
+			b.WriteString("   └── " + rationale + "\n")
+		}
 	}
-	visualFprintln(stdout, t.Render())
+	visualFprintln(stdout, strings.TrimRight(b.String(), "\n"))
 }
 
 var recoveryLogReadCmd = &cobra.Command{

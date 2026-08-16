@@ -102,9 +102,10 @@ The milestone's verdict. Not satisfiable by tests.
 
 Carried from v1.25, out of scope for v1.26:
 
-- **SEE** (14) — rich terminal visibility beyond SEEN-01..03
+- **SEE** (14) — rich terminal visibility beyond SEEN-01..03. *(Substantially delivered 2026-08-16 by the v5.4.0-richness restoration: SEE-01 health breakdown, SEE-03 one-terminal decision, SEE-06 decision blocks, SEE-07 diagnosis, SEE-08 identity, SEE-10 charter ceremony, SEE-11 preservation boundary, SEE-12/13 standards — see `.planning/decisions/` and the named tests there. Remaining SEE scope, if any, re-derives from the owner's daily-driver feedback.)*
 - **TYPED** (8) — required `mode` field and removal of prose-based inference
 - **RECLAIM** (9) — the wider unreachable-command sweep beyond WIRE-01's ratchet
+- **COLONY-01..05** (5) — re-homed 2026-08-16 after falling out of both v1.26 scope and this list. Dispositions: COLONY-01 (all 27 caste YAMLs kept) holds by default — nothing deletes them; COLONY-02/03 (phase-fit dispatch, failable test) delivered from the suppression side by Phase 182 and from the positive side by `TestDispatchComposesForPhaseCharacter` (restoration Stage 7); COLONY-04 (YAML loader) closed as rejected — Phase 176's cut stands, the compiled registry is authoritative; COLONY-05 (Dream 28th caste) decided — Dream stays a command (`.planning/decisions/dream-caste.md`)
 - **LOCK** (4) — state locking and lifecycle transactions
 - **MODEL** — revised per the 2026-07-28 decision: automatic model selection is rejected; cheap-model capability means the framework carries the intelligence, not that it picks models
 - **ROSTER-03..08** (6) — operator-authored agents (one-command creation, three-lane translation, safety exclusions, identity rendering). Shelved 2026-08-13 by the owner-approved reshape: the owner selects among the 27 existing castes and has never asked to author a 28th. Revisit only if that changes

@@ -658,6 +658,12 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if err != nil {
 		attemptFinished = true
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
+		// Classic failure theatre: a halted build is announced as a framed
+		// operator moment, never a silent error return.
+		emitVisualProgress(renderDecisionBlock("⚠", "Wave Failure — Build Halted",
+			fmt.Sprintf("Phase %d dispatch failed: %v", phaseNum, err),
+			"The phase's state was rolled back; nothing half-done was kept.",
+			"Fix the cause, then rerun the build for this phase."))
 		return nil, err
 	}
 	if err := store.SaveJSON(claimsRel, terminalClaims); err != nil {

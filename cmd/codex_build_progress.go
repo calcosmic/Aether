@@ -41,6 +41,8 @@ func emitCodexDispatchWaveProgress(label string, wave int, dispatches []codex.Wo
 		}
 		b.WriteString("\n")
 	}
+	b.WriteString(renderSpawnAnnouncement(dispatches, policy.Strategy))
+	b.WriteString("\n")
 	for _, dispatch := range dispatches {
 		b.WriteString("  ")
 		b.WriteString(casteIdentity(dispatch.Caste))
@@ -52,6 +54,49 @@ func emitCodexDispatchWaveProgress(label string, wave int, dispatches []codex.Wo
 	}
 
 	emitVisualProgress(strings.TrimSpace(b.String()))
+}
+
+// renderSpawnAnnouncement is the classic moment-of-dispatch beat:
+// `──── 🔨🐜 Spawning 3 Builders in parallel ────`. Single worker gets its
+// name; a mixed team gets the caste composition.
+func renderSpawnAnnouncement(dispatches []codex.WorkerDispatch, strategy string) string {
+	if len(dispatches) == 0 {
+		return ""
+	}
+	manner := "in parallel"
+	if strategy == "serial" {
+		manner = "serially"
+	}
+
+	casteOrder := []string{}
+	counts := map[string]int{}
+	for _, dispatch := range dispatches {
+		key := normalizeCasteKey(dispatch.Caste)
+		if counts[key] == 0 {
+			casteOrder = append(casteOrder, key)
+		}
+		counts[key]++
+	}
+
+	if len(casteOrder) == 1 {
+		caste := casteOrder[0]
+		glyph := casteEmoji(caste) + "🐜"
+		if len(dispatches) == 1 {
+			single := dispatches[0]
+			summary := strings.TrimSpace(workerDispatchSummary(single))
+			if summary != "" {
+				return fmt.Sprintf("──── %s Spawning %s — %s ────", glyph, single.WorkerName, summary)
+			}
+			return fmt.Sprintf("──── %s Spawning %s ────", glyph, single.WorkerName)
+		}
+		return fmt.Sprintf("──── %s Spawning %d %ss %s ────", glyph, len(dispatches), casteLabel(caste), manner)
+	}
+
+	parts := make([]string, 0, len(casteOrder))
+	for _, caste := range casteOrder {
+		parts = append(parts, fmt.Sprintf("%d %s %s", counts[caste], casteEmoji(caste), casteLabel(caste)))
+	}
+	return fmt.Sprintf("──── 🐜 Spawning %d workers (%s) %s ────", len(dispatches), strings.Join(parts, ", "), manner)
 }
 
 func emitCodexBuildWorkerStarted(dispatch codex.WorkerDispatch, wave int) {

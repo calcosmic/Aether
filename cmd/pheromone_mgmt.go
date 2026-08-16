@@ -181,24 +181,10 @@ var pheromoneDisplayCmd = &cobra.Command{
 			return extractText(filtered[i].Content) < extractText(filtered[j].Content)
 		})
 
-		// Format as text table
-		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("%-10s %-10s %-10s %-24s %s\n", "TYPE", "PRIORITY", "STRENGTH", "LIFE", "CONTENT"))
-		sb.WriteString(strings.Repeat("-", 110) + "\n")
-		for _, sig := range filtered {
-			strength := fmt.Sprintf("%.2f", computeEffectiveStrength(sig, now))
-			life := signalLifetimeSummary(sig, now)
-			text := extractText(sig.Content)
-			if len(text) > 60 {
-				text = text[:57] + "..."
-			}
-			if len(life) > 24 {
-				life = life[:21] + "..."
-			}
-			sb.WriteString(fmt.Sprintf("%-10s %-10s %-10s %-24s %s\n", sig.Type, sig.Priority, strength, life, text))
-		}
-
-		display := sb.String()
+		// Classic sectioned view (v5.4.0 house style): emoji-headed groups
+		// with a plain-English explanation, one signal per line with its
+		// nested lifetime detail — never a fixed-width machine table.
+		display := renderClassicPheromoneSections(filtered, now)
 
 		// Build serializable signals list
 		signals := make([]map[string]interface{}, len(filtered))
@@ -248,8 +234,7 @@ func renderPheromoneDisplayVisual(display string, count int) string {
 	}
 
 	b.WriteString(strings.TrimRight(display, "\n"))
-	b.WriteString("\n\n")
-	b.WriteString(fmt.Sprintf("%d active signal(s).\n", count))
+	b.WriteString("\n")
 	b.WriteString(renderNextUp(
 		"Run `aether build <phase>` — these signals are injected into every worker prompt.",
 		"Run `aether feedback \"<note>\"` to adjust behaviour without adding a hard constraint.",

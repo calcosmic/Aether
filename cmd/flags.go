@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -87,23 +89,29 @@ func filterFlags(entries []colony.FlagEntry) []colony.FlagEntry {
 	return result
 }
 
-// renderFlagsTable displays flags in a formatted table.
+// renderFlagsTable displays flags in the classic headed house style: one line
+// per flag with a status icon, nested detail underneath — not a machine table.
 func renderFlagsTable(entries []colony.FlagEntry) {
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"ID", "Description", "Type", "Resolved", "Source"})
-
+	var b strings.Builder
 	for _, entry := range entries {
-		resolved := "no"
+		icon := "🚩"
+		state := "open"
 		if entry.Resolved {
-			resolved = "yes"
+			icon = "✅"
+			state = "resolved"
 		}
-		desc := entry.Description
-		if len(desc) > 40 {
-			desc = desc[:37] + "..."
+		b.WriteString(fmt.Sprintf("%s %s (%s)\n", icon, strings.TrimSpace(entry.Description), state))
+		detail := entry.ID
+		if entry.Type != "" {
+			detail += ", " + entry.Type
 		}
-		t.AppendRow(table.Row{entry.ID, desc, entry.Type, resolved, entry.Source})
+		if entry.Source != "" {
+			detail += ", from " + entry.Source
+		}
+		if entry.Phase != nil {
+			detail += fmt.Sprintf(", phase %d", *entry.Phase)
+		}
+		b.WriteString("   └── " + detail + "\n")
 	}
-	t.SetStyle(table.StyleRounded)
-
-	visualFprintln(stdout, t.Render())
+	visualFprintln(stdout, strings.TrimRight(b.String(), "\n"))
 }

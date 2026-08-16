@@ -94,7 +94,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 		assertSubstringsInOrder(t, wrapperPath, text, inOrder)
 
-		for _, forbidden := range []string{"It's safe to clear your context now.", "/ant-resume"} {
+		for _, forbidden := range []string{"safe to clear your context now.", "/ant-resume"} {
 			if strings.Contains(text, forbidden) {
 				t.Errorf("%s should not contain %q (runtime owns context-clear)", wrapperPath, forbidden)
 			}
@@ -109,19 +109,19 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	// Non-final case
 	nonFinalOutput := renderContinueVisual(state, phase, nil, false, &colony.Phase{ID: 2, Name: "Next"}, nil, colony.VerificationDepthLight)
-	if !strings.Contains(nonFinalOutput, "It's safe to clear your context now.") {
+	if !strings.Contains(nonFinalOutput, "safe to clear your context now.") {
 		t.Errorf("renderContinueVisual() non-final missing context-clear guidance\n%s", nonFinalOutput)
 	}
 
 	// Final case
 	finalOutput := renderContinueVisual(state, phase, nil, true, nil, nil, colony.VerificationDepthLight)
-	if !strings.Contains(finalOutput, "It's safe to clear your context now.") {
+	if !strings.Contains(finalOutput, "safe to clear your context now.") {
 		t.Errorf("renderContinueVisual() final missing context-clear guidance\n%s", finalOutput)
 	}
 
 	// Blocked case must NOT contain guidance
 	blockedOutput := renderContinueBlockedVisual(state, phase, nil, colony.VerificationDepthLight)
-	if strings.Contains(blockedOutput, "It's safe to clear your context now.") {
+	if strings.Contains(blockedOutput, "safe to clear your context now.") {
 		t.Errorf("renderContinueBlockedVisual() should not contain context-clear guidance\n%s", blockedOutput)
 	}
 }
@@ -242,7 +242,7 @@ func TestContinueWrapperStageSkeletonAndParity(t *testing.T) {
 	t.Run("context_clear_stays_runtime_owned", func(t *testing.T) {
 		paths := append(append([]string{}, canonicalPaths...), flatMirrorPath(repoRoot, "continue"))
 		forbidden := []string{
-			"It's safe to clear your context now.",
+			"safe to clear your context now.",
 			"/ant-resume",
 			// D-10 item 9 (CONTEXT.md regression fence), widened to the flat
 			// mirror alongside the context-clear fence -- see the comment on

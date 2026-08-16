@@ -90,16 +90,11 @@ func renderAutopilotComplete(phasesCompleted int) string {
 // renderRunPauseBlock is the visually distinct decision block for a pause: the
 // run stopped on purpose, here is why in plain English, here is what to do.
 func renderRunPauseBlock(reason, next string) string {
-	var b strings.Builder
-	b.WriteString("━━━ ⏸ " + spacedTitle("Autopilot Paused") + " ━━━\n")
-	b.WriteString(humanizeAutopilotPauseReason(reason))
-	b.WriteString("\n")
+	guidance := "Fix the issue, then run `aether run` to resume."
 	if strings.TrimSpace(next) != "" {
-		b.WriteString(fmt.Sprintf("Fix the issue, then run `aether run` to resume. Suggested first step: `%s`", next))
-	} else {
-		b.WriteString("Fix the issue, then run `aether run` to resume.")
+		guidance = fmt.Sprintf("Fix the issue, then run `aether run` to resume. Suggested first step: `%s`", next)
 	}
-	return b.String()
+	return renderDecisionBlock("⏸", "Autopilot Paused", humanizeAutopilotPauseReason(reason), guidance)
 }
 
 // humanizeAutopilotPauseReason translates a checkAutopilotPauseConditions

@@ -5927,9 +5927,9 @@ func TestContinueVisualAnnouncesDeterministicVerificationFlow(t *testing.T) {
 	for _, want := range []string{
 		"Running deterministic verification for phase 1 before watcher/review workers",
 		"Continue Worker Flow",
-		"Deterministic verification [system] completed",
-		"Continue watcher [system] skipped",
-		"Review wave [system] skipped",
+		"Deterministic verification completed",
+		"Continue watcher skipped",
+		"Review wave skipped",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("visual output missing %q:\n%s", want, output)

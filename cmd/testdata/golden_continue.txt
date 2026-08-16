@@ -2,6 +2,7 @@ Running deterministic verification for phase 1 before watcher/review workers (ti
 ── Dispatch ──
 Continue Verification 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
+──── 👁️🐜 Spawning Worker-XX — Phase: 1 — Golden phase ────
   👁️🐜 Watcher Worker-XX  Phase: 1 — Golden phase
 
 … 👁️🐜 Watcher Worker-XX  starting wave 1  Phase: 1 — Golden phase
@@ -14,6 +15,7 @@ Continue Verification 1 starting (in-repo, serial)
 ── Dispatch ──
 Continue Review 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
+──── 🧪🐜 Spawning Worker-XX — Phase: 1 — Golden phase ────
   🧪🐜 Probe Worker-XX  Phase: 1 — Golden phase
 
 … 🧪🐜 Probe Worker-XX  starting wave 1  Phase: 1 — Golden phase
@@ -35,11 +37,11 @@ Workers
   - Worker-XX
   - Worker-XX
 Continue Worker Flow
-  - Deterministic verification [system] completed — deterministic verification completed: 3 passed, 1 skipped
-  - Worker-XX [watcher] completed — Watcher Worker-XX completed independent verification before advancement
-  - Worker-XX [probe] completed — Probe Worker-XX completed continue review before advancement
-  - Signal housekeeping [system] completed — 0 active -> 0 active
-  - Phase-end consolidation [librarian] completed — colony observed nothing new this phase
+  - 🐜 Ant Deterministic verification completed — deterministic verification completed: 3 passed, 1 skipped
+  - 👁️🐜 Watcher Worker-XX completed — Watcher Worker-XX completed independent verification before advancement
+  - 🧪🐜 Probe Worker-XX completed — Probe Worker-XX completed continue review before advancement
+  - 🐜 Ant Signal housekeeping completed — 0 active -> 0 active
+  - 🧠🐜 Librarian Phase-end consolidation completed — colony observed nothing new this phase
 Verification passed during continue
 ━━ 🗂️ A R T I F A C T S ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -58,4 +60,4 @@ Next phase ready: 2 — Next golden phase
 
 ━━ 🐜 N E X T   U P ━━
 Run `/ant-build 2` to start the next phase
-It's safe to clear your context now. Run `/ant-resume` to restore.
+Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant-resume` to restore.

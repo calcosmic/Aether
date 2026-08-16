@@ -422,7 +422,7 @@ func TestStatusShowsInlinePheromoneStrength(t *testing.T) {
 	}
 
 	output := buf.String()
-	for _, want := range []string{"Active Pheromones", "Strength", "Life", "Avoid global state", "Focus on lifecycle output", "0.91", "0.83", "phase-scoped", "ttl"} {
+	for _, want := range []string{"Active Pheromones", "[91%]", "[83%]", "Avoid global state", "Focus on lifecycle output", "phase-scoped", "ttl"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("status output missing %q\n%s", want, output)
 		}
@@ -676,11 +676,11 @@ func TestStatusMemoryHealth(t *testing.T) {
 	if !strings.Contains(output, "Memory Health") {
 		t.Errorf("output missing 'Memory Health'\ngot:\n%s", output)
 	}
-	if !strings.Contains(output, "Wisdom Entries") {
-		t.Errorf("output missing 'Wisdom Entries' row")
+	if !strings.Contains(output, "Wisdom entries") {
+		t.Errorf("output missing 'Wisdom entries' row")
 	}
-	if !strings.Contains(output, "Recent Failures") {
-		t.Errorf("output missing 'Recent Failures' row")
+	if !strings.Contains(output, "Recent failures") {
+		t.Errorf("output missing 'Recent failures' row")
 	}
 }
 

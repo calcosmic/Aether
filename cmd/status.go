@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"sort"
@@ -15,7 +16,6 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -66,6 +66,37 @@ func renderColonyHealthLine(vitals map[string]interface{}) string {
 		instincts = intValue(section["instinct_count"])
 	}
 	return fmt.Sprintf("\nColony health: %s (%d/100) — %d signal(s) active, %d instinct(s) learned\n", label, score, signals, instincts)
+}
+
+// renderColonyHealthBreakdown renders the five component signals beneath the
+// health line (SEE-01): the score is explainable on screen, not a bare number.
+func renderColonyHealthBreakdown(vitals map[string]interface{}) string {
+	var b strings.Builder
+	if section, ok := vitals["build_velocity"].(map[string]interface{}); ok {
+		b.WriteString(fmt.Sprintf("   Build velocity: %v phase(s)/day (%s)\n", section["phases_per_day"], stringValue(section["trend"])))
+	}
+	if section, ok := vitals["error_rate"].(map[string]interface{}); ok {
+		b.WriteString(fmt.Sprintf("   Error rate:     %v error(s)/day (%s)\n", section["errors_per_day"], stringValue(section["status"])))
+	}
+	if section, ok := vitals["signal_health"].(map[string]interface{}); ok {
+		b.WriteString(fmt.Sprintf("   Signal health:  %d active (%s)\n", intValue(section["active_count"]), stringValue(section["status"])))
+	}
+	if section, ok := vitals["memory_pressure"].(map[string]interface{}); ok {
+		b.WriteString(fmt.Sprintf("   Memory:         %d instinct(s) (%s)\n", intValue(section["instinct_count"]), stringValue(section["status"])))
+	}
+	ageHours := 0.0
+	switch v := vitals["colony_age_hours"].(type) {
+	case float64:
+		ageHours = v
+	case int:
+		ageHours = float64(v)
+	}
+	if ageHours >= 48 {
+		b.WriteString(fmt.Sprintf("   Colony age:     %.0fd\n", ageHours/24))
+	} else if ageHours > 0 {
+		b.WriteString(fmt.Sprintf("   Colony age:     %.0fh\n", ageHours))
+	}
+	return b.String()
 }
 
 func renderNoColonyStatusVisual() string {
@@ -365,26 +396,17 @@ func renderLoopSafetySection(loopEvents []events.Event) string {
 	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Loop Safety: %d events in last 7 days\n", len(loopEvents))
 
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Time", "Type", "Signal", "Action"})
+	// Classic activity-feed lines, not a bordered table.
 	for _, evt := range loopEvents {
 		var payload events.CeremonyPayload
 		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
 			continue
 		}
-		signal := payload.DetectionSignal
-		if len(signal) > 40 {
-			signal = signal[:37] + "..."
+		fmt.Fprintf(&b, "   [%s] 🔧 %s: %s\n", formatTimestamp(evt.Timestamp), payload.LoopType, strings.TrimSpace(payload.DetectionSignal))
+		if action := strings.TrimSpace(payload.ActionTaken); action != "" {
+			fmt.Fprintf(&b, "      └── %s\n", action)
 		}
-		action := payload.ActionTaken
-		if len(action) > 40 {
-			action = action[:37] + "..."
-		}
-		t.AppendRow(table.Row{formatTimestamp(evt.Timestamp), payload.LoopType, signal, action})
 	}
-	t.SetStyle(table.StyleRounded)
-	b.WriteString(t.Render())
-	b.WriteString("\n")
 	return b.String()
 }
 
@@ -982,7 +1004,9 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	// Colony health, from the same computation colony-vital-signs runs.
 	// v5.4.0's status surfaced this; the modern status computed it on request
 	// only, behind a subcommand nobody was told about.
-	b.WriteString(renderColonyHealthLine(computeColonyVitalSigns(s, state)))
+	vitals := computeColonyVitalSigns(s, state)
+	b.WriteString(renderColonyHealthLine(vitals))
+	b.WriteString(renderColonyHealthBreakdown(vitals))
 
 	// State
 	stateLabel := string(state.State)
@@ -1393,19 +1417,22 @@ func granularityLabel(granularity string) string {
 	}
 }
 
-// renderMemoryHealthTable writes the memory health table to the builder.
+// renderMemoryHealthTable writes memory health as classic labeled lines.
 func renderMemoryHealthTable(b *strings.Builder, s *storage.Store) {
 	summary := loadMemoryHealthSummary(s)
 
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Metric", "Count", "Last Updated"})
-	t.AppendRow(table.Row{"Wisdom Entries", summary.WisdomTotal, formatTimestamp(summary.LastLearning)})
-	t.AppendRow(table.Row{"Pending Promos", summary.PendingPromotions, formatTimestamp(summary.LastLearning)})
-	t.AppendRow(table.Row{"Applied Instincts", summary.AppliedInstincts, formatTimestamp(summary.LastInstinctTouched)})
-	t.AppendRow(table.Row{"Needs Review", summary.ReviewCandidates + summary.RereadCandidates, formatTimestamp(summary.LastInstinctTouched)})
-	t.AppendRow(table.Row{"Recent Failures", summary.RecentFailures, formatTimestamp(summary.LastFailure)})
-	t.SetStyle(table.StyleRounded)
-	b.WriteString(t.Render() + "\n")
+	writeLine := func(emoji, label string, count int, ts string) {
+		fmt.Fprintf(b, "   %s %s: %d", emoji, label, count)
+		if formatted := formatTimestamp(ts); formatted != "" {
+			fmt.Fprintf(b, " (updated %s)", formatted)
+		}
+		b.WriteString("\n")
+	}
+	writeLine("🧠", "Wisdom entries", summary.WisdomTotal, summary.LastLearning)
+	writeLine("📤", "Pending promotions", summary.PendingPromotions, summary.LastLearning)
+	writeLine("🐜", "Applied instincts", summary.AppliedInstincts, summary.LastInstinctTouched)
+	writeLine("👀", "Needs review", summary.ReviewCandidates+summary.RereadCandidates, summary.LastInstinctTouched)
+	writeLine("🗑", "Recent failures", summary.RecentFailures, summary.LastFailure)
 }
 
 // hasReviewFindings checks whether any review domain has non-zero findings.
@@ -1425,9 +1452,6 @@ func hasReviewFindings(s *storage.Store) bool {
 
 // renderReviewFindingsTable writes a table of review findings per domain.
 func renderReviewFindingsTable(b *strings.Builder, s *storage.Store) {
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Domain", "Total", "Open", "Resolved"})
-
 	for _, d := range colony.DomainOrder {
 		ledgerPath := fmt.Sprintf("reviews/%s/ledger.json", d)
 		var lf colony.ReviewLedgerFile
@@ -1437,11 +1461,12 @@ func renderReviewFindingsTable(b *strings.Builder, s *storage.Store) {
 		if lf.Summary.Total == 0 {
 			continue
 		}
-		t.AppendRow(table.Row{d, lf.Summary.Total, lf.Summary.Open, lf.Summary.Resolved})
+		icon := "👀"
+		if lf.Summary.Open == 0 {
+			icon = "✅"
+		}
+		fmt.Fprintf(b, "   %s %s: %d open, %d resolved (%d total)\n", icon, d, lf.Summary.Open, lf.Summary.Resolved, lf.Summary.Total)
 	}
-
-	t.SetStyle(table.StyleRounded)
-	b.WriteString(t.Render() + "\n")
 }
 
 // renderPheromoneSummary writes the pheromone summary table to the builder.
@@ -1487,28 +1512,24 @@ func renderPheromoneSummary(b *strings.Builder, s *storage.Store) {
 		return rows[i].Signal < rows[j].Signal
 	})
 
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Type", "Strength", "Life", "Signal"})
-	b.WriteString("   Strength reflects the active decay-adjusted signal weight.\n")
-	b.WriteString("   Life shows remaining expiry or decay context for each signal.\n")
-
+	// Classic house style: one emoji-prefixed line per signal, grouped by
+	// priority order — not a bordered machine table.
+	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
 	for _, row := range rows {
 		signal := row.Signal
 		if signal == "" {
-			signal = "none"
+			signal = "(no content)"
 		}
-		if len(signal) > 44 {
-			signal = signal[:41] + "..."
+		if len(signal) > 60 {
+			signal = signal[:57] + "..."
 		}
-		life := row.Life
-		if len(life) > 26 {
-			life = life[:23] + "..."
+		emoji := emojiFor[row.Type]
+		if emoji == "" {
+			emoji = "🐜"
 		}
-		t.AppendRow(table.Row{row.Type, fmt.Sprintf("%.2f", row.Strength), life, signal})
+		fmt.Fprintf(b, "   %s [%d%%] %q — %s\n", emoji, int(math.Round(row.Strength*100)), signal, row.Life)
 	}
-
-	t.SetStyle(table.StyleRounded)
-	b.WriteString(t.Render() + "\n")
+	b.WriteString("   Strength fades over time; run `aether pheromone-display` for the full view.\n")
 }
 
 func renderRecentInstincts(b *strings.Builder, instincts []colony.Instinct) {

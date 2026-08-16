@@ -422,7 +422,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "/ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "/ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "safe to clear your context now."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -470,7 +470,7 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 		"── Context ──",
 		"── Tasks ──",
 		"── Dispatch ──",
-		"It's safe to clear your context now.",
+		"safe to clear your context now.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
@@ -755,9 +755,9 @@ func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T
 		"── Verification ──",
 		"Phase 1 verified and completed: Verify contracts",
 		"Continue Worker Flow",
-		expectedWatcher + " [watcher] completed",
+		expectedWatcher + " completed",
 		"Watcher " + expectedWatcher + " completed independent verification before advancement",
-		"Signal housekeeping [system] completed",
+		"Signal housekeeping completed",
 		"── Housekeeping ──",
 		"A R T I F A C T S",
 		"Workers",
@@ -770,7 +770,7 @@ func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T
 		".aether/data/build/phase-1/review.json",
 		".aether/data/build/phase-1/continue.json",
 		".aether/data/spawn-tree.txt",
-		"It's safe to clear your context now.",
+		"safe to clear your context now.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)
@@ -910,7 +910,7 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 		"── Colony Complete ──",
 		"All planned phases are complete. The colony is ready for Crowned Anthill.",
 		"/ant-seal",
-		"It's safe to clear your context now.",
+		"safe to clear your context now.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)

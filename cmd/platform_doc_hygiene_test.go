@@ -224,7 +224,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			},
 			forbidden: []string{
 				"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
-				"It's safe to clear your context now.",
+				"safe to clear your context now.",
 				"/ant-resume",
 				"continue-verify.md",
 				"continue-gates.md",
@@ -534,7 +534,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			},
 			forbidden: []string{
 				"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
-				"It's safe to clear your context now.",
+				"safe to clear your context now.",
 				"/ant-resume",
 				"continue-verify.md",
 				"continue-gates.md",

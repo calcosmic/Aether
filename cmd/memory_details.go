@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"math"
+	"time"
+
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
@@ -144,14 +147,42 @@ func computeColonyVitalSigns(s *storage.Store, state colony.ColonyState) map[str
 		memoryStatus = "building"
 	}
 
+	// Age, velocity and error rate come from state the function already
+	// holds — they were placeholder zeros until the health breakdown gained
+	// a render (SEE-01), which made the gap visible.
+	ageHours := 0.0
+	if state.InitializedAt != nil {
+		ageHours = time.Since(*state.InitializedAt).Hours()
+		if ageHours < 0 {
+			ageHours = 0
+		}
+	}
+	ageDays := ageHours / 24
+	phasesPerDay := 0.0
+	errorsPerDay := 0.0
+	velocityTrend := "starting"
+	if ageDays >= 1 {
+		phasesPerDay = float64(completedPhases) / ageDays
+		errorsPerDay = float64(errorCount) / ageDays
+		velocityTrend = "steady"
+	} else if completedPhases > 0 {
+		phasesPerDay = float64(completedPhases)
+		errorsPerDay = float64(errorCount)
+		velocityTrend = "fresh"
+	}
+	errorStatus := "clean"
+	if errorCount > 0 {
+		errorStatus = "recorded"
+	}
+
 	return map[string]interface{}{
 		"build_velocity": map[string]interface{}{
-			"phases_per_day": 0,
-			"trend":          "starting",
+			"phases_per_day": math.Round(phasesPerDay*10) / 10,
+			"trend":          velocityTrend,
 		},
 		"error_rate": map[string]interface{}{
-			"errors_per_day": 0,
-			"status":         "clean",
+			"errors_per_day": math.Round(errorsPerDay*10) / 10,
+			"status":         errorStatus,
 		},
 		"signal_health": map[string]interface{}{
 			"active_count": signalCount,
@@ -161,7 +192,7 @@ func computeColonyVitalSigns(s *storage.Store, state colony.ColonyState) map[str
 			"instinct_count": instinctCount,
 			"status":         memoryStatus,
 		},
-		"colony_age_hours": 0,
+		"colony_age_hours": math.Round(ageHours*10) / 10,
 		"overall_health":   healthScore,
 		"health_label":     healthLabel,
 	}

@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -350,12 +351,48 @@ func outputWorkflow(result interface{}, visual string) {
 	outputOK(result)
 }
 
+// currentStreamingCommand is the top-level command of this invocation, set by
+// the root PersistentPreRunE. The streaming emitters consult its ceremony
+// class: classifyCommandCeremonyLevel was written as the streaming taxonomy
+// and had zero production callers until this gate landed — the exact
+// built-but-never-called failure this repo documents.
+var currentStreamingCommand string
+
+// streamingAllowedForCurrentCommand: quiet-classified commands (finalizers,
+// plumbing subcommands) never stream progress; every other ceremony level may.
+// The classifier returns quiet for unknown commands too, so the gate silences
+// only the surfaces the taxonomy explicitly names — an unlisted subcommand
+// that legitimately prints (e.g. a monitor's stale-worker warning) keeps its
+// voice.
+func streamingAllowedForCurrentCommand() bool {
+	name := strings.TrimSpace(currentStreamingCommand)
+	if name == "" {
+		return true
+	}
+	if classifyCommandCeremonyLevel(name) != commandCeremonyLevelQuiet {
+		return true
+	}
+	return !isExplicitlyQuietCommand(name)
+}
+
+func isExplicitlyQuietCommand(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if strings.HasSuffix(name, "-finalize") {
+		return true
+	}
+	switch name {
+	case "command-guide", "spawn-log", "spawn-complete", "ceremony", "completion", "version", "generate-progress-bar", "version-check-cached":
+		return true
+	}
+	return false
+}
+
 // emitVisualLine writes a single progress line with one trailing newline, so
 // repeated calls stack as readable scrollback. emitVisualProgress adds a blank
 // line after each block, which is right for banners and wrong for a run that
 // emits fifty rounds.
 func emitVisualLine(line string) {
-	if !shouldRenderVisualOutput(stdout) {
+	if !shouldRenderVisualOutput(stdout) || !streamingAllowedForCurrentCommand() {
 		return
 	}
 	line = strings.TrimRight(line, "\n")
@@ -366,7 +403,7 @@ func emitVisualLine(line string) {
 }
 
 func emitVisualProgress(visual string) {
-	if !shouldRenderVisualOutput(stdout) {
+	if !shouldRenderVisualOutput(stdout) || !streamingAllowedForCurrentCommand() {
 		return
 	}
 	visual = strings.TrimSpace(visual)
@@ -575,13 +612,18 @@ func detectPlatform() string {
 }
 
 func renderContextClearGuidanceForPlatform(platform string) string {
+	// SEE criterion: never advise clearing context without confirming the
+	// handoff is actually on disk. The guidance names the saved file when it
+	// exists, and says so honestly when it does not.
+	confirmation := "It's safe to clear your context now."
+	if handoffPath := filepath.Join(resolveAetherRootPath(), ".aether", "HANDOFF.md"); fileExists(handoffPath) {
+		confirmation = "Handoff saved (.aether/HANDOFF.md) — safe to clear your context now."
+	}
 	switch platform {
 	case "codex":
-		return "It's safe to clear your context now. Run `aether resume` to restore.\n"
-	case "opencode":
-		return "It's safe to clear your context now. Run `/ant-resume` to restore.\n"
+		return confirmation + " Run `aether resume` to restore.\n"
 	default:
-		return "It's safe to clear your context now. Run `/ant-resume` to restore.\n"
+		return confirmation + " Run `/ant-resume` to restore.\n"
 	}
 }
 
@@ -1940,6 +1982,20 @@ func renderContinueWorkerFlowValue(b *strings.Builder, raw interface{}) {
 		b.WriteString("Continue Worker Flow\n")
 		for _, step := range flow {
 			renderContinueWorkerFlowLine(b, step.Name, step.Caste, step.Status, step.Summary)
+			findings := make([]string, 0, len(step.Findings))
+			for _, finding := range step.Findings {
+				label := strings.TrimSpace(finding.Title)
+				if label == "" {
+					label = strings.TrimSpace(finding.Description)
+				}
+				if severity := strings.TrimSpace(finding.Severity); severity != "" && label != "" {
+					label = severity + ": " + label
+				}
+				if label != "" {
+					findings = append(findings, label)
+				}
+			}
+			renderContinueWorkerFlowDetail(b, findings, step.Recommendations, step.WeakSpots, step.EdgeCases, step.Blockers)
 		}
 	case []interface{}:
 		renderContinueWorkerFlowMap(b, flow)
@@ -1958,14 +2014,36 @@ func renderContinueWorkerFlowMap(b *strings.Builder, flow []interface{}) {
 			continue
 		}
 		renderContinueWorkerFlowLine(b, name, stringValue(step["caste"]), stringValue(step["status"]), stringValue(step["summary"]))
+		findings := []string{}
+		if rawFindings, ok := step["findings"].([]interface{}); ok {
+			for _, rawFinding := range rawFindings {
+				finding, _ := rawFinding.(map[string]interface{})
+				label := strings.TrimSpace(stringValue(finding["title"]))
+				if label == "" {
+					label = strings.TrimSpace(stringValue(finding["description"]))
+				}
+				if severity := strings.TrimSpace(stringValue(finding["severity"])); severity != "" && label != "" {
+					label = severity + ": " + label
+				}
+				if label != "" {
+					findings = append(findings, label)
+				}
+			}
+		}
+		renderContinueWorkerFlowDetail(b, findings,
+			stringSliceValue(step["recommendations"]),
+			stringSliceValue(step["weak_spots"]),
+			stringSliceValue(step["edge_cases_discovered"]),
+			stringSliceValue(step["blockers"]))
 	}
 }
 
 func renderContinueWorkerFlowLine(b *strings.Builder, name, caste, status, summary string) {
-	line := "  - " + strings.TrimSpace(name)
+	line := "  - "
 	if caste = strings.TrimSpace(caste); caste != "" {
-		line += " [" + caste + "]"
+		line += casteIdentity(caste) + " "
 	}
+	line += strings.TrimSpace(name)
 	if status = strings.TrimSpace(status); status != "" {
 		line += " " + status
 	}
@@ -1974,6 +2052,31 @@ func renderContinueWorkerFlowLine(b *strings.Builder, name, caste, status, summa
 	}
 	b.WriteString(line)
 	b.WriteString("\n")
+}
+
+// renderContinueWorkerFlowDetail is the progressive-disclosure layer beneath
+// each worker line: what the worker actually found, capped per category with
+// an honest overflow count — the data was always carried, never shown.
+func renderContinueWorkerFlowDetail(b *strings.Builder, findings, recommendations, weakSpots, edgeCases, blockers []string) {
+	const perCategoryCap = 2
+	writeCategory := func(label string, items []string) {
+		for i, item := range items {
+			if i >= perCategoryCap {
+				b.WriteString(fmt.Sprintf("      └── %s: (+%d more)\n", label, len(items)-perCategoryCap))
+				return
+			}
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			b.WriteString(fmt.Sprintf("      └── %s: %s\n", label, item))
+		}
+	}
+	writeCategory("found", findings)
+	writeCategory("recommends", recommendations)
+	writeCategory("weak spot", weakSpots)
+	writeCategory("edge case", edgeCases)
+	writeCategory("blocker", blockers)
 }
 
 func renderContinueGateSummaryMap(b *strings.Builder, gates map[string]interface{}) {
@@ -1997,6 +2100,23 @@ func renderContinueGateSummaryMap(b *strings.Builder, gates map[string]interface
 func mapValue(raw interface{}) map[string]interface{} {
 	value, _ := raw.(map[string]interface{})
 	return value
+}
+
+// renderDecisionBlock (SEE-06) is the one visually distinct frame for moments
+// that need the operator: a halted wave, a tripped breaker, a paused
+// autopilot. One shape everywhere, so "the colony needs you" is recognizable
+// at a glance instead of buried in prose.
+func renderDecisionBlock(emoji, title string, lines ...string) string {
+	var b strings.Builder
+	b.WriteString("━━━ " + emoji + " " + spacedTitle(title) + " ━━━\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // renderProjectComplete is the classic v5.4.0 project-complete celebration.
@@ -2868,10 +2988,14 @@ func writeHistoryEntry(b *strings.Builder, entry map[string]interface{}) {
 	if label == "" {
 		label = "unknown time"
 	}
-	b.WriteString("• ")
+	// Classic activity-feed form: [time] icon [TYPE] source — every line
+	// carries an action icon so the feed reads at a glance.
+	b.WriteString("[")
 	b.WriteString(label)
+	b.WriteString("] ")
+	b.WriteString(historyEventIcon(eventType, msg))
 	if eventType != "" {
-		b.WriteString("  [")
+		b.WriteString(" [")
 		b.WriteString(eventType)
 		b.WriteString("]")
 	}
@@ -2884,6 +3008,33 @@ func writeHistoryEntry(b *strings.Builder, entry map[string]interface{}) {
 		b.WriteString("  ")
 		b.WriteString(msg)
 		b.WriteString("\n")
+	}
+}
+
+// historyEventIcon maps an event to the classic v5.4.0 activity-feed icon set
+// (colorize-log.sh): ⚡ spawn, ✅ complete, ❌ error, ✨ created, 📝 modified,
+// 🔬 research, ⚙️ executing.
+func historyEventIcon(eventType, message string) string {
+	probe := strings.ToUpper(eventType + " " + message)
+	switch {
+	case strings.Contains(probe, "SPAWN"):
+		return "⚡"
+	case strings.Contains(probe, "COMPLETE"), strings.Contains(probe, "SEALED"), strings.Contains(probe, "ADVANCE"):
+		return "✅"
+	case strings.Contains(probe, "ERROR"), strings.Contains(probe, "FAIL"), strings.Contains(probe, "BLOCK"):
+		return "❌"
+	case strings.Contains(probe, "CREATED"), strings.Contains(probe, "INIT"):
+		return "✨"
+	case strings.Contains(probe, "MODIFIED"), strings.Contains(probe, "REPAIR"), strings.Contains(probe, "UPDATE"):
+		return "📝"
+	case strings.Contains(probe, "RESEARCH"), strings.Contains(probe, "EXPLOR"), strings.Contains(probe, "SURVEY"):
+		return "🔬"
+	case strings.Contains(probe, "EXECUT"), strings.Contains(probe, "BUILD"):
+		return "⚙️"
+	case strings.Contains(probe, "PHASE"):
+		return "🐜"
+	default:
+		return "•"
 	}
 }
 

@@ -14,7 +14,6 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -1421,9 +1420,6 @@ var gateClassifyCmd = &cobra.Command{
 }
 
 func renderGateClassifyTable() {
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Gate", "Classification", "Rationale"})
-
 	type entry struct {
 		name string
 		gateClassificationEntry
@@ -1439,10 +1435,15 @@ func renderGateClassifyTable() {
 		return entries[i].name < entries[j].name
 	})
 
+	// Classic headed style: one line per gate, rationale nested beneath.
+	var b strings.Builder
 	for _, e := range entries {
-		t.AppendRow(table.Row{e.name, string(e.Tier), e.Rationale})
+		b.WriteString(fmt.Sprintf("🚧 %s (%s)\n", e.name, string(e.Tier)))
+		if rationale := strings.TrimSpace(e.Rationale); rationale != "" {
+			b.WriteString("   └── " + rationale + "\n")
+		}
 	}
-	visualFprintln(stdout, t.Render())
+	visualFprintln(stdout, strings.TrimRight(b.String(), "\n"))
 }
 
 var gateAutoResolveCmd = &cobra.Command{
@@ -1468,9 +1469,6 @@ func renderGateAutoResolveTable() {
 }
 
 func renderGateAutoResolveTableWith(thresholds map[string]gateAutoResolveThreshold) {
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Gate", "Threshold", "Light", "Standard", "Heavy", "Rationale"})
-
 	type entry struct {
 		name string
 		gateAutoResolveThreshold
@@ -1483,13 +1481,19 @@ func renderGateAutoResolveTableWith(thresholds map[string]gateAutoResolveThresho
 		return entries[i].name < entries[j].name
 	})
 
+	// Classic headed style: per-gate line with the depth-adjusted thresholds
+	// in prose, rationale nested beneath.
+	var b strings.Builder
 	for _, e := range entries {
-		light := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthLight))
-		standard := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthStandard))
-		heavy := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthHeavy))
-		t.AppendRow(table.Row{e.name, fmt.Sprintf("%.1f", e.Threshold), light, standard, heavy, e.Rationale})
+		light := e.Threshold * autoResolveDepthMultiplier(colony.VerificationDepthLight)
+		standard := e.Threshold * autoResolveDepthMultiplier(colony.VerificationDepthStandard)
+		heavy := e.Threshold * autoResolveDepthMultiplier(colony.VerificationDepthHeavy)
+		b.WriteString(fmt.Sprintf("🚧 %s: base %.1f (light %.1f / standard %.1f / heavy %.1f)\n", e.name, e.Threshold, light, standard, heavy))
+		if rationale := strings.TrimSpace(e.Rationale); rationale != "" {
+			b.WriteString("   └── " + rationale + "\n")
+		}
 	}
-	visualFprintln(stdout, t.Render())
+	visualFprintln(stdout, strings.TrimRight(b.String(), "\n"))
 }
 
 func init() {

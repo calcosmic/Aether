@@ -281,7 +281,7 @@ func TestGoldenBuildVisualOutput(t *testing.T) {
 			"── Context ──", "── Tasks ──", "── Dispatch ──",
 			"── Verification", "── Housekeeping ──",
 			"── Colony Complete ──",
-			"It's safe to clear your context now.",
+			"safe to clear your context now.",
 		} {
 			if !strings.Contains(clean, want) {
 				t.Errorf("build golden output missing %q", want)

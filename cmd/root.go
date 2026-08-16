@@ -177,6 +177,10 @@ var rootCmd = &cobra.Command{
 	// Custom version printer to match expected format "aether v<version>"
 	Version: "v" + Version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Record the invoked command so streaming emitters can consult its
+		// ceremony class (quiet commands never stream progress).
+		currentStreamingCommand = cmd.Name()
+
 		// Skip store initialization for commands that don't need it.
 		if skipStoreInit(cmd) {
 			return nil
