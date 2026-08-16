@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -1573,6 +1575,55 @@ func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
 	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
 }
 
+// renderSteeringSignals shows the operator's active pheromone signals at the
+// moment they take effect — the build's Context stage. The signals were
+// always injected into every worker prompt; until this render, nothing told
+// the operator their steering was live, which made the steering loop feel
+// disconnected ("did my note do anything?").
+func renderSteeringSignals() string {
+	pf := loadPheromones()
+	var active []colony.PheromoneSignal
+	if pf != nil {
+		for _, sig := range pf.Signals {
+			if sig.Active {
+				active = append(active, sig)
+			}
+		}
+	}
+	if len(active) == 0 {
+		return "Steering signals: none — run `aether focus \"<area>\"` or `aether redirect \"<avoid>\"` to steer this build.\n"
+	}
+
+	sort.SliceStable(active, func(i, j int) bool {
+		return signalPriority(active[i].Type) < signalPriority(active[j].Type)
+	})
+
+	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
+	now := time.Now().UTC()
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Steering signals: %d active — injected into every worker prompt\n", len(active)))
+	const shown = 5
+	for i, sig := range active {
+		if i >= shown {
+			b.WriteString(fmt.Sprintf("  … and %d more — `aether pheromone-display` for the full view\n", len(active)-shown))
+			break
+		}
+		emoji := emojiFor[sig.Type]
+		if emoji == "" {
+			emoji = "🐜"
+		}
+		text := strings.TrimSpace(extractText(sig.Content))
+		if text == "" {
+			text = "(no content)"
+		}
+		if len(text) > 70 {
+			text = text[:67] + "..."
+		}
+		b.WriteString(fmt.Sprintf("  %s [%d%%] %q\n", emoji, int(math.Round(computeEffectiveStrength(sig, now)*100)), text))
+	}
+	return b.String()
+}
+
 func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
 	var policy codexQueenExecutionPolicy
 	if len(policyOpt) > 0 {
@@ -1594,6 +1645,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 		b.WriteString("\n")
 	}
 	b.WriteString(renderStageMarker("Context"))
+	b.WriteString(renderSteeringSignals())
 	b.WriteString(renderStageMarker("Tasks"))
 	for _, task := range phase.Tasks {
 		b.WriteString("  [ ] ")

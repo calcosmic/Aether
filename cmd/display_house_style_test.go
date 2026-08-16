@@ -320,3 +320,51 @@ func TestPrintBriefMatchesTaskPacketStandard(t *testing.T) {
 		t.Errorf("task packet has no Assignment section; sections: %v", names)
 	}
 }
+
+// TestBuildContextShowsSteeringSignals: the operator's active signals render
+// under the build's Context stage — the steering loop is visible at the
+// moment it takes effect. Fails if the Context stage goes silent again.
+func TestBuildContextShowsSteeringSignals(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	store = s
+
+	pf := colony.PheromoneFile{Signals: []colony.PheromoneSignal{
+		{ID: "s1", Type: "REDIRECT", Content: []byte(`{"text":"never touch the billing tables"}`), Active: true, CreatedAt: "2026-08-16T00:00:00Z"},
+		{ID: "s2", Type: "FOCUS", Content: []byte(`{"text":"the auth module"}`), Active: true, CreatedAt: "2026-08-16T00:00:00Z"},
+		{ID: "s3", Type: "FOCUS", Content: []byte(`{"text":"expired note"}`), Active: false, CreatedAt: "2026-01-01T00:00:00Z"},
+	}}
+	if err := s.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("seed signals: %v", err)
+	}
+
+	goal := "steering fixture"
+	state := colony.ColonyState{Goal: &goal, Plan: colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "P1"}}}}
+	output := renderBuildVisualWithDispatches(state, state.Plan.Phases[0], nil, colony.VerificationDepthStandard)
+
+	for _, want := range []string{
+		"Steering signals: 2 active — injected into every worker prompt",
+		`🚫 [`,
+		`"never touch the billing tables"`,
+		`🎯 [`,
+		`"the auth module"`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("build Context missing %q in:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "expired note") {
+		t.Errorf("inactive signal leaked into the build Context")
+	}
+
+	// With no signals, the stage says so and teaches the steering commands.
+	if err := s.SaveJSON("pheromones.json", colony.PheromoneFile{Signals: []colony.PheromoneSignal{}}); err != nil {
+		t.Fatalf("clear signals: %v", err)
+	}
+	empty := renderBuildVisualWithDispatches(state, state.Plan.Phases[0], nil, colony.VerificationDepthStandard)
+	if !strings.Contains(empty, "Steering signals: none") {
+		t.Errorf("empty-signal build Context missing the none line:\n%s", empty)
+	}
+}

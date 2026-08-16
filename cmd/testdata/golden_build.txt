@@ -71,6 +71,7 @@ Ceremony complete in 0s
 Phase: Golden phase
 Review depth: heavy (final phase)
 ── Context ──
+Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
 ── Tasks ──
   [ ] First golden task
   [ ] Second golden task
