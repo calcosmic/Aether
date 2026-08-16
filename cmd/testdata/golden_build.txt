@@ -77,9 +77,6 @@ Queen's Team
   🔨 Builder — builder is always required for build flow
   🧪 Probe — probe is always required for build flow
   👁️ Watcher — watcher is always required for build flow
-  Kept by safety policy: Builder — builder is always required for build flow
-  Kept by safety policy: Probe — probe is always required for build flow
-  Kept by safety policy: Watcher — watcher is always required for build flow
 
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

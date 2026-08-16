@@ -209,3 +209,31 @@ func TestStatusHealthLineReflectsComputedVitals(t *testing.T) {
 		t.Errorf("health line %q does not carry the computed label %q — the render must surface the computation, not invent one", line, wantLabel)
 	}
 }
+
+// TestQuietBuildDoesNotAnnounceSafetyInterventions: PreservedCastes is the
+// intersection of selected and required, which on an ordinary build always
+// contains the Watcher. Rendering "Kept by safety policy" unconditionally
+// would announce an intervention on every build — noise, and untrue: when
+// nothing was pruned, nothing was protected from anything.
+func TestQuietBuildDoesNotAnnounceSafetyInterventions(t *testing.T) {
+	policy := codexQueenExecutionPolicy{
+		SpawnBudget: &codexQueenSpawnBudgetContract{
+			SelectedReasons: map[string]string{
+				"builder": "Score 12 >= threshold 6 for build flow",
+				"watcher": "watcher is always required for build flow",
+			},
+			PreservedCastes: []string{"watcher"},
+			// No pruning of any kind: nothing was cut, so nothing was kept
+			// against a cut.
+		},
+	}
+	rendered := renderQueenTeamChoice(policy, teamChoiceDispatches())
+	if strings.Contains(rendered, "Kept by safety policy") {
+		t.Errorf("a build where nothing was pruned announces a safety intervention:\n%s", rendered)
+	}
+	// The per-caste selection clauses still render — quiet about
+	// interventions, not silent about the team.
+	if !strings.Contains(rendered, "watcher is always required for build flow") {
+		t.Errorf("quieting the safety line must not remove the selection clauses:\n%s", rendered)
+	}
+}

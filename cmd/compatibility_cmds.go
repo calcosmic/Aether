@@ -155,9 +155,17 @@ var oracleCmd = &cobra.Command{
 		}
 
 		// `status --follow` streams the round log and never touches state.
+		//
+		// The --from-brief exclusion is load-bearing: `oracle --from-brief
+		// --background --follow` — the exact command the wrapper instructs —
+		// also has zero positional args, and without the exclusion it was
+		// swallowed here as a bare status-follow. The research never started;
+		// follow replayed the PREVIOUS run's log and exited as if work had
+		// happened. Locked by TestOracleFromBriefBackgroundFollowStartsTheRun.
 		follow, _ := cmd.Flags().GetBool("follow")
 		followInterval, _ := cmd.Flags().GetDuration("follow-interval")
-		if follow && (len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status")) {
+		fromBrief, _ := cmd.Flags().GetBool("from-brief")
+		if follow && !fromBrief && (len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status")) {
 			if err := followOracleProgress(skillWorkspaceRoot(), followInterval); err != nil {
 				outputError(1, err.Error(), nil)
 				return renderedErrorExit(1)
@@ -179,7 +187,7 @@ var oracleCmd = &cobra.Command{
 		// --from-brief is the gated path: it refuses to run unless the setup
 		// ritual actually produced an approved brief. Without this the ritual
 		// is only prose in a wrapper, which nothing can enforce.
-		if fromBrief, _ := cmd.Flags().GetBool("from-brief"); fromBrief {
+		if fromBrief {
 			brief, briefErr := resolveOracleBriefRun(skillWorkspaceRoot())
 			if briefErr != nil {
 				outputError(1, briefErr.Error(), nil)
@@ -206,7 +214,11 @@ var oracleCmd = &cobra.Command{
 		// `--background --follow` is the wrapper's normal path: detach the
 		// controller so a long run cannot time out the host's tool call, then
 		// stream its rounds back so the operator can still watch it work.
-		if follow {
+		// Only when the run actually detached: a foreground run already
+		// printed its rounds live, and replaying the log would print every
+		// line twice.
+		detached, _ := result["background"].(bool)
+		if follow && detached {
 			if err := followOracleProgress(skillWorkspaceRoot(), followInterval); err != nil {
 				outputError(1, err.Error(), nil)
 				return renderedErrorExit(1)

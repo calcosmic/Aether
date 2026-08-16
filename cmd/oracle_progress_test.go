@@ -527,3 +527,80 @@ func TestOracleSelftestLeavesRealResearchAlone(t *testing.T) {
 		t.Fatal("selftest overwrote the operator's existing research")
 	}
 }
+
+// TestOracleFromBriefBackgroundFollowStartsTheRun pins the wrapper's flagship
+// invocation. `oracle --from-brief --background --follow` has zero positional
+// args, and the bare `status --follow` interception used to swallow it: the
+// research never started, follow replayed the PREVIOUS run's log, and the
+// command exited as if work had happened — failing soft, which is this repo's
+// documented disease. The test runs the real command line end to end and
+// fails unless a NEW run with the brief's topic actually started.
+func TestOracleFromBriefBackgroundFollowStartsTheRun(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	s, tmpDir := newTestStore(t)
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	store = s
+	root := filepath.Dir(filepath.Dir(s.BasePath()))
+	withWorkingDir(t, root)
+
+	// A previous, finished run in the workspace — the decoy the broken
+	// dispatch used to follow instead of starting anything.
+	paths := oracleWorkspacePaths(root)
+	if err := ensureOracleWorkspace(paths); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	stale := oracleStateFile{Version: "1.1", Topic: "an old finished question", Status: "complete", Iteration: 5, MaxIterations: 5}
+	if err := writeOracleStateFile(paths.StatePath, stale); err != nil {
+		t.Fatalf("seed stale state: %v", err)
+	}
+	appendOracleProgressEvent(paths.ProgressPath, oracleProgressEvent{Event: oracleProgressEventRunEnd, Iteration: 5, MaxIterations: 5, Status: "complete"})
+
+	if _, err := runOracleBriefApprove(root, oracleBriefOptions{
+		Topic:        "cache storage",
+		CoreQuestion: "Should the local cache use SQLite or Postgres?",
+		Depth:        "quick",
+	}, false); err != nil {
+		t.Fatalf("approve brief: %v", err)
+	}
+
+	// Stub the detached controller: record that it was asked to start, and
+	// write a terminal progress line so --follow exits instead of polling.
+	started := false
+	originalStart := startOracleBackgroundController
+	startOracleBackgroundController = func(paths oraclePaths) (int, string, error) {
+		started = true
+		appendOracleProgressEvent(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventRunStart, oracleStateFile{MaxIterations: 5, TargetConfidence: 60}))
+		appendOracleProgressEvent(paths.ProgressPath, oracleProgressEvent{Event: oracleProgressEventRunEnd, Iteration: 1, MaxIterations: 5, Status: "complete"})
+		return os.Getpid(), filepath.Join(paths.Dir, "oracle.log"), nil
+	}
+	t.Cleanup(func() { startOracleBackgroundController = originalStart })
+
+	rootCmd.SetArgs([]string{"oracle", "--from-brief", "--background", "--follow", "--follow-interval", "10ms"})
+	done := make(chan error, 1)
+	go func() { done <- rootCmd.Execute() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("command returned error: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("oracle --from-brief --background --follow hung")
+	}
+
+	if !started {
+		t.Fatal("the run never started: --follow swallowed --from-brief and followed the previous run instead")
+	}
+	state, err := loadOracleStateFile(paths.StatePath)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.Topic != "cache storage" {
+		t.Fatalf("workspace still holds the old run (topic %q); the brief's run was never created", state.Topic)
+	}
+	if state.CoreQuestion != "Should the local cache use SQLite or Postgres?" {
+		t.Errorf("the approved core question did not reach the run: %q", state.CoreQuestion)
+	}
+}

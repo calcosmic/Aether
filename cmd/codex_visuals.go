@@ -3585,16 +3585,26 @@ func renderQueenTeamChoice(policy codexQueenExecutionPolicy, dispatches []codexB
 	// Safety restorations and policy additions: when the runtime keeps a caste
 	// the depth flag or budget would have dropped, it says which caste and why
 	// instead of silently correcting.
-	for _, caste := range budget.PreservedCastes {
-		reason := strings.TrimSpace(budget.SelectedReasons[caste])
-		if reason == "" {
-			reason = "required by safety policy for this phase"
+	//
+	// The preserved-castes clause renders ONLY when the budget actually cut
+	// something. PreservedCastes is the intersection of selected and required,
+	// which on an ordinary build always contains the Watcher — rendering it
+	// unconditionally would announce a "safety intervention" on every build,
+	// which is both noise and untrue. When nothing was pruned, nothing was
+	// protected from anything.
+	budgetCut := len(budget.PrunedReasons) > 0 || intDeref(budget.PrunedCastes) > 0 || intDeref(budget.PrunedWorkers) > 0
+	if budgetCut {
+		for _, caste := range budget.PreservedCastes {
+			reason := strings.TrimSpace(budget.SelectedReasons[caste])
+			if reason == "" {
+				reason = "required by safety policy for this phase"
+			}
+			b.WriteString("  Kept by safety policy: ")
+			b.WriteString(casteLabel(caste))
+			b.WriteString(" — ")
+			b.WriteString(reason)
+			b.WriteString("\n")
 		}
-		b.WriteString("  Kept by safety policy: ")
-		b.WriteString(casteLabel(caste))
-		b.WriteString(" — ")
-		b.WriteString(reason)
-		b.WriteString("\n")
 	}
 	for _, caste := range budget.PolicyAddedCastes {
 		b.WriteString("  Added by build policy: ")
