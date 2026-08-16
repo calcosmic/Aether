@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -73,6 +74,52 @@ var oracleCmd = &cobra.Command{
 			return nil
 		}
 
+		// The setup ritual: propose suggests how to scope the run and writes
+		// nothing; brief records the approved scope that `--from-brief` then
+		// requires.
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "propose") {
+			topic, _ := cmd.Flags().GetString("topic")
+			if strings.TrimSpace(topic) == "" {
+				topic = strings.TrimSpace(strings.Join(args[1:], " "))
+			}
+			result, err := runOraclePropose(skillWorkspaceRoot(), topic)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			outputWorkflow(result, renderOraclePropose(result))
+			return nil
+		}
+
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "brief") {
+			opts := oracleBriefOptions{}
+			opts.Topic, _ = cmd.Flags().GetString("topic")
+			opts.CoreQuestion, _ = cmd.Flags().GetString("core-question")
+			opts.Context, _ = cmd.Flags().GetString("context")
+			opts.SuccessCriteria, _ = cmd.Flags().GetStringArray("success-criteria")
+			opts.Template, _ = cmd.Flags().GetString("template")
+			opts.Depth, _ = cmd.Flags().GetString("depth")
+			opts.Scope, _ = cmd.Flags().GetString("scope")
+			opts.MaxIterations, _ = cmd.Flags().GetInt("max-iterations")
+			if raw, _ := cmd.Flags().GetString("confidence-target"); strings.TrimSpace(raw) != "" {
+				parsed, parseErr := strconv.Atoi(strings.TrimSuffix(strings.TrimSpace(raw), "%"))
+				if parseErr != nil {
+					outputError(1, fmt.Sprintf("--confidence-target must be a number 1-100, got %q", raw), nil)
+					return renderedErrorExit(1)
+				}
+				opts.TargetConfidence = parsed
+			}
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			result, err := runOracleBriefApprove(skillWorkspaceRoot(), opts, dryRun)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			panel, _ := result["panel"].(string)
+			outputWorkflow(result, panel)
+			return nil
+		}
+
 		depth, _ := cmd.Flags().GetString("depth")
 		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
 		scope, _ := cmd.Flags().GetString("scope")
@@ -83,6 +130,27 @@ var oracleCmd = &cobra.Command{
 		if maxIterations > 0 {
 			maxIterationArg = fmt.Sprintf("%d", maxIterations)
 		}
+
+		// --from-brief is the gated path: it refuses to run unless the setup
+		// ritual actually produced an approved brief. Without this the ritual
+		// is only prose in a wrapper, which nothing can enforce.
+		if fromBrief, _ := cmd.Flags().GetBool("from-brief"); fromBrief {
+			brief, briefErr := resolveOracleBriefRun(skillWorkspaceRoot())
+			if briefErr != nil {
+				outputError(1, briefErr.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			args = []string{brief.Topic}
+			depth = brief.Depth
+			scope = brief.Scope
+			template = brief.Template
+			confidenceTarget = fmt.Sprintf("%d", brief.TargetConfidence)
+			maxIterationArg = ""
+			if brief.MaxIterations > 0 {
+				maxIterationArg = fmt.Sprintf("%d", brief.MaxIterations)
+			}
+		}
+
 		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget, scope, template, maxIterationArg, fmt.Sprintf("%t", background))
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -180,6 +248,11 @@ func init() {
 	oracleCmd.Flags().String("template", defaultOracleTemplate, "Output template: auto, prd, tech-eval, architecture-review, bug-investigation, research-brief, or custom")
 	oracleCmd.Flags().Int("max-iterations", 0, "Override depth iteration cap, 1-50")
 	oracleCmd.Flags().Bool("background", false, "Start the Oracle loop in a detached background controller and return immediately")
+	oracleCmd.Flags().String("topic", "", "For `oracle propose` and `oracle brief`: the research topic")
+	oracleCmd.Flags().String("core-question", "", "For `oracle brief`: the single question this run must answer")
+	oracleCmd.Flags().String("context", "", "For `oracle brief`: why this research is happening and what decision it feeds")
+	oracleCmd.Flags().StringArray("success-criteria", nil, "For `oracle brief`: what a finished answer contains (repeatable)")
+	oracleCmd.Flags().Bool("from-brief", false, "Start the Oracle loop from the approved research brief; fails when no brief has been approved")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)

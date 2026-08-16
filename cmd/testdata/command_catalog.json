@@ -4781,12 +4781,17 @@
     "flags": [
       "background",
       "confidence-target",
+      "context",
+      "core-question",
       "depth",
       "dry-run",
+      "from-brief",
       "max-iterations",
       "min-confidence",
       "scope",
-      "template"
+      "success-criteria",
+      "template",
+      "topic"
     ],
     "parent_command": "",
     "has_subcommands": false,

@@ -94,13 +94,28 @@ func inferOracleTemplate(topic string) string {
 		return "bug-investigation"
 	case containsAnyOracleKeyword(lower, "architecture", "architectural", "design", "refactor", "system design", "scalability", "structure"):
 		return "architecture-review"
-	case containsAnyOracleKeyword(lower, "evaluate", "evaluation", "compare", " vs ", "versus", "adopt", "library", "framework", "tooling", "dependency"):
+	// "Should the cache use SQLite or Postgres?" is the most common way a
+	// choice between two technologies gets phrased, and it matched none of the
+	// comparison verbs.
+	case containsAnyOracleKeyword(lower, "evaluate", "evaluation", "compare", " vs ", "versus", "adopt", "library", "framework", "tooling", "dependency"),
+		oracleLooksLikeChoice(lower):
 		return "tech-eval"
 	case containsAnyOracleKeyword(lower, "best practice", "best practices", "patterns", "conventions", "idiomatic", "how should"):
 		return "research-brief"
 	default:
 		return "custom"
 	}
+}
+
+// oracleLooksLikeChoice spots a question that weighs one option against
+// another -- "should the cache use SQLite or Postgres", "which should we pick".
+// It requires both a deciding verb and an alternative, so ordinary prose
+// containing "or" does not trip it.
+func oracleLooksLikeChoice(lower string) bool {
+	if !strings.Contains(lower, " or ") {
+		return false
+	}
+	return containsAnyOracleKeyword(lower, "should", "which", "choose", "pick", "prefer", "better")
 }
 
 func resolveOracleScope(topic, requested string) (oracleScopeProfile, error) {
@@ -156,7 +171,9 @@ func inferOracleAutoScope(topic string) string {
 	repoKeywords := []string{
 		"this repo", "this repository", "current repo", "current repository", "codebase", "aether", "colony",
 		"phase", "build", "continue", "seal", "codex", "claude", "opencode", "pheromone", "runtime", "cli",
-		"local", "source checkout",
+		// "local" on its own matched ordinary words like "local cache" and
+		// forced repo-only evidence onto questions that needed the web.
+		"local runtime", "local checkout", "source checkout",
 	}
 	externalKeywords := []string{
 		"latest", "current", "today", "at the moment", "top ", "github repo", "github repos", "market",
@@ -309,6 +326,11 @@ type oracleStateFile struct {
 	ControllerPID      int            `json:"controller_pid,omitempty"`
 	Depth              string         `json:"depth,omitempty"`
 	Novelty            noveltyTracker `json:"novelty,omitempty"`
+	// CoreQuestion and SuccessCriteria carry the approved research brief into
+	// the run, so the saved research records what was actually asked rather
+	// than a template-generated paraphrase of the topic.
+	CoreQuestion    string   `json:"core_question,omitempty"`
+	SuccessCriteria []string `json:"success_criteria,omitempty"`
 }
 
 type oraclePlanFile struct {
@@ -572,6 +594,10 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 		autoBackground = true
 	}
 
+	// Read the approved brief before the workspace is archived below. The
+	// archive sweep is what consumes it, so a brief is never reused.
+	approvedBrief := approvedBriefForTopic(root, topic)
+
 	paths := oracleWorkspacePaths(root)
 	if fileExists(paths.LoopPath) {
 		if state, err := loadOracleStateFile(paths.StatePath); err == nil && strings.EqualFold(strings.TrimSpace(state.Status), "active") {
@@ -645,10 +671,16 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 		ControllerPID:     os.Getpid(),
 		Depth:             depthCfg.Label,
 	}
+	coreQuestion := ""
+	if approvedBrief != nil {
+		coreQuestion = approvedBrief.CoreQuestion
+		state.CoreQuestion = approvedBrief.CoreQuestion
+		state.SuccessCriteria = approvedBrief.SuccessCriteria
+	}
 	plan := oraclePlanFile{
 		Version:     "1.1",
 		Sources:     map[string]oracleSource{},
-		Questions:   buildBriefInformedQuestions(topic, brief, detectedType, scopeProfile),
+		Questions:   buildOracleQuestionPlan(topic, brief, detectedType, coreQuestion, scopeProfile),
 		CreatedAt:   now,
 		LastUpdated: now,
 	}
@@ -2073,6 +2105,41 @@ func scanCodebaseStructure(root string) string {
 		count++
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// buildOracleQuestionPlan puts the operator's approved core question first.
+//
+// Without a brief the loop opens on a generated question that splices the raw
+// topic into a template, which is how a run once spent its first iteration on a
+// 300-character question nobody had asked. When the operator has approved a core
+// question, that is the question the loop should open on.
+func buildOracleQuestionPlan(topic, brief, detectedType, coreQuestion string, profile oracleScopeProfile) []oracleQuestion {
+	generated := buildBriefInformedQuestions(topic, brief, detectedType, profile)
+	coreQuestion = strings.Join(strings.Fields(strings.TrimSpace(coreQuestion)), " ")
+	if coreQuestion == "" {
+		return generated
+	}
+
+	questions := make([]oracleQuestion, 0, len(generated)+1)
+	questions = append(questions, oracleQuestion{
+		Text:              coreQuestion,
+		Status:            "open",
+		Confidence:        0,
+		KeyFindings:       []oracleFinding{},
+		IterationsTouched: []int{},
+	})
+	for _, question := range generated {
+		// The generated boundary question restates the core question badly
+		// once the operator has written a real one.
+		if strings.EqualFold(strings.TrimSpace(question.Text), coreQuestion) {
+			continue
+		}
+		questions = append(questions, question)
+	}
+	for i := range questions {
+		questions[i].ID = fmt.Sprintf("q%d", i+1)
+	}
+	return questions
 }
 
 func buildBriefInformedQuestions(topic string, brief string, detectedType string, profiles ...oracleScopeProfile) []oracleQuestion {
