@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.55] - 2026-08-16
+
+### Added
+
+- The Oracle setup ritual is now real runtime, not wrapper prose: `oracle propose` suggests scope/depth/accuracy and how much clarifying to do, `oracle brief` records the approved core question, and `oracle --from-brief` refuses to run without one. The approved question opens the research.
+- Live research visibility: every Oracle round appends to a progress log regardless of output mode, and `oracle status --follow` (or `--background --follow`) streams one line per round — phase, round N of M, confidence against target, current question. The previous per-round display was a guaranteed no-op on every background run.
+- `aether oracle selftest` proves the research machinery end to end with one real round in a throwaway workspace; non-zero exit when the dispatcher, agent definition, artifacts, or progress log are broken.
+- Completed research is saved durably to `.aether/research/<date>-<slug>.md` with front matter (core question, confidence, rounds); `oracle save` keeps a stopped run, `aether research` lists what's saved. The workspace copy is swept by the next run; the saved copy is not.
+- Research handoff: `aether init --research <path>` and `aether plan --research <path>` record a pointer on colony state, and the runtime carries the document's contents into planning, phase-research, and build worker briefs (budget-bounded, framed as evidence not instructions). `plan --print-brief` confirms delivery before a plan run is paid for.
+- Orchestration visibility: the Dispatch stage renders the Queen's team choice from the manifest rationale — one clause per selected caste, a short clause for castes considered and not called, and a named line whenever the runtime keeps a safety caste against the depth flag. Completed workers say whether they flagged anything or came back clean. `aether status` shows the colony health line the vital-signs computation always produced.
+- Knowledge-repo support: a directory of notes with zero code (Obsidian/Logseq vault, docs archive) now scans as a knowledge base — no CI/LICENSE/README housekeeping suggestions, risks about content loss and broken links instead of regression, and a charter describing note counts. `.aether/` gains a WHAT-IS-THIS.md marker so disk cleanups can tell durable colony state from a build cache.
+
+### Fixed
+
+- A new colony no longer inherits the previous colony's clarified decisions, assumptions, or worker handoff notes — re-init clears them, so workers stop being briefed with a finished project's context.
+- Deep and exhaustive Oracle runs no longer spend their opening third at the lowest reasoning effort; the survey phase is capped at a quarter of the round budget and runs at medium effort on deep runs.
+- Oracle research questions no longer splice in the goal of an inactive, unrelated colony, and the colony-goal question stays under 240 characters.
+- `aether oracle status` is read-only; repairing a dead controller moved to `aether oracle recover`.
+- "A unknown project" and the pile of "No X detected" filler lines are gone from generated charters; an empty scan now says plainly that it found nothing.
+- The Claude and OpenCode Oracle agent definitions described a Stop-hook loop and `--legacy` flag that never existed; they now describe the controller-owned loop the runtime actually runs, fenced by tests that fail on invented paths.
+- The session-freshness tools (`session-verify-fresh`, `session-clear`) — documented for years, called by nothing — are now reachable from the medic wrapper and off the orphan allowlist.
+
 ## [1.0.48] - 2026-08-04
 
 ### Fixed

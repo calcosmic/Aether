@@ -73,21 +73,29 @@ Review depth: heavy (final phase)
   [ ] Second golden task
 
 ── Dispatch ──
+Queen's Team
+  🔨 Builder — builder is always required for build flow
+  🧪 Probe — probe is always required for build flow
+  👁️ Watcher — watcher is always required for build flow
+  Kept by safety policy: Builder — builder is always required for build flow
+  Kept by safety policy: Probe — probe is always required for build flow
+  Kept by safety policy: Watcher — watcher is always required for build flow
+
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨 Builder Worker-XX  First golden task (+1 more step)  ✓ completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+  🔨 Builder Worker-XX  First golden task (+1 more step)  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
 
 Post-Wave: Probe
   Execution: serial — post-wave independent verification of builder claims
-  🧪 Probe Worker-XX  Independent probe verification of builder claims  ✓ completed 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
+  🧪 Probe Worker-XX  Independent probe verification of builder claims  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
 
 Post-Wave: Watcher
   Execution: serial — post-wave watcher verification before advancement
   👁️ Watcher Worker-XX  Independent verification before advancement
 
-Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher  ✓ completed 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
+Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
 
 Total planned dispatches: 3
 

@@ -88,10 +88,18 @@ TestStatusHealthLineReflectsComputedVitals.
 Remaining 287 unreviewed entries stay for the RECLAIM phase — this item's
 mandate was highest-value, not exhaustive.
 
-## Item 5 — RELEASE READINESS: **not started**
+## Item 5 — RELEASE READINESS: **DONE** (round 1)
 
-Version bump + CHANGELOG.md + goreleaser check + aether integrity. NO publish,
-NO push.
+- Version bumped 1.0.54 -> 1.0.55 via `aether bump-version` (.aether/version.json
+  + npm/package.json together — a republished version number proves nothing).
+- CHANGELOG.md: full 1.0.55 section (oracle ritual/visibility/selftest, durable
+  research + --research handoff, orchestration visibility, knowledge repos,
+  residue clear, loop-quality fixes, freshness-tool wiring).
+- goreleaser check: PASS. aether integrity: 4/5 — the sole failing check is
+  "hub 1.0.54 behind binary 1.0.55", which is DEFINITIONALLY pending until
+  `aether publish` runs, and publishing is the operator's reserved action (the
+  loop's own DO-NOT). This is the tool correctly reporting an unpublished
+  release, not a defect; the operator ships with `aether publish`.
 
 ## Verify gate (must be green in the SAME round as the promise)
 
