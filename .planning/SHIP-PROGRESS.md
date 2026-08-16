@@ -30,9 +30,9 @@ Audited WORKFLOW-01..09 + RUNTIME-01/02 for executable evidence; ticked each in
 - NOT in scope of item 1, left unticked: CATALOG-01/02, TEST-01/02,
   QUEEN-01/02, PROOF-01 (PROOF-01 needs a real downstream repo run — operator).
 
-## Item 2 — INIT HARDENING (field report): **IN PROGRESS** (round 1)
+## Item 2 — INIT HARDENING (field report): **DONE** (round 1)
 
-Spec: .planning/field-reports/2026-08-16-init-obsidian-vault.md. To deliver:
+Spec: .planning/field-reports/2026-08-16-init-obsidian-vault.md. Delivered:
 - knowledge_base classification in cmd/init_research.go — markdown/source
   counting in the walk, .obsidian//.logseq/ detection, only when zero
   languages; suppresses CI/LICENSE/README/formatter/no-docs pheromones; risks
@@ -43,11 +43,13 @@ Spec: .planning/field-reports/2026-08-16-init-obsidian-vault.md. To deliver:
 - .aether/WHAT-IS-THIS.md durable-state marker written by
   ensureRepoLocalScaffold (cmd/platform_sync.go).
 Tests: TestObsidianVaultClassifiesAsKnowledgeBase,
+TestMarkdownOnlyRepoClassifiesAsKnowledgeBase,
 TestKnowledgeRepoGetsNoCodeHousekeepingPheromones,
 TestCodeRepoNeverClassifiesAsKnowledgeBase,
 TestUnknownProjectCharterNeverPrintsBrokenFiller,
 TestKnowledgeRepoRisksAreAboutContent,
-TestAetherScaffoldWritesDurableStateMarker, TestInitWrappersCarryLowSignalBranch.
+TestAetherScaffoldWritesDurableStateMarker, TestInitWrappersCarryLowSignalBranch
+(cmd/init_research_knowledge_test.go). All green round 1.
 
 ## Item 3 — TIE IT TOGETHER (Phase 168 spirit + Phase 175): **not started**
 

@@ -15,6 +15,7 @@ ceremony_contract:
 intent_refinement:
   - "Shelf Backlog collects the user's chosen shelf IDs only; Approval spends them inside the same `aether init` call, after consent."
   - "Do not treat init-research as the final charter. It is only a deterministic codebase scan."
+  - "Low-signal branch: when init-research returns detected_type \"unknown\" with empty languages, frameworks, and governance, the scan found nothing to go on. Say that plainly, do not present or paraphrase the generated charter, and drive Intent Refinement purely from the user's stated goal. When detected_type is \"knowledge_base\" the repo is a notes vault: skip all code-toolchain framing and ask about the content instead."
   - "If prior_colonies.count > 0, show a Prior Context section (up to 3 recent colonies' goals and outcomes from prior_colonies.recent) before asking for the new goal."
   - "Run `aether research list` before the scoping questions. If a saved research document relates to this goal, offer it and, with the user's approval, pass it as `--research <path>` so the planning workers read it instead of rediscovering it. Never attach a document the user has not agreed to."
   - "Research is a pointer, not charter content. Do not paste a research document's text into the charter; the charter is governance, research is evidence."

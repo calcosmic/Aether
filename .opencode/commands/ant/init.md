@@ -85,6 +85,16 @@ Display a brief summary from the scan:
 - Git: `{git_history.commits}` commits, `{git_history.contributors}` contributors on `{git_history.branch}`
 - Governance: list detected linters, CI, test frameworks from `governance` object
 
+**Low-signal branch:** if `detected_type` is `"unknown"` and `languages`,
+`frameworks`, and `governance` are all empty, the scan found nothing to go on.
+Say exactly that in one plain sentence, skip the summary display and the
+generated charter entirely — never show or paraphrase runtime charter text on
+this branch — and drive Intent Refinement purely from the user's stated goal.
+If `detected_type` is `"knowledge_base"`, this is a notes vault: describe it by
+its note count, skip all code-toolchain framing, and interview about the
+content (what the notes are, what organised looks like, what must never be
+lost) instead of tech-stack questions.
+
 **Stop conditions:** If `init-research` fails or reports setup is missing,
 relay the runtime guidance exactly and stop — do not ask interview questions
 from a stage that never scanned the repo.

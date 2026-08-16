@@ -777,6 +777,35 @@ func ensureRepoLocalScaffold(localAether string) syncResult {
 		result.copied++
 	}
 
+	// A durable-state marker, because .aether/ is indistinguishable from a
+	// build cache to an outside observer: repo root, untracked, dominated by
+	// ts-host/node_modules. A routine disk cleanup deleted one on 2026-08-16
+	// for exactly that reason (.planning/field-reports/
+	// 2026-08-16-init-obsidian-vault.md §4) — no colony existed there, but a
+	// running colony would have been destroyed.
+	markerPath := filepath.Join(localAether, "WHAT-IS-THIS.md")
+	if _, err := os.Stat(markerPath); os.IsNotExist(err) {
+		marker := `# What is this directory?
+
+This is Aether's colony state for this repository — durable working memory,
+not a build cache. Deleting it destroys any colony running here: its goal,
+phase plan, learned lessons, and steering signals.
+
+Safe to delete: ts-host/node_modules/ only (npm packages, ~60 MB — Aether
+reinstalls them on demand).
+
+Everything else here should be treated like your project's own files.
+Managed by the aether CLI (https://github.com/calcosmic/Aether).
+`
+		if writeErr := os.WriteFile(markerPath, []byte(marker), 0644); writeErr != nil {
+			result.errors = append(result.errors, fmt.Sprintf("write %s: %v", markerPath, writeErr))
+		} else {
+			result.copied++
+		}
+	} else if err == nil {
+		result.skipped++
+	}
+
 	gitignorePath := filepath.Join(localAether, ".gitignore")
 	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
 		// ts-host/node_modules is ~60 MB of npm packages installed by
