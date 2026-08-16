@@ -1510,7 +1510,11 @@ func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
 	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
 }
 
-func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
+func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
+	var policy codexQueenExecutionPolicy
+	if len(policyOpt) > 0 {
+		policy = policyOpt[0]
+	}
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d", phase.ID)))
 	b.WriteString(visualDividerStr())
@@ -1538,6 +1542,10 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	}
 	b.WriteString("\n")
 	b.WriteString(renderStageMarker("Dispatch"))
+	if teamChoice := renderQueenTeamChoice(policy, dispatches); teamChoice != "" {
+		b.WriteString(teamChoice)
+		b.WriteString("\n")
+	}
 	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
 	b.WriteString(renderArtifactsSection(
 		displayDataPath(fmt.Sprintf("build/phase-%d/manifest.json", phase.ID)),
@@ -1563,7 +1571,11 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	return b.String()
 }
 
-func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
+func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
+	var policy codexQueenExecutionPolicy
+	if len(policyOpt) > 0 {
+		policy = policyOpt[0]
+	}
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Plan %d", phase.ID)))
 	b.WriteString(visualDividerStr())
@@ -1581,6 +1593,10 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
+	if teamChoice := renderQueenTeamChoice(policy, dispatches); teamChoice != "" {
+		b.WriteString(teamChoice)
+		b.WriteString("\n")
+	}
 	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
 	b.WriteString(renderNextUp(
 		`Use the JSON `+"`dispatch_manifest`"+` to spawn wrapper agents with the Task tool.`,
@@ -3517,6 +3533,133 @@ func renderSpawnPlan(phase colony.Phase, depth string) string {
 	return renderSpawnPlanForDispatches(plannedBuildDispatches(phase, depth), colony.ModeInRepo)
 }
 
+// renderQueenTeamChoice makes the Queen's team decision readable. The
+// rationale strings are composed on every build and carried in the dispatch
+// contract (SelectedReasons/PrunedReasons, cmd/codex_dispatch_contract.go) —
+// and until this renderer existed they were never shown to a human, so "why
+// didn't it use the security one?" required opening a JSON manifest.
+//
+// Everything printed here is read from the contract, never recomputed and
+// never hardcoded: the render test blanks the contract fields and asserts the
+// clauses disappear with them.
+func renderQueenTeamChoice(policy codexQueenExecutionPolicy, dispatches []codexBuildDispatch) string {
+	budget := policy.SpawnBudget
+	if budget == nil || (len(budget.SelectedReasons) == 0 && len(budget.PrunedReasons) == 0 && len(budget.PreservedCastes) == 0) {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("Queen's Team\n")
+
+	// One clause per selected caste, in dispatch order so the list reads the
+	// way the workers will actually spawn.
+	seen := map[string]bool{}
+	orderedCastes := make([]string, 0, len(budget.SelectedReasons))
+	for _, dispatch := range dispatches {
+		caste := strings.TrimSpace(dispatch.Caste)
+		if caste == "" || seen[caste] {
+			continue
+		}
+		seen[caste] = true
+		orderedCastes = append(orderedCastes, caste)
+	}
+	// Castes with a recorded reason but no dispatch row still get their clause.
+	for _, caste := range sortedStringKeys(budget.SelectedReasons) {
+		if !seen[caste] {
+			seen[caste] = true
+			orderedCastes = append(orderedCastes, caste)
+		}
+	}
+	for _, caste := range orderedCastes {
+		reason := strings.TrimSpace(budget.SelectedReasons[caste])
+		if reason == "" {
+			continue
+		}
+		b.WriteString("  ")
+		b.WriteString(casteIdentity(caste))
+		b.WriteString(" — ")
+		b.WriteString(reason)
+		b.WriteString("\n")
+	}
+
+	// Safety restorations and policy additions: when the runtime keeps a caste
+	// the depth flag or budget would have dropped, it says which caste and why
+	// instead of silently correcting.
+	for _, caste := range budget.PreservedCastes {
+		reason := strings.TrimSpace(budget.SelectedReasons[caste])
+		if reason == "" {
+			reason = "required by safety policy for this phase"
+		}
+		b.WriteString("  Kept by safety policy: ")
+		b.WriteString(casteLabel(caste))
+		b.WriteString(" — ")
+		b.WriteString(reason)
+		b.WriteString("\n")
+	}
+	for _, caste := range budget.PolicyAddedCastes {
+		b.WriteString("  Added by build policy: ")
+		b.WriteString(casteLabel(caste))
+		b.WriteString("\n")
+	}
+
+	// The castes considered and not called, as ONE short clause. 27 castes
+	// exist; a per-build absentee table is exactly the ceremony the reshape
+	// removed, so at most three are named and the rest are a count.
+	if len(budget.PrunedReasons) > 0 {
+		pruned := sortedStringKeys(budget.PrunedReasons)
+		b.WriteString(fmt.Sprintf("  Not called (%d): ", len(pruned)))
+		shown := pruned
+		if len(shown) > 3 {
+			shown = shown[:3]
+		}
+		clauses := make([]string, 0, len(shown))
+		for _, caste := range shown {
+			reason := strings.TrimSpace(budget.PrunedReasons[caste])
+			if reason == "" {
+				clauses = append(clauses, casteLabel(caste))
+				continue
+			}
+			clauses = append(clauses, casteLabel(caste)+" — "+reason)
+		}
+		b.WriteString(strings.Join(clauses, "; "))
+		if remaining := len(pruned) - len(shown); remaining > 0 {
+			b.WriteString(fmt.Sprintf("; and %d more below the relevance threshold", remaining))
+		}
+		b.WriteString("\n")
+	}
+	if trimmed := intDeref(budget.PrunedWorkers); trimmed > 0 && len(budget.PrunedReasons) == 0 {
+		b.WriteString(fmt.Sprintf("  Trimmed to the worker cap: %d caste(s)\n", trimmed))
+	}
+
+	return b.String()
+}
+
+// queenPolicyFromResult recovers the typed Queen policy from a build result
+// map. The build paths store the struct value directly, so no JSON round-trip
+// is involved.
+func queenPolicyFromResult(result map[string]interface{}) codexQueenExecutionPolicy {
+	if policy, ok := result["queen_execution_policy"].(codexQueenExecutionPolicy); ok {
+		return policy
+	}
+	return codexQueenExecutionPolicy{}
+}
+
+func sortedStringKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func intDeref(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
 func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode colony.ParallelMode) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("spawn-plan"), "Spawn Plan"))
@@ -3647,6 +3790,17 @@ func writeDispatchExecutionStatus(b *strings.Builder, dispatch codexBuildDispatc
 	b.WriteString(icon)
 	b.WriteString(" ")
 	b.WriteString(status)
+	// A worker that surfaced something and a worker that came back with
+	// nothing to report are different outcomes, not two identical "completed"
+	// lines. Blockers are the actionable-finding channel in the result schema,
+	// so completion is qualified by it.
+	if status == "completed" {
+		if len(dispatch.Blockers) > 0 {
+			b.WriteString(fmt.Sprintf(" — flagged %d issue(s)", len(dispatch.Blockers)))
+		} else {
+			b.WriteString(" — nothing to flag")
+		}
+	}
 	if dispatch.Duration > 0 {
 		b.WriteString(fmt.Sprintf(" %.1fs", dispatch.Duration))
 	}

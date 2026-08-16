@@ -49,6 +49,25 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 }
 
+// renderColonyHealthLine compresses the vital-signs snapshot to one status
+// line: label, score, and the three counts that produced it.
+func renderColonyHealthLine(vitals map[string]interface{}) string {
+	label := strings.TrimSpace(stringValue(vitals["health_label"]))
+	score := intValue(vitals["overall_health"])
+	if label == "" || score == 0 {
+		return ""
+	}
+	signals := 0
+	if section, ok := vitals["signal_health"].(map[string]interface{}); ok {
+		signals = intValue(section["active_count"])
+	}
+	instincts := 0
+	if section, ok := vitals["memory_pressure"].(map[string]interface{}); ok {
+		instincts = intValue(section["instinct_count"])
+	}
+	return fmt.Sprintf("\nColony health: %s (%d/100) — %d signal(s) active, %d instinct(s) learned\n", label, score, signals, instincts)
+}
+
 func renderNoColonyStatusVisual() string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("status"), "Colony Status"))
@@ -959,6 +978,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 			renderRecentInstincts(&b, recentInstincts)
 		}
 	}
+
+	// Colony health, from the same computation colony-vital-signs runs.
+	// v5.4.0's status surfaced this; the modern status computed it on request
+	// only, behind a subcommand nobody was told about.
+	b.WriteString(renderColonyHealthLine(computeColonyVitalSigns(s, state)))
 
 	// State
 	stateLabel := string(state.State)

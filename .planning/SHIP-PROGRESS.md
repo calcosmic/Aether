@@ -51,17 +51,26 @@ TestKnowledgeRepoRisksAreAboutContent,
 TestAetherScaffoldWritesDurableStateMarker, TestInitWrappersCarryLowSignalBranch
 (cmd/init_research_knowledge_test.go). All green round 1.
 
-## Item 3 — TIE IT TOGETHER (Phase 168 spirit + Phase 175): **not started**
+## Item 3 — TIE IT TOGETHER (Phase 168 spirit + Phase 175): **DONE** (round 1)
 
-Wire already-computed data into typed commands: colony vital signs +
-next-step guidance into status/build/continue output; per-caste dispatch
-rationale rendered at the Dispatch stage (one clause per selected caste, SHORT
-not-called clause, never a 27-row table); safety-caste restoration and cap
-trims named with reasons; run summary distinguishes finding vs clean workers.
-Render tests must fail if manifest rationale is removed. REUSE computed
-strings (colony-vital-signs, nextCommandFromState, closeoutNextCommand,
-continueNextCommandForAssessment, dispatch manifest rationale). Do NOT
-reimplement.
+- Queen's team choice rendered at the Dispatch stage from the manifest's
+  SelectedReasons/PrunedReasons/PreservedCastes (renderQueenTeamChoice,
+  cmd/codex_visuals.go), wired into both build render paths via
+  queenPolicyFromResult. One clause per selected caste; not-called castes are
+  ONE short clause (max 3 named + count); safety restorations named with
+  reason ("Kept by safety policy: ...").
+- Run summary distinguishes finding vs clean: completed workers render
+  "— flagged N issue(s)" or "— nothing to flag" (writeDispatchExecutionStatus).
+- Colony health line in `aether status` from the extracted
+  computeColonyVitalSigns (cmd/memory_details.go) — surfaced, not
+  reimplemented. Next-step guidance was already wired (guided actions +
+  renderNextUp on every lifecycle visual); verified, not duplicated.
+Tests (cmd/queen_team_choice_test.go): TestQueenTeamChoiceRendersManifestRationaleVerbatim
+(anti-hardcode fence — blanking the manifest blanks the render),
+TestNotCalledCastesRenderAsOneShortClause, TestLightBuildOfProductionPhaseShowsSafetyRestorationLine
+(real contract builder), TestBuildVisualCarriesQueenTeamChoice,
+TestRunSummaryDistinguishesFindingFromCleanWorkers,
+TestStatusHealthLineReflectsComputedVitals.
 
 ## Item 4 — ORPHAN RECLAMATION: **not started**
 
