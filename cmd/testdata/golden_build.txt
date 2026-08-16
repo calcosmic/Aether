@@ -9,15 +9,15 @@ Phase: Golden phase
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨 Builder Worker-XX  First golden task (+1 more step)
+  🔨🐜 Builder Worker-XX  First golden task (+1 more step)
 
 Post-Wave: Probe
   Execution: serial — post-wave independent verification of builder claims
-  🧪 Probe Worker-XX  Independent probe verification of builder claims
+  🧪🐜 Probe Worker-XX  Independent probe verification of builder claims
 
 Post-Wave: Watcher
   Execution: serial — post-wave watcher verification before advancement
-  👁️ Watcher Worker-XX  Independent verification before advancement
+  👁️🐜 Watcher Worker-XX  Independent verification before advancement
 
 Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher
 
@@ -33,31 +33,31 @@ Safety castes a risky phase needs are kept at every size.
 Wave 11 starting (in-repo, serial)
   Execution: serial — single task in this wave
 
-… 🔨 Builder Worker-XX  starting wave 11  Worker: Worker-XX
+… 🔨🐜 Builder Worker-XX  starting wave 11  Worker: Worker-XX
 
-… 🔨 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
+… 🔨🐜 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
 
-✓ 🔨 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+✓ 🔨🐜 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
 
 ── Dispatch ──
 Wave 13 starting (in-repo, serial)
   Execution: serial — single task in this wave
 
-… 🧪 Probe Worker-XX  starting wave 13  Worker: Worker-XX
+… 🧪🐜 Probe Worker-XX  starting wave 13  Worker: Worker-XX
 
-… 🧪 Probe Worker-XX  running wave 13  Worker: Worker-XX  [simulated worker heartbeat observed]
+… 🧪🐜 Probe Worker-XX  running wave 13  Worker: Worker-XX  [simulated worker heartbeat observed]
 
-✓ 🧪 Probe Worker-XX  completed 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
+✓ 🧪🐜 Probe Worker-XX  completed 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
 
 ── Dispatch ──
 Wave 14 starting (in-repo, serial)
   Execution: serial — single task in this wave
 
-… 👁️ Watcher Worker-XX  starting wave 14  Worker: Worker-XX
+… 👁️🐜 Watcher Worker-XX  starting wave 14  Worker: Worker-XX
 
-… 👁️ Watcher Worker-XX  running wave 14  Worker: Worker-XX  [simulated worker heartbeat observed]
+… 👁️🐜 Watcher Worker-XX  running wave 14  Worker: Worker-XX  [simulated worker heartbeat observed]
 
-✓ 👁️ Watcher Worker-XX  completed 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
+✓ 👁️🐜 Watcher Worker-XX  completed 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
 
   Step 4/5: Verify (0s)
   Step 5/5: Complete (0s)
@@ -74,23 +74,23 @@ Review depth: heavy (final phase)
 
 ── Dispatch ──
 Queen's Team
-  🔨 Builder — builder is always required for build flow
-  🧪 Probe — probe is always required for build flow
-  👁️ Watcher — watcher is always required for build flow
+  🔨🐜 Builder — builder is always required for build flow
+  🧪🐜 Probe — probe is always required for build flow
+  👁️🐜 Watcher — watcher is always required for build flow
 
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨 Builder Worker-XX  First golden task (+1 more step)  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
 
 Post-Wave: Probe
   Execution: serial — post-wave independent verification of builder claims
-  🧪 Probe Worker-XX  Independent probe verification of builder claims  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
+  🧪🐜 Probe Worker-XX  Independent probe verification of builder claims  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
 
 Post-Wave: Watcher
   Execution: serial — post-wave watcher verification before advancement
-  👁️ Watcher Worker-XX  Independent verification before advancement
+  👁️🐜 Watcher Worker-XX  Independent verification before advancement
 
 Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
 

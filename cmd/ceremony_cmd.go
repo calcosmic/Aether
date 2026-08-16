@@ -383,7 +383,7 @@ func renderCeremonyQueenFrame(workflow string, manifest map[string]interface{}, 
 	}
 
 	var b strings.Builder
-	b.WriteString("👑 Queen Orchestration")
+	b.WriteString("👑🐜 Queen Orchestration")
 	if len(parts) > 0 {
 		b.WriteString(": ")
 		b.WriteString(strings.Join(parts, " | "))

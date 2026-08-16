@@ -4026,7 +4026,14 @@ func casteANSIColor(caste string) string {
 }
 
 func casteIdentity(caste string) string {
-	return casteEmoji(caste) + " " + colorizeCaste(caste, casteLabel(caste))
+	// Classic house style (v5.4.0 caste-system.md): the caste glyph is always
+	// followed by the ant — 🔨🐜 Builder Hammer-42 — except when the glyph IS
+	// the generic ant, which stays single.
+	emoji := casteEmoji(caste)
+	if emoji != "🐜" {
+		emoji += "🐜"
+	}
+	return emoji + " " + colorizeCaste(caste, casteLabel(caste))
 }
 
 func colorizeCaste(caste, text string) string {

@@ -118,11 +118,11 @@ Aether uses a hybrid UX model: the Go runtime owns truth, platform wrappers own 
 ### Caste Identity System
 
 Each worker caste has three visual components:
-1. **Emoji prefix** — decorative icon (e.g., `🔨` for Builder, `👁️` for Watcher)
+1. **Emoji prefix** — caste glyph followed by the ant, the classic v5.4.0 house style (e.g., `🔨🐜` for Builder, `👁️🐜` for Watcher; the generic fallback stays a single `🐜`)
 2. **ANSI-colored label** — the primary identity, colored by caste (e.g., "Builder" in yellow)
 3. **Deterministic name** — hash-based per caste+task (e.g., "Mason-67")
 
-Format: `🔨 Builder Mason-67  Task description`
+Format: `🔨🐜 Builder Mason-67  Task description` (locked by `TestCasteIdentityUsesHouseStyle`)
 
 Color maps in `cmd/codex_visuals.go`: `casteColorMap` (ANSI codes), `casteEmojiMap` (single emoji), `casteLabelMap` (human-readable name). Functions: `casteIdentity()`, `casteLabel()`, `casteEmoji()`.
 

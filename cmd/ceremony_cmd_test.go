@@ -153,7 +153,7 @@ func TestCeremonySpawnPlanRendersQueenFrameAndSkillCards(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"👑 Queen Orchestration",
+		"👑🐜 Queen Orchestration",
 		"mode=plan-only",
 		"owner=host-wrapper",
 		"platform=codex",

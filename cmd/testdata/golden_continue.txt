@@ -2,25 +2,25 @@ Running deterministic verification for phase 1 before watcher/review workers (ti
 ── Dispatch ──
 Continue Verification 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
-  👁️ Watcher Worker-XX  Phase: 1 — Golden phase
+  👁️🐜 Watcher Worker-XX  Phase: 1 — Golden phase
 
-… 👁️ Watcher Worker-XX  starting wave 1  Phase: 1 — Golden phase
+… 👁️🐜 Watcher Worker-XX  starting wave 1  Phase: 1 — Golden phase
 
-… 👁️ Watcher Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
+… 👁️🐜 Watcher Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
 
-✓ 👁️ Watcher Worker-XX  completed 0.0s  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
+✓ 👁️🐜 Watcher Worker-XX  completed 0.0s  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
 
   Step 1/4: Verification (0s)
 ── Dispatch ──
 Continue Review 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
-  🧪 Probe Worker-XX  Phase: 1 — Golden phase
+  🧪🐜 Probe Worker-XX  Phase: 1 — Golden phase
 
-… 🧪 Probe Worker-XX  starting wave 1  Phase: 1 — Golden phase
+… 🧪🐜 Probe Worker-XX  starting wave 1  Phase: 1 — Golden phase
 
-… 🧪 Probe Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
+… 🧪🐜 Probe Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
 
-✓ 🧪 Probe Worker-XX  completed 0.0s  FakeInvoker completed task continue-review-probe for worker Worker-XX (caste: probe)
+✓ 🧪🐜 Probe Worker-XX  completed 0.0s  FakeInvoker completed task continue-review-probe for worker Worker-XX (caste: probe)
 
   Step 2/4: Housekeeping (0s)
   Step 3/4: Advance (0s)
@@ -52,7 +52,7 @@ Workers closed: 2
 ── Housekeeping ──
 Signals: 0 active -> 0 active after housekeeping
 ── Learning ──
-🧠 Librarian  colony observed nothing new this phase
+🧠🐜 Librarian  colony observed nothing new this phase
 ── Next Phase ──
 Next phase ready: 2 — Next golden phase
 
