@@ -36,4 +36,16 @@ clear would remove, then clear it for real once the preview looks right.
 Protected scopes (`init`, `seal`, `entomb`) refuse to clear — their state is
 precious and the runtime enforces that; do not work around it.
 
+## Undoing A Repair
+
+Before `aether medic --fix` changes anything it snapshots the colony state and
+prints the checkpoint name. If a repair made things worse:
+
+```
+aether autofix-rollback --checkpoint-id <name from the repair log>
+```
+
+`aether autofix-checkpoint --issue "<why>"` creates the same kind of snapshot
+manually before any risky hand-intervention.
+
 **YAML source:** `.aether/commands/medic.yaml`

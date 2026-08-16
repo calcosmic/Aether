@@ -189,3 +189,60 @@ func init() {
 	rootCmd.AddCommand(registryAddCmd)
 	rootCmd.AddCommand(registryListCmd)
 }
+
+// resolveHubPathQuiet is resolveHubPath without the outputError side effect,
+// for non-blocking callers (init/seal bookkeeping must never fail a lifecycle
+// command).
+func resolveHubPathQuiet() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return resolveHubPathForHome(home, resolveRuntimeChannel())
+}
+
+// upsertColonyRegistryEntry registers or updates this repo in the hub-level
+// colony registry. Wired into init (active, with detected domains) and seal
+// (inactive) — RECLAIM-02: the registry supplies the domain tags that scope
+// hive wisdom retrieval, and until this wiring nothing populated it.
+func upsertColonyRegistryEntry(repoPath, goal string, domains []string, active bool) (updated bool, err error) {
+	repoPath = strings.TrimSpace(repoPath)
+	if repoPath == "" {
+		return false, fmt.Errorf("empty repo path")
+	}
+	hub := resolveHubPathQuiet()
+	if hub == "" {
+		return false, fmt.Errorf("hub path unavailable")
+	}
+	registryPath := filepath.Join(hub, "registry", "registry.json")
+
+	var rd registryData
+	if raw, readErr := os.ReadFile(registryPath); readErr == nil {
+		_ = json.Unmarshal(raw, &rd)
+	}
+
+	for i, c := range rd.Colonies {
+		if c.RepoPath == repoPath {
+			if len(domains) > 0 {
+				rd.Colonies[i].Domains = domains
+			}
+			if goal != "" {
+				rd.Colonies[i].LastGoal = goal
+			}
+			rd.Colonies[i].Active = active
+			return true, writeRegistry(registryPath, rd)
+		}
+	}
+
+	if domains == nil {
+		domains = []string{}
+	}
+	rd.Colonies = append(rd.Colonies, registryEntry{
+		RepoPath:     repoPath,
+		Domains:      domains,
+		Active:       active,
+		RegisteredAt: time.Now().UTC().Format(time.RFC3339),
+		LastGoal:     goal,
+	})
+	return false, writeRegistry(registryPath, rd)
+}

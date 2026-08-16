@@ -257,6 +257,10 @@ func renderMedicReport(results []HealthIssue, opts MedicOptions, state *colony.C
 	// Repair log if fix mode was used and repairs were performed
 	if opts.Fix && repairResult != nil {
 		b.WriteString(renderStageMarker("Repair Log"))
+		if repairResult.Checkpoint != "" {
+			b.WriteString(fmt.Sprintf("Checkpoint created: %s\n", repairResult.Checkpoint))
+			b.WriteString(fmt.Sprintf("Undo with: aether autofix-rollback --checkpoint-id %s\n", repairResult.Checkpoint))
+		}
 		for _, rec := range repairResult.Repairs {
 			status := "OK"
 			if !rec.Success {

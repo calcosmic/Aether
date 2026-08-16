@@ -732,7 +732,7 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	}
 }
 
-func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Charter, researchDocs ...string) string {
+func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Charter, hiveSeeded int, researchDocs ...string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
 	b.WriteString(visualDividerStr())
@@ -765,6 +765,9 @@ func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Ch
 	b.WriteString("\n👑 Queen has set the colony's intention\n\n")
 	b.WriteString(fmt.Sprintf("   %q\n\n", goal))
 	b.WriteString("   🟢 Colony Status: READY\n")
+	if hiveSeeded > 0 {
+		b.WriteString(fmt.Sprintf("   🧠 Hive wisdom: %d cross-colony pattern(s) seeded into QUEEN.md\n", hiveSeeded))
+	}
 	b.WriteString(renderNextUp(
 		`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
 		`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,

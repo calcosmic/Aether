@@ -282,6 +282,17 @@ Before colony state creation:
 **Stop conditions:** If no shelved entries exist, skip silently. This stage
 never writes — it only records the chosen IDs for Approval to spend.
 
+## Hub Bookkeeping (automatic)
+
+**Purpose:** Explain the cross-colony records init keeps automatically, and the inspection commands for them.
+
+`aether init` registers this repo in the machine-level colony registry with
+its detected domain tags (they scope cross-colony wisdom retrieval) and seeds
+QUEEN.md from hive wisdom — both automatic and non-blocking. Related manual
+commands: `aether registry-list` shows every colony on this machine;
+`aether domain-detect` shows the tags detected for this repo;
+`aether queen-seed-from-hive` re-runs the wisdom seeding on demand.
+
 ## Cross-Platform Drift Guard
 
 If you change init interview, synthesis, pheromone, shelf, approval, or closeout

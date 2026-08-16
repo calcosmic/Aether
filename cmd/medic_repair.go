@@ -19,11 +19,12 @@ import (
 
 // RepairResult holds the outcome of a full repair cycle.
 type RepairResult struct {
-	Attempted int
-	Succeeded int
-	Failed    int
-	Skipped   int
-	Repairs   []RepairRecord
+	Attempted  int
+	Succeeded  int
+	Failed     int
+	Skipped    int
+	Checkpoint string // rollback point created before the repairs (RECLAIM-01)
+	Repairs    []RepairRecord
 }
 
 // RepairRecord documents a single repair attempt.
@@ -195,6 +196,14 @@ func performRepairs(scanResult *ScannerResult, opts MedicOptions, dataPath strin
 	backupsDir := filepath.Dir(backupPath)
 	_ = cleanupOldBackups(backupsDir, 3)
 
+	// RECLAIM-01: a rollback-able state checkpoint before the risky repair,
+	// visibly named in the result so the undo command is one copy-paste away.
+	// Non-blocking: a colony without COLONY_STATE.json still gets repairs.
+	checkpointName, _, cpErr := createAutofixCheckpoint(fmt.Sprintf("medic --fix run over %d issue(s)", len(scanResult.Issues)))
+	if cpErr != nil {
+		checkpointName = ""
+	}
+
 	// Filter to fixable issues only
 	var fixable []HealthIssue
 	for _, issue := range scanResult.Issues {
@@ -217,7 +226,8 @@ func performRepairs(scanResult *ScannerResult, opts MedicOptions, dataPath strin
 	})
 
 	result := &RepairResult{
-		Attempted: len(fixable),
+		Attempted:  len(fixable),
+		Checkpoint: checkpointName,
 	}
 
 	// Deduplicate by category+message to avoid repairing the same issue twice

@@ -37,72 +37,6 @@ type swarmTimingFile struct {
 	StartAt string `json:"start_at"`
 }
 
-// --- swarm-findings-init ---
-
-var swarmFindingsInitCmd = &cobra.Command{
-	Use:   "swarm-findings-init",
-	Short: "Create an empty findings file for a swarm",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-		id := mustGetString(cmd, "id")
-		if id == "" {
-			return nil
-		}
-
-		path := fmt.Sprintf("swarms/%s/findings.json", id)
-		if err := store.SaveJSON(path, swarmFindingsFile{SwarmID: id, Findings: []swarmFinding{}}); err != nil {
-			outputError(2, fmt.Sprintf("failed to create findings: %v", err), nil)
-			return nil
-		}
-		outputOK(map[string]interface{}{"created": true, "swarm_id": id})
-		return nil
-	},
-}
-
-// --- swarm-findings-add ---
-
-var swarmFindingsAddCmd = &cobra.Command{
-	Use:   "swarm-findings-add",
-	Short: "Append a finding to a swarm",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-		id := mustGetString(cmd, "id")
-		if id == "" {
-			return nil
-		}
-		agent := mustGetString(cmd, "agent")
-		if agent == "" {
-			return nil
-		}
-		finding := mustGetString(cmd, "finding")
-		if finding == "" {
-			return nil
-		}
-
-		path := fmt.Sprintf("swarms/%s/findings.json", id)
-		var ff swarmFindingsFile
-		if err := store.LoadJSON(path, &ff); err != nil {
-			outputError(1, fmt.Sprintf("findings not found for swarm %s: %v", id, err), nil)
-			return nil
-		}
-		ff.Findings = append(ff.Findings, swarmFinding{Agent: agent, Finding: finding})
-		if err := store.SaveJSON(path, ff); err != nil {
-			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
-			return nil
-		}
-		outputOK(map[string]interface{}{"added": true, "swarm_id": id, "agent": agent, "total": len(ff.Findings)})
-		return nil
-	},
-}
-
 // --- swarm-findings-read ---
 
 var swarmFindingsReadCmd = &cobra.Command{
@@ -131,42 +65,6 @@ var swarmFindingsReadCmd = &cobra.Command{
 			"solution": ff.Solution,
 			"total":    len(ff.Findings),
 		})
-		return nil
-	},
-}
-
-// --- swarm-solution-set ---
-
-var swarmSolutionSetCmd = &cobra.Command{
-	Use:   "swarm-solution-set",
-	Short: "Set the solution for a swarm",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-		id := mustGetString(cmd, "id")
-		if id == "" {
-			return nil
-		}
-		solution := mustGetString(cmd, "solution")
-		if solution == "" {
-			return nil
-		}
-
-		path := fmt.Sprintf("swarms/%s/findings.json", id)
-		var ff swarmFindingsFile
-		if err := store.LoadJSON(path, &ff); err != nil {
-			outputError(1, fmt.Sprintf("findings not found for swarm %s: %v", id, err), nil)
-			return nil
-		}
-		ff.Solution = solution
-		if err := store.SaveJSON(path, ff); err != nil {
-			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
-			return nil
-		}
-		outputOK(map[string]interface{}{"set": true, "swarm_id": id})
 		return nil
 	},
 }
@@ -426,23 +324,18 @@ var swarmTimingEtaCmd = &cobra.Command{
 
 func init() {
 	for _, c := range []*cobra.Command{
-		swarmFindingsInitCmd, swarmFindingsAddCmd, swarmFindingsReadCmd,
-		swarmSolutionSetCmd, swarmCleanupCmd,
+		swarmFindingsReadCmd, swarmCleanupCmd,
 		swarmDisplayInitCmd, swarmDisplayUpdateCmd,
 		swarmTimingStartCmd, swarmTimingGetCmd, swarmTimingEtaCmd,
 	} {
 		c.Flags().String("id", "", "Swarm ID (required)")
 	}
-	swarmFindingsAddCmd.Flags().String("agent", "", "Agent name (required)")
-	swarmFindingsAddCmd.Flags().String("finding", "", "Finding text (required)")
-	swarmSolutionSetCmd.Flags().String("solution", "", "Solution text (required)")
 	swarmDisplayUpdateCmd.Flags().String("agent", "", "Agent name (required)")
 	swarmDisplayUpdateCmd.Flags().String("status", "", "Status (required)")
 	swarmTimingEtaCmd.Flags().Float64("progress", 0, "Progress fraction 0.0-1.0 (required)")
 
 	for _, c := range []*cobra.Command{
-		swarmFindingsInitCmd, swarmFindingsAddCmd, swarmFindingsReadCmd,
-		swarmSolutionSetCmd, swarmCleanupCmd,
+		swarmFindingsReadCmd, swarmCleanupCmd,
 		swarmDisplayInitCmd, swarmDisplayUpdateCmd,
 		swarmTimingStartCmd, swarmTimingGetCmd, swarmTimingEtaCmd,
 	} {

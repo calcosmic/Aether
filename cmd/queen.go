@@ -328,70 +328,83 @@ var queenSeedFromHiveCmd = &cobra.Command{
 	Short: "Seed QUEEN.md with relevant hive wisdom",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		hub := resolveHubPath()
-		wisdomPath := filepath.Join(hub, "hive", "wisdom.json")
-		s := hubStore()
-		if s == nil {
+		seeded, skipped, total, err := seedQueenFromHive()
+		if err != nil {
+			outputError(1, err.Error(), nil)
 			return nil
 		}
-
-		var wisdom struct {
-			Entries []map[string]interface{} `json:"entries"`
-		}
-		if raw, err := os.ReadFile(wisdomPath); err != nil {
-			outputError(1, fmt.Sprintf("failed to read hive wisdom: %v", err), nil)
-			return nil
-		} else {
-			if err := json.Unmarshal(raw, &wisdom); err != nil {
-				log.Printf("queen-seed-from-hive: failed to unmarshal wisdom JSON: %v", err)
-			}
-		}
-
-		if len(wisdom.Entries) == 0 {
+		if total == 0 {
 			result := map[string]interface{}{"seeded": 0, "reason": "no hive wisdom entries"}
 			outputWorkflow(result, renderQueenActionVisual("queen-seed-from-hive", "Queen Hive Seed", result))
 			return nil
 		}
-
-		text, _, err := loadQueenText(s)
-		if err != nil {
-			outputError(1, fmt.Sprintf("failed to load QUEEN.md: %v", err), nil)
-			return nil
-		}
-
-		var entries []string
-		for _, e := range wisdom.Entries {
-			text, _ := e["text"].(string)
-			if text != "" {
-				entries = append(entries, fmt.Sprintf("- %s (hive wisdom)", sanitizeQueenInline(text)))
-			}
-		}
-
-		// Filter entries already present in QUEEN.md (per D-02)
-		var newEntries []string
-		for _, entry := range entries {
-			if !isEntryInText(text, entry) {
-				newEntries = append(newEntries, entry)
-			}
-		}
-
-		skippedCount := len(entries) - len(newEntries)
-
-		text = appendEntriesToQueenSection(text, "Wisdom", newEntries)
-
-		if err := writeQueenText(s, text); err != nil {
-			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
-			return nil
-		}
-
 		result := map[string]interface{}{
-			"seeded":  len(newEntries),
-			"skipped": skippedCount,
-			"total":   len(entries),
+			"seeded":  seeded,
+			"skipped": skipped,
+			"total":   total,
 		}
 		outputWorkflow(result, renderQueenActionVisual("queen-seed-from-hive", "Queen Hive Seeded", result))
 		return nil
 	},
+}
+
+// seedQueenFromHive appends hive wisdom entries not already present in
+// QUEEN.md and reports (seeded, skipped, total). Quiet — no output-envelope
+// side effects — so `aether init` calls it non-blockingly (RECLAIM-09:
+// v5.4.0 seeded cross-colony wisdom at init; the modern command had no
+// caller anywhere).
+func seedQueenFromHive() (int, int, int, error) {
+	hub := resolveHubPathQuiet()
+	if hub == "" {
+		return 0, 0, 0, fmt.Errorf("hub path unavailable")
+	}
+	raw, err := os.ReadFile(filepath.Join(hub, "hive", "wisdom.json"))
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to read hive wisdom: %v", err)
+	}
+	var wisdom struct {
+		Entries []map[string]interface{} `json:"entries"`
+	}
+	if err := json.Unmarshal(raw, &wisdom); err != nil {
+		log.Printf("queen-seed-from-hive: failed to unmarshal wisdom JSON: %v", err)
+	}
+	if len(wisdom.Entries) == 0 {
+		return 0, 0, 0, nil
+	}
+
+	s, err := storage.NewStore(hub)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to initialize hub store: %v", err)
+	}
+	text, _, err := loadQueenText(s)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to load QUEEN.md: %v", err)
+	}
+
+	var entries []string
+	for _, e := range wisdom.Entries {
+		entryText, _ := e["text"].(string)
+		if entryText != "" {
+			entries = append(entries, fmt.Sprintf("- %s (hive wisdom)", sanitizeQueenInline(entryText)))
+		}
+	}
+
+	// Filter entries already present in QUEEN.md (per D-02)
+	var newEntries []string
+	for _, entry := range entries {
+		if !isEntryInText(text, entry) {
+			newEntries = append(newEntries, entry)
+		}
+	}
+	skippedCount := len(entries) - len(newEntries)
+
+	if len(newEntries) > 0 {
+		text = appendEntriesToQueenSection(text, "Wisdom", newEntries)
+		if err := writeQueenText(s, text); err != nil {
+			return 0, skippedCount, len(entries), fmt.Errorf("failed to write QUEEN.md: %v", err)
+		}
+	}
+	return len(newEntries), skippedCount, len(entries), nil
 }
 
 // --- queen-migrate ---

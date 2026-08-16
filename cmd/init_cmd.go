@@ -294,6 +294,22 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
+		// Cross-colony bookkeeping (RECLAIM-02/09) — both NON-BLOCKING,
+		// matching the seal-time hive-promotion precedent: registry and hive
+		// failures warn, never stop an init. The registry entry carries the
+		// domain tags that scope hive wisdom retrieval for this repo.
+		repoRoot := filepath.Dir(aetherDir)
+		registryDomains := detectColonyDomains(repoRoot)
+		if _, regErr := upsertColonyRegistryEntry(repoRoot, goal, registryDomains, true); regErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not register colony in hub registry: %v\n", regErr)
+		}
+		hiveSeeded := 0
+		if automaticHiveReadEnabled() {
+			if seeded, _, _, seedErr := seedQueenFromHive(); seedErr == nil {
+				hiveSeeded = seeded
+			}
+		}
+
 		// Load active shelf for wrapper consumption
 		shelfEntries, _ := loadActiveShelf(store)
 		result := map[string]interface{}{
@@ -316,11 +332,13 @@ var initCmd = &cobra.Command{
 			// rather than trusting that it did.
 			result["research_docs"] = researchDocs
 		}
+		result["registry_domains"] = registryDomains
+		result["hive_seeded"] = hiveSeeded
 		if priorStateBackup != "" {
 			result["prior_state_backup"] = priorStateBackup
 			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
 		}
-		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, researchDocs...))
+		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, hiveSeeded, researchDocs...))
 		return nil
 	},
 }

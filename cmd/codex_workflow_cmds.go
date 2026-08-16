@@ -611,6 +611,17 @@ func completeSealRuntime(state colony.ColonyState) error {
 	}, "aether-seal")
 	updateSessionSummary("seal", "aether entomb", "Colony sealed")
 
+	// Hub registry (RECLAIM-02, non-blocking): the sealed colony's entry goes
+	// inactive with its final goal recorded, so `aether registry-list` reads
+	// as a true history of colonies on this machine.
+	sealGoal := ""
+	if state.Goal != nil {
+		sealGoal = strings.TrimSpace(*state.Goal)
+	}
+	if _, regErr := upsertColonyRegistryEntry(filepath.Dir(filepath.Dir(store.BasePath())), sealGoal, nil, false); regErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not update hub registry at seal: %v\n", regErr)
+	}
+
 	result := map[string]interface{}{
 		"sealed":    true,
 		"milestone": state.Milestone,

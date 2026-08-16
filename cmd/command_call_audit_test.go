@@ -1051,7 +1051,22 @@ var knownEnrichmentSubcommands = map[string]bool{
 	// first time: both are housekeeping/cleanup commands whose failure
 	// degrades tidiness only — no verification result, security scan, or
 	// gate outcome depends on either — so both are enrichment, not a gate.
-	"backup-prune-global":         true,
+	"backup-prune-global": true,
+	// Reclaim sweep (2026-08-16), judged deliberately at the point their
+	// wrapper documentation made them visible: all seven are inspection,
+	// housekeeping, or redundant-manual paths whose failure degrades nothing
+	// a verification result, security scan, or gate outcome depends on.
+	// autofix-checkpoint/rollback are the operator's UNDO surface for medic
+	// repairs — a failed checkpoint aborts nothing by itself (medic still
+	// holds its own directory backup), and rollback is invoked by a human
+	// reading the repair log, not by a gate.
+	"autofix-checkpoint":          true,
+	"autofix-rollback":            true,
+	"domain-detect":               true,
+	"queen-seed-from-hive":        true,
+	"registry-list":               true,
+	"swarm-cleanup":               true,
+	"swarm-findings-read":         true,
 	"behavior-observe":            true,
 	"build-completion-stage":      true,
 	"build-finalize":              true,

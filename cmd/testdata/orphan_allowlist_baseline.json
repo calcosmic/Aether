@@ -131,12 +131,12 @@
   },
   {
     "name": "aether clash-check",
-    "reason": "unreviewed-pre-existing",
+    "reason": "dispositioned-2026-08-16: belongs to the uncommitted PR-based worktree workflow (clash detection); wire or retire when that workflow lands",
     "owner_phase": "RECLAIM"
   },
   {
     "name": "aether clash-setup",
-    "reason": "unreviewed-pre-existing",
+    "reason": "dispositioned-2026-08-16: belongs to the uncommitted PR-based worktree workflow (clash detection); wire or retire when that workflow lands",
     "owner_phase": "RECLAIM"
   },
   {
@@ -266,7 +266,7 @@
   },
   {
     "name": "aether data-safety-stats",
-    "reason": "unreviewed-pre-existing",
+    "reason": "dispositioned-2026-08-16: diagnostic counterpart of /ant-data-clean; candidate to document in the data-clean wrapper or retire",
     "owner_phase": "RECLAIM"
   },
   {
@@ -806,7 +806,7 @@
   },
   {
     "name": "aether pheromone-count",
-    "reason": "unreviewed-pre-existing",
+    "reason": "dispositioned-2026-08-16: subsumed by pheromone-display (classic sectioned view carries the count in its footer); candidate for retirement in a dedicated deletion change",
     "owner_phase": "RECLAIM"
   },
   {
@@ -921,7 +921,7 @@
   },
   {
     "name": "aether registry-add",
-    "reason": "unreviewed-pre-existing",
+    "reason": "dispositioned-2026-08-16: superseded by automatic registry population at init/seal (upsertColonyRegistryEntry); retained as the manual repair path, still unreferenced by wrappers",
     "owner_phase": "RECLAIM"
   },
   {
@@ -1250,22 +1250,7 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether swarm-findings-add",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether swarm-findings-init",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether swarm-findings-read",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether swarm-solution-set",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
