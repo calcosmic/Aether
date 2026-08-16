@@ -733,9 +733,16 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 
 	dispatchMaps := codexBuildDispatchMaps(dispatches)
 
+	// Suggestion analysis at build end — the same non-blocking hook the
+	// host-manifest finalize path runs; without this the direct build path
+	// never generated steering recommendations at all.
+	suggestAnalyzeRan, pendingSuggestionCount := collectPendingSuggestions(root)
+
 	result := map[string]interface{}{
 		"phase":                    phaseNum,
 		"colony_mode":              string(updatedState.EffectiveColonyMode()),
+		"suggest_analyze_ran":      suggestAnalyzeRan,
+		"pending_suggestions":      pendingSuggestionCount,
 		"review_depth":             string(reviewDepth),
 		"phase_name":               updatedPhase.Name,
 		"state":                    updatedState.State,

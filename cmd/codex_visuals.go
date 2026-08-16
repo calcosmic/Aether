@@ -1575,6 +1575,38 @@ func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
 	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
 }
 
+// renderSuggestedSteering renders the colony's unreviewed pheromone
+// suggestions as numbered proposals for a multiple-choice ask. The analysis
+// engine has stored these on colony state since v1.x and nothing ever showed
+// them to the operator — recommendations piled up invisibly while the approve
+// command sat on the orphan allowlist.
+func renderSuggestedSteering(state colony.ColonyState) string {
+	if state.PendingSuggestions == nil {
+		return ""
+	}
+	active := filterActiveSuggestions(state.PendingSuggestions)
+	if len(active) == 0 {
+		return ""
+	}
+	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
+	var b strings.Builder
+	b.WriteString(renderStageMarker("Suggested Steering"))
+	b.WriteString("The colony noticed patterns worth steering on — proposals only, nothing is written until you approve it:\n")
+	for i, suggestion := range active {
+		emoji := emojiFor[strings.ToUpper(strings.TrimSpace(suggestion.Type))]
+		if emoji == "" {
+			emoji = "🐜"
+		}
+		b.WriteString(fmt.Sprintf("  %d. %s [%s] %s\n", i+1, emoji, strings.ToUpper(strings.TrimSpace(suggestion.Type)), strings.TrimSpace(suggestion.Content)))
+		if reason := strings.TrimSpace(suggestion.Reason); reason != "" {
+			b.WriteString("     └── " + reason + "\n")
+		}
+		b.WriteString("     └── adopt: `aether suggest-approve --approve " + suggestion.ID + "`\n")
+	}
+	b.WriteString("Dismiss one with `aether suggest-approve --dismiss <id>`, or everything with `--dismiss-all`.\n")
+	return b.String()
+}
+
 // renderSteeringSignals shows the operator's active pheromone signals at the
 // moment they take effect — the build's Context stage. The signals were
 // always injected into every worker prompt; until this render, nothing told
@@ -1815,6 +1847,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	}
 
 	b.WriteString(renderLearningBeat(result["consolidation"]))
+	b.WriteString(renderSuggestedSteering(state))
 
 	if final {
 		b.WriteString(renderStageMarker("Colony Complete"))

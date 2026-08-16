@@ -368,3 +368,46 @@ func TestBuildContextShowsSteeringSignals(t *testing.T) {
 		t.Errorf("empty-signal build Context missing the none line:\n%s", empty)
 	}
 }
+
+// TestContinueSurfacesSuggestedSteering: pending recommendations render as a
+// consent-framed numbered section at the end-of-phase checkpoint, and each
+// carries the exact approve command. Fails if suggestions go invisible again
+// — the analysis engine stored them for years while nothing showed them.
+func TestContinueSurfacesSuggestedSteering(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	goal := "steering suggestions fixture"
+	pending := []colony.PendingSuggestion{
+		{ID: "sg_1", Type: "REDIRECT", Content: "never edit generated files by hand", Reason: "3 generated files were hand-edited this phase"},
+		{ID: "sg_2", Type: "FOCUS", Content: "the exporter module", Reason: "most churn this phase", Dismissed: false},
+		{ID: "sg_3", Type: "FOCUS", Content: "already rejected", Dismissed: true},
+	}
+	state := colony.ColonyState{
+		Goal:               &goal,
+		PendingSuggestions: &pending,
+		Plan:               colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "P1", Status: colony.PhaseCompleted}}},
+	}
+
+	output := renderContinueVisual(state, state.Plan.Phases[0], nil, false, nil, map[string]interface{}{}, colony.VerificationDepthStandard)
+	for _, want := range []string{
+		"── Suggested Steering ──",
+		"nothing is written until you approve it",
+		"1. 🚫 [REDIRECT] never edit generated files by hand",
+		"└── 3 generated files were hand-edited this phase",
+		"aether suggest-approve --approve sg_1",
+		"2. 🎯 [FOCUS] the exporter module",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("continue missing %q in:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "already rejected") {
+		t.Errorf("dismissed suggestion re-surfaced")
+	}
+
+	// No pending suggestions → no section, no nagging.
+	state.PendingSuggestions = nil
+	quiet := renderContinueVisual(state, state.Plan.Phases[0], nil, false, nil, map[string]interface{}{}, colony.VerificationDepthStandard)
+	if strings.Contains(quiet, "Suggested Steering") {
+		t.Errorf("empty suggestion list still rendered the section")
+	}
+}

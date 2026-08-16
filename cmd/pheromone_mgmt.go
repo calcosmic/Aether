@@ -141,7 +141,7 @@ var pheromoneDisplayCmd = &cobra.Command{
 				"signals": []interface{}{},
 				"count":   0,
 				"display": "No pheromone signals found.",
-			}, renderPheromoneDisplayVisual("", 0))
+			}, renderPheromoneDisplayVisual("", 0, pendingSteeringSection()))
 			return nil
 		}
 
@@ -164,7 +164,7 @@ var pheromoneDisplayCmd = &cobra.Command{
 				"signals": []interface{}{},
 				"count":   0,
 				"display": "No pheromone signals found.",
-			}, renderPheromoneDisplayVisual("", 0))
+			}, renderPheromoneDisplayVisual("", 0, pendingSteeringSection()))
 			return nil
 		}
 
@@ -207,7 +207,7 @@ var pheromoneDisplayCmd = &cobra.Command{
 			"signals": signals,
 			"count":   len(filtered),
 			"display": display,
-		}, renderPheromoneDisplayVisual(display, len(filtered)))
+		}, renderPheromoneDisplayVisual(display, len(filtered), pendingSteeringSection()))
 		return nil
 	},
 }
@@ -218,13 +218,16 @@ var pheromoneDisplayCmd = &cobra.Command{
 // on top of it, in every output mode — so `/ant-pheromones` showed a user a
 // table followed by a wall of JSON, with no banner and no next step. It was the
 // only lifecycle command with no Next Up block.
-func renderPheromoneDisplayVisual(display string, count int) string {
+func renderPheromoneDisplayVisual(display string, count int, suggestions string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("pheromones"), "Pheromone Signals"))
 	b.WriteString(visualDividerStr())
 
 	if count == 0 {
 		b.WriteString("No active signals. Workers are running on colony context alone.\n")
+		if suggestions != "" {
+			b.WriteString(suggestions)
+		}
 		b.WriteString(renderNextUp(
 			"Run `aether focus \"<area>\"` to point the colony at something specific.",
 			"Run `aether redirect \"<pattern>\"` to set a hard constraint workers must not break.",
@@ -235,6 +238,9 @@ func renderPheromoneDisplayVisual(display string, count int) string {
 
 	b.WriteString(strings.TrimRight(display, "\n"))
 	b.WriteString("\n")
+	if suggestions != "" {
+		b.WriteString(suggestions)
+	}
 	b.WriteString(renderNextUp(
 		"Run `aether build <phase>` — these signals are injected into every worker prompt.",
 		"Run `aether feedback \"<note>\"` to adjust behaviour without adding a hard constraint.",
@@ -346,4 +352,14 @@ func extractText(raw json.RawMessage) string {
 		}
 	}
 	return strings.TrimSpace(string(raw))
+}
+
+// pendingSteeringSection loads colony state quietly and renders its active
+// pending suggestions — empty when there is no colony or nothing pending.
+func pendingSteeringSection() string {
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return ""
+	}
+	return renderSuggestedSteering(state)
 }

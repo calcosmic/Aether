@@ -221,6 +221,15 @@ continue command's own output (fast path).
 1. Mark completion briefly.
 2. Route first to `/ant-seal`.
 
+**Steering checkpoint (after the result is reported):** if the runtime output
+contains a "Suggested Steering" section, present those proposals to the user
+as a real multiple-choice question (the AskUserQuestion tool, multi-select) —
+one option per suggestion, each stating its plain-English consequence, plus a
+"none of these" option. For each approval run
+`AETHER_OUTPUT_MODE=json aether suggest-approve --approve <id>`; for each
+explicit rejection run `--dismiss <id>`. Never write a suggestion the user did
+not pick, and never re-ask about suggestions they dismissed.
+
 **Stop conditions:** the user has one clear next command, and no verification
 result was fabricated by the wrapper.
 

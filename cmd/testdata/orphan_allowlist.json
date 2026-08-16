@@ -1160,16 +1160,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether suggest-analyze",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether suggest-approve",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether survey-verify",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"

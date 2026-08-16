@@ -279,7 +279,8 @@ func TestWorkerBriefFileHoldsComposedBrief(t *testing.T) {
 	recent := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
 	pf := colony.PheromoneFile{
 		Signals: []colony.PheromoneSignal{
-			{Type: "FOCUS", Content: json.RawMessage(`{"text":"security"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: recent},
+			{Type: "FOCUS", Content: json.RawMessage(`{"text":"sentinel-focus-the-vault-exporter"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: recent},
+			{Type: "REDIRECT", Content: json.RawMessage(`{"text":"sentinel-never-touch-billing-tables"}`), Active: true, Strength: floatPtr(0.9), CreatedAt: recent},
 		},
 	}
 	if err := store.SaveJSON("pheromones.json", pf); err != nil {
@@ -343,6 +344,14 @@ func TestWorkerBriefFileHoldsComposedBrief(t *testing.T) {
 		}
 		if strings.Contains(string(fileContents), "## Pheromone Signals") {
 			sawPheromoneSection = true
+			// The heading alone proves a section exists; the operator's actual
+			// words reaching the worker is the effect that matters. Both the
+			// FOCUS nudge and the REDIRECT hard constraint must arrive intact.
+			for _, sentinel := range []string{"sentinel-focus-the-vault-exporter", "sentinel-never-touch-billing-tables"} {
+				if !strings.Contains(string(fileContents), sentinel) {
+					t.Fatalf("worker brief for %s carries the Pheromone Signals heading but not the signal text %q — steering is not reaching workers", dispatch.Name, sentinel)
+				}
+			}
 		}
 	}
 	if !sawPheromoneSection {
