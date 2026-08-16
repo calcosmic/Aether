@@ -480,6 +480,14 @@ func TestOracleSelftestPassesWithWorkingInvoker(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(oracleWorkspacePaths(root).Dir, ".selftest")); !os.IsNotExist(err) {
 		t.Error("selftest left its probe workspace behind")
 	}
+
+	// Nor may the probe round save a research document. Selftest runs a real
+	// round, so without a guard its completion finalizes like any other and
+	// files an answer to a question the operator never asked.
+	saved, _ := filepath.Glob(filepath.Join(root, ".aether", "research", "*.md"))
+	if len(saved) > 0 {
+		t.Errorf("selftest saved %d research document(s) into the operator's saved research: %v", len(saved), saved)
+	}
 }
 
 // TestOracleSelftestLeavesRealResearchAlone: running a check must never cost

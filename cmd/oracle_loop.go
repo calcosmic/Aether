@@ -1354,7 +1354,7 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 	// next run cannot destroy. Blocked and manually stopped runs do not --
 	// `aether oracle save` keeps those on request.
 	researchDocument := ""
-	if status == "complete" || stopReason == "max_iterations_reached" {
+	if (status == "complete" || stopReason == "max_iterations_reached") && isCanonicalOracleWorkspace(paths) {
 		saved, saveErr := saveOracleResearchDocument(paths, state, plan, "")
 		if saveErr != nil {
 			// Worth saying out loud: the run succeeded but its write-up is
@@ -3173,6 +3173,18 @@ func escapeOracleTableCell(text string) string {
 	text = strings.TrimSpace(text)
 	text = strings.ReplaceAll(text, "\n", " ")
 	return strings.ReplaceAll(text, "|", "\\|")
+}
+
+// isCanonicalOracleWorkspace reports whether these paths describe the colony's
+// real Oracle workspace rather than a throwaway probe.
+//
+// `oracle selftest` runs a genuine round -- that is the point of it -- through
+// an isolated workspace under .aether/oracle/.selftest. Without this check its
+// round finalizes like any other and saves a durable research document, so
+// checking that Oracle works would litter the operator's saved research with
+// answers to a question they never asked.
+func isCanonicalOracleWorkspace(paths oraclePaths) bool {
+	return paths.Dir == oracleWorkspacePaths(paths.Root).Dir
 }
 
 func writeOracleLoopMarker(path string, state oracleStateFile) error {
