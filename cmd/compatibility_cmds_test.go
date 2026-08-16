@@ -977,11 +977,17 @@ func TestOracleCompatibilityAppliesSurveyAttemptPolicy(t *testing.T) {
 	}
 
 	first := capturing.configs[0]
-	if first.Timeout != 3*time.Minute {
-		t.Fatalf("survey timeout = %v, want 3m", first.Timeout)
+	// This run is --depth exhaustive. Survey holds until every question has
+	// been touched once, so the cheap survey setting used to apply to the
+	// opening stretch of the longest runs -- someone who asked for fifty
+	// rounds got the shallowest reasoning and the shortest watchdog for the
+	// first several. Deep and exhaustive runs now survey at medium/5m; quick
+	// runs still survey at low/3m (TestOracleDeepSurveyUsesMediumReasoning).
+	if first.Timeout != 5*time.Minute {
+		t.Fatalf("survey timeout on an exhaustive run = %v, want 5m", first.Timeout)
 	}
-	if !containsString(first.ConfigOverrides, `model_reasoning_effort="low"`) {
-		t.Fatalf("config overrides = %v, want survey low reasoning override", first.ConfigOverrides)
+	if !containsString(first.ConfigOverrides, `model_reasoning_effort="medium"`) {
+		t.Fatalf("config overrides = %v, want medium reasoning on an exhaustive run's survey", first.ConfigOverrides)
 	}
 	if first.ResponsePath == "" {
 		t.Fatal("expected controller-managed oracle response path to be set")
@@ -1018,7 +1024,7 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
 	originalPolicy := oracleAttemptPolicyForPhase
-	oracleAttemptPolicyForPhase = func(phase string, attempt int) oracleAttemptPolicy {
+	oracleAttemptPolicyForPhase = func(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 		return oracleAttemptPolicy{
 			ReasoningEffort: "low",
 			Timeout:         250 * time.Millisecond,
@@ -1071,7 +1077,7 @@ func TestOracleCompatibilityEnforcesAttemptWatchdog(t *testing.T) {
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
 	originalPolicy := oracleAttemptPolicyForPhase
-	oracleAttemptPolicyForPhase = func(phase string, attempt int) oracleAttemptPolicy {
+	oracleAttemptPolicyForPhase = func(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 		return oracleAttemptPolicy{
 			ReasoningEffort: "low",
 			Timeout:         40 * time.Millisecond,
@@ -1139,7 +1145,7 @@ func TestOracleCompatibilityShortCircuitsOnValidResponseFile(t *testing.T) {
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
 	originalPolicy := oracleAttemptPolicyForPhase
-	oracleAttemptPolicyForPhase = func(phase string, attempt int) oracleAttemptPolicy {
+	oracleAttemptPolicyForPhase = func(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 		return oracleAttemptPolicy{
 			ReasoningEffort: "low",
 			Timeout:         250 * time.Millisecond,

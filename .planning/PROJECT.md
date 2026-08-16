@@ -271,7 +271,18 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [ ] TEST-02: Test matrix documents which commands are covered and how
 - [ ] WORKFLOW-01: Colonize workflow restored and verified end-to-end
 - [ ] WORKFLOW-02: Iterative plan workflow restored and verified end-to-end
-- [ ] WORKFLOW-03: Iterative oracle/RALF workflow restored and verified end-to-end
+- [x] WORKFLOW-03: Iterative oracle/RALF workflow restored and verified end-to-end
+      Evidence: `aether oracle selftest` runs one real research round and exits
+      non-zero if the dispatcher, agent definition, artifacts or progress log
+      are broken. The loop itself was never removed; what was missing was a way
+      to see it (`--follow` over `progress.jsonl` — the old per-round render was
+      a guaranteed no-op in background mode), a scoping ritual with any runtime
+      existence (`oracle propose` / `oracle brief` / `oracle --from-brief`), and
+      anywhere for the findings to go (`.aether/research/` plus `--research` on
+      init and plan). Named tests in `cmd/oracle_brief_test.go`,
+      `cmd/oracle_progress_test.go`, `cmd/oracle_research_doc_test.go`,
+      `cmd/colony_research_test.go`, `cmd/oracle_loop_quality_test.go` and
+      `cmd/agent_doc_paths_test.go`.
 - [ ] WORKFLOW-04: Build workflow restored and verified end-to-end
 - [ ] WORKFLOW-05: Continue workflow restored and verified end-to-end
 - [ ] WORKFLOW-06: Run (autopilot) workflow restored and verified end-to-end

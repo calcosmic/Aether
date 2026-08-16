@@ -47,7 +47,15 @@ with extensive coverage (no additional smoke tests needed):
 
 Commands with **no dedicated smoke test** but covered indirectly:
 - `entomb` — covered via seal/colonize test paths
-- `oracle` — covered in `cmd/oracle_iterate_cmd_test.go`
+- `oracle` — covered in `cmd/oracle_loop_test.go` (the live loop),
+  `cmd/oracle_brief_test.go` (the scoping ritual), `cmd/oracle_progress_test.go`
+  (round logging, `--follow`, `selftest`, `recover`),
+  `cmd/oracle_loop_quality_test.go` and `cmd/oracle_promote_test.go`. Runnable
+  smoke path: `aether oracle selftest`, which runs one real research round and
+  exits non-zero if the dispatcher, agent definition, artifacts or progress log
+  are broken. Note `cmd/oracle_iterate_cmd_test.go` covers the *orphaned*
+  `aether oracle-iterate` path against `.aether/data/oracle/`, not the live
+  loop, which uses `.aether/oracle/`.
 - `swarm` — no dedicated test (parallel bug investigation, tested via builder/watcher paths)
 
 ## Test Count Summary

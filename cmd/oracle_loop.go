@@ -50,6 +50,10 @@ type oracleScopeProfile struct {
 	IncludeRecentLearnings bool
 }
 
+// oracleDeepRunIterations is the round count at which a run counts as "deep"
+// for effort decisions -- the `deep` preset's own cap.
+const oracleDeepRunIterations = 30
+
 var oracleDepthLevels = map[string]oracleDepthConfig{
 	"quick":      {5, 60, "Quick", "Fast overview, up to 5 iterations"},
 	"balanced":   {15, 85, "Balanced", "Standard research, up to 15 iterations"},
@@ -954,7 +958,7 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			loopStopReason string
 		)
 		for attempt := 1; attempt <= defaultOracleMaxAttempts; attempt++ {
-			policy := oracleAttemptPolicyForPhase(state.Phase, attempt)
+			policy := oracleAttemptPolicyForPhase(state.Phase, attempt, state.MaxIterations)
 			startedAt := time.Now().UTC()
 			deadlineAt := startedAt.Add(policy.Timeout)
 			responsePath = oracleResponsePath(paths, state.Iteration, attempt)
@@ -2104,6 +2108,14 @@ func formulateOracleBrief(root, topic, detectedType string, languages, framework
 	return brief
 }
 
+// loadColonyGoal returns the goal of an *active* colony, and nothing otherwise.
+//
+// It used to return whatever goal was last written, so standalone research done
+// before or after a colony -- the common case -- inherited the goal of an
+// unrelated, often already-finished project. A live run shows the cost: an
+// iteration was spent on "How does investigating <truncated topic> advance the
+// colony goal of: Fix TS host typecheck..." for a colony that had already
+// completed and had nothing to do with the question being asked.
 func loadColonyGoal(root string) string {
 	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
 	data, err := os.ReadFile(statePath)
@@ -2111,9 +2123,14 @@ func loadColonyGoal(root string) string {
 		return ""
 	}
 	var state struct {
-		Goal *string `json:"goal"`
+		Goal  *string `json:"goal"`
+		State string  `json:"state"`
 	}
 	if err := json.Unmarshal(data, &state); err != nil || state.Goal == nil {
+		return ""
+	}
+	// Same emptiness test `aether init` uses to decide a colony is not in play.
+	if strings.EqualFold(strings.TrimSpace(state.State), string(colony.StateIDLE)) {
 		return ""
 	}
 	return strings.TrimSpace(*state.Goal)
@@ -2281,10 +2298,13 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 	}
 
 	if scopeProfile.IncludeColonyGoal {
-		// Colony goal relevance question
+		// Colony goal relevance question. Both halves are trimmed hard: the
+		// unbounded version produced a 300-character splice of a truncated
+		// topic and a truncated goal that no worker could answer as asked.
 		goal := extractBriefSection(brief, "Colony Goal")
 		if goal != "" && !strings.Contains(goal, "(no colony goal set)") {
-			nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topicLabel, goal))
+			goal = truncateString(strings.Join(strings.Fields(goal), " "), 120)
+			nextQ(fmt.Sprintf("Which parts of the active colony goal (%s) does this research bear on, and which does it not?", goal))
 		}
 	}
 
@@ -3156,23 +3176,41 @@ func escapeOracleTableCell(text string) string {
 }
 
 func writeOracleLoopMarker(path string, state oracleStateFile) error {
+	// This marker used to carry a pointer to a checked-in copy of the worker
+	// prompt under .aether/utils/. Nothing loaded that file -- the real prompt
+	// is composed here by buildOracleWorkerConfig and
+	// renderOracleContextCapsule -- so the copy could only drift away from what
+	// workers actually receive. Both the file and the pointer are gone.
 	marker := strings.TrimSpace(fmt.Sprintf(`---
 iteration: %d
 max_iterations: %d
 phase: %s
 target_confidence: %d
 controller_pid: %d
-oracle_md_path: .aether/utils/oracle/oracle.md
 ---
 Oracle research loop active
 `, state.Iteration, state.MaxIterations, emptyFallback(state.Phase, "survey"), state.TargetConfidence, state.ControllerPID)) + "\n"
 	return os.WriteFile(path, []byte(marker), 0644)
 }
 
+// oracleSurveyIterationCap bounds the breadth-first survey phase to a quarter
+// of the run (minimum three rounds). Nothing goes unexamined: past the cap the
+// loop moves to investigate, and selectOracleQuestionSmart still prefers
+// untouched questions -- they simply get looked at properly rather than skimmed.
+func oracleSurveyIterationCap(maxIterations int) int {
+	cap := maxIterations / 4
+	if cap < 3 {
+		cap = 3
+	}
+	return cap
+}
+
 func nextOraclePhase(plan oraclePlanFile, state oracleStateFile) string {
-	for _, q := range plan.Questions {
-		if len(q.IterationsTouched) == 0 {
-			return "survey"
+	if state.Iteration <= oracleSurveyIterationCap(state.MaxIterations) {
+		for _, q := range plan.Questions {
+			if len(q.IterationsTouched) == 0 {
+				return "survey"
+			}
 		}
 	}
 	if oracleReadyForCompletion(plan, state) || state.Iteration >= state.MaxIterations {
@@ -3720,7 +3758,11 @@ func oracleWorkerConfigOverrides(policy oracleAttemptPolicy) []string {
 	return overrides
 }
 
-func defaultOracleAttemptPolicy(phase string, attempt int) oracleAttemptPolicy {
+// defaultOracleAttemptPolicy chooses reasoning effort and the watchdog for one
+// attempt. maxIterations stands in for how deep a run the operator asked for:
+// a run with thirty or more rounds is a deep run whatever label it carries, and
+// that also covers an explicit --max-iterations without a --depth flag.
+func defaultOracleAttemptPolicy(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 	policy := oracleAttemptPolicy{
 		ReasoningEffort: defaultOracleReasoningEffort,
 		Timeout:         defaultOracleTimeout,
@@ -3729,6 +3771,16 @@ func defaultOracleAttemptPolicy(phase string, attempt int) oracleAttemptPolicy {
 
 	switch strings.ToLower(strings.TrimSpace(phase)) {
 	case "survey":
+		// Survey is breadth-first, so it runs cheap by default. On a deep run
+		// that was wrong: survey holds until every question has been touched
+		// once, so roughly the first third of a thirty-round run was spent at
+		// the lowest effort and the shortest watchdog. Someone who asked for
+		// depth should not get the shallow setting for a third of it.
+		if maxIterations >= oracleDeepRunIterations {
+			policy.ReasoningEffort = "medium"
+			policy.Timeout = 5 * time.Minute
+			break
+		}
 		policy.ReasoningEffort = "low"
 		policy.Timeout = 3 * time.Minute
 	case "verify":

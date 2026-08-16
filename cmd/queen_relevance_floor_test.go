@@ -56,9 +56,9 @@ func calVaultPhase() colony.Phase {
 
 func securityPhase() colony.Phase {
 	return colony.Phase{
-		ID:          4,
-		Name:        "Password reset by email",
-		Description: "Let a user reset their password with an emailed token, and store the credential hash.",
+		ID:              4,
+		Name:            "Password reset by email",
+		Description:     "Let a user reset their password with an emailed token, and store the credential hash.",
 		SuccessCriteria: []string{"A reset token expires after one hour."},
 		Tasks: []colony.Task{{
 			Goal: "Implement the password reset endpoint and its token store.",
