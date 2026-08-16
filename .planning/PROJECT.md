@@ -269,8 +269,17 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [ ] CATALOG-02: Classify every command as public lifecycle, public utility, internal runtime, alias, or deprecated
 - [ ] TEST-01: Every public command has at least one smoke/fixture/e2e test with executable evidence
 - [ ] TEST-02: Test matrix documents which commands are covered and how
-- [ ] WORKFLOW-01: Colonize workflow restored and verified end-to-end
-- [ ] WORKFLOW-02: Iterative plan workflow restored and verified end-to-end
+- [x] WORKFLOW-01: Colonize workflow restored and verified end-to-end
+      Evidence: `TestColonizeWritesSurveyArtifactsAndUpdatesState` runs the real
+      colonize command against a fixture repo and fails when survey artifacts or
+      state updates are missing; the finalize contract suite
+      (`cmd/codex_colonize_test.go`) covers external-surveyor claims, stale
+      manifests, and artifact preservation.
+- [x] WORKFLOW-02: Iterative plan workflow restored and verified end-to-end
+      Evidence: `TestFullLifecycleInDownstreamRepo` executes the real plan
+      command in a downstream fixture repo; the iteration loop is locked by
+      `TestPlanningLoopOptionsClampAndEvaluateStopReasons` and revision
+      durability by `TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild`.
 - [x] WORKFLOW-03: Iterative oracle/RALF workflow restored and verified end-to-end
       Evidence: `aether oracle selftest` runs one real research round and exits
       non-zero if the dispatcher, agent definition, artifacts or progress log
@@ -283,16 +292,44 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
       `cmd/oracle_progress_test.go`, `cmd/oracle_research_doc_test.go`,
       `cmd/colony_research_test.go`, `cmd/oracle_loop_quality_test.go` and
       `cmd/agent_doc_paths_test.go`.
-- [ ] WORKFLOW-04: Build workflow restored and verified end-to-end
-- [ ] WORKFLOW-05: Continue workflow restored and verified end-to-end
-- [ ] WORKFLOW-06: Run (autopilot) workflow restored and verified end-to-end
-- [ ] WORKFLOW-07: Swarm workflow restored and verified end-to-end
-- [ ] WORKFLOW-08: Seal workflow restored and verified end-to-end
-- [ ] WORKFLOW-09: Entomb workflow restored and verified end-to-end
+- [x] WORKFLOW-04: Build workflow restored and verified end-to-end
+      Evidence: `TestFullLifecycleInDownstreamRepo` (real build in a downstream
+      repo, manifest asserted) and `TestCLIInterruptedBuildResumesThroughForceRedispatch`
+      (interrupted build recovers).
+- [x] WORKFLOW-05: Continue workflow restored and verified end-to-end
+      Evidence: `TestFullLifecycleInDownstreamRepo` (real continue advances the
+      phase) and `TestCLIContinueEnforcesFreshCriterionEvidence` (stale evidence
+      is rejected, not silently accepted).
+- [x] WORKFLOW-06: Run (autopilot) workflow restored and verified end-to-end
+      Evidence: `TestRunCompatibilityExecutesSinglePhase` runs the real autopilot
+      command through one phase; `TestRunCompatibilityDryRunPlansLifecycle` locks
+      the dry-run plan; pause behaviour in `cmd/autopilot_pause_test.go`.
+- [x] WORKFLOW-07: Swarm workflow restored and verified end-to-end
+      Evidence: `TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult` runs
+      the real swarm command with worker waves and asserts the structured result;
+      blocked workers surfaced by `TestSwarmDestroySurfacesBlockedWorkers`.
+- [x] WORKFLOW-08: Seal workflow restored and verified end-to-end
+      Evidence: `TestFullLifecycleInDownstreamRepo` seals the fixture colony;
+      `TestCLICompiledInstallToSealJourney` proves install-to-seal against the
+      compiled binary.
+- [x] WORKFLOW-09: Entomb workflow restored and verified end-to-end
+      Evidence: `TestFullLifecycleInDownstreamRepo` entombs the sealed colony
+      and asserts the chamber archive exists.
 - [ ] QUEEN-01: Queen execution policy restored with 4 modes: direct, single-worker, focused-review, full-colony
 - [ ] QUEEN-02: Deterministic commands and small lifecycle steps do not spawn unnecessary agents
-- [ ] RUNTIME-01: Stale decision/session leakage between colonies eliminated
-- [ ] RUNTIME-02: Worker artifact/result collection preserves completed work (no silent loss)
+- [x] RUNTIME-01: Stale decision/session leakage between colonies eliminated
+      Evidence: `TestInitClearsPriorColonyDecisionResidue` (2026-08-16) seeds a
+      prior colony's pending-decisions.json, assumptions.json and worker
+      handoffs, re-inits, and fails if any survive. It failed before the fix:
+      init cleared only session.json, so new colonies briefed their workers
+      with the previous project's CLARIFIED INTENT and handoffs.
+- [x] RUNTIME-02: Worker artifact/result collection preserves completed work (no silent loss)
+      Evidence: `TestMergeExternalBuildResults_RejectsMissingResult` — a
+      dispatched worker with no reported result raises a blocking
+      worker.result_missing contract violation (finalize refuses rather than
+      proceeding); worker-written artifacts preserved per
+      `TestColonizePreservesWorkerWrittenSurveyArtifacts` and
+      `TestWriteSurveyArtifactsPreservesClaimedWorkerFile`.
 - [ ] PROOF-01: End-to-end smoke test in a separate downstream repo proves Aether works without modifying itself during the run
 
 ### Out of Scope

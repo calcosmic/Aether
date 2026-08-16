@@ -164,8 +164,17 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
-		// Clear stale session from any prior colony to prevent old decisions from leaking in.
+		// Clear the prior colony's conversational residue so it cannot leak
+		// into the new colony's workers. This is not bookkeeping:
+		// pending-decisions.json renders into every worker prompt as
+		// CLARIFIED INTENT, and handoffs/worker-handoffs.json renders as
+		// Previous Worker Handoffs — leaving them behind briefs workers on a
+		// new goal with the previous project's decisions (RUNTIME-01, locked
+		// by TestInitClearsPriorColonyDecisionResidue).
 		_ = os.Remove(filepath.Join(dataDir, "session.json"))
+		_ = os.Remove(filepath.Join(dataDir, "pending-decisions.json"))
+		_ = os.Remove(filepath.Join(dataDir, "assumptions.json"))
+		_ = os.RemoveAll(filepath.Join(dataDir, "handoffs"))
 
 		// Backup old colony state before overwriting (sealed colony fresh-init).
 		// The backup is mandatory, not best-effort: if it cannot be written, the
