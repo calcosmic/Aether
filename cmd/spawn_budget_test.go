@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -832,5 +833,110 @@ func TestAnEndedRunRecordDoesNotResetTheWholeRunBudget(t *testing.T) {
 	}
 	if !bytes.Equal(ledgerBefore, ledgerAfter) {
 		t.Fatalf("spawn-tree.txt bytes changed merely from editing spawn-runs.json:\nbefore=%q\nafter=%q", ledgerBefore, ledgerAfter)
+	}
+}
+
+// TestFinishedHistoryDoesNotConsumeSpawnBudget is the Pocket-Chopper field
+// failure's regression lock. spawn-tree.txt is append-only across the
+// colony's whole lifetime, and the whole-ledger fallback branches used to
+// count every non-abandoned entry — so a repo that had ever FINISHED more
+// than 20 helpers (the field repo held 117 completed entries accumulated
+// since May) was permanently refused new spawns, and no recovery command
+// could clear it (spawn-orphans and recover only touch live entries).
+// Finished work must never consume a future run's budget; only helpers
+// still marked in-flight may.
+func TestFinishedHistoryDoesNotConsumeSpawnBudget(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	// Case 1 — the exact field shape: a lifetime of completed helpers, no
+	// run recorded at all (workers call spawn-log outside any lifecycle
+	// command). 30 completed entries exceed the cap of 20; the next spawn
+	// must still be allowed.
+	s1, tmpDir1 := newTestStore(t)
+	defer os.RemoveAll(tmpDir1)
+	store = s1
+	tree1 := agent.NewSpawnTree(s1, "spawn-tree.txt")
+	for i := 1; i <= 30; i++ {
+		name := fmt.Sprintf("H%d", i)
+		if err := tree1.RecordSpawn("Queen", "builder", name, fmt.Sprintf("finished historical task %d", i), 0); err != nil {
+			t.Fatalf("record historical spawn %s: %v", name, err)
+		}
+		if err := tree1.UpdateStatus(name, "completed", "done"); err != nil {
+			t.Fatalf("complete historical spawn %s: %v", name, err)
+		}
+	}
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "FRESH1", "0"))
+
+	// Case 2 — the routine post-run shape: a lifecycle command's run began,
+	// its helpers finished, the run ENDED (every lifecycle command closes
+	// its run on exit), and a worker then calls spawn-log from a later
+	// process. The ended-run fallback used to count the whole ledger's
+	// non-abandoned entries; completed history must not deny here either.
+	s2, tmpDir2 := newTestStore(t)
+	defer os.RemoveAll(tmpDir2)
+	store = s2
+	// The run's window is entirely in the past; the finished history below
+	// (timestamped now) falls OUTSIDE it — months of completed helpers from
+	// earlier runs, exactly what the field ledger had accumulated.
+	handle, err := beginRuntimeSpawnRun("test-build", time.Now().UTC().Add(-3*time.Hour))
+	if err != nil {
+		t.Fatalf("begin run: %v", err)
+	}
+	finishRuntimeSpawnRun(handle, "completed", time.Now().UTC().Add(-2*time.Hour))
+	tree2 := agent.NewSpawnTree(s2, "spawn-tree.txt")
+	for i := 1; i <= 25; i++ {
+		name := fmt.Sprintf("R%d", i)
+		if err := tree2.RecordSpawn("Queen", "builder", name, fmt.Sprintf("finished run task %d", i), 0); err != nil {
+			t.Fatalf("record run spawn %s: %v", name, err)
+		}
+		if err := tree2.UpdateStatus(name, "completed", "done"); err != nil {
+			t.Fatalf("complete run spawn %s: %v", name, err)
+		}
+	}
+	runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", "AFTER-RUN1", "0"))
+
+	// Case 3 — the anti-tamper floor survives the fix: the same ended-run
+	// shape but with the helpers still LIVE (never completed) must still be
+	// refused, and the deny sentence must name the run having ended — the
+	// v1.0.55 message claimed "no run is recorded" for this path, which sent
+	// the field operator chasing a phantom missing-run condition.
+	s3, tmpDir3 := newTestStore(t)
+	defer os.RemoveAll(tmpDir3)
+	store = s3
+	// The run's window is entirely in the past, so every live spawn below
+	// lands OUTSIDE it — the exact shape that forces the whole-ledger
+	// fallback rather than the run-window count.
+	handle3, err := beginRuntimeSpawnRun("test-build", time.Now().UTC().Add(-3*time.Hour))
+	if err != nil {
+		t.Fatalf("begin run (case 3): %v", err)
+	}
+	finishRuntimeSpawnRun(handle3, "completed", time.Now().UTC().Add(-2*time.Hour))
+	for i := 1; i <= spawnTreeBudgetRedProofLiteralMax; i++ {
+		runSpawnLogExpectingSuccess(t, &buf, &errBuf, spawnLogArgs("Queen", fmt.Sprintf("L%d", i), "0"))
+	}
+
+	buf.Reset()
+	errBuf.Reset()
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs(spawnLogArgs("Queen", "L21-GHOSTS", "0"))
+	_ = rootCmd.Execute()
+	if code := int(renderedCommandExitCode.Load()); code == 0 {
+		t.Fatalf("20 LIVE ghosts with an ended run were allowed to exceed the budget — the anti-tamper floor is gone: stdout=%s stderr=%s", buf.String(), errBuf.String())
+	}
+	env := parseEnvelope(t, errBuf.String())
+	msg, _ := env["error"].(string)
+	if !strings.Contains(msg, "budget") {
+		t.Fatalf("deny message does not name the budget: %s", errBuf.String())
+	}
+	if !strings.Contains(msg, "run has ended") {
+		t.Fatalf("deny message does not name the ACTUAL cause (run has ended): %s", msg)
+	}
+	if strings.Contains(msg, "no run is recorded") {
+		t.Fatalf("deny message still claims no run is recorded when a run exists: %s", msg)
 	}
 }

@@ -40,14 +40,29 @@ type spawnTreeBudget struct {
 	Consumed  int
 	Remaining int
 	Reason    string
-	// CountedWholeLedger is true when Consumed came from counting every live
-	// entry across the WHOLE ledger (Gap B, see spawnTreeBudgetState) rather
-	// than from the current run's own time window, because no run could be
-	// resolved. spawnTreeBudgetReason uses this to say so in the exhausted-
-	// budget deny sentence, so an operator is not left wondering why the
-	// count is higher than the run they are watching.
+	// CountedWholeLedger is true when Consumed came from counting live
+	// entries across the WHOLE ledger (Gap B, see spawnTreeBudgetState)
+	// rather than from the current run's own time window.
+	// spawnTreeBudgetReason uses this to say so in the exhausted-budget deny
+	// sentence, so an operator is not left wondering why the count is higher
+	// than the run they are watching.
 	CountedWholeLedger bool
+	// WholeLedgerCause records WHY the whole ledger was counted, so the deny
+	// message can name the actual condition instead of guessing. The v1.0.55
+	// field failure was chased for hours because the message claimed "no run
+	// is recorded" when a run existed but had ended. Values:
+	// whole-ledger-no-run, whole-ledger-run-ended, whole-ledger-live-floor.
+	WholeLedgerCause string
 }
+
+// The three WholeLedgerCause values. Each maps to a distinct sentence in
+// spawnTreeBudgetReason — if a new whole-ledger path is added, it needs its
+// own cause and its own sentence, not a reuse of these.
+const (
+	wholeLedgerNoRun     = "whole-ledger-no-run"
+	wholeLedgerRunEnded  = "whole-ledger-run-ended"
+	wholeLedgerLiveFloor = "whole-ledger-live-floor"
+)
 
 // spawnTreeBudgetState computes the current run's consumption against
 // spawnTreeBudgetMax.
@@ -81,14 +96,21 @@ type spawnTreeBudget struct {
 // run was ever recorded" is ROUTINE legitimate use — cmd/spawn_enforce_test.go
 // and cmd/spawn_ancestor_test.go both build multi-hop spawn chains this way
 // with no run ever begun, and .aether/workers.md:292 documents workers
-// calling this guard directly, outside any lifecycle command. Refusing there
-// would brick ordinary use to stop an attack that whole-ledger counting
-// already stops on its own: the whole-ledger count is never LOWER than the
-// correct run-scoped count (the ledger is a superset of any one run's
-// window), so deleting spawn-runs.json can only make the budget stricter,
-// never free it (T-173-70). The residual bound is T-173-67 (named in plan
-// 11's summary): an attacker who rewrites the ledger in well-formed pipe
-// format can still drop entries, and no counting rule here can detect that.
+// calling this guard directly, outside any lifecycle command.
+//
+// The whole-ledger fallbacks count LIVE entries only. They used to count
+// everything non-abandoned, which turned the append-only ledger into a
+// lifetime meter: a repo whose colony had ever finished more than 20 helpers
+// could never spawn again (the field failure counted 117 completed helpers
+// from months of history against a per-run cap of 20, and no recovery
+// command could clear it). Live-only counting keeps the tamper floor that
+// matters — erasing spawn-runs.json still counts every in-flight helper, so
+// a run cannot free its OWN live spend that way (T-173-70's core case) —
+// while the narrowed residual (deleting the run record after helpers have
+// completed frees their slots) is no stronger than the already-accepted
+// T-173-67 residual: an attacker who rewrites the ledger in well-formed pipe
+// format can drop entries outright, and no counting rule here can detect
+// that.
 func spawnTreeBudgetState() (spawnTreeBudget, error) {
 	if store == nil {
 		return spawnTreeBudget{}, fmt.Errorf("no store initialized")
@@ -119,18 +141,27 @@ func spawnTreeBudgetState() (spawnTreeBudget, error) {
 			return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: 0, Remaining: spawnTreeBudgetMax}, nil
 		}
 
+		// Count LIVE entries only, not everything non-abandoned. The ledger
+		// is append-only across the colony's whole lifetime, so a finished
+		// helper from May must not consume June's budget: a real repo
+		// accumulated 117 completed entries and became permanently unable to
+		// spawn against the cap of 20. Live-only counting keeps the
+		// anti-tamper floor (erasing spawn-runs.json still counts every
+		// in-flight helper — T-173-70's spirit), and the residual — freeing
+		// completed entries by deleting the run record — is no stronger than
+		// the already-accepted T-173-67 residual (an attacker who can shell
+		// into .aether/data can rewrite the ledger lines outright).
 		consumed := 0
 		for _, e := range entries {
-			if strings.EqualFold(strings.TrimSpace(e.Status), agent.SpawnStatusAbandoned) {
-				continue
+			if agent.IsLiveSpawnStatus(e.Status) {
+				consumed++
 			}
-			consumed++
 		}
 		remaining := spawnTreeBudgetMax - consumed
 		if remaining < 0 {
 			remaining = 0
 		}
-		return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: consumed, Remaining: remaining, CountedWholeLedger: true}, nil
+		return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: consumed, Remaining: remaining, CountedWholeLedger: consumed > 0, WholeLedgerCause: wholeLedgerNoRun}, nil
 	}
 
 	entriesForRun, err := st.EntriesForRun(run.ID)
@@ -165,25 +196,30 @@ func spawnTreeBudgetState() (spawnTreeBudget, error) {
 	//     spawn-reap, not window scoping, is how budget is legitimately
 	//     freed.
 	countedWholeLedger := false
-	if !agent.IsActiveSpawnRunStatus(run.Status) {
-		whole := 0
-		for _, e := range entries {
-			if strings.EqualFold(strings.TrimSpace(e.Status), agent.SpawnStatusAbandoned) {
-				continue
-			}
-			whole++
+	wholeLedgerCause := ""
+	liveWhole := 0
+	for _, e := range entries {
+		if agent.IsLiveSpawnStatus(e.Status) {
+			liveWhole++
 		}
-		if whole > consumed {
-			consumed = whole
+	}
+	if !agent.IsActiveSpawnRunStatus(run.Status) {
+		// The recorded run has ended, so its closed window is not a
+		// trustworthy picture of what is happening NOW — but this is also
+		// the ROUTINE post-run path (workers call spawn-log from later
+		// processes after the lifecycle command's run closed), not only a
+		// tamper route. Keep the ended run's own window count as the base
+		// (that spend was real) and floor it by every live entry anywhere in
+		// the ledger. Counting everything non-abandoned here is what bricked
+		// long-lived repos: every completed helper since the colony's first
+		// day counted against a per-run cap of 20.
+		if liveWhole > consumed {
+			consumed = liveWhole
 			countedWholeLedger = true
+			wholeLedgerCause = wholeLedgerRunEnded
 		}
 	} else {
-		liveWhole, liveWindow := 0, 0
-		for _, e := range entries {
-			if agent.IsLiveSpawnStatus(e.Status) {
-				liveWhole++
-			}
-		}
+		liveWindow := 0
 		for _, e := range entriesForRun {
 			if agent.IsLiveSpawnStatus(e.Status) {
 				liveWindow++
@@ -192,6 +228,7 @@ func spawnTreeBudgetState() (spawnTreeBudget, error) {
 		if liveWhole > liveWindow && liveWhole > consumed {
 			consumed = liveWhole
 			countedWholeLedger = true
+			wholeLedgerCause = wholeLedgerLiveFloor
 		}
 	}
 
@@ -200,7 +237,7 @@ func spawnTreeBudgetState() (spawnTreeBudget, error) {
 		remaining = 0
 	}
 
-	return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: consumed, Remaining: remaining, CountedWholeLedger: countedWholeLedger}, nil
+	return spawnTreeBudget{Max: spawnTreeBudgetMax, Consumed: consumed, Remaining: remaining, CountedWholeLedger: countedWholeLedger, WholeLedgerCause: wholeLedgerCause}, nil
 }
 
 // spawnBudgetPreflight answers, before a single worker is dispatched, whether
@@ -276,14 +313,21 @@ func spawnTreeBudgetReason(in spawnDecisionInput) string {
 			requesterName = "the requester"
 		}
 		if state.CountedWholeLedger {
-			// Gap B: no run window could be resolved, so the count came
-			// from the whole ledger rather than the current run. Say so
-			// plainly — otherwise an operator watching one run sees a
-			// number higher than that run's own activity and has no way to
-			// tell why.
+			// The count came from the whole ledger rather than the current
+			// run's window. Name the ACTUAL cause: the v1.0.55 message
+			// claimed "no run is recorded" for every whole-ledger count,
+			// including the run-ended and live-floor paths where a run very
+			// much existed — an operator chased that phantom for hours.
+			why := "no run is recorded"
+			switch state.WholeLedgerCause {
+			case wholeLedgerRunEnded:
+				why = "the recorded run has ended, so helpers still marked running anywhere in the ledger are counted"
+			case wholeLedgerLiveFloor:
+				why = "helpers still marked running exist outside the current run's window"
+			}
 			return fmt.Sprintf(
-				"whole-run helper budget exhausted: %d of %d helpers already spawned (counted across the entire ledger because no run is recorded); %s may not spawn another",
-				state.Consumed, state.Max, requesterName,
+				"whole-run helper budget exhausted: %d of %d helpers already spawned (counted across the entire ledger because %s); %s may not spawn another — `aether spawn-orphans` lists helpers that never reported finishing",
+				state.Consumed, state.Max, why, requesterName,
 			)
 		}
 		return fmt.Sprintf(
