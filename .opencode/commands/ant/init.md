@@ -325,7 +325,12 @@ mark the moment the colony's intention becomes real.
 with nothing persisted — no charter, no pheromones, no shelf promotion or
 dismissal.
 
-**Next steps:**
-- `/ant-colonize` — map an existing codebase before planning
-- `/ant-discuss` — clarify intent before the plan is drawn
-- `/ant-plan` — generate the phase plan
+**Next moves (the user's choice, never yours):** after a successful init, the
+runtime's result carries ranked `proposals` — the sensible next moves computed
+from what this repo actually contains, each with a plain-English reason (its
+"Next Moves" section shows the same list). Present them as a real
+multiple-choice question (the AskUserQuestion tool): one option per proposal
+in the runtime's order, each stating the runtime's reason, the top one marked
+recommended, plus "I'll decide later". Route to the picked command
+(`/ant-colonize`, `/ant-discuss`, or `/ant-plan`); run nothing until the user
+picks, and if they pick "later", stop cleanly.

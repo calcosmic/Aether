@@ -75,8 +75,12 @@ func TestInitCmd_BasicInit(t *testing.T) {
 	if session.ColonyGoal != "Build feature X" {
 		t.Errorf("session.colony_goal = %q, want 'Build feature X'", session.ColonyGoal)
 	}
-	if session.SuggestedNext != "aether plan" {
-		t.Errorf("session.suggested_next = %q, want 'aether plan'", session.SuggestedNext)
+	// The suggestion is no longer a hardcoded constant — it is whatever the
+	// proposal engine ranked first for THIS repo (an empty fixture with a
+	// short goal ranks discuss first).
+	wantNext := computeInitProposals(tmpDir, "Build feature X", false)[0].Command
+	if session.SuggestedNext != wantNext {
+		t.Errorf("session.suggested_next = %q, want the top proposal %q", session.SuggestedNext, wantNext)
 	}
 
 	// Verify CONTEXT.md was created
@@ -88,8 +92,8 @@ func TestInitCmd_BasicInit(t *testing.T) {
 	if !strings.Contains(string(data), "Build feature X") {
 		t.Errorf("CONTEXT.md does not contain goal")
 	}
-	if !strings.Contains(string(data), "aether plan") {
-		t.Errorf("CONTEXT.md does not contain the next step")
+	if !strings.Contains(string(data), wantNext) {
+		t.Errorf("CONTEXT.md does not contain the next step %q", wantNext)
 	}
 
 	handoffPath := filepath.Join(tmpDir, ".aether", "HANDOFF.md")

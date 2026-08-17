@@ -253,6 +253,17 @@ var initCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "warning: could not apply shelf selection(s): %s\n", strings.Join(shelfFailed, ", "))
 		}
 
+		// Ranked next-move proposals, computed from what the repo actually
+		// contains — the runtime proposes, the wrapper asks, the user picks.
+		// The top proposal replaces the old hardcoded "aether plan" as the
+		// recorded suggestion.
+		repoRoot := filepath.Dir(aetherDir)
+		proposals := computeInitProposals(repoRoot, goal, priorStateBackup != "")
+		suggestedNext := "aether plan"
+		if len(proposals) > 0 {
+			suggestedNext = proposals[0].Command
+		}
+
 		// Create session.json
 		session := colony.SessionFile{
 			SessionID:        sessionID,
@@ -261,7 +272,7 @@ var initCmd = &cobra.Command{
 			ColonyMode:       colonyMode,
 			CurrentPhase:     0,
 			CurrentMilestone: "",
-			SuggestedNext:    "aether plan",
+			SuggestedNext:    suggestedNext,
 			ActiveTodos:      promotedShelfTodos(store, goal),
 			Summary:          "Colony initialized",
 		}
@@ -273,7 +284,7 @@ var initCmd = &cobra.Command{
 
 		if _, err := syncColonyArtifacts(state, colonyArtifactOptions{
 			CommandName:   "init",
-			SuggestedNext: "aether plan",
+			SuggestedNext: suggestedNext,
 			Summary:       "Colony initialized",
 			HandoffTitle:  "Initialized Colony",
 			WriteHandoff:  true,
@@ -298,7 +309,6 @@ var initCmd = &cobra.Command{
 		// matching the seal-time hive-promotion precedent: registry and hive
 		// failures warn, never stop an init. The registry entry carries the
 		// domain tags that scope hive wisdom retrieval for this repo.
-		repoRoot := filepath.Dir(aetherDir)
 		registryDomains := detectColonyDomains(repoRoot)
 		if _, regErr := upsertColonyRegistryEntry(repoRoot, goal, registryDomains, true); regErr != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not register colony in hub registry: %v\n", regErr)
@@ -334,11 +344,13 @@ var initCmd = &cobra.Command{
 		}
 		result["registry_domains"] = registryDomains
 		result["hive_seeded"] = hiveSeeded
+		result["proposals"] = proposals
+		result["suggested_next"] = suggestedNext
 		if priorStateBackup != "" {
 			result["prior_state_backup"] = priorStateBackup
 			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
 		}
-		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, hiveSeeded, researchDocs...))
+		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, hiveSeeded, proposals, researchDocs...))
 		return nil
 	},
 }

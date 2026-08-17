@@ -740,7 +740,7 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	}
 }
 
-func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Charter, hiveSeeded int, researchDocs ...string) string {
+func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Charter, hiveSeeded int, proposals []initProposal, researchDocs ...string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
 	b.WriteString(visualDividerStr())
@@ -776,11 +776,18 @@ func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Ch
 	if hiveSeeded > 0 {
 		b.WriteString(fmt.Sprintf("   🧠 Hive wisdom: %d cross-colony pattern(s) seeded into QUEEN.md\n", hiveSeeded))
 	}
-	b.WriteString(renderNextUp(
-		`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
-		`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,
-		`Run `+"`aether colonize`"+` first if you want a quick codebase scan before planning.`,
-	))
+	// Ranked, repo-aware next moves replace the old static trio that was
+	// identical for every repo on earth. Fallback to the generic three only
+	// when no proposals were computed (a proposal failure never fails init).
+	if len(proposals) > 0 {
+		b.WriteString(renderInitProposals(proposals))
+	} else {
+		b.WriteString(renderNextUp(
+			`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
+			`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,
+			`Run `+"`aether colonize`"+` first if you want a quick codebase scan before planning.`,
+		))
+	}
 	b.WriteString(renderContextClearGuidance())
 	return b.String()
 }
