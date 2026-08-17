@@ -1,0 +1,15 @@
+# Allowlist for bench/tasks/03-interrupted-execution.md
+# Any changed path in the substrate clone that does not match one of the
+# patterns below is counted as an unnecessary modification.
+# This task reuses task 01's exact fix (see bench/tasks/01-bug-fix.md), so
+# its task-content block is identical to 01-bug-fix.txt's.
+
+# task-content block: what a correct fix touches
+# mux_test.go is deliberately NOT allowlisted here either, for the same
+# reason as task 01 — it must stay byte-for-byte unchanged.
+mux.go
+
+# lane working state — not counted as unnecessary
+.aether/**
+.planning/**
+.claude/**
