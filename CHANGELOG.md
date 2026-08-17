@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.58] - 2026-08-17
+
+### Fixed
+
+- **Publish no longer leaks private session files into the hub.** The Aether
+  repo's own `.aether/` folder does double duty — shipped source plus the
+  colony working data from developing Aether on itself. The publish
+  exclusion list matched directory names only, so loose working files
+  (session handoff snapshots, activity ledgers, failure logs, review
+  archives, this repo's own colony memory) were swept into
+  `~/.aether/system/` alongside the real product. Exclusion now covers
+  exact file paths too, and is two-sided: the next publish also removes
+  copies that leaked under earlier versions. Locked by
+  `TestHubPublishExcludesPrivateColonyFiles`, which pins the exclusion
+  floor so an entry cannot be silently dropped. The machine-local
+  `registry.json` (personal repo paths) is also untracked from git and
+  ignored going forward.
+
 ## [1.0.57] - 2026-08-17
 
 Colony Conversation & Judgement: the colony becomes something you talk WITH,

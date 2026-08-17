@@ -987,3 +987,79 @@ func TestInstallShellScriptsGetExecutable(t *testing.T) {
 		t.Errorf("expected .sh file to be executable, got permissions %o", perm)
 	}
 }
+
+// writeHubFixture creates path's parent directories and writes a small file.
+func writeHubFixture(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte("fixture\n"), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// TestHubPublishExcludesPrivateColonyFiles: the Aether repo's .aether/ does
+// double duty — shipped source plus this repo's own colony working data.
+// Publish must never copy the private half into the hub, and must sweep out
+// copies that leaked before the exclusion existed. The test iterates the real
+// exclusion lists, so every future entry is covered automatically.
+func TestHubPublishExcludesPrivateColonyFiles(t *testing.T) {
+	src := t.TempDir()
+	dest := t.TempDir()
+
+	shipped := []string{
+		"workers.md",
+		"version.json",
+		filepath.Join("docs", "pheromones.md"),
+	}
+	for _, rel := range shipped {
+		writeHubFixture(t, filepath.Join(src, rel))
+	}
+
+	// Pinned floor: these must stay excluded. Iterating hubExcludeFiles alone
+	// would let a deleted entry silently drop out of coverage.
+	for _, rel := range []string{
+		"CONTEXT.md", "CROWNED-ANTHILL.md", "HANDOFF.md", "PAUSE_HANDOFF.md",
+		"QUEEN.md", "error_ledger.json", "learnings.json", "ledger.jsonl",
+		"manifest.json", "registry.json", "docs/constraints.md",
+	} {
+		if !hubExcludeFiles[rel] {
+			t.Fatalf("private colony file %q is missing from hubExcludeFiles", rel)
+		}
+	}
+	privateFiles := make([]string, 0, len(hubExcludeFiles)+3)
+	for rel := range hubExcludeFiles {
+		privateFiles = append(privateFiles, filepath.FromSlash(rel))
+	}
+	for _, dir := range []string{"midden", "reviews-archive", "events"} {
+		if !hubExcludeDirs[dir] {
+			t.Fatalf("private colony directory %q is missing from hubExcludeDirs", dir)
+		}
+	}
+	privateFiles = append(privateFiles,
+		filepath.Join("midden", "build-failures.md"),
+		filepath.Join("reviews-archive", "bugs", "ledger.json"),
+		filepath.Join("events", "current.ndjson"),
+	)
+	for _, rel := range privateFiles {
+		writeHubFixture(t, filepath.Join(src, rel))
+		// Pre-seed dest too: an earlier publish already leaked this file.
+		writeHubFixture(t, filepath.Join(dest, rel))
+	}
+
+	result := syncDirToHub(src, dest)
+	if len(result.errors) > 0 {
+		t.Fatalf("syncDirToHub returned errors: %v", result.errors)
+	}
+	for _, rel := range shipped {
+		if _, err := os.Stat(filepath.Join(dest, rel)); err != nil {
+			t.Fatalf("shipped file %s did not publish: %v", rel, err)
+		}
+	}
+	for _, rel := range privateFiles {
+		if _, err := os.Stat(filepath.Join(dest, rel)); err == nil {
+			t.Fatalf("private colony file %s reached (or survived in) the hub", rel)
+		}
+	}
+}

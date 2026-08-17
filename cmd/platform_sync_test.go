@@ -257,7 +257,7 @@ func TestOpenCodeAgentNamePreservedInHubSync(t *testing.T) {
 	}
 
 	// Run hub sync with validation (same as setupInstallHub for OpenCode agents)
-	result := syncDirToHubWithExclusion(srcDir, destDir, nil, validateOpenCodeAgentFile, nil)
+	result := syncDirToHubWithExclusion(srcDir, destDir, nil, nil, validateOpenCodeAgentFile, nil)
 	if len(result.errors) > 0 {
 		t.Fatalf("hub sync failed: %v", result.errors)
 	}
@@ -303,7 +303,7 @@ func TestOpenCodeAgentNamePreservedFullRoundtrip(t *testing.T) {
 	if err := os.MkdirAll(hubDir, 0755); err != nil {
 		t.Fatalf("mkdir hub: %v", err)
 	}
-	hubResult := syncDirToHubWithExclusion(srcDir, hubDir, nil, validateOpenCodeAgentFile, nil)
+	hubResult := syncDirToHubWithExclusion(srcDir, hubDir, nil, nil, validateOpenCodeAgentFile, nil)
 	if len(hubResult.errors) > 0 {
 		t.Fatalf("publish to hub failed: %v", hubResult.errors)
 	}

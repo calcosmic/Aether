@@ -688,23 +688,53 @@ func cleanEmptyDirs(baseDir string) {
 // These are private/local paths that belong to individual colonies and should
 // never be published into the shared hub.
 var hubExcludeDirs = map[string]bool{
-	"data":          true,
-	"dreams":        true,
-	"oracle":        true,
-	"checkpoints":   true,
-	"locks":         true,
-	"temp":          true,
-	"archive":       true,
-	"chambers":      true,
-	"backups":       true,
-	".aether":       true,
-	"agents":        true,
-	"agents-claude": true,
-	"agents-codex":  true,
-	"skills-codex":  true,
-	"examples":      true,
-	"node_modules":  true,
-	"__pycache__":   true,
+	"data":            true,
+	"dreams":          true,
+	"oracle":          true,
+	"checkpoints":     true,
+	"locks":           true,
+	"temp":            true,
+	"archive":         true,
+	"chambers":        true,
+	"backups":         true,
+	".aether":         true,
+	"agents":          true,
+	"agents-claude":   true,
+	"agents-codex":    true,
+	"skills-codex":    true,
+	"examples":        true,
+	"node_modules":    true,
+	"__pycache__":     true,
+	"midden":          true,
+	"reviews-archive": true,
+	"events":          true,
+}
+
+// hubExcludeFiles are .aether/-relative file paths that must never be synced
+// to the hub. hubExcludeDirs covers private directories; these are the loose
+// per-colony working files that live beside the shipped source (session
+// snapshots, activity ledgers, this repo's own colony records). Exclusion is
+// two-sided: the file is never copied, and a copy already present in the hub
+// from an earlier publish is removed during stale-file cleanup.
+var hubExcludeFiles = map[string]bool{
+	"CONTEXT.md":          true,
+	"CROWNED-ANTHILL.md":  true,
+	"HANDOFF.md":          true,
+	"PAUSE_HANDOFF.md":    true,
+	"QUEEN.md":            true,
+	"error_ledger.json":   true,
+	"learnings.json":      true,
+	"ledger.jsonl":        true,
+	"manifest.json":       true,
+	"registry.json":       true,
+	"docs/constraints.md": true,
+}
+
+func hubExcludedFile(excludeFiles map[string]bool, relPath string) bool {
+	if len(excludeFiles) == 0 {
+		return false
+	}
+	return excludeFiles[filepath.ToSlash(filepath.Clean(relPath))]
 }
 
 // setupInstallHub creates the hub directory at ~/.aether/ and syncs companion files
@@ -749,7 +779,7 @@ func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} 
 	// landing at .codex/agents/agents/*.toml. Syncing just agents/ fixes this.
 	codexSrc := filepath.Join(packageDir, ".codex", "agents")
 	codexDest := filepath.Join(systemDir, "codex")
-	codexSyncResult := syncDirToHubWithExclusion(codexSrc, codexDest, nil, validateCodexAgentFile, isShippedAetherCodexAgent)
+	codexSyncResult := syncDirToHubWithExclusion(codexSrc, codexDest, nil, nil, validateCodexAgentFile, isShippedAetherCodexAgent)
 	result["codex_copied"] = codexSyncResult.copied
 	result["codex_skipped"] = codexSyncResult.skipped
 	if len(codexSyncResult.errors) > 0 {
@@ -796,7 +826,7 @@ func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} 
 			include: isOraclePhaseDirectivesFile,
 		},
 	} {
-		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, pair.validate, pair.include)
+		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, nil, pair.validate, pair.include)
 		hubSyncResult.copied += syncRes.copied
 		hubSyncResult.skipped += syncRes.skipped
 		hubSyncResult.removed = append(hubSyncResult.removed, syncRes.removed...)
@@ -806,7 +836,7 @@ func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} 
 		}
 	}
 
-	referenceSyncResult := syncDirToHubWithExclusion(filepath.Join(packageDir, ".aether", "references"), filepath.Join(hubDir, "references"), nil, nil, nil)
+	referenceSyncResult := syncDirToHubWithExclusion(filepath.Join(packageDir, ".aether", "references"), filepath.Join(hubDir, "references"), nil, nil, nil, nil)
 	hubSyncResult.copied += referenceSyncResult.copied
 	hubSyncResult.skipped += referenceSyncResult.skipped
 	hubSyncResult.removed = append(hubSyncResult.removed, referenceSyncResult.removed...)
@@ -858,12 +888,12 @@ func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} 
 // skipping excluded directories and unchanged files (by SHA-256 hash).
 // Also removes stale files in dest that no longer exist in src.
 func syncDirToHub(src, dest string) syncResult {
-	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, nil, nil)
+	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, hubExcludeFiles, nil, nil)
 }
 
-// syncDirToHubWithExclusion is like syncDirToHub but accepts a custom exclusion map.
-// Pass nil to exclude nothing.
-func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, validate syncValidator, include syncFilter) syncResult {
+// syncDirToHubWithExclusion is like syncDirToHub but accepts custom exclusion
+// maps for directories and exact file paths. Pass nil to exclude nothing.
+func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, excludeFiles map[string]bool, validate syncValidator, include syncFilter) syncResult {
 	// Default to no exclusions if nil
 	if exclude == nil {
 		exclude = map[string]bool{}
@@ -892,6 +922,17 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 	srcFiles := listFilesRecursiveWithExclusion(src, exclude)
 	if include != nil {
 		srcFiles = filterSyncFiles(srcFiles, include)
+	}
+	if len(excludeFiles) > 0 {
+		kept := make([]string, 0, len(srcFiles))
+		for _, relPath := range srcFiles {
+			if hubExcludedFile(excludeFiles, relPath) {
+				result.skipped++
+				continue
+			}
+			kept = append(kept, relPath)
+		}
+		srcFiles = kept
 	}
 	var ignored int
 	srcFiles, ignored = filterIgnoredSyncFiles(srcFiles)
@@ -941,7 +982,7 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 		srcSet[f] = struct{}{}
 	}
 	for _, relPath := range destFiles {
-		if syncPathIgnored(relPath) {
+		if syncPathIgnored(relPath) || hubExcludedFile(excludeFiles, relPath) {
 			destPath := filepath.Join(dest, relPath)
 			if err := os.Remove(destPath); err == nil {
 				result.removed = append(result.removed, relPath)

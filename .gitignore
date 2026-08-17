@@ -97,6 +97,7 @@ logs/
 .aether/stdlib/
 .aether/learnings.json
 .aether/docs/constraints.md
+.aether/registry.json
 
 # Session files
 *.session
