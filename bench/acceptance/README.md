@@ -65,6 +65,17 @@ to stay a genuinely outside observer.
 
 ## Ordering baseline
 
-<!-- Filled in by Task 3, immediately after the acceptance scripts are
-     committed and before any benchmark run exists — the fixed point every
-     later result is compared against. -->
+The commit below is the fixed point every later benchmark result is
+compared against — it is the last commit that touched anything in this
+folder before any run had happened. At the moment this commit landed,
+`bench/results/` did not exist anywhere in this project's history (verified
+with `git log --oneline -- bench/results`, which returned nothing) and
+`bench/acceptance/` was not excluded from version control (verified with
+`git check-ignore -v bench/acceptance`, which also returned nothing).
+
+- **Commit:** `763572bad64fea86245eeec448f88ca0c0335807`
+- **Committer date:** 2026-08-17T22:34:32+02:00
+- **Verified by:** running `bench/acceptance/verify-predates-runs.sh`
+  immediately after this commit, which reported the vacuous pass — no
+  results existed yet — and named 5 acceptance scripts checked (the four
+  task judges plus this ordering checker itself).
