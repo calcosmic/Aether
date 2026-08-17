@@ -924,7 +924,7 @@ Plans:
 - [x] 186-04-PLAN.md — Read-only `aether build --print-brief --full` capture from a real mid-project colony, with a checksum proof it mutated nothing
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 186-05-PLAN.md — Four deterministic acceptance scripts, committed before any run, with the git-history ordering checker
+- [x] 186-05-PLAN.md — Four deterministic acceptance scripts, committed before any run, with the git-history ordering checker
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 186-06-PLAN.md — The harness: one documented command per cell, permitted-inputs script, results-table generator, operator runbook
