@@ -44,8 +44,9 @@ var suggestAnalyzeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		target, _ := cmd.Flags().GetString("target")
+		force, _ := cmd.Flags().GetBool("force")
 
-		result, err := runSuggestAnalyze(target, dryRun)
+		result, err := runSuggestAnalyzeWithForce(target, dryRun, force)
 		if err != nil {
 			outputErrorMessage(err.Error())
 			return nil
@@ -66,6 +67,13 @@ var suggestAnalyzeCmd = &cobra.Command{
 // RESEARCH Pitfall 3: it returns an empty, successful result rather than an
 // error, so a suggestion-engine problem never fails a build or the CLI.
 func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, error) {
+	return runSuggestAnalyzeWithForce(target, dryRun, false)
+}
+
+// runSuggestAnalyzeWithForce is runSuggestAnalyze with an operator override
+// for change detection: "give me fresh recommendations" must work even when
+// nothing was committed since the last scan.
+func runSuggestAnalyzeWithForce(target string, dryRun, force bool) (map[string]interface{}, error) {
 	suggestAnalyzeInvocationCount++
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
@@ -91,7 +99,7 @@ func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, erro
 		currentHead = ""
 	}
 
-	if cs.LastAnalyzeCommit != nil && currentHead != "" && *cs.LastAnalyzeCommit != "" {
+	if !force && cs.LastAnalyzeCommit != nil && currentHead != "" && *cs.LastAnalyzeCommit != "" {
 		changedCount, err := countChangedFiles(target, *cs.LastAnalyzeCommit, currentHead)
 		if err == nil && changedCount < changeThreshold {
 			// Below threshold: skip analysis, return existing pending
@@ -221,8 +229,32 @@ func runSuggestAnalyze(target string, dryRun bool) (map[string]interface{}, erro
 // a stored slice, keeping any stored entry whose content hash isn't
 // superseded by a new entry. Shared by the persist path and the reported
 // "total" so both use the same merge definition (WR-01, WR-02).
+// maxPendingSuggestions bounds the unreviewed queue. A recommendation list is
+// a conversation with the operator; past this size it is a backlog nobody
+// reads, and it bloats COLONY_STATE.json. Newest first; dismissed entries are
+// dropped first when trimming.
+const maxPendingSuggestions = 12
+
 func mergePendingSuggestions(newPending []colony.PendingSuggestion, existing *[]colony.PendingSuggestion) []colony.PendingSuggestion {
-	merged := append([]colony.PendingSuggestion{}, newPending...)
+	// A dismissal is a decision, not a cache entry: when a re-scan produces
+	// the same suggestion again, the operator's earlier "no" survives.
+	// Without this, every fresh analysis re-nagged with everything ever
+	// rejected.
+	dismissedHashes := map[string]struct{}{}
+	if existing != nil {
+		for _, old := range *existing {
+			if old.Dismissed {
+				dismissedHashes[old.ContentHash] = struct{}{}
+			}
+		}
+	}
+	merged := make([]colony.PendingSuggestion, 0, len(newPending))
+	for _, p := range newPending {
+		if _, wasDismissed := dismissedHashes[p.ContentHash]; wasDismissed {
+			p.Dismissed = true
+		}
+		merged = append(merged, p)
+	}
 	if existing != nil {
 		newHashes := make(map[string]struct{}, len(newPending))
 		for _, p := range newPending {
@@ -234,11 +266,26 @@ func mergePendingSuggestions(newPending []colony.PendingSuggestion, existing *[]
 			}
 		}
 	}
+	if len(merged) > maxPendingSuggestions {
+		kept := make([]colony.PendingSuggestion, 0, maxPendingSuggestions)
+		for _, s := range merged {
+			if !s.Dismissed && len(kept) < maxPendingSuggestions {
+				kept = append(kept, s)
+			}
+		}
+		for _, s := range merged {
+			if s.Dismissed && len(kept) < maxPendingSuggestions {
+				kept = append(kept, s)
+			}
+		}
+		merged = kept
+	}
 	return merged
 }
 
 func init() {
 	suggestAnalyzeCmd.Flags().Bool("dry-run", false, "Preview suggestions without persisting")
+	suggestAnalyzeCmd.Flags().Bool("force", false, "Re-analyze even when nothing changed since the last scan")
 	suggestAnalyzeCmd.Flags().String("target", ".", "Target directory to analyze")
 	rootCmd.AddCommand(suggestAnalyzeCmd)
 }
@@ -316,22 +363,40 @@ func buildSpecificPatterns(target string, techStack []techStackDetail) []pheromo
 		})
 	}
 
-	// Large files check (Go files over 500 lines)
-	largeFiles := findLargeFiles(target)
-	for _, lf := range largeFiles {
+	// Large files check (Go files over 500 lines). One aggregated suggestion,
+	// never one per file: a real repo produced 170 identical per-file entries
+	// in a single run, which made the approve flow unusable and bloated
+	// colony state — a recommendation list nobody can choose from steers
+	// nothing.
+	if largeFiles := findLargeFiles(target); len(largeFiles) > 0 {
+		examples := largeFiles
+		if len(examples) > 3 {
+			examples = examples[:3]
+		}
+		content := fmt.Sprintf("%d file(s) over 500 lines (e.g. %s) -- consider splitting the worst offenders", len(largeFiles), strings.Join(examples, ", "))
+		if len(largeFiles) == 1 {
+			content = fmt.Sprintf("large file detected (%s) -- consider splitting", largeFiles[0])
+		}
 		suggestions = append(suggestions, pheromoneSuggestion{
 			Type:    "FEEDBACK",
-			Content: fmt.Sprintf("large file detected (%s) -- consider splitting", lf),
+			Content: content,
 			Reason:  "build-specific: large file detection",
 		})
 	}
 
-	// Test gaps check
-	testGaps := findTestGaps(target)
-	for _, dir := range testGaps {
+	// Test gaps check — aggregated for the same reason as large files.
+	if testGaps := findTestGaps(target); len(testGaps) > 0 {
+		examples := testGaps
+		if len(examples) > 3 {
+			examples = examples[:3]
+		}
+		content := fmt.Sprintf("%d source director(ies) without tests (e.g. %s)", len(testGaps), strings.Join(examples, ", "))
+		if len(testGaps) == 1 {
+			content = fmt.Sprintf("no tests found in %s", testGaps[0])
+		}
 		suggestions = append(suggestions, pheromoneSuggestion{
 			Type:    "FEEDBACK",
-			Content: fmt.Sprintf("no tests found in %s", dir),
+			Content: content,
 			Reason:  "build-specific: test gap detection",
 		})
 	}
