@@ -177,6 +177,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := persistExternalContinueHandoffs(root, phase.ID, plan.Dispatches, completion.workerResults()); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	// The runtime persists review findings itself — review castes return
+	// them in result JSON and must never be briefed to run CLI commands
+	// (auditor and gatekeeper have no Bash by design). Non-fatal: ledger
+	// bookkeeping never blocks an advance.
+	reviewFindingsPersisted, reviewFindingNotes := persistReviewFindingsToLedgers(phase.ID, phase.Name, workerFlow)
+	for _, note := range reviewFindingNotes {
+		fmt.Fprintf(os.Stderr, "⚠ %s\n", note)
+	}
 
 	verificationTimeout := continueFinalizeVerificationTimeout(plan, verificationTimeoutOverride)
 	emitContinueVerificationStart(phase, verificationTimeout)
@@ -500,6 +508,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// "fix" this back to symmetry with the default continue path.
 	consolidationSummary := runPhaseEndConsolidation(phase.ID)
 	attachConsolidationSummary(result, consolidationSummary)
+	if reviewFindingsPersisted > 0 && result != nil {
+		result["review_findings_persisted"] = reviewFindingsPersisted
+	}
 	// advanceExternalContinue already emitted its own ceremony flow sequence
 	// (containing the housekeeping step) before returning -- D-04 places
 	// consolidation strictly after that call, so the learning beat cannot be

@@ -1173,16 +1173,24 @@ type codexContinueReviewSpec struct {
 	Task  string
 }
 
+// codexContinueReviewSpecs' task text must never instruct a caste to run a
+// CLI command: gatekeeper and auditor have no Bash tool by explicit design
+// ("strictly read-only"), and telling them to run `aether review-ledger-write`
+// gave them an unsatisfiable brief — they self-reported blocked, which
+// blocked phase advancement (Pocket-Chopper field report). Workers return
+// findings in their result JSON; the RUNTIME persists them to the domain
+// review ledgers in-process (persistReviewFindingsToLedgers). Locked by
+// TestReviewSpecsDoNotInstructBashlessCastes.
 var codexContinueReviewSpecs = []codexContinueReviewSpec{
 	{
 		Caste: "gatekeeper",
 		Task: "Review the phase for security, release, and integrity blockers before advancement. Return blocked if it is unsafe to advance." +
-			"\n\nPersist your security findings to the domain review ledger using: aether review-ledger-write --domain security --phase <N> --findings '<json>' --agent gatekeeper",
+			"\n\nReturn your security findings in this result's findings array; the runtime records them in the domain review ledger for you.",
 	},
 	{
 		Caste: "auditor",
 		Task: "Audit whether the completed work actually satisfies the phase tasks rather than just producing superficial artifacts. Return blocked if the evidence looks partial, generic, or docs-only." +
-			"\n\nPersist your quality, security, and performance findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent auditor",
+			"\n\nReturn your quality, security, and performance findings in this result's findings array; the runtime records them in the domain review ledger for you.",
 	},
 	{
 		Caste: "probe",
@@ -1432,7 +1440,10 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	b.WriteString(spec.Task)
 	b.WriteString("\n\n")
 	if spec.Caste == "gatekeeper" || spec.Caste == "auditor" {
-		b.WriteString("This is a review task. You may persist findings to your domain review ledger using `aether review-ledger-write`, but do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
+		// These two castes have no Bash tool by design — never instruct them
+		// to run a CLI command. They return findings in result JSON and the
+		// runtime persists to the ledger (persistReviewFindingsToLedgers).
+		b.WriteString("This is a review task. Return your findings in this result's findings array — the runtime records them in the domain review ledger for you. Do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
 	} else {
 		b.WriteString("This is a read-only review. Do not modify repo files. Return status `blocked` if advancement is unsafe.\n\n")
 	}

@@ -3107,7 +3107,7 @@ func TestMergeExternalPlanResults_RejectsNamelessResult(t *testing.T) {
 	}
 }
 
-func TestPlanningWorkerBriefGatekeeperIncludesReviewLedgerInstruction(t *testing.T) {
+func TestPlanningWorkerBriefGatekeeperNeverInstructsCLI(t *testing.T) {
 	root := t.TempDir()
 	survey := codexSurveyContext{}
 	spec, ok := planningWorkerSpecForCaste("gatekeeper")
@@ -3116,8 +3116,11 @@ func TestPlanningWorkerBriefGatekeeperIncludesReviewLedgerInstruction(t *testing
 	}
 
 	brief := renderPlanningWorkerBrief(root, survey, spec)
-	if !strings.Contains(brief, "review-ledger-write") {
-		t.Fatalf("gatekeeper planning brief missing review-ledger-write instruction:\n%s", brief)
+	// Gatekeeper has no Bash tool by design; an instruction to run
+	// `aether review-ledger-write` is unsatisfiable and made the caste
+	// self-report blocked (Pocket-Chopper field report).
+	if strings.Contains(brief, "review-ledger-write") {
+		t.Fatalf("gatekeeper planning brief instructs a CLI command the caste cannot run:\n%s", brief)
 	}
 	if !strings.Contains(brief, "This is a review task") {
 		t.Fatalf("gatekeeper planning brief missing review task indicator:\n%s", brief)

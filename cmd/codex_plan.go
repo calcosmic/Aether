@@ -2192,7 +2192,10 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString(strings.Join(primaryOutputs, ", "))
 		b.WriteString("\n")
 	} else if spec.Caste == "gatekeeper" || spec.Caste == "auditor" {
-		b.WriteString("This is a review task. You may persist findings to your domain review ledger using `aether review-ledger-write`, but do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
+		// No CLI instructions for these two: they have no Bash tool by
+		// design, so briefing them to run `aether review-ledger-write` was an
+		// unsatisfiable task they answered by self-reporting blocked.
+		b.WriteString("This is a review task. Report findings in this result's summary and blockers — do not run CLI commands and do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
 		b.WriteString("Write planning outputs directly into the repository.\n")
 		b.WriteString("- Primary outputs: ")
 		b.WriteString(strings.Join(primaryOutputs, ", "))
