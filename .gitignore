@@ -37,6 +37,8 @@ eggs/
 lib/
 !npm/lib/
 !npm/lib/**
+!bench/lib/
+!bench/lib/**
 lib64/
 parts/
 sdist/
