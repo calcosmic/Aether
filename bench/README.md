@@ -116,3 +116,34 @@ correctly on this machine: the copy produced a non-empty `VERSION` file and
 more than the minimum expected number of agents and skills, and the `gsd-sdk`
 command responded correctly once made reachable on `PATH` inside the isolated
 environment.
+
+## Committed evidence: what a worker is told
+
+Alongside the run harness described above, this repository commits one
+extra piece of evidence: the exact full text one of Aether's helper agents
+("workers" — the same term used throughout this document) receives before
+it starts work on a real, already-in-progress project ("colony," again the
+same term as above). It was captured by printing that text out, without
+running any of the actual work and without changing anything on disk — a
+read-only inspection, not a live run.
+
+This capture is committed here rather than regenerated on demand because
+later work in this development programme deliberately changes what a
+worker ("phase" — one stage of a colony's plan) is told during that stage.
+Without a dated snapshot taken before that change, there would be nothing
+to compare the change against — no way to say whether a later change made
+the worker's instructions better, worse, or just different.
+
+The read-only property above is a checked fact, not a claim: the capture
+script records a fingerprint of the source project's saved state before and
+after taking the snapshot, and it refuses to write the capture at all if
+that fingerprint differs.
+
+The two files are `bench/evidence/print-brief-capture.txt` (the raw text a
+worker actually received) and `bench/evidence/print-brief-capture.md`
+(where that text came from, when, and the read-only proof). To take a fresh
+snapshot for comparison, run:
+
+```
+bench/evidence/capture-print-brief.sh <path-to-a-real-mid-project-colony> <phase-number> [worker-name]
+```
