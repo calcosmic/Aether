@@ -912,6 +912,16 @@ Phases 186–192 close milestone v1.26. Source: the 2026-08-17 truth audit + hos
 **Requirements**: PROOF-01, PROOF-03 (remapped)
 **Success Criteria**: (1) `bench/` committed and one documented command reproduces a run; (2) `bench/results/<date>/` holds 12 transcripts + operator logs + a results table with autonomous success rate, interventions and tokens per lane; (3) acceptance scripts predate run timestamps; (4) a read-only `aether build --print-brief --full` capture from a real mid-project colony is committed; (5) first milestone before any task specs: a hermetic profile boots, authenticates and completes one trivial task in both systems.
 **Stop-check**: no numbers within one week of harness work → cut harness scope, never grow it.
+**Plans**: 7 plans in 5 waves
+
+Plans:
+- [ ] 186-01-PLAN.md — Hermetic-profile smoke: a clean HOME boots, authenticates and completes one trivial task in BOTH systems (wave 1, alone — the locked sequencing gate)
+- [ ] 186-02-PLAN.md — Pin two neutral OSS substrate repos and write the four task specs plus per-task file allowlists
+- [ ] 186-03-PLAN.md — Measurement libraries: harness-side token parsing, git cleanliness, operator log, plus a self-test against hand-computed fixtures
+- [ ] 186-04-PLAN.md — Read-only `aether build --print-brief --full` capture from a real mid-project colony, with a checksum proof it mutated nothing
+- [ ] 186-05-PLAN.md — Four deterministic acceptance scripts, committed before any run, with the git-history ordering checker
+- [ ] 186-06-PLAN.md — The harness: one documented command per cell, permitted-inputs script, results-table generator, operator runbook
+- [ ] 186-07-PLAN.md — Execute the twelve runs (operator at keyboard) and commit the generated results table
 
 ### Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 **Goal**: No Aether command ever deletes unmerged or dirty work; worktree merge works outside Go repos.
@@ -1005,7 +1015,7 @@ Remaining, in this order — **not** numeric order (revised 2026-08-17, Audit Ad
 | 185. One Honest Cost Line | v1.26 | 0/TBD | Queued (after 190) | - |
 | 175. Orchestration Visibility | v1.26 | 1/1 | **Complete** | 2026-08-16 |
 | 179. Proof | v1.26 | — | **Remapped → 186 + 192** (2026-08-17) | - |
-| **186. Baseline Showdown (Light)** | v1.26 | 0/TBD | **Next** | - |
+| **186. Baseline Showdown (Light)** | v1.26 | 0/7 | **Planned** | - |
 | 187. Crash-Safe Worktrees & Ecosystem Neutrality | v1.26 | 0/TBD | Not started | - |
 | 188. One Truth for Failures and Advances | v1.26 | 0/TBD | Not started | - |
 | 189. Complete Worker Contract | v1.26 | 0/TBD | Not started | - |
