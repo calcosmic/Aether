@@ -511,6 +511,10 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if reviewFindingsPersisted > 0 && result != nil {
 		result["review_findings_persisted"] = reviewFindingsPersisted
 	}
+	// The phase save-point commit — strictly after advanceExternalContinue
+	// returned with err == nil (PhaseCompleted is durable), same non-fatal
+	// contract as consolidation above.
+	attachPhaseCommitResult(result, commitPhaseAdvance(root, updated, phase))
 	// advanceExternalContinue already emitted its own ceremony flow sequence
 	// (containing the housekeeping step) before returning -- D-04 places
 	// consolidation strictly after that call, so the learning beat cannot be

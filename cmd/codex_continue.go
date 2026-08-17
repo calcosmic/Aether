@@ -987,6 +987,11 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// as an error (D-05).
 	consolidationSummary := runPhaseEndConsolidation(phase.ID)
 	workerFlow = append(workerFlow, continueLearningFlowStep(consolidationSummary))
+	// The phase save-point: one git commit of exactly the files this phase's
+	// workers reported changing, so repo history mirrors colony history.
+	// Same non-fatal contract as consolidation — a commit failure is
+	// reported (and pauses autopilot via the marker), never blocks.
+	phaseCommit := commitPhaseAdvance(root, updated, phase)
 	emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 	flowEvents := continueWorkerFlowEvents(now, workerFlow)
 	updated.Events = append(updated.Events, flowEvents...)
@@ -1057,6 +1062,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		result["next_phase_name"] = nextPhase.Name
 	}
 	attachConsolidationSummary(result, consolidationSummary)
+	attachPhaseCommitResult(result, phaseCommit)
 	runStatus = "completed"
 	return result, updated, updated.Plan.Phases[currentIdx], nextPhase, &housekeeping, final, nil
 }

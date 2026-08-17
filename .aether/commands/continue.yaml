@@ -56,7 +56,7 @@ wrapper_additions:
   post_continue: |
     Close from runtime output only:
     1. For the heavy external review path, run the visual closeout command first and use its next-step line as the source of truth.
-    2. If the phase advanced, summarize what was verified, which review workers ran, what the colony learned, and route first to `/ant-build N+1`.
+    2. If the phase advanced, summarize what was verified, which review workers ran, what the colony learned, and route first to `/ant-build N+1`. The runtime makes a git save-point commit of the files the phase's workers changed (`phase_commit` in the result); mention it in one line. The `aether phase-commits` toggle controls this: check it with `aether phase-commits get`, turn it off with `aether phase-commits set off`.
     3. If continue blocked, translate the blocker into plain language and follow the runtime's recovery command first when it surfaces one; only fall back to `/ant-continue` when the runtime stayed generic.
     4. If the colony completed, mark the achievement briefly and route first to `/ant-seal`.
     5. Mention signal housekeeping only if the runtime surfaced it, and keep that note to one short line.

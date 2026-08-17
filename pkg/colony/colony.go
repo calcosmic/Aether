@@ -172,6 +172,31 @@ func (m ParallelMode) Valid() bool {
 // ErrInvalidParallelMode is returned when a parallel mode value is not recognized.
 var ErrInvalidParallelMode = fmt.Errorf("invalid parallel mode")
 
+// PhaseCommitMode controls whether the runtime makes a git commit when a
+// phase durably advances. Empty means ON — the save-point after every
+// verified phase is the default behaviour; `aether phase-commits set off`
+// turns it off per colony.
+type PhaseCommitMode string
+
+const (
+	PhaseCommitsOn  PhaseCommitMode = "on"
+	PhaseCommitsOff PhaseCommitMode = "off"
+)
+
+// Valid reports whether m is a recognized phase-commit mode.
+func (m PhaseCommitMode) Valid() bool {
+	switch m {
+	case PhaseCommitsOn, PhaseCommitsOff:
+		return true
+	}
+	return false
+}
+
+// Enabled reports whether phase commits should run: on unless explicitly off.
+func (m PhaseCommitMode) Enabled() bool {
+	return m != PhaseCommitsOff
+}
+
 // ColonyMode represents the top-level execution posture for a colony.
 type ColonyMode string
 
@@ -334,6 +359,7 @@ type ColonyState struct {
 	SpawnReapThresholdMinutes *int                 `json:"spawn_reap_threshold_minutes,omitempty"`
 	PlanGranularity           PlanGranularity      `json:"plan_granularity,omitempty"`
 	ParallelMode              ParallelMode         `json:"parallel_mode,omitempty"`
+	PhaseCommits              PhaseCommitMode      `json:"phase_commits,omitempty"`
 	TerritorySurveyed         *string              `json:"territory_surveyed,omitempty"`
 	Milestone                 string               `json:"milestone"`
 	MilestoneUpdatedAt        *string              `json:"milestone_updated_at,omitempty"`

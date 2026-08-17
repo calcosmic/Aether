@@ -210,7 +210,8 @@ continue command's own output (fast path).
 **If the phase advanced:**
 1. Use the visual closeout's next-step line as the source of truth.
 2. Summarize what the runtime verified and learned.
-3. Route first to `/ant-build N+1`.
+3. If the runtime's result reports a `phase_commit`, mention in one line that the colony made a git save-point of the files its workers changed (or why it skipped). The `aether phase-commits` toggle controls this: check it with `aether phase-commits get`, turn it off with `aether phase-commits set off`.
+4. Route first to `/ant-build N+1`.
 
 **If continue is blocked:**
 1. Translate the blocker into plain language.
