@@ -171,8 +171,8 @@ oplog_start "$RUN_ID" "$LANE" "$CATEGORY" "$SUBSTRATE_REPO_LABEL" "$MODEL"
 step "permitted operator inputs for this cell (see bench/harness/permitted-inputs.md for the full list)"
 PERMITTED_INPUTS_FILE="$ROOT/bench/harness/permitted-inputs.md"
 if [ -f "$PERMITTED_INPUTS_FILE" ]; then
-  awk -v lane="$LANE" -v category="$CATEGORY" '
-    $0 ~ "^## " lane " . " category "$" || $0 ~ "^## " lane "-" category "$" { in_section = 1; print; next }
+  awk -v want="## $LANE $CATEGORY" '
+    $0 == want { in_section = 1; print; next }
     in_section && /^## / { in_section = 0 }
     in_section { print }
   ' "$PERMITTED_INPUTS_FILE"

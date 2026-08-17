@@ -1,0 +1,45 @@
+{
+  "lane": "aether-autopilot",
+  "category": "01-bug-fix",
+  "repo": "gorilla/mux",
+  "starting_sha": "deadbeef0000000000000000000000000000beef",
+  "model": "claude-fixture-model",
+  "model_deviation": "MODEL-DEVIATION lane=aether-autopilot reason=hub-dir-not-yet-installed",
+  "parallel_mode": "in-repo",
+  "parallel_mode_note": "worktree mode is disqualified until Phase 187",
+  "acceptance_pass": true,
+  "acceptance_status": 0,
+  "acceptance": {
+    "task_id": "01-bug-fix",
+    "pass": true,
+    "assertions": []
+  },
+  "tokens": {
+    "total_tokens": 5100,
+    "total_input_tokens": 5000,
+    "model_calls": 3,
+    "models": "claude-fixture-model",
+    "source": "session-transcript"
+  },
+  "cleanliness": {
+    "orphan_branches": 0,
+    "uncommitted_residue": 0,
+    "tool_internal_paths_count": 0,
+    "unnecessary_modifications": 0,
+    "cleanliness_score": 100
+  },
+  "operator": {
+    "scripted_inputs": 2,
+    "unscripted_inputs": 0,
+    "autonomous": true,
+    "wall_clock_seconds": 155,
+    "wait_seconds": 30,
+    "wall_clock_net_seconds": 125
+  },
+  "hallucinated_completion": "false",
+  "evidence": {
+    "transcripts_dir": "transcripts",
+    "operator_log_path": "operator-log.jsonl",
+    "acceptance_json_path": "acceptance.json"
+  }
+}
