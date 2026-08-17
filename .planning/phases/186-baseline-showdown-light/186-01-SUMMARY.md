@@ -149,6 +149,10 @@ No credentials were written into the repository or committed anywhere. `bench/sm
 
 **Blocker for real (non-`--synthetic`, non-`--print-brief`) benchmark runs:** the 12-run baseline cannot execute unattended until `ANTHROPIC_API_KEY` is provisioned per the User Setup Required section above. This blocks live Claude CLI work in any later plan's lanes, not the harness scaffolding itself — task specs, acceptance scripts, and run machinery (186-02 onward) can still be built and tested structurally in the meantime.
 
+## Self-Check: PASSED
+
+All created files confirmed present on disk (bench/lib/hermetic-home.sh, bench/lib/gsd-install.sh, bench/smoke-hermetic.sh, bench/README.md, this SUMMARY.md). All four commits (767643e5, da03be79, ca0e42ef, 8e135e4a) confirmed present in `git log --oneline --all`.
+
 ---
 *Phase: 186-baseline-showdown-light*
 *Completed: 2026-08-17*
