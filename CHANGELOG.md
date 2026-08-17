@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.57] - 2026-08-17
+
+Colony Conversation & Judgement: the colony becomes something you talk WITH,
+not just watch — every proposal is asked, every block brings a way forward,
+and three field-reported breakages are fixed.
+
+### Added
+
+- **`/ant-ask` — ask the colony anything.** "Where are we?", "why did phase 3
+  block?", "what changed?" answered from the colony's own memory with zero
+  setup. The briefing assembler gained its first parameterization: a question
+  boosts the sections it is about and pulls in recent activity, read-only by
+  locked test.
+- **Queen-composed clarification questions.** The discuss flow composes 3–5
+  questions from THIS goal and THIS codebase instead of the same canned trio;
+  every composed question must cite what it is grounded in or the runtime
+  refuses it. Answers land in the unchanged pipeline (hard constraints still
+  become REDIRECT signals) and the canned generator remains the typed
+  fallback.
+- **A git save-point after every verified phase.** Exactly the files the
+  phase's workers reported changing — the owner's dirty, untracked, and even
+  pre-staged files can never be swept in — with a greppable
+  `aether(phase-N):` subject and an `Aether-Phase` trailer for the
+  Archaeologist. Never pushes (argv invariant test); a commit failure pauses
+  autopilot via the previously-dead marker instead of blocking. Off switch:
+  `aether phase-commits set off`.
+- **Worker model tags on spawn lines.** `🔨🐜 Builder [sonnet] Mason-67`,
+  resolved from agent frontmatter plus any `ANTHROPIC_DEFAULT_*_MODEL`
+  redirect. Display only — routing stays with the platform, and a parity test
+  pins the display table to the agent files so it cannot go stale.
+- **Ranked post-init proposals.** Init proposes the sensible next moves
+  computed from the actual repo (colonize first for existing code, discuss
+  first for broad goals) with plain-English reasons; the wrapper asks, the
+  recorded suggestion is the real top proposal instead of a hardcoded
+  constant.
+- **The classic end-of-phase footer.** Every phase end shows open flags 🚩
+  with triage counts, active steering signals with content and strength,
+  phase/task progress bars, an honestly-verified "safe to clear your context"
+  line, and the next command as the user's choice via a real question — the
+  build wrapper never rolls into verification on its own.
+- **Deliberately-RED phases.** A typed `expect_failing_tests` field lets the
+  route-setter plan TDD red-first phases whose deliverable IS a failing test
+  run; verification inverts the tests check (green blocks, red advances), and
+  timeouts are never credited as the expected failure.
+- **Force seal (owner override).** `aether seal --force --reason "why"` files
+  a project away past unverified phases, open blockers, and review blocks —
+  for work finished outside the colony or a colony wedged on its own gates.
+  Never silent: the reason is required, a `sealed_forced` event names every
+  unverified phase, CROWNED-ANTHILL.md carries a permanent Owner Override
+  section, and the wrapper asks before ever forcing.
+
+### Fixed
+
+- **Spawn budget counted all-time history** (field report): the append-only
+  spawn ledger made any repo that ever finished more than 20 helpers
+  permanently unable to spawn again, with no recovery command able to clear
+  it. Fallback counting is live-helpers-only, and the deny message names the
+  actual cause instead of claiming "no run is recorded" when one exists.
+- **Review castes were briefed to run a CLI they cannot run** (field report):
+  auditor and gatekeeper have no Bash by design, yet their briefs instructed
+  `aether review-ledger-write` — they self-reported blocked and stalled the
+  phase. The runtime now persists the findings workers return, in-process.
+- **The flags gate silently lied**: it claimed to run "every time for safety"
+  but never opened the flags file, so a blocker raised with `/ant-flag`
+  blocked nothing. The classic Iron Law is restored, advancement-scoped:
+  blockers stop `continue` (never `build`), cannot be acknowledged away, and
+  machine-raised blockers clear on green verification evidence — while
+  chaos-raised and owner-raised blockers never auto-clear. The age-based
+  auto-resolve no longer defaults to resolving problems by growing old.
+- **Critics must bring solutions**: structured review findings now actually
+  feed the blocking decision (they were decorative); a blocking finding
+  carries its fix in the same breath or names `/ant-unblock`, CRITICAL ledger
+  writes without a suggestion are refused, Watcher issues carry
+  suggestion+blocking, every Chaos finding carries a concrete
+  `suggested_hardening`, and blocked output gains a Way Forward section.
+- **The classic flag renderer was dead code**: written during the restoration
+  round, never wired — `/ant-flags` now actually uses it.
+
 ## [1.0.56] - 2026-08-16
 
 The v5.4.0 richness restoration: the colony you can watch work, back on the
