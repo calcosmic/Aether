@@ -919,9 +919,9 @@ Plans:
 - [x] 186-01-PLAN.md — Hermetic-profile smoke: a clean HOME boots, authenticates and completes one trivial task in BOTH systems (wave 1, alone — the locked sequencing gate)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 186-02-PLAN.md — Pin two neutral OSS substrate repos and write the four task specs plus per-task file allowlists
-- [ ] 186-03-PLAN.md — Measurement libraries: harness-side token parsing, git cleanliness, operator log, plus a self-test against hand-computed fixtures
-- [ ] 186-04-PLAN.md — Read-only `aether build --print-brief --full` capture from a real mid-project colony, with a checksum proof it mutated nothing
+- [x] 186-02-PLAN.md — Pin two neutral OSS substrate repos and write the four task specs plus per-task file allowlists
+- [x] 186-03-PLAN.md — Measurement libraries: harness-side token parsing, git cleanliness, operator log, plus a self-test against hand-computed fixtures
+- [x] 186-04-PLAN.md — Read-only `aether build --print-brief --full` capture from a real mid-project colony, with a checksum proof it mutated nothing
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 186-05-PLAN.md — Four deterministic acceptance scripts, committed before any run, with the git-history ordering checker
