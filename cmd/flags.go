@@ -89,16 +89,35 @@ func filterFlags(entries []colony.FlagEntry) []colony.FlagEntry {
 	return result
 }
 
-// renderFlagsTable displays flags in the classic headed house style: one line
-// per flag with a status icon, nested detail underneath — not a machine table.
-func renderFlagsTable(entries []colony.FlagEntry) {
+// renderFlagsTable renders flags in the classic headed house style: one line
+// per flag with a status icon, nested detail underneath — not a machine
+// table. This was written during the v5.4.0-richness restoration but never
+// wired in (flagsCmd kept the flat list); it is now THE /ant-flags renderer,
+// locked by TestFlagsCmdUsesClassicRenderer.
+func renderFlagsTable(entries []colony.FlagEntry) string {
+	if len(entries) == 0 {
+		return "🚩 Flags: none\n"
+	}
+	blockers, issues, notes := 0, 0, 0
 	var b strings.Builder
 	for _, entry := range entries {
+		if !entry.Resolved {
+			switch strings.ToLower(strings.TrimSpace(entry.Type)) {
+			case "blocker":
+				blockers++
+			case "note":
+				notes++
+			default:
+				issues++
+			}
+		}
 		icon := "🚩"
 		state := "open"
 		if entry.Resolved {
 			icon = "✅"
 			state = "resolved"
+		} else if entry.Acknowledged {
+			state = "parked"
 		}
 		b.WriteString(fmt.Sprintf("%s %s (%s)\n", icon, strings.TrimSpace(entry.Description), state))
 		detail := entry.ID
@@ -113,5 +132,9 @@ func renderFlagsTable(entries []colony.FlagEntry) {
 		}
 		b.WriteString("   └── " + detail + "\n")
 	}
-	visualFprintln(stdout, strings.TrimRight(b.String(), "\n"))
+	fmt.Fprintf(&b, "\nOpen: %d blocker(s), %d issue(s), %d note(s)\n", blockers, issues, notes)
+	if blockers > 0 {
+		b.WriteString("Blockers stop advancement — resolve with `aether flag-resolve --id <id> --message \"what fixed it\"`, or /ant-unblock dispatches the Fixer.\n")
+	}
+	return b.String()
 }

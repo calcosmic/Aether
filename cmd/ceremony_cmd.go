@@ -598,6 +598,30 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 			b.WriteString("\n")
 		}
 	}
+	if workflow == "build" {
+		// The build's ending: the colony's whole picture (flags, signals,
+		// progress) plus the handoff verdict — "safe to clear" appears only
+		// when the handoff is verifiably on disk, checked at render time,
+		// never inferred from the finalize having succeeded.
+		phaseID := intValue(result["completion_phase"])
+		if phaseID == 0 {
+			phaseID = intValue(result["current_phase"])
+		}
+		var state colony.ColonyState
+		if store != nil && store.LoadJSON("COLONY_STATE.json", &state) == nil && phaseID > 0 {
+			b.WriteString("\n")
+			b.WriteString(renderStageMarker("Colony State"))
+			b.WriteString(renderPhaseEndFooter(state, phaseID))
+		}
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Handoff"))
+		if phaseID > 0 && phaseHandoffRecordsExist(phaseID) {
+			fmt.Fprintf(&b, "📦 Worker handoffs recorded for phase %d — the next phase's workers inherit this build's context.\n", phaseID)
+			b.WriteString(renderContextClearGuidance())
+		} else {
+			b.WriteString("📦 No worker handoffs recorded for this phase — don't clear your context yet; the next workers would start blind.\n")
+		}
+	}
 	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
 	b.WriteString(renderNextUp(next))
 	return b.String()

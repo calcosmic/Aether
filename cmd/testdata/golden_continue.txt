@@ -57,6 +57,11 @@ Signals: 0 active -> 0 active after housekeeping
 🧠🐜 Librarian  colony observed nothing new this phase
 ── Next Phase ──
 Next phase ready: 2 — Next golden phase
+── Colony State ──
+🚩 Flags: none open
+Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
+📍 [Phase 1/2] [████████░░░░░░░░] 50%
+   └── Tasks [████████████████] 1/1 in phase 1
 
 ━━ 🐜 N E X T   U P ━━
 Run `/ant-build 2` to start the next phase

@@ -101,11 +101,36 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		}
 	}
 
-	// Runtime-level assertion: verify renderContinueVisual() emits context-clear guidance
+	// Runtime-level assertion: verify renderContinueVisual() emits
+	// context-clear guidance. The safe-to-clear CLAIM is verified, not
+	// assumed: it appears only when .aether/HANDOFF.md is actually on disk,
+	// so the fixture writes one; the no-file case must hold the user back.
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
 	goal := "Runtime contract check"
 	now := time.Now()
 	state := colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateBUILT, CurrentPhase: 1, BuildStartedAt: &now}
 	phase := colony.Phase{ID: 1, Name: "Contract check"}
+
+	// Without a handoff on disk: an explicit hold, never the claim.
+	heldOutput := renderContinueVisual(state, phase, nil, false, &colony.Phase{ID: 2, Name: "Next"}, nil, colony.VerificationDepthLight)
+	if strings.Contains(heldOutput, "safe to clear your context now.") {
+		t.Errorf("renderContinueVisual() claims safe-to-clear with no handoff on disk\n%s", heldOutput)
+	}
+	if !strings.Contains(heldOutput, "don't clear your context yet") {
+		t.Errorf("renderContinueVisual() missing the explicit hold when the handoff is absent\n%s", heldOutput)
+	}
+
+	handoffPath := filepath.Join(resolveAetherRootPath(), ".aether", "HANDOFF.md")
+	if err := os.MkdirAll(filepath.Dir(handoffPath), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(handoffPath, []byte("# handoff\n"), 0644); err != nil {
+		t.Fatalf("write handoff: %v", err)
+	}
 
 	// Non-final case
 	nonFinalOutput := renderContinueVisual(state, phase, nil, false, &colony.Phase{ID: 2, Name: "Next"}, nil, colony.VerificationDepthLight)

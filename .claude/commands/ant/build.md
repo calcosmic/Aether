@@ -305,18 +305,22 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion
 
 ## After the Build
 
-🐜 A build that nobody looks at again was wasted effort.
+🐜 A build that nobody looks at again was wasted effort — and the next move is the user's, never the wrapper's.
 
-**Purpose:** Hand the user back a clear picture of what moved and where to go next, using the runtime's own closeout as the source of truth.
+**Purpose:** Hand the user back a clear picture of what moved, then ask what happens next as a real choice. The wrapper never rolls into verification on its own.
 
-**Reads:** the visual closeout rendered in Finalize.
+**Reads:** the visual closeout rendered in Finalize (including its Colony State and Handoff sections).
 
 1. Use the visual closeout's next-step line as the source of truth.
-2. Summarize what moved forward and which workers/castes ran.
-3. Note the most relevant signal or risk.
-4. Guide the user first to `/ant-continue`.
+2. Summarize in plain language what moved forward, which workers/castes ran, and the most relevant signal or risk.
+3. Then ask the user what to do next as a real multiple-choice question (the AskUserQuestion tool), with these options:
+   - "Verify and advance now" — runs `/ant-continue` (recommended; mark it so).
+   - "Stop here — safe to clear your context" — offer this option ONLY when the closeout's Handoff section actually said the handoff was saved; if it said "not confirmed" or "don't clear", replace this option with "Stop here (handoff not confirmed — don't clear your context)".
+   - "Add steering first" — `/ant-focus` or `/ant-redirect` before verification.
+   Run nothing until the user picks. If they pick stop, stop — report nothing further.
+4. Autopilot (`/ant-run`) is exempt: its auto-advance is runtime-owned and this stage never runs inside it.
 
-**Stop conditions:** None — this stage only reports.
+**Stop conditions:** the user has been asked and their pick executed (or nothing, if they chose to stop).
 
 ## Verification Depth
 

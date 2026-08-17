@@ -615,12 +615,18 @@ func detectPlatform() string {
 
 func renderContextClearGuidanceForPlatform(platform string) string {
 	// SEE criterion: never advise clearing context without confirming the
-	// handoff is actually on disk. The guidance names the saved file when it
-	// exists, and says so honestly when it does not.
-	confirmation := "It's safe to clear your context now."
-	if handoffPath := filepath.Join(resolveAetherRootPath(), ".aether", "HANDOFF.md"); fileExists(handoffPath) {
-		confirmation = "Handoff saved (.aether/HANDOFF.md) — safe to clear your context now."
+	// handoff is actually on disk. "Safe to clear" is a CLAIM — it may only
+	// appear when the handoff file verifiably exists; when it does not, the
+	// honest line is "don't clear yet", not a softer version of safe.
+	if handoffPath := filepath.Join(resolveAetherRootPath(), ".aether", "HANDOFF.md"); !fileExists(handoffPath) {
+		switch platform {
+		case "codex":
+			return "Handoff not confirmed on disk — don't clear your context yet. Run `aether status` first.\n"
+		default:
+			return "Handoff not confirmed on disk — don't clear your context yet. Run `/ant-status` first.\n"
+		}
 	}
+	confirmation := "Handoff saved (.aether/HANDOFF.md) — safe to clear your context now."
 	switch platform {
 	case "codex":
 		return confirmation + " Run `aether resume` to restore.\n"
@@ -1862,6 +1868,11 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 		b.WriteString(renderStageMarker("Next Phase"))
 		b.WriteString(fmt.Sprintf("Next phase ready: %d — %s\n", nextPhase.ID, nextPhase.Name))
 	}
+	// The classic end-of-phase footer: flags, steering signals with content
+	// and strength, and progress — the colony's whole picture at the moment
+	// you decide what to do next.
+	b.WriteString(renderStageMarker("Colony State"))
+	b.WriteString(renderPhaseEndFooter(state, phase.ID))
 	b.WriteString(renderNextUpVisual(nextUpSuggestionsForState(state)))
 	b.WriteString(renderContextClearGuidance())
 	return b.String()
@@ -3277,23 +3288,10 @@ func renderFlagsVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("flags"), "Flags"))
 	b.WriteString(visualDividerStr())
-	entries := flagEntriesValue(result["flags"])
-	if len(entries) == 0 {
-		b.WriteString("No flags found.\n")
-	} else {
-		b.WriteString(fmt.Sprintf("Flags: %d\n\n", len(entries)))
-		for _, entry := range entries {
-			status := "active"
-			if entry.Resolved {
-				status = "resolved"
-			}
-			b.WriteString(fmt.Sprintf("  - %s [%s/%s] %s", emptyFallback(entry.ID, "(no id)"), entry.Type, status, emptyFallback(entry.Description, "(no description)")))
-			if entry.Phase != nil && *entry.Phase > 0 {
-				b.WriteString(fmt.Sprintf("  phase %d", *entry.Phase))
-			}
-			b.WriteString("\n")
-		}
-	}
+	// The classic 🚩 renderer (written in the restoration round, finally
+	// wired): one line per flag with nested detail, triage counts, and the
+	// Iron Law reminder when blockers are open.
+	b.WriteString(renderFlagsTable(flagEntriesValue(result["flags"])))
 	b.WriteString(renderNextUp(
 		`Run `+"`aether flag \"...\"`"+` to create a new flag.`,
 		`Run `+"`aether flag-resolve --id <id>`"+` after a blocker or issue is handled.`,

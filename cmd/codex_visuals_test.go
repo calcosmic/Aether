@@ -2668,6 +2668,20 @@ func TestCodexVisualParity(t *testing.T) {
 	})
 
 	t.Run("ContextClearParity", func(t *testing.T) {
+		// The safe-to-clear claim is verified against a real handoff file,
+		// so this subtest supplies one — it must not depend on whichever
+		// store an earlier test happened to leave behind.
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		handoffPath := filepath.Join(resolveAetherRootPath(), ".aether", "HANDOFF.md")
+		if err := os.MkdirAll(filepath.Dir(handoffPath), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(handoffPath, []byte("# handoff\n"), 0644); err != nil {
+			t.Fatalf("write handoff: %v", err)
+		}
 		guidance := renderContextClearGuidance()
 		if !strings.Contains(guidance, "safe to clear") {
 			t.Errorf("renderContextClearGuidance() missing clear guidance: %s", guidance)
