@@ -20,6 +20,16 @@ type PendingDecision struct {
 	Resolved    bool   `json:"resolved"`
 	CreatedAt   string `json:"created_at"`
 	ResolvedAt  string `json:"resolved_at,omitempty"`
+	// HardConstraint marks a clarification whose answer must become a
+	// REDIRECT signal (a hard "never do this"). Typed per the
+	// prose-to-control-flow decision — the legacy ":hard" source suffix is
+	// still honored as a fallback, but new writers set this field.
+	HardConstraint bool `json:"hard_constraint,omitempty"`
+	// Grounding records what a composed question is BASED ON (the scan
+	// fact, state datum, or survey finding that motivated it). Required for
+	// wrapper-composed questions — a question that cannot cite its basis is
+	// the canned-question problem wearing a new coat.
+	Grounding string `json:"grounding,omitempty"`
 }
 
 // PendingDecisionFile is the JSON structure for pending-decisions.json.

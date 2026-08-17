@@ -1994,10 +1994,16 @@
     "name": "discuss",
     "short_description": "Surface intent clarifications before planning and record resolved answers",
     "flags": [
+      "add-question",
       "answer",
+      "category",
       "dry-run",
+      "grounding",
+      "hard",
       "max-questions",
-      "resolve"
+      "options",
+      "resolve",
+      "source"
     ],
     "parent_command": "",
     "has_subcommands": false,
