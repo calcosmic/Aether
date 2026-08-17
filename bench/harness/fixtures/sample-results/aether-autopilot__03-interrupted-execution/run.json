@@ -1,0 +1,45 @@
+{
+  "lane": "aether-autopilot",
+  "category": "03-interrupted-execution",
+  "repo": "gorilla/mux",
+  "starting_sha": "deadbeef0000000000000000000000000000beef",
+  "model": "claude-fixture-model",
+  "model_deviation": null,
+  "parallel_mode": "in-repo",
+  "parallel_mode_note": "worktree mode is disqualified until Phase 187",
+  "acceptance_pass": false,
+  "acceptance_status": 1,
+  "acceptance": {
+    "task_id": "03-interrupted-execution",
+    "pass": false,
+    "assertions": []
+  },
+  "tokens": {
+    "total_tokens": 6500,
+    "total_input_tokens": 6400,
+    "model_calls": 5,
+    "models": "claude-fixture-model",
+    "source": "session-transcript"
+  },
+  "cleanliness": {
+    "orphan_branches": 0,
+    "uncommitted_residue": 0,
+    "tool_internal_paths_count": 0,
+    "unnecessary_modifications": 2,
+    "cleanliness_score": 60
+  },
+  "operator": {
+    "scripted_inputs": 3,
+    "unscripted_inputs": 2,
+    "autonomous": false,
+    "wall_clock_seconds": 250,
+    "wait_seconds": 30,
+    "wall_clock_net_seconds": 220
+  },
+  "hallucinated_completion": "true",
+  "evidence": {
+    "transcripts_dir": "transcripts",
+    "operator_log_path": "operator-log.jsonl",
+    "acceptance_json_path": "acceptance.json"
+  }
+}
