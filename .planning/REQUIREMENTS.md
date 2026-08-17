@@ -37,21 +37,21 @@ Four independent researchers converged on the same thing: **most of this milesto
 
 Enforcement lands before capability: parent/depth linkage is recorded at spawn time and cannot be retrofitted.
 
-- [ ] **SPAWN-01**: `spawn-can-spawn` refuses at a configured depth — a specific test proves it returns `can_spawn: false`, which it has never done
-- [ ] **SPAWN-02**: A spawned child records its true depth; `spawn-tree-depth` returns a non-zero value for a nested tree
-- [ ] **SPAWN-03**: A whole-tree worker budget stops a run that stays within the depth limit — depth alone is not a budget, and a 2-deep 8-wide tree is 72 workers
-- [ ] **SPAWN-04**: A `PreToolUse` hook lets the Go runtime deny a spawn before the platform executes it, and denies when it cannot resolve the requester's depth (fail closed)
-- [ ] **SPAWN-05**: The runtime detects ancestor-chain repetition (a caste spawning itself on the same task) and refuses — the real hazard, since a spawn tree cannot contain a cycle
-- [ ] **SPAWN-06**: *(Decision)* A written decision records what depth 0 means, resolving the inconsistency present in the repo today
-- [ ] **SPAWN-07**: The operator can see a delegation tree as it grows — a runaway subtree is visible while running, not discovered on the bill
-- [ ] **SPAWN-08**: An abandoned child worker is reaped and its budget released, and the operator has a command to see and clear orphans — an orphan wastes money once and then progressively locks the colony out of spawning as the tree budget fills with ghosts
+- [x] **SPAWN-01**: `spawn-can-spawn` refuses at a configured depth — a specific test proves it returns `can_spawn: false`, which it has never done
+- [x] **SPAWN-02**: A spawned child records its true depth; `spawn-tree-depth` returns a non-zero value for a nested tree
+- [x] **SPAWN-03**: A whole-tree worker budget stops a run that stays within the depth limit — depth alone is not a budget, and a 2-deep 8-wide tree is 72 workers
+- [x] **SPAWN-04**: A `PreToolUse` hook lets the Go runtime deny a spawn before the platform executes it, and denies when it cannot resolve the requester's depth (fail closed)
+- [x] **SPAWN-05**: The runtime detects ancestor-chain repetition (a caste spawning itself on the same task) and refuses — the real hazard, since a spawn tree cannot contain a cycle
+- [x] **SPAWN-06**: *(Decision)* A written decision records what depth 0 means, resolving the inconsistency present in the repo today
+- [x] **SPAWN-07**: The operator can see a delegation tree as it grows — a runaway subtree is visible while running, not discovered on the bill
+- [x] **SPAWN-08**: An abandoned child worker is reaped and its budget released, and the operator has a command to see and clear orphans — an orphan wastes money once and then progressively locks the colony out of spawning as the tree budget fills with ghosts
 
 ## Spend Ledger (SPEND)
 
-- [ ] **SPEND-01**: Worker token usage persists beyond the process and is readable after a run
+- [x] **SPEND-01**: Worker token usage persists beyond the process and is readable after a run
 - [ ] **SPEND-02**: The wrapper path reports token usage — today `codexExternalBuildWorkerResult` has no usage field, so the path an operator actually runs measures nothing
-- [ ] **SPEND-03**: A total includes cache-read and cache-creation tokens — the counts are disjoint, and deriving `input + output` undercounted a real run by 186x
-- [ ] **SPEND-04**: A run that produced no provider figure appears in the ledger tagged as an estimate, and cannot be read as a measurement
+- [x] **SPEND-03**: A total includes cache-read and cache-creation tokens — the counts are disjoint, and deriving `input + output` undercounted a real run by 186x
+- [x] **SPEND-04**: A run that produced no provider figure appears in the ledger tagged as an estimate, and cannot be read as a measurement
 - [ ] **SPEND-05**: Nested child spend rolls up to its parent, so a delegating worker's true cost is visible — parent attribution per row and a no-double-count invariant; the full self/subtree dual-column view is deferred until worker delegation exists (Phase 177)
 - [ ] **SPEND-06**: `aether spend` reports per-worker tokens and tool calls for the current run, mutating nothing — dollars never headline and no model-price table is ever built; USD appears only where the provider itself reported it, labelled as hypothetical API price *(reworded 2026-08-13: the owner is on subscription billing — tokens are the unit that draws their limits)*
 - [ ] **SPEND-07**: No figure in the spend report derives from a character budget, and documentation stops naming a character budget a "Token Budget" — a dashboard fed by `colonyPrimeBudgetChars` can go green while real cost is unchanged, which is how the 186x undercount stayed invisible
@@ -59,9 +59,9 @@ Enforcement lands before capability: parent/depth linkage is recorded at spawn t
 
 ## Orchestration Visibility (SEEN)
 
-- [ ] **SEEN-01**: The operator can see which workers the Queen chose and why, in plain English, before they spawn
-- [ ] **SEEN-02**: When the runtime overrides the Queen's choice — restoring a required caste, trimming to budget — the override and its reason are stated, not applied silently
-- [ ] **SEEN-03**: A worker that returned no actionable finding is distinguishable in the run summary from one that did
+- [x] **SEEN-01**: The operator can see which workers the Queen chose and why, in plain English, before they spawn
+- [x] **SEEN-02**: When the runtime overrides the Queen's choice — restoring a required caste, trimming to budget — the override and its reason are stated, not applied silently
+- [x] **SEEN-03**: A worker that returned no actionable finding is distinguishable in the run summary from one that did
 
 ## Agent Roster (ROSTER) — reshaped 2026-08-13
 
@@ -83,7 +83,7 @@ Phase 173 built the complete guard system and deliberately granted nothing. Thes
 Security lands in this phase, not a phase later.
 
 - [ ] **SKILL-01**: The unreferenced skill-lifecycle commands either have a caller or are removed — 8 of 9 reach nobody today
-- [ ] **SKILL-02**: Skill selection cannot be won by filename — an alphabetical tiebreak currently lets one broad `aaa-*` skill evict three shipped skills from every worker prompt
+- [x] **SKILL-02**: Skill selection cannot be won by filename — an alphabetical tiebreak currently lets one broad `aaa-*` skill evict three shipped skills from every worker prompt
 - [ ] **SKILL-03**: Skill validation runs on the Claude path — `/ant-skill-create` currently hand-writes `SKILL.md` and bypasses `aether skill-create`, so validation would protect Codex users only
 - [ ] **SKILL-04**: A skill that fails validation is reported with the file and reason, not silently dropped
 
@@ -144,41 +144,43 @@ SKILL security inside the skill phase → PROOF last.
 | WIRE-01 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
 | WIRE-02 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
 | WIRE-03 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
-| SPAWN-01 | Phase 173 | Delegation Guard | Pending |
-| SPAWN-02 | Phase 173 | Delegation Guard | Pending |
-| SPAWN-03 | Phase 173 | Delegation Guard | Pending |
-| SPAWN-04 | Phase 173 | Delegation Guard | Pending |
-| SPAWN-05 | Phase 173 | Delegation Guard | Pending |
-| SPAWN-06 | Phase 173 | Delegation Guard *(decision, not build)* | Pending |
-| SPAWN-07 | Phase 173 | Delegation Guard | Pending |
-| SPAWN-08 | Phase 173 | Delegation Guard | Pending |
-| SPEND-01 | Phase 174 | Spend Ledger | Pending |
-| SPEND-02 | Phase 174 | Spend Ledger | Pending |
-| SPEND-03 | Phase 174 | Spend Ledger | Pending |
-| SPEND-04 | Phase 174 | Spend Ledger | Pending |
-| SPEND-05 | Phase 174 | Spend Ledger | Pending |
-| SPEND-06 | Phase 174 | Spend Ledger | Pending |
-| SPEND-07 | Phase 174 | Spend Ledger | Pending |
-| SPEND-08 | Phase 174 | Spend Ledger | Pending |
-| SEEN-01 | Phase 175 | Orchestration Visibility | Pending |
-| SEEN-02 | Phase 175 | Orchestration Visibility | Pending |
-| SEEN-03 | Phase 175 | Orchestration Visibility | Pending |
-| ROSTER-01 | Phase 176 | Roster Ruling | Pending |
-| ROSTER-02 | Phase 176 | Roster Ruling | Pending |
+| SPAWN-01 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
+| SPAWN-02 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
+| SPAWN-03 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
+| SPAWN-04 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
+| SPAWN-05 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
+| SPAWN-06 | Phase 173 | Delegation Guard *(decision, not build)* | Satisfied (2026-08-13) |
+| SPAWN-07 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
+| SPAWN-08 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
+| SPEND-01 | Phase 174 | Spend Ledger (plans 01–02) | Satisfied (2026-08-14) |
+| SPEND-02 | Phase 185 | Remapped 2026-08-17 (wrapper-path usage for the cost line) | Pending |
+| SPEND-03 | Phase 174 | Spend Ledger (plans 01–02) | Satisfied (2026-08-14) |
+| SPEND-04 | Phase 174 | Spend Ledger (plans 01–02) | Satisfied (2026-08-14) |
+| SPEND-05 | — | Cut 2026-08-14 (needs cut Phase 177) | Dropped |
+| SPEND-06 | — | Cut 2026-08-14 (no inspection command — ruling stands) | Dropped |
+| SPEND-07 | Phase 185 | Merged 2026-08-17 into criterion 3 | Pending |
+| SPEND-08 | Phase 185 | One Honest Cost Line | Pending |
+| SEEN-01 | Phase 175 | Orchestration Visibility | Satisfied (2026-08-16) |
+| SEEN-02 | Phase 175 | Orchestration Visibility | Satisfied (2026-08-16) |
+| SEEN-03 | Phase 175 | Orchestration Visibility | Satisfied (2026-08-16) |
+| ROSTER-01 | Phase 191 | Remapped 2026-08-17 (ruling-by-deletion, Dead Wood) | Pending |
+| ROSTER-02 | Phase 191 | Remapped 2026-08-17 (ruling-by-deletion, Dead Wood) | Pending |
 | ROSTER-03 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
 | ROSTER-04 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
 | ROSTER-05 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
 | ROSTER-06 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
 | ROSTER-07 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
 | ROSTER-08 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
-| SPAWN-09 | Phase 177 | Worker Delegation Grant | Pending |
-| SPAWN-10 | Phase 177 | Worker Delegation Grant | Pending |
-| SPAWN-11 | Phase 177 | Worker Delegation Grant | Pending |
-| SKILL-01 | Phase 178 | Skill Authoring Hardening | Pending |
-| SKILL-02 | Phase 178 | Skill Authoring Hardening | Pending |
-| SKILL-03 | Phase 178 | Skill Authoring Hardening | Pending |
-| SKILL-04 | Phase 178 | Skill Authoring Hardening | Pending |
-| PROOF-01 | Phase 179 | Proof | Pending |
-| PROOF-02 | Phase 179 | Proof | Pending |
-| PROOF-03 | Phase 179 | Proof | Pending |
-| PROOF-04 | Phase 179 | Proof | Pending |
+| SPAWN-09 | — | Cut 2026-08-14 with Phase 177 (cut stands) | Dropped |
+| SPAWN-10 | — | Cut 2026-08-14 with Phase 177 (cut stands) | Dropped |
+| SPAWN-11 | — | Cut 2026-08-14 with Phase 177 (cut stands) | Dropped |
+| SKILL-01 | Phase 191 | Remapped 2026-08-17 (caller-or-removal, Dead Wood) | Pending |
+| SKILL-02 | Phase 181 | Delivered by the 2026-08-14 tiebreak fix | Satisfied (2026-08-14) |
+| SKILL-03 | — | Deferred 2026-08-17 (off the golden path) | Deferred |
+| SKILL-04 | — | Deferred 2026-08-17 (off the golden path) | Deferred |
+| PROOF-01 | Phases 186+192 | Remapped 2026-08-17 (comparative benchmark) | Pending |
+| PROOF-02 | Phase 192 | Remapped 2026-08-17 (Final Showdown) | Pending |
+| PROOF-03 | Phases 186+192 | Remapped 2026-08-17 (harness-side measurement) | Pending |
+| PROOF-04 | Phases 186+192 | Remapped 2026-08-17 (interrupt category) | Pending |
+
+*Reconciled 2026-08-17 (Audit Addendum): the body checkboxes above and this table were stale against ROADMAP.md — phases 173 and 175 completed with their requirements unticked. Statuses now reflect roadmap truth; remapped rows point at the Audit Addendum phases in ROADMAP.md.*

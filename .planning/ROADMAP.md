@@ -900,6 +900,53 @@ context part-way costs one phase, not the sequence.
   5. *(Added 2026-08-13 — measurement gains a consumer)* The before/after token record from criterion 3 is **acted on**: a written, dated retune decision either adjusts the Phase 173 defaults (depth cap, whole-run budget, team-size floors) with the measurement cited, or records why they stand unchanged. Measurement without a consumer is the gap the reshape review named; this criterion closes it without adding a phase
 **Sequencing note (2026-08-13)**: only criterion 3 depends on Phase 174; criteria 1, 2 and 4 depend on nothing in 175-178 and may be run early if the operator wants proof sooner.
 **Plans**: TBD
+**REMAPPED 2026-08-17**: Phase 179 is superseded by the Audit Addendum below. Its intent (real-task proof, PROOF-01..04) splits into Phase 186 (light comparative baseline) and Phase 192 (full showdown, which carries criteria 2, 4 and 5). Criterion 3's reference to `aether spend` — a command cut with SPEND-06 — is reconciled: tokens are measured harness-side from provider usage, and the Phase 185 cost line is validated against that measurement. Do not plan Phase 179 directly.
+
+## Audit Addendum (added 2026-08-17)
+
+Phases 186–192 close milestone v1.26. Source: the 2026-08-17 truth audit + hostile falsification review (frozen target of 12 outcome-level requirements; full programme in the approved implementation plan). Governing decisions: light comparative baseline before code changes, full 3-repeat benchmark at the finish line; BOTH Aether lanes (interactive and `/ant-run`) must be ≥ GSD; auxiliary commands (`/ant-oracle`, `/ant-dream`, chaos, archaeology, swarm, council) are preserved — simplification touches only the main lifecycle path.
+
+### Phase 186: Baseline Showdown (Light)
+**Goal**: An Aether-vs-GSD benchmark exists and a light baseline (4 task categories × 3 lanes × 1 run = 12 runs) is committed with raw evidence. Two neutral pinned OSS repos (1 Go, 1 TS); hermetic HOME per lane; one pinned model both systems; scripted operator protocol; deterministic acceptance scripts written before runs; tokens measured harness-side from provider usage.
+**Depends on**: nothing — deliberately before all code changes.
+**Requirements**: PROOF-01, PROOF-03 (remapped)
+**Success Criteria**: (1) `bench/` committed and one documented command reproduces a run; (2) `bench/results/<date>/` holds 12 transcripts + operator logs + a results table with autonomous success rate, interventions and tokens per lane; (3) acceptance scripts predate run timestamps; (4) a read-only `aether build --print-brief --full` capture from a real mid-project colony is committed; (5) first milestone before any task specs: a hermetic profile boots, authenticates and completes one trivial task in both systems.
+**Stop-check**: no numbers within one week of harness work → cut harness scope, never grow it.
+
+### Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
+**Goal**: No Aether command ever deletes unmerged or dirty work; worktree merge works outside Go repos.
+**Depends on**: 186.
+**Success Criteria**: (1) fail-then-pass test: kill between dispatch and finalize → resume → work still present and surfaced with a named command (`gcOrphanedWorktrees` refuses/stashes dirty or unmerged worktrees and defers destruction to recover's scanner); (2) a worktree-mode build completes in a non-Go fixture repo (merge gate and `worktree-merge-back` use `resolveTestCommand()`, not hard-coded `go test ./...`); (3) `mergePhaseWorktrees` gains real-path tests.
+
+### Phase 188: One Truth for Failures and Advances
+**Goal**: One failure ledger; one phase-advance discipline; every retry loop leaves a record.
+**Depends on**: 186.
+**Success Criteria**: (1) a failure written by any component is read by colony-prime, autopilot, immune and memory-health (midden path unified); (2) both continue paths advance through one shared `advancePhase()` with the supersession check; (3) ungated `state-mutate --field current_phase` is refused; (4) grep-ratchet against non-atomic COLONY_STATE writes; (5) an exhausted retry loop leaves a readable record of what was tried; (6) a loud warning is logged when build-finalize accepts a legacy unbound manifest.
+
+### Phase 189: Complete Worker Contract
+**Goal**: Every worker sees its full task and the output contract the finalizer enforces; reviewers get the same context on every path.
+**Depends on**: 186. Plan as ≥2 plans (build-side contract; reviewer parity).
+**Success Criteria**: (1) the brief for a merged dispatch contains every covered task's constraints and success criteria; (2) the brief contains the handoff/return schema the finalizer enforces; (3) continue's external dispatches carry capsule, skill and pheromone sections and the wrappers (all three platforms, parity-tested) instruct their delivery.
+
+### Phase 190: Lean, Non-Duplicated Delivery
+**Goal**: No context section delivered twice; briefs stop transiting the orchestrator byte-for-byte.
+**Depends on**: 189.
+**Success Criteria**: (1) plan-only manifests carry `brief_path` to files on disk and the wrapper passes paths (build.md prose updated to match); (2) `--print-brief` asserts zero duplicated sections (pheromones and handoffs get one home each); (3) TS-host hive double-injection removed (build path and continue dry-run `hive_section`); (4) orchestrator-relay byte count measurably drops.
+
+### Phase 191: Dead Wood
+**Goal**: Nothing remains that claims to define behaviour while defining nothing. Delivers ROSTER-01/02 and SKILL-01 as rulings-by-deletion.
+**Depends on**: 186 (independent of 187–190).
+**Success Criteria**: (1) zero-reader configs deleted (`colony/agents/*.yaml`, `colony/phases/*.yaml`, `model-routing.yaml`, `autopilot.yaml`, `memory-rules.yaml`) with grep-ratchets against reappearance; (2) the four CWD-relative silent-fallback loaders resolved: each diffed against its compiled default, divergent values folded into the defaults, then files deleted — dev-checkout ceremony/visual output byte-identical before and after; (3) dead code removed (`pkg/trace/cost.go` + unconstructed pool path, `session-verify-fresh`, `newLearningValidator`, unreferenced skill-lifecycle commands); (4) false docs corrected (workers.md:825, CLAUDE.md trim-order and host-build claims); (5) `oracle-phase-directives.yaml` and all auxiliary commands untouched — `/ant-oracle` and `/ant-dream` smoke-pass.
+
+### Phase 192: Final Showdown
+**Goal**: The full benchmark (4 categories × 3 repeats × 3 lanes) with the acceptance gate applied. v1.26 completes only if the gate passes — not when implementation tasks are done.
+**Depends on**: 185, 187–191.
+**Requirements**: PROOF-01, PROOF-02, PROOF-03, PROOF-04 (remapped)
+**Success Criteria**: (1) both Aether lanes' success count within one run of GSD's or better (the honest tie rule at n=12 per lane); (2) guardrails hold — median tokens per successful task ≤ 1.5× GSD's (provisional, owner-ratified against 186 data), unscripted interventions ≤ GSD's, hallucinated completions = 0, recovery failures = 0, git cleanliness not worse than GSD, target-project history clean; (3) evidence committed favourable or not, reproducible via one command; (4) each frozen outcome 1–12 backed by a named test or committed artifact; (5) the Phase 185 cost line validated against harness-side usage; (6) dated retune decision consuming the measurements (Phase 173 defaults adjusted or affirmed); (7) Aether repo `git status` clean after downstream runs; (8) v1.26 closure paperwork (MILESTONES.md entry, archives).
+
+**Accepted residue (decisions, not oversights)**: the legacy unbound-manifest branch in attempt binding stays (loud warning added in 188); the build-time orchestrator-boundary gate stays prose-only (seal's finalizer backstops it).
+
+**Conditional phases 193+**: not planned. Adaptive Queen extensions, learning-intake wiring, instinct-application recording, semantic cross-store dedup, curation cadence, UX/dashboard work — each only with a stated hypothesis about which benchmark number it moves, triggered by the showdown failing (or one pre-showdown insertion if the light baseline exposes a doomed lane; likeliest candidate: autopilot consulting the same Queen judgement path interactive builds use). Maximum two remediation phases programme-wide. Showdown passes → stop building.
 
 ## Progress
 
@@ -907,11 +954,11 @@ context part-way costs one phase, not the sequence.
 
 Shipped: 145 → … → 172 → 173 → 174 *(closed partial at plan 2 of 9)*
 
-Remaining, in this order — **not** numeric order:
+Remaining, in this order — **not** numeric order (revised 2026-08-17, Audit Addendum):
 
-**180** → **181** → **182** → **183** → **184** → **185** → **175** → **179**
+**186** → **187** → **188** → **189** → **190** → **191** → **185** → **192**
 
-180–184 are the hardening phases and each is independently completable; 180/182/183/184 have no dependencies on each other and may run in any order if that suits. 185 is the rescued cost line. 175 is the plain-English explanation of who was dispatched and why. 179 is the finish line — real tasks in real repositories on an inexpensive model.
+186 is the light comparative baseline and runs before any code change. 187–191 are the audit fix phases — 187, 188, 189→190 and 191 are independent chains after 186. 185 is the rescued cost line, sequenced after 190 so it reports the leaner delivery. 192 is the finish line — the full benchmark with the acceptance gate; 179 is remapped into 186+192 and must not be planned directly. (The 2026-08-14 hardening order completed through 175 on 2026-08-16.)
 
 **Cut 2026-08-14 by owner decision:** 176 (Roster Ruling), 177 (Worker Delegation Grant), 178 (Skill Authoring Hardening), and Phase 174 plans 03–07 and 09. Rationale in `.planning/HARDENING-PLAN.md`. Never-started v1.25 phases 161 and 166–171 remain not started.
 
@@ -955,6 +1002,13 @@ Remaining, in this order — **not** numeric order:
 | 182. Specialists Earn Their Seat | v1.26 | 1/1 | **Complete** | 2026-08-15 |
 | 183. The Worker Limit Actually Limits | v1.26 | 1/1 | **Complete (partial)** | 2026-08-15 |
 | 184. One Worker Owns A Run Of File Work | v1.26 | 1/1 | **Complete** | 2026-08-15 |
-| **185. One Honest Cost Line** | v1.26 | 0/TBD | **Next** | - |
+| 185. One Honest Cost Line | v1.26 | 0/TBD | Queued (after 190) | - |
 | 175. Orchestration Visibility | v1.26 | 1/1 | **Complete** | 2026-08-16 |
-| 179. Proof | v1.26 | 0/TBD | Not started | - |
+| 179. Proof | v1.26 | — | **Remapped → 186 + 192** (2026-08-17) | - |
+| **186. Baseline Showdown (Light)** | v1.26 | 0/TBD | **Next** | - |
+| 187. Crash-Safe Worktrees & Ecosystem Neutrality | v1.26 | 0/TBD | Not started | - |
+| 188. One Truth for Failures and Advances | v1.26 | 0/TBD | Not started | - |
+| 189. Complete Worker Contract | v1.26 | 0/TBD | Not started | - |
+| 190. Lean, Non-Duplicated Delivery | v1.26 | 0/TBD | Not started | - |
+| 191. Dead Wood | v1.26 | 0/TBD | Not started | - |
+| 192. Final Showdown | v1.26 | 0/TBD | Not started | - |

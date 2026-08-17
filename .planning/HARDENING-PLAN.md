@@ -230,6 +230,19 @@ real project.
 using it annoys someone. Everything currently on the roadmap beyond this list
 is the system improving itself for its own benefit.
 
+**Addendum 2026-08-17 (Audit Addendum — this extends the list above, it does
+not replace it).** A full audit plus a hostile falsification review of that
+audit found H1–H5 and 175 delivered, and found eleven verified defects on the
+main path — the worst being that resuming after a crash can delete unfinished
+work sitting in isolated working copies. The finish line now reads: the three
+conditions above, **plus** the audit fix phases 187–191, the cost line (185),
+and Phase 192 — the full Aether-vs-GSD benchmark, which replaces Phase 179 as
+the confirming evidence (Phase 186 records the light baseline first, before
+any code changes). The stop rule is unchanged: when Phase 192's gate passes,
+we stop building. Details and per-phase criteria live in ROADMAP.md under
+"Audit Addendum"; the frozen outcome list lives in the approved implementation
+plan of the same date.
+
 ---
 
 ## Why we are keeping GSD

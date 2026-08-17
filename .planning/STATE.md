@@ -3,22 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
 status: executing
-stopped_at: Phase 174 closed partial; phases 176-178 cut; hardening phases 180-185 added
-last_updated: "2026-08-14T00:00:00.000Z"
-last_activity: 2026-08-14 -- roadmap rescoped by owner decision; Phase 180 is next
+stopped_at: Audit Addendum adopted (phases 186-192); Phase 186 Baseline Showdown is next
+last_updated: "2026-08-17T00:00:00.000Z"
+last_activity: 2026-08-17 -- truth audit + hostile review complete; implementation programme approved; setup reconciliation done
 progress:
-  total_phases: 11
-  completed_phases: 3
-  total_plans: 29
-  completed_plans: 29
-  percent: 27
+  total_phases: 16
+  completed_phases: 9
+  total_plans: 33
+  completed_plans: 33
+  percent: 56
   note: >
-    Counts cover milestone v1.26 only (phases 172, 173, 174, 180-185, 175, 179).
-    174 counts as complete because it is closed partial and will not be resumed;
-    2 of its 9 plans shipped, the rest were cut. The previous values in this
-    block were self-contradictory (2 of 38 phases at 100%; 82 plans completed
-    out of a total of 36) and were reporting on a phase set that no longer
-    exists.
+    Counts cover milestone v1.26 (phases 172, 173, 174, 180-184, 175, 185,
+    186-192; 179 remapped into 186+192). Complete: 172, 173, 174 (closed
+    partial, will not be resumed), 175, 180, 181, 182, 183, 184. Remaining:
+    186, 187, 188, 189, 190, 191, 185, 192 — in that order. This file went
+    stale 2026-08-14..17 while ROADMAP.md was maintained; reconciled 2026-08-17.
 ---
 
 # Project State
@@ -28,27 +27,36 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-08)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 180 — keep Aether's own internals out of other people's projects
-**Milestone:** v1.26 — rescoped 2026-08-14 from "Intelligent Orchestration" to hardening. The governing document is now `.planning/HARDENING-PLAN.md`; it overrides ROADMAP.md for anything numbered 175 and above.
+**Current focus:** Phase 186 — Baseline Showdown (Light): the Aether-vs-GSD benchmark, run before any code changes
+**Milestone:** v1.26 — hardening (rescoped 2026-08-14) plus the Audit Addendum (2026-08-17, phases 186-192). Governing documents: `.planning/HARDENING-PLAN.md` (with its 2026-08-17 addendum) and ROADMAP.md's "Audit Addendum" section; the frozen 12-outcome target lives in the approved implementation plan of 2026-08-17.
 **Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases)
-**Product version:** v1.0.53 *(corrected — this file said v1.0.50, PROJECT.md says v1.0.42, the binary reports 1.0.53; the binary is authoritative)*
+**Product version:** v1.0.58 (binary is authoritative)
 
 ## Current Position
 
-Phase: 180 — Aether Stays Out Of Other People's Projects
+Phase: 186 — Baseline Showdown (Light)
 Plan: not yet planned
 Status: ready to plan
-Progress: 3 of 11 phases in this milestone
-Last activity: 2026-08-14 -- roadmap rescoped by owner decision
+Progress: 9 of 16 phases in this milestone
+Last activity: 2026-08-17 -- audit programme setup complete (roadmap addendum, requirement reconciliation, checkpoint tag `pre-audit-addendum`)
 
-**Order from here:** 180 → 181 → 182 → 183 → 184 → 185 → 175 → 179.
-Each of 180-184 is independently completable and independently verifiable, so
-losing context part-way costs one phase, not the sequence.
+**Order from here:** 186 → 187 → 188 → 189 → 190 → 191 → 185 → 192.
+186 first, before any code change — it records the baseline everything else is
+measured against. 187, 188, 189→190 and 191 are independent after 186. 192 is
+the full benchmark with the acceptance gate; the milestone completes only when
+that gate passes, not when the tasks are done.
 
-**The finish line (from HARDENING-PLAN.md):** a small job costs one or two
-workers and finishes in minutes; one screen says who was dispatched, why, and
-what it cost; Aether never sends its own internals into someone else's project.
-When those are true, building stops.
+**The finish line (HARDENING-PLAN.md + 2026-08-17 addendum):** a small job
+costs one or two workers and finishes in minutes; one screen says who was
+dispatched, why, and what it cost; Aether never sends its own internals into
+someone else's project; the audit fix phases land; and the full benchmark
+shows both Aether lanes at least as good as GSD without brute-forcing tokens.
+When Phase 192's gate passes, building stops.
+
+**Owner constraints (2026-08-17):** auxiliary commands stay (/ant-oracle,
+/ant-dream, chaos, archaeology, swarm, council...); simplification touches
+only the main lifecycle path. Both Aether lanes (interactive and /ant-run)
+must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 
 ## Performance Metrics
 
@@ -94,15 +102,18 @@ When those are true, building stops.
 - [x] Plan Phase 172: Wiring Proof — shipped
 - [x] Plan Phase 173: Delegation Guard — shipped
 - [x] Plan Phase 174: Spend Ledger — closed partial at plan 2, rest cut
-- [ ] Plan Phase 180: Aether Stays Out Of Other People's Projects ← **next**
-- [ ] Plan Phase 181: Reading Material Chosen By The Task
-- [ ] Plan Phase 182: Specialists Earn Their Seat
-- [ ] Plan Phase 183: The Worker Limit Actually Limits
-- [ ] Plan Phase 184: One Worker Owns A Run Of File Work
-- [ ] Plan Phase 185: One Honest Cost Line
-- [ ] Plan Phase 175: Orchestration Visibility
-- [ ] Plan Phase 179: Proof
-- ~~Plan Phases 176, 177, 178~~ — cut 2026-08-14
+- [x] Phases 180–184: hardening fixes — shipped 2026-08-14/15 (v1.0.54)
+- [x] Phase 175: Orchestration Visibility — shipped 2026-08-16 (outside the phase system; SHIP-PROGRESS Item 3)
+- [x] Truth audit + hostile review + implementation programme approved — 2026-08-17
+- [ ] Plan Phase 186: Baseline Showdown (Light) ← **next**
+- [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
+- [ ] Plan Phase 188: One Truth for Failures and Advances
+- [ ] Plan Phase 189: Complete Worker Contract (≥2 plans)
+- [ ] Plan Phase 190: Lean, Non-Duplicated Delivery
+- [ ] Plan Phase 191: Dead Wood
+- [ ] Plan Phase 185: One Honest Cost Line (after 190)
+- [ ] Plan Phase 192: Final Showdown
+- ~~Plan Phases 176, 177, 178~~ — cut 2026-08-14; ~~Phase 179~~ — remapped 2026-08-17 into 186+192
 
 ### Blockers/Concerns
 
