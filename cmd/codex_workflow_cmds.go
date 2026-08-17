@@ -377,10 +377,11 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
+		forceFlag, _ := cmd.Flags().GetBool("force")
+		forceReason, _ := cmd.Flags().GetString("reason")
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		if planOnly {
-			forceFlag, _ := cmd.Flags().GetBool("force")
-			result, err := runSealPlanOnly(resolveAetherRootPath(), forceFlag)
+			result, err := runSealPlanOnly(resolveAetherRootPath(), forceFlag, forceReason)
 			if err != nil {
 				renderRecoveryMenu("seal", err.Error(), nil)
 				return nil
@@ -389,27 +390,20 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
-		state, err := loadActiveColonyState()
+		// The same readiness rules as the heavy path: with --force the
+		// all-phases-completed rule becomes an owner override (recorded
+		// with a reason), because sometimes the work was finished OUTSIDE
+		// the colony, or the colony is wedged on its own gates, and the
+		// owner's call to file the project away must win.
+		state, incompletePhases, err := validateSealReady(forceFlag)
 		if err != nil {
-			renderRecoveryMenu("seal", colonyStateLoadMessage(err), nil)
+			renderRecoveryMenu("seal", err.Error(), nil)
 			return nil
-		}
-		if len(state.Plan.Phases) == 0 {
-			renderRecoveryMenu("seal", "No project plan. Run `aether plan` first.", nil)
-			return nil
-		}
-
-		for _, phase := range state.Plan.Phases {
-			if phase.Status != colony.PhaseCompleted {
-				renderRecoveryMenu("seal", "all phases must be completed before sealing the colony", nil)
-				return nil
-			}
 		}
 
 		// Check for blocker-severity flags
 		blockers, issues := checkSealBlockers(store)
 		if len(blockers) > 0 {
-			forceFlag, _ := cmd.Flags().GetBool("force")
 			if !forceFlag {
 				renderRecoveryMenu("seal", renderBlockerSummary(blockers, issues), nil)
 				return nil
@@ -420,11 +414,33 @@ var sealCmd = &cobra.Command{
 			visualFprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
 		}
 
-		return completeSealRuntime(state)
+		override := sealOverride{Forced: forceFlag, Reason: strings.TrimSpace(forceReason), IncompletePhases: incompletePhases, OverriddenBlockers: len(blockers)}
+		if forceFlag && (len(incompletePhases) > 0 || len(blockers) > 0) && override.Reason == "" {
+			renderRecoveryMenu("seal", fmt.Sprintf("force-sealing overrides %d unverified phase(s) and %d open blocker(s) — a reason is required so the override is recorded honestly: rerun with `--reason \"why\"`", len(incompletePhases), len(blockers)), nil)
+			return nil
+		}
+
+		return completeSealRuntime(state, override)
 	},
 }
 
-func completeSealRuntime(state colony.ColonyState) error {
+// sealOverride records what an owner-forced seal skipped — the honesty
+// payload the seal event, result, and CROWNED-ANTHILL.md all carry. A
+// forced seal is legitimate (work done outside the colony, a wedged gate);
+// a SILENT forced seal is not.
+type sealOverride struct {
+	Forced                 bool
+	Reason                 string
+	IncompletePhases       []string
+	OverriddenBlockers     int
+	OverriddenReviewBlocks int
+}
+
+func (o sealOverride) overrodeAnything() bool {
+	return o.Forced && (len(o.IncompletePhases) > 0 || o.OverriddenBlockers > 0 || o.OverriddenReviewBlocks > 0)
+}
+
+func completeSealRuntime(state colony.ColonyState, override sealOverride) error {
 	// Snapshot the instinct entries eligible for THIS seal's own local/hive
 	// promotion loop (D-08) before consolidation below decays trust scores
 	// and archives stale instincts. Consolidation's archival floor operates
@@ -558,7 +574,17 @@ func completeSealRuntime(state colony.ColonyState) error {
 	state.State = colony.StateCOMPLETED
 	state.Milestone = "Crowned Anthill"
 	state.MilestoneUpdatedAt = &now
-	state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|sealed|seal|Colony sealed at Crowned Anthill", now))
+	if override.overrodeAnything() {
+		// A forced seal is a real event in the colony's history, not a
+		// footnote: name what was skipped and why, so the Archaeologist and
+		// anyone reading history sees an honest record.
+		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf(
+			"%s|sealed_forced|seal|Colony force-sealed by owner (%d unverified phase(s), %d overridden blocker(s)): %s",
+			now, len(override.IncompletePhases), override.OverriddenBlockers+override.OverriddenReviewBlocks, override.Reason,
+		))
+	} else {
+		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|sealed|seal|Colony sealed at Crowned Anthill", now))
+	}
 
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		outputError(2, fmt.Sprintf("failed to save colony state: %v", err), nil)
@@ -593,6 +619,7 @@ func completeSealRuntime(state colony.ColonyState) error {
 		FinalReview:           finalReview,
 		ReviewBacklog:         reviewBacklog,
 		ConsolidationReport:   sealConsolidation.ReportPath,
+		Override:              override,
 	}
 
 	summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
@@ -627,6 +654,12 @@ func completeSealRuntime(state colony.ColonyState) error {
 		"milestone": state.Milestone,
 		"summary":   summaryPath,
 		"next":      "aether entomb",
+	}
+	if override.overrodeAnything() {
+		result["force_sealed"] = true
+		result["force_reason"] = override.Reason
+		result["unverified_phases"] = override.IncompletePhases
+		result["overridden_blockers"] = override.OverriddenBlockers + override.OverriddenReviewBlocks
 	}
 	addOrchestratorBoundaryGuidance(result, "seal", state, "aether entomb", nil)
 	outputWorkflow(result, renderSealVisual(state, summaryPath))
@@ -1104,6 +1137,9 @@ type sealEnrichment struct {
 	// report (LEARN-02, <.aether>/CURATION-REPORT.md), surfaced here so it
 	// is discoverable from CROWNED-ANTHILL.md as well as from stdout.
 	ConsolidationReport string
+	// Override carries the owner's force-seal record, when one happened —
+	// what was skipped and why, written into the summary permanently.
+	Override sealOverride
 }
 
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
@@ -1118,6 +1154,23 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 	b.WriteString(fmt.Sprintf("- Completed phases: %d\n", len(state.Plan.Phases)))
 	if state.CurrentPhase > 0 {
 		b.WriteString(fmt.Sprintf("- Final phase: %d\n", state.CurrentPhase))
+	}
+	if enrichment.Override.overrodeAnything() {
+		b.WriteString("\n## Owner Override (Force Seal)\n")
+		b.WriteString("This colony was sealed by an explicit owner decision, not by its own verification finishing.\n")
+		b.WriteString(fmt.Sprintf("- Reason: %s\n", enrichment.Override.Reason))
+		if len(enrichment.Override.IncompletePhases) > 0 {
+			b.WriteString(fmt.Sprintf("- Unverified phases (%d):\n", len(enrichment.Override.IncompletePhases)))
+			for _, name := range enrichment.Override.IncompletePhases {
+				b.WriteString("  - " + name + "\n")
+			}
+		}
+		if enrichment.Override.OverriddenBlockers > 0 {
+			b.WriteString(fmt.Sprintf("- Open blocker flags overridden: %d\n", enrichment.Override.OverriddenBlockers))
+		}
+		if enrichment.Override.OverriddenReviewBlocks > 0 {
+			b.WriteString(fmt.Sprintf("- Final-review blocking findings overridden: %d\n", enrichment.Override.OverriddenReviewBlocks))
+		}
 	}
 	// Add review warnings section if any high-severity open findings exist
 	if len(warnings) > 0 {
@@ -1316,7 +1369,8 @@ func init() {
 	continueFinalizeCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
-	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")
+	sealCmd.Flags().Bool("force", false, "Owner override: seal past unverified phases, open blockers, and review blocks (recorded; requires --reason when it overrides anything)")
+	sealCmd.Flags().String("reason", "", "Why the seal is being forced — recorded in the colony's history and CROWNED-ANTHILL.md")
 	sealCmd.Flags().Bool("plan-only", false, "Print the final seal review manifest without mutating colony state or spawning workers")
 	sealFinalizeCmd.Flags().String("completion-file", "", "JSON file containing seal_manifest and external review worker results")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")

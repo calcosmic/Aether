@@ -515,7 +515,7 @@ func TestSealFinalizeBlocksUnresolvedOrchestratorBoundaryGuidance(t *testing.T) 
 		t.Fatalf("save state: %v", err)
 	}
 
-	planResult, err := runSealPlanOnly(root, false)
+	planResult, err := runSealPlanOnly(root, false, "")
 	if err != nil {
 		t.Fatalf("runSealPlanOnly: %v", err)
 	}

@@ -149,7 +149,9 @@ func TestSealForceBlockers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, _ := runSealCmd(t, s, tmpDir, []string{"--force"})
+	// A force that overrides something now requires a written reason — the
+	// override is recorded, never waved through silently.
+	out, _ := runSealCmd(t, s, tmpDir, []string{"--force", "--reason", "issue tracked externally; shipping"})
 
 	// Should contain the warning about overriding
 	if !strings.Contains(out, "WARNING: Overriding") {

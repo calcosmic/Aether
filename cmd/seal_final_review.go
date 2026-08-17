@@ -113,6 +113,7 @@ type sealPlanManifest struct {
 	FinalizeSurface           string                          `json:"finalize_surface"`
 	FinalizerCommand          string                          `json:"finalizer_command"`
 	Force                     bool                            `json:"force,omitempty"`
+	ForceReason               string                          `json:"force_reason,omitempty"`
 	WorkerTimeout             int                             `json:"worker_timeout_seconds,omitempty"`
 	Dispatches                []codexContinueExternalDispatch `json:"dispatches"`
 	DispatchContract          map[string]interface{}          `json:"dispatch_contract,omitempty"`
@@ -230,17 +231,25 @@ func finalCompletedPhase(state colony.ColonyState) (colony.Phase, bool) {
 	return phase, phase.Status == colony.PhaseCompleted
 }
 
-func runSealPlanOnly(root string, force bool) (map[string]interface{}, error) {
+func runSealPlanOnly(root string, force bool, forceReason string) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
-	state, err := validateSealReady(force)
+	state, incompletePhases, err := validateSealReady(force)
 	if err != nil {
 		return nil, err
 	}
+	if force && len(incompletePhases) > 0 && strings.TrimSpace(forceReason) == "" {
+		return nil, fmt.Errorf("force-sealing past %d unverified phase(s) requires a reason — rerun with `--reason \"why\"` so the override is recorded honestly", len(incompletePhases))
+	}
 	phase, ok := finalCompletedPhase(state)
 	if !ok {
-		return nil, fmt.Errorf("no completed final phase found for seal review")
+		if !force {
+			return nil, fmt.Errorf("no completed final phase found for seal review")
+		}
+		// Force-seal of a colony whose final phase never completed: the
+		// review still needs a target, so it reviews the last phase as-is.
+		phase = state.Plan.Phases[len(state.Plan.Phases)-1]
 	}
 
 	now := time.Now().UTC()
@@ -270,6 +279,7 @@ func runSealPlanOnly(root string, force bool) (map[string]interface{}, error) {
 		FinalizeSurface:   "awaiting_wrapper_completion",
 		FinalizerCommand:  "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>",
 		Force:             force,
+		ForceReason:       strings.TrimSpace(forceReason),
 		WorkerTimeout:     int(effectiveContinueReviewTimeout(0) / time.Second),
 		Dispatches:        dispatches,
 		DispatchContract: map[string]interface{}{
@@ -335,24 +345,35 @@ func sealAfterDiscussNext(force bool) string {
 	return "aether seal"
 }
 
-func validateSealReady(force bool) (colony.ColonyState, error) {
+// validateSealReady checks the colony can seal. With force, the
+// all-phases-completed rule becomes an OWNER OVERRIDE instead of a refusal:
+// the unverified phases are returned so the seal records them honestly —
+// this is the escape hatch for work done outside the colony, or a colony
+// wedged on its own gates, when the owner wants to file the project away
+// and move on. Never silent: callers must pair a force that overrides
+// something with a written reason.
+func validateSealReady(force bool) (colony.ColonyState, []string, error) {
 	state, err := loadActiveColonyState()
 	if err != nil {
-		return state, fmt.Errorf("%s", colonyStateLoadMessage(err))
+		return state, nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 	if len(state.Plan.Phases) == 0 {
-		return state, fmt.Errorf("No project plan. Run `aether plan` first.")
+		return state, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
 	}
+	incomplete := []string{}
 	for _, phase := range state.Plan.Phases {
 		if phase.Status != colony.PhaseCompleted {
-			return state, fmt.Errorf("all phases must be completed before sealing the colony")
+			incomplete = append(incomplete, fmt.Sprintf("phase %d — %s (%s)", phase.ID, phase.Name, emptyFallback(string(phase.Status), "pending")))
 		}
+	}
+	if len(incomplete) > 0 && !force {
+		return state, incomplete, fmt.Errorf("all phases must be completed before sealing the colony — or, if the work was finished outside the colony or you want to move on anyway, seal with `aether seal --force --reason \"why\"` (records an owner override naming the %d unverified phase(s))", len(incomplete))
 	}
 	blockers, _ := checkSealBlockers(store)
 	if len(blockers) > 0 && !force {
-		return state, fmt.Errorf("%s", renderBlockerSummary(blockers, nil))
+		return state, incomplete, fmt.Errorf("%s", renderBlockerSummary(blockers, nil))
 	}
-	return state, nil
+	return state, incomplete, nil
 }
 
 func plannedExternalSealReviewDispatches(root string, state colony.ColonyState, phase colony.Phase, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codexContinueExternalDispatch {
@@ -397,16 +418,22 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 		return err
 	}
 
-	state, err := validateSealReady(manifest.Force)
+	state, incompletePhases, err := validateSealReady(manifest.Force)
 	if err != nil {
 		return err
+	}
+	if manifest.Force && (len(incompletePhases) > 0) && strings.TrimSpace(manifest.ForceReason) == "" {
+		return fmt.Errorf("force-sealing past %d unverified phase(s) requires a reason — rerun `aether seal --plan-only --force --reason \"why\"` so the override is recorded honestly", len(incompletePhases))
 	}
 	if err := validateFinalizerManifestColonyMode("seal_manifest", manifest.ColonyMode, state); err != nil {
 		return err
 	}
 	phase, ok := finalCompletedPhase(state)
 	if !ok {
-		return fmt.Errorf("no completed final phase found for seal review")
+		if !manifest.Force {
+			return fmt.Errorf("no completed final phase found for seal review")
+		}
+		phase = state.Plan.Phases[len(state.Plan.Phases)-1]
 	}
 	if manifest.Phase != phase.ID {
 		return fmt.Errorf("seal_manifest phase = %d, current final phase = %d", manifest.Phase, phase.ID)
@@ -453,7 +480,15 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if !report.Passed && !manifest.Force {
 		return fmt.Errorf("%s", renderSealFinalReviewBlockers(sealFinalReviewGate{Report: report, ReportRel: sealFinalReviewReportRel, Ran: true}))
 	}
-	return completeSealRuntime(state)
+	override := sealOverride{
+		Forced:           manifest.Force,
+		Reason:           strings.TrimSpace(manifest.ForceReason),
+		IncompletePhases: incompletePhases,
+	}
+	if manifest.Force && !report.Passed {
+		override.OverriddenReviewBlocks = len(report.BlockingIssues)
+	}
+	return completeSealRuntime(state, override)
 }
 
 func mergeExternalSealReviewResults(manifest sealPlanManifest, results []codexContinueExternalDispatch) ([]codexContinueWorkerFlowStep, error) {

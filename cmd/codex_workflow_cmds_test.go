@@ -330,7 +330,7 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 		t.Fatalf("save state: %v", err)
 	}
 
-	planResult, err := runSealPlanOnly(root, false)
+	planResult, err := runSealPlanOnly(root, false, "")
 	if err != nil {
 		t.Fatalf("run seal plan-only: %v", err)
 	}

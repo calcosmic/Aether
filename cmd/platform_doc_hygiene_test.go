@@ -291,9 +291,14 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file",
 			},
+			// "AskUserQuestion" left this forbidden list 2026-08-17: the ban
+			// predated the house interaction pattern, and the force-seal flow
+			// is exactly a decision that MUST be asked — the wrapper may never
+			// add --force on its own (TestForceSealWrapperAsksFirst requires
+			// the consent question). Invented option menus beyond that remain
+			// out.
 			forbidden: []string{
 				"manually update milestone via COLONY_STATE.json",
-				"AskUserQuestion",
 				".aether/aether-utils.sh",
 			},
 		},

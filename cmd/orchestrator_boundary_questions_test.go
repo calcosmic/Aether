@@ -162,7 +162,7 @@ func TestOrchestratorBoundaryQuestionsCreatedForPlanOnlyWorkflows(t *testing.T) 
 			}}},
 		})
 
-		result, err := runSealPlanOnly(root, false)
+		result, err := runSealPlanOnly(root, false, "")
 		if err != nil {
 			t.Fatalf("runSealPlanOnly: %v", err)
 		}
@@ -310,7 +310,7 @@ func TestDefaultColonyModeDoesNotCreateBoundaryQuestions(t *testing.T) {
 			}}},
 		})
 
-		result, err := runSealPlanOnly(root, false)
+		result, err := runSealPlanOnly(root, false, "")
 		if err != nil {
 			t.Fatalf("runSealPlanOnly: %v", err)
 		}

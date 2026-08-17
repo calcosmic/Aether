@@ -6608,7 +6608,8 @@
     "short_description": "Seal a completed colony and write a summary artifact",
     "flags": [
       "force",
-      "plan-only"
+      "plan-only",
+      "reason"
     ],
     "parent_command": "",
     "has_subcommands": false,
