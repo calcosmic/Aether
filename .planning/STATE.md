@@ -3,15 +3,20 @@ gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
 status: executing
-stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
+stopped_at: Phase 186 waves 1-4 complete (6/7 plans); wave 5 is the operator-run benchmark checkpoint
 last_updated: "2026-08-17T19:55:42.836Z"
-last_activity: 2026-08-17 -- Phase 186 execution started
+last_activity: 2026-08-17 -- Phase 186 execution: harness built and verified, awaiting operator for the 12 runs
 progress:
-  total_phases: 51
-  completed_phases: 2
-  total_plans: 43
-  completed_plans: 84
-  percent: 100
+  total_phases: 16
+  completed_phases: 9
+  total_plans: 40
+  completed_plans: 39
+  percent: 60
+  note: >
+    v1.26 = phases 172-175, 180-185, 186-192 (179 remapped into 186+192).
+    Phase 186: plans 01-06 complete, plan 07 (the 12 operator-driven runs)
+    pending. The state.begin-phase/planned-phase SDK verbs regenerate this
+    block with wrong totals; recompute from the ROADMAP Progress table.
 ---
 
 # Project State
