@@ -4346,6 +4346,74 @@ func casteIdentity(caste string) string {
 	return emoji + " " + colorizeCaste(caste, casteLabel(caste))
 }
 
+// casteModelSlot maps each caste to the model slot its agent definition
+// declares in `.claude/agents/ant/aether-<role>.md` frontmatter. DISPLAY
+// ONLY: the platform routes agents natively from that frontmatter; nothing
+// in the runtime reads this table to choose a model (automatic model routing
+// was rejected 2026-07-28 and stays rejected). To change a role's model,
+// edit the single `model:` line in its agent file — this table then fails
+// TestCasteModelSlotMatchesAgentFrontmatter until it agrees, which is the
+// point: a static table plus a parity test cannot go stale silently.
+// Castes with no agent file (colonizer, dreamer, the curation ants…) are
+// deliberately absent and get no model tag.
+var casteModelSlot = map[string]string{
+	"ambassador":    "sonnet",
+	"archaeologist": "opus",
+	"architect":     "opus",
+	"auditor":       "opus",
+	"builder":       "sonnet",
+	"chaos":         "sonnet",
+	"chronicler":    "inherit",
+	"fixer":         "sonnet",
+	"gatekeeper":    "opus",
+	"includer":      "inherit",
+	"keeper":        "inherit",
+	"measurer":      "opus",
+	"medic":         "sonnet",
+	"oracle":        "opus",
+	"porter":        "sonnet",
+	"probe":         "sonnet",
+	"queen":         "opus",
+	"route_setter":  "opus",
+	"sage":          "opus",
+	"scout":         "sonnet",
+	"surveyor":      "sonnet",
+	"tracker":       "opus",
+	"watcher":       "sonnet",
+	"weaver":        "sonnet",
+}
+
+// resolveCasteModel returns the display name of the model a caste's workers
+// actually run on: the ANTHROPIC_DEFAULT_<SLOT>_MODEL environment variable's
+// value when the user has redirected that slot (e.g. sonnet → glm-5-turbo),
+// otherwise the slot name itself. "inherit" agents run on whatever model the
+// session uses, shown as "session". Unknown castes get "" — no tag.
+func resolveCasteModel(caste string) string {
+	slot, ok := casteModelSlot[normalizeCasteKey(caste)]
+	if !ok {
+		return ""
+	}
+	if slot == "inherit" {
+		return "session"
+	}
+	if override := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_" + strings.ToUpper(slot) + "_MODEL")); override != "" {
+		return override
+	}
+	return slot
+}
+
+// casteIdentityWithModel is casteIdentity plus the resolved model tag —
+// `🔨🐜 Builder [sonnet]` — used at SPAWN announcements only. Tagging every
+// identity line (status lists, history rows, ~30 call sites) would be noise;
+// the moment a worker is dispatched is where "which brain is this?" matters.
+func casteIdentityWithModel(caste string) string {
+	identity := casteIdentity(caste)
+	if model := resolveCasteModel(caste); model != "" {
+		identity += " [" + model + "]"
+	}
+	return identity
+}
+
 func colorizeCaste(caste, text string) string {
 	if !shouldUseANSIColors() {
 		return text

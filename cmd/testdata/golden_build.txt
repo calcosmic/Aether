@@ -34,7 +34,7 @@ Wave 11 starting (in-repo, serial)
   Execution: serial — single task in this wave
 ──── 🔨🐜 Spawning Worker-XX — Worker: Worker-XX ────
 
-… 🔨🐜 Builder Worker-XX  starting wave 11  Worker: Worker-XX
+… 🔨🐜 Builder [sonnet] Worker-XX  starting wave 11  Worker: Worker-XX
 
 … 🔨🐜 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
 
@@ -45,7 +45,7 @@ Wave 13 starting (in-repo, serial)
   Execution: serial — single task in this wave
 ──── 🧪🐜 Spawning Worker-XX — Worker: Worker-XX ────
 
-… 🧪🐜 Probe Worker-XX  starting wave 13  Worker: Worker-XX
+… 🧪🐜 Probe [sonnet] Worker-XX  starting wave 13  Worker: Worker-XX
 
 … 🧪🐜 Probe Worker-XX  running wave 13  Worker: Worker-XX  [simulated worker heartbeat observed]
 
@@ -56,7 +56,7 @@ Wave 14 starting (in-repo, serial)
   Execution: serial — single task in this wave
 ──── 👁️🐜 Spawning Worker-XX — Worker: Worker-XX ────
 
-… 👁️🐜 Watcher Worker-XX  starting wave 14  Worker: Worker-XX
+… 👁️🐜 Watcher [sonnet] Worker-XX  starting wave 14  Worker: Worker-XX
 
 … 👁️🐜 Watcher Worker-XX  running wave 14  Worker: Worker-XX  [simulated worker heartbeat observed]
 

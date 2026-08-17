@@ -13,9 +13,9 @@ Coordination: .aether/data/spawn-tree.txt
 Planning Wave 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
 ──── 🔍🐜 Spawning Worker-XX — Planning task: Survey the repo and distill planning findings from available territory reports ────
-  🔍🐜 Scout Worker-XX  Planning task: Survey the repo and distill planning findings from available territory reports
+  🔍🐜 Scout [sonnet] Worker-XX  Planning task: Survey the repo and distill planning findings from available territory reports
 
-… 🔍🐜 Scout Worker-XX  starting wave 1  Planning task: Survey the repo and distill planning findings from available territory reports
+… 🔍🐜 Scout [sonnet] Worker-XX  starting wave 1  Planning task: Survey the repo and distill planning findings from available territory reports
 
 … 🔍🐜 Scout Worker-XX  running wave 1  Planning task: Survey the repo and distill planning findings from available territory reports  [simulated worker heartbeat observed]
 
@@ -25,9 +25,9 @@ Planning Wave 1 starting (in-repo, serial)
 Planning Wave 2 starting (in-repo, serial)
   Execution: serial — single task in this wave
 ──── 📋🐜 Spawning Worker-XX — Planning task: Convert surveyed findings into an executable multi-phase colony plan ────
-  📋🐜 Route-Setter Worker-XX  Planning task: Convert surveyed findings into an executable multi-phase colony plan
+  📋🐜 Route-Setter [opus] Worker-XX  Planning task: Convert surveyed findings into an executable multi-phase colony plan
 
-… 📋🐜 Route-Setter Worker-XX  starting wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan
+… 📋🐜 Route-Setter [opus] Worker-XX  starting wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan
 
 … 📋🐜 Route-Setter Worker-XX  running wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan  [simulated worker heartbeat observed]
 

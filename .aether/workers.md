@@ -63,6 +63,22 @@ Claude Code resolves these slots via environment variables in `~/.claude/setting
 - `ANTHROPIC_DEFAULT_SONNET_MODEL` -> sonnet slot
 - `ANTHROPIC_DEFAULT_HAIKU_MODEL` -> haiku slot
 
+**Seeing which model a worker runs on.** Every spawn line shows the worker's
+model in brackets — `🔨🐜 Builder [sonnet] Mason-67` — resolved from the
+agent's declared slot and any `ANTHROPIC_DEFAULT_*_MODEL` redirect (so if
+your sonnet slot points at `glm-5-turbo`, the line says `[glm-5-turbo]`).
+Agents that declare `inherit` show `[session]` — they run on whatever model
+your session uses. This is display only; nothing in Aether picks models.
+
+**Changing one role's model is a one-line edit.** Open
+`.claude/agents/ant/aether-<role>.md` (for example `aether-builder.md`) and
+change the single `model:` line near the top — say `model: sonnet` to
+`model: opus`. That's the whole change: the platform routes from that line,
+and the spawn display follows it. (The display table in
+`cmd/codex_visuals.go` is checked against these files by
+`TestCasteModelSlotMatchesAgentFrontmatter`, so a mismatch fails the build
+rather than showing a stale tag.)
+
 > **Historical note:** A model-per-caste routing system using environment variable injection
 > at spawn time was previously built and archived (see `.aether/archive/model-routing/`).
 > That approach could not function due to Claude Code Task tool limitations (env vars

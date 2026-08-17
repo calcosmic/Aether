@@ -3,9 +3,9 @@ Running deterministic verification for phase 1 before watcher/review workers (ti
 Continue Verification 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
 ──── 👁️🐜 Spawning Worker-XX — Phase: 1 — Golden phase ────
-  👁️🐜 Watcher Worker-XX  Phase: 1 — Golden phase
+  👁️🐜 Watcher [sonnet] Worker-XX  Phase: 1 — Golden phase
 
-… 👁️🐜 Watcher Worker-XX  starting wave 1  Phase: 1 — Golden phase
+… 👁️🐜 Watcher [sonnet] Worker-XX  starting wave 1  Phase: 1 — Golden phase
 
 … 👁️🐜 Watcher Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
 
@@ -16,9 +16,9 @@ Continue Verification 1 starting (in-repo, serial)
 Continue Review 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
 ──── 🧪🐜 Spawning Worker-XX — Phase: 1 — Golden phase ────
-  🧪🐜 Probe Worker-XX  Phase: 1 — Golden phase
+  🧪🐜 Probe [sonnet] Worker-XX  Phase: 1 — Golden phase
 
-… 🧪🐜 Probe Worker-XX  starting wave 1  Phase: 1 — Golden phase
+… 🧪🐜 Probe [sonnet] Worker-XX  starting wave 1  Phase: 1 — Golden phase
 
 … 🧪🐜 Probe Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
 

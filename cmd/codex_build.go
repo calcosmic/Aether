@@ -23,9 +23,15 @@ type codexBuildDispatch struct {
 	Stage         string `json:"stage"`
 	Wave          int    `json:"wave,omitempty"`
 	ExecutionWave int    `json:"execution_wave,omitempty"`
-	Caste         string `json:"caste"`
-	AgentName     string `json:"agent_name,omitempty"`
-	Name          string `json:"name"`
+	Caste     string `json:"caste"`
+	AgentName string `json:"agent_name,omitempty"`
+	// Model is the DISPLAY name of the model this caste's agent runs on
+	// (resolved from agent frontmatter slot + ANTHROPIC_DEFAULT_*_MODEL env),
+	// so wrapper-rendered spawn descriptions can show it. Nothing reads it
+	// to choose a model — routing stays with the platform's agent
+	// frontmatter, and automatic model selection stays rejected.
+	Model string `json:"model,omitempty"`
+	Name  string `json:"name"`
 	Task          string `json:"task"`
 	Status        string `json:"status"`
 	Summary       string `json:"summary,omitempty"`
@@ -3077,6 +3083,7 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 		// type; the TS host used to enrich this and the direct plan-only
 		// path must carry it too.
 		dispatches[i].AgentName = codexAgentNameForCaste(dispatches[i].Caste)
+		dispatches[i].Model = resolveCasteModel(dispatches[i].Caste)
 		dispatches[i].PermissionProfile = codex.PermissionProfileForCaste(dispatches[i].Caste)
 		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section

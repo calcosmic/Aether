@@ -45,7 +45,7 @@ func emitCodexDispatchWaveProgress(label string, wave int, dispatches []codex.Wo
 	b.WriteString("\n")
 	for _, dispatch := range dispatches {
 		b.WriteString("  ")
-		b.WriteString(casteIdentity(dispatch.Caste))
+		b.WriteString(casteIdentityWithModel(dispatch.Caste))
 		b.WriteString(" ")
 		b.WriteString(dispatch.WorkerName)
 		b.WriteString("  ")
@@ -106,7 +106,7 @@ func emitCodexBuildWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
 func emitCodexDispatchWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
 	var b strings.Builder
 	b.WriteString("… ")
-	b.WriteString(casteIdentity(dispatch.Caste))
+	b.WriteString(casteIdentityWithModel(dispatch.Caste))
 	b.WriteString(" ")
 	b.WriteString(dispatch.WorkerName)
 	b.WriteString(fmt.Sprintf("  starting wave %d", wave))

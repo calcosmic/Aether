@@ -1114,7 +1114,7 @@ func writeCeremonyPhaseLine(b *strings.Builder, manifest map[string]interface{})
 
 func writeCeremonyDispatchLine(b *strings.Builder, dispatch ceremonyDispatch, prefix string) {
 	b.WriteString(prefix)
-	b.WriteString(casteIdentity(dispatch.Caste))
+	b.WriteString(casteIdentityWithModel(dispatch.Caste))
 	b.WriteString(" ")
 	b.WriteString(emptyFallback(dispatch.Name, "worker"))
 	if dispatch.AgentName != "" && dispatch.AgentName != dispatch.Name {
