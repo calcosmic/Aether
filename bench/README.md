@@ -147,3 +147,57 @@ snapshot for comparison, run:
 ```
 bench/evidence/capture-print-brief.sh <path-to-a-real-mid-project-colony> <phase-number> [worker-name]
 ```
+
+## Running the benchmark
+
+The one documented command that reproduces a single benchmark run:
+
+```
+bench/run.sh --lane <lane> --category <category>
+```
+
+`<lane>` is one of `gsd`, `aether-interactive`, `aether-autopilot`; `<category>`
+is one of `01-bug-fix`, `02-brownfield-feature`, `03-interrupted-execution`,
+`04-fresh-repo-lifecycle`. Requires `BENCH_MODEL` (the one AI model both
+systems are pinned to, for a fair comparison) to be set, and refuses to run
+if `bench/acceptance/verify-predates-runs.sh` fails — that is the point at
+which the "the judges were written before any result existed" claim is
+enforced automatically rather than just documented.
+
+To see the full twelve-cell plan (lane, category, real-world project and
+pinned commit, judge script, and the exact command that would run it)
+without spending an actual run, use dry-run mode — it prints everything and
+executes nothing:
+
+```
+bench/run.sh --dry-run
+```
+(equivalently: `make bench-dry-run`)
+
+For the full step-by-step procedure a human follows to actually produce all
+twelve runs — one-time setup, the order to run them in, what the operator
+is and is not allowed to type, how the interrupted-execution runs work, and
+what to do if something goes wrong — see **`bench/RUNBOOK.md`**.
+
+## What lands in bench/results/
+
+Each day's benchmark session gets one dated folder,
+`bench/results/<YYYY-MM-DD>/`, holding one subfolder per cell,
+`<lane>__<category>/` (for example `gsd__01-bug-fix/`). Every file inside a
+cell's subfolder is written by a script during the run — never typed by
+hand:
+
+| File | What it is |
+|---|---|
+| `run.json` | Every measured number and fact from that one run, in one file: which lane and category, the real-world project's pinned commit, whether the independent judge script says the task passed, how many operator inputs were scripted vs. unscripted, whether the system claimed success when the judge disagreed (or `unknown` if that could not be determined), how many files were changed that the task did not ask for, a cleanliness score, tokens used, how many times the AI model was called, and the run's real working time (excluding time spent waiting on the operator). |
+| `operator-log.jsonl` | A timestamped, line-by-line record of everything the harness watched happen during the run — when it started, every input the operator gave and whether it was scripted or unscripted, when it ended. |
+| `acceptance.json` | The independent judge script's detailed verdict: every individual check it ran, what it expected, what it actually found, and whether each one passed. |
+| `transcripts/` | A copy of the saved session transcripts from the isolated home directory the system ran in — the raw record token counts are measured from. |
+| `claimed-success.txt` | The saved terminal transcript text used to determine whether the system claimed the task was done, when that transcript was captured (see `bench/RUNBOOK.md`'s "Before you start" section for how to capture it). |
+
+Once every cell for a session has its `run.json`, the final markdown results
+table is generated — never hand-typed — with:
+
+```
+bench/results/generate-table.sh bench/results/<YYYY-MM-DD>
+```
