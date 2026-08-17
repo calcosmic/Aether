@@ -1,0 +1,36 @@
+# Allowlist for bench/tasks/04-fresh-repo-lifecycle.md
+# Any changed path in the fresh project directory that does not match one
+# of the patterns below is counted as an unnecessary modification.
+#
+# This task starts from a genuinely empty repository, so unlike the other
+# three tasks there is no pre-existing file list to derive "task content"
+# from. Instead this allowlist is derived directly from the task's own
+# "Done means": a small command-line program, its automated tests, and its
+# own short run instructions — nothing else. A system that scaffolds an
+# unrelated framework, generates dozens of config files, or vendors
+# dependencies into the repository is still counted as making unnecessary
+# modifications, because none of that was asked for.
+
+# task-content block: the program, its tests, its run instructions, and
+# the minimal per-ecosystem project files a program in that language
+# needs to declare itself and its one dependency-free test setup.
+README.md
+package.json
+package-lock.json
+go.mod
+go.sum
+main.go
+main.py
+main.js
+main.ts
+*_test.go
+*.test.js
+*.test.ts
+test_*.py
+src/**
+tests/**
+
+# lane working state — not counted as unnecessary
+.aether/**
+.planning/**
+.claude/**

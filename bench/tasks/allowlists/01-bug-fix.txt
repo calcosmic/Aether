@@ -1,0 +1,15 @@
+# Allowlist for bench/tasks/01-bug-fix.md
+# Any changed path in the substrate clone that does not match one of the
+# patterns below is counted as an unnecessary modification.
+
+# --- task-content block: what a correct fix touches ---
+# The bug is in mux.go's cleanPath function; a correct fix changes only
+# this one line/file. mux_test.go must stay byte-for-byte unchanged per
+# the task's own "Done means" — it is deliberately NOT allowlisted here,
+# so any system that edits the test to make it pass is caught, not hidden.
+mux.go
+
+# lane working state — not counted as unnecessary
+.aether/**
+.planning/**
+.claude/**
