@@ -2,6 +2,7 @@
   "yaml_catalog": [
     "abandon",
     "archaeology",
+    "ask",
     "assumptions",
     "build",
     "bump-version",
@@ -67,6 +68,7 @@
   "claude_wrapper_catalog": [
     "abandon",
     "archaeology",
+    "ask",
     "assumptions",
     "build",
     "bump-version",
@@ -132,6 +134,7 @@
   "opencode_wrapper_catalog": [
     "abandon",
     "archaeology",
+    "ask",
     "assumptions",
     "build",
     "bump-version",
@@ -197,6 +200,7 @@
   "command_guide_catalog": [
     "abandon",
     "archaeology",
+    "ask",
     "assumptions",
     "build",
     "bump-version",
@@ -638,6 +642,7 @@
     "worktree-orphan-scan"
   ],
   "runtime_resolved_names": {
+    "ask": "colony-prime",
     "assumptions": "assumptions-analyze",
     "export-signals": "pheromone-export-xml",
     "flag": "flag-add",

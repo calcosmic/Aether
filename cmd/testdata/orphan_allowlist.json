@@ -175,11 +175,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether colony-prime",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether colony-vital-signs",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"

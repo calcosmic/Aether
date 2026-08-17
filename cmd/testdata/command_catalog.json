@@ -1220,7 +1220,8 @@
     "name": "colony-prime",
     "short_description": "Assemble full colony context for worker prompt injection",
     "flags": [
-      "compact"
+      "compact",
+      "question"
     ],
     "parent_command": "",
     "has_subcommands": false,

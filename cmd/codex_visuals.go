@@ -219,6 +219,7 @@ var commandEmojiMap = map[string]string{
 	"bump-version":           "🚀",
 	"insert-phase":           "➕",
 	"quick":                  "⚡",
+	"ask":                    "💭",
 	"skill-create":           "🧪",
 	"data-clean":             "🧹",
 	"export-signals":         "📤",

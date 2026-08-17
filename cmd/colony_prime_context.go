@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -344,7 +345,24 @@ func buildPriorReviewsSection(s *storage.Store, compact bool) (colonyPrimeSectio
 	}, totalOpen
 }
 
+// colonyPrimeOptions parameterizes the briefing assembler. Question is the
+// ask-mode addition: when set, sections that overlap the question's words
+// get a relevance boost (so "why is phase 3 blocked?" ranks blockers above
+// boilerplate) and an activity-tail section joins the roster. colony-prime
+// had taken zero inputs since it was written; this is its first
+// parameterization, kept behind an options struct so the next one does not
+// change every call site again.
+type colonyPrimeOptions struct {
+	Compact  bool
+	Question string
+}
+
 func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
+	return buildColonyPrimeOutputOpts(colonyPrimeOptions{Compact: compact})
+}
+
+func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
+	compact := opts.Compact
 	budget := colonyPrimeBudgetChars
 	if compact {
 		budget = colonyPrimeCompactBudgetChars
@@ -364,16 +382,30 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		return result
 	}
 
-	sc := cache.NewSessionCache(store.BasePath())
-	sc.ClearStale(24 * time.Hour)
+	// Ask mode (--question) is a pure inspection and must leave
+	// .aether/data byte-identical — the session cache both writes
+	// acceleration entries and prunes stale ones, so ask mode bypasses it
+	// entirely. Locked by TestColonyPrimeQuestionIsReadOnly.
+	askMode := strings.TrimSpace(opts.Question) != ""
+	var sc *cache.SessionCache
+	if !askMode {
+		sc = cache.NewSessionCache(store.BasePath())
+		sc.ClearStale(24 * time.Hour)
+	}
+	cachedLoad := func(path, rel string, dest interface{}) error {
+		if sc != nil {
+			if err := sc.Load(path, dest); err == nil {
+				return nil
+			}
+		}
+		return store.LoadJSON(rel, dest)
+	}
 
 	sections := make([]colonyPrimeSection, 0, 9)
 
 	var state colony.ColonyState
 	statePath := filepath.Join(store.BasePath(), "COLONY_STATE.json")
-	if err := sc.Load(statePath, &state); err != nil {
-		_ = store.LoadJSON("COLONY_STATE.json", &state)
-	}
+	_ = cachedLoad(statePath, "COLONY_STATE.json", &state)
 
 	var stateSection strings.Builder
 	writeSectionHeader(&stateSection, "state", "## Colony State\n\n")
@@ -576,12 +608,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	}
 	var instFile colony.InstinctsFile
 	instinctsPath := filepath.Join(store.BasePath(), "instincts.json")
-	instinctsLoaded := false
-	if err := sc.Load(instinctsPath, &instFile); err == nil {
-		instinctsLoaded = true
-	} else if err := store.LoadJSON("instincts.json", &instFile); err == nil {
-		instinctsLoaded = true
-	}
+	instinctsLoaded := cachedLoad(instinctsPath, "instincts.json", &instFile) == nil
 	if instinctsLoaded {
 		for _, inst := range instFile.Instincts {
 			if inst.Archived {
@@ -940,6 +967,15 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		}
 	}
 
+	// Ask mode: recent activity is history colony-prime never carried —
+	// state.Events is frequently empty while activity.log holds the real
+	// feed — and a question about "what happened" needs it.
+	if strings.TrimSpace(opts.Question) != "" {
+		if tail := buildActivityTailSection(); tail != nil {
+			sections = append(sections, *tail)
+		}
+	}
+
 	result.Sections = len(sections)
 	allowedCandidates := make([]colony.ContextCandidate, 0, len(sections))
 	for _, sec := range sections {
@@ -953,6 +989,10 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			result.Ledger.Blocked = append(result.Ledger.Blocked, sec.ledgerItem())
 			continue
 		}
+		// Question-aware relevance: a small additive boost for sections
+		// whose content overlaps the question's words, on top of the static
+		// per-section score — no new ranking system.
+		sec.relevanceScore += questionRelevanceBoost(opts.Question, sec)
 		allowedCandidates = append(allowedCandidates, sec.rankingCandidate())
 	}
 
@@ -998,6 +1038,89 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	result.Used = ranking.Used
 	result.LogLine = fmt.Sprintf("colony-prime loaded %d signal(s), %d instinct(s), %d review(s), used %d/%d chars", result.SignalCount, result.InstinctCount, result.ReviewCount, ranking.Used, budget)
 	return result
+}
+
+// questionRelevanceBoost scores how much a section's content overlaps the
+// question's words — keyword overlap only, deliberately: it nudges ranking
+// under budget pressure so the sections a question is ABOUT survive the
+// trim; it never invents relevance. Zero when there is no question.
+func questionRelevanceBoost(question string, sec colonyPrimeSection) float64 {
+	question = strings.ToLower(strings.TrimSpace(question))
+	if question == "" {
+		return 0
+	}
+	haystack := strings.ToLower(sec.name + " " + sec.title + " " + sec.content)
+	matched := 0
+	total := 0
+	for _, word := range strings.Fields(question) {
+		word = strings.Trim(word, "?.,!\"'")
+		if len(word) < 4 {
+			continue
+		}
+		total++
+		if strings.Contains(haystack, word) {
+			matched++
+		}
+	}
+	if total == 0 || matched == 0 {
+		return 0
+	}
+	return 2.0 * float64(matched) / float64(total)
+}
+
+// buildActivityTailSection carries the last entries of activity.log — the
+// history feed an ask question about "what happened" needs. state.Events is
+// frequently empty (nothing durable writes it between phases) while
+// activity.log holds the real per-command record; /ant-history reads only
+// the former, which is exactly why "what changed?" had no good answer.
+func buildActivityTailSection() *colonyPrimeSection {
+	if store == nil {
+		return nil
+	}
+	lines, err := store.ReadJSONL("activity.log")
+	if err != nil || len(lines) == 0 {
+		return nil
+	}
+	const activityTailMax = 20
+	if len(lines) > activityTailMax {
+		lines = lines[len(lines)-activityTailMax:]
+	}
+	var b strings.Builder
+	b.WriteString("## Recent Activity\n\n")
+	for _, raw := range lines {
+		var entry map[string]interface{}
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			continue
+		}
+		ts := strings.TrimSpace(stringValue(entry["timestamp"]))
+		action := strings.TrimSpace(stringValue(entry["action"]))
+		detail := strings.TrimSpace(stringValue(entry["detail"]))
+		if action == "" {
+			continue
+		}
+		if ts != "" {
+			fmt.Fprintf(&b, "- %s %s", ts, action)
+		} else {
+			fmt.Fprintf(&b, "- %s", action)
+		}
+		if detail != "" {
+			fmt.Fprintf(&b, " — %s", detail)
+		}
+		b.WriteString("\n")
+	}
+	protected, preserveReason := protectedSectionPolicy("activity_tail")
+	return &colonyPrimeSection{
+		name:              "activity_tail",
+		title:             "Recent Activity",
+		source:            filepath.Join(store.BasePath(), "activity.log"),
+		content:           b.String(),
+		priority:          6,
+		freshnessScore:    1.0,
+		confirmationScore: 1.0,
+		relevanceScore:    sectionRelevanceScore("activity_tail"),
+		protected:         protected,
+		preserveReason:    preserveReason,
+	}
 }
 
 func resolveCodexWorkerContext() string {

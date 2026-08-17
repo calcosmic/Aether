@@ -1,0 +1,15 @@
+name: ant-ask
+description: "💭 Ask the colony anything — auto-primed with its full memory"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=json aether colony-prime --question \"$ARGUMENTS\""
+ceremony_contract:
+  class: "inspection"
+  authority: "Go owns the briefing: colony-prime assembles state, plan, signals, learnings, decisions, blockers, handoffs, and recent activity, ranked by relevance to the question, read-only."
+  wrapper_role: "Answer the user's question conversationally FROM the briefing — no worker spawn, no invention beyond what the briefing contains."
+guardrails:
+  - "Answer only from the briefing's content; when the colony has no record, say so plainly instead of inventing."
+  - "Do not spawn workers for an ask — the briefing already holds the colony's memory; spawning adds latency and no information."
+  - "If the question is about the CODE rather than the colony, say so and point to `/ant-quick`, which dispatches a read-only scout at the repo."
+  - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "If docs and runtime disagree, runtime wins."

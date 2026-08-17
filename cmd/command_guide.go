@@ -423,6 +423,7 @@ func commandGuideLiteralCommands() []string {
 	return []string{
 		"abandon",
 		"archaeology",
+		"ask",
 		"assumptions",
 		"bump-version",
 		"chaos",

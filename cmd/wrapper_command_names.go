@@ -15,6 +15,7 @@ package cmd
 var wrapperCommandNames = map[string]bool{
 	"abandon":         true,
 	"archaeology":     true,
+	"ask":             true,
 	"assumptions":     true,
 	"build":           true,
 	"bump-version":    true,

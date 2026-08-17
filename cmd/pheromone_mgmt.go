@@ -115,8 +115,14 @@ var colonyPrimeCmd = &cobra.Command{
 		}
 
 		compact, _ := cmd.Flags().GetBool("compact")
-		result := buildColonyPrimeOutput(compact)
-		emitPromptIntegrityEvents("colony-prime", colonyPrimeIntegrityRecords(result))
+		question, _ := cmd.Flags().GetString("question")
+		result := buildColonyPrimeOutputOpts(colonyPrimeOptions{Compact: compact, Question: question})
+		if strings.TrimSpace(question) == "" {
+			emitPromptIntegrityEvents("colony-prime", colonyPrimeIntegrityRecords(result))
+		}
+		// Ask mode (--question) is a pure inspection: no event emission, no
+		// writes — the briefing is read, ranked, and returned. Locked by
+		// TestColonyPrimeQuestionIsReadOnly.
 		outputOK(result)
 		return nil
 	},
@@ -308,6 +314,7 @@ var pheromoneMergeBackCmd = &cobra.Command{
 
 func init() {
 	colonyPrimeCmd.Flags().Bool("compact", false, "Use 4000 char budget instead of 8000")
+	colonyPrimeCmd.Flags().String("question", "", "Ask mode: boost sections relevant to this question and include recent activity (read-only)")
 
 	pheromoneDisplayCmd.Flags().String("type", "", "Filter by signal type (FOCUS/REDIRECT/FEEDBACK)")
 	pheromoneDisplayCmd.Flags().Bool("active-only", true, "Only show active signals")
