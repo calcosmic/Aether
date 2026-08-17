@@ -132,7 +132,14 @@ type codexWorkerPlanPhase struct {
 	// keywords never decide it at runtime. A phase description containing the
 	// word "research" once silently flipped an implementation phase to
 	// discovery and dispatched an Oracle instead of a Builder.
-	Mode                 string                                `json:"mode,omitempty"`
+	Mode string `json:"mode,omitempty"`
+	// ExpectFailingTests marks a deliberately-RED phase whose deliverable is
+	// failing tests that prove a defect. The Route-Setter states it
+	// explicitly at authoring time; continue's verification then treats a
+	// failing test run as the expected outcome and a green one as the
+	// blocker. Without this the planner emitted RED-first phases the gate
+	// could never advance.
+	ExpectFailingTests   bool                                  `json:"expect_failing_tests,omitempty"`
 	Tasks                []codexWorkerPlanTask                 `json:"tasks"`
 	SuccessCriteria      []string                              `json:"success_criteria,omitempty"`
 	EvidenceRequirements []colony.CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
@@ -2246,6 +2253,7 @@ func renderPhasePlanSchemaGuidance() string {
 - Only list a file under artifacts when THIS task changes it. artifacts is a claim that the task produced the file, and the runtime verifies it against the build's claim lists.
 - Never bind an "unchanged", "untouched", "still passes", or "remains dependency-free" criterion to artifacts. Those assert pre-existing state, and the task never claims those files, so the phase blocks with "artifact <path> was not claimed by the current build" and can only be recovered with manual --reconcile-task/--read-only-artifact flags.
 - Express a "nothing regressed" criterion with checks instead: {"criterion":"the suite still passes","checks":["tests"]} with no artifacts entry.
+- A deliberately-RED phase — one whose deliverable is FAILING tests that prove a defect exists (TDD red-first, "reproduce and lock the bug") — must set "expect_failing_tests": true on the phase. Verification then expects the test run to fail and blocks if it passes. Never plan a red-first phase without this field: the tests check treats any failure as a blocker otherwise, and the phase can never advance.
 `) + "\n"
 }
 
@@ -2454,6 +2462,7 @@ func buildWorkerPlanPhases(artifact codexWorkerPlanArtifact) []colony.Phase {
 			Description:          strings.TrimSpace(sourcePhase.Description),
 			Status:               colony.PhasePending,
 			Mode:                 resolveAuthoredPhaseMode(sourcePhase.Mode, sourcePhase.Name, sourcePhase.Description),
+			ExpectFailingTests:   sourcePhase.ExpectFailingTests,
 			Tasks:                []colony.Task{},
 			SuccessCriteria:      uniqueSortedStrings(sourcePhase.SuccessCriteria),
 			EvidenceRequirements: normalizeWorkerCriterionRequirements(sourcePhase.EvidenceRequirements),

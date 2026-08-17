@@ -233,6 +233,7 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 		runVerificationStep(context.Background(), root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
 		runVerificationStep(context.Background(), root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
 	}
+	steps = applyExpectedTestFailure(steps, phase)
 	claims := verifyCodexBuildClaims(root, manifest)
 	watcher := evaluateContinueWatcherVerification(manifest)
 	if skipWatchers {

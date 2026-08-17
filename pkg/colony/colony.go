@@ -619,6 +619,16 @@ type Phase struct {
 	SuccessCriteria      []string                       `json:"success_criteria"`
 	EvidenceRequirements []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
 	WatcherFailureCount  int                            `json:"watcher_failure_count,omitempty"`
+	// ExpectFailingTests marks a deliberately-RED phase: its deliverable is
+	// failing tests that prove a defect exists (classic TDD red-first).
+	// Continue's verification inverts the tests check for such a phase — a
+	// failing test run is the expected outcome, and a PASSING run blocks
+	// advancement instead. This is a discrete typed field rather than a
+	// PhaseMode value because RED is orthogonal to discovery/prototype/
+	// production: a production-mode defect-reproduction phase is exactly the
+	// case that produced it (prose-to-control-flow: control flow rides typed
+	// fields, and mode readers need no stance for this one).
+	ExpectFailingTests bool `json:"expect_failing_tests,omitempty"`
 }
 
 // Task represents a single task within a phase.

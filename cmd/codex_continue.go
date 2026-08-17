@@ -1528,6 +1528,7 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		runVerificationStep(ctx, root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
 		runVerificationStep(ctx, root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
 	}
+	steps = applyExpectedTestFailure(steps, phase)
 	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
 
@@ -2841,6 +2842,37 @@ func setVerificationCommand(commands *codexVerificationCommands, kind, command s
 // three locations never drift apart.
 func blockedVerificationConfigGuidance() string {
 	return `configure a real command in AGENTS.md, in CLAUDE.md under "## Verification Commands", or in .aether/data/codebase.md`
+}
+
+// applyExpectedTestFailure inverts the tests check's expectation for a
+// deliberately-RED phase (Phase.ExpectFailingTests): the phase's deliverable
+// is failing tests that prove a defect, so a genuine test failure is the
+// expected outcome and a green suite means the deliverable was not produced.
+// Aether's own route-setter plans RED-first phases; before this existed the
+// gate treated their defining artifact as a blocker and the phase could never
+// advance (Pocket-Chopper field report). Only a genuine test failure is
+// inverted — a timeout, an execution block, or an environment fault is not a
+// failing test suite and keeps its ordinary failure semantics.
+func applyExpectedTestFailure(steps []codexVerificationStep, phase colony.Phase) []codexVerificationStep {
+	if !phase.ExpectFailingTests {
+		return steps
+	}
+	for i := range steps {
+		if steps[i].Name != "tests" || steps[i].Skipped {
+			continue
+		}
+		if steps[i].Passed {
+			steps[i].Passed = false
+			steps[i].Summary = "expected failing tests — this phase's deliverable is tests that prove the defect, but the test run passed; write the failing test first (" + strings.TrimSpace(steps[i].Summary) + ")"
+			continue
+		}
+		if steps[i].TimedOut || steps[i].Blocked || steps[i].ErrorClass == ErrorClassEnvironment {
+			continue
+		}
+		steps[i].Passed = true
+		steps[i].Summary = "tests failed as expected — this phase's deliverable is failing tests that prove the defect (" + strings.TrimSpace(steps[i].Summary) + ")"
+	}
+	return steps
 }
 
 func runVerificationStep(ctx context.Context, root, name string, required bool, command string, timeout time.Duration) codexVerificationStep {
