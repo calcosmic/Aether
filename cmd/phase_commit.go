@@ -259,16 +259,21 @@ var phaseCommitsGetCmd = &cobra.Command{
 }
 
 var phaseCommitsSetCmd = &cobra.Command{
-	Use:   "set",
+	Use:   "set <on|off>",
 	Short: "Turn the per-phase git save-point on or off",
-	Args:  cobra.NoArgs,
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
 			return nil
 		}
-		mode := colony.PhaseCommitMode(mustGetString(cmd, "mode"))
+		raw := mustGetString(cmd, "mode")
+		if len(args) == 1 {
+			raw = args[0]
+		}
+		mode := colony.PhaseCommitMode(raw)
 		if mode == "" {
+			outputError(1, "usage: aether phase-commits set <on|off>", nil)
 			return nil
 		}
 		if !mode.Valid() {

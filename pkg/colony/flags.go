@@ -12,6 +12,10 @@ type FlagEntry struct {
 	ResolvedAt   string `json:"resolved_at,omitempty"`
 	Resolution   string `json:"resolution,omitempty"`
 	Acknowledged bool   `json:"acknowledged,omitempty"`
+	// AcknowledgedAt records WHEN a flag was parked (classic flag lifecycle:
+	// acknowledge = "noted but continuing", issues and notes only — blockers
+	// cannot be acknowledged, they must be resolved).
+	AcknowledgedAt string `json:"acknowledged_at,omitempty"`
 }
 
 // FlagsFile represents the top-level pending-decisions.json file.

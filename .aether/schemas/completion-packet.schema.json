@@ -234,6 +234,9 @@
         "agent_name": {
           "type": "string"
         },
+        "model": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },

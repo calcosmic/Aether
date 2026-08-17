@@ -108,6 +108,22 @@ var reviewLedgerWriteCmd = &cobra.Command{
 			return nil
 		}
 
+		// Critics must bring solutions: a CRITICAL finding with no
+		// suggestion is "it doesn't work" with the power to stop the line
+		// and nothing anyone can act on. The write is refused, naming the
+		// finding, so the reviewer supplies the smallest change that would
+		// make it pass (or files it at a lower severity).
+		for i, f := range findings {
+			if strings.EqualFold(strings.TrimSpace(f.Severity), "CRITICAL") && strings.TrimSpace(f.Suggestion) == "" {
+				desc := strings.TrimSpace(f.Description)
+				if len(desc) > 80 {
+					desc = desc[:77] + "..."
+				}
+				outputError(1, fmt.Sprintf("finding %d (%q) is CRITICAL but carries no suggestion — a critical finding must name a proposed fix or next step; add a suggestion or lower the severity", i+1, desc), nil)
+				return nil
+			}
+		}
+
 		inputs := make([]reviewLedgerFindingInput, 0, len(findings))
 		for _, f := range findings {
 			inputs = append(inputs, reviewLedgerFindingInput{

@@ -197,8 +197,12 @@ Return a single JSON block when verification is complete:
 Fields:
 - `verification_passed`: true only if all execution checks passed and no CRITICAL/HIGH issues were found
 - `recommendation`: `"proceed"` or `"fix_required"` — binary, no hedging
-- `issues_found`: array of objects with `severity`, `description`, `evidence`, `file` (if applicable)
+- `issues_found`: array of objects with `severity`, `description`, `evidence`, `file` (if applicable), `suggestion`, `blocking`
 - `quality_score`: integer 1–10; cannot exceed 6 if any execution check failed
+
+Critics bring solutions — two fields on every issue:
+- `suggestion`: the smallest change that would make this issue pass. Required whenever `severity` is CRITICAL or HIGH, and whenever `blocking` is true. Proposing a fix in words is not fixing — the "report only, don't fix" boundary stands; Builder applies it.
+- `blocking`: true only when the phase must not advance until this is addressed. A blocking issue without a `suggestion` still blocks, but the runtime offers the Fixer (/ant-unblock) as its next step — never leave the colony with "it doesn't work" and no way forward.
 
 ### Findings Persistence
 After completing your analysis, persist findings to your domain review ledger:

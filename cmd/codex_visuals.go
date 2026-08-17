@@ -2017,6 +2017,7 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 	if blockers := stringSliceValue(result["blocking_issues"]); len(blockers) > 0 {
 		b.WriteString("Blocking issues\n")
 		b.WriteString(renderIndentedList(blockers))
+		b.WriteString(renderBlockedWayForward(mapValue(result["gates"])))
 	}
 	primary := `Fix the blocking issues, then run ` + "`aether continue`" + ` again.`
 	if next := strings.TrimSpace(stringValue(result["next"])); next != "" {
@@ -2030,6 +2031,55 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 		secondary = `Run ` + "`" + skip + "`" + ` only if you intend to abandon this phase and move on.`
 	}
 	b.WriteString(renderNextUp(primary, secondary))
+	return b.String()
+}
+
+// renderBlockedWayForward turns the failed gates' fix hints and recovery
+// options into the block's way forward — a critic that stops the line brings
+// its fix in the same breath, and the Fixer (/ant-unblock) is always on the
+// list so "it doesn't work" is never a dead end.
+func renderBlockedWayForward(gates map[string]interface{}) string {
+	lines := []string{}
+	seen := map[string]bool{}
+	appendLine := func(text string) {
+		text = strings.TrimSpace(text)
+		if text == "" || seen[text] {
+			return
+		}
+		seen[text] = true
+		lines = append(lines, text)
+	}
+	checks, _ := gates["checks"].([]interface{})
+	for _, raw := range checks {
+		check, _ := raw.(map[string]interface{})
+		if check == nil {
+			continue
+		}
+		if passed, _ := check["passed"].(bool); passed {
+			continue
+		}
+		appendLine(stringValue(check["fix_hint"]))
+		for _, option := range stringSliceValue(check["recovery_options"]) {
+			appendLine(option)
+		}
+	}
+	appendLine("Run /ant-unblock to dispatch the Fixer against the blocking issues")
+
+	var b strings.Builder
+	b.WriteString("🧭 Way forward\n")
+	shown := lines
+	const maxWayForwardLines = 6
+	if len(shown) > maxWayForwardLines {
+		shown = shown[:maxWayForwardLines]
+	}
+	for _, line := range shown {
+		b.WriteString("   └── ")
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	if extra := len(lines) - len(shown); extra > 0 {
+		b.WriteString(fmt.Sprintf("   └── (+%d more in the gate report)\n", extra))
+	}
 	return b.String()
 }
 

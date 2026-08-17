@@ -510,7 +510,12 @@ var specialistCommandSurfaces = []string{
 // This is a change-detection fence, not an integrity control against an
 // adversary (see threat T-165-06-05 in 165-06-PLAN.md).
 var specialistCommandSurfaceHashes = map[string]string{
-	".claude/commands/ant/chaos.md":       "25244408c9229617c9a19a50f2436de11c168362de2dcf43702a2e08e5c27ebb",
+	// chaos.md hashes updated 2026-08-17 (critics-bring-solutions round):
+	// every finding now carries a `suggested_hardening` — the concrete step
+	// that closes the gap, shown per-finding in the report and in the JSON
+	// schema. Content addition only; the 5-scenario investigation flow,
+	// Tester's Law, and credit-resilience framing are unchanged.
+	".claude/commands/ant/chaos.md":       "16f24da7ea50ec125ca5e754ea7f7c0c8a06aed3a8d2e7f8d4f128a1b71115a0",
 	".claude/commands/ant/archaeology.md": "fada154f485134084ec39eccdf129f0bc2d4b0750e5d055e22620f060c3bc2ba",
 	".claude/commands/ant/dream.md":       "06158585eeafe94748086c871b02f7a9c2aa8165a8cd0409dcc98663fc94609e",
 	".claude/commands/ant/oracle.md":      "bdd9c4cbaae5bf81360d50f671dfef334b179f58b8e4ba19e9552353553e597f",
@@ -521,7 +526,7 @@ var specialistCommandSurfaceHashes = map[string]string{
 	".claude/commands/ant/swarm.md":         "a8f81e0474550915399d66a05effe03a41b5ed073e189242bc070770ae5f8529",
 	".claude/commands/ant/colonize.md":      "316767bf23b35618eaeebf34965cc8ca494ba7adcc35e2504a1dd35e7ff9cf99",
 	".claude/commands/ant/council.md":       "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
-	".opencode/commands/ant/chaos.md":       "25244408c9229617c9a19a50f2436de11c168362de2dcf43702a2e08e5c27ebb",
+	".opencode/commands/ant/chaos.md":       "16f24da7ea50ec125ca5e754ea7f7c0c8a06aed3a8d2e7f8d4f128a1b71115a0",
 	".opencode/commands/ant/archaeology.md": "fada154f485134084ec39eccdf129f0bc2d4b0750e5d055e22620f060c3bc2ba",
 	".opencode/commands/ant/dream.md":       "06158585eeafe94748086c871b02f7a9c2aa8165a8cd0409dcc98663fc94609e",
 	".opencode/commands/ant/oracle.md":      "bdd9c4cbaae5bf81360d50f671dfef334b179f58b8e4ba19e9552353553e597f",

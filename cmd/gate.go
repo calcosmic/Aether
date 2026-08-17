@@ -318,7 +318,12 @@ func extractTestCommand(content string) string {
 	return ""
 }
 
-// checkNoCriticalFlags checks for CRITICAL severity error records in the colony state.
+// checkNoCriticalFlags checks for CRITICAL severity error records in the
+// colony state. Deliberately NOT the Iron Law check: this gate also runs
+// pre-build, and the classic law scopes to ADVANCEMENT — you may build with
+// an open blocker (autopilot pauses on it, continue refuses to advance past
+// it), so the blocker-flag check lives in checkUnresolvedBlockerFlags and is
+// wired into the continue gates only.
 func checkNoCriticalFlags() gateCheck {
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
@@ -350,6 +355,45 @@ func checkNoCriticalFlags() gateCheck {
 		Passed: true,
 		Detail: "no critical flags",
 	}
+}
+
+// checkUnresolvedBlockerFlags enforces the classic Iron Law: "No phase
+// advancement with unresolved blockers." It reads blocker-type flags from
+// pending-decisions.json (flags.json fallback). This regressed silently in
+// the Go port — the continue gates claimed to run a flag check "every time
+// for safety" while never opening the flags file, so a blocker raised with
+// /ant-flag did not actually block /ant-continue. Blockers cannot be
+// acknowledged away — only resolved. Locked by TestBlockerFlagBlocksContinue.
+func checkUnresolvedBlockerFlags() gateCheck {
+	var ff colony.FlagsFile
+	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
+		if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
+			return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}
+		}
+	}
+	blockerDescriptions := []string{}
+	for _, flag := range ff.Decisions {
+		if flag.Resolved || !strings.EqualFold(strings.TrimSpace(flag.Type), "blocker") {
+			continue
+		}
+		desc := strings.TrimSpace(flag.Description)
+		if desc == "" {
+			desc = flag.ID
+		}
+		blockerDescriptions = append(blockerDescriptions, desc)
+	}
+	if len(blockerDescriptions) > 0 {
+		shown := blockerDescriptions
+		if len(shown) > 3 {
+			shown = shown[:3]
+		}
+		return gateCheck{
+			Name:   "no_unresolved_blockers",
+			Passed: false,
+			Detail: fmt.Sprintf("%d unresolved blocker flag(s): %s", len(blockerDescriptions), strings.Join(shown, "; ")),
+		}
+	}
+	return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}
 }
 
 // checkAllTasksCompleted verifies that all tasks in a phase have completed status.

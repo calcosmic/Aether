@@ -1060,8 +1060,15 @@ var knownEnrichmentSubcommands = map[string]bool{
 	// repairs — a failed checkpoint aborts nothing by itself (medic still
 	// holds its own directory backup), and rollback is invoked by a human
 	// reading the repair log, not by a gate.
-	"autofix-checkpoint":          true,
-	"autofix-rollback":            true,
+	"autofix-checkpoint": true,
+	"autofix-rollback":   true,
+	// phase-commits (2026-08-17, colony-conversation round): the per-phase
+	// git save-point toggle. Reading or flipping it failing degrades
+	// bookkeeping convenience only — the commit itself is already non-fatal
+	// by contract (a failed phase commit warns and writes the autopilot
+	// pause marker; it never gates advancement), so the toggle is
+	// enrichment, not a gate.
+	"phase-commits":               true,
 	"domain-detect":               true,
 	"queen-seed-from-hive":        true,
 	"registry-list":               true,

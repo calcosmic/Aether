@@ -451,6 +451,7 @@
     "pending-decision-list",
     "pending-decision-resolve",
     "phase",
+    "phase-commits",
     "phase-insert",
     "pheromone-count",
     "pheromone-display",

@@ -667,6 +667,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if priorGateResults == nil {
 		priorGateResults = []GateCheckResult{}
 	}
+	// Evidence-based flag clearing BEFORE the gates evaluate: a failed
+	// verification raised machine-source blocker flags; this green run is
+	// the evidence that clears them, and the restored Iron Law flags gate
+	// would otherwise deadlock on its own stale flags. Chaos-raised and
+	// user-raised blockers never auto-clear.
+	autoResolveVerificationBlockers(verification.ChecksPassed, phase.ID)
 	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 	if progress != nil {
 		progress.Advance("Verification")
@@ -3212,12 +3218,27 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 	if !flagCheck.Passed {
 		flagCheck.FixHint = "Resolve critical flags before continuing"
 		flagCheck.RecoveryOptions = []string{
+			"Fix the issue, then resolve its flag: /ant-flags --resolve <id> \"what fixed it\"",
+			"Run /ant-unblock to dispatch the Fixer against the blocking issues",
 			"Fix manually and run /ant-continue",
-			"Run /ant-unblock for guided recovery",
 		}
 		blockers = append(blockers, flagCheck.Detail)
 	}
 	checks = append(checks, flagCheck)
+
+	// The Iron Law gate (classic Flags Gate): no phase advancement with
+	// unresolved blockers. Advancement-scoped only — build is allowed with
+	// an open blocker; passing this line is not.
+	blockerFlagCheck := checkUnresolvedBlockerFlags()
+	if !blockerFlagCheck.Passed {
+		blockerFlagCheck.FixHint = "Every blocker must be resolved before the phase can advance"
+		blockerFlagCheck.RecoveryOptions = []string{
+			"Fix the issue, then resolve its flag: /ant-flags --resolve <id> \"what fixed it\"",
+			"Run /ant-unblock to dispatch the Fixer against the blocking issues",
+		}
+		blockers = append(blockers, blockerFlagCheck.Detail)
+	}
+	checks = append(checks, blockerFlagCheck)
 
 	// anti_pattern / anti_pattern_executed gates — the live caller for the
 	// security gate that RESEARCH.md found had no live caller (T-160-01).

@@ -224,6 +224,11 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// queenAdvisory.Decisions provides advisory context for logging -- finalize re-evaluates gates live
 	// queenAdvisory is NOT used to skip or alter gate evaluation -- it is purely informational
 	_ = queenAdvisory
+	// Evidence-based flag clearing before gates — same contract and same
+	// reasoning as the fast path (see codex_continue.go): green verification
+	// clears the machine-raised blockers a failed run created; chaos and
+	// user flags never auto-clear.
+	autoResolveVerificationBlockers(verification.ChecksPassed, phase.ID)
 	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 	budget := budgetFromRecoveryLog(phase.ID, 1)
 	if budget == nil {
@@ -479,6 +484,12 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
 	if !review.Passed {
+		// Hand the blocking findings to the Fixer's intake: `aether unblock
+		// --dispatch` reads gate-results-<N>.json, so a review_findings gate
+		// entry with each finding's suggestion as recovery options is what
+		// puts the reviewers' proposed fixes in the Fixer's hands with zero
+		// new plumbing.
+		appendReviewFindingsGateResult(phase.ID, workerFlow, now)
 		blockedWorkerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
 		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, blockedWorkerFlow, now, verificationReportRel, gateReportRel, nil, finalizeReviewDepth)
 		if err != nil {
@@ -783,6 +794,57 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 	return verification, nil
 }
 
+// appendReviewFindingsGateResult writes a review_findings entry into the
+// phase's gate-results file when review workers returned blocking findings,
+// carrying each finding's suggestion as a recovery option — the bridge that
+// puts reviewer-proposed fixes into `aether unblock --dispatch`'s Fixer
+// context. Best-effort: gate-results bookkeeping never blocks anything.
+func appendReviewFindingsGateResult(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time) {
+	details := []string{}
+	options := []string{"Run /ant-unblock to dispatch the Fixer against these findings"}
+	fixHint := ""
+	for _, step := range workerFlow {
+		for _, finding := range step.Findings {
+			if !finding.Blocking && !strings.EqualFold(finding.Severity, "CRITICAL") {
+				continue
+			}
+			desc := strings.TrimSpace(finding.Description)
+			if desc == "" {
+				desc = strings.TrimSpace(finding.Title)
+			}
+			if desc == "" {
+				continue
+			}
+			details = append(details, fmt.Sprintf("%s: %s", step.Name, desc))
+			if suggestion := strings.TrimSpace(finding.Suggestion); suggestion != "" {
+				options = append(options, fmt.Sprintf("Apply %s's fix: %s", step.Name, suggestion))
+				if fixHint == "" {
+					fixHint = suggestion
+				}
+			}
+		}
+	}
+	if len(details) == 0 {
+		return
+	}
+	if fixHint == "" {
+		fixHint = "No reviewer supplied a fix — /ant-unblock dispatches the Fixer to propose one"
+	}
+	entries, err := gateResultsReadPhase(phaseID)
+	if err != nil || entries == nil {
+		entries = []GateCheckResult{}
+	}
+	entries = append(entries, GateCheckResult{
+		Name:            "review_findings",
+		Status:          "failed",
+		Detail:          strings.Join(details, "; "),
+		FixHint:         fixHint,
+		RecoveryOptions: options,
+		Timestamp:       now.Format(time.RFC3339),
+	})
+	_ = gateResultsWritePhase(phaseID, entries)
+}
+
 func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, skipMissing bool, reviewDepth colony.VerificationDepth, plannedDispatches ...[]codexContinueExternalDispatch) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phaseID,
@@ -802,6 +864,30 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 		}
 		report.Workers = append(report.Workers, step)
 		if status == "completed" || status == "manually-reconciled" {
+			// Typed blocking: a completed review whose STRUCTURED findings
+			// carry blocking (or CRITICAL severity, treated as implicitly
+			// blocking) still stops the line — previously only raw blocker
+			// strings fed this decision and structured findings were
+			// decorative. Every typed block carries its way forward in the
+			// same breath: the reviewer's fix, or the Fixer.
+			for _, finding := range step.Findings {
+				if !finding.Blocking && !strings.EqualFold(finding.Severity, "CRITICAL") {
+					continue
+				}
+				desc := strings.TrimSpace(finding.Description)
+				if desc == "" {
+					desc = strings.TrimSpace(finding.Title)
+				}
+				if desc == "" {
+					continue
+				}
+				report.Passed = false
+				if suggestion := strings.TrimSpace(finding.Suggestion); suggestion != "" {
+					blockers = append(blockers, fmt.Sprintf("%s blocking finding: %s (fix: %s)", step.Name, desc, suggestion))
+				} else {
+					blockers = append(blockers, fmt.Sprintf("%s blocking finding: %s (next step: /ant-unblock — dispatch the Fixer)", step.Name, desc))
+				}
+			}
 			continue
 		}
 		if continueWorkerFlowEnvironmentBlocked(step) {

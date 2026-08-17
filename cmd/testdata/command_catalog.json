@@ -2553,7 +2553,7 @@
   },
   {
     "name": "flag-auto-resolve",
-    "short_description": "Auto-resolve flags matching patterns (e.g., old flags)",
+    "short_description": "Resolve flags older than an explicit --max-days (age-based housekeeping only)",
     "flags": [
       "max-days"
     ],

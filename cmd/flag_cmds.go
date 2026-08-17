@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -293,7 +294,15 @@ var flagAcknowledgeCmd = &cobra.Command{
 		found := false
 		for i := range ff.Decisions {
 			if ff.Decisions[i].ID == id {
+				// Classic flag lifecycle: "Blockers CANNOT be acknowledged —
+				// they must be resolved before phase advancement." Parking a
+				// blocker would let the Iron Law gate be waved through.
+				if strings.EqualFold(strings.TrimSpace(ff.Decisions[i].Type), "blocker") {
+					outputError(1, fmt.Sprintf("flag %q is a blocker and cannot be acknowledged — resolve it: aether flag-resolve --id %s --message \"what fixed it\"", id, id), nil)
+					return nil
+				}
 				ff.Decisions[i].Acknowledged = true
+				ff.Decisions[i].AcknowledgedAt = time.Now().UTC().Format(time.RFC3339)
 				found = true
 				break
 			}
@@ -319,9 +328,17 @@ var flagAcknowledgeCmd = &cobra.Command{
 	},
 }
 
+// flagAutoResolveCmd is age-based housekeeping ONLY, and only under an
+// explicit --max-days. It used to default to resolving anything older than 7
+// days — resolving problems by aging, regardless of whether they were fixed,
+// which inverted the classic semantics (classic auto-resolve was
+// evidence-based: blockers cleared on build_pass). The evidence-based path
+// is runtime-owned now — autoResolveVerificationBlockers runs inside
+// continue where the real verification report exists — so this CLI cannot
+// fake the evidence.
 var flagAutoResolveCmd = &cobra.Command{
 	Use:   "flag-auto-resolve",
-	Short: "Auto-resolve flags matching patterns (e.g., old flags)",
+	Short: "Resolve flags older than an explicit --max-days (age-based housekeeping only)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
@@ -330,8 +347,9 @@ var flagAutoResolveCmd = &cobra.Command{
 		}
 
 		maxDays, _ := cmd.Flags().GetInt("max-days")
-		if maxDays == 0 {
-			maxDays = 7
+		if maxDays <= 0 {
+			outputError(1, "flag-auto-resolve requires an explicit --max-days: age is not evidence, so aging out flags is an operator decision, never a default (blockers auto-resolve on verification evidence inside continue instead)", nil)
+			return nil
 		}
 
 		var ff colony.FlagsFile
@@ -356,6 +374,8 @@ var flagAutoResolveCmd = &cobra.Command{
 			}
 			if createdAt.Before(cutoff) {
 				ff.Decisions[i].Resolved = true
+				ff.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+				ff.Decisions[i].Resolution = fmt.Sprintf("aged out by flag-auto-resolve --max-days %d", maxDays)
 				resolved++
 			}
 		}
@@ -376,6 +396,63 @@ var flagAutoResolveCmd = &cobra.Command{
 	},
 }
 
+// autoResolveMachineSources are the flag sources the runtime itself raises
+// when verification fails. When a LATER verification run comes back green,
+// these clear automatically — the classic `auto_resolve_on: "build_pass"`
+// semantics. Deliberately absent: chaos (the v2.4.3 exemption — a Chaos
+// finding always demands a human), and user-raised flags (empty or other
+// sources) — the owner's "don't advance until I say" is never waved through
+// by a green build.
+var autoResolveMachineSources = map[string]bool{
+	"verification": true,
+	"watcher":      true,
+	"escalation":   true,
+	"build":        true,
+	"continue":     true,
+	"medic":        true,
+}
+
+// autoResolveVerificationBlockers clears machine-raised blocker flags when
+// verification has genuinely passed. Called by BOTH real continue paths
+// strictly BEFORE the gates evaluate — the failed run raised the flag, the
+// green run is the evidence that clears it, and without this ordering the
+// restored Iron Law gate would deadlock on its own stale flags. NEVER called
+// from the plan-only/inspection path (dry-run must not mutate).
+func autoResolveVerificationBlockers(verificationPassed bool, phaseID int) int {
+	if !verificationPassed || store == nil {
+		return 0
+	}
+	var ff colony.FlagsFile
+	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
+		if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
+			return 0
+		}
+	}
+	resolved := 0
+	now := time.Now().UTC().Format(time.RFC3339)
+	for i := range ff.Decisions {
+		flag := &ff.Decisions[i]
+		if flag.Resolved || !strings.EqualFold(strings.TrimSpace(flag.Type), "blocker") {
+			continue
+		}
+		source := strings.ToLower(strings.TrimSpace(flag.Source))
+		if strings.Contains(source, "chaos") {
+			continue
+		}
+		if !autoResolveMachineSources[source] {
+			continue
+		}
+		flag.Resolved = true
+		flag.ResolvedAt = now
+		flag.Resolution = fmt.Sprintf("auto-resolved: phase %d verification passed", phaseID)
+		resolved++
+	}
+	if resolved > 0 {
+		_ = store.SaveJSON("pending-decisions.json", ff)
+	}
+	return resolved
+}
+
 func init() {
 	flagAddCmd.Flags().String("title", "", "Flag title/description (required)")
 	flagAddCmd.Flags().String("severity", "", "Severity: critical, high, low (required)")
@@ -388,7 +465,9 @@ func init() {
 	flagResolveCmd.Flags().String("message", "", "Resolution message")
 	flagAcknowledgeCmd.Flags().String("id", "", "Flag ID to acknowledge (required)")
 
-	flagAutoResolveCmd.Flags().Int("max-days", 7, "Maximum age in days for auto-resolution")
+	// No default: age-based resolution is an explicit operator decision
+	// (age is not evidence that anything was fixed).
+	flagAutoResolveCmd.Flags().Int("max-days", 0, "Maximum age in days for auto-resolution (required; no default)")
 
 	rootCmd.AddCommand(flagAddCmd)
 	rootCmd.AddCommand(flagResolveCmd)
