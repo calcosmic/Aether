@@ -8,10 +8,13 @@ VERSION := $(shell \
 BINARY  := aether
 LDFLAGS := -X github.com/calcosmic/Aether/cmd.Version=$(VERSION)
 
-.PHONY: build test lint clean install smoke version-sync vulncheck
+.PHONY: build test lint clean install smoke bench-selftest version-sync vulncheck
 
 smoke:
 	./scripts/smoke-daily-driver.sh
+
+bench-selftest:
+	./bench/lib/selftest.sh
 
 # Fails on any vulnerability this code actually calls. Modules we require but
 # never call into are reported separately and do not fail the gate.
