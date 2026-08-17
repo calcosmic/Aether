@@ -11,13 +11,17 @@
 # fingerprint changed even by one byte.
 #
 # Usage:
-#   capture-print-brief.sh <colony-repo> <phase-number>
-#   capture-print-brief.sh --check <colony-repo> <phase-number>
+#   capture-print-brief.sh <colony-repo> <phase-number> [worker-name]
+#   capture-print-brief.sh --check <colony-repo> <phase-number> [worker-name]
 #
 # <colony-repo> must be a real, already-in-progress project on this machine
 # (it must already have .aether/data/COLONY_STATE.json). This script never
 # creates or advances a colony — a colony it manufactured would be a
 # fixture, not evidence of what a real worker sees.
+#
+# [worker-name] is optional and passes straight through to the real
+# command's own --worker flag, scoping the capture to one named worker's
+# brief instead of every worker planned for the phase.
 #
 # Exit codes: 0 on success (or, in --check mode, on "unchanged"); non-zero
 # with a named reason on any failure, including "the composition changed"
@@ -44,9 +48,10 @@ fi
 
 COLONY_REPO="${1:-}"
 PHASE_NUM="${2:-}"
+WORKER_NAME="${3:-}"
 
-[ -n "$COLONY_REPO" ] || fail "usage: capture-print-brief.sh [--check] <colony-repo> <phase-number>"
-[ -n "$PHASE_NUM" ] || fail "usage: capture-print-brief.sh [--check] <colony-repo> <phase-number>"
+[ -n "$COLONY_REPO" ] || fail "usage: capture-print-brief.sh [--check] <colony-repo> <phase-number> [worker-name]"
+[ -n "$PHASE_NUM" ] || fail "usage: capture-print-brief.sh [--check] <colony-repo> <phase-number> [worker-name]"
 
 case "$PHASE_NUM" in
   ''|*[!0-9]*) fail "phase number must be a positive integer, got '$PHASE_NUM'" ;;
@@ -106,11 +111,16 @@ echo "    binary version: $BINARY_VERSION"
 # ---------------------------------------------------------------------------
 # Run the real, read-only inspector command from the colony repo.
 # ---------------------------------------------------------------------------
-step "running aether build $PHASE_NUM --print-brief --full"
+WORKER_ARGS=()
+if [ -n "$WORKER_NAME" ]; then
+  WORKER_ARGS=(--worker "$WORKER_NAME")
+fi
+
+step "running aether build $PHASE_NUM --print-brief --full${WORKER_NAME:+ --worker $WORKER_NAME}"
 CAPTURE_OUT="$WORK/capture.out"
 CAPTURE_ERR="$WORK/capture.err"
 set +e
-(cd "$COLONY_REPO" && "$BIN" build "$PHASE_NUM" --print-brief --full >"$CAPTURE_OUT" 2>"$CAPTURE_ERR")
+(cd "$COLONY_REPO" && "$BIN" build "$PHASE_NUM" --print-brief --full "${WORKER_ARGS[@]}" >"$CAPTURE_OUT" 2>"$CAPTURE_ERR")
 CAPTURE_STATUS=$?
 set -e
 

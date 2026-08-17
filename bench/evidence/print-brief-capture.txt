@@ -1,0 +1,271 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚  Guard-55  (keeper)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── Context Capsule (manifest-level) ──
+
+## Colony State
+
+Goal: Rebrand all agents for the Aether ant colony using emojis and different names and ant metaphors
+State: EXECUTING
+Phase: 6
+Phase Name: Update Strategy Documentation
+Tasks:
+  - [] Inventory all strategy docs for agent references
+  - [] Update phase playbooks (0-6) with new agent names
+  - [] Update scenario runbooks with new agent names
+  - [] Update coordination and activation documents
+  - [] Update QUICKSTART.md and EXECUTIVE-BRIEF.md
+Parallel Mode: in-repo
+## USER PREFERENCES
+
+- Speak plain English
+## GLOBAL QUEEN WISDOM (Cross-Colony)
+
+- Always write tests first
+## Active Instincts
+
+- [] Always extract to CSV first, validate, then batch process (confidence: 0.95)
+- [] Assign colors by caste, not by individual agent (confidence: 0.90)
+- [] Generate table content programmatically, then manual copy-paste to target (confidence: 0.90)
+- [] Always strip quotes when parsing YAML field values to avoid literal quote inclusion (confidence: 0.95)
+- [] Use find/dynamic discovery instead of hardcoded paths or names (confidence: 0.90)
+## Key Decisions
+
+- Phase 2:  — Source data contained 13 duplicate or invalid entries that were filtered out
+## Phase Learnings
+
+### Phase 1: Design Ant Colony Branding
+  - Ant caste metaphors effectively map to business functions [hypothesis]
+  - Naming patterns with {Concept}-{Number} format scales well [hypothesis]
+### Phase 2: Create Agent Mapping Spreadsheet
+  - Source data contains duplicates that need deduplication [verified]
+  - CSV format with 13 columns works well for agent mapping [verified]
+  - Caste-based emoji assignment prevents duplicates naturally [verified]
+### Phase 4: Update README.md
+  - Script-generated table content enables efficient manual README updates [verified]
+  - Caste emoji prefixes improve visual scanning in large tables [hypothesis]
+  - README stats need separate maintenance from actual counts [verified]
+### Phase 5: Update Scripts
+  - YAML quote stripping is essential for color field extraction [verified]
+  - Directory-agnostic scripts survive renames without modification [verified]
+  - Slugify functions with hyphen support handle Aether naming correctly [verified]
+## Review Depth
+
+Standard review -- watcher and probe verification
+
+# Build Dispatch
+
+- Worker: Guard-55
+- Caste: keeper
+- Phase: 6 — Update Strategy Documentation
+- Started: 2026-08-17T22:13:38+02:00
+- Workspace: /Users/callumcowie/repos/agency-agents
+
+## Assignment
+
+Knowledge preservation plan for reusable patterns
+
+## Phase Objective
+
+Refresh playbooks, runbooks, and coordination docs with ant colony language and references
+
+## Phase Success Criteria
+
+- All strategy docs updated with Aether Colony language
+- All agent references use new names
+- Workflows and examples remain functional
+- Documentation maintains clarity
+
+## Expected Output
+
+- Reusable project knowledge and patterns preserved for future workers.
+
+
+── Skill Section ──
+
+### Skill: markdown-authoring
+
+---
+name: markdown-authoring
+description: Use when the project uses Markdown for documentation or content authoring
+type: domain
+domains: [documentation, authoring, content]
+agent_roles: [builder, watcher]
+detect_files: ["docs/**", "*.md"]
+priority: low
+version: "1.0"
+---
+
+# Markdown Authoring Best Practices
+
+## Heading Hierarchy
+
+Use a single `#` h1 per document as the page title. Use `##` for top-level sections and `###` for subsections. Never skip levels for visual effect — use heading levels to convey document structure, not size.
+
+Do not use bold text as a substitute for headings. If a block of content needs a label that belongs in a table of contents, make it a heading.
+
+## Link Conventions
+
+Use descriptive link text that makes sense out of context: `[skill format specification](specs/skill-format.md)` not `[click here](specs/skill-format.md)`.
+
+Prefer relative paths for internal links. Absolute URLs are appropriate only for external resources. Keep relative paths consistent with the file's location in the repository.
+
+Check that all internal links resolve to existing files before committing. Broken links degrade navigation and signal out-of-date docs.
+
+## Code Blocks
+
+Always specify a language tag on fenced code blocks: ` ```bash `, ` ```json `, ` ```yaml `. This enables syntax highlighting and signals to readers what runtime or parser to use.
+
+Use inline code (`backticks`) for file paths, command names, variable names, and short literals in prose. Do not use inline code for emphasis — use bold or italic for that.
+
+## Frontmatter Usage
+
+Use YAML frontmatter only when the document will be processed by a static site generator or metadata pipeline. In plain documentation repos, omit frontmatter unless specified by a format standard.
+
+When frontmatter is present, keep it minimal: only fields that are actually consumed downstream. Remove unused fields rather than leaving them with empty values.
+
+## Table Formatting
+
+Use tables only for genuinely tabular data — rows of comparable items with the same set of attributes. Do not use tables to force two-column layout for non-comparable content.
+
+Align column separators consistently. Include a header row and use the `---` separator row. For long tables, consider whether a definition list or section headings would be clearer.
+
+Keep cell content concise. If a cell requires a sentence or more, a table is probably the wrong structure — use a definition list or subsections.
+
+## List Consistency
+
+Use unordered lists (`-`) for items without a meaningful sequence. Use ordered lists (`1.`) when sequence or numbering matters (steps, rankings).
+
+Keep list items parallel in structure: all noun phrases, all imperative verbs, or all complete sentences — not a mix. Start each item with the same grammatical form.
+
+Do not mix ordered and unordered lists at the same level. Nested lists are acceptable up to two levels deep; deeper nesting is a sign the content needs restructuring.
+
+## Images and Alt Text
+
+Every image must have alt text that describes the image's content or purpose: `![Flow diagram showing data moving from input to output](assets/data-flow.png)`.
+
+Use empty alt text (`alt=""`) only for decorative images that add no informational value. Screen readers skip empty-alt images entirely.
+
+Store images in a dedicated assets or images directory. Use lowercase kebab-case filenames. Avoid generic names like `screenshot.png` or `image1.jpg`.
+
+## Markdownlint Compliance
+
+Run `markdownlint` (or `markdownlint-cli2`) on all Markdown files before committing. Address all warnings — common violations include trailing spaces, missing blank lines around headings, and inconsistent list marker style.
+
+Configure a `.markdownlint.json` or `.markdownlint.yaml` at the repo root to establish project-wide rules. Shared configuration prevents rule drift across contributors.
+
+Do not disable rules inline without a documented reason. If a rule fires repeatedly on legitimate content, adjust the project configuration rather than suppressing it per file.
+
+## Document Length and Scope
+
+Keep each Markdown document focused on a single topic. If a document grows beyond what fits on one screen without scrolling, consider splitting it into multiple focused files with a parent index.
+
+Avoid orphaned documents with no inbound links. Every document should be reachable from an index or navigation file.
+
+## Reference Library
+
+Use these global Aether references for output shape and quality bars.
+
+### Phase Plan Template
+
+# Phase Plan Template
+
+## Goal
+
+State the outcome in user terms.
+
+## Scope
+
+### In Scope
+
+List what will be changed.
+
+### Out Of Scope
+
+List what will not be changed.
+
+## Assumptions
+
+Name assumptions and how they will be tested.
+
+## Tasks
+
+Use small, dependency-aware tasks:
+
+```json
+{
+  "goal": "Concrete outcome",
+  "depends_on": [],
+  "hints": ["likely file or command"],
+  "success_criteria": ["observable proof"]
+}
+```
+
+Do not write an `id` field in `.aether/data/planning/phase-plan.json`. Aether assigns task ids from phase/task array order: phase 1 task 1 is `1.1`, phase 1 task 2 is `1.2`, and phase 2 task 1 is `2.1`. `depends_on` must reference only those runtime ids, never task prose, file paths, or aliases such as `P1-T1`.
+
+## Worker Fit
+
+Name which worker roles are likely needed and why.
+
+## Verification
+
+List phase-level checks, not just generic test commands.
+
+## Risks
+
+Name what could derail the phase.
+
+For beginners: a phase plan is a build map, not a wish list.
+
+### Acceptance Test Plan Template
+
+# Acceptance Test Plan Template
+
+## Acceptance Criteria
+
+List each requirement as an observable statement.
+
+## Test Mapping
+
+Use this table:
+
+| Criterion | Test/Command | Evidence | Owner | Status |
+|---|---|---|---|---|
+
+## Required Fixtures
+
+Name fixture files, temp repos, state files, or mocked inputs needed.
+
+## Negative Cases
+
+List what must fail safely:
+
+- invalid input
+- missing files
+- stale state
+- permission errors
+- platform mismatch
+
+## Regression Surface
+
+Name existing behavior that must not break.
+
+## Completion Standard
+
+State the minimum evidence needed to call the work complete.
+
+For beginners: this connects "what should be true" to "how we prove it."
+────────────────────────────────────────────────────────────────────────
+  COMPOSITION
+────────────────────────────────────────────────────────────────────────
+  Skill Section                        6244   68.3%  ███████████████████████████
+  Context Capsule (manifest-level)     2247   24.6%  █████████
+  Phase Success Criteria                198    2.2%  █
+  (preamble)                            188    2.1%  █
+  Phase Objective                       112    1.2%  █
+  Expected Output                        93    1.0%  █
+  Assignment                             66    0.7%  █
+────────────────────────────────────────────────────────────────────────
+  TOTAL                                9147  100.0%
+
