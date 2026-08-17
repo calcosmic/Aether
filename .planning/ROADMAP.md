@@ -927,7 +927,7 @@ Plans:
 - [x] 186-05-PLAN.md — Four deterministic acceptance scripts, committed before any run, with the git-history ordering checker
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 186-06-PLAN.md — The harness: one documented command per cell, permitted-inputs script, results-table generator, operator runbook
+- [x] 186-06-PLAN.md — The harness: one documented command per cell, permitted-inputs script, results-table generator, operator runbook
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 186-07-PLAN.md — Execute the twelve runs (operator at keyboard) and commit the generated results table
