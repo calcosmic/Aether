@@ -915,12 +915,21 @@ Phases 186–192 close milestone v1.26. Source: the 2026-08-17 truth audit + hos
 **Plans**: 7 plans in 5 waves
 
 Plans:
+**Wave 1**
 - [ ] 186-01-PLAN.md — Hermetic-profile smoke: a clean HOME boots, authenticates and completes one trivial task in BOTH systems (wave 1, alone — the locked sequencing gate)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 186-02-PLAN.md — Pin two neutral OSS substrate repos and write the four task specs plus per-task file allowlists
 - [ ] 186-03-PLAN.md — Measurement libraries: harness-side token parsing, git cleanliness, operator log, plus a self-test against hand-computed fixtures
 - [ ] 186-04-PLAN.md — Read-only `aether build --print-brief --full` capture from a real mid-project colony, with a checksum proof it mutated nothing
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 186-05-PLAN.md — Four deterministic acceptance scripts, committed before any run, with the git-history ordering checker
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 186-06-PLAN.md — The harness: one documented command per cell, permitted-inputs script, results-table generator, operator runbook
+
+**Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 186-07-PLAN.md — Execute the twelve runs (operator at keyboard) and commit the generated results table
 
 ### Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality

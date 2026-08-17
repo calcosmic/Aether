@@ -3,21 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
 status: executing
-stopped_at: Audit Addendum adopted (phases 186-192); Phase 186 Baseline Showdown is next
-last_updated: "2026-08-17T00:00:00.000Z"
-last_activity: 2026-08-17 -- truth audit + hostile review complete; implementation programme approved; setup reconciliation done
+stopped_at: Phase 186 planned (7 plans, 5 waves); ready to execute
+last_updated: "2026-08-17T18:14:14.493Z"
+last_activity: 2026-08-17 -- Phase 186 planning complete
 progress:
   total_phases: 16
   completed_phases: 9
-  total_plans: 33
+  total_plans: 40
   completed_plans: 33
   percent: 56
   note: >
-    Counts cover milestone v1.26 (phases 172, 173, 174, 180-184, 175, 185,
-    186-192; 179 remapped into 186+192). Complete: 172, 173, 174 (closed
-    partial, will not be resumed), 175, 180, 181, 182, 183, 184. Remaining:
-    186, 187, 188, 189, 190, 191, 185, 192 — in that order. This file went
-    stale 2026-08-14..17 while ROADMAP.md was maintained; reconciled 2026-08-17.
+    Counts cover milestone v1.26 (172, 173, 174, 180-184, 175, 185, 186-192;
+    179 remapped into 186+192). Phase 186 adds 7 plans, 0 complete. The
+    state.planned-phase SDK verb regenerates this block with wrong totals
+    (it counts all-history phase dirs); if these numbers look absurd again,
+    that verb ran — recompute from the ROADMAP Progress table.
 ---
 
 # Project State
@@ -36,9 +36,9 @@ See: .planning/PROJECT.md (updated 2026-08-08)
 
 Phase: 186 — Baseline Showdown (Light)
 Plan: not yet planned
-Status: ready to plan
+Status: Ready to execute
 Progress: 9 of 16 phases in this milestone
-Last activity: 2026-08-17 -- audit programme setup complete (roadmap addendum, requirement reconciliation, checkpoint tag `pre-audit-addendum`)
+Last activity: 2026-08-17 -- Phase 186 planning complete
 
 **Order from here:** 186 → 187 → 188 → 189 → 190 → 191 → 185 → 192.
 186 first, before any code change — it records the baseline everything else is
