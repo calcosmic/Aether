@@ -916,7 +916,7 @@ Phases 186–192 close milestone v1.26. Source: the 2026-08-17 truth audit + hos
 
 Plans:
 **Wave 1**
-- [ ] 186-01-PLAN.md — Hermetic-profile smoke: a clean HOME boots, authenticates and completes one trivial task in BOTH systems (wave 1, alone — the locked sequencing gate)
+- [x] 186-01-PLAN.md — Hermetic-profile smoke: a clean HOME boots, authenticates and completes one trivial task in BOTH systems (wave 1, alone — the locked sequencing gate)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 186-02-PLAN.md — Pin two neutral OSS substrate repos and write the four task specs plus per-task file allowlists
