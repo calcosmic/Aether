@@ -152,8 +152,70 @@ func TestWorktreeSafetyRefusesEmptyBranch(t *testing.T) {
 	}
 }
 
+// TestWorktreeSafetyRefusesStaleDirectoryWithUntrackedWork is CR-02's
+// fail-then-pass proof. `git -C <path> status --porcelain` does not fail
+// when <path> is a plain directory that is not itself a worktree — git
+// walks UP the directory tree and answers about the enclosing repository
+// instead. This reproduces the review's PROBE D exactly: a directory
+// gitignored by the root repo (the realistic configuration, since
+// .aether/data is documented as local-only), containing an untracked file,
+// with the ROOT repo otherwise clean. Before the CR-02 fix, this reads as
+// "clean and fully merged" because the guard is answering about root, not
+// about the stale directory.
+func TestWorktreeSafetyRefusesStaleDirectoryWithUntrackedWork(t *testing.T) {
+	root, _, entry := newWorktreeSafetyFixture(t, "phase-1/builder-stale")
+
+	if err := os.WriteFile(root+"/.gitignore", []byte("/.aether/\n"), 0644); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+	runGit(t, root, "add", ".gitignore")
+	runGit(t, root, "commit", "-m", "ignore .aether")
+
+	staleDir := root + "/.aether/stale-worktree"
+	if err := os.MkdirAll(staleDir, 0755); err != nil {
+		t.Fatalf("mkdir stale dir: %v", err)
+	}
+	if err := os.WriteFile(staleDir+"/precious.txt", []byte("untracked precious work\n"), 0644); err != nil {
+		t.Fatalf("write precious file: %v", err)
+	}
+	entry.Path = staleDir
+
+	// Sanity check the premise: root must be clean, otherwise the dirty
+	// check (Step 3) could refuse for the wrong reason and this test would
+	// pass even without the CR-02 fix.
+	if rootStatusOut, rootStatusErr := exec.Command("git", "-C", root, "status", "--porcelain").CombinedOutput(); rootStatusErr != nil {
+		t.Fatalf("git status on root: %v: %s", rootStatusErr, rootStatusOut)
+	} else if strings.TrimSpace(string(rootStatusOut)) != "" {
+		t.Fatalf("fixture setup error: expected a clean root, got dirty status: %s", rootStatusOut)
+	}
+
+	safety := worktreeDestructionSafety(root, entry)
+
+	if safety.Safe {
+		t.Fatalf("expected Safe=false for a stale directory holding untracked work that git resolves to the enclosing (clean) repo, got Safe=true (reason: %q, dirty=%d)", safety.Reason, safety.DirtyFileCount)
+	}
+}
+
 func TestWorktreeSafetyRefusesWhenGitCannotAnswer(t *testing.T) {
 	root, _, entry := newWorktreeSafetyFixture(t, "phase-1/builder-unreadable")
+
+	// CR-02: the root itself must stay CLEAN for this test to prove
+	// anything. If creating notAWorktree makes the enclosing root dirty,
+	// the guard's dirty check (Step 3) would report Safe=false for the
+	// wrong reason — "the root is dirty" rather than "this path is not its
+	// own worktree" — and the test would still pass even if the CR-02
+	// top-level check were deleted entirely. .gitignore the whole .aether/
+	// directory (matching the real, documented configuration — .aether/data
+	// is local-only) so the root's `git status --porcelain` stays empty,
+	// even though newWorktreeSafetyFixture already created an untracked
+	// .aether/worktrees/... directory before this test ran; git re-evaluates
+	// ignore status on every `status` call, so adding the ignore now still
+	// clears it.
+	if err := os.WriteFile(root+"/.gitignore", []byte("/.aether/\n"), 0644); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+	runGit(t, root, "add", ".gitignore")
+	runGit(t, root, "commit", "-m", "ignore not-a-worktree fixture dir")
 
 	// Point the entry at a directory that exists but is not a git worktree.
 	notAWorktree := root + "/.aether/not-a-worktree"
@@ -161,6 +223,15 @@ func TestWorktreeSafetyRefusesWhenGitCannotAnswer(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	entry.Path = notAWorktree
+
+	// Sanity check the premise: the root repo must be clean, or this test
+	// cannot distinguish "the CR-02 guard refused" from "the dirty check
+	// happened to refuse for an unrelated reason".
+	if rootStatusOut, rootStatusErr := exec.Command("git", "-C", root, "status", "--porcelain").CombinedOutput(); rootStatusErr != nil {
+		t.Fatalf("git status on root: %v: %s", rootStatusErr, rootStatusOut)
+	} else if strings.TrimSpace(string(rootStatusOut)) != "" {
+		t.Fatalf("fixture setup error: expected a clean root, got dirty status: %s", rootStatusOut)
+	}
 
 	safety := worktreeDestructionSafety(root, entry)
 

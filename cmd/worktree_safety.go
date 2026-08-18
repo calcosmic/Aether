@@ -63,6 +63,31 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 		return result
 	}
 
+	// Step 2.5: confirm absPath is the TOP LEVEL of its own git worktree
+	// before trusting any status answer computed from it. `git -C <path>
+	// status` does not fail when <path> is a plain directory that is not
+	// itself a worktree — git walks UP the directory tree and answers about
+	// the first enclosing repository it finds instead. Without this check, a
+	// stale directory whose worktree registration is gone (crash during
+	// `git worktree add`, a manually deleted `.git/worktrees/...` entry, a
+	// restored backup) would silently report the ENCLOSING repo's status —
+	// "clean" if the root happens to be clean — rather than refusing (CR-02).
+	topCtx, topCancel := context.WithTimeout(context.Background(), GitTimeout)
+	topOut, topErr := exec.CommandContext(topCtx, "git", "-C", absPath, "rev-parse", "--show-toplevel").Output()
+	topCancel()
+	if topErr != nil {
+		result.Safe = false
+		result.Reason = "cannot determine whether this worktree has unsaved changes"
+		return result
+	}
+	resolvedTop, _ := filepath.EvalSymlinks(strings.TrimSpace(string(topOut)))
+	resolvedAbs, _ := filepath.EvalSymlinks(absPath)
+	if resolvedTop != resolvedAbs {
+		result.Safe = false
+		result.Reason = "this folder is no longer a separate worker workspace, so its contents cannot be checked"
+		return result
+	}
+
 	// Step 3: dirty check. A guard that cannot see must refuse, never assume
 	// safe.
 	statusCtx, statusCancel := context.WithTimeout(context.Background(), GitTimeout)
