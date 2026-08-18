@@ -197,12 +197,30 @@ var initCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "backed up previous colony state to %s\nrestore with: cp %q %q\n", backupFile, backupFile, statePath)
 		}
 
-		// Clean up any leftover worktrees from previous colony
-		if cleaned, orphaned, err := gcOrphanedWorktrees(); err == nil && (cleaned > 0 || orphaned > 0) {
-			fmt.Fprintf(os.Stderr, "warning: cleaned %d stale worktree(s), %d orphaned\n", cleaned, orphaned)
+		// Check any leftover worktrees from a previous colony. Nothing here
+		// is destroyed automatically (D-01) — dirty or unmerged work is
+		// kept, not deleted, and every occurrence is reported (D-02).
+		var wtPreserved int
+		if cleaned, preserved, err := gcOrphanedWorktrees(); err == nil {
+			wtPreserved = preserved
+			if cleaned > 0 || preserved > 0 {
+				fmt.Fprintf(os.Stderr, "worker workspaces from a previous colony: %d forgotten (already gone), %d kept because they still hold work — run `aether worktree-reap` to remove them deliberately\n", cleaned, preserved)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: could not check previous colony's worker workspaces for leftover work: %v\n", err)
 		}
-		// Also remove the worktrees directory entirely to ensure a clean slate
-		_ = os.RemoveAll(filepath.Join(aetherDir, "worktrees"))
+		// Remove the worktrees directory entirely to ensure a clean slate,
+		// but only when nothing was preserved. Removing it unconditionally
+		// would silently undo every preservation gcOrphanedWorktrees just
+		// made — init would become the new data-loss path the moment
+		// gcOrphanedWorktrees stopped being one. Do not remove this guard;
+		// doing so reintroduces the exact defect this phase was created to
+		// fix.
+		if wtPreserved == 0 {
+			_ = os.RemoveAll(filepath.Join(aetherDir, "worktrees"))
+		} else {
+			fmt.Fprintf(os.Stderr, "the previous colony's worker workspaces were left in place because they still hold work — run `aether worktree-reap` to remove them deliberately\n")
+		}
 
 		// Clean up reviews from any prior colony
 		_ = os.RemoveAll(filepath.Join(dataDir, "reviews"))

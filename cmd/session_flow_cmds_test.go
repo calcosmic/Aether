@@ -903,19 +903,22 @@ func TestResumeColonyGCOphanedWorktrees(t *testing.T) {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
 
-	// Verify worktree entry was removed from state
+	// The fixture's worktree path (.aether/worktrees/test) was never created
+	// on disk, so worktreeDestructionSafety reports it as safe because
+	// there is nothing there — gcOrphanedWorktrees drops the stale state
+	// entry (counted as cleaned), not because anything was destroyed.
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
 		t.Fatalf("reload state: %v", err)
 	}
 	if len(state.Worktrees) > 0 {
-		t.Errorf("expected worktree entry removed on resume, got %d", len(state.Worktrees))
+		t.Errorf("expected stale worktree entry (nonexistent path) dropped on resume, got %d", len(state.Worktrees))
 	}
 
-	// Verify resume output mentions worktree cleanup
+	// Verify resume output reports the preservation pass by its new name.
 	output := buf.String()
-	if !strings.Contains(output, "worktree_gc") {
-		t.Errorf("expected worktree_gc in resume output, got: %s", output)
+	if !strings.Contains(output, "worktrees_preserved") {
+		t.Errorf("expected worktrees_preserved in resume output, got: %s", output)
 	}
 }
 
@@ -931,20 +934,23 @@ func TestResumeVisualWorktreeCleanup(t *testing.T) {
 			"phase":        1,
 			"total_phases": 2,
 		},
-		"worktree_gc": map[string]interface{}{
-			"cleaned":  2,
-			"orphaned": 1,
+		"worktrees_preserved": map[string]interface{}{
+			"cleaned":   2,
+			"preserved": 1,
 		},
 		"blockers": []string{},
 		"signals":  map[string]interface{}{"items": []string{}, "count": 0},
 	}
 
 	output := renderResumeVisual(result, "", true)
-	if !strings.Contains(output, "2 stale worktree(s) cleaned up") {
+	if !strings.Contains(output, "2 worker workspace(s) forgotten") {
 		t.Errorf("missing cleaned worktree message\n%s", output)
 	}
-	if !strings.Contains(output, "1 worktree(s) could not be cleaned") {
-		t.Errorf("missing orphaned worktree message\n%s", output)
+	if !strings.Contains(output, "Kept 1 worker workspace(s)") {
+		t.Errorf("missing preserved worktree message\n%s", output)
+	}
+	if strings.Contains(strings.ToLower(output), "orphan") {
+		t.Errorf("resume visual must not use the repo-invented word 'orphan'\n%s", output)
 	}
 }
 
