@@ -221,10 +221,16 @@ func preserveWorktreeWork(root string, entry colony.WorktreeEntry, safety worktr
 		return true, detail, nil
 
 	default:
-		// The safety reason was an inability to determine state. Preserve
-		// by doing nothing destructive.
-		detail = fmt.Sprintf("could not check worktree state, so branch %s was left alone", entry.Branch)
-		return true, detail, nil
+		// The safety reason was an inability to determine state — nothing
+		// was actually stashed or otherwise saved here, only decided against
+		// deleting. Reporting preserved=true here (CR-04) would tell a
+		// caller like worktree-reap's --force --include-unmerged path that
+		// it is safe to proceed with destruction because "the work was
+		// saved first" — but nothing was examined, let alone saved. Return
+		// preserved=false so any caller about to destroy on top of this
+		// must refuse instead of reading "no error" as "saved".
+		detail = fmt.Sprintf("could not check the work on branch %s, so nothing could be saved", entry.Branch)
+		return false, detail, nil
 	}
 }
 

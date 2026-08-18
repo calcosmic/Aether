@@ -742,3 +742,75 @@ func TestWorktreeReapIncludeUnmergedAloneDoesNothing(t *testing.T) {
 		t.Errorf("expected file content unchanged, got: %q", string(content))
 	}
 }
+
+// TestWorktreeReapIncludeUnmergedRefusesUndeterminableState is CR-04's
+// end-to-end fail-then-pass proof. It reproduces the exact defect: an entry
+// with no branch recorded (CR-01's shape) still has a genuine `git worktree
+// add`-created directory on disk, so `git worktree remove` on it actually
+// SUCCEEDS in destroying the directory — only the trailing `branch -D ""`
+// step fails, because there is no branch to delete. worktreeDestructionSafety
+// cannot determine unmerged-commit state for an empty branch (Safe=false,
+// DirtyFileCount=0, UnmergedCommitCount=0), landing preserveWorktreeWork in
+// its `default` branch. Before the fix, that branch reported preserved=true
+// having stashed nothing, worktree-reap discarded the boolean with `_,`, and
+// proceeded to call removeGitWorktree — which genuinely deletes the worktree
+// directory on disk even though it also returns a non-nil error (from the
+// unrelated branch-delete failure). This test proves the directory itself
+// must survive.
+func TestWorktreeReapIncludeUnmergedRefusesUndeterminableState(t *testing.T) {
+	root, dataDir := reapFixture(t)
+
+	staleBranch := "" // CR-01's shape: a worktree with no branch recorded.
+	wtPath, wtRel := addCrashSafetyWorktree(t, root, "phase-1/builder-undeterminable-src", "phase-1-builder-undeterminable")
+	if err := os.WriteFile(filepath.Join(wtPath, "precious.txt"), []byte("must survive\n"), 0644); err != nil {
+		t.Fatalf("write file in worktree: %v", err)
+	}
+	runGit(t, wtPath, "add", ".")
+	runGit(t, wtPath, "commit", "-m", "commit before entry loses its branch field")
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	entry := colony.WorktreeEntry{
+		ID:        "wt-undeterminable",
+		Branch:    staleBranch, // the entry itself claims no branch
+		Path:      wtRel,
+		Status:    colony.WorktreeInProgress,
+		Phase:     1,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	writeColonyStateWithWorktrees(t, dataDir, []colony.WorktreeEntry{entry})
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	rootCmd.SetArgs([]string{"worktree-reap", "--force", "--include-unmerged"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("worktree-reap --force --include-unmerged returned error: %v", err)
+	}
+
+	// The directory and its content must still exist — an undeterminable
+	// state must never be read as "saved, so it is safe to destroy".
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Fatalf("expected the undeterminable-state worktree to survive --force --include-unmerged, but it is gone: %v", statErr)
+	}
+	content, readErr := os.ReadFile(filepath.Join(wtPath, "precious.txt"))
+	if readErr != nil {
+		t.Fatalf("read file in worktree: %v", readErr)
+	}
+	if string(content) != "must survive\n" {
+		t.Errorf("expected file content unchanged, got: %q", string(content))
+	}
+
+	reloaded := loadColonyStateFixture(t, dataDir)
+	found := false
+	for _, wt := range reloaded.Worktrees {
+		if wt.Path == wtRel {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected entry for path %q to still be present in COLONY_STATE.json after refusing to destroy it, got worktrees: %+v", wtRel, reloaded.Worktrees)
+	}
+}

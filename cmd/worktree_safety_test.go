@@ -318,6 +318,37 @@ func TestPreserveWorktreeWorkIgnoresCleanWorktree(t *testing.T) {
 	}
 }
 
+// TestPreserveWorktreeWorkReportsFalseWhenStateUndeterminable is CR-04's
+// unit-level fail-then-pass proof. When worktreeDestructionSafety could not
+// determine dirty/unmerged state at all (git itself could not answer), the
+// default branch of preserveWorktreeWork must report preserved=false — it
+// took no stash and made no commit, so reporting preserved=true would tell
+// a caller the work was saved when nothing was examined, let alone saved.
+func TestPreserveWorktreeWorkReportsFalseWhenStateUndeterminable(t *testing.T) {
+	// A worktreeSafety with Safe=false but neither DirtyFileCount nor
+	// UnmergedCommitCount set is exactly the shape worktreeDestructionSafety
+	// produces when git itself could not answer (e.g. an empty branch name,
+	// CR-01, or an unreadable worktree, CR-02) — this is the `default` case
+	// preserveWorktreeWork's switch falls into.
+	undeterminable := worktreeSafety{
+		Safe:   false,
+		Reason: "cannot determine whether this branch holds unmerged commits",
+		Branch: "phase-1/builder-undeterminable",
+		Path:   "/does/not/matter/for/this/branch",
+	}
+
+	preserved, detail, err := preserveWorktreeWork("/unused-root", colony.WorktreeEntry{Branch: undeterminable.Branch}, undeterminable)
+	if err != nil {
+		t.Fatalf("preserveWorktreeWork returned unexpected error: %v", err)
+	}
+	if preserved {
+		t.Fatalf("expected preserved=false when the worktree's state could not be determined — nothing was actually saved, so reporting preserved=true is a lie a destructive caller could act on. detail=%q", detail)
+	}
+	if detail == "" {
+		t.Error("expected a non-empty detail explaining nothing could be saved")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // describeWorktreePreservation tests
 // ---------------------------------------------------------------------------
