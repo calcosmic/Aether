@@ -3,9 +3,11 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -338,6 +340,96 @@ func TestResumingOnePhaseDoesNotDestroyAnotherPhasesWorktree(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestCleanupBuildWorktreesSurvivesCrashOnBuildPath
+// ---------------------------------------------------------------------------
+
+// TestCleanupBuildWorktreesSurvivesCrashOnBuildPath is CR-05's fail-then-pass
+// proof. cleanupBuildWorktrees runs on EVERY build (cmd/codex_build.go,
+// unconditionally after every dispatch) and selects exactly the
+// Allocated/InProgress entries a same-phase crash leaves behind — the
+// scenario this whole phase exists to make safe. Before the fix, it called
+// removeGitWorktree directly with no safety guard at all. This test puts a
+// dirty, uncommitted worktree belonging to the phase being cleaned up in
+// front of cleanupBuildWorktrees and proves it survives, exactly as
+// gcOrphanedWorktrees already proves for the resume/continue/init paths.
+func TestCleanupBuildWorktreesSurvivesCrashOnBuildPath(t *testing.T) {
+	root, dataDir := crashSafetyFixture(t)
+
+	branch := "phase-4/builder-crashed-midbuild"
+	wtPath, relPath := addCrashSafetyWorktree(t, root, branch, "phase-4-builder-crashed-midbuild")
+
+	const uncommittedContent = "distinctive uncommitted content from a same-phase crash\n"
+	if err := os.WriteFile(filepath.Join(wtPath, "uncommitted-work.txt"), []byte(uncommittedContent), 0644); err != nil {
+		t.Fatalf("write uncommitted file: %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	entry := colony.WorktreeEntry{
+		ID:        "wt-crash-midbuild",
+		Branch:    branch,
+		Path:      relPath,
+		Status:    colony.WorktreeInProgress, // exactly what a crash between dispatch and finalize leaves behind
+		Phase:     4,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	writeColonyStateWithWorktrees(t, dataDir, []colony.WorktreeEntry{entry})
+
+	cleaned, orphaned, err := cleanupBuildWorktrees(4)
+	if err != nil {
+		t.Fatalf("cleanupBuildWorktrees returned error: %v", err)
+	}
+	if orphaned < 1 {
+		t.Errorf("expected orphaned >= 1 (the dirty worktree must be preserved, not destroyed), got orphaned=%d cleaned=%d", orphaned, cleaned)
+	}
+
+	// The worktree directory must still exist on disk.
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Fatalf("expected worktree directory to still exist after cleanupBuildWorktrees, stat error: %v", statErr)
+	}
+
+	// The branch must still be a real git branch.
+	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", branch).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git branch --list: %v: %s", err, branchOut)
+	}
+	if strings.TrimSpace(string(branchOut)) == "" {
+		t.Fatalf("expected branch %q to still exist, got empty branch --list output", branch)
+	}
+
+	// The uncommitted content must be recoverable — either still present in
+	// the working tree, or stashed and recoverable via `git stash pop`.
+	restoredDirectly := false
+	if content, readErr := os.ReadFile(filepath.Join(wtPath, "uncommitted-work.txt")); readErr == nil {
+		if string(content) == uncommittedContent {
+			restoredDirectly = true
+		}
+	}
+	if !restoredDirectly {
+		stashListOut, stashErr := exec.Command("git", "-C", wtPath, "stash", "list").CombinedOutput()
+		if stashErr != nil {
+			t.Fatalf("git stash list: %v: %s", stashErr, stashListOut)
+		}
+		if strings.TrimSpace(string(stashListOut)) == "" {
+			t.Fatal("uncommitted content is neither present in the working tree nor in a stash — it was lost by cleanupBuildWorktrees")
+		}
+	}
+
+	// The entry must still be present in the reloaded state.
+	reloaded := loadColonyStateFixture(t, dataDir)
+	found := false
+	for _, wt := range reloaded.Worktrees {
+		if wt.Branch == branch {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected entry for branch %q to still be present in COLONY_STATE.json, got worktrees: %+v", branch, reloaded.Worktrees)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestGCNeverCallsRemoveGitWorktree
 // ---------------------------------------------------------------------------
 
@@ -365,6 +457,134 @@ func TestGCNeverCallsRemoveGitWorktree(t *testing.T) {
 	if strings.Contains(stripped, "removeGitWorktree") {
 		t.Errorf("gcOrphanedWorktrees's body still contains a call to removeGitWorktree outside of comments — this reintroduces the exact destructive path this phase removed")
 	}
+}
+
+// TestCleanupBuildWorktreesNeverCallsRemoveGitWorktree is CR-05's own
+// source-level ratchet, the same shape as TestGCNeverCallsRemoveGitWorktree.
+// cleanupBuildWorktrees runs on every build and previously called
+// removeGitWorktree directly with no safety guard; this guards against a
+// future refactor quietly reinstating that call.
+func TestCleanupBuildWorktreesNeverCallsRemoveGitWorktree(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	src, err := os.ReadFile(filepath.Join(repoRoot, "cmd", "codex_build_worktree.go"))
+	if err != nil {
+		t.Fatalf("read cmd/codex_build_worktree.go: %v", err)
+	}
+
+	body, ok := extractFuncBody(string(src), "func cleanupBuildWorktrees(")
+	if !ok {
+		t.Fatalf("could not locate the body of cleanupBuildWorktrees in cmd/codex_build_worktree.go — a test that cannot locate what it is checking must not silently pass")
+	}
+
+	stripped := stripGoLineComments(body)
+	if strings.Contains(stripped, "removeGitWorktree") {
+		t.Errorf("cleanupBuildWorktrees's body still contains a call to removeGitWorktree outside of comments — this reintroduces the exact unguarded build-path destruction CR-05 removed")
+	}
+}
+
+// TestRemoveGitWorktreeHasOnlySanctionedCallers is the review's requested
+// wider ratchet: rather than trusting a comment to say who calls
+// removeGitWorktree, it scans every non-test .go source file under cmd/ and
+// asserts every call site is one of the three functions this phase leaves as
+// sanctioned callers. A caller outside this set means either an unguarded
+// lifecycle path was reintroduced, or this list (and the reasoning in the
+// worktreeReapCmd doc comment explaining why each is safe) needs updating —
+// either way, a human must look, not silently pass.
+func TestRemoveGitWorktreeHasOnlySanctionedCallers(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	sanctionedFuncs := map[string]bool{
+		"func removeGitWorktree(":     true, // the function's own definition
+		"func allocateBuildWorktree(": true, // rollback of a worktree it just created, never registered as holding output
+		"func finalizeBuildWorktree(": true, // runs only after a successful worker's changes are already synced to root
+		"func runWorktreeReap(":       true, // the named, operator-invoked destruction command
+	}
+
+	cmdDir := filepath.Join(repoRoot, "cmd")
+	entries, err := os.ReadDir(cmdDir)
+	if err != nil {
+		t.Fatalf("read cmd dir: %v", err)
+	}
+
+	scanned := 0
+	var violations []string
+	for _, dirEntry := range entries {
+		name := dirEntry.Name()
+		if dirEntry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(cmdDir, name))
+		if readErr != nil {
+			t.Fatalf("read %s: %v", name, readErr)
+		}
+		content := string(data)
+		if !strings.Contains(content, "removeGitWorktree") {
+			continue
+		}
+		scanned++
+
+		lines := strings.Split(content, "\n")
+		currentFunc := ""
+		for _, line := range lines {
+			for sig := range sanctionedFuncs {
+				if strings.HasPrefix(line, sig) {
+					currentFunc = sig
+					break
+				}
+			}
+			// A new top-level function that is not in the sanctioned map
+			// resets currentFunc so calls inside it are correctly attributed
+			// as unsanctioned, not misread as still belonging to the prior
+			// sanctioned function.
+			if strings.HasPrefix(line, "func ") {
+				if _, ok := sanctionedFuncs[funcSigPrefix(line)]; !ok {
+					currentFunc = ""
+				}
+			}
+			trimmed := strings.TrimSpace(line)
+			if idx := strings.Index(trimmed, "//"); idx >= 0 {
+				trimmed = trimmed[:idx]
+			}
+			if strings.Contains(trimmed, "removeGitWorktree(") && !strings.HasPrefix(trimmed, "func removeGitWorktree(") {
+				if currentFunc == "" || !sanctionedFuncs[currentFunc] {
+					violations = append(violations, fmt.Sprintf("%s: %s", name, strings.TrimSpace(line)))
+				}
+			}
+		}
+	}
+
+	if scanned == 0 {
+		t.Fatalf("scanned zero source files mentioning removeGitWorktree — a test that finds nothing to check would pass vacuously forever")
+	}
+	if len(violations) > 0 {
+		t.Errorf("found call(s) to removeGitWorktree outside the sanctioned caller set %v: %v", sanctionedFuncsList(sanctionedFuncs), violations)
+	}
+}
+
+// funcSigPrefix extracts the "func Name(" prefix from a function-declaration
+// line, trimming trailing parameters and everything after the opening paren.
+func funcSigPrefix(line string) string {
+	idx := strings.Index(line, "(")
+	if idx < 0 {
+		return strings.TrimSpace(line)
+	}
+	return line[:idx+1]
+}
+
+func sanctionedFuncsList(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // extractFuncBody finds the top-level function whose signature starts with
