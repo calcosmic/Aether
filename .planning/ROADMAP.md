@@ -950,7 +950,7 @@ Plans:
 - [x] 187-02-PLAN.md — `worktree-merge-back` gate driven by `resolveTestCommand()`; refuse-and-preserve when undeterminable; non-Go fixture tests (wave 1)
 
 **Wave 2** *(blocked on Wave 1)*
-- [ ] 187-03-PLAN.md — `gcOrphanedWorktrees` becomes preserve-and-report; resume/continue/init report in plain English; new operator-only `worktree-reap`; fail-then-pass crash/resume tests (wave 2, needs 01)
+- [x] 187-03-PLAN.md — `gcOrphanedWorktrees` becomes preserve-and-report; resume/continue/init report in plain English; new operator-only `worktree-reap`; fail-then-pass crash/resume tests (wave 2, needs 01)
 
 **Wave 3** *(blocked on Wave 2)*
 - [ ] 187-04-PLAN.md — build-path merge gate (`mergePhaseWorktrees`) uses `resolveTestCommand()`; refuse-and-preserve when undeterminable; real-git fixture tests covering Node success, refusal, and non-destruction (wave 3, needs 03 — file-write ordering on `cmd/codex_build_worktree.go`, no compile-time dependency)
@@ -1044,7 +1044,7 @@ Remaining, in this order — **not** numeric order (revised 2026-08-17, Audit Ad
 | 175. Orchestration Visibility | v1.26 | 1/1 | **Complete** | 2026-08-16 |
 | 179. Proof | v1.26 | — | **Remapped → 186 + 192** (2026-08-17) | - |
 | **186. Baseline Showdown (Light)** | v1.26 | 0/7 | **Planned** | - |
-| 187. Crash-Safe Worktrees & Ecosystem Neutrality | v1.26 | 2/4 | In Progress|  |
+| 187. Crash-Safe Worktrees & Ecosystem Neutrality | v1.26 | 3/4 | In Progress|  |
 | 188. One Truth for Failures and Advances | v1.26 | 0/TBD | Not started | - |
 | 189. Complete Worker Contract | v1.26 | 0/TBD | Not started | - |
 | 190. Lean, Non-Duplicated Delivery | v1.26 | 0/TBD | Not started | - |
