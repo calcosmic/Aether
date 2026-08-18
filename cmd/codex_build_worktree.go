@@ -1041,11 +1041,36 @@ func cleanupBuildWorktrees(phaseID int) (cleaned int, orphaned int, err error) {
 	return cleaned, orphaned, nil
 }
 
-// gcOrphanedWorktrees scans all tracked worktrees and cleans up any that are
-// stale (Allocated, InProgress, or Orphaned status). It returns counts of
-// cleaned and orphaned worktrees. Unlike cleanupBuildWorktrees, it operates
+// gcOrphanedWorktrees scans all tracked worktrees (Allocated, InProgress, or
+// Orphaned status) and decides, per entry, whether it is safe to forget about
+// without losing work. It returns counts of cleaned (stale state entries
+// whose path no longer exists on disk) and preserved (everything else — kept
+// on purpose, never deleted). Unlike cleanupBuildWorktrees, it operates
 // across all phases and does not filter by phase ID.
-func gcOrphanedWorktrees() (cleaned int, orphaned int, err error) {
+//
+// This function runs from three recovery paths — resume
+// (cmd/session_flow_cmds.go), continue (cmd/codex_continue.go) and init
+// (cmd/init_cmd.go) — all three of which a user reaches while trying to
+// recover from something going wrong. A recovery path must never be the
+// thing that destroys what is being recovered (D-01,
+// .planning/phases/187-crash-safe-worktrees-ecosystem-neutrality/187-CONTEXT.md).
+// It therefore NEVER calls removeGitWorktree. Destruction now lives only in
+// the explicitly named, operator-invoked `worktree-reap` command
+// (cmd/worktree_reap.go).
+//
+// No phase filter is applied here deliberately. CONTEXT.md notes this
+// function has none today, which lets resuming phase 5 act on a stalled
+// phase 2 worktree — but since this function no longer destroys anything,
+// the blast radius that made the missing filter dangerous is gone. Adding a
+// filter now would instead hide older worktrees from the report, which is
+// how ten branches stranded unnoticed between May and July 2026
+// (.planning/WORKTREE-BRANCH-AUDIT-2026-07-27.md). Each entry's Phase is
+// included in the preservation report so a user resuming phase 5 who sees a
+// phase 2 worktree mentioned understands what is meant.
+// detectOrphanedWorktrees's current-phase blind spot (cmd/codex_build.go) is
+// a separate, explicitly deferred concern (CONTEXT.md <deferred>) and is not
+// touched here.
+func gcOrphanedWorktrees() (cleaned int, preserved int, err error) {
 	if store == nil {
 		return 0, 0, fmt.Errorf("no store initialized")
 	}
@@ -1065,20 +1090,46 @@ func gcOrphanedWorktrees() (cleaned int, orphaned int, err error) {
 				continue
 			}
 
-			absPath := filepath.Join(root, entry.Path)
-			// If the path doesn't exist on disk, just remove the stale entry
-			if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
-				cleaned++
-				continue
-			}
-			if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
+			safety := worktreeDestructionSafety(root, entry)
+
+			if !safety.Safe {
+				// Dirty, unmerged, or undeterminable — preserve and keep the
+				// entry, regardless of whether preservation itself errors. A
+				// failed stash is even more reason not to delete.
+				_, detail, preserveErr := preserveWorktreeWork(root, entry, safety)
+				if preserveErr != nil {
+					detail = fmt.Sprintf("could not stash automatically (%v); branch %s was left alone", preserveErr, entry.Branch)
+				}
+				reportWorktreePreservation(safety, fmt.Sprintf("phase %d: %s", entry.Phase, detail))
 				entry.Status = colony.WorktreeOrphaned
 				remaining = append(remaining, entry)
-				orphaned++
-			} else {
-				cleaned++
-				// Don't append — entry is removed
+				preserved++
+				continue
 			}
+
+			// safety.Safe is true. Either the path is gone (nothing to keep,
+			// safety.Reason is "worktree path no longer exists on disk") or
+			// the worktree is clean and fully merged (something to keep, but
+			// only an operator invoking worktree-reap may remove it).
+			// worktreeDestructionSafety already resolved and stat'd the
+			// absolute path (safety.Path); re-derive from that rather than
+			// re-stat'ing entry.Path (which may be relative) a second time.
+			if _, statErr := os.Stat(safety.Path); statErr == nil {
+				// Path exists — clean and merged. D-01's implication is
+				// explicit: destruction is deferred to an explicit, named
+				// operator-invoked command, never to an automatic cleanup
+				// running inside resume, continue or init.
+				detail := fmt.Sprintf("phase %d: %s — safe to remove, run: aether worktree-reap --force --branch %s", entry.Phase, safety.Reason, entry.Branch)
+				reportWorktreePreservation(safety, detail)
+				entry.Status = colony.WorktreeOrphaned
+				remaining = append(remaining, entry)
+				preserved++
+				continue
+			}
+
+			// Path no longer exists on disk — a missing directory holds
+			// nothing to preserve. Drop the stale entry.
+			cleaned++
 		}
 
 		state.Worktrees = remaining
@@ -1086,7 +1137,7 @@ func gcOrphanedWorktrees() (cleaned int, orphaned int, err error) {
 	}); err != nil {
 		return 0, 0, err
 	}
-	return cleaned, orphaned, nil
+	return cleaned, preserved, nil
 }
 
 // ---------------------------------------------------------------------------
