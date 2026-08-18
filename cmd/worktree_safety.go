@@ -127,3 +127,97 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 	result.Reason = "clean and fully merged"
 	return result
 }
+
+// worktreeDestructionCategory classifies the named, operator-invoked
+// destruction command the same way recover_repair.go classifies
+// "dirty_worktree" — destructive, requires an explicit --force (or
+// equivalent) flag, never runs implicitly.
+const worktreeDestructionCategory = "worktree_destruction"
+
+// isDestructiveWorktreeAction reports whether the given action name is the
+// worktree-destruction category. Sibling to isDestructiveCategory
+// (cmd/recover_repair.go) so plan 03's named destruction command can
+// classify itself the same way recover classifies dirty_worktree.
+func isDestructiveWorktreeAction(action string) bool {
+	return action == worktreeDestructionCategory
+}
+
+// preserveWorktreeWork makes unsafe work recoverable without discarding it.
+// Per D-01 ("preserves the work and continues — it does not delete, and it
+// does not stop and ask"), this function never blocks and never calls a
+// destructive git command.
+//
+// It must never call removeGitWorktree, `git branch -D`, or
+// `git worktree remove`. It must never read from stdin — confirmRepair's
+// interactive prompt shape (cmd/recover_repair.go) is explicitly rejected by
+// D-01 because it blocks unattended runs.
+func preserveWorktreeWork(root string, entry colony.WorktreeEntry, safety worktreeSafety) (preserved bool, detail string, err error) {
+	// A clean, safe-to-destroy worktree has nothing to preserve. This
+	// function must never act on it.
+	if safety.Safe {
+		return false, "", nil
+	}
+
+	absPath := entry.Path
+	if !filepath.IsAbs(absPath) {
+		absPath = filepath.Join(root, entry.Path)
+	}
+
+	switch {
+	case safety.DirtyFileCount > 0:
+		// Stash rather than discard — the exact command already used and
+		// tested at cmd/recover_repair.go's repairDirtyWorktree.
+		stashCtx, stashCancel := context.WithTimeout(context.Background(), GitTimeout)
+		stashOut, stashErr := exec.CommandContext(stashCtx, "git", "-C", absPath, "stash", "--include-untracked").CombinedOutput()
+		stashCancel()
+		if stashErr != nil {
+			return false, "", fmt.Errorf("stash worktree changes: %w: %s", stashErr, strings.TrimSpace(string(stashOut)))
+		}
+		detail = fmt.Sprintf("%d uncommitted change(s) stashed on branch %s", safety.DirtyFileCount, entry.Branch)
+		return true, detail, nil
+
+	case safety.UnmergedCommitCount > 0:
+		// Nothing to stash — the commits are already durable on the branch.
+		// The preservation action here is the decision NOT to run
+		// `branch -D`.
+		detail = fmt.Sprintf("%d commit(s) kept on branch %s (not yet merged)", safety.UnmergedCommitCount, entry.Branch)
+		return true, detail, nil
+
+	default:
+		// The safety reason was an inability to determine state. Preserve
+		// by doing nothing destructive.
+		detail = fmt.Sprintf("could not check worktree state, so branch %s was left alone", entry.Branch)
+		return true, detail, nil
+	}
+}
+
+// describeWorktreePreservation returns a single plain-English line for a
+// non-technical reader, naming the branch, saying the work was kept rather
+// than deleted, and saying how to get it back. Per D-02 and this repo's
+// non-technical-owner rule in CLAUDE.md, this string must never use the
+// words "orphaned", "GC", "ratchet", or "residue" — those are repo-invented
+// terms the owner does not know.
+func describeWorktreePreservation(safety worktreeSafety, detail string) string {
+	branch := safety.Branch
+	if branch == "" {
+		branch = "(unknown branch)"
+	}
+	if detail == "" {
+		detail = safety.Reason
+	}
+	return fmt.Sprintf("Kept the work on branch %s instead of deleting it (%s). "+
+		"To get it back, run: aether recover", branch, detail)
+}
+
+// reportWorktreePreservation writes the plain-English preservation line to
+// stderr, matching the existing precedent at cmd/init_cmd.go. It must write
+// unconditionally on every call — D-02 states "reported in plain language on
+// every occurrence" and "silent handling is prohibited on this path".
+//
+// A caller that swallows this report reintroduces the defect that let ten
+// branches strand unnoticed between May and July 2026
+// (.planning/WORKTREE-BRANCH-AUDIT-2026-07-27.md). Do not wrap this call in
+// a conditional that can suppress it.
+func reportWorktreePreservation(safety worktreeSafety, detail string) {
+	fmt.Fprintf(os.Stderr, "%s\n", describeWorktreePreservation(safety, detail))
+}
