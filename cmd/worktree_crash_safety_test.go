@@ -3,9 +3,11 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -338,6 +340,96 @@ func TestResumingOnePhaseDoesNotDestroyAnotherPhasesWorktree(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestCleanupBuildWorktreesSurvivesCrashOnBuildPath
+// ---------------------------------------------------------------------------
+
+// TestCleanupBuildWorktreesSurvivesCrashOnBuildPath is CR-05's fail-then-pass
+// proof. cleanupBuildWorktrees runs on EVERY build (cmd/codex_build.go,
+// unconditionally after every dispatch) and selects exactly the
+// Allocated/InProgress entries a same-phase crash leaves behind — the
+// scenario this whole phase exists to make safe. Before the fix, it called
+// removeGitWorktree directly with no safety guard at all. This test puts a
+// dirty, uncommitted worktree belonging to the phase being cleaned up in
+// front of cleanupBuildWorktrees and proves it survives, exactly as
+// gcOrphanedWorktrees already proves for the resume/continue/init paths.
+func TestCleanupBuildWorktreesSurvivesCrashOnBuildPath(t *testing.T) {
+	root, dataDir := crashSafetyFixture(t)
+
+	branch := "phase-4/builder-crashed-midbuild"
+	wtPath, relPath := addCrashSafetyWorktree(t, root, branch, "phase-4-builder-crashed-midbuild")
+
+	const uncommittedContent = "distinctive uncommitted content from a same-phase crash\n"
+	if err := os.WriteFile(filepath.Join(wtPath, "uncommitted-work.txt"), []byte(uncommittedContent), 0644); err != nil {
+		t.Fatalf("write uncommitted file: %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	entry := colony.WorktreeEntry{
+		ID:        "wt-crash-midbuild",
+		Branch:    branch,
+		Path:      relPath,
+		Status:    colony.WorktreeInProgress, // exactly what a crash between dispatch and finalize leaves behind
+		Phase:     4,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	writeColonyStateWithWorktrees(t, dataDir, []colony.WorktreeEntry{entry})
+
+	cleaned, orphaned, err := cleanupBuildWorktrees(4)
+	if err != nil {
+		t.Fatalf("cleanupBuildWorktrees returned error: %v", err)
+	}
+	if orphaned < 1 {
+		t.Errorf("expected orphaned >= 1 (the dirty worktree must be preserved, not destroyed), got orphaned=%d cleaned=%d", orphaned, cleaned)
+	}
+
+	// The worktree directory must still exist on disk.
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Fatalf("expected worktree directory to still exist after cleanupBuildWorktrees, stat error: %v", statErr)
+	}
+
+	// The branch must still be a real git branch.
+	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", branch).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git branch --list: %v: %s", err, branchOut)
+	}
+	if strings.TrimSpace(string(branchOut)) == "" {
+		t.Fatalf("expected branch %q to still exist, got empty branch --list output", branch)
+	}
+
+	// The uncommitted content must be recoverable — either still present in
+	// the working tree, or stashed and recoverable via `git stash pop`.
+	restoredDirectly := false
+	if content, readErr := os.ReadFile(filepath.Join(wtPath, "uncommitted-work.txt")); readErr == nil {
+		if string(content) == uncommittedContent {
+			restoredDirectly = true
+		}
+	}
+	if !restoredDirectly {
+		stashListOut, stashErr := exec.Command("git", "-C", wtPath, "stash", "list").CombinedOutput()
+		if stashErr != nil {
+			t.Fatalf("git stash list: %v: %s", stashErr, stashListOut)
+		}
+		if strings.TrimSpace(string(stashListOut)) == "" {
+			t.Fatal("uncommitted content is neither present in the working tree nor in a stash — it was lost by cleanupBuildWorktrees")
+		}
+	}
+
+	// The entry must still be present in the reloaded state.
+	reloaded := loadColonyStateFixture(t, dataDir)
+	found := false
+	for _, wt := range reloaded.Worktrees {
+		if wt.Branch == branch {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected entry for branch %q to still be present in COLONY_STATE.json, got worktrees: %+v", branch, reloaded.Worktrees)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TestGCNeverCallsRemoveGitWorktree
 // ---------------------------------------------------------------------------
 
@@ -365,6 +457,134 @@ func TestGCNeverCallsRemoveGitWorktree(t *testing.T) {
 	if strings.Contains(stripped, "removeGitWorktree") {
 		t.Errorf("gcOrphanedWorktrees's body still contains a call to removeGitWorktree outside of comments — this reintroduces the exact destructive path this phase removed")
 	}
+}
+
+// TestCleanupBuildWorktreesNeverCallsRemoveGitWorktree is CR-05's own
+// source-level ratchet, the same shape as TestGCNeverCallsRemoveGitWorktree.
+// cleanupBuildWorktrees runs on every build and previously called
+// removeGitWorktree directly with no safety guard; this guards against a
+// future refactor quietly reinstating that call.
+func TestCleanupBuildWorktreesNeverCallsRemoveGitWorktree(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	src, err := os.ReadFile(filepath.Join(repoRoot, "cmd", "codex_build_worktree.go"))
+	if err != nil {
+		t.Fatalf("read cmd/codex_build_worktree.go: %v", err)
+	}
+
+	body, ok := extractFuncBody(string(src), "func cleanupBuildWorktrees(")
+	if !ok {
+		t.Fatalf("could not locate the body of cleanupBuildWorktrees in cmd/codex_build_worktree.go — a test that cannot locate what it is checking must not silently pass")
+	}
+
+	stripped := stripGoLineComments(body)
+	if strings.Contains(stripped, "removeGitWorktree") {
+		t.Errorf("cleanupBuildWorktrees's body still contains a call to removeGitWorktree outside of comments — this reintroduces the exact unguarded build-path destruction CR-05 removed")
+	}
+}
+
+// TestRemoveGitWorktreeHasOnlySanctionedCallers is the review's requested
+// wider ratchet: rather than trusting a comment to say who calls
+// removeGitWorktree, it scans every non-test .go source file under cmd/ and
+// asserts every call site is one of the three functions this phase leaves as
+// sanctioned callers. A caller outside this set means either an unguarded
+// lifecycle path was reintroduced, or this list (and the reasoning in the
+// worktreeReapCmd doc comment explaining why each is safe) needs updating —
+// either way, a human must look, not silently pass.
+func TestRemoveGitWorktreeHasOnlySanctionedCallers(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	sanctionedFuncs := map[string]bool{
+		"func removeGitWorktree(":     true, // the function's own definition
+		"func allocateBuildWorktree(": true, // rollback of a worktree it just created, never registered as holding output
+		"func finalizeBuildWorktree(": true, // runs only after a successful worker's changes are already synced to root
+		"func runWorktreeReap(":       true, // the named, operator-invoked destruction command
+	}
+
+	cmdDir := filepath.Join(repoRoot, "cmd")
+	entries, err := os.ReadDir(cmdDir)
+	if err != nil {
+		t.Fatalf("read cmd dir: %v", err)
+	}
+
+	scanned := 0
+	var violations []string
+	for _, dirEntry := range entries {
+		name := dirEntry.Name()
+		if dirEntry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(cmdDir, name))
+		if readErr != nil {
+			t.Fatalf("read %s: %v", name, readErr)
+		}
+		content := string(data)
+		if !strings.Contains(content, "removeGitWorktree") {
+			continue
+		}
+		scanned++
+
+		lines := strings.Split(content, "\n")
+		currentFunc := ""
+		for _, line := range lines {
+			for sig := range sanctionedFuncs {
+				if strings.HasPrefix(line, sig) {
+					currentFunc = sig
+					break
+				}
+			}
+			// A new top-level function that is not in the sanctioned map
+			// resets currentFunc so calls inside it are correctly attributed
+			// as unsanctioned, not misread as still belonging to the prior
+			// sanctioned function.
+			if strings.HasPrefix(line, "func ") {
+				if _, ok := sanctionedFuncs[funcSigPrefix(line)]; !ok {
+					currentFunc = ""
+				}
+			}
+			trimmed := strings.TrimSpace(line)
+			if idx := strings.Index(trimmed, "//"); idx >= 0 {
+				trimmed = trimmed[:idx]
+			}
+			if strings.Contains(trimmed, "removeGitWorktree(") && !strings.HasPrefix(trimmed, "func removeGitWorktree(") {
+				if currentFunc == "" || !sanctionedFuncs[currentFunc] {
+					violations = append(violations, fmt.Sprintf("%s: %s", name, strings.TrimSpace(line)))
+				}
+			}
+		}
+	}
+
+	if scanned == 0 {
+		t.Fatalf("scanned zero source files mentioning removeGitWorktree — a test that finds nothing to check would pass vacuously forever")
+	}
+	if len(violations) > 0 {
+		t.Errorf("found call(s) to removeGitWorktree outside the sanctioned caller set %v: %v", sanctionedFuncsList(sanctionedFuncs), violations)
+	}
+}
+
+// funcSigPrefix extracts the "func Name(" prefix from a function-declaration
+// line, trimming trailing parameters and everything after the opening paren.
+func funcSigPrefix(line string) string {
+	idx := strings.Index(line, "(")
+	if idx < 0 {
+		return strings.TrimSpace(line)
+	}
+	return line[:idx+1]
+}
+
+func sanctionedFuncsList(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // extractFuncBody finds the top-level function whose signature starts with
@@ -452,6 +672,81 @@ func TestWorktreeReapHasNoLifecycleCaller(t *testing.T) {
 	}
 	if len(violations) > 0 {
 		t.Errorf("found a reference to runWorktreeReap or the literal command name \"worktree-reap\" in lifecycle file(s) %v — destruction must stay operator-invoked only; wiring the reaper into an automatic path must fail this test rather than silently ship", violations)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestRemoveGitWorktreeDoesNotDeleteBranchWhenRemovalFails
+// ---------------------------------------------------------------------------
+
+// TestRemoveGitWorktreeDoesNotDeleteBranchWhenRemovalFails is CR-03's
+// fail-then-pass proof. Before the fix, the three git commands inside
+// removeGitWorktree ran unconditionally and only accumulated errors: when
+// `git worktree remove` failed, `git branch -D` still ran and still
+// succeeded (-D force-deletes even unmerged branches), so a caller reading
+// the returned error as "nothing was destroyed" was wrong — the branch,
+// carrying a real unmerged commit, was already gone.
+//
+// The failure mode is produced by making the worktree directory
+// unwritable (chmod 0500) before removal. Real git (2.52) unregisters the
+// worktree from `git worktree list` BEFORE it finishes deleting the
+// directory's contents, so when the delete step then hits "Permission
+// denied" on a file it cannot remove, `worktree remove` exits non-zero
+// while the worktree is already unregistered — meaning `git branch -D`, if
+// it still runs afterward, succeeds and destroys the branch. This was
+// confirmed manually against the real git binary before writing this test:
+// `git worktree lock` was tried first and does NOT reproduce the defect,
+// because a genuinely locked/registered worktree also protects the branch
+// from `branch -D` ("used by worktree at ...") — only the unregistered
+// case actually loses data, which is what this test reproduces.
+func TestRemoveGitWorktreeDoesNotDeleteBranchWhenRemovalFails(t *testing.T) {
+	root, _ := crashSafetyFixture(t)
+
+	branch := "phase-1/builder-unwritable"
+	wtPath, _ := addCrashSafetyWorktree(t, root, branch, "phase-1-builder-unwritable")
+
+	// A unique unmerged commit on the branch — if `branch -D` runs anyway,
+	// this commit becomes unreachable and is exactly what CR-03 protects.
+	if err := os.WriteFile(filepath.Join(wtPath, "unmerged.txt"), []byte("unique unmerged content\n"), 0644); err != nil {
+		t.Fatalf("write unmerged file: %v", err)
+	}
+	runGit(t, wtPath, "add", ".")
+	runGit(t, wtPath, "commit", "-m", "unmerged commit")
+
+	shaOut, err := exec.Command("git", "-C", root, "rev-parse", branch).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git rev-parse %s: %v: %s", branch, err, shaOut)
+	}
+	sha := strings.TrimSpace(string(shaOut))
+
+	// Make the worktree directory itself unwritable so git can unregister
+	// the worktree but then fails partway through deleting its contents.
+	if chmodErr := os.Chmod(wtPath, 0500); chmodErr != nil {
+		t.Fatalf("chmod worktree dir: %v", chmodErr)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(wtPath, 0755) // restore so t.TempDir() cleanup can remove it
+	})
+
+	removeErr := removeGitWorktree(root, wtPath, branch)
+	if removeErr == nil {
+		t.Fatal("expected removeGitWorktree to return an error when the worktree directory cannot be fully deleted")
+	}
+
+	// The branch MUST still exist — a non-nil error must mean nothing was
+	// destroyed.
+	branchOut, branchErr := exec.Command("git", "-C", root, "branch", "--list", branch).CombinedOutput()
+	if branchErr != nil {
+		t.Fatalf("git branch --list: %v: %s", branchErr, branchOut)
+	}
+	if strings.TrimSpace(string(branchOut)) == "" {
+		t.Fatalf("expected branch %q to still exist after a failed removal, but it is gone — removeGitWorktree deleted the branch even though it reported an error", branch)
+	}
+
+	// The unmerged commit must still be reachable via its own SHA.
+	showOut, showErr := exec.Command("git", "-C", root, "cat-file", "-e", sha).CombinedOutput()
+	if showErr != nil {
+		t.Fatalf("expected commit %s to still be reachable after a failed removal, got: %v: %s", sha, showErr, showOut)
 	}
 }
 
@@ -665,5 +960,77 @@ func TestWorktreeReapIncludeUnmergedAloneDoesNothing(t *testing.T) {
 	}
 	if string(content) != "should stay\n" {
 		t.Errorf("expected file content unchanged, got: %q", string(content))
+	}
+}
+
+// TestWorktreeReapIncludeUnmergedRefusesUndeterminableState is CR-04's
+// end-to-end fail-then-pass proof. It reproduces the exact defect: an entry
+// with no branch recorded (CR-01's shape) still has a genuine `git worktree
+// add`-created directory on disk, so `git worktree remove` on it actually
+// SUCCEEDS in destroying the directory — only the trailing `branch -D ""`
+// step fails, because there is no branch to delete. worktreeDestructionSafety
+// cannot determine unmerged-commit state for an empty branch (Safe=false,
+// DirtyFileCount=0, UnmergedCommitCount=0), landing preserveWorktreeWork in
+// its `default` branch. Before the fix, that branch reported preserved=true
+// having stashed nothing, worktree-reap discarded the boolean with `_,`, and
+// proceeded to call removeGitWorktree — which genuinely deletes the worktree
+// directory on disk even though it also returns a non-nil error (from the
+// unrelated branch-delete failure). This test proves the directory itself
+// must survive.
+func TestWorktreeReapIncludeUnmergedRefusesUndeterminableState(t *testing.T) {
+	root, dataDir := reapFixture(t)
+
+	staleBranch := "" // CR-01's shape: a worktree with no branch recorded.
+	wtPath, wtRel := addCrashSafetyWorktree(t, root, "phase-1/builder-undeterminable-src", "phase-1-builder-undeterminable")
+	if err := os.WriteFile(filepath.Join(wtPath, "precious.txt"), []byte("must survive\n"), 0644); err != nil {
+		t.Fatalf("write file in worktree: %v", err)
+	}
+	runGit(t, wtPath, "add", ".")
+	runGit(t, wtPath, "commit", "-m", "commit before entry loses its branch field")
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	entry := colony.WorktreeEntry{
+		ID:        "wt-undeterminable",
+		Branch:    staleBranch, // the entry itself claims no branch
+		Path:      wtRel,
+		Status:    colony.WorktreeInProgress,
+		Phase:     1,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	writeColonyStateWithWorktrees(t, dataDir, []colony.WorktreeEntry{entry})
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	rootCmd.SetArgs([]string{"worktree-reap", "--force", "--include-unmerged"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("worktree-reap --force --include-unmerged returned error: %v", err)
+	}
+
+	// The directory and its content must still exist — an undeterminable
+	// state must never be read as "saved, so it is safe to destroy".
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Fatalf("expected the undeterminable-state worktree to survive --force --include-unmerged, but it is gone: %v", statErr)
+	}
+	content, readErr := os.ReadFile(filepath.Join(wtPath, "precious.txt"))
+	if readErr != nil {
+		t.Fatalf("read file in worktree: %v", readErr)
+	}
+	if string(content) != "must survive\n" {
+		t.Errorf("expected file content unchanged, got: %q", string(content))
+	}
+
+	reloaded := loadColonyStateFixture(t, dataDir)
+	found := false
+	for _, wt := range reloaded.Worktrees {
+		if wt.Path == wtRel {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected entry for path %q to still be present in COLONY_STATE.json after refusing to destroy it, got worktrees: %+v", wtRel, reloaded.Worktrees)
 	}
 }

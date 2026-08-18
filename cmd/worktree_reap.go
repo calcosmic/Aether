@@ -7,16 +7,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// worktreeReapCmd is the ONLY caller of removeGitWorktree left in this
-// codebase after Phase 187. It is the named, operator-invoked destruction
-// command D-01 requires: destruction is deferred to an explicit, named
-// command a human types — never to an automatic cleanup running inside
-// resume, continue, init, build, build-finalize, run, or any autopilot
-// path. That boundary is enforced by
+// worktreeReapCmd is the named, operator-invoked destruction command D-01
+// requires: destruction of a WORKTREE THAT MAY HOLD DIRTY OR UNMERGED WORK
+// is deferred to an explicit command a human types — never to an automatic
+// cleanup running inside resume, continue, init, build, build-finalize,
+// run, or any autopilot path. That boundary is enforced by
 // TestWorktreeReapHasNoLifecycleCaller (cmd/worktree_crash_safety_test.go),
 // which scans every lifecycle source file for a call to runWorktreeReap or
 // the literal command name and fails the build if either appears outside a
 // human-invoked context.
+//
+// This is NOT a claim that worktreeReapCmd is the only caller of
+// removeGitWorktree in the codebase — a prior version of this comment made
+// that claim and it was wrong (CR-05). Two other, narrower callers remain
+// and are intentionally out of scope for the D-01 boundary because neither
+// destroys a worktree without first knowing its contents were already
+// handled: allocateBuildWorktree's own rollback (cmd/codex_build_worktree.go)
+// removes a worktree it JUST created in the same call and never registered
+// as holding worker output, and finalizeBuildWorktree
+// (cmd/codex_build_worktree.go) runs only after reconcileWorktreeWave has
+// already synced a successful worker's changes into the root checkout —
+// the crash-recovery paths this phase protects (resume, continue, init,
+// and cleanupBuildWorktrees on the build path) all route through
+// worktreeDestructionSafety and preserveWorktreeWork before ever reaching
+// removeGitWorktree, and none of the three calls it directly.
 var worktreeReapCmd = &cobra.Command{
 	Use:   "worktree-reap",
 	Short: "Remove finished worker workspaces",
@@ -141,11 +155,16 @@ func runWorktreeReap(cmd *cobra.Command, args []string) error {
 			// --force --include-unmerged: the operator explicitly asked for
 			// dirty or unmerged work to go. Preserve FIRST (stash) so the
 			// changes land safely before the worktree goes, then destroy.
-			_, detail, preserveErr := preserveWorktreeWork(root, entry, safety)
-			if preserveErr != nil {
-				// Could not even stash — refuse to destroy on top of a
-				// failed save. Keep the entry.
-				reportWorktreePreservation(safety, fmt.Sprintf("could not save changes before removal (%v); branch %s was left alone", preserveErr, entry.Branch))
+			preservedOK, detail, preserveErr := preserveWorktreeWork(root, entry, safety)
+			if preserveErr != nil || !preservedOK {
+				// Could not even stash, or the state was undeterminable so
+				// nothing was actually saved (CR-04) — either way, refuse to
+				// destroy on top of a save that did not happen. Discarding
+				// the preservedOK boolean here (the old `_,` pattern) is
+				// what let this path print "its changes were saved first"
+				// and then destroy a worktree whose contents were never
+				// examined.
+				reportWorktreePreservation(safety, fmt.Sprintf("could not save the work before removal; branch %s was left alone", entry.Branch))
 				remaining = append(remaining, entry)
 				preservedBranches = append(preservedBranches, entry.Branch)
 				continue

@@ -1748,9 +1748,17 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	// Per D-09: render phase-end summary with actions needed (Phase 99 OUT-01)
 	renderPhaseEndSummary(summary, phase.ID)
 
-	// Clean up any worktrees that weren't properly finalized during dispatch
-	cleaned, orphaned, _ := cleanupBuildWorktrees(phase.ID)
-	if cleaned > 0 || orphaned > 0 {
+	// Clean up any worktrees that weren't properly finalized during dispatch.
+	// Per D-02, a destructive-capable path must never handle its own error
+	// silently — cleanupBuildWorktrees itself never destroys unsaved or
+	// unmerged work (CR-05), but if the state update it needs fails, that
+	// failure must be visible rather than swallowed, since it means the
+	// leftover Allocated/InProgress entries from this build were not
+	// examined at all.
+	cleaned, orphaned, cleanupErr := cleanupBuildWorktrees(phase.ID)
+	if cleanupErr != nil {
+		emitVisualProgress(fmt.Sprintf("Worktree cleanup could not run (%v) — any unfinalized worker workspaces from this build were left untouched", cleanupErr))
+	} else if cleaned > 0 || orphaned > 0 {
 		emitVisualProgress(fmt.Sprintf("Worktree cleanup: %d cleaned, %d orphaned", cleaned, orphaned))
 	}
 	for _, result := range results {

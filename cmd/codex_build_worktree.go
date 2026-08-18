@@ -816,22 +816,30 @@ func finalizeBuildWorktree(root string, session *buildWorktreeSession, status co
 	return nil
 }
 
+// removeGitWorktree removes a worktree and deletes its branch. The three git
+// commands run in a strict fail-fast sequence, not an accumulate-all-errors
+// sequence: if `worktree remove` fails, the function returns immediately and
+// NEVER reaches `branch -D` (CR-03). Every caller of this function reads a
+// non-nil error as "nothing was destroyed" — finalizeBuildWorktree marks the
+// entry Orphaned "to protect it", worktree-reap re-appends the entry and
+// reports the branch "was left alone". Running `branch -D` (a force delete
+// that succeeds even on unmerged commits) after the worktree removal already
+// failed would silently contradict every one of those messages: the branch
+// would already be gone while the caller believes it survived.
 func removeGitWorktree(root, absPath, branch string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
 
-	var errs []string
 	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", absPath, "--force").CombinedOutput(); err != nil {
-		errs = append(errs, fmt.Sprintf("worktree remove: %v (output: %s)", err, string(out)))
+		// Do NOT continue to prune or branch deletion — the working copy
+		// still exists, so its branch is the only handle left on that work.
+		return fmt.Errorf("worktree remove: %v (output: %s)", err, string(out))
 	}
 	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "prune").CombinedOutput(); err != nil {
-		errs = append(errs, fmt.Sprintf("worktree prune: %v (output: %s)", err, string(out)))
+		return fmt.Errorf("worktree prune: %v (output: %s)", err, string(out))
 	}
 	if out, err := exec.CommandContext(ctx, "git", "-C", root, "branch", "-D", branch).CombinedOutput(); err != nil {
-		errs = append(errs, fmt.Sprintf("branch delete: %v (output: %s)", err, string(out)))
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("worktree cleanup failed: %s", strings.Join(errs, "; "))
+		return fmt.Errorf("branch delete: %v (output: %s)", err, string(out))
 	}
 	return nil
 }
@@ -996,9 +1004,25 @@ func applyRelativePathStatus(srcRoot, dstRoot, rel, status string) error {
 	return os.WriteFile(dst, data, info.Mode().Perm())
 }
 
-// cleanupBuildWorktrees removes any unfinalized worktrees for a phase.
-// It scans the colony state for worktree entries with Allocated or InProgress status,
-// attempts to remove them, and updates their status to Orphaned on failure.
+// cleanupBuildWorktrees scans the colony state for worktree entries
+// belonging to phaseID with Allocated or InProgress status — precisely the
+// statuses a crash between dispatch and finalize leaves behind — and
+// decides, per entry, whether it is safe to forget about without losing
+// work. It returns counts of cleaned (stale state entries whose path no
+// longer exists on disk, or entries safely removed after passing the
+// destruction guard) and orphaned (dirty, unmerged, or undeterminable —
+// preserved and marked Orphaned rather than deleted).
+//
+// This function runs on EVERY build (cmd/codex_build.go, unconditionally,
+// after every dispatch), which makes it a lifecycle path exactly like
+// gcOrphanedWorktrees, resume and continue: it must never destroy unsaved or
+// unmerged work (D-01,
+// .planning/phases/187-crash-safe-worktrees-ecosystem-neutrality/187-CONTEXT.md).
+// Before CR-05, this function called removeGitWorktree directly with no
+// safety guard at all, on exactly the entries a same-phase crash leaves
+// behind — the scenario this phase exists to make safe. It now routes every
+// entry through worktreeDestructionSafety and preserveWorktreeWork first,
+// mirroring gcOrphanedWorktrees, and NEVER calls removeGitWorktree itself.
 func cleanupBuildWorktrees(phaseID int) (cleaned int, orphaned int, err error) {
 	if store == nil {
 		return 0, 0, fmt.Errorf("no store initialized")
@@ -1017,20 +1041,42 @@ func cleanupBuildWorktrees(phaseID int) (cleaned int, orphaned int, err error) {
 				continue
 			}
 
-			absPath := filepath.Join(root, entry.Path)
-			// If the path doesn't exist on disk, just remove the stale entry
-			if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
-				cleaned++
-				continue
-			}
-			if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
+			safety := worktreeDestructionSafety(root, entry)
+
+			if !safety.Safe {
+				// Dirty, unmerged, or undeterminable — preserve and keep the
+				// entry, regardless of whether preservation itself errors or
+				// reports preserved=false (CR-04). Either way nothing is
+				// destroyed here.
+				_, detail, preserveErr := preserveWorktreeWork(root, entry, safety)
+				if preserveErr != nil {
+					detail = fmt.Sprintf("could not save automatically (%v); branch %s was left alone", preserveErr, entry.Branch)
+				}
+				reportWorktreePreservation(safety, fmt.Sprintf("phase %d: %s", entry.Phase, detail))
 				entry.Status = colony.WorktreeOrphaned
 				remaining = append(remaining, entry)
 				orphaned++
-			} else {
-				cleaned++
-				// Don't append — entry is removed
+				continue
 			}
+
+			// safety.Safe is true. Either the path is gone (nothing to
+			// clean up) or the worktree is clean and fully merged (safe to
+			// remove, but only an operator invoking worktree-reap may do
+			// so — D-01: destruction is deferred to an explicit, named,
+			// operator-invoked command, never to an automatic cleanup
+			// running inside build).
+			if _, statErr := os.Stat(safety.Path); statErr == nil {
+				detail := fmt.Sprintf("phase %d: %s — safe to remove, run: aether worktree-reap --force --branch %s", entry.Phase, safety.Reason, entry.Branch)
+				reportWorktreePreservation(safety, detail)
+				entry.Status = colony.WorktreeOrphaned
+				remaining = append(remaining, entry)
+				orphaned++
+				continue
+			}
+
+			// Path no longer exists on disk — a missing directory holds
+			// nothing to preserve. Drop the stale entry.
+			cleaned++
 		}
 
 		state.Worktrees = remaining

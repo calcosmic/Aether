@@ -63,6 +63,31 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 		return result
 	}
 
+	// Step 2.5: confirm absPath is the TOP LEVEL of its own git worktree
+	// before trusting any status answer computed from it. `git -C <path>
+	// status` does not fail when <path> is a plain directory that is not
+	// itself a worktree — git walks UP the directory tree and answers about
+	// the first enclosing repository it finds instead. Without this check, a
+	// stale directory whose worktree registration is gone (crash during
+	// `git worktree add`, a manually deleted `.git/worktrees/...` entry, a
+	// restored backup) would silently report the ENCLOSING repo's status —
+	// "clean" if the root happens to be clean — rather than refusing (CR-02).
+	topCtx, topCancel := context.WithTimeout(context.Background(), GitTimeout)
+	topOut, topErr := exec.CommandContext(topCtx, "git", "-C", absPath, "rev-parse", "--show-toplevel").Output()
+	topCancel()
+	if topErr != nil {
+		result.Safe = false
+		result.Reason = "cannot determine whether this worktree has unsaved changes"
+		return result
+	}
+	resolvedTop, _ := filepath.EvalSymlinks(strings.TrimSpace(string(topOut)))
+	resolvedAbs, _ := filepath.EvalSymlinks(absPath)
+	if resolvedTop != resolvedAbs {
+		result.Safe = false
+		result.Reason = "this folder is no longer a separate worker workspace, so its contents cannot be checked"
+		return result
+	}
+
 	// Step 3: dirty check. A guard that cannot see must refuse, never assume
 	// safe.
 	statusCtx, statusCancel := context.WithTimeout(context.Background(), GitTimeout)
@@ -82,6 +107,16 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 		return result
 	}
 
+	// Step 3.5: a nameless branch cannot be checked, and uncertainty is not
+	// permission. Without this guard, git rev-list --count "main.." (empty
+	// right-hand side) is valid git, returns 0 with exit status 0, and the
+	// unmerged-commit check below falls through to Safe=true — CR-01.
+	if strings.TrimSpace(entry.Branch) == "" {
+		result.Safe = false
+		result.Reason = "this worker workspace has no branch recorded, so its work cannot be checked"
+		return result
+	}
+
 	// Step 4: unmerged-commit check. Determine the integration branch by
 	// trying main and falling back to master, matching the checkout
 	// fallback already used in mergePhaseWorktrees
@@ -93,9 +128,11 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 	}
 	verifyCancel()
 
+	// "--" separates the revision range from any option flags, so a branch
+	// name beginning with "-" cannot be misread by git as a flag (CR-01).
 	revListCtx, revListCancel := context.WithTimeout(context.Background(), GitTimeout)
 	revListOut, revListErr := exec.CommandContext(revListCtx, "git", "-C", root, "rev-list", "--count",
-		integrationBranch+".."+entry.Branch).CombinedOutput()
+		integrationBranch+".."+entry.Branch, "--").CombinedOutput()
 	revListCancel()
 	if revListErr != nil {
 		result.Safe = false
@@ -184,10 +221,16 @@ func preserveWorktreeWork(root string, entry colony.WorktreeEntry, safety worktr
 		return true, detail, nil
 
 	default:
-		// The safety reason was an inability to determine state. Preserve
-		// by doing nothing destructive.
-		detail = fmt.Sprintf("could not check worktree state, so branch %s was left alone", entry.Branch)
-		return true, detail, nil
+		// The safety reason was an inability to determine state — nothing
+		// was actually stashed or otherwise saved here, only decided against
+		// deleting. Reporting preserved=true here (CR-04) would tell a
+		// caller like worktree-reap's --force --include-unmerged path that
+		// it is safe to proceed with destruction because "the work was
+		// saved first" — but nothing was examined, let alone saved. Return
+		// preserved=false so any caller about to destroy on top of this
+		// must refuse instead of reading "no error" as "saved".
+		detail = fmt.Sprintf("could not check the work on branch %s, so nothing could be saved", entry.Branch)
+		return false, detail, nil
 	}
 }
 
