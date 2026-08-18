@@ -9653,6 +9653,19 @@
     "stability_score": 91
   },
   {
+    "name": "worktree-reap",
+    "short_description": "Remove finished worker workspaces",
+    "flags": [
+      "branch",
+      "force",
+      "include-unmerged",
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
     "name": "closeout",
     "short_description": "Render an old-style lifecycle summary from a completion JSON file",
     "flags": [

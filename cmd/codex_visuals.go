@@ -2747,15 +2747,22 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		}
 	}
 
-	// Worktree cleanup summary
-	if wtGC, ok := result["worktree_gc"].(map[string]interface{}); ok {
-		cleaned := intValue(wtGC["cleaned"])
-		orphaned := intValue(wtGC["orphaned"])
+	// Worktree preservation summary — this is where "your work is still
+	// here" has to appear on the exact screen a crash-recovery user sees.
+	// Nothing here is destroyed automatically (D-01); this only reports
+	// what was kept and what was forgotten because its path no longer
+	// exists on disk.
+	if errMsg := stringValue(result["worktree_gc_error"]); errMsg != "" {
+		b.WriteString(fmt.Sprintf("⚠️ Could not check worker workspaces for leftover work: %s\n", errMsg))
+	}
+	if wtPreserved, ok := result["worktrees_preserved"].(map[string]interface{}); ok {
+		cleaned := intValue(wtPreserved["cleaned"])
+		preserved := intValue(wtPreserved["preserved"])
 		if cleaned > 0 {
-			b.WriteString(fmt.Sprintf("🧹 %d stale worktree(s) cleaned up\n", cleaned))
+			b.WriteString(fmt.Sprintf("%d worker workspace(s) forgotten (their folder was already gone, nothing to keep)\n", cleaned))
 		}
-		if orphaned > 0 {
-			b.WriteString(fmt.Sprintf("⚠️ %d worktree(s) could not be cleaned — run `aether worktree-cleanup`\n", orphaned))
+		if preserved > 0 {
+			b.WriteString(fmt.Sprintf("Kept %d worker workspace(s) because they still hold work — nothing was deleted. Run `aether recover` to see them.\n", preserved))
 		}
 	}
 

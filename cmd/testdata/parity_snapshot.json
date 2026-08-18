@@ -639,7 +639,8 @@
     "worktree-create",
     "worktree-list",
     "worktree-merge-back",
-    "worktree-orphan-scan"
+    "worktree-orphan-scan",
+    "worktree-reap"
   ],
   "runtime_resolved_names": {
     "ask": "colony-prime",

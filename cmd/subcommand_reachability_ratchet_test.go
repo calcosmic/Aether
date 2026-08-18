@@ -181,6 +181,16 @@ var pathCollisionRevealedOrphans = map[string]bool{
 	"aether host watch":        true,
 	"aether export pheromones": true,
 	"aether import pheromones": true,
+
+	// Phase 187 (2026-08-18), a second, distinct kind of reviewed exemption:
+	// "aether worktree-reap" is a brand-new command with no pre-migration
+	// entry at all — it did not exist before this phase, so it cannot be one
+	// of the 278 frozen leaves' legitimate path expansions. It is listed here
+	// deliberately, not because of a path-collision, but because D-01/T-187-13
+	// require it to have NO caller anywhere except a human typing it.
+	// TestOrphanAllowlistOnlyShrinks carries the same rationale at its call
+	// site; this is the other half of the same on-the-record decision.
+	"aether worktree-reap": true,
 }
 
 // loadPreMigrationReasonByLeaf reads the frozen, byte-identical,
@@ -1399,6 +1409,17 @@ func TestRatchetDoesNotConsultTheRegeneratedCatalog(t *testing.T) {
 // against the committed baseline. It deliberately does not compare counts (a
 // one-out-one-in swap must fail) and does not consult git history (CI
 // shallow-clones and history is rewritable).
+//
+// Phase 187's one deliberate, on-the-record addition (2026-08-18): "aether
+// worktree-reap" is added to both the live allowlist and this baseline
+// together, in the same change, following the pathCollisionRevealedOrphans
+// precedent above. This is not an unreviewed drift — it is D-01/T-187-13's
+// explicit requirement that worktree-reap have NO caller anywhere except a
+// human typing it. Any documented wrapper, hook, or script invocation would
+// itself violate TestWorktreeReapHasNoLifecycleCaller's guarantee that
+// destruction stays operator-invoked only. The command being registered but
+// uncalled is therefore the intended, permanent end state, not a gap to
+// close by inventing a caller.
 func TestOrphanAllowlistOnlyShrinks(t *testing.T) {
 	live := loadOrphanAllowlist(t, "testdata/orphan_allowlist.json")
 	baseline := loadOrphanAllowlist(t, "testdata/orphan_allowlist_baseline.json")

@@ -1378,5 +1378,10 @@
     "name": "aether worktree-orphan-scan",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
+  },
+  {
+    "name": "aether worktree-reap",
+    "reason": "deliberately-operator-invoked-only",
+    "owner_phase": "187"
   }
 ]

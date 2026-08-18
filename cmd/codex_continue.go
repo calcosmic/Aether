@@ -536,10 +536,14 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 
-	// Background cleanup of orphaned worktrees — non-blocking
-	gcCleaned, gcOrphaned, _ := gcOrphanedWorktrees()
-	if gcCleaned > 0 || gcOrphaned > 0 {
-		emitVisualProgress(fmt.Sprintf("Worktree cleanup: %d cleaned, %d orphaned", gcCleaned, gcOrphaned))
+	// Preserve-and-report pass over tracked worktrees. Synchronous — the
+	// error is captured and surfaced rather than discarded, since a
+	// discarded error here is how a preservation failure would go unnoticed.
+	gcCleaned, gcPreserved, gcErr := gcOrphanedWorktrees()
+	if gcErr != nil {
+		emitVisualProgress(fmt.Sprintf("Could not check worktrees for leftover work: %v", gcErr))
+	} else if gcCleaned > 0 || gcPreserved > 0 {
+		emitVisualProgress(fmt.Sprintf("Worktrees: %d stale entry(s) forgotten (path already gone), %d kept because they still hold work", gcCleaned, gcPreserved))
 	}
 
 	if len(state.Plan.Phases) == 0 {
