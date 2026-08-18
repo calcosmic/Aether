@@ -942,6 +942,19 @@ Plans:
 **Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — its criteria are self-contained wiring tests).
 **Success Criteria**: (1) fail-then-pass test: kill between dispatch and finalize → resume → work still present and surfaced with a named command (`gcOrphanedWorktrees` refuses/stashes dirty or unmerged worktrees and defers destruction to recover's scanner); (2) a worktree-mode build completes in a non-Go fixture repo (merge gate and `worktree-merge-back` use `resolveTestCommand()`, not hard-coded `go test ./...`); (3) `mergePhaseWorktrees` gains real-path tests.
 
+**Plans**: 4 plans in 3 waves
+
+Plans:
+**Wave 1**
+- [ ] 187-01-PLAN.md — Shared dirty/unmerged safety guard + stash-not-discard preservation + plain-language report, with real-git tests (wave 1)
+- [ ] 187-02-PLAN.md — `worktree-merge-back` gate driven by `resolveTestCommand()`; refuse-and-preserve when undeterminable; non-Go fixture tests (wave 1)
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 187-03-PLAN.md — `gcOrphanedWorktrees` becomes preserve-and-report; resume/continue/init report in plain English; new operator-only `worktree-reap`; fail-then-pass crash/resume tests (wave 2, needs 01)
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 187-04-PLAN.md — build-path merge gate uses `resolveTestCommand()`; `mergePhaseWorktrees` real-path tests; two source ratchets against both defects returning (wave 3, needs 01, 02, 03)
+
 ### Phase 188: One Truth for Failures and Advances
 **Goal**: One failure ledger; one phase-advance discipline; every retry loop leaves a record.
 **Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — its criteria are self-contained wiring tests).
