@@ -25,6 +25,11 @@ PARTIAL=0
 if [ "${2:-}" = "--partial" ] || [ "${1:-}" = "--partial" ]; then
   PARTIAL=1
 fi
+
+# Why absent cells are absent. Set BENCH_NOT_RUN_REASON when cells are left
+# un-run on purpose; unset, the banner reports them as missing evidence rather
+# than assuming a deliberate decision nobody recorded.
+NOT_RUN_REASON="${BENCH_NOT_RUN_REASON:-}"
 if [ "$RESULTS_DIR" = "--partial" ]; then
   RESULTS_DIR="${2:-}"
 fi
@@ -57,9 +62,23 @@ fi
 
 # --- emit the markdown table -------------------------------------------------
 if [ "$FOUND_COUNT" -lt "$EXPECTED_COUNT" ]; then
-  echo "> **INCOMPLETE RESULTS — $FOUND_COUNT/$EXPECTED_COUNT cells present.**"
+  echo "> **PARTIAL RESULTS — $FOUND_COUNT/$EXPECTED_COUNT cells present.**"
   echo ">"
-  echo "> Missing cells: ${MISSING_CELLS[*]}"
+  echo "> Absent cells: ${MISSING_CELLS[*]}"
+  echo ">"
+  if [ -n "$NOT_RUN_REASON" ]; then
+    # An absent cell is only evidence of a gap if nobody meant it to be absent.
+    # Recording the reason inline stops a deliberately reduced scope from being
+    # read later as lost or incomplete evidence.
+    echo "> Why they are absent: $NOT_RUN_REASON"
+  else
+    echo "> No reason was recorded for the absent cells. Treat them as MISSING"
+    echo "> evidence, not as a deliberate scope decision — set BENCH_NOT_RUN_REASON"
+    echo "> when cells are intentionally not run."
+  fi
+  echo ">"
+  echo "> This table is not a baseline. Do not compare its rows against any other"
+  echo "> run unless that run shares the environment recorded in PREFLIGHT.md."
   echo
 fi
 
@@ -76,7 +95,10 @@ for f in "${RUN_JSON_FILES[@]}"; do
       .repo,
       (if .acceptance_pass then "PASS" else "FAIL" end),
       ((.operator.scripted_inputs // 0) | tostring) + "/" + ((.operator.unscripted_inputs // 0) | tostring),
-      (.hallucinated_completion // "unknown"),
+      # Accept either the string form the cell runner writes or a raw boolean,
+      # and never let an absent flag render as anything but "unknown" — an
+      # unmeasured claim must not read as a clean one.
+      ((.hallucinated_completion // "unknown") | tostring),
       ((.cleanliness.unnecessary_modifications // "n/a") | tostring),
       ((.cleanliness.cleanliness_score // "n/a") | tostring),
       ((.tokens.total_tokens // "n/a") | tostring),
@@ -127,9 +149,18 @@ for lane in "${LANES[@]}"; do
     |
     (map(.operator.unscripted_inputs // 0) | add // 0) as $total_unscripted
     |
-    (map(select(.hallucinated_completion == "true")) | length) as $hallucinated_count
+    (map(select(.hallucinated_completion == "true" or .hallucinated_completion == true)) | length) as $hallucinated_count
     |
-    (map(.cleanliness.cleanliness_score // 0) | add / length) as $mean_cleanliness
+    (
+      # cleanliness_score is a 0-100 number from git-cleanliness.sh. Guard the
+      # divide: a null score (measurement unavailable) or a non-numeric one must
+      # not crash the table or silently average in as zero, which would read as
+      # a filthy repo rather than an unmeasured one.
+      (map(.cleanliness.cleanliness_score | select(type == "number"))) as $scores
+      | if ($scores | length) == 0 then "n/a"
+        else (($scores | add) / ($scores | length) | . * 10 | round / 10)
+        end
+    ) as $mean_cleanliness
     |
     "| \($lane) | \($count) | \($autonomous_successes)/4 | \($total_tokens) | \($median_tokens) | \($total_unscripted) | \($hallucinated_count) | \($mean_cleanliness) |"
   '
