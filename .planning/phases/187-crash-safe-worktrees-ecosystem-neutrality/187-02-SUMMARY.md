@@ -93,3 +93,11 @@ None - no external service configuration required.
 ---
 *Phase: 187-crash-safe-worktrees-ecosystem-neutrality*
 *Completed: 2026-08-18*
+
+## Self-Check: PASSED
+
+- FOUND: cmd/worktree.go
+- FOUND: cmd/worktree_merge_gate_test.go
+- FOUND: .planning/phases/187-crash-safe-worktrees-ecosystem-neutrality/187-02-SUMMARY.md
+- FOUND commit: 3201e73f
+- FOUND commit: eb1ce9f0
