@@ -127,11 +127,11 @@ func runWorktreeReap(cmd *cobra.Command, args []string) error {
 				// Even the explicit destruction command does not throw away
 				// unmerged or dirty work on --force alone (D-01: "never
 				// destroyed"). --include-unmerged is the separate opt-in.
-				_, detail, preserveErr := preserveWorktreeWork(root, entry, safety)
-				if preserveErr != nil {
-					detail = fmt.Sprintf("could not stash automatically (%v); branch %s was left alone", preserveErr, entry.Branch)
-				}
-				reportWorktreePreservation(safety, detail)
+				// The worktree itself is not being touched in this branch —
+				// nothing is removed, so there is nothing to stash. Stashing
+				// here would needlessly disturb a worktree that is being
+				// left alone.
+				reportWorktreePreservation(safety, fmt.Sprintf("branch %s was left alone", entry.Branch))
 				entry.Status = colony.WorktreeOrphaned
 				remaining = append(remaining, entry)
 				preservedBranches = append(preservedBranches, entry.Branch)
@@ -150,7 +150,7 @@ func runWorktreeReap(cmd *cobra.Command, args []string) error {
 				preservedBranches = append(preservedBranches, entry.Branch)
 				continue
 			}
-			fmt.Fprintf(stderr, "Removing worker workspace on branch %s — its changes were saved first (%s). To get them back, run: aether recover\n", entry.Branch, detail)
+			visualFprintf(stderr, "Removing worker workspace on branch %s — its changes were saved first (%s). To get them back, run: aether recover\n", entry.Branch, detail)
 			if removeErr := removeGitWorktree(root, safety.Path, entry.Branch); removeErr != nil {
 				remaining = append(remaining, entry)
 				preservedBranches = append(preservedBranches, entry.Branch)
@@ -208,16 +208,16 @@ func reportWorktreeReapPlan(candidates []worktreeReapCandidate, jsonOut bool) {
 	}
 
 	if len(candidates) == 0 {
-		fmt.Fprintln(stdout, "No worker workspaces to check.")
+		visualFprintln(stdout, "No worker workspaces to check.")
 		return
 	}
 
-	fmt.Fprintln(stdout, "This only shows what would happen — nothing is deleted without --force.")
+	visualFprintln(stdout, "This only shows what would happen — nothing is deleted without --force.")
 	for _, c := range candidates {
 		if c.safety.Safe {
-			fmt.Fprintf(stdout, "Would remove: branch %s (phase %d) — %s\n", c.entry.Branch, c.entry.Phase, c.safety.Reason)
+			visualFprintf(stdout, "Would remove: branch %s (phase %d) — %s\n", c.entry.Branch, c.entry.Phase, c.safety.Reason)
 		} else {
-			fmt.Fprintf(stdout, "Would keep: branch %s (phase %d) — %s. Add --include-unmerged with --force to remove it anyway (its work is saved first).\n", c.entry.Branch, c.entry.Phase, c.safety.Reason)
+			visualFprintf(stdout, "Would keep: branch %s (phase %d) — %s. Add --include-unmerged with --force to remove it anyway (its work is saved first).\n", c.entry.Branch, c.entry.Phase, c.safety.Reason)
 		}
 	}
 }

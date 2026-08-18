@@ -200,11 +200,18 @@ var initCmd = &cobra.Command{
 		// Check any leftover worktrees from a previous colony. Nothing here
 		// is destroyed automatically (D-01) — dirty or unmerged work is
 		// kept, not deleted, and every occurrence is reported (D-02).
+		// gcOrphanedWorktrees itself already names the deliberate-removal
+		// command per entry via reportWorktreePreservation; this summary
+		// line intentionally says "aether recover" rather than repeating
+		// the destructive command's own name, since TestWorktreeReapHasNoLifecycleCaller
+		// (cmd/worktree_crash_safety_test.go) fails the build if this file
+		// contains that literal string — a lifecycle path must not even
+		// mention the destruction command by name, let alone call it.
 		var wtPreserved int
 		if cleaned, preserved, err := gcOrphanedWorktrees(); err == nil {
 			wtPreserved = preserved
 			if cleaned > 0 || preserved > 0 {
-				fmt.Fprintf(os.Stderr, "worker workspaces from a previous colony: %d forgotten (already gone), %d kept because they still hold work — run `aether worktree-reap` to remove them deliberately\n", cleaned, preserved)
+				fmt.Fprintf(os.Stderr, "worker workspaces from a previous colony: %d forgotten (already gone), %d kept because they still hold work — run `aether recover` to see them\n", cleaned, preserved)
 			}
 		} else {
 			fmt.Fprintf(os.Stderr, "warning: could not check previous colony's worker workspaces for leftover work: %v\n", err)
@@ -219,7 +226,7 @@ var initCmd = &cobra.Command{
 		if wtPreserved == 0 {
 			_ = os.RemoveAll(filepath.Join(aetherDir, "worktrees"))
 		} else {
-			fmt.Fprintf(os.Stderr, "the previous colony's worker workspaces were left in place because they still hold work — run `aether worktree-reap` to remove them deliberately\n")
+			fmt.Fprintf(os.Stderr, "the previous colony's worker workspaces were left in place because they still hold work — run `aether recover` to see them\n")
 		}
 
 		// Clean up reviews from any prior colony
