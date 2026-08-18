@@ -691,7 +691,8 @@ var worktreeMergeBackCmd = &cobra.Command{
 	Use:   "worktree-merge-back",
 	Short: "Merge a worktree branch back to main with safety gates",
 	Long: "Merges a tracked worktree branch back to the main branch. " +
-		"Two gates must pass before merge: (1) go test ./... in the worktree, " +
+		"Two gates must pass before merge: (1) the project's test command, " +
+		"resolved from CLAUDE.md or the project's language, run in the worktree, " +
 		"(2) clash detection to prevent file conflicts. On failure, a blocker " +
 		"flag is created. On success, the worktree is cleaned up automatically.",
 	Args: cobra.NoArgs,
@@ -746,9 +747,33 @@ var worktreeMergeBackCmd = &cobra.Command{
 		}
 
 		// Step 2: Gate 1 -- Run tests in worktree directory
+		testCommand := strings.TrimSpace(resolveTestCommand())
+		if testCommand == "" {
+			// D-03: cannot determine how to test this project -- refuse to
+			// merge and preserve the work exactly where it is. Returning here
+			// (before the timeout context is created and before Step 5's
+			// auto-cleanup) is load-bearing: falling through would run
+			// `git worktree remove --force` and `git branch -d` on the very
+			// branch this refusal exists to protect.
+			blockerDesc := fmt.Sprintf("Merge blocked: cannot determine how to test this project for %s", branch)
+			if createErr := createBlocker(store, blockerDesc, "worktree-merge-back"); createErr != nil {
+				outputError(2, fmt.Sprintf("cannot determine how to test this project AND failed to create blocker: %v", createErr), nil)
+				return nil
+			}
+			outputError(2, fmt.Sprintf(
+				"merge blocked: cannot determine how to test this project. "+
+					"Aether looked in CLAUDE.md and .aether/data/codebase.md for a test "+
+					"command for %s and found none. The work has been left exactly where "+
+					"it is, on its own branch, untouched. Add a test command to CLAUDE.md "+
+					"(for example, a line like \"Run tests: npm test\") and the merge can "+
+					"proceed.", branch), nil)
+			return nil
+		}
+
 		testCtx, testCancel := context.WithTimeout(context.Background(), BuildTimeout)
 		defer testCancel()
-		testCmd := exec.CommandContext(testCtx, "go", "test", "./...")
+		testFields := strings.Fields(testCommand)
+		testCmd := exec.CommandContext(testCtx, testFields[0], testFields[1:]...)
 		testCmd.Dir = wtAbsPath // CRITICAL: run in worktree directory (absolute path)
 		testOutput, testErr := testCmd.CombinedOutput()
 		if testErr != nil {
