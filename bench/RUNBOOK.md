@@ -1,4 +1,28 @@
-# Operator runbook: the twelve benchmark runs
+# Operator runbook: the benchmark runs
+
+> **RESCOPED 2026-08-18 — read this before anything else.**
+>
+> This runbook was written for twelve runs. **Only one is now required:**
+>
+> ```
+> bench/run.sh --lane aether-interactive --category 01-bug-fix
+> ```
+>
+> The head-to-head comparison against GSD was cut by owner decision. The
+> repair work it was meant to inform (phases 187–191) turned out not to need
+> it — each of those has its own pass/fail test. What was kept is a single
+> honest run of Aether on a real open-source project it has never seen,
+> fixing a small deliberately-planted bug. It answers one question: can
+> Aether finish a small real job without someone nudging it? That is a smoke
+> alarm, not a scoreboard.
+>
+> **Everything below still applies to that one run** — the setup checks, the
+> permitted-inputs discipline, the recording of the terminal session. Skip
+> the "The order to run them in" section entirely; there is no ordering
+> question with one cell. The other eleven cells still work and can be run
+> later with the same command if anyone wants them.
+>
+> The full comparison lives in Phase 192, at the end of the programme.
 
 This is the procedure a human follows to produce all twelve benchmark runs
 (three ways of running the tools under test, times four kinds of coding

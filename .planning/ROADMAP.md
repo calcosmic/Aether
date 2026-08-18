@@ -906,13 +906,18 @@ context part-way costs one phase, not the sequence.
 
 Phases 186–192 close milestone v1.26. Source: the 2026-08-17 truth audit + hostile falsification review (frozen target of 12 outcome-level requirements; full programme in the approved implementation plan). Governing decisions: light comparative baseline before code changes, full 3-repeat benchmark at the finish line; BOTH Aether lanes (interactive and `/ant-run`) must be ≥ GSD; auxiliary commands (`/ant-oracle`, `/ant-dream`, chaos, archaeology, swarm, council) are preserved — simplification touches only the main lifecycle path.
 
-### Phase 186: Baseline Showdown (Light)
-**Goal**: An Aether-vs-GSD benchmark exists and a light baseline (4 task categories × 3 lanes × 1 run = 12 runs) is committed with raw evidence. Two neutral pinned OSS repos (1 Go, 1 TS); hermetic HOME per lane; one pinned model both systems; scripted operator protocol; deterministic acceptance scripts written before runs; tokens measured harness-side from provider usage.
+### Phase 186: Baseline Smoke (rescoped 2026-08-18)
+**Goal**: The benchmark harness exists and is proven to work end-to-end by ONE real Aether run on a neutral repo. The 12-run comparative baseline is CUT.
+
+**Rescope decision (2026-08-18, owner)**: the twelve-run GSD comparison is cut. Every fix phase (187–191) already carries its own fail-able wiring criteria and needs no number from a comparative baseline — the `Depends on: 186` lines were sequencing, not information. What is NOT cut is a single honest end-to-end run: this repo's history is eighteen of twenty-five milestones spent restoring things previously marked done, and wiring checks catch "never called" but not "runs, returns, and the answer is wrong" (the 2026-08-17 pre-compact snapshot wrote a blank `.aether/CONTEXT.md` and reported success). One real run on a repo Aether has never seen is the cheapest instrument that catches that class of failure. Beating GSD is a scoreboard; this run is a smoke alarm.
+
 **Depends on**: nothing — deliberately before all code changes.
-**Requirements**: PROOF-01, PROOF-03 (remapped)
-**Success Criteria**: (1) `bench/` committed and one documented command reproduces a run; (2) `bench/results/<date>/` holds 12 transcripts + operator logs + a results table with autonomous success rate, interventions and tokens per lane; (3) acceptance scripts predate run timestamps; (4) a read-only `aether build --print-brief --full` capture from a real mid-project colony is committed; (5) first milestone before any task specs: a hermetic profile boots, authenticates and completes one trivial task in both systems.
-**Stop-check**: no numbers within one week of harness work → cut harness scope, never grow it.
-**Plans**: 7 plans in 5 waves
+**Requirements**: PROOF-01, PROOF-03 (remapped; the comparative half of both now lands entirely in Phase 192)
+**Success Criteria**: (1) `bench/` committed and one documented command reproduces a run; (2) ONE `aether-interactive` run against `01-bug-fix` completes on a pinned neutral OSS repo with its transcript, operator log and acceptance-script exit code committed under `bench/results/<date>/`; (3) acceptance scripts predate the run timestamp, checkable by one command; (4) a read-only `aether build --print-brief --full` capture from a real mid-project colony is committed; (5) the hermetic profile boots, authenticates and completes one trivial task (already met by 186-01).
+**Explicitly not required**: GSD lanes, the autopilot lane, categories 02–04, and any cross-system comparison. All comparative measurement is Phase 192's job.
+**Consequence accepted**: Phase 192's provisional "median tokens ≤ 1.5× GSD's" target loses its ratifying baseline data and is now set blind — to be ratified or amended from 192's own first-repeat numbers.
+**Stop-check**: unchanged — no numbers within one week of harness work → cut harness scope, never grow it.
+**Plans**: 7 plans in 5 waves (01–06 complete; 07 rescoped from twelve runs to one)
 
 Plans:
 **Wave 1**
@@ -930,21 +935,21 @@ Plans:
 - [x] 186-06-PLAN.md — The harness: one documented command per cell, permitted-inputs script, results-table generator, operator runbook
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 186-07-PLAN.md — Execute the twelve runs (operator at keyboard) and commit the generated results table
+- [ ] 186-07-PLAN.md — **RESCOPED 2026-08-18**: execute ONE run (`aether-interactive` / `01-bug-fix`, operator at keyboard) and commit its evidence. Was: execute the twelve runs and commit the generated results table. Does NOT block 187–191.
 
 ### Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 **Goal**: No Aether command ever deletes unmerged or dirty work; worktree merge works outside Go repos.
-**Depends on**: 186.
+**Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — its criteria are self-contained wiring tests).
 **Success Criteria**: (1) fail-then-pass test: kill between dispatch and finalize → resume → work still present and surfaced with a named command (`gcOrphanedWorktrees` refuses/stashes dirty or unmerged worktrees and defers destruction to recover's scanner); (2) a worktree-mode build completes in a non-Go fixture repo (merge gate and `worktree-merge-back` use `resolveTestCommand()`, not hard-coded `go test ./...`); (3) `mergePhaseWorktrees` gains real-path tests.
 
 ### Phase 188: One Truth for Failures and Advances
 **Goal**: One failure ledger; one phase-advance discipline; every retry loop leaves a record.
-**Depends on**: 186.
+**Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — its criteria are self-contained wiring tests).
 **Success Criteria**: (1) a failure written by any component is read by colony-prime, autopilot, immune and memory-health (midden path unified); (2) both continue paths advance through one shared `advancePhase()` with the supersession check; (3) ungated `state-mutate --field current_phase` is refused; (4) grep-ratchet against non-atomic COLONY_STATE writes; (5) an exhausted retry loop leaves a readable record of what was tried; (6) a loud warning is logged when build-finalize accepts a legacy unbound manifest.
 
 ### Phase 189: Complete Worker Contract
 **Goal**: Every worker sees its full task and the output contract the finalizer enforces; reviewers get the same context on every path.
-**Depends on**: 186. Plan as ≥2 plans (build-side contract; reviewer parity).
+**Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope). Plan as ≥2 plans (build-side contract; reviewer parity).
 **Success Criteria**: (1) the brief for a merged dispatch contains every covered task's constraints and success criteria; (2) the brief contains the handoff/return schema the finalizer enforces; (3) continue's external dispatches carry capsule, skill and pheromone sections and the wrappers (all three platforms, parity-tested) instruct their delivery.
 
 ### Phase 190: Lean, Non-Duplicated Delivery
@@ -954,13 +959,14 @@ Plans:
 
 ### Phase 191: Dead Wood
 **Goal**: Nothing remains that claims to define behaviour while defining nothing. Delivers ROSTER-01/02 and SKILL-01 as rulings-by-deletion.
-**Depends on**: 186 (independent of 187–190).
+**Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — independent of 187–190).
 **Success Criteria**: (1) zero-reader configs deleted (`colony/agents/*.yaml`, `colony/phases/*.yaml`, `model-routing.yaml`, `autopilot.yaml`, `memory-rules.yaml`) with grep-ratchets against reappearance; (2) the four CWD-relative silent-fallback loaders resolved: each diffed against its compiled default, divergent values folded into the defaults, then files deleted — dev-checkout ceremony/visual output byte-identical before and after; (3) dead code removed (`pkg/trace/cost.go` + unconstructed pool path, `session-verify-fresh`, `newLearningValidator`, unreferenced skill-lifecycle commands); (4) false docs corrected (workers.md:825, CLAUDE.md trim-order and host-build claims); (5) `oracle-phase-directives.yaml` and all auxiliary commands untouched — `/ant-oracle` and `/ant-dream` smoke-pass.
 
 ### Phase 192: Final Showdown
 **Goal**: The full benchmark (4 categories × 3 repeats × 3 lanes) with the acceptance gate applied. v1.26 completes only if the gate passes — not when implementation tasks are done.
 **Depends on**: 185, 187–191.
-**Requirements**: PROOF-01, PROOF-02, PROOF-03, PROOF-04 (remapped)
+**Requirements**: PROOF-01, PROOF-02, PROOF-03, PROOF-04 (remapped). **2026-08-18**: 192 now carries the comparative half of PROOF-01 and PROOF-03 in full, since the 12-run baseline that previously shared them is cut.
+**Baseline note (2026-08-18)**: criterion 2's "median tokens ≤ 1.5× GSD's" was to be owner-ratified against Phase 186's data. That data will not exist. The multiplier is therefore set blind: ratify or amend it from 192's own first repeat, recording the decision and its date before the remaining repeats are scored. Do not silently keep a number whose evidence was cut.
 **Success Criteria**: (1) both Aether lanes' success count within one run of GSD's or better (the honest tie rule at n=12 per lane); (2) guardrails hold — median tokens per successful task ≤ 1.5× GSD's (provisional, owner-ratified against 186 data), unscripted interventions ≤ GSD's, hallucinated completions = 0, recovery failures = 0, git cleanliness not worse than GSD, target-project history clean; (3) evidence committed favourable or not, reproducible via one command; (4) each frozen outcome 1–12 backed by a named test or committed artifact; (5) the Phase 185 cost line validated against harness-side usage; (6) dated retune decision consuming the measurements (Phase 173 defaults adjusted or affirmed); (7) Aether repo `git status` clean after downstream runs; (8) v1.26 closure paperwork (MILESTONES.md entry, archives).
 
 **Accepted residue (decisions, not oversights)**: the legacy unbound-manifest branch in attempt binding stays (loud warning added in 188); the build-time orchestrator-boundary gate stays prose-only (seal's finalizer backstops it).
@@ -977,7 +983,7 @@ Remaining, in this order — **not** numeric order (revised 2026-08-17, Audit Ad
 
 **186** → **187** → **188** → **189** → **190** → **191** → **185** → **192**
 
-186 is the light comparative baseline and runs before any code change. 187–191 are the audit fix phases — 187, 188, 189→190 and 191 are independent chains after 186. 185 is the rescued cost line, sequenced after 190 so it reports the leaner delivery. 192 is the finish line — the full benchmark with the acceptance gate; 179 is remapped into 186+192 and must not be planned directly. (The 2026-08-14 hardening order completed through 175 on 2026-08-16.)
+**Revised 2026-08-18**: 186 is rescoped to a single smoke run and **no longer gates anything**. 187, 188, 189→190 and 191 may start immediately and in parallel — each carries its own fail-able wiring criteria and never needed baseline numbers. 186's one run is a smoke alarm to be fired when convenient, not a gate. 185 is the rescued cost line, sequenced after 190 so it reports the leaner delivery. 192 is unchanged and remains the finish line — the full benchmark with the acceptance gate, now carrying all comparative measurement; 179 is remapped into 186+192 and must not be planned directly. (The 2026-08-14 hardening order completed through 175 on 2026-08-16.)
 
 **Cut 2026-08-14 by owner decision:** 176 (Roster Ruling), 177 (Worker Delegation Grant), 178 (Skill Authoring Hardening), and Phase 174 plans 03–07 and 09. Rationale in `.planning/HARDENING-PLAN.md`. Never-started v1.25 phases 161 and 166–171 remain not started.
 

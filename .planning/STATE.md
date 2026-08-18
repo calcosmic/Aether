@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
 status: executing
-stopped_at: Phase 186 waves 1-4 complete (6/7 plans); wave 5 is the operator-run benchmark checkpoint
+stopped_at: Phase 186 rescoped 2026-08-18 to a single smoke run and no longer gates anything; 187-191 are unblocked and ready to plan
 last_updated: "2026-08-17T19:55:42.836Z"
-last_activity: 2026-08-17 -- Phase 186 execution: harness built and verified, awaiting operator for the 12 runs
+last_activity: 2026-08-18 -- Phase 186 rescoped: 12-run GSD baseline cut, one smoke run retained, fix phases unblocked
 progress:
   total_phases: 16
   completed_phases: 9
@@ -14,9 +14,10 @@ progress:
   percent: 60
   note: >
     v1.26 = phases 172-175, 180-185, 186-192 (179 remapped into 186+192).
-    Phase 186: plans 01-06 complete, plan 07 (the 12 operator-driven runs)
-    pending. The state.begin-phase/planned-phase SDK verbs regenerate this
-    block with wrong totals; recompute from the ROADMAP Progress table.
+    Phase 186: plans 01-06 complete, plan 07 rescoped 2026-08-18 from twelve
+    operator-driven runs to one and no longer gating; 187-191 unblocked. The
+    state.begin-phase/planned-phase SDK verbs regenerate this block with wrong
+    totals; recompute from the ROADMAP Progress table.
 ---
 
 # Project State
@@ -26,22 +27,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-08)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 186 — Baseline Showdown (Light)
+**Current focus:** Phase 187 — Crash-Safe Worktrees & Ecosystem Neutrality (186 rescoped 2026-08-18 and no longer gating)
 **Milestone:** v1.26 — hardening (rescoped 2026-08-14) plus the Audit Addendum (2026-08-17, phases 186-192). Governing documents: `.planning/HARDENING-PLAN.md` (with its 2026-08-17 addendum) and ROADMAP.md's "Audit Addendum" section; the frozen 12-outcome target lives in the approved implementation plan of 2026-08-17.
 **Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases)
 **Product version:** v1.0.58 (binary is authoritative)
 
 ## Current Position
 
-Phase: 186 (Baseline Showdown (Light)) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 186
+Phase: 187 (Crash-Safe Worktrees & Ecosystem Neutrality) — READY TO PLAN
+Plan: none yet
+Status: Phase 186 rescoped and parked (6/7 plans done, plan 07 is one non-gating smoke run)
 Progress: 9 of 16 phases in this milestone
-Last activity: 2026-08-17 -- Phase 186 execution started
+Last activity: 2026-08-18 -- Phase 186 rescoped; 187-191 unblocked
 
-**Order from here:** 186 → 187 → 188 → 189 → 190 → 191 → 185 → 192.
-186 first, before any code change — it records the baseline everything else is
-measured against. 187, 188, 189→190 and 191 are independent after 186. 192 is
+**Order from here (revised 2026-08-18):** 187, 188, 189→190 and 191 may start
+NOW, in any order and in parallel — the 186 rescope removed their only
+dependency, and each carries its own fail-able wiring criteria. Then 185, then
+192. Phase 186's remaining plan is one smoke run: fire it when convenient, it
+gates nothing. 192 is
 the full benchmark with the acceptance gate; the milestone completes only when
 that gate passes, not when the tasks are done.
 
@@ -104,12 +107,12 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 - [x] Phases 180–184: hardening fixes — shipped 2026-08-14/15 (v1.0.54)
 - [x] Phase 175: Orchestration Visibility — shipped 2026-08-16 (outside the phase system; SHIP-PROGRESS Item 3)
 - [x] Truth audit + hostile review + implementation programme approved — 2026-08-17
-- [ ] Plan Phase 186: Baseline Showdown (Light) ← **next**
-- [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
-- [ ] Plan Phase 188: One Truth for Failures and Advances
-- [ ] Plan Phase 189: Complete Worker Contract (≥2 plans)
-- [ ] Plan Phase 190: Lean, Non-Duplicated Delivery
-- [ ] Plan Phase 191: Dead Wood
+- [~] Phase 186: rescoped 2026-08-18 — plans 01-06 shipped; plan 07 cut from twelve runs to one non-gating smoke run, to be fired when convenient
+- [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality ← **next**
+- [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
+- [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
+- [ ] Plan Phase 190: Lean, Non-Duplicated Delivery (after 189)
+- [ ] Plan Phase 191: Dead Wood (independent — may run in parallel with 187-190)
 - [ ] Plan Phase 185: One Honest Cost Line (after 190)
 - [ ] Plan Phase 192: Final Showdown
 - ~~Plan Phases 176, 177, 178~~ — cut 2026-08-14; ~~Phase 179~~ — remapped 2026-08-17 into 186+192
