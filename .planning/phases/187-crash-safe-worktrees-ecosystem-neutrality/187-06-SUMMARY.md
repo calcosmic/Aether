@@ -168,6 +168,13 @@ None — no external service configuration required.
 - The new guard is self-maintaining for new lifecycle commands: adding a bare command name to `lifecycleEntryCommands` is the only step needed for a future automatic entry point to be covered, since entry-point discovery, call-graph construction, and destruction-site discovery are all structural.
 - If a future destructive helper is added under a new name and wired into build/continue/init/resume/run without going through `worktreeDestructionSafety` first, this guard fails with the offending function name, file, and line — no update to this test is needed to catch it.
 
+## Self-Check: PASSED
+
+- FOUND: cmd/worktree_destruction_reachability_test.go
+- FOUND: .planning/phases/187-crash-safe-worktrees-ecosystem-neutrality/187-06-SUMMARY.md
+- FOUND: commit 13ecce11 (test: replace name-checking worktree ratchets with a property guard)
+- FOUND: commit e5d0b6fc (docs: summarize the ratchet-to-property-guard replacement and its proof)
+
 ---
 *Phase: 187-crash-safe-worktrees-ecosystem-neutrality*
 *Completed: 2026-08-18*
