@@ -82,6 +82,16 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 		return result
 	}
 
+	// Step 3.5: a nameless branch cannot be checked, and uncertainty is not
+	// permission. Without this guard, git rev-list --count "main.." (empty
+	// right-hand side) is valid git, returns 0 with exit status 0, and the
+	// unmerged-commit check below falls through to Safe=true — CR-01.
+	if strings.TrimSpace(entry.Branch) == "" {
+		result.Safe = false
+		result.Reason = "this worker workspace has no branch recorded, so its work cannot be checked"
+		return result
+	}
+
 	// Step 4: unmerged-commit check. Determine the integration branch by
 	// trying main and falling back to master, matching the checkout
 	// fallback already used in mergePhaseWorktrees
@@ -93,9 +103,11 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 	}
 	verifyCancel()
 
+	// "--" separates the revision range from any option flags, so a branch
+	// name beginning with "-" cannot be misread by git as a flag (CR-01).
 	revListCtx, revListCancel := context.WithTimeout(context.Background(), GitTimeout)
 	revListOut, revListErr := exec.CommandContext(revListCtx, "git", "-C", root, "rev-list", "--count",
-		integrationBranch+".."+entry.Branch).CombinedOutput()
+		integrationBranch+".."+entry.Branch, "--").CombinedOutput()
 	revListCancel()
 	if revListErr != nil {
 		result.Safe = false

@@ -130,6 +130,28 @@ func TestWorktreeSafetyDoesNotSkipOrphanedEntries(t *testing.T) {
 	}
 }
 
+// TestWorktreeSafetyRefusesEmptyBranch is CR-01's fail-then-pass proof. An
+// entry with no branch recorded (a hand-edited or partially-written
+// COLONY_STATE.json) must never read as safe to destroy. Before the CR-01
+// fix, `git rev-list --count "main.."` is valid git — it returns 0 with exit
+// status 0 for an empty right-hand side — so the unmerged-commit check fell
+// through to Safe=true even though the branch could not actually be
+// verified at all.
+func TestWorktreeSafetyRefusesEmptyBranch(t *testing.T) {
+	root, _, entry := newWorktreeSafetyFixture(t, "phase-1/builder-emptybranch")
+
+	// Simulate a WorktreeEntry that was appended before its branch field was
+	// assigned — the worktree directory and git branch created by the
+	// fixture still exist, but the *entry* claims no branch.
+	entry.Branch = ""
+
+	safety := worktreeDestructionSafety(root, entry)
+
+	if safety.Safe {
+		t.Fatalf("expected Safe=false for an entry with an empty branch name, got Safe=true (reason: %q) — an empty branch must never resolve to 'safe to destroy'", safety.Reason)
+	}
+}
+
 func TestWorktreeSafetyRefusesWhenGitCannotAnswer(t *testing.T) {
 	root, _, entry := newWorktreeSafetyFixture(t, "phase-1/builder-unreadable")
 
