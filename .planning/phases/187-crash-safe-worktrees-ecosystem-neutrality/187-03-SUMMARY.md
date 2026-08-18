@@ -175,6 +175,11 @@ Plan 04 (scoped solely to `mergePhaseWorktrees`'s ecosystem-neutral test-command
 
 The one deferred item worth flagging for future phases: `detectOrphanedWorktrees`'s current-phase blind spot (`cmd/codex_build.go`) remains unfixed, as CONTEXT.md explicitly scoped it out of this phase. `gcOrphanedWorktrees`'s no-phase-filter behavior is intentional and unchanged.
 
+## Self-Check: PASSED
+
+- Verified all 5 files created/modified in this plan's Task Commits exist on disk (`cmd/worktree_reap.go`, `cmd/worktree_crash_safety_test.go`, plus the 11 other modified files) — all found.
+- Verified all 5 claimed commit hashes (`bf1085db`, `a81cf6aa`, `9fcfde53`, `95868ea4`, `517bcfc0`) appear in `git log --oneline` — all found.
+
 ---
 *Phase: 187-crash-safe-worktrees-ecosystem-neutrality*
 *Completed: 2026-08-18*
