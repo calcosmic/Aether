@@ -953,7 +953,7 @@ Plans:
 - [ ] 187-03-PLAN.md — `gcOrphanedWorktrees` becomes preserve-and-report; resume/continue/init report in plain English; new operator-only `worktree-reap`; fail-then-pass crash/resume tests (wave 2, needs 01)
 
 **Wave 3** *(blocked on Wave 2)*
-- [ ] 187-04-PLAN.md — build-path merge gate uses `resolveTestCommand()`; `mergePhaseWorktrees` real-path tests; two source ratchets against both defects returning (wave 3, needs 01, 02, 03)
+- [ ] 187-04-PLAN.md — build-path merge gate (`mergePhaseWorktrees`) uses `resolveTestCommand()`; refuse-and-preserve when undeterminable; real-git fixture tests covering Node success, refusal, and non-destruction (wave 3, needs 03 — file-write ordering on `cmd/codex_build_worktree.go`, no compile-time dependency)
 
 ### Phase 188: One Truth for Failures and Advances
 **Goal**: One failure ledger; one phase-advance discipline; every retry loop leaves a record.
