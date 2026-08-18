@@ -1157,6 +1157,34 @@ func mergePhaseWorktrees(phaseNum int) (merged []string, failed []string, err er
 	}
 
 	root := resolveAetherRoot()
+
+	// Resolve the project's own test command ONCE, before the loop -- the
+	// resolver reads the colony root, which does not change between
+	// entries, and resolving inside the loop would re-read CLAUDE.md from
+	// disk for every worktree.
+	testCommand := strings.TrimSpace(resolveTestCommand())
+	testFields := strings.Fields(testCommand)
+	if len(testFields) == 0 {
+		// D-03: cannot determine how to test this project -- refuse to
+		// merge and preserve the work exactly where it is. Returning here,
+		// before the loop runs at all, is load-bearing: nothing in this
+		// function may execute a git command past this point. No test, no
+		// clash check, no checkout, no merge. This deliberately does NOT
+		// copy checkTestsPass's pass-by-default-on-empty behaviour
+		// (cmd/gate.go:176-184) -- passing a merge gate vacuously would
+		// merge unverified work into the user's main branch, which is
+		// exactly what D-03 exists to prevent. The branch and worktree are
+		// left untouched, matching D-01's preserve-and-continue policy.
+		return nil, nil, fmt.Errorf(
+			"cannot determine how to test this project. Aether looked in "+
+				"CLAUDE.md and .aether/data/codebase.md for a test command "+
+				"for phase %d and found none. No branch was merged and "+
+				"nothing was deleted -- the work has been left exactly "+
+				"where it is, on its own branch, untouched. Add a test "+
+				"command to CLAUDE.md (for example, a line like \"Run "+
+				"tests: npm test\") and the merge can proceed.", phaseNum)
+	}
+
 	for _, entry := range state.Worktrees {
 		if entry.Phase != phaseNum {
 			continue
@@ -1170,9 +1198,9 @@ func mergePhaseWorktrees(phaseNum int) (merged []string, failed []string, err er
 			wtAbsPath = filepath.Join(root, wtAbsPath)
 		}
 
-		// Gate 1: run tests in worktree
+		// Gate 1: run the project's own test command in the worktree
 		testCtx, testCancel := context.WithTimeout(context.Background(), BuildTimeout)
-		testCmd := exec.CommandContext(testCtx, "go", "test", "./...")
+		testCmd := exec.CommandContext(testCtx, testFields[0], testFields[1:]...)
 		testCmd.Dir = wtAbsPath
 		_, testErr := testCmd.CombinedOutput()
 		testCancel()
