@@ -3,11 +3,9 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -430,34 +428,19 @@ func TestCleanupBuildWorktreesSurvivesCrashOnBuildPath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestGCNeverCallsRemoveGitWorktree
+// TestGCNeverCallsRemoveGitWorktree and TestRemoveGitWorktreeHasOnlySanctionedCallers
+// were replaced (Phase 187 Plan 06) by
+// TestNoLifecycleReachableFunctionDestroysWorktreeWithoutSafetyGate in
+// cmd/worktree_destruction_reachability_test.go. Both checked a single
+// hardcoded name or a hardcoded file/function list rather than the actual
+// safety property; CR-05 found a second unguarded destructive function
+// (cleanupBuildWorktrees) that neither test caught. The new guard discovers
+// destruction sites and lifecycle reachability structurally via go/ast
+// instead of by name, and additionally verifies each site is actually
+// gated on a .Safe condition rather than merely living in a function that
+// also happens to call the gate somewhere. See that file's doc comment for
+// the full property statement and this phase's fail-then-pass proof.
 // ---------------------------------------------------------------------------
-
-// TestGCNeverCallsRemoveGitWorktree is a source-level ratchet: it isolates
-// the body of gcOrphanedWorktrees, strips // comments, and fails if the
-// remainder still contains removeGitWorktree. This guards against a future
-// refactor quietly reinstating the deletion this phase removed.
-func TestGCNeverCallsRemoveGitWorktree(t *testing.T) {
-	repoRoot, err := repoRootForCommandSourceTest()
-	if err != nil {
-		t.Fatalf("resolve repo root: %v", err)
-	}
-
-	src, err := os.ReadFile(filepath.Join(repoRoot, "cmd", "codex_build_worktree.go"))
-	if err != nil {
-		t.Fatalf("read cmd/codex_build_worktree.go: %v", err)
-	}
-
-	body, ok := extractFuncBody(string(src), "func gcOrphanedWorktrees(")
-	if !ok {
-		t.Fatalf("could not locate the body of gcOrphanedWorktrees in cmd/codex_build_worktree.go — a test that cannot locate what it is checking must not silently pass")
-	}
-
-	stripped := stripGoLineComments(body)
-	if strings.Contains(stripped, "removeGitWorktree") {
-		t.Errorf("gcOrphanedWorktrees's body still contains a call to removeGitWorktree outside of comments — this reintroduces the exact destructive path this phase removed")
-	}
-}
 
 // TestCleanupBuildWorktreesNeverCallsRemoveGitWorktree is CR-05's own
 // source-level ratchet, the same shape as TestGCNeverCallsRemoveGitWorktree.
@@ -486,106 +469,16 @@ func TestCleanupBuildWorktreesNeverCallsRemoveGitWorktree(t *testing.T) {
 	}
 }
 
-// TestRemoveGitWorktreeHasOnlySanctionedCallers is the review's requested
-// wider ratchet: rather than trusting a comment to say who calls
-// removeGitWorktree, it scans every non-test .go source file under cmd/ and
-// asserts every call site is one of the three functions this phase leaves as
-// sanctioned callers. A caller outside this set means either an unguarded
-// lifecycle path was reintroduced, or this list (and the reasoning in the
-// worktreeReapCmd doc comment explaining why each is safe) needs updating —
-// either way, a human must look, not silently pass.
-func TestRemoveGitWorktreeHasOnlySanctionedCallers(t *testing.T) {
-	repoRoot, err := repoRootForCommandSourceTest()
-	if err != nil {
-		t.Fatalf("resolve repo root: %v", err)
-	}
-
-	sanctionedFuncs := map[string]bool{
-		"func removeGitWorktree(":     true, // the function's own definition
-		"func allocateBuildWorktree(": true, // rollback of a worktree it just created, never registered as holding output
-		"func finalizeBuildWorktree(": true, // runs only after a successful worker's changes are already synced to root
-		"func runWorktreeReap(":       true, // the named, operator-invoked destruction command
-	}
-
-	cmdDir := filepath.Join(repoRoot, "cmd")
-	entries, err := os.ReadDir(cmdDir)
-	if err != nil {
-		t.Fatalf("read cmd dir: %v", err)
-	}
-
-	scanned := 0
-	var violations []string
-	for _, dirEntry := range entries {
-		name := dirEntry.Name()
-		if dirEntry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		data, readErr := os.ReadFile(filepath.Join(cmdDir, name))
-		if readErr != nil {
-			t.Fatalf("read %s: %v", name, readErr)
-		}
-		content := string(data)
-		if !strings.Contains(content, "removeGitWorktree") {
-			continue
-		}
-		scanned++
-
-		lines := strings.Split(content, "\n")
-		currentFunc := ""
-		for _, line := range lines {
-			for sig := range sanctionedFuncs {
-				if strings.HasPrefix(line, sig) {
-					currentFunc = sig
-					break
-				}
-			}
-			// A new top-level function that is not in the sanctioned map
-			// resets currentFunc so calls inside it are correctly attributed
-			// as unsanctioned, not misread as still belonging to the prior
-			// sanctioned function.
-			if strings.HasPrefix(line, "func ") {
-				if _, ok := sanctionedFuncs[funcSigPrefix(line)]; !ok {
-					currentFunc = ""
-				}
-			}
-			trimmed := strings.TrimSpace(line)
-			if idx := strings.Index(trimmed, "//"); idx >= 0 {
-				trimmed = trimmed[:idx]
-			}
-			if strings.Contains(trimmed, "removeGitWorktree(") && !strings.HasPrefix(trimmed, "func removeGitWorktree(") {
-				if currentFunc == "" || !sanctionedFuncs[currentFunc] {
-					violations = append(violations, fmt.Sprintf("%s: %s", name, strings.TrimSpace(line)))
-				}
-			}
-		}
-	}
-
-	if scanned == 0 {
-		t.Fatalf("scanned zero source files mentioning removeGitWorktree — a test that finds nothing to check would pass vacuously forever")
-	}
-	if len(violations) > 0 {
-		t.Errorf("found call(s) to removeGitWorktree outside the sanctioned caller set %v: %v", sanctionedFuncsList(sanctionedFuncs), violations)
-	}
-}
-
-// funcSigPrefix extracts the "func Name(" prefix from a function-declaration
-// line, trimming trailing parameters and everything after the opening paren.
-func funcSigPrefix(line string) string {
-	idx := strings.Index(line, "(")
-	if idx < 0 {
-		return strings.TrimSpace(line)
-	}
-	return line[:idx+1]
-}
-
-func sanctionedFuncsList(m map[string]bool) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
+// TestRemoveGitWorktreeHasOnlySanctionedCallers was replaced (Phase 187 Plan
+// 06) by TestNoLifecycleReachableFunctionDestroysWorktreeWithoutSafetyGate
+// (cmd/worktree_destruction_reachability_test.go), which subsumes this
+// test's whole-codebase sanctioned-caller scan with a strictly more precise
+// AST-based version: it also computes real lifecycle reachability (this test
+// only asked "which named function contains the call", not "can that
+// function actually run from build/continue/init/resume/run") and verifies
+// each destruction site is gated on a .Safe condition rather than merely
+// living inside a sanctioned-named function. Keeping both would be a
+// redundant overlapping ratchet.
 
 // extractFuncBody finds the top-level function whose signature starts with
 // signaturePrefix (e.g. "func gcOrphanedWorktrees(") and returns everything
@@ -626,54 +519,15 @@ func stripGoLineComments(src string) string {
 	return b.String()
 }
 
-// ---------------------------------------------------------------------------
-// TestWorktreeReapHasNoLifecycleCaller
-// ---------------------------------------------------------------------------
-
-// TestWorktreeReapHasNoLifecycleCaller is T-187-13's ratchet: worktree-reap
-// must have no caller other than a human typing it. It scans every named
-// lifecycle source file for a call to runWorktreeReap or the literal
-// command name and fails if either appears.
-func TestWorktreeReapHasNoLifecycleCaller(t *testing.T) {
-	repoRoot, err := repoRootForCommandSourceTest()
-	if err != nil {
-		t.Fatalf("resolve repo root: %v", err)
-	}
-
-	lifecycleFiles := []string{
-		"session_flow_cmds.go",
-		"codex_continue.go",
-		"init_cmd.go",
-		"codex_build.go",
-		"codex_build_finalize.go",
-		"run_cmd.go",
-	}
-
-	scanned := 0
-	var violations []string
-	for _, name := range lifecycleFiles {
-		path := filepath.Join(repoRoot, "cmd", name)
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			if os.IsNotExist(readErr) {
-				continue
-			}
-			t.Fatalf("read %s: %v", path, readErr)
-		}
-		scanned++
-		content := string(data)
-		if strings.Contains(content, "runWorktreeReap") || strings.Contains(content, "worktree-reap") {
-			violations = append(violations, name)
-		}
-	}
-
-	if scanned == 0 {
-		t.Fatalf("scanned zero lifecycle files across %v — a test that finds nothing to check would pass vacuously forever", lifecycleFiles)
-	}
-	if len(violations) > 0 {
-		t.Errorf("found a reference to runWorktreeReap or the literal command name \"worktree-reap\" in lifecycle file(s) %v — destruction must stay operator-invoked only; wiring the reaper into an automatic path must fail this test rather than silently ship", violations)
-	}
-}
+// TestWorktreeReapHasNoLifecycleCaller was replaced (Phase 187 Plan 06) by
+// TestNoLifecycleReachableFunctionDestroysWorktreeWithoutSafetyGate
+// (cmd/worktree_destruction_reachability_test.go), which asserts the same
+// isolation property via real call-graph reachability from every automatic
+// lifecycle entry point, rather than grepping a hardcoded file list for two
+// literal strings. A destructive call reintroduced through a new file, a new
+// helper function, or an indirect call chain would not have been caught by
+// this test's flat string search; the new guard's BFS over the parsed call
+// graph catches it regardless of which file or how many hops away it is.
 
 // ---------------------------------------------------------------------------
 // TestRemoveGitWorktreeDoesNotDeleteBranchWhenRemovalFails
