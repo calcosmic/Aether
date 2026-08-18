@@ -125,3 +125,12 @@ The two duplicate merge-gate implementations remain intentionally un-consolidate
 ---
 *Phase: 187-crash-safe-worktrees-ecosystem-neutrality*
 *Completed: 2026-08-18*
+
+## Self-Check: PASSED
+
+- FOUND: cmd/codex_build_worktree.go
+- FOUND: cmd/merge_phase_worktrees_test.go
+- FOUND: .planning/phases/187-crash-safe-worktrees-ecosystem-neutrality/187-04-SUMMARY.md
+- FOUND commit: ed415daa
+- FOUND commit: a7644928
+- FOUND commit: bf1ae340
