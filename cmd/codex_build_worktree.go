@@ -816,22 +816,30 @@ func finalizeBuildWorktree(root string, session *buildWorktreeSession, status co
 	return nil
 }
 
+// removeGitWorktree removes a worktree and deletes its branch. The three git
+// commands run in a strict fail-fast sequence, not an accumulate-all-errors
+// sequence: if `worktree remove` fails, the function returns immediately and
+// NEVER reaches `branch -D` (CR-03). Every caller of this function reads a
+// non-nil error as "nothing was destroyed" — finalizeBuildWorktree marks the
+// entry Orphaned "to protect it", worktree-reap re-appends the entry and
+// reports the branch "was left alone". Running `branch -D` (a force delete
+// that succeeds even on unmerged commits) after the worktree removal already
+// failed would silently contradict every one of those messages: the branch
+// would already be gone while the caller believes it survived.
 func removeGitWorktree(root, absPath, branch string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
 
-	var errs []string
 	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", absPath, "--force").CombinedOutput(); err != nil {
-		errs = append(errs, fmt.Sprintf("worktree remove: %v (output: %s)", err, string(out)))
+		// Do NOT continue to prune or branch deletion — the working copy
+		// still exists, so its branch is the only handle left on that work.
+		return fmt.Errorf("worktree remove: %v (output: %s)", err, string(out))
 	}
 	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "prune").CombinedOutput(); err != nil {
-		errs = append(errs, fmt.Sprintf("worktree prune: %v (output: %s)", err, string(out)))
+		return fmt.Errorf("worktree prune: %v (output: %s)", err, string(out))
 	}
 	if out, err := exec.CommandContext(ctx, "git", "-C", root, "branch", "-D", branch).CombinedOutput(); err != nil {
-		errs = append(errs, fmt.Sprintf("branch delete: %v (output: %s)", err, string(out)))
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("worktree cleanup failed: %s", strings.Join(errs, "; "))
+		return fmt.Errorf("branch delete: %v (output: %s)", err, string(out))
 	}
 	return nil
 }

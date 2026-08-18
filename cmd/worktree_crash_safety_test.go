@@ -456,6 +456,81 @@ func TestWorktreeReapHasNoLifecycleCaller(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestRemoveGitWorktreeDoesNotDeleteBranchWhenRemovalFails
+// ---------------------------------------------------------------------------
+
+// TestRemoveGitWorktreeDoesNotDeleteBranchWhenRemovalFails is CR-03's
+// fail-then-pass proof. Before the fix, the three git commands inside
+// removeGitWorktree ran unconditionally and only accumulated errors: when
+// `git worktree remove` failed, `git branch -D` still ran and still
+// succeeded (-D force-deletes even unmerged branches), so a caller reading
+// the returned error as "nothing was destroyed" was wrong — the branch,
+// carrying a real unmerged commit, was already gone.
+//
+// The failure mode is produced by making the worktree directory
+// unwritable (chmod 0500) before removal. Real git (2.52) unregisters the
+// worktree from `git worktree list` BEFORE it finishes deleting the
+// directory's contents, so when the delete step then hits "Permission
+// denied" on a file it cannot remove, `worktree remove` exits non-zero
+// while the worktree is already unregistered — meaning `git branch -D`, if
+// it still runs afterward, succeeds and destroys the branch. This was
+// confirmed manually against the real git binary before writing this test:
+// `git worktree lock` was tried first and does NOT reproduce the defect,
+// because a genuinely locked/registered worktree also protects the branch
+// from `branch -D` ("used by worktree at ...") — only the unregistered
+// case actually loses data, which is what this test reproduces.
+func TestRemoveGitWorktreeDoesNotDeleteBranchWhenRemovalFails(t *testing.T) {
+	root, _ := crashSafetyFixture(t)
+
+	branch := "phase-1/builder-unwritable"
+	wtPath, _ := addCrashSafetyWorktree(t, root, branch, "phase-1-builder-unwritable")
+
+	// A unique unmerged commit on the branch — if `branch -D` runs anyway,
+	// this commit becomes unreachable and is exactly what CR-03 protects.
+	if err := os.WriteFile(filepath.Join(wtPath, "unmerged.txt"), []byte("unique unmerged content\n"), 0644); err != nil {
+		t.Fatalf("write unmerged file: %v", err)
+	}
+	runGit(t, wtPath, "add", ".")
+	runGit(t, wtPath, "commit", "-m", "unmerged commit")
+
+	shaOut, err := exec.Command("git", "-C", root, "rev-parse", branch).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git rev-parse %s: %v: %s", branch, err, shaOut)
+	}
+	sha := strings.TrimSpace(string(shaOut))
+
+	// Make the worktree directory itself unwritable so git can unregister
+	// the worktree but then fails partway through deleting its contents.
+	if chmodErr := os.Chmod(wtPath, 0500); chmodErr != nil {
+		t.Fatalf("chmod worktree dir: %v", chmodErr)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(wtPath, 0755) // restore so t.TempDir() cleanup can remove it
+	})
+
+	removeErr := removeGitWorktree(root, wtPath, branch)
+	if removeErr == nil {
+		t.Fatal("expected removeGitWorktree to return an error when the worktree directory cannot be fully deleted")
+	}
+
+	// The branch MUST still exist — a non-nil error must mean nothing was
+	// destroyed.
+	branchOut, branchErr := exec.Command("git", "-C", root, "branch", "--list", branch).CombinedOutput()
+	if branchErr != nil {
+		t.Fatalf("git branch --list: %v: %s", branchErr, branchOut)
+	}
+	if strings.TrimSpace(string(branchOut)) == "" {
+		t.Fatalf("expected branch %q to still exist after a failed removal, but it is gone — removeGitWorktree deleted the branch even though it reported an error", branch)
+	}
+
+	// The unmerged commit must still be reachable via its own SHA.
+	showOut, showErr := exec.Command("git", "-C", root, "cat-file", "-e", sha).CombinedOutput()
+	if showErr != nil {
+		t.Fatalf("expected commit %s to still be reachable after a failed removal, got: %v: %s", sha, showErr, showOut)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // worktree-reap CLI tests
 // ---------------------------------------------------------------------------
 
