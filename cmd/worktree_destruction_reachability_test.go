@@ -528,6 +528,17 @@ func destructiveGitArgs(args []ast.Expr) (string, bool) {
 // worktree-cleanup, worktree-orphan-scan) are deliberately excluded: those
 // require a human to type the exact destructive command, which is the D-01
 // boundary this whole phase exists to protect.
+//
+// Being excluded from this list is NOT a claim that these commands are
+// unguarded. 187-VERIFICATION.md (GAP-1, GAP-2) found that worktree-merge-back
+// and worktree-cleanup previously destroyed dirty/unmerged work unconditionally
+// -- being "operator-invoked" is not, on its own, a safety property. Both were
+// fixed to call worktreeDestructionSafety internally before destroying,
+// exactly like worktree-reap already did; see cmd/worktree.go's Step 5 and
+// cmd/clash.go's worktreeCleanupCmd. This guard cannot see that internal
+// gating (its BFS starts only from lifecycleEntryCommands), so it is not what
+// proves these two commands are safe -- the real-git fail-then-pass tests in
+// cmd/worktree_operator_destruction_test.go are.
 var lifecycleEntryCommands = []string{
 	"build",
 	"continue",

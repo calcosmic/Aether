@@ -216,6 +216,41 @@ var initCmd = &cobra.Command{
 		} else {
 			fmt.Fprintf(os.Stderr, "warning: could not check previous colony's worker workspaces for leftover work: %v\n", err)
 		}
+		// wtPreserved only counts entries gcOrphanedWorktrees actually saw,
+		// and it only ever iterates state.Worktrees. A worktree created by
+		// `git worktree add` but killed before its state entry was appended
+		// (the exact crash window this phase exists for) is invisible to
+		// that count — it looks like "nothing preserved" even though it may
+		// hold uncommitted or unmerged work. Scan the directory on disk,
+		// independent of state, before trusting wtPreserved == 0 (WR-06,
+		// 187-VERIFICATION.md GAP-3).
+		worktreesDir := filepath.Join(aetherDir, "worktrees")
+		gitRoot := filepath.Dir(aetherDir)
+		knownPaths := map[string]bool{}
+		var wtScanState colony.ColonyState
+		if loadErr := store.LoadJSON("COLONY_STATE.json", &wtScanState); loadErr == nil {
+			for _, wt := range wtScanState.Worktrees {
+				p := wt.Path
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(gitRoot, p)
+				}
+				knownPaths[p] = true
+			}
+		}
+		unrecorded := scanUnrecordedWorktrees(gitRoot, worktreesDir, knownPaths)
+		var unrecordedUnsafe []worktreeSafety
+		for _, safety := range unrecorded {
+			if !safety.Safe {
+				unrecordedUnsafe = append(unrecordedUnsafe, safety)
+			}
+		}
+		if len(unrecordedUnsafe) > 0 {
+			wtPreserved += len(unrecordedUnsafe)
+			for _, safety := range unrecordedUnsafe {
+				reportWorktreePreservation(safety, fmt.Sprintf("found on disk but not yet recorded (likely interrupted mid-creation): %s", safety.Reason))
+			}
+		}
+
 		// Remove the worktrees directory entirely to ensure a clean slate,
 		// but only when nothing was preserved. Removing it unconditionally
 		// would silently undo every preservation gcOrphanedWorktrees just
@@ -224,7 +259,7 @@ var initCmd = &cobra.Command{
 		// doing so reintroduces the exact defect this phase was created to
 		// fix.
 		if wtPreserved == 0 {
-			_ = os.RemoveAll(filepath.Join(aetherDir, "worktrees"))
+			_ = os.RemoveAll(worktreesDir)
 		} else {
 			fmt.Fprintf(os.Stderr, "the previous colony's worker workspaces were left in place because they still hold work — run `aether recover` to see them\n")
 		}
