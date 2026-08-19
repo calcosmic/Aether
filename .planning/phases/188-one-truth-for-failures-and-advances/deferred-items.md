@@ -35,3 +35,60 @@ issues, just noted here for whoever next touches midden plumbing:
   plan's fix, `scanDataFiles` now additionally reports a non-fixable "midden.json not found"
   info-level issue there, which does not affect either `Healthy` (critical-only) or the
   `fixableCount`/`remainingFixable` comparison the test actually asserts on.
+
+# Deferred Items — Phase 188 Plan 06 (code review fixes: CR-01, CR-02, CR-03, WR-01)
+
+## 3. `cmd/codex_build.go`'s `rollbackCodexBuildFailure` discards its own fresh read too
+
+While extending the atomicity ratchet for WR-01 (188-REVIEW.md), the new
+`TestNoUpdateJSONAtomicallyDiscardsFreshRead` check — scanned across all of `cmd/*.go`, not
+scoped to any one of the four items this plan was dispatched to fix — found a fourth live
+instance of the same defect class, outside this plan's explicit scope (CR-01:
+`cmd/codex_continue_finalize.go`, CR-02: `cmd/codex_build_finalize.go`, CR-03:
+`cmd/state_cmds.go`):
+
+`cmd/codex_build.go`'s `rollbackCodexBuildFailure` (the function that reverts colony state
+after a build's worker dispatch fails) does:
+```go
+var current colony.ColonyState
+if err := store.UpdateJSONAtomically("COLONY_STATE.json", &current, func() error {
+    if err := validateRuntimeStateStillCurrent(current, phaseNum, &startedAt, colony.StateEXECUTING, colony.StateBUILT); err != nil {
+        return err
+    }
+    rollback.Worktrees = mergeBuildFailureWorktrees(rollback.Worktrees, current.Worktrees)
+    current = rollback
+    return nil
+}); err != nil {
+```
+It DOES call `validateRuntimeStateStillCurrent` first (so a concurrent pause, phase change, or
+state-machine drift is caught and refused), but then discards the fresh read's OTHER fields —
+anything not covered by that specific check — by reassigning `current = rollback`, where
+`rollback` is built from a `previous` parameter captured before this call. Narrower than CR-02
+(a real guard exists here, unlike CR-01/CR-02's original unguarded overwrites), but
+structurally the same clobber shape the ratchet now polices.
+
+**Not fixed here** — `cmd/codex_build.go` is not one of this plan's four assigned findings, and
+understanding this function's full rollback contract (worktree merge-failure recovery,
+interaction with `beginBuildAttempt`/attempt journaling) is out of the context budget for a
+plan already touching four other files. Per the executor's scope-boundary rule, out-of-scope
+discoveries are logged, not fixed.
+
+**Handled without silently hiding it:** added to a small, explicit, shrink-only
+`colonyStateDiscardedReadAllowlist` in `cmd/colony_state_atomicity_ratchet_test.go` (NOT the
+JSON-file-backed baseline `testdata/colony_state_write_allowlist.json` — a separate, in-file
+list scoped to exactly this one pending item), with a doc comment pointing back here. The
+allowlist is shrink-only in both directions: a stale entry (once this site is fixed) fails the
+test just as loudly as an unlisted new one would.
+
+**Recommendation:** a future plan should apply the same fix shape used here for CR-01/CR-02 —
+mutate `current`'s own fields (or a small, explicit list of fields `rollback` actually needs to
+apply) instead of reassigning `current` wholesale from `rollback`, then remove the
+`colonyStateDiscardedReadAllowlist` entry once fixed.
+
+## 4. `cmd/codex_build.go` has a pre-existing `gofmt` struct-alignment drift
+
+`gofmt -l cmd/*.go` flags `cmd/codex_build.go` (a `codexBuildDispatch` struct field
+alignment gap around line 23). Confirmed pre-existing and unrelated: `git diff --stat
+cmd/codex_build.go` shows zero changes from this plan's work, and the drift is a pure
+whitespace/alignment issue with no behavioral effect. Not fixed here (out of scope, unrelated
+file) — a future formatting pass (`gofmt -w cmd/codex_build.go`) can pick it up in one line.
