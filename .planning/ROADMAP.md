@@ -1044,7 +1044,7 @@ Remaining, in this order — **not** numeric order (revised 2026-08-17, Audit Ad
 | 175. Orchestration Visibility | v1.26 | 1/1 | **Complete** | 2026-08-16 |
 | 179. Proof | v1.26 | — | **Remapped → 186 + 192** (2026-08-17) | - |
 | **186. Baseline Showdown (Light)** | v1.26 | 0/7 | **Planned** | - |
-| 187. Crash-Safe Worktrees & Ecosystem Neutrality | v1.26 | 6/4 | Complete   | 2026-08-18 |
+| 187. Crash-Safe Worktrees & Ecosystem Neutrality | v1.26 | 7/4 | Complete   | 2026-08-19 |
 | 188. One Truth for Failures and Advances | v1.26 | 0/TBD | Not started | - |
 | 189. Complete Worker Contract | v1.26 | 0/TBD | Not started | - |
 | 190. Lean, Non-Duplicated Delivery | v1.26 | 0/TBD | Not started | - |
