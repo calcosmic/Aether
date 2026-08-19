@@ -424,7 +424,308 @@ func indexFuncBody(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName strin
 	if g.calls[nodeName] == nil {
 		g.calls[nodeName] = map[string]bool{}
 	}
-	walkStmtsForDestruction(g, fset, relFile, nodeName, body.List, false)
+	sc := &safetyGateContext{
+		verdictIdents:   findApprovedSafetyVerdictIdents(body),
+		aggregateIdents: findApprovedUnsafeAggregateIdents(body),
+	}
+	walkStmtsForDestruction(g, fset, relFile, nodeName, body.List, false, sc)
+}
+
+// safetyGateContext bundles the two kinds of identifier this guard trusts as
+// a genuine `.Safe`-gating signal within one enclosing function:
+//
+//   - verdictIdents: identifiers assigned directly from an
+//     approvedSafetyVerdictProducers call (worktreeDestructionSafety,
+//     branchMergeSafety) -- gated by testing `<ident>.Safe` directly.
+//   - aggregateIdents: identifiers built by the "collect every unsafe
+//     verdict from a range loop" idiom (findApprovedUnsafeAggregateIdents)
+//     -- gated by testing `len(<ident>) > 0`, `<ident> > 0`, or
+//     `<ident> == 0`.
+//
+// Bundling these into one struct (rather than two more map[string]bool
+// parameters threaded through every walker function) keeps the walker
+// signatures stable as this guard's vocabulary of recognized gating shapes
+// grows -- a third kind added later extends this struct, not every call
+// site's parameter list.
+type safetyGateContext struct {
+	verdictIdents   map[string]bool
+	aggregateIdents map[string]bool
+}
+
+// mergeIdentSets returns the union of two identifier sets, either of which
+// may be nil.
+func mergeIdentSets(a, b map[string]bool) map[string]bool {
+	merged := map[string]bool{}
+	for k := range a {
+		merged[k] = true
+	}
+	for k := range b {
+		merged[k] = true
+	}
+	return merged
+}
+
+// approvedSafetyVerdictProducers is the set of function names whose return
+// value is trusted to represent a genuine worktreeDestructionSafety-family
+// verdict. A `.Safe` selector only counts as gating this guard's destruction
+// check when the variable it selects from was itself assigned, somewhere in
+// the enclosing function, from a direct call to one of these -- not from a
+// same-named local struct literal with a hardcoded field (BS-2,
+// 187-VERIFICATION.md's second reproduced evasion: `fakeSafety := struct{
+// Safe bool }{Safe: true}` satisfies a purely-syntactic `.Safe` match while
+// gating nothing real).
+var approvedSafetyVerdictProducers = map[string]bool{
+	"worktreeDestructionSafety": true,
+	"branchMergeSafety":         true,
+}
+
+// findApprovedSafetyVerdictIdents scans an entire function body (every
+// nesting depth -- ifs, closures, loops, switches; this is a single
+// whole-body pass done ONCE per function, not per statement, so it does not
+// need to track control flow the way walkStmtsForDestruction does) and
+// returns the set of identifier names that were assigned, anywhere in the
+// body, directly from a call to an approvedSafetyVerdictProducers entry --
+// e.g. `safety := worktreeDestructionSafety(root, entry)` or
+// `safety = branchMergeSafety(root, branch)`.
+//
+// This is deliberately NOT full dataflow analysis: it does not track
+// reassignment, does not follow the value through further indirection (e.g.
+// `other := safety; other.Safe`), and does not distinguish shadowed
+// identifiers with the same name in different scopes. It only needs to
+// answer one narrower question well: "was SOME identifier with this name,
+// anywhere in this function, ever assigned from a real producer call?" A
+// same-named local declared as a struct literal alongside a real call (the
+// exact BS-2 injected shape: `safety := branchMergeSafety(...)` immediately
+// followed by `fakeSafety := struct{Safe bool}{Safe: true}`) still fails this
+// check correctly, because "fakeSafety" itself was never assigned from an
+// approved producer -- only "safety" was, and the injected code deliberately
+// tests fakeSafety.Safe, not safety.Safe. Full dataflow tracking (SSA-level
+// shadowing, reassignment-to-a-non-producer-value invalidating a prior
+// binding) is more than this codebase's actual call sites need; every real
+// gating condition in production either tests the same identifier the
+// producer call assigned, or does not test .Safe at all.
+func findApprovedSafetyVerdictIdents(body *ast.BlockStmt) map[string]bool {
+	idents := map[string]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		var lhs []ast.Expr
+		var rhs []ast.Expr
+		switch s := n.(type) {
+		case *ast.AssignStmt:
+			lhs = s.Lhs
+			rhs = s.Rhs
+		default:
+			return true
+		}
+		if len(lhs) != len(rhs) {
+			// Multi-value assignment from a single call (e.g. `a, err :=
+			// f()`) -- a safety verdict producer here returns a single
+			// value, not (value, error), so this shape cannot apply; skip
+			// rather than guess.
+			return true
+		}
+		for i, r := range rhs {
+			call, ok := r.(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			fnIdent, ok := call.Fun.(*ast.Ident)
+			if !ok || !approvedSafetyVerdictProducers[fnIdent.Name] {
+				continue
+			}
+			if target, ok := lhs[i].(*ast.Ident); ok {
+				idents[target.Name] = true
+			}
+		}
+		return true
+	})
+	return idents
+}
+
+// approvedSafetyVerdictSliceProducers is the set of function names whose
+// return value is a slice of verdicts, each individually derived from an
+// approvedSafetyVerdictProducers call -- i.e. functions that themselves wrap
+// the real safety check per-element rather than returning a single verdict.
+// scanUnrecordedWorktrees (cmd/worktree_safety.go) is the one production
+// example: it walks a directory and calls worktreeDestructionSafety once per
+// entry found, returning []worktreeSafety. A range loop over its result that
+// tests each element's `.Safe` field is exactly as trustworthy as a range
+// loop over a literal []worktreeSafety built one worktreeDestructionSafety
+// call at a time -- the indirection through one more function does not
+// change what the loop variable actually is.
+var approvedSafetyVerdictSliceProducers = map[string]bool{
+	"scanUnrecordedWorktrees": true,
+}
+
+// findApprovedUnsafeAggregateIdents scans an entire function body for the
+// "count/collect the unsafe verdicts" idiom every real GAP-3/GAP-5 fix in
+// this codebase actually uses:
+//
+//	for _, v := range <approved verdict slice> {
+//	    if !v.Safe {
+//	        unsafe = append(unsafe, v)   // or: counter++ / counter += n
+//	    }
+//	}
+//	if len(unsafe) > 0 { ...preserve, do not destroy... }
+//
+// It returns the set of identifier names that were built this way -- an
+// accumulator (slice or int) that only grows when a loop variable ranging
+// over an approved-producer's (or approved-slice-producer's) result tested
+// `!v.Safe` first. condReferencesSafe treats `len(accum) > 0`, `accum > 0`,
+// and `accum == 0` as equivalent to a direct `.Safe` selector test for any
+// identifier in this set -- see condReferencesSafe's own doc comment for why
+// this is the right level of generality (a second, narrow, named rule, not
+// general dataflow analysis).
+//
+// This does NOT track arbitrary aggregation shapes -- only append-inside-a-
+// range-with-a-negated-.Safe-guard, and only when the range's source is
+// itself provably a slice of approved verdicts (a direct call to an
+// approvedSafetyVerdictSliceProducers entry, or an identifier this same scan
+// already resolved as such). A counter incremented from some other,
+// unrelated condition is not recognized, and correctly so -- recognizing it
+// would be exactly the kind of false-safe verdict this guard exists to
+// refuse.
+func findApprovedUnsafeAggregateIdents(body *ast.BlockStmt) map[string]bool {
+	// First pass: identify which identifiers hold a []worktreeSafety-shaped
+	// value from an approved slice producer, so a range over that identifier
+	// (rather than the call expression directly) is still recognized.
+	approvedSliceIdents := map[string]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		assign, ok := n.(*ast.AssignStmt)
+		if !ok || len(assign.Lhs) != len(assign.Rhs) {
+			return true
+		}
+		for i, r := range assign.Rhs {
+			call, ok := r.(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			fnIdent, ok := call.Fun.(*ast.Ident)
+			if !ok || !approvedSafetyVerdictSliceProducers[fnIdent.Name] {
+				continue
+			}
+			if target, ok := assign.Lhs[i].(*ast.Ident); ok {
+				approvedSliceIdents[target.Name] = true
+			}
+		}
+		return true
+	})
+
+	isApprovedSliceExpr := func(e ast.Expr) bool {
+		switch v := e.(type) {
+		case *ast.Ident:
+			return approvedSliceIdents[v.Name]
+		case *ast.CallExpr:
+			if fnIdent, ok := v.Fun.(*ast.Ident); ok {
+				return approvedSafetyVerdictSliceProducers[fnIdent.Name]
+			}
+		}
+		return false
+	}
+
+	aggregates := map[string]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		rng, ok := n.(*ast.RangeStmt)
+		if !ok || !isApprovedSliceExpr(rng.X) {
+			return true
+		}
+		loopVarName := ""
+		if valueIdent, ok := rng.Value.(*ast.Ident); ok {
+			loopVarName = valueIdent.Name
+		}
+		if loopVarName == "" {
+			return true
+		}
+		// Within this range body, find `if !<loopVar>.Safe { ... }` guard
+		// bodies and record every identifier assigned or incremented inside
+		// them as an approved unsafe-aggregate.
+		ast.Inspect(rng.Body, func(inner ast.Node) bool {
+			ifs, ok := inner.(*ast.IfStmt)
+			if !ok {
+				return true
+			}
+			unary, ok := ifs.Cond.(*ast.UnaryExpr)
+			if !ok || unary.Op != token.NOT {
+				return true
+			}
+			sel, ok := unary.X.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Safe" {
+				return true
+			}
+			base, ok := sel.X.(*ast.Ident)
+			if !ok || base.Name != loopVarName {
+				return true
+			}
+			// This is `if !<loopVar>.Safe { ... }` ranging over an approved
+			// verdict slice -- every identifier assigned to (append) or
+			// incremented (++, +=) directly inside this if-body is an
+			// approved unsafe-aggregate.
+			ast.Inspect(ifs.Body, func(bodyNode ast.Node) bool {
+				switch bn := bodyNode.(type) {
+				case *ast.AssignStmt:
+					for i, r := range bn.Rhs {
+						if call, ok := r.(*ast.CallExpr); ok {
+							if fnIdent, ok := call.Fun.(*ast.Ident); ok && fnIdent.Name == "append" {
+								if target, ok := bn.Lhs[i].(*ast.Ident); ok {
+									aggregates[target.Name] = true
+								}
+							}
+						}
+					}
+					if bn.Tok == token.ADD_ASSIGN {
+						if target, ok := bn.Lhs[0].(*ast.Ident); ok {
+							aggregates[target.Name] = true
+						}
+					}
+				case *ast.IncDecStmt:
+					if target, ok := bn.X.(*ast.Ident); ok {
+						aggregates[target.Name] = true
+					}
+				}
+				return true
+			})
+			return true
+		})
+		return true
+	})
+
+	// Propagation pass: `wtPreserved += len(unrecordedUnsafe)` (init_cmd.go's
+	// actual shape) is a SECOND aggregation step outside the range loop
+	// itself -- unrecordedUnsafe is already an approved aggregate after the
+	// pass above, but the guard clause the code actually branches on
+	// (`if wtPreserved == 0`) tests a DIFFERENT identifier that a later
+	// statement folded it into. One additional pass recognizes `Y +=
+	// len(X)` / `Y = Y + len(X)` / `Y += X` / `Y = X` where X is already a
+	// known aggregate, and adds Y to the set too. This is still a single,
+	// named, one-hop propagation -- not a fixed-point dataflow solver -- so
+	// it is run exactly once; a chain of three or more foldings would not
+	// be traced, which is fine, since no production call site in this
+	// codebase needs more than one hop.
+	ast.Inspect(body, func(n ast.Node) bool {
+		assign, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		derivesFromAggregate := func(e ast.Expr) bool {
+			switch v := e.(type) {
+			case *ast.Ident:
+				return aggregates[v.Name]
+			case *ast.CallExpr:
+				if fnIdent, ok := v.Fun.(*ast.Ident); ok && fnIdent.Name == "len" && len(v.Args) == 1 {
+					if argIdent, ok := v.Args[0].(*ast.Ident); ok {
+						return aggregates[argIdent.Name]
+					}
+				}
+			}
+			return false
+		}
+		if assign.Tok == token.ADD_ASSIGN && len(assign.Lhs) == 1 && len(assign.Rhs) == 1 {
+			if target, ok := assign.Lhs[0].(*ast.Ident); ok && derivesFromAggregate(assign.Rhs[0]) {
+				aggregates[target.Name] = true
+			}
+		}
+		return true
+	})
+	return aggregates
 }
 
 // walkStmtsForDestruction walks a statement list in order, tracking
@@ -454,7 +755,7 @@ func indexFuncBody(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName strin
 // destruction sites but does NOT descend into nested IfStmts or FuncLits --
 // those are re-entered here explicitly so safetyGated is tracked correctly
 // for their own subtree).
-func walkStmtsForDestruction(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName string, stmts []ast.Stmt, safetyGated bool) {
+func walkStmtsForDestruction(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName string, stmts []ast.Stmt, safetyGated bool, sc *safetyGateContext) {
 	for _, stmt := range stmts {
 		switch s := stmt.(type) {
 		case *ast.IfStmt:
@@ -465,20 +766,20 @@ func walkStmtsForDestruction(g *cmdFuncGraph, fset *token.FileSet, relFile, node
 			// cleanupBuildWorktrees (post-fix) both use: `if !safety.Safe {
 			// preserve } ... ` and `if _, statErr := ...; statErr == nil {
 			// defer to operator }`.
-			gated := safetyGated || ifChainReferencesSafe(s)
+			gated := safetyGated || ifChainReferencesSafe(s, sc)
 			if s.Init != nil {
-				recordCallsInExpr(g, fset, relFile, nodeName, s.Init, safetyGated)
+				recordCallsInExpr(g, fset, relFile, nodeName, s.Init, safetyGated, sc)
 			}
 			if s.Cond != nil {
-				recordCallsInExpr(g, fset, relFile, nodeName, s.Cond, safetyGated)
+				recordCallsInExpr(g, fset, relFile, nodeName, s.Cond, safetyGated, sc)
 			}
-			walkStmtsForDestruction(g, fset, relFile, nodeName, s.Body.List, gated)
+			walkStmtsForDestruction(g, fset, relFile, nodeName, s.Body.List, gated, sc)
 			if s.Else != nil {
 				switch e := s.Else.(type) {
 				case *ast.BlockStmt:
-					walkStmtsForDestruction(g, fset, relFile, nodeName, e.List, gated)
+					walkStmtsForDestruction(g, fset, relFile, nodeName, e.List, gated, sc)
 				case *ast.IfStmt:
-					walkStmtsForDestruction(g, fset, relFile, nodeName, []ast.Stmt{e}, gated)
+					walkStmtsForDestruction(g, fset, relFile, nodeName, []ast.Stmt{e}, gated, sc)
 				}
 			}
 
@@ -491,65 +792,171 @@ func walkStmtsForDestruction(g *cmdFuncGraph, fset *token.FileSet, relFile, node
 			// of this walkStmtsForDestruction call (it is never un-set --
 			// there is no shape in this codebase where a LATER statement
 			// in the same list would need to un-gate).
-			if s.Else == nil && ifChainReferencesSafe(s) && ifChainAlwaysTerminates(s) {
+			if s.Else == nil && ifChainReferencesSafe(s, sc) && ifChainAlwaysTerminates(s) {
 				safetyGated = true
 			}
 
 		case *ast.BlockStmt:
-			walkStmtsForDestruction(g, fset, relFile, nodeName, s.List, safetyGated)
+			walkStmtsForDestruction(g, fset, relFile, nodeName, s.List, safetyGated, sc)
 
 		case *ast.ForStmt:
 			if s.Init != nil {
-				recordCallsInExpr(g, fset, relFile, nodeName, s.Init, safetyGated)
+				recordCallsInExpr(g, fset, relFile, nodeName, s.Init, safetyGated, sc)
 			}
-			walkStmtsForDestruction(g, fset, relFile, nodeName, s.Body.List, safetyGated)
+			walkStmtsForDestruction(g, fset, relFile, nodeName, s.Body.List, safetyGated, sc)
 
 		case *ast.RangeStmt:
-			walkStmtsForDestruction(g, fset, relFile, nodeName, s.Body.List, safetyGated)
+			walkStmtsForDestruction(g, fset, relFile, nodeName, s.Body.List, safetyGated, sc)
 
 		case *ast.SwitchStmt:
 			for _, c := range s.Body.List {
 				if cc, ok := c.(*ast.CaseClause); ok {
-					walkStmtsForDestruction(g, fset, relFile, nodeName, cc.Body, safetyGated)
+					walkStmtsForDestruction(g, fset, relFile, nodeName, cc.Body, safetyGated, sc)
 				}
 			}
 
 		case *ast.SelectStmt:
 			for _, c := range s.Body.List {
 				if cc, ok := c.(*ast.CommClause); ok {
-					walkStmtsForDestruction(g, fset, relFile, nodeName, cc.Body, safetyGated)
+					walkStmtsForDestruction(g, fset, relFile, nodeName, cc.Body, safetyGated, sc)
 				}
 			}
 
 		default:
-			recordCallsInExpr(g, fset, relFile, nodeName, stmt, safetyGated)
+			recordCallsInExpr(g, fset, relFile, nodeName, stmt, safetyGated, sc)
 		}
 	}
 }
 
 // ifChainReferencesSafe reports whether the given IfStmt's condition, or any
 // `else if` condition in the same chain, contains a selector expression
-// ending in `.Safe`.
-func ifChainReferencesSafe(s *ast.IfStmt) bool {
-	if s.Cond != nil && condReferencesSafe(s.Cond) {
+// ending in `.Safe` whose base identifier is a member of sc
+// (see findApprovedSafetyVerdictIdents) -- i.e. a variable this function
+// actually assigned from a real worktreeDestructionSafety/branchMergeSafety
+// call, not merely any locally-declared value with a field named `Safe`.
+func ifChainReferencesSafe(s *ast.IfStmt, sc *safetyGateContext) bool {
+	if s.Cond != nil && condReferencesSafe(s.Cond, sc) {
 		return true
 	}
 	if elseIf, ok := s.Else.(*ast.IfStmt); ok {
-		return ifChainReferencesSafe(elseIf)
+		return ifChainReferencesSafe(elseIf, sc)
 	}
 	return false
 }
 
-func condReferencesSafe(cond ast.Expr) bool {
+// condReferencesSafe reports whether cond contains EITHER:
+//
+//  1. A selector expression `X.Safe` where X is a bare identifier present in
+//     sc.verdictIdents -- a variable this function actually assigned from a
+//     real worktreeDestructionSafety/branchMergeSafety call, not merely any
+//     locally-declared value with a field named `Safe`; or
+//  2. A `len(X) > 0`, `X > 0`, or `X == 0` comparison where X is a bare
+//     identifier present in sc.aggregateIdents -- the "collect every unsafe
+//     verdict from a range loop, then gate on whether anything was
+//     collected" idiom (findApprovedUnsafeAggregateIdents), which
+//     cmd/init_cmd.go's `if wtPreserved == 0` and
+//     cmd/entomb_cmd.go's `if len(unsafe) > 0 { ...; return nil }` both use.
+//
+// BS-2 (187-VERIFICATION.md's second reproduced evasion): before this fix,
+// case 1 matched ANY `.Safe` selector syntactically, regardless of what it
+// was selecting from. `fakeSafety := struct{ Safe bool }{Safe: true}; if
+// !fakeSafety.Safe { ...destroy... }` satisfied that check even though
+// fakeSafety was never a real safety verdict -- the destructive call ran
+// unconditionally in practice while the guard read the condition as gated.
+// Requiring the selector's base identifier to be one this function actually
+// assigned from an approvedSafetyVerdictProducers call closes that evasion:
+// fakeSafety is never in sc.verdictIdents (only a real producer-assigned
+// identifier like `safety` would be), so a condition built entirely from it
+// is correctly NOT recognized as gating.
+//
+// Case 2 exists because adding case 1 alone, with no equivalent for the
+// aggregation idiom, made this stricter detector flag cmd/init_cmd.go:262
+// and cmd/entomb_cmd.go:746 as false positives -- both are genuinely gated,
+// just via a count/slice built across a loop rather than a single `.Safe`
+// selector. Recognizing this ONE additional named shape (not general
+// dataflow analysis -- see findApprovedUnsafeAggregateIdents's own doc
+// comment for exactly what it does and does not track) keeps both real
+// production sites correctly recognized as gated without adding either to
+// a blanket function-level sanctioned-exception entry, which would have
+// silenced ANY future ungated destruction added to those same functions,
+// not just the one already-safe call site.
+//
+// This intentionally only inspects the selector's/comparison's immediate
+// base identifier (`X` in `X.Safe` or `len(X)`), not arbitrary
+// sub-expressions (`a.b.Safe`, `arr[i].Safe`) -- every real gating
+// condition in this codebase's production fixes tests a single
+// bare-identifier verdict or aggregate variable directly, so this covers
+// every real shape without needing a general expression-provenance tracer.
+func condReferencesSafe(cond ast.Expr, sc *safetyGateContext) bool {
 	found := false
 	ast.Inspect(cond, func(n ast.Node) bool {
-		if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "Safe" {
-			found = true
-			return false
+		switch expr := n.(type) {
+		case *ast.SelectorExpr:
+			if expr.Sel.Name != "Safe" {
+				return true
+			}
+			base, ok := expr.X.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if sc.verdictIdents[base.Name] {
+				found = true
+				return false
+			}
+
+		case *ast.BinaryExpr:
+			if aggregateComparisonReferencesIdent(expr, sc.aggregateIdents) {
+				found = true
+				return false
+			}
 		}
 		return true
 	})
 	return found
+}
+
+// aggregateComparisonReferencesIdent reports whether the given BinaryExpr is
+// one of the three comparison shapes findApprovedUnsafeAggregateIdents'
+// identifiers are gated with in production: `len(X) > 0`, `X > 0`, or
+// `X == 0`, where X is present in aggregateIdents. Operand order (`0 ==
+// len(X)` vs `len(X) == 0`) is checked both ways since Go does not enforce
+// either ordering.
+func aggregateComparisonReferencesIdent(expr *ast.BinaryExpr, aggregateIdents map[string]bool) bool {
+	if expr.Op != token.GTR && expr.Op != token.EQL {
+		return false
+	}
+	identNamed := func(e ast.Expr) (string, bool) {
+		switch v := e.(type) {
+		case *ast.Ident:
+			return v.Name, true
+		case *ast.CallExpr:
+			if fnIdent, ok := v.Fun.(*ast.Ident); ok && fnIdent.Name == "len" && len(v.Args) == 1 {
+				if argIdent, ok := v.Args[0].(*ast.Ident); ok {
+					return argIdent.Name, true
+				}
+			}
+		}
+		return "", false
+	}
+	isZeroLit := func(e ast.Expr) bool {
+		lit, ok := e.(*ast.BasicLit)
+		return ok && lit.Kind == token.INT && lit.Value == "0"
+	}
+	// `<ident-or-len> > 0` / `0 < <ident-or-len>` (BinaryExpr only stores the
+	// operator as written, so only the GTR-with-zero-on-the-right and
+	// EQL-either-side shapes need checking; Go's own idiom for these guard
+	// clauses is always `X > 0` / `X == 0`, never `0 < X`).
+	if name, ok := identNamed(expr.X); ok && aggregateIdents[name] {
+		if (expr.Op == token.GTR || expr.Op == token.EQL) && isZeroLit(expr.Y) {
+			return true
+		}
+	}
+	if name, ok := identNamed(expr.Y); ok && aggregateIdents[name] {
+		if expr.Op == token.EQL && isZeroLit(expr.X) {
+			return true
+		}
+	}
+	return false
 }
 
 // ifChainAlwaysTerminates reports whether an if/else-if chain with NO final
@@ -617,16 +1024,17 @@ func blockAlwaysTerminates(b *ast.BlockStmt) bool {
 
 // recordCallsInExpr inspects n (an expression or a non-IfStmt/FuncLit
 // statement) for CallExprs. Every CallExpr found is recorded as a
-// call-graph edge; a call to removeGitWorktree or a direct destructive git
-// exec is additionally recorded as a destructionSite tagged with the given
-// safetyGated value. Nested IfStmts are deliberately NOT re-entered here --
-// walkStmtsForDestruction is the only place that descends into an IfStmt, so
-// safetyGated is always tracked at that single point of truth. Nested
-// FuncLits ARE re-entered here (under the same node name, per indexFuncBody's
-// doc comment), since a FuncLit cannot itself be reached by
-// walkStmtsForDestruction's statement-list walk -- it only ever appears
-// inside an expression.
-func recordCallsInExpr(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName string, n ast.Node, safetyGated bool) {
+// call-graph edge; a call to removeGitWorktree, a direct destructive git
+// exec, or a directory-destroying os.RemoveAll/os.Rename targeting a
+// worktree-bearing path is additionally recorded as a destructionSite
+// tagged with the given safetyGated value. Nested IfStmts are deliberately
+// NOT re-entered here -- walkStmtsForDestruction is the only place that
+// descends into an IfStmt, so safetyGated is always tracked at that single
+// point of truth. Nested FuncLits ARE re-entered here (under the same node
+// name, per indexFuncBody's doc comment), since a FuncLit cannot itself be
+// reached by walkStmtsForDestruction's statement-list walk -- it only ever
+// appears inside an expression.
+func recordCallsInExpr(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName string, n ast.Node, safetyGated bool, sc *safetyGateContext) {
 	if n == nil {
 		return
 	}
@@ -635,11 +1043,29 @@ func recordCallsInExpr(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName s
 			return false
 		}
 		if ifs, ok := node.(*ast.IfStmt); ok {
-			walkStmtsForDestruction(g, fset, relFile, nodeName, []ast.Stmt{ifs}, safetyGated)
+			walkStmtsForDestruction(g, fset, relFile, nodeName, []ast.Stmt{ifs}, safetyGated, sc)
 			return false
 		}
 		if lit, ok := node.(*ast.FuncLit); ok {
-			walkStmtsForDestruction(g, fset, relFile, nodeName, lit.Body.List, safetyGated)
+			// A closure gets its OWN reaching-definition scan -- a safety
+			// verdict assigned in the enclosing function is visible to a
+			// closure that captures it (Go closures close over variables,
+			// not just values), so idents found in either scope are valid.
+			// findApprovedSafetyVerdictIdents/findApprovedUnsafeAggregateIdents
+			// on the FuncLit's own body additionally catch a verdict or
+			// aggregate built INSIDE the closure itself, which the
+			// enclosing-function scan (run once, before any closure is
+			// descended into) cannot see.
+			litVerdictIdents := findApprovedSafetyVerdictIdents(lit.Body)
+			litAggregateIdents := findApprovedUnsafeAggregateIdents(lit.Body)
+			merged := sc
+			if len(litVerdictIdents) > 0 || len(litAggregateIdents) > 0 {
+				merged = &safetyGateContext{
+					verdictIdents:   mergeIdentSets(sc.verdictIdents, litVerdictIdents),
+					aggregateIdents: mergeIdentSets(sc.aggregateIdents, litAggregateIdents),
+				}
+			}
+			walkStmtsForDestruction(g, fset, relFile, nodeName, lit.Body.List, safetyGated, merged)
 			return false
 		}
 
@@ -687,6 +1113,30 @@ func recordCallsInExpr(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName s
 						enclosingFn: nodeName,
 						line:        pos.Line,
 						description: desc,
+						safetyGated: safetyGated,
+					})
+					g.sitesFound++
+				}
+			}
+
+			// BS-1 (187-VERIFICATION.md's first reproduced evasion):
+			// os.RemoveAll and os.Rename are just as destructive as
+			// removeGitWorktree or a direct `git worktree remove` when their
+			// target is a worktree-bearing path -- GAP-5's exact original
+			// shape was an unconditional os.RemoveAll(worktreesDir), and
+			// neither this detector nor removeGitWorktree's own git-command
+			// wrapping ever saw it, because it goes around git entirely and
+			// deletes the directory straight off disk. See
+			// isWorktreePathDestruction's own doc comment for what pattern
+			// is recognized and why.
+			if isOSPackageCall(fn, "RemoveAll", "Rename") {
+				if isWorktreePathDestruction(call.Args) {
+					pos := fset.Position(call.Pos())
+					g.destructions[nodeName] = append(g.destructions[nodeName], destructionSite{
+						file:        relFile,
+						enclosingFn: nodeName,
+						line:        pos.Line,
+						description: fmt.Sprintf("os.%s(...) targeting a worktree-bearing path", fn.Sel.Name),
 						safetyGated: safetyGated,
 					})
 					g.sitesFound++
@@ -745,6 +1195,111 @@ func destructiveGitArgs(args []ast.Expr) (string, bool) {
 		return "git branch -D/-d (direct exec)", true
 	}
 	return "", false
+}
+
+// isOSPackageCall reports whether a SelectorExpr is os.<name> for one of the
+// given names (e.g. isOSPackageCall(fn, "RemoveAll", "Rename")).
+func isOSPackageCall(sel *ast.SelectorExpr, names ...string) bool {
+	pkgIdent, ok := sel.X.(*ast.Ident)
+	if !ok || pkgIdent.Name != "os" {
+		return false
+	}
+	for _, name := range names {
+		if sel.Sel.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// worktreePathMarkers is the set of literal path segments and bare
+// identifiers this codebase actually uses to name the worktrees directory --
+// see cmd/worktree.go's own worktreeBaseDir constant (".aether/worktrees")
+// and every worktreesDir local variable in cmd/entomb_cmd.go, cmd/abandon_cmd.go,
+// and cmd/init_cmd.go, all of which are built as
+// filepath.Join(<root>, ".aether", "worktrees") or reference worktreeBaseDir
+// directly.
+var worktreePathIdentMarkers = map[string]bool{
+	"worktreesDir":    true,
+	"worktreeBaseDir": true,
+}
+
+// isWorktreePathDestruction reports whether the first argument to an
+// os.RemoveAll/os.Rename call is an expression that names a worktree-bearing
+// path -- either:
+//
+//  1. A bare identifier matching a known worktree-directory variable/const
+//     name (worktreePathIdentMarkers) -- e.g. `os.RemoveAll(worktreesDir)`.
+//  2. A filepath.Join(...) call whose arguments include the string literal
+//     "worktrees" -- e.g. `os.RemoveAll(filepath.Join(aetherRoot, ".aether",
+//     "worktrees"))`, the shape every production call site in this codebase
+//     actually uses.
+//
+// This is deliberately a conservative, legible heuristic rather than a
+// dataflow tracer that resolves an identifier back to the string that built
+// it (per this plan's own instruction: a false positive costs a human
+// reviewer one look and, if genuine, a one-line sanctioned-exception entry
+// with written justification; a false negative silently ships GAP-5 again).
+// What it catches: any RemoveAll/Rename call whose argument expression, read
+// as source text, names a worktree directory the way every real call site in
+// this repo already does. What it does NOT catch: a path built through an
+// intermediate variable with a name this list doesn't know
+// (`p := someOtherName; os.RemoveAll(p)`), a path built by string
+// concatenation instead of filepath.Join, or a path assembled dynamically at
+// runtime in a way no static read of the source could resolve. Widen
+// worktreePathIdentMarkers, or teach this function a new shape, the day a
+// real call site needs it -- do not weaken this to silence a false positive
+// on a site that is not actually worktree-related; move that site to a
+// differently-named local instead, which documents the non-relationship
+// better than a detector exception would.
+func isWorktreePathDestruction(args []ast.Expr) bool {
+	if len(args) == 0 {
+		return false
+	}
+	return exprNamesWorktreePath(args[0])
+}
+
+func exprNamesWorktreePath(expr ast.Expr) bool {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return worktreePathIdentMarkers[e.Name]
+
+	case *ast.SelectorExpr:
+		// A qualified reference to the shared constant, e.g. some future
+		// `cmdpkg.WorktreeBaseDir` -- matched by its selector name alone,
+		// the same conservative-by-name approach as the bare-identifier
+		// case above.
+		return worktreePathIdentMarkers[e.Sel.Name]
+
+	case *ast.CallExpr:
+		sel, ok := e.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return false
+		}
+		pkgIdent, ok := sel.X.(*ast.Ident)
+		if !ok || pkgIdent.Name != "filepath" || sel.Sel.Name != "Join" {
+			return false
+		}
+		for _, arg := range e.Args {
+			if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				if strings.Trim(lit.Value, "\"") == "worktrees" {
+					return true
+				}
+			}
+			// A filepath.Join argument that is itself a worktree-path
+			// expression (nested Join, or a worktreesDir/worktreeBaseDir
+			// identifier passed as a segment) also counts -- this handles
+			// filepath.Join(worktreesDir, extra) as well as the direct
+			// literal-segment case.
+			if exprNamesWorktreePath(arg) {
+				return true
+			}
+		}
+		return false
+
+	default:
+		return false
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -890,6 +1445,18 @@ func TestNoLifecycleReachableFunctionDestroysWorktreeWithoutSafetyGate(t *testin
 	// given. This exception set is named explicitly so a change to any of
 	// these three functions' reasoning still requires a human decision, not
 	// a silent pass.
+	//
+	// Note (187-09): cmd/init_cmd.go's `os.RemoveAll(worktreesDir)` (gated
+	// on `if wtPreserved == 0`) and cmd/entomb_cmd.go's
+	// clearActiveColonyRuntimeFiles (gated on `if len(unsafe) > 0 { ...;
+	// return nil }`) are NOT in this exception map -- they are real,
+	// correctly-gated sites recognized directly by condReferencesSafe's
+	// aggregate-comparison branch (see findApprovedUnsafeAggregateIdents),
+	// not exempted by name. A blanket function-name exception here would
+	// have silenced ANY future ungated destruction added to those
+	// functions, not just this one already-safe call site -- see BS-1's
+	// own fail-then-pass proof in 187-09-SUMMARY.md for why that
+	// distinction matters in practice.
 	sanctioned := map[string]bool{
 		"finalizeBuildWorktree": true,
 		"allocateBuildWorktree": true,
@@ -964,6 +1531,17 @@ func TestNoLifecycleReachableFunctionDestroysWorktreeWithoutSafetyGate(t *testin
 //     distinct Go identifier from allocateBuildWorktree (a different
 //     function, reached only via a different, operator-typed command) so
 //     it needs its own entry, not a rename of the existing one.
+//
+// Note (187-09): cmd/init_cmd.go's `os.RemoveAll(worktreesDir)` (gated on
+// `if wtPreserved == 0`) and cmd/entomb_cmd.go's clearActiveColonyRuntimeFiles
+// (gated on `if len(unsafe) > 0 { ...; return nil }`) are deliberately NOT
+// in this exception map, for the same reason given at the narrower guard's
+// `sanctioned` map above: both are real, correctly-gated sites recognized
+// directly by condReferencesSafe's aggregate-comparison branch (see
+// findApprovedUnsafeAggregateIdents), not exempted by name. A blanket
+// function-name exception would have silenced ANY future ungated
+// destruction added to those functions, not just this one already-safe
+// call site.
 //
 // Every other name in this list corresponds to a real fix landed in 187-08
 // closing GAP-4/GAP-5, documented at its own call site with a `.Safe`-gated
