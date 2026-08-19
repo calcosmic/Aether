@@ -1,206 +1,123 @@
 ---
 phase: 187-crash-safe-worktrees-ecosystem-neutrality
 verified: 2026-08-19T00:00:00Z
-status: gaps_found
-score: 8/11 truths verified (3 truths from the original 9 plus 2 new truths surfaced by a full re-sweep of cmd/ this pass)
+status: passed
+score: 11/11 must-haves verified
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 7/9
+  previous_score: 8/11
   gaps_closed:
-    - "worktree-merge-back's Step 5 auto-cleanup now consults worktreeDestructionSafety before any destructive git command (GAP-1)"
-    - "worktree-cleanup now consults the same guard, gained a --force opt-in that preserves first, and its latent branch-name-as-path bug is fixed (GAP-2)"
-    - "init's worktrees-directory wipe now scans the directory on disk (scanUnrecordedWorktrees) independently of COLONY_STATE.json before trusting wtPreserved==0 (GAP-3, WR-06)"
+    - "cmd/recover_repair.go's orphan-branch delete now calls branchMergeSafety before `git branch -D`; unsafe branches are preserved and reported, not deleted (GAP-4)"
+    - "cmd/entomb_cmd.go / cmd/abandon_cmd.go's shared clearActiveColonyRuntimeFiles now scans the worktrees directory via scanUnrecordedWorktrees before RemoveAll, and leaves unsafe entries in place; abandon's confirmation preview now states worker_workspaces_with_work in plain language before --confirm (GAP-5)"
+    - "The AST reachability guard was extended from a 7-command hand-maintained root set to every command actually registered on rootCmd (TestNoRegisteredCommandDestroysWorktreeWithoutSafetyGate), closing the review-sweep cycle that found new gaps on every pass"
   gaps_remaining: []
   regressions: []
-gaps:
-  - truth: "No Aether command ever deletes unmerged or dirty work (the phase's literal goal statement)"
-    status: failed
-    reason: >
-      Plan 07 closed the three gaps this verifier found last pass (worktree-merge-back,
-      worktree-cleanup, init). Re-running the full enumeration from scratch across the WHOLE
-      cmd/ package — not just the three named files — as instructed, found two more live,
-      shipped code paths that destroy unmerged or dirty worktree work with zero call to
-      worktreeDestructionSafety, in files plan 07 never touched:
-
-      GAP-4 — cmd/recover_repair.go:652, repairDirtyWorktree's "Orphan branch" sub-case runs
-      `exec.Command("git", "branch", "-D", branchName)` unconditionally, with no check of any
-      kind for unmerged commits on that branch. The issue that triggers this path comes from
-      reportOrphanBranches (cmd/worktree.go:487), which classifies a branch as "orphan" purely
-      by regex match against the worker-branch naming pattern (`^phase-[1-9]\d*/[a-z0-9-]+$`,
-      the exact pattern allocateBuildWorktree uses) plus "no worktree, not tracked in state" —
-      it never once checks git log or rev-list for whether the branch's commits are on main.
-      Confirmed by direct execution: created a real git repo, committed one file on main,
-      branched, committed a second "unmerged work" file on the branch, checked out main, ran
-      `git branch -D <branch>` — exit 0, `git log --all --oneline` shows only the first commit;
-      the unmerged commit is unreachable from any ref. This is the identical failure mode
-      worktreeDestructionSafety Step 4 exists to catch (UnmergedCommitCount > 0 => Safe=false),
-      but this call site never invokes it. Reachable via the real, shipped `aether recover
-      --apply` command — either `--force` or an interactive `y` at the confirmation prompt
-      triggers it, and the prompt only shows the issue's message ("Orphan branch: X (no
-      worktree, not tracked in state)"), never the branch's merge status, so consenting is not
-      an informed choice. No test file in the repo references repairDirtyWorktree's orphan-branch
-      deletion at all — no fail-then-pass proof exists for it, unlike GAP-1/2/3.
-
-      GAP-5 — cmd/entomb_cmd.go and cmd/abandon_cmd.go both call
-      clearActiveColonyRuntimeFiles (cmd/entomb_cmd.go:695), which unconditionally
-      `os.RemoveAll`s the entire `.aether/worktrees` directory with no call to
-      worktreeDestructionSafety and no per-entry check of any kind. entomb is gated behind
-      `state.Milestone == "Crowned Anthill"` (seal must have already run), which is a materially
-      lower-risk window since sealing implies the colony's work is expected to already be
-      merged. abandon has no such gate: `aether abandon --confirm` can be run at ANY point
-      during an active colony, including mid-build with worker worktrees allocated and
-      possibly holding unmerged/uncommitted output, and its preview (abandonColonySummary)
-      shows only goal/phase-counts/instincts/decisions — it never mentions worktrees, dirty
-      state, or unmerged work, so an operator gets zero warning before this call wipes
-      .aether/worktrees. No test file (cmd/abandon_cmd_test.go) references worktree
-      interaction of any kind.
-
-      Both gaps are the same underlying shape as GAP-1/2/3: a real, shippable command that
-      performs worktree destruction outside the three call sites plan 07 fixed, invisible to
-      the AST reachability guard (neither `recover` nor `abandon` is in lifecycleEntryCommands,
-      correctly, since both are human-typed) and — unlike worktree-reap, and unlike the now-fixed
-      worktree-merge-back/worktree-cleanup — with no internal safety gate of any kind protecting
-      the destructive call.
-    artifacts:
-      - path: "cmd/recover_repair.go"
-        issue: "repairDirtyWorktree's 'Orphan branch' case (line 652) runs `git branch -D` with zero unmerged-commit check; never calls worktreeDestructionSafety."
-      - path: "cmd/worktree.go"
-        issue: "reportOrphanBranches (line 487) classifies branches as orphaned by name pattern and absence from state/disk only -- never checks mergedness -- feeding the unguarded deletion above."
-      - path: "cmd/entomb_cmd.go"
-        issue: "clearActiveColonyRuntimeFiles (line 695, called from entomb_cmd.go:138) unconditionally os.RemoveAll's .aether/worktrees with no safety check. Lower risk: gated behind Milestone == Crowned Anthill."
-      - path: "cmd/abandon_cmd.go"
-        issue: "Calls the same clearActiveColonyRuntimeFiles with NO milestone gate and no worktree mention in its --confirm preview; reachable during an active build."
-    missing:
-      - "Route repairDirtyWorktree's 'Orphan branch' case through worktreeDestructionSafety (or equivalent rev-list check against main) before `git branch -D`; on unsafe, report and skip rather than delete, matching worktree-reap's contract."
-      - "Fix reportOrphanBranches to check mergedness, not just name-pattern-and-absence, before labeling a branch 'orphan' in a way that flows into a repair path with a --force/confirm-only gate."
-      - "Route clearActiveColonyRuntimeFiles's worktree removal through scanUnrecordedWorktrees/worktreeDestructionSafety per-entry (as init now does), or at minimum surface dirty/unmerged worktrees in abandon's preview and refuse/preserve on --confirm the same way the three GAP-1/2/3 fixes do."
-      - "Add real-git fail-then-pass tests for both: an unmerged orphan branch surviving `aether recover --apply --force`, and a dirty/unmerged worktree surviving `aether abandon --confirm`."
-deferred: []
-human_verification: []
 ---
 
 # Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality Verification Report
 
 **Phase Goal:** No Aether command ever deletes unmerged or dirty work; worktree merge works outside Go repos.
 **Verified:** 2026-08-19
-**Status:** gaps_found
-**Re-verification:** Yes — after gap closure (plan 187-07)
+**Status:** passed
+**Re-verification:** Yes — third full pass, after plan 187-08 closed GAP-4 and GAP-5 and extended the guard
 
 ## Goal Achievement
 
-### Observable Truths
+### GAP-4 and GAP-5: Verified Fixed in Source (not from SUMMARY)
 
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 1 | Kill between dispatch and finalize → resume → work still present, surfaced by a named command | ✓ VERIFIED | `TestCrashBetweenDispatchAndFinalizeSurvivesResume` — unchanged since last pass, re-confirmed passing. |
-| 2 | `gcOrphanedWorktrees` refuses/stashes dirty or unmerged worktrees, defers destruction to an explicit command | ✓ VERIFIED | Unchanged, re-confirmed by source read. |
-| 3 | `cleanupBuildWorktrees` (build path) never destroys unsafe work | ✓ VERIFIED | Unchanged, re-confirmed by source read (CR-05). |
-| 4 | `removeGitWorktree` never deletes a branch after worktree removal has already failed | ✓ VERIFIED | Unchanged, re-confirmed by source read (CR-03). |
-| 5 | Preservation never reports success without having actually saved anything | ✓ VERIFIED | Unchanged (CR-04). |
-| 6 | `worktree-reap` (sole *previously* known named destruction command) is operator-invoked and internally gated | ✓ VERIFIED | Unchanged; gates every destructive call on `.Safe`. |
-| 7 | `worktree-merge-back`'s Step 5 cleanup does not destroy dirty/unmerged work (GAP-1) | ✓ VERIFIED | Read `cmd/worktree.go:834-876` directly: `worktreeDestructionSafety` is computed and branched on before any destructive git command; unsafe path stashes/preserves, marks entry `WorktreeOrphaned`, returns `cleaned_up:false`. `TestWorktreeMergeBackPreservesUncommittedWorkAfterMerge` run directly — passes. |
-| 8 | `worktree-cleanup` does not destroy dirty/unmerged work, and its path-resolution bug is fixed (GAP-2) | ✓ VERIFIED | Read `cmd/clash.go:150-266` directly: `resolveWorktreePathForBranch` resolves the real path via `git worktree list --porcelain`; `worktreeDestructionSafety` gates the removal; unsafe-without-force refuses and reports; unsafe-with-force preserves (stashes) first via `preserveWorktreeWork`, only then destroys. `TestWorktreeCleanupRefusesToDestroyDirtyWorktree` and `TestWorktreeCleanupRemovesCleanMergedWorktree` run directly — both pass. |
-| 9 | `init`'s worktrees-directory wipe does not silently destroy a not-yet-state-tracked worktree (GAP-3 / WR-06) | ✓ VERIFIED | Read `cmd/init_cmd.go:216-262` and `cmd/worktree_safety.go:287-370` directly: `scanUnrecordedWorktrees` lists the worktrees directory on disk, confirms each unknown entry is genuinely the top level of its own git worktree (`--show-toplevel` identity check, guards the same footgun `worktreeDestructionSafety` Step 2.5 guards), evaluates it with `worktreeDestructionSafety`, adds unsafe entries to `wtPreserved`, and reports each before the `RemoveAll` decision. `TestInitPreservesUnrecordedWorktreeWithUncommittedWork` and `TestInitStillWipesWorktreesDirectoryWhenTrulyEmpty` run directly — both pass. |
-| 10 | **No Aether command ever deletes unmerged or dirty work (the phase's literal, absolute goal statement)** | ✗ FAILED | A full re-sweep of every destruction pattern (`git worktree remove`, `git branch -D/-d`, `git stash drop`, `git clean -fd`, force-checkout, `os.RemoveAll` on any worktree-related path) across the ENTIRE `cmd/` package — not just the four files plan 07 touched — found two more live, unguarded destruction paths: `cmd/recover_repair.go`'s orphan-branch deletion (GAP-4) and `cmd/entomb_cmd.go`/`cmd/abandon_cmd.go`'s shared worktrees-directory wipe (GAP-5, `abandon` is the higher-risk half — no milestone gate). See Gaps. |
-| 11 | The three remaining sanctioned exceptions from `lifecycleEntryCommands`'s exclusion list (worktree-merge-back, worktree-cleanup being newly-fixed-but-still-excluded, worktree-reap) are each genuinely justified | ✓ VERIFIED (for the guard's own stated scope) | The guard's doc comment was updated in plan 07 to state explicitly that exclusion from `lifecycleEntryCommands` is NOT a safety claim, only an "automatic vs. human-typed" boundary, and that the real proof for the two now-fixed commands lives in `cmd/worktree_operator_destruction_test.go`, not in reachability analysis. That framing is honest and now accurate for those two. It does NOT extend to `recover` or `abandon`, which are also human-typed and also correctly excluded from the guard by the same logic — but unlike `worktree-reap`/`worktree-merge-back`/`worktree-cleanup`, they have no internal gate at all, so the guard's "being excluded is not a safety claim" caveat is exactly where GAP-4/5 hide. |
+| Gap | Claim | Verified by reading | Verdict |
+|-----|-------|---------------------|---------|
+| GAP-4 | `repairDirtyWorktree`'s orphan-branch case gates `git branch -D` on `branchMergeSafety` | `cmd/recover_repair.go:655-677` — `safety := branchMergeSafety(root, branchName)`; `if !safety.Safe` returns early via `reportWorktreePreservation` + `record.Action = "skip_delete_unmerged_orphan_branch"`; the delete (`exec.Command("git", "-C", root, "branch", "-D", branchName)`) only runs after the `if` block, on the safe path. `branchMergeSafety` (`cmd/worktree_safety.go:134-191`) runs a real `git rev-list --count <integration>..<branch> --` and resolves `Safe=false` on ANY error (fail-closed) or `unmergedCount > 0`. Not a stub — it is a genuine mergedness check, delegated to from `worktreeDestructionSafety` itself so there is one implementation. | ✓ VERIFIED |
+| GAP-5 | `clearActiveColonyRuntimeFiles` scans before wiping `.aether/worktrees`, both callers gated | `cmd/entomb_cmd.go:695-749` — `scanUnrecordedWorktrees` runs against the worktrees dir; `if len(unsafe) > 0` reports each preservation and `return nil` WITHOUT calling `os.RemoveAll(worktreesDir)`; the RemoveAll only executes after that guard clause. `abandon_cmd.go:61,131-158` — `countWorktreesHoldingWork` runs BEFORE the colony-state reset (state.Worktrees still populated), checks both tracked (`worktreeDestructionSafety`) and unrecorded (`scanUnrecordedWorktrees`) entries, and the count flows into `renderAbandonPreviewVisual`'s `Warning:` line and a stated caveat that unsafe workspaces "will be kept, not deleted, even after --confirm." | ✓ VERIFIED |
 
-**Score:** 8/11 truths verified (10 sub-truths tracking the goal's constituent claims, plus truth 11 about the guard's honesty). The two failures are new instances of the same underlying gap class as the three that were just closed: a real, shipped command destroys worktree content outside the set of call sites this phase's plans have so far enumerated, invisible to the AST guard by design (human-typed) and without any internal gate of its own.
+**Behavioral confirmation (not just source reading):** `go test -run TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork` and `go test -run 'TestRecoverApplyPreservesUnmergedOrphanBranch|TestRecoverApplyDeletesTrulyMergedOrphanBranch'` — all PASS against the current, unmodified source (see Adversarial Probes below, where these same tests are shown to FAIL against reintroduced regressions and then confirmed to pass again after restoration).
 
-### Deferred Items
+### Adversarial Probe of the Extended Guard — THE central question this pass asked
 
-None. Both new gaps are live, present-day defects in currently-shipped commands, not items scheduled for a later phase.
+The guard (`cmd/worktree_destruction_reachability_test.go`) was probed with real source-code injection, not read-only inspection. Each probe: patch source, run both guard tests + the relevant real-git behavioral test, record results, restore source, confirm restoration byte-identical via `diff` + `git status --short` (clean), rebuild, rerun to confirm normal state.
+
+| # | Probe | Guard tests (narrow + extended) | Real-git behavioral test | Verdict |
+|---|-------|----------------------------------|---------------------------|---------|
+| 1 | Reintroduce GAP-4's exact original shape (bare `git branch -D`, no safety check) in `recover_repair.go` | Narrow: PASS (correctly excluded — human-typed). Extended: **FAILED**, correctly, naming `cmd/recover_repair.go:660` and `repairDirtyWorktree` | N/A (this is the SUMMARY's own documented proof, re-confirmed) | Guard works as designed for THIS shape |
+| 2 | Reintroduce GAP-5's exact original shape (unconditional `os.RemoveAll(worktreesDir)`, strip the `scanUnrecordedWorktrees`/`len(unsafe)>0` gate entirely) in `entomb_cmd.go`'s `clearActiveColonyRuntimeFiles` | **BOTH PASS** — neither guard flags anything | `TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork` **FAILS**, correctly (`...but it is gone: stat .../mid-build-notes.txt: no such file or directory`) | **EVASION FOUND: the guard's AST detector has no `os.RemoveAll` pattern at all.** `recordCallsInExpr` only flags `removeGitWorktree(...)` calls and literal `git worktree remove`/`git branch -D` args passed to `exec.Command`/`exec.CommandContext`. A destructive `os.RemoveAll` on a worktree directory — the exact mechanism `init`, `entomb`, and `abandon` all use — is invisible to both guard tests, structurally, not merely unreachable or sanctioned. The real-git test is the only thing that would catch this regression. |
+| 3 | Satisfy the guard's `.Safe`-selector check textually without real gating: `_ = branchMergeSafety(root, branchName)` (result discarded), then `fakeSafety := struct{ Safe bool }{Safe: true}; if !fakeSafety.Safe { ...preserve... }` — condition is always false, delete always runs | **BOTH PASS** — neither guard flags anything | `TestRecoverApplyPreservesUnmergedOrphanBranch` **FAILS**, correctly (`expected branch ... to still exist ... but "git branch --list" returned ""`) | **EVASION FOUND: `condReferencesSafe` is purely syntactic** (`ast.Inspect` for any `SelectorExpr` ending in `.Safe`) — it has no data-flow analysis to confirm the `.Safe` field traces back to a real `worktreeDestructionSafety`/`branchMergeSafety` call result. Any locally-declared struct with a field literally named `Safe`, hardcoded true, satisfies the guard's gating check. The real-git test is again the only thing that catches this. |
+| 4 | Structural (read-only, not injected): `cmd/host_cmd.go` registers 9 subcommands via inline `hostCmd.AddCommand(&cobra.Command{...})` — an anonymous composite literal, not a `var X = &cobra.Command{...}` declaration and not a bare identifier argument | N/A — static read | N/A | **Real gap in root-set derivation, currently inert.** `indexCobraCommandLiteral` (Step 1) is only invoked from the `var`-declaration path in `indexFile`, so an inline literal is never indexed as an entry node at all. `indexRegistrationCalls` (Step 1.5) only records `*ast.Ident` arguments to `AddCommand`, so this inline literal is invisible to `registeredIdents` too. Currently harmless: every one of these 9 subcommands (`colonize`, `lifecycle`, `plan`, `build`, `continue`, `seal`, `oracle`, `watch`, `swarm` under `aether host`) delegates entirely to `makeHostSubcommand`, which shells out to a Node subprocess — no Go-level worktree logic lives there for the guard to miss today. But if a future Go-level destructive helper were added inline this way, in this file or a new one using the same idiom, it would not be picked up as an entry point candidate by either guard test — a distinct blind spot from #2 and #3 above (this one is about which commands get scanned at all, not what counts as a destruction site or a gate). |
+
+All four production-file injections (#1–#3) were restored and confirmed byte-identical to the pre-injection source via `diff` (not `git diff`, to avoid conflating with any legitimate change) and `git status --short` showing a clean tree. `go build ./cmd/...` and the full guard/behavioral test set were re-run after each restoration and pass normally.
+
+### Verdict on the guard's soundness
+
+**The guard is not sound as a sole gate, but the safety net it sits inside of is.** Two concrete, reproduced evasions exist (`os.RemoveAll` invisible to detection; syntactic-only `.Safe` matching with no data-flow tracing) plus one structural blind spot in root-set derivation (inline `AddCommand` literals, currently inert). None of these are hypothetical — each was demonstrated by actually breaking production code, in memory, in this session, and confirming the guard passes while the real-git behavioral test correctly fails and catches the exact same regression. This repo's Definition of Done language — "a command exists that someone can run, and that command fails when the requirement is unmet" — is satisfied here by the **combination**: `cmd/worktree_operator_destruction_test.go`'s real-git fail-then-pass tests are the actual backstop for GAP-4 and GAP-5's specific mechanisms (`git branch -D`, `os.RemoveAll` on the worktrees directory), and they do fail correctly on both reintroduced regressions. The AST guard adds a second, faster, broader-surfaced check for the `removeGitWorktree`/`git worktree remove`/`git branch -D`-via-exec pattern specifically, which is real and valuable, but its own doc comments overstate its coverage: it does not defend against every destructive git operation an author might reach for (`os.RemoveAll`, `git clean -fd`, `git stash drop`, `git checkout -f`, `git worktree remove --force` invoked via a different shape than the ones it string-matches), and it cannot distinguish a genuine safety verdict from a same-named local variable.
+
+This does not reopen GAP-4 or GAP-5 — both are genuinely fixed today, confirmed by direct reading and by real-git tests passing against the actual, unmodified source. What it means is: **the review-sweep cycle is not fully closed by this guard alone.** A sixth gap of the `os.RemoveAll`-shaped or fake-`.Safe`-shaped kind, in a file nobody has opened yet, would not be caught by either guard test — it would only be caught if a human (or a future review sweep) also wrote a real-git fail-then-pass test for that specific new call site, the same manual work this repo has now done three times. The guard narrows where a human needs to look; it does not yet make that manual step unnecessary.
+
+**This is reported as a WARNING, not a BLOCKER**, because: (a) no currently-shipped code exploits either evasion — every real destructive call site found via a fresh full-file sweep of `cmd/` this pass (see below) is genuinely gated in production; (b) the real-git behavioral tests that exist today do catch regressions in the two mechanisms GAP-4/GAP-5 fixed; (c) the phase's literal goal ("no Aether command ever deletes unmerged or dirty work") is a claim about the current codebase's behavior, which holds, not a claim about the guard's own completeness as a detector.
+
+### Full Fresh Sweep of cmd/ for Unguarded Destruction (this pass, independent of the guard)
+
+Searched for every destruction pattern the task named, across the whole `cmd/` package, and traced each hit to its enclosing safety check by hand:
+
+| Pattern | Sites found | Gated? |
+|---------|-------------|--------|
+| `removeGitWorktree(...)` calls | `worktree_reap.go` (`if safety.Safe`), `codex_build_worktree.go` `gcOrphanedWorktrees`/`cleanupBuildWorktrees` (both `if !safety.Safe`-style), `clash.go` `worktreeCleanupCmd`, `worktree.go` `worktreeMergeBackCmd` | All gated |
+| `git worktree remove` / `git branch -D`/`-d` via `exec.Command` | Same sites as above, plus `recover_repair.go`'s orphan-branch case | All gated (branch-only case uses `branchMergeSafety`) |
+| `os.RemoveAll` on a worktree-shaped path | `entomb_cmd.go:746` / `init_cmd.go:262` (`.aether/worktrees`, both behind `len(unsafe)==0`/`wtPreserved==0` guard clauses), `codex_build_worktree.go:721` (`allocateBuildWorktree`'s own pre-allocation cleanup of a path that does not yet hold worker output — same shape the guard already sanctions for this function's registered-worktree rollback) | All gated or provably pre-creation |
+| `git stash drop` | None found | N/A |
+| `git clean -fd` | None found | N/A |
+| force-checkout (`git checkout -f`/`--force`) | None found | N/A |
+| `os.Rename` of a worktree path | None found | N/A |
+
+No new live gap found. GAP-4 and GAP-5 were the last two, and both are closed.
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `cmd/worktree_safety.go` | Shared destruction-safety gate, fail-closed | ✓ VERIFIED | Unchanged, re-read directly. `scanUnrecordedWorktrees` addition confirmed present and correctly wired into `init_cmd.go`. |
-| `cmd/worktree.go` (`worktreeMergeBackCmd`) | Does not destroy dirty work (GAP-1) | ✓ VERIFIED | Fixed, confirmed by direct read + test run. |
-| `cmd/clash.go` (`worktreeCleanupCmd`) | Does not destroy dirty work, path bug fixed (GAP-2) | ✓ VERIFIED | Fixed, confirmed by direct read + test run. |
-| `cmd/init_cmd.go` | Worktrees directory cleanup accounts for unrecorded worktrees (GAP-3) | ✓ VERIFIED | Fixed, confirmed by direct read + test run. |
-| `cmd/recover_repair.go` (`repairDirtyWorktree`) | Orphan-branch deletion should not destroy unmerged commits | ✗ UNGUARDED (GAP-4, new) | `git branch -D` with zero merge check; no test coverage. |
-| `cmd/entomb_cmd.go` / `cmd/abandon_cmd.go` (`clearActiveColonyRuntimeFiles`) | Worktrees-directory wipe should not destroy unmerged/dirty work | ✗ UNGUARDED (GAP-5, new) | `entomb` gated behind sealed milestone (lower risk); `abandon` has no gate and no warning in its preview; no test coverage for either. |
-| `cmd/worktree_destruction_reachability_test.go` | Structural property guard, honest about its own scope | ✓ VERIFIED with the same scope caveat as last pass, now also covering `recover`/`abandon` | The guard's algorithm is unchanged and correct for what it claims to check (lifecycle-automatic paths). Its doc comment already states plainly that exclusion from `lifecycleEntryCommands` is not a safety claim — that caveat now also covers `recover` and `abandon`, which were always excluded (correctly, as human-typed commands) but were never brought under any internal gate the way worktree-merge-back/worktree-cleanup were in this same plan. |
-
-### Key Link Verification
-
-| From | To | Via | Status | Details |
-|------|-----|-----|--------|---------|
-| `worktree.go` (`worktree-merge-back`) Step 5 | `worktreeDestructionSafety` | direct call | ✓ WIRED | Confirmed by direct read, line 841. |
-| `clash.go` (`worktree-cleanup`) | `worktreeDestructionSafety` | direct call | ✓ WIRED | Confirmed by direct read, line 228. |
-| `init_cmd.go` | `scanUnrecordedWorktrees` → `worktreeDestructionSafety` | direct call | ✓ WIRED | Confirmed by direct read, lines 226-253. |
-| `recover_repair.go` (`repairDirtyWorktree`, Orphan branch case) | `worktreeDestructionSafety` | **none** | ✗ NOT WIRED (GAP-4) | Confirmed by full read of the function; only calls `exec.Command("git", "branch", "-D", ...)` directly. |
-| `entomb_cmd.go` / `abandon_cmd.go` | `clearActiveColonyRuntimeFiles` → `worktreeDestructionSafety` | **none** | ✗ NOT WIRED (GAP-5) | Confirmed by full read; the function performs a bare `os.RemoveAll` with no per-entry check. |
-
-### Data-Flow Trace (Level 4)
-
-| Path | Data Source | Produces Real Verdict | Status |
-|------|-------------|------------------------|--------|
-| `reportOrphanBranches` → `scanDirtyWorktrees` "Orphan branch" issue → `repairDirtyWorktree` | Branch name regex + absence from state/disk | No — never queries git for mergedness | ✗ HOLLOW SAFETY CHECK — the issue's own message ("no worktree, not tracked in state") is true and accurate, but a human reading "Orphan branch" reasonably infers "safe to delete", when the branch may hold live unmerged work. This is the actual root cause of GAP-4: the input to the repair function is already mis-labeled before the repair function's own missing gate compounds it. |
-
-### Behavioral Spot-Checks
-
-| Behavior | Command | Result | Status |
-|----------|---------|--------|--------|
-| `git branch -D` silently discards an unmerged commit | Real git repo: commit on main, branch, second commit on branch, checkout main, `git branch -D <branch>` | Exit 0, `git log --all --oneline` shows only the first commit — the second is unreachable from any ref | ✓ CONFIRMED (this is the exact mechanism `repairDirtyWorktree`'s Orphan-branch case invokes unguarded — the function's only intervening code between the switch-case entry and this call is the `exec.Command` construction itself, confirmed by direct read of lines 610-656) |
-| `worktree-merge-back` preserves dirty content post-fix | `go test -run TestWorktreeMergeBackPreservesUncommittedWorkAfterMerge -v` | PASS | ✓ PASS |
-| `worktree-cleanup` preserves dirty content post-fix | `go test -run TestWorktreeCleanupRefusesToDestroyDirtyWorktree -v` | PASS | ✓ PASS |
-| `worktree-cleanup` still removes genuinely clean worktrees | `go test -run TestWorktreeCleanupRemovesCleanMergedWorktree -v` | PASS | ✓ PASS |
-| `init` preserves an unrecorded dirty worktree | `go test -run TestInitPreservesUnrecordedWorktreeWithUncommittedWork -v` | PASS | ✓ PASS |
-| `init` still wipes a truly empty worktrees directory | `go test -run TestInitStillWipesWorktreesDirectoryWhenTrulyEmpty -v` | PASS | ✓ PASS |
-| AST reachability guard still holds for lifecycle paths | `go test -run TestNoLifecycleReachableFunctionDestroysWorktreeWithoutSafetyGate -v` | PASS | ✓ PASS |
-| `go build ./...` | `go build ./...` | Clean | ✓ PASS |
-
-### Probe Execution
-
-No `scripts/*/tests/probe-*.sh` files exist for this phase; evidence is embedded in Go tests, run directly above rather than via a shell probe script. N/A.
+| `cmd/worktree_safety.go` (`branchMergeSafety`) | Real mergedness check for a bare branch, fail-closed | ✓ VERIFIED | Read directly; genuine `git rev-list --count` check, `Safe=false` on any error or `unmergedCount>0`. |
+| `cmd/recover_repair.go` (`repairDirtyWorktree`) | Orphan-branch delete gated on `branchMergeSafety` | ✓ VERIFIED | Read directly; confirmed by `TestRecoverApplyPreservesUnmergedOrphanBranch` / `TestRecoverApplyDeletesTrulyMergedOrphanBranch` passing against unmodified source. |
+| `cmd/entomb_cmd.go` / `cmd/abandon_cmd.go` (`clearActiveColonyRuntimeFiles`, `countWorktreesHoldingWork`) | Worktrees-directory wipe gated; abandon's preview warns | ✓ VERIFIED | Read directly; confirmed by `TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork` / `TestAbandonPreviewMentionsWorkerWorkspacesWithWork` passing against unmodified source. |
+| `cmd/worktree_destruction_reachability_test.go` (`TestNoRegisteredCommandDestroysWorktreeWithoutSafetyGate`) | Property guard over every registered command | ⚠️ ORPHANED-BLIND-SPOT (sound for the pattern it detects; blind to `os.RemoveAll` and to textual-only `.Safe` matches; blind to inline `AddCommand` literals) | Confirmed by adversarial injection, three separate probes, all restored cleanly afterward. |
+| `cmd/worktree_operator_destruction_test.go` | Real-git fail-then-pass tests, the actual backstop | ✓ VERIFIED | All named tests pass against unmodified source; confirmed to catch both reintroduced regressions the AST guard missed. |
 
 ### Requirements Coverage
 
-No formal REQUIREMENTS.md IDs are declared in this phase's PLAN frontmatter (`requirements-completed: []` in 187-07's SUMMARY, matching prior plans); phase is judged solely against ROADMAP.md success criteria.
+No formal REQUIREMENTS.md IDs are declared for this phase; judged against ROADMAP.md success criteria, confirmed below.
+
+### ROADMAP Success Criteria
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 1 | Fail-then-pass test: kill between dispatch and finalize → resume → work still present and surfaced with a named command | ✓ VERIFIED | `go test -run TestCrashBetweenDispatchAndFinalizeSurvivesResume -v` — PASS. Output includes the plain-English preservation line: "Kept the work on branch phase-3/builder-crashed instead of deleting it ... run: aether recover". |
+| 2 | Worktree-mode build completes in a non-Go fixture repo; merge gate and `worktree-merge-back` use `resolveTestCommand()`, not hard-coded `go test ./...` | ✓ VERIFIED | `resolveTestCommand()` confirmed called at `cmd/worktree.go:750` and `cmd/codex_build_worktree.go:1211`. `TestMergePhaseWorktreesUsesProjectTestCommandInNodeRepo` exists and passes, exercising a real non-Go (Node) fixture repo. |
+| 3 | `mergePhaseWorktrees` gains real-path tests | ✓ VERIFIED | `cmd/merge_phase_worktrees_test.go` — 4 tests, all against real `t.TempDir()` git repos with real `exec.Command("git", ...)` assertions (worktree list, branch list, log), not mocks. |
 
 ### Anti-Patterns Found
 
-| File | Line | Pattern | Severity | Impact |
-|------|------|---------|----------|--------|
-| `cmd/recover_repair.go` | 652 | Unconditional `git branch -D` with no mergedness check | 🛑 BLOCKER | Directly contradicts the phase's literal goal statement; confirmed by direct execution that this permanently discards unmerged commits |
-| `cmd/worktree.go` | 487-570 | `reportOrphanBranches` classifies branches as safe-to-delete-adjacent ("orphan") without ever checking mergedness | ⚠️ WARNING | Root cause feeding GAP-4; the mislabel, not just the missing gate, is the defect |
-| `cmd/entomb_cmd.go` / `cmd/abandon_cmd.go` | 695, 84, 138 | `clearActiveColonyRuntimeFiles` unconditionally wipes `.aether/worktrees`; `abandon` has no milestone gate and no worktree warning in its preview | 🛑 BLOCKER (abandon) / ⚠️ WARNING (entomb, lower risk due to seal gate) | `abandon --confirm` can run mid-build with live worker worktrees present and gives zero warning before wiping them |
+None in the files touched by plan 187-08. No `TBD`/`FIXME`/`XXX` markers.
 
-No `TBD`/`FIXME`/`XXX` markers found in the newly-examined files.
+### Behavioral Spot-Checks / Full Suite
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Build | `go build ./cmd/...` | Clean |
+| Vet | `go vet ./...` | Clean |
+| Full suite, race detection | `go test ./... -race` | All packages PASS (cmd package: 401.4s) |
+| Working tree after all adversarial probes | `git status --short` | Clean — every injected probe was restored byte-for-byte |
+| GAP-4 fail-then-pass | `go test -run TestRecoverApplyPreservesUnmergedOrphanBranch\|TestRecoverApplyDeletesTrulyMergedOrphanBranch` | Both PASS |
+| GAP-5 fail-then-pass | `go test -run TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork\|TestAbandonPreviewMentionsWorkerWorkspacesWithWork` | Both PASS |
+| Narrow guard | `go test -run TestNoLifecycleReachableFunctionDestroysWorktreeWithoutSafetyGate` | PASS |
+| Extended guard | `go test -run TestNoRegisteredCommandDestroysWorktreeWithoutSafetyGate` | PASS |
 
 ### Human Verification Required
 
-None — all findings above were confirmed by direct code reading and direct execution (real git commands against a real repo), not requiring subjective/visual judgment.
+None — every finding above (including the two guard evasions) was demonstrated by direct source injection and test execution, not by inference or subjective judgment.
 
 ### Gaps Summary
 
-Plan 187-07 is a genuine, verified fix for exactly the three gaps the previous verification pass named. Each of GAP-1, GAP-2, and GAP-3 is confirmed fixed by direct source reading (not by trusting the SUMMARY) and by running the corresponding real-git fail-then-pass tests directly — all pass. `worktree-merge-back` and `worktree-cleanup` now call `worktreeDestructionSafety` before any destructive git command, exactly like `worktree-reap` already did. `init` now scans the worktrees directory on disk independently of `COLONY_STATE.json` before trusting its preserved-count, closing the exact crash window (worktree created, state entry not yet appended) this phase exists to protect. `go build ./...` is clean.
+No blocking gap remains. GAP-4 and GAP-5 are genuinely fixed, confirmed both by direct source reading and by real-git fail-then-pass tests passing against the current, unmodified codebase. A fresh, independent full-file sweep of `cmd/` for every destruction pattern named in this pass's instructions found no new live, unguarded destruction site — the three prior sweeps (missing `clash.go`, then missing `recover`/`abandon`/`entomb`) have not surfaced a fourth round.
 
-However, re-running the destruction-pattern sweep from scratch across the entire `cmd/` package — as this pass's instructions required, specifically because the previous sweep missed `cmd/clash.go` entirely — found two more live, shipped code paths that destroy worktree content with no use of `worktreeDestructionSafety` and no test coverage:
-
-1. **`cmd/recover_repair.go`'s orphan-branch deletion (GAP-4).** `aether recover --apply` classifies a branch as "orphan" purely by name pattern and absence from state/disk (`reportOrphanBranches`, `cmd/worktree.go:487`) — never checking whether its commits are merged — then `repairDirtyWorktree`'s "Orphan branch" case runs `git branch -D` on it unconditionally. Confirmed by direct execution that this exact git command permanently discards an unmerged commit, exit 0, no warning. The confirmation prompt this command requires (absent `--force`) shows only the mis-labeled "orphan" message, never the branch's actual merge status, so an operator's "yes" is not informed consent to lose work.
-
-2. **`cmd/entomb_cmd.go` and `cmd/abandon_cmd.go`'s shared `clearActiveColonyRuntimeFiles` (GAP-5).** Both call the same function, which unconditionally `os.RemoveAll`s the whole `.aether/worktrees` directory. `entomb` is gated behind the colony already being sealed, a materially lower-risk window. `abandon` has no such gate — `aether abandon --confirm` can run at any point during an active build, and its preview never mentions worktrees or unmerged work, so it can silently discard live worker output with zero warning.
-
-Both are the same underlying failure mode as the three gaps this plan just fixed: a real, shippable Cobra command performing worktree destruction, deliberately (and correctly) outside the AST guard's `lifecycleEntryCommands` scope because it is human-typed — but, unlike `worktree-reap` and the two commands this plan fixed, with no internal safety gate protecting the destructive call at all.
-
-**This does not look like an intentional scope decision.** Unlike the original GAP-1/2/3 framing (where a case could be made that "operator-typed = D-01-exempt" was the design intent, even if not literally what the goal says), `recover` and `abandon` were not discussed anywhere in this phase's plans, CONTEXT.md, or REVIEW.md — they were simply never looked at. `cmd/worktree_safety.go`'s own doc comment for `preserveWorktreeWork` even says its stash approach was "already used and tested at cmd/recover_repair.go's repairDirtyWorktree" for the dirty-file case, showing the phase's authors read that file and modeled part of the fix on it — but the orphan-branch sub-case three lines below in the same switch statement was never brought under the same discipline.
-
-Given this repo's Definition of Done ("a requirement is satisfied only when a command exists that someone can run, and that command fails when the requirement is unmet"), no such failing command exists yet for either of these two paths — `cmd/abandon_cmd_test.go` has zero worktree references, and no test anywhere exercises `repairDirtyWorktree`'s orphan-branch deletion.
-
-If this is accepted as an explicit scope boundary rather than closed, add to this file's frontmatter:
-
-```yaml
-overrides:
-  - must_have: "No Aether command ever deletes unmerged or dirty work"
-    reason: "D-01's boundary covers only the destruction call sites this phase's plans have enumerated (build/continue/init lifecycle paths, plus worktree-merge-back, worktree-cleanup, and worktree-reap as explicitly-scoped operator commands). recover --apply and abandon --confirm are accepted as out-of-scope for this phase; their orphan-branch and directory-wipe behavior is deferred to a follow-up."
-    accepted_by: "<owner>"
-    accepted_at: "<ISO timestamp>"
-```
-
-Absent that explicit acceptance, this is a gap requiring a closure plan — the same shape of fix plan 07 just successfully applied three times (call `worktreeDestructionSafety` before the destructive git command; preserve on unsafe; add a real-git fail-then-pass test), applied to two more call sites.
+The adversarial review of the extended guard found it is **not fully sound as a standalone detector**: it has no `os.RemoveAll` pattern in its AST vocabulary (proven by reintroducing GAP-5's exact regression and watching both guard tests pass while the real-git test correctly failed), and its `.Safe`-gating check is purely syntactic with no data-flow verification that the referenced field came from an actual safety verdict (proven the same way for GAP-4's mechanism). A third, currently-inert gap exists in root-set derivation for inline `AddCommand(&cobra.Command{...})` registrations. These are reported as a WARNING rather than a BLOCKER because nothing in the current codebase exploits them — every real site found this pass is genuinely gated — and because the real-git behavioral test suite (`cmd/worktree_operator_destruction_test.go`) does catch regressions in exactly the two mechanisms these evasions target. The practical implication for future work: a fourth review sweep, or a fourth GAP-N, is still possible in principle if a future change uses `os.RemoveAll`, `git stash drop`, `git clean -fd`, force-checkout, or a fake `.Safe`-named local variable in a new destructive call site — the AST guard would not flag it, and only a dedicated real-git test for that specific call site would. This is a recommendation for follow-up guard-hardening work, not a reason to withhold passing this phase, whose literal goal (no live command destroys unmerged/dirty work today) is verified true.
 
 ---
 
