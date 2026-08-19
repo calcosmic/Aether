@@ -245,11 +245,8 @@ func TestGoldenAutopilotPauseConditions(t *testing.T) {
 		{
 			name: "critical_chaos_findings",
 			seed: func(t *testing.T, dataDir string) {
-				if err := os.MkdirAll(filepath.Join(dataDir, "midden"), 0755); err != nil {
-					t.Fatalf("mkdir midden: %v", err)
-				}
-				middenJSON := `{"entries":[{"id":"m1","category":"chaos","description":"boom","tags":["critical"]}]}`
-				if err := os.WriteFile(filepath.Join(dataDir, "midden", "midden.json"), []byte(middenJSON), 0644); err != nil {
+				middenJSON := `{"entries":[{"id":"m1","category":"chaos","message":"boom","tags":["critical"]}]}`
+				if err := os.WriteFile(filepath.Join(dataDir, "midden.json"), []byte(middenJSON), 0644); err != nil {
 					t.Fatalf("seed midden: %v", err)
 				}
 			},

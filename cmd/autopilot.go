@@ -83,10 +83,7 @@ func checkAutopilotPauseConditions() string {
 	}
 
 	// 3. Critical chaos findings from midden
-	var middenFile struct {
-		Entries []colony.MiddenEntry `json:"entries"`
-	}
-	if err := store.LoadJSON("midden/midden.json", &middenFile); err == nil {
+	if middenFile, err := loadMiddenFile(store); err == nil {
 		for _, entry := range middenFile.Entries {
 			if strings.Contains(strings.ToLower(entry.Category), "chaos") {
 				for _, tag := range entry.Tags {

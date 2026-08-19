@@ -250,10 +250,8 @@ var immuneAutoScarCmd = &cobra.Command{
 		}
 
 		// Load midden for recent failures
-		var midden struct {
-			Entries []map[string]interface{} `json:"entries"`
-		}
-		if err := store.LoadJSON("midden/midden.json", &midden); err != nil {
+		midden, err := loadMiddenFile(store)
+		if err != nil {
 			outputOK(map[string]interface{}{"detected": 0, "reason": "no midden data"})
 			return nil
 		}
@@ -271,8 +269,8 @@ var immuneAutoScarCmd = &cobra.Command{
 
 		var newScars []scarEntry
 		for _, entry := range midden.Entries {
-			category, _ := entry["category"].(string)
-			description, _ := entry["description"].(string)
+			category := entry.Category
+			description := entry.Message
 			if category == "" || description == "" {
 				continue
 			}

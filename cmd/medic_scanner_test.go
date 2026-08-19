@@ -432,7 +432,7 @@ func TestScanPheromonesDuplicateContentHash(t *testing.T) {
 
 func TestScanDataFilesCorrupted(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "midden/midden.json", []byte(`{corrupted`))
+	writeFile(t, dir, "midden.json", []byte(`{corrupted`))
 
 	fc := newFileChecker(dir)
 	issues := scanDataFiles(fc)
@@ -580,7 +580,7 @@ func TestPerformHealthScanIntegration(t *testing.T) {
 	writeJSONFile(t, dataDir, "instincts.json", colony.InstinctsFile{
 		Version: "1.0",
 	})
-	writeJSONFile(t, dataDir, "midden/midden.json", colony.MiddenFile{Version: "1.0"})
+	writeJSONFile(t, dataDir, "midden.json", colony.MiddenFile{Version: "1.0"})
 	writeJSONFile(t, dataDir, "learning-observations.json", colony.LearningFile{})
 	writeJSONFile(t, dataDir, "assumptions.json", colony.AssumptionsFile{Version: "1.0"})
 	writeJSONFile(t, dataDir, "pending-decisions.json", colony.FlagsFile{Version: "1.0"})
