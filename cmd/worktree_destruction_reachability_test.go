@@ -102,6 +102,29 @@ type cmdFuncGraph struct {
 	// name, for every var X = &cobra.Command{...} declaration found.
 	cobraEntryNodes map[string]string
 
+	// identToCobraNode maps the Go variable identifier a Cobra command
+	// literal was assigned to (e.g. "abandonCmd") to its synthetic node name
+	// (e.g. "cobra:abandon"). cobraEntryNodes is keyed by the command's Use
+	// string, which is what a human reads and what lifecycleEntryCommands
+	// lists by name; identToCobraNode is keyed by the Go identifier, which is
+	// what an AddCommand(...) call site actually references. Registration
+	// derivation (Step 1.5 below) needs the latter: it walks every
+	// `.AddCommand(...)` call and every `[]*cobra.Command{...}` slice literal
+	// ranged into one, both of which pass variable identifiers, never Use
+	// strings.
+	identToCobraNode map[string]string
+
+	// registeredIdents is the set of every Go identifier this scan found
+	// passed to some `.AddCommand(...)` call, directly or via a
+	// `[]*cobra.Command{...}` slice literal that is later ranged over into an
+	// AddCommand call (the pattern cmd/clash.go, cmd/worktree.go,
+	// cmd/autopilot.go, cmd/immune.go, cmd/queen.go, and cmd/swarm.go all
+	// use). This is populated by registration-call scanning (Step 1.5), not
+	// by the per-function call-graph walk (Step 1), since AddCommand
+	// arguments are not calls to same-package top-level functions and would
+	// never appear in g.calls.
+	registeredIdents map[string]bool
+
 	filesScanned int
 	funcsIndexed int
 	sitesFound   int
@@ -112,9 +135,11 @@ type cmdFuncGraph struct {
 // returns the call graph described above.
 func buildCmdFuncGraph(cmdDir string) (*cmdFuncGraph, error) {
 	g := &cmdFuncGraph{
-		calls:           map[string]map[string]bool{},
-		destructions:    map[string][]destructionSite{},
-		cobraEntryNodes: map[string]string{},
+		calls:            map[string]map[string]bool{},
+		destructions:     map[string][]destructionSite{},
+		cobraEntryNodes:  map[string]string{},
+		identToCobraNode: map[string]string{},
+		registeredIdents: map[string]bool{},
 	}
 
 	entries, err := os.ReadDir(cmdDir)
@@ -123,6 +148,7 @@ func buildCmdFuncGraph(cmdDir string) (*cmdFuncGraph, error) {
 	}
 
 	fset := token.NewFileSet()
+	var files []*ast.File
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -140,11 +166,24 @@ func buildCmdFuncGraph(cmdDir string) (*cmdFuncGraph, error) {
 		g.filesScanned++
 		relName := filepath.Join("cmd", name)
 		indexFile(g, fset, file, relName)
+		files = append(files, file)
 	}
 
 	if g.filesScanned == 0 {
 		return nil, fmt.Errorf("scanned zero .go files in %s", cmdDir)
 	}
+
+	// Step 1.5: registration-call scanning. Runs AFTER every file has been
+	// indexed (so identToCobraNode is fully populated first) and walks every
+	// file a second time looking for `.AddCommand(...)` calls and
+	// `[]*cobra.Command{...}` slice literals, recording every identifier
+	// argument found. This is what lets the guard derive its root set from
+	// the actual command registrations instead of a hand-maintained list --
+	// see indexRegistrationCalls' own doc comment.
+	for _, file := range files {
+		indexRegistrationCalls(g, file)
+	}
+
 	return g, nil
 }
 
@@ -176,8 +215,20 @@ func indexFile(g *cmdFuncGraph, fset *token.FileSet, file *ast.File, relName str
 				if !ok {
 					continue
 				}
-				for _, val := range vs.Values {
-					indexCobraCommandLiteral(g, fset, relName, val)
+				// vs.Names and vs.Values are parallel slices for a
+				// single-value `var X = expr` spec (the only shape every
+				// Cobra command declaration in cmd/ uses -- confirmed by
+				// this guard's own zero-entries fail-loud check, which
+				// would catch a shape change silently producing no
+				// entries). A multi-name spec (`var a, b = x, y`) still
+				// pairs correctly index-for-index; anything shorter is
+				// skipped rather than guessed at.
+				for i, val := range vs.Values {
+					var varName string
+					if i < len(vs.Names) {
+						varName = vs.Names[i].Name
+					}
+					indexCobraCommandLiteral(g, fset, relName, varName, val)
 				}
 			}
 		}
@@ -187,8 +238,11 @@ func indexFile(g *cmdFuncGraph, fset *token.FileSet, file *ast.File, relName str
 // indexCobraCommandLiteral recognizes `&cobra.Command{Use: "...", RunE: func(...) {...}, ...}`
 // and, when found, indexes the RunE closure body under a synthetic node
 // "cobra:<Use>" so it participates in the call graph as an entry point
-// candidate.
-func indexCobraCommandLiteral(g *cmdFuncGraph, fset *token.FileSet, relName string, expr ast.Expr) {
+// candidate. When varName is non-empty (the command was assigned to a
+// top-level `var X = &cobra.Command{...}`), also records identToCobraNode[varName]
+// so registration-call scanning (indexRegistrationCalls) can resolve an
+// `AddCommand(X)` argument back to this same node.
+func indexCobraCommandLiteral(g *cmdFuncGraph, fset *token.FileSet, relName, varName string, expr ast.Expr) {
 	unary, ok := expr.(*ast.UnaryExpr)
 	if !ok || unary.Op != token.AND {
 		return
@@ -250,6 +304,9 @@ func indexCobraCommandLiteral(g *cmdFuncGraph, fset *token.FileSet, relName stri
 	}
 	node := "cobra:" + bareUse[0]
 	g.cobraEntryNodes[bareUse[0]] = node
+	if varName != "" {
+		g.identToCobraNode[varName] = node
+	}
 	g.entriesFound++
 	if runEBody != nil {
 		indexFuncBody(g, fset, relName, node, runEBody)
@@ -262,6 +319,87 @@ func indexCobraCommandLiteral(g *cmdFuncGraph, fset *token.FileSet, relName stri
 		g.calls[node] = map[string]bool{}
 	}
 	g.calls[node][runEIdent] = true
+}
+
+// indexRegistrationCalls walks an entire parsed file looking for the two
+// shapes this codebase uses to register a Cobra command on some parent
+// command (rootCmd, or a sub-command like ceremonyCmd or clashCmd):
+//
+//  1. A direct call `<something>.AddCommand(arg1, arg2, ...)` -- every
+//     identifier argument is recorded as registered.
+//  2. A `[]*cobra.Command{ident1, ident2, ...}` slice literal -- recorded
+//     unconditionally, since every such literal in this codebase exists to
+//     be ranged over into an AddCommand call in the same init() function
+//     (cmd/clash.go, cmd/worktree.go, cmd/autopilot.go, cmd/immune.go,
+//     cmd/queen.go, cmd/swarm.go). This guard does not attempt to verify the
+//     range->AddCommand data-flow itself -- doing so would require local
+//     variable tracking this AST walk does not otherwise need -- so it
+//     records the slice's contents directly, which is safe in the
+//     conservative direction: a command identifier only ends up inside one
+//     of these slice literals because a human put it there to be
+//     registered, and worst case this treats an unregistered-but-listed
+//     command as reachable-checkable when it was never actually wired in,
+//     which can only ADD false coverage, never remove real coverage.
+//
+// This is what lets the guard's root set be derived from the actual command
+// registrations (rootCmd.AddCommand(...) / Use: fields) instead of a
+// hand-maintained list, per 187-08's design requirement: a command added
+// tomorrow and registered either way is picked up here without anyone
+// updating this file.
+func indexRegistrationCalls(g *cmdFuncGraph, file *ast.File) {
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.CallExpr:
+			sel, ok := node.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "AddCommand" {
+				return true
+			}
+			for _, arg := range node.Args {
+				if ident, ok := arg.(*ast.Ident); ok {
+					g.registeredIdents[ident.Name] = true
+				}
+			}
+
+		case *ast.CompositeLit:
+			arrType, ok := node.Type.(*ast.ArrayType)
+			if !ok {
+				return true
+			}
+			starExpr, ok := arrType.Elt.(*ast.StarExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := starExpr.X.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Command" {
+				return true
+			}
+			for _, elt := range node.Elts {
+				if ident, ok := elt.(*ast.Ident); ok {
+					g.registeredIdents[ident.Name] = true
+				}
+			}
+		}
+		return true
+	})
+}
+
+// registeredCommandNodes resolves g.registeredIdents (the Go identifiers
+// found passed to some AddCommand call or listed in a
+// []*cobra.Command{...} registration slice) into the synthetic cobra: node
+// names BFS reachability needs, via identToCobraNode. An identifier that
+// never resolves (e.g. a command variable that exists in source but is
+// truly never registered anywhere) is silently dropped here rather than
+// treated as an entry point -- it cannot be, by definition, since nothing
+// calls AddCommand on it.
+func registeredCommandNodes(g *cmdFuncGraph) []string {
+	var nodes []string
+	for ident := range g.registeredIdents {
+		if node, ok := g.identToCobraNode[ident]; ok {
+			nodes = append(nodes, node)
+		}
+	}
+	sort.Strings(nodes)
+	return nodes
 }
 
 // indexFuncBody walks a function or closure body, recording every call it
@@ -291,7 +429,26 @@ func indexFuncBody(g *cmdFuncGraph, fset *token.FileSet, relFile, nodeName strin
 
 // walkStmtsForDestruction walks a statement list in order, tracking
 // safetyGated -- whether the statements being walked are nested inside an
-// `if` (or `if`/`else if` chain) whose condition references a `.Safe` field.
+// `if` (or `if`/`else if` chain) whose condition references a `.Safe`
+// field, OR come lexically AFTER a guard clause of the shape `if
+// <condition referencing .Safe> { ...; return/continue/break }` earlier in
+// the SAME statement list. That second case is the idiom every production
+// fix in this phase actually uses -- worktree-reap
+// (`if safety.Safe { removeGitWorktree(...) ...continue }`,
+// then further down `if !includeUnmerged { ...continue }` before a second
+// removeGitWorktree), worktree-cleanup (`if !safety.Safe && !force {
+// ...return nil }` followed by `if !safety.Safe && force { ... }` then an
+// unconditional removeGitWorktree only reachable once both guard clauses
+// have fallen through), worktree-merge-back (`if !safety.Safe { ...
+// return nil }` followed by the destructive git commands), and
+// recover_repair.go's orphan-branch case (`if !safety.Safe { ... return
+// record }` followed by `git branch -D`). Treating only literal
+// if/else-if-chain NESTING as "gated" and everything else as ungated
+// would flag every one of those real, working preservation checks as a
+// violation -- CR-05's own lesson (a check that only recognizes ONE
+// syntactic shape misses the shapes it was never shown), applied to this
+// guard's own detection logic rather than to production code.
+//
 // For each statement it visits every expression the statement directly
 // contains (via recordCallsInExpr, which records call-graph edges and
 // destruction sites but does NOT descend into nested IfStmts or FuncLits --
@@ -323,6 +480,19 @@ func walkStmtsForDestruction(g *cmdFuncGraph, fset *token.FileSet, relFile, node
 				case *ast.IfStmt:
 					walkStmtsForDestruction(g, fset, relFile, nodeName, []ast.Stmt{e}, gated)
 				}
+			}
+
+			// Guard-clause idiom: a `.Safe`-referencing if/else-if chain
+			// with NO else branch, whose body unconditionally terminates
+			// the enclosing statement list (return/continue/break on every
+			// path through the chain's bodies), implicitly negates its
+			// condition for every statement that follows it in THIS
+			// statement list. Once true, safetyGated latches for the rest
+			// of this walkStmtsForDestruction call (it is never un-set --
+			// there is no shape in this codebase where a LATER statement
+			// in the same list would need to un-gate).
+			if s.Else == nil && ifChainReferencesSafe(s) && ifChainAlwaysTerminates(s) {
+				safetyGated = true
 			}
 
 		case *ast.BlockStmt:
@@ -380,6 +550,69 @@ func condReferencesSafe(cond ast.Expr) bool {
 		return true
 	})
 	return found
+}
+
+// ifChainAlwaysTerminates reports whether an if/else-if chain with NO final
+// else branch unconditionally terminates the enclosing statement list on
+// every path THROUGH ITS OWN BODIES -- i.e. every `if`/`else if` body in the
+// chain ends in a return/continue/break/goto, so control can only reach the
+// statements AFTER this chain by having the chain's combined condition be
+// false. This is what makes the guard-clause idiom
+// (`if !safety.Safe { ...; return nil }`, or worktree-reap's
+// `if safety.Safe { ...; continue }`) an implicit gate on everything that
+// follows: reaching the next statement is only possible when none of the
+// chain's conditions held.
+//
+// A chain WITH a final else is deliberately excluded (return false) even if
+// every branch terminates -- that shape is already fully handled by
+// walkStmtsForDestruction's direct recursion into both the if-body and the
+// else-body with `gated` set on each, so it needs no fallthrough inference
+// here; conflating the two would double-count the same gating decision two
+// different ways for no benefit.
+func ifChainAlwaysTerminates(s *ast.IfStmt) bool {
+	if s.Else != nil {
+		return false
+	}
+	if !blockAlwaysTerminates(s.Body) {
+		return false
+	}
+	return true
+}
+
+// blockAlwaysTerminates reports whether the last statement in a block is a
+// return, a branch statement (continue/break/goto/fallthrough), or an
+// if/else-if/else chain where EVERY branch (including a final else, if
+// present) itself always terminates. This intentionally does not attempt
+// full control-flow analysis (no panic-call detection, no exhaustive switch
+// analysis) -- it only needs to recognize the guard-clause shapes this
+// codebase's own worktree-destruction fixes actually use, all of which end
+// their guard body in a single return/continue statement.
+func blockAlwaysTerminates(b *ast.BlockStmt) bool {
+	if b == nil || len(b.List) == 0 {
+		return false
+	}
+	last := b.List[len(b.List)-1]
+	switch s := last.(type) {
+	case *ast.ReturnStmt:
+		return true
+	case *ast.BranchStmt:
+		// continue, break, goto, fallthrough -- any of these leaves the
+		// current statement list without falling through to what follows.
+		return true
+	case *ast.IfStmt:
+		if !blockAlwaysTerminates(s.Body) {
+			return false
+		}
+		switch e := s.Else.(type) {
+		case nil:
+			return false // no else: there is a fallthrough path
+		case *ast.BlockStmt:
+			return blockAlwaysTerminates(e)
+		case *ast.IfStmt:
+			return blockAlwaysTerminates(&ast.BlockStmt{List: []ast.Stmt{e}})
+		}
+	}
+	return false
 }
 
 // recordCallsInExpr inspects n (an expression or a non-IfStmt/FuncLit
@@ -701,6 +934,180 @@ func TestNoLifecycleReachableFunctionDestroysWorktreeWithoutSafetyGate(t *testin
 		}
 		if reachable[opNode] {
 			t.Errorf("the operator-invoked destruction command %q is reachable from an automatic lifecycle path -- destruction must stay behind a human explicitly typing the command, never wired into build/continue/init/resume/run", opName)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Step 3 (187-08): the extended property, covering every registered command.
+// ---------------------------------------------------------------------------
+
+// sanctionedUngatedDestructionFuncs is the set of functions allowed to
+// perform worktree destruction without a `.Safe`-gated condition, checked by
+// TestNoRegisteredCommandDestroysWorktreeWithoutSafetyGate below. This is a
+// SEPARATE list from the narrower guard's `sanctioned` map above (same
+// reasoning duplicated rather than shared so a change to one guard's
+// exception set does not silently loosen the other), plus one more entry
+// specific to the all-commands property:
+//
+//   - finalizeBuildWorktree, allocateBuildWorktree, removeGitWorktree: see
+//     the narrower guard's `sanctioned` map above for the full reasoning:
+//     each destroys only work already synced elsewhere, or is itself the
+//     sanctioned low-level wrapper other sites are counted through.
+//   - cobra:worktree-allocate: worktreeAllocateCmd's own RunE closure
+//     (cmd/worktree.go) removes a worktree it JUST created moments earlier
+//     in the SAME call, only when the immediately following
+//     store.SaveJSON fails -- the identical shape allocateBuildWorktree's
+//     rollback already covers above (never registered as holding worker
+//     output, so there is nothing to preserve; the worktree did not exist
+//     a few lines earlier in the same function invocation). This is a
+//     distinct Go identifier from allocateBuildWorktree (a different
+//     function, reached only via a different, operator-typed command) so
+//     it needs its own entry, not a rename of the existing one.
+//
+// Every other name in this list corresponds to a real fix landed in 187-08
+// closing GAP-4/GAP-5, documented at its own call site with a `.Safe`-gated
+// branch -- if a name here is destructive WITHOUT being safety-gated, that is
+// a real regression this guard exists to catch, not something to add here to
+// silence.
+var sanctionedUngatedDestructionFuncs = map[string]bool{
+	"finalizeBuildWorktree":   true,
+	"allocateBuildWorktree":   true,
+	"removeGitWorktree":       true,
+	"cobra:worktree-allocate": true,
+}
+
+// TestNoRegisteredCommandDestroysWorktreeWithoutSafetyGate is the
+// extension 187-VERIFICATION.md's GAP-4/GAP-5 remediation requires: the
+// narrower guard above only ever starts its BFS from
+// lifecycleEntryCommands, a hand-maintained list of seven automatic entry
+// points. Every one of the five defects found after that guard was written
+// (worktree-merge-back, worktree-cleanup, recover, abandon, entomb) lived in
+// an operator-TYPED command -- a category the narrower guard does not police
+// AT ALL, by design (D-01 says operator-typed destruction is legitimate, so
+// the guard deliberately excludes it from the "automatic path" property).
+// But "deliberately excluded from ONE property" is not the same claim as
+// "verified safe by some OTHER property" -- and until this test, no
+// structural guard existed to check operator-typed commands at all. Three
+// successive review sweeps each found more, by hand, in files nobody had
+// happened to open.
+//
+// This test asks a different, broader question than the narrow guard: of
+// EVERY command actually registered on rootCmd (derived from real
+// `.AddCommand(...)` calls and `[]*cobra.Command{...}` registration slices,
+// not a hand-maintained list -- see registeredCommandNodes), does every
+// worktree-destruction call site reachable from it sit behind a
+// `.Safe`-gated condition? Operator-typed commands are explicitly WITHIN
+// scope here, unlike the narrower guard -- worktree-reap, worktree-cleanup,
+// worktree-merge-back, recover, and abandon must all pass this property,
+// because each one destroys a worktree via a call site that MUST be gated
+// (worktree-reap's own `if safety.Safe` branch, worktree-cleanup's
+// `!safety.Safe && !force` refusal, worktree-merge-back's Step 5,
+// recover_repair.go's `if !safety.Safe` orphan-branch preservation). A
+// command whose entire job is "destroy without checking" would have no
+// legitimate reason to exist un-gated; the one command that IS allowed to
+// destroy freely (worktree-reap when safety.Safe is literally true) still
+// reaches that decision via a `.Safe`-gated branch, so it satisfies this
+// property too -- see this test's own assertion below.
+func TestNoRegisteredCommandDestroysWorktreeWithoutSafetyGate(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	g, err := buildCmdFuncGraph(filepath.Join(repoRoot, "cmd"))
+	if err != nil {
+		t.Fatalf("build call graph: %v", err)
+	}
+
+	// Requirement: fail loudly, never vacuously -- same discipline as the
+	// narrower guard, applied to the new root-set derivation too.
+	if g.entriesFound == 0 {
+		t.Fatalf("found zero Cobra command entry points while scanning %d files -- a guard that finds no entry points to check would pass vacuously forever", g.filesScanned)
+	}
+	if g.sitesFound == 0 {
+		t.Fatalf("found zero worktree destruction sites across %d files and %d functions -- either the scan is broken or removeGitWorktree itself was renamed/removed; either way this must not silently pass", g.filesScanned, g.funcsIndexed)
+	}
+	if len(g.registeredIdents) == 0 {
+		t.Fatalf("found zero identifiers passed to any .AddCommand(...) call or listed in a []*cobra.Command{...} registration slice across %d files -- either every command registration in cmd/ was removed (implausible) or indexRegistrationCalls stopped matching the AST shapes this codebase actually uses; a guard that derives zero registered commands would silently check nothing and still pass", g.filesScanned)
+	}
+
+	startNodes := registeredCommandNodes(g)
+	if len(startNodes) == 0 {
+		t.Fatalf("resolved zero registered command nodes from %d registered identifiers -- identToCobraNode could not match any of them back to an indexed Cobra command literal; this guard cannot derive a root set it cannot resolve", len(g.registeredIdents))
+	}
+
+	// Every entry this repo's lifecycle guard already trusts must also
+	// appear here -- the all-commands root set must be a superset of the
+	// automatic-lifecycle root set, never a narrower one. If it is not, the
+	// derivation itself is broken (a registered command silently failed to
+	// resolve), which would make this test's whole reason for existing --
+	// catching MORE than the narrow guard, never less -- false.
+	startNodeSet := map[string]bool{}
+	for _, n := range startNodes {
+		startNodeSet[n] = true
+	}
+	for _, cmdName := range lifecycleEntryCommands {
+		node, ok := g.cobraEntryNodes[cmdName]
+		if !ok {
+			continue // already asserted as fatal by the narrower guard above
+		}
+		if !startNodeSet[node] {
+			t.Fatalf("lifecycle command %q (node %q) is not present in the all-commands root set derived from actual registrations -- the registration-derived root set must be a superset of lifecycleEntryCommands, or this guard's coverage claim (it checks strictly MORE than the narrow guard) does not hold. Check indexRegistrationCalls: is %q's variable actually passed to some .AddCommand(...) call in source?", cmdName, node, cmdName)
+		}
+	}
+
+	reachable := reachableFrom(g, startNodes)
+
+	var violations []string
+	for nodeName, sites := range g.destructions {
+		if !reachable[nodeName] || sanctionedUngatedDestructionFuncs[nodeName] {
+			continue
+		}
+		for _, site := range sites {
+			if site.safetyGated {
+				continue
+			}
+			violations = append(violations, fmt.Sprintf(
+				"%s:%d — function %s is reachable from a registered Aether command and calls %s, but that call is not nested inside a condition that checks a worktreeDestructionSafety verdict's .Safe field. This property covers EVERY registered command, not just the automatic lifecycle subset -- operator-typed commands (recover, abandon, entomb, worktree-cleanup, worktree-merge-back, worktree-reap, and any command added in the future) are all in scope. Either route this call through worktreeDestructionSafety (or the branch-only branchMergeSafety variant, for a bare branch with no worktree directory) and branch on the result before destroying, or if this call is genuinely safe for a documented reason, add it to sanctionedUngatedDestructionFuncs in this test with the same reasoning worktree_reap.go's doc comment gives for its existing exceptions.",
+				site.file, site.line, nodeName, site.description))
+		}
+	}
+	sort.Strings(violations)
+
+	if len(violations) > 0 {
+		t.Errorf("found %d unguarded worktree destruction site(s) reachable from a registered command:\n%s",
+			len(violations), strings.Join(violations, "\n"))
+	}
+
+	// worktree-reap remains legitimately destructive by design (D-01's
+	// named, explicit, operator-invoked destruction command), but it must
+	// satisfy the SAME property everything else does: every destructive call
+	// it makes must sit behind a `.Safe`-gated branch. It is deliberately
+	// NOT given a blanket exemption here the way the narrower guard exempts
+	// it from reachability entirely -- runWorktreeReap's own destructive
+	// call (removeGitWorktree inside `if safety.Safe { ... }`) is walked and
+	// checked exactly like every other site, and passes because it already
+	// is gated. This is the one place this test intentionally diverges from
+	// the narrow guard's shape: rather than asserting worktree-reap is
+	// UNREACHABLE (a property that would be false here on purpose --
+	// worktree-reap. IS a registered command, so it IS reachable from this
+	// root set), it asserts worktree-reap's destruction sites satisfy the
+	// same safety-gating property as everything else, which is the actual
+	// invariant D-01 requires.
+	for _, opName := range operatorOnlyDestructionCommands {
+		opNode, ok := g.cobraEntryNodes[opName]
+		if !ok {
+			t.Fatalf("expected to find the operator-invoked command %q among indexed entry points, but it was missing -- this guard cannot assert a property against a command it cannot locate", opName)
+		}
+		if !reachable[opNode] {
+			t.Fatalf("expected %q to be reachable from the all-commands root set (it IS a registered command) -- if it is not, registeredCommandNodes failed to resolve it, which would make every assertion in this test about it meaningless", opName)
+		}
+		sites := g.destructions[opNode]
+		for _, site := range sites {
+			if !site.safetyGated {
+				t.Errorf("%s:%d — %q's own destruction site is not `.Safe`-gated; this is the one command whose entire purpose is destruction, so if even IT does not gate on the safety verdict, nothing in this codebase reliably does", site.file, site.line, opName)
+			}
 		}
 	}
 }
