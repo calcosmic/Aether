@@ -9526,7 +9526,8 @@
     "name": "worktree-cleanup",
     "short_description": "Clean up worktree after merge",
     "flags": [
-      "branch"
+      "branch",
+      "force"
     ],
     "parent_command": "",
     "has_subcommands": false,

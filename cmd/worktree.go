@@ -831,7 +831,50 @@ var worktreeMergeBackCmd = &cobra.Command{
 			return nil
 		}
 
-		// Step 5: Auto-cleanup
+		// Step 5: Auto-cleanup -- gated on worktreeDestructionSafety
+		// (D-01/187-VERIFICATION.md GAP-1). The merge above only proves the
+		// worktree's committed HEAD is now safely on main; it says nothing
+		// about uncommitted content left sitting alongside it. `git worktree
+		// remove --force` deletes that content silently, so the safety
+		// verdict must be computed and branched on before any destructive
+		// git command runs.
+		safety := worktreeDestructionSafety(aetherRoot, *entry)
+		if !safety.Safe {
+			_, detail, preserveErr := preserveWorktreeWork(aetherRoot, *entry, safety)
+			if preserveErr != nil {
+				detail = fmt.Sprintf("could not stash automatically (%v); branch %s was left alone", preserveErr, entry.Branch)
+			}
+			reportWorktreePreservation(safety, detail)
+
+			// The merge already succeeded and is durable on main -- only the
+			// destructive cleanup step is skipped. Leave the entry marked
+			// orphaned so `aether recover` / `worktree-reap` can find it,
+			// rather than merged (which would suggest nothing is left to
+			// look at).
+			preservedNow := time.Now().UTC().Format(time.RFC3339)
+			state.Worktrees[entryIndex].Status = colony.WorktreeOrphaned
+			state.Worktrees[entryIndex].UpdatedAt = preservedNow
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				outputError(2, fmt.Sprintf("failed to save colony state: %v", err), nil)
+				return nil
+			}
+			store.AppendJSONL("state-changelog.jsonl", map[string]interface{}{
+				"action":    "worktree-merge-preserved",
+				"branch":    entry.Branch,
+				"path":      entry.Path,
+				"timestamp": preservedNow,
+			})
+			outputOK(map[string]interface{}{
+				"merged":     true,
+				"branch":     entry.Branch,
+				"worktree":   entry.Path,
+				"status":     "merged",
+				"cleaned_up": false,
+				"preserved":  detail,
+			})
+			return nil
+		}
+
 		pruneCtx, pruneCancel := context.WithTimeout(context.Background(), GitTimeout)
 		defer pruneCancel()
 
