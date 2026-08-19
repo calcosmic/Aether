@@ -213,3 +213,88 @@ func TestContinueFinalizeRefusesToAdvanceOnSupersededState(t *testing.T) {
 		t.Fatalf("superseded finalize readied phase 2")
 	}
 }
+
+// TestFinalizeBlockedExternalContinueDoesNotOverwritePausedState reproduces
+// CR-01 (188-REVIEW.md): finalizeBlockedExternalContinue's write used to be
+// `blockedState := state; ...; store.SaveJSON("COLONY_STATE.json",
+// blockedState)` -- a raw, non-atomic snapshot of whatever `state` its
+// caller (runCodexContinueFinalize) captured once at the very top of the
+// call, before verification, gates, and review ran. Any concurrent write to
+// COLONY_STATE.json during that window (an operator pause, a background
+// writer) was silently discarded and replaced wholesale.
+//
+// This calls finalizeBlockedExternalContinue directly with a `state` value
+// that is already stale relative to what is on disk -- exactly what
+// runCodexContinueFinalize would have captured before a concurrent pause --
+// mirroring the technique TestContinueFinalizeRefusesToAdvanceOnSupersededState
+// uses for the (already-fixed) advance path, and the exact throwaway-probe
+// technique 188-REVIEW.md's CR-01 finding itself used.
+func TestFinalizeBlockedExternalContinueDoesNotOverwritePausedState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Blocked continue-finalize does not overwrite a concurrent pause"
+	buildStartedAt := time.Now().UTC()
+	taskID := "1.1"
+	staleState := colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &buildStartedAt,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Pause during blocked continue-finalize",
+				Status: colony.PhaseInProgress,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Pause while finalize blocks", Status: colony.TaskCompleted}},
+			}},
+		},
+	}
+	createTestColonyState(t, dataDir, staleState)
+
+	// Simulate a concurrent process pausing the colony after
+	// runCodexContinueFinalize would have captured `state` (at its very top,
+	// before verification/gates/review ran) but before
+	// finalizeBlockedExternalContinue's write -- the exact gap CR-01 closes.
+	var paused colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &paused); err != nil {
+		t.Fatalf("load state for mutation: %v", err)
+	}
+	pausedAt := time.Now().UTC().Format(time.RFC3339)
+	paused.Paused = true
+	paused.PausedAt = &pausedAt
+	if err := store.SaveJSON("COLONY_STATE.json", paused); err != nil {
+		t.Fatalf("write competing pause: %v", err)
+	}
+
+	phase := staleState.Plan.Phases[0]
+	result, _, err := finalizeBlockedExternalContinue(
+		staleState, phase,
+		codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+		codexContinueGateReport{BlockingIssues: []string{"forced gate failure for CR-01 regression test"}},
+		nil, "", nil, buildStartedAt.Add(time.Minute),
+		"verification.json", "gates.json", nil, colony.VerificationDepthLight,
+	)
+	if err != nil {
+		t.Fatalf("finalizeBlockedExternalContinue returned an error instead of a superseded result: %v", err)
+	}
+	if superseded, _ := result["superseded"].(bool); !superseded {
+		t.Errorf("result[superseded] = %v, want true (result: %#v)", result["superseded"], result)
+	}
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Errorf("result[blocked] = %v, want true (result: %#v)", result["blocked"], result)
+	}
+
+	var after colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &after); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if !after.Paused {
+		t.Fatalf("expected the competing Paused=true write to survive; got Paused=%v", after.Paused)
+	}
+}
