@@ -303,15 +303,12 @@ func TestResumeDashboardWithMemory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := os.MkdirAll(s.BasePath()+"/midden", 0755); err != nil {
-		t.Fatal(err)
-	}
 	midden := colony.MiddenFile{
 		Entries: []colony.MiddenEntry{
 			{ID: "m1", Category: "build", Message: "test failure", Timestamp: "2026-04-01T10:00:00Z"},
 		},
 	}
-	if err := s.SaveJSON("midden/midden.json", midden); err != nil {
+	if err := s.SaveJSON("midden.json", midden); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1213,16 +1210,13 @@ func TestPRContext(t *testing.T) {
 	}
 
 	// Create midden entries
-	if err := os.MkdirAll(s.BasePath()+"/midden", 0755); err != nil {
-		t.Fatal(err)
-	}
 	midden := colony.MiddenFile{
 		Entries: []colony.MiddenEntry{
 			{ID: "m1", Timestamp: "2026-04-01T10:00:00Z", Category: "build", Source: "builder", Message: "Build failed on test"},
 			{ID: "m2", Timestamp: "2026-04-01T11:00:00Z", Category: "test", Source: "watcher", Message: "Test timeout error"},
 		},
 	}
-	if err := s.SaveJSON("midden/midden.json", midden); err != nil {
+	if err := s.SaveJSON("midden.json", midden); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1533,9 +1527,6 @@ func TestPRContextWithMidden(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := os.MkdirAll(s.BasePath()+"/midden", 0755); err != nil {
-		t.Fatal(err)
-	}
 	midden := colony.MiddenFile{
 		Entries: []colony.MiddenEntry{
 			{ID: "m1", Timestamp: "2026-04-01T10:00:00Z", Category: "build", Source: "builder", Message: "Build failed due to missing dependency"},
@@ -1543,7 +1534,7 @@ func TestPRContextWithMidden(t *testing.T) {
 			{ID: "m3", Timestamp: "2026-04-01T14:00:00Z", Category: "deploy", Source: "builder", Message: "Deploy script failed on staging"},
 		},
 	}
-	if err := s.SaveJSON("midden/midden.json", midden); err != nil {
+	if err := s.SaveJSON("midden.json", midden); err != nil {
 		t.Fatal(err)
 	}
 

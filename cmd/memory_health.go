@@ -73,8 +73,7 @@ func loadMemoryHealthSummary(s *storage.Store) memoryHealthSummary {
 		}
 	}
 
-	var midden colony.MiddenFile
-	if err := s.LoadJSON("midden/midden.json", &midden); err == nil {
+	if midden, err := loadMiddenFile(s); err == nil {
 		summary.RecentFailures = len(midden.Entries)
 		for _, entry := range midden.Entries {
 			summary.LastFailure = latestMemoryHealthTimestamp(summary.LastFailure, entry.Timestamp)
