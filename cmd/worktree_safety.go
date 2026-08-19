@@ -107,20 +107,46 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 		return result
 	}
 
-	// Step 3.5: a nameless branch cannot be checked, and uncertainty is not
-	// permission. Without this guard, git rev-list --count "main.." (empty
-	// right-hand side) is valid git, returns 0 with exit status 0, and the
-	// unmerged-commit check below falls through to Safe=true — CR-01.
-	if strings.TrimSpace(entry.Branch) == "" {
+	// Step 3.5 / 4 / 5: nameless-branch refusal + the unmerged-commit check,
+	// shared with the branch-only path (branchMergeSafety) used where no
+	// worktree directory exists at all — see that function's doc comment.
+	merge := branchMergeSafety(root, entry.Branch)
+	result.Safe = merge.Safe
+	result.Reason = merge.Reason
+	result.UnmergedCommitCount = merge.UnmergedCommitCount
+	return result
+}
+
+// branchMergeSafety answers a narrower question than worktreeDestructionSafety:
+// ignoring any worktree directory entirely, does this branch name hold commits
+// that are not yet on the integration branch? This is the check
+// worktreeDestructionSafety's Step 3.5/4 already perform once a worktree path
+// has passed its dirty-file check — factored out here so a caller with NO
+// worktree directory to inspect (a bare branch, e.g. an "orphan branch" with
+// no worktree and no state entry — recover_repair.go's repairDirtyWorktree)
+// can still get the same unmerged-commit protection without a synthetic,
+// nonexistent path defeating worktreeDestructionSafety's Step 2 short-circuit
+// ("a missing directory holds no work" — true for a worktree, not true for a
+// branch that was never checked out into one).
+//
+// Per worktreeDestructionSafety's own rule 2: every failure to determine an
+// answer resolves to Safe=false. Uncertainty is not permission.
+func branchMergeSafety(root, branch string) worktreeSafety {
+	result := worktreeSafety{Branch: branch}
+
+	// A nameless branch cannot be checked, and uncertainty is not permission.
+	// Without this guard, git rev-list --count "main.." (empty right-hand
+	// side) is valid git, returns 0 with exit status 0, and the unmerged-
+	// commit check below falls through to Safe=true — CR-01.
+	if strings.TrimSpace(branch) == "" {
 		result.Safe = false
-		result.Reason = "this worker workspace has no branch recorded, so its work cannot be checked"
+		result.Reason = "no branch name was given, so its work cannot be checked"
 		return result
 	}
 
-	// Step 4: unmerged-commit check. Determine the integration branch by
-	// trying main and falling back to master, matching the checkout
-	// fallback already used in mergePhaseWorktrees
-	// (cmd/codex_build_worktree.go).
+	// Determine the integration branch by trying main and falling back to
+	// master, matching the checkout fallback already used in
+	// mergePhaseWorktrees (cmd/codex_build_worktree.go).
 	integrationBranch := "main"
 	verifyCtx, verifyCancel := context.WithTimeout(context.Background(), GitTimeout)
 	if _, verifyErr := exec.CommandContext(verifyCtx, "git", "-C", root, "rev-parse", "--verify", "main").CombinedOutput(); verifyErr != nil {
@@ -132,7 +158,7 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 	// name beginning with "-" cannot be misread by git as a flag (CR-01).
 	revListCtx, revListCancel := context.WithTimeout(context.Background(), GitTimeout)
 	revListOut, revListErr := exec.CommandContext(revListCtx, "git", "-C", root, "rev-list", "--count",
-		integrationBranch+".."+entry.Branch, "--").CombinedOutput()
+		integrationBranch+".."+branch, "--").CombinedOutput()
 	revListCancel()
 	if revListErr != nil {
 		result.Safe = false
@@ -159,7 +185,6 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 		return result
 	}
 
-	// Step 5: clean and fully merged.
 	result.Safe = true
 	result.Reason = "clean and fully merged"
 	return result

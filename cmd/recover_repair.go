@@ -604,9 +604,14 @@ func repairMissingAgentFiles(issue HealthIssue, dataDir string) RepairRecord {
 // ---------------------------------------------------------------------------
 
 // repairDirtyWorktree handles three sub-types based on issue.Message content:
-// 1. state-disk mismatch / not in git worktree list -> remove orphan entry
-// 2. uncommitted change -> git stash
-// 3. Orphan branch -> git branch -D
+//  1. state-disk mismatch / not in git worktree list -> remove orphan entry
+//  2. uncommitted change -> git stash
+//  3. Orphan branch -> git branch -D, but ONLY once branchMergeSafety confirms
+//     the branch holds no commits missing from main/master (187-VERIFICATION.md
+//     GAP-4). reportOrphanBranches (cmd/worktree.go) labels a branch "orphan"
+//     purely by name pattern and absence from state/disk -- it never checks
+//     mergedness, so this function cannot trust the label alone; it must ask
+//     git itself before deleting anything.
 func repairDirtyWorktree(issue HealthIssue, dataDir string, force bool) RepairRecord {
 	record := RepairRecord{
 		Category: issue.Category,
@@ -649,7 +654,21 @@ func repairDirtyWorktree(issue HealthIssue, dataDir string, force bool) RepairRe
 
 	case strings.Contains(msg, "Orphan branch"):
 		branchName := issue.File
-		cmd := exec.Command("git", "branch", "-D", branchName)
+		root := resolveAetherRoot()
+		safety := branchMergeSafety(root, branchName)
+		if !safety.Safe {
+			// D-01: preserve, don't delete, and don't stop to ask (this path
+			// only runs under `recover --apply`, already an explicit,
+			// intentional action). The commits are already durable on the
+			// branch -- the preservation action here is the decision NOT to
+			// run `git branch -D`.
+			reportWorktreePreservation(safety, fmt.Sprintf("branch %s was left alone instead of being deleted", branchName))
+			record.Action = "skip_delete_unmerged_orphan_branch"
+			record.Success = true
+			record.After = describeWorktreePreservation(safety, fmt.Sprintf("branch %s was left alone instead of being deleted", branchName))
+			return record
+		}
+		cmd := exec.Command("git", "-C", root, "branch", "-D", branchName)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			record.Error = fmt.Sprintf("git branch -D failed: %v: %s", err, string(output))
 			return record

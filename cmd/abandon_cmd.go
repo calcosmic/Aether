@@ -55,7 +55,10 @@ func runAbandon(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	dataDirForSummary := store.BasePath()
+	aetherRootForSummary := resolveAetherRoot()
 	summary := abandonColonySummary(state)
+	summary["worker_workspaces_with_work"] = countWorktreesHoldingWork(aetherRootForSummary, dataDirForSummary)
 	confirmed, _ := cmd.Flags().GetBool("confirm")
 	if !confirmed {
 		summary["abandoned"] = false
@@ -113,6 +116,47 @@ func abandonColonySummary(state colony.ColonyState) map[string]interface{} {
 	}
 }
 
+// countWorktreesHoldingWork reports how many worker workspaces (git
+// worktrees) under this colony currently hold uncommitted or unmerged work,
+// so abandon's confirmation preview can say so in plain language before a
+// human types --confirm. A destructive confirmation that hides the thing
+// being destroyed is not informed consent -- 187-VERIFICATION.md GAP-5 found
+// abandon's preview never mentioned worktrees at all.
+//
+// This checks BOTH worktrees tracked in COLONY_STATE.json (via
+// worktreeDestructionSafety) and worktrees present on disk but not yet
+// recorded (via scanUnrecordedWorktrees, the same crash window GAP-3 closed
+// for init) -- state.Worktrees is still populated here since this runs
+// before the colony state reset.
+func countWorktreesHoldingWork(aetherRoot, dataDir string) int {
+	count := 0
+	knownPaths := map[string]bool{}
+
+	var state colony.ColonyState
+	if store != nil {
+		if err := store.LoadJSON("COLONY_STATE.json", &state); err == nil {
+			for _, wt := range state.Worktrees {
+				p := wt.Path
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(aetherRoot, p)
+				}
+				knownPaths[p] = true
+				if safety := worktreeDestructionSafety(aetherRoot, wt); !safety.Safe {
+					count++
+				}
+			}
+		}
+	}
+
+	worktreesDir := filepath.Join(aetherRoot, ".aether", "worktrees")
+	for _, safety := range scanUnrecordedWorktrees(aetherRoot, worktreesDir, knownPaths) {
+		if !safety.Safe {
+			count++
+		}
+	}
+	return count
+}
+
 func backupColonyStateForAbandon(dataDir string) (string, error) {
 	statePath := filepath.Join(dataDir, "COLONY_STATE.json")
 	raw, err := os.ReadFile(statePath)
@@ -154,7 +198,13 @@ func renderAbandonPreviewVisual(summary map[string]interface{}) string {
 	if learned := intValue(summary["instincts"]) + intValue(summary["decisions"]); learned > 0 {
 		b.WriteString(fmt.Sprintf("  Learned:   %d instinct(s) and decision(s) recorded\n", learned))
 	}
+	if withWork := intValue(summary["worker_workspaces_with_work"]); withWork > 0 {
+		b.WriteString(fmt.Sprintf("  Warning:   %d worker workspace(s) still hold unsaved or unmerged work\n", withWork))
+	}
 	b.WriteString("\nThe state is backed up first and can be restored, but the colony stops here.\n")
+	if withWork := intValue(summary["worker_workspaces_with_work"]); withWork > 0 {
+		b.WriteString("Worker workspaces that still hold unsaved or unmerged work will be kept, not deleted, even after --confirm -- run `aether recover` afterward to see them.\n")
+	}
 	b.WriteString("If this work is actually finished, `aether seal` then `aether entomb` archives it properly instead.\n")
 	b.WriteString(renderNextUp(
 		"Run `aether abandon --confirm` to discard it and start fresh.",
