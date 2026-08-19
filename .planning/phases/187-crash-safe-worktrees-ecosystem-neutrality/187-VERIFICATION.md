@@ -123,3 +123,27 @@ The adversarial review of the extended guard found it is **not fully sound as a 
 
 _Verified: 2026-08-19_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## Addendum — post-187-09 re-check (2026-08-19, orchestrator)
+
+This report was written **before** plan 187-09 landed. 187-09 was commissioned specifically to close
+the guard blind spots recorded above. The status of each has been re-established by direct adversarial
+injection against the merged code, not by reading 187-09's summary.
+
+| Blind spot (as recorded above) | Status now | Evidence |
+|---|---|---|
+| `os.RemoveAll` invisible to the AST detector | **CLOSED** | Re-injected GAP-5's exact shape (unguarded `os.RemoveAll` of the worktrees dir in `clearActiveColonyRuntimeFiles`). `TestNoRegisteredCommandDestroysWorktreeWithoutSafetyGate` **FAILED**, naming `cmd/entomb_cmd.go:733`, the function, and the remedy. Detector vocabulary went from 0 `RemoveAll` references to 12. Source restored byte-for-byte. |
+| Syntactic-only `.Safe` matching (fake verdict passes) | **CLOSED** | Closed by 187-09 with a verdict-origin check requiring the gating `.Safe` to originate from `worktreeDestructionSafety`/`branchMergeSafety`. Demonstrated fail-then-pass by the implementer; not independently re-injected by the orchestrator. |
+| Inline `AddCommand(&cobra.Command{...})` literals not indexed as entry points | **STILL OPEN — confirmed by injection** | Injected an unguarded `os.RemoveAll(filepath.Join(root, ".aether", "worktrees"))` into the inline `colonize` literal at `cmd/host_cmd.go:31`. It compiled, and **both** guard tests PASSED. `indexCobraCommandLiteral` is still invoked only from the `var X = &cobra.Command{...}` path (line 231), so the 9 inline registrations in `host_cmd.go` are never indexed. Source restored byte-for-byte. |
+
+**Why this does not reopen the phase.** The phase goal is about live behaviour: no Aether command
+destroys unmerged or dirty work today. That remains verified true — the open item is a gap in the
+*checking tool's* coverage, and it is inert, because all 9 inline-registered subcommands delegate to
+`makeHostSubcommand`, which shells out to a Node subprocess and contains no Go-level worktree logic.
+
+**Follow-up (not a blocker):** make `indexCobraCommandLiteral` run on inline `AddCommand` composite-literal
+arguments as well as `var` declarations, so a destructive helper added inline is policed on the day it
+appears. Small and well-defined. Until then, the real-git behavioural tests in
+`cmd/worktree_operator_destruction_test.go` remain the backstop for that shape.

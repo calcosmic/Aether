@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
-status: executing
+status: ready_to_plan
 stopped_at: Phase 186 rescoped 2026-08-18 to a single smoke run and no longer gates anything; 187-191 are unblocked and ready to plan
 last_updated: "2026-08-17T19:55:42.836Z"
 last_activity: 2026-08-18 -- Phase 186 rescoped: 12-run GSD baseline cut, one smoke run retained, fix phases unblocked
 progress:
   total_phases: 16
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 40
   completed_plans: 39
-  percent: 60
+  percent: 63
   note: >
     v1.26 = phases 172-175, 180-185, 186-192 (179 remapped into 186+192).
     Phase 186: plans 01-06 complete, plan 07 rescoped 2026-08-18 from twelve
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-08-08)
 
 ## Current Position
 
-Phase: 187 (Crash-Safe Worktrees & Ecosystem Neutrality) — READY TO PLAN
-Plan: none yet
-Status: Phase 186 rescoped and parked (6/7 plans done, plan 07 is one non-gating smoke run)
+Phase: 188
+Plan: Not started
+Status: Ready to plan
 Progress: 9 of 16 phases in this milestone
-Last activity: 2026-08-18 -- Phase 186 rescoped; 187-191 unblocked
+Last activity: 2026-08-19
 
 **Order from here (revised 2026-08-18):** 187, 188, 189→190 and 191 may start
 NOW, in any order and in parallel — the 186 rescope removed their only
@@ -64,7 +64,7 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 
 **Velocity:**
 
-- Total plans completed: 20 (v1.26, all Phase 172)
+- Total plans completed: 29 (v1.26, all Phase 172)
 - Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 
