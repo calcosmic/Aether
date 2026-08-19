@@ -124,6 +124,27 @@ type colonyStateWriteSite struct {
 	Primitive string // "SaveJSON" or "AtomicWrite"
 }
 
+// colonyStateDiscardedReadSite is one
+// store.UpdateJSONAtomically("COLONY_STATE.json", &target, func() error {
+// ... }) call whose closure discards the primitive's own fresh on-disk read
+// by reassigning `target` wholesale from a DIFFERENT, outer-scoped value,
+// instead of mutating one of the fresh read's own fields (WR-01,
+// 188-REVIEW.md). This is the exact shape CR-02 reproduced
+// (`committedState = updatedState` inside
+// cmd/codex_build_finalize.go's runCodexBuildFinalize) and the original
+// advance_phase.go bug this whole phase exists to close (`updated = state`)
+// -- structurally identical to a plain non-atomic overwrite at the
+// call-site level, despite using the "safe" primitive. Deliberately a
+// separate type from colonyStateWriteSite: this is not a SaveJSON/AtomicWrite
+// call at all, and colonyStateWriteSelectors' own doc comment states plainly
+// that UpdateJSONAtomically is "the safe primitive this ratchet does not
+// flag" -- true for the general case, false for this specific shape.
+type colonyStateDiscardedReadSite struct {
+	File     string // repo-relative, e.g. "cmd/codex_build_finalize.go"
+	Function string // enclosing function name
+	Target   string // the variable name UpdateJSONAtomically's second argument (&target) points at
+}
+
 // colonyStateWriteAllowlistEntry is one checked-in, accepted pre-existing
 // non-atomic COLONY_STATE.json write site. D-08 (188-CONTEXT.md): keyed by
 // (File, Function, Primitive), never by line number -- line numbers drift
@@ -153,6 +174,16 @@ type colonyStateScanResult struct {
 	// worktree_destruction_reachability_test.go's reachableFrom.
 	calls        map[string]map[string]bool
 	filesScanned int
+
+	// discardedReads and updateJSONAtomicallyCalls are WR-01's addition
+	// (188-REVIEW.md): every UpdateJSONAtomically("COLONY_STATE.json", ...)
+	// call site whose closure discards its own fresh read (discardedReads),
+	// and a raw count of every such call site found REGARDLESS of shape
+	// (updateJSONAtomicallyCalls) -- the latter is the vacuous-check guard
+	// TestNoUpdateJSONAtomicallyDiscardsFreshRead uses, exactly as
+	// len(res.sites) == 0 guards the two checks above it.
+	discardedReads            []colonyStateDiscardedReadSite
+	updateJSONAtomicallyCalls int
 }
 
 // scanColonyStateSource parses every non-test .go file directly under
@@ -348,9 +379,125 @@ func recordColonyStateCallsAndSites(res *colonyStateScanResult, node ast.Node, r
 					}
 				}
 			}
+			// WR-01 (188-REVIEW.md): UpdateJSONAtomically is deliberately
+			// excluded from colonyStateWriteSelectors above -- it IS the safe
+			// primitive, in general. But neither check built on
+			// colonyStateWriteSelectors alone can see a call that uses it in
+			// a way that defeats its own safety property: a closure that
+			// reassigns the fresh-read target wholesale from another value
+			// instead of mutating its fields. Detected as a separate,
+			// dedicated shape below, never added to colonyStateWriteSelectors
+			// itself (that would also make TestColonyStateWriteAllowlistOnlyShrinks
+			// start flagging every ordinary, correctly-guarded
+			// UpdateJSONAtomically call site in the codebase).
+			if fn.Sel.Name == "UpdateJSONAtomically" && len(call.Args) >= 3 {
+				if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					if val, unquoteErr := strconv.Unquote(lit.Value); unquoteErr == nil && val == "COLONY_STATE.json" {
+						if target := updateJSONAtomicallyTargetName(call.Args[1]); target != "" {
+							res.updateJSONAtomicallyCalls++
+							if closure, ok := call.Args[2].(*ast.FuncLit); ok && closureDiscardsFreshRead(closure.Body, target) {
+								res.discardedReads = append(res.discardedReads, colonyStateDiscardedReadSite{
+									File:     relFile,
+									Function: fnName,
+									Target:   target,
+								})
+							}
+						}
+					}
+				}
+			}
 		}
 		return true
 	})
+}
+
+// updateJSONAtomicallyTargetName extracts the variable name from a
+// `&target`-shaped argument (an *ast.UnaryExpr taking the address of a bare
+// identifier) -- the second argument to every store.UpdateJSONAtomically
+// call in this codebase. Returns "" for any other shape (defensive; no real
+// call site in this codebase passes anything else).
+func updateJSONAtomicallyTargetName(arg ast.Expr) string {
+	unary, ok := arg.(*ast.UnaryExpr)
+	if !ok || unary.Op != token.AND {
+		return ""
+	}
+	ident, ok := unary.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return ident.Name
+}
+
+// closureDiscardsFreshRead reports whether body contains a bare assignment
+// `target = <expr>` where <expr> NEVER references the identifier `target`
+// anywhere in its own subtree -- i.e. a wholesale reassignment of
+// UpdateJSONAtomically's own fresh-read pointer target from some other,
+// completely unconnected value, rather than a mutation of one of the fresh
+// read's fields (WR-01). `target.Field = ...` is a DIFFERENT Lhs AST shape
+// (*ast.SelectorExpr, not *ast.Ident) and is never matched here -- mutating
+// fields of the fresh read is exactly the correct, intended usage this
+// check must not flag.
+//
+// A same-package self-transform shape, `target = someFunc(target)` (e.g.
+// cmd/codex_plan.go's `state = normalizeLegacyColonyState(state)`), is also
+// NOT flagged: `target` appears inside the RHS subtree, so the fresh read's
+// own data is still what flows into the reassignment, merely passed through
+// a normalizer -- confirmed by reading normalizeLegacyColonyState
+// (cmd/state_load.go), which takes its argument by value and returns a
+// transformed copy of the SAME value, not an unrelated one. Only an RHS that
+// mentions `target` NOWHERE (the CR-01/CR-02 shape: `updated = state`,
+// `committedState = updatedState`) is the wholesale-discard this check
+// exists to catch. rhsMentionsIdent below does the subtree search rather
+// than a shallow top-level identifier match, precisely to avoid this false
+// positive.
+//
+// Known, accepted scope bound (same discipline as this file's other
+// documented bounds): a nested closure that happens to declare its OWN
+// unrelated local variable with the identical name via `:=` and later
+// reassigns it would false-positive here, since this walk does not resolve
+// lexical scope. No real call site in this codebase does this -- confirmed
+// by reading every UpdateJSONAtomically("COLONY_STATE.json", ...) call site
+// this scanner finds.
+func closureDiscardsFreshRead(body ast.Node, target string) bool {
+	discards := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		assign, ok := n.(*ast.AssignStmt)
+		if !ok || assign.Tok != token.ASSIGN {
+			return true
+		}
+		for i, lhs := range assign.Lhs {
+			ident, ok := lhs.(*ast.Ident)
+			if !ok || ident.Name != target || i >= len(assign.Rhs) {
+				continue
+			}
+			if rhsMentionsIdent(assign.Rhs[i], target) {
+				continue
+			}
+			discards = true
+		}
+		return true
+	})
+	return discards
+}
+
+// rhsMentionsIdent reports whether expr's own subtree references an
+// *ast.Ident named name anywhere -- used to tell a genuine wholesale
+// discard (`target = otherVar`, RHS never mentions target) apart from a
+// self-transform (`target = f(target)`, RHS threads target's own value
+// through).
+func rhsMentionsIdent(expr ast.Expr, name string) bool {
+	found := false
+	ast.Inspect(expr, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		if id, ok := n.(*ast.Ident); ok && id.Name == name {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }
 
 // findColonyStateWriteSites is TestColonyStateWriteAllowlistOnlyShrinks's
@@ -584,5 +731,112 @@ func TestNoFunctionReachableFromAdvancePhaseWritesNonAtomically(t *testing.T) {
 	if len(violations) > 0 {
 		t.Errorf("%d non-atomic COLONY_STATE.json write site(s) found inside a function reachable from advancePhase -- NO allowlist exemption is possible for this set, by design:\n  %s\nRoute this write through store.UpdateJSONAtomically instead.",
 			len(violations), strings.Join(violations, "\n  "))
+	}
+}
+
+// colonyStateDiscardedReadAllowlist is a small, deliberately NOT
+// JSON-file-backed shrink-only allowlist (unlike
+// testdata/colony_state_write_allowlist.json's ~30-entry regenerable
+// baseline) for discard sites already present in source BEFORE this check
+// existed, but outside phase 188's own fix scope (CR-01:
+// cmd/codex_continue_finalize.go, CR-02: cmd/codex_build_finalize.go, CR-03:
+// cmd/state_cmds.go -- none of which is cmd/codex_build.go). This is the
+// same "found more than this task's own scope, defer rather than silently
+// expand" reasoning D-07 already established for the original ~30
+// SaveJSON/AtomicWrite sites, applied to this new defect class. Logged as a
+// deferred discovery in 188-06-SUMMARY.md / deferred-items.md, not silently
+// fixed here. Kept as a small in-file list rather than a regenerable JSON
+// asset because, unlike that ~30-entry baseline (expected to persist and
+// need routine consultation), this is a one-time acknowledgment of a single
+// freshly-discovered site pending its own dedicated fix.
+//
+// Shrink-only in both directions, exactly like
+// TestColonyStateWriteAllowlistOnlyShrinks: a NEW discard site not listed
+// here still fails the test (zero-tolerance for regressions), and a listed
+// entry with no matching real site also fails (once rollbackCodexBuildFailure
+// is fixed, this entry must be removed, not left to rot).
+var colonyStateDiscardedReadAllowlist = []colonyStateDiscardedReadSite{
+	{
+		File:     "cmd/codex_build.go",
+		Function: "rollbackCodexBuildFailure",
+		Target:   "current",
+	},
+}
+
+// TestNoUpdateJSONAtomicallyDiscardsFreshRead is WR-01's fix (188-REVIEW.md):
+// the two checks above key entirely off which PRIMITIVE a call site uses --
+// SaveJSON/AtomicWrite are flagged, UpdateJSONAtomically is unconditionally
+// treated as safe -- without ever inspecting what a matched
+// UpdateJSONAtomically call's mutate closure actually DOES with the value it
+// freshly read. CR-02 (cmd/codex_build_finalize.go's commitBuildFinalizeState,
+// née runCodexBuildFinalize) was a live instance of exactly this:
+// `committedState = updatedState` inside the closure discarded the fresh
+// on-disk read UpdateJSONAtomically had just populated and replaced it
+// wholesale with a stale, pre-computed value -- mechanically identical to a
+// plain non-atomic overwrite at the call-site level, and invisible to both
+// checks above.
+//
+// Shrink-only against colonyStateDiscardedReadAllowlist above (unlike
+// TestNoFunctionReachableFromAdvancePhaseWritesNonAtomically's true
+// zero-tolerance, no-allowlist design): this ratchet's first run against the
+// full codebase found one pre-existing discard site outside phase 188's own
+// fix scope (cmd/codex_build.go's rollbackCodexBuildFailure) in addition to
+// CR-02, which this phase does fix. A genuinely NEW discard site -- anywhere
+// not already in that small, explicit allowlist -- still fails this test;
+// only the one already-acknowledged, already-logged exception is tolerated,
+// and even that entry stops being tolerated the moment it is fixed (see the
+// allowlist's own doc comment for the shrink-in-both-directions check).
+func TestNoUpdateJSONAtomicallyDiscardsFreshRead(t *testing.T) {
+	res, err := scanColonyStateSource(".")
+	if err != nil {
+		t.Fatalf("scan cmd/ for COLONY_STATE.json UpdateJSONAtomically call sites: %v", err)
+	}
+
+	// T-188-12, shared discipline: a check with nothing to say passes
+	// vacuously. This scan must find at least the UpdateJSONAtomically call
+	// sites already known to exist (advancePhase, runCodexBuildWithOptions's
+	// second commit, commitBuildFinalizeState, finalizeBlockedExternalContinue,
+	// recordBlockedContinueWorkerFlow, appendRuntimeStateEventsIfCurrent) --
+	// if the scanner finds none of them at all, it broke, not that
+	// UpdateJSONAtomically stopped being used against COLONY_STATE.json.
+	if res.updateJSONAtomicallyCalls == 0 {
+		t.Fatal(`scanColonyStateSource found zero store.UpdateJSONAtomically("COLONY_STATE.json", ...) call sites across cmd/*.go -- the AST walker likely broke (wrong selector name, wrong string literal match, wrong &target shape), not that the codebase stopped using the safe primitive.`)
+	}
+
+	allowed := map[string]bool{}
+	for _, e := range colonyStateDiscardedReadAllowlist {
+		allowed[siteAllowlistKey(e.File, e.Function, e.Target)] = true
+	}
+	found := map[string]bool{}
+	for _, d := range res.discardedReads {
+		found[siteAllowlistKey(d.File, d.Function, d.Target)] = true
+	}
+
+	var newSites []string
+	for _, d := range res.discardedReads {
+		if !allowed[siteAllowlistKey(d.File, d.Function, d.Target)] {
+			newSites = append(newSites, fmt.Sprintf("%s:%s (discards fresh read of %q)", d.File, d.Function, d.Target))
+		}
+	}
+	var staleEntries []string
+	for _, e := range colonyStateDiscardedReadAllowlist {
+		if !found[siteAllowlistKey(e.File, e.Function, e.Target)] {
+			staleEntries = append(staleEntries, fmt.Sprintf("%s:%s (discards fresh read of %q)", e.File, e.Function, e.Target))
+		}
+	}
+	sort.Strings(newSites)
+	sort.Strings(staleEntries)
+
+	if len(newSites) > 0 {
+		t.Errorf(`%d NEW store.UpdateJSONAtomically("COLONY_STATE.json", ...) call site(s) discard the primitive's own fresh on-disk read by reassigning the target wholesale from another value, instead of mutating its fields:
+  %s
+Mutate fields of the fresh read only (e.g. target.Field = ...); never reassign the target variable itself (target = someOtherValue) inside the closure. If this is a genuinely reviewed, deliberately deferred exception, add it to colonyStateDiscardedReadAllowlist with a reason.`,
+			len(newSites), strings.Join(newSites, "\n  "))
+	}
+	if len(staleEntries) > 0 {
+		t.Errorf(`%d colonyStateDiscardedReadAllowlist entry(ies) no longer match any real discard site in source:
+  %s
+The fix landed (or the function was removed/renamed) -- remove the stale entry from colonyStateDiscardedReadAllowlist.`,
+			len(staleEntries), strings.Join(staleEntries, "\n  "))
 	}
 }

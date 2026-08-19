@@ -1673,6 +1673,17 @@ func TestContinueFinalizeResultIncludesReviewDepth(t *testing.T) {
 	gates := codexContinueGateReport{Passed: false, BlockingIssues: []string{"test gate failed"}}
 	now := time.Now().UTC()
 
+	// T-188-CR-01: finalizeBlockedExternalContinue now re-reads
+	// COLONY_STATE.json atomically and refuses (a superseded result, with a
+	// different, smaller result shape than the one this test asserts) unless
+	// the on-disk state still matches what this call expects. Seed disk with
+	// the exact `state` this test constructs so the currency check passes
+	// and the normal blocked-result shape (including review_depth) is what
+	// gets returned.
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("seed colony state: %v", err)
+	}
+
 	result, _, err := finalizeBlockedExternalContinue(state, phase, codexContinueManifest{}, verification, assessment, gates, nil, "", nil, now, "verification.json", "gates.json", nil, colony.VerificationDepthLight)
 	if err != nil {
 		t.Fatalf("finalizeBlockedExternalContinue returned error: %v", err)

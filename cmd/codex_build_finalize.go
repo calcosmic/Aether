@@ -592,6 +592,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 
 	// Worktree mode: merge back completed branches before marking phase done.
+	var worktreeMergeEvent string
 	if effectiveParallelMode(updatedState) == colony.ModeWorktree {
 		merged, failed, mergeErr := mergePhaseWorktrees(phaseNum)
 		if mergeErr != nil {
@@ -601,20 +602,33 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("worktree merge-back blocked: %s", strings.Join(failed, "; "))
 		}
 		if len(merged) > 0 {
-			updatedState.Events = append(updatedState.Events,
-				fmt.Sprintf("%s|worktree_merge|build-finalize|Merged %d worktree branch(es): %s",
-					completedAt.Format(time.RFC3339), len(merged), strings.Join(merged, ", ")),
-			)
+			worktreeMergeEvent = fmt.Sprintf("%s|worktree_merge|build-finalize|Merged %d worktree branch(es): %s",
+				completedAt.Format(time.RFC3339), len(merged), strings.Join(merged, ", "))
+			updatedState.Events = append(updatedState.Events, worktreeMergeEvent)
 		}
 	}
 
-	// Atomically commit the colony state mutation.
-	var committedState colony.ColonyState
-	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
-		committedState = updatedState
-		return nil
-	}); err != nil {
+	// Atomically commit the colony state mutation (CR-02, 188-REVIEW.md).
+	committedState, err := commitBuildFinalizeState(buildFinalizeCommitParams{
+		PhaseNum:           phaseNum,
+		StartedAt:          startedAt,
+		SelectedTaskIDs:    selectedTaskIDs,
+		ReviewDepth:        colony.NormalizeVerificationDepth(manifest.ReviewDepth),
+		Dispatches:         dispatches,
+		CompletedAt:        completedAt,
+		LegacyManifest:     binding.Legacy,
+		WorktreeMergeEvent: worktreeMergeEvent,
+		UpdatedState:       updatedState,
+	})
+	if err != nil {
 		finishAttempt(buildAttemptFailed, "failed to commit external built lifecycle state", err)
+		if errors.Is(err, errRuntimeStateSuperseded) {
+			// Propagate the supersession error directly rather than wrapping
+			// it in the generic "failed to save" message, which would read
+			// as a storage/IO failure instead of the concurrency refusal it
+			// actually is (CR-02).
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
 	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "external built lifecycle state committed", dispatches, &claims, "external-task", nil); err != nil {
@@ -658,6 +672,102 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
 	return result, updatedState, updatedPhase, dispatches, nil
+}
+
+// buildFinalizeCommitParams carries what commitBuildFinalizeState needs to
+// transition COLONY_STATE.json to StateBUILT for one phase.
+type buildFinalizeCommitParams struct {
+	PhaseNum           int
+	StartedAt          time.Time
+	SelectedTaskIDs    []string
+	ReviewDepth        colony.VerificationDepth
+	Dispatches         []codexBuildDispatch
+	CompletedAt        time.Time
+	LegacyManifest     bool
+	WorktreeMergeEvent string
+	UpdatedState       colony.ColonyState
+}
+
+// commitBuildFinalizeState is runCodexBuildFinalize's one write against
+// COLONY_STATE.json (CR-02, 188-REVIEW.md).
+//
+// This used to be `committedState = params.UpdatedState` inside the
+// UpdateJSONAtomically closure -- discarding the primitive's own fresh
+// on-disk read and replacing it wholesale with a value built earlier in
+// runCodexBuildFinalize (from a `state` loaded once, long before the
+// checkpoint save, build-attempt transitions, claims write, and, in
+// worktree mode, a full worktree merge). Any concurrent write to
+// COLONY_STATE.json during that window -- an operator pausing the colony --
+// was silently discarded and replaced. It now mutates only the freshly-read
+// value's own fields, re-validated by validateBuildFinalizeStateStillCurrent
+// first.
+//
+// Unlike the direct-build path's second commit (runCodexBuildWithOptions,
+// cmd/codex_build.go:692-707), which guards with
+// validateRuntimeStateStillCurrent(..., colony.StateEXECUTING) because it
+// commits a SEPARATE, EARLIER READY->EXECUTING checkpoint (SaveJSON, before
+// worker dispatch) moments before this second call, the external/wrapper
+// build-finalize flow never separately persists an EXECUTING checkpoint at
+// all -- aether build --plan-only (runCodexBuildPlanOnlyWithOptions) returns
+// a manifest without writing COLONY_STATE.json. This single write is the
+// entire READY->BUILT transition for that flow, so its currency guard
+// cannot require state.State == EXECUTING the way the direct path's second
+// commit does; see validateBuildFinalizeStateStillCurrent's own doc comment.
+func commitBuildFinalizeState(params buildFinalizeCommitParams) (colony.ColonyState, error) {
+	var committedState colony.ColonyState
+	err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
+		if err := validateBuildFinalizeStateStillCurrent(committedState, params.PhaseNum); err != nil {
+			return err
+		}
+		applyCodexBuildState(&committedState, params.PhaseNum, params.StartedAt, params.SelectedTaskIDs, params.ReviewDepth)
+		committedState.State = colony.StateBUILT
+		reconcileCompletedBuildTasks(&committedState, params.PhaseNum, params.Dispatches)
+		committedState.Events = append(trimmedEvents(committedState.Events),
+			fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", params.CompletedAt.Format(time.RFC3339), params.PhaseNum),
+		)
+		if params.LegacyManifest {
+			committedState.Events = append(committedState.Events,
+				fmt.Sprintf("%s|manifest_legacy_accepted|build-finalize|Phase %d build completion did not include the newer tracking details that link it back to one specific dispatched build, and was accepted using the older, less strictly checked method", params.CompletedAt.Format(time.RFC3339), params.PhaseNum),
+			)
+		}
+		if params.WorktreeMergeEvent != "" {
+			committedState.Events = append(committedState.Events, params.WorktreeMergeEvent)
+		}
+		return nil
+	})
+	return committedState, err
+}
+
+// validateBuildFinalizeStateStillCurrent re-checks, against a freshly-read
+// on-disk COLONY_STATE.json, that commitBuildFinalizeState's target phase is
+// still the one the colony expects to commit -- the same fail-closed
+// philosophy as validateRuntimeStateStillCurrent (cmd/codex_build.go), but
+// shaped for THIS transition. The external/wrapper build-finalize flow never
+// separately commits a READY->EXECUTING checkpoint before dispatch (see
+// commitBuildFinalizeState's own doc comment); confirmed by this codebase's
+// own fixtures (e.g. TestBuildFinalizeReconcilesJournalAfterBuiltStateCommit
+// seeds State: colony.StateREADY, Status: colony.PhaseReady before calling
+// runCodexBuildFinalize for the first time) -- so "still current" cannot
+// mean "state is still EXECUTING." CurrentPhase == 0 is also accepted: a
+// colony's very first phase may never have had CurrentPhase set by a prior
+// advancePhase call (setupExternalBuildAttemptTest's own fixture uses
+// CurrentPhase: 0 for phase 1). A concurrent pause, or a race that already
+// advanced this phase past build, must still be caught -- that is exactly
+// the clobber class CR-02 closes.
+func validateBuildFinalizeStateStillCurrent(state colony.ColonyState, phaseNum int) error {
+	if state.Paused {
+		return runtimeStateSupersededError(phaseNum, "colony is paused")
+	}
+	if state.CurrentPhase != phaseNum && state.CurrentPhase != 0 {
+		return runtimeStateSupersededError(phaseNum, fmt.Sprintf("current phase is %d", state.CurrentPhase))
+	}
+	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
+		return runtimeStateSupersededError(phaseNum, "phase is no longer present")
+	}
+	if state.Plan.Phases[phaseNum-1].Status == colony.PhaseCompleted {
+		return runtimeStateSupersededError(phaseNum, fmt.Sprintf("phase status is %s", state.Plan.Phases[phaseNum-1].Status))
+	}
+	return nil
 }
 
 // collectPendingSuggestions runs suggest-analyze exactly once after a build

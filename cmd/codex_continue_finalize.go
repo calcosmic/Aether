@@ -474,6 +474,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			if err != nil {
 				return nil, state, phase, nil, nil, false, err
 			}
+			if superseded, _ := result["superseded"].(bool); superseded {
+				// finalizeBlockedExternalContinue found the runtime state no
+				// longer matches what this call was asked to record (T-188-CR-01)
+				// and refused to write anything -- mirror advanceExternalContinue's
+				// own supersession return a few lines below.
+				runStatus = "superseded"
+				return result, blockedState, phase, nil, nil, false, nil
+			}
 			runStatus = "blocked"
 			return result, blockedState, phase, nil, nil, false, nil
 		}
@@ -495,6 +503,10 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, blockedWorkerFlow, now, verificationReportRel, gateReportRel, nil, finalizeReviewDepth)
 		if err != nil {
 			return nil, state, phase, nil, nil, false, err
+		}
+		if superseded, _ := result["superseded"].(bool); superseded {
+			runStatus = "superseded"
+			return result, blockedState, phase, nil, nil, false, nil
 		}
 		runStatus = "blocked"
 		return result, blockedState, phase, nil, nil, false, nil
@@ -1044,12 +1056,40 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 	if err := recordExternalContinueWorkerFlow(workerFlow); err != nil {
 		return nil, state, err
 	}
-	blockedState := state
-	blockedState.Events = append(trimmedEvents(blockedState.Events), continueWorkerFlowEvents(now, workerFlow)...)
-	blockedState.Events = append(blockedState.Events, fmt.Sprintf("%s|continue_blocked|continue-finalize|Continue blocked before advancement", now.Format(time.RFC3339)))
-	if err := store.SaveJSON("COLONY_STATE.json", blockedState); err != nil {
+	// T-188-CR-01: this used to be `blockedState := state; ...;
+	// store.SaveJSON("COLONY_STATE.json", blockedState)` -- a raw, non-atomic
+	// snapshot of `state`, the value the caller (runCodexContinueFinalize)
+	// captured once at its very top, before verification, gates, and review
+	// ran. Any concurrent write to COLONY_STATE.json during that window (an
+	// operator pause, a background writer) was silently discarded and
+	// replaced wholesale -- the identical bug class 188-02 fixed for the
+	// successful-advance branch of this same file (advanceExternalContinue).
+	// Route this sibling blocked-path write through the same atomic
+	// read-modify-write + supersession discipline: mutate fields on the
+	// value UpdateJSONAtomically just freshly read, never reassign it
+	// wholesale from the stale `state` parameter. Mirrors
+	// recordBlockedContinueWorkerFlow (cmd/codex_continue.go), the
+	// correctly-guarded blocked path on the default (non-finalize) continue
+	// flow.
+	var updated colony.ColonyState
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		if err := validateRuntimeStateStillCurrent(updated, phase.ID, state.BuildStartedAt, colony.StateEXECUTING, colony.StateBUILT); err != nil {
+			return err
+		}
+		updated.Events = append(trimmedEvents(updated.Events), continueWorkerFlowEvents(now, workerFlow)...)
+		updated.Events = append(updated.Events, fmt.Sprintf("%s|continue_blocked|continue-finalize|Continue blocked before advancement", now.Format(time.RFC3339)))
+		return nil
+	}); err != nil {
+		if errors.Is(err, errRuntimeStateSuperseded) {
+			// nil error: mirrors advanceExternalContinue's own supersession
+			// handling a few lines away in this same file -- the caller
+			// treats this as a completed-but-superseded result, not a hard
+			// failure.
+			return continueSupersededResult(state, phase, err), state, nil
+		}
 		return nil, state, fmt.Errorf("failed to save colony state: %w", err)
 	}
+	blockedState := updated
 	emitContinueCeremonyFlowSequence("aether-continue-finalize", phase, workerFlow)
 	updateSessionSummary("continue-finalize", nextCommand, summary)
 	result := map[string]interface{}{

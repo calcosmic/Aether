@@ -61,7 +61,7 @@ var stateMutateCmd = &cobra.Command{
 			return nil
 		}
 		expr := vars.remaining[len(vars.remaining)-1]
-		return executeExpression(expr, vars.vars)
+		return executeExpression(cmd, expr, vars.vars)
 	},
 }
 
@@ -277,24 +277,13 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 		// guard for THIS exact phase number. The outer RunE's `enforceGuard`
 		// already re-ran the gate check itself when --guard was supplied;
 		// this only confirms the guard is the right kind for this field.
-		guardFlag, _ := cmd.Flags().GetString("guard")
-		if !cmd.Flags().Changed("guard") {
-			outputError(1, "refused: a colony's phase can only move forward through the normal advance process (running a build then letting it advance) -- setting it directly requires proof that those same checks already passed, and none was supplied here", nil)
-			return nil
-		}
 		phaseNum := 0
 		if _, err := fmt.Sscanf(value, "%d", &phaseNum); err != nil {
 			outputError(1, fmt.Sprintf("invalid phase number %q", value), nil)
 			return nil
 		}
-		guardParts := strings.SplitN(guardFlag, ":", 2)
-		if len(guardParts) != 2 || guardParts[0] != "phase-advance" {
-			outputError(1, "refused: a colony's phase can only move forward through the normal advance process -- the check supplied here is not the kind that proves a phase is actually ready to advance", nil)
-			return nil
-		}
-		guardPhaseNum, convErr := strconv.Atoi(guardParts[1])
-		if convErr != nil || guardPhaseNum != phaseNum {
-			outputError(1, "refused: a colony's phase can only move forward through the normal advance process -- the check supplied here was for a different phase number than the one being set", nil)
+		if err := validateCurrentPhaseGuard(cmd, phaseNum); err != nil {
+			outputError(1, err.Error(), nil)
 			return nil
 		}
 		if phaseNum > 0 && phaseNum <= len(state.Plan.Phases) {
@@ -345,7 +334,7 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 	return nil
 }
 
-func executeExpression(expr string, vars map[string]interface{}) error {
+func executeExpression(cmd *cobra.Command, expr string, vars map[string]interface{}) error {
 	data, err := store.ReadFile("COLONY_STATE.json")
 	if err != nil {
 		outputError(1, "COLONY_STATE.json not found", nil)
@@ -355,6 +344,10 @@ func executeExpression(expr string, vars map[string]interface{}) error {
 		sub = strings.TrimSpace(sub)
 		if sub == "" {
 			continue
+		}
+		if err := guardCurrentPhaseSubExpression(cmd, sub, vars); err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
 		}
 		data, err = applySubExpression(data, sub, vars)
 		if err != nil {
@@ -371,6 +364,60 @@ func executeExpression(expr string, vars map[string]interface{}) error {
 	}
 	outputOK(map[string]interface{}{"updated": true, "expr": expr})
 	return nil
+}
+
+// validateCurrentPhaseGuard enforces the same "--guard phase-advance:<N>"
+// contract executeFieldMode's current_phase case has always required, for
+// the target phase number being written. Both the --field/--value path
+// (executeFieldMode) and the jq-like expression path (executeExpression,
+// via guardCurrentPhaseSubExpression below) funnel a raw current_phase write
+// through this one check (T-188-CR-03) -- a colony's phase must only move
+// forward through the normal advance process (a build, then letting it
+// advance), never by a direct state edit that skips those checks, no matter
+// which of state-mutate's two invocation syntaxes is used to reach it.
+func validateCurrentPhaseGuard(cmd *cobra.Command, phaseNum int) error {
+	if !cmd.Flags().Changed("guard") {
+		return fmt.Errorf("refused: a colony's phase can only move forward through the normal advance process (running a build then letting it advance) -- setting it directly requires proof that those same checks already passed, and none was supplied here")
+	}
+	guardFlag, _ := cmd.Flags().GetString("guard")
+	guardParts := strings.SplitN(guardFlag, ":", 2)
+	if len(guardParts) != 2 || guardParts[0] != "phase-advance" {
+		return fmt.Errorf("refused: a colony's phase can only move forward through the normal advance process -- the check supplied here is not the kind that proves a phase is actually ready to advance")
+	}
+	guardPhaseNum, convErr := strconv.Atoi(guardParts[1])
+	if convErr != nil || guardPhaseNum != phaseNum {
+		return fmt.Errorf("refused: a colony's phase can only move forward through the normal advance process -- the check supplied here was for a different phase number than the one being set")
+	}
+	return nil
+}
+
+// guardCurrentPhaseSubExpression is the expression-syntax twin of
+// executeFieldMode's current_phase guard (T-188-CR-03). `state-mutate
+// '.current_phase = N'` reaches executeExpression, a completely separate
+// code path from --field/--value, and previously carried no guard
+// requirement at all -- proven by the pre-existing (now updated)
+// TestStateMutateExpressionNumericStillWorks, which asserted this exact
+// mutation succeeded with no --guard flag anywhere. It detects only the
+// plain field-set shape (`.current_phase = <expr>`, the same reFieldSet
+// pattern applySubExpression itself dispatches on) targeting current_phase
+// itself or a sub-path of it; every other expression -- including field-sets
+// of any OTHER field -- returns nil (no guard required), so this does not
+// over-block the rest of the expression syntax.
+func guardCurrentPhaseSubExpression(cmd *cobra.Command, sub string, vars map[string]interface{}) error {
+	m := reFieldSet.FindStringSubmatch(sub)
+	if m == nil {
+		return nil
+	}
+	path := normalizeBracketPath(m[1])
+	if path != "current_phase" && !strings.HasPrefix(path, "current_phase.") {
+		return nil
+	}
+	resolved := resolveValue(strings.TrimSpace(m[2]), vars)
+	var phaseNum int
+	if _, err := fmt.Sscanf(resolved, "%d", &phaseNum); err != nil {
+		return fmt.Errorf("invalid phase number in expression %q", sub)
+	}
+	return validateCurrentPhaseGuard(cmd, phaseNum)
 }
 
 func splitChainedAssignments(expr string) []string {
