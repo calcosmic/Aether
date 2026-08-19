@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -511,8 +512,21 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err != nil {
 		return nil, state, phase, nil, housekeeping, final, err
 	}
+	if superseded, _ := result["superseded"].(bool); superseded {
+		// advanceExternalContinue found the runtime state no longer matches
+		// what this call was asked to advance (188-CONTEXT.md D-04/D-05) and
+		// refused to write anything -- nil error, blocked/superseded result,
+		// mirroring exactly how the default continue path surfaces a
+		// supersession. Return immediately, the same way the earlier gate-
+		// and review-blocked branches above do: do NOT fall through to
+		// phase-end consolidation or the phase-commit git commit below,
+		// since nothing actually advanced.
+		runStatus = "superseded"
+		return result, updated, phase, nil, nil, false, nil
+	}
 	// D-04: phase-end consolidation fires only after advanceExternalContinue
-	// returns with err == nil, NOT colocated with captureContinueLearning
+	// returns with err == nil AND an actual advance (not a superseded
+	// refusal, handled above), NOT colocated with captureContinueLearning
 	// above. PhaseCompleted is written INSIDE advanceExternalContinue, so
 	// only this post-return point guarantees the phase truly advanced --
 	// the stricter-correct placement (RESEARCH.md assumption A1). Do not
@@ -1078,54 +1092,37 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 }
 
 func advanceExternalContinue(root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review codexContinueReviewReport, reviewReportRel string, watcherFlow *codexContinueWorkerFlowStep, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string, reviewDepth colony.VerificationDepth) (map[string]interface{}, colony.ColonyState, *colony.Phase, *signalHousekeepingResult, bool, error) {
-	currentIdx := state.CurrentPhase - 1
 	closedWorkerDetails := plannedCodexContinueClosedWorkers(manifest, assessment)
 	closedWorkers := closedWorkerNames(closedWorkerDetails)
 
-	var (
-		nextPhase   *colony.Phase
-		nextCommand string
-		final       bool
-		updated     colony.ColonyState
-	)
-	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
-		updated = state
-		updated.Events = append(trimmedEvents(updated.Events),
-			fmt.Sprintf("%s|verification_passed|continue-finalize|Build verification passed for phase %d", now.Format(time.RFC3339), phase.ID),
-			fmt.Sprintf("%s|gate_passed|continue-finalize|Continue gates passed for phase %d", now.Format(time.RFC3339), phase.ID),
-		)
-		updated.Plan.Phases[currentIdx].Status = colony.PhaseCompleted
-		for i := range updated.Plan.Phases[currentIdx].Tasks {
-			updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
+	// advancePhase (cmd/advance_phase.go) is the one shared atomic core both
+	// aether continue and aether continue-finalize call -- see
+	// 188-CONTEXT.md D-04/D-05/D-06. Unlike the block this replaced, it
+	// re-validates that the phase and build this call was asked to advance
+	// are still the ones actually in progress before writing anything, and
+	// it has no full colony.ColonyState value in scope to clobber the fresh
+	// read with (the `updated = state` bug this file used to have).
+	advanceResult, err := advancePhase(advancePhaseParams{
+		PhaseID:                phase.ID,
+		ExpectedBuildStartedAt: state.BuildStartedAt,
+		AllowedStates:          []colony.State{colony.StateEXECUTING, colony.StateBUILT},
+		Source:                 "continue-finalize",
+		Now:                    now,
+	})
+	if err != nil {
+		if errors.Is(err, errRuntimeStateSuperseded) {
+			// nil error: the caller (runCodexContinueFinalize) treats this as
+			// a completed-but-blocked result rather than a hard failure,
+			// mirroring exactly how the default continue path surfaces a
+			// supersession via continueSupersededResult.
+			return continueSupersededResult(state, phase, err), state, nil, nil, false, nil
 		}
-		updated.BuildStartedAt = nil
-		updated.GateResults = nil
-
-		final = currentIdx == len(updated.Plan.Phases)-1
-		nextCommand = "aether seal"
-		if final {
-			updated.State = colony.StateCOMPLETED
-			updated.CurrentPhase = phase.ID
-			updated.Events = append(updated.Events,
-				fmt.Sprintf("%s|phase_completed|continue-finalize|Completed final phase %d", now.Format(time.RFC3339), updated.CurrentPhase),
-			)
-		} else {
-			nextIdx := currentIdx + 1
-			if updated.Plan.Phases[nextIdx].Status == colony.PhasePending || updated.Plan.Phases[nextIdx].Status == "" {
-				updated.Plan.Phases[nextIdx].Status = colony.PhaseReady
-			}
-			updated.CurrentPhase = nextIdx + 1
-			nextPhase = &updated.Plan.Phases[nextIdx]
-			updated.State = colony.StateREADY
-			nextCommand = fmt.Sprintf("aether build %d", nextIdx+1)
-			updated.Events = append(updated.Events,
-				fmt.Sprintf("%s|phase_advanced|continue-finalize|Completed phase %d, ready for phase %d", now.Format(time.RFC3339), phase.ID, nextIdx+1),
-			)
-		}
-		return nil
-	}); err != nil {
 		return nil, state, nil, nil, false, fmt.Errorf("failed to atomically advance phase: %w", err)
 	}
+	updated := advanceResult.Updated
+	nextPhase := advanceResult.NextPhase
+	nextCommand := advanceResult.NextCommand
+	final := advanceResult.Final
 
 	housekeeping, housekeepingErr := continueSignalHousekeeper(now, updated)
 	if housekeepingErr != nil {
@@ -1143,8 +1140,15 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 		return nil, state, nil, &housekeeping, final, err
 	}
 	emitContinueCeremonyFlowSequence("aether-continue-finalize", phase, fullWorkerFlow)
-	updated.Events = append(updated.Events, continueWorkerFlowEvents(now, fullWorkerFlow)...)
-	_ = store.SaveJSON("COLONY_STATE.json", updated)
+	// Persist side-effect events (review, housekeeping) into colony state.
+	// This is a best-effort append; the core advancement was already committed
+	// by advancePhase above. appendRuntimeStateEventsIfCurrent re-checks
+	// currency before appending rather than blindly overwriting with `updated`
+	// -- the same non-atomic-write hazard D-06 removes here that the default
+	// continue path (cmd/codex_continue.go) never had.
+	flowEvents := continueWorkerFlowEvents(now, fullWorkerFlow)
+	updated.Events = append(updated.Events, flowEvents...)
+	_ = appendRuntimeStateEventsIfCurrent(updated, flowEvents)
 
 	summary := fmt.Sprintf("Phase %d verified and advanced", phase.ID)
 	if assessment.PartialSuccess {

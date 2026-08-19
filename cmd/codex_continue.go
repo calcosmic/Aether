@@ -909,57 +909,28 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// --- ATOMIC STATE COMMIT ---
 	// Mutate and save colony state in a single atomic read-modify-write cycle.
 	// If the mutation fails, no write occurs. This runs BEFORE side effects
-	// and report saves so no external observer can see a partially advanced state.
-	var (
-		nextPhase   *colony.Phase
-		nextCommand string
-		final       bool
-		updated     colony.ColonyState
-	)
-	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
-		if err := validateRuntimeStateStillCurrent(updated, phase.ID, state.BuildStartedAt, colony.StateEXECUTING, colony.StateBUILT); err != nil {
-			return err
-		}
-		updated.Events = append(trimmedEvents(updated.Events),
-			fmt.Sprintf("%s|verification_passed|continue|Build verification passed for phase %d", now.Format(time.RFC3339), phase.ID),
-			fmt.Sprintf("%s|gate_passed|continue|Continue gates passed for phase %d", now.Format(time.RFC3339), phase.ID),
-		)
-		updated.Plan.Phases[currentIdx].Status = colony.PhaseCompleted
-		for i := range updated.Plan.Phases[currentIdx].Tasks {
-			updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
-		}
-		updated.BuildStartedAt = nil
-		updated.GateResults = nil
-
-		final = currentIdx == len(updated.Plan.Phases)-1
-		nextCommand = "aether seal"
-		if final {
-			updated.State = colony.StateCOMPLETED
-			updated.CurrentPhase = phase.ID
-			updated.Events = append(updated.Events,
-				fmt.Sprintf("%s|phase_completed|continue|Completed final phase %d", now.Format(time.RFC3339), updated.CurrentPhase),
-			)
-		} else {
-			nextIdx := currentIdx + 1
-			if updated.Plan.Phases[nextIdx].Status == colony.PhasePending || updated.Plan.Phases[nextIdx].Status == "" {
-				updated.Plan.Phases[nextIdx].Status = colony.PhaseReady
-			}
-			updated.CurrentPhase = nextIdx + 1
-			nextPhase = &updated.Plan.Phases[nextIdx]
-			updated.State = colony.StateREADY
-			nextCommand = fmt.Sprintf("aether build %d", nextIdx+1)
-			updated.Events = append(updated.Events,
-				fmt.Sprintf("%s|phase_advanced|continue|Completed phase %d, ready for phase %d", now.Format(time.RFC3339), phase.ID, nextIdx+1),
-			)
-		}
-		return nil
-	}); err != nil {
+	// and report saves so no external observer can see a partially advanced
+	// state. advancePhase (cmd/advance_phase.go) is the one shared core both
+	// aether continue and aether continue-finalize call -- see 188-CONTEXT.md
+	// D-04/D-05/D-06.
+	advanceResult, err := advancePhase(advancePhaseParams{
+		PhaseID:                phase.ID,
+		ExpectedBuildStartedAt: state.BuildStartedAt,
+		AllowedStates:          []colony.State{colony.StateEXECUTING, colony.StateBUILT},
+		Source:                 "continue",
+		Now:                    now,
+	})
+	if err != nil {
 		if errors.Is(err, errRuntimeStateSuperseded) {
 			runStatus = "superseded"
 			return continueSupersededResult(state, phase, err), state, phase, nil, nil, false, nil
 		}
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to atomically advance phase: %w", err)
 	}
+	updated := advanceResult.Updated
+	nextPhase := advanceResult.NextPhase
+	nextCommand := advanceResult.NextCommand
+	final := advanceResult.Final
 
 	// --- SIDE EFFECTS (after state is durable) ---
 	// These operations produce derived data. If any fails, state is already
