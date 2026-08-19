@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -362,5 +364,96 @@ func TestBuildFinalizeRejectsCompletedWorkerWithoutHandoff(t *testing.T) {
 	_, _, _, _, err = runCodexBuildFinalize(root, 1, completion, false)
 	if err == nil {
 		t.Fatal("freshness-only handoff was accepted; a timestamp alone relays nothing")
+	}
+}
+
+// TestCommitBuildFinalizeStateDoesNotOverwritePausedState reproduces CR-02
+// (188-REVIEW.md): commitBuildFinalizeState's atomic commit used to be
+// `store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func()
+// error { committedState = params.UpdatedState; return nil })` -- the
+// closure discarded UpdateJSONAtomically's own fresh on-disk read
+// (`committedState`) and replaced it wholesale with a value built earlier in
+// runCodexBuildFinalize, long before the checkpoint save, build-attempt
+// transitions, claims write, and (in worktree mode) a full worktree merge.
+// Any concurrent write to COLONY_STATE.json during that window -- an
+// operator pausing the colony -- was silently discarded.
+//
+// runCodexBuildFinalize itself has an EARLIER, unrelated safety check
+// (validateBuildAttemptManifestBinding's OriginalStateSHA digest comparison)
+// that refuses if COLONY_STATE.json changed between the build attempt being
+// prepared and runCodexBuildFinalize's own early state load -- which would
+// intercept a pause written before runCodexBuildFinalize is even called,
+// masking CR-02's own, later window (between that early load and the atomic
+// commit many operations later) behind a different, unrelated error. Calling
+// commitBuildFinalizeState directly -- the one function that actually
+// performs CR-02's write -- reaches the real vulnerability precisely,
+// mirroring the direct-build sibling's own concurrent-pause coverage
+// (TestBuildFinalizationDoesNotOverwritePausedState, cmd/codex_build_test.go)
+// without needing an injectable worker-invocation hook build-finalize does
+// not have.
+func TestCommitBuildFinalizeStateDoesNotOverwritePausedState(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	_ = root
+
+	goal := "commitBuildFinalizeState does not overwrite a concurrent pause"
+	taskID := "1.1"
+	seeded := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Pause during build-finalize commit",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Pause while commit runs", Status: colony.TaskPending}},
+		}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", seeded); err != nil {
+		t.Fatalf("seed colony state: %v", err)
+	}
+
+	startedAt := time.Now().UTC()
+	// updatedState represents what runCodexBuildFinalize would have computed
+	// from a `state` loaded before the concurrent pause below -- stale by
+	// the time the atomic commit actually runs.
+	updatedState := seeded
+	updatedState.State = colony.StateBUILT
+	updatedState.Plan.Phases[0].Status = colony.PhaseCompleted
+
+	// Simulate a concurrent process pausing the colony after
+	// runCodexBuildFinalize's own early state load but before this commit --
+	// the exact gap CR-02 closes.
+	var paused colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &paused); err != nil {
+		t.Fatalf("load state for mutation: %v", err)
+	}
+	pausedAt := time.Now().UTC().Format(time.RFC3339)
+	paused.Paused = true
+	paused.PausedAt = &pausedAt
+	if err := store.SaveJSON("COLONY_STATE.json", paused); err != nil {
+		t.Fatalf("write competing pause: %v", err)
+	}
+
+	_, err := commitBuildFinalizeState(buildFinalizeCommitParams{
+		PhaseNum:     1,
+		StartedAt:    startedAt,
+		ReviewDepth:  colony.VerificationDepthLight,
+		CompletedAt:  startedAt.Add(time.Minute),
+		UpdatedState: updatedState,
+	})
+	if !errors.Is(err, errRuntimeStateSuperseded) {
+		t.Fatalf("expected superseded build-finalize commit error, got %v", err)
+	}
+
+	var after colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &after); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if !after.Paused {
+		t.Fatalf("expected paused state to be preserved, got %+v", after)
+	}
+	if after.State == colony.StateBUILT {
+		t.Fatalf("stale build-finalize commit overwrote state to BUILT despite a concurrent pause")
 	}
 }
