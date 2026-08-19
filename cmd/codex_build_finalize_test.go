@@ -1832,3 +1832,90 @@ func TestBuildFinalizeCollectsSuggestAnalyzeResults(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// T-188-09 (D-10, D-11): validateBuildAttemptManifestBinding already detects
+// a completion whose dispatch_manifest carries neither attempt_id nor
+// attempt_path (binding.Legacy == true) -- the 2026-08-17 Audit Addendum
+// keeps this branch on purpose, but before this fix nothing ever read
+// binding.Legacy, so a legacy manifest was silently indistinguishable from a
+// normal fresh completion. This must still be accepted (no new refusal) but
+// must now warn loudly on stderr and leave a durable, phase-numbered Events
+// entry -- on every occurrence, and never on the ordinary bound path.
+// ---------------------------------------------------------------------------
+
+func TestBuildFinalizeWarnsOnLegacyUnboundManifest(t *testing.T) {
+	t.Run("a manifest with no attempt binding is accepted and warns loudly", func(t *testing.T) {
+		root := setupExternalBuildAttemptTest(t)
+		_, completion := prepareExternalBuildCompletion(t, root)
+
+		var errBuf bytes.Buffer
+		stderr = &errBuf
+
+		// Simulate a legacy completion packet: omit both attempt-binding
+		// fields the newer, fully-bound path relies on.
+		completion.DispatchManifest.AttemptID = ""
+		completion.DispatchManifest.AttemptPath = ""
+
+		result, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+		if err != nil {
+			t.Fatalf("a legacy unbound manifest must still be accepted (no new refusal), got error: %v", err)
+		}
+		if updatedState.State != colony.StateBUILT {
+			t.Fatalf("expected the legacy manifest to finalize the build normally, state=%s", updatedState.State)
+		}
+		if result["idempotent"] != false {
+			t.Errorf("expected a fresh (non-idempotent) finalize, got result=%+v", result)
+		}
+
+		warning := errBuf.String()
+		if warning == "" {
+			t.Fatal("expected an unconditional stderr warning for a legacy unbound manifest, got none")
+		}
+		if !strings.Contains(warning, "older, less strictly checked method") {
+			t.Errorf("expected a plain-language stderr warning describing the older method, got: %q", warning)
+		}
+		if strings.Contains(strings.ToLower(warning), "legacy") || strings.Contains(strings.ToLower(warning), "binding") {
+			t.Errorf("warning must explain itself in plain language, not the bare jargon words 'legacy'/'binding': %q", warning)
+		}
+
+		foundEvent := false
+		for _, evt := range updatedState.Events {
+			if strings.Contains(evt, "manifest_legacy_accepted") && strings.Contains(evt, "Phase 1") {
+				foundEvent = true
+				break
+			}
+		}
+		if !foundEvent {
+			t.Fatalf("expected state.Events to contain a manifest_legacy_accepted entry naming phase 1, got: %v", updatedState.Events)
+		}
+	})
+
+	t.Run("an ordinary bound manifest stays silent on both channels", func(t *testing.T) {
+		root := setupExternalBuildAttemptTest(t)
+		_, completion := prepareExternalBuildCompletion(t, root)
+
+		var errBuf bytes.Buffer
+		stderr = &errBuf
+
+		// Attempt-binding fields are left exactly as prepareExternalBuildCompletion
+		// set them: this is the ordinary, fully-bound path.
+		if completion.DispatchManifest.AttemptID == "" || completion.DispatchManifest.AttemptPath == "" {
+			t.Fatal("fixture precondition: the ordinary path must start out fully bound")
+		}
+
+		_, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+		if err != nil {
+			t.Fatalf("bound manifest should finalize cleanly, got error: %v", err)
+		}
+
+		if warning := errBuf.String(); strings.Contains(warning, "older, less strictly checked method") {
+			t.Errorf("the ordinary bound path must not emit the legacy warning, got stderr: %q", warning)
+		}
+		for _, evt := range updatedState.Events {
+			if strings.Contains(evt, "manifest_legacy_accepted") {
+				t.Errorf("the ordinary bound path must not append a manifest_legacy_accepted event, got: %v", updatedState.Events)
+			}
+		}
+	})
+}
