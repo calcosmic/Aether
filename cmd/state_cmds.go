@@ -270,9 +270,31 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 			_ = tracer.LogStateTransition(*state.RunID, string(oldState), string(newState), "state-mutate")
 		}
 	case "current_phase":
+		// T-188-07: moving current_phase directly (outside a real `aether
+		// continue` advance) must prove it carries the same precondition
+		// check a real advance would run -- not merely that --guard was
+		// present on the command somewhere, but that it is a phase-advance
+		// guard for THIS exact phase number. The outer RunE's `enforceGuard`
+		// already re-ran the gate check itself when --guard was supplied;
+		// this only confirms the guard is the right kind for this field.
+		guardFlag, _ := cmd.Flags().GetString("guard")
+		if !cmd.Flags().Changed("guard") {
+			outputError(1, "refused: a colony's phase can only move forward through the normal advance process (running a build then letting it advance) -- setting it directly requires proof that those same checks already passed, and none was supplied here", nil)
+			return nil
+		}
 		phaseNum := 0
 		if _, err := fmt.Sscanf(value, "%d", &phaseNum); err != nil {
 			outputError(1, fmt.Sprintf("invalid phase number %q", value), nil)
+			return nil
+		}
+		guardParts := strings.SplitN(guardFlag, ":", 2)
+		if len(guardParts) != 2 || guardParts[0] != "phase-advance" {
+			outputError(1, "refused: a colony's phase can only move forward through the normal advance process -- the check supplied here is not the kind that proves a phase is actually ready to advance", nil)
+			return nil
+		}
+		guardPhaseNum, convErr := strconv.Atoi(guardParts[1])
+		if convErr != nil || guardPhaseNum != phaseNum {
+			outputError(1, "refused: a colony's phase can only move forward through the normal advance process -- the check supplied here was for a different phase number than the one being set", nil)
 			return nil
 		}
 		if phaseNum > 0 && phaseNum <= len(state.Plan.Phases) {

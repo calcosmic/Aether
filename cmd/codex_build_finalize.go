@@ -419,6 +419,22 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	// T-188-09 (D-10, D-11): a completion packet with no attempt binding at
+	// all is still accepted -- this branch is deliberately kept, not
+	// hardened into a refusal -- but it must never be silent. Warn on
+	// stderr immediately, every time this is detected, regardless of
+	// whether anything later in this function fails. The durable Events
+	// record is appended near the end of this function (alongside this
+	// same request's other Events, once `updatedState` is stable) rather
+	// than here: `state` is still reassigned wholesale by
+	// reconcilePriorCompletedPhaseTasksFromTrustedManifests below when a
+	// prior completed phase needs task-status repair, and an event
+	// appended to `state.Events` here would be silently discarded by that
+	// reassignment in that case -- appending later is the only placement
+	// that is correct on every occurrence, not just the common one.
+	if binding.Legacy {
+		visualFprintf(stderr, "warning: phase %d's build completion did not include the newer tracking details that link it back to one specific dispatched build, so it is being accepted using the older, less strictly checked method\n", phaseNum)
+	}
 	completionDigest, err := jsonSHA256(completion)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
@@ -527,6 +543,17 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	updatedState.Events = append(trimmedEvents(updatedState.Events),
 		fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", completedAt.Format(time.RFC3339), phaseNum),
 	)
+	if binding.Legacy {
+		// Same fact as the stderr warning above, repeated here so it survives
+		// past the terminal -- queryable later via `aether history`/`aether
+		// status` -- rather than only a fleeting print (D-11). Appended here,
+		// not immediately after validateBuildAttemptManifestBinding, because
+		// this is the first point after `updatedState` is fully settled (see
+		// the comment at the binding check above).
+		updatedState.Events = append(updatedState.Events,
+			fmt.Sprintf("%s|manifest_legacy_accepted|build-finalize|Phase %d build completion did not include the newer tracking details that link it back to one specific dispatched build, and was accepted using the older, less strictly checked method", completedAt.Format(time.RFC3339), phaseNum),
+		)
+	}
 
 	if err := transitionBuildAttempt(attemptRel, buildAttemptTerminal, "external terminal worker results recorded before lifecycle projection", dispatches, &claims, "external-task", nil); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist external terminal worker results", err)
