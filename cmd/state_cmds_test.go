@@ -210,8 +210,92 @@ func TestStateMutateExpressionStringNotDoubleQuoted(t *testing.T) {
 	}
 }
 
+// TestStateMutateExpressionNumericStillWorks used to prove
+// `.current_phase = 3` succeeded via the expression syntax with no --guard
+// flag anywhere -- exactly the bypass CR-03 (188-REVIEW.md) closes:
+// state-mutate's `--field current_phase` path already required a matching
+// `--guard phase-advance:<N>`, but the free-form jq-like expression syntax
+// reached the same destructive field through executeExpression, a
+// completely separate code path with no field-name-specific validation at
+// all. This test now asserts the expression syntax is refused exactly like
+// --field is, proving both paths share one gated way to move current_phase.
+// See TestStateMutateExpressionCurrentPhaseSucceedsWithMatchingGuard for the
+// (still working, now gated) success case, and
+// TestStateMutateExpressionNonCurrentPhaseFieldRemainsUnguarded for proof
+// this does not over-block other fields.
 func TestStateMutateExpressionNumericStillWorks(t *testing.T) {
-	// Numeric values should still use SetRawBytes (raw JSON).
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// No --guard at all -- the exact shape this test used to prove succeeded.
+	rootCmd.SetArgs([]string{"state-mutate", `.current_phase = 2`})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected `.current_phase = N` with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded expression-syntax current_phase mutation")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateExpressionCurrentPhaseSucceedsWithMatchingGuard proves the
+// expression syntax is still usable for current_phase -- just gated the
+// same way --field is -- and that numeric values still round-trip through
+// SetRawBytes (raw JSON, not a quoted string), the original property
+// TestStateMutateExpressionNumericStillWorks protected.
+func TestStateMutateExpressionCurrentPhaseSucceedsWithMatchingGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+
+	rootCmd.SetArgs([]string{"state-mutate", "--guard", "phase-advance:2", `.current_phase = 2`})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected cobra error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected a matching phase-advance guard to allow the expression-syntax mutation, got: %v", env)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 2 {
+		t.Errorf("current_phase = %d, want 2", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateExpressionNonCurrentPhaseFieldRemainsUnguarded proves the
+// new guard does not over-block: expression-syntax mutations of any OTHER
+// field must keep working with no --guard at all, exactly as before.
+func TestStateMutateExpressionNonCurrentPhaseFieldRemainsUnguarded(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	var buf bytes.Buffer
@@ -234,15 +318,20 @@ func TestStateMutateExpressionNumericStillWorks(t *testing.T) {
 	}
 	s.SaveJSON("COLONY_STATE.json", state)
 
-	rootCmd.SetArgs([]string{"state-mutate", `.current_phase = 3`})
+	rootCmd.SetArgs([]string{"state-mutate", `.milestone = "Brood Stable"`})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected an unguarded, non-current_phase expression mutation to still succeed, got: %v", env)
+	}
+
 	var updated colony.ColonyState
 	s.LoadJSON("COLONY_STATE.json", &updated)
-	if updated.CurrentPhase != 3 {
-		t.Errorf("current_phase = %d, want 3", updated.CurrentPhase)
+	if updated.Milestone != "Brood Stable" {
+		t.Errorf("milestone = %q, want %q", updated.Milestone, "Brood Stable")
 	}
 }
 
