@@ -449,6 +449,7 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				ParentContext: ctx,
 			})
 			if err != nil {
+				firstErr := err
 				emitVisualLine(fmt.Sprintf("⚠ Build failed for phase %d, attempting single retry...", phase.ID))
 				select {
 				case <-ctx.Done():
@@ -463,6 +464,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 					ParentContext: ctx,
 				})
 				if err != nil {
+					// Best-effort record, pause regardless (T-188-15): only
+					// the write's own error is discarded here, never the
+					// pause below. recordAutopilotRetryExhaustion still
+					// returns its error to any caller that wants to check.
+					_ = recordAutopilotRetryExhaustion(store, phase.ID, firstErr, err)
 					_ = syncRunAutopilotState(state, opts, "paused", "")
 					return nil, err
 				}
