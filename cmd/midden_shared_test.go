@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -124,10 +125,15 @@ func TestAppendMiddenEntryTwiceAppendsBothOldestFirst(t *testing.T) {
 	}
 }
 
-// TestAppendMiddenEntryNilTagsBecomesEmptyNonNilSlice locks midden-write's own
-// convention (Tags: []string{}), so a nil tags argument never round-trips as
-// JSON null.
-func TestAppendMiddenEntryNilTagsBecomesEmptyNonNilSlice(t *testing.T) {
+// TestAppendMiddenEntryNilTagsRoundTripsEmpty locks midden-write's own
+// convention (Tags: []string{}) for a nil tags argument: no crash, no "tags"
+// key written for an empty slice, and an empty result once reloaded.
+// colony.MiddenEntry's Tags field is JSON-tagged `omitempty`
+// (pkg/colony/midden.go, not modified by this plan), so an empty slice is
+// omitted on write and legitimately reads back as nil -- this test asserts
+// the observable, round-tripped contract (length zero, key omitted), not an
+// implementation detail omitempty already erases.
+func TestAppendMiddenEntryNilTagsRoundTripsEmpty(t *testing.T) {
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
 
@@ -139,10 +145,15 @@ func TestAppendMiddenEntryNilTagsBecomesEmptyNonNilSlice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadMiddenFile: %v", err)
 	}
-	if mf.Entries[0].Tags == nil {
-		t.Error("Tags should default to a non-nil empty slice, got nil")
-	}
 	if len(mf.Entries[0].Tags) != 0 {
 		t.Errorf("Tags = %v, want empty", mf.Entries[0].Tags)
+	}
+
+	raw, err := os.ReadFile(s.BasePath() + "/" + middenCanonicalPath)
+	if err != nil {
+		t.Fatalf("read canonical file directly: %v", err)
+	}
+	if strings.Contains(string(raw), `"tags"`) {
+		t.Errorf("wrote a tags key for an empty slice, want the omitempty field omitted entirely: %s", raw)
 	}
 }
