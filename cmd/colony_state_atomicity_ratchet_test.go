@@ -493,3 +493,96 @@ func TestColonyStateWriteAllowlistOnlyShrinks(t *testing.T) {
 			len(staleEntries), strings.Join(staleEntries, "\n  "))
 	}
 }
+
+// colonyStateReachableFrom performs a BFS over calls starting at every node
+// in startNodes and returns the set of every node name reached, including
+// the start nodes themselves. Mirrors
+// worktree_destruction_reachability_test.go's reachableFrom: an edge is
+// only followed to a callee name that is itself an indexed node (a
+// same-package function or synthetic cobra: node this scan recorded a body
+// for) -- calls into another package, the standard library, or an
+// unindexed method are dead ends, which is correct: advancePhase and every
+// COLONY_STATE.json write primitive it or its callees could reach live in
+// package cmd, so same-package reachability is exactly what this check
+// needs.
+func colonyStateReachableFrom(calls map[string]map[string]bool, startNodes []string) map[string]bool {
+	visited := map[string]bool{}
+	queue := append([]string{}, startNodes...)
+	for _, s := range startNodes {
+		visited[s] = true
+	}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for callee := range calls[cur] {
+			if visited[callee] {
+				continue
+			}
+			if _, ok := calls[callee]; !ok {
+				continue
+			}
+			visited[callee] = true
+			queue = append(queue, callee)
+		}
+	}
+	return visited
+}
+
+// TestNoFunctionReachableFromAdvancePhaseWritesNonAtomically is the
+// zero-tolerance guard (T-188-10): no allowlist exemption is consulted for
+// anything reachable, by same-package call-graph BFS, from advancePhase
+// (cmd/advance_phase.go, 188-02's shared phase-advance core) -- that one
+// function is the actual subject of "one phase-advance discipline," so it
+// alone is held to the full standard, structurally verified rather than
+// asserted in prose.
+func TestNoFunctionReachableFromAdvancePhaseWritesNonAtomically(t *testing.T) {
+	res, err := scanColonyStateSource(".")
+	if err != nil {
+		t.Fatalf("scan cmd/ for COLONY_STATE.json write sites and call graph: %v", err)
+	}
+
+	// T-188-12, shared with TestColonyStateWriteAllowlistOnlyShrinks: a
+	// scanner that finds zero sites has broken.
+	if len(res.sites) == 0 {
+		t.Fatal("scanColonyStateSource found zero non-atomic COLONY_STATE.json write sites across cmd/*.go -- the AST walker likely broke, not that the codebase became fully atomic overnight.")
+	}
+
+	if _, ok := res.calls["advancePhase"]; !ok {
+		t.Fatal("advancePhase is not present in the call graph -- either cmd/advance_phase.go was not found under cmd/ or the function was renamed; this check has exactly one root (advancePhase, cmd/advance_phase.go, produced by 188-02) and cannot proceed without it")
+	}
+
+	reachable := colonyStateReachableFrom(res.calls, []string{"advancePhase"})
+
+	// T-188-12: advancePhase is known to call validateRuntimeStateStillCurrent,
+	// trimmedEvents, and store.UpdateJSONAtomically at minimum -- a reachable
+	// set of size 1 (just advancePhase itself) means the call-graph walker
+	// broke, not that advancePhase calls nothing. A guard that finds
+	// nothing meaningful must fail, not pass.
+	if len(reachable) <= 1 {
+		names := make([]string, 0, len(reachable))
+		for n := range reachable {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		t.Fatalf("reachability BFS rooted at advancePhase found only %d node(s) (%s) -- advancePhase is known to call same-package helpers (validateRuntimeStateStillCurrent, trimmedEvents) at minimum, so a reachable set this small means the call-graph walker likely broke, not that advancePhase calls nothing.",
+			len(reachable), strings.Join(names, ", "))
+	}
+
+	// Zero-tolerance: the allowlist TestColonyStateWriteAllowlistOnlyShrinks
+	// loads is never loaded or consulted anywhere in this test, by design --
+	// every site whose enclosing function is in the advancePhase-reachable
+	// set fails this test regardless of whether it is also recorded as an
+	// accepted, pre-existing exception in
+	// testdata/colony_state_write_allowlist.json.
+	var violations []string
+	for _, s := range res.sites {
+		if reachable[s.Function] {
+			violations = append(violations, fmt.Sprintf("%s:%s (%s)", s.File, s.Function, s.Primitive))
+		}
+	}
+	sort.Strings(violations)
+	if len(violations) > 0 {
+		t.Errorf("%d non-atomic COLONY_STATE.json write site(s) found inside a function reachable from advancePhase -- NO allowlist exemption is possible for this set, by design:\n  %s\nRoute this write through store.UpdateJSONAtomically instead.",
+			len(violations), strings.Join(violations, "\n  "))
+	}
+}
