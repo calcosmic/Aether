@@ -97,7 +97,38 @@ func NormalizeWorkerHandoff(root string, h WorkerHandoff) WorkerHandoff {
 	return h
 }
 
-func workerHandoffIsEmpty(h WorkerHandoff) bool {
+// IsEmptyWorkerHandoffIncludingFreshness is IsEmptyWorkerHandoff plus a
+// Freshness check. IN-01 (189-REVIEW.md): this repo used to carry THREE
+// near-identical "is this handoff empty" functions (this one, an unexported
+// duplicate of it in cmd/codex_dispatch_contract.go, and the exported
+// IsEmptyWorkerHandoff above) -- close enough in name and shape that seeing
+// one of them called somewhere in the persistence path made it reasonable,
+// but wrong, to conclude emptiness rejection was already handled generally.
+// That confusion is named as a contributing factor to CR-01 (the finding
+// this same review round's blocker fix closes).
+//
+// The two are genuinely NOT interchangeable, which is why this stays a
+// second function rather than folding into IsEmptyWorkerHandoff:
+//
+//   - IsEmptyWorkerHandoff (terminal rejection): used where a "completed"
+//     result is about to be accepted or persisted for good
+//     (persistExternalBuildHandoffs, mergeExternalContinueResults). Freshness
+//     alone must NOT count as content there -- a bare timestamp with nothing
+//     else relayed is exactly the "written but empty" record those checks
+//     exist to reject.
+//   - This function (pre-synthesis fallback decision): used where a raw,
+//     not-yet-normalized handoff is being checked to decide whether to
+//     synthesize a richer one from other claim data (normalizeWorkerClaims,
+//     buildWorkerHandoffRecord). Both call sites run BEFORE
+//     NormalizeWorkerHandoff stamps a blank Freshness to "now", so an
+//     explicit, worker-supplied Freshness value here is a signal the worker
+//     said something (e.g. "not-run") that a synthesized replacement must
+//     not silently overwrite.
+//
+// Only ONE definition of the freshness-inclusive check now exists (this
+// one, exported so cmd's copy could be deleted in the same fix); callers in
+// both packages converge on it instead of each keeping their own copy.
+func IsEmptyWorkerHandoffIncludingFreshness(h WorkerHandoff) bool {
 	return len(h.ChangedFiles) == 0 &&
 		len(h.CommandsRun) == 0 &&
 		strings.TrimSpace(h.VerificationStatus) == "" &&
