@@ -439,6 +439,29 @@ func checklistRowFor(brief, label, heading string) briefChecklistRow {
 	return briefChecklistRow{Label: label, Present: present, Chars: chars}
 }
 
+// checklistRowForEither builds a checklist row by locating heading inside
+// EITHER brief or capsule, whichever carries it (190-03, D-190-01-A). Since
+// composeBuildManifestBrief now omits pheromone signals and prior worker
+// handoffs from the brief for every caller that also carries a capsule (the
+// checklist's own caller included), those two sections live in the capsule
+// exclusively -- checking brief alone (checklistRowFor's behavior) would
+// report them ABSENT even though the worker still receives them, which is
+// exactly the misreport renderBriefChecklist's own doc comment warns against
+// ("a section the runtime silently stopped delivering shows up as ABSENT
+// here even if the state that would produce it still exists" -- the inverse
+// error, reporting ABSENT for a section that IS delivered elsewhere, is just
+// as wrong). Checking both sources keeps this row honest regardless of which
+// side currently owns the content.
+func checklistRowForEither(brief, capsule, label, heading string) briefChecklistRow {
+	if present, chars := locateChecklistSection(brief, heading); present {
+		return briefChecklistRow{Label: label, Present: true, Chars: chars}
+	}
+	if present, chars := locateChecklistSection(capsule, heading); present {
+		return briefChecklistRow{Label: label, Present: true, Chars: chars}
+	}
+	return briefChecklistRow{Label: label, Present: false, Chars: 0}
+}
+
 // renderBriefChecklist is the default `--print-brief` output (D-06): a
 // ten-second, sectioned answer to "which context arrived and which did not,"
 // with sizes and a total against a real, derived budget. It reports what the
@@ -476,8 +499,8 @@ func renderBriefChecklist(dispatch codexBuildDispatch, brief, capsule string) st
 	rows = append(rows, checklistRowFor(brief, "Phase Research", "## Phase Research"))
 	rows = append(rows, checklistRowFor(brief, "Colony Research", "## Colony Research"))
 	rows = append(rows, checklistRowFor(brief, "Codegraph Context", "## Codebase Graph Context"))
-	rows = append(rows, checklistRowFor(brief, "Pheromone Signals", "## Pheromone Signals"))
-	rows = append(rows, checklistRowFor(brief, "Previous Worker Handoffs", "## Previous Worker Handoffs"))
+	rows = append(rows, checklistRowForEither(brief, capsule, "Pheromone Signals", "## Pheromone Signals"))
+	rows = append(rows, checklistRowForEither(brief, capsule, "Previous Worker Handoffs", "## Previous Worker Handoffs"))
 	rows = append(rows, checklistRowFor(brief, "Expected Output", "## Expected Output"))
 
 	capsulePresent := strings.TrimSpace(capsule) != ""
