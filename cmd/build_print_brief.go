@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -78,6 +79,19 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		single := []codexBuildDispatch{dispatch}
 		attachBuildDispatchContext(root, phase, single, startedAt)
 		brief := single[0].Brief
+
+		// D-05/D-06: assert zero duplicated sections on the SAME assembled text
+		// (capsule + brief + skill section) renderBriefComposition/
+		// renderBriefChecklist already treat as the total assembled worker
+		// context — a repeated owned heading or a repeated handoff-schema
+		// sentence means the worker would receive the same steering content
+		// twice. This must fail --print-brief regardless of which mode
+		// (checklist or --full) is active, so it runs once here, ahead of
+		// either rendering branch.
+		assembled := capsule + "\n" + brief + "\n" + single[0].SkillSection
+		if duplicated := duplicatedBriefSections(assembled); len(duplicated) > 0 {
+			return fmt.Errorf("dispatch %s delivers duplicated context: %s (each owned section and the handoff schema must appear exactly once in the assembled worker context)", dispatch.Name, strings.Join(duplicated, ", "))
+		}
 
 		out.WriteString(strings.Repeat("━", 72))
 		out.WriteString(fmt.Sprintf("\n%s  %s  (%s)\n", casteEmoji(dispatch.Caste), dispatch.Name, dispatch.Caste))
@@ -243,6 +257,84 @@ func splitBriefSections(brief string) []briefSection {
 	flush()
 
 	return sections
+}
+
+// handoffSectionDuplicationAnchorChars is how many leading characters of
+// codex.HandoffFieldsSummary anchor the handoff-sentence duplication check.
+// The handoff schema sentence has no "## " heading of its own (189's D-04
+// design -- it is plain text appended after composeBuildManifestBrief's base
+// render), so splitBriefSections's heading walk cannot see it repeat; a
+// substring of the constant's own content is used instead of a hand-copied
+// piece of English, so the anchor can never drift from the schema
+// ValidateWorkerHandoff actually enforces. 40 chars of this specific,
+// generated sentence is long enough that it cannot plausibly false-match
+// unrelated prose.
+const handoffSectionDuplicationAnchorChars = 40
+
+// handoffSectionDuplicationAnchor returns the stable substring
+// duplicatedBriefSections counts occurrences of.
+func handoffSectionDuplicationAnchor() string {
+	if len(codex.HandoffFieldsSummary) <= handoffSectionDuplicationAnchorChars {
+		return codex.HandoffFieldsSummary
+	}
+	return codex.HandoffFieldsSummary[:handoffSectionDuplicationAnchorChars]
+}
+
+// duplicatedBriefSectionHandoffLabel is the name duplicatedBriefSections
+// reports when the handoff-schema sentence repeats. It has no heading of its
+// own, so it is not a member of briefOwnedSections -- this label exists only
+// to give a duplication finding a human-readable name distinct from any real
+// heading.
+const duplicatedBriefSectionHandoffLabel = "Handoff Schema"
+
+// duplicatedBriefSections reports every owned heading (per briefOwnedSections)
+// or the handoff-schema sentence that occurs more than once in assembled --
+// the same capsule + composed brief + skill-section text printWorkerBriefs
+// already has in hand for --full rendering, and the same denominator
+// renderBriefComposition/renderBriefChecklist already use (WR-04: capsule +
+// brief + skills, not brief alone).
+//
+// It performs two independent counting passes: heading occurrences via the
+// same "## " walk splitBriefSections uses, but COUNTING every occurrence
+// instead of splitBriefSections's first-wins/restart behavior (a second
+// "## Pheromone Signals" today silently becomes a second, same-named
+// briefSection entry that renderBriefComposition/renderBriefChecklist never
+// flag as a repeat); and occurrences of a stable anchor drawn from
+// codex.HandoffFieldsSummary's own text, since the handoff sentence carries
+// no heading for the first pass to see.
+//
+// Returns the sorted, deduplicated names of anything found more than once;
+// an empty slice when nothing repeats -- the healthy, common case.
+func duplicatedBriefSections(assembled string) []string {
+	counts := make(map[string]int)
+	for _, line := range strings.Split(assembled, "\n") {
+		if !strings.HasPrefix(line, "## ") {
+			continue
+		}
+		heading := strings.TrimSpace(strings.TrimPrefix(line, "## "))
+		if !briefOwnedSections[heading] {
+			// An unrecognized "## " heading belongs to injected content
+			// (e.g. a playbook), not the brief's own structure -- mirrors
+			// splitBriefSections's existing exclusion exactly.
+			continue
+		}
+		counts[heading]++
+	}
+
+	if anchor := handoffSectionDuplicationAnchor(); anchor != "" {
+		if n := strings.Count(assembled, anchor); n > 1 {
+			counts[duplicatedBriefSectionHandoffLabel] = n
+		}
+	}
+
+	duplicated := make([]string, 0, len(counts))
+	for name, n := range counts {
+		if n > 1 {
+			duplicated = append(duplicated, name)
+		}
+	}
+	sort.Strings(duplicated)
+	return duplicated
 }
 
 func truncateSectionName(name string, max int) string {

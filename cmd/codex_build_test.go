@@ -565,8 +565,18 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if strings.TrimSpace(manifest["attempt_id"].(string)) == "" || strings.TrimSpace(manifest["attempt_path"].(string)) == "" {
 		t.Fatalf("plan-only manifest should identify its durable attempt: %+v", manifest)
 	}
-	if workerBriefs := manifest["worker_briefs"].([]interface{}); len(workerBriefs) != 0 {
-		t.Fatalf("plan-only manifest should not write worker briefs, got %v", workerBriefs)
+	// D-04: plan-only now legitimately writes brief files as a side effect --
+	// consistent with the many OTHER side effects --plan-only already has
+	// (beginBuildAttempt, store.SaveJSON(manifestRel, manifest)). It was never
+	// claimed to be a pure/dry-run function; that role belongs to
+	// printWorkerBriefs/--print-brief, a fully separate call graph. One brief
+	// file per dispatch, matching the direct path's existing contract.
+	workerBriefs, ok := manifest["worker_briefs"].([]interface{})
+	if !ok || len(workerBriefs) == 0 {
+		t.Fatalf("plan-only manifest should write one worker brief per dispatch, got %v", manifest["worker_briefs"])
+	}
+	if len(workerBriefs) != len(dispatches) {
+		t.Fatalf("plan-only manifest worker_briefs count = %d, want %d (one per dispatch)", len(workerBriefs), len(dispatches))
 	}
 	manifestDispatches := manifest["dispatches"].([]interface{})
 	assertDispatchHasRuntimeSkillAssignment(t, manifestDispatches[0].(map[string]interface{}))
@@ -628,6 +638,172 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if state.Plan.Phases[0].Status != colony.PhaseReady {
 		t.Fatalf("phase status = %s, want ready", state.Plan.Phases[0].Status)
 	}
+}
+
+// TestBuildPlanOnlyManifestOmitsInlineBriefWhenBriefPathPresent proves D-01
+// through D-04 and criterion 4's invariant: once a plan-only dispatch's brief
+// is successfully written to disk, brief_path names that file -- byte-
+// identical to what composeBuildManifestBrief renders for that dispatch --
+// and the inline "brief" key is entirely ABSENT (not merely empty) from the
+// JSON, in BOTH representations the plan-only response ships:
+// result.dispatches[] (built by codexBuildDispatchMaps) and
+// result.dispatch_manifest.dispatches[] (marshaled from the typed manifest
+// struct). The same composed brief text must never ship twice in one
+// response.
+func TestBuildPlanOnlyManifestOmitsInlineBriefWhenBriefPathPresent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+	setupRuntimeSkillAssignmentHub(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+	// Re-derive root the same way skillWorkspaceRoot() does internally
+	// (os.Getwd() post-chdir) -- on macOS, /var is a symlink to /private/var,
+	// so the runtime's own composeBuildManifestBrief call embeds the
+	// syscall-resolved path in its "Workspace:" line. Comparing against the
+	// pre-chdir logical path here would fail on that cosmetic difference
+	// alone, not on anything this task actually changed.
+	if resolvedRoot, err := os.Getwd(); err == nil {
+		root = resolvedRoot
+	}
+
+	goal := "Prove plan-only briefs ship once, not twice"
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "No double delivery",
+					Description: "Prove brief_path replaces the inline brief instead of shipping alongside it",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &taskOneID, Goal: "Research the byte-duplication gap", Status: colony.TaskPending},
+						{ID: &taskTwoID, Goal: "Implement the single-source brief writer", Status: colony.TaskPending, DependsOn: []string{taskOneID}},
+					},
+					SuccessCriteria: []string{"No dispatch carries both brief and brief_path at once"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --plan-only returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse plan-only output: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	result := envelope["result"].(map[string]interface{})
+
+	// The typed manifest persisted to disk is the oracle for what
+	// composeBuildManifestBrief would have produced for each dispatch --
+	// reload it, plus the (plan-only leaves it unmutated) phase, so the
+	// byte-match check below is against the real composer, never a
+	// hand-copied expectation.
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	startedAt, err := time.Parse(time.RFC3339, manifest.GeneratedAt)
+	if err != nil {
+		t.Fatalf("failed to parse manifest generated_at %q: %v", manifest.GeneratedAt, err)
+	}
+	var reloadedState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &reloadedState); err != nil {
+		t.Fatalf("failed to reload colony state: %v", err)
+	}
+	phase := reloadedState.Plan.Phases[0]
+
+	byName := make(map[string]codexBuildDispatch, len(manifest.Dispatches))
+	for _, d := range manifest.Dispatches {
+		byName[d.Name] = d
+	}
+	if len(byName) == 0 {
+		t.Fatal("expected at least one dispatch in the persisted manifest")
+	}
+
+	basePath := store.BasePath()
+	checkDispatchMap := func(source string, raw interface{}) {
+		dispatch, ok := raw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("%s: dispatch entry is not an object: %#v", source, raw)
+		}
+		name, _ := dispatch["name"].(string)
+		if name == "" {
+			t.Fatalf("%s: dispatch entry missing name: %#v", source, dispatch)
+		}
+		if _, ok := dispatch["brief"]; ok {
+			t.Fatalf("%s: dispatch %q still carries an inline \"brief\" key once brief_path succeeded: %#v", source, name, dispatch)
+		}
+		briefPath, ok := dispatch["brief_path"].(string)
+		if !ok || strings.TrimSpace(briefPath) == "" {
+			t.Fatalf("%s: dispatch %q missing brief_path", source, name)
+		}
+		rel := strings.TrimPrefix(briefPath, ".aether/data/")
+		full := filepath.Join(basePath, rel)
+		fileContents, err := os.ReadFile(full)
+		if err != nil {
+			t.Fatalf("%s: brief_path %s for dispatch %q does not resolve to an existing file: %v", source, briefPath, name, err)
+		}
+		composed, ok := byName[name]
+		if !ok {
+			t.Fatalf("%s: dispatch %q not found in the persisted manifest for comparison", source, name)
+		}
+		want := composeBuildManifestBrief(root, phase, composed, startedAt)
+		if string(fileContents) != want {
+			t.Fatalf("%s: brief_path file for dispatch %q does not byte-match composeBuildManifestBrief's output (file %d bytes, want %d bytes)", source, name, len(fileContents), len(want))
+		}
+	}
+
+	dispatches, ok := result["dispatches"].([]interface{})
+	if !ok || len(dispatches) == 0 {
+		t.Fatalf("expected non-empty result.dispatches, got %#v", result["dispatches"])
+	}
+	for _, raw := range dispatches {
+		checkDispatchMap("result.dispatches[]", raw)
+	}
+
+	dispatchManifest, ok := result["dispatch_manifest"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("result.dispatch_manifest is not an object: %#v", result["dispatch_manifest"])
+	}
+	manifestDispatches, ok := dispatchManifest["dispatches"].([]interface{})
+	if !ok || len(manifestDispatches) == 0 {
+		t.Fatalf("expected non-empty result.dispatch_manifest.dispatches, got %#v", dispatchManifest["dispatches"])
+	}
+	for _, raw := range manifestDispatches {
+		checkDispatchMap("result.dispatch_manifest.dispatches[]", raw)
+	}
+
+	// Criterion 4's own measurement: record the bytes that would have shipped
+	// inline (sum of composed brief lengths, one per JSON representation)
+	// against what actually ships (brief_path strings only) for this fixture.
+	inlineBytes := 0
+	pathBytes := 0
+	for _, d := range manifest.Dispatches {
+		inlineBytes += len(composeBuildManifestBrief(root, phase, d, startedAt))
+		pathBytes += len(d.BriefPath)
+	}
+	t.Logf("criterion-4 measurement: %d dispatches, %d bytes would have shipped inline per JSON representation, %d bytes actually ship (brief_path strings) -- %.1f%% reduction per representation",
+		len(manifest.Dispatches), inlineBytes, pathBytes, 100*(1-float64(pathBytes)/float64(inlineBytes)))
 }
 
 func TestBuildQueenLedWrapperContractUsesHostSourceCommand(t *testing.T) {
