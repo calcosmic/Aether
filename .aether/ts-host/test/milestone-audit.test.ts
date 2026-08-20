@@ -57,13 +57,27 @@ const REQUIREMENT_COVERAGE_MAP: Array<{
   { id: "ITER-06", testFiles: ["confidence-loop.test.ts", "confidence-loop-e2e.test.ts"], description: "Iteration progress in ceremony" },
 
   // HIVE-01 through HIVE-07
-  // NOTE (Phase 190, 2026-08-20): hive-injector.test.ts and the src module it
-  // covered (.aether/ts-host/src/hive-injector.ts) were deleted. That module
-  // independently recomputed and attached the SAME hive wisdom Go's
-  // colony-prime capsule already delivers, duplicating "## HIVE WISDOM
-  // (Cross-Colony Patterns)" in every worker prompt. Removal is a
-  // correctness fix (190-CONTEXT.md D-08/D-09/D-10), not a regression --
-  // hive wisdom still reaches every worker, now exactly once. The TS-side
+  // NOTE (Phase 190, 2026-08-20; corrected 190-REVIEW WR-03): hive-injector.
+  // test.ts and the src module it covered (.aether/ts-host/src/hive-injector.
+  // ts) were deleted. That module independently recomputed and attached a
+  // second "## HIVE WISDOM (Cross-Colony Patterns)" section on top of the one
+  // Go's colony-prime capsule already delivers, so every worker prompt
+  // carried the heading twice. Removal is a correctness fix (190-CONTEXT.md
+  // D-08/D-09/D-10), not a regression -- hive wisdom still reaches every
+  // worker, now exactly once.
+  //
+  // The two channels were NOT selecting identical entries, and saying so
+  // would be wrong. The deleted TS channel called hive-read with no --domain
+  // filter and then applied its own ranking, KEEPING entries from other
+  // domains at a 0.5x confidence discount. Go's surviving channel
+  // (filterHiveWisdomEntriesByDomain, cmd/context_weighting.go:78) EXCLUDES
+  // a non-matching domain outright once the repo has domain tags. So for a
+  // colony whose tags do not span everything in ~/.aether/hive/wisdom.json,
+  // the deleted channel was the only one surfacing cross-domain wisdom at
+  // all, and this phase narrowed that coverage rather than merely
+  // deduplicating it. The hard exclusion is the intended final behaviour;
+  // discounted cross-domain inclusion is a separate product decision, not
+  // something this phase quietly settled. The TS-side
   // presence-based behaviors these v1.21 entries originally named
   // (hive-read calls, domain-tag resolution, confidence discounting) no
   // longer exist in this codebase by design; host-integration.test.ts now

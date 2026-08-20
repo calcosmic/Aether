@@ -37,7 +37,9 @@ findings:
   warning: 3
   info: 2
   total: 6
-status: issues_found
+status: resolved
+resolved: 2026-08-20
+resolution: all 6 findings addressed; see "Resolution" at the foot of this file
 ---
 
 # Phase 190: Code Review Report
@@ -45,7 +47,7 @@ status: issues_found
 **Reviewed:** 2026-08-20T10:58:30Z
 **Depth:** standard
 **Files Reviewed:** 28
-**Status:** issues_found
+**Status:** resolved (see Resolution at the foot of this file)
 
 ## Summary
 
@@ -288,3 +290,53 @@ comment correction next time this function is touched.
 _Reviewed: 2026-08-20T10:58:30Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Resolution (2026-08-20)
+
+Every finding above was acted on in the same pass. Each fix carries a test that fails
+against the behaviour it replaced — verified by reverting the fix and watching the test go
+red, not by assuming it would.
+
+| Finding | Outcome | Lock |
+|---|---|---|
+| CR-01 `handoff_section` duplicates the capsule | Fixed — `attachBuildDispatchContext` leaves the field empty; the field is also folded into `--print-brief`'s duplication input so a future repopulation trips the detector | `TestPlanOnlyDispatchesCarryNoHandoffSection` |
+| WR-01 stale worker-brief files accumulate | Fixed — new `cleanupStaleWorkerBriefs` (brief-only, so it cannot destroy verification evidence or worker reports the way the direct path's broader sweep would) runs before the plan-only write | `TestPlanOnlyRerunDoesNotAccumulateStaleWorkerBriefs` |
+| WR-02 gate catches "twice" but never "zero" | Fixed — `absentBriefSections` fails when a section's source data exists and the section reaches no channel, and warns instead of failing when the capsule's trim ledger accounts for the absence | `TestPrintBriefGateCatchesAbsentSectionNotJustDuplicated`, `TestPrintBriefFailsWhenAnExpectedSectionReachesNoWorker` |
+| WR-03 hive removal narrowed cross-domain coverage | Record corrected — `milestone-audit.test.ts`'s note now states the selection-semantics difference instead of claiming identical content; the product question logged as D-190-R-A | — (documentation) |
+| IN-01 D-190-03-A re-verified | No action, as the review concluded | — |
+| IN-02 doc-comment overclaim | Fixed — the comment now describes the `(nil, nil, err)` the code actually returns | — (comment) |
+
+### Two things the review's suggested fixes did not cover, found while applying them
+
+**The first WR-01 test was worthless and was rewritten.** It called `cleanupStaleWorkerBriefs`
+directly. Deleting the call site from `runCodexBuildPlanOnlyWithOptions` left it green — it
+proved the helper worked while the path that needs it never ran it, which is precisely the
+failure mode this repo's definition of done exists to prevent. It now drives
+`runCodexBuildPlanOnly` end to end, and deleting the call site turns it red.
+
+**The WR-02 predicates had to be re-derived from the capsule, not from the nearest similar
+function.** Two mismatches would each have produced false failures on healthy colonies:
+
+- The obvious pheromone predicate, `resolvePheromoneSection()`, filters on
+  `sig.Active && effective strength >= 0.1` (`cmd/context.go:1392`), while the capsule renders
+  its heading from `filterSignalsForPrompt` (`cmd/colony_prime_context.go:566`). Two predicates
+  that can disagree would report a delivery defect whenever they did. The gate now calls
+  `filterSignalsForPrompt`.
+- The handoff predicate initially used the INSPECTED phase's ID, while the capsule resolves
+  handoffs against `state.CurrentPhase`. `--print-brief` on any non-current phase would have
+  failed on a defect that did not exist. It now takes the state.
+
+A section a worker never sees and a section the budget deliberately evicted are reported
+differently, on purpose: failing on eviction would make `--print-brief` unusable on any
+context-heavy colony, and staying silent on a genuine drop is the bug being fixed.
+
+### Also cleared in this pass (not review findings)
+
+The three stale ceremony snapshot fixtures logged in `deferred-items.md` were regenerated —
+the diff is only the intended caste-emoji house style and model tag from Phase 187 — and
+`ceremony-snapshots.test.ts` now strips ANSI before comparing. That suite previously passed or
+failed according to whether the caller exported `FORCE_COLOR`, which every agent harness and
+most CI runners do; a test whose result depends on who invoked it is not evidence about the
+code. Caste colours remain asserted in Go, where they are decided.

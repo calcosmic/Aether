@@ -1,10 +1,10 @@
 ━━━ 🔨 S P A W N   P L A N ━━━
 
-👑 Queen Orchestration: workflow=build
+👑🐜 Queen Orchestration: workflow=build
 
 Phase 3: Ceremony Contract
 
 Wave 11 — Parallel
-  🔨 Builder Bolt-69  Align TS ceremony adapter lifecycle snapshots with Go contract names •
+  🔨🐜 Builder [sonnet] Bolt-69  Align TS ceremony adapter lifecycle snapshots with Go contract names •
 
 Total: 1 Builder = 1 spawns

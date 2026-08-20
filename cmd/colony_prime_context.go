@@ -1124,13 +1124,38 @@ func buildActivityTailSection() *colonyPrimeSection {
 }
 
 func resolveCodexWorkerContext() string {
-	context := strings.TrimSpace(buildColonyPrimeOutput(true).PromptSection)
+	context, _ := resolveCodexWorkerContextWithTrim()
+	return context
+}
+
+// resolveCodexWorkerContextWithTrim returns the same capsule
+// resolveCodexWorkerContext returns, plus the names of the sections the token
+// budget dropped while assembling it.
+//
+// The trim list exists so a caller can tell a DELIBERATE omission from a
+// SILENT one. --print-brief needs exactly that distinction (190-190/WR-02):
+// a steering section that is absent because the budget evicted it is a real
+// but explicable finding about this colony's context pressure, while a
+// section absent with no eviction on record is a delivery defect. Reporting
+// both as the same failure would either cry wolf on a busy colony or stay
+// quiet on a genuine drop.
+//
+// Callers that only need the text keep using resolveCodexWorkerContext, which
+// delegates here so there is one assembly path and the capsule's side effects
+// (hive retrieval recording, ledger writes) happen once per call, not twice.
+func resolveCodexWorkerContextWithTrim() (string, []string) {
+	output := buildColonyPrimeOutput(true)
+	context := strings.TrimSpace(output.PromptSection)
+	trimmed := append([]string(nil), output.Trimmed...)
 	if context == "" {
+		// Fallback assembly: a different builder with its own budget, so the
+		// colony-prime trim ledger above does not describe it.
 		context = buildContextCapsuleOutput(true, 8, 3, 2, 220).PromptSection
+		trimmed = nil
 	}
 	if len(context) < 128 {
 		fmt.Fprintf(os.Stderr, "⚠ Context capsule below minimum threshold (%d chars, min 128) — dispatch blocked to prevent zero-context worker execution\n", len(context))
-		return ""
+		return "", trimmed
 	}
-	return context
+	return context, trimmed
 }

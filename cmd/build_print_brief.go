@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -62,7 +63,28 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 	// is resolved once here for display only. Nothing below may write it into
 	// single[0].Brief or any dispatch — that would reintroduce the per-dispatch
 	// duplication plan 01 removed.
-	capsule := resolveCodexWorkerContext()
+	capsule, budgetTrimmed := resolveBriefContextCapsule()
+
+	// D-05/D-06 covered "twice". This covers "never" (190-190/WR-02): the
+	// duplication gate below only ever recorded a heading seen more than
+	// once, so a change that stopped delivering an active pheromone signal or
+	// a stored handoff to EITHER channel left --print-brief exiting 0,
+	// indistinguishable from a healthy build. The gate's own error text
+	// promised "exactly once" while the code enforced only "not more than
+	// once". Both halves are now real.
+	//
+	// This is a capsule-level property, not a per-dispatch one — with
+	// includeSteeringSections=false the brief never carries these sections at
+	// all, so the capsule is the only place they can be — hence one check
+	// ahead of the loop rather than N identical ones inside it.
+	if missing, evicted := absentBriefSections(capsule, expectedBriefSections(state), budgetTrimmed); len(missing) > 0 || len(evicted) > 0 {
+		for _, section := range evicted {
+			fmt.Fprintf(os.Stderr, "⚠ %q is not in the worker context: the token budget evicted it while assembling the capsule. The data exists; workers will not see it this build.\n", section)
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("dispatch context is missing %s: the source data exists and the capsule's trim ledger does not account for the omission, so this content reaches no worker (each owned section must appear exactly once in the assembled worker context)", strings.Join(missing, ", "))
+		}
+	}
 
 	matched := 0
 	var out strings.Builder
@@ -88,7 +110,14 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		// twice. This must fail --print-brief regardless of which mode
 		// (checklist or --full) is active, so it runs once here, ahead of
 		// either rendering branch.
-		assembled := capsule + "\n" + brief + "\n" + single[0].SkillSection
+		// single[0].HandoffSection is included even though
+		// attachBuildDispatchContext now deliberately leaves it empty
+		// (190-190/CR-01): it is a field that ships on the wire in
+		// result.dispatches[] and result.dispatch_manifest.dispatches[], so
+		// if anything ever repopulates it the duplicate must trip this gate
+		// rather than slip past it the way it did before. Empty today, it
+		// contributes nothing to the counts.
+		assembled := capsule + "\n" + brief + "\n" + single[0].SkillSection + "\n" + single[0].HandoffSection
 		if duplicated := duplicatedBriefSections(assembled); len(duplicated) > 0 {
 			return fmt.Errorf("dispatch %s delivers duplicated context: %s (each owned section and the handoff schema must appear exactly once in the assembled worker context)", dispatch.Name, strings.Join(duplicated, ", "))
 		}
@@ -335,6 +364,112 @@ func duplicatedBriefSections(assembled string) []string {
 	}
 	sort.Strings(duplicated)
 	return duplicated
+}
+
+// resolveBriefContextCapsule is the seam --print-brief resolves its capsule
+// through, and is a variable for exactly one reason: the absence gate below
+// has a branch the healthy runtime cannot be coaxed into producing on demand
+// (a section whose source data exists, absent from the capsule, with no
+// eviction on record). Without a seam that branch could only ever be
+// unit-tested — and a test that exercises the checker but not the call site
+// still passes when the call site is deleted, which is the failure this
+// repo's definition of done exists to prevent.
+//
+// Production code must not reassign it.
+var resolveBriefContextCapsule = resolveCodexWorkerContextWithTrim
+
+// briefExpectedSection ties a heading a worker is supposed to receive to the
+// data that makes it expected and to the capsule section name the token
+// budget uses when it evicts one.
+type briefExpectedSection struct {
+	// Heading is the "## " heading the assembled worker context must carry.
+	Heading string
+	// SectionName is colony-prime's internal name for the same section, which
+	// is what appears in the capsule's trim ledger.
+	SectionName string
+	// Expected reports whether the underlying data exists at all. A section
+	// with no data is not missing — it has nothing to say.
+	Expected func() bool
+}
+
+// expectedBriefSections lists the steering sections whose absence is a defect
+// rather than an empty set.
+//
+// Both are INPUT context resolved from stored colony data, and both are
+// rendered by the capsule and by nothing else on this path, so "the data
+// exists but the heading does not appear" is decidable here without guessing.
+// Deliberately narrow: sections whose presence depends on phase shape
+// (Dependencies, Hints, Territory Survey) have no such crisp predicate and
+// would produce false alarms.
+// It takes the whole state, not the inspected phase, because the capsule
+// resolves handoffs against state.CurrentPhase
+// (cmd/colony_prime_context.go:695). Asking about a different phase number
+// than the capsule used would make --print-brief on any non-current phase
+// report a delivery defect that does not exist.
+func expectedBriefSections(state colony.ColonyState) []briefExpectedSection {
+	return []briefExpectedSection{
+		{
+			Heading:     "Pheromone Signals",
+			SectionName: "pheromones",
+			// filterSignalsForPrompt, not resolvePheromoneSection: the
+			// capsule renders its "## Pheromone Signals" heading exactly when
+			// filterSignalsForPrompt returns a non-empty set
+			// (cmd/colony_prime_context.go:566-571), while
+			// resolvePheromoneSection uses a DIFFERENT predicate
+			// (sig.Active && effective strength >= 0.1, cmd/context.go:1392).
+			// Two predicates that can disagree would make this gate report a
+			// delivery defect whenever they did.
+			Expected: func() bool {
+				var pf colony.PheromoneFile
+				if store == nil || store.LoadJSON("pheromones.json", &pf) != nil {
+					return false
+				}
+				return len(filterSignalsForPrompt(pf.Signals, time.Now())) > 0
+			},
+		},
+		{
+			Heading:     "Previous Worker Handoffs",
+			SectionName: "worker_handoffs",
+			// Same arguments the capsule itself uses
+			// (cmd/colony_prime_context.go:695) so the two agree on what
+			// "there is a handoff to deliver" means.
+			Expected: func() bool {
+				return strings.TrimSpace(renderWorkerHandoffSection("build", state.CurrentPhase, "")) != ""
+			},
+		},
+	}
+}
+
+// absentBriefSections splits expected-but-absent sections into two buckets:
+// missing (no explanation on record — a delivery defect) and evicted (the
+// capsule's token budget dropped it, which is deliberate and explicable).
+//
+// Callers fail on the first and warn on the second. Collapsing them would
+// either make --print-brief fail on any context-heavy colony or let a genuine
+// silent drop pass; the trim ledger is what separates the two.
+func absentBriefSections(assembled string, expected []briefExpectedSection, budgetTrimmed []string) (missing []string, evicted []string) {
+	trimmed := make(map[string]bool, len(budgetTrimmed))
+	for _, name := range budgetTrimmed {
+		trimmed[strings.TrimSpace(name)] = true
+	}
+
+	for _, section := range expected {
+		if section.Expected == nil || !section.Expected() {
+			continue
+		}
+		if strings.Contains(assembled, "## "+section.Heading) {
+			continue
+		}
+		if trimmed[section.SectionName] {
+			evicted = append(evicted, section.Heading)
+			continue
+		}
+		missing = append(missing, section.Heading)
+	}
+
+	sort.Strings(missing)
+	sort.Strings(evicted)
+	return missing, evicted
 }
 
 func truncateSectionName(name string, max int) string {

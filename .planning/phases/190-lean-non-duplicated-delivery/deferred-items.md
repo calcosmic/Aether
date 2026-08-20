@@ -179,3 +179,36 @@ branch returning canned data. Since the TS host no longer calls `hive-read` anyw
 tests is cosmetic cleanup, not required for correctness or for proving the hive_section removal
 (the branches don't pair with any assertion about hive content). Left as a minor, low-priority
 cleanup opportunity for whoever next touches those tests.
+
+---
+
+## Raised by 190-REVIEW (2026-08-20)
+
+### D-190-R-A: Cross-domain hive wisdom is now excluded outright, not discounted
+
+**Found during:** 190-REVIEW WR-03
+
+**Symptom:** Plan 190-02 was recorded as removing a duplicate delivery of "the SAME hive
+wisdom". At the heading level that is true — every worker prompt carried
+`## HIVE WISDOM (Cross-Colony Patterns)` twice and now carries it once. At the *entry* level it
+is not. The deleted TS channel (`.aether/ts-host/src/hive-injector.ts`, see
+`git show b60a0075:.aether/ts-host/src/hive-injector.ts`) called `hive-read --for-worker
+--min-confidence 0.5` with **no** `--domain` filter and then ranked the results itself, keeping
+entries from other domains at a **0.5x confidence discount**. The surviving Go channel
+(`filterHiveWisdomEntriesByDomain`, `cmd/context_weighting.go:78-97`, untouched by this phase)
+**excludes** any entry whose domain is not an exact match, or `general`/empty, as soon as the
+repo has registered domain tags.
+
+So for a colony whose registered tags do not span every domain present in
+`~/.aether/hive/wisdom.json`, the deleted channel was the only one surfacing cross-domain wisdom
+at all. Removing it narrowed coverage for that case; it was not pure deduplication.
+
+**Corrected in this pass:** the misleading comment in
+`.aether/ts-host/test/milestone-audit.test.ts` now states the selection-semantics difference
+explicitly instead of implying the two channels chose the same entries.
+
+**Deferred:** whether hard exclusion is the *right* final behaviour is a product decision about
+how much cross-domain wisdom a worker should see, not a defect to patch quietly. If discounted
+cross-domain inclusion is wanted, port it into `filterHiveWisdomEntriesByDomain` as its own
+change with its own test. The record is now honest either way, which is what the review asked
+for.

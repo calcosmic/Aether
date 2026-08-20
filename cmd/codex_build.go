@@ -23,20 +23,20 @@ type codexBuildDispatch struct {
 	Stage         string `json:"stage"`
 	Wave          int    `json:"wave,omitempty"`
 	ExecutionWave int    `json:"execution_wave,omitempty"`
-	Caste     string `json:"caste"`
-	AgentName string `json:"agent_name,omitempty"`
+	Caste         string `json:"caste"`
+	AgentName     string `json:"agent_name,omitempty"`
 	// Model is the DISPLAY name of the model this caste's agent runs on
 	// (resolved from agent frontmatter slot + ANTHROPIC_DEFAULT_*_MODEL env),
 	// so wrapper-rendered spawn descriptions can show it. Nothing reads it
 	// to choose a model — routing stays with the platform's agent
 	// frontmatter, and automatic model selection stays rejected.
-	Model string `json:"model,omitempty"`
-	Name  string `json:"name"`
-	Task          string `json:"task"`
-	Status        string `json:"status"`
-	Summary       string `json:"summary,omitempty"`
-	TaskID        string `json:"task_id,omitempty"`
-	TaskIndex     int    `json:"task_index,omitempty"`
+	Model     string `json:"model,omitempty"`
+	Name      string `json:"name"`
+	Task      string `json:"task"`
+	Status    string `json:"status"`
+	Summary   string `json:"summary,omitempty"`
+	TaskID    string `json:"task_id,omitempty"`
+	TaskIndex int    `json:"task_index,omitempty"`
 	// CoveredTaskIDs lists every task this one worker took on. It holds more
 	// than one entry when a chain of dependent steps was merged into a single
 	// dispatch (see coalesceSequentialDispatches). TaskID stays the first of
@@ -285,6 +285,11 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	// path the interactive wrapper is allowed to call must never ship the
 	// same composed brief twice in one JSON response. A dispatch whose write
 	// fails keeps its inline Brief populated (see writeBuildWorkerBriefFiles).
+	// Clear the previous manifest's brief files first (190-190/WR-01) --
+	// this path writes {dispatch.Name}.md into a directory nothing else ever
+	// prunes, and dispatch names change whenever task wording, task selection
+	// or caste coalescing does.
+	cleanupStaleWorkerBriefs(phaseNum)
 	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, generatedAt, true)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -2087,11 +2092,15 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 // and prior-handoff delivery on the one path that has no other channel for
 // them.
 //
-// A write failure returns the error immediately, before any blanking for
-// that dispatch (or any dispatch after it) happens -- the caller's slice
-// keeps that dispatch's .Brief populated and .BriefPath empty, the same
-// graceful-degradation posture the direct path has always had: ship inline
-// when the disk write did not happen, never silently drop the prompt.
+// A write failure returns (nil, nil, err) immediately, before any blanking
+// for that dispatch (or any dispatch after it) happens. The returned slice is
+// nil, not partially populated: every caller treats a non-nil error as fatal
+// and never inspects the dispatches value, so discarding it is simpler than
+// reasoning about a half-written slice. (190-190/IN-02: this comment used to
+// describe returning the slice with .Brief still populated and .BriefPath
+// empty, which is not what the code does.) The no-silent-drop guarantee is
+// still real and is what matters: the inline Brief is only ever cleared after
+// its file write has succeeded, so no path can lose a worker's prompt.
 func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, error) {
 	briefPaths := make([]string, 0, len(dispatches))
 
@@ -2839,9 +2848,40 @@ func cleanupStaleBuildAttemptArtifacts(phaseNum int) {
 	for _, name := range []string{"verification.json", "gates.json", "continue.json", "review.json"} {
 		_ = os.Remove(filepath.Join(buildDir, name))
 	}
-	for _, name := range []string{"worker-briefs", "worker-reports"} {
-		_ = os.RemoveAll(filepath.Join(buildDir, name))
+	_ = os.RemoveAll(filepath.Join(buildDir, "worker-reports"))
+	cleanupStaleWorkerBriefs(phaseNum)
+}
+
+// cleanupStaleWorkerBriefs removes a phase's worker-brief directory so the
+// next manifest writes into an empty one.
+//
+// Split out of cleanupStaleBuildAttemptArtifacts for the plan-only path
+// (190-190/WR-01), which must NOT do what the rest of that function does:
+// clearing verification.json / gates.json / continue.json / review.json would
+// destroy a previous attempt's evidence, and clearing worker-reports would
+// destroy real worker output — neither is this planning step's to discard.
+//
+// Without this, repeated `--plan-only` runs for the same phase accumulated
+// dead files forever. Brief filenames are "{dispatch.Name}.md", and dispatch
+// names hash phase:task-index:task-goal-text, so any edit to a task's wording,
+// any --selected-tasks filter, or any different caste/coalescing decision
+// produced a NEW name and orphaned the old file. Re-running --plan-only
+// without --force is an ordinary supported flow (see the idle-plan-only
+// auto-supersede above, which exists precisely so it does not need --force),
+// and nothing else ever cleared this directory: clearActiveColonyRuntimeFiles
+// (entomb/abandon) and `aether init`'s sweep both leave .aether/data/build/
+// alone.
+//
+// Safe at the plan-only call site because any prior attempt has already been
+// superseded or interrupted by the time it runs — the manifest that referenced
+// those brief files is dead.
+//
+// Locked by TestPlanOnlyRerunDoesNotAccumulateStaleWorkerBriefs.
+func cleanupStaleWorkerBriefs(phaseNum int) {
+	if store == nil || phaseNum < 1 {
+		return
 	}
+	_ = os.RemoveAll(filepath.Join(store.BasePath(), "build", fmt.Sprintf("phase-%d", phaseNum), "worker-briefs"))
 }
 
 // coveredDispatchTask pairs a merged dispatch's covered task ID with its
@@ -3261,10 +3301,30 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 		dispatches[i].ColonySkills = assignment.ColonyCount
 		dispatches[i].DomainSkills = assignment.DomainCount
 		dispatches[i].MatchedSkills = append([]string{}, assignment.MatchedNames...)
-		dispatches[i].HandoffSection = renderWorkerHandoffSection("build", phase.ID, dispatches[i].Name)
-		// Brief must be composed after HandoffSection is set — it embeds it
-		// when includeSteeringSections is true (never the case here, see
-		// below).
+		// HandoffSection stays EMPTY on this path (190-190/CR-01). The
+		// manifest-level capsule (resolveCodexWorkerContext(), which renders
+		// "## Previous Worker Handoffs" at cmd/colony_prime_context.go:695)
+		// is the sole channel for prior-worker handoffs on every caller of
+		// attachBuildDispatchContext, and .claude/commands/ant/build.md says
+		// so to the wrapper in as many words: the capsule "is the SOLE source
+		// of pheromone signals and prior worker handoffs".
+		//
+		// Populating this field anyway shipped that same content a second
+		// time in result.dispatches[] AND (via the json:"handoff_section"
+		// tag on the typed manifest) in result.dispatch_manifest.dispatches[],
+		// contradicting 190-03's own "one home each" invariant, doubling the
+		// response payload, and leaving a trap for any wrapper that reads
+		// "here is this dispatch's handoff context" as an instruction to use
+		// it. Gating the brief's copy was not enough; this adjacent field
+		// carried the duplicate.
+		//
+		// The direct/native dispatch path is unaffected: it never calls this
+		// function and sets codex.WorkerDispatch.HandoffSection itself.
+		//
+		// Locked by TestPlanOnlyDispatchesCarryNoHandoffSection.
+		dispatches[i].HandoffSection = ""
+		// Brief is composed with includeSteeringSections=false, so it does
+		// not embed HandoffSection either (see below).
 		//
 		// includeSteeringSections=false (190-03, closing D-190-01-A): every
 		// caller of attachBuildDispatchContext also carries or inspects the
