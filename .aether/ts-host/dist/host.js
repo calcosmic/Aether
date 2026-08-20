@@ -92,7 +92,6 @@ import { runWatchDisplay } from "./watch-display.js";
 import { runSwarmDisplay } from "./swarm-display.js";
 import { createNarrator } from "./narrator.js";
 import { startEventBridge } from "./event-bridge.js";
-import { readHiveWisdom, resolveDomainTags } from "./hive-injector.js";
 /** Parse command-line arguments for the TS host. */
 export function parseArgs(argv) {
     const args = argv.slice(2); // skip node and script path
@@ -412,9 +411,6 @@ function toWorkerDispatches(dispatches) {
         if (dispatch.permission_profile !== undefined) {
             workerDispatch.permission_profile = dispatch.permission_profile;
         }
-        if (dispatch.hive_section !== undefined) {
-            workerDispatch.hive_section = dispatch.hive_section;
-        }
         if (dispatch.matched_skills !== undefined) {
             workerDispatch.matched_skills = dispatch.matched_skills;
         }
@@ -438,36 +434,6 @@ function emitSkillSummary(dispatches) {
     const skillCount = dispatches.filter((d) => typeof d.skill_section === "string" && d.skill_section.trim() !== "").length;
     if (skillCount > 0) {
         process.stderr.write(`Injecting ${skillCount} skills into worker prompts.\n`);
-    }
-}
-/** Build a hive wisdom injection summary line */
-function emitHiveSummary(dispatches) {
-    const hiveCount = dispatches.filter((d) => typeof d.hive_section === "string" && d.hive_section.trim() !== "").length;
-    if (hiveCount > 0) {
-        process.stderr.write(`Injecting hive wisdom into ${hiveCount} worker prompts.\n`);
-    }
-}
-/**
- * Prepare the hive wisdom section for a dispatch pipeline.
- * Resolves domain tags, reads hive wisdom, and returns a formatted section.
- * Graceful degradation: any failure logs a warning and returns empty string.
- */
-async function prepareHiveSection(bridge) {
-    try {
-        const domains = await resolveDomainTags(bridge);
-        return await readHiveWisdom({
-            goBinaryPath: bridge.goBinaryPath,
-            cwd: bridge.cwd,
-            domains,
-            minConfidence: 0.5,
-            maxEntries: 10,
-            budgetChars: 2500,
-        });
-    }
-    catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`Warning: hive-read failed: ${msg}\n`);
-        return "";
     }
 }
 async function preflightHostWorkerDispatch(bridge, context, fallbackDiagnostic) {
@@ -535,11 +501,11 @@ async function runDryRunDispatchedCommand(bridge, parsed, definition) {
         ?? continueManifest?.dispatches
         ?? [];
     const manifestObj = dispatchManifest ?? planManifest ?? planningManifest ?? continueManifest;
-    // Attach hive wisdom to each dispatch (dry-run also fetches wisdom per RESEARCH.md Q4)
-    const hiveSection = await prepareHiveSection(bridge);
-    for (const d of dispatches) {
-        d.hive_section = hiveSection;
-    }
+    // Hive wisdom is no longer computed or attached here (Phase 190). It
+    // arrives exactly once, already embedded in each dispatch's
+    // context_capsule by Go's colony-prime capsule -- attaching a second,
+    // independently-computed copy here duplicated the same "## HIVE WISDOM
+    // (Cross-Colony Patterns)" section in every worker's assembled prompt.
     // Playbook injection removed to match cmd/codex_build.go. Playbooks are
     // orchestrator guidance; appending them to every worker's task_brief told a
     // single Builder "YOU (the Queen) will spawn workers directly" at five times
@@ -558,8 +524,6 @@ async function runDryRunDispatchedCommand(bridge, parsed, definition) {
     renderDryRunBadge();
     // Skill injection summary
     emitSkillSummary(dispatches);
-    // Hive wisdom injection summary
-    emitHiveSummary(dispatches);
     // Output manifest JSON to stdout
     process.stdout.write(JSON.stringify({ ok: true, dry_run: true, manifest: manifestResult }, null, 2) + "\n");
 }
@@ -831,8 +795,6 @@ async function dispatchBuildWave(bridge, parsed, ceremony, buildManifest, dispat
     }
     // Skill injection summary (D-07)
     emitSkillSummary(dispatches);
-    // Hive wisdom injection summary
-    emitHiveSummary(dispatches);
     // Dispatch workers
     if (!buildManifest.execution_binding) {
         throw new Error("Build manifest contains no durable execution_binding");
@@ -916,11 +878,10 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
     if (dispatches.length === 0) {
         throw new Error("Build manifest contains no dispatches. Nothing to build.");
     }
-    // Step 1b: Resolve hive wisdom and attach to each dispatch
-    const hiveSection = await prepareHiveSection(bridge);
-    for (const d of dispatches) {
-        d.hive_section = hiveSection;
-    }
+    // Step 1b removed: hive wisdom is no longer separately resolved and
+    // attached here (Phase 190). Each dispatch's context_capsule already
+    // carries Go's colony-prime "## HIVE WISDOM (Cross-Colony Patterns)"
+    // section; recomputing and attaching a second copy duplicated it.
     // Step 1c removed: build playbooks are no longer injected into worker briefs.
     // See the note in runDryRunDispatchedCommand and cmd/codex_build.go.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
@@ -957,12 +918,6 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
     let iterationCount = 0;
     while (true) {
         iterationCount++;
-        // Re-attach hive wisdom for iterations after the first (dispatches are re-fetched)
-        if (iterationCount > 1) {
-            for (const d of dispatches) {
-                d.hive_section = hiveSection;
-            }
-        }
         // Build iteration feedback from previous iteration's blockers
         let iterationFeedback;
         if (lastWaveResult && lastWaveResult.workerClaims.length > 0) {
@@ -1067,11 +1022,10 @@ async function runDispatchedPlanCommand(bridge, parsed) {
     if (dispatches.length === 0) {
         throw new Error("Plan manifest contains no dispatches. Nothing to plan.");
     }
-    // Step 1b: Resolve hive wisdom and attach to each dispatch
-    const hiveSection = await prepareHiveSection(bridge);
-    for (const d of dispatches) {
-        d.hive_section = hiveSection;
-    }
+    // Step 1b removed: hive wisdom is no longer separately resolved and
+    // attached here (Phase 190). Each dispatch's context_capsule already
+    // carries Go's colony-prime "## HIVE WISDOM (Cross-Colony Patterns)"
+    // section; recomputing and attaching a second copy duplicated it.
     // Step 1c removed: plan playbooks are no longer injected into worker briefs.
     // See the note in runDryRunDispatchedCommand and cmd/codex_build.go.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
@@ -1081,8 +1035,6 @@ async function runDispatchedPlanCommand(bridge, parsed) {
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
     renderManifestCeremony(ceremony, "plan", ceremonyEnvelope, dispatches);
-    // Step 3b: Hive wisdom injection summary
-    emitHiveSummary(dispatches);
     // Step 4: Research phases get their own confidence loop (RESEARCH-07)
     // before the rest of the wave dispatches. This preserves today's ordering
     // contract -- all wave-1 research completes before the wave-2 Route-Setter
@@ -1160,11 +1112,10 @@ async function runDispatchedContinueCommand(bridge, parsed) {
     if (dispatches.length === 0) {
         throw new Error("Continue manifest contains no dispatches. Nothing to continue.");
     }
-    // Step 1b: Resolve hive wisdom and attach to each dispatch
-    const hiveSection = await prepareHiveSection(bridge);
-    for (const d of dispatches) {
-        d.hive_section = hiveSection;
-    }
+    // Step 1b removed: hive wisdom is no longer separately resolved and
+    // attached here (Phase 190). Each dispatch's context_capsule already
+    // carries Go's colony-prime "## HIVE WISDOM (Cross-Colony Patterns)"
+    // section; recomputing and attaching a second copy duplicated it.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
         await preflightHostWorkerDispatch(bridge, "Continue");
@@ -1172,8 +1123,6 @@ async function runDispatchedContinueCommand(bridge, parsed) {
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };
     renderManifestCeremony(ceremony, "continue", ceremonyEnvelope, dispatches);
-    // Step 3b: Hive wisdom injection summary
-    emitHiveSummary(dispatches);
     // Step 4: Dispatch review workers
     const dispatchOpts = {
         goBinaryPath: bridge.goBinaryPath,

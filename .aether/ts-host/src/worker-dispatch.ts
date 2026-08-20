@@ -284,7 +284,6 @@ async function dispatchRealWorker(
   if (opts.executionBinding !== undefined) request.execution_binding = opts.executionBinding;
   if (dispatch.context_capsule !== undefined) request.context_capsule = dispatch.context_capsule;
   if (dispatch.skill_section !== undefined) request.skill_section = dispatch.skill_section;
-  if (dispatch.hive_section !== undefined) request.hive_section = dispatch.hive_section;
   if (dispatch.pheromone_section !== undefined) request.pheromone_section = dispatch.pheromone_section;
   if (dispatch.handoff_section !== undefined) request.handoff_section = dispatch.handoff_section;
 
@@ -375,7 +374,6 @@ interface GoWorkerDispatchRequest {
   task_brief: string;
   context_capsule?: string;
   skill_section?: string;
-  hive_section?: string;
   pheromone_section?: string;
   handoff_section?: string;
   timeout_ms: number;

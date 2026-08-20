@@ -49,7 +49,6 @@ export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedConti
 /** Parse command-line arguments for the TS host. */
 export declare function parseArgs(argv: string[]): ParsedHostArgs;
 type HostInjectedDispatchFields = {
-    hive_section?: string;
     task_brief?: string;
 };
 type PlanDispatchLike = PlanningDispatch & HostInjectedDispatchFields;
