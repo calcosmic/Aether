@@ -108,8 +108,6 @@ export interface BuildDispatch {
   blockers?: string[];
   duration?: number;
   skill_section?: string;
-  /** Cross-colony hive wisdom section for this dispatch. */
-  hive_section?: string;
   /** Sub-workers requested by this dispatch via structured spawn claims. */
   spawns?: SpawnClaim[];
   skill_count?: number;

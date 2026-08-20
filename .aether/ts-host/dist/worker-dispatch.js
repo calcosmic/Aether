@@ -164,8 +164,6 @@ async function dispatchRealWorker(opts, dispatch) {
         request.context_capsule = dispatch.context_capsule;
     if (dispatch.skill_section !== undefined)
         request.skill_section = dispatch.skill_section;
-    if (dispatch.hive_section !== undefined)
-        request.hive_section = dispatch.hive_section;
     if (dispatch.pheromone_section !== undefined)
         request.pheromone_section = dispatch.pheromone_section;
     if (dispatch.handoff_section !== undefined)

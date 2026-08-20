@@ -632,58 +632,7 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
     __setDetectAvailablePlatforms(async () => ["claude"]);
   }
 
-  function mockHiveReadFailure() {
-    const handler = <T>(_opts: unknown, args: string[]): T => {
-      goCalls.push(args);
-      const cmd = args[0];
-      if (cmd === "hive-read") {
-        throw new Error("corrupted wisdom.json");
-      }
-      if (cmd === "registry-list") {
-        return {
-          colonies: [
-            {
-              repo_path: process.cwd(),
-              domains: ["go"],
-              active: true,
-              registered_at: "2026-05-18T00:00:00Z",
-            },
-          ],
-        } as unknown as T;
-      }
-      if (cmd === "build") {
-        return {
-          dispatch_manifest: {
-            execution_binding: TEST_EXECUTION_BINDING,
-            dispatches: [
-              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
-            ],
-          },
-        } as unknown as T;
-      }
-      if (cmd === "build-finalize") {
-        return { ok: true } as unknown as T;
-      }
-      return { ok: true } as unknown as T;
-    };
-
-    __setCallGoJSON(handler);
-    __setGoBridgeCallGoJSON(handler);
-
-    __setDispatchWorkers(async (_opts, dispatches) => {
-      capturedDispatches = dispatches;
-      return dispatches.map((d: BuildDispatch) => ({
-        name: d.name,
-        status: "completed",
-        summary: "Done",
-        duration: 5,
-      }));
-    });
-
-    __setDetectAvailablePlatforms(async () => ["claude"]);
-  }
-
-  it("build runner calls hive-read before dispatch and attaches hive_section to dispatches (HIVE-04)", async () => {
+  it("build runner does not call hive-read and never attaches hive_section (regression lock for Phase 190, was HIVE-04)", async () => {
     mockHiveReadSuccess();
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
@@ -693,64 +642,29 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
 
     await runDispatchedBuildCommand(bridge, parsed, def);
 
-    // Verify hive-read was called
+    // Hive wisdom is now delivered exactly once, by Go's colony-prime
+    // context capsule -- the TS host must never call hive-read itself.
     const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
-    assert.ok(hiveReadCall, "hive-read should have been called");
+    assert.equal(hiveReadCall, undefined, "hive-read must not be called by the build runner");
 
-    // Verify dispatches have hive_section
     assert.ok(capturedDispatches, "dispatchWorkers should have been called");
     assert.ok(capturedDispatches!.length > 0, "dispatches should not be empty");
     for (const d of capturedDispatches!) {
       const dispatch = d as Record<string, unknown>;
-      assert.ok(
-        typeof dispatch.hive_section === "string" && dispatch.hive_section.includes("HIVE WISDOM"),
-        `Dispatch ${dispatch.name} should have hive_section containing HIVE WISDOM. Got: ${dispatch.hive_section}`
-      );
-      assert.ok(
-        (dispatch.hive_section as string).includes("Use table-driven tests"),
-        `Dispatch ${dispatch.name} should contain the wisdom text`
-      );
-    }
-
-    // Verify stderr contains hive summary
-    assert.ok(
-      stderrOutput.includes("Injecting hive wisdom"),
-      `Stderr should contain hive summary. Got: ${stderrOutput.slice(0, 200)}`
-    );
-  });
-
-  it("hive-read failure does not block dispatch (HIVE-04)", async () => {
-    mockHiveReadFailure();
-
-    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
-    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
-    const { getHostCommandDefinition } = await import("../src/command-registry.js");
-    const def = getHostCommandDefinition("build")!;
-
-    await runDispatchedBuildCommand(bridge, parsed, def);
-
-    // Verify warning was logged
-    assert.ok(
-      stderrOutput.includes("Warning: hive-read failed: corrupted wisdom.json"),
-      `Stderr should contain hive-read failure warning. Got: ${stderrOutput.slice(0, 300)}`
-    );
-
-    // Verify dispatch still proceeded
-    assert.ok(capturedDispatches, "dispatchWorkers should still have been called despite hive-read failure");
-    assert.ok(capturedDispatches!.length > 0, "dispatches should not be empty");
-
-    // Verify dispatches have empty hive_section (graceful degradation)
-    for (const d of capturedDispatches!) {
-      const dispatch = d as Record<string, unknown>;
       assert.equal(
         dispatch.hive_section,
-        "",
-        `Dispatch ${dispatch.name} should have empty hive_section on failure`
+        undefined,
+        `Dispatch ${dispatch.name} must not carry a TS-computed hive_section`
       );
     }
+
+    assert.ok(
+      !stderrOutput.includes("Injecting hive wisdom"),
+      `Stderr must not announce a TS-side hive wisdom injection. Got: ${stderrOutput.slice(0, 200)}`
+    );
   });
 
-  it("plan runner attaches hive_section to dispatches", async () => {
+  it("plan runner does not call hive-read and never attaches hive_section (regression lock for Phase 190)", async () => {
     mockHiveReadSuccess();
 
     const parsed = parseArgs(["node", "host.js", "plan", "--simulate"]);
@@ -759,19 +673,20 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
     await runDispatchedPlanCommand(bridge, parsed);
 
     const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
-    assert.ok(hiveReadCall, "hive-read should have been called for plan");
+    assert.equal(hiveReadCall, undefined, "hive-read must not be called by the plan runner");
 
     assert.ok(capturedDispatches, "dispatchWorkers should have been called for plan");
     for (const d of capturedDispatches!) {
       const dispatch = d as Record<string, unknown>;
-      assert.ok(
-        typeof dispatch.hive_section === "string" && dispatch.hive_section.includes("HIVE WISDOM"),
-        `Plan dispatch ${dispatch.name} should have hive_section`
+      assert.equal(
+        dispatch.hive_section,
+        undefined,
+        `Plan dispatch ${dispatch.name} must not carry a TS-computed hive_section`
       );
     }
   });
 
-  it("continue runner attaches hive_section to dispatches", async () => {
+  it("continue runner does not call hive-read and never attaches hive_section (regression lock for Phase 190)", async () => {
     mockHiveReadSuccess();
 
     const parsed = parseArgs(["node", "host.js", "continue", "--simulate"]);
@@ -780,19 +695,20 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
     await runDispatchedContinueCommand(bridge, parsed);
 
     const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
-    assert.ok(hiveReadCall, "hive-read should have been called for continue");
+    assert.equal(hiveReadCall, undefined, "hive-read must not be called by the continue runner");
 
     assert.ok(capturedDispatches, "dispatchWorkers should have been called for continue");
     for (const d of capturedDispatches!) {
       const dispatch = d as Record<string, unknown>;
-      assert.ok(
-        typeof dispatch.hive_section === "string" && dispatch.hive_section.includes("HIVE WISDOM"),
-        `Continue dispatch ${dispatch.name} should have hive_section`
+      assert.equal(
+        dispatch.hive_section,
+        undefined,
+        `Continue dispatch ${dispatch.name} must not carry a TS-computed hive_section`
       );
     }
   });
 
-  it("dry-run calls hive-read and attaches hive_section", async () => {
+  it("dry-run does not call hive-read and the printed manifest JSON never contains a hive_section key (regression lock for Phase 190)", async () => {
     mockHiveReadSuccess();
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--dry-run"]);
@@ -800,152 +716,31 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
     const { getHostCommandDefinition } = await import("../src/command-registry.js");
     const def = getHostCommandDefinition("build")!;
 
-    await runDryRunDispatchedCommand(bridge, parsed, def);
-
-    const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
-    assert.ok(hiveReadCall, "hive-read should have been called for dry-run");
-
-    // In dry-run, dispatchWorkers is NOT called, but we can verify
-    // the hive summary was logged and no error occurred
-    assert.ok(
-      stderrOutput.includes("Injecting hive wisdom"),
-      `Dry-run stderr should contain hive summary. Got: ${stderrOutput.slice(0, 200)}`
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Cross-colony wisdom benefit (HIVE-05)
-// ---------------------------------------------------------------------------
-
-describe("cross-colony wisdom benefit (HIVE-05)", () => {
-  let goCalls: string[][];
-  let capturedDispatches: unknown[] | undefined;
-  let stderrOutput: string;
-
-  beforeEach(() => {
-    __restoreAllMocks();
-    __restoreGoBridgeCallGoJSON();
-    __restoreCreateCeremonyAdapter();
-    goCalls = [];
-    capturedDispatches = undefined;
-    stderrOutput = "";
-
-    // Mock ceremony adapter to avoid Go subprocess calls
-    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
-
-    const originalStderrWrite = process.stderr.write.bind(process.stderr);
-    process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
-      if (typeof chunk === "string") stderrOutput += chunk;
-      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
-    }) as typeof process.stderr.write;
-
-    // Mock: colony A promoted wisdom (source_repo = "colony-a")
-    const handler = <T>(_opts: unknown, args: string[]): T => {
-      goCalls.push(args);
-      const cmd = args[0];
-      if (cmd === "hive-read") {
-        return {
-          entries: [
-            {
-              id: "colony-a-1",
-              text: "Prefer early error returns over deep nesting",
-              domain: "go",
-              confidence: 0.92,
-              source_repo: "colony-a",
-              source_repos: ["colony-a"],
-              created_at: "2026-05-18T00:00:00Z",
-              accessed_at: "2026-05-18T00:00:00Z",
-              access_count: 3,
-            },
-          ],
-          total: 1,
-        } as unknown as T;
-      }
-      if (cmd === "registry-list") {
-        return {
-          colonies: [
-            {
-              repo_path: process.cwd(),
-              domains: ["go"],
-              active: true,
-              registered_at: "2026-05-18T00:00:00Z",
-            },
-          ],
-        } as unknown as T;
-      }
-      if (cmd === "build") {
-        return {
-          dispatch_manifest: {
-            execution_binding: TEST_EXECUTION_BINDING,
-            dispatches: [
-              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
-            ],
-          },
-        } as unknown as T;
-      }
-      if (cmd === "build-finalize") {
-        return { ok: true } as unknown as T;
-      }
-      return { ok: true } as unknown as T;
-    };
-
-    __setCallGoJSON(handler);
-    __setGoBridgeCallGoJSON(handler);
-
-    __setDispatchWorkers(async (_opts, dispatches) => {
-      capturedDispatches = dispatches;
-      return dispatches.map((d: BuildDispatch) => ({
-        name: d.name,
-        status: "completed",
-        summary: "Done",
-        duration: 5,
-      }));
-    });
-
-    __setDetectAvailablePlatforms(async () => ["claude"]);
-  });
-
-  afterEach(() => {
-    __restoreAllMocks();
-    __restoreGoBridgeCallGoJSON();
-    __restoreCreateCeremonyAdapter();
-  });
-
-  it("colony B worker prompt contains colony A wisdom (presence proxy)", async () => {
-    // This test verifies the mechanism: wisdom from colony-a is present
-    // in colony-b's worker dispatches. The actual speedup ("faster or fewer
-    // retries") is a system property verified by observation, not by
-    // automated assertion. See RESEARCH.md HIVE-05 test strategy.
-    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
-    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
-    const { getHostCommandDefinition } = await import("../src/command-registry.js");
-    const def = getHostCommandDefinition("build")!;
-
-    await runDispatchedBuildCommand(bridge, parsed, def);
-
-    assert.ok(capturedDispatches, "dispatchWorkers should have been called");
-    assert.ok(capturedDispatches!.length > 0, "dispatches should not be empty");
-
-    for (const d of capturedDispatches!) {
-      const dispatch = d as Record<string, unknown>;
-      const hiveSection = dispatch.hive_section as string;
-      assert.ok(
-        typeof hiveSection === "string" && hiveSection.includes("HIVE WISDOM"),
-        `Dispatch should have hive_section with HIVE WISDOM header`
-      );
-      assert.ok(
-        hiveSection.includes("Prefer early error returns over deep nesting"),
-        `Dispatch should contain colony-a wisdom text`
-      );
-      // source_repo is in the data structure but not rendered in the formatted text;
-      // the presence of the wisdom text proves the cross-colony mechanism works
+    // Capture the literal stdout bytes -- this is the actual dry-run JSON
+    // envelope a live `aether host build --dry-run` invocation prints and
+    // the wrapper reads, not a re-derived in-memory approximation of it.
+    let stdoutOutput = "";
+    const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stdoutOutput += chunk;
+      return originalStdoutWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
+    }) as typeof process.stdout.write;
+    try {
+      await runDryRunDispatchedCommand(bridge, parsed, def);
+    } finally {
+      process.stdout.write = originalStdoutWrite;
     }
 
-    // Verify the hive summary was emitted
+    const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
+    assert.equal(hiveReadCall, undefined, "hive-read must not be called for dry-run");
+
     assert.ok(
-      stderrOutput.includes("Injecting hive wisdom"),
-      `Stderr should confirm hive wisdom injection`
+      !stderrOutput.includes("Injecting hive wisdom"),
+      `Dry-run stderr must not announce a TS-side hive summary. Got: ${stderrOutput.slice(0, 200)}`
+    );
+    assert.ok(
+      !stdoutOutput.includes("hive_section"),
+      `Dry-run JSON manifest output must not contain a hive_section key on any dispatch. Got: ${stdoutOutput.slice(0, 500)}`
     );
   });
 });
@@ -1257,9 +1052,6 @@ describe("build iteration loop", () => {
     let finalizedManifest: unknown;
     const mockGo = <T>(_bridgeOpts: unknown, args: string[]): T => {
       goCalls.push(args);
-      if (args[0] === "hive-read") {
-        return { entries: [{ text: "Use typed errors", domain: "go", confidence: 0.9 }], total: 1 } as unknown as T;
-      }
 		if (args[0] === "build") {
 			return { dispatch_manifest: issuedManifest } as unknown as T;
 		}
@@ -1306,9 +1098,10 @@ describe("build iteration loop", () => {
     const enriched = capturedAllDispatches[0]![0] as Record<string, unknown>;
     // Playbook context is no longer appended to worker briefs — it was
     // orchestrator guidance that told a single worker it was the Queen.
-    // Hive enrichment is still expected; that is genuine per-worker context.
+    // Hive wisdom now arrives solely via Go's context capsule (Phase 190) --
+    // the TS host must not recompute or attach its own hive_section.
     assert.doesNotMatch(String(enriched.task_brief ?? ""), /Relevant Playbooks/);
-    assert.match(String(enriched.hive_section), /Use typed errors/);
+    assert.equal(enriched.hive_section, undefined, "the enriched dispatch must not carry a TS-recomputed hive_section");
   });
 
   it("does not dispatch a build blocked by orchestrator boundary questions", async () => {
@@ -1741,10 +1534,10 @@ describe("ceremony output", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Cross-phase integration: hive + spawn + iteration (VAL-03)
+// Cross-phase integration: spawn + iteration (VAL-03)
 // ---------------------------------------------------------------------------
 
-describe("cross-phase integration (hive + spawn + iteration)", () => {
+describe("cross-phase integration (spawn + iteration)", () => {
   let goCalls: string[][];
   let capturedAllDispatches: unknown[][];
   let capturedDispatchOpts: unknown[];
@@ -1776,43 +1569,13 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     __restoreCreateCeremonyAdapter();
   });
 
-  it("build pipeline exercises hive, spawn, and iteration together", async () => {
-    // Set up mock callGoJSON that returns hive-read entries, registry-list,
-    // build manifest with queen_execution_policy (spawn budget: max_workers: 10),
-    // and build-finalize responses. First dispatch workers fail, second succeed.
+  it("build pipeline exercises spawn and iteration together", async () => {
+    // Set up mock callGoJSON that returns a build manifest with
+    // queen_execution_policy (spawn budget: max_workers: 10) and
+    // build-finalize responses. First dispatch workers fail, second succeed.
     const handler = <T>(_bridgeOpts: unknown, args: string[]): T => {
       goCalls.push(args);
       const cmd = args[0];
-      if (cmd === "hive-read") {
-        return {
-          entries: [
-            {
-              id: "1",
-              text: "Use table-driven tests for Go code",
-              domain: "go",
-              confidence: 0.92,
-              source_repo: "colony-a",
-              source_repos: ["colony-a"],
-              created_at: "2026-05-18T00:00:00Z",
-              accessed_at: "2026-05-18T00:00:00Z",
-              access_count: 3,
-            },
-          ],
-          total: 1,
-        } as unknown as T;
-      }
-      if (cmd === "registry-list") {
-        return {
-          colonies: [
-            {
-              repo_path: process.cwd(),
-              domains: ["go", "typescript"],
-              active: true,
-              registered_at: "2026-05-18T00:00:00Z",
-            },
-          ],
-        } as unknown as T;
-      }
       if (cmd === "build") {
         return {
           dispatch_manifest: {
@@ -1833,7 +1596,6 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
       return { ok: true } as unknown as T;
     };
 
-    // Set mock at both levels: host.ts uses _callGoJSONRef; hive-injector uses go-bridge module-level callGoJSON
     __setCallGoJSON(handler);
     __setGoBridgeCallGoJSON(handler);
 
@@ -1876,9 +1638,10 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
 
     await runDispatchedBuildCommand(bridge, parsed, def);
 
-    // 1. hive-read was called
+    // 1. hive-read is never called by the TS host (Phase 190 -- hive wisdom
+    // is delivered exactly once, by Go's colony-prime context capsule).
     const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
-    assert.ok(hiveReadCall, "hive-read should have been called");
+    assert.equal(hiveReadCall, undefined, "hive-read must not be called");
 
     // 2. spawnOrchestrator in dispatch opts has totalBudget from manifest
     assert.ok(capturedDispatchOpts.length >= 1, "Should have captured dispatch opts");
@@ -1905,10 +1668,10 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     );
     assert.ok(hasBlockerFeedback, "Second iteration dispatches should contain blocker text from iteration 1");
 
-    // 5. stderr contains hive wisdom and iteration markers
+    // 5. stderr contains iteration markers, and never a TS-side hive summary
     assert.ok(
-      stderrOutput.includes("Injecting hive wisdom"),
-      `Stderr should contain hive wisdom injection marker. Got: ${stderrOutput.slice(0, 500)}`
+      !stderrOutput.includes("Injecting hive wisdom"),
+      `Stderr must not contain a TS-side hive wisdom injection marker. Got: ${stderrOutput.slice(0, 500)}`
     );
     assert.ok(
       stderrOutput.includes("Iteration"),
