@@ -198,6 +198,7 @@ var briefOwnedSections = map[string]bool{
 	"Constraints":              true,
 	"Hints":                    true,
 	"Task Success Criteria":    true,
+	"Task Resolution Notice":   true,
 	"Phase Success Criteria":   true,
 	"Heartbeat Protocol":       true,
 	"Relevant Playbooks":       true,
