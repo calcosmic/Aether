@@ -296,6 +296,13 @@ expected base commit resolved this automatically before any plan work began.
   pheromone signals on every command this repo dispatches a Codex/Claude/OpenCode worker from --
   the one gap 190-VERIFICATION.md's own gaps_found score (6/7) named is closed.
 
+## Self-Check: PASSED
+
+- FOUND: `cmd/build_pheromone_190_05_test.go`
+- FOUND: `.planning/phases/190-lean-non-duplicated-delivery/deferred-items.md`
+- FOUND commit `e94192e4` (fix: stop duplicating pheromone signals on native worker dispatch)
+- FOUND commit `8720ab60` (docs: add plan summary)
+
 ---
 *Phase: 190-lean-non-duplicated-delivery*
 *Completed: 2026-08-21*
