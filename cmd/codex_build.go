@@ -279,6 +279,16 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	attachBuildDispatchContext(root, phase, dispatches, generatedAt)
+	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
+	// Write every dispatch's composed brief to disk and blank the inline copy
+	// once the write succeeds (clearInlineBrief=true) -- the ONLY dispatch
+	// path the interactive wrapper is allowed to call must never ship the
+	// same composed brief twice in one JSON response. A dispatch whose write
+	// fails keeps its inline Brief populated (see writeBuildWorkerBriefFiles).
+	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, generatedAt, true)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 
 	parallelMode := effectiveParallelMode(state)
@@ -286,11 +296,10 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	executionPlan := buildExecutionPlans(dispatches, parallelMode)
 	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
 	providerDiagnostics := dispatchProviderDiagnostics(newCodexWorkerInvoker())
-	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	claimsRel := "last-build-claims.json"
-	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true, reviewDepth)
+	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, briefPaths, true, reviewDepth)
 	manifest.Phase = phaseNum
 	manifest.DispatchContract = dispatchContract
 	manifest.ProviderDiagnostics = providerDiagnostics
@@ -2049,25 +2058,37 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 	return dispatchMaps
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
+// writeBuildWorkerBriefFiles writes each dispatch's composed worker brief to
+// a file on disk under buildDirRel/worker-briefs/{name}.md, falling back to
+// composeBuildManifestBrief when .Brief is already empty (mirroring the
+// direct dispatch path's long-standing fallback: some callers of
+// writeCodexBuildArtifacts never run attachBuildDispatchContext, so Brief can
+// arrive empty here).
+//
+// writeCodexBuildArtifacts (direct/native `aether build <phase>`) and
+// runCodexBuildPlanOnlyWithOptions (`aether build <phase> --plan-only`) both
+// converge on this single helper, distinguished only by clearInlineBrief:
+// the direct path needs .Brief to survive on disk in the manifest (two
+// existing tests require it -- TestWorkerBriefFileHoldsComposedBrief,
+// TestDispatchEntryCarriesBriefPath), so it passes false. The plan-only path
+// needs .Brief cleared once the file write succeeds, so the composed brief
+// never ships twice in the same JSON envelope (result.dispatches[] and
+// result.dispatch_manifest.dispatches[] both read off this same slice), so it
+// passes true.
+//
+// A write failure returns the error immediately, before any blanking for
+// that dispatch (or any dispatch after it) happens -- the caller's slice
+// keeps that dispatch's .Brief populated and .BriefPath empty, the same
+// graceful-degradation posture the direct path has always had: ship inline
+// when the disk write did not happen, never silently drop the prompt.
+func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, error) {
 	briefPaths := make([]string, 0, len(dispatches))
-	briefOutputs := map[string]string{}
-	finalOutputs := map[string][]string{}
 
 	for i := range dispatches {
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
-		// Prefer the already-composed brief (base + pheromone signals + prior
-		// handoffs) so the file on disk and the manifest's inline dispatch.brief
-		// are provably the same bytes. Some callers of writeCodexBuildArtifacts
-		// (the direct/real-dispatch path in runCodexBuildWithOptions) never run
-		// attachBuildDispatchContext, so Brief can be empty here; fall back to
-		// composing it directly rather than writing the base-only render.
 		content := dispatches[i].Brief
 		if strings.TrimSpace(content) == "" {
 			content = composeBuildManifestBrief(root, phase, dispatches[i], startedAt)
-			// Keep the manifest's inline Brief in sync with what the file holds so
-			// the byte-equality invariant holds for every dispatch, not only the
-			// ones whose caller already ran attachBuildDispatchContext.
 			dispatches[i].Brief = content
 		}
 		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
@@ -2075,13 +2096,33 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 		}
 		displayPath := displayDataPath(briefRel)
 		briefPaths = append(briefPaths, displayPath)
-		briefOutputs[dispatches[i].Name] = displayPath
 		dispatches[i].BriefPath = displayPath
+		if clearInlineBrief {
+			// The file on disk is now the single source of truth for this
+			// dispatch's brief -- nothing downstream (codexBuildDispatchMaps or
+			// the manifest's own Dispatches value copy) may ship the same bytes
+			// a second time under the inline "brief" key.
+			dispatches[i].Brief = ""
+		}
 	}
 	sort.Strings(briefPaths)
 
+	return briefPaths, dispatches, nil
+}
+
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
+	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	briefOutputs := map[string]string{}
+	for i := range dispatches {
+		briefOutputs[dispatches[i].Name] = dispatches[i].BriefPath
+	}
+	finalOutputs := map[string][]string{}
+
 	if isFinalBuildDispatchMode(dispatchMode) {
-		var err error
 		finalOutputs, dispatches, err = writeCodexBuildOutcomeReports(root, phase, buildDirRel, dispatches, time.Now().UTC(), dispatchMode)
 		if err != nil {
 			return nil, nil, err

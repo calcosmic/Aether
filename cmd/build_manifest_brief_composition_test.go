@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,6 +16,12 @@ import (
 // brief, and active pheromone signals must be inside it. Sub-resolver tests
 // alone let the composition regress silently — this is the failing command
 // for the milestone's core claim, "the colony hears you".
+//
+// Phase 190 D-01/D-04 moved the delivery mechanism: a plan-only dispatch now
+// carries brief_path (a file on disk holding the composed brief) instead of
+// shipping the same text inline under "brief" -- never both. This test's
+// steering-reaches-the-worker guarantee still holds, it just now reads the
+// file brief_path names instead of the inline field.
 func TestPlanOnlyManifestBriefCarriesPheromones(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -59,22 +66,31 @@ func TestPlanOnlyManifestBriefCarriesPheromones(t *testing.T) {
 	if len(dispatches) == 0 {
 		t.Fatal("no dispatches in plan-only result")
 	}
-	briefless := 0
+	basePath := store.BasePath()
+	pathless := 0
 	signalCarried := false
 	for _, d := range dispatches {
-		brief, _ := d["brief"].(string)
-		if strings.TrimSpace(brief) == "" {
-			briefless++
+		if brief, ok := d["brief"].(string); ok && strings.TrimSpace(brief) != "" {
+			t.Fatalf("dispatch %v still carries an inline brief once brief_path succeeded — the same bytes must not ship twice", d["name"])
+		}
+		briefPath, _ := d["brief_path"].(string)
+		if strings.TrimSpace(briefPath) == "" {
+			pathless++
 			continue
 		}
-		if strings.Contains(brief, signal) && strings.Contains(brief, "## Pheromone Signals") {
+		rel := strings.TrimPrefix(briefPath, ".aether/data/")
+		content, err := os.ReadFile(filepath.Join(basePath, rel))
+		if err != nil {
+			t.Fatalf("brief_path %s for dispatch %v does not resolve to a file on disk: %v", briefPath, d["name"], err)
+		}
+		if strings.Contains(string(content), signal) && strings.Contains(string(content), "## Pheromone Signals") {
 			signalCarried = true
 		}
 	}
-	if briefless > 0 {
-		t.Fatalf("%d of %d plan-only dispatches carry no brief — wrapper-spawned workers would get a bare task line again", briefless, len(dispatches))
+	if pathless > 0 {
+		t.Fatalf("%d of %d plan-only dispatches carry no brief_path — wrapper-spawned workers would get a bare task line again", pathless, len(dispatches))
 	}
 	if !signalCarried {
-		t.Fatalf("the user's REDIRECT %q reached no worker brief; the colony cannot hear steering", signal)
+		t.Fatalf("the user's REDIRECT %q reached no worker brief file; the colony cannot hear steering", signal)
 	}
 }
