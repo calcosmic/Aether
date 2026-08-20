@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -387,3 +389,102 @@ func TestPrintBriefFailsWhenAnExpectedSectionReachesNoWorker(t *testing.T) {
 		t.Fatalf("a budget-evicted section must be warned about, not failed on: %v", err)
 	}
 }
+
+// Ported from the parallel 190-04 fix branch (rescue-190-04): the native/direct
+// dispatch path must deliver stored handoff content exactly once. The wrapper
+// plan-only path is covered by TestPlanOnlyDispatchesCarryNoHandoffSection above;
+// this is its sibling for the other delivery route (the zero-vs-once trap).
+func TestNativeDispatchHandoffStaysExactlyOnceViaCapsule(t *testing.T) {
+	saveGlobals(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Prove the native dispatch path keeps handoff delivery to exactly once"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:              1,
+					Name:            "Native dispatch handoff",
+					Description:     "Native/direct dispatch must keep handoff delivery to exactly once",
+					Status:          colony.PhaseReady,
+					SuccessCriteria: []string{"Handoff content reaches the worker exactly once"},
+				},
+			},
+		},
+	})
+
+	recent := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	handoffs := workerHandoffFile{
+		Entries: []workerHandoffRecord{
+			{
+				ID:                 "native-path-fixture-1",
+				Workflow:           "build",
+				Phase:              1,
+				WorkerName:         "PriorFixtureWorker-1",
+				Status:             "completed",
+				VerificationStatus: "pass",
+				Summary:            "sentinel-native-handoff-probe",
+				Freshness:          recent,
+			},
+		},
+	}
+	if err := store.SaveJSON(workerHandoffsPath, handoffs); err != nil {
+		t.Fatalf("failed to save worker handoffs: %v", err)
+	}
+
+	phase := colony.Phase{ID: 1, Name: "Native dispatch handoff"}
+	dispatches := []codexBuildDispatch{{Name: "NativeWorker-1", Caste: "builder", Task: "do the thing"}}
+	// attachBuildDispatchContext (the ONLY setter of HandoffSection) is
+	// deliberately never called here -- this mirrors writeCodexBuildArtifacts,
+	// which never calls it on the direct/native path either.
+
+	// executeCodexBuildDispatches marks the spawn tree entry "starting" as
+	// its first move; the real runCodexBuildWithOptions flow pre-seeds this
+	// entry via spawnTree.RecordSpawn before dispatch (cmd/codex_build.go:3053),
+	// so a direct call here must seed it the same way.
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := spawnTree.RecordSpawn("Queen", "builder", "NativeWorker-1", "do the thing", 1); err != nil {
+		t.Fatalf("failed to seed spawn tree: %v", err)
+	}
+
+	invoker := &codex.FakeInvoker{}
+	results, _, _, err := executeCodexBuildDispatches(context.Background(), root, phase, dispatches, time.Now(), invoker, colony.ModeInRepo, 0, 3, false, nil)
+	if err != nil {
+		t.Fatalf("executeCodexBuildDispatches failed: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("expected at least one dispatch result")
+	}
+
+	capsule := resolveCodexWorkerContext()
+	if !strings.Contains(capsule, "sentinel-native-handoff-probe") {
+		t.Fatalf("expected the stored handoff to reach the native path's own capsule:\n%s", capsule)
+	}
+	if strings.TrimSpace(results[0].HandoffSection) != "" {
+		t.Fatalf("native/direct dispatch path must never populate HandoffSection (attachBuildDispatchContext is not on this path) -- got %q", results[0].HandoffSection)
+	}
+	assembled := codex.AssembleHostedPrompt(capsule, results[0].HandoffSection, "", "", "task brief")
+	if n := strings.Count(assembled, "## Previous Worker Handoffs"); n != 1 {
+		t.Fatalf("native dispatch's assembled prompt has %d \"## Previous Worker Handoffs\" headings, want exactly 1 (via the capsule alone):\n%s", n, assembled)
+	}
+	if n := strings.Count(assembled, "sentinel-native-handoff-probe"); n != 1 {
+		t.Fatalf("native dispatch's assembled prompt carries the stored handoff's own text %d times, want exactly 1:\n%s", n, assembled)
+	}
+}
+
+
