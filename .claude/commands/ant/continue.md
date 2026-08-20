@@ -131,9 +131,10 @@ on credential work is not available at any cost. Relay what the runtime added
 or dropped.
 
 **Reads:** the manifest returned by `aether host continue --dry-run`;
-`continue_manifest.context_capsule` and `continue_manifest.pheromone_section`
-(both read once, not per-dispatch); each dispatch's runtime-provided `brief`
-verbatim; `dispatch.skill_section` when present.
+`continue_manifest.context_capsule` (read once, not per-dispatch — the capsule
+is the SOLE source of pheromone signals; `pheromone_section` is no longer
+populated); each dispatch's runtime-provided `brief` verbatim;
+`dispatch.skill_section` when present.
 
 **Spawns:** the reviewers named in `result.manifest.continue_manifest` — one
 platform agent per named dispatch, spawned in the manifest's own wave order.
@@ -167,7 +168,7 @@ Render the runtime-owned heavy-review ceremony:
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>
 ```
 
-Spawn reviewers as visible live Task/subagent panels. Do not set `run_in_background`. Each reviewer's prompt = `continue_manifest.context_capsule` + `continue_manifest.pheromone_section` (both read once from the manifest, not per-dispatch, reused for every reviewer this continue run spawns) prepended VERBATIM ahead of each dispatch's own runtime-provided `brief`, then `dispatch.skill_section` appended when present. Nothing else, nothing invented.
+Spawn reviewers as visible live Task/subagent panels. Do not set `run_in_background`. Each reviewer's prompt = `continue_manifest.context_capsule` (read once from the manifest, not per-dispatch, reused for every reviewer this continue run spawns — it already carries every active pheromone signal; do not prepend `pheromone_section`, which the runtime no longer populates) prepended VERBATIM ahead of each dispatch's own runtime-provided `brief`, then `dispatch.skill_section` appended when present. Nothing else, nothing invented.
 
 For each heavy-review wave:
 
@@ -175,7 +176,7 @@ For each heavy-review wave:
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each reviewer.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. The reviewer's prompt = `continue_manifest.context_capsule` (read once, prepended verbatim) + `continue_manifest.pheromone_section` (read once, prepended verbatim) + each dispatch's runtime-provided `brief` verbatim + `dispatch.skill_section` when present. Nothing else, nothing invented.
+5. The reviewer's prompt = `continue_manifest.context_capsule` (read once, prepended verbatim — the sole carrier of pheromone signals) + each dispatch's runtime-provided `brief` verbatim + `dispatch.skill_section` when present. Nothing else, nothing invented.
 6. After each reviewer returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <worker_file>`.
 

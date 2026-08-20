@@ -165,10 +165,22 @@ func TestContinueWrapperInstructsCapsuleAndPheromoneDelivery(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
+	// 190-VERIFICATION (third pass): the capsule is the SOLE carrier of
+	// pheromone signals on the continue wrapper flow — the runtime no longer
+	// populates continue_manifest.pheromone_section, and the wrapper prose
+	// must not instruct prepending it (that concatenation shipped every
+	// active signal to heavy-depth reviewers twice). This test previously
+	// required the pheromone_section delivery instruction; flipped
+	// deliberately alongside the manifest change in codex_continue_plan.go.
 	required := []string{
 		"continue_manifest.context_capsule",
-		"continue_manifest.pheromone_section",
+		"SOLE source of pheromone signals",
 		"dispatch.skill_section",
+	}
+	forbidden := []string{
+		// The old concatenation instructions, in both shapes they appeared.
+		"+ `continue_manifest.pheromone_section`",
+		"and `continue_manifest.pheromone_section`",
 	}
 
 	for _, wrapperPath := range canonicalWrapperPaths(repoRoot, "continue") {
@@ -180,6 +192,11 @@ func TestContinueWrapperInstructsCapsuleAndPheromoneDelivery(t *testing.T) {
 		for _, want := range required {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s missing delivery instruction %q -- a wrapper-spawned continue reviewer would never receive it", wrapperPath, want)
+			}
+		}
+		for _, ban := range forbidden {
+			if strings.Contains(text, ban) {
+				t.Errorf("%s still instructs prepending pheromone_section (%q) -- the capsule is the sole carrier; concatenating both delivers every active signal twice", wrapperPath, ban)
 			}
 		}
 	}

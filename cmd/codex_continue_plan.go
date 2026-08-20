@@ -54,11 +54,16 @@ type codexContinuePlanManifest struct {
 	WorkerTimeout       int                             `json:"worker_timeout_seconds,omitempty"`
 	VerificationTimeout int                             `json:"verification_timeout_seconds,omitempty"`
 	SkipWatchers        bool                            `json:"skip_watchers,omitempty"`
-	// ContextCapsule and PheromoneSection are colony-wide, resolved ONCE per
-	// plan-only manifest -- mirroring codexBuildManifest.ContextCapsule
-	// (cmd/codex_build.go) -- never copied per-dispatch. The wrapper reads
-	// each once from the manifest and prepends it, verbatim, ahead of every
-	// spawned reviewer/watcher's brief this continue run carries.
+	// ContextCapsule is colony-wide, resolved ONCE per plan-only manifest --
+	// mirroring codexBuildManifest.ContextCapsule (cmd/codex_build.go) --
+	// never copied per-dispatch. The wrapper reads it once from the manifest
+	// and prepends it, verbatim, ahead of every spawned reviewer/watcher's
+	// brief this continue run carries. It is the SOLE carrier of pheromone
+	// signals on this flow (190-VERIFICATION third pass): PheromoneSection
+	// below stays unset -- populating it again shipped every active signal
+	// to heavy-depth reviewers twice, once per field. The field itself is
+	// kept (omitempty, so it vanishes from the JSON) for wire compatibility,
+	// exactly as 190-04 kept handoff_section on the build manifest.
 	ContextCapsule            string                          `json:"context_capsule,omitempty"`
 	PheromoneSection          string                          `json:"pheromone_section,omitempty"`
 	Dispatches                []codexContinueExternalDispatch `json:"dispatches"`
@@ -160,8 +165,14 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		WorkerTimeout:       int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
 		VerificationTimeout: int(verificationTimeout / time.Second),
 		SkipWatchers:        effectiveSkipWatchers,
-		ContextCapsule:      resolveCodexWorkerContext(),
-		PheromoneSection:    resolvePheromoneSection(),
+		// ContextCapsule is the SOLE carrier of pheromone signals on this
+		// flow (190-VERIFICATION third pass) — resolveCodexWorkerContext()
+		// already renders "## Pheromone Signals" for every active signal,
+		// and continue.md used to instruct the wrapper to concatenate a
+		// separate PheromoneSection verbatim as well, delivering each
+		// signal to every heavy-depth reviewer twice. Mirrors build's
+		// 190-03 decision; PheromoneSection deliberately left unset.
+		ContextCapsule: resolveCodexWorkerContext(),
 		Dispatches:          dispatches,
 		DispatchMode:        "plan-only",
 		FinalizeSurface:     "awaiting_wrapper_completion",

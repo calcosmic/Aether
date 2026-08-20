@@ -207,8 +207,22 @@ func TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection(t *testing.T)
 	if strings.TrimSpace(plan.ContextCapsule) == "" {
 		t.Errorf("expected continue_manifest.context_capsule to be non-empty for a colony with an active goal/state, got %q", plan.ContextCapsule)
 	}
-	if !strings.Contains(plan.PheromoneSection, distinctiveSignalText) {
-		t.Errorf("expected continue_manifest.pheromone_section to contain the seeded signal's text %q, got %q", distinctiveSignalText, plan.PheromoneSection)
+	// 190-VERIFICATION (third pass): the capsule is the SOLE carrier of
+	// pheromone signals on the continue wrapper flow, exactly as build's
+	// wrapper flow settled in 190-03. This test previously asserted the
+	// OPPOSITE (that pheromone_section carried the signal alongside the
+	// capsule) — that contract shipped every active signal to heavy-depth
+	// reviewers twice, once per field, because continue.md instructs the
+	// wrapper to concatenate both verbatim. Flip locked deliberately.
+	if n := strings.Count(plan.ContextCapsule, distinctiveSignalText); n != 1 {
+		t.Errorf("expected the capsule to carry the seeded signal's text exactly once, got %d occurrences", n)
+	}
+	if strings.TrimSpace(plan.PheromoneSection) != "" {
+		t.Errorf("continue_manifest.pheromone_section must stay empty — the capsule is the sole carrier of pheromone signals (190-VERIFICATION third pass); got %q", plan.PheromoneSection)
+	}
+	combined := plan.ContextCapsule + "\n" + plan.PheromoneSection
+	if n := strings.Count(combined, distinctiveSignalText); n != 1 {
+		t.Errorf("seeded signal text must reach the manifest exactly once across capsule+pheromone_section, got %d", n)
 	}
 
 	// codexContinueExternalDispatch must NOT have grown a per-dispatch
