@@ -1035,7 +1035,13 @@ func plannedSealFinalReviewDispatches(root string, state colony.ColonyState, pha
 			TaskID:         fmt.Sprintf("seal-review-%s", spec.Caste),
 			TaskBrief:      renderSealFinalReviewBrief(root, state, phase, spec),
 			ContextCapsule: capsule,
-			HandoffSection: renderWorkerHandoffSection("seal", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste))),
+			// D-190-05-A / 190-06: renderRelatedWorkflowHandoffSection, not
+			// renderWorkerHandoffSection -- capsule (above) already renders
+			// "## Previous Worker Handoffs" for "build"-workflow records
+			// (cmd/colony_prime_context.go:695). Same shape D-190-05-A found
+			// for continue, empirically reproduced here (throwaway probe,
+			// 190-06) whenever both a build- and a seal-workflow handoff exist.
+			HandoffSection: renderRelatedWorkflowHandoffSection("seal", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste))),
 			Workflow:       "seal",
 			Phase:          phase.ID,
 			SkillSection:   resolveSkillSectionForWorkflow("seal", spec.Caste, spec.Task),

@@ -1037,7 +1037,13 @@ func invokeSwarmWorker(ctx context.Context, root, target, swarmID string, plan s
 		TaskID:         fmt.Sprintf("swarm.%s", plan.Role),
 		TaskBrief:      brief,
 		ContextCapsule: resolveCodexWorkerContext(),
-		HandoffSection: renderWorkerHandoffSection("swarm", 0, plan.Name),
+		// D-190-05-A / 190-06: renderRelatedWorkflowHandoffSection, not
+		// renderWorkerHandoffSection -- ContextCapsule above already renders
+		// "## Previous Worker Handoffs" for "build"-workflow records
+		// (cmd/colony_prime_context.go:695). Same shape D-190-05-A found for
+		// continue, empirically reproduced here (throwaway probe, 190-06)
+		// whenever both a build- and a swarm-workflow handoff exist.
+		HandoffSection: renderRelatedWorkflowHandoffSection("swarm", 0, plan.Name),
 		Root:           root,
 		Timeout:        firstSwarmTimeout(plan.Timeout),
 		SkillSection:   resolveSkillSection(plan.Caste, plan.Task),

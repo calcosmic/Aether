@@ -148,6 +148,35 @@ invisible to the one tool built to catch exactly this class of bug.
 
 ## D-190-05-A: Continue's native review and watcher dispatches independently double-deliver prior-worker handoffs through a separate, unfixed channel (HandoffSection, not pheromones)
 
+**RESOLVED by 190-06.** `plannedContinueReviewDispatches` and
+`plannedContinueWatcherDispatch` no longer call `renderWorkerHandoffSection` for
+`HandoffSection` (which shares the capsule's own "## Previous Worker Handoffs"
+heading); they call the new `renderRelatedWorkflowHandoffSection` instead, which
+renders under a distinct "## Related Worker Handoffs" heading. The capsule's
+"build"-workflow carryover and the dedicated field's "continue"-workflow
+sibling relay are NOT the same content (unlike D-190-03-A's pheromone case, where
+deletion was correct because both channels rendered byte-identical text) — deleting
+the field would have silently dropped the sibling-relay content to zero, exactly
+the trap this plan's own instructions warned against. Both channels now keep
+exactly one home each. Proven with a fail-then-pass test per dispatch function
+(`TestContinueReviewHandoffStaysExactlyOnceViaOwnHeading`,
+`TestContinueWatcherHandoffStaysExactlyOnceViaOwnHeading`) plus a 9-case breadth
+lock (`TestNineCommandsDeliverHandoffExactlyOnce`) mirroring 190-05's pheromone
+breadth test exactly.
+
+The per-caller audit required by 190-06's own instructions found the IDENTICAL
+"capsule (build-only) + dedicated field (own-workflow)" shape on four more native
+dispatch paths D-190-05-A never named: colonize, plan, seal, and swarm. Verified
+empirically (throwaway probe, deleted after use) before concluding this, per this
+repo's Definition of Done — a "final gap of the phase" claim must not leave a
+proven, reproducible instance of the exact bug being closed undiscovered. All four
+were fixed with the identical mechanism (see `190-06-SUMMARY.md` for the full
+per-caller audit table). `codexWorkerDispatchesForRecovery` (build's
+retry-instruction builder) used the SAME "build" workflow tag as the capsule — a
+TRUE duplicate, not a materially-different one — so its `HandoffSection` was
+removed outright, mirroring 190-05's own `PheromoneSection` fix at that exact call
+site. The rest of this entry is kept for historical record.
+
 **Found during:** 190-05, while auditing all ~8 `codex.WorkerDispatch`/`codex.WorkerConfig`
 construction sites per this plan's own per-caller discipline (required to establish, for each
 caller, whether its capsule already embeds the pheromone section before touching
