@@ -985,7 +985,15 @@ func buildExternalBuildRecoveryInstructions(phaseNum int, dispatches []codexBuil
 func codexWorkerDispatchesForRecovery(dispatches []codexBuildDispatch, phaseNum int) []codex.WorkerDispatch {
 	root := resolveAetherRoot()
 	capsule := resolveCodexWorkerContext()
-	pheromones := resolvePheromoneSection()
+	// PheromoneSection is deliberately NOT resolved here (D-190-03-A / 190-05):
+	// capsule already renders "## Pheromone Signals" unconditionally whenever a
+	// signal is active (cmd/colony_prime_context.go:571). These WorkerDispatch
+	// values are never passed through AssemblePrompt/AssembleHostedPrompt today
+	// (buildExternalBuildRecoveryInstructions only reads them in-memory for
+	// same-caste peer lookup), but populating a redundant PheromoneSection would
+	// leave a duplication trap for the moment a future change wires this into
+	// a live invocation, mirroring the pattern this plan just closed on the
+	// live native/direct dispatch path.
 
 	workers := make([]codex.WorkerDispatch, 0, len(dispatches))
 	for _, dispatch := range dispatches {
@@ -1006,7 +1014,6 @@ func codexWorkerDispatchesForRecovery(dispatches []codexBuildDispatch, phaseNum 
 			TaskBrief:         brief,
 			ContextCapsule:    capsule,
 			SkillSection:      dispatch.SkillSection,
-			PheromoneSection:  pheromones,
 			HandoffSection:    renderWorkerHandoffSection("build", phaseNum, dispatch.Name),
 			PermissionProfile: dispatch.PermissionProfile,
 			DeclaredPaths:     append([]string{}, dispatch.DeclaredPaths...),

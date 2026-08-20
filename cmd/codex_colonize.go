@@ -676,7 +676,12 @@ func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker 
 	specs := queenSurveyorSpecs()
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	capsule := resolveCodexWorkerContext()
-	pheromoneSection := resolvePheromoneSection()
+	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
+	// already renders "## Pheromone Signals" unconditionally whenever a signal
+	// is active (cmd/colony_prime_context.go:571). Populating a second,
+	// independent PheromoneSection field here would deliver the same steering
+	// text twice. See resolvePheromoneSection's doc comment for which callers
+	// still need it.
 	workerTimeout := effectiveSurveyorDispatchTimeout(timeoutOverride)
 	for i, spec := range specs {
 		tomlFile := fmt.Sprintf("aether-surveyor-%s.toml", spec.AgentSuffix)
@@ -691,21 +696,20 @@ func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker 
 		taskBrief := fmt.Sprintf("Survey task: %s\n\nWrite these survey outputs in the repo: %s\n\nSurvey the territory at %s", spec.Task, strings.Join(outputPaths, ", "), root)
 
 		dispatches = append(dispatches, codex.WorkerDispatch{
-			ID:               fmt.Sprintf("surveyor-%d", i),
-			WorkerName:       workerName,
-			AgentName:        fmt.Sprintf("aether-surveyor-%s", spec.AgentSuffix),
-			AgentTOMLPath:    dispatchAgentPath(root, invoker, strings.TrimSuffix(tomlFile, ".toml")),
-			Caste:            spec.Caste,
-			TaskID:           fmt.Sprintf("survey-%d", i),
-			TaskBrief:        taskBrief,
-			ContextCapsule:   capsule,
-			HandoffSection:   renderWorkerHandoffSection("colonize", 0, workerName),
-			Workflow:         "colonize",
-			SkillSection:     resolveSkillSectionForWorkflow("colonize", spec.Caste, spec.Task),
-			PheromoneSection: pheromoneSection,
-			Root:             root,
-			Timeout:          workerTimeout,
-			Wave:             1,
+			ID:             fmt.Sprintf("surveyor-%d", i),
+			WorkerName:     workerName,
+			AgentName:      fmt.Sprintf("aether-surveyor-%s", spec.AgentSuffix),
+			AgentTOMLPath:  dispatchAgentPath(root, invoker, strings.TrimSuffix(tomlFile, ".toml")),
+			Caste:          spec.Caste,
+			TaskID:         fmt.Sprintf("survey-%d", i),
+			TaskBrief:      taskBrief,
+			ContextCapsule: capsule,
+			HandoffSection: renderWorkerHandoffSection("colonize", 0, workerName),
+			Workflow:       "colonize",
+			SkillSection:   resolveSkillSectionForWorkflow("colonize", spec.Caste, spec.Task),
+			Root:           root,
+			Timeout:        workerTimeout,
+			Wave:           1,
 		})
 	}
 

@@ -1699,7 +1699,17 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	capsule := resolveCodexWorkerContext()
 	cleanupStaleWorkersBeforeDispatch(root)
 
-	pheromoneSection := resolvePheromoneSection()
+	// PheromoneSection is deliberately left unset here (D-190-03-A, closed by
+	// 190-05). capsule (resolveCodexWorkerContext(), above) already renders its
+	// own "## Pheromone Signals" section unconditionally whenever a signal is
+	// active (cmd/colony_prime_context.go:571) -- populating a second,
+	// independent PheromoneSection field on top of it would deliver the same
+	// steering text twice into AssemblePrompt/AssembleHostedPrompt
+	// (pkg/codex/prompt.go), under two different headings, to every
+	// native-dispatched worker (including every autopilot /ant-run build).
+	// The capsule is this path's sole steering channel now, mirroring the
+	// "one home" decision 190-03 already made for the wrapper plan-only flow.
+	// See resolvePheromoneSection's doc comment for which callers still need it.
 	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
 	indexByName := make(map[string]int, len(dispatches))
 	dispatchByName := make(map[string]codex.WorkerDispatch, len(dispatches))
@@ -1722,7 +1732,6 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			Workflow:          "build",
 			Phase:             phase.ID,
 			SkillSection:      resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
-			PheromoneSection:  pheromoneSection,
 			Root:              root,
 			TrackingRoot:      root,
 			Timeout:           workerTimeout,
@@ -3438,6 +3447,27 @@ func resolveSkillSectionForWorkflow(workflow, caste, task string) string {
 // resolvePheromoneSection extracts active pheromone signals, groups them by
 // type, and formats them into a markdown section. Returns empty string if no signals
 // or if the store is not initialized.
+//
+// Calling contract (D-190-03-A / 190-05): this renders the SAME content
+// resolveCodexWorkerContext()'s capsule already includes under its own
+// "## Pheromone Signals" heading (cmd/colony_prime_context.go:571) whenever a
+// signal is active. A caller that sets codex.WorkerDispatch/WorkerConfig's
+// ContextCapsule to resolveCodexWorkerContext() must NOT also populate
+// PheromoneSection from this function -- AssemblePrompt/AssembleHostedPrompt
+// (pkg/codex/prompt.go) join ContextCapsule and PheromoneSection as two
+// separate, both-included parts with no dedup between them, so doing both
+// ships the same steering text twice under two different headings. This is
+// why executeCodexBuildDispatches (build, native/direct), plannedContinueReviewDispatches
+// and plannedContinueWatcherDispatch (continue), dispatchRealPlanningWorkersWithIterationContext
+// (plan), dispatchRealSurveyorsWithTimeout (colonize), plannedSealFinalReviewDispatches
+// (seal), and invokeSwarmWorker (swarm) do not call this function.
+//
+// Call this ONLY when the caller's ContextCapsule is a custom, lighter capsule
+// that does not itself render "## Pheromone Signals" -- today that means
+// runQuickScout (quick, renderQuickContextCapsule) and the Oracle worker
+// config builder (oracle, renderOracleContextCapsule), where this function is
+// the pheromone signals' sole delivery channel. Removing it from those two
+// callers would silently drop pheromone steering to zero, not deduplicate it.
 func resolvePheromoneSection() string {
 	if store == nil {
 		return ""

@@ -1030,20 +1030,25 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 func invokeSwarmWorker(ctx context.Context, root, target, swarmID string, plan swarmWorkerPlan, priorSummary, responsePath string, invoker codex.WorkerInvoker) (*codex.WorkerResult, *swarmWorkerResponse, error) {
 	brief := renderSwarmWorkerBrief(root, target, swarmID, plan, priorSummary, responsePath)
 	cfg := codex.WorkerConfig{
-		AgentName:        plan.AgentName,
-		AgentTOMLPath:    dispatchAgentPath(root, invoker, plan.AgentName),
-		Caste:            plan.Caste,
-		WorkerName:       plan.Name,
-		TaskID:           fmt.Sprintf("swarm.%s", plan.Role),
-		TaskBrief:        brief,
-		ContextCapsule:   resolveCodexWorkerContext(),
-		HandoffSection:   renderWorkerHandoffSection("swarm", 0, plan.Name),
-		Root:             root,
-		Timeout:          firstSwarmTimeout(plan.Timeout),
-		SkillSection:     resolveSkillSection(plan.Caste, plan.Task),
-		PheromoneSection: resolvePheromoneSection(),
-		ConfigOverrides:  swarmWorkerConfigOverrides(plan),
-		ResponsePath:     responsePath,
+		AgentName:      plan.AgentName,
+		AgentTOMLPath:  dispatchAgentPath(root, invoker, plan.AgentName),
+		Caste:          plan.Caste,
+		WorkerName:     plan.Name,
+		TaskID:         fmt.Sprintf("swarm.%s", plan.Role),
+		TaskBrief:      brief,
+		ContextCapsule: resolveCodexWorkerContext(),
+		HandoffSection: renderWorkerHandoffSection("swarm", 0, plan.Name),
+		Root:           root,
+		Timeout:        firstSwarmTimeout(plan.Timeout),
+		SkillSection:   resolveSkillSection(plan.Caste, plan.Task),
+		// PheromoneSection is deliberately left unset (D-190-03-A / 190-05):
+		// ContextCapsule above already renders "## Pheromone Signals"
+		// unconditionally whenever a signal is active
+		// (cmd/colony_prime_context.go:571) -- a second, independent
+		// PheromoneSection field would deliver the same text twice. See
+		// resolvePheromoneSection's doc comment for which callers still need it.
+		ConfigOverrides: swarmWorkerConfigOverrides(plan),
+		ResponsePath:    responsePath,
 	}
 
 	result, err := invoker.Invoke(ctx, cfg)

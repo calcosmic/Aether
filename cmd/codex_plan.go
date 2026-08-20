@@ -1476,7 +1476,12 @@ func dispatchRealPlanningWorkersWithIterationContext(ctx context.Context, root s
 	planned := plannedPlanningWorkersForGoal(root, goal)
 	specs := planningWorkerSpecsForGoal(goal)
 	capsule := resolveCodexWorkerContext()
-	pheromoneSection := resolvePheromoneSection()
+	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
+	// already renders "## Pheromone Signals" unconditionally whenever a signal
+	// is active (cmd/colony_prime_context.go:571). Populating a second,
+	// independent PheromoneSection field here would deliver the same steering
+	// text twice. See resolvePheromoneSection's doc comment for which callers
+	// still need it.
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	results := make([]codex.DispatchResult, 0, len(specs))
 	workerTimeout := effectivePlanningDispatchTimeout(timeoutOverride)
@@ -1494,7 +1499,6 @@ func dispatchRealPlanningWorkersWithIterationContext(ctx context.Context, root s
 			HandoffSection:    renderWorkerHandoffSection("plan", 0, planned[i].Name),
 			Workflow:          "plan",
 			SkillSection:      resolveSkillSectionForWorkflow("plan", spec.Caste, spec.Task),
-			PheromoneSection:  pheromoneSection,
 			Root:              root,
 			Wave:              i + 1,
 			Timeout:           workerTimeout,
