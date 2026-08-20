@@ -3154,17 +3154,20 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 
 // composeBuildManifestBrief is the single source of the worker prompt that
 // ships in the plan-only manifest. It is the base task brief plus the steering
-// sections the wrapper has no other channel for: pheromone signals and prior
-// worker handoffs.
+// sections the wrapper has no other channel for: pheromone signals, prior
+// worker handoffs, and the handoff/return schema.
 //
 // The Go subprocess path deliberately does NOT use this composition — it
 // delivers PheromoneSection and HandoffSection separately through WorkerConfig
-// and pkg/codex/prompt.go, so embedding them in the shared renderer would
-// duplicate them there. --print-brief uses this composer so what the user
-// inspects is exactly what the manifest carries.
+// and pkg/codex/prompt.go, and states the handoff schema itself via
+// renderResponseContract on that same separate channel, so embedding any of
+// this in the shared renderer would duplicate it there. --print-brief uses
+// this composer so what the user inspects is exactly what the manifest
+// carries.
 func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
 	var b strings.Builder
 	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt))
+	b.WriteString(fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary))
 
 	if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
 		// The resolver emits its own "### Active Pheromone Signals" heading;
