@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codegraph"
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
@@ -416,6 +417,107 @@ func TestPrintBriefFullFlagAndCoverage(t *testing.T) {
 			t.Errorf("error should name the requested worker: %s", errOut)
 		}
 	})
+}
+
+// TestPrintBriefFailsOnDuplicatedSection is a direct unit test against
+// duplicatedBriefSections itself (D-05): a real repeated owned heading is
+// named, a real repeated handoff-schema sentence is named via its own label
+// (the sentence carries no heading of its own, per 189's D-04 design), and a
+// healthy construction with each present exactly once finds nothing.
+func TestPrintBriefFailsOnDuplicatedSection(t *testing.T) {
+	handoffSentence := "Your final result's handoff object must include " + codex.HandoffFieldsSummary + ". An empty handoff is rejected.\n"
+
+	t.Run("a repeated owned heading is reported by name", func(t *testing.T) {
+		assembled := "## Pheromone Signals\n\nFOCUS: watch the exporter\n\n## Pheromone Signals\n\nFOCUS: watch the exporter again\n"
+		got := duplicatedBriefSections(assembled)
+		if len(got) != 1 || got[0] != "Pheromone Signals" {
+			t.Fatalf("duplicatedBriefSections = %v, want [\"Pheromone Signals\"]", got)
+		}
+	})
+
+	t.Run("a repeated handoff-schema sentence is reported", func(t *testing.T) {
+		assembled := "## Assignment\n\nDo the thing.\n\n" + handoffSentence + "\n" + handoffSentence
+		got := duplicatedBriefSections(assembled)
+		found := false
+		for _, name := range got {
+			if name == duplicatedBriefSectionHandoffLabel {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("duplicatedBriefSections = %v, want it to contain %q", got, duplicatedBriefSectionHandoffLabel)
+		}
+	})
+
+	t.Run("each owned heading once and the handoff sentence once finds nothing", func(t *testing.T) {
+		assembled := "## Assignment\n\nDo the thing.\n\n## Pheromone Signals\n\nFOCUS: watch the exporter\n\n" + handoffSentence
+		got := duplicatedBriefSections(assembled)
+		if len(got) != 0 {
+			t.Fatalf("duplicatedBriefSections = %v, want empty slice for healthy input, got %v", got, got)
+		}
+	})
+}
+
+// TestPrintBriefCommandStaysCleanOnHealthyFixtureWithoutDuplication is the
+// positive-case proof this check does not misfire on ordinary,
+// already-shipping output: basePrintBriefState()'s fixture seeds no
+// pheromone signals, so neither the manifest-level capsule nor the composed
+// brief carries a "## Pheromone Signals" section at all -- --print-brief must
+// exit cleanly in both checklist and --full mode.
+func TestPrintBriefCommandStaysCleanOnHealthyFixtureWithoutDuplication(t *testing.T) {
+	saveGlobals(t)
+	printBriefFixture(t, basePrintBriefState())
+
+	out, errOut := runPrintBriefCmd(t)
+	if errOut != "" {
+		t.Fatalf("unexpected stderr on healthy fixture (checklist mode): %s", errOut)
+	}
+	if !strings.Contains(out, "CONTEXT CHECKLIST") {
+		t.Errorf("expected checklist output on healthy fixture, got:\n%s", out)
+	}
+
+	fullOut, fullErrOut := runPrintBriefCmd(t, "--full")
+	if fullErrOut != "" {
+		t.Fatalf("unexpected stderr on healthy fixture (--full mode): %s", fullErrOut)
+	}
+	if !strings.Contains(fullOut, "COMPOSITION") {
+		t.Errorf("expected composition table on healthy fixture, got:\n%s", fullOut)
+	}
+}
+
+// TestPrintBriefCommandFailsWhenPrintWorkerBriefsFindsDuplication proves the
+// duplication check catches a REAL duplicate through the full --print-brief
+// command path, not just a hand-built string: colony-prime's own
+// manifest-level capsule (cmd/colony_prime_context.go:571) and
+// composeBuildManifestBrief's per-dispatch resolvePheromoneSection call
+// (cmd/codex_build.go) both independently render a "## Pheromone Signals"
+// section from the same pheromones.json whenever a signal is active, so
+// seeding one active signal reproduces a genuine, already-shipping
+// duplication rather than a synthetic one.
+func TestPrintBriefCommandFailsWhenPrintWorkerBriefsFindsDuplication(t *testing.T) {
+	saveGlobals(t)
+	printBriefFixture(t, basePrintBriefState())
+
+	recent := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{Type: "FOCUS", Content: json.RawMessage(`{"text":"sentinel-print-brief-duplication-probe"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: recent},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("failed to save pheromones: %v", err)
+	}
+
+	out, errOut := runPrintBriefCmd(t)
+	if out != "" {
+		t.Errorf("expected no checklist output once duplication is found, got:\n%s", out)
+	}
+	if !strings.Contains(errOut, "duplicated context") {
+		t.Fatalf("expected a duplicated-context error on stderr, got: %s", errOut)
+	}
+	if !strings.Contains(errOut, "Pheromone Signals") {
+		t.Errorf("error should name the duplicated section, got: %s", errOut)
+	}
 }
 
 // lineContaining returns the first line of text containing substr, or "".
