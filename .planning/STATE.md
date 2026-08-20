@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
-status: ready_to_plan
+status: executing
 stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
-last_updated: "2026-08-20T00:28:23.575Z"
-last_activity: 2026-08-20 -- Phase 189 execution started
+last_updated: "2026-08-20T08:53:56.202Z"
+last_activity: 2026-08-20 -- Phase 190 execution started
 progress:
   total_phases: 51
   completed_phases: 5
-  total_plans: 54
-  completed_plans: 105
-  percent: 10
+  total_plans: 56
+  completed_plans: 108
+  percent: 100
 ---
 
 # Project State
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-08)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 189 — complete-worker-contract
+**Current focus:** Phase 190 — lean-non-duplicated-delivery
 **Milestone:** v1.26 — hardening (rescoped 2026-08-14) plus the Audit Addendum (2026-08-17, phases 186-192). Governing documents: `.planning/HARDENING-PLAN.md` (with its 2026-08-17 addendum) and ROADMAP.md's "Audit Addendum" section; the frozen 12-outcome target lives in the approved implementation plan of 2026-08-17.
 **Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases)
 **Product version:** v1.0.58 (binary is authoritative)
 
 ## Current Position
 
-Phase: 190
-Plan: Not started
-Status: Ready to plan
+Phase: 190 (lean-non-duplicated-delivery) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 190
 Progress: 9 of 16 phases in this milestone
-Last activity: 2026-08-20
+Last activity: 2026-08-20 -- Phase 190 execution started
 
 **Order from here (revised 2026-08-18):** 187, 188, 189→190 and 191 may start
 NOW, in any order and in parallel — the 186 rescope removed their only
