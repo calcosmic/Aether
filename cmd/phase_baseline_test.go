@@ -132,12 +132,16 @@ func TestVerifierBriefCarriesPhaseBaseline(t *testing.T) {
 	watcher := codexBuildDispatch{Caste: "watcher", Name: "Keen-6", Task: "Independent verification before advancement"}
 	builder := codexBuildDispatch{Caste: "builder", Name: "Mason-1", Task: "Write README.md"}
 
-	watcherBrief := composeBuildManifestBrief(root, phase, watcher, time.Now().UTC())
+	// includeSteeringSections=true: unrelated to what this test checks (the
+	// phase-baseline section, which always renders regardless of the flag --
+	// see composeBuildManifestBrief's doc comment); true matches the
+	// self-contained/default composition shape.
+	watcherBrief := composeBuildManifestBrief(root, phase, watcher, time.Now().UTC(), true)
 	if !strings.Contains(watcherBrief, "## Phase Baseline") || !strings.Contains(watcherBrief, "prior.js") {
 		t.Fatalf("watcher brief lacks the phase baseline:\n%s", watcherBrief)
 	}
 
-	builderBrief := composeBuildManifestBrief(root, phase, builder, time.Now().UTC())
+	builderBrief := composeBuildManifestBrief(root, phase, builder, time.Now().UTC(), true)
 	if strings.Contains(builderBrief, "## Phase Baseline") {
 		t.Fatalf("builder brief should not carry the baseline; it only dilutes the task:\n%s", builderBrief)
 	}

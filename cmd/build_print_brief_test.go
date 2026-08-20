@@ -485,16 +485,30 @@ func TestPrintBriefCommandStaysCleanOnHealthyFixtureWithoutDuplication(t *testin
 	}
 }
 
-// TestPrintBriefCommandFailsWhenPrintWorkerBriefsFindsDuplication proves the
-// duplication check catches a REAL duplicate through the full --print-brief
-// command path, not just a hand-built string: colony-prime's own
-// manifest-level capsule (cmd/colony_prime_context.go:571) and
-// composeBuildManifestBrief's per-dispatch resolvePheromoneSection call
-// (cmd/codex_build.go) both independently render a "## Pheromone Signals"
-// section from the same pheromones.json whenever a signal is active, so
-// seeding one active signal reproduces a genuine, already-shipping
-// duplication rather than a synthetic one.
-func TestPrintBriefCommandFailsWhenPrintWorkerBriefsFindsDuplication(t *testing.T) {
+// TestPrintBriefStaysCleanWithActiveSignalAndStoredHandoffs is the
+// fail-then-pass proof for Phase 190 Plan 03 (D-190-01-A, "one home each").
+//
+// Its predecessor, TestPrintBriefCommandFailsWhenPrintWorkerBriefsFindsDuplication,
+// proved the opposite fact: before this fix, colony-prime's own manifest-level
+// capsule (cmd/colony_prime_context.go:571,695) and composeBuildManifestBrief's
+// per-dispatch resolvePheromoneSection/HandoffSection embedding
+// (cmd/codex_build.go) both independently rendered "## Pheromone Signals" and
+// "## Previous Worker Handoffs" from the same underlying data, so seeding one
+// active signal plus one stored handoff reproduced a genuine,
+// already-shipping duplication:
+//
+//	{"ok":false,"error":"dispatch Dash-21 delivers duplicated context: Pheromone
+//	Signals, Previous Worker Handoffs (each owned section and the handoff
+//	schema must appear exactly once in the assembled worker context)","code":1}
+//
+// composeBuildManifestBrief now omits both sections when a capsule will also
+// be prepended (attachBuildDispatchContext's includeSteeringSections=false),
+// so the identical fixture must now pass cleanly, with the capsule as the
+// sole channel. Once-ness is asserted positively (count == 1 in the --full
+// assembled output), not just by the absence of an error -- an error-free
+// exit would also happen if both sections had silently dropped to zero,
+// which is not what "one home each" means.
+func TestPrintBriefStaysCleanWithActiveSignalAndStoredHandoffs(t *testing.T) {
 	saveGlobals(t)
 	printBriefFixture(t, basePrintBriefState())
 
@@ -508,15 +522,75 @@ func TestPrintBriefCommandFailsWhenPrintWorkerBriefsFindsDuplication(t *testing.
 		t.Fatalf("failed to save pheromones: %v", err)
 	}
 
-	out, errOut := runPrintBriefCmd(t)
-	if out != "" {
-		t.Errorf("expected no checklist output once duplication is found, got:\n%s", out)
+	// Stored handoff from a worker that will not itself be dispatched in this
+	// fixture, so renderWorkerHandoffSection's own-worker exclusion never
+	// filters it out for any dispatch under test.
+	handoffs := workerHandoffFile{
+		Entries: []workerHandoffRecord{
+			{
+				ID:                 "print-brief-fixture-1",
+				Workflow:           "build",
+				Phase:              1,
+				WorkerName:         "PriorFixtureWorker-1",
+				Status:             "completed",
+				VerificationStatus: "pass",
+				Summary:            "sentinel-print-brief-handoff-probe",
+				Freshness:          recent,
+			},
+		},
 	}
-	if !strings.Contains(errOut, "duplicated context") {
-		t.Fatalf("expected a duplicated-context error on stderr, got: %s", errOut)
+	if err := store.SaveJSON(workerHandoffsPath, handoffs); err != nil {
+		t.Fatalf("failed to save worker handoffs: %v", err)
 	}
-	if !strings.Contains(errOut, "Pheromone Signals") {
-		t.Errorf("error should name the duplicated section, got: %s", errOut)
+
+	// Checklist mode (the default): must exit clean, and both sections must
+	// report present -- proving delivery moved to the capsule, not to
+	// nowhere. checklistRowForEither is what makes this row honest once the
+	// content lives in the capsule instead of the brief.
+	checklistOut, checklistErr := runPrintBriefCmd(t)
+	if checklistErr != "" {
+		t.Fatalf("expected --print-brief to pass cleanly with an active signal and a stored handoff, got stderr: %s", checklistErr)
+	}
+	pheromoneLine := lineContaining(checklistOut, "Pheromone Signals")
+	if pheromoneLine == "" || !strings.Contains(pheromoneLine, "present") {
+		t.Errorf("Pheromone Signals checklist row should read present (delivered via the capsule): %q\n%s", pheromoneLine, checklistOut)
+	}
+	handoffLine := lineContaining(checklistOut, "Previous Worker Handoffs")
+	if handoffLine == "" || !strings.Contains(handoffLine, "present") {
+		t.Errorf("Previous Worker Handoffs checklist row should read present (delivered via the capsule): %q\n%s", handoffLine, checklistOut)
+	}
+
+	// --full mode, scoped to a single worker with --worker: must also exit
+	// clean, and that ONE worker's assembled output (capsule + brief +
+	// skills, verbatim) must contain each owned heading EXACTLY once -- the
+	// positive once-ness check the checklist's present/absent marker alone
+	// cannot make (constraint 2's trap: absence-only checks would also pass
+	// on zero). --full's own output covers every dispatch in one printout
+	// (one composed section per worker, by design), so counting across the
+	// unscoped output would find one occurrence per dispatch and not test
+	// "once per worker" at all -- --worker scopes to exactly one dispatch's
+	// own assembled context, matching what "each path receives each section
+	// exactly once" actually means.
+	names := workerNamesFromBanners(checklistOut)
+	if len(names) == 0 {
+		t.Fatalf("could not find any dispatch names in checklist output:\n%s", checklistOut)
+	}
+	target := names[0]
+	fullOut, fullErr := runPrintBriefCmd(t, "--full", "--worker", target)
+	if fullErr != "" {
+		t.Fatalf("expected --print-brief --full --worker %s to pass cleanly with an active signal and a stored handoff, got stderr: %s", target, fullErr)
+	}
+	if n := strings.Count(fullOut, "## Pheromone Signals"); n != 1 {
+		t.Errorf("expected exactly one \"## Pheromone Signals\" heading in %s's assembled context, found %d:\n%s", target, n, fullOut)
+	}
+	if n := strings.Count(fullOut, "## Previous Worker Handoffs"); n != 1 {
+		t.Errorf("expected exactly one \"## Previous Worker Handoffs\" heading in %s's assembled context, found %d:\n%s", target, n, fullOut)
+	}
+	if !strings.Contains(fullOut, "sentinel-print-brief-duplication-probe") {
+		t.Errorf("the active FOCUS signal's own text did not reach %s's assembled context:\n%s", target, fullOut)
+	}
+	if !strings.Contains(fullOut, "sentinel-print-brief-handoff-probe") {
+		t.Errorf("the stored handoff's own summary text did not reach %s's assembled context:\n%s", target, fullOut)
 	}
 }
 

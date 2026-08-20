@@ -2076,6 +2076,17 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 // result.dispatch_manifest.dispatches[] both read off this same slice), so it
 // passes true.
 //
+// This function's OWN fallback composition (below, reached only when .Brief
+// arrives empty -- i.e. the direct path, since runCodexBuildPlanOnlyWithOptions
+// always runs attachBuildDispatchContext first) always passes
+// includeSteeringSections=true to composeBuildManifestBrief: the direct
+// path's manifest.json carries no ContextCapsule alongside this Brief (see
+// codexBuildManifest.ContextCapsule's doc comment -- "Only populated when
+// planOnly"), so this artifact must stay self-contained (190-03,
+// D-190-01-A). Do not change this to false -- that would zero out pheromone
+// and prior-handoff delivery on the one path that has no other channel for
+// them.
+//
 // A write failure returns the error immediately, before any blanking for
 // that dispatch (or any dispatch after it) happens -- the caller's slice
 // keeps that dispatch's .Brief populated and .BriefPath empty, the same
@@ -2088,7 +2099,7 @@ func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel str
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
 		content := dispatches[i].Brief
 		if strings.TrimSpace(content) == "" {
-			content = composeBuildManifestBrief(root, phase, dispatches[i], startedAt)
+			content = composeBuildManifestBrief(root, phase, dispatches[i], startedAt, true)
 			dispatches[i].Brief = content
 		}
 		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
@@ -3251,53 +3262,102 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 		dispatches[i].DomainSkills = assignment.DomainCount
 		dispatches[i].MatchedSkills = append([]string{}, assignment.MatchedNames...)
 		dispatches[i].HandoffSection = renderWorkerHandoffSection("build", phase.ID, dispatches[i].Name)
-		// Brief must be composed after HandoffSection is set — it embeds it.
-		dispatches[i].Brief = composeBuildManifestBrief(root, phase, dispatches[i], startedAt)
+		// Brief must be composed after HandoffSection is set — it embeds it
+		// when includeSteeringSections is true (never the case here, see
+		// below).
+		//
+		// includeSteeringSections=false (190-03, closing D-190-01-A): every
+		// caller of attachBuildDispatchContext also carries or inspects the
+		// manifest-level capsule alongside this brief -- the plan-only wrapper
+		// flow (runCodexBuildPlanOnlyWithOptions, which sets
+		// manifest.ContextCapsule from resolveCodexWorkerContext()) and the
+		// --print-brief inspector (printWorkerBriefs, which explicitly
+		// resolves and prepends the same capsule to simulate that exact
+		// flow). The capsule already renders "## Pheromone Signals" (D-190-01-A;
+		// cmd/colony_prime_context.go:571) and "## Previous Worker Handoffs"
+		// (cmd/colony_prime_context.go:695) unconditionally whenever either is
+		// active, so composing them again here would ship the same content
+		// twice to a wrapper-spawned worker. This is the ONLY caller that
+		// composes Brief ahead of a capsule prepend -- writeBuildWorkerBriefFiles's
+		// own fallback composition (used only when no capsule accompanies the
+		// artifact) keeps the old self-contained behavior.
+		dispatches[i].Brief = composeBuildManifestBrief(root, phase, dispatches[i], startedAt, false)
 	}
 }
 
 // composeBuildManifestBrief is the single source of the worker prompt that
-// ships in the plan-only manifest. It is the base task brief plus the steering
-// sections the wrapper has no other channel for: pheromone signals, prior
-// worker handoffs, and the handoff/return schema.
+// ships in the plan-only manifest and (as a self-contained artifact) the
+// direct-dispatch manifest.json. It is the base task brief plus the handoff
+// schema sentence (codex.HandoffFieldsSummary) -- always stated, since no
+// other channel states the OUTPUT contract this composer's callers need --
+// plus, when includeSteeringSections is true, the steering sections the
+// caller has no other channel for: pheromone signals and prior worker
+// handoffs (the INPUT context, distinct from the schema sentence above).
 //
-// The Go subprocess path deliberately does NOT use this composition — it
-// delivers PheromoneSection and HandoffSection separately through WorkerConfig
-// and pkg/codex/prompt.go, and states the handoff schema itself via
-// renderResponseContract on that same separate channel, so embedding any of
-// this in the shared renderer would duplicate it there. --print-brief uses
-// this composer so what the user inspects is exactly what the manifest
-// carries.
-func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
+// includeSteeringSections distinguishes composeBuildManifestBrief's two
+// still-valid callers (190-03, D-190-01-A): attachBuildDispatchContext (the
+// wrapper plan-only flow and its --print-brief simulation) passes false,
+// because those callers also carry the manifest-level capsule
+// (resolveCodexWorkerContext()) alongside this brief, and that capsule
+// already renders both "## Pheromone Signals" and "## Previous Worker
+// Handoffs" whenever either is active -- composing them again here would
+// duplicate what colony-prime already delivers (CLAUDE.md documents
+// pheromone signals as colony-prime-injected and the highest-retention-priority
+// section in its trim order; capsule is the established, multiply-consumed
+// channel, matching the same "one canonical source" reasoning Phase 190's own
+// criterion 3 already applied to hive wisdom). writeBuildWorkerBriefFiles's
+// own fallback composition (used only for the direct/native
+// `aether build <phase>` path, whose manifest.json carries no ContextCapsule
+// at all -- see codexBuildManifest.ContextCapsule's doc comment) passes true,
+// because that artifact has no accompanying capsule in the same JSON envelope
+// and must stay self-contained (TestWorkerBriefFileHoldsComposedBrief pins
+// this).
+//
+// The Go subprocess path (executeCodexBuildDispatches) deliberately does NOT
+// use this composition at all — it delivers PheromoneSection and
+// HandoffSection separately through WorkerConfig and pkg/codex/prompt.go, and
+// states the handoff schema itself via renderResponseContract on that same
+// separate channel, so embedding any of this in the shared renderer would
+// duplicate it there regardless of includeSteeringSections. --print-brief
+// uses this composer (via attachBuildDispatchContext) so what the user
+// inspects is exactly what the manifest carries.
+func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time, includeSteeringSections bool) string {
 	var b strings.Builder
 	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt))
 	b.WriteString(fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary))
 
-	if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
-		// The resolver emits its own "### Active Pheromone Signals" heading;
-		// rewrap under the "## Pheromone Signals" heading every caste agent
-		// definition's <pheromone_protocol> block is written against.
-		content := strings.TrimSpace(strings.TrimPrefix(pheromoneSection, "### Active Pheromone Signals"))
-		if content != "" {
-			b.WriteString("\n## Pheromone Signals\n\n")
-			b.WriteString(content)
-			b.WriteString("\n")
+	if includeSteeringSections {
+		if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
+			// The resolver emits its own "### Active Pheromone Signals" heading;
+			// rewrap under the "## Pheromone Signals" heading every caste agent
+			// definition's <pheromone_protocol> block is written against.
+			content := strings.TrimSpace(strings.TrimPrefix(pheromoneSection, "### Active Pheromone Signals"))
+			if content != "" {
+				b.WriteString("\n## Pheromone Signals\n\n")
+				b.WriteString(content)
+				b.WriteString("\n")
+			}
 		}
 	}
 
 	// Verifying castes need to know what the tree already looked like: phases
 	// do not commit between themselves, so prior phases' verified work shows
-	// up as uncommitted changes and reads as this phase overreaching.
+	// up as uncommitted changes and reads as this phase overreaching. Not a
+	// steering section in the pheromone/handoff sense -- the capsule carries
+	// neither a phase-baseline concept nor a per-caste gate, so this always
+	// renders regardless of includeSteeringSections.
 	if baselineAwareCastes[strings.ToLower(strings.TrimSpace(dispatch.Caste))] {
 		if section := renderPhaseBaselineSection(capturePhaseBaseline(root)); section != "" {
 			b.WriteString(section)
 		}
 	}
 
-	if handoff := strings.TrimSpace(dispatch.HandoffSection); handoff != "" {
-		b.WriteString("\n")
-		b.WriteString(handoff)
-		b.WriteString("\n")
+	if includeSteeringSections {
+		if handoff := strings.TrimSpace(dispatch.HandoffSection); handoff != "" {
+			b.WriteString("\n")
+			b.WriteString(handoff)
+			b.WriteString("\n")
+		}
 	}
 
 	return b.String()

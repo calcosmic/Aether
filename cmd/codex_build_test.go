@@ -371,6 +371,105 @@ func TestWorkerBriefFileHoldsComposedBrief(t *testing.T) {
 	}
 }
 
+// TestDirectBuildManifestHasNoCapsuleSoBriefStaysTheSoleSteeringChannel is the
+// PATH B half of Phase 190 Plan 03's proof (D-190-01-A): the direct/native
+// `aether build <phase>` manifest.json carries no context_capsule at all (see
+// codexBuildManifest.ContextCapsule's own doc comment, "Only populated when
+// planOnly"), so composeBuildManifestBrief's brief-level pheromone section
+// must remain the sole channel there -- and must appear EXACTLY once, not
+// zero and not twice. This is the "not zero" half of constraint 2's trap:
+// removing the wrapper-flow's duplicate copy (this plan's actual fix) must
+// not also silence the direct path, which has no other channel for it.
+func TestDirectBuildManifestHasNoCapsuleSoBriefStaysTheSoleSteeringChannel(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	recent := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{Type: "FOCUS", Content: json.RawMessage(`{"text":"sentinel-direct-path-once-not-zero"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: recent},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("failed to save pheromones: %v", err)
+	}
+
+	goal := "Prove the direct path still delivers steering exactly once"
+	researchID := "1.1"
+	implementID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Direct path parity",
+					Description: "Prove manifest.ContextCapsule stays empty and the brief stays the sole channel",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &researchID, Goal: "Research the missing build orchestration gaps", Status: colony.TaskPending},
+						{ID: &implementID, Goal: "Implement the Go-native build packet", Status: colony.TaskPending, DependsOn: []string{researchID}},
+					},
+					SuccessCriteria: []string{"Build artifacts exist"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	if manifest.ContextCapsule != "" {
+		t.Fatalf("direct-path manifest.json unexpectedly carries a context_capsule (%d chars) -- if this ever changes, the brief-level pheromone section becomes a genuine duplicate and must be gated the same way the wrapper flow now is", len(manifest.ContextCapsule))
+	}
+	if len(manifest.Dispatches) == 0 {
+		t.Fatal("expected at least one dispatch")
+	}
+
+	checked := 0
+	for _, dispatch := range manifest.Dispatches {
+		briefRel := strings.TrimPrefix(dispatch.BriefPath, ".aether/data/")
+		fileContents, err := os.ReadFile(filepath.Join(dataDir, briefRel))
+		if err != nil {
+			t.Fatalf("failed to read worker brief file for %s: %v", dispatch.Name, err)
+		}
+		if n := strings.Count(string(fileContents), "## Pheromone Signals"); n != 1 {
+			t.Errorf("dispatch %s: expected exactly one \"## Pheromone Signals\" heading in the direct-path brief file (no capsule accompanies it, so it must not be zero; nothing else duplicates it, so it must not be more than one), found %d", dispatch.Name, n)
+			continue
+		}
+		if !strings.Contains(string(fileContents), "sentinel-direct-path-once-not-zero") {
+			t.Errorf("dispatch %s: Pheromone Signals heading present but the signal's own text is missing", dispatch.Name)
+			continue
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("no dispatch brief file was actually checked")
+	}
+}
+
 // TestDispatchEntryCarriesBriefPath proves every dispatch entry in both the
 // result envelope and the persisted manifest names the file holding its
 // brief, and that the named file resolves to something on disk under the
@@ -767,7 +866,12 @@ func TestBuildPlanOnlyManifestOmitsInlineBriefWhenBriefPathPresent(t *testing.T)
 		if !ok {
 			t.Fatalf("%s: dispatch %q not found in the persisted manifest for comparison", source, name)
 		}
-		want := composeBuildManifestBrief(root, phase, composed, startedAt)
+		// includeSteeringSections=false: this dispatch went through the
+		// plan-only wrapper flow (attachBuildDispatchContext), which composes
+		// with steering sections OMITTED since manifest.ContextCapsule
+		// already carries them (190-03, D-190-01-A) -- the oracle here must
+		// match, or this byte-match check would fail for the wrong reason.
+		want := composeBuildManifestBrief(root, phase, composed, startedAt, false)
 		if string(fileContents) != want {
 			t.Fatalf("%s: brief_path file for dispatch %q does not byte-match composeBuildManifestBrief's output (file %d bytes, want %d bytes)", source, name, len(fileContents), len(want))
 		}
@@ -799,7 +903,7 @@ func TestBuildPlanOnlyManifestOmitsInlineBriefWhenBriefPathPresent(t *testing.T)
 	inlineBytes := 0
 	pathBytes := 0
 	for _, d := range manifest.Dispatches {
-		inlineBytes += len(composeBuildManifestBrief(root, phase, d, startedAt))
+		inlineBytes += len(composeBuildManifestBrief(root, phase, d, startedAt, false))
 		pathBytes += len(d.BriefPath)
 	}
 	t.Logf("criterion-4 measurement: %d dispatches, %d bytes would have shipped inline per JSON representation, %d bytes actually ship (brief_path strings) -- %.1f%% reduction per representation",
@@ -4134,7 +4238,13 @@ func TestComposeBuildManifestBriefStatesHandoffSchemaOnceNotOnNativePath(t *test
 	phase := colony.Phase{ID: 1, Name: "Test Phase"}
 	startedAt := time.Now()
 
-	composed := composeBuildManifestBrief(tmpDir, phase, dispatch, startedAt)
+	// includeSteeringSections=false: this test's own doc comment describes
+	// composeBuildManifestBrief here as "the wrapper-facing build brief --
+	// dispatch.Brief in the JSON manifest Claude Code and OpenCode workers
+	// read" -- exactly the capsule-accompanied call shape (190-03). The
+	// handoff SCHEMA sentence under test is unconditional either way; this
+	// flag only governs the separate pheromone/prior-handoff sections.
+	composed := composeBuildManifestBrief(tmpDir, phase, dispatch, startedAt, false)
 	rawBrief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, startedAt)
 
 	fieldsPart := codex.HandoffFieldsSummary
