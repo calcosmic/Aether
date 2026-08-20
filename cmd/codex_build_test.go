@@ -3765,6 +3765,56 @@ func TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria(t *testing.
 	}
 }
 
+// TestComposeBuildManifestBriefStatesHandoffSchemaOnceNotOnNativePath is the
+// duplication-avoidance proof for criterion 2 (D-04): composeBuildManifestBrief
+// (the wrapper-facing build brief -- dispatch.Brief in the JSON manifest Claude
+// Code and OpenCode workers read) must state codex.HandoffFieldsSummary so
+// those workers are told the exact handoff schema the finalizer enforces.
+// renderCodexBuildWorkerBrief's OWN output must NOT contain it, because that
+// raw output is fed to native-Codex workers as TaskBrief
+// (executeCodexBuildDispatches) -- and those workers already receive the
+// schema via renderResponseContract on a separate channel
+// (AssembleHostedPrompt/AssemblePrompt). Embedding it in the shared renderer
+// would show it to them twice.
+//
+// Every field named in codex.HandoffFieldsSummary is checked, not a
+// hand-picked couple, so this is an invariant over the constant's actual
+// content rather than a check that would stay green if a field were silently
+// dropped from one side.
+func TestComposeBuildManifestBriefStatesHandoffSchemaOnceNotOnNativePath(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-27",
+		Caste: "builder",
+		Task:  "Implement feature Y",
+	}
+	phase := colony.Phase{ID: 1, Name: "Test Phase"}
+	startedAt := time.Now()
+
+	composed := composeBuildManifestBrief(tmpDir, phase, dispatch, startedAt)
+	rawBrief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, startedAt)
+
+	fieldsPart := codex.HandoffFieldsSummary
+	if idx := strings.Index(fieldsPart, "("); idx >= 0 {
+		fieldsPart = fieldsPart[:idx]
+	}
+	wantFields := splitFieldTokens(fieldsPart)
+	if len(wantFields) == 0 {
+		t.Fatal("parsed zero fields from codex.HandoffFieldsSummary; test fixture is broken")
+	}
+
+	for _, field := range wantFields {
+		if !strings.Contains(composed, field) {
+			t.Errorf("composeBuildManifestBrief missing handoff-schema field %q; a wrapper-spawned worker was never told the finalizer's schema:\n%s", field, composed)
+		}
+		if strings.Contains(rawBrief, field) {
+			t.Errorf("renderCodexBuildWorkerBrief already contains handoff-schema field %q; native-Codex workers (whose TaskBrief is this raw output) would see the schema twice -- once here, once via renderResponseContract:\n%s", field, rawBrief)
+		}
+	}
+}
+
 func TestBuildWorkerBriefIncludesCodegraphContext(t *testing.T) {
 	saveGlobals(t)
 
