@@ -465,6 +465,13 @@ func TestContinueFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 		result := dispatch
 		result.Status = "completed"
 		result.Summary = dispatch.Name + " cleared continue review"
+		// A completed result must relay a non-empty handoff (189-REVIEW.md
+		// CR-01): the finalizer now enforces the same promise every wrapper
+		// brief states.
+		result.Handoff = codex.WorkerHandoff{
+			VerificationStatus:     "pass",
+			NextWorkerInstructions: []string{dispatch.Name + " found no blocking issues"},
+		}
 		results = append(results, result)
 	}
 

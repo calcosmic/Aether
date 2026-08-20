@@ -3765,6 +3765,171 @@ func TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria(t *testing.
 	}
 }
 
+// TestBuildWorkerBriefMergedDispatchKeepsNumberingAcrossUnresolvedTask
+// reproduces WR-01 (189-REVIEW.md): findDispatchTasks's own doc comment
+// claims a covered ID with no matching phase.Tasks entry is skipped
+// "defensively," but renderDispatchTaskItemsSection used to label each
+// block by its position in the FILTERED tasks slice, not its position in
+// the original covered-ID chain -- so dropping task "2" from phase.Tasks
+// shifted task "3"'s content one label to the left ("**Task 2:**" instead
+// of "**Task 3:**"), silently misattributing it, while task "2" vanished
+// with no trace. This builds the exact 3-task merged dispatch
+// TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria uses, but
+// omits the middle task from phase.Tasks (simulating a stale or renamed
+// task ID), and asserts every resolvable task still renders under its
+// correct original number and the unresolvable one is visibly marked rather
+// than silently dropped.
+func TestBuildWorkerBriefMergedDispatchKeepsNumberingAcrossUnresolvedTask(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+
+	task1 := colony.Task{
+		ID:              strPtr("1"),
+		Goal:            "first",
+		Constraints:     []string{"constraint-only-in-task-1"},
+		Hints:           []string{"hint-only-in-task-1"},
+		SuccessCriteria: []string{"criteria-only-in-task-1"},
+	}
+	// task "2" is deliberately OMITTED from phase.Tasks below -- simulating a
+	// stale/renamed covered task ID that dispatchCoveredTaskIDs still names
+	// but phase.Tasks no longer carries.
+	task3 := colony.Task{
+		ID:              strPtr("3"),
+		Goal:            "third",
+		Constraints:     []string{"constraint-only-in-task-3"},
+		Hints:           []string{"hint-only-in-task-3"},
+		SuccessCriteria: []string{"criteria-only-in-task-3"},
+	}
+
+	phase := colony.Phase{
+		ID:    1,
+		Name:  "Merged Dispatch Phase With A Stale Task ID",
+		Tasks: []colony.Task{task1, task3},
+	}
+	dispatch := codexBuildDispatch{
+		Name:           "Hammer-28",
+		Caste:          "builder",
+		TaskID:         "1",
+		CoveredTaskIDs: []string{"1", "2", "3"},
+		Task:           "1. first\n2. second\n3. third",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+	// Task 1 keeps its own label and content.
+	if !strings.Contains(brief, "**Task 1:**\n- constraint-only-in-task-1") {
+		t.Errorf("task 1's constraint did not render under \"**Task 1:**\":\n%s", brief)
+	}
+	// Task 3 must keep ITS OWN number -- not be shifted down into "Task 2"
+	// because task 2 was unresolved.
+	if !strings.Contains(brief, "**Task 3:**\n- constraint-only-in-task-3") {
+		t.Errorf("task 3's constraint did not render under its correct label \"**Task 3:**\" (numbering desync across the unresolved task):\n%s", brief)
+	}
+	// The exact corruption WR-01 found: task 3's content mislabeled as task 2.
+	if strings.Contains(brief, "**Task 2:**\n- constraint-only-in-task-3") {
+		t.Errorf("task 3's constraint was mislabeled \"**Task 2:**\" (the WR-01 numbering-desync bug):\n%s", brief)
+	}
+	for _, want := range []string{
+		"hint-only-in-task-1", "criteria-only-in-task-1",
+		"constraint-only-in-task-3", "hint-only-in-task-3", "criteria-only-in-task-3",
+	} {
+		if !strings.Contains(brief, want) {
+			t.Errorf("merged dispatch brief with a stale task ID is missing %q:\n%s", want, brief)
+		}
+	}
+	// Task 2's content must never appear (it doesn't exist in phase.Tasks),
+	// but its absence must be VISIBLE, not silent.
+	if strings.Contains(brief, "constraint-only-in-task-2") {
+		t.Errorf("unresolved task 2 should not contribute any content, but its constraint text appeared:\n%s", brief)
+	}
+	if !strings.Contains(brief, `Task 2 (id "2") could not be resolved`) {
+		t.Errorf("brief does not visibly mark task 2 as unresolved -- a worker has no way to tell \"task 2 has no constraints\" from \"task 2's constraints could not be found\":\n%s", brief)
+	}
+}
+
+// TestBuildWorkerBriefIsMostlyTaskForMergedDispatch is WR-02's fix
+// (189-REVIEW.md): TestBuildWorkerBriefIsMostlyTask's own fixture carries no
+// TaskID and no CoveredTaskIDs, so dispatchCoveredTaskIDs returns nil for it
+// and the merged-dispatch rendering findDispatchTasks/
+// renderDispatchTaskItemsSection add in this phase sits completely outside
+// that test's protection -- its "regression lock" claim ("any future addition
+// that pushes framework scaffolding past half the prompt fails here
+// regardless of what that addition is called") was not actually true for the
+// code path this phase added. This test applies the IDENTICAL share>=40
+// invariant, with the identical counted-section switch, to a real 3-task
+// merged dispatch (the same fixture
+// TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria uses), so a
+// future addition that pushes scaffolding past task content on the
+// merged-dispatch path fails here too, not only on the single-task path.
+// TestBuildWorkerBriefIsMostlyTask itself is untouched -- this is a sibling,
+// not a replacement.
+func TestBuildWorkerBriefIsMostlyTaskForMergedDispatch(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+
+	task1 := colony.Task{
+		ID:              strPtr("1"),
+		Goal:            "Add the exporter call to commands.rs",
+		Constraints:     []string{"constraint-only-in-task-1"},
+		Hints:           []string{"hint-only-in-task-1"},
+		SuccessCriteria: []string{"criteria-only-in-task-1"},
+	}
+	task2 := colony.Task{
+		ID:              strPtr("2"),
+		Goal:            "Pass its result to the dashboard view",
+		Constraints:     []string{"constraint-only-in-task-2"},
+		Hints:           []string{"hint-only-in-task-2"},
+		SuccessCriteria: []string{"criteria-only-in-task-2"},
+	}
+	task3 := colony.Task{
+		ID:              strPtr("3"),
+		Goal:            "Wire the dashboard render path",
+		Constraints:     []string{"constraint-only-in-task-3"},
+		Hints:           []string{"hint-only-in-task-3"},
+		SuccessCriteria: []string{"criteria-only-in-task-3"},
+	}
+	phase := colony.Phase{
+		ID:              1,
+		Name:            "Wire the exporter",
+		Description:     "Connect the vault exporter to the dashboard command",
+		SuccessCriteria: []string{"Dashboard renders exporter output"},
+		Tasks:           []colony.Task{task1, task2, task3},
+	}
+	dispatch := codexBuildDispatch{
+		Name:           "Hammer-27",
+		Caste:          "builder",
+		TaskID:         "1",
+		CoveredTaskIDs: []string{"1", "2", "3"},
+		Task:           "1. Add the exporter call to commands.rs\n2. Pass its result to the dashboard view\n3. Wire the dashboard render path",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+	taskChars := 0
+	for _, section := range splitBriefSections(brief) {
+		// Identical switch to TestBuildWorkerBriefIsMostlyTask's -- not
+		// weakened, not retuned, just applied to a different fixture.
+		switch section.Name {
+		case "Assignment", "Phase Objective", "Phase Success Criteria",
+			"Task Success Criteria", "Dependencies", "Task Constraints", "Hints",
+			"Verification Command":
+			taskChars += section.Chars
+		}
+	}
+
+	if len(brief) == 0 {
+		t.Fatal("empty worker brief")
+	}
+	share := float64(taskChars) / float64(len(brief)) * 100
+	t.Logf("merged-dispatch task-relevant share: %.1f%% (%d of %d chars)", share, taskChars, len(brief))
+	if share < 40 {
+		t.Errorf("task-relevant content is %.1f%% of the merged-dispatch worker brief (%d of %d chars); framework scaffolding now outweighs the task",
+			share, taskChars, len(brief))
+	}
+}
+
 // TestComposeBuildManifestBriefStatesHandoffSchemaOnceNotOnNativePath is the
 // duplication-avoidance proof for criterion 2 (D-04): composeBuildManifestBrief
 // (the wrapper-facing build brief -- dispatch.Brief in the JSON manifest Claude

@@ -2709,6 +2709,7 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	renderDispatchTaskItemsSection(&b, "Task Constraints", relatedTasks, func(t *colony.Task) []string { return t.Constraints })
 	renderDispatchTaskItemsSection(&b, "Hints", relatedTasks, func(t *colony.Task) []string { return t.Hints })
 	renderDispatchTaskItemsSection(&b, "Task Success Criteria", relatedTasks, func(t *colony.Task) []string { return t.SuccessCriteria })
+	b.WriteString(renderUnresolvedDispatchTaskNotice(relatedTasks))
 
 	if len(phase.SuccessCriteria) > 0 {
 		b.WriteString("\n## Phase Success Criteria\n\n")
@@ -2791,14 +2792,34 @@ func cleanupStaleBuildAttemptArtifacts(phaseNum int) {
 	}
 }
 
+// coveredDispatchTask pairs a merged dispatch's covered task ID with its
+// resolved colony.Task (nil when the ID has no matching phase.Tasks entry)
+// and its 1-based POSITION within the original covered-ID chain --
+// dispatchCoveredTaskIDs's own order, stable across a stale or missing ID.
+// WR-01 (189-REVIEW.md): a filtered slice's own index used to double as the
+// "Task N:" label, so dropping one unresolved ID silently shifted every
+// later task's label down by one, misattributing its content. Carrying
+// Position separately makes that shift impossible.
+type coveredDispatchTask struct {
+	Position int
+	ID       string
+	Task     *colony.Task
+}
+
 // findDispatchTasks resolves every task a dispatch covers (via the
 // already-merge-aware dispatchCoveredTaskIDs) against phase.Tasks, in covered
 // order. It does not reimplement "which task IDs does this dispatch cover" --
-// that is dispatchCoveredTaskIDs's job, also used by completedBuildTaskIDs. A
-// covered ID with no matching phase.Tasks entry is skipped silently
-// (defensive: a stale or renamed task ID must never panic or drop the rest of
-// the brief).
-func findDispatchTasks(phase colony.Phase, dispatch codexBuildDispatch) []*colony.Task {
+// that is dispatchCoveredTaskIDs's job, also used by completedBuildTaskIDs.
+//
+// A covered ID with no matching phase.Tasks entry is NEVER dropped from the
+// returned slice -- doing so used to corrupt every later task's "Task N:"
+// label (WR-01, 189-REVIEW.md). Its slot is kept with Task == nil and
+// Position set to its original 1-based place in the covered-ID chain, so
+// callers can both render subsequent tasks under their correct number
+// (renderDispatchTaskItemsSection) and visibly flag the gap instead of
+// silently vanishing it (renderUnresolvedDispatchTaskNotice). A stale or
+// renamed task ID must never panic or drop the rest of the brief.
+func findDispatchTasks(phase colony.Phase, dispatch codexBuildDispatch) []coveredDispatchTask {
 	coveredIDs := dispatchCoveredTaskIDs(dispatch)
 	if len(coveredIDs) == 0 {
 		return nil
@@ -2807,17 +2828,19 @@ func findDispatchTasks(phase colony.Phase, dispatch codexBuildDispatch) []*colon
 	for i := range phase.Tasks {
 		byID[buildTaskID(phase.Tasks[i], i)] = &phase.Tasks[i]
 	}
-	tasks := make([]*colony.Task, 0, len(coveredIDs))
-	for _, id := range coveredIDs {
-		if task, ok := byID[id]; ok {
-			tasks = append(tasks, task)
-		}
+	tasks := make([]coveredDispatchTask, 0, len(coveredIDs))
+	for i, id := range coveredIDs {
+		tasks = append(tasks, coveredDispatchTask{Position: i + 1, ID: id, Task: byID[id]})
 	}
 	return tasks
 }
 
 // renderDispatchTaskItemsSection appends a "## <heading>" section gathering
-// extract's items across every task in tasks.
+// extract's items across every task in tasks. An entry whose Task could not
+// be resolved (Task == nil) contributes no items here -- it renders no
+// content in any of the three sections this function backs, and
+// renderUnresolvedDispatchTaskNotice is what visibly flags it, once, rather
+// than three times.
 //
 // Exactly one covered task renders byte-identical to the pre-merge-aware
 // brief: the heading appears whenever that task's raw item slice is
@@ -2825,18 +2848,25 @@ func findDispatchTasks(phase colony.Phase, dispatch codexBuildDispatch) []*colon
 // the edge case where every item trims to empty), with no "Task N:" label --
 // just that task's bullets.
 //
-// More than one covered task labels each task's block "**Task N:**" (N = the
-// task's 1-based position within tasks, matching mergeDispatchInto's own
-// numbering of dispatch.Task), including only tasks with at least one
-// non-empty item for this section; a task with none is skipped entirely, so
-// no empty "Task N:" label with nothing under it is ever emitted.
-func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []*colony.Task, extract func(*colony.Task) []string) {
+// More than one covered task labels each task's block "**Task N:**" (N =
+// the task's 1-based POSITION within the original covered-ID chain --
+// dispatchCoveredTaskIDs's own order, matching mergeDispatchInto's own
+// numbering of dispatch.Task -- NOT the index into this function's own
+// possibly-gapped tasks slice; conflating the two is the exact numbering
+// desync WR-01 fixed, where a missing task shifted every later task's label
+// down by one), including only tasks with at least one non-empty item for
+// this section; a task with none (resolved or not) is skipped entirely
+// here, so no empty "Task N:" label with nothing under it is ever emitted.
+func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []coveredDispatchTask, extract func(*colony.Task) []string) {
 	if len(tasks) == 0 {
 		return
 	}
 
 	if len(tasks) == 1 {
-		items := extract(tasks[0])
+		if tasks[0].Task == nil {
+			return
+		}
+		items := extract(tasks[0].Task)
 		if len(items) == 0 {
 			return
 		}
@@ -2857,9 +2887,12 @@ func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []
 
 	var body strings.Builder
 	any := false
-	for i, task := range tasks {
+	for _, task := range tasks {
+		if task.Task == nil {
+			continue
+		}
 		var written []string
-		for _, item := range extract(task) {
+		for _, item := range extract(task.Task) {
 			item = strings.TrimSpace(item)
 			if item != "" {
 				written = append(written, item)
@@ -2869,7 +2902,7 @@ func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []
 			continue
 		}
 		any = true
-		body.WriteString(fmt.Sprintf("**Task %d:**\n", i+1))
+		body.WriteString(fmt.Sprintf("**Task %d:**\n", task.Position))
 		for _, item := range written {
 			body.WriteString("- ")
 			body.WriteString(item)
@@ -2883,6 +2916,36 @@ func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []
 	b.WriteString(heading)
 	b.WriteString("\n\n")
 	b.WriteString(body.String())
+}
+
+// renderUnresolvedDispatchTaskNotice returns a "## Task Resolution Notice"
+// section listing every covered task ID findDispatchTasks could not resolve
+// against phase.Tasks, or "" when every covered task resolved (the
+// overwhelming common case, keeping ordinary briefs byte-identical to
+// before this fix). WR-01 (189-REVIEW.md): a stale or renamed task ID used
+// to vanish from the brief with no trace at all -- a worker had no way to
+// tell "this task has no constraints" apart from "this task's constraints
+// could not be found." Silence there is how a worker ends up judged on a
+// task it never saw.
+func renderUnresolvedDispatchTaskNotice(tasks []coveredDispatchTask) string {
+	var unresolved []coveredDispatchTask
+	for _, task := range tasks {
+		if task.Task == nil {
+			unresolved = append(unresolved, task)
+		}
+	}
+	if len(unresolved) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n## Task Resolution Notice\n\n")
+	for _, task := range unresolved {
+		b.WriteString(fmt.Sprintf(
+			"- Task %d (id %q) could not be resolved against this phase's task list. Its constraints, hints, and success criteria are NOT included above -- treat them as unknown, not absent, and check the phase plan directly before treating this task as unconstrained.\n",
+			task.Position, task.ID,
+		))
+	}
+	return b.String()
 }
 
 func expectedDispatchOutcome(dispatch codexBuildDispatch) string {

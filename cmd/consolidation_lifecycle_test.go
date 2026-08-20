@@ -393,6 +393,10 @@ func TestExternalContinueAdvanceInvokesPhaseEndConsolidation(t *testing.T) {
 			TaskID:  dispatch.TaskID,
 			Status:  "completed",
 			Summary: dispatch.Name + " cleared consolidation wiring review",
+			// A completed result must relay a non-empty handoff (189-REVIEW.md
+			// CR-01): the finalizer now enforces the same promise every
+			// wrapper brief states.
+			Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{dispatch.Name + " found no blocking issues"}},
 		})
 	}
 	completion := codexExternalContinueCompletion{

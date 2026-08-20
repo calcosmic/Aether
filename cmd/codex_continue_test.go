@@ -519,6 +519,10 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 			TaskID:  dispatch.TaskID,
 			Status:  "completed",
 			Summary: dispatch.Name + " cleared wrapper continue review",
+			// A completed result must relay a non-empty handoff (189-REVIEW.md
+			// CR-01): the finalizer now enforces the same promise every
+			// wrapper brief states.
+			Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{dispatch.Name + " found no blocking issues"}},
 		})
 	}
 	completion := codexExternalContinueCompletion{
@@ -5113,6 +5117,7 @@ func TestMergeExternalContinuePropagatesReportFields(t *testing.T) {
 			Blockers: []string{},
 			Duration: 15.0,
 			Report:   "# Watcher Report\n\nTests passed.",
+			Handoff:  codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"all checks passed"}},
 		},
 		{
 			Stage:    "review",
@@ -5126,6 +5131,7 @@ func TestMergeExternalContinuePropagatesReportFields(t *testing.T) {
 			Blockers: []string{"secret-found"},
 			Duration: 22.5,
 			Report:   "# Gatekeeper Report\n\nOne blocker found.",
+			Handoff:  codex.WorkerHandoff{VerificationStatus: "fail", KnownFailures: []string{"secret-found"}, NextWorkerInstructions: []string{"rotate the exposed secret"}},
 		},
 	}
 
@@ -5230,6 +5236,10 @@ func TestContinueFinalizeWritesWorkerOutcomeReports(t *testing.T) {
 			Status:   "completed",
 			Summary:  dispatch.Name + " completed",
 			Duration: float64(i+1) * 10.0,
+			// A completed result must relay a non-empty handoff (189-REVIEW.md
+			// CR-01): the finalizer now enforces the same promise every
+			// wrapper brief states.
+			Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{dispatch.Name + " found no blocking issues"}},
 		}
 		// Give report content to first worker, leave second empty
 		if i == 0 {
@@ -5323,8 +5333,8 @@ func TestMergeExternalContinueResultsToleratesMissing(t *testing.T) {
 		},
 	}
 	results := []codexContinueExternalDispatch{
-		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green"},
-		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues"},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"all checks passed"}}},
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"no security issues found"}}},
 	}
 
 	flow, err := mergeExternalContinueResults(plan, results)

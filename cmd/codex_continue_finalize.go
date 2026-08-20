@@ -656,6 +656,29 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 				return nil, fmt.Errorf("external continue result for %s has invalid handoff: %w", dispatch.Name, err)
 			}
 		}
+		// CR-01 (189-REVIEW.md): continueExternalBriefWithHandoffSchema tells
+		// every wrapper-spawned watcher and reviewer "An empty handoff is
+		// rejected" (cmd/codex_continue_plan.go) -- the identical promise
+		// build's brief makes -- but until this check, nothing on continue's
+		// finalize chain enforced it: ValidateWorkerHandoff above only
+		// format-checks VerificationStatus and explicitly accepts "" as
+		// valid, so a completed worker could relay a fully empty handoff and
+		// have it silently persisted. Mirrors persistExternalBuildHandoffs's
+		// identical guard (cmd/codex_build_finalize.go) so both finalize
+		// chains enforce the same promise their briefs state.
+		//
+		// `ok` here means "a result with this name was submitted at all" --
+		// a genuinely missing worker (!ok) is a distinct, pre-existing
+		// "timeout" placeholder path (see above), not conflated with this
+		// check. A submitted "completed" result whose handoff field was
+		// simply never set decodes to the identical zero value an explicit
+		// empty object would (WorkerHandoff is a value, not a pointer, on
+		// codexContinueExternalDispatch), so this same check already covers
+		// "no handoff at all" -- there is no separate wire representation to
+		// special-case.
+		if ok && status == buildWorkerCompleted && codex.IsEmptyWorkerHandoff(result.Handoff) {
+			return nil, fmt.Errorf("external continue result for %s completed without a handoff; completed reviewers and watchers must relay changed_files, commands_run, verification_status, and next_worker_instructions so later phases inherit their context", dispatch.Name)
+		}
 		summary := strings.TrimSpace(result.Summary)
 		blockers := uniqueSortedStrings(result.Blockers)
 		if summary == "" && len(blockers) > 0 {

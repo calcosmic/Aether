@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -88,6 +89,21 @@ func parityResult(name, status string) codexContinueExternalDispatch {
 		Name:   name,
 		Status: status,
 	}
+}
+
+// parityResultWithHandoff is parityResult plus a minimal, non-empty handoff.
+// Tests that drive a result through mergeExternalContinueResults or
+// mergeExternalSealReviewResults directly (rather than only inspecting
+// manifest fields) need this: 189-REVIEW.md's CR-01 fix now rejects a
+// "completed" result whose handoff carries no relay content, matching
+// build's own long-standing enforcement.
+func parityResultWithHandoff(name, status string) codexContinueExternalDispatch {
+	r := parityResult(name, status)
+	r.Handoff = codex.WorkerHandoff{
+		VerificationStatus:     "pass",
+		NextWorkerInstructions: []string{"parity test handoff content"},
+	}
+	return r
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +328,7 @@ func TestFinalityParity_Merge_ContinueAndSealProduceSameOutput(t *testing.T) {
 		parityDispatch("GK-01", "gatekeeper", "review", "completed"),
 	}
 	results := []codexContinueExternalDispatch{
-		parityResult("GK-01", "completed"),
+		parityResultWithHandoff("GK-01", "completed"),
 	}
 
 	continuePlan := parityContinueManifest(func(m *codexContinuePlanManifest) {
@@ -472,7 +488,7 @@ func TestFinalityParity_Merge_BothTreatMissingAsTimeout(t *testing.T) {
 		parityDispatch("KP-02", "gatekeeper", "review", ""),
 	}
 	results := []codexContinueExternalDispatch{
-		parityResult("GK-01", "completed"),
+		parityResultWithHandoff("GK-01", "completed"),
 		// KP-02 result is missing
 	}
 
@@ -515,7 +531,7 @@ func TestFinalityParity_Merge_BothNormalizeStatus(t *testing.T) {
 		parityDispatch("BD-01", "builder", "review", ""),
 	}
 	results := []codexContinueExternalDispatch{
-		parityResult("BD-01", "code_written"),
+		parityResultWithHandoff("BD-01", "code_written"),
 	}
 
 	continuePlan := parityContinueManifest(func(m *codexContinuePlanManifest) {
@@ -558,6 +574,7 @@ func TestFinalityParity_Merge_BothDeduplicateFindings(t *testing.T) {
 			Status:   "completed",
 			Findings: []codexReviewFinding{duplicateFinding},
 			Issues:   []codexReviewFinding{duplicateFinding},
+			Handoff:  codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"see findings"}},
 		},
 	}
 
@@ -858,8 +875,8 @@ func TestFinalityParity_SealDelegatesToContinueMerge(t *testing.T) {
 		},
 	}
 	results := []codexContinueExternalDispatch{
-		{Name: "GK-01", Status: "completed", Caste: "gatekeeper", Stage: "review", Summary: "No issues"},
-		{Name: "AU-02", Status: "completed", Caste: "auditor", Stage: "review", Summary: "Clean code"},
+		{Name: "GK-01", Status: "completed", Caste: "gatekeeper", Stage: "review", Summary: "No issues", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"no security issues found"}}},
+		{Name: "AU-02", Status: "completed", Caste: "auditor", Stage: "review", Summary: "Clean code", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"quality checks clean"}}},
 	}
 
 	sealPlan := paritySealManifest(func(m *sealPlanManifest) {

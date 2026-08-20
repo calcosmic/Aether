@@ -788,7 +788,10 @@ func buildWorkerHandoffRecord(dispatch codex.WorkerDispatch, result codex.Dispat
 		}
 		summary = strings.TrimSpace(result.WorkerResult.Summary)
 		handoff = result.WorkerResult.Handoff
-		if workerHandoffEmpty(handoff) {
+		// IN-01 (189-REVIEW.md): reuses the single canonical
+		// freshness-inclusive emptiness check (pkg/codex) instead of a
+		// third hand-copied definition.
+		if codex.IsEmptyWorkerHandoffIncludingFreshness(handoff) {
 			handoff = codex.WorkerHandoff{
 				ChangedFiles:       append(append(append([]string{}, result.WorkerResult.FilesCreated...), result.WorkerResult.FilesModified...), result.WorkerResult.TestsWritten...),
 				KnownFailures:      append([]string{}, result.WorkerResult.Blockers...),
@@ -883,18 +886,6 @@ func verificationStatusForWorkerStatus(status string) string {
 	default:
 		return "partial"
 	}
-}
-
-func workerHandoffEmpty(h codex.WorkerHandoff) bool {
-	return len(h.ChangedFiles) == 0 &&
-		len(h.CommandsRun) == 0 &&
-		strings.TrimSpace(h.VerificationStatus) == "" &&
-		len(h.KnownFailures) == 0 &&
-		len(h.OpenDecisions) == 0 &&
-		len(h.Assumptions) == 0 &&
-		len(h.NextWorkerInstructions) == 0 &&
-		len(h.DoNotRepeat) == 0 &&
-		strings.TrimSpace(h.Freshness) == ""
 }
 
 func appendHandoffList(b *strings.Builder, label string, values []string) {

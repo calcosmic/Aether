@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/codex"
 )
 
 func TestLifecycleFinalizerLoadersRejectBadCompletionFiles(t *testing.T) {
@@ -275,7 +277,7 @@ func TestLifecycleResultMergersPreferCompletedResultOverTimeoutPlaceholder(t *te
 		plan := codexContinuePlanManifest{Dispatches: []codexContinueExternalDispatch{{Name: "Hawk-1", Caste: "watcher", Stage: "review", Task: "verify", TaskID: "review"}}}
 		results := []codexContinueExternalDispatch{
 			{Name: "Hawk-1", Caste: "watcher", Stage: "review", Task: "verify", TaskID: "review", Status: "timeout", Summary: "timeout placeholder"},
-			{Name: "Hawk-1", Caste: "watcher", Stage: "review", Task: "verify", TaskID: "review", Status: "completed", Summary: "valid review"},
+			{Name: "Hawk-1", Caste: "watcher", Stage: "review", Task: "verify", TaskID: "review", Status: "completed", Summary: "valid review", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"verified successfully"}}},
 		}
 		flow, err := mergeExternalContinueResults(plan, results)
 		if err != nil {

@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -296,5 +298,106 @@ func TestFinalizeBlockedExternalContinueDoesNotOverwritePausedState(t *testing.T
 	}
 	if !after.Paused {
 		t.Fatalf("expected the competing Paused=true write to survive; got Paused=%v", after.Paused)
+	}
+}
+
+// TestContinueFinalizeRejectsCompletedWorkerWithoutHandoff reproduces CR-01
+// (189-REVIEW.md): continueExternalBriefWithHandoffSchema tells every
+// wrapper-spawned continue watcher and reviewer "An empty handoff is
+// rejected" (cmd/codex_continue_plan.go) -- the identical sentence build's
+// brief already carries -- but continue's own finalize chain had no
+// equivalent check anywhere. mergeExternalContinueResults only ran
+// codex.ValidateWorkerHandoff, which format-checks VerificationStatus and
+// explicitly accepts "" as valid, so a completed worker relaying a fully
+// empty handoff sailed straight through and was persisted into
+// handoffs/worker-handoffs.json. This is the finalize-path twin of build's
+// own regression test (TestBuildFinalizeRejectsCompletedWorkerWithoutHandoff,
+// cmd/build_attempt_external_test.go): it drives the real entry point
+// (runCodexContinueFinalize), not a lower-level helper directly.
+func TestContinueFinalizeRejectsCompletedWorkerWithoutHandoff(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, _, _, _ := setupIntermediateContinueState(t, "Continue finalize rejects a content-free handoff")
+
+	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{LightFlag: true, SkipWatchers: false})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
+	}
+	plan, ok := planResult["continue_manifest"].(codexContinuePlanManifest)
+	if !ok {
+		t.Fatalf("expected continue_manifest in result, got %#v", planResult["continue_manifest"])
+	}
+	if len(plan.Dispatches) == 0 {
+		t.Fatalf("expected at least one planned dispatch (the watcher is always required); got none")
+	}
+	var watcher codexContinueExternalDispatch
+	found := false
+	for _, d := range plan.Dispatches {
+		if d.Caste == "watcher" {
+			watcher = d
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected a watcher dispatch in the plan; got castes %v", dispatchCastes(plan.Dispatches))
+	}
+
+	// A completed result carrying a fully empty (but explicitly present)
+	// handoff -- the exact shape 189-REVIEW.md's CR-01 probe proved sails
+	// through unrejected today.
+	emptyHandoffResult := codexContinueExternalDispatch{
+		Stage:   watcher.Stage,
+		Wave:    watcher.Wave,
+		Caste:   watcher.Caste,
+		Name:    watcher.Name,
+		Task:    watcher.Task,
+		TaskID:  watcher.TaskID,
+		Status:  "completed",
+		Summary: "looks fine",
+		Handoff: codex.WorkerHandoff{},
+	}
+
+	_, _, _, _, _, _, err = runCodexContinueFinalize(root, codexExternalContinueCompletion{
+		ContinueManifest: &plan,
+		Dispatches:       []codexContinueExternalDispatch{emptyHandoffResult},
+	}, false, 0, false)
+	if err == nil {
+		t.Fatal("completed continue worker with an explicitly empty handoff was accepted; the finalizer must reject content-free relays, matching build's own enforcement")
+	}
+	if !strings.Contains(err.Error(), "handoff") {
+		t.Fatalf("rejection should name the missing handoff, got: %v", err)
+	}
+
+	// The no-handoff-at-all case: the submitted JSON never includes a
+	// "handoff" key whatsoever, rather than an explicit empty object.
+	// codexContinueExternalDispatch.Handoff is a value type (not a pointer),
+	// so decode it from real JSON that omits the key entirely and confirm --
+	// as data, not assertion -- that this decodes to the identical zero
+	// value an explicit `"handoff":{}` would produce. A result that provides
+	// NO handoff at all must not fare better than one providing an empty
+	// one.
+	var decodedNoHandoff codexContinueExternalDispatch
+	noHandoffJSON := []byte(`{"stage":"verification","caste":"watcher","name":"` + watcher.Name + `","status":"completed","summary":"looks fine"}`)
+	if err := json.Unmarshal(noHandoffJSON, &decodedNoHandoff); err != nil {
+		t.Fatalf("unmarshal no-handoff-at-all fixture: %v", err)
+	}
+	if !codex.IsEmptyWorkerHandoff(decodedNoHandoff.Handoff) {
+		t.Fatalf("test setup error: JSON omitting \"handoff\" entirely should decode to an empty handoff, got %+v", decodedNoHandoff.Handoff)
+	}
+	decodedNoHandoff.Wave = watcher.Wave
+	decodedNoHandoff.Task = watcher.Task
+	decodedNoHandoff.TaskID = watcher.TaskID
+
+	_, _, _, _, _, _, err = runCodexContinueFinalize(root, codexExternalContinueCompletion{
+		ContinueManifest: &plan,
+		Dispatches:       []codexContinueExternalDispatch{decodedNoHandoff},
+	}, false, 0, false)
+	if err == nil {
+		t.Fatal("completed continue worker submitting no \"handoff\" key at all was accepted; it must be rejected exactly like an explicitly empty handoff")
+	}
+	if !strings.Contains(err.Error(), "handoff") {
+		t.Fatalf("rejection should name the missing handoff, got: %v", err)
 	}
 }

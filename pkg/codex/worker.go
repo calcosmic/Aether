@@ -1034,7 +1034,7 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 	claims.TestsWritten = normalizeClaimPaths(config.Root, claims.TestsWritten)
 	claims.Blockers = compactStrings(claims.Blockers)
 	claims.Spawns = compactStrings(claims.Spawns)
-	if workerHandoffIsEmpty(claims.Handoff) {
+	if IsEmptyWorkerHandoffIncludingFreshness(claims.Handoff) {
 		claims.Handoff = synthesizeWorkerHandoff(claims)
 	}
 	claims.Handoff = NormalizeWorkerHandoff(config.Root, claims.Handoff)
