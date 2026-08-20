@@ -41,19 +41,26 @@ type codexContinueExternalDispatch struct {
 }
 
 type codexContinuePlanManifest struct {
-	Phase                     int                             `json:"phase"`
-	PhaseName                 string                          `json:"phase_name"`
-	Root                      string                          `json:"root"`
-	GeneratedAt               string                          `json:"generated_at"`
-	ColonyMode                string                          `json:"colony_mode,omitempty"`
-	BuildManifest             string                          `json:"build_manifest,omitempty"`
-	Verification              codexContinueVerificationReport `json:"verification"`
-	Assessment                codexContinueAssessment         `json:"assessment"`
-	ReconcileTaskIDs          []string                        `json:"reconcile_task_ids,omitempty"`
-	ReadOnlyArtifacts         []string                        `json:"read_only_artifacts,omitempty"`
-	WorkerTimeout             int                             `json:"worker_timeout_seconds,omitempty"`
-	VerificationTimeout       int                             `json:"verification_timeout_seconds,omitempty"`
-	SkipWatchers              bool                            `json:"skip_watchers,omitempty"`
+	Phase               int                             `json:"phase"`
+	PhaseName           string                          `json:"phase_name"`
+	Root                string                          `json:"root"`
+	GeneratedAt         string                          `json:"generated_at"`
+	ColonyMode          string                          `json:"colony_mode,omitempty"`
+	BuildManifest       string                          `json:"build_manifest,omitempty"`
+	Verification        codexContinueVerificationReport `json:"verification"`
+	Assessment          codexContinueAssessment         `json:"assessment"`
+	ReconcileTaskIDs    []string                        `json:"reconcile_task_ids,omitempty"`
+	ReadOnlyArtifacts   []string                        `json:"read_only_artifacts,omitempty"`
+	WorkerTimeout       int                             `json:"worker_timeout_seconds,omitempty"`
+	VerificationTimeout int                             `json:"verification_timeout_seconds,omitempty"`
+	SkipWatchers        bool                            `json:"skip_watchers,omitempty"`
+	// ContextCapsule and PheromoneSection are colony-wide, resolved ONCE per
+	// plan-only manifest -- mirroring codexBuildManifest.ContextCapsule
+	// (cmd/codex_build.go) -- never copied per-dispatch. The wrapper reads
+	// each once from the manifest and prepends it, verbatim, ahead of every
+	// spawned reviewer/watcher's brief this continue run carries.
+	ContextCapsule            string                          `json:"context_capsule,omitempty"`
+	PheromoneSection          string                          `json:"pheromone_section,omitempty"`
 	Dispatches                []codexContinueExternalDispatch `json:"dispatches"`
 	DispatchMode              string                          `json:"dispatch_mode"`
 	FinalizeSurface           string                          `json:"finalize_surface"`
@@ -153,6 +160,8 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		WorkerTimeout:       int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
 		VerificationTimeout: int(verificationTimeout / time.Second),
 		SkipWatchers:        effectiveSkipWatchers,
+		ContextCapsule:      resolveCodexWorkerContext(),
+		PheromoneSection:    resolvePheromoneSection(),
 		Dispatches:          dispatches,
 		DispatchMode:        "plan-only",
 		FinalizeSurface:     "awaiting_wrapper_completion",
@@ -287,6 +296,20 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 	}
 }
 
+// continueExternalBriefWithHandoffSchema appends the handoff/return schema
+// note to a wrapper-external continue brief (watcher or reviewer), mirroring
+// composeBuildManifestBrief's identical append (cmd/codex_build.go) for
+// build's wrapper-external brief. Continue's native-Codex dispatch path
+// (plannedContinueReviewDispatches, plannedContinueWatcherDispatch,
+// cmd/codex_continue.go) already states this schema via a SEPARATE channel
+// (AssembleHostedPrompt + renderResponseContract) -- appending it here,
+// rather than inside renderCodexContinueReviewBrief/renderCodexContinueWatcherBrief
+// themselves (shared by both paths), is what keeps a native-Codex continue
+// worker from seeing it twice (D-06).
+func continueExternalBriefWithHandoffSchema(rendered string) string {
+	return rendered + fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary)
+}
+
 func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
 	dispatches := []codexContinueExternalDispatch{}
@@ -303,7 +326,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			TaskID:        fmt.Sprintf("continue-verification-%d", phase.ID),
 			Timeout:       timeoutSeconds,
 			Status:        "planned",
-			Brief:         renderCodexContinueWatcherBrief(root, phase, manifest, verification.Steps, verification.Claims, verification.Watcher, workerTimeout),
+			Brief:         continueExternalBriefWithHandoffSchema(renderCodexContinueWatcherBrief(root, phase, manifest, verification.Steps, verification.Claims, verification.Watcher, workerTimeout)),
 			SkillSection:  watcherSkillAssignment.Section,
 			SkillCount:    watcherSkillAssignment.SkillCount,
 			ColonySkills:  watcherSkillAssignment.ColonyCount,
@@ -328,7 +351,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			TaskID:        fmt.Sprintf("continue-review-%s", spec.Caste),
 			Timeout:       timeoutSeconds,
 			Status:        "planned",
-			Brief:         renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec),
+			Brief:         continueExternalBriefWithHandoffSchema(renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec)),
 			SkillSection:  assignment.Section,
 			SkillCount:    assignment.SkillCount,
 			ColonySkills:  assignment.ColonyCount,

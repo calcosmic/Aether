@@ -1,11 +1,15 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -159,4 +163,154 @@ func TestContinuePlanOnlyWithoutCriterionRequirementsLeavesBlockersUnchanged(t *
 	if len(verification.BlockingIssues) != 0 {
 		t.Fatalf("expected no blocking issues for a phase without evidence requirements, got %v", verification.BlockingIssues)
 	}
+}
+
+// TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection proves 189-02
+// D-11: continue's external (wrapper-mediated) plan-only manifest carries a
+// colony-wide context capsule and, when a signal is active, a pheromone
+// section -- both resolved ONCE per manifest, mirroring how
+// codexBuildManifest.ContextCapsule already works for build (cmd/codex_build.go).
+// Before this plan's fix, codexContinuePlanManifest had neither field at all.
+func TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, dataDir, _, _ := setupIntermediateContinueState(t, "Capsule and pheromone on continue plan-only")
+
+	distinctiveSignalText := "distinctive-continue-plan-only-pheromone-marker-3f9a"
+	strength := 1.0
+	writeTestPheromones(t, dataDir, colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:        "sig_continue_plan_only_capsule_pheromone_test",
+				Type:      "FOCUS",
+				Priority:  "normal",
+				Source:    "test",
+				CreatedAt: time.Now().UTC().Format(time.RFC3339),
+				Active:    true,
+				Strength:  &strength,
+				Content:   json.RawMessage(`{"text":"` + distinctiveSignalText + `"}`),
+			},
+		},
+	})
+
+	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{LightFlag: true, SkipWatchers: true})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
+	}
+	plan, ok := planResult["continue_manifest"].(codexContinuePlanManifest)
+	if !ok {
+		t.Fatalf("expected continue_manifest in result, got %#v", planResult["continue_manifest"])
+	}
+
+	if strings.TrimSpace(plan.ContextCapsule) == "" {
+		t.Errorf("expected continue_manifest.context_capsule to be non-empty for a colony with an active goal/state, got %q", plan.ContextCapsule)
+	}
+	if !strings.Contains(plan.PheromoneSection, distinctiveSignalText) {
+		t.Errorf("expected continue_manifest.pheromone_section to contain the seeded signal's text %q, got %q", distinctiveSignalText, plan.PheromoneSection)
+	}
+
+	// codexContinueExternalDispatch must NOT have grown a per-dispatch
+	// capsule/pheromone field of its own -- both are manifest-level,
+	// resolved once, not per-dispatch (D-11). This is a compile-time
+	// invariant checked via reflection so a future per-dispatch addition
+	// fails this test rather than silently duplicating the manifest-level
+	// fields N times in the JSON payload.
+	dispatchType := reflect.TypeOf(codexContinueExternalDispatch{})
+	for i := 0; i < dispatchType.NumField(); i++ {
+		name := dispatchType.Field(i).Name
+		if name == "ContextCapsule" || name == "PheromoneSection" {
+			t.Errorf("codexContinueExternalDispatch must not carry its own %s field -- capsule/pheromone are manifest-level (D-11), never per-dispatch", name)
+		}
+	}
+}
+
+// TestContinueExternalDispatchBriefsStateHandoffSchemaOnceNotOnNativePath
+// proves 189-02 D-06: every wrapper-external continue dispatch's Brief (the
+// watcher's and every reviewer's) states the exact handoff/return schema
+// codex.ValidateWorkerHandoff enforces -- but renderCodexContinueWatcherBrief
+// and renderCodexContinueReviewBrief's OWN raw output, the same functions
+// continue's native-Codex dispatch path
+// (plannedContinueReviewDispatches/plannedContinueWatcherDispatch) calls
+// directly as TaskBrief, does NOT contain it. The native path already states
+// the schema via a separate channel (AssembleHostedPrompt +
+// renderResponseContract); adding it inside either render function would
+// duplicate it there.
+func TestContinueExternalDispatchBriefsStateHandoffSchemaOnceNotOnNativePath(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, _, _, taskID := setupIntermediateContinueState(t, "Handoff schema stated once on external continue dispatches")
+
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Handoff schema stated once on external continue dispatches",
+		Status: colony.PhaseInProgress,
+		Tasks:  []colony.Task{{ID: &taskID, Goal: "Complete intermediate work", Status: colony.TaskInProgress}},
+	}
+	manifest := loadCodexContinueManifest(phase.ID)
+	verification := codexContinueVerificationReport{Phase: phase.ID, ChecksPassed: true, Passed: true}
+	assessment := codexContinueAssessment{Phase: phase.ID, Passed: true}
+
+	// skipWatchers=false and no explicit Queen caste proposal (nil) drives
+	// plannedExternalContinueDispatches through the same deterministic
+	// queenOrchestrate path runCodexContinuePlanOnly itself uses -- a real,
+	// not hand-picked, set of dispatches for a standard-depth continue run.
+	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, 0, colony.VerificationDepthStandard, false, nil, "")
+	if len(dispatches) == 0 {
+		t.Fatalf("expected at least one planned external continue dispatch (the watcher is always required)")
+	}
+
+	const schemaNeedle = "changed_files"
+	if !strings.Contains(codex.HandoffFieldsSummary, schemaNeedle) {
+		t.Fatalf("test setup error: %q must be a substring of codex.HandoffFieldsSummary -- fix the test, not the schema", schemaNeedle)
+	}
+
+	sawWatcher := false
+	sawReviewer := false
+	for _, dispatch := range dispatches {
+		if !strings.Contains(dispatch.Brief, schemaNeedle) {
+			t.Errorf("dispatch %s (caste %s)'s Brief is missing handoff-schema substring %q -- a wrapper-spawned continue worker was never told the finalizer's schema:\n%s", dispatch.Name, dispatch.Caste, schemaNeedle, dispatch.Brief)
+		}
+		if dispatch.Caste == "watcher" {
+			sawWatcher = true
+		} else {
+			sawReviewer = true
+		}
+	}
+	if !sawWatcher {
+		t.Fatalf("expected the watcher dispatch to be present (skipWatchers=false); got castes %v", dispatchCastes(dispatches))
+	}
+	if !sawReviewer {
+		t.Fatalf("expected at least one reviewer dispatch at standard depth on a phase with real source tasks; got castes %v", dispatchCastes(dispatches))
+	}
+
+	// Proof of no duplication: renderCodexContinueWatcherBrief's and
+	// renderCodexContinueReviewBrief's own raw output -- what continue's
+	// native-Codex dispatch path feeds as TaskBrief -- must NOT contain the
+	// schema note plannedExternalContinueDispatches appends only for the
+	// wrapper-external path.
+	rawWatcherBrief := renderCodexContinueWatcherBrief(root, phase, manifest, verification.Steps, verification.Claims, verification.Watcher, 0)
+	if strings.Contains(rawWatcherBrief, schemaNeedle) {
+		t.Errorf("renderCodexContinueWatcherBrief's raw output already contains %q -- a native-Codex watcher would see the handoff schema twice:\n%s", schemaNeedle, rawWatcherBrief)
+	}
+
+	reviewSpec, ok := continueReviewSpecForCaste("probe")
+	if !ok {
+		t.Fatalf("test setup error: no review spec registered for caste %q", "probe")
+	}
+	rawReviewBrief := renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, reviewSpec)
+	if strings.Contains(rawReviewBrief, schemaNeedle) {
+		t.Errorf("renderCodexContinueReviewBrief's raw output already contains %q -- a native-Codex reviewer would see the handoff schema twice:\n%s", schemaNeedle, rawReviewBrief)
+	}
+}
+
+func dispatchCastes(dispatches []codexContinueExternalDispatch) []string {
+	castes := make([]string, 0, len(dispatches))
+	for _, d := range dispatches {
+		castes = append(castes, d.Caste)
+	}
+	return castes
 }

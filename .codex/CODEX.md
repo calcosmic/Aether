@@ -188,7 +188,7 @@ Skills are not a separate Codex plugin bundle. Codex agent definitions remain in
 `.codex/agents/*.toml`, and the Go CLI handles skill indexing, matching, and injection.
 
 Skills are automatically matched and injected into worker prompts during `build`,
-`colonize`, and `plan` dispatches.
+`colonize`, `plan`, and `continue` dispatches.
 
 Codex lifecycle orchestration skills are intentionally separate from worker skill
 injection. `aether-colony-creation`, `aether-colony-research`, and
@@ -199,7 +199,7 @@ summarize before or around the runtime command. They must stay aligned with
 ### Pheromone Signals
 
 Active pheromone signals are automatically injected into worker prompts during
-`build`, `colonize`, and `plan` dispatches.
+`build`, `colonize`, `plan`, and `continue` dispatches.
 
 Pheromone signals work identically across all platforms via the `aether` CLI:
 

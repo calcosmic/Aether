@@ -151,6 +151,40 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	}
 }
 
+// TestContinueWrapperInstructsCapsuleAndPheromoneDelivery proves 189-02 D-13:
+// both canonical continue wrapper paths (Claude Code and OpenCode) instruct
+// reading continue_manifest.context_capsule and .pheromone_section once from
+// the manifest and delivering dispatch.skill_section per reviewer -- the same
+// delivery formula build.md already states for dispatch_manifest.context_capsule.
+// Before this plan's fix, continue.md's entire delivery instruction was "Pass
+// each dispatch's runtime-provided `brief` verbatim", naming none of these
+// three keys.
+func TestContinueWrapperInstructsCapsuleAndPheromoneDelivery(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	required := []string{
+		"continue_manifest.context_capsule",
+		"continue_manifest.pheromone_section",
+		"dispatch.skill_section",
+	}
+
+	for _, wrapperPath := range canonicalWrapperPaths(repoRoot, "continue") {
+		content, err := os.ReadFile(wrapperPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", wrapperPath, err)
+		}
+		text := string(content)
+		for _, want := range required {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing delivery instruction %q -- a wrapper-spawned continue reviewer would never receive it", wrapperPath, want)
+			}
+		}
+	}
+}
+
 func TestContinueWrapperSourcesUseFastDevContinue(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
