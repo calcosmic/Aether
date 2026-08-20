@@ -110,7 +110,7 @@ func codegraphTextPartsForBuildBrief(phase colony.Phase, dispatch codexBuildDisp
 	if strings.TrimSpace(phase.Description) != "" {
 		parts = append(parts, phase.Description)
 	}
-	if task := findDispatchTask(phase, dispatch); task != nil {
+	for _, task := range findDispatchTasks(phase, dispatch) {
 		parts = append(parts, task.Goal)
 		parts = append(parts, task.Constraints...)
 		parts = append(parts, task.Hints...)

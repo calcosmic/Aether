@@ -88,9 +88,14 @@ func TestContractDocExampleValidatesAgainstSchema(t *testing.T) {
 // TestWrapperFieldListMatchesSchema is the four-surface parity invariant
 // (D-04): the handoff field set must be exactly equal across the schema's
 // WorkerHandoff $defs properties, the brace-list in both wrapper build.md
-// files, and the response-contract sentence in pkg/codex/worker.go. It
-// also asserts every field build.md requires in a terminal worker result
-// exists as a property of the schema's worker-result definition.
+// files, and codex.HandoffFieldsSummary in pkg/codex/handoff.go -- the one
+// canonical constant renderResponseContract (native-Codex dispatch),
+// composeBuildManifestBrief (wrapper-facing build brief), and continue's
+// external reviewer briefs all reference by symbol (189-01/189-02 D-03), so
+// checking the constant's own declared value is equivalent to checking every
+// one of its readers at once. It also asserts every field build.md requires
+// in a terminal worker result exists as a property of the schema's
+// worker-result definition.
 func TestWrapperFieldListMatchesSchema(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
@@ -99,16 +104,16 @@ func TestWrapperFieldListMatchesSchema(t *testing.T) {
 
 	claudeBuildMD := filepath.Join(repoRoot, ".claude", "commands", "ant", "build.md")
 	opencodeBuildMD := filepath.Join(repoRoot, ".opencode", "commands", "ant", "build.md")
-	workerGoPath := filepath.Join(repoRoot, "pkg", "codex", "worker.go")
+	handoffConstPath := filepath.Join(repoRoot, "pkg", "codex", "handoff.go")
 
 	schemaFields := schemaDefinitionPropertyNames(t, "WorkerHandoff")
 	claudeFields := wrapperHandoffBraceListFields(t, claudeBuildMD)
 	opencodeFields := wrapperHandoffBraceListFields(t, opencodeBuildMD)
-	workerGoFields := workerGoResponseContractFields(t, workerGoPath)
+	handoffConstFields := handoffFieldsSummaryConstFields(t, handoffConstPath)
 
 	assertFieldSetsEqual(t, "schema $defs.WorkerHandoff vs "+claudeBuildMD, schemaFields, claudeFields)
 	assertFieldSetsEqual(t, "schema $defs.WorkerHandoff vs "+opencodeBuildMD, schemaFields, opencodeFields)
-	assertFieldSetsEqual(t, "schema $defs.WorkerHandoff vs "+workerGoPath, schemaFields, workerGoFields)
+	assertFieldSetsEqual(t, "schema $defs.WorkerHandoff vs "+handoffConstPath, schemaFields, handoffConstFields)
 
 	requiredResultFields := terminalResultRequiredFields(t, claudeBuildMD)
 	resultProperties := schemaDefinitionPropertyNames(t, "codexExternalBuildWorkerResult")
@@ -199,14 +204,17 @@ func wrapperHandoffBraceListFields(t *testing.T, path string) []string {
 	return nil
 }
 
-// responseContractSentencePattern matches "Include handoff with <fields> ("
-// in pkg/codex/worker.go's renderResponseContract, capturing the field list
-// up to the parenthetical freshness explanation.
-var responseContractSentencePattern = regexp.MustCompile(`Include handoff with ([^(\n]+)\(`)
+// handoffFieldsSummaryConstPattern matches the declaration of
+// codex.HandoffFieldsSummary in pkg/codex/handoff.go, capturing the field
+// list up to the parenthetical freshness explanation. This constant is the
+// one canonical source every reader (renderResponseContract,
+// composeBuildManifestBrief, continue's external reviewer briefs) references
+// by symbol rather than hand-copying, per 189-01/189-02 D-03.
+var handoffFieldsSummaryConstPattern = regexp.MustCompile(`HandoffFieldsSummary\s*=\s*"([^(\n]+)\(`)
 
-// workerGoResponseContractFields extracts the handoff field list from the
-// "Include handoff with ..." sentence in pkg/codex/worker.go.
-func workerGoResponseContractFields(t *testing.T, path string) []string {
+// handoffFieldsSummaryConstFields extracts the handoff field list from
+// codex.HandoffFieldsSummary's own declared value in pkg/codex/handoff.go.
+func handoffFieldsSummaryConstFields(t *testing.T, path string) []string {
 	t.Helper()
 
 	content, err := os.ReadFile(path)
@@ -214,14 +222,14 @@ func workerGoResponseContractFields(t *testing.T, path string) []string {
 		t.Fatalf("failed to read %s: %v", path, err)
 	}
 
-	match := responseContractSentencePattern.FindSubmatch(content)
+	match := handoffFieldsSummaryConstPattern.FindSubmatch(content)
 	if match == nil {
-		t.Fatalf("no \"Include handoff with ...\" response-contract sentence found in %s", path)
+		t.Fatalf("no \"HandoffFieldsSummary = ...\" constant declaration found in %s", path)
 	}
 
 	fields := splitFieldTokens(string(match[1]))
 	if len(fields) == 0 {
-		t.Fatalf("parsed zero fields from the response-contract sentence in %s", path)
+		t.Fatalf("parsed zero fields from the HandoffFieldsSummary constant in %s", path)
 	}
 	return fields
 }

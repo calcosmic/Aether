@@ -2705,45 +2705,10 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 		}
 	}
 
-	relatedTask := findDispatchTask(phase, dispatch)
-	if relatedTask != nil {
-		if len(relatedTask.Constraints) > 0 {
-			b.WriteString("\n## Constraints\n\n")
-			for _, item := range relatedTask.Constraints {
-				item = strings.TrimSpace(item)
-				if item == "" {
-					continue
-				}
-				b.WriteString("- ")
-				b.WriteString(item)
-				b.WriteString("\n")
-			}
-		}
-		if len(relatedTask.Hints) > 0 {
-			b.WriteString("\n## Hints\n\n")
-			for _, item := range relatedTask.Hints {
-				item = strings.TrimSpace(item)
-				if item == "" {
-					continue
-				}
-				b.WriteString("- ")
-				b.WriteString(item)
-				b.WriteString("\n")
-			}
-		}
-		if len(relatedTask.SuccessCriteria) > 0 {
-			b.WriteString("\n## Task Success Criteria\n\n")
-			for _, item := range relatedTask.SuccessCriteria {
-				item = strings.TrimSpace(item)
-				if item == "" {
-					continue
-				}
-				b.WriteString("- ")
-				b.WriteString(item)
-				b.WriteString("\n")
-			}
-		}
-	}
+	relatedTasks := findDispatchTasks(phase, dispatch)
+	renderDispatchTaskItemsSection(&b, "Task Constraints", relatedTasks, func(t *colony.Task) []string { return t.Constraints })
+	renderDispatchTaskItemsSection(&b, "Hints", relatedTasks, func(t *colony.Task) []string { return t.Hints })
+	renderDispatchTaskItemsSection(&b, "Task Success Criteria", relatedTasks, func(t *colony.Task) []string { return t.SuccessCriteria })
 
 	if len(phase.SuccessCriteria) > 0 {
 		b.WriteString("\n## Phase Success Criteria\n\n")
@@ -2826,16 +2791,98 @@ func cleanupStaleBuildAttemptArtifacts(phaseNum int) {
 	}
 }
 
-func findDispatchTask(phase colony.Phase, dispatch codexBuildDispatch) *colony.Task {
-	if dispatch.TaskID == "" {
+// findDispatchTasks resolves every task a dispatch covers (via the
+// already-merge-aware dispatchCoveredTaskIDs) against phase.Tasks, in covered
+// order. It does not reimplement "which task IDs does this dispatch cover" --
+// that is dispatchCoveredTaskIDs's job, also used by completedBuildTaskIDs. A
+// covered ID with no matching phase.Tasks entry is skipped silently
+// (defensive: a stale or renamed task ID must never panic or drop the rest of
+// the brief).
+func findDispatchTasks(phase colony.Phase, dispatch codexBuildDispatch) []*colony.Task {
+	coveredIDs := dispatchCoveredTaskIDs(dispatch)
+	if len(coveredIDs) == 0 {
 		return nil
 	}
+	byID := make(map[string]*colony.Task, len(phase.Tasks))
 	for i := range phase.Tasks {
-		if buildTaskID(phase.Tasks[i], i) == dispatch.TaskID {
-			return &phase.Tasks[i]
+		byID[buildTaskID(phase.Tasks[i], i)] = &phase.Tasks[i]
+	}
+	tasks := make([]*colony.Task, 0, len(coveredIDs))
+	for _, id := range coveredIDs {
+		if task, ok := byID[id]; ok {
+			tasks = append(tasks, task)
 		}
 	}
-	return nil
+	return tasks
+}
+
+// renderDispatchTaskItemsSection appends a "## <heading>" section gathering
+// extract's items across every task in tasks.
+//
+// Exactly one covered task renders byte-identical to the pre-merge-aware
+// brief: the heading appears whenever that task's raw item slice is
+// non-empty (matching the original single-task code's own behavior, even in
+// the edge case where every item trims to empty), with no "Task N:" label --
+// just that task's bullets.
+//
+// More than one covered task labels each task's block "**Task N:**" (N = the
+// task's 1-based position within tasks, matching mergeDispatchInto's own
+// numbering of dispatch.Task), including only tasks with at least one
+// non-empty item for this section; a task with none is skipped entirely, so
+// no empty "Task N:" label with nothing under it is ever emitted.
+func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []*colony.Task, extract func(*colony.Task) []string) {
+	if len(tasks) == 0 {
+		return
+	}
+
+	if len(tasks) == 1 {
+		items := extract(tasks[0])
+		if len(items) == 0 {
+			return
+		}
+		b.WriteString("\n## ")
+		b.WriteString(heading)
+		b.WriteString("\n\n")
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			b.WriteString("- ")
+			b.WriteString(item)
+			b.WriteString("\n")
+		}
+		return
+	}
+
+	var body strings.Builder
+	any := false
+	for i, task := range tasks {
+		var written []string
+		for _, item := range extract(task) {
+			item = strings.TrimSpace(item)
+			if item != "" {
+				written = append(written, item)
+			}
+		}
+		if len(written) == 0 {
+			continue
+		}
+		any = true
+		body.WriteString(fmt.Sprintf("**Task %d:**\n", i+1))
+		for _, item := range written {
+			body.WriteString("- ")
+			body.WriteString(item)
+			body.WriteString("\n")
+		}
+	}
+	if !any {
+		return
+	}
+	b.WriteString("\n## ")
+	b.WriteString(heading)
+	b.WriteString("\n\n")
+	b.WriteString(body.String())
 }
 
 func expectedDispatchOutcome(dispatch codexBuildDispatch) string {
@@ -3107,17 +3154,20 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 
 // composeBuildManifestBrief is the single source of the worker prompt that
 // ships in the plan-only manifest. It is the base task brief plus the steering
-// sections the wrapper has no other channel for: pheromone signals and prior
-// worker handoffs.
+// sections the wrapper has no other channel for: pheromone signals, prior
+// worker handoffs, and the handoff/return schema.
 //
 // The Go subprocess path deliberately does NOT use this composition — it
 // delivers PheromoneSection and HandoffSection separately through WorkerConfig
-// and pkg/codex/prompt.go, so embedding them in the shared renderer would
-// duplicate them there. --print-brief uses this composer so what the user
-// inspects is exactly what the manifest carries.
+// and pkg/codex/prompt.go, and states the handoff schema itself via
+// renderResponseContract on that same separate channel, so embedding any of
+// this in the shared renderer would duplicate it there. --print-brief uses
+// this composer so what the user inspects is exactly what the manifest
+// carries.
 func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
 	var b strings.Builder
 	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt))
+	b.WriteString(fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary))
 
 	if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
 		// The resolver emits its own "### Active Pheromone Signals" heading;

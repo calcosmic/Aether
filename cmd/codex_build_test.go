@@ -3696,6 +3696,125 @@ func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
 	}
 }
 
+// TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria is the
+// invariant proof for criterion 1: a merged (multi-task) dispatch's brief must
+// carry every covered task's constraints, hints and success criteria, not
+// just the first task folded into the chain. It builds a real 3-task merged
+// dispatch (via CoveredTaskIDs, exactly as coalesceSequentialDispatches
+// produces one) rather than a single-task dispatch with a hand-set
+// CoveredTaskIDs list, so it actually exercises the merge-aware resolution
+// path instead of asserting a single hardcoded string.
+func TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+
+	task1 := colony.Task{
+		ID:              strPtr("1"),
+		Goal:            "first",
+		Constraints:     []string{"constraint-only-in-task-1"},
+		Hints:           []string{"hint-only-in-task-1"},
+		SuccessCriteria: []string{"criteria-only-in-task-1"},
+	}
+	task2 := colony.Task{
+		ID:              strPtr("2"),
+		Goal:            "second",
+		Constraints:     []string{"constraint-only-in-task-2"},
+		Hints:           []string{"hint-only-in-task-2"},
+		SuccessCriteria: []string{"criteria-only-in-task-2"},
+	}
+	task3 := colony.Task{
+		ID:              strPtr("3"),
+		Goal:            "third",
+		Constraints:     []string{"constraint-only-in-task-3"},
+		Hints:           []string{"hint-only-in-task-3"},
+		SuccessCriteria: []string{"criteria-only-in-task-3"},
+	}
+
+	phase := colony.Phase{
+		ID:    1,
+		Name:  "Merged Dispatch Phase",
+		Tasks: []colony.Task{task1, task2, task3},
+	}
+	dispatch := codexBuildDispatch{
+		Name:           "Hammer-26",
+		Caste:          "builder",
+		TaskID:         "1",
+		CoveredTaskIDs: []string{"1", "2", "3"},
+		Task:           "1. first\n2. second\n3. third",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+	wantSubstrings := []string{
+		"constraint-only-in-task-1", "hint-only-in-task-1", "criteria-only-in-task-1",
+		"constraint-only-in-task-2", "hint-only-in-task-2", "criteria-only-in-task-2",
+		"constraint-only-in-task-3", "hint-only-in-task-3", "criteria-only-in-task-3",
+	}
+	for _, want := range wantSubstrings {
+		if !strings.Contains(brief, want) {
+			t.Errorf("merged dispatch brief missing %q (a task-2/3 constraint, hint, or success criterion was dropped):\n%s", want, brief)
+		}
+	}
+
+	if !strings.Contains(brief, "## Task Constraints\n") {
+		t.Errorf("merged dispatch brief missing the renamed \"## Task Constraints\" heading:\n%s", brief)
+	}
+	if strings.Contains(brief, "## Constraints\n") {
+		t.Errorf("merged dispatch brief still emits the old \"## Constraints\" heading:\n%s", brief)
+	}
+}
+
+// TestComposeBuildManifestBriefStatesHandoffSchemaOnceNotOnNativePath is the
+// duplication-avoidance proof for criterion 2 (D-04): composeBuildManifestBrief
+// (the wrapper-facing build brief -- dispatch.Brief in the JSON manifest Claude
+// Code and OpenCode workers read) must state codex.HandoffFieldsSummary so
+// those workers are told the exact handoff schema the finalizer enforces.
+// renderCodexBuildWorkerBrief's OWN output must NOT contain it, because that
+// raw output is fed to native-Codex workers as TaskBrief
+// (executeCodexBuildDispatches) -- and those workers already receive the
+// schema via renderResponseContract on a separate channel
+// (AssembleHostedPrompt/AssemblePrompt). Embedding it in the shared renderer
+// would show it to them twice.
+//
+// Every field named in codex.HandoffFieldsSummary is checked, not a
+// hand-picked couple, so this is an invariant over the constant's actual
+// content rather than a check that would stay green if a field were silently
+// dropped from one side.
+func TestComposeBuildManifestBriefStatesHandoffSchemaOnceNotOnNativePath(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-27",
+		Caste: "builder",
+		Task:  "Implement feature Y",
+	}
+	phase := colony.Phase{ID: 1, Name: "Test Phase"}
+	startedAt := time.Now()
+
+	composed := composeBuildManifestBrief(tmpDir, phase, dispatch, startedAt)
+	rawBrief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, startedAt)
+
+	fieldsPart := codex.HandoffFieldsSummary
+	if idx := strings.Index(fieldsPart, "("); idx >= 0 {
+		fieldsPart = fieldsPart[:idx]
+	}
+	wantFields := splitFieldTokens(fieldsPart)
+	if len(wantFields) == 0 {
+		t.Fatal("parsed zero fields from codex.HandoffFieldsSummary; test fixture is broken")
+	}
+
+	for _, field := range wantFields {
+		if !strings.Contains(composed, field) {
+			t.Errorf("composeBuildManifestBrief missing handoff-schema field %q; a wrapper-spawned worker was never told the finalizer's schema:\n%s", field, composed)
+		}
+		if strings.Contains(rawBrief, field) {
+			t.Errorf("renderCodexBuildWorkerBrief already contains handoff-schema field %q; native-Codex workers (whose TaskBrief is this raw output) would see the schema twice -- once here, once via renderResponseContract:\n%s", field, rawBrief)
+		}
+	}
+}
+
 func TestBuildWorkerBriefIncludesCodegraphContext(t *testing.T) {
 	saveGlobals(t)
 

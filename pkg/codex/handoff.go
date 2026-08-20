@@ -19,6 +19,14 @@ type WorkerHandoff struct {
 	Freshness              string     `json:"freshness,omitempty"`
 }
 
+// HandoffFieldsSummary is the single canonical description of every field a
+// WorkerHandoff carries. renderResponseContract (native-Codex dispatch path)
+// and the wrapper-facing build/continue brief composers (Claude Code and
+// OpenCode dispatch paths) all reference this one constant instead of
+// hand-copying the sentence, so the schema stated to a worker can never drift
+// from the schema ValidateWorkerHandoff actually enforces.
+const HandoffFieldsSummary = "changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness (an RFC3339 timestamp for when evidence was collected, or \"not-run\")"
+
 // IsEmptyWorkerHandoff reports whether a handoff carries no relay content at
 // all. Handoffs are the memory the next phase's workers receive; a
 // content-free record occupies a slot in that memory while telling the next
