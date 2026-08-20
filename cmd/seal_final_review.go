@@ -1015,29 +1015,33 @@ func runSealFinalReview(root string, state colony.ColonyState, phase colony.Phas
 
 func plannedSealFinalReviewDispatches(root string, state colony.ColonyState, phase colony.Phase, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codex.WorkerDispatch {
 	capsule := resolveCodexWorkerContext()
-	pheromoneSection := resolvePheromoneSection()
+	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
+	// already renders "## Pheromone Signals" unconditionally whenever a signal
+	// is active (cmd/colony_prime_context.go:571). Populating a second,
+	// independent PheromoneSection field here would deliver the same steering
+	// text twice. See resolvePheromoneSection's doc comment for which callers
+	// still need it.
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
 	specs := queenSealReviewSpecs(state, phase, reviewDepth)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)
 		dispatches = append(dispatches, codex.WorkerDispatch{
-			ID:               fmt.Sprintf("seal-review-%d", idx),
-			WorkerName:       deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste)),
-			AgentName:        agentName,
-			AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
-			Caste:            spec.Caste,
-			TaskID:           fmt.Sprintf("seal-review-%s", spec.Caste),
-			TaskBrief:        renderSealFinalReviewBrief(root, state, phase, spec),
-			ContextCapsule:   capsule,
-			HandoffSection:   renderWorkerHandoffSection("seal", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste))),
-			Workflow:         "seal",
-			Phase:            phase.ID,
-			SkillSection:     resolveSkillSectionForWorkflow("seal", spec.Caste, spec.Task),
-			PheromoneSection: pheromoneSection,
-			Root:             root,
-			Timeout:          timeout,
-			Wave:             1,
+			ID:             fmt.Sprintf("seal-review-%d", idx),
+			WorkerName:     deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste)),
+			AgentName:      agentName,
+			AgentTOMLPath:  dispatchAgentPath(root, invoker, agentName),
+			Caste:          spec.Caste,
+			TaskID:         fmt.Sprintf("seal-review-%s", spec.Caste),
+			TaskBrief:      renderSealFinalReviewBrief(root, state, phase, spec),
+			ContextCapsule: capsule,
+			HandoffSection: renderWorkerHandoffSection("seal", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste))),
+			Workflow:       "seal",
+			Phase:          phase.ID,
+			SkillSection:   resolveSkillSectionForWorkflow("seal", spec.Caste, spec.Task),
+			Root:           root,
+			Timeout:        timeout,
+			Wave:           1,
 		})
 	}
 	return dispatches

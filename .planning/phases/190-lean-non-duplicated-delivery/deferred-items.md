@@ -71,6 +71,20 @@ up.
 
 ## D-190-03-A: The native/direct build dispatch path independently double-delivers pheromone signals through a separate, unfixed channel
 
+**RESOLVED by 190-05.** Audited all ~8 `codex.WorkerDispatch`/`codex.WorkerConfig` construction
+sites named below (build native, continue review, continue watcher, plan, colonize, seal, swarm,
+quick, oracle) individually: build/continue×2/plan/colonize/seal/swarm all set `ContextCapsule` to
+`resolveCodexWorkerContext()`, which unconditionally embeds `## Pheromone Signals` whenever a
+signal is active — those seven call sites now leave `PheromoneSection` unset entirely (the
+`resolvePheromoneSection()` call was removed at each). quick and oracle build their own lightweight,
+custom capsules (`renderQuickContextCapsule`, `renderOracleContextCapsule`) that do NOT render
+pheromones at all — `PheromoneSection` remains their sole channel, deliberately unchanged.
+`codexWorkerDispatchesForRecovery` (`cmd/codex_build_finalize.go`, build's retry-instruction
+builder) also had the same redundant-but-inert pattern; fixed for consistency even though its
+`WorkerDispatch` values are never passed through `AssemblePrompt` today. See `190-05-SUMMARY.md`
+for the full per-caller audit table and the fail-then-pass proof (`TestNativeDispatchPheromoneStaysExactlyOnceViaCapsule`,
+`TestEightCommandsDeliverPheromoneExactlyOnce`). The rest of this entry is kept for historical record.
+
 **Found during:** 190-03, while tracing "both delivery paths" per this plan's own architectural-decision
 constraint 2 (the trap: a fix must not zero out a section on a path it didn't intend to touch).
 
@@ -129,6 +143,61 @@ that steering text twice in its assembled prompt, under two different headings. 
 `--print-brief`'s duplication detector (which only inspects the wrapper-facing capsule + composed brief
 + skill section, never `executeCodexBuildDispatches`'s live `AssemblePrompt` output), so it is currently
 invisible to the one tool built to catch exactly this class of bug.
+
+---
+
+## D-190-05-A: Continue's native review and watcher dispatches independently double-deliver prior-worker handoffs through a separate, unfixed channel (HandoffSection, not pheromones)
+
+**Found during:** 190-05, while auditing all ~8 `codex.WorkerDispatch`/`codex.WorkerConfig`
+construction sites per this plan's own per-caller discipline (required to establish, for each
+caller, whether its capsule already embeds the pheromone section before touching
+`PheromoneSection` anywhere). D-190-03-A's own text asserted "`HandoffSection` does NOT
+independently duplicate on this same path today" — true for BUILD's native dispatch specifically,
+but that assertion does not hold for CONTINUE's native dispatch functions, which this plan's audit
+newly inspected.
+
+**What was verified, by reading and by test:** `plannedContinueReviewDispatches`
+(`cmd/codex_continue.go`) and `plannedContinueWatcherDispatch` (`cmd/codex_continue.go`) both set
+`ContextCapsule: resolveCodexWorkerContext()` (which unconditionally renders
+`## Previous Worker Handoffs` whenever a handoff record matches, `cmd/colony_prime_context.go:695`)
+AND `HandoffSection: renderWorkerHandoffSection("continue", phase.ID, workerName)` on every
+dispatch — the same "capsule + dedicated field" shape D-190-03-A found for pheromones, but for
+handoffs, and specific to continue's native path.
+
+Proven empirically, not just by reading: a throwaway probe (deleted after use) seeded one stored
+handoff with `Workflow: "continue"` (the earlier probe attempt using the base test fixture's
+`Workflow: "build"` handoff produced a false negative — `renderWorkerHandoffSection` filters by
+workflow, so a build-workflow handoff never populates a continue-scoped `HandoffSection`, which is
+why this went unnoticed) and called `plannedContinueReviewDispatches` directly. The assembled
+prompt via `codex.AssembleHostedPrompt` carried `## Previous Worker Handoffs` **twice**: once from
+`ContextCapsule`, once from the independently-populated `HandoffSection`.
+
+**Why this is not fixed here:** Out of 190-05's scope, which is pheromone-specific (per this plan's
+own objective: "an active pheromone signal reaches each worker TWICE"). Fixing it means deciding
+whether `plannedContinueReviewDispatches`/`plannedContinueWatcherDispatch` should stop populating
+`HandoffSection` (mirroring what this plan just did for `PheromoneSection` at these same two call
+sites) — a decision this plan's own objective and success criteria do not name, and touching it
+would silently expand this plan's declared scope past pheromones. Note
+`plannedContinueWatcherDispatch`'s own comment ("The watcher... was the only one dispatched without
+the relay... Nothing in the design justified the asymmetry; it was omitted") shows `HandoffSection`
+was deliberately ADDED to these two call sites by a prior change, apparently without checking
+whether the capsule already delivered the same content — the same oversight D-190-03-A named for
+pheromones, recurring for handoffs on a different command.
+
+**Recommended follow-up:** A future phase should apply the exact fix this plan (190-05) just applied
+to `PheromoneSection` at these two call sites, to `HandoffSection` instead: remove
+`HandoffSection: renderWorkerHandoffSection("continue", ...)` from both
+`plannedContinueReviewDispatches` and `plannedContinueWatcherDispatch`, since `ContextCapsule`
+already delivers the same content. Prove with a `Workflow: "continue"`-scoped handoff fixture (the
+base `seedHandoffColonyForBriefTests` fixture's `Workflow: "build"` handoff will NOT exercise this
+bug — reuse the probe pattern in this entry, not that fixture alone).
+
+**Impact if left unfixed:** Every native continue-review or continue-watcher dispatch (`aether
+continue`, no `--plan-only`) with a stored handoff matching `Workflow: "continue"` for the current
+or preceding phase receives that handoff's content twice in its assembled prompt, under the same
+heading. Not currently caught by any test in the suite (the existing 190 locks target pheromones
+and the build native path, or the continue plan-only wrapper manifest, not continue's native
+review/watcher dispatch functions).
 
 ---
 

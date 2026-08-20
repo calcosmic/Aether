@@ -1386,29 +1386,33 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 
 func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codex.WorkerDispatch {
 	capsule := resolveCodexWorkerContext()
-	pheromoneSection := resolvePheromoneSection()
+	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
+	// already renders "## Pheromone Signals" unconditionally whenever a signal is
+	// active (cmd/colony_prime_context.go:571). Populating a second, independent
+	// PheromoneSection field here would deliver the same steering text twice into
+	// AssemblePrompt/AssembleHostedPrompt. See resolvePheromoneSection's doc
+	// comment for which callers still need it.
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
 	specs := queenContinueReviewSpecs(phase, reviewDepth)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)
 		dispatches = append(dispatches, codex.WorkerDispatch{
-			ID:               fmt.Sprintf("continue-review-%d", idx),
-			WorkerName:       deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste)),
-			AgentName:        agentName,
-			AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
-			Caste:            spec.Caste,
-			TaskID:           fmt.Sprintf("continue-review-%s", spec.Caste),
-			TaskBrief:        renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec),
-			ContextCapsule:   capsule,
-			HandoffSection:   renderWorkerHandoffSection("continue", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste))),
-			Workflow:         "continue",
-			Phase:            phase.ID,
-			SkillSection:     resolveSkillSectionForWorkflow("continue", spec.Caste, spec.Task),
-			PheromoneSection: pheromoneSection,
-			Root:             root,
-			Timeout:          timeout,
-			Wave:             1,
+			ID:             fmt.Sprintf("continue-review-%d", idx),
+			WorkerName:     deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste)),
+			AgentName:      agentName,
+			AgentTOMLPath:  dispatchAgentPath(root, invoker, agentName),
+			Caste:          spec.Caste,
+			TaskID:         fmt.Sprintf("continue-review-%s", spec.Caste),
+			TaskBrief:      renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec),
+			ContextCapsule: capsule,
+			HandoffSection: renderWorkerHandoffSection("continue", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste))),
+			Workflow:       "continue",
+			Phase:          phase.ID,
+			SkillSection:   resolveSkillSectionForWorkflow("continue", spec.Caste, spec.Task),
+			Root:           root,
+			Timeout:        timeout,
+			Wave:           1,
 		})
 	}
 	return dispatches
@@ -1781,16 +1785,21 @@ func runCodexContinueWatcherVerification(ctx context.Context, root string, phase
 func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification, invoker codex.WorkerInvoker, workerTimeout time.Duration) codex.WorkerDispatch {
 	agentName := codexAgentNameForCaste("watcher")
 	return codex.WorkerDispatch{
-		ID:               fmt.Sprintf("continue-verification-%d", phase.ID),
-		WorkerName:       deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID)),
-		AgentName:        agentName,
-		AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
-		Caste:            "watcher",
-		TaskID:           fmt.Sprintf("continue-verification-%d", phase.ID),
-		TaskBrief:        renderCodexContinueWatcherBrief(root, phase, manifest, steps, claims, buildWatcher, workerTimeout),
-		ContextCapsule:   resolveCodexWorkerContext(),
-		SkillSection:     resolveSkillSectionForWorkflow("continue", "watcher", "Independent verification before advancement"),
-		PheromoneSection: resolvePheromoneSection(),
+		ID:             fmt.Sprintf("continue-verification-%d", phase.ID),
+		WorkerName:     deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID)),
+		AgentName:      agentName,
+		AgentTOMLPath:  dispatchAgentPath(root, invoker, agentName),
+		Caste:          "watcher",
+		TaskID:         fmt.Sprintf("continue-verification-%d", phase.ID),
+		TaskBrief:      renderCodexContinueWatcherBrief(root, phase, manifest, steps, claims, buildWatcher, workerTimeout),
+		ContextCapsule: resolveCodexWorkerContext(),
+		SkillSection:   resolveSkillSectionForWorkflow("continue", "watcher", "Independent verification before advancement"),
+		// PheromoneSection is deliberately left unset (D-190-03-A / 190-05):
+		// ContextCapsule above already renders "## Pheromone Signals"
+		// unconditionally whenever a signal is active
+		// (cmd/colony_prime_context.go:571) -- a second, independent
+		// PheromoneSection field would deliver the same text twice. See
+		// resolvePheromoneSection's doc comment for which callers still need it.
 		// The watcher is the most expensive single worker in the flow and was
 		// the only one dispatched without the relay — its sibling reviewers get
 		// it. Nothing in the design justified the asymmetry; it was omitted.
