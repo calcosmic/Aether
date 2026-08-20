@@ -3696,6 +3696,75 @@ func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
 	}
 }
 
+// TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria is the
+// invariant proof for criterion 1: a merged (multi-task) dispatch's brief must
+// carry every covered task's constraints, hints and success criteria, not
+// just the first task folded into the chain. It builds a real 3-task merged
+// dispatch (via CoveredTaskIDs, exactly as coalesceSequentialDispatches
+// produces one) rather than a single-task dispatch with a hand-set
+// CoveredTaskIDs list, so it actually exercises the merge-aware resolution
+// path instead of asserting a single hardcoded string.
+func TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+
+	task1 := colony.Task{
+		ID:              strPtr("1"),
+		Goal:            "first",
+		Constraints:     []string{"constraint-only-in-task-1"},
+		Hints:           []string{"hint-only-in-task-1"},
+		SuccessCriteria: []string{"criteria-only-in-task-1"},
+	}
+	task2 := colony.Task{
+		ID:              strPtr("2"),
+		Goal:            "second",
+		Constraints:     []string{"constraint-only-in-task-2"},
+		Hints:           []string{"hint-only-in-task-2"},
+		SuccessCriteria: []string{"criteria-only-in-task-2"},
+	}
+	task3 := colony.Task{
+		ID:              strPtr("3"),
+		Goal:            "third",
+		Constraints:     []string{"constraint-only-in-task-3"},
+		Hints:           []string{"hint-only-in-task-3"},
+		SuccessCriteria: []string{"criteria-only-in-task-3"},
+	}
+
+	phase := colony.Phase{
+		ID:    1,
+		Name:  "Merged Dispatch Phase",
+		Tasks: []colony.Task{task1, task2, task3},
+	}
+	dispatch := codexBuildDispatch{
+		Name:           "Hammer-26",
+		Caste:          "builder",
+		TaskID:         "1",
+		CoveredTaskIDs: []string{"1", "2", "3"},
+		Task:           "1. first\n2. second\n3. third",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+	wantSubstrings := []string{
+		"constraint-only-in-task-1", "hint-only-in-task-1", "criteria-only-in-task-1",
+		"constraint-only-in-task-2", "hint-only-in-task-2", "criteria-only-in-task-2",
+		"constraint-only-in-task-3", "hint-only-in-task-3", "criteria-only-in-task-3",
+	}
+	for _, want := range wantSubstrings {
+		if !strings.Contains(brief, want) {
+			t.Errorf("merged dispatch brief missing %q (a task-2/3 constraint, hint, or success criterion was dropped):\n%s", want, brief)
+		}
+	}
+
+	if !strings.Contains(brief, "## Task Constraints\n") {
+		t.Errorf("merged dispatch brief missing the renamed \"## Task Constraints\" heading:\n%s", brief)
+	}
+	if strings.Contains(brief, "## Constraints\n") {
+		t.Errorf("merged dispatch brief still emits the old \"## Constraints\" heading:\n%s", brief)
+	}
+}
+
 func TestBuildWorkerBriefIncludesCodegraphContext(t *testing.T) {
 	saveGlobals(t)
 
