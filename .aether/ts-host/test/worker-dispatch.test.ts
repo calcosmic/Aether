@@ -190,7 +190,6 @@ describe("worker-dispatch", () => {
         context_capsule: "## Colony State\n\nGo-provided context",
         handoff_section: "## Previous Worker Handoffs\n\nPrior worker result",
         skill_section: "### Skill: worker-priming\n\nUse matched skill context",
-        hive_section: "## HIVE WISDOM\n\nUse verified patterns",
         task_brief: "# Build Dispatch\n\nGo-authored task brief",
       });
 
@@ -199,7 +198,11 @@ describe("worker-dispatch", () => {
       assert.equal(request?.["context_capsule"], "## Colony State\n\nGo-provided context");
       assert.equal(request?.["handoff_section"], "## Previous Worker Handoffs\n\nPrior worker result");
       assert.equal(request?.["skill_section"], "### Skill: worker-priming\n\nUse matched skill context");
-      assert.equal(request?.["hive_section"], "## HIVE WISDOM\n\nUse verified patterns");
+      // Phase 190 regression lock: the TS host must never attach a
+      // hive_section to the Go-bound request -- hive wisdom is delivered
+      // exactly once, already embedded in context_capsule by Go's
+      // colony-prime capsule.
+      assert.equal(request && "hive_section" in request, false, "the Go-bound request must not carry a hive_section key");
       assert.equal(request?.["task_brief"], "# Build Dispatch\n\nGo-authored task brief");
       assert.deepEqual(request?.["permission_profile"], {
         schema_version: 1,
