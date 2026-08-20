@@ -994,6 +994,15 @@ func codexWorkerDispatchesForRecovery(dispatches []codexBuildDispatch, phaseNum 
 	// leave a duplication trap for the moment a future change wires this into
 	// a live invocation, mirroring the pattern this plan just closed on the
 	// live native/direct dispatch path.
+	//
+	// HandoffSection is deliberately NOT resolved here either (D-190-05-A /
+	// 190-06), for the identical reason but a different field: capsule already
+	// renders "## Previous Worker Handoffs" for "build"-workflow records
+	// (cmd/colony_prime_context.go:695), and this function's per-dispatch
+	// HandoffSection used the SAME "build" workflow tag -- an exact duplicate
+	// of the capsule's own content, not the "materially different workflow"
+	// case 190-06 fixed for continue/colonize/plan/seal/swarm. Removed for
+	// consistency, same as PheromoneSection above.
 
 	workers := make([]codex.WorkerDispatch, 0, len(dispatches))
 	for _, dispatch := range dispatches {
@@ -1014,7 +1023,6 @@ func codexWorkerDispatchesForRecovery(dispatches []codexBuildDispatch, phaseNum 
 			TaskBrief:         brief,
 			ContextCapsule:    capsule,
 			SkillSection:      dispatch.SkillSection,
-			HandoffSection:    renderWorkerHandoffSection("build", phaseNum, dispatch.Name),
 			PermissionProfile: dispatch.PermissionProfile,
 			DeclaredPaths:     append([]string{}, dispatch.DeclaredPaths...),
 			Root:              root,

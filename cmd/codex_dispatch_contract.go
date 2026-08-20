@@ -700,8 +700,51 @@ func persistDispatchWorkerHandoff(dispatch codex.WorkerDispatch, result codex.Di
 	})
 }
 
-// renderWorkerHandoffSection renders the handoff context section for a worker.
+// renderWorkerHandoffSection renders the handoff context section for a
+// worker, under the shared "## Previous Worker Handoffs" heading -- the SAME
+// heading the colony-prime capsule (resolveCodexWorkerContext(), which
+// unconditionally renders a "build"-workflow-scoped copy whenever a matching
+// record exists, cmd/colony_prime_context.go:695) uses.
+//
+// A caller whose ContextCapsule is resolveCodexWorkerContext() and who ALSO
+// needs a DIFFERENT workflow's handoffs delivered (e.g. continue's relay of
+// sibling continue-review/watcher handoffs, distinct from the capsule's own
+// build-carryover) must call renderRelatedWorkflowHandoffSection instead.
+// Calling this function a second time for such a caller would deliver two
+// "## Previous Worker Handoffs" sections into the same assembled prompt --
+// the exact shape D-190-05-A found on continue's native review/watcher
+// dispatch paths, closed by Phase 190 Plan 06.
 func renderWorkerHandoffSection(workflow string, phaseID int, workerName string) string {
+	return renderHandoffSectionNamed(workflow, phaseID, workerName, "worker_handoffs", "## Previous Worker Handoffs\n\n")
+}
+
+// renderRelatedWorkflowHandoffSection renders handoff records for a workflow
+// OTHER than the "build" workflow the shared colony-prime capsule always
+// carries (cmd/colony_prime_context.go:695) -- e.g. a "continue"-workflow
+// handoff left by a sibling continue dispatch (a review caste, or the
+// watcher) for the current or preceding phase.
+//
+// Use this instead of renderWorkerHandoffSection when the caller's
+// ContextCapsule is resolveCodexWorkerContext(): that capsule already
+// delivers "build"-workflow handoffs under "## Previous Worker Handoffs", so
+// calling renderWorkerHandoffSection a second time for a DIFFERENT workflow
+// would still collide on the same heading even though the underlying
+// records differ (D-190-05-A) -- this repo's own convention treats a
+// repeated HEADING as "the same section delivered twice" regardless of
+// whether the body content is identical. This function renders under a
+// distinct heading instead, so both the cross-phase build-carryover content
+// (capsule) and the same-workflow sibling-relay content (this function)
+// keep exactly one home each, and neither is silently dropped to zero.
+func renderRelatedWorkflowHandoffSection(workflow string, phaseID int, workerName string) string {
+	return renderHandoffSectionNamed(workflow, phaseID, workerName, "related_worker_handoffs", "## Related Worker Handoffs\n\nHandoffs from other workers on this same workflow -- distinct from any cross-phase build handoff above.\n\n")
+}
+
+// renderHandoffSectionNamed is the shared implementation behind
+// renderWorkerHandoffSection and renderRelatedWorkflowHandoffSection. The
+// filtering and per-record rendering are identical between the two; only the
+// heading (and its section-template identity, for colonies that override
+// section headers) differs.
+func renderHandoffSectionNamed(workflow string, phaseID int, workerName string, sectionName string, fallbackHeading string) string {
 	if store == nil {
 		return ""
 	}
@@ -735,7 +778,7 @@ func renderWorkerHandoffSection(workflow string, phaseID int, workerName string)
 	}
 
 	var b strings.Builder
-	writeSectionHeader(&b, "worker_handoffs", "## Previous Worker Handoffs\n\n")
+	writeSectionHeader(&b, sectionName, fallbackHeading)
 	for _, record := range filtered {
 		title := strings.TrimSpace(record.WorkerName)
 		if title == "" {
@@ -744,16 +787,16 @@ func renderWorkerHandoffSection(workflow string, phaseID int, workerName string)
 		if record.TaskID != "" {
 			title += " (" + record.TaskID + ")"
 		}
-		b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.WorkerHeaderFormat }, "### %s\n", title))
+		b.WriteString(fmtOrFallback(sectionName, func(t *sectionTemplate) string { return t.WorkerHeaderFormat }, "### %s\n", title))
 		// Caste, wave and age were stored on every record and rendered on none,
 		// so a reader could not tell whether a handoff came from the worker
 		// beside it or from a build three days ago — and weighted them equally.
 		b.WriteString(fmt.Sprintf("- From: %s\n", handoffProvenance(record)))
 		if record.Status != "" || record.VerificationStatus != "" {
-			b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.StatusFormat }, "- Status: %s; verification: %s\n", firstNonEmpty(record.Status, "unknown"), firstNonEmpty(record.VerificationStatus, "unknown")))
+			b.WriteString(fmtOrFallback(sectionName, func(t *sectionTemplate) string { return t.StatusFormat }, "- Status: %s; verification: %s\n", firstNonEmpty(record.Status, "unknown"), firstNonEmpty(record.VerificationStatus, "unknown")))
 		}
 		if record.Summary != "" {
-			b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.SummaryFormat }, "- Summary: %s\n", record.Summary))
+			b.WriteString(fmtOrFallback(sectionName, func(t *sectionTemplate) string { return t.SummaryFormat }, "- Summary: %s\n", record.Summary))
 		}
 		appendHandoffList(&b, "Changed files", record.ChangedFiles)
 		appendHandoffList(&b, "Commands run", record.CommandsRun)

@@ -704,7 +704,15 @@ func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker 
 			TaskID:         fmt.Sprintf("survey-%d", i),
 			TaskBrief:      taskBrief,
 			ContextCapsule: capsule,
-			HandoffSection: renderWorkerHandoffSection("colonize", 0, workerName),
+			// D-190-05-A / 190-06: renderRelatedWorkflowHandoffSection, not
+			// renderWorkerHandoffSection -- capsule (above) already renders
+			// "## Previous Worker Handoffs" for "build"-workflow records
+			// (cmd/colony_prime_context.go:695). Empirically confirmed
+			// (throwaway probe, 190-06) this same "capsule + own-workflow
+			// dedicated field" shape D-190-05-A found for continue also
+			// reproduces here whenever both a build- and a colonize-workflow
+			// handoff exist.
+			HandoffSection: renderRelatedWorkflowHandoffSection("colonize", 0, workerName),
 			Workflow:       "colonize",
 			SkillSection:   resolveSkillSectionForWorkflow("colonize", spec.Caste, spec.Task),
 			Root:           root,

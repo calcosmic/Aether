@@ -1406,7 +1406,13 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 			TaskID:         fmt.Sprintf("continue-review-%s", spec.Caste),
 			TaskBrief:      renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec),
 			ContextCapsule: capsule,
-			HandoffSection: renderWorkerHandoffSection("continue", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste))),
+			// D-190-05-A / 190-06: renderRelatedWorkflowHandoffSection, not
+			// renderWorkerHandoffSection -- capsule (above) already renders
+			// "## Previous Worker Handoffs" for "build"-workflow records
+			// (cmd/colony_prime_context.go:695). This relays "continue"-workflow
+			// records (sibling review/watcher dispatches) under a distinct
+			// heading so both channels keep exactly one home each.
+			HandoffSection: renderRelatedWorkflowHandoffSection("continue", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste))),
 			Workflow:       "continue",
 			Phase:          phase.ID,
 			SkillSection:   resolveSkillSectionForWorkflow("continue", spec.Caste, spec.Task),
@@ -1803,7 +1809,13 @@ func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest co
 		// The watcher is the most expensive single worker in the flow and was
 		// the only one dispatched without the relay — its sibling reviewers get
 		// it. Nothing in the design justified the asymmetry; it was omitted.
-		HandoffSection: renderWorkerHandoffSection("continue", phase.ID,
+		// D-190-05-A / 190-06: renderRelatedWorkflowHandoffSection, not
+		// renderWorkerHandoffSection -- ContextCapsule above already renders
+		// "## Previous Worker Handoffs" for "build"-workflow records
+		// (cmd/colony_prime_context.go:695). This relays "continue"-workflow
+		// records under a distinct heading so both channels keep exactly one
+		// home each.
+		HandoffSection: renderRelatedWorkflowHandoffSection("continue", phase.ID,
 			deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID))),
 		Root:    root,
 		Timeout: effectiveContinueReviewTimeout(workerTimeout),

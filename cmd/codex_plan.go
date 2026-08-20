@@ -1489,14 +1489,20 @@ func dispatchRealPlanningWorkersWithIterationContext(ctx context.Context, root s
 	for i, spec := range specs {
 		agentName := strings.TrimSuffix(spec.AgentFile, ".toml")
 		dispatch := codex.WorkerDispatch{
-			ID:                fmt.Sprintf("planning-%d", i),
-			WorkerName:        planned[i].Name,
-			AgentName:         agentName,
-			AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
-			Caste:             spec.Caste,
-			TaskID:            fmt.Sprintf("plan-%d", i),
-			ContextCapsule:    capsule,
-			HandoffSection:    renderWorkerHandoffSection("plan", 0, planned[i].Name),
+			ID:             fmt.Sprintf("planning-%d", i),
+			WorkerName:     planned[i].Name,
+			AgentName:      agentName,
+			AgentTOMLPath:  dispatchAgentPath(root, invoker, agentName),
+			Caste:          spec.Caste,
+			TaskID:         fmt.Sprintf("plan-%d", i),
+			ContextCapsule: capsule,
+			// D-190-05-A / 190-06: renderRelatedWorkflowHandoffSection, not
+			// renderWorkerHandoffSection -- capsule (above) already renders
+			// "## Previous Worker Handoffs" for "build"-workflow records
+			// (cmd/colony_prime_context.go:695). Same shape D-190-05-A found
+			// for continue, empirically reproduced here (throwaway probe,
+			// 190-06) whenever both a build- and a plan-workflow handoff exist.
+			HandoffSection:    renderRelatedWorkflowHandoffSection("plan", 0, planned[i].Name),
 			Workflow:          "plan",
 			SkillSection:      resolveSkillSectionForWorkflow("plan", spec.Caste, spec.Task),
 			Root:              root,
