@@ -37,7 +37,6 @@ type internalWorkerDispatchRequest struct {
 	TaskBrief         string                  `json:"task_brief,omitempty"`
 	ContextCapsule    string                  `json:"context_capsule,omitempty"`
 	SkillSection      string                  `json:"skill_section,omitempty"`
-	HiveSection       string                  `json:"hive_section,omitempty"`
 	PheromoneSection  string                  `json:"pheromone_section,omitempty"`
 	HandoffSection    string                  `json:"handoff_section,omitempty"`
 	TimeoutMS         int64                   `json:"timeout_ms,omitempty"`
@@ -401,7 +400,7 @@ func internalWorkerConfig(root string, invoker codex.WorkerInvoker, request inte
 	if timeout > internalWorkerTimeoutMax {
 		return codex.WorkerConfig{}, fmt.Errorf("worker timeout cannot exceed %v", internalWorkerTimeoutMax)
 	}
-	skillSection := joinInternalWorkerSections(request.SkillSection, request.HiveSection)
+	skillSection := strings.TrimSpace(request.SkillSection)
 	config := codex.WorkerConfig{
 		AgentName:         agentName,
 		AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
@@ -426,16 +425,6 @@ func internalWorkerConfig(root string, invoker codex.WorkerInvoker, request inte
 		}
 	}
 	return config, nil
-}
-
-func joinInternalWorkerSections(sections ...string) string {
-	joined := make([]string, 0, len(sections))
-	for _, section := range sections {
-		if section = strings.TrimSpace(section); section != "" {
-			joined = append(joined, section)
-		}
-	}
-	return strings.Join(joined, "\n\n")
 }
 
 func validateInternalWorkerResult(request internalWorkerDispatchRequest, result *codex.WorkerResult, invokeErr error) error {

@@ -21,7 +21,6 @@ func TestInternalWorkerAdapterSimulatesOnlyWithExplicitFlag(t *testing.T) {
 		"task_id":        "1.1",
 		"task":           "Exercise the adapter boundary",
 		"skill_section":  "skill guidance",
-		"hive_section":   "verified hive guidance",
 	})
 
 	response, err := runInternalWorkerAdapter(context.Background(), requestPath, false, true)
