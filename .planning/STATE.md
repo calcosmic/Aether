@@ -2,22 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
-status: ready_to_plan
-stopped_at: Phase 186 rescoped 2026-08-18 to a single smoke run and no longer gates anything; 187-191 are unblocked and ready to plan
-last_updated: "2026-08-17T19:55:42.836Z"
-last_activity: 2026-08-18 -- Phase 186 rescoped: 12-run GSD baseline cut, one smoke run retained, fix phases unblocked
+status: executing
+stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
+last_updated: "2026-08-20T00:28:23.575Z"
+last_activity: 2026-08-20 -- Phase 189 execution started
 progress:
-  total_phases: 16
-  completed_phases: 10
-  total_plans: 40
-  completed_plans: 39
-  percent: 63
-  note: >
-    v1.26 = phases 172-175, 180-185, 186-192 (179 remapped into 186+192).
-    Phase 186: plans 01-06 complete, plan 07 rescoped 2026-08-18 from twelve
-    operator-driven runs to one and no longer gating; 187-191 unblocked. The
-    state.begin-phase/planned-phase SDK verbs regenerate this block with wrong
-    totals; recompute from the ROADMAP Progress table.
+  total_phases: 51
+  completed_phases: 4
+  total_plans: 54
+  completed_plans: 105
+  percent: 100
 ---
 
 # Project State
@@ -27,23 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-08)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 187 — Crash-Safe Worktrees & Ecosystem Neutrality (186 rescoped 2026-08-18 and no longer gating)
+**Current focus:** Phase 189 — complete-worker-contract
 **Milestone:** v1.26 — hardening (rescoped 2026-08-14) plus the Audit Addendum (2026-08-17, phases 186-192). Governing documents: `.planning/HARDENING-PLAN.md` (with its 2026-08-17 addendum) and ROADMAP.md's "Audit Addendum" section; the frozen 12-outcome target lives in the approved implementation plan of 2026-08-17.
 **Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases)
 **Product version:** v1.0.58 (binary is authoritative)
 
 ## Current Position
 
-Phase: 188
-Plan: Not started
-Status: Ready to plan
+Phase: 189 (complete-worker-contract) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 189
 Progress: 9 of 16 phases in this milestone
-Last activity: 2026-08-19
+Last activity: 2026-08-20 -- Phase 189 execution started
 
 **Order from here (revised 2026-08-18):** 187, 188, 189→190 and 191 may start
 NOW, in any order and in parallel — the 186 rescope removed their only
 dependency, and each carries its own fail-able wiring criteria. Then 185, then
+
 192. Phase 186's remaining plan is one smoke run: fire it when convenient, it
+
 gates nothing. 192 is
 the full benchmark with the acceptance gate; the milestone completes only when
 that gate passes, not when the tasks are done.
