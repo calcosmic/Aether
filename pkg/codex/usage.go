@@ -281,9 +281,11 @@ func (u WorkerUsage) TotalInputTokens() int64 {
 
 // BilledTotalTokens is the single exported entry point every consumer in this
 // phase must use for a row's token count. No caller anywhere may re-derive a
-// total by adding fields itself — that is Pitfall 1 (the 186x undercount),
-// and pkg/trace/cost.go's CalculateCost is a live second instance of the same
-// shape today.
+// total by adding fields itself — that is Pitfall 1 (the 186x undercount).
+// The trace package's own per-call cost estimator once re-derived a total the
+// same way; it was deleted as dead code in Phase 191 (its only caller was
+// unreachable in production), not because the shape stopped being a pitfall —
+// a future caller can still reintroduce it.
 //
 // It returns TotalTokens when the provider reported one, otherwise falls back
 // to billedTotal(). The TotalTokens preference exists because Claude Code's
