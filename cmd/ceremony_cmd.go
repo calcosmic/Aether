@@ -143,7 +143,11 @@ func init() {
 	ceremonyCloseoutCmd.Flags().StringVar(&ceremonyFlags.CompletionFile, "completion-file", "", "Completion JSON packet used by a lifecycle finalizer")
 	_ = ceremonyCloseoutCmd.MarkFlagRequired("completion-file")
 
-	ceremonyCmd.AddCommand(ceremonySpawnPlanCmd, ceremonyWaveStartCmd, ceremonyWorkerCompleteCmd, ceremonyCloseoutCmd)
+	ceremonyTeamCheckinCmd.Flags().StringVar(&ceremonyFlags.Workflow, "workflow", "build", "Lifecycle workflow name")
+	ceremonyTeamCheckinCmd.Flags().StringVar(&ceremonyFlags.ManifestFile, "manifest-file", "", "JSON file containing the runtime manifest envelope")
+	_ = ceremonyTeamCheckinCmd.MarkFlagRequired("manifest-file")
+
+	ceremonyCmd.AddCommand(ceremonySpawnPlanCmd, ceremonyWaveStartCmd, ceremonyWorkerCompleteCmd, ceremonyCloseoutCmd, ceremonyTeamCheckinCmd)
 	rootCmd.AddCommand(ceremonyCmd)
 }
 

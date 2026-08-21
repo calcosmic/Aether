@@ -556,6 +556,7 @@
       "full",
       "heavy",
       "light",
+      "no-checkin",
       "no-suggest",
       "plan-only",
       "print-brief",
@@ -9548,6 +9549,17 @@
       "v5.4.0": false
     },
     "stability_score": 45
+  },
+  {
+    "name": "team-checkin",
+    "short_description": "Render the pre-spawn team check-in card from a lifecycle manifest JSON file",
+    "flags": [
+      "manifest-file",
+      "workflow"
+    ],
+    "parent_command": "ceremony",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "wave-start",

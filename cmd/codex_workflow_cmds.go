@@ -167,6 +167,10 @@ var buildCmd = &cobra.Command{
 				outputError(1, err.Error(), nil)
 				return nil
 			}
+			// The wrapper's Team Check-In stage pauses on this flag; the
+			// runtime plan itself is identical either way.
+			noCheckin, _ := cmd.Flags().GetBool("no-checkin")
+			result["checkin_requested"] = !noCheckin
 			reviewDepthPlan := reviewDepthFromResult(result)
 			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan, queenPolicyFromResult(result)))
 			return nil
@@ -1340,6 +1344,7 @@ func init() {
 	// The Queen's team choice. Supplied by the wrapper after it has read the
 	// phase; omitted means the deterministic keyword engine decides, which is
 	// what every caller did before judgement existed.
+	buildCmd.Flags().Bool("no-checkin", false, "Skip the wrapper's pre-spawn team check-in pause (the runtime plan is unchanged)")
 	buildCmd.Flags().StringArray("castes", nil, "Queen's proposed worker castes for this phase (repeatable or comma-separated). Safety castes the phase requires are added back automatically; the worker budget still applies")
 	buildCmd.Flags().String("caste-reason", "", "Why the Queen chose that team, shown to the operator alongside the roster")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")

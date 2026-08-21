@@ -591,6 +591,7 @@
     "swarm-timing-eta",
     "swarm-timing-get",
     "swarm-timing-start",
+    "team-checkin",
     "temp-clean",
     "trace-export",
     "trace-inspect",
