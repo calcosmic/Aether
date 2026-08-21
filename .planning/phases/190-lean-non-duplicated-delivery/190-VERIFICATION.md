@@ -1,280 +1,331 @@
 ---
 phase: 190-lean-non-duplicated-delivery
-verified: 2026-08-20T23:50:20Z
-status: gaps_found
-score: 6/7 must-haves verified
+verified: 2026-08-21T00:00:00Z
+status: passed
+score: 7/7 must-haves verified
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
   previous_score: 6/7
   gaps_closed:
-    - "D-190-03-A: the native/direct build dispatch path (executeCodexBuildDispatches) and 6 sibling native dispatch functions (continue review, continue watcher, plan, colonize, seal, swarm) independently double-delivered active pheromone signals via ContextCapsule + a separate PheromoneSection. Closed by 190-05. Revert-tested in this pass: re-adding `PheromoneSection: resolvePheromoneSection()` to executeCodexBuildDispatches's WorkerDispatch literal made TestNativeDispatchPheromoneStaysExactlyOnceViaCapsule and TestEightCommandsDeliverPheromoneExactlyOnce/build_native fail with the exact pre-fix symptom (\"assembled prompt has 2 Pheromone Signals headings\"); restoring the file returned both to green."
-    - "D-190-05-A: continue's native review/watcher dispatch paths (plus colonize, plan, seal, swarm) independently double-delivered prior-worker handoffs via ContextCapsule + a separate HandoffSection. Closed by 190-06 (distinct heading, not deletion, since the two channels carry materially different workflow-scoped content). Revert-tested in this pass: reverting plannedContinueReviewDispatches/plannedContinueWatcherDispatch to call renderWorkerHandoffSection instead of renderRelatedWorkflowHandoffSection made TestContinueReviewHandoffStaysExactlyOnceViaOwnHeading, TestContinueWatcherHandoffStaysExactlyOnceViaOwnHeading, and TestNineCommandsDeliverHandoffExactlyOnce/{continue_review,continue_watcher} fail with the exact pre-fix symptom (\"2 Previous Worker Handoffs headings\"); restoring the file returned all to green."
-  gaps_remaining:
-    - "The phase's own unqualified goal sentence ('No context section delivered twice') is still false in the codebase -- NOT for the previously-named native build-path reason (that instance is now closed and mutation-confirmed), but for a newly discovered instance on a different route this verification pass found: continue's classic-ceremony/heavy-review WRAPPER flow (codexContinuePlanManifest) delivers an active pheromone signal to every reviewer/watcher prompt twice, via ContextCapsule + a separate manifest-level PheromoneSection field the wrapper prose also concatenates. See gaps below."
+    - "The phase's own unqualified goal sentence ('No context section delivered twice') was still false because continue's classic-ceremony/heavy-review WRAPPER flow (codexContinuePlanManifest, cmd/codex_continue_plan.go) set both ContextCapsule and a separate PheromoneSection, and .claude/commands/ant/continue.md + .opencode/commands/ant/continue.md instructed concatenating both — double-delivering every active pheromone signal to every reviewer/watcher spawned by `aether continue --classic-ceremony` / `--verification-depth heavy`. Closed by commit b6671584 ('fix(190-07): capsule is the sole pheromone carrier on continue's wrapper flow'): PheromoneSection is no longer set on codexContinuePlanManifest (field kept, omitempty, for wire-compat only); all three wrapper prose copies (.claude/commands/ant/continue.md, .opencode/commands/ant/continue.md, and the flat installed mirror .claude/commands/ant-continue.md) now state the capsule is the SOLE source of pheromone signals and no longer instruct prepending pheromone_section. Revert-tested in THIS pass (not just re-read): temporarily restoring `PheromoneSection: resolvePheromoneSection(),` to codexContinuePlanManifest made TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection fail with 'seeded signal text must reach the manifest exactly once across capsule+pheromone_section, got 2'; restoring the file returned it to green. Separately, temporarily re-adding a forbidden concatenation line ('+ `continue_manifest.pheromone_section`') to .claude/commands/ant/continue.md made TestContinueWrapperInstructsCapsuleAndPheromoneDelivery fail with the exact forbidden-pattern message; restoring the file returned it to green. A new end-to-end throwaway probe (TestZZProbe190Pass4WrapperAssemblyDeliversSignalExactlyOnce, deleted after use) additionally confirmed, for a real HeavyFlag:true run producing 4 dispatches (1 watcher + 3 reviewers), that the FULL wrapper-assembled prompt (capsule + each dispatch's own brief + skill_section, exactly the formula continue.md now documents) carries the seeded marker exactly once per dispatch, zero times via PheromoneSection."
+  gaps_remaining: []
   regressions: []
-gaps:
-  - truth: "No context section is delivered twice on ANY dispatch path this repo spawns a worker from -- native or wrapper-mediated, for any command"
-    status: failed
-    reason: >
-      NEWLY DISCOVERED by this verification pass -- not logged in deferred-items.md as D-190-03-A
-      or D-190-05-A, and not part of either prior gap. continue's plan-only/classic-ceremony
-      wrapper manifest (codexContinuePlanManifest, cmd/codex_continue_plan.go:149-167) sets BOTH
-      ContextCapsule: resolveCodexWorkerContext() (cmd/codex_continue_plan.go:163 -- unconditionally
-      renders "## Pheromone Signals" whenever a signal is active, the same shared capsule renderer
-      190-05 fixed at 7 other call sites) AND PheromoneSection: resolvePheromoneSection()
-      (cmd/codex_continue_plan.go:164 -- independently renders the SAME active signal's text under
-      its own "### Active Pheromone Signals" heading) -- both fields manifest-level, resolved once.
-      Both .claude/commands/ant/continue.md and .opencode/commands/ant/continue.md (byte-identical,
-      md5 031949b27c91ed343ba0ea778dc60587) instruct the wrapper, at lines 134, 170 and 178: "Each
-      reviewer's prompt = `continue_manifest.context_capsule` + `continue_manifest.pheromone_section`
-      ... prepended VERBATIM ahead of each dispatch's own runtime-provided `brief`." This is the
-      exact D-190-01-A shape (build's wrapper flow, fixed by 190-03) recurring on continue's wrapper
-      flow, unfixed. It is not a rare edge case: this path triggers on every `aether continue
-      --classic-ceremony` or `--verification-depth heavy` invocation, and CLAUDE.md's own
-      Queen-Owned Orchestration section documents heavy depth as the ordinary choice for
-      production/final/security-named phases, not an exception.
-
-      DEMONSTRATED, not inferred: a throwaway probe (seedActiveSignal + runCodexContinuePlanOnly,
-      deleted after use, tree confirmed clean via `git status --porcelain` before and after) showed
-      the seeded marker text present once in `plan.ContextCapsule` (under "## Pheromone Signals")
-      and once in `plan.PheromoneSection` (under "### Active Pheromone Signals") -- 2 occurrences
-      total in the wrapper-concatenated string, simulating exactly what .claude/commands/ant/continue.md
-      lines 170/178 instruct the wrapper to assemble.
-
-      This field WAS examined during 190-05's own per-caller audit (190-05-SUMMARY.md, "Also
-      audited and found inert" section, referencing cmd/codex_continue_plan.go's
-      codexContinuePlanManifest.PheromoneSection field) but incorrectly cleared: the audit checked
-      only whether PheromoneSection duplicated PER-DISPATCH (it does not -- codexContinueExternalDispatch
-      has no such field, and TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection's own
-      reflection check confirms this), never whether the two CO-RESIDENT manifest-level fields
-      (ContextCapsule and PheromoneSection) duplicate against EACH OTHER when the wrapper
-      concatenates both -- which is the actual D-190-01-A-shaped bug. Build's equivalent wrapper
-      prose (.claude/commands/ant/build.md:259) already reads "`context_capsule` ... is the SOLE
-      source of pheromone signals and prior worker handoffs" with zero `pheromone_section`
-      references anywhere in that file (confirmed by grep) -- continue's prose was never brought in
-      line with that same 190-03 fix.
-    artifacts:
-      - path: "cmd/codex_continue_plan.go"
-        issue: "codexContinuePlanManifest sets both ContextCapsule (line 163) and PheromoneSection (line 164) at manifest-construction time inside runCodexContinuePlanOnly; both render the same active-signal text under two different headings, and nothing dedups them before the manifest is returned to the wrapper."
-      - path: ".claude/commands/ant/continue.md"
-        issue: "Lines 134, 170, 178 instruct the wrapper to prepend continue_manifest.context_capsule AND continue_manifest.pheromone_section, both verbatim, ahead of every classic-ceremony/heavy-review dispatch's brief."
-      - path: ".opencode/commands/ant/continue.md"
-        issue: "Byte-identical to the Claude Code file (md5 031949b27c91ed343ba0ea778dc60587) -- carries the identical instruction, so both primary platforms are affected equally."
-    missing:
-      - "Stop setting PheromoneSection on codexContinuePlanManifest (mirroring 190-05's fix at the 7 native call sites -- ContextCapsule is already this flow's sole channel for pheromones, matching what 190-03 already established for build's own wrapper manifest)."
-      - "Remove the pheromone_section references from .claude/commands/ant/continue.md and .opencode/commands/ant/continue.md (lines 134, 170, 178), mirroring build.md:259's 'context_capsule ... is the SOLE source of pheromone signals' language."
-      - "A permanent test mirroring TestNativeDispatchPheromoneStaysExactlyOnceViaCapsule's shape, but for codexContinuePlanManifest: seed an active signal, call runCodexContinuePlanOnly, assert the signal's own text appears in the union of ContextCapsule+PheromoneSection exactly once, not twice. The existing TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection (Phase 189) only proves both fields are independently non-empty -- that assertion gap is exactly what let this ship undetected through Phase 189 and all of Phase 190's plans to date."
 ---
 
 # Phase 190: Lean, Non-Duplicated Delivery — Verification Report
 
 **Phase Goal:** No context section delivered twice; briefs stop transiting the orchestrator byte-for-byte.
-**Verified:** 2026-08-20T23:50:20Z
-**Status:** gaps_found
-**Re-verification:** Yes — third pass, after 190-05 and 190-06 gap-closure plans
+**Verified:** 2026-08-21T00:00:00Z
+**Status:** passed
+**Re-verification:** Yes — fourth pass, after commit `b6671584` closed the third pass's one remaining gap (continue wrapper pheromone duplication)
 
 ## Summary For The Developer
 
-Two real bugs were closed since the last pass, and both closures are confirmed by breaking them on
-purpose and watching the right test fail, not by trusting the summaries. But this pass found a
-**third, previously-undetected instance of the identical bug shape**, on a route none of the six
-plans in this phase ever touched: `aether continue --classic-ceremony` / `--verification-depth
-heavy` still delivers an active pheromone signal to every reviewer's prompt twice. The score stays
-6/7 — not because nothing improved, but because the one truth that was failing before is still
-failing now, for a different, smaller, well-understood reason.
+The gap the third pass found — continue's `--classic-ceremony` / `--verification-depth heavy`
+wrapper flow delivering an active pheromone signal to every reviewer and watcher twice — is fixed,
+and this pass proved it by breaking the fix on purpose (twice, for both the runtime field and the
+wrapper prose) and watching the exact pre-fix symptom come back, then restoring and watching it go
+green again. This pass also ran a fresh end-to-end probe simulating the wrapper's own documented
+assembly formula across a real heavy-depth run (4 spawned workers) rather than trusting the existing
+unit test alone, and did a full-repo sweep for any other place the same bug shape could be hiding.
+None was found. All 7 of this phase's must-haves are now verified. Working tree is clean at HEAD
+(`b6671584`) — no leftover mutations or probe files.
 
 ## Goal Achievement
 
 Every claim below marked **DEMONSTRATED** was proven by running or mutating code in this session
-(Go test execution, revert-and-restore mutation tests, live throwaway probes with `git status
---porcelain` confirmed empty before and after) — not by reading SUMMARY.md prose. The working tree
-was restored to byte-identical HEAD (`270dad6c`) after every mutation and probe; final confirmation
-recorded below.
+(Go test execution, revert-and-restore mutation tests against both the runtime field and the wrapper
+markdown, a fresh live throwaway probe) — not by reading SUMMARY.md prose or trusting the third
+pass's own record without re-running it. Claims marked **RE-CONFIRMED (regression check)** were
+proven with fresh test execution this pass but were not re-derived from first principles, per the
+re-verification methodology (previously-passed items get a quick regression check, not the full
+Inversion + Confirmation Bias Counter treatment). Claims marked **READ-VERIFIED** are structural/
+negative claims (e.g. "no other file does X") established by direct reading and grep of the actual
+source, not by execution — execution cannot prove a universally-quantified absence, only exhaustive
+enumeration can. The working tree was restored to byte-identical HEAD (`b6671584`) after every
+mutation and probe; confirmed via `git status --porcelain` (empty) and `git diff --stat` (empty)
+immediately before this report was written.
 
 ### Observable Truths
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | SC1 — Plan-only manifests carry `brief_path` to files on disk; the wrapper passes paths; build.md prose describes `brief_path` as routine | ✓ VERIFIED | DEMONSTRATED (re-run this pass). `TestBuildPlanOnlyManifestOmitsInlineBriefWhenBriefPathPresent` passed, logging the same measurement as the prior pass: "7 dispatches, 6848 bytes would have shipped inline... 364 bytes actually ship... 94.7% reduction." `TestDispatchEntryCarriesBriefPath` passed. `git diff --stat` from the previous verification's HEAD (`1430acf4`) to current HEAD confirms zero files touched under `.claude/commands/`, `.opencode/commands/`, `.aether/commands/`, or `cmd/command_guide.go` — this criterion's surface is untouched by 190-05/190-06. |
-| 2 | SC2 — `--print-brief` asserts zero duplicated sections; pheromones and handoffs get one home each **within the scope `--print-brief` inspects** (the wrapper plan-only build flow) | ✓ VERIFIED | DEMONSTRATED (re-run this pass). `TestPrintBriefStaysCleanWithActiveSignalAndStoredHandoffs`, `TestPrintBriefFailsOnDuplicatedSection`, `TestPlanOnlyDispatchesCarryNoHandoffSection`, `TestNativeDispatchHandoffStaysExactlyOnceViaCapsule` all passed. `cmd/build_review_190_findings_test.go` (the file carrying these locks) is byte-for-byte unmodified since the previous pass (confirmed via `git diff --stat`, 0 changes) — 190-05/190-06 did not touch `--print-brief` or its detectors at all. |
-| 3 | SC3 — TS-host hive double-injection removed (build path and continue dry-run `hive_section`) | ✓ VERIFIED | DEMONSTRATED (re-run this pass). `TestInternalWorkerAdapterIgnoresHiveSectionAndUsesSkillSectionDirectly` passed. `git diff --stat` confirms zero `.aether/ts-host/` files touched by 190-05/190-06. `grep -rn "HiveSection\|hive_section" cmd/*.go pkg/codex/*.go` (non-test) still returns zero hits — no new hive channel was introduced by the pheromone/handoff fixes. |
-| 4 | SC4 — Orchestrator-relay byte count measurably drops | ✓ VERIFIED | DEMONSTRATED (same test run as truth 1, same 94.7%-reduction figure, computed live by the test itself, not a hardcoded string). `codexBuildManifest.WorkerBriefs` unaffected — 190-05/190-06 never touched `cmd/codex_build.go`'s manifest-serialization code, only `executeCodexBuildDispatches`'s native `codex.WorkerDispatch` construction (a different function in the same file; confirmed by `git diff cmd/codex_build.go` showing only the `PheromoneSection`-removal hunk plus its doc comment, +34/-? lines total for the whole file across both plans). |
-| 5 | **The phase's own goal sentence, unqualified: "No context section delivered twice," on ANY dispatch path this repo spawns a worker from** — native or wrapper-mediated, for any command | ✗ FAILED | The previously-failing instance (native build dispatch, D-190-03-A) is CLOSED — DEMONSTRATED via revert test (see Re-verification Detail below). A second instance found by the same 190-05 audit (continue's native handoff duplication, D-190-05-A) is also CLOSED — DEMONSTRATED via revert test. But this verification pass found a **third, new, previously-undetected instance**: continue's plan-only/classic-ceremony WRAPPER flow still delivers an active pheromone signal twice. See `gaps` in frontmatter for full detail and DEMONSTRATED probe evidence. |
-| 6 | Convergence risk (two parallel 190-04 fixes reconciled) left no franken-state, and this remains true after two more merged worktree plans | ✓ VERIFIED | Re-checked this pass: `go build ./...` clean, `go vet ./cmd/...` clean. No duplicate function definitions across any 190-05/190-06-touched file (`grep -c "^func <name>"` returns exactly 1 for `executeCodexBuildDispatches`, `renderWorkerHandoffSection`, `renderRelatedWorkflowHandoffSection`, `resolvePheromoneSection`). Both plans' own SUMMARYs document their `chore: merge executor worktree` commits landed cleanly (`git log` confirms `8a598648`, `95007482`), and `git status --porcelain` is empty at HEAD. |
-| 7 | D-190-R-A (hive cross-domain coverage narrowing, WR-03) is an honestly-recorded, defensible scope call, not a phase-190-goal violation | ✓ VERIFIED | Unaffected by 190-05/190-06 (neither plan touches hive wisdom). Re-confirmed this pass: still recorded in `deferred-items.md` as an explicit owner/product decision ("whether hard exclusion is the right final behaviour is a product decision... The record is now honest either way"), not a duplication defect. No later phase (191 "Dead Wood" is config/dead-code deletion; 192 "Final Showdown" is a benchmark gate) claims this — it stays an open, named, non-blocking product question, consistent with the previous pass's treatment. |
+| 1 | SC1 — Plan-only manifests carry `brief_path` to files on disk; the wrapper passes paths; build.md prose describes `brief_path` as routine | ✓ VERIFIED | RE-CONFIRMED (regression check). `TestBuildPlanOnlyManifestOmitsInlineBriefWhenBriefPathPresent` and `TestDispatchEntryCarriesBriefPath` re-run this pass, both PASS (same 94.7%-reduction measurement, computed live by the test). `git diff --stat 270dad6c..b6671584` confirms zero files touched under `.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`, `.aether/commands/`, or `cmd/command_guide.go` since the third pass — this criterion's surface is entirely untouched by the 190-07 fix. |
+| 2 | SC2 — `--print-brief` asserts zero duplicated sections; pheromones and handoffs get one home each within the scope `--print-brief` inspects (the wrapper plan-only build flow) | ✓ VERIFIED | RE-CONFIRMED (regression check). `TestPrintBriefStaysCleanWithActiveSignalAndStoredHandoffs`, `TestPrintBriefFailsOnDuplicatedSection` (3 sub-cases), `TestPlanOnlyDispatchesCarryNoHandoffSection`, `TestNativeDispatchHandoffStaysExactlyOnceViaCapsule` all re-run this pass, all PASS. `cmd/build_review_190_findings_test.go` is not in the `270dad6c..b6671584` diff — untouched by the 190-07 fix. |
+| 3 | SC3 — TS-host hive double-injection removed (build path and continue dry-run `hive_section`) | ✓ VERIFIED | RE-CONFIRMED (regression check). `TestInternalWorkerAdapterIgnoresHiveSectionAndUsesSkillSectionDirectly` re-run this pass, PASS. `grep -rn "HiveSection\|hive_section" cmd/*.go pkg/codex/*.go` (non-test) re-run this pass, still zero hits. |
+| 4 | SC4 — Orchestrator-relay byte count measurably drops | ✓ VERIFIED | RE-CONFIRMED (same test run as truth 1, same live-computed reduction figure). `git diff --stat 270dad6c..b6671584` confirms `cmd/codex_build.go` is not in this pass's diff at all — the 190-07 fix touched only `cmd/codex_continue_plan.go` (continue's plan-only manifest), never build's manifest-serialization code. |
+| 5 | **The phase's own goal sentence, unqualified: "No context section delivered twice," on ANY dispatch path this repo spawns a worker from** — native or wrapper-mediated, for any command | ✓ VERIFIED | DEMONSTRATED. See "Re-verification Detail" and "Full-Surface Sweep" below — this is the truth the third pass failed and this pass closes. |
+| 6 | Convergence risk (parallel fixes reconciled) left no franken-state, and this remains true after the 190-07 fix | ✓ VERIFIED | RE-CONFIRMED this pass: `go build ./...` clean (exit 0), `go vet ./cmd/...` clean (exit 0, no output). `grep -n "^func resolveCodexWorkerContext("` returns exactly 1 definition (`cmd/colony_prime_context.go:1126`); `runCodexContinuePlanOnly`, `codexContinuePlanManifest`, `resolvePheromoneSection` each have exactly 1 definition. `git status --porcelain` empty at HEAD. |
+| 7 | D-190-R-A (hive cross-domain coverage narrowing, WR-03 — also referenced as "D-190-04-A" in 190-04-SUMMARY.md, same finding under an earlier label) is an honestly-recorded, defensible scope call, not a phase-190-goal violation | ✓ VERIFIED | READ-VERIFIED this pass (see Probe 5 detail below). Re-read `deferred-items.md` in full: the duplication-level claim is confirmed already fixed by 190-02 ("every worker prompt carried `## HIVE WISDOM (Cross-Colony Patterns)` twice and now carries it once") — only the *coverage/breadth* question (hard-exclude vs. discount cross-domain entries) remains open, explicitly flagged as a product decision, not a duplication defect. Traced the same finding across three artifacts under three labels (WR-03 in 190-REVIEW.md, D-190-04-A in 190-04-SUMMARY.md, D-190-R-A in deferred-items.md's current ledger) and confirmed they are the same entity, not three different open items. |
 
-**Score:** 6/7 truths verified
+**Score:** 7/7 truths verified
 
-### Re-verification Detail: What Was Actually Broken And Fixed (Not Just Claimed)
+### Re-verification Detail: What Was Actually Broken And Fixed (Not Just Claimed) — Probes 1 and 4
 
-**D-190-03-A (native pheromone duplication) — revert-tested this pass:**
-Re-added `PheromoneSection: resolvePheromoneSection(),` to `executeCodexBuildDispatches`'s
-`codex.WorkerDispatch{}` literal (`cmd/codex_build.go`, immediately after `ContextCapsule: capsule,`).
-Result: `TestNativeDispatchPheromoneStaysExactlyOnceViaCapsule` failed with `"build native: assembled
-prompt has 2 \"Pheromone Signals\" headings, want exactly 1"`; `TestEightCommandsDeliverPheromoneExactlyOnce/build_native`
-failed identically; the other 8 breadth sub-tests (continue×2, plan, colonize, seal, swarm, quick,
-oracle) correctly stayed green, since only the `build_native` case was mutated. File restored from
-backup, `git diff --stat` confirmed zero diff, both tests re-run and passed clean.
+**Probe 1 — seed a signal, run the real `runCodexContinuePlanOnly`, count the marker, revert-test the fix.**
 
-**D-190-05-A (continue native handoff duplication) — revert-tested this pass:**
-Reverted both `plannedContinueReviewDispatches` and `plannedContinueWatcherDispatch`
-(`cmd/codex_continue.go`) from `renderRelatedWorkflowHandoffSection("continue", ...)` back to
-`renderWorkerHandoffSection("continue", ...)` (the pre-190-06 call). Result:
-`TestContinueReviewHandoffStaysExactlyOnceViaOwnHeading` and
-`TestContinueWatcherHandoffStaysExactlyOnceViaOwnHeading` both failed with `"assembled prompt has 2
-\"## Previous Worker Handoffs\" headings, want exactly 1"`; `TestNineCommandsDeliverHandoffExactlyOnce/{continue_review,continue_watcher}`
-failed identically; the other 7 breadth sub-tests stayed green. File restored from backup, `git diff
---stat` confirmed zero diff, all tests re-run and passed clean.
+Ran the existing regression lock fresh (not trusted from the third pass): `TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection` seeds one active FOCUS signal carrying a
+distinctive marker, calls the real `runCodexContinuePlanOnly`, and asserts: `plan.ContextCapsule`
+contains the marker exactly once, `plan.PheromoneSection` is empty, and `ContextCapsule + "\n" +
+PheromoneSection` contains the marker exactly once. **PASS.**
 
-**Conclusion:** both fixes are real, load-bearing, and correctly scoped — not decorative tests that
-would pass regardless of the source.
+Then went further than re-running the existing test — wrote a new throwaway probe,
+`TestZZProbe190Pass4WrapperAssemblyDeliversSignalExactlyOnce` (`cmd/zz_probe_190_pass4_test.go`,
+deleted immediately after use), that simulates continue.md's actual CURRENT documented formula —
+`continue_manifest.context_capsule` + each dispatch's own `brief` + `dispatch.skill_section` — for
+**every dispatch** a `HeavyFlag: true` run produces, not just the manifest-level fields the
+permanent test checks. Result: 4 heavy-depth dispatches were produced (1 watcher + 3 reviewers); the
+marker appeared in the full wrapper-assembled string exactly once for every one of them, and zero
+times via `PheromoneSection`. Output captured: `"DEMONSTRATED: 4 heavy-depth dispatch(es) each
+received the active signal exactly once via the wrapper's documented capsule+brief+skill_section
+formula; plan.PheromoneSection stayed empty."` File deleted after the run; `git status --porcelain`
+confirmed empty immediately after.
 
-### Adversarial Scrutiny: 190-06's "Distinct Heading, Not Deletion" Decision
+**Revert-test (fail-then-pass), runtime field:** Backed up `cmd/codex_continue_plan.go`, then edited
+the live file to restore `PheromoneSection: resolvePheromoneSection(),` alongside `ContextCapsule`
+(the exact pre-190-07 state — confirmed via `git diff` showing only that one hunk). Result:
+`TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection` **FAILED** with:
+```
+continue_manifest.pheromone_section must stay empty ...; got "### Active Pheromone Signals\n\n**FOCUS:**\n- distinctive-continue-plan-only-pheromone-marker-3f9a"
+seeded signal text must reach the manifest exactly once across capsule+pheromone_section, got 2
+```
+This is the exact double-delivery symptom the third pass described. Restored the file from backup;
+`git diff --stat` confirmed zero diff; re-ran the test — **PASS**.
 
-The task asked whether giving the dedicated handoff channel its own heading (instead of deleting it,
-as 190-05 did for pheromones) could let the SAME text reach a prompt twice under two different
-headings — satisfying a heading-count test while still violating the goal's spirit.
+**Revert-test (fail-then-pass), wrapper prose:** Backed up `.claude/commands/ant/continue.md`, then
+inserted a line containing one of the test's forbidden patterns (`` + `continue_manifest.pheromone_section` ``)
+near the "Reads:" section. Result: `TestContinueWrapperInstructsCapsuleAndPheromoneDelivery`
+**FAILED** with:
+```
+.../continue.md still instructs prepending pheromone_section ("+ `continue_manifest.pheromone_section`")
+-- the capsule is the sole carrier; concatenating both delivers every active signal twice
+```
+Restored the file from backup; `git diff --stat` confirmed zero diff; re-ran the test — **PASS**.
 
-**Probed empirically, not just reasoned about.** A throwaway probe seeded a "build"-workflow handoff
-record and a "continue"-workflow handoff record with the SAME literal `NextWorkerInstructions` text,
-then called `plannedContinueReviewDispatches` and assembled the real prompt. Result: the identical
-text appeared **twice** — once under "## Previous Worker Handoffs" (capsule, build-workflow), once
-under "## Related Worker Handoffs" (dedicated field, continue-workflow). This confirms the scenario
-is mechanically reachable, not merely theoretical.
+**Conclusion:** both the manifest-level fix and the wrapper-prose fix are real, load-bearing, and
+correctly scoped — not decorative tests that would pass regardless of the source. This satisfies
+Probe 4 (the two flipped tests are locks, not accommodations) in the same pass as Probe 1.
 
-**Judgment: this is not a phase-goal violation**, for four reasons:
+### Probe 2 — The heavy-depth reviewer path specifically
 
-1. **Different bug class.** Every duplicate this phase has fixed (D-190-01-A, D-190-03-A, D-190-05-A)
-   was the SAME underlying data, computed by two independent code paths, delivered twice. This
-   scenario requires two DIFFERENT, independently-authored handoff records (different IDs, different
-   workflow tags, different worker names) that happen to share text — a coincidence of content, not a
-   redundant computation. Structurally, `record.Workflow` is a single field set once at persist time
-   from the producing dispatch's own `Workflow` value (`cmd/codex_dispatch_contract.go:867`); a build-tagged
-   record and a continue-tagged record can never be the same record.
-2. **Consistent with this codebase's own established convention.** `--print-brief`'s own duplication
-   detector (`duplicatedBriefSections`, since 190-01) has always counted HEADINGS, not content hashes.
-   190-06's own source comment (`cmd/codex_dispatch_contract.go`, on `renderRelatedWorkflowHandoffSection`)
-   states this explicitly: "this repo's own convention treats a repeated HEADING as 'the same section
-   delivered twice' regardless of whether the body content is identical." This is a documented,
-   consistent choice, not a newly-discovered loophole.
-3. **The distinct headings carry real information.** They tell the reading worker WHERE each note came
-   from (cross-phase build carryover vs. same-workflow sibling relay) — collapsing them to avoid a
-   contrived content collision would destroy that distinction for every normal case where the content
-   legitimately differs (the overwhelming majority).
-4. **A content-hash alternative would be strictly worse.** Suppressing "duplicate-looking" text across
-   channels risks dropping genuinely distinct information that merely shares some words (e.g. two
-   workers both correctly reporting the same changed file).
+Traced the call chain precisely rather than assuming "heavy" is a synonym for the fixed path:
 
-This is examined and resolved, not left open — flagged here for transparency since it was explicitly
-in scope for this pass's scrutiny, not because it changes the verdict.
+- `.claude/commands/ant/continue.md` / `.opencode/commands/ant/continue.md` instruct fetching the
+  manifest via `aether host continue --dry-run --classic-ceremony $ARGUMENTS`, noting
+  `--verification-depth heavy` is "equivalent for callers that already use depth flags."
+- `.aether/ts-host/src/command-registry.ts`'s `continueArgs()` (read directly) always emits
+  `["continue", "--plan-only", ...]`, forwarding `--verification-depth <value>` and
+  `--classic-ceremony` verbatim when present — so `aether host continue --dry-run
+  --verification-depth heavy` becomes `aether continue --plan-only --verification-depth heavy`.
+- `cmd/codex_workflow_cmds.go`'s `continueCmd.RunE` (read directly): when `--classic-ceremony` is
+  set, it forces `planOnly = true; heavyFlag = true; verificationDepth = "heavy"` (if unset); when
+  `planOnly` is true (either way), it calls `runCodexContinuePlanOnly` — the exact function fixed by
+  `b6671584`.
+- The new throwaway probe above used `codexContinueOptions{HeavyFlag: true}` directly against
+  `runCodexContinuePlanOnly` and observed 4 dispatches (1 watcher + 3 reviewers — consistent with a
+  heavy-depth roster), each receiving the signal exactly once.
+
+**DEMONSTRATED**: the heavy-depth reviewer path specifically receives the fix, not just some other
+depth that happens to share code.
+
+### Probe 3 — Full-Surface Sweep For A Fifth Instance
+
+READ-VERIFIED (structural/negative claim — established by exhaustive enumeration and reading, not
+execution, per the nature of a "nothing else exists" claim). Three consecutive prior passes each
+found one more instance of the identical bug shape (native build dispatch → continue native handoffs
+→ continue wrapper signals). This pass swept for a fifth on every axis the shape could recur:
+
+1. **Every struct field named `ContextCapsule string` with a JSON tag, repo-wide** (`grep -n
+   "^\s*ContextCapsule\s\+string" cmd/*.go pkg/**/*.go`, non-test): exactly 3 hits. `codexBuildManifest`
+   (build wrapper, fixed 190-01/03) and `codexContinuePlanManifest` (continue wrapper, fixed this
+   pass) are the only two **manifest-level** ones — both now confirmed PheromoneSection-free in live
+   wiring. The third, `internalWorkerDispatchRequest` (`cmd/internal_worker_adapter.go`, the
+   TS-host→Go worker-adapter boundary), forwards both `ContextCapsule` and `PheromoneSection`
+   unfiltered — but tracing its only two producers (`.aether/ts-host/src/worker-dispatch.ts`'s
+   `dispatchRealWorker`, which reads `dispatch.context_capsule`/`dispatch.pheromone_section` from a
+   `BuildDispatch` whose Go-side counterpart, `codexBuildDispatch`, has **no such fields at all** —
+   confirmed by reading its full struct declaration, so these TS reads are always `undefined`; and
+   Go's own `beginDirectBuildWorkerRun`, which forwards an already-empty `PheromoneSection` from a
+   `codex.WorkerDispatch` value that 190-05 already fixed) confirms this is currently dormant, not a
+   live, demonstrable duplicate — no call site exists today that populates both fields for the same
+   worker. This mirrors this phase's own established, accepted precedent for dormant "traps" (e.g.
+   `codexWorkerDispatchesForRecovery`'s explicitly-documented inert `PheromoneSection` risk, D-190-03-A).
+2. **Every `codex.WorkerDispatch{` construction site** (13 hits, `grep -rn "codex\.WorkerDispatch{"
+   cmd/*.go`, non-test): all 13 read directly. Nine set `ContextCapsule` and explicitly omit
+   `PheromoneSection` (commented "deliberately left unset," citing D-190-03-A/190-05); the other four
+   (`persistDispatchWorkerHandoff` bookkeeping calls, `buildToWorkerDispatches`) set neither field at
+   all.
+3. **Every `codex.WorkerConfig{` construction site** (6 hits, non-test): `codex_build_worktree.go`
+   ×2 forward an already-empty `PheromoneSection` from a `WorkerDispatch`; `command_truth.go` (quick)
+   and `oracle_loop.go` (oracle) set `PheromoneSection` deliberately as their *sole* channel, because
+   their own bespoke capsules (`renderQuickContextCapsule`, `renderOracleContextCapsule`) never
+   render pheromones — confirmed by reading both renderers directly, and locked by
+   `TestEightCommandsDeliverPheromoneExactlyOnce`'s `quick`/`oracle` sub-cases, which fail the fixture
+   if this ever changes; `internal_worker_adapter.go` and `swarm_cmd.go` already covered above.
+4. **The four other wrapper-facing manifests** — `codexPlanManifest` (plan/planning_manifest),
+   `codexColonizeManifest`, `sealPlanManifest`, `swarmManifest` — read in full: **none has a
+   manifest-level `ContextCapsule` field at all**. The specific bug shape (manifest-level capsule +
+   redundant field, wrapper concatenates both) is structurally impossible on these four routes; there
+   is nothing for a wrapper to concatenate.
+5. **Every command wrapper source file** — `grep -rln "pheromone_section\|context_capsule"
+   .claude/commands/ant/*.md .opencode/commands/ant/*.md .aether/commands/*.yaml`: only `build.md`
+   (×2 platforms, `context_capsule` only, already reads "SOLE source") and `continue.md` (×2
+   platforms) matched. The flat installed mirror `.claude/commands/ant-continue.md` — not covered by
+   `canonicalWrapperPaths` or by the automated lock test — was independently diffed by hand
+   (`diff` against its pre-fix `270dad6c` copy) and confirmed to carry the identical fix (capsule is
+   the sole source; no forbidden concatenation pattern remains). `colonize.md`, `plan.md`, `seal.md`,
+   `swarm.md` (both platforms) mention neither term at all.
+6. **Codex platform surface**: `grep -rln "pheromone_section" .codex/` returns zero hits. By
+   architecture (CLAUDE.md's "UX Architecture" table: "Codex UX | Go runtime only | No wrapper
+   markdown"), Codex has no wrapper prose file that could instruct a concatenation in the first
+   place — this bug class is structurally impossible there.
+7. **Skill content never embedded in the capsule**: read `cmd/colony_prime_context.go` in full for
+   any `## Skill` heading — none exists. Skills are injected via a wholly separate 8K-budget channel
+   (`skill-inject`), never inside the colony-prime capsule, ruling out a capsule+SkillSection
+   duplication vector by construction.
+8. **Handoff duplication** (the other bug class this phase closed, D-190-05-A/190-06) already has
+   its own 9-case breadth lock, `TestNineCommandsDeliverHandoffExactlyOnce`, re-run green this pass
+   (see Truth 6/Anti-Patterns below) — covering the same 9 routes pheromones cover.
+
+**Conclusion: no fifth instance found. The well is dry**, on the evidence enumerated above — not
+because the sweep stopped early, but because every construction site of every field capable of this
+bug shape, on every route, in every wrapper prose file across all three platforms, was individually
+read and accounted for.
+
+### Probe 5 — Deferred Ledger
+
+Re-read `deferred-items.md` in full.
+
+- **D-190-01-A**: marked RESOLVED by 190-03, with a pointer to `190-03-SUMMARY.md`. Historical
+  record only.
+- **D-190-03-A**: marked RESOLVED by 190-05. Historical record only; independently re-confirmed this
+  pass via green regression (`TestNativeDispatchPheromoneStaysExactlyOnceViaCapsule`,
+  `TestEightCommandsDeliverPheromoneExactlyOnce`).
+- **D-190-05-A**: marked RESOLVED by 190-06. Historical record only; independently re-confirmed this
+  pass via green regression (`TestContinueReviewHandoffStaysExactlyOnceViaOwnHeading`,
+  `TestContinueWatcherHandoffStaysExactlyOnceViaOwnHeading`, `TestNineCommandsDeliverHandoffExactlyOnce`).
+- **Stale ceremony-adapter snapshot fixtures** (from 190-02): a caste-identity rendering format drift
+  (missing ant-glyph/model-tag in three committed test snapshots), proven pre-existing and unrelated
+  to hive_section removal. Does not touch the phase's duplication goal.
+- **Inert `hive-read` mock branches** (from 190-02): dead TS test-fixture code, cosmetic. Does not
+  touch the phase's duplication goal.
+- **D-190-R-A** (hive cross-domain coverage narrowing, WR-03): the task's probe instructions named
+  this "D-190-04-A" — traced and confirmed this is the SAME finding under three different labels
+  across three artifacts: `WR-03` in `190-REVIEW.md`, `"D-190-04-A deferred decision"` explicitly
+  named in `190-04-SUMMARY.md`, and `D-190-R-A` in the current `deferred-items.md` ledger (which
+  itself cites "Found during: 190-REVIEW WR-03"). Re-read its full text: the **duplication-level**
+  claim is already resolved ("every worker prompt carried `## HIVE WISDOM (Cross-Colony Patterns)`
+  twice and now carries it once"). What remains open is a **coverage/breadth** question — whether
+  cross-domain hive entries should be hard-excluded (current behavior) or discounted-but-included
+  (the deleted TS channel's old behavior) — explicitly flagged as "a product decision... not a defect
+  to patch quietly." This is not a duplication defect and does not touch this phase's stated goal.
+
+**Conclusion:** nothing else in `deferred-items.md` is a live, unresolved instance of this phase's
+duplication goal. All three "D-190-0X-A" entries are RESOLVED (and independently re-verified, not
+just trusted); the two remaining informational entries are format-drift and dead-test cleanup,
+unrelated to duplication; D-190-R-A/D-190-04-A is a deliberately-deferred coverage/breadth product
+decision that does not conflict with "no context section delivered twice."
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `cmd/codex_build.go` (`executeCodexBuildDispatches`) | No `PheromoneSection` set; capsule is sole channel | ✓ VERIFIED | Confirmed by reading + revert test (see above). |
-| `cmd/build_pheromone_190_05_test.go` | 9-case breadth lock for pheromone once-ness | ✓ VERIFIED | `TestNativeDispatchPheromoneStaysExactlyOnceViaCapsule` + `TestEightCommandsDeliverPheromoneExactlyOnce` (9 sub-tests) all pass; mutation-confirmed to catch the reintroduced defect. |
-| `cmd/codex_dispatch_contract.go` (`renderRelatedWorkflowHandoffSection`, `renderHandoffSectionNamed`) | Distinct-heading relay for materially-different handoff content | ✓ VERIFIED | Exists, wired at 6 call sites (continue review, continue watcher, colonize, plan, seal, swarm); mutation-confirmed via revert test. |
-| `cmd/build_handoff_190_06_test.go` | 9-case breadth lock for handoff once-ness (both channels) | ✓ VERIFIED | `TestContinueReviewHandoffStaysExactlyOnceViaOwnHeading`, `TestContinueWatcherHandoffStaysExactlyOnceViaOwnHeading`, `TestNineCommandsDeliverHandoffExactlyOnce` (9 sub-tests) all pass; mutation-confirmed. |
-| `deferred-items.md` | D-190-03-A and D-190-05-A marked RESOLVED with pointers to closing SUMMARYs | ✓ VERIFIED | Both entries read in full; resolution text matches the actual code (cross-checked, not just trusted). |
-| `cmd/codex_continue_plan.go` (`codexContinuePlanManifest`) | Should not independently duplicate pheromones against its own `ContextCapsule` | ✗ **NOT VERIFIED — NEW GAP** | Both `ContextCapsule` and `PheromoneSection` are set (lines 163-164) and both are consumed by wrapper prose. See gaps in frontmatter. |
-| `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md` | Should read like build.md's fixed prose ("capsule is the SOLE source of pheromone signals") | ✗ **NOT VERIFIED — NEW GAP** | Still instructs concatenation of `context_capsule` + `pheromone_section` (lines 134, 170, 178 in both, byte-identical). |
+| `cmd/codex_continue_plan.go` (`codexContinuePlanManifest`) | `PheromoneSection` no longer set; `ContextCapsule` is sole channel | ✓ VERIFIED | Read directly; confirmed by revert test (Probe 1 above). |
+| `cmd/codex_continue_plan_test.go` (`TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection`) | Flipped to require capsule-sole-carrier, forbid non-empty `PheromoneSection` | ✓ VERIFIED | Read directly; mutation-confirmed to catch the reintroduced defect (Probe 1/4). |
+| `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md` | Read like build.md's fixed prose ("capsule is the SOLE source of pheromone signals") | ✓ VERIFIED | Read directly, byte-identical (md5 `6e44a0a4cc48a4d7601fbd85fd5e0139`). No concatenation instruction remains; mutation-confirmed via revert test (Probe 1/4). |
+| `.claude/commands/ant-continue.md` (flat installed mirror, not covered by the automated lock) | Same fix as the two nested copies | ✓ VERIFIED | Diffed directly against its pre-fix (`270dad6c`) content; confirmed identical fix applied. Not covered by `TestContinueWrapperInstructsCapsuleAndPheromoneDelivery`'s `canonicalWrapperPaths`, so this was checked by direct read, not by an existing test. |
+| `cmd/continue_wrapper_ceremony_test.go` (`TestContinueWrapperInstructsCapsuleAndPheromoneDelivery`) | Flipped to require sole-carrier language and forbid the old concatenation instructions | ✓ VERIFIED | Read directly; mutation-confirmed via revert test (Probe 1/4) using a real forbidden-pattern re-insertion. |
+| `deferred-items.md` | D-190-01-A, D-190-03-A, D-190-05-A marked RESOLVED; D-190-R-A honestly scoped | ✓ VERIFIED | Read in full this pass (Probe 5); resolution text cross-checked against actual code and green regression tests, not just trusted. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `executeCodexBuildDispatches` | `codex.WorkerDispatch{ContextCapsule}` only | `PheromoneSection` no longer set | WIRED, FIXED | Revert-tested. |
-| `plannedContinueReviewDispatches` / `plannedContinueWatcherDispatch` | `renderRelatedWorkflowHandoffSection` | distinct `"## Related Worker Handoffs"` heading | WIRED, FIXED | Revert-tested. |
-| `dispatchRealSurveyorsWithTimeout` / `dispatchRealPlanningWorkersWithIterationContext` / `plannedSealFinalReviewDispatches` / `invokeSwarmWorker` | `renderRelatedWorkflowHandoffSection` | same mechanism, 4 more commands | WIRED, FIXED | Confirmed via `TestNineCommandsDeliverHandoffExactlyOnce`'s per-command sub-tests, all passing. |
-| `runCodexContinuePlanOnly` | `codexContinuePlanManifest{ContextCapsule, PheromoneSection}` | both fields set unconditionally when a signal is active | **WIRED, BUT DUPLICATING** | **NEW GAP.** Confirmed by direct trace (`cmd/codex_continue_plan.go:163-164`) and live probe (marker text present once in each field). |
-| `.claude/commands/ant/continue.md` (classic-ceremony reviewer prompt assembly) | `continue_manifest.context_capsule` + `continue_manifest.pheromone_section` | both concatenated verbatim | **INSTRUCTED TO DUPLICATE** | **NEW GAP.** Lines 170, 178; byte-identical in `.opencode/commands/ant/continue.md`. |
-| `pkg/codex/prompt.go` (`AssemblePrompt`/`AssembleHostedPrompt`) | 5 independent parts (context/handoff/skill/pheromone/brief) | unchanged since 190-01 | WIRED, UNCHANGED | Re-read this pass; confirms the fix strategy throughout is "stop setting the redundant field at the caller," never "dedup in the assembler" — consistent across all three closed instances and applicable to the new one too. |
-| `pkg/codex/dispatch.go` (`WorkerConfig` construction) | Forwards `ContextCapsule`/`PheromoneSection`/`HandoffSection` unfiltered | lines 175, 180-181 | WIRED, UNCHANGED | Re-confirmed this pass — the duplication-prevention burden sits entirely at the caller layer, by design; this is exactly why the new gap sits at `codex_continue_plan.go`, not in this shared forwarding code. |
+| `runCodexContinuePlanOnly` | `codexContinuePlanManifest{ContextCapsule}` only | `PheromoneSection` no longer set | WIRED, FIXED | Revert-tested this pass (Probe 1). |
+| `.claude/commands/ant/continue.md` / `.opencode/commands/ant/continue.md` / `.claude/commands/ant-continue.md` (classic-ceremony reviewer prompt assembly) | `continue_manifest.context_capsule` only | `pheromone_section` concatenation instruction removed from all three copies | FIXED, NOT DUPLICATING | Two nested copies mutation-confirmed (Probe 1/4); flat mirror confirmed via direct diff (Probe 3, item 5). |
+| `aether host continue --dry-run --verification-depth heavy` / `--classic-ceremony` | `aether continue --plan-only --verification-depth heavy` | `continueArgs()` (`.aether/ts-host/src/command-registry.ts`), read directly | WIRED, CONFIRMED | Traced the full chain to `runCodexContinuePlanOnly` (Probe 2) — the heavy-depth path is not a different, unfixed code path. |
+| `executeCodexBuildDispatches` / `plannedContinueReviewDispatches` / `plannedContinueWatcherDispatch` / plan / colonize / seal / swarm | `codex.WorkerConfig`/`WorkerDispatch{ContextCapsule}` | `PheromoneSection`/redundant `HandoffSection` still absent | WIRED, UNCHANGED | RE-CONFIRMED this pass via green regression (`TestEightCommandsDeliverPheromoneExactlyOnce`, `TestNineCommandsDeliverHandoffExactlyOnce`, 9 sub-cases each). |
+| `pkg/codex/prompt.go` (`AssemblePrompt`/`AssembleHostedPrompt`) | 5 independent parts (context/handoff/skill/pheromone/brief) | unchanged since 190-01 | WIRED, UNCHANGED | Fix strategy remains "stop setting the redundant field at the caller," consistent across all four now-closed instances. |
+| `internalWorkerConfig` (`cmd/internal_worker_adapter.go`) | `codex.WorkerConfig{ContextCapsule, PheromoneSection}` both forwarded unfiltered from the JSON request | dormant — no current producer populates both | NOT LIVE, READ-VERIFIED | See Full-Surface Sweep item 1. Flagged for visibility, not as a gap: no call site today can trigger it, so nothing to revert-test. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|---------------------|--------|
-| `TestEightCommandsDeliverPheromoneExactlyOnce` / `TestNineCommandsDeliverHandoffExactlyOnce` | captured `codex.WorkerConfig`/`codex.WorkerDispatch` | Spy `WorkerInvoker` capturing the REAL value each production dispatch function hands to the invoker | Yes | ✓ FLOWING — not a parallel computation; the spy proves the actual wiring. |
-| `codexContinuePlanManifest.ContextCapsule` / `.PheromoneSection` | seeded pheromone signal | `pheromones.json` via `store.SaveJSON`, read back through `resolveCodexWorkerContext()`/`resolvePheromoneSection()` in production code | Yes (and duplicated) | ⚠ FLOWING TWICE — this is the new gap; both variables independently source from the same underlying signal. |
+| `TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection` | `plan.ContextCapsule` / `plan.PheromoneSection` | seeded pheromone signal via `store.SaveJSON`, read back through `resolveCodexWorkerContext()` in production code | Yes | ✓ FLOWING, EXACTLY ONCE |
+| `TestZZProbe190Pass4WrapperAssemblyDeliversSignalExactlyOnce` (throwaway, deleted) | `plan.Dispatches[i].Brief` / `.SkillSection` combined with `plan.ContextCapsule` per the wrapper's documented formula | same seeded signal, real `runCodexContinuePlanOnly` output, real per-dispatch briefs | Yes | ✓ FLOWING, EXACTLY ONCE per dispatch (4/4) |
+| `TestEightCommandsDeliverPheromoneExactlyOnce` / `TestNineCommandsDeliverHandoffExactlyOnce` | captured `codex.WorkerConfig`/`WorkerDispatch` | spy `WorkerInvoker` capturing the REAL value each production dispatch function hands to the invoker | Yes | ✓ FLOWING — re-confirmed this pass, unchanged from third pass |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Pheromone breadth lock (9 cases) | `go test ./cmd/ -run TestEightCommandsDeliverPheromoneExactlyOnce -v -count=1` | 9/9 PASS | ✓ PASS |
-| Handoff breadth lock (9 cases) | `go test ./cmd/ -run TestNineCommandsDeliverHandoffExactlyOnce -v -count=1` | 9/9 PASS | ✓ PASS |
-| Criteria 1/2/3/4 targeted regression (8 named tests) | `go test ./cmd/ -run '<8 test names>' -v -count=1` | 8/8 PASS | ✓ PASS |
-| `go vet ./cmd/...` | `go vet ./cmd/...` | exit 0, no output | ✓ PASS |
+| Manifest-level fix (existing lock) | `go test ./cmd/ -run TestContinuePlanOnlyManifestCarriesCapsuleAndPheromoneSection -v -count=1` | PASS | ✓ PASS |
+| Wrapper-prose fix (existing lock, 3 required + 2 forbidden patterns) | `go test ./cmd/ -run TestContinueWrapperInstructsCapsuleAndPheromoneDelivery -v -count=1` | PASS | ✓ PASS |
+| New end-to-end wrapper-assembly probe (4 heavy-depth dispatches) | throwaway `TestZZProbe190Pass4WrapperAssemblyDeliversSignalExactlyOnce`, deleted after use | marker exactly once per dispatch (4/4), zero in PheromoneSection | ✓ PASS |
+| Manifest-level revert-test | restore `PheromoneSection: resolvePheromoneSection()`, re-run | FAILED as expected ("got 2"), then reverted, then PASS | ✓ PASS (fix is real) |
+| Wrapper-prose revert-test | re-add `` + `continue_manifest.pheromone_section` `` line, re-run | FAILED as expected (forbidden-pattern message), then reverted, then PASS | ✓ PASS (fix is real) |
+| Regression: pheromone breadth lock (9 cases) | `go test ./cmd/ -run TestEightCommandsDeliverPheromoneExactlyOnce -v -count=1` | 9/9 PASS | ✓ PASS |
+| Regression: handoff breadth lock (9 cases) | `go test ./cmd/ -run TestNineCommandsDeliverHandoffExactlyOnce -v -count=1` | 9/9 PASS | ✓ PASS |
+| Regression: continue native handoff locks | `go test ./cmd/ -run TestContinueReviewHandoffStaysExactlyOnceViaOwnHeading\|TestContinueWatcherHandoffStaysExactlyOnceViaOwnHeading -v -count=1` | PASS | ✓ PASS |
+| Regression: criteria 1-3 named tests (7 tests) | `go test ./cmd/ -run '<7 test names>' -v -count=1` | 7/7 PASS | ✓ PASS |
 | `go build ./...` | `go build ./...` | exit 0, no output | ✓ PASS |
-| D-190-03-A mutation (re-add `PheromoneSection` to native build dispatch) | revert, `go test -run TestNativeDispatchPheromoneStaysExactlyOnceViaCapsule\|TestEightCommandsDeliverPheromoneExactlyOnce` | FAIL as expected (2/9 sub-cases), then reverted, then PASS | ✓ PASS (fix is real) |
-| D-190-05-A mutation (revert continue handoff calls to plain `renderWorkerHandoffSection`) | revert, `go test -run TestContinueReviewHandoffStaysExactlyOnceViaOwnHeading\|TestContinueWatcherHandoffStaysExactlyOnceViaOwnHeading\|TestNineCommandsDeliverHandoffExactlyOnce` | FAIL as expected (4 failures), then reverted, then PASS | ✓ PASS (fix is real) |
-| NEW GAP probe: continue plan-only manifest cross-field pheromone duplication | throwaway probe: seed active signal, `runCodexContinuePlanOnly`, count marker in `ContextCapsule` + `PheromoneSection` | marker present 1× in each field, 2× in the wrapper-concatenated string | ✗ FAIL — confirms the gap |
-| Adversarial probe: 190-06 same-text-under-two-headings scenario | throwaway probe: seed identical text in a build-tagged AND a continue-tagged handoff, assemble via `plannedContinueReviewDispatches` | text present 2×, once under each of two distinct headings | Reachable but judged NOT a goal violation (see Adversarial Scrutiny above) |
-| Working tree clean after all probes and mutations | `git status --porcelain` | empty | ✓ PASS |
+| `go vet ./cmd/...` | `go vet ./cmd/...` | exit 0, no output | ✓ PASS |
+| Flat mirror parity (`.claude/commands/ant-continue.md`) | manual `diff` against pre-fix `270dad6c` content | fix present, no forbidden pattern | ✓ PASS |
+| Working tree clean after all probes and mutations | `git status --porcelain` / `git diff --stat` | both empty | ✓ PASS |
 
 ### Probe Execution
 
 SKIPPED — no `scripts/*/tests/probe-*.sh` files exist in this repository and none is named in this
-phase's PLAN/SUMMARY/REVIEW files. This is a Go/TS phase verified via `go test` directly plus live
-mutation/probe testing in this session (see Behavioral Spot-Checks above), not a probe-script-based
-migration/tooling phase.
+phase's PLAN/SUMMARY/REVIEW files. Verified via `go test` directly plus live mutation/probe testing
+in this session (see above), not a probe-script-based migration/tooling phase. Unchanged from prior
+passes.
 
 ### Requirements Coverage
 
-N/A. No `requirements:` IDs are declared in any Phase 190 plan's frontmatter, and `grep -n "190"
-.planning/REQUIREMENTS.md` returns zero matches — no REQ-IDs map to Phase 190. No orphaned
-requirements. Unchanged from the previous pass.
+N/A. No `requirements:` IDs are declared in `190-05-PLAN.md`, `190-06-PLAN.md`, or any 190-07 work
+(no PLAN.md exists for the orchestrator's direct fix). `grep -n "190" .planning/REQUIREMENTS.md`
+returns zero matches — no REQ-IDs map to Phase 190. No orphaned requirements. Unchanged from prior
+passes.
 
 ### Anti-Patterns Found
 
-None in the files 190-05/190-06 modified. Scanned `cmd/codex_build.go`, `cmd/codex_build_finalize.go`,
-`cmd/codex_colonize.go`, `cmd/codex_continue.go`, `cmd/codex_dispatch_contract.go`, `cmd/codex_plan.go`,
-`cmd/seal_final_review.go`, `cmd/swarm_cmd.go`, `cmd/build_pheromone_190_05_test.go`,
-`cmd/build_handoff_190_06_test.go` for `TBD`/`FIXME`/`XXX`, `TODO`/`HACK`/`PLACEHOLDER`,
-"not yet implemented"/"placeholder"/"coming soon", and empty-return stub patterns. The only hits were
-pre-existing, unrelated `codex_colonize.go` lines that implement the surveyor's OWN tech-debt scanner
-(literal strings `"TODO"`/`"FIXME"` used as detection patterns for codebases Aether analyzes, not
-debt markers in Aether's own code) and pre-existing `"placeholder"` occurrences inside
-`ResultCollectionPolicy` documentation strings describing conflict-resolution semantics — neither is
-new, neither is a stub.
+None. Scanned every file touched between the third pass and this one (`cmd/codex_continue_plan.go`,
+`cmd/codex_continue_plan_test.go`, `cmd/continue_wrapper_ceremony_test.go`,
+`.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md`,
+`.claude/commands/ant-continue.md`) for `TBD`/`FIXME`/`XXX`, `TODO`/`HACK`/`PLACEHOLDER`, and
+"not yet implemented"/"placeholder"/"coming soon" language. Two incidental substring hits, both
+false positives on inspection: `codex_continue_plan.go`'s pre-existing `"timeout placeholder for the
+same reviewer"` (describes a result-collection design concept, not a stub) and continue.md's
+pre-existing `"is not available at any cost"` (describes a security policy — skipping a credential
+review is never available — not an unfinished feature). Neither is new, neither is a stub, neither is
+a debt marker.
 
 ### Human Verification Required
 
 None. This remains a backend CLI/wire-format phase (no UI, no visual rendering, no real-time
 behavior, no external service integration) — every claim in this report was verifiable, and was
-verified, by direct execution.
+verified, by direct execution or direct reading of the source.
 
 ### Gaps Summary
 
-**What is genuinely fixed, confirmed by breaking it and watching it break:** the native/direct build
-dispatch path no longer double-delivers pheromone signals (7 commands' worth, closed by 190-05), and
-continue's native review/watcher dispatch paths — plus four more commands the same audit
-discipline surfaced — no longer double-deliver prior-worker handoffs (closed by 190-06). Both fixes
-were verified in this session by temporarily reverting the source and watching the exact named
-regression test fail with the exact pre-fix symptom text, then restoring and watching it pass again.
-The working tree is clean at HEAD (`270dad6c`) with no leftover mutations or probe files.
-
-**What is not yet true:** the phase's own literal goal — "No context section delivered twice" — still
-does not hold everywhere. This pass found a route none of the six 190-0X plans exercised:
-`aether continue --classic-ceremony` (equivalently, `--verification-depth heavy`) still delivers an
-active pheromone signal to every spawned reviewer and watcher's prompt twice, via
-`codexContinuePlanManifest`'s `ContextCapsule` and `PheromoneSection` fields, both of which the
-wrapper prose (identical across Claude Code and OpenCode) explicitly concatenates. This is the exact
-shape of bug 190-03 already fixed for build's equivalent wrapper flow — build.md was updated to make
-the capsule the sole channel; continue.md never was. It was looked at during 190-05's audit and
-cleared on an incomplete check (per-dispatch duplication only), not fixed. The fix is small,
-well-precedented (this phase has now applied the identical "stop setting the redundant field" pattern
-three times), and does not require new architecture — but it is not done as of this HEAD.
-
-This is a genuine BLOCKER for the phase's own stated goal, not a scope question: it is squarely a
-duplication defect (the same class this entire phase exists to close), on a route this phase's own
-scope statement covers ("No context section delivered twice" — unqualified by command), triggered by
-ordinary use (heavy-depth continue runs), and demonstrated live in this session, not inferred.
+None. The one gap the third pass found — continue's classic-ceremony/heavy-review wrapper flow
+double-delivering pheromone signals — is closed, demonstrated by breaking the fix on purpose (twice:
+the runtime field and the wrapper prose) and watching it fail with the exact pre-fix symptom, then
+restoring and watching it pass again. A fresh end-to-end probe confirmed the fix holds across a real
+4-dispatch heavy-depth run using the wrapper's own current documented assembly formula, not just the
+manifest-level fields the permanent unit test checks. A full-repo sweep for a fifth instance of the
+same bug shape, across every `ContextCapsule`-carrying struct, every dispatch-construction site,
+every wrapper prose file on both primary platforms (including the flat installed mirror, which no
+automated test covers), and the Codex platform surface, found none. The deferred ledger's one
+remaining open item (D-190-R-A / D-190-04-A, hive cross-domain coverage) is a distinct, honestly-
+recorded product decision about data breadth, not a duplication defect, and does not conflict with
+this phase's goal. All 7 of this phase's must-haves are verified; the phase goal — "No context
+section delivered twice; briefs stop transiting the orchestrator byte-for-byte" — holds in the
+codebase as of HEAD (`b6671584`), not merely in a summary describing it.
 
 ---
 
-_Verified: 2026-08-20T23:50:20Z_
+_Verified: 2026-08-21T00:00:00Z_
 _Verifier: Claude (gsd-verifier)_
