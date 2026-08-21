@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An honest "nothing needed changing" is now a first-class success.** A
+  worker that proves the required behavior already exists reports
+  `completed_no_change` (disposition `verified_existing`) instead of being
+  forced to fabricate an edit or getting coerced to `failed`. Evidence is
+  mandatory — a summary, a passing handoff verification, and the commands
+  actually run — enforced at result merge
+  (`TestNoChangeResultWithEvidenceIsAccepted` /
+  `TestNoChangeResultWithoutEvidenceIsRejected`), build and continue
+  provenance (`TestProvenanceAcceptsEvidencedNoChangeBuild`,
+  `TestContinueProvenanceAcceptsNoChangeDispatch`), covered-task credit,
+  task completion, and the in-process claims path
+  (`TestClaimsNormalizationKeepsHonestStatuses`). Rate-limit/quota stops
+  are now `interrupted` — terminal but resumable, never a code failure
+  (`TestInterruptedIsTerminalButNotSuccess`). The worker contract teaches
+  both outcomes on every lane, Go and TypeScript host alike
+  (`TestResponseContractOffersNoChangeOutcome`); the completion-packet
+  schema is regenerated in lockstep.
 - **Team check-in before every build.** After the Queen shows her spawn plan,
   the build pauses and asks the owner to proceed, trim optional workers, or
   redirect — with a one-line reason per worker and safety workers marked as
