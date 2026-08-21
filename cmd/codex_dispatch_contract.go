@@ -75,13 +75,34 @@ const (
 	fallbackPlanningDependencyBehavior         = "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first."
 	fallbackPlanningExtendedDependencyBehavior = "Real worker dispatch requires an authenticated platform dispatcher. Supporting planning castes may contribute evidence, and route-setter finalization is selected by caste identity rather than fixed array position."
 	fallbackSurveyFallbackBehavior             = "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first."
-	fallbackPlanningFallbackBehavior           = "Normal planning does not fall back to local synthesis. If Scout or Route-Setter workers are unavailable, blocked, failed, or timed out, stop with recovery guidance; only explicit `aether plan --synthetic` may produce dispatch_mode=synthetic local preview artifacts."
-	fallbackSurveyResultCollectionPolicy       = "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files."
-	fallbackPlanningResultCollectionPolicy     = "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid."
+	// fallbackPlanningFallbackBehavior deliberately does NOT match
+	// colony/policies/dispatch-contract.yaml's (now-deleted) planning
+	// fallback_behavior text. 191-02's field-by-field diff found this field
+	// diverging, but folding the YAML's stale "synthesize locally" text into
+	// this constant -- the plan's literal default fold direction -- would
+	// silently regress a deliberate, already-shipped, already-tested
+	// fail-closed design: TestPlanIncludesDispatchContract
+	// (cmd/codex_plan_test.go), TestPlanVisualOutputShowsDispatchContractDetails
+	// (cmd/codex_visuals_test.go), and the committed golden fixture
+	// (cmd/testdata/golden_plan.txt) all pin THIS text -- not the YAML's --
+	// as correct, and none of the three could ever have been exercising the
+	// real colony/ file (Go's test runner sets CWD to the package directory,
+	// so the bare "colony/policies/..." path never resolved in any of them).
+	// Deleting the stale file fixes a real dev-checkout/every-other-install
+	// inconsistency rather than preserving it. See 191-02-SUMMARY.md.
+	fallbackPlanningFallbackBehavior       = "Normal planning does not fall back to local synthesis. If Scout or Route-Setter workers are unavailable, blocked, failed, or timed out, stop with recovery guidance; only explicit `aether plan --synthetic` may produce dispatch_mode=synthetic local preview artifacts."
+	fallbackSurveyResultCollectionPolicy   = "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files."
+	fallbackPlanningResultCollectionPolicy = "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid."
 )
 
 var (
-	fallbackSurveyFallbackVisibility   = []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"}
+	fallbackSurveyFallbackVisibility = []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"}
+	// fallbackPlanningFallbackVisibility deliberately does NOT match
+	// colony/policies/dispatch-contract.yaml's (now-deleted) planning
+	// fallback_visibility list, for the same reason documented above
+	// fallbackPlanningFallbackBehavior: "synthetic"/"synthetic_warning" are
+	// the tested, golden-fixture-locked, fail-closed design this constant
+	// must keep describing, not the stale YAML's "provider_diagnostics".
 	fallbackPlanningFallbackVisibility = []string{"dispatch_mode", "planning_warning", "synthetic", "synthetic_warning", "artifact_source", "plan_source", "planning_loop"}
 )
 
