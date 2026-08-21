@@ -680,6 +680,12 @@
         "task_index": {
           "type": "integer"
         },
+        "covered_task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "depends_on": {
           "items": {
             "type": "string"

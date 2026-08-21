@@ -190,3 +190,94 @@ func TestFinalizeNeverSendsUserToACommandThatRefuses(t *testing.T) {
 		})
 	}
 }
+
+// TestStagedForcedRedispatchAfterBuiltIsNotADeadlock closes the gap
+// TestForcedRedispatchAfterBuiltIsNotADeadlock leaves open (191.1-CONTEXT.md
+// D-01, 191.1-PATTERNS.md Pattern 1): that test builds its forced-redispatch
+// completion in memory and hands it straight to runCodexBuildFinalize,
+// skipping the durable staging step the wrapper protocol actually performs
+// first -- `aether build-completion-stage` (cmd/command_guide.go:322),
+// underneath which is stageBuildAttemptCompletion (cmd/build_attempt.go).
+// Criterion 1 of the 2026-08-21 field-hardening phase spec names the field
+// sequence explicitly as "build-completion-stage -> both refusals"; a test
+// that never calls stageBuildAttemptCompletion cannot prove that literal
+// sequence, only an adjacent one that happens to reach the same fix.
+//
+// This test reproduces the sequence literally: build phase 1 to BUILT, force
+// a redispatch, stage the new attempt's completion through the real
+// stageBuildAttemptCompletion entrypoint (reloading from disk afterward to
+// prove the durable artifact was actually written, not just returned in
+// memory), then finalize. If finalize still refuses here, the failure
+// message says so explicitly rather than reading as a generic assertion
+// failure -- per 191.1-PATTERNS.md Pattern 2, failure messages must be
+// actionable, not just descriptive.
+func TestStagedForcedRedispatchAfterBuiltIsNotADeadlock(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+
+	_, completion := prepareExternalBuildCompletion(t, root)
+	if _, state, _, _, err := runCodexBuildFinalize(root, 1, completion, false); err != nil {
+		t.Fatalf("first finalize: %v", err)
+	} else if state.State != "BUILT" {
+		t.Fatalf("fixture did not reach BUILT, so the deadlock's precondition is absent: state=%s", state.State)
+	}
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{Force: true})
+	if err != nil {
+		t.Fatalf("forced redispatch of an already-built phase: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+
+	// Assert the precondition rather than assume it, exactly like the
+	// existing test: this test is only meaningful while the second attempt
+	// genuinely has committed nothing yet.
+	attemptRel, record, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("no attempt recorded for the forced redispatch")
+	}
+	if record.CompletionSHA256 != "" || record.Claims != nil {
+		t.Fatalf("fixture broken: the redispatched attempt already carries terminal evidence (digest=%q claims=%v), so it is a partial commit, not the fresh attempt this test is about", record.CompletionSHA256, record.Claims != nil)
+	}
+	planned := 0
+	for _, dispatch := range record.Dispatches {
+		if strings.TrimSpace(dispatch.Status) == "planned" {
+			planned++
+		}
+	}
+	if planned != len(record.Dispatches) || planned == 0 {
+		t.Fatalf("fixture broken: %d of %d dispatches are `planned`; the reported state had all of them planned", planned, len(record.Dispatches))
+	}
+
+	staged := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Dispatches:       externalResultsForManifest(manifest),
+	}
+
+	// The step the existing test skips: persist the completion packet
+	// through the real `aether build-completion-stage` entrypoint, one layer
+	// below cobra flag parsing, before finalizing.
+	durablePath, digest, err := stageBuildAttemptCompletion(attemptRel, staged)
+	if err != nil {
+		t.Fatalf("stageBuildAttemptCompletion (the real build-completion-stage entrypoint) rejected a well-formed forced-redispatch completion: %v", err)
+	}
+
+	// Reload from disk, not the in-memory return value, to prove staging
+	// wrote through durably rather than only handing back a value nobody
+	// persisted.
+	_, afterStage, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("build attempt vanished after staging its completion")
+	}
+	if afterStage.CompletionPath == "" || afterStage.CompletionSHA256 == "" {
+		t.Fatalf("staging did not write through: attempt still shows CompletionPath=%q CompletionSHA256=%q", afterStage.CompletionPath, afterStage.CompletionSHA256)
+	}
+	if afterStage.CompletionSHA256 != digest {
+		t.Fatalf("staged attempt digest %q does not match stageBuildAttemptCompletion's own returned digest %q", afterStage.CompletionSHA256, digest)
+	}
+	if afterStage.CompletionPath != durablePath {
+		t.Fatalf("staged attempt completion path %q does not match stageBuildAttemptCompletion's own returned path %q", afterStage.CompletionPath, durablePath)
+	}
+
+	if _, _, _, _, err := runCodexBuildFinalize(root, 1, staged, false); err != nil {
+		t.Fatalf("deadlock regressed at the literal field sequence: `aether build-completion-stage` succeeded but `aether build-finalize` then refused this same forced-redispatch attempt (%v).\n\nThis reproduces the exact sequence criterion 1 names (build-completion-stage -> both refusals): if finalize also refuses here, `aether continue` refuses too -- its dispatches are still `planned` -- and the only way out is `aether recover`, out of band.", err)
+	}
+}

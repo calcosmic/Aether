@@ -59,26 +59,42 @@ func (c codexExternalBuildCompletion) structuralInput() (any, error) {
 }
 
 type codexExternalBuildWorkerResult struct {
-	Stage         string              `json:"stage,omitempty"`
-	Wave          int                 `json:"wave,omitempty"`
-	ExecutionWave int                 `json:"execution_wave,omitempty"`
-	Caste         string              `json:"caste,omitempty"`
-	Name          string              `json:"name"`
-	AntName       string              `json:"ant_name,omitempty"`
-	Task          string              `json:"task,omitempty"`
-	Status        string              `json:"status"`
-	Summary       string              `json:"summary,omitempty"`
-	TaskID        string              `json:"task_id,omitempty"`
-	TaskIndex     int                 `json:"task_index,omitempty"`
-	DependsOn     []string            `json:"depends_on,omitempty"`
-	Outputs       []string            `json:"outputs,omitempty"`
-	Blockers      []string            `json:"blockers,omitempty"`
-	Duration      float64             `json:"duration,omitempty"`
-	ToolCount     int                 `json:"tool_count,omitempty"`
-	FilesCreated  []string            `json:"files_created,omitempty"`
-	FilesModified []string            `json:"files_modified,omitempty"`
-	TestsWritten  []string            `json:"tests_written,omitempty"`
-	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
+	Stage         string `json:"stage,omitempty"`
+	Wave          int    `json:"wave,omitempty"`
+	ExecutionWave int    `json:"execution_wave,omitempty"`
+	Caste         string `json:"caste,omitempty"`
+	Name          string `json:"name"`
+	AntName       string `json:"ant_name,omitempty"`
+	Task          string `json:"task,omitempty"`
+	Status        string `json:"status"`
+	Summary       string `json:"summary,omitempty"`
+	TaskID        string `json:"task_id,omitempty"`
+	TaskIndex     int    `json:"task_index,omitempty"`
+	// CoveredTaskIDs names every OTHER manifest dispatch this worker's real
+	// work actually covered, for the case where the WRAPPER (not the
+	// runtime) bundled several manifest-listed dispatches into one worker
+	// call the manifest still lists as separate dispatches. This is the
+	// WORKER's own claim, submitted via the completion packet -- contrast
+	// codexBuildDispatch.CoveredTaskIDs (cmd/codex_build.go), which the
+	// RUNTIME writes when it coalesces a dependent chain into one dispatch
+	// before any worker runs (coalesceSequentialDispatches). Because this
+	// field is worker-supplied, the trust boundary inverts relative to that
+	// runtime-written analog: mergeExternalBuildResults validates every
+	// entry against the manifest's own dispatches before granting any
+	// credit, never trusting the claim blindly (191.1-PATTERNS.md Pattern
+	// 6). An entry naming a task ID absent from the manifest, or claimed by
+	// two different results, is a distinct, named contract violation, never
+	// a silent credit or a silently dropped field.
+	CoveredTaskIDs []string            `json:"covered_task_ids,omitempty"`
+	DependsOn      []string            `json:"depends_on,omitempty"`
+	Outputs        []string            `json:"outputs,omitempty"`
+	Blockers       []string            `json:"blockers,omitempty"`
+	Duration       float64             `json:"duration,omitempty"`
+	ToolCount      int                 `json:"tool_count,omitempty"`
+	FilesCreated   []string            `json:"files_created,omitempty"`
+	FilesModified  []string            `json:"files_modified,omitempty"`
+	TestsWritten   []string            `json:"tests_written,omitempty"`
+	Handoff        codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
 // effectiveName returns the worker name, falling back to AntName when Name is empty.
@@ -1150,6 +1166,23 @@ const (
 	violationRuleIdentityMismatch = "worker.identity_mismatch"
 	violationRuleStatusTerminal   = "worker.status_terminal"
 	violationRuleHandoffValid     = "handoff.valid"
+	// violationRuleCoveredTaskUnknown fires when a worker result's
+	// covered_task_ids names a task ID that resolves to no dispatch anywhere
+	// in the manifest -- an unrecognized claim, never silently accepted or
+	// silently dropped (191.1-PATTERNS.md Pattern 6).
+	violationRuleCoveredTaskUnknown = "worker.covered_task_unknown"
+	// violationRuleCoveredTaskDuplicate fires when two different worker
+	// results both claim covered_task_ids credit for the same task ID --
+	// the second claim is rejected rather than silently overwriting the
+	// first credit.
+	violationRuleCoveredTaskDuplicate = "worker.covered_task_duplicate"
+	// violationRuleBundledWorkSuspected is additive guidance (never a
+	// replacement for the genuine violationRuleResultMissing violations it
+	// rides alongside, D-04): it fires when exactly one dispatch has a real,
+	// evidenced completed result and one or more other dispatches have no
+	// result at all, naming the concrete covered_task_ids repair instead of
+	// leaving a dead-end refusal.
+	violationRuleBundledWorkSuspected = "worker.bundled_work_suspected"
 )
 
 // mergeExternalBuildResults merges a completion packet's worker results onto
@@ -1192,6 +1225,79 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		resultByName[name] = result
 	}
 
+	// covered_task_ids resolution (FIELD-02, 191.1-PATTERNS.md Pattern 6) runs
+	// as its own pass, BEFORE the main per-dispatch loop below, and not
+	// inline inside it: the main loop unconditionally resets
+	// dispatches[i] = dispatch at the top of every iteration, so a credit
+	// written into dispatches[j] while processing the covering dispatch's own
+	// iteration would be silently overwritten once the loop reaches index j
+	// on its own turn (and a covering worker can equally sit at a HIGHER
+	// index than the dispatches it covers, so no loop ordering makes this
+	// safe as an inline mutation). Resolving credits first, into a lookup the
+	// main loop's own "missing result" branch consults, is what makes a
+	// covered dispatch never see a violationRuleResultMissing in the first
+	// place, honestly, regardless of index order.
+	dispatchIndexByTaskID := make(map[string]int, len(manifest.Dispatches))
+	for idx, d := range manifest.Dispatches {
+		if taskID := strings.TrimSpace(d.TaskID); taskID != "" {
+			if _, exists := dispatchIndexByTaskID[taskID]; !exists {
+				dispatchIndexByTaskID[taskID] = idx
+			}
+		}
+		// A manifest dispatch that is ITSELF a runtime-coalesced chain
+		// (coalesceSequentialDispatches) already covers more than its own
+		// primary TaskID; a worker's covered_task_ids claim must resolve
+		// against that full chain too, not just the chain's first step.
+		for _, covered := range d.CoveredTaskIDs {
+			if trimmed := strings.TrimSpace(covered); trimmed != "" {
+				if _, exists := dispatchIndexByTaskID[trimmed]; !exists {
+					dispatchIndexByTaskID[trimmed] = idx
+				}
+			}
+		}
+	}
+
+	type coveredTaskCredit struct {
+		coveringName   string
+		coveringResult codexExternalBuildWorkerResult
+	}
+	coveredBy := make(map[int]coveredTaskCredit, len(results))
+	for _, result := range results {
+		if len(result.CoveredTaskIDs) == 0 {
+			continue
+		}
+		coveringName := result.effectiveName()
+		selfTaskID := strings.TrimSpace(result.TaskID)
+		for _, raw := range result.CoveredTaskIDs {
+			coveredTaskID := strings.TrimSpace(raw)
+			if coveredTaskID == "" || coveredTaskID == selfTaskID {
+				continue // Blank, or a self-reference to the covering dispatch's own task -- not another dispatch.
+			}
+			idx, exists := dispatchIndexByTaskID[coveredTaskID]
+			if !exists {
+				violations = append(violations, contractViolation{
+					Worker:  coveringName,
+					Field:   "covered_task_ids",
+					Value:   coveredTaskID,
+					Rule:    violationRuleCoveredTaskUnknown,
+					Message: fmt.Sprintf("%s claims covered_task_ids credit for task %s, but no dispatch in the manifest has that task ID", coveringName, coveredTaskID),
+				})
+				continue
+			}
+			if existing, already := coveredBy[idx]; already {
+				violations = append(violations, contractViolation{
+					Worker:  coveringName,
+					Field:   "covered_task_ids",
+					Value:   coveredTaskID,
+					Rule:    violationRuleCoveredTaskDuplicate,
+					Message: fmt.Sprintf("%s and %s both claim covered_task_ids credit for task %s; only one worker's result can be credited for it", existing.coveringName, coveringName, coveredTaskID),
+				})
+				continue
+			}
+			coveredBy[idx] = coveredTaskCredit{coveringName: coveringName, coveringResult: result}
+		}
+	}
+
 	dispatches := make([]codexBuildDispatch, len(manifest.Dispatches))
 	usedResults := make(map[string]bool, len(results))
 	for i, dispatch := range manifest.Dispatches {
@@ -1207,6 +1313,21 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 			continue
 		}
 		if !ok {
+			if credit, covered := coveredBy[i]; covered {
+				// A different worker's result honestly named this dispatch's
+				// task ID in covered_task_ids, validated above against the
+				// manifest: the wrapper bundled this dispatch's real work
+				// into that worker's single call. Credit it directly instead
+				// of reporting a missing result -- the work was actually
+				// done, just not filed under this dispatch's own name.
+				dispatch.Status = "completed"
+				dispatch.Summary = fmt.Sprintf("covered by %s via covered_task_ids", credit.coveringName)
+				if outputs := uniqueSortedStrings(append(append(append([]string{}, credit.coveringResult.Outputs...), credit.coveringResult.FilesCreated...), append(credit.coveringResult.FilesModified, credit.coveringResult.TestsWritten...)...)); len(outputs) > 0 {
+					dispatch.Outputs = outputs
+				}
+				dispatches[i] = dispatch
+				continue
+			}
 			violations = append(violations, contractViolation{
 				Worker:  dispatch.Name,
 				Field:   "name",
@@ -1254,6 +1375,52 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		}
 		dispatches[i] = dispatch
 	}
+
+	// D-04/criterion 2b: additive guidance, appended only after every genuine
+	// violationRuleResultMissing violation above has already been recorded,
+	// and never removing or replacing any of them (the packet really is
+	// incomplete right now). When the packet's shape strongly resembles the
+	// field failure this plan closes -- exactly one dispatch with a real,
+	// evidenced completed result sitting next to one or more dispatches with
+	// no result at all -- name the specific worker, the specific missing
+	// dispatches, and the concrete covered_task_ids repair, instead of
+	// leaving only a dead-end refusal with no path forward.
+	var missingDispatchNames []string
+	for _, v := range violations {
+		if v.Rule == violationRuleResultMissing {
+			missingDispatchNames = append(missingDispatchNames, v.Worker)
+		}
+	}
+	if len(missingDispatchNames) > 0 {
+		var completedWithEvidence []codexBuildDispatch
+		for _, d := range dispatches {
+			if d.Status == "completed" && len(d.Outputs) > 0 {
+				completedWithEvidence = append(completedWithEvidence, d)
+			}
+		}
+		if len(completedWithEvidence) == 1 {
+			completed := completedWithEvidence[0]
+			missingTaskIDs := make([]string, 0, len(missingDispatchNames))
+			for _, name := range missingDispatchNames {
+				for _, d := range dispatches {
+					if d.Name == name && strings.TrimSpace(d.TaskID) != "" {
+						missingTaskIDs = append(missingTaskIDs, strings.TrimSpace(d.TaskID))
+						break
+					}
+				}
+			}
+			violations = append(violations, contractViolation{
+				Worker: completed.Name,
+				Field:  "covered_task_ids",
+				Rule:   violationRuleBundledWorkSuspected,
+				Message: fmt.Sprintf(
+					"%s is the only dispatch with a real, evidenced completed result; %s have no result at all. If %s's work actually covered them too, resubmit %s's result with covered_task_ids naming their task IDs (%s) instead of leaving them unreported.",
+					completed.Name, strings.Join(missingDispatchNames, ", "), completed.Name, completed.Name, strings.Join(missingTaskIDs, ", "),
+				),
+			})
+		}
+	}
+
 	return dispatches, violations, nil
 }
 
