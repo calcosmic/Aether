@@ -40,7 +40,9 @@ Builder–Probe unlock; recovery recommendations ranked reconcile-before-rerun;
 one canonical command registry with generated aliases (ruling D5).
 - Already landed: marginal-value spawn gate + per-worker justification
   display + owner check-in (2026-08-21, v1.0.62); swarm/seal/colonize spawn
-  floors.
+  floors; honest `completed_no_change`/`verified_existing` outcomes with
+  mandatory evidence + resumable `interrupted` (2026-08-21 evening, commit
+  969a2bda — UNPUBLISHED pending fresh-eyes review of 043c2745..HEAD).
 - Codex grades this the largest correctness gap (C−/D). Extend the existing
   attempt journals/manifest — no parallel stores (ruling D3).
 
