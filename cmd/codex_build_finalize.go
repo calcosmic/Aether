@@ -442,7 +442,41 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if binding.Bound && buildAttemptCompletionSealed(binding.Record) && binding.Record.CompletionSHA256 != "" && binding.Record.CompletionSHA256 != completionDigest {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion packet does not match the result already bound to attempt %s", binding.Record.ID)
 	}
-	if binding.Bound && binding.Record.Status != buildAttemptBuilt && state.State == colony.StateBUILT && state.CurrentPhase == phaseNum {
+	// Route to committed-attempt reconciliation ONLY when THIS attempt is the
+	// one whose lifecycle was committed -- proved by its own terminal
+	// evidence, not by the colony happening to sit at BUILT.
+	//
+	// Without buildAttemptRecordedTerminalEvidence this condition also caught
+	// a brand-new attempt that has never been finalized, whenever the phase
+	// had been built before -- exactly what `--force` produces. That created a
+	// deadlock with no in-band exit, reported from a live colony on
+	// 2026-08-21 and reproduced by TestForcedRedispatchAfterBuiltIsNotADeadlock:
+	//
+	//   finalize:  "attempt X is already committed, so this different
+	//               completion packet cannot replace it ... run `aether continue`"
+	//   continue:  "no completed worker dispatches found -- build did not
+	//               produce verifiable results"
+	//
+	// Each pointed at the other. The finalize half is a message I added on
+	// 2026-08-19; it is correct for a genuinely committed attempt, and was
+	// sending users nowhere for an attempt that had committed nothing.
+	//
+	// The two situations look alike and are not:
+	//
+	//   partial commit     colony state committed, journal write lost.
+	//                      CompletionSHA256 set, Claims set, dispatches
+	//                      completed. Reconciling is right; `aether continue`
+	//                      genuinely works, because the dispatches are there.
+	//
+	//   forced redispatch  a fresh attempt on a phase whose PREVIOUS attempt
+	//                      built. CompletionSHA256 empty, Claims nil,
+	//                      dispatches still `planned`. Nothing of this attempt
+	//                      has been committed, so there is nothing to
+	//                      reconcile -- it is an ordinary finalize, and the
+	//                      stale BUILT is the state --force exists to replace.
+	if binding.Bound && binding.Record.Status != buildAttemptBuilt &&
+		buildAttemptRecordedTerminalEvidence(binding.Record) &&
+		state.State == colony.StateBUILT && state.CurrentPhase == phaseNum {
 		return reconcileCommittedExternalBuildAttempt(state, phaseNum, binding, completionDigest)
 	}
 	if binding.Bound && binding.Record.Status == buildAttemptBuilt {

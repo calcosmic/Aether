@@ -642,6 +642,24 @@ func buildAttemptCompletionSealed(record buildAttemptRecord) bool {
 	return strings.TrimSpace(record.Status) == buildAttemptBuilt
 }
 
+// buildAttemptRecordedTerminalEvidence reports whether this attempt itself got
+// as far as recording terminal worker evidence -- the transition that writes
+// the completion digest and the claims together, immediately before the
+// lifecycle commit.
+//
+// It is the difference between "this attempt was committed and its journal
+// write was lost" and "this attempt has never been finalized at all". Only the
+// first is reconcilable; treating the second as reconcilable produced a
+// deadlock with no in-band exit (see the routing comment in
+// cmd/codex_build_finalize.go and TestForcedRedispatchAfterBuiltIsNotADeadlock).
+//
+// Both halves are required. The digest alone would admit an attempt whose
+// evidence was recorded but whose claims never landed, and Claims alone would
+// admit one with no packet bound to it.
+func buildAttemptRecordedTerminalEvidence(record buildAttemptRecord) bool {
+	return strings.TrimSpace(record.CompletionSHA256) != "" && record.Claims != nil
+}
+
 func buildAttemptSummary(record buildAttemptRecord) map[string]interface{} {
 	workerStatusCounts := map[string]int{}
 	for _, workerRun := range record.WorkerRuns {
