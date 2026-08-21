@@ -126,6 +126,26 @@ func legacyOutOfBandPhase() colony.Phase {
 	}
 }
 
+// malformedBoundOutOfBandPhase reproduces the WR-03 (191.1-REVIEW.md) shape:
+// a structurally malformed bound requirement -- neither Artifacts nor
+// Checks -- that validateNewPlanEvidenceContract refuses to accept at plan
+// acceptance time (validatePhaseCriterionEvidence rejects it too, with "has
+// no artifact or verification check"). Reaching this fixture at all requires
+// bypassing plan acceptance, exactly the "hand-edited or migrated
+// COLONY_STATE.json" scenario WR-03 names -- reproduced here by writing
+// COLONY_STATE.json directly (createTestColonyState/setupOutOfBandTest)
+// instead of through plan acceptance.
+func malformedBoundOutOfBandPhase() colony.Phase {
+	return colony.Phase{
+		Name:            "Photo intake",
+		SuccessCriteria: []string{"the workspace builds and its tests pass"},
+		EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+			Criterion: "the workspace builds and its tests pass",
+			// Deliberately empty: no Artifacts, no Checks.
+		}},
+	}
+}
+
 // writeFailingOutOfBandTest overwrites the fixture workspace's test file
 // with one that genuinely fails, so the ceremony's fresh `go test ./...`
 // run is a real, live failure -- not a mock.
@@ -313,6 +333,45 @@ func TestVerifyOutOfBandRefusesUnsupportedWorkerEvidenceChecks(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected the refusal to name the unsupported watcher evidence honestly, got %v", report.Criteria[0].BlockingIssues)
+	}
+	if _, _, ok := loadLatestBuildAttempt(1); ok {
+		t.Fatal("refused ceremony fabricated a build attempt")
+	}
+}
+
+// TestVerifyOutOfBandRefusesMalformedBoundCriterion is the WR-03 regression
+// lock (191.1-REVIEW.md): evaluateOutOfBandBoundCriteria used to never call
+// validatePhaseCriterionEvidence at all, so a structurally malformed
+// requirement (no Artifacts and no Checks -- normally impossible to accept
+// via validateNewPlanEvidenceContract, but reachable via a hand-edited or
+// migrated COLONY_STATE.json) evaluated vacuously: neither the artifact loop
+// nor the checks loop had anything to iterate, so the criterion stayed
+// Passed:true with zero Evidence and zero BlockingIssues. aether continue's
+// own evaluator (evaluatePhaseCriterionEvidence, cmd/criterion_evidence.go)
+// already refuses this exact shape outright -- this ceremony must agree,
+// not silently rubber-stamp what continue would refuse.
+func TestVerifyOutOfBandRefusesMalformedBoundCriterion(t *testing.T) {
+	root := setupOutOfBandTest(t, malformedBoundOutOfBandPhase())
+	_ = root
+
+	report, result, err := executeVerifyOutOfBand(context.Background(), 1, true, false)
+	if err == nil {
+		t.Fatalf("expected refusal for a structurally malformed bound criterion, got success: %+v", result)
+	}
+	if report.Passed {
+		t.Fatal("report claims Passed=true for a structurally malformed bound criterion -- the exact vacuous-pass WR-03 exists to close")
+	}
+	if len(report.Criteria) != 0 {
+		t.Fatalf("expected no per-criterion results once the requirement itself is refused as malformed, got %+v", report.Criteria)
+	}
+	found := false
+	for _, issue := range report.BlockingIssues {
+		if strings.Contains(issue, "no artifact or verification check") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected the refusal to name the malformed requirement (matching validatePhaseCriterionEvidence's own message), got %v", report.BlockingIssues)
 	}
 	if _, _, ok := loadLatestBuildAttempt(1); ok {
 		t.Fatal("refused ceremony fabricated a build attempt")

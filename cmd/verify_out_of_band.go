@@ -200,6 +200,20 @@ func gatherOutOfBandEvidence(ctx context.Context, root string, phase colony.Phas
 	}
 
 	if policy == criterionEvidencePolicyBoundV1 {
+		// WR-03 (191.1-REVIEW.md): mirror evaluatePhaseCriterionEvidence's own
+		// first line (cmd/criterion_evidence.go) so this ceremony can never
+		// evaluate -- and vacuously pass -- a structurally malformed
+		// requirement (e.g. neither Artifacts nor Checks). aether continue
+		// already refuses this exact shape outright; reaching it here at all
+		// requires bypassing plan acceptance (a hand-edited or migrated
+		// COLONY_STATE.json), but this ceremony must agree with continue's
+		// refusal rather than silently rubber-stamping what continue would
+		// refuse.
+		if err := validatePhaseCriterionEvidence(phase); err != nil {
+			report.Passed = false
+			report.BlockingIssues = []string{err.Error()}
+			return report
+		}
 		report.Criteria = evaluateOutOfBandBoundCriteria(root, phase, steps)
 		report.Passed = true
 		for _, c := range report.Criteria {
