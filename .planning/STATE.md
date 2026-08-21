@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
-status: executing
+status: ready_to_plan
 stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
 last_updated: "2026-08-21T00:53:05.982Z"
 last_activity: 2026-08-21 -- Phase 191 execution started
 progress:
   total_phases: 51
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 63
   completed_plans: 114
-  percent: 100
+  percent: 14
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-08)
 
 ## Current Position
 
-Phase: 191 (dead-wood) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 191
+Phase: 192
+Plan: Not started
+Status: Ready to plan
 Progress: 9 of 16 phases in this milestone
-Last activity: 2026-08-21 -- Phase 191 execution started
+Last activity: 2026-08-21
 
 **Order from here (revised 2026-08-18):** 187, 188, 189→190 and 191 may start
 NOW, in any order and in parallel — the 186 rescope removed their only
@@ -60,7 +60,7 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 
 **Velocity:**
 
-- Total plans completed: 44 (v1.26, all Phase 172)
+- Total plans completed: 51 (v1.26, all Phase 172)
 - Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 
