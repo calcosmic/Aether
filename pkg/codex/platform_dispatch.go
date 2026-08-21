@@ -25,7 +25,28 @@ const (
 	envOpenCodePath     = "AETHER_OPENCODE_PATH"
 	envOpenCodePrimary  = "AETHER_OPENCODE_PRIMARY_AGENT"
 	envOpenCodeAgentURL = "AETHER_OPENCODE_AGENT_URL"
-	defaultProbeTimout  = 3 * time.Second
+	// defaultProbeTimout is the budget for the CHEAP auth probe (`claude auth
+	// status --json`, `codex login status`) -- not the model round-trip
+	// preflight below, which has its own, much larger budget.
+	//
+	// It was 3s with no retry and no override. Idle, these probes answer in
+	// 0.05-0.3s, so 3s looks generous; but they occasionally stall well past
+	// it (a token refresh reaching the network is the likeliest cause), and a
+	// stall was fatal -- the worker never started, on a machine where the CLI
+	// was installed and logged in the whole time.
+	//
+	// Observed on 2026-08-21 in two unrelated places on the same day: a
+	// Formica build lost two of four workers to `claude auth status failed:
+	// timed out` while the OTHER TWO STARTED FINE on the same credentials
+	// (proof the auth was healthy and the probe was not), and this repo's own
+	// suite lost TestCodexReadOnlyProfileSelectsReadOnlySandbox to `codex
+	// login status failed: timed out`, passing on a rerun.
+	//
+	// This is the same lesson hostedPreflightTimeout already learned and
+	// wrote down (20s -> 45s plus one retry, after a run died 22s in while a
+	// hand-run probe answered in 5). The cheap probe never got the same
+	// treatment, so it kept failing the same way for the same reason.
+	defaultProbeTimout = 10 * time.Second
 )
 
 const defaultOpenCodePrimaryAgent = "aether-worker-router"
@@ -1671,24 +1692,86 @@ func reorderDispatchers(dispatchers []PlatformDispatcher, preferred ...Platform)
 	return out
 }
 
+// resolvedAvailabilityProbeTimeout returns the auth-probe budget, honoring
+// AETHER_PROBE_TIMEOUT (Go duration syntax, e.g. "30s") so a slow host can
+// widen it without a rebuild -- the same escape hatch AETHER_PREFLIGHT_TIMEOUT
+// gives the model round-trip probe, which this one lacked entirely. An invalid
+// or non-positive value falls back to the compiled default: a mistyped env var
+// must not brick dispatch.
+func resolvedAvailabilityProbeTimeout() time.Duration {
+	envValue := strings.TrimSpace(os.Getenv("AETHER_PROBE_TIMEOUT"))
+	if envValue == "" {
+		return defaultProbeTimout
+	}
+	timeout, err := time.ParseDuration(envValue)
+	if err != nil || timeout <= 0 {
+		return defaultProbeTimout
+	}
+	return timeout
+}
+
+// availabilityProbeAttempts mirrors hostedPreflightAttempts: one retry, and
+// only for timeouts. A timeout is the transient case. Missing credentials, a
+// missing binary or a bad subcommand fail identically twice and must surface
+// immediately rather than costing the user a second wait.
+//
+// Declared as a var so tests can exercise both the retry and its absence.
+var availabilityProbeAttempts = 2
+
 func runAvailabilityProbe(ctx context.Context, binary string, args ...string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	var output string
+	var err error
+	for attempt := 0; attempt < availabilityProbeAttempts; attempt++ {
+		output, err = runAvailabilityProbeOnce(ctx, binary, args...)
+		if err == nil || !errors.Is(err, errAvailabilityProbeTimeout) {
+			return output, err
+		}
+		// Only a timeout retries, and only while the CALLER's context is
+		// still live -- an inherited deadline or a cancelled command must not
+		// be retried past its owner's intent.
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return output, err
+}
+
+// errAvailabilityProbeTimeout marks the retryable case. It is matched with
+// errors.Is rather than by string so the retry decision cannot drift from the
+// message the user eventually sees.
+var errAvailabilityProbeTimeout = errors.New("timed out")
+
+func runAvailabilityProbeOnce(ctx context.Context, binary string, args ...string) (string, error) {
+	probeCtx := ctx
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultProbeTimout)
+		probeCtx, cancel = context.WithTimeout(ctx, resolvedAvailabilityProbeTimeout())
 		defer cancel()
 	}
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := exec.CommandContext(probeCtx, binary, args...)
+	// Without this the budget above is advisory, not real. The provider CLIs
+	// are wrappers that spawn children; cancelling the context kills only the
+	// direct child, and cmd.Run() then blocks until every inherited pipe
+	// closes -- which means until the grandchild exits on its own. A 10s
+	// budget could burn far longer than 10s and still report "timed out".
+	//
+	// configureWorkerCommand is the machinery that already solves this for
+	// workers and for the model round-trip preflight: a process group, a
+	// Cancel that signals the whole group, and a WaitDelay backstop that
+	// closes the pipes rather than waiting forever. This probe was the one
+	// caller building a bare exec.CommandContext and inheriting none of it.
+	configureWorkerCommand(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	output := combinedWorkerOutput(stdout.String(), stderr.String())
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return output, fmt.Errorf("timed out")
+		if probeCtx.Err() == context.DeadlineExceeded {
+			return output, errAvailabilityProbeTimeout
 		}
 		return output, err
 	}
