@@ -52,7 +52,12 @@ one canonical command registry with generated aliases (ruling D5).
   `TestNoChangeSuccessIsHonouredWhereverStatusIsJudged`,
   `TestNoHandRolledWorkerSuccessLists`,
   `TestRuntimeLaneDemandsNoChangeEvidence` and
-  `TestRuntimeNoChangeEvidenceGateIsWiredIntoDispatch`. Still UNPUBLISHED.
+  `TestRuntimeNoChangeEvidenceGateIsWiredIntoDispatch`. A second round then
+  mined a downstream colony transcript for six more (blank worker failures,
+  one verification check silently unresolving another, halt guidance pointing
+  at a guarded path, folded tasks reading as dropped, a summary claiming an
+  unperformed recovery, four identical surveyor identities). **PUBLISHED as
+  v1.0.63 on 2026-08-21** — hub and binary agree, 5/5 integrity checks pass.
 - Codex grades this the largest correctness gap (C−/D). Extend the existing
   attempt journals/manifest — no parallel stores (ruling D3).
 

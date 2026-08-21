@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-08-08)
 **Current focus:** Phase 191 — dead-wood
 **Milestone:** v1.26 — hardening (rescoped 2026-08-14) plus the Audit Addendum (2026-08-17, phases 186-192). Governing documents: `.planning/HARDENING-PLAN.md` (with its 2026-08-17 addendum) and ROADMAP.md's "Audit Addendum" section; the frozen 12-outcome target lives in the approved implementation plan of 2026-08-17.
 **Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases)
-**Product version:** v1.0.58 (binary is authoritative)
+**Product version:** v1.0.63 (binary is authoritative; published 2026-08-21 after the review gate found and fixed 13 truth-reporting defects)
 
 ## Current Position
 
