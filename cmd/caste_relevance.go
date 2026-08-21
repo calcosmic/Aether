@@ -347,7 +347,10 @@ func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.C
 		case colony.VerificationDepthHeavy:
 			return caste == "gatekeeper" || caste == "auditor" || caste == "probe"
 		default:
-			return caste == "auditor" || caste == "probe"
+			// Probe on a documentation-only final phase has no code to cover —
+			// the same gate build and continue already apply. Heavy stays
+			// unconditional above: heavy is an explicit request for breadth.
+			return caste == "auditor" || (caste == "probe" && queenPhaseProducesTestableCode(phase))
 		}
 	}
 	return false
