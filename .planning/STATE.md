@@ -77,7 +77,7 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 
 - v1.26 roadmap created 2026-08-08 from 35 requirements across 7 categories (WIRE, SPAWN, SPEND, SEEN, ROSTER, SKILL, PROOF), continuing phase numbering from v1.25's Phase 171
 - Research suggested 7 phases; the roadmap ships 8. The single deviation is splitting ROSTER into **176 Roster Reader** (ROSTER-01..02, the shipped 27 YAMLs) and **177 Operator-Authored Agents** (ROSTER-03..08, the user path), so the reader must demonstrably change dispatch output before the user-extension path is planned
-- Research's suggested "Phase 6 — Delegation Delivery" is **not** in this milestone. The SPAWN requirements cover the *guard* only; nothing gains the ability to delegate recursively in v1.26. Delivery (child result plumbing, follow-on-wave channel, parent-direct spawn) carries a research flag and belongs to a later milestone
+- Research's suggested sixth phase ("Delegation Delivery") is **not** in this milestone. The SPAWN requirements cover the *guard* only; nothing gains the ability to delegate recursively in v1.26. Delivery (child result plumbing, follow-on-wave channel, parent-direct spawn) carries a research flag and belongs to a later milestone
 
 ### Decisions
 
