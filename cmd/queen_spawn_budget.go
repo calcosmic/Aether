@@ -308,6 +308,9 @@ func queenMaxWorkersForBudget(phase colony.Phase, flowType string, state colony.
 		}
 		return 4, "standard planning"
 	case "colonize":
+		if stateVerificationDepth(state) == colony.VerificationDepthLight {
+			return 2, "light territory survey"
+		}
 		return 4, "territory survey"
 	case "swarm":
 		return 5, "focused swarm"

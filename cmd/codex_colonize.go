@@ -646,12 +646,24 @@ func surveyOutputPaths(outputs []string) []string {
 }
 
 func queenSurveyorSpecs() []surveyorSpec {
+	// Colonize used to be the one flow where verification depth changed
+	// nothing: every survey sent exactly four surveyors. The operator's depth
+	// choice now reaches the surveyor roster (light = structure + dependency
+	// surveyors only).
+	state := colony.ColonyState{}
+	if active, err := loadActiveColonyState(); err == nil {
+		state = active
+	}
+	return queenSurveyorSpecsForState(state)
+}
+
+func queenSurveyorSpecsForState(state colony.ColonyState) []surveyorSpec {
 	phase := colony.Phase{
 		Name:        "Colonize repository",
 		Description: "Survey architecture, provisions, disciplines, and pathogens",
 		Mode:        colony.PhaseModeDiscovery,
 	}
-	selected := queenBuildCasteSet(queenOrchestrate(phase, "colonize", colony.ColonyState{}))
+	selected := queenBuildCasteSet(queenOrchestrate(phase, "colonize", state))
 	specs := make([]surveyorSpec, 0, len(surveyorSpecs))
 	for _, spec := range surveyorSpecs {
 		if selected[spec.Caste] {

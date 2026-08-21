@@ -331,6 +331,12 @@ func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.C
 	case "plan":
 		return caste == "scout" || caste == "route_setter"
 	case "colonize":
+		// Light keeps the two surveys a colony cannot start without —
+		// structure (nest) and dependencies (provisions); conventions and
+		// tech-debt surveys are the optional depth.
+		if stateVerificationDepth(state) == colony.VerificationDepthLight {
+			return caste == "surveyor-provisions" || caste == "surveyor-nest"
+		}
 		return caste == "surveyor-provisions" ||
 			caste == "surveyor-nest" ||
 			caste == "surveyor-disciplines" ||
@@ -409,6 +415,9 @@ func isCasteSuppressed(caste, flowType string, phase colony.Phase, state colony.
 	}
 	if flowType == "seal" && stateVerificationDepth(state) == colony.VerificationDepthLight {
 		return oneOf(caste, "gatekeeper", "auditor", "probe")
+	}
+	if flowType == "colonize" && stateVerificationDepth(state) == colony.VerificationDepthLight {
+		return oneOf(caste, "surveyor-disciplines", "surveyor-pathogens")
 	}
 	if flowType == "continue" || flowType == "seal" {
 		return oneOf(caste, "builder", "weaver", "tracker", "archaeologist", "ambassador")

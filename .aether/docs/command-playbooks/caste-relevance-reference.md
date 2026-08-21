@@ -65,7 +65,8 @@ Source: `spawnThreshold`
 - Always: `scout`, `route_setter`
 
 ### Colonize
-- Always: `surveyor-provisions`, `surveyor-nest`, `surveyor-disciplines`, `surveyor-pathogens`
+- Standard/heavy: `surveyor-provisions`, `surveyor-nest`, `surveyor-disciplines`, `surveyor-pathogens`
+- Light: `surveyor-provisions`, `surveyor-nest` only (structure and dependencies; conventions and tech-debt surveys are the optional depth)
 
 ### Swarm
 - Always: `tracker`, `builder`, `watcher`
@@ -108,7 +109,8 @@ Source: `queenMaxWorkersForBudget`
 | default | 4 | standard planning |
 
 ### Colonize
-- Always: 4 (territory survey)
+- Light: 2 (light territory survey)
+- Otherwise: 4 (territory survey)
 
 ### Swarm
 - Always: 5 (focused swarm)
