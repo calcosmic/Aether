@@ -31,3 +31,17 @@ respects). Downstream workaround that worked: chain resume+continue in one comma
 
 Not in scope of phases 187-191; candidate for a 192-adjacent remediation slot. Relevant to the
 showdown gate: "unscripted interventions ≤ GSD's" and "recovery failures = 0".
+
+## Reproduction detail (relayed from the downstream session, 2026-08-21)
+
+The watcher spawned inside `aether continue` failed 3 of 5 runs. The verdict field came back
+holding the check's own COMMAND or DESCRIPTION strings rather than a result:
+- one failure's stated reason: literally `/ant-continue 2>&1 | tail -100`
+- two "successful" runs reported: "Check exit code of plan-only continue run" and
+  "Preview what /ant-continue would do without mutating state"
+
+Diagnosis this points at: the code populating the verdict/reason maps the wrong field from the
+check definition (its `description`/`command`) instead of the check's actual output/result.
+Confirmed compounding factor: `--skip-watchers` does not route around it because bound criteria
+listing `watcher` in `required_checks` treat "skipped" as not-passed — the phase stays blocked
+either way.
