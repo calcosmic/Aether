@@ -1,5 +1,35 @@
 # Aether Milestones
 
+## v1.19 Roadmap Archive: v1.19 TypeScript Host Cutover + Oracle Confidence Recovery (Backfilled: 2026-08-21)
+
+**Note:** Synthesized from archive snapshot by `/gsd-health --backfill`. Original completion date unknown.
+
+---
+
+## v1.18 : Hybrid Runtime Parity & Release Gate (Backfilled: 2026-08-21)
+
+**Note:** Synthesized from archive snapshot by `/gsd-health --backfill`. Original completion date unknown.
+
+---
+
+## v1.17 Roadmap: Aether v1.17 Classic Restoration (Backfilled: 2026-08-21)
+
+**Note:** Synthesized from archive snapshot by `/gsd-health --backfill`. Original completion date unknown.
+
+---
+
+## v1.14 Roadmap: Aether (Backfilled: 2026-08-21)
+
+**Note:** Synthesized from archive snapshot by `/gsd-health --backfill`. Original completion date unknown.
+
+---
+
+## v1.13 Roadmap: Aether (Backfilled: 2026-08-21)
+
+**Note:** Synthesized from archive snapshot by `/gsd-health --backfill`. Original completion date unknown.
+
+---
+
 ## v1.24 Hybrid Architecture Salvage (Shipped: 2026-05-24)
 
 **Phases completed:** 8 phases, 21 plans, 36 requirements
@@ -18,11 +48,13 @@
 **Stats:** 86 commits, 375 files changed, +45,732 / −507 lines, ~4 days
 
 **Tech Debt:**
+
 - `executePlan.test.ts` test isolation — create parent directory before writing COLONY_STATE.json
 - Phases 152-156 missing VERIFICATION.md (completed before verification workflow was standard)
 - REQUIREMENTS.md traceability table shows all requirements as "Pending" (bookkeeping only)
 
 **Archives:**
+
 - [Roadmap](milestones/v1.24-ROADMAP.md)
 - [Requirements](milestones/v1.24-REQUIREMENTS.md)
 - [Audit](milestones/v1.24-MILESTONE-AUDIT.md)
@@ -49,6 +81,7 @@
 **Tech Debt:** Missing VERIFICATION.md and SUMMARY.md process artifacts for phases 146–151 (documentation gaps, not work gaps)
 
 **Archives:**
+
 - [Roadmap](milestones/v1.23-ROADMAP.md)
 - [Requirements](milestones/v1.23-REQUIREMENTS.md)
 - [Audit](milestones/v1.23-MILESTONE-AUDIT.md)
@@ -72,6 +105,7 @@
 **Tech Debt:** None. Zero anti-patterns.
 
 **Archives:**
+
 - [Roadmap](milestones/v1.22-ROADMAP.md)
 - [Requirements](milestones/v1.22-REQUIREMENTS.md)
 - [Audit](milestones/v1.22-MILESTONE-AUDIT.md)
