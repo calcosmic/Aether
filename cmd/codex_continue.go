@@ -656,6 +656,25 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
+	// FIELD-04 (191.1-CONTEXT.md D-07/D-08): a completed, passing
+	// verification from an earlier continue run may have lost the race to a
+	// colony pause and been preserved instead of discarded (see
+	// cmd/advance_phase.go). Check for it here, before any of the expensive
+	// verification/watcher-dispatch work below, so a resumed colony applies
+	// that already-verified result instead of re-running it.
+	if outcome := replayPendingContinueAdvance(state, phase, "continue", now); outcome.Handled {
+		if outcome.Err != nil {
+			runStatus = "failed"
+			return nil, state, phase, nil, nil, false, outcome.Err
+		}
+		if superseded, _ := outcome.Result["superseded"].(bool); superseded {
+			runStatus = "superseded"
+		} else {
+			runStatus = "completed"
+		}
+		return outcome.Result, outcome.State, outcome.Phase, outcome.NextPhase, outcome.Housekeeping, outcome.Final, nil
+	}
+
 	// Ceremony progress tracking (visual mode only)
 	var progress *ceremonyProgress
 	if shouldRenderVisualOutput(stdout) {
@@ -922,6 +941,19 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	})
 	if err != nil {
 		if errors.Is(err, errRuntimeStateSuperseded) {
+			// FIELD-04: if this supersession is specifically because the
+			// colony is paused, preserve this already-computed, already-
+			// passing payload for replay after resume instead of discarding
+			// it (cmd/advance_phase.go). Any other supersession reason
+			// (phase or build identity genuinely changed) preserves
+			// nothing -- discard exactly as before.
+			preserveIfPausedSupersession(phase.ID, state.BuildStartedAt, "continue", now, pendingContinueAdvancePayload{
+				Verification: verification,
+				Assessment:   assessment,
+				Gates:        gates,
+				Review:       review,
+				ReviewDepth:  reviewDepth,
+			})
 			runStatus = "superseded"
 			return continueSupersededResult(state, phase, err), state, phase, nil, nil, false, nil
 		}
