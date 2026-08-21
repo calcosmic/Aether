@@ -35,7 +35,7 @@ wrapper_additions:
     2. Run the visual closeout command with that durable packet; use its next-step line as the source of truth.
     3. Summarize what moved forward and which workers/castes actually ran.
     4. Note only the most relevant signal or risk.
-    5. End with the user's choice, never an auto-advance: ask via AskUserQuestion — "Verify and advance now" (runs `/ant-continue`, recommended), "Stop here — safe to clear" (only offerable when the closeout's Handoff section confirmed the handoff saved), or "Add steering first" (`/ant-focus` / `/ant-redirect`). Run nothing until the user picks. Autopilot is exempt (runtime-owned auto-advance).
+    5. End with the user's choice, never an auto-advance: ask via AskUserQuestion — "Verify and advance now" (runs `/ant-continue`, recommended), "Stop here — safe to clear" (only offerable when the closeout's Handoff section confirmed the handoff saved), "Add steering first" (`/ant-focus` / `/ant-redirect`), or — only when `aether handoff-decisions` reports unanswered worker questions — "Answer the workers' open questions first", recording answers via `aether decision-answer`. Run nothing until the user picks. Autopilot is exempt (runtime-owned auto-advance).
   stage_skeleton: |
     Every non-exempt stage in build.md follows one order: a colony beat, then
     `**Purpose:**`, then `**Reads:**`, then `**Spawns:**` where the stage

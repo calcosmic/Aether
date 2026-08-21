@@ -225,6 +225,13 @@ continue command's own output (fast path).
 1. Mark completion briefly.
 2. Route first to `/ant-seal`.
 
+**Worker questions checkpoint (after the result is reported):** run
+`AETHER_OUTPUT_MODE=json aether handoff-decisions --phase <n>`. If `count` > 0,
+ask each question via AskUserQuestion (at most 4; always offering "Let the
+colony proceed on its current assumption") and record real answers with
+`AETHER_OUTPUT_MODE=json aether decision-answer --question "<q>" --answer "<a>" --phase <n>`.
+An unanswered question never blocks — it resurfaces at the next boundary.
+
 **Steering checkpoint (after the result is reported):** if the runtime output
 contains a "Suggested Steering" section, present those proposals to the user
 as a real multiple-choice question (the AskUserQuestion tool, multi-select) —

@@ -238,6 +238,32 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 
 **Stop conditions:** None — this stage only renders; the plan was already fixed in Dispatch Manifest.
 
+## Team Check-In
+
+🐜 The colony shows its team; the owner has the last word before anyone moves.
+
+**Purpose:** Pause after the spawn plan renders and let the user approve, trim, or redirect the team before any worker spawns. Required workers are the safety floor and are never offered for removal — the runtime re-adds them regardless, so offering the choice would be a lie.
+
+**Reads:** the manifest file written in Dispatch Manifest, and `result.checkin_requested` from the plan-only result.
+
+If `checkin_requested` is false (`--no-checkin` was passed), skip this stage entirely.
+
+1. Render the runtime-owned check-in card:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file <manifest_file>
+```
+
+2. Fetch the same card as data: `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>` and read `result.required`, `result.optional`, `result.reasons`.
+3. Ask the user (AskUserQuestion, single question): "The Queen picked this team. Proceed?" with options:
+   - "Proceed with this team" (recommended) — spawn as planned.
+   - "Trim optional workers" — follow up with ONE multi-select question listing ONLY `result.optional` entries, each labeled with its plain-English job and reason. Never list a required caste.
+   - "Redirect first" — route to `aether discuss`, then request a fresh manifest exactly as the Guided Boundary Gate does; never reuse the pre-discuss manifest.
+4. On trim: re-fetch `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only --castes <kept optional castes> --caste-reason "owner check-in trim"`, overwrite the manifest file with the new manifest, re-render the spawn ceremony for the new plan, and record the preference: `AETHER_OUTPUT_MODE=json aether memory-capture "owner trimmed <dropped castes> from the phase <n> build team"`. Relay `caste_decision.summary` in plain English — anything the runtime added back must be said out loud.
+5. Autopilot (`/ant-run`) never runs this stage — it does not run this wrapper.
+
+**Stop conditions:** The user has been asked and their pick applied. Never spawn from a manifest the user asked to trim without re-fetching it.
+
 ## Worker Spawning
 
 🐜 The Queen spawns directly. The colony requires actual parallelism.
@@ -256,7 +282,7 @@ For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 
 - Use visible live Task/subagent calls. Do not set `run_in_background`.
 - Each worker description: `{caste emoji} {Caste} {name}: {task}`.
-- Each dispatch carries `brief` — the complete runtime-rendered worker prompt (phase objective, constraints, hints, success criteria, survey paths) — or `brief_path`: a repo-display path to a file holding that same composed brief, byte for byte. `brief_path` is now the routine channel for every dispatch: the runtime writes the composed brief to disk and reports the path, so inline JSON briefs of 6-22KB never hit Read-tool long-line truncation. Inline `dispatch.brief` appears only in the rare case where the runtime could not write the file for that dispatch — honor it verbatim when it is the only one present. Whichever one a dispatch carries, use it VERBATIM; never merge, summarize, or reconstruct. Read `dispatch_manifest.context_capsule` ONCE from the manifest — it is not per-dispatch data, reuse the same value for every worker this build spawns, and it is the SOLE source of pheromone signals and prior worker handoffs (the brief itself does not repeat them) — and prepend it VERBATIM ahead of the brief, then append `dispatch.skill_section` when present. Do not summarize, reorder, or reconstruct any of it — the runtime already assembled it.
+- Each dispatch carries `brief` — the complete runtime-rendered worker prompt (phase objective, constraints, hints, success criteria, survey paths) — or `brief_path`: a repo-display path to a file holding that same composed brief, byte for byte. `brief_path` is now the routine channel for every dispatch: the runtime writes the composed brief to disk and reports the path, so inline JSON briefs of 6-22KB never hit Read-tool long-line truncation. Inline `dispatch.brief` appears only in the rare case where the runtime could not write the file for that dispatch — honor it verbatim when it is the only one present. Whichever one a dispatch carries, use it VERBATIM; never merge, summarize, or reconstruct. Read `dispatch_manifest.context_capsule` ONCE from the manifest — it is not per-dispatch data, reuse the same value for every worker this build spawns, and it is the SOLE source of pheromone signals and prior worker handoffs (the brief itself does not repeat them) — and prepend it VERBATIM ahead of the brief, then append `dispatch.skill_section` when present, then append the newest `decision-answer` `prompt_section` when one exists (runtime-rendered owner steering; never wrapper-written). Do not summarize, reorder, or reconstruct any of it — the runtime already assembled it.
 - Inspect and preserve each dispatch `permission_profile`. A `repository_read_only` worker must use a host-enforced no-write boundary. Reject `scoped_write` or `test_write` when the host cannot enforce it. `behavioral_restrictions` inside `workspace_write` are instructions, not a sandbox claim.
 - Require terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `blockers`, `duration`, `handoff`.
 - The `handoff` object is mandatory for completed workers and must be concrete: `{changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, freshness}` (freshness: RFC3339 timestamp of evidence collection, or `not-run`). It is what the next phase's workers receive as context — an empty handoff will be rejected by the finalizer.
@@ -269,9 +295,10 @@ For each manifest wave:
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each worker.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. The worker's prompt = `dispatch_manifest.context_capsule` (read once, prepended verbatim) + the brief read VERBATIM from `dispatch.brief_path` — the routine channel every plan-only dispatch carries — falling back to inline `dispatch.brief` only on the rare dispatch where the runtime could not write the file + `dispatch.skill_section` when present. Nothing else, nothing invented.
+5. The worker's prompt = `dispatch_manifest.context_capsule` (read once, prepended verbatim) + the brief read VERBATIM from `dispatch.brief_path` — the routine channel every plan-only dispatch carries — falling back to inline `dispatch.brief` only on the rare dispatch where the runtime could not write the file + `dispatch.skill_section` when present + the newest `decision-answer` `prompt_section` when one exists (runtime-rendered owner steering). Nothing else, nothing invented.
 6. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`.
+8. After the wave's workers return: collect `handoff.open_decisions` from their terminal results. For each question not already answered this build (compare normalized text), ask the user (AskUserQuestion, at most 4 per wave; carry extras to the next boundary). Every question gets the option "Let the colony proceed on its current assumption" — an unanswered question never blocks the build. For each real answer, record it: `AETHER_OUTPUT_MODE=json aether decision-answer --question "<q>" --answer "<a>" --phase <n>` and keep the returned `prompt_section`. For every LATER wave's workers, append the newest `prompt_section` verbatim after `dispatch.skill_section` — it is runtime-rendered owner steering, delivered exactly like the capsule and brief.
 
 **Stop conditions:** All workers in a wave fail — do not continue to the next wave; failed dependencies cascade into work built on broken foundations.
 
@@ -313,12 +340,14 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion
 
 1. Use the visual closeout's next-step line as the source of truth.
 2. Summarize in plain language what moved forward, which workers/castes ran, and the most relevant signal or risk.
-3. Then ask the user what to do next as a real multiple-choice question (the AskUserQuestion tool), with these options:
+3. Check for unanswered worker questions: run `AETHER_OUTPUT_MODE=json aether handoff-decisions --phase <n>` and note `count`.
+4. Then ask the user what to do next as a real multiple-choice question (the AskUserQuestion tool), with these options:
    - "Verify and advance now" — runs `/ant-continue` (recommended; mark it so).
    - "Stop here — safe to clear your context" — offer this option ONLY when the closeout's Handoff section actually said the handoff was saved; if it said "not confirmed" or "don't clear", replace this option with "Stop here (handoff not confirmed — don't clear your context)".
    - "Add steering first" — `/ant-focus` or `/ant-redirect` before verification.
+   - "Answer the workers' open questions first (<count> waiting)" — include this option ONLY when `count` > 0. Walk each question through AskUserQuestion (always offering "Let the colony proceed on its current assumption"), record real answers via `AETHER_OUTPUT_MODE=json aether decision-answer --question "<q>" --answer "<a>" --phase <n>`, then re-ask this choice.
    Run nothing until the user picks. If they pick stop, stop — report nothing further.
-4. Autopilot (`/ant-run`) is exempt: its auto-advance is runtime-owned and this stage never runs inside it.
+5. Autopilot (`/ant-run`) is exempt: its auto-advance is runtime-owned and this stage never runs inside it.
 
 **Stop conditions:** the user has been asked and their pick executed (or nothing, if they chose to stop).
 

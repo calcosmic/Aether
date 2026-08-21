@@ -200,6 +200,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"AETHER_OUTPUT_MODE=visual aether status",
 				"aether build $ARGUMENTS --plan-only",
 				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
+				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file <manifest_file>",
+				"AETHER_OUTPUT_MODE=json aether decision-answer --question",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
 			forbidden: []string{
@@ -517,6 +519,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"AETHER_OUTPUT_MODE=visual aether status",
 				"aether build $ARGUMENTS --plan-only",
 				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
+				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file <manifest_file>",
+				"AETHER_OUTPUT_MODE=json aether decision-answer --question",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
 			forbidden: []string{

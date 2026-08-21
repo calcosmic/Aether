@@ -1069,6 +1069,13 @@ var knownEnrichmentSubcommands = map[string]bool{
 	// pause marker; it never gates advancement), so the toggle is
 	// enrichment, not a gate.
 	"phase-commits":               true,
+	// handoff-decisions / decision-answer (2026-08-21, team check-in round):
+	// the worker-question relay is non-blocking by contract — an unanswered
+	// question never stops a build, it resurfaces at the next boundary, and
+	// a failed listing or answer write loses one steering note, never a
+	// verification result or gate outcome. Enrichment, not a gate.
+	"handoff-decisions":           true,
+	"decision-answer":             true,
 	"domain-detect":               true,
 	"queen-seed-from-hive":        true,
 	"registry-list":               true,
