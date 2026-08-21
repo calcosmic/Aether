@@ -198,50 +198,16 @@ Otherwise: Apply existing file-modification conditional below.
 - If suggest-approve returns error during review: Log the error but keep the pause -- user still needs to acknowledge
 - Never let suggestion DETECTION failures block the build, but the REVIEW PAUSE is intentional per D-04
 
-### Step 4.3: Skill Detection
+### Step 4.3: Skill Detection (retired)
 
-**Non-blocking step — failures are logged and skipped.**
-
-Build the skills index and detect which domain skills match the current codebase.
-
-**4.3.1 — Build/read the skills index:**
-
-Run using the Bash tool with description "Building skills index...":
-```bash
-skill_index_result=$(aether skill-index 2>/dev/null)
-```
-
-**Parse the JSON response:**
-- If `.ok` is false or command fails: Set `skill_index_count = 0`, log warning, skip to next step
-- If successful: Extract `.result.skill_count` as `skill_index_count`
-
-**4.3.2 — Detect domain skills matching this codebase:**
-
-Run using the Bash tool with description "Detecting codebase skills...":
-```bash
-skill_detect_result=$(aether skill-detect)
-```
-
-**Parse the JSON response:**
-- If `.ok` is false or command fails: Set `skill_detections = "[]"`, log warning, continue
-- If successful: Extract `.result.detections` as `skill_detections` (JSON array)
-- Count entries in `skill_detections` as `skill_detection_count`
-
-**4.3.3 — Store cross-stage state and display:**
-
-Store the following variables for use by build-wave.md:
-- `skill_index_count` — total number of skills in the index
-- `skill_detections` — JSON array of matched skills with scores (e.g., `[{"name": "react", "score": 70}]`)
-
-Display to user:
-```
-🧠 Skills: {skill_index_count} indexed, {skill_detection_count} matched to codebase
-```
-
-**Error handling:**
-- If `skill-index` fails: Log `⚠️ Skill index unavailable — continuing without skills`, set defaults, continue
-- If `skill-detect` fails: Log `⚠️ Skill detection failed — continuing without matches`, set defaults, continue
-- Never let skill failures block the build
+`skill-index` and `skill-detect`, the two CLI commands this step used to call, were deleted
+in Phase 191 as dead CLI surface (SKILL-01) — their standalone wrappers had no caller, and
+the `skill_index_count`/`skill_detections` state this step produced was never actually
+consumed by build-wave.md's own skill-loading step below. Skill matching is not a separate
+upfront detection phase: `composeBuildManifestBrief` (the Go runtime's worker-brief
+assembler) calls the live matching logic directly, in-process, once per worker, as part of
+Step 5's brief assembly — see build-wave.md's "Load skills" step. There is nothing to run
+here.
 
 2. **If existing code modification detected — spawn Archaeologist Scout:**
 

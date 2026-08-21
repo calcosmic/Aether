@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/spf13/cobra"
@@ -148,62 +147,6 @@ var skillIndexRuntimeCache = struct {
 	entries: map[string][]skillIndexEntry{},
 }
 
-var skillParseFrontmatterCmd = &cobra.Command{
-	Use:   "skill-parse-frontmatter",
-	Short: "Parse SKILL.md frontmatter and return as JSON",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		file := mustGetString(cmd, "file")
-		if file == "" {
-			return nil
-		}
-
-		raw, err := os.ReadFile(file)
-		if err != nil {
-			outputError(1, fmt.Sprintf("failed to read %s: %v", file, err), nil)
-			return nil
-		}
-
-		fm := parseSkillFrontmatter(string(raw))
-		if fm == nil {
-			outputError(1, "no frontmatter found in file", nil)
-			return nil
-		}
-
-		outputOK(fm)
-		return nil
-	},
-}
-
-var skillIndexCmd = &cobra.Command{
-	Use:   "skill-index",
-	Short: "Build skills index from installed skills",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		hub := resolveHubPath()
-		entries := buildFullIndex(hub)
-
-		data := skillIndexData{
-			Entries:   entries,
-			UpdatedAt: time.Now().UTC().Format(time.RFC3339),
-		}
-
-		indexPath := filepath.Join(hub, "skills", "index.json")
-		if err := os.MkdirAll(filepath.Dir(indexPath), 0755); err != nil {
-			outputError(2, fmt.Sprintf("failed to create index directory: %v", err), nil)
-			return nil
-		}
-		encoded, _ := json.MarshalIndent(data, "", "  ")
-		if err := os.WriteFile(indexPath, append(encoded, '\n'), 0644); err != nil {
-			outputError(2, fmt.Sprintf("failed to write index: %v", err), nil)
-			return nil
-		}
-
-		outputOK(map[string]interface{}{"indexed": len(entries), "path": indexPath})
-		return nil
-	},
-}
-
 var skillIndexReadCmd = &cobra.Command{
 	Use:   "skill-index-read",
 	Short: "Read cached skills index",
@@ -225,87 +168,6 @@ var skillIndexReadCmd = &cobra.Command{
 		}
 
 		outputOK(map[string]interface{}{"entries": data.Entries, "total": len(data.Entries), "updated_at": data.UpdatedAt})
-		return nil
-	},
-}
-
-var skillDetectCmd = &cobra.Command{
-	Use:   "skill-detect",
-	Short: "Detect domain skills matching codebase file patterns",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		hub := resolveHubPath()
-		entries := loadSkillIndexOrBuild(hub)
-		root := skillWorkspaceRoot()
-
-		var matched []skillResolvedEntry
-		for _, e := range entries {
-			if e.Type != "domain" {
-				continue
-			}
-			reasons := skillWorkspaceMatchReasons(root, e)
-			if len(reasons) == 0 {
-				continue
-			}
-			matched = append(matched, skillResolvedEntry{
-				skillIndexEntry: e,
-				Score:           reasonScoreTotal(reasons),
-				Reasons:         reasons,
-			})
-		}
-		sortScoredResolvedEntries(matched)
-
-		outputOK(map[string]interface{}{"matched": matched, "total": len(matched), "root": root})
-		return nil
-	},
-}
-
-var skillMatchCmd = &cobra.Command{
-	Use:   "skill-match [role] [task]",
-	Short: "Match skills to worker role and task",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		role, task := resolveSkillMatchInput(cmd, args)
-		workflow, _ := cmd.Flags().GetString("workflow")
-		if role == "" {
-			outputError(1, "worker role is required", nil)
-			return nil
-		}
-
-		result := matchSkillsForWorkflow(resolveHubPath(), workflow, role, task)
-		outputOK(result)
-		return nil
-	},
-}
-
-var skillInjectCmd = &cobra.Command{
-	Use:   "skill-inject [role] [task]",
-	Short: "Load matched skills into prompt section text",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		role, task := resolveSkillMatchInput(cmd, args)
-		workflow, _ := cmd.Flags().GetString("workflow")
-		if role == "" {
-			outputError(1, "worker role is required", nil)
-			return nil
-		}
-
-		match := matchSkillsForWorkflow(resolveHubPath(), workflow, role, task)
-		compact, _ := cmd.Flags().GetBool("compact")
-		budget, _ := cmd.Flags().GetInt("budget")
-		outputOK(renderSkillInjectResultWithBudget(match, resolveSkillInjectBudget(compact, budget)))
-		return nil
-	},
-}
-
-var skillListCmd = &cobra.Command{
-	Use:   "skill-list",
-	Short: "List all installed skills",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		hub := resolveHubPath()
-		entries := buildFullIndex(hub)
-		outputOK(map[string]interface{}{"skills": entries, "total": len(entries)})
 		return nil
 	},
 }
@@ -335,75 +197,6 @@ var skillManifestReadCmd = &cobra.Command{
 		}
 
 		outputOK(map[string]interface{}{"skills": data.Skills, "total": len(data.Skills), "updated_at": data.UpdatedAt})
-		return nil
-	},
-}
-
-var skillCacheRebuildCmd = &cobra.Command{
-	Use:   "skill-cache-rebuild",
-	Short: "Force rebuild of skills index cache",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		hub := resolveHubPath()
-		indexPath := filepath.Join(hub, "skills", "index.json")
-		entries := buildFullIndex(hub)
-
-		data := skillIndexData{
-			Entries:   entries,
-			UpdatedAt: time.Now().UTC().Format(time.RFC3339),
-		}
-
-		if err := os.MkdirAll(filepath.Dir(indexPath), 0755); err != nil {
-			outputError(2, fmt.Sprintf("failed to create index directory: %v", err), nil)
-			return nil
-		}
-		encoded, _ := json.MarshalIndent(data, "", "  ")
-		if err := os.WriteFile(indexPath, append(encoded, '\n'), 0644); err != nil {
-			outputError(2, fmt.Sprintf("failed to write: %v", err), nil)
-			return nil
-		}
-
-		outputOK(map[string]interface{}{"rebuilt": true, "total": len(entries), "path": indexPath})
-		return nil
-	},
-}
-
-var skillDiffCmd = &cobra.Command{
-	Use:   "skill-diff",
-	Short: "Compare user skill with shipped version",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := mustGetString(cmd, "skill")
-		if name == "" {
-			return nil
-		}
-
-		hub := resolveHubPath()
-		userPath := filepath.Join(hub, "skills", "domain", name, "SKILL.md")
-		shippedPath := filepath.Join(".aether", "skills", "domain", name, "SKILL.md")
-
-		userContent, userErr := os.ReadFile(userPath)
-		shippedContent, shippedErr := os.ReadFile(shippedPath)
-
-		if userErr != nil && shippedErr != nil {
-			outputError(1, fmt.Sprintf("skill %q not found in user or shipped locations", name), nil)
-			return nil
-		}
-
-		result := map[string]interface{}{
-			"skill":          name,
-			"user_exists":    userErr == nil,
-			"shipped_exists": shippedErr == nil,
-			"identical":      false,
-		}
-
-		if userErr == nil && shippedErr == nil {
-			result["identical"] = string(userContent) == string(shippedContent)
-			result["user_size"] = len(userContent)
-			result["shipped_size"] = len(shippedContent)
-		}
-
-		outputOK(result)
 		return nil
 	},
 }
@@ -1127,21 +920,6 @@ func sortScoredSkills(skills []scoredSkill) {
 	})
 }
 
-func sortScoredResolvedEntries(entries []skillResolvedEntry) {
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Score != entries[j].Score {
-			return entries[i].Score > entries[j].Score
-		}
-		if entries[i].Name != entries[j].Name {
-			return entries[i].Name < entries[j].Name
-		}
-		if entries[i].Source != entries[j].Source {
-			return entries[i].Source < entries[j].Source
-		}
-		return entries[i].Path < entries[j].Path
-	})
-}
-
 func topResolvedSkillEntries(skills []scoredSkill, limit int) []skillResolvedEntry {
 	if len(skills) > limit {
 		skills = skills[:limit]
@@ -1383,27 +1161,9 @@ func containsString(items []string, want string) bool {
 }
 
 func init() {
-	skillParseFrontmatterCmd.Flags().String("file", "", "Path to SKILL.md (required)")
-	skillMatchCmd.Flags().String("role", "", "Worker role")
-	skillMatchCmd.Flags().String("task", "", "Task description")
-	skillMatchCmd.Flags().String("workflow", "", "Aether workflow context (optional)")
-	skillInjectCmd.Flags().String("role", "", "Worker role")
-	skillInjectCmd.Flags().String("task", "", "Task description")
-	skillInjectCmd.Flags().String("workflow", "", "Aether workflow context (optional)")
-	skillInjectCmd.Flags().Bool("compact", false, "Use compact 4000-character skill budget")
-	skillInjectCmd.Flags().Int("budget", 0, "Override skill injection budget in characters")
-	skillDiffCmd.Flags().String("skill", "", "Skill name (required)")
 	skillIsUserCreatedCmd.Flags().String("skill", "", "Skill name (required)")
 
-	rootCmd.AddCommand(skillParseFrontmatterCmd)
-	rootCmd.AddCommand(skillIndexCmd)
 	rootCmd.AddCommand(skillIndexReadCmd)
-	rootCmd.AddCommand(skillDetectCmd)
-	rootCmd.AddCommand(skillMatchCmd)
-	rootCmd.AddCommand(skillInjectCmd)
-	rootCmd.AddCommand(skillListCmd)
 	rootCmd.AddCommand(skillManifestReadCmd)
-	rootCmd.AddCommand(skillCacheRebuildCmd)
-	rootCmd.AddCommand(skillDiffCmd)
 	rootCmd.AddCommand(skillIsUserCreatedCmd)
 }

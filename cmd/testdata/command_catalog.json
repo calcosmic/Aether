@@ -7189,30 +7189,6 @@
     "stability_score": 64
   },
   {
-    "name": "skill-cache-rebuild",
-    "short_description": "Force rebuild of skills index cache",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "skill-create",
     "short_description": "Create a new repo-local pheromone skill",
     "flags": [
@@ -7264,113 +7240,9 @@
     "stability_score": 64
   },
   {
-    "name": "skill-detect",
-    "short_description": "Detect domain skills matching codebase file patterns",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-diff",
-    "short_description": "Compare user skill with shipped version",
-    "flags": [
-      "skill"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-index",
-    "short_description": "Build skills index from installed skills",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "skill-index-read",
     "short_description": "Read cached skills index",
     "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-inject",
-    "short_description": "Load matched skills into prompt section text",
-    "flags": [
-      "budget",
-      "compact",
-      "role",
-      "task",
-      "workflow"
-    ],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -7397,30 +7269,6 @@
     "flags": [
       "skill"
     ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-list",
-    "short_description": "List all installed skills",
-    "flags": [],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -7471,60 +7319,6 @@
     "name": "skill-manifest-read",
     "short_description": "Read the skills manifest",
     "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-match",
-    "short_description": "Match skills to worker role and task",
-    "flags": [
-      "role",
-      "task",
-      "workflow"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-parse-frontmatter",
-    "short_description": "Parse SKILL.md frontmatter and return as JSON",
-    "flags": [
-      "file"
-    ],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",

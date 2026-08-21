@@ -176,8 +176,9 @@ parallel mode, and context capsule -- all within a token budget (see Token Budge
 
 One build cycle, model-agnostic. Shows both parallel modes in a single graph:
 the `in-repo` path is solid, the `worktree` path with sync-back is dashed. The
-Skill Matching sub-graph is the `skill-match` → `skill-inject` flow called out
-in the Skills System section.
+Skill Matching sub-graph is the in-process matching-then-injection logic
+called out in the Skills System section (no longer a standalone CLI step --
+see that section for what changed in Phase 191).
 
 For beginners: the Queen is the head chef, colony-prime is the whiteboard she
 reads before giving each cook their recipe, the sub-graph labelled "Skill
@@ -204,10 +205,10 @@ flowchart LR
         MD --> CTX
     end
 
-    subgraph SK[Skill Matching]
+    subgraph SK[Skill Matching -- in-process, no CLI step]
         direction TB
-        SIDX[skill-index cache] --> SMATCH[skill-match<br/>workflow + role + task + codebase]
-        SMATCH --> SINJ[skill-inject<br/>8K budget]
+        SIDX[live skill scan] --> SMATCH[match<br/>workflow + role + task + codebase]
+        SMATCH --> SINJ[inject<br/>8K budget]
     end
 
     Q --> CP
@@ -233,8 +234,9 @@ flowchart LR
 Verify: every node maps to a real artifact. `pheromones.json`, `COLONY_STATE.json`,
 `midden.json`, `instincts.json` live under `.aether/data/`. Global Queen wisdom
 and `hive/wisdom.json` live under `~/.aether/`; repo-specific Queen wisdom lives
-in `.aether/QUEEN.md`. `skill-index`, `skill-match`, and `skill-inject` are real
-subcommands (see Skills System). Gate order matches the Quality Gates table.
+in `.aether/QUEEN.md`. Skill matching and injection are Go functions called
+directly from the worker-brief assembler, not standalone subcommands (see
+Skills System). Gate order matches the Quality Gates table.
 
 ---
 
@@ -378,9 +380,6 @@ Since Codex CLI has no slash commands, all colony operations use the `aether` CL
 | `aether data-clean` | Clean test artifacts from data files |
 | `aether parallel-mode get` | Show the active parallel execution mode |
 | `aether parallel-mode set <mode>` | Change between `in-repo` and `worktree` execution |
-| `aether skill-list` | List installed skills |
-| `aether skill-match --workflow <workflow> --role <role> --task "<task>"` | Match skills for a worker |
-| `aether skill-inject --workflow <workflow> --role <role> --task "<task>"` | Render injected skill context |
 
 ### Typical Workflow
 
@@ -574,42 +573,36 @@ on demand. Two categories:
 | `~/.aether/system/skills/` | Published hub mirror of shipped skills |
 | `~/.aether/skills/domain/` | Custom user-created domain skills |
 | repo `.aether/skills/` | Repo-specific custom skills only |
-| `~/.codex/skills/aether/` | Small Codex shim set that routes to `aether skill-inject` |
+| `~/.codex/skills/aether/` | Small Codex shim set; the `aether-skill-loader` shim explains that skill content already arrives automatically in dispatch responses |
 
 ### How Matching Works
 
-1. Colony-prime builds a skills index via `skill-index` (cached for performance)
-2. `skill-match` scores each skill against the current worker using:
+Matching and injection are Go functions (`matchSkillsForWorkflow`, `renderSkillInjectResult`
+in `cmd/skills.go`) called directly, in-process, from the worker-brief assembler -- not a
+separate CLI step. Phase 191 deleted the 8 standalone CLI wrappers that used to expose this
+as `skill-index`/`skill-detect`/`skill-match`/`skill-inject`/`skill-list`/`skill-diff`/
+`skill-parse-frontmatter`/`skill-cache-rebuild` (SKILL-01 -- confirmed dead CLI surface with
+no caller anywhere; the underlying functions were preserved unconditionally since
+`composeBuildManifestBrief` calls them for every worker brief). For each worker:
+
+1. A live scan of installed skills is built (no separate index-build step)
+2. Each skill is scored against the current worker using:
    - Workflow context (`build`, `colonize`, `plan`, `continue`)
    - Worker role (builder, watcher, etc.)
    - Task keywords from the worker assignment
-   - `skill-detect` patterns matched against the codebase
+   - Detected file/package patterns matched against the codebase
 3. Top 3 colony skills + top 3 domain skills are selected per worker
 
 ### Skill Injection
 
 - Own 8K character budget (independent of the colony-prime token budget)
-- Injected into builder and watcher prompts
-- `skill-inject` assembles matched skills into a prompt section
-- In Codex CLI, skills are automatically matched and injected into worker prompts during `build`, `colonize`, `plan`, and `continue` dispatches
-
-### Subcommands
-
-| Subcommand | Purpose |
-|------------|---------|
-| `skill-index` | Build/read cached skills index |
-| `skill-detect` | Detect domain skills matching codebase |
-| `skill-match` | Match skills to worker by workflow + role + task + codebase |
-| `skill-inject` | Load matched skills into prompt section |
-| `skill-list` | List all installed skills |
-| `skill-parse-frontmatter` | Parse SKILL.md frontmatter to JSON |
-| `skill-diff` | Compare user skill with shipped version |
-| `skill-cache-rebuild` | Force rebuild of index cache |
+- Injected into builder and watcher prompts automatically as part of brief assembly
+- In Codex CLI, skills are automatically matched and injected into worker prompts during `build`, `colonize`, `plan`, and `continue` dispatches -- there is no separate command to fetch them
 
 ### Custom Skills
 
 - Manual creation: add a `SKILL.md` file to `~/.aether/skills/domain/`
-- Use `aether skill-list`, `aether skill-match`, and `aether skill-diff` to validate custom skill behavior
+- A custom skill is picked up automatically the next time any worker's skill section is assembled -- there is no separate validation or cache-rebuild command to run
 
 ### Update Safety
 
