@@ -615,7 +615,12 @@ func evaluateCriterionCheck(check string, steps []codexVerificationStep, claims 
 		for _, step := range steps {
 			if strings.EqualFold(strings.TrimSpace(step.Name), check) {
 				if step.Passed && !step.Skipped {
-					return true, fmt.Sprintf("%s check passed: %s", check, strings.TrimSpace(step.Command)), ""
+					// FIELD-03 (191.1-CONTEXT.md D-05): report the verified
+					// outcome (step.Summary, e.g. "tests passed"), never the
+					// raw configured shell command (step.Command) -- a
+					// downstream colony's embedded checker was reporting the
+					// check's own definition as if it were the finding.
+					return true, fmt.Sprintf("%s check passed: %s", check, strings.TrimSpace(step.Summary)), ""
 				}
 				if step.Skipped {
 					return false, "", fmt.Sprintf("required %s check was skipped", check)

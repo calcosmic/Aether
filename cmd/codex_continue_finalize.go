@@ -169,6 +169,26 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
+	// FIELD-04 (191.1-CONTEXT.md D-07/D-08): a completed, passing
+	// verification from an earlier continue-finalize run may have lost the
+	// race to a colony pause and been preserved instead of discarded (see
+	// cmd/advance_phase.go) -- the SAME shared mechanism runCodexContinue's
+	// own entry point checks. Check for it here, before any of the
+	// expensive fresh verification work below, so a resumed colony applies
+	// that already-verified result instead of re-running it.
+	if outcome := replayPendingContinueAdvance(state, phase, "continue-finalize", now); outcome.Handled {
+		if outcome.Err != nil {
+			runStatus = "failed"
+			return nil, state, phase, nil, nil, false, outcome.Err
+		}
+		if superseded, _ := outcome.Result["superseded"].(bool); superseded {
+			runStatus = "superseded"
+		} else {
+			runStatus = "completed"
+		}
+		return outcome.Result, outcome.State, outcome.Phase, outcome.NextPhase, outcome.Housekeeping, outcome.Final, nil
+	}
+
 	cleanupStaleContinueReports(phase.ID)
 
 	workerFlow, err := mergeExternalContinueResults(*plan, completion.workerResults())
@@ -1174,6 +1194,21 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 	})
 	if err != nil {
 		if errors.Is(err, errRuntimeStateSuperseded) {
+			// FIELD-04: if this supersession is specifically because the
+			// colony is paused, preserve this already-computed, already-
+			// passing payload for replay after resume instead of discarding
+			// it (cmd/advance_phase.go) -- the SAME shared function
+			// runCodexContinue's own advancePhase call site uses, per
+			// Pattern 5 (one mechanism, not two per-caller copies). Any
+			// other supersession reason preserves nothing -- discard
+			// exactly as before.
+			preserveIfPausedSupersession(phase.ID, state.BuildStartedAt, "continue-finalize", now, pendingContinueAdvancePayload{
+				Verification: verification,
+				Assessment:   assessment,
+				Gates:        gates,
+				Review:       review,
+				ReviewDepth:  reviewDepth,
+			})
 			// nil error: the caller (runCodexContinueFinalize) treats this as
 			// a completed-but-blocked result rather than a hard failure,
 			// mirroring exactly how the default continue path surfaces a

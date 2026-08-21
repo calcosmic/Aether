@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -99,4 +102,228 @@ func advancePhase(params advancePhaseParams) (advancePhaseResult, error) {
 	}
 
 	return advancePhaseResult{Updated: updated, NextPhase: nextPhase, NextCommand: nextCommand, Final: final}, nil
+}
+
+// --- FIELD-04: preserve-and-replay a continue advance that loses the pause race ---
+//
+// A ~10-minute continue verification can finish just as a stop hook pauses
+// the colony underneath it. advancePhase above correctly refuses to commit
+// (validateRuntimeStateStillCurrent's FIRST check, "colony is paused" --
+// Phase 188's supersession protection working as designed) but, before this
+// mechanism existed, both callers then discarded everything they had just
+// computed and returned a generic superseded result. That is real, expensive
+// work lost to UX, not a correctness problem -- so on this ONE specific
+// supersession reason (never any other), the already-computed payload is
+// preserved durably and replayed automatically the next time continue runs
+// against a colony state whose phase and build identity still match exactly
+// (191.1-CONTEXT.md D-07/D-08, 191.1-PATTERNS.md Pattern 5: one shared
+// mechanism in this file, not two independent per-caller copies).
+
+// pendingContinueAdvancePayload is the caller-supplied bundle preserved when
+// a completed continue advance loses the race to a colony pause. Only the
+// already-computed verification/gate/review reports are kept -- not the
+// surrounding pipeline's worker-flow bookkeeping, learning capture, or
+// phase-commit machinery, none of which is the expensive ~10-minute part
+// this mechanism exists to avoid re-running.
+type pendingContinueAdvancePayload struct {
+	Verification codexContinueVerificationReport `json:"verification"`
+	Assessment   codexContinueAssessment         `json:"assessment"`
+	Gates        codexContinueGateReport         `json:"gates"`
+	Review       codexContinueReviewReport       `json:"review"`
+	ReviewDepth  colony.VerificationDepth        `json:"review_depth"`
+}
+
+// pendingContinueAdvanceRecord is the durable, on-disk form of a preserved
+// continue advance, keyed to the exact phase + build identity it was
+// computed against. Replay requires an exact match against CURRENT state
+// (T-191.1-02-03) -- a genuinely different build that happened in between is
+// discarded, never blindly replayed.
+type pendingContinueAdvanceRecord struct {
+	PhaseID        int                           `json:"phase_id"`
+	BuildStartedAt *time.Time                    `json:"build_started_at,omitempty"`
+	Source         string                        `json:"source"`
+	CreatedAt      time.Time                     `json:"created_at"`
+	Payload        pendingContinueAdvancePayload `json:"payload"`
+}
+
+// pendingContinueAdvancePath follows the existing
+// .aether/data/build/phase-<N>/ naming convention already used for
+// verification.json, gates.json, continue.json and review.json
+// (cleanupStaleContinueReports, cmd/codex_continue.go).
+func pendingContinueAdvancePath(phaseID int) string {
+	return filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "pending-advance.json"))
+}
+
+// preservePendingContinueAdvance durably stores an already-computed continue
+// advance payload for later replay, keyed to phaseID + buildStartedAt.
+func preservePendingContinueAdvance(phaseID int, buildStartedAt *time.Time, source string, now time.Time, payload pendingContinueAdvancePayload) error {
+	if store == nil {
+		return fmt.Errorf("no store initialized")
+	}
+	return store.SaveJSON(pendingContinueAdvancePath(phaseID), pendingContinueAdvanceRecord{
+		PhaseID:        phaseID,
+		BuildStartedAt: buildStartedAt,
+		Source:         source,
+		CreatedAt:      now,
+		Payload:        payload,
+	})
+}
+
+// preserveIfPausedSupersession is called from both continue call sites'
+// errRuntimeStateSuperseded handling (cmd/codex_continue.go's runCodexContinue,
+// cmd/codex_continue_finalize.go's advanceExternalContinue) -- the SAME
+// function from both, per Pattern 5. It reloads current colony state and
+// checks its Paused field directly rather than string-matching the error
+// text -- that field is exactly what runtimeStateSupersededError's "colony
+// is paused" branch (cmd/codex_build.go, validateRuntimeStateStillCurrent)
+// was built from. Only on that specific reason does it preserve the
+// caller's already-computed payload; any other supersession reason (a
+// genuinely different phase or build) is left to discard exactly as before
+// -- nothing is written.
+func preserveIfPausedSupersession(phaseID int, buildStartedAt *time.Time, source string, now time.Time, payload pendingContinueAdvancePayload) {
+	latest, err := loadActiveColonyState()
+	if err != nil || !latest.Paused {
+		return
+	}
+	_ = preservePendingContinueAdvance(phaseID, buildStartedAt, source, now, payload)
+}
+
+// loadPendingContinueAdvance returns the pending record for phaseID if one
+// exists AND its BuildStartedAt identity matches currentBuildStartedAt
+// exactly. A missing record returns ok=false. A record whose identity does
+// NOT match is discarded (deleted) as a side effect and also returns
+// ok=false (T-191.1-02-02/03) -- it can never be replayed, not now and not
+// on a later call either.
+func loadPendingContinueAdvance(phaseID int, currentBuildStartedAt *time.Time) (pendingContinueAdvanceRecord, bool) {
+	var record pendingContinueAdvanceRecord
+	if store == nil {
+		return record, false
+	}
+	if err := store.LoadJSON(pendingContinueAdvancePath(phaseID), &record); err != nil {
+		return pendingContinueAdvanceRecord{}, false
+	}
+	// runtimeStartedAtMatches (cmd/codex_build.go) is the exact same
+	// nil-safe comparison advancePhase's own validateRuntimeStateStillCurrent
+	// check uses -- reused here rather than duplicated, so this identity
+	// check can never silently diverge from the one advancePhase itself
+	// applies at commit time.
+	if record.PhaseID != phaseID || !runtimeStartedAtMatches(record.BuildStartedAt, currentBuildStartedAt) {
+		clearPendingContinueAdvance(phaseID)
+		return pendingContinueAdvanceRecord{}, false
+	}
+	return record, true
+}
+
+// clearPendingContinueAdvance deletes the pending record so it can never be
+// replayed twice (after a successful replay) or ever again (after being
+// discarded as stale).
+func clearPendingContinueAdvance(phaseID int) {
+	if store == nil {
+		return
+	}
+	_ = os.Remove(filepath.Join(store.BasePath(), filepath.FromSlash(pendingContinueAdvancePath(phaseID))))
+}
+
+// pendingContinueReplayOutcome is the caller-agnostic result of checking for
+// and attempting to replay a preserved pending continue advance. Handled is
+// false when no matching pending record existed (or one existed but was
+// discarded as stale) -- the caller proceeds with its own ordinary
+// fresh-verification path exactly as if this check had never run. Handled
+// is true whenever the caller should return immediately using the other
+// fields: either a successfully replayed advance, or an ordinary
+// blocked/superseded result (the colony is still paused).
+type pendingContinueReplayOutcome struct {
+	Handled      bool
+	Result       map[string]interface{}
+	State        colony.ColonyState
+	Phase        colony.Phase
+	NextPhase    *colony.Phase
+	Housekeeping *signalHousekeepingResult
+	Final        bool
+	Err          error
+}
+
+// replayPendingContinueAdvance is the shared replay half of the FIELD-04
+// preserve/replay mechanism. Both runCodexContinue and
+// runCodexContinueFinalize call this at their natural entry point, before
+// any expensive fresh verification/watcher-dispatch work begins, so a
+// colony resumed after a pause applies an already-completed, already-passing
+// result instead of re-running it.
+func replayPendingContinueAdvance(state colony.ColonyState, phase colony.Phase, source string, now time.Time) pendingContinueReplayOutcome {
+	record, ok := loadPendingContinueAdvance(phase.ID, state.BuildStartedAt)
+	if !ok {
+		return pendingContinueReplayOutcome{Handled: false}
+	}
+
+	advanceResult, err := advancePhase(advancePhaseParams{
+		PhaseID:                phase.ID,
+		ExpectedBuildStartedAt: state.BuildStartedAt,
+		AllowedStates:          []colony.State{colony.StateEXECUTING, colony.StateBUILT},
+		Source:                 source,
+		Now:                    now,
+	})
+	if err != nil {
+		if !errors.Is(err, errRuntimeStateSuperseded) {
+			return pendingContinueReplayOutcome{Handled: true, Err: fmt.Errorf("failed to atomically advance phase: %w", err)}
+		}
+		// Still can't commit. Only a still-paused colony keeps the record
+		// for a later retry -- any other reason means identity has
+		// genuinely gone stale in the moment between the match above and
+		// this commit attempt, so it must be discarded, never replayed
+		// (T-191.1-02-03).
+		latest, loadErr := loadActiveColonyState()
+		if loadErr == nil && latest.Paused {
+			return pendingContinueReplayOutcome{
+				Handled: true,
+				Result:  continueSupersededResult(state, phase, err),
+				State:   state,
+				Phase:   phase,
+			}
+		}
+		clearPendingContinueAdvance(phase.ID)
+		return pendingContinueReplayOutcome{Handled: false}
+	}
+
+	clearPendingContinueAdvance(phase.ID)
+	updated := advanceResult.Updated
+	completedPhase := phase
+	if idx := phase.ID - 1; idx >= 0 && idx < len(updated.Plan.Phases) {
+		completedPhase = updated.Plan.Phases[idx]
+	}
+	payload := record.Payload
+	summary := fmt.Sprintf("Phase %d verified and advanced (replayed after a colony pause)", phase.ID)
+	if payload.Assessment.PartialSuccess {
+		summary = fmt.Sprintf("Phase %d verified and advanced with partial operational success (replayed after a colony pause)", phase.ID)
+	}
+	result := map[string]interface{}{
+		"advanced":             true,
+		"completed":            advanceResult.Final,
+		"partial_success":      payload.Assessment.PartialSuccess,
+		"current_phase":        updated.CurrentPhase,
+		"state":                updated.State,
+		"next":                 advanceResult.NextCommand,
+		"review_depth":         string(payload.ReviewDepth),
+		"verification":         payload.Verification,
+		"assessment":           payload.Assessment,
+		"task_evidence":        payload.Assessment.Tasks,
+		"gates":                payload.Gates,
+		"review":               payload.Review,
+		"operational_issues":   payload.Assessment.OperationalIssues,
+		"recovery":             payload.Assessment.Recovery,
+		"reconciled_tasks":     payload.Assessment.ReconciledTasks,
+		"replayed_after_pause": true,
+		"summary":              summary,
+	}
+	if advanceResult.NextPhase != nil {
+		result["next_phase"] = advanceResult.NextPhase.ID
+		result["next_phase_name"] = advanceResult.NextPhase.Name
+	}
+	return pendingContinueReplayOutcome{
+		Handled:   true,
+		Result:    result,
+		State:     updated,
+		Phase:     completedPhase,
+		NextPhase: advanceResult.NextPhase,
+		Final:     advanceResult.Final,
+	}
 }
