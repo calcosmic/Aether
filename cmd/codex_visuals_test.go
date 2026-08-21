@@ -2885,3 +2885,249 @@ visual_divider: "CUSTOM_DIVIDER\n"
 		t.Errorf("visualDividerStr() with file: got %q, want CUSTOM_DIVIDER\\n", got)
 	}
 }
+
+// --- Phase 191-03: fold-and-delete regression lock for colony/ceremony/visuals.md ---
+
+// TestVisualsConfigOriginalFileHadPreexistingParseDefect is a forensic
+// record, not a live guard: colony/ceremony/visuals.md's YAML frontmatter
+// never successfully parsed, in any dev checkout, ever -- independent of,
+// and in addition to, the CWD-relative-only defect 191-CONTEXT.md's
+// criterion 2 documents for all four loaders. Its aether_wordmark
+// block-literal scalar (`aether_wordmark: |`) auto-detected an indentation
+// baseline of 6 spaces from its first content line, but the following five
+// lines used only 5 -- one less than that baseline, which YAML's
+// block-scalar rules treat as ending the block mid-document -- and the
+// parser then fails on what follows ("did not find expected key"). Because
+// gopkg.in/yaml.v3 parses the whole frontmatter as one document, this one
+// defect silently invalidated every field in the file, not only the
+// wordmark: loadVisualsConfig() has returned nil for this file
+// unconditionally, forever, in every environment. This is why
+// TestVisualsConfigFoldedDefaultsMatchOriginalFile below is trivially
+// byte-identical -- the file never contributed a single live value to
+// compare against -- and it is independent, stronger-than-required proof
+// that deleting the file changes nothing observable.
+func TestVisualsConfigOriginalFileHadPreexistingParseDefect(t *testing.T) {
+	fixture := filepath.Join("testdata", "visuals_config_original.md")
+
+	resetVisualsCache()
+	visualsPathOverride = fixture
+	loaded := loadVisualsConfig()
+	visualsPathOverride = ""
+	resetVisualsCache()
+
+	if loaded != nil {
+		t.Fatalf("loadVisualsConfig() successfully parsed the frozen original fixture %s -- the historical parse defect this test documents (inconsistent aether_wordmark block-scalar indentation) appears to be gone from the frozen copy; if colony/ceremony/visuals.md's real content ever differed from what 191-03-SUMMARY.md recorded, re-verify that summary's claims and this test's premise", fixture)
+	}
+}
+
+// TestVisualsConfigFoldedDefaultsMatchOriginalFile is the permanent
+// before/after regression lock for Phase 191 criterion 2's third loader,
+// loadVisualsConfig(). colony/ceremony/visuals.md was deleted after
+// confirming (see TestVisualsConfigOriginalFileHadPreexistingParseDefect
+// and 191-03-SUMMARY.md) that the file never successfully parsed in any
+// environment, so it never contributed a single live value -- there was
+// nothing to fold. cmd/testdata/visuals_config_original.md is a byte-exact
+// frozen copy of the deleted file (made with `cp`, verified with `diff`).
+// This test renders every field the compiled defaults can produce -- every
+// caste's emoji/ANSI color/label/composed identity, every command's emoji,
+// every caste's name-prefix list plus the default prefixes, the ASCII
+// wordmark, and the divider -- once with the frozen original file loaded
+// (which resolves to the same nil-config fallback it always has) and once
+// with the file entirely absent (the permanent, post-deletion state), and
+// asserts the two renders are byte-identical. The key sets it iterates come
+// from the compiled Go maps directly (casteEmojiMap, commandEmojiMap,
+// castePrefixes) -- the sole authoritative source now that the file
+// contributes nothing live -- so this test cannot silently shrink into a
+// sample.
+func TestVisualsConfigFoldedDefaultsMatchOriginalFile(t *testing.T) {
+	fixture := filepath.Join("testdata", "visuals_config_original.md")
+
+	// identityCastes: every caste key the compiled emoji/color/label maps
+	// name -- drives the casteEmoji/casteANSIColor/casteLabel/casteIdentity
+	// checks below.
+	identityCastes := map[string]bool{}
+	for caste := range casteEmojiMap {
+		identityCastes[caste] = true
+	}
+	for caste := range casteColorMap {
+		identityCastes[caste] = true
+	}
+	for caste := range casteLabelMap {
+		identityCastes[caste] = true
+	}
+
+	// prefixCastes: every identity caste plus every caste with its own
+	// name-prefix list (e.g. "prime" has prefixes but no emoji/color/label
+	// entry) -- drives the deterministicAntName checks below, which
+	// exercise both the CastePrefixes field (castes with their own list) and
+	// the DefaultPrefixes field (identity castes with no list of their own).
+	prefixCastes := map[string]bool{}
+	for caste := range identityCastes {
+		prefixCastes[caste] = true
+	}
+	for caste := range castePrefixes {
+		prefixCastes[caste] = true
+	}
+
+	seeds := []string{"seed-alpha", "seed-beta", "seed-gamma", "seed-delta", "seed-epsilon"}
+
+	render := func(t *testing.T, label string) map[string]string {
+		t.Helper()
+		out := make(map[string]string)
+		for caste := range identityCastes {
+			out["casteEmoji:"+caste] = casteEmoji(caste)
+			out["casteANSIColor:"+caste] = casteANSIColor(caste)
+			out["casteLabel:"+caste] = casteLabel(caste)
+			out["casteIdentity:"+caste] = casteIdentity(caste)
+		}
+		for caste := range prefixCastes {
+			for _, seed := range seeds {
+				out["deterministicAntName:"+caste+":"+seed] = deterministicAntName(caste, seed)
+			}
+		}
+		for command := range commandEmojiMap {
+			out["commandEmoji:"+command] = commandEmoji(command)
+		}
+		out["renderAetherWordmark"] = renderAetherWordmark()
+		out["visualDividerStr"] = visualDividerStr()
+		if len(out) == 0 {
+			t.Fatalf("%s render produced zero entries -- test is broken, not passing for the right reason", label)
+		}
+		return out
+	}
+
+	resetVisualsCache()
+	visualsPathOverride = fixture
+	before := render(t, "original colony/ceremony/visuals.md (frozen fixture)")
+	visualsPathOverride = ""
+	resetVisualsCache()
+
+	visualsPathOverride = filepath.Join(t.TempDir(), "visuals-deleted-does-not-exist.md")
+	after := render(t, "compiled defaults with the file absent")
+	visualsPathOverride = ""
+	resetVisualsCache()
+
+	if len(before) != len(after) {
+		t.Fatalf("render key-set size changed between renders: before=%d after=%d -- test itself is unstable", len(before), len(after))
+	}
+	mismatches := 0
+	for key, wantVal := range before {
+		if gotVal := after[key]; gotVal != wantVal {
+			mismatches++
+			t.Errorf("%s: with colony/ceremony/visuals.md present = %q, with it absent = %q -- deletion changed observable output", key, wantVal, gotVal)
+		}
+	}
+	if mismatches > 0 {
+		t.Fatalf("%d of %d rendered field(s) changed after deleting colony/ceremony/visuals.md -- see failures above", mismatches, len(before))
+	}
+}
+
+// TestVisualsConfigOriginalFileValuesMatchCompiledDefaults is supporting
+// evidence for the "nothing to fold" conclusion, independent of the parse
+// defect documented above. cmd/testdata/visuals_config_original_parseable.md
+// is the frozen original with a single line changed -- `aether_wordmark: |`
+// became `aether_wordmark: |5`, an explicit YAML block-indentation
+// indicator that supplies the baseline the parser could not auto-detect
+// (see TestVisualsConfigOriginalFileHadPreexistingParseDefect) -- not one
+// byte of any content line, including the wordmark's own art, was touched
+// (verified with `diff` when this fixture was made; see 191-03-SUMMARY.md).
+// With that single line fixed, the file parses, and this test proves its
+// written values for every discrete field -- caste_emoji_map,
+// caste_color_map, caste_label_map, command_emoji_map, caste_prefixes,
+// default_prefixes, and visual_divider -- match cmd/codex_visuals.go's
+// compiled defaults exactly, for every key the file names, not a sample.
+//
+// aether_wordmark is deliberately excluded from the byte-equality
+// assertions above and checked separately, glyph content only: a `|`
+// block-literal's indentation baseline is auto-detected from its first
+// content line, so the minimal one-line fix that makes the document valid
+// changes what absolute left-margin the parsed value carries (it cannot
+// also recover what margin the file's author intended) -- only that the
+// same characters, in the same order, are present is provable. The compiled
+// default (already the only value ever actually rendered, per the parse
+// defect finding above) is kept exactly as-is; there is no live value to
+// fold it against.
+func TestVisualsConfigOriginalFileValuesMatchCompiledDefaults(t *testing.T) {
+	fixture := filepath.Join("testdata", "visuals_config_original_parseable.md")
+
+	resetVisualsCache()
+	visualsPathOverride = fixture
+	parsed := loadVisualsConfig()
+	visualsPathOverride = ""
+	resetVisualsCache()
+	if parsed == nil {
+		t.Fatalf("loadVisualsConfig() returned nil for the syntax-fixed fixture %s -- it should parse cleanly; the single-line `|5` fix may have been lost", fixture)
+	}
+	if len(parsed.CasteEmojiMap) == 0 || len(parsed.CasteColorMap) == 0 || len(parsed.CasteLabelMap) == 0 ||
+		len(parsed.CommandEmojiMap) == 0 || len(parsed.CastePrefixes) == 0 || len(parsed.DefaultPrefixes) == 0 ||
+		parsed.VisualDivider == "" || parsed.AetherWordmark == "" {
+		t.Fatalf("syntax-fixed fixture parsed with an unexpectedly empty field -- this test would pass vacuously instead of proving anything: %+v", parsed)
+	}
+
+	for caste, fileEmoji := range parsed.CasteEmojiMap {
+		if compiled, ok := casteEmojiMap[caste]; ok && fileEmoji != compiled {
+			t.Errorf("caste_emoji_map[%s]: file=%q compiled=%q", caste, fileEmoji, compiled)
+		}
+	}
+	for caste, fileColor := range parsed.CasteColorMap {
+		if compiled, ok := casteColorMap[caste]; ok && fileColor != compiled {
+			t.Errorf("caste_color_map[%s]: file=%q compiled=%q", caste, fileColor, compiled)
+		}
+	}
+	for caste, fileLabel := range parsed.CasteLabelMap {
+		if compiled, ok := casteLabelMap[caste]; ok && fileLabel != compiled {
+			t.Errorf("caste_label_map[%s]: file=%q compiled=%q", caste, fileLabel, compiled)
+		}
+	}
+	for command, fileEmoji := range parsed.CommandEmojiMap {
+		if compiled, ok := commandEmojiMap[command]; ok && fileEmoji != compiled {
+			t.Errorf("command_emoji_map[%s]: file=%q compiled=%q", command, fileEmoji, compiled)
+		}
+	}
+	for caste, filePrefixes := range parsed.CastePrefixes {
+		compiled, ok := castePrefixes[caste]
+		if !ok {
+			continue
+		}
+		if len(filePrefixes) != len(compiled) {
+			t.Errorf("caste_prefixes[%s]: file has %d entries, compiled has %d: file=%v compiled=%v", caste, len(filePrefixes), len(compiled), filePrefixes, compiled)
+			continue
+		}
+		for i := range filePrefixes {
+			if filePrefixes[i] != compiled[i] {
+				t.Errorf("caste_prefixes[%s][%d]: file=%q compiled=%q", caste, i, filePrefixes[i], compiled[i])
+			}
+		}
+	}
+	if len(parsed.DefaultPrefixes) != len(defaultPrefixes) {
+		t.Errorf("default_prefixes: file has %d entries, compiled has %d: file=%v compiled=%v", len(parsed.DefaultPrefixes), len(defaultPrefixes), parsed.DefaultPrefixes, defaultPrefixes)
+	} else {
+		for i := range parsed.DefaultPrefixes {
+			if parsed.DefaultPrefixes[i] != defaultPrefixes[i] {
+				t.Errorf("default_prefixes[%d]: file=%q compiled=%q", i, parsed.DefaultPrefixes[i], defaultPrefixes[i])
+			}
+		}
+	}
+	if parsed.VisualDivider != visualDividerFallback {
+		t.Errorf("visual_divider: file=%q compiled=%q", parsed.VisualDivider, visualDividerFallback)
+	}
+
+	// Glyph-content-only comparison for the wordmark: strip each line's
+	// leading spaces from both sides (the file's parsed value already had
+	// the `|5` baseline stripped by the YAML parser; the compiled Go string
+	// literal has not been stripped of anything) and compare what remains,
+	// line by line. See the doc comment above for why absolute margin is
+	// not asserted.
+	fileLines := strings.Split(strings.Trim(parsed.AetherWordmark, "\n"), "\n")
+	compiledLines := strings.Split(strings.Trim(aetherWordmark, "\n"), "\n")
+	if len(fileLines) != len(compiledLines) {
+		t.Fatalf("aether_wordmark: file has %d lines, compiled has %d -- glyph content cannot match", len(fileLines), len(compiledLines))
+	}
+	for i := range fileLines {
+		fileGlyphs := strings.TrimLeft(fileLines[i], " ")
+		compiledGlyphs := strings.TrimLeft(compiledLines[i], " ")
+		if fileGlyphs != compiledGlyphs {
+			t.Errorf("aether_wordmark line %d glyph content: file=%q compiled=%q", i, fileGlyphs, compiledGlyphs)
+		}
+	}
+}

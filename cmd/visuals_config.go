@@ -32,6 +32,16 @@ type visualsConfig struct {
 // loadVisualsConfig reads colony/ceremony/visuals.md once per process and
 // caches the result.  If the file is missing, unreadable, or unparseable it
 // returns nil so callers fall back to hardcoded defaults.
+//
+// colony/ceremony/visuals.md was deleted in Phase 191 (dead-wood criterion
+// 2): it was a CWD-relative, dev-checkout-only loader, and every value it
+// ever defined was already exactly what cmd/codex_visuals.go's compiled
+// defaults produce -- see cmd/codex_visuals_test.go's
+// TestVisualsConfigFoldedDefaultsMatchOriginalFile and
+// TestVisualsConfigOriginalFileHadPreexistingParseDefect for the proof.
+// This function is kept as a permanently-fallback path (D-04,
+// 191-CONTEXT.md): visualsPathOverride still lets a future colony/ file, or
+// a test, supply values again without any caller needing to change.
 func loadVisualsConfig() *visualsConfig {
 	visualsOnce.Do(func() {
 		path := visualsPathOverride
