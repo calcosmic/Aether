@@ -1673,6 +1673,17 @@ func TestContinueFinalizeResultIncludesReviewDepth(t *testing.T) {
 	gates := codexContinueGateReport{Passed: false, BlockingIssues: []string{"test gate failed"}}
 	now := time.Now().UTC()
 
+	// T-188-CR-01: finalizeBlockedExternalContinue now re-reads
+	// COLONY_STATE.json atomically and refuses (a superseded result, with a
+	// different, smaller result shape than the one this test asserts) unless
+	// the on-disk state still matches what this call expects. Seed disk with
+	// the exact `state` this test constructs so the currency check passes
+	// and the normal blocked-result shape (including review_depth) is what
+	// gets returned.
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("seed colony state: %v", err)
+	}
+
 	result, _, err := finalizeBlockedExternalContinue(state, phase, codexContinueManifest{}, verification, assessment, gates, nil, "", nil, now, "verification.json", "gates.json", nil, colony.VerificationDepthLight)
 	if err != nil {
 		t.Fatalf("finalizeBlockedExternalContinue returned error: %v", err)
@@ -1829,5 +1840,92 @@ heavy_keywords:
 	}
 	if phaseHasHeavyKeywords("plain phase without match") {
 		t.Error("expected phaseHasHeavyKeywords to return false for plain phase")
+	}
+}
+
+// --- Phase 191 Plan 04: byte-identical proof before colony/policies/review-depth.yaml deletion ---
+//
+// 191-CONTEXT.md Criterion 2 / D-04 and 191-PATTERNS.md "Baseline Capture
+// Before Any Change" require a before/after regression test proving every
+// field reviewDepthPolicy defines resolves identically whether
+// colony/policies/review-depth.yaml is present with its original content, or
+// absent (the compiled fallback path). This is Layer 1 of the two-layer
+// proof; Layer 2 (a real dev-checkout CLI capture, run from the repo root
+// where the CWD-relative file read actually resolves -- something go test
+// cannot exercise on its own, since go test's working directory is this
+// package directory, not the repo root) is recorded in 191-04-SUMMARY.md.
+
+// reviewDepthOriginalFixture is a permanent, byte-for-byte snapshot of
+// colony/policies/review-depth.yaml's content, copied immediately before the
+// live file was deleted. Kept as testdata so this regression test continues
+// to prove the fold was complete forever, without needing the real file to
+// exist.
+const reviewDepthOriginalFixture = "testdata/review_depth_original_191_04.yaml"
+
+// captureReviewDepthFields snapshots every accessor loadReviewDepthPolicy()
+// feeds: the three keyword lists and all six smart-default-reason strings.
+func captureReviewDepthFields() (heavy, securityRisk, blastRadius []string, reasons map[string]string) {
+	heavy = append([]string(nil), getHeavyKeywords()...)
+	securityRisk = append([]string(nil), getSecurityRiskKeywords()...)
+	blastRadius = append([]string(nil), getBlastRadiusKeywords()...)
+	reasons = map[string]string{}
+	for _, key := range []string{"high_risk", "final_phase", "medium_risk", "early_phase", "late_phase", "standard"} {
+		reasons[key] = getSmartDefaultReason(key)
+	}
+	return heavy, securityRisk, blastRadius, reasons
+}
+
+func assertReviewDepthFieldEqual(t *testing.T, field string, want, got []string) {
+	t.Helper()
+	if len(want) != len(got) {
+		t.Errorf("%s: file had %d entries %v, compiled default has %d entries %v -- fold the missing/extra values into review_depth.go's fallback slice before deleting colony/policies/review-depth.yaml", field, len(want), want, len(got), got)
+		return
+	}
+	for i := range want {
+		if want[i] != got[i] {
+			t.Errorf("%s[%d]: file said %q, compiled default says %q -- fold this value into review_depth.go's fallback slice before deleting colony/policies/review-depth.yaml", field, i, want[i], got[i])
+		}
+	}
+}
+
+// TestReviewDepthPolicyFieldsSurviveDeletion is the mandatory before/after
+// proof: it must pass BEFORE colony/policies/review-depth.yaml is deleted
+// (proving the fold, if any was needed, is complete) and continue passing
+// AFTER deletion (proving the compiled defaults are now authoritative and
+// the file is not silently missed by any accessor).
+func TestReviewDepthPolicyFieldsSurviveDeletion(t *testing.T) {
+	resetReviewDepthPolicyState()
+	defer func() {
+		reviewDepthPathOverride = ""
+		resetReviewDepthPolicyState()
+	}()
+
+	// Render 1: policy file present, using the exact original file content
+	// (byte-for-byte, captured into testdata before the live file's deletion).
+	reviewDepthPathOverride = reviewDepthOriginalFixture
+	resetReviewDepthPolicyState()
+	if p := loadReviewDepthPolicy(); p == nil {
+		t.Fatal("fixture file failed to load -- reviewDepthOriginalFixture path is wrong, missing, or unparseable; the comparison below would otherwise pass vacuously (both renders silently using the same compiled defaults)")
+	}
+	wantHeavy, wantSecurityRisk, wantBlastRadius, wantReasons := captureReviewDepthFields()
+
+	// Render 2: policy file absent -- exercises the compiled fallback path
+	// that becomes authoritative once colony/policies/review-depth.yaml is
+	// deleted.
+	reviewDepthPathOverride = filepath.Join(t.TempDir(), "does-not-exist.yaml")
+	resetReviewDepthPolicyState()
+	if p := loadReviewDepthPolicy(); p != nil {
+		t.Fatal("compiled-default render unexpectedly loaded a policy -- the nonexistent-path override did not take effect")
+	}
+	gotHeavy, gotSecurityRisk, gotBlastRadius, gotReasons := captureReviewDepthFields()
+
+	assertReviewDepthFieldEqual(t, "heavy_keywords", wantHeavy, gotHeavy)
+	assertReviewDepthFieldEqual(t, "security_risk_keywords", wantSecurityRisk, gotSecurityRisk)
+	assertReviewDepthFieldEqual(t, "blast_radius_keywords", wantBlastRadius, gotBlastRadius)
+
+	for _, key := range []string{"high_risk", "final_phase", "medium_risk", "early_phase", "late_phase", "standard"} {
+		if wantReasons[key] != gotReasons[key] {
+			t.Errorf("smart_default_reasons[%s]: file said %q, compiled default says %q -- fold this value into review_depth.go's fallback consts before deleting colony/policies/review-depth.yaml", key, wantReasons[key], gotReasons[key])
+		}
 	}
 }

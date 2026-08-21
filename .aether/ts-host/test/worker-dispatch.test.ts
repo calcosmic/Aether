@@ -20,9 +20,12 @@ import {
   sanitizeWorkerDiagnosticOutput,
   toWorkerResults,
   isAuthError,
+  resolvePreflightAdapterBudgetMs,
+  PREFLIGHT_GO_ATTEMPTS,
   type DispatchResult,
   type DispatchOptions,
 } from "../src/worker-dispatch.js";
+import { resolvePreflightTimeoutMs } from "../src/preflight-config.js";
 import {
   __restoreCallGoJSON,
   __restoreCallGoJSONAsync,
@@ -187,7 +190,6 @@ describe("worker-dispatch", () => {
         context_capsule: "## Colony State\n\nGo-provided context",
         handoff_section: "## Previous Worker Handoffs\n\nPrior worker result",
         skill_section: "### Skill: worker-priming\n\nUse matched skill context",
-        hive_section: "## HIVE WISDOM\n\nUse verified patterns",
         task_brief: "# Build Dispatch\n\nGo-authored task brief",
       });
 
@@ -196,7 +198,11 @@ describe("worker-dispatch", () => {
       assert.equal(request?.["context_capsule"], "## Colony State\n\nGo-provided context");
       assert.equal(request?.["handoff_section"], "## Previous Worker Handoffs\n\nPrior worker result");
       assert.equal(request?.["skill_section"], "### Skill: worker-priming\n\nUse matched skill context");
-      assert.equal(request?.["hive_section"], "## HIVE WISDOM\n\nUse verified patterns");
+      // Phase 190 regression lock: the TS host must never attach a
+      // hive_section to the Go-bound request -- hive wisdom is delivered
+      // exactly once, already embedded in context_capsule by Go's
+      // colony-prime capsule.
+      assert.equal(request && "hive_section" in request, false, "the Go-bound request must not carry a hive_section key");
       assert.equal(request?.["task_brief"], "# Build Dispatch\n\nGo-authored task brief");
       assert.deepEqual(request?.["permission_profile"], {
         schema_version: 1,
@@ -704,6 +710,66 @@ describe("worker-dispatch: error classification", () => {
     const goodResult = results.find((r) => r.name === "Good-Worker");
     assert.ok(goodResult, "Should have a result for Good-Worker");
     assert.equal(goodResult!.status, "completed", "Good worker should succeed despite sibling failure");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Preflight adapter budget tests (CR-01: the Node-side kill timer must scale
+// with AETHER_PREFLIGHT_TIMEOUT so a widened knob cannot SIGKILL the Go
+// adapter mid-retry — the 27-July failure mode)
+// ---------------------------------------------------------------------------
+
+describe("worker-dispatch: preflight adapter budget", { concurrency: false }, () => {
+  function withPreflightTimeoutEnv(value: string | undefined, fn: () => void): void {
+    const previous = process.env["AETHER_PREFLIGHT_TIMEOUT"];
+    if (value === undefined) {
+      delete process.env["AETHER_PREFLIGHT_TIMEOUT"];
+    } else {
+      process.env["AETHER_PREFLIGHT_TIMEOUT"] = value;
+    }
+    try {
+      fn();
+    } finally {
+      if (previous === undefined) {
+        delete process.env["AETHER_PREFLIGHT_TIMEOUT"];
+      } else {
+        process.env["AETHER_PREFLIGHT_TIMEOUT"] = previous;
+      }
+    }
+  }
+
+  it("defaults to the historical 120s floor when the knob is unset", () => {
+    withPreflightTimeoutEnv(undefined, () => {
+      assert.equal(resolvePreflightAdapterBudgetMs(), 120_000);
+    });
+  });
+
+  it("keeps the 120s floor for an unparseable knob value", () => {
+    withPreflightTimeoutEnv("banana", () => {
+      assert.equal(resolvePreflightAdapterBudgetMs(), 120_000);
+    });
+  });
+
+  it("scales past the floor when AETHER_PREFLIGHT_TIMEOUT is widened (90s -> 210s wrapper)", () => {
+    withPreflightTimeoutEnv("90s", () => {
+      assert.equal(resolvePreflightAdapterBudgetMs(), 90_000 * PREFLIGHT_GO_ATTEMPTS + 30_000);
+    });
+  });
+
+  // The invariant that actually matters (same style as
+  // TestHostsAgreeOnPreflightDefaultBudget): whatever the knob resolves to,
+  // the Node wrapper budget must exceed the Go side's full retry budget —
+  // otherwise Node kills the adapter before the Go retry can ever fire.
+  it("always exceeds the resolved Go budget times hostedPreflightAttempts", () => {
+    for (const value of [undefined, "1s", "45s", "90s", "5m", "banana"]) {
+      withPreflightTimeoutEnv(value, () => {
+        const goWorstCaseMs = resolvePreflightTimeoutMs() * PREFLIGHT_GO_ATTEMPTS;
+        assert.ok(
+          resolvePreflightAdapterBudgetMs() > goWorstCaseMs,
+          `budget ${resolvePreflightAdapterBudgetMs()}ms must exceed Go worst case ${goWorstCaseMs}ms for AETHER_PREFLIGHT_TIMEOUT=${value ?? "<unset>"}`
+        );
+      });
+    }
   });
 });
 

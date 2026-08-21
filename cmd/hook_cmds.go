@@ -22,6 +22,26 @@ type claudeHookInput struct {
 	CustomInstructions   string                 `json:"custom_instructions"`
 	StopHookActive       bool                   `json:"stop_hook_active"`
 	LastAssistantMessage string                 `json:"last_assistant_message"`
+	// AgentID, AgentType, and SessionID are Phase 173 (SPAWN-04) additions.
+	// These field names come from current official Claude Code hooks
+	// documentation and are a hypothesis, not a confirmed contract — Task 3
+	// of the 173-01 plan runs a real nested dispatch and records the actual
+	// observed field names in 173-HOOK-FINDINGS.md. If the observed names
+	// differ, plan 07 corrects them. All three are plain strings so an
+	// absent field decodes to the empty string rather than failing decode.
+	AgentID   string `json:"agent_id"`
+	AgentType string `json:"agent_type"`
+	SessionID string `json:"session_id"`
+	// TranscriptPath is a Phase 174 (SPEND-02) addition. Unlike AgentID,
+	// AgentType and SessionID above -- which were a hypothesis Phase 173
+	// confirmed after the fact -- this field name was empirically confirmed
+	// FIRST, by the real captured payloads in
+	// .planning/phases/173-delegation-guard/173-HOOK-FINDINGS.md
+	// (2026-08-13). It is the platform's own record of where this session's
+	// transcript lives, and is the one thing an orchestrating LLM cannot
+	// fabricate: the runtime reads it from the platform, not from anything
+	// a wrapper typed.
+	TranscriptPath string `json:"transcript_path"`
 }
 
 const postResumeStopGracePeriod = 15 * time.Minute
@@ -32,7 +52,9 @@ var hookPreToolUseCmd = &cobra.Command{
 	Hidden: true,
 	Args:   cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		input := readClaudeHookInput()
+		input, raw := readClaudeHookInput()
+		captureRawHookPayload(raw)
+		recordSpendSessionFromHook(input)
 
 		toolName := input.ToolName
 		if toolName == "" && len(args) > 0 {
@@ -85,8 +107,127 @@ var hookPreToolUseCmd = &cobra.Command{
 			}
 		}
 
+		// SPAWN-04/D-20: 173-HOOK-FINDINGS.md (2026-08-13) observed the
+		// dispatch tool's name as "Agent", not "Task". Accept "Task" too for
+		// forward compatibility -- .claude/settings.json's matcher already
+		// covers both, so a future runtime that reverts to "Task" must not
+		// silently stop being covered here.
+		if strings.EqualFold(toolName, "Agent") || strings.EqualFold(toolName, "Task") {
+			if reason := hookSpawnDenyReason(input); reason != "" {
+				if tracer != nil {
+					var state colony.ColonyState
+					if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
+						_ = tracer.LogIntervention(*state.RunID, "hook.pre-tool-use.spawn-deny", "hook-cmd", map[string]interface{}{
+							"hook":       "pre-tool-use",
+							"reason":     reason,
+							"tool":       toolName,
+							"agent_id":   input.AgentID,
+							"agent_type": input.AgentType,
+						})
+					}
+				}
+				return emitHookBlock(reason)
+			}
+		}
+
 		return nil
 	},
+}
+
+// hookAetherAgentTypePrefix is the naming convention every one of the repo's
+// named worker castes follows (aether-builder, aether-watcher, ...,
+// confirmed by `ls .claude/agents/ant/`). A requester whose agent_type
+// carries this prefix was dispatched as one of Aether's own first-tier
+// workers.
+const hookAetherAgentTypePrefix = "aether-"
+
+// hookSpawnDenyReason is Phase 173's SPAWN-04/D-20 guard: the PreToolUse
+// hook's fail-closed answer for a delegation dispatch (an "Agent"/"Task" tool
+// call) BEFORE the platform acts on it. It follows protectedHookWriteReason's
+// shape -- a reason string on deny, the empty string on allow, one dispatch
+// point -- but DELIBERATELY INVERTS that function's unresolvable-input
+// branch (`if normalized == "" { return "" }`, which fails open). Here,
+// failing to resolve who is asking must fail closed.
+//
+// Empirically observed coverage (173-HOOK-FINDINGS.md, captured 2026-08-13,
+// a real two-level nested dispatch performed live inside this repo): the
+// hook fired for BOTH the coordinator's own dispatch (tool_name "Agent", no
+// agent_id -- a depth-0 requester) AND a subagent's dispatch of its own
+// helper (tool_name "Agent", agent_id present, agent_type carrying the
+// REQUESTER's own dispatched type, not the target's). No third-level
+// (helper-of-helper) dispatch was captured in that run. This function's
+// claims and comments are bounded to those two observed levels; nothing
+// here asserts coverage of a dispatch depth the capture did not demonstrate.
+// See 173-HOOK-FINDINGS.md for the raw payloads and the four answers derived
+// from them.
+//
+// There is no mapping from Claude Code's own agent_id (e.g.
+// "ae93ff782863d564f") to Aether's spawn-tree AgentName -- 173-HOOK-FINDINGS.md
+// recorded which fields the platform supplies, not an identity bridge. Every
+// rule below is therefore a heuristic over agent_id/agent_type's
+// presence/absence and value, not a lookup into Aether's own spawn records.
+// The AUTHORITATIVE depth enforcement remains spawn-log's deriveSpawnDepth,
+// which derives depth from the parent's own recorded spawn-tree entry and
+// cannot be fooled by a caller's claimed identity; this hook is a
+// before-the-fact deterrent layered in front of it, not a replacement for it.
+func hookSpawnDenyReason(in claudeHookInput) string {
+	agentID := strings.TrimSpace(in.AgentID)
+	agentType := strings.TrimSpace(in.AgentType)
+
+	if agentID == "" {
+		// D-20's deliberate exception to fail-closed: absence of a subagent
+		// identifier is positive evidence this dispatch originates from the
+		// main session (depth 0), not an unresolved lookup --
+		// 173-HOOK-FINDINGS.md confirmed this by direct comparison of the
+		// two captured payloads: the coordinator's own dispatch carried
+		// neither agent_id nor agent_type at all. Depth 0 is always
+		// permitted to dispatch its own first-tier workers.
+		return ""
+	}
+
+	var requesterDepth int
+	switch {
+	case strings.HasPrefix(strings.ToLower(agentType), hookAetherAgentTypePrefix):
+		// A named first-tier worker, dispatched by the coordinator with one
+		// of the repo's own aether-* castes as its subagent_type.
+		requesterDepth = 1
+	default:
+		// Covers the observed "general-purpose" value and every other
+		// unclassified value. 173-HOOK-FINDINGS.md showed agent_type names
+		// the REQUESTER's own dispatched type, not the target's -- and
+		// .aether/workers.md's own spawn protocol instructs every worker to
+		// dispatch its own helper with subagent_type="general-purpose". A
+		// first-tier worker that followed that documented fallback verbatim
+		// would ALSO carry agent_type "general-purpose" on its own dispatch,
+		// so this single value cannot distinguish "first-tier worker using
+		// the documented fallback" (should resolve depth 1) from "second-tier
+		// helper spawning past the cap" (should resolve depth 2). Inventing
+		// a resolution the capture never demonstrated would be exactly the
+		// identity-lookup mistake this function's own comment warns against
+		// -- so every unclassified value denies, not just this one.
+		return fmt.Sprintf(
+			"cannot resolve who is asking to delegate (agent_id=%q agent_type=%q); refusing the spawn",
+			agentID, agentType,
+		)
+	}
+
+	// This branch is reachable only if a future, better-resolved requester
+	// type pushes requesterDepth to spawnMaxDelegationDepth or beyond; today
+	// the one resolvable value (an aether-* type) always yields
+	// requesterDepth 1, and 1+1 never exceeds the cap of 2. It is kept
+	// because the resolution rule above is deliberately bounded to what
+	// 173-HOOK-FINDINGS.md demonstrated and may widen later, and because this
+	// is the one place the hook must use spawnMaxDelegationDepth directly --
+	// the same cap constant the CLI guards use, not a second number.
+	prospectiveDepth := requesterDepth + 1
+	if prospectiveDepth > spawnMaxDelegationDepth {
+		return fmt.Sprintf(
+			"requester type %q resolved to depth %d; a helper spawned from here would be depth %d, past the cap of %d",
+			agentType, requesterDepth, prospectiveDepth, spawnMaxDelegationDepth,
+		)
+	}
+
+	return ""
 }
 
 var hookStopCmd = &cobra.Command{
@@ -95,7 +236,7 @@ var hookStopCmd = &cobra.Command{
 	Hidden: true,
 	Args:   cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		input := readClaudeHookInput()
+		input, _ := readClaudeHookInput()
 		if input.StopHookActive {
 			return nil
 		}
@@ -140,7 +281,7 @@ var hookPreCompactCmd = &cobra.Command{
 	Hidden: true,
 	Args:   cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		input := readClaudeHookInput()
+		input, _ := readClaudeHookInput()
 		if store == nil {
 			return nil
 		}
@@ -183,23 +324,56 @@ func allowStopAfterRecentResume() bool {
 	return age >= 0 && age <= postResumeStopGracePeriod
 }
 
-func readClaudeHookInput() claudeHookInput {
+func readClaudeHookInput() (claudeHookInput, []byte) {
 	var input claudeHookInput
 
 	info, err := os.Stdin.Stat()
 	if err != nil {
-		return input
+		return input, nil
 	}
 	if (info.Mode() & os.ModeCharDevice) != 0 {
-		return input
+		return input, nil
 	}
 
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil || len(strings.TrimSpace(string(data))) == 0 {
-		return input
+		return input, nil
 	}
 	_ = json.Unmarshal(data, &input)
-	return input
+	return input, data
+}
+
+// captureRawHookPayload appends the raw stdin bytes received by a hook to
+// the file named by AETHER_HOOK_CAPTURE_FILE, when that environment variable
+// is set. This is Phase 173 (SPAWN-04) Wave 0's opt-in evidence recorder: it
+// exists so the field names a future deny path matches on are copied from an
+// observed payload rather than assumed from documentation. It is off by
+// default (empty env var short-circuits immediately) and every error path
+// returns silently -- a capture failure must never affect the hook's
+// allow/deny answer (T-173-02).
+//
+// The environment variable is the ONLY switch, deliberately. A briefly-lived
+// sentinel-file fallback (~/.aether/hook-capture-path) existed on 2026-08-13
+// to run the 173-HOOK-FINDINGS.md capture when the env var could not be
+// delivered through session launch; the phase code review (173-REVIEW.md
+// CR-01) showed a home-directory file is writable by any worker's ordinary
+// Write tool, letting capture be aimed at protected state or the spawn
+// ledger. The fallback was removed the same day, restoring T-173-03's
+// boundary: only someone with shell access to the operator's environment
+// can turn capture on. Do not re-add a file-based switch without a
+// destination validation story.
+func captureRawHookPayload(raw []byte) {
+	path := strings.TrimSpace(os.Getenv("AETHER_HOOK_CAPTURE_FILE"))
+	if path == "" {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(raw)
+	_, _ = f.Write([]byte("\n"))
 }
 
 func hookToolTargetPath(toolInput map[string]interface{}) string {
@@ -214,6 +388,28 @@ func hookToolTargetPath(toolInput map[string]interface{}) string {
 	return ""
 }
 
+// sanctionedDataWritePrefixes lists the exact-subpath carve-outs under
+// .aether/data/ that a worker is actually ordered to write by a real runtime
+// instruction. Each entry is a full directory segment (leading and trailing
+// slash) so a substring match can never widen past a directory boundary.
+// Widening any entry to a bare "/.aether/data/" match is a regression —
+// TestHookPreToolUseBlocksProtectedPath must fail if that ever happens.
+//
+//   - /.aether/data/planning/       — D-04: planning artifacts a worker is
+//     told to persist during the plan workflow.
+//   - /.aether/data/phase-research/ — cmd/phase_research.go:124 orders the
+//     scout to write phase-N-research.md here.
+//   - /.aether/data/survey/         — pkg/codex/permission_profile.go's
+//     surveyor behavioral restriction names this directory.
+//   - /.aether/data/worker-debug/   — D-04: worker debug artifacts a worker
+//     is told to persist for diagnostics.
+var sanctionedDataWritePrefixes = []string{
+	"/.aether/data/planning/",
+	"/.aether/data/phase-research/",
+	"/.aether/data/survey/",
+	"/.aether/data/worker-debug/",
+}
+
 func protectedHookWriteReason(target, cwd string) string {
 	normalized := normalizeHookPath(target, cwd)
 	if normalized == "" {
@@ -222,9 +418,14 @@ func protectedHookWriteReason(target, cwd string) string {
 
 	slash := filepath.ToSlash(normalized)
 	base := filepath.Base(slash)
+	for _, prefix := range sanctionedDataWritePrefixes {
+		if strings.Contains(slash, prefix) {
+			return ""
+		}
+	}
 	switch {
 	case strings.Contains(slash, "/.aether/data/"):
-		return "Protected colony state path. Update `.aether/data/*` through the `aether` CLI, not direct edits."
+		return "Protected colony state path. Update `.aether/data/*` through the `aether` CLI, not direct edits. Sanctioned scratch subpaths (planning/, phase-research/, survey/, worker-debug/) are writable."
 	case strings.Contains(slash, "/.aether/dreams/"):
 		return "Protected dream journal path. Do not edit `.aether/dreams/` from a worker."
 	case strings.HasPrefix(base, ".env"):
@@ -301,9 +502,39 @@ func normalizeHookPath(target, cwd string) string {
 	}
 	abs, err := filepath.Abs(target)
 	if err != nil {
-		return filepath.Clean(target)
+		abs = filepath.Clean(target)
+	} else {
+		abs = filepath.Clean(abs)
 	}
-	return filepath.Clean(abs)
+	return resolveHookPathSymlinks(abs)
+}
+
+// resolveHookPathSymlinks resolves symlinks in path before allowlist and
+// blocklist matching (WR-05). normalizeHookPath was purely lexical
+// (filepath.Clean only), so a symlink planted inside a sanctioned scratch
+// subdir (e.g. .aether/data/planning/link -> ../COLONY_STATE.json) made a
+// Write to the "allowed" path land on protected state instead.
+//
+// A Write's target frequently does not exist yet (Write creates new files),
+// so filepath.EvalSymlinks on the full path fails outright when the leaf is
+// new. Walk up to the deepest existing ancestor, resolve symlinks on that
+// ancestor, then rejoin the not-yet-created remainder — this is the standard
+// approach for symlink-safe path resolution of paths that may not exist.
+func resolveHookPathSymlinks(path string) string {
+	if path == "" {
+		return path
+	}
+	cleaned := filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(cleaned); err == nil {
+		return resolved
+	}
+	parent := filepath.Dir(cleaned)
+	if parent == cleaned {
+		// Reached the filesystem root without finding an existing,
+		// resolvable ancestor -- nothing left to resolve.
+		return cleaned
+	}
+	return filepath.Join(resolveHookPathSymlinks(parent), filepath.Base(cleaned))
 }
 
 func emitHookBlock(reason string) error {

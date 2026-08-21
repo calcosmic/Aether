@@ -72,22 +72,37 @@ func TestRenderVisualErrorFriendlyPath(t *testing.T) {
 	}
 }
 
+// TestRenderVisualErrorGenericHint pins the fallback hint per platform. The
+// hint has to name a command the reader can actually type: `/ant-patrol` in
+// Claude Code and OpenCode, `aether patrol` in Codex, which has no wrappers.
 func TestRenderVisualErrorGenericHint(t *testing.T) {
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	for _, tc := range []struct {
+		platform string
+		wantHint string
+	}{
+		{"claude", "/ant-patrol"},
+		{"opencode", "/ant-patrol"},
+		{"codex", "aether patrol"},
+	} {
+		t.Run(tc.platform, func(t *testing.T) {
+			t.Setenv("AETHER_OUTPUT_MODE", "visual")
+			t.Setenv("AETHER_PLATFORM", tc.platform)
 
-	var buf bytes.Buffer
-	oldStderr := stderr
-	stderr = &buf
-	defer func() { stderr = oldStderr }()
+			var buf bytes.Buffer
+			oldStderr := stderr
+			stderr = &buf
+			defer func() { stderr = oldStderr }()
 
-	outputError(1, "something completely unexpected", nil)
+			outputError(1, "something completely unexpected", nil)
 
-	output := buf.String()
-	if !strings.Contains(output, "something completely unexpected") {
-		t.Errorf("expected output to contain raw error message, got: %s", output)
-	}
-	if !strings.Contains(output, "aether patrol") {
-		t.Errorf("expected output to contain generic hint 'aether patrol', got: %s", output)
+			output := buf.String()
+			if !strings.Contains(output, "something completely unexpected") {
+				t.Errorf("expected output to contain raw error message, got: %s", output)
+			}
+			if !strings.Contains(output, tc.wantHint) {
+				t.Errorf("expected %s output to contain generic hint %q, got: %s", tc.platform, tc.wantHint, output)
+			}
+		})
 	}
 }
 
@@ -194,6 +209,7 @@ func TestOutputErrorVisualUsesBanner(t *testing.T) {
 	// use JSON path since isTerminalWriter returns false for bytes.Buffer).
 	// Force visual output via env var.
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	t.Setenv("AETHER_PLATFORM", "codex")
 
 	var buf bytes.Buffer
 	oldStderr := stderr
@@ -206,6 +222,8 @@ func TestOutputErrorVisualUsesBanner(t *testing.T) {
 	if !strings.Contains(output, "E R R O R") {
 		t.Errorf("expected visual output to contain banner, got: %s", output)
 	}
+	// Codex has no slash wrappers, so the raw CLI form is the correct hint
+	// there. Per-platform naming is covered by TestRenderVisualErrorGenericHint.
 	if !strings.Contains(output, "aether patrol") {
 		t.Errorf("expected visual output to contain generic hint, got: %s", output)
 	}

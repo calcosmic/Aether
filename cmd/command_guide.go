@@ -160,6 +160,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Synthesize raw goal, user answers, and init-research output into a refined goal and charter JSON; do not echo the scan output as the final charter.",
 			"Before creating colony state, ask the user to choose Colony Mode or Orchestrator Mode. Explain that Colony Mode is the existing default, while Orchestrator Mode asks guided boundary questions at phase points for tighter user control. If the user skips the choice or the host is non-interactive, default to Colony Mode.",
 			"Separate deterministic housekeeping warnings from at most 3 strategic AI-synthesized pheromone suggestions, and ask approval before writing any signal.",
+			"Run `aether shelf-list --json --status shelved`, let the user choose per entry, and carry the chosen IDs into the init call with `--promote-shelf` / `--dismiss-shelf` -- never promote or dismiss before the user approves, since a cancel or a failed init must leave the backlog untouched.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\"",
 		PostSteps: []string{
@@ -206,15 +207,16 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Literal:        false,
 		PreSteps: []string{
 			"Load the aether-colony-build-cycle Codex skill.",
-			"Select planning depth and decomposition depth with the user unless arguments already specify them.",
+			"Decision Moment 1 (depth proposal): request a first manifest with `aether host plan`, omitting `--depth`, `--planning-depth`, and `--verification-depth` unless arguments already specify them, then print `result.depth_proposal_card` verbatim — do not restate, summarize, or re-reason the recommendations. Accept on a single confirmation, or request a fresh manifest with the named knob's flag set when the user picks a different option.",
 			"Run `AETHER_OUTPUT_MODE=visual aether status` for current colony context.",
-			"Inspect every planning dispatch `permission_profile` before spawning it. The Scout repository_read_only profile must remain host-enforced; do not substitute an unrestricted agent or describe prompt wording as isolation.",
+			"Inspect every planning dispatch `permission_profile` before spawning it and pass it through verbatim from the manifest; never substitute or broaden it. Scout's canonical profile is `workspace_write`, scoped behaviorally to writing only under `.aether/data/phase-research`.",
 			"When revising future work after a completed phase, pass `--refresh --revision-type <type> --revision-reason <why>` to every host-plan iteration. Research and verification revisions also require repository-relative `--revision-evidence <path>` files.",
-			"Run `aether host plan --depth <choice> --planning-depth <choice>` to fetch one planning-iteration manifest via the TS host. Parse `result.plan_manifest` or `result.planning_manifest`.",
+			"Run `aether host plan --depth <choice> --planning-depth <choice> --verification-depth <choice>` to fetch one planning-iteration manifest via the TS host. Parse `result.plan_manifest` or `result.planning_manifest`.",
 			"Save the full JSON envelope to a temporary manifest file for later ceremony rendering.",
 			"Treat the manifest's `planning_run_id`, `iteration`, `target_confidence`, `max_iterations`, `previous_confidence`, `selected_gaps`, `previous_plan_draft`, and `expected_workers` as authoritative loop state.",
 			"If the manifest includes `revision`, preserve it and the worker briefs verbatim: completed phases are immutable and Route-Setter outputs replacement unfinished phases only; Go assigns final IDs atomically.",
 			"When the manifest includes `queen_execution_policy.spawn_budget`, surface selected/pruned caste reasons so users can see why workers were or were not spawned.",
+			"Decision Moment 2 (research batch, the second and final decision moment): print `result.research_proposal_card` verbatim when non-empty, approve with `aether plan-research-approve --approve-all` or flip specific phases with `--flip <ids>`, then request a fresh manifest so gated `phase_research` dispatches appear. Surface `result.research_warning` whenever `result.research_awaiting_approval` is true.",
 			"Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`: if active or `next` is `aether discuss`, stop, show the summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved.",
 			"Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>`.",
 			"If runtime returns `dispatch_mode: agent-delegate`, dispatch Scout and Route-Setter through the host platform instead of nested subprocess workers, then finalize with the returned manifest.",
@@ -304,7 +306,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		PreSteps: []string{
 			"Load the aether-colony-build-cycle Codex skill.",
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.",
-			"Run `aether host build --dry-run <phase>` to fetch the dispatch manifest via the TS host without dispatching workers. Parse `result.manifest.dispatch_manifest`; do not parse visual output.",
+			"Run `aether build <phase> --plan-only` to fetch the dispatch manifest directly from the Go runtime without dispatching workers. Parse `result.dispatch_manifest`; do not parse visual output.",
 			"Save the full JSON envelope to a temporary manifest file for later ceremony rendering.",
 			"Read `queen_execution_policy.spawn_budget` from the dispatch manifest and surface selected/pruned caste reasons so users can see why workers were or were not spawned.",
 			"If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output.",
@@ -314,7 +316,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Before dispatching each worker, inspect its typed `permission_profile`. Do not broaden it: repository_read_only must run through a host-enforced no-write boundary; scoped_write or test_write must be rejected until the selected host reports enforcement. Treat `behavioral_restrictions` under workspace_write as required behavior, not as a sandbox claim.",
 			"Before each manifest wave, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest file> --execution-wave <execution_wave>`.",
 			"Spawn parallel waves as visible live Task/subagent panels with caste-labelled descriptions; do not use background-only dispatch as the ceremony.",
-			"Pass worker briefs verbatim and enforce read cache discipline: if a worker keeps re-reading the same unchanged file, mark it blocked with the missing context instead of waiting for another loop.",
+			"Pass worker briefs verbatim: `dispatch.brief_path` (a repo-display path to the file holding the composed brief, byte for byte) is now the routine channel every dispatch carries -- the runtime writes the composed brief to disk and reports the path, so inline JSON briefs of 6-22KB never hit Read-tool long-line truncation. Inline `dispatch.brief` appears only in the rare case where the runtime could not write the file for that dispatch; honor it verbatim when it is the only one present. Whichever one a dispatch carries, use it verbatim, never merge, summarize, or reconstruct. Enforce read cache discipline: if a worker keeps re-reading the same unchanged file, mark it blocked with the missing context instead of waiting for another loop.",
 			"Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.",
 			finalizerCompletionContractStep("build"),
 			"After all terminal results are accepted, run `AETHER_OUTPUT_MODE=json aether build-completion-stage <phase> --completion-file <approved temp completion JSON>` exactly once. Parse `result.completion_path`; this Go-owned packet is the recovery source if the wrapper stops before finalization.",
@@ -419,7 +421,9 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 
 func commandGuideLiteralCommands() []string {
 	return []string{
+		"abandon",
 		"archaeology",
+		"ask",
 		"assumptions",
 		"bump-version",
 		"chaos",
@@ -452,6 +456,7 @@ func commandGuideLiteralCommands() []string {
 		"profile",
 		"queen-compose",
 		"quick",
+		"recover",
 		"redirect",
 		"reference-index",
 		"reference-list",

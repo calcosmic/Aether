@@ -6,7 +6,11 @@ description: "🔦 Emit a FOCUS pheromone through the Aether CLI runtime"
 
 Use the Go `aether` CLI as the source of truth.
 
-- Execute `aether focus "$ARGUMENTS"` directly.
+- Execute `AETHER_OUTPUT_MODE=visual aether focus "$ARGUMENTS"` directly.
 - Do not append to `constraints.json` or rewrite `pheromones.json` by hand.
 - If `$ARGUMENTS` is empty, show `Usage: /ant-focus <area>`.
 - Report the CLI result directly.
+
+**Next steps:**
+- `/ant-pheromones` — see all active signals
+- `/ant-build <phase>` — build with the new focus in effect

@@ -170,8 +170,8 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether plan-finalize",
 		},
 		"build": {
-			"aether host build --dry-run <phase>",
-			"Parse `result.manifest.dispatch_manifest`",
+			"aether build <phase> --plan-only",
+			"Parse `result.dispatch_manifest`",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -250,14 +250,13 @@ func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
 		},
 		"build": {
 			required: []string{
-				"aether host build --dry-run <phase>",
-				"Parse `result.manifest.dispatch_manifest`",
+				"aether build <phase> --plan-only",
+				"Parse `result.dispatch_manifest`",
 				"AETHER_OUTPUT_MODE=json aether build-finalize",
 			},
 			retired: []string{
-				"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
-				"aether host build <phase>",
-				"Parse `result.dispatch_manifest`",
+				"aether host build --dry-run <phase>",
+				"Parse `result.manifest.dispatch_manifest`",
 			},
 		},
 		"continue": {
@@ -355,7 +354,7 @@ func TestWrapperSourcesUseTypeScriptHostManifestSpine(t *testing.T) {
 			"plan-finalize",
 		},
 		"build": {
-			"aether host build --dry-run",
+			"aether build $ARGUMENTS --plan-only",
 			"build-finalize",
 		},
 		"continue": {
@@ -440,7 +439,7 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	for _, want := range []string{
 		"aether host colonize",
 		"aether host plan --depth <choice> --planning-depth <choice>",
-		"aether host build --dry-run <phase>",
+		"aether build <phase> --plan-only",
 		"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
 		"aether host continue --dry-run --classic-ceremony",
 		"aether host seal",
@@ -933,7 +932,7 @@ func TestExecutionPathAudit_OneConductorPerWorkflow(t *testing.T) {
 		{
 			name:        "build",
 			yamlFile:    "build.yaml",
-			wantHostCmd: "aether host build",
+			wantHostCmd: "aether build $ARGUMENTS --plan-only",
 		},
 		{
 			name:        "plan",

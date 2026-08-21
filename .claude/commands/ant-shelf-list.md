@@ -1,7 +1,7 @@
 <!-- Aether-managed: runtime spec at .aether/commands/shelf-list.yaml. Synced by aether update. -->
 ---
 name: ant-shelf-list
-description: "List Aether shelf backlog items"
+description: "📚 List Aether shelf backlog items"
 ---
 
 Use the Go `aether` CLI as the source of truth.

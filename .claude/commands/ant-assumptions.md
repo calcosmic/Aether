@@ -12,3 +12,7 @@ Use the Go `aether` CLI as the source of truth.
 - To validate one assumption after confirming evidence, execute `AETHER_OUTPUT_MODE=visual aether assumption-validate --id <id> --note "<evidence>"`.
 - If the runtime reports unclear assumptions, surface them honestly instead of silently deciding for the user.
 - If docs and runtime disagree, runtime wins.
+
+**Next steps:**
+- `/ant-build <phase>` — build with assumptions surfaced
+- `/ant-discuss` — resolve any assumption that looks wrong

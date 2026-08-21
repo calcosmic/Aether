@@ -57,13 +57,39 @@ const REQUIREMENT_COVERAGE_MAP: Array<{
   { id: "ITER-06", testFiles: ["confidence-loop.test.ts", "confidence-loop-e2e.test.ts"], description: "Iteration progress in ceremony" },
 
   // HIVE-01 through HIVE-07
-  { id: "HIVE-01", testFiles: ["hive-injector.test.ts", "host-integration.test.ts"], description: "Hive injector calls hive-read" },
-  { id: "HIVE-02", testFiles: ["hive-injector.test.ts", "host-integration.test.ts"], description: "Colony-prime reads hive wisdom" },
-  { id: "HIVE-03", testFiles: ["hive-injector.test.ts", "host-integration.test.ts"], description: "Graceful degradation without hive" },
-  { id: "HIVE-04", testFiles: ["hive-injector.test.ts", "host-integration.test.ts"], description: "Hive-read failure does not block" },
-  { id: "HIVE-05", testFiles: ["hive-injector.test.ts"], description: "Colony B benefits from colony A wisdom" },
-  { id: "HIVE-06", testFiles: ["hive-injector.test.ts"], description: "Domain tags include tech stack" },
-  { id: "HIVE-07", testFiles: ["hive-injector.test.ts"], description: "Partial domain match discount" },
+  // NOTE (Phase 190, 2026-08-20; corrected 190-REVIEW WR-03): hive-injector.
+  // test.ts and the src module it covered (.aether/ts-host/src/hive-injector.
+  // ts) were deleted. That module independently recomputed and attached a
+  // second "## HIVE WISDOM (Cross-Colony Patterns)" section on top of the one
+  // Go's colony-prime capsule already delivers, so every worker prompt
+  // carried the heading twice. Removal is a correctness fix (190-CONTEXT.md
+  // D-08/D-09/D-10), not a regression -- hive wisdom still reaches every
+  // worker, now exactly once.
+  //
+  // The two channels were NOT selecting identical entries, and saying so
+  // would be wrong. The deleted TS channel called hive-read with no --domain
+  // filter and then applied its own ranking, KEEPING entries from other
+  // domains at a 0.5x confidence discount. Go's surviving channel
+  // (filterHiveWisdomEntriesByDomain, cmd/context_weighting.go:78) EXCLUDES
+  // a non-matching domain outright once the repo has domain tags. So for a
+  // colony whose tags do not span everything in ~/.aether/hive/wisdom.json,
+  // the deleted channel was the only one surfacing cross-domain wisdom at
+  // all, and this phase narrowed that coverage rather than merely
+  // deduplicating it. The hard exclusion is the intended final behaviour;
+  // discounted cross-domain inclusion is a separate product decision, not
+  // something this phase quietly settled. The TS-side
+  // presence-based behaviors these v1.21 entries originally named
+  // (hive-read calls, domain-tag resolution, confidence discounting) no
+  // longer exist in this codebase by design; host-integration.test.ts now
+  // carries the Phase 190 regression lock proving their ABSENCE instead,
+  // so this ledger points at a real, current file rather than a deleted one.
+  { id: "HIVE-01", testFiles: ["host-integration.test.ts"], description: "Hive injector calls hive-read (mechanism retired Phase 190; see note above)" },
+  { id: "HIVE-02", testFiles: ["host-integration.test.ts"], description: "Colony-prime reads hive wisdom" },
+  { id: "HIVE-03", testFiles: ["host-integration.test.ts"], description: "Graceful degradation without hive (mechanism retired Phase 190; see note above)" },
+  { id: "HIVE-04", testFiles: ["host-integration.test.ts"], description: "Hive-read failure does not block (mechanism retired Phase 190; see note above)" },
+  { id: "HIVE-05", testFiles: ["host-integration.test.ts"], description: "Colony B benefits from colony A wisdom (mechanism retired Phase 190; see note above)" },
+  { id: "HIVE-06", testFiles: ["host-integration.test.ts"], description: "Domain tags include tech stack (mechanism retired Phase 190; see note above)" },
+  { id: "HIVE-07", testFiles: ["host-integration.test.ts"], description: "Partial domain match discount (mechanism retired Phase 190; see note above)" },
 
   // SKILL-01 through SKILL-03
   { id: "SKILL-01", testFiles: ["host-integration.test.ts", "classic-command-parity.test.ts", "cross-platform-parity.test.ts"], description: "Skill section present when dispatch has skill_section" },

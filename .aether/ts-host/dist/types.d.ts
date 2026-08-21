@@ -95,8 +95,6 @@ export interface BuildDispatch {
     blockers?: string[];
     duration?: number;
     skill_section?: string;
-    /** Cross-colony hive wisdom section for this dispatch. */
-    hive_section?: string;
     /** Sub-workers requested by this dispatch via structured spawn claims. */
     spawns?: SpawnClaim[];
     skill_count?: number;
@@ -340,6 +338,9 @@ export interface PlanningDispatch {
     colony_skill_count?: number;
     domain_skill_count?: number;
     matched_skills?: string[];
+    /** Canonical Go-owned permission request for this caste; the host copies
+     * it through verbatim and never substitutes its own. */
+    permission_profile?: PermissionProfile;
 }
 export interface PlanSynthesis {
     source: "ts-host";
@@ -483,6 +484,9 @@ export interface ContinueExternalDispatch {
     domain_skill_count?: number;
     matched_skills?: string[];
     handoff?: WorkerHandoff;
+    /** Canonical Go-owned permission request for this caste; the host copies
+     * it through verbatim and never substitutes its own. */
+    permission_profile?: PermissionProfile;
 }
 export interface VerificationStep {
     name: string;

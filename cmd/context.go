@@ -232,8 +232,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 	}
 
 	failureCount := 0
-	var midden colony.MiddenFile
-	if err := store.LoadJSON("midden/midden.json", &midden); err == nil {
+	if midden, err := loadMiddenFile(store); err == nil {
 		failureCount = len(midden.Entries)
 	}
 
@@ -853,10 +852,9 @@ var prContextCmd = &cobra.Command{
 		}
 		cacheStatus["decisions"] = "read"
 
-		// 9. midden: Load midden.json
+		// 9. midden: Load the canonical failure-record file
 		middenMap := map[string]interface{}{"count": 0, "items": []string{}}
-		var midden colony.MiddenFile
-		if err := sc.Load(filepath.Join(store.BasePath(), "midden", "midden.json"), &midden); err != nil {
+		if midden, err := loadMiddenFile(store); err != nil {
 			fallbacks = append(fallbacks, "midden: midden.json missing")
 			cacheStatus["midden"] = "missing"
 		} else {
@@ -1527,9 +1525,11 @@ func readQUEENMd(filePath string) map[string]string {
 			sectionName := strings.TrimPrefix(trimmed, "## ")
 			inWisdomSection = sectionName == "Wisdom" || sectionName == "Patterns" ||
 				sectionName == "Codebase Patterns" || sectionName == "Philosophies" || sectionName == "Anti-Patterns" ||
+				sectionName == "Instincts" ||
 				strings.HasPrefix(sectionName, "Wisdom") || strings.HasPrefix(sectionName, "Patterns") ||
 				strings.HasPrefix(sectionName, "Codebase Patterns") ||
-				strings.HasPrefix(sectionName, "Philosophies") || strings.HasPrefix(sectionName, "Anti-Patterns")
+				strings.HasPrefix(sectionName, "Philosophies") || strings.HasPrefix(sectionName, "Anti-Patterns") ||
+				strings.HasPrefix(sectionName, "Instincts")
 			continue
 		}
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -52,7 +53,7 @@ var watchCmd = &cobra.Command{
 }
 
 var oracleCmd = &cobra.Command{
-	Use:   "oracle [topic|status|stop]",
+	Use:   "oracle [topic|propose|brief|status|stop|recover|promote|selftest]",
 	Short: "Run the autonomous Oracle RALF research loop",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -73,6 +74,105 @@ var oracleCmd = &cobra.Command{
 			return nil
 		}
 
+		// The setup ritual: propose suggests how to scope the run and writes
+		// nothing; brief records the approved scope that `--from-brief` then
+		// requires.
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "propose") {
+			topic, _ := cmd.Flags().GetString("topic")
+			if strings.TrimSpace(topic) == "" {
+				topic = strings.TrimSpace(strings.Join(args[1:], " "))
+			}
+			result, err := runOraclePropose(skillWorkspaceRoot(), topic)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			outputWorkflow(result, renderOraclePropose(result))
+			return nil
+		}
+
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "brief") {
+			opts := oracleBriefOptions{}
+			opts.Topic, _ = cmd.Flags().GetString("topic")
+			opts.CoreQuestion, _ = cmd.Flags().GetString("core-question")
+			opts.Context, _ = cmd.Flags().GetString("context")
+			opts.SuccessCriteria, _ = cmd.Flags().GetStringArray("success-criteria")
+			opts.Template, _ = cmd.Flags().GetString("template")
+			opts.Depth, _ = cmd.Flags().GetString("depth")
+			opts.Scope, _ = cmd.Flags().GetString("scope")
+			opts.MaxIterations, _ = cmd.Flags().GetInt("max-iterations")
+			if raw, _ := cmd.Flags().GetString("confidence-target"); strings.TrimSpace(raw) != "" {
+				parsed, parseErr := strconv.Atoi(strings.TrimSuffix(strings.TrimSpace(raw), "%"))
+				if parseErr != nil {
+					outputError(1, fmt.Sprintf("--confidence-target must be a number 1-100, got %q", raw), nil)
+					return renderedErrorExit(1)
+				}
+				opts.TargetConfidence = parsed
+			}
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			result, err := runOracleBriefApprove(skillWorkspaceRoot(), opts, dryRun)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			panel, _ := result["panel"].(string)
+			outputWorkflow(result, panel)
+			return nil
+		}
+
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "save") {
+			name, _ := cmd.Flags().GetString("name")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			result, err := runOracleSave(skillWorkspaceRoot(), name, dryRun)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			outputOK(result)
+			return nil
+		}
+
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "selftest") {
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			result, err := runOracleSelftest(skillWorkspaceRoot(), dryRun)
+			if result != nil {
+				outputWorkflow(result, renderOracleSelftest(result))
+			}
+			if err != nil {
+				return renderedErrorExit(1)
+			}
+			return nil
+		}
+
+		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "recover") {
+			result, err := oracleRecoverStaleRun(skillWorkspaceRoot())
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			outputOK(result)
+			return nil
+		}
+
+		// `status --follow` streams the round log and never touches state.
+		//
+		// The --from-brief exclusion is load-bearing: `oracle --from-brief
+		// --background --follow` — the exact command the wrapper instructs —
+		// also has zero positional args, and without the exclusion it was
+		// swallowed here as a bare status-follow. The research never started;
+		// follow replayed the PREVIOUS run's log and exited as if work had
+		// happened. Locked by TestOracleFromBriefBackgroundFollowStartsTheRun.
+		follow, _ := cmd.Flags().GetBool("follow")
+		followInterval, _ := cmd.Flags().GetDuration("follow-interval")
+		fromBrief, _ := cmd.Flags().GetBool("from-brief")
+		if follow && !fromBrief && (len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status")) {
+			if err := followOracleProgress(skillWorkspaceRoot(), followInterval); err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			return nil
+		}
+
 		depth, _ := cmd.Flags().GetString("depth")
 		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
 		scope, _ := cmd.Flags().GetString("scope")
@@ -83,12 +183,47 @@ var oracleCmd = &cobra.Command{
 		if maxIterations > 0 {
 			maxIterationArg = fmt.Sprintf("%d", maxIterations)
 		}
+
+		// --from-brief is the gated path: it refuses to run unless the setup
+		// ritual actually produced an approved brief. Without this the ritual
+		// is only prose in a wrapper, which nothing can enforce.
+		if fromBrief {
+			brief, briefErr := resolveOracleBriefRun(skillWorkspaceRoot())
+			if briefErr != nil {
+				outputError(1, briefErr.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			args = []string{brief.Topic}
+			depth = brief.Depth
+			scope = brief.Scope
+			template = brief.Template
+			confidenceTarget = fmt.Sprintf("%d", brief.TargetConfidence)
+			maxIterationArg = ""
+			if brief.MaxIterations > 0 {
+				maxIterationArg = fmt.Sprintf("%d", brief.MaxIterations)
+			}
+		}
+
 		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget, scope, template, maxIterationArg, fmt.Sprintf("%t", background))
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
 		outputWorkflow(result, renderOracleCompatibilityVisual(result))
+
+		// `--background --follow` is the wrapper's normal path: detach the
+		// controller so a long run cannot time out the host's tool call, then
+		// stream its rounds back so the operator can still watch it work.
+		// Only when the run actually detached: a foreground run already
+		// printed its rounds live, and replaying the log would print every
+		// line twice.
+		detached, _ := result["background"].(bool)
+		if follow && detached {
+			if err := followOracleProgress(skillWorkspaceRoot(), followInterval); err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+		}
 		return nil
 	},
 }
@@ -164,7 +299,7 @@ func init() {
 	watchCmd.Flags().Duration("interval", 2*time.Second, "Refresh interval for live watch output")
 
 	runCompatibilityCmd.Flags().Int("max-phases", 0, "Run at most N phases before pausing")
-	runCompatibilityCmd.Flags().Int("replan-interval", 0, "Pause for replanning every N completed phases")
+	runCompatibilityCmd.Flags().Int("replan-interval", 2, "Pause for replanning every N completed phases (0 disables; classic default is 2)")
 	runCompatibilityCmd.Flags().Bool("continue", false, "Ignore the next replan pause and keep running")
 	runCompatibilityCmd.Flags().Bool("dry-run", false, "Preview the autopilot steps without mutating state")
 	runCompatibilityCmd.Flags().Bool("headless", false, "Record headless mode in autopilot state")
@@ -180,9 +315,18 @@ func init() {
 	oracleCmd.Flags().String("template", defaultOracleTemplate, "Output template: auto, prd, tech-eval, architecture-review, bug-investigation, research-brief, or custom")
 	oracleCmd.Flags().Int("max-iterations", 0, "Override depth iteration cap, 1-50")
 	oracleCmd.Flags().Bool("background", false, "Start the Oracle loop in a detached background controller and return immediately")
+	oracleCmd.Flags().String("topic", "", "For `oracle propose` and `oracle brief`: the research topic")
+	oracleCmd.Flags().String("core-question", "", "For `oracle brief`: the single question this run must answer")
+	oracleCmd.Flags().String("context", "", "For `oracle brief`: why this research is happening and what decision it feeds")
+	oracleCmd.Flags().StringArray("success-criteria", nil, "For `oracle brief`: what a finished answer contains (repeatable)")
+	oracleCmd.Flags().Bool("from-brief", false, "Start the Oracle loop from the approved research brief; fails when no brief has been approved")
+	oracleCmd.Flags().String("name", "", "For `oracle save`: filename slug for the saved research document")
+	oracleCmd.Flags().Bool("follow", false, "Stream one line per research round until the run ends")
+	oracleCmd.Flags().Duration("follow-interval", defaultOracleFollowInterval, "How often `--follow` checks for new rounds")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)
+	rootCmd.AddCommand(researchCmd)
 	rootCmd.AddCommand(runCompatibilityCmd)
 	rootCmd.AddCommand(versionsCmd)
 }
@@ -224,7 +368,7 @@ func runLiveWatch(interval time.Duration) error {
 		_ = writeWatchArtifacts(result, visual)
 
 		frame := "\033[H\033[2J" + strings.TrimRight(visual, "\n") + "\n"
-		fmt.Fprint(stdout, frame)
+		writeVisualOutput(stdout, frame)
 
 		stateName := strings.TrimSpace(stringValue(result["state"]))
 		if intValue(result["active_count"]) == 0 && stateName != string(colony.StateEXECUTING) && stateName != string(colony.StateBUILT) {
@@ -260,9 +404,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 	steps := make([]map[string]interface{}, 0, len(state.Plan.Phases)*2)
 	phasesCompleted := 0
 
+	emitVisualProgress(renderRunEngageLine(state, opts))
+
 	for {
 		if err := ctx.Err(); err != nil {
-			_ = syncRunAutopilotState(state, opts, "paused")
+			_ = syncRunAutopilotState(state, opts, "paused", "")
 			reason := "cancelled"
 			if err == context.DeadlineExceeded {
 				reason = "timeout"
@@ -274,36 +420,40 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			}
 			return result, nil
 		}
-		if err := syncRunAutopilotState(state, opts, "running"); err != nil {
+		if err := syncRunAutopilotState(state, opts, "running", ""); err != nil {
 			return nil, err
 		}
 
 		switch state.State {
 		case colony.StateCOMPLETED:
-			_ = syncRunAutopilotState(state, opts, "completed")
+			_ = syncRunAutopilotState(state, opts, "completed", "")
 			return buildRunExecutionResult(state, opts, steps, phasesCompleted, "completed", "aether seal"), nil
 
 		case colony.StateREADY:
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "max_phases_reached")
+				emitVisualLine(fmt.Sprintf("--- Autopilot: paused after %d phase(s) — max reached ---", phasesCompleted))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "max_phases_reached", nextCommandFromState(state)), nil
 			}
 
 			phase := recoveryPhase(&state)
 			if phase == nil {
-				_ = syncRunAutopilotState(state, opts, "completed")
+				_ = syncRunAutopilotState(state, opts, "completed", "")
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "completed", "aether seal"), nil
 			}
+
+			emitVisualProgress(renderRunPhaseHeader(phase, len(state.Plan.Phases)))
 
 			buildResult, err := runCodexBuildWithOptions(root, phase.ID, nil, false, codexBuildOptions{
 				WorkerTimeout: opts.WorkerTimeout,
 				ParentContext: ctx,
 			})
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "⚠ Build failed for phase %d, attempting single retry...\n", phase.ID)
+				firstErr := err
+				emitVisualLine(fmt.Sprintf("⚠ Build failed for phase %d, attempting single retry...", phase.ID))
 				select {
 				case <-ctx.Done():
-					_ = syncRunAutopilotState(state, opts, "paused")
+					_ = syncRunAutopilotState(state, opts, "paused", "")
 					result := buildRunExecutionResult(state, opts, steps, phasesCompleted, "cancelled", nextCommandFromState(state))
 					result["error"] = ctx.Err().Error()
 					return result, nil
@@ -314,7 +464,12 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 					ParentContext: ctx,
 				})
 				if err != nil {
-					_ = syncRunAutopilotState(state, opts, "paused")
+					// Best-effort record, pause regardless (T-188-15): only
+					// the write's own error is discarded here, never the
+					// pause below. recordAutopilotRetryExhaustion still
+					// returns its error to any caller that wants to check.
+					_ = recordAutopilotRetryExhaustion(store, phase.ID, firstErr, err)
+					_ = syncRunAutopilotState(state, opts, "paused", "")
 					return nil, err
 				}
 			}
@@ -333,13 +488,19 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				return nil, err
 			}
 
+			// Classic pause check between build and verification: the run
+			// stops on purpose, with the reason on screen, not mid-flight.
+			if reason := checkAutopilotPauseConditions(); reason != "" {
+				return pauseAutopilotRun(state, opts, steps, phasesCompleted, reason), nil
+			}
+
 		case colony.StateEXECUTING, colony.StateBUILT:
 			continueResult, updatedState, phase, _, _, final, err := runCodexContinue(root, codexContinueOptions{
 				WorkerTimeout: opts.WorkerTimeout,
 				ParentContext: ctx,
 			})
 			if err != nil {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "")
 				return nil, err
 			}
 
@@ -355,25 +516,37 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			state = updatedState
 
 			if blocked, _ := continueResult["blocked"].(bool); blocked {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "blocked")
 				next := strings.TrimSpace(stringValue(continueResult["next"]))
 				if next == "" {
 					next = "aether continue"
 				}
+				if opts.Headless {
+					queueAutopilotPauseDecision("blocked", state.CurrentPhase)
+				}
+				emitVisualProgress(renderRunPauseBlock("blocked", next))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "blocked", next), nil
 			}
 
 			phasesCompleted++
 			if final {
-				_ = syncRunAutopilotState(state, opts, "completed")
+				_ = syncRunAutopilotState(state, opts, "completed", "")
+				emitVisualProgress(renderAutopilotComplete(phasesCompleted))
+				emitVisualProgress(renderProjectComplete(state, phasesCompleted))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "completed", "aether seal"), nil
 			}
+			emitVisualProgress(renderRunPhaseAdvancement(phase, continueResult, phasesCompleted, len(state.Plan.Phases)))
+			if reason := checkAutopilotPauseConditions(); reason != "" {
+				return pauseAutopilotRun(state, opts, steps, phasesCompleted, reason), nil
+			}
 			if opts.ReplanInterval > 0 && phasesCompleted > 0 && phasesCompleted%opts.ReplanInterval == 0 && !opts.ContinueWithoutReplan {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "replan_due")
+				emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "replan_due", "aether plan"), nil
 			}
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
-				_ = syncRunAutopilotState(state, opts, "paused")
+				_ = syncRunAutopilotState(state, opts, "paused", "max_phases_reached")
+				emitVisualLine(fmt.Sprintf("--- Autopilot: paused after %d phase(s) — max reached ---", phasesCompleted))
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "max_phases_reached", nextCommandFromState(state)), nil
 			}
 
@@ -536,7 +709,7 @@ func buildRunExecutionResult(state colony.ColonyState, opts runCompatibilityOpti
 	}
 }
 
-func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOptions, status string) error {
+func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOptions, status, reason string) error {
 	if store == nil {
 		return nil
 	}
@@ -546,6 +719,7 @@ func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOption
 		TotalPhases:    len(state.Plan.Phases),
 		CurrentPhase:   state.CurrentPhase,
 		Status:         status,
+		Reason:         reason,
 		Headless:       opts.Headless,
 		ReplanInterval: opts.ReplanInterval,
 		Phases:         make([]autopilotPhaseStatus, 0, len(state.Plan.Phases)),
@@ -597,23 +771,47 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 		b.WriteString(fmt.Sprintf("Phases Planned: %d\n", phasesPlanned))
 	}
 
-	if steps, ok := result["steps"].([]interface{}); ok && len(steps) > 0 {
-		b.WriteString("\nSteps\n")
+	// The result reaches this renderer both in-process (steps is
+	// []map[string]interface{}) and after a JSON round trip (steps is
+	// []interface{}); handle both or the visual silently drops the section.
+	var stepMaps []map[string]interface{}
+	switch steps := result["steps"].(type) {
+	case []map[string]interface{}:
+		stepMaps = steps
+	case []interface{}:
 		for _, raw := range steps {
-			step, _ := raw.(map[string]interface{})
+			if step, ok := raw.(map[string]interface{}); ok {
+				stepMaps = append(stepMaps, step)
+			}
+		}
+	}
+	if len(stepMaps) > 0 {
+		b.WriteString("\nSteps\n")
+		for _, step := range stepMaps {
 			if step == nil {
 				continue
 			}
 			b.WriteString("  - ")
 			b.WriteString(stringValue(step["command"]))
 			if phase := intValue(step["phase"]); phase > 0 {
-				b.WriteString(fmt.Sprintf(" [phase %d]", phase))
+				if name := strings.TrimSpace(stringValue(step["phase_name"])); name != "" {
+					b.WriteString(fmt.Sprintf(" [phase %d: %s]", phase, name))
+				} else {
+					b.WriteString(fmt.Sprintf(" [phase %d]", phase))
+				}
 			}
 			if state := strings.TrimSpace(stringValue(step["state"])); state != "" {
 				b.WriteString(" -> ")
 				b.WriteString(state)
 			}
 			b.WriteString("\n")
+		}
+	}
+
+	if dryRun, _ := result["dry_run"].(bool); dryRun {
+		b.WriteString("\nPause Triggers (the run stops on purpose when one fires)\n")
+		for _, trigger := range autopilotPauseTriggerCatalog() {
+			b.WriteString(fmt.Sprintf("  %s — %s\n", trigger.Condition, trigger.Meaning))
 		}
 	}
 

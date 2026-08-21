@@ -21,7 +21,6 @@ func TestInternalWorkerAdapterSimulatesOnlyWithExplicitFlag(t *testing.T) {
 		"task_id":        "1.1",
 		"task":           "Exercise the adapter boundary",
 		"skill_section":  "skill guidance",
-		"hive_section":   "verified hive guidance",
 	})
 
 	response, err := runInternalWorkerAdapter(context.Background(), requestPath, false, true)
@@ -49,8 +48,8 @@ func TestInternalWorkerAdapterRequiresAndValidatesPermissionProfile(t *testing.T
 	t.Chdir(root)
 	base := map[string]interface{}{
 		"schema_version": 1,
-		"caste":          "scout",
-		"worker_name":    "Scout-Test",
+		"caste":          "includer",
+		"worker_name":    "Includer-Test",
 		"task":           "Inspect without writing",
 	}
 
@@ -71,7 +70,7 @@ func TestInternalWorkerAdapterRequiresAndValidatesPermissionProfile(t *testing.T
 		t.Fatal(err)
 	}
 	if _, err := internalWorkerConfig(root, &codex.FakeInvoker{}, broadRequest); err == nil || !strings.Contains(err.Error(), "mismatch") {
-		t.Fatalf("broadened scout profile was accepted: %v", err)
+		t.Fatalf("broadened includer profile was accepted: %v", err)
 	}
 }
 
@@ -125,6 +124,55 @@ func TestInternalWorkerAdapterRejectsMalformedTerminalResult(t *testing.T) {
 	result.WorkerName = "Different-Worker"
 	if err := validateInternalWorkerResult(request, &result, nil); err == nil || !strings.Contains(err.Error(), "identity") {
 		t.Fatalf("mismatched worker identity was accepted: %v", err)
+	}
+}
+
+// TestInternalWorkerAdapterIgnoresHiveSectionAndUsesSkillSectionDirectly is
+// Phase 190's regression lock for the Go side of the TS-host hive
+// double-injection removal (190-CONTEXT.md D-08/D-09/D-10). It constructs a
+// request carrying BOTH a real skill_section and a stray hive_section --
+// simulating either a not-yet-rebuilt TS host or a malicious/stray extra
+// field (T-190-06) -- unmarshalled with Go's ordinary, lenient JSON decoding
+// (not the strict internalWorkerAdapterCmd request-file path, which now
+// rejects an unknown field outright; this test proves the field is INERT
+// wherever it might still arrive). It asserts the resulting worker config's
+// SkillSection equals strings.TrimSpace(request.SkillSection) exactly --
+// proving the removed field cannot leak hive content into a worker's prompt
+// via any path, and that ordinary skill injection is unaffected.
+func TestInternalWorkerAdapterIgnoresHiveSectionAndUsesSkillSectionDirectly(t *testing.T) {
+	raw := map[string]interface{}{
+		"schema_version": 1,
+		"caste":          "builder",
+		"worker_name":    "Builder-Test",
+		"task":           "Exercise hive_section removal at the wire boundary",
+		"skill_section":  "skill-marker-alpha",
+		"hive_section":   "hive-marker-beta",
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("marshal raw request: %v", err)
+	}
+
+	var request internalWorkerDispatchRequest
+	if err := json.Unmarshal(data, &request); err != nil {
+		t.Fatalf("unmarshal raw request with default (lenient) decoding: %v", err)
+	}
+	request.PermissionProfile = codex.PermissionProfileForCaste("builder")
+
+	config, err := internalWorkerConfig(t.TempDir(), &codex.FakeInvoker{}, request)
+	if err != nil {
+		t.Fatalf("internalWorkerConfig: %v", err)
+	}
+
+	if config.SkillSection != strings.TrimSpace(request.SkillSection) {
+		t.Fatalf("SkillSection must equal strings.TrimSpace(request.SkillSection) exactly, got %q want %q",
+			config.SkillSection, strings.TrimSpace(request.SkillSection))
+	}
+	if !strings.Contains(config.SkillSection, "skill-marker-alpha") {
+		t.Fatalf("expected SkillSection to retain the genuine skill_section text, got %q", config.SkillSection)
+	}
+	if strings.Contains(config.SkillSection, "hive-marker-beta") {
+		t.Fatalf("SkillSection leaked a stray hive_section value into the worker prompt -- got %q", config.SkillSection)
 	}
 }
 

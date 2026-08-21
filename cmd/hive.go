@@ -269,71 +269,6 @@ func evictHiveEntryForCapacity(wf *hiveWisdomData) {
 	}
 }
 
-// --- colony retrieval consent ---
-
-const hiveRetrievalConsentFile = "hive_retrieval.json"
-
-type hiveRetrievalConsent struct {
-	OptIn     bool   `json:"opt_in"`
-	UpdatedAt string `json:"updated_at"`
-}
-
-// hiveRetrievalConsentPath resolves the current colony's consent record. The
-// colony data dir takes precedence; the working directory is the fallback so
-// data-only subcommands still resolve it.
-func hiveRetrievalConsentPath() string {
-	if store != nil && strings.TrimSpace(store.BasePath()) != "" {
-		return filepath.Join(store.BasePath(), hiveRetrievalConsentFile)
-	}
-	if envDir := strings.TrimSpace(os.Getenv("COLONY_DATA_DIR")); envDir != "" {
-		return filepath.Join(envDir, hiveRetrievalConsentFile)
-	}
-	if root := strings.TrimSpace(os.Getenv("AETHER_ROOT")); root != "" {
-		return filepath.Join(root, ".aether", "data", hiveRetrievalConsentFile)
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(cwd, ".aether", "data", hiveRetrievalConsentFile)
-}
-
-// hiveRetrievalOptedIn reports whether this colony has explicitly consented
-// to receiving cross-project wisdom. Consent is per colony, always: the
-// global policy only decides whether the feature exists, never whether this
-// repository receives it.
-func hiveRetrievalOptedIn() bool {
-	path := hiveRetrievalConsentPath()
-	if path == "" {
-		return false
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	var consent hiveRetrievalConsent
-	if err := json.Unmarshal(raw, &consent); err != nil {
-		return false
-	}
-	return consent.OptIn
-}
-
-func writeHiveRetrievalConsent(optIn bool) error {
-	path := hiveRetrievalConsentPath()
-	if path == "" {
-		return fmt.Errorf("no colony data directory; run inside an initialized colony")
-	}
-	consent := hiveRetrievalConsent{OptIn: optIn, UpdatedAt: time.Now().UTC().Format(time.RFC3339)}
-	encoded, err := json.MarshalIndent(consent, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(encoded, '\n'), 0644)
-}
-
 // --- hive-init ---
 
 var hiveInitCmd = &cobra.Command{
@@ -551,17 +486,6 @@ var hiveReadCmd = &cobra.Command{
 			})
 			return nil
 		}
-		if forWorker && !hiveRetrievalOptedIn() {
-			outputOK(map[string]interface{}{
-				"entries": []hiveWisdomEntry{},
-				"total":   0,
-				"policy":  string(currentHiveRuntimePolicy()),
-				"enabled": false,
-				"reason":  "this colony has not consented to cross-project wisdom; run `aether hive-opt-in` to enable it here",
-			})
-			return nil
-		}
-
 		hub := resolveHubPath()
 		now := time.Now().UTC()
 
@@ -614,10 +538,12 @@ var hiveAbstractCmd = &cobra.Command{
 		}
 		sourceRepo, _ := cmd.Flags().GetString("source-repo")
 
-		// Simple abstraction: remove repo-specific identifiers
+		// Simple abstraction: remove repo-specific identifiers. Uses the shared
+		// colony.RepoPlaceholder because this output feeds hive-store, which
+		// sanitizes it.
 		abstracted := instinct
 		if sourceRepo != "" {
-			abstracted = strings.ReplaceAll(abstracted, sourceRepo, "<repo>")
+			abstracted = strings.ReplaceAll(abstracted, sourceRepo, colony.RepoPlaceholder)
 		}
 		// Remove common repo path prefixes
 		for _, prefix := range []string{"src/", "lib/", "pkg/", "cmd/", "internal/"} {
@@ -658,9 +584,15 @@ func promoteToHiveWithReference(text, domain, sourceRepo string, confidence floa
 	// and friends was labelled abstraction but was plain string replacement that
 	// pointed entries at paths which do not exist, making them unverifiable.
 	// Same reasoning as HiveStore.abstractContent in pkg/learn/hive_store.go.
+	//
+	// The placeholder is colony.RepoPlaceholder, not a local literal, because
+	// storeHiveWisdomEntry below sanitizes this text and the sanitizer used to
+	// reject the placeholder inserted right here — silently discarding nearly
+	// every promotion. It is defined beside the rules that judge it and locked
+	// by TestRepoPlaceholderSurvivesSanitizer.
 	abstracted := text
 	if sourceRepo != "" {
-		abstracted = strings.ReplaceAll(abstracted, sourceRepo, "<repo>")
+		abstracted = strings.ReplaceAll(abstracted, sourceRepo, colony.RepoPlaceholder)
 	}
 
 	hub := resolveHubPath()
@@ -864,39 +796,6 @@ var hiveRevokeCmd = &cobra.Command{
 	},
 }
 
-// --- hive-opt-in / hive-opt-out ---
-
-var hiveOptInCmd = &cobra.Command{
-	Use:   "hive-opt-in",
-	Short: "Consent this colony to receiving cross-project wisdom in worker context",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := writeHiveRetrievalConsent(true); err != nil {
-			outputError(2, err.Error(), nil)
-			return nil
-		}
-		outputOK(map[string]interface{}{
-			"opt_in": true,
-			"note":   "cross-project wisdom will be injected into this colony's worker context when AETHER_HIVE_POLICY allows reads",
-		})
-		return nil
-	},
-}
-
-var hiveOptOutCmd = &cobra.Command{
-	Use:   "hive-opt-out",
-	Short: "Withdraw this colony's consent to receiving cross-project wisdom",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := writeHiveRetrievalConsent(false); err != nil {
-			outputError(2, err.Error(), nil)
-			return nil
-		}
-		outputOK(map[string]interface{}{"opt_in": false})
-		return nil
-	},
-}
-
 // --- eternal-init ---
 
 // eternalInitCmd initializes the eternal memory fallback storage directory and file.
@@ -969,7 +868,5 @@ func init() {
 	rootCmd.AddCommand(hiveAbstractCmd)
 	rootCmd.AddCommand(hivePromoteCmd)
 	rootCmd.AddCommand(hiveRevokeCmd)
-	rootCmd.AddCommand(hiveOptInCmd)
-	rootCmd.AddCommand(hiveOptOutCmd)
 	rootCmd.AddCommand(eternalInitCmd)
 }

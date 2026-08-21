@@ -81,6 +81,7 @@ type WorkerResult struct {
 	Spawns        []string                   // Sub-workers spawned
 	Duration      time.Duration              // Wall-clock time of the invocation
 	RawOutput     string                     // Full stdout from the subprocess
+	Usage         WorkerUsage                // Provider-reported token spend (or a labelled estimate)
 	Error         error                      // Invocation error (if any)
 	Handoff       WorkerHandoff              // Worker handoff relay data
 }
@@ -273,9 +274,8 @@ func (r *RealInvoker) Preflight(ctx context.Context, root string) AvailabilitySt
 		return status
 	}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
+	// root is intentionally not used as the probe's working directory (D-07)
+	// — the shared runner isolates every probe into its own temp directory.
 	args := []string{
 		"--sandbox", "read-only",
 		"--ask-for-approval", "never",
@@ -284,41 +284,7 @@ func (r *RealInvoker) Preflight(ctx context.Context, root string) AvailabilitySt
 		"--ephemeral",
 		"--skip-git-repo-check",
 	}
-	cmd := exec.CommandContext(probeCtx, r.binaryName, args...)
-	if strings.TrimSpace(root) != "" {
-		cmd.Dir = root
-	}
-	cmd.Stdin = strings.NewReader("Return exactly OK.\n")
-	configureWorkerCommand(cmd)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		raw := strings.TrimSpace(combinedWorkerOutput(stdout.String(), stderr.String()))
-		reason := strings.TrimSpace(sanitizeWorkerDiagnosticOutput(raw))
-		if reason == "" {
-			reason = sanitizeWorkerDiagnosticOutput(err.Error())
-		}
-		category := AvailabilityCategoryProviderConfig
-		if probeCtx.Err() == context.DeadlineExceeded {
-			reason = "codex provider/model preflight timed out before worker dispatch"
-			category = AvailabilityCategoryAuthProbeFailed
-		}
-		return AvailabilityStatus{
-			Platform:  PlatformCodex,
-			Binary:    status.Binary,
-			Available: false,
-			Category:  category,
-			Reason:    fmt.Sprintf("codex provider/model preflight failed before worker dispatch: %s", reason),
-		}
-	}
-	return AvailabilityStatus{
-		Platform:  PlatformCodex,
-		Binary:    status.Binary,
-		Available: true,
-		Category:  AvailabilityCategoryAvailable,
-	}
+	return runHostedProviderPreflight(ctx, status, args, "Return exactly OK.\n")
 }
 
 // ValidateAgent parses and validates a TOML agent file.
@@ -855,15 +821,18 @@ func renderResponseContract(config WorkerConfig) string {
 ## Final Response Contract
 
 Return ONLY a single JSON object as your final response.
+- Your FINAL message must be the JSON object and nothing else: no prose before it, no prose after it.
+- Do not emit the JSON and then keep working. Emit it once, as the last thing you do.
+- Do not tell the user which command to run next. The orchestrator owns lifecycle decisions; advice appended after the JSON is discarded and breaks result parsing.
 - Do not wrap the JSON in markdown code fences.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
 - Set status to one of: %s.
 - Report blockers truthfully. If blocked, explain why in blockers.
-- Include handoff with changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness.
+- Include handoff with %s.
 - Keep summary concise and concrete.
-- Include artifacts as an object. Use {} unless the task brief gives an explicit schema.
+- Include artifacts as an object with research_file, survey_file, and plan_file. Set the one the task brief ordered you to produce (e.g. renderPhaseResearchBrief's research file path); set the rest to null.
 %s
-`, filepath.Clean(root), statusLine, scoutReportLine))
+`, filepath.Clean(root), statusLine, HandoffFieldsSummary, scoutReportLine))
 }
 
 func workerClaimsSchemaForConfig(config WorkerConfig) jsonSchema {
@@ -918,11 +887,27 @@ func workerClaimsSchema() jsonSchema {
 			"files_created":  stringArray,
 			"files_modified": stringArray,
 			"tests_written":  stringArray,
+			// artifacts carries named, typed fields a worker reports when its task
+			// brief orders a specific output — e.g. renderPhaseResearchBrief
+			// (cmd/phase_research.go:124) orders a scout to write phase research to
+			// disk and report the path back. Every declared property is nullable and
+			// listed in required, matching the strict-schema convention already used
+			// by the sibling handoff schema below (and enforced repo-wide by
+			// TestWorkerClaimsSchemaStrictObjects / the Codex --output-schema strict
+			// validator) — "required" in this dialect means "key must be present",
+			// not "must be non-null", so a worker that produces no artifacts stays
+			// valid by reporting null for every field. additionalProperties MUST
+			// stay false: flipping it to true would let a worker report arbitrary
+			// unvalidated JSON as artifacts (T-163-02).
 			"artifacts": map[string]interface{}{
 				"type":                 "object",
 				"additionalProperties": false,
-				"properties":           map[string]interface{}{},
-				"required":             []string{},
+				"properties": map[string]interface{}{
+					"research_file": map[string]interface{}{"type": []string{"string", "null"}},
+					"survey_file":   map[string]interface{}{"type": []string{"string", "null"}},
+					"plan_file":     map[string]interface{}{"type": []string{"string", "null"}},
+				},
+				"required": []string{"research_file", "survey_file", "plan_file"},
 			},
 			"tool_count": map[string]interface{}{
 				"type":    "integer",
@@ -1049,7 +1034,7 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 	claims.TestsWritten = normalizeClaimPaths(config.Root, claims.TestsWritten)
 	claims.Blockers = compactStrings(claims.Blockers)
 	claims.Spawns = compactStrings(claims.Spawns)
-	if workerHandoffIsEmpty(claims.Handoff) {
+	if IsEmptyWorkerHandoffIncludingFreshness(claims.Handoff) {
 		claims.Handoff = synthesizeWorkerHandoff(claims)
 	}
 	claims.Handoff = NormalizeWorkerHandoff(config.Root, claims.Handoff)
@@ -1384,4 +1369,13 @@ func classifyWorkerFinalMessageError(action string, err error, runningObserved b
 
 func runningInGoTest() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
+}
+
+// assembledPromptChars approximates the delivered prompt size from the parts
+// the dispatcher composes. It exists only to give an unmeasured run a
+// non-zero, clearly-labelled estimate; the real figure comes from the provider
+// whenever one is reported.
+func (c WorkerConfig) assembledPromptChars() int {
+	return len(c.TaskBrief) + len(c.ContextCapsule) + len(c.SkillSection) +
+		len(c.PheromoneSection) + len(c.HandoffSection)
 }

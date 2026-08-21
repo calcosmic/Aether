@@ -1,0 +1,45 @@
+{
+  "lane": "aether-interactive",
+  "category": "02-brownfield-feature",
+  "repo": "colinhacks/zod",
+  "starting_sha": "deadbeef0000000000000000000000000000beef",
+  "model": "claude-fixture-model",
+  "model_deviation": null,
+  "parallel_mode": "in-repo",
+  "parallel_mode_note": "worktree mode is disqualified until Phase 187",
+  "acceptance_pass": false,
+  "acceptance_status": 1,
+  "acceptance": {
+    "task_id": "02-brownfield-feature",
+    "pass": false,
+    "assertions": []
+  },
+  "tokens": {
+    "total_tokens": 13000,
+    "total_input_tokens": 12900,
+    "model_calls": 6,
+    "models": "claude-fixture-model",
+    "source": "session-transcript"
+  },
+  "cleanliness": {
+    "orphan_branches": 0,
+    "uncommitted_residue": 0,
+    "tool_internal_paths_count": 0,
+    "unnecessary_modifications": 1,
+    "cleanliness_score": 80
+  },
+  "operator": {
+    "scripted_inputs": 3,
+    "unscripted_inputs": 0,
+    "autonomous": true,
+    "wall_clock_seconds": 350,
+    "wait_seconds": 30,
+    "wall_clock_net_seconds": 320
+  },
+  "hallucinated_completion": "true",
+  "evidence": {
+    "transcripts_dir": "transcripts",
+    "operator_log_path": "operator-log.jsonl",
+    "acceptance_json_path": "acceptance.json"
+  }
+}

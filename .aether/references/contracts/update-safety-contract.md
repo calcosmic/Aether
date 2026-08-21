@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: update-safety-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Update Safety Contract
 description: "Rules for safe install/update behavior across the Aether hub and target repos."
 output_types: [update-plan, distribution-review, safety-review]

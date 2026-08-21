@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/codex"
 )
 
 func TestLifecycleFinalizerLoadersRejectBadCompletionFiles(t *testing.T) {
@@ -244,9 +246,12 @@ func TestLifecycleResultMergersPreferCompletedResultOverTimeoutPlaceholder(t *te
 			{Name: "Mason-1", Caste: "builder", Stage: "wave", TaskID: "1.1", Status: "timeout", Summary: "timeout placeholder"},
 			{Name: "Mason-1", Caste: "builder", Stage: "wave", TaskID: "1.1", Status: "completed", Summary: "valid result", FilesModified: []string{"cmd/codex_build_finalize.go"}},
 		}
-		dispatches, err := mergeExternalBuildResults(manifest, results)
+		dispatches, violations, err := mergeExternalBuildResults(manifest, results)
 		if err != nil {
 			t.Fatalf("mergeExternalBuildResults: %v", err)
+		}
+		if len(violations) != 0 {
+			t.Fatalf("expected no violations, got %+v", violations)
 		}
 		if dispatches[0].Status != "completed" || dispatches[0].Summary != "valid result" {
 			t.Fatalf("expected completed result to win over timeout, got %+v", dispatches[0])
@@ -272,7 +277,7 @@ func TestLifecycleResultMergersPreferCompletedResultOverTimeoutPlaceholder(t *te
 		plan := codexContinuePlanManifest{Dispatches: []codexContinueExternalDispatch{{Name: "Hawk-1", Caste: "watcher", Stage: "review", Task: "verify", TaskID: "review"}}}
 		results := []codexContinueExternalDispatch{
 			{Name: "Hawk-1", Caste: "watcher", Stage: "review", Task: "verify", TaskID: "review", Status: "timeout", Summary: "timeout placeholder"},
-			{Name: "Hawk-1", Caste: "watcher", Stage: "review", Task: "verify", TaskID: "review", Status: "completed", Summary: "valid review"},
+			{Name: "Hawk-1", Caste: "watcher", Stage: "review", Task: "verify", TaskID: "review", Status: "completed", Summary: "valid review", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"verified successfully"}}},
 		}
 		flow, err := mergeExternalContinueResults(plan, results)
 		if err != nil {
@@ -290,11 +295,14 @@ func TestLifecycleResultMergersRejectDuplicateTerminalResults(t *testing.T) {
 		{Name: "Mason-1", Caste: "builder", Stage: "wave", TaskID: "1.1", Status: "completed", FilesModified: []string{"cmd/codex_build_finalize.go"}},
 		{Name: "Mason-1", Caste: "builder", Stage: "wave", TaskID: "1.1", Status: "completed", FilesModified: []string{"cmd/codex_build_finalize_test.go"}},
 	}
-	_, err := mergeExternalBuildResults(manifest, results)
-	if err == nil {
-		t.Fatal("expected duplicate completed results to be rejected")
+	_, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("expected no internal error for duplicate completed results, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "duplicate external worker result") {
-		t.Fatalf("expected duplicate result error, got: %v", err)
+	if len(violations) != 1 {
+		t.Fatalf("expected duplicate completed results to be rejected as exactly 1 violation, got %d: %+v", len(violations), violations)
+	}
+	if !strings.Contains(violations[0].Message, "duplicate external worker result") {
+		t.Fatalf("expected duplicate result violation message, got: %v", violations[0].Message)
 	}
 }

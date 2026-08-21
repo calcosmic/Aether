@@ -33,6 +33,19 @@ type codexBuildArtifactEvidence struct {
 	SHA256     string `json:"sha256"`
 	Size       int64  `json:"size"`
 	ModifiedAt string `json:"modified_at"`
+	// ReadOnly and ReadOnlyTaskID are runtime-set only. They are recorded
+	// exclusively by the --read-only-artifact reconcile path
+	// (recordReadOnlyArtifactEvidence) and must never be accepted from a
+	// worker's own completion packet: attachBuildArtifactEvidence replaces
+	// claims.ArtifactEvidence wholesale from the claimed file lists, which
+	// carry no ReadOnly concept, so any worker-submitted value here is
+	// discarded before it can be evaluated (D-01, Pitfall 3, T-163.1-26).
+	ReadOnly bool `json:"read_only,omitempty"`
+	// ReadOnlyTaskID scopes the bypass to a single task's criteria, keeping
+	// task claim sets disjoint (D-02): read-only evidence recorded for one
+	// task can never satisfy another task's criterion, and an empty value
+	// satisfies nothing.
+	ReadOnlyTaskID string `json:"read_only_task_id,omitempty"`
 }
 
 type codexCriterionVerification struct {
@@ -414,11 +427,27 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s has no readable current-build claims: %v", artifact, claimsErr))
 				continue
 			}
-			if !claimed[artifact] {
+			// D-01 (amended): an artifact absent from the task's claim lists
+			// can still pass the claimed gate if it has evidence explicitly
+			// recorded as read-only. The recording is operator-authorized and
+			// hash-verified, and it attests the path's state for this continue
+			// run — so it satisfies EVERY requirement naming the path, task-
+			// bound or phase-level. Scoping it to one task made a phase whose
+			// two tasks both bind the same untouched file unsatisfiable (the
+			// recording guard allows one task per path per run). (D-02: claim
+			// sets stay disjoint; nothing here merges them.)
+			recorded, ok := evidenceByPath[artifact]
+			readOnlyMatch := ok && recorded.ReadOnly && strings.TrimSpace(recorded.ReadOnlyTaskID) != ""
+			// A task-bound criterion may also verify against an artifact
+			// claimed by a different task in the same build: the artifact is
+			// hash-recorded at build time either way, so tamper detection is
+			// identical. TDD plans routinely bind a later task's criterion to
+			// the test file an earlier task wrote.
+			buildClaimed := claimSets[""][artifact]
+			if !claimed[artifact] && !readOnlyMatch && !buildClaimed {
 				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s was not claimed by the current build%s", artifact, criterionTaskSuffix(requirement.TaskID)))
 				continue
 			}
-			recorded, ok := evidenceByPath[artifact]
 			if !ok || strings.TrimSpace(recorded.SHA256) == "" {
 				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s has no build-time content hash", artifact))
 				continue
@@ -429,10 +458,40 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 				continue
 			}
 			if current.SHA256 != recorded.SHA256 || current.Size != recorded.Size {
-				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s changed after build evidence was recorded", artifact))
+				// The build photographs every artifact it claims, and this
+				// compares the photograph to what is on disk now. Its purpose is
+				// to catch a change slipped in after the build signed off.
+				//
+				// But the colony's own reviewers run inside the build, and
+				// fixing what they find necessarily lands after finalization.
+				// With no allowance for that, Aether refused the work its own
+				// Probe and Watcher had just asked for, and the only sanctioned
+				// route was re-running most of the phase to re-take the
+				// photograph — real cost, no new information.
+				//
+				// Continue re-runs the repository's real verification commands
+				// live before advancing, so a changed artifact whose suite is
+				// still green is an amendment, not tampering. A change that
+				// breaks the suite still blocks, which is the case the hash
+				// existed to catch. The evidence line names it as amended so the
+				// substitution is visible rather than silent.
+				// Only for artifacts the build actually wrote. A read-only
+				// recording is the operator attesting "this file was NOT
+				// modified"; if it changed, that attestation is false whatever
+				// the test suite says, so it stays a hard block.
+				if proof, ok := verificationReRunProvesArtifacts(steps); ok && !readOnlyMatch {
+					result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s amended after build evidence; %s", artifact, proof))
+					evaluation.Deterministic = true
+					continue
+				}
+				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s changed after build evidence was recorded and verification did not re-run green", artifact))
 				continue
 			}
-			result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s", artifact, recorded.SHA256))
+			if readOnlyMatch {
+				result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s (read-only)", artifact, recorded.SHA256))
+			} else {
+				result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s", artifact, recorded.SHA256))
+			}
 			evaluation.Deterministic = true
 		}
 		for _, check := range requirement.Checks {
@@ -556,7 +615,12 @@ func evaluateCriterionCheck(check string, steps []codexVerificationStep, claims 
 		for _, step := range steps {
 			if strings.EqualFold(strings.TrimSpace(step.Name), check) {
 				if step.Passed && !step.Skipped {
-					return true, fmt.Sprintf("%s check passed: %s", check, strings.TrimSpace(step.Command)), ""
+					// FIELD-03 (191.1-CONTEXT.md D-05): report the verified
+					// outcome (step.Summary, e.g. "tests passed"), never the
+					// raw configured shell command (step.Command) -- a
+					// downstream colony's embedded checker was reporting the
+					// check's own definition as if it were the finding.
+					return true, fmt.Sprintf("%s check passed: %s", check, strings.TrimSpace(step.Summary)), ""
 				}
 				if step.Skipped {
 					return false, "", fmt.Sprintf("required %s check was skipped", check)
@@ -573,4 +637,32 @@ func criterionTaskSuffix(taskID string) string {
 		return ""
 	}
 	return " for task " + strings.TrimSpace(taskID)
+}
+
+// verificationReRunProvesArtifacts reports whether this continue run actually
+// executed the repository's verification and found it green, and returns a
+// human-readable proof naming the command that ran.
+//
+// "Actually executed" is the load-bearing word. runVerificationStep marks an
+// optional step Passed:true when no command could be resolved for it — a
+// convenience so a missing linter cannot block a phase. Trusting Passed alone
+// would therefore accept an amendment on the strength of three checks that
+// never ran, which is precisely the substitution this function exists to
+// prevent. A step only counts if it carried a command, was not skipped, and
+// exited clean; and any failing or blocked step disqualifies the whole run.
+func verificationReRunProvesArtifacts(steps []codexVerificationStep) (string, bool) {
+	executed := make([]string, 0, len(steps))
+	for _, step := range steps {
+		if step.Blocked || (!step.Skipped && !step.Passed) {
+			return "", false
+		}
+		if step.Skipped || strings.TrimSpace(step.Command) == "" || !step.Passed {
+			continue
+		}
+		executed = append(executed, step.Name)
+	}
+	if len(executed) == 0 {
+		return "", false
+	}
+	return fmt.Sprintf("verification re-ran green (%s)", strings.Join(executed, ", ")), true
 }

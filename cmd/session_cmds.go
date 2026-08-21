@@ -34,9 +34,12 @@ func commandFileMap() map[string]commandFileEntry {
 			dir:   ".aether/data/survey",
 			files: []string{"PROVISIONS.md", "TRAILS.md", "BLUEPRINT.md", "CHAMBERS.md", "DISCIPLINES.md", "SENTINEL-PROTOCOLS.md", "PATHOGENS.md"},
 		},
+		// Workspace files only. Saved research lives in .aether/research and is
+		// never cleared here -- it is the deliverable the operator keeps and
+		// points later colonies at.
 		"oracle": {
 			dir:   ".aether/oracle",
-			files: []string{"state.json", "plan.json", "gaps.md", "synthesis.md", "research-plan.md", ".stop", ".last-topic"},
+			files: []string{"state.json", "plan.json", "gaps.md", "synthesis.md", "research-plan.md", "progress.jsonl", "pending-brief.json", ".stop", ".last-topic"},
 		},
 		"watch": {
 			dir:   ".aether/data",
@@ -234,7 +237,9 @@ var sessionUpdateCmd = &cobra.Command{
 			if state.Milestone != "" {
 				session.CurrentMilestone = state.Milestone
 			}
-			session.ActiveTodos = sessionActiveTodosFromState(state)
+			// Phase 165 gap CR-01: merge, don't overwrite -- a bare assignment here
+			// erases any shelf-seeded todo the moment a session refresh runs.
+			session.ActiveTodos = mergeShelfTodos(session.ActiveTodos, sessionActiveTodosFromState(state))
 		}
 
 		// Update fields

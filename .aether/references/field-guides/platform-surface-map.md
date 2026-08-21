@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: platform-surface-map
 kind: field-guide
 category: field-guides
+scope: aether-internal
 title: Platform Surface Map
 description: "Guide for identifying which Claude, OpenCode, Codex, and hub files are affected by a change."
 output_types: [platform-map, parity-review]

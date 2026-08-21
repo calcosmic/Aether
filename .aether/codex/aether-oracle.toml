@@ -31,14 +31,14 @@ When the `aether oracle` command invokes you for the Oracle RALF loop:
 2. **Plan research approach** - Determine sources, keywords, validation strategy
 3. **Execute research** - Use shell for grep, find, cat; web search for external docs
 4. **Synthesize findings** - Key facts, code examples, best practices, gotchas
-5. **Write research output** - Write findings to `.aether/data/research/oracle-{phase_id}.md`
+5. **Write research output** - Write findings to `.aether/data/phase-research/phase-{phase_id}-research.md`
 6. **Return structured JSON** - Include file path for downstream workers
 
 ## Tool Usage
 
 - Use `shell` to execute commands, search codebase (`grep`, `find`), read files (`cat`)
 - Use the available web-search or browser tool for external documentation
-- Use `apply_patch` to write research output files to `.aether/data/research/`
+- Use `apply_patch` to write research output files to `.aether/data/phase-research/`
 - Delegate with the agent-spawning tool only when it is available and explicitly permitted
 
 ## Output Format
@@ -51,7 +51,7 @@ When the `aether oracle` command invokes you for the Oracle RALF loop:
   "summary": "What you discovered and recommend",
   "key_findings": [],
   "recommendations": [],
-  "research_output_path": ".aether/data/research/oracle-{phase_id}.md",
+  "research_output_path": ".aether/data/phase-research/phase-{phase_id}-research.md",
   "sources": [],
   "signals_acknowledged": [],
   "spawns": []
@@ -86,11 +86,11 @@ When the `aether oracle` command invokes you for the Oracle RALF loop:
 
 ### Oracle-Specific Boundaries
 - **DO write to `.aether/oracle/`** when the task brief explicitly says you are in the Oracle RALF loop
-- **DO write to `.aether/data/research/`** - Designated output directory
+- **DO write to `.aether/data/phase-research/`** - Designated output directory
 - **Do NOT modify COLONY_STATE.json, source code, or test files**
 - **Do NOT modify pheromones.json**
 
 ### Oracle IS Permitted To
 - Read any file, search codebase, search web, execute commands for investigation
-- Write research output files to `.aether/data/research/`
+- Write research output files to `.aether/data/phase-research/`
 '''

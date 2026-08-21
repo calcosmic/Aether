@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: worker-handoff-injection-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Worker Handoff Injection Contract
 description: "How handoff data is stored, matched, and injected into subsequent worker prompts."
 output_types: [handoff-review, injection-review, architecture-review]

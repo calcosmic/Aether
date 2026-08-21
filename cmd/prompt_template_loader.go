@@ -116,6 +116,27 @@ func writeSectionHeader(b *strings.Builder, name string, fallback string) {
 	}
 }
 
+// charterFallbackHeading is the charter section heading used when no colony
+// template overrides it. The single literal both writeSectionHeader (via
+// buildColonyPrimeOutput) and charterSectionHeading below resolve against,
+// so the producer and the checklist can never drift apart on the fallback
+// text itself (WR-06).
+const charterFallbackHeading = "## Charter -- Binding Rules"
+
+// charterSectionHeading returns the exact heading line the charter section
+// was written with -- a colony's SectionTemplates["charter"].Header override
+// if one is configured, otherwise the fallback. Shared by the producer
+// (buildColonyPrimeOutput, via writeSectionHeader) and the checklist
+// (renderBriefChecklist) so charter-presence detection can't diverge from
+// what was actually written: a hardcoded heading string breaks the moment a
+// colony configures a custom charter header (WR-06).
+func charterSectionHeading() string {
+	if t := getSectionTemplate("charter"); t != nil && t.Header != "" {
+		return strings.TrimRight(t.Header, "\n")
+	}
+	return charterFallbackHeading
+}
+
 // sectionString returns the template string for a named section field, or fallback.
 func sectionString(name string, field func(*sectionTemplate) string, fallback string) string {
 	if t := getSectionTemplate(name); t != nil {

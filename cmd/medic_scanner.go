@@ -508,7 +508,7 @@ func scanDataFiles(fc *fileChecker) []HealthIssue {
 		filename    string
 		description string
 	}{
-		{"midden/midden.json", "midden.json"},
+		{"midden.json", "midden.json"},
 		{"instincts.json", "instincts.json"},
 		{"learning-observations.json", "learning-observations.json"},
 		{"assumptions.json", "assumptions.json"},

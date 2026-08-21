@@ -4,32 +4,34 @@ Planning worker wave dispatching.
 Goal: Golden workflow test colony
 
 Workers
-  🔍 Scout Worker-XX  Survey the repo and distill planning findings from available territory reports
-  📋 Route-Setter Worker-XX  Convert surveyed findings into an executable multi-phase colony plan
+  🔍🐜 Scout Worker-XX  Survey the repo and distill planning findings from available territory reports
+  📋🐜 Route-Setter Worker-XX  Convert surveyed findings into an executable multi-phase colony plan
 
 Coordination: .aether/data/spawn-tree.txt
 
 ── Dispatch ──
 Planning Wave 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
-  🔍 Scout Worker-XX  Planning task: Survey the repo and distill planning findings from available territory reports
+──── 🔍🐜 Spawning Worker-XX — Planning task: Survey the repo and distill planning findings from available territory reports ────
+  🔍🐜 Scout [sonnet] Worker-XX  Planning task: Survey the repo and distill planning findings from available territory reports
 
-… 🔍 Scout Worker-XX  starting wave 1  Planning task: Survey the repo and distill planning findings from available territory reports
+… 🔍🐜 Scout [sonnet] Worker-XX  starting wave 1  Planning task: Survey the repo and distill planning findings from available territory reports
 
-… 🔍 Scout Worker-XX  running wave 1  Planning task: Survey the repo and distill planning findings from available territory reports  [simulated worker heartbeat observed]
+… 🔍🐜 Scout Worker-XX  running wave 1  Planning task: Survey the repo and distill planning findings from available territory reports  [simulated worker heartbeat observed]
 
-✓ 🔍 Scout Worker-XX  completed 0.0s  FakeInvoker completed task plan-0 for worker Worker-XX (caste: scout)
+✓ 🔍🐜 Scout Worker-XX  completed 0.0s  FakeInvoker completed task plan-0 for worker Worker-XX (caste: scout)
 
 ── Dispatch ──
 Planning Wave 2 starting (in-repo, serial)
   Execution: serial — single task in this wave
-  📋 Route-Setter Worker-XX  Planning task: Convert surveyed findings into an executable multi-phase colony plan
+──── 📋🐜 Spawning Worker-XX — Planning task: Convert surveyed findings into an executable multi-phase colony plan ────
+  📋🐜 Route-Setter [opus] Worker-XX  Planning task: Convert surveyed findings into an executable multi-phase colony plan
 
-… 📋 Route-Setter Worker-XX  starting wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan
+… 📋🐜 Route-Setter [opus] Worker-XX  starting wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan
 
-… 📋 Route-Setter Worker-XX  running wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan  [simulated worker heartbeat observed]
+… 📋🐜 Route-Setter Worker-XX  running wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan  [simulated worker heartbeat observed]
 
-✓ 📋 Route-Setter Worker-XX  completed 0.0s  FakeInvoker completed task plan-1 for worker Worker-XX (caste: route_setter)
+✓ 📋🐜 Route-Setter Worker-XX  completed 0.0s  FakeInvoker completed task plan-1 for worker Worker-XX (caste: route_setter)
 
 ━━ 📋 P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -49,7 +51,7 @@ Contract
   - Execution: 2 staged workers, scout then route-setter (2 waves), 2 workers
   - Timeouts: 15m0s worker max; Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked.
   - Dependencies: Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first.
-  - Fallback: Normal planning does not fall back to local synthesis. If Scout or Route-Setter workers are unavailable, blocked, failed, or timed out, stop with recovery guidance; only explicit `aether plan --synthetic` may produce dispatch_mode=synthetic local preview artifacts. Visibility: dispatch_mode, planning_warning, synthetic, synthetic_warning, artifact_source, plan_source, planning_loop.
+  - Fallback: Normal planning does not fall back to local synthesis. If Scout or Route-Setter workers are unavailable, blocked, failed, or timed out, stop with recovery guidance; only explicit `/ant-plan --synthetic` may produce dispatch_mode=synthetic local preview artifacts. Visibility: dispatch_mode, planning_warning, synthetic, synthetic_warning, artifact_source, plan_source, planning_loop.
   - Coordination: .aether/data/spawn-tree.txt
   - Artifacts: .aether/data/planning/SCOUT.md, .aether/data/planning/ROUTE-SETTER.md, .aether/data/planning/phase-plan.json, .aether/data/phase-research
   - Result artifacts: ${TMPDIR:-/tmp}/aether-<workflow>-<run>/<workflow>-completion.json
@@ -238,5 +240,5 @@ Coordination: .aether/data/spawn-tree.txt
 
 
 ━━ 🐜 N E X T   U P ━━
-Run `aether build 1` to start the next planned phase.
-Alternative: Run `aether focus "..."` or `aether redirect "..."` if you want to adjust the colony before the first wave.
+Run `/ant-build 1` to start the next planned phase.
+Alternative: Run `/ant-focus "..."` or `/ant-redirect "..."` if you want to adjust the colony before the first wave.

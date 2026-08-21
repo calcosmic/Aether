@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: queen-execution-policy-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Queen Execution Policy Contract
 description: "Classification tiers, auto-resolve eligibility, circuit breaker, and recovery preview for Queen gate decisions."
 output_types: [gate-decision, queen-decision, execution-policy, gate-decision-example]

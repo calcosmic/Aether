@@ -147,7 +147,8 @@ Return structured JSON at task completion:
         "3. Expected: returns null or throws with descriptive message"
       ],
       "expected_behavior": "{what the code should do with this input}",
-      "actual_behavior": "{what the code actually does}"
+      "actual_behavior": "{what the code actually does}",
+      "suggested_hardening": "{one concrete hardening step with a file reference — the smallest change that closes this gap. Required for every finding-status scenario; null for resilient ones}"
     }
   ],
   "summary_counts": {
@@ -171,6 +172,8 @@ Return structured JSON at task completion:
 - `blocked` — Investigation requires capabilities Chaos does not have (e.g., Write access for test harness setup, or architectural decision about acceptable behavior)
 
 **Resilient scenarios:** Include these — they confirm the investigation was thorough. A fully resilient result is a valid and valuable finding.
+
+**A strengthener brings the strengthening:** every finding carries `suggested_hardening` — the concrete step that closes the gap it exposes, with a file reference. Probing a weakness without proposing the hardening leaves the colony with a list of holes and no shovel; the classic chaos ethos ("your findings make the colony's code more robust") means the finding and its fix travel together. Fix implementation still goes to Builder — proposing in words is not fixing.
 
 ### Findings Persistence
 After completing your analysis, persist findings to your domain review ledger:

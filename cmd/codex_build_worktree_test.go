@@ -704,13 +704,17 @@ func TestBuildWorktreeModeMergesPheromoneChangesBackToRoot(t *testing.T) {
 // --- Worktree Lifecycle Tests (Phase 23) ---
 
 func TestRemoveGitWorktreeErrorPropagation(t *testing.T) {
-	// Test with a non-existent path — should return error
+	// Test with a non-existent path — should return error. Per CR-03,
+	// removeGitWorktree now fails fast on the first failing step rather than
+	// accumulating errors from all three commands, so the message names the
+	// specific step that failed ("worktree remove: ...") instead of the old
+	// generic "worktree cleanup failed" wrapper.
 	err := removeGitWorktree("/nonexistent", "/nonexistent/path", "nonexistent-branch")
 	if err == nil {
 		t.Error("removeGitWorktree should return error for non-existent path")
 	}
-	if !strings.Contains(err.Error(), "worktree cleanup failed") {
-		t.Errorf("error should contain 'worktree cleanup failed': %v", err)
+	if !strings.Contains(err.Error(), "worktree remove") {
+		t.Errorf("error should contain 'worktree remove': %v", err)
 	}
 }
 

@@ -19,9 +19,13 @@ type ConsolidationResult struct {
 	ObservationsDecayed int
 	PromotionCandidates []string // content hashes of observations eligible for promotion
 	QueenEligible       []string // instinct IDs eligible for QUEEN.md promotion
-	ReviewCandidates    []string // instinct IDs that should be reviewed
-	RereadCandidates    []string // observation or instinct IDs that should be re-read
-	Errors              []error
+	// QueenPromoted lists the instinct IDs Pipeline.RunConsolidation actually
+	// wrote into QUEEN.md -- a subset of QueenEligible. A failed PromoteInstinct
+	// is log-and-continue, so eligibility alone never proves a write happened.
+	QueenPromoted    []string
+	ReviewCandidates []string // instinct IDs that should be reviewed
+	RereadCandidates []string // observation or instinct IDs that should be re-read
+	Errors           []error
 }
 
 // ConsolidationService runs phase-end consolidation: decay, archive, and check promotions.
@@ -65,6 +69,7 @@ func (s *ConsolidationService) Run(ctx context.Context) (*ConsolidationResult, e
 	result := &ConsolidationResult{
 		PromotionCandidates: []string{},
 		QueenEligible:       []string{},
+		QueenPromoted:       []string{},
 		ReviewCandidates:    []string{},
 		RereadCandidates:    []string{},
 	}

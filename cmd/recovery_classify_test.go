@@ -502,7 +502,7 @@ func TestFailureClassifyCmd_JSONOutput(t *testing.T) {
 }
 
 // TestFailureClassifyCmd_TableOutput verifies failure-classify (default) outputs a
-// table with expected headers and content.
+// headed classification lines with nested rationale.
 func TestFailureClassifyCmd_TableOutput(t *testing.T) {
 	gateCmdTestSetup(t)
 
@@ -514,16 +514,12 @@ func TestFailureClassifyCmd_TableOutput(t *testing.T) {
 	}
 
 	output := buf.String()
-	for _, header := range []string{"PATTERN", "CLASSIFICATION", "FAILURE TYPE", "RATIONALE"} {
-		if !strings.Contains(output, header) {
-			t.Errorf("expected table to contain header %q", header)
-		}
+	// Classic headed style: pattern line with nested rationale, no machine table.
+	if !strings.Contains(output, "🔧 timeout → recoverable (transient)") {
+		t.Errorf("expected headed classification line for timeout, got:\n%s", output)
 	}
-	if !strings.Contains(output, "timeout") {
-		t.Error("expected table to contain 'timeout' pattern")
-	}
-	if !strings.Contains(output, "recoverable") {
-		t.Error("expected table to contain 'recoverable' classification")
+	if !strings.Contains(output, "└── Worker timed out") {
+		t.Errorf("expected nested rationale under the timeout line, got:\n%s", output)
 	}
 }
 

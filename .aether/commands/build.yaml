@@ -2,11 +2,11 @@ name: ant-build
 description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  manifest_command: "aether host build --dry-run $ARGUMENTS"
+  manifest_command: "aether build $ARGUMENTS --plan-only"
   finalizer_command: "aether build-finalize $ARGUMENTS --completion-file <go_owned_completion_path>"
   contract: ".aether/docs/wrapper-host-contract.md"
 ownership:
-  manifest_authority: "TS host (aether host build --dry-run returns plan-only JSON without dispatching workers)"
+  manifest_authority: "Go runtime (aether build --plan-only returns plan-only JSON without dispatching workers)"
   worker_conductor: "Wrapper (spawns workers via platform Agent tool, manages ceremony)"
   state_mutator: "Go runtime (build-finalize commits results)"
 codex_orchestration:
@@ -22,22 +22,46 @@ wrapper_additions:
     3. Include strength or remaining-life context so the user understands why each signal matters right now.
     4. Frame the requested work as `Phase N of M — Name` with a one-line purpose.
   manifest_fetch: |
-    Fetch the dispatch manifest from the TS host in plan-only mode:
-    1. Run `aether host build --dry-run $ARGUMENTS`.
-    2. The TS host calls `aether build <phase> --plan-only` and returns JSON without dispatching workers.
-    3. Parse `result.manifest.dispatch_manifest` for the dispatch plan.
+    Fetch the dispatch manifest from the Go runtime in plan-only mode:
+    1. Run `aether build $ARGUMENTS --plan-only`.
+    2. The runtime returns JSON without dispatching workers.
+    3. Parse `result.dispatch_manifest` for the dispatch plan.
     4. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
     5. If provider dispatch is unavailable, surface only the Go-owned structured availability message.
+    6. Each dispatch now routinely carries `brief_path` -- a repo-display path to a file holding the composed brief, byte for byte -- instead of the inline `dispatch.brief` text: the runtime writes the brief to disk and reports the path, avoiding Read-tool long-line truncation on 6-22KB briefs. Read `brief_path` verbatim. Inline `dispatch.brief` appears only in the rare case where the runtime could not write the file for that dispatch -- honor it verbatim when it is the only one present.
   post_build: |
     Close with a short colony-language synthesis:
     1. Stage the accepted temp packet with `aether build-completion-stage <phase> --completion-file <temp completion>` and finalize only the returned Go-owned `completion_path`.
     2. Run the visual closeout command with that durable packet; use its next-step line as the source of truth.
     3. Summarize what moved forward and which workers/castes actually ran.
     4. Note only the most relevant signal or risk.
-    5. Route first to `/ant-continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
+    5. End with the user's choice, never an auto-advance: ask via AskUserQuestion — "Verify and advance now" (runs `/ant-continue`, recommended), "Stop here — safe to clear" (only offerable when the closeout's Handoff section confirmed the handoff saved), or "Add steering first" (`/ant-focus` / `/ant-redirect`). Run nothing until the user picks. Autopilot is exempt (runtime-owned auto-advance).
+  stage_skeleton: |
+    Every non-exempt stage in build.md follows one order: a colony beat, then
+    `**Purpose:**`, then `**Reads:**`, then `**Spawns:**` where the stage
+    spawns anything, then the stage's instructions, then `**Stop
+    conditions:**`. The named cross-stage state carry (`## Required
+    Cross-Stage State`) lists: `phase_id`, `verification_depth`,
+    `manifest_file`, `context_capsule`, `wave_results`,
+    `verification_status`, `next_action`.
+  ownership_chain: |
+    build.md's structural ownership is recorded in the file itself: Phase 160
+    (Fail Loudly) merged first and made only narrow call-argument fixes;
+    Phase 165 (Core Lifecycle Commands) is the sole structural owner of this
+    file for milestone v1.25; Phase 168 (Live Visibility) appends a
+    visual-guidance trailer afterward, at the reserved marker
+    `<!-- PHASE-168: visual-guidance trailer appends below this line -->`,
+    which is always the last non-empty line of the file.
+  read_only_boundary: |
+    The wrapper never opens colony state, session, or pheromone files by hand
+    in either direction -- not reading them, not writing them. It reads
+    runtime state only through runtime commands such as `aether status`; all
+    persistence goes through the Go-owned finalizers. This is the same
+    boundary the Guardrails `Do NOT read or write colony state files by hand`
+    bullet states -- the <read_only> block and the Guardrails list agree.
 guardrails:
-  - "The TS host is the sole manifest authority; always use `aether host build --dry-run` to fetch the plan, never `aether host build` alone (which dispatches workers via the TS host path, causing double-dispatch)."
-  - "The wrapper is the sole conductor for interactive worker spawning; spawn workers via platform Agent tool from the manifest, not from the TS host."
+  - "The Go runtime is the sole manifest authority; always fetch the plan with `aether build $ARGUMENTS --plan-only`, never a command that dispatches workers itself."
+  - "The wrapper is the sole conductor for interactive worker spawning; spawn workers via platform Agent tool from the manifest, never through a dispatched runtime path."
   - "Respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
   - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest."
   - "Use visible live Task/subagent panels for build ceremony. Run aether spawn-log before each dispatch and aether spawn-complete after. Call build-finalize only after all terminal worker results are collected."
@@ -47,11 +71,13 @@ guardrails:
   - "Do NOT mutate COLONY_STATE.json, session.json, or pheromone files."
   - "Do NOT parse visual output as authoritative state."
   - "Do NOT expose raw provider stdout/stderr, tokens, or auth probe output; use the Go availability category and sanitized next action."
-  - "Do NOT run `aether host build` without `--dry-run` from the wrapper; that triggers the TS host dispatched path which duplicates the wrapper's own worker spawning."
+  - "Do NOT run `aether host build` from the wrapper; the TS host hop is off the interactive build path."
   - "Do NOT run `aether build --synthetic` after real wrapper Task agents complete."
   - "Do NOT describe parallel workers as background agents or say you will be notified later; keep the live worker stack visible until terminal results return."
   - "Do NOT add extra option menus or recovery advice unless the runtime explicitly asks."
+  - "Do NOT hand-render any visual that `aether ceremony` already renders (spawn plans, wave starts, worker completions, closeouts, caste legends); invoke the renderer and narrate around it."
+  - "Do NOT reintroduce the retired `colony_depth` vocabulary (light/standard/deep/full); the live vocabulary is `--verification-depth <light|standard|heavy>`."
   - "If docs and runtime disagree, runtime wins."
 follow_up:
-  verify: "Guide the user first to `/ant-continue`, with `aether continue` as the runtime source of truth."
+  verify: "Offer `/ant-continue` as the recommended pick in the end-of-build choice, with `aether continue` as the runtime source of truth — never run it unasked."
   inspect: "Run `aether status` if you want to inspect progress before advancing."

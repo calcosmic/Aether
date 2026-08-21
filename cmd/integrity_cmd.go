@@ -137,7 +137,7 @@ func runIntegrity(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(stdout, string(data))
 	} else {
 		visual := buildIntegrityVisual(result)
-		fmt.Fprint(stdout, visual)
+		visualFprint(stdout, visual)
 	}
 
 	// 8. Return

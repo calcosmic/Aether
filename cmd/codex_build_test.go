@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -81,28 +84,42 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 
 	result := envelope["result"].(map[string]interface{})
-	if got := int(result["dispatch_count"].(float64)); got != 6 {
+	// Phase 184: the two golden tasks form a dependent chain of single-task
+	// waves with the same caste, so they are now one worker rather than two.
+	if got := int(result["dispatch_count"].(float64)); got != 5 {
 		// Modeless phase resolves to prototype: prose "Research" in a task no
-		// longer spawns an Oracle (typed phase mode).
-		t.Fatalf("dispatch_count = %d, want 6", got)
+		// longer spawns an Oracle (typed phase mode). The keyword-gated
+		// external castes (ambassador, gatekeeper) no longer spawn either:
+		// this phase replaces internal build dispatch and has no external
+		// surface or auth boundary for them to review.
+		t.Fatalf("dispatch_count = %d, want 5", got)
 	}
-	if got := int(result["wave_count"].(float64)); got != 2 {
-		t.Fatalf("wave_count = %d, want 2 task waves", got)
+	// Phase 184: the two chained tasks are one worker, so one task wave.
+	if got := int(result["wave_count"].(float64)); got != 1 {
+		t.Fatalf("wave_count = %d, want 1 task wave", got)
 	}
 	if got := int(result["parallel_waves"].(float64)); got != 0 {
 		t.Fatalf("parallel_waves = %d, want 0", got)
 	}
-	if got := int(result["execution_wave_count"].(float64)); got != 6 {
-		t.Fatalf("execution_wave_count = %d, want 6 execution waves", got)
+	// Was 6 before independent specialists and independent reviewers stopped
+	// occupying one wave each. Fewer waves is the point: same workers, run
+	// concurrently instead of queued.
+	// Phase 184: one fewer execution wave, because the two chained tasks are one
+	// worker rather than two waves of one.
+	if got := int(result["execution_wave_count"].(float64)); got != 3 {
+		t.Fatalf("execution_wave_count = %d, want 3 execution waves", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
 	}
-	if waveExecution, ok := result["wave_execution"].([]interface{}); !ok || len(waveExecution) != 2 {
-		t.Fatalf("wave_execution = %#v, want 2 wave plans", result["wave_execution"])
+	// Phase 184: one wave plan, because the two chained tasks became one worker.
+	if waveExecution, ok := result["wave_execution"].([]interface{}); !ok || len(waveExecution) != 1 {
+		t.Fatalf("wave_execution = %#v, want 1 wave plan", result["wave_execution"])
 	}
-	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 6 {
-		t.Fatalf("execution_plan = %#v, want 6 execution stages", result["execution_plan"])
+	// Was 6 while each reviewer held its own wave. Independent reviewers now
+	// share one step; see TestIndependentSpecialistsShareAWave.
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 3 {
+		t.Fatalf("execution_plan = %#v, want 3 execution stages", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -125,17 +142,18 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 6 {
-		t.Fatalf("expected 6 manifest dispatches, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 5 {
+		t.Fatalf("expected 5 manifest dispatches, got %d", len(manifest.Dispatches))
 	}
-	if len(manifest.WorkerBriefs) != 6 {
-		t.Fatalf("expected 6 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	// Phase 184: five workers, so five briefs. The two chained tasks share one.
+	if len(manifest.WorkerBriefs) != 5 {
+		t.Fatalf("expected 5 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
 	}
-	if len(manifest.WaveExecution) != 2 {
-		t.Fatalf("expected 2 manifest wave execution plans, got %d", len(manifest.WaveExecution))
+	if len(manifest.WaveExecution) != 1 {
+		t.Fatalf("expected 1 manifest wave execution plan, got %d", len(manifest.WaveExecution))
 	}
 	for _, plan := range manifest.WaveExecution {
 		if plan.Strategy != "serial" {
@@ -235,6 +253,309 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 }
 
+// TestWorkerBriefFileHoldsComposedBrief proves the D-12 fix: the file at
+// worker-briefs/{name}.md is byte-identical to the dispatch's manifest brief
+// field (the composed brief -- base + pheromone signals + prior handoffs),
+// not the base-only render writeCodexBuildArtifacts wrote before this change.
+func TestWorkerBriefFileHoldsComposedBrief(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	// Seed an active pheromone signal so the composed brief diverges from the
+	// base-only render -- proving the file changed, not just that a heading
+	// exists somewhere.
+	recent := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{Type: "FOCUS", Content: json.RawMessage(`{"text":"sentinel-focus-the-vault-exporter"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: recent},
+			{Type: "REDIRECT", Content: json.RawMessage(`{"text":"sentinel-never-touch-billing-tables"}`), Active: true, Strength: floatPtr(0.9), CreatedAt: recent},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("failed to save pheromones: %v", err)
+	}
+
+	goal := "Prove worker briefs carry the composed prompt"
+	researchID := "1.1"
+	implementID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Composed brief parity",
+					Description: "Prove the worker-briefs file matches the manifest brief field byte for byte",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &researchID, Goal: "Research the missing build orchestration gaps", Status: colony.TaskPending},
+						{ID: &implementID, Goal: "Implement the Go-native build packet", Status: colony.TaskPending, DependsOn: []string{researchID}},
+					},
+					SuccessCriteria: []string{"Build artifacts exist"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	if len(manifest.Dispatches) == 0 {
+		t.Fatal("expected at least one dispatch")
+	}
+
+	sawPheromoneSection := false
+	for _, dispatch := range manifest.Dispatches {
+		if strings.TrimSpace(dispatch.Brief) == "" {
+			t.Fatalf("dispatch %s has no composed brief in the manifest", dispatch.Name)
+		}
+		if strings.TrimSpace(dispatch.BriefPath) == "" {
+			t.Fatalf("dispatch %s has no brief_path in the manifest", dispatch.Name)
+		}
+		briefRel := strings.TrimPrefix(dispatch.BriefPath, ".aether/data/")
+		fileContents, err := os.ReadFile(filepath.Join(dataDir, briefRel))
+		if err != nil {
+			t.Fatalf("failed to read worker brief file for %s: %v", dispatch.Name, err)
+		}
+		if !bytes.Equal(fileContents, []byte(dispatch.Brief)) {
+			t.Fatalf("worker brief file for %s does not byte-match manifest brief field", dispatch.Name)
+		}
+		if strings.Contains(string(fileContents), "## Pheromone Signals") {
+			sawPheromoneSection = true
+			// The heading alone proves a section exists; the operator's actual
+			// words reaching the worker is the effect that matters. Both the
+			// FOCUS nudge and the REDIRECT hard constraint must arrive intact.
+			for _, sentinel := range []string{"sentinel-focus-the-vault-exporter", "sentinel-never-touch-billing-tables"} {
+				if !strings.Contains(string(fileContents), sentinel) {
+					t.Fatalf("worker brief for %s carries the Pheromone Signals heading but not the signal text %q — steering is not reaching workers", dispatch.Name, sentinel)
+				}
+			}
+		}
+	}
+	if !sawPheromoneSection {
+		t.Fatal("expected at least one worker brief file to contain the Pheromone Signals heading")
+	}
+
+	// Prove the base-only render does NOT itself contain the pheromone
+	// section -- the file changed because writeCodexBuildArtifacts now writes
+	// the composed brief, not because the heading appears unconditionally.
+	var reloadedState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &reloadedState); err != nil {
+		t.Fatalf("failed to reload colony state: %v", err)
+	}
+	base := renderCodexBuildWorkerBrief(root, reloadedState.Plan.Phases[0], manifest.Dispatches[0], time.Now().UTC())
+	if strings.Contains(base, "## Pheromone Signals") {
+		t.Fatal("base-only render unexpectedly contains the Pheromone Signals heading")
+	}
+}
+
+// TestDirectBuildManifestHasNoCapsuleSoBriefStaysTheSoleSteeringChannel is the
+// PATH B half of Phase 190 Plan 03's proof (D-190-01-A): the direct/native
+// `aether build <phase>` manifest.json carries no context_capsule at all (see
+// codexBuildManifest.ContextCapsule's own doc comment, "Only populated when
+// planOnly"), so composeBuildManifestBrief's brief-level pheromone section
+// must remain the sole channel there -- and must appear EXACTLY once, not
+// zero and not twice. This is the "not zero" half of constraint 2's trap:
+// removing the wrapper-flow's duplicate copy (this plan's actual fix) must
+// not also silence the direct path, which has no other channel for it.
+func TestDirectBuildManifestHasNoCapsuleSoBriefStaysTheSoleSteeringChannel(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	recent := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{Type: "FOCUS", Content: json.RawMessage(`{"text":"sentinel-direct-path-once-not-zero"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: recent},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("failed to save pheromones: %v", err)
+	}
+
+	goal := "Prove the direct path still delivers steering exactly once"
+	researchID := "1.1"
+	implementID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Direct path parity",
+					Description: "Prove manifest.ContextCapsule stays empty and the brief stays the sole channel",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &researchID, Goal: "Research the missing build orchestration gaps", Status: colony.TaskPending},
+						{ID: &implementID, Goal: "Implement the Go-native build packet", Status: colony.TaskPending, DependsOn: []string{researchID}},
+					},
+					SuccessCriteria: []string{"Build artifacts exist"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	if manifest.ContextCapsule != "" {
+		t.Fatalf("direct-path manifest.json unexpectedly carries a context_capsule (%d chars) -- if this ever changes, the brief-level pheromone section becomes a genuine duplicate and must be gated the same way the wrapper flow now is", len(manifest.ContextCapsule))
+	}
+	if len(manifest.Dispatches) == 0 {
+		t.Fatal("expected at least one dispatch")
+	}
+
+	checked := 0
+	for _, dispatch := range manifest.Dispatches {
+		briefRel := strings.TrimPrefix(dispatch.BriefPath, ".aether/data/")
+		fileContents, err := os.ReadFile(filepath.Join(dataDir, briefRel))
+		if err != nil {
+			t.Fatalf("failed to read worker brief file for %s: %v", dispatch.Name, err)
+		}
+		if n := strings.Count(string(fileContents), "## Pheromone Signals"); n != 1 {
+			t.Errorf("dispatch %s: expected exactly one \"## Pheromone Signals\" heading in the direct-path brief file (no capsule accompanies it, so it must not be zero; nothing else duplicates it, so it must not be more than one), found %d", dispatch.Name, n)
+			continue
+		}
+		if !strings.Contains(string(fileContents), "sentinel-direct-path-once-not-zero") {
+			t.Errorf("dispatch %s: Pheromone Signals heading present but the signal's own text is missing", dispatch.Name)
+			continue
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("no dispatch brief file was actually checked")
+	}
+}
+
+// TestDispatchEntryCarriesBriefPath proves every dispatch entry in both the
+// result envelope and the persisted manifest names the file holding its
+// brief, and that the named file resolves to something on disk under the
+// store base path.
+func TestDispatchEntryCarriesBriefPath(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Prove every dispatch entry names its brief file"
+	researchID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "brief_path coverage",
+					Description: "Every manifest dispatch entry names the file holding its brief",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &researchID, Goal: "Research the missing build orchestration gaps", Status: colony.TaskPending},
+					},
+					SuccessCriteria: []string{"Build artifacts exist"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse build output: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	result := envelope["result"].(map[string]interface{})
+	dispatches := result["dispatches"].([]interface{})
+	if len(dispatches) == 0 {
+		t.Fatal("expected at least one dispatch in the build result")
+	}
+	basePath := store.BasePath()
+	for _, raw := range dispatches {
+		dispatch := raw.(map[string]interface{})
+		briefPath, ok := dispatch["brief_path"].(string)
+		if !ok || strings.TrimSpace(briefPath) == "" {
+			t.Fatalf("dispatch %v missing brief_path", dispatch["name"])
+		}
+		if strings.Contains(briefPath, "..") {
+			t.Fatalf("brief_path %s escapes the store base path", briefPath)
+		}
+		rel := strings.TrimPrefix(briefPath, ".aether/data/")
+		full := filepath.Join(basePath, rel)
+		if _, err := os.Stat(full); err != nil {
+			t.Fatalf("brief_path %s does not resolve to an existing file under %s: %v", briefPath, basePath, err)
+		}
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	for _, dispatch := range manifest.Dispatches {
+		if strings.TrimSpace(dispatch.BriefPath) == "" {
+			t.Fatalf("manifest dispatch %s missing brief_path", dispatch.Name)
+		}
+	}
+}
+
 func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -298,18 +619,20 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 		t.Fatalf("dispatch_mode = %q, want plan-only", got)
 	}
 	wrapperContract := result["wrapper_contract"].(map[string]interface{})
-	if got := wrapperContract["source_command"].(string); got != "aether host build <phase>" {
+	if got := wrapperContract["source_command"].(string); got != "aether build <phase> --plan-only" {
 		t.Fatalf("wrapper_contract source_command = %q, want TS host build command", got)
 	}
 	if got := result["colony_mode"].(string); got != "colony" {
 		t.Fatalf("colony_mode = %q, want colony", got)
 	}
-	if got := int(result["dispatch_count"].(float64)); got != 7 {
-		t.Fatalf("dispatch_count = %d, want 7", got)
+	// Phase 184: a dependent chain of single-task waves sharing a caste is now
+	// one worker instead of several.
+	if got := int(result["dispatch_count"].(float64)); got != 6 {
+		t.Fatalf("dispatch_count = %d, want 6", got)
 	}
 	dispatches := result["dispatches"].([]interface{})
-	if len(dispatches) != 7 {
-		t.Fatalf("dispatches = %d, want 7", len(dispatches))
+	if len(dispatches) != 6 {
+		t.Fatalf("dispatches = %d, want 6", len(dispatches))
 	}
 	for _, raw := range dispatches {
 		dispatch := raw.(map[string]interface{})
@@ -341,16 +664,31 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if strings.TrimSpace(manifest["attempt_id"].(string)) == "" || strings.TrimSpace(manifest["attempt_path"].(string)) == "" {
 		t.Fatalf("plan-only manifest should identify its durable attempt: %+v", manifest)
 	}
-	if workerBriefs := manifest["worker_briefs"].([]interface{}); len(workerBriefs) != 0 {
-		t.Fatalf("plan-only manifest should not write worker briefs, got %v", workerBriefs)
+	// D-04: plan-only now legitimately writes brief files as a side effect --
+	// consistent with the many OTHER side effects --plan-only already has
+	// (beginBuildAttempt, store.SaveJSON(manifestRel, manifest)). It was never
+	// claimed to be a pure/dry-run function; that role belongs to
+	// printWorkerBriefs/--print-brief, a fully separate call graph. One brief
+	// file per dispatch, matching the direct path's existing contract.
+	workerBriefs, ok := manifest["worker_briefs"].([]interface{})
+	if !ok || len(workerBriefs) == 0 {
+		t.Fatalf("plan-only manifest should write one worker brief per dispatch, got %v", manifest["worker_briefs"])
+	}
+	if len(workerBriefs) != len(dispatches) {
+		t.Fatalf("plan-only manifest worker_briefs count = %d, want %d (one per dispatch)", len(workerBriefs), len(dispatches))
 	}
 	manifestDispatches := manifest["dispatches"].([]interface{})
 	assertDispatchHasRuntimeSkillAssignment(t, manifestDispatches[0].(map[string]interface{}))
 	executionPlan := manifest["execution_plan"].([]interface{})
-	if len(executionPlan) != 7 {
-		t.Fatalf("execution_plan = %d, want 7 steps: %#v", len(executionPlan), executionPlan)
+	// Was 7 steps with probe/measurement/resilience serialised one per wave.
+	// They review the same finished code and share no inputs, so they now
+	// occupy a single "mixed" step.
+	// Phase 184 removed one more: the two chained task waves are now a single
+	// worker, so there is one "wave" step rather than two.
+	if len(executionPlan) != 4 {
+		t.Fatalf("execution_plan = %d, want 4 steps: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"design", "wave", "wave", "probe", "measurement", "resilience", "verification"}
+	wantStages := []string{"design", "wave", "mixed", "verification"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})
@@ -401,6 +739,177 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 }
 
+// TestBuildPlanOnlyManifestOmitsInlineBriefWhenBriefPathPresent proves D-01
+// through D-04 and criterion 4's invariant: once a plan-only dispatch's brief
+// is successfully written to disk, brief_path names that file -- byte-
+// identical to what composeBuildManifestBrief renders for that dispatch --
+// and the inline "brief" key is entirely ABSENT (not merely empty) from the
+// JSON, in BOTH representations the plan-only response ships:
+// result.dispatches[] (built by codexBuildDispatchMaps) and
+// result.dispatch_manifest.dispatches[] (marshaled from the typed manifest
+// struct). The same composed brief text must never ship twice in one
+// response.
+func TestBuildPlanOnlyManifestOmitsInlineBriefWhenBriefPathPresent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+	setupRuntimeSkillAssignmentHub(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+	// Re-derive root the same way skillWorkspaceRoot() does internally
+	// (os.Getwd() post-chdir) -- on macOS, /var is a symlink to /private/var,
+	// so the runtime's own composeBuildManifestBrief call embeds the
+	// syscall-resolved path in its "Workspace:" line. Comparing against the
+	// pre-chdir logical path here would fail on that cosmetic difference
+	// alone, not on anything this task actually changed.
+	if resolvedRoot, err := os.Getwd(); err == nil {
+		root = resolvedRoot
+	}
+
+	goal := "Prove plan-only briefs ship once, not twice"
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "No double delivery",
+					Description: "Prove brief_path replaces the inline brief instead of shipping alongside it",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &taskOneID, Goal: "Research the byte-duplication gap", Status: colony.TaskPending},
+						{ID: &taskTwoID, Goal: "Implement the single-source brief writer", Status: colony.TaskPending, DependsOn: []string{taskOneID}},
+					},
+					SuccessCriteria: []string{"No dispatch carries both brief and brief_path at once"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --plan-only returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse plan-only output: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	result := envelope["result"].(map[string]interface{})
+
+	// The typed manifest persisted to disk is the oracle for what
+	// composeBuildManifestBrief would have produced for each dispatch --
+	// reload it, plus the (plan-only leaves it unmutated) phase, so the
+	// byte-match check below is against the real composer, never a
+	// hand-copied expectation.
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	startedAt, err := time.Parse(time.RFC3339, manifest.GeneratedAt)
+	if err != nil {
+		t.Fatalf("failed to parse manifest generated_at %q: %v", manifest.GeneratedAt, err)
+	}
+	var reloadedState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &reloadedState); err != nil {
+		t.Fatalf("failed to reload colony state: %v", err)
+	}
+	phase := reloadedState.Plan.Phases[0]
+
+	byName := make(map[string]codexBuildDispatch, len(manifest.Dispatches))
+	for _, d := range manifest.Dispatches {
+		byName[d.Name] = d
+	}
+	if len(byName) == 0 {
+		t.Fatal("expected at least one dispatch in the persisted manifest")
+	}
+
+	basePath := store.BasePath()
+	checkDispatchMap := func(source string, raw interface{}) {
+		dispatch, ok := raw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("%s: dispatch entry is not an object: %#v", source, raw)
+		}
+		name, _ := dispatch["name"].(string)
+		if name == "" {
+			t.Fatalf("%s: dispatch entry missing name: %#v", source, dispatch)
+		}
+		if _, ok := dispatch["brief"]; ok {
+			t.Fatalf("%s: dispatch %q still carries an inline \"brief\" key once brief_path succeeded: %#v", source, name, dispatch)
+		}
+		briefPath, ok := dispatch["brief_path"].(string)
+		if !ok || strings.TrimSpace(briefPath) == "" {
+			t.Fatalf("%s: dispatch %q missing brief_path", source, name)
+		}
+		rel := strings.TrimPrefix(briefPath, ".aether/data/")
+		full := filepath.Join(basePath, rel)
+		fileContents, err := os.ReadFile(full)
+		if err != nil {
+			t.Fatalf("%s: brief_path %s for dispatch %q does not resolve to an existing file: %v", source, briefPath, name, err)
+		}
+		composed, ok := byName[name]
+		if !ok {
+			t.Fatalf("%s: dispatch %q not found in the persisted manifest for comparison", source, name)
+		}
+		// includeSteeringSections=false: this dispatch went through the
+		// plan-only wrapper flow (attachBuildDispatchContext), which composes
+		// with steering sections OMITTED since manifest.ContextCapsule
+		// already carries them (190-03, D-190-01-A) -- the oracle here must
+		// match, or this byte-match check would fail for the wrong reason.
+		want := composeBuildManifestBrief(root, phase, composed, startedAt, false)
+		if string(fileContents) != want {
+			t.Fatalf("%s: brief_path file for dispatch %q does not byte-match composeBuildManifestBrief's output (file %d bytes, want %d bytes)", source, name, len(fileContents), len(want))
+		}
+	}
+
+	dispatches, ok := result["dispatches"].([]interface{})
+	if !ok || len(dispatches) == 0 {
+		t.Fatalf("expected non-empty result.dispatches, got %#v", result["dispatches"])
+	}
+	for _, raw := range dispatches {
+		checkDispatchMap("result.dispatches[]", raw)
+	}
+
+	dispatchManifest, ok := result["dispatch_manifest"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("result.dispatch_manifest is not an object: %#v", result["dispatch_manifest"])
+	}
+	manifestDispatches, ok := dispatchManifest["dispatches"].([]interface{})
+	if !ok || len(manifestDispatches) == 0 {
+		t.Fatalf("expected non-empty result.dispatch_manifest.dispatches, got %#v", dispatchManifest["dispatches"])
+	}
+	for _, raw := range manifestDispatches {
+		checkDispatchMap("result.dispatch_manifest.dispatches[]", raw)
+	}
+
+	// Criterion 4's own measurement: record the bytes that would have shipped
+	// inline (sum of composed brief lengths, one per JSON representation)
+	// against what actually ships (brief_path strings only) for this fixture.
+	inlineBytes := 0
+	pathBytes := 0
+	for _, d := range manifest.Dispatches {
+		inlineBytes += len(composeBuildManifestBrief(root, phase, d, startedAt, false))
+		pathBytes += len(d.BriefPath)
+	}
+	t.Logf("criterion-4 measurement: %d dispatches, %d bytes would have shipped inline per JSON representation, %d bytes actually ship (brief_path strings) -- %.1f%% reduction per representation",
+		len(manifest.Dispatches), inlineBytes, pathBytes, 100*(1-float64(pathBytes)/float64(inlineBytes)))
+}
+
 func TestBuildQueenLedWrapperContractUsesHostSourceCommand(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -432,7 +941,7 @@ func TestBuildQueenLedWrapperContractUsesHostSourceCommand(t *testing.T) {
 		t.Fatalf("runCodexBuildQueenLed returned error: %v", err)
 	}
 	wrapperContract := result["wrapper_contract"].(map[string]interface{})
-	if got := wrapperContract["source_command"].(string); got != "aether host build <phase>" {
+	if got := wrapperContract["source_command"].(string); got != "aether build <phase> --plan-only" {
 		t.Fatalf("wrapper_contract source_command = %q, want TS host build command", got)
 	}
 }
@@ -575,9 +1084,26 @@ func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
 			t.Fatalf("execution step %+v has no workers", step)
 		}
 	}
-	wantStages := []string{"wave", "probe", "measurement", "resilience", "verification"}
+	// The reviewers (probe, measurer, chaos) previously took a wave each. They
+	// examine the same finished code and share no inputs, so they now collapse
+	// into one "mixed" step. The property this test guards — the watcher runs
+	// after every specialist — is unchanged and asserted below.
+	wantStages := []string{"wave", "mixed", "verification"}
 	if strings.Join(gotStages, ",") != strings.Join(wantStages, ",") {
 		t.Fatalf("execution stages = %v, want %v", gotStages, wantStages)
+	}
+
+	// Guard the collapse itself, not just the stage names: the reviewers must
+	// actually share one wave rather than having been dropped.
+	for _, step := range manifest.ExecutionPlan {
+		if step.Stage != "mixed" {
+			continue
+		}
+		for _, caste := range []string{"probe", "measurer", "chaos"} {
+			if !containsString(step.Castes, caste) {
+				t.Errorf("review wave lost %s: %+v", caste, step)
+			}
+		}
 	}
 
 	last := manifest.ExecutionPlan[len(manifest.ExecutionPlan)-1]
@@ -1121,7 +1647,10 @@ func TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases(t *testing.T) {
 	if ambassador == nil {
 		t.Fatalf("expected ambassador dispatch for integration phase, got %#v", manifest.Dispatches)
 	}
-	if ambassador.Stage != "integration" || ambassador.ExecutionWave != 4 {
+	// Wave 2, not 4: the planning specialists share a wave now instead of
+	// queueing one per wave. The property under test — an integration phase
+	// gets an Ambassador, in the pre-wave planning stage — is unchanged.
+	if ambassador.Stage != "integration" || ambassador.ExecutionWave != 2 {
 		t.Fatalf("ambassador dispatch = %+v, want integration execution wave 4", *ambassador)
 	}
 	if got := codexAgentNameForCaste(ambassador.Caste); got != "aether-ambassador" {
@@ -1687,7 +2216,12 @@ func TestBuildFinalizeAcceptsVerificationOnlyOutputEvidence(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Dispatches:       dispatchResults,
-		Claims:           &codexBuildClaims{},
+		// FilesCreated/FilesModified must be explicit empty arrays, not a
+		// nil zero value: the completion-packet schema (generated from
+		// codexBuildClaims's non-omitempty []string fields) requires both
+		// keys present as arrays, even for a legitimate verification-only
+		// submission with no file claims.
+		Claims: &codexBuildClaims{FilesCreated: []string{}, FilesModified: []string{}},
 	}
 
 	_, state, _, finalDispatches, err := runCodexBuildFinalize(root, 1, completion, false)
@@ -2147,6 +2681,215 @@ func TestBuildAllocatesUniqueNamesWhenSpawnHistoryCollides(t *testing.T) {
 	}
 	if !strings.HasPrefix(manifest.Dispatches[0].Name, baseDispatches[0].Name+"-r") {
 		t.Fatalf("expected retry-style suffix on renamed worker, got %q", manifest.Dispatches[0].Name)
+	}
+}
+
+// seedBuildAttemptRecord writes a minimal buildAttemptRecord and its
+// latest-attempt pointer directly to the store, bypassing beginBuildAttempt's
+// ColonyState/workspace-fingerprint requirements, so tests can construct an
+// attempt in an arbitrary status for a given phase.
+func seedBuildAttemptRecord(t *testing.T, phaseNum int, status string, dispatches []codexBuildDispatch) {
+	t.Helper()
+	attemptID := fmt.Sprintf("attempt-test-phase-%d-%s", phaseNum, status)
+	attemptRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "attempts", attemptID+".json"))
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	record := buildAttemptRecord{
+		SchemaVersion: buildAttemptSchemaVersion,
+		ID:            attemptID,
+		Phase:         phaseNum,
+		Status:        status,
+		StartedAt:     now,
+		UpdatedAt:     now,
+		Dispatches:    dispatches,
+	}
+	if err := store.SaveJSON(attemptRel, record); err != nil {
+		t.Fatalf("failed to seed build attempt record: %v", err)
+	}
+	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseNum), latestBuildAttemptPointer{
+		SchemaVersion: buildAttemptSchemaVersion,
+		AttemptID:     attemptID,
+		Path:          displayDataPath(attemptRel),
+		UpdatedAt:     now,
+	}); err != nil {
+		t.Fatalf("failed to seed latest build attempt pointer: %v", err)
+	}
+}
+
+func dispatchNames(dispatches []codexBuildDispatch) []string {
+	names := make([]string, len(dispatches))
+	for i, dispatch := range dispatches {
+		names[i] = dispatch.Name
+	}
+	sort.Strings(names)
+	return names
+}
+
+// TestEnsureUniqueBuildDispatchNamesStableAcrossRePlan is the headline D-09
+// test: planning the same phase's still-open attempt twice in a row, without
+// finalizing it, must produce identical worker names both times -- no -rN
+// suffixes -- so results never need manual remapping between re-plans.
+func TestEnsureUniqueBuildDispatchNamesStableAcrossRePlan(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Keep worker names stable across re-plans"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Re-plan stability",
+					Description: "Re-planning the same unfinalized attempt keeps worker names",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &taskID, Goal: "Implement stable naming", Status: colony.TaskPending},
+					},
+					SuccessCriteria: []string{"Names stay stable"},
+				},
+			},
+		},
+	})
+
+	_, _, _, firstDispatches, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("first plan-only run failed: %v", err)
+	}
+	_, _, _, secondDispatches, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("second plan-only run (re-plan) failed: %v", err)
+	}
+
+	firstNames := dispatchNames(firstDispatches)
+	secondNames := dispatchNames(secondDispatches)
+	if len(firstNames) == 0 {
+		t.Fatal("expected at least one dispatch from the first plan-only run")
+	}
+	if !reflect.DeepEqual(firstNames, secondNames) {
+		t.Fatalf("worker names changed across re-plan: first=%v second=%v", firstNames, secondNames)
+	}
+	retrySuffix := regexp.MustCompile(`-r[0-9]+$`)
+	for _, name := range secondNames {
+		if retrySuffix.MatchString(name) {
+			t.Fatalf("re-plan produced a retry-suffixed name %q, want stable names", name)
+		}
+	}
+}
+
+// TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase proves
+// a name reused from a genuinely different phase's attempt still forces a
+// suffix -- the phase-scoped exclusion in ensureUniqueBuildDispatchNames must
+// not leak across phases (T-163.1-20).
+func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase(t *testing.T) {
+	saveGlobals(t)
+	dataDir := t.TempDir() + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-44", "Phase 1 task", 1); err != nil {
+		t.Fatalf("failed to seed spawn tree: %v", err)
+	}
+	// Phase 1 has its own active, unfinalized attempt that used this name --
+	// that exclusion must not apply when planning a DIFFERENT phase.
+	seedBuildAttemptRecord(t, 1, buildAttemptAwaiting, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
+
+	dispatches := []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}}
+	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 2)
+	if err != nil {
+		t.Fatalf("ensureUniqueBuildDispatchNames: %v", err)
+	}
+	if allocated[0].Name == "Hammer-44" {
+		t.Fatalf("expected a same-name worker from a different phase to be renamed, still got %q", allocated[0].Name)
+	}
+	if !strings.HasPrefix(allocated[0].Name, "Hammer-44-r") {
+		t.Fatalf("expected retry-style suffix, got %q", allocated[0].Name)
+	}
+}
+
+// TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromSealedAttempt proves
+// a name collision with a worker from a previously sealed (built) attempt of
+// THIS SAME phase still forces a suffix -- reuse is scoped to unfinalized
+// attempts only (T-163.1-20).
+func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromSealedAttempt(t *testing.T) {
+	saveGlobals(t)
+	dataDir := t.TempDir() + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-44", "Phase 1 task", 1); err != nil {
+		t.Fatalf("failed to seed spawn tree: %v", err)
+	}
+	seedBuildAttemptRecord(t, 1, buildAttemptBuilt, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
+
+	dispatches := []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}}
+	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 1)
+	if err != nil {
+		t.Fatalf("ensureUniqueBuildDispatchNames: %v", err)
+	}
+	if allocated[0].Name == "Hammer-44" {
+		t.Fatalf("expected a same-name worker from a sealed (built) attempt of the same phase to be renamed, still got %q", allocated[0].Name)
+	}
+	if !strings.HasPrefix(allocated[0].Name, "Hammer-44-r") {
+		t.Fatalf("expected retry-style suffix, got %q", allocated[0].Name)
+	}
+}
+
+// TestEnsureUniqueBuildDispatchNamesDistinguishesWithinRunCollisions proves
+// the within-run collision guard survives the D-09 change: two dispatches
+// produced by the same plan run that would share a name must still end up
+// with distinct names.
+func TestEnsureUniqueBuildDispatchNamesDistinguishesWithinRunCollisions(t *testing.T) {
+	saveGlobals(t)
+	dataDir := t.TempDir() + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	dispatches := []codexBuildDispatch{
+		{Name: "Hammer-44", Caste: "builder"},
+		{Name: "Hammer-44", Caste: "watcher"},
+	}
+	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 1)
+	if err != nil {
+		t.Fatalf("ensureUniqueBuildDispatchNames: %v", err)
+	}
+	if allocated[0].Name == allocated[1].Name {
+		t.Fatalf("expected two same-named dispatches in one run to get distinct names, both got %q", allocated[0].Name)
 	}
 }
 
@@ -3204,8 +3947,21 @@ func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
 	taskChars := 0
 	for _, section := range splitBriefSections(brief) {
 		switch section.Name {
+		// "Verification Command" is counted with the task sections, not against
+		// them. It is the executable form of "Task Success Criteria", which is
+		// already counted: the criteria say what done looks like, the command
+		// is how the worker checks it. Both exist to serve this task, neither
+		// is colony ceremony.
+		//
+		// Stated explicitly because the alternative reading — that anything
+		// useful may be reclassified as task content — would hollow this test
+		// out entirely. The bar for adding a name here is that a worker could
+		// not complete *this* task correctly without it. Colony state, skills,
+		// pheromones and survey pointers do not meet it and stay on the
+		// scaffolding side.
 		case "Assignment", "Phase Objective", "Phase Success Criteria",
-			"Task Success Criteria", "Dependencies", "Task Constraints", "Hints":
+			"Task Success Criteria", "Dependencies", "Task Constraints", "Hints",
+			"Verification Command":
 			taskChars += section.Chars
 		}
 	}
@@ -3217,6 +3973,296 @@ func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
 	if share < 40 {
 		t.Errorf("task-relevant content is %.1f%% of the worker brief (%d of %d chars); framework scaffolding now outweighs the task",
 			share, taskChars, len(brief))
+	}
+}
+
+// TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria is the
+// invariant proof for criterion 1: a merged (multi-task) dispatch's brief must
+// carry every covered task's constraints, hints and success criteria, not
+// just the first task folded into the chain. It builds a real 3-task merged
+// dispatch (via CoveredTaskIDs, exactly as coalesceSequentialDispatches
+// produces one) rather than a single-task dispatch with a hand-set
+// CoveredTaskIDs list, so it actually exercises the merge-aware resolution
+// path instead of asserting a single hardcoded string.
+func TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+
+	task1 := colony.Task{
+		ID:              strPtr("1"),
+		Goal:            "first",
+		Constraints:     []string{"constraint-only-in-task-1"},
+		Hints:           []string{"hint-only-in-task-1"},
+		SuccessCriteria: []string{"criteria-only-in-task-1"},
+	}
+	task2 := colony.Task{
+		ID:              strPtr("2"),
+		Goal:            "second",
+		Constraints:     []string{"constraint-only-in-task-2"},
+		Hints:           []string{"hint-only-in-task-2"},
+		SuccessCriteria: []string{"criteria-only-in-task-2"},
+	}
+	task3 := colony.Task{
+		ID:              strPtr("3"),
+		Goal:            "third",
+		Constraints:     []string{"constraint-only-in-task-3"},
+		Hints:           []string{"hint-only-in-task-3"},
+		SuccessCriteria: []string{"criteria-only-in-task-3"},
+	}
+
+	phase := colony.Phase{
+		ID:    1,
+		Name:  "Merged Dispatch Phase",
+		Tasks: []colony.Task{task1, task2, task3},
+	}
+	dispatch := codexBuildDispatch{
+		Name:           "Hammer-26",
+		Caste:          "builder",
+		TaskID:         "1",
+		CoveredTaskIDs: []string{"1", "2", "3"},
+		Task:           "1. first\n2. second\n3. third",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+	wantSubstrings := []string{
+		"constraint-only-in-task-1", "hint-only-in-task-1", "criteria-only-in-task-1",
+		"constraint-only-in-task-2", "hint-only-in-task-2", "criteria-only-in-task-2",
+		"constraint-only-in-task-3", "hint-only-in-task-3", "criteria-only-in-task-3",
+	}
+	for _, want := range wantSubstrings {
+		if !strings.Contains(brief, want) {
+			t.Errorf("merged dispatch brief missing %q (a task-2/3 constraint, hint, or success criterion was dropped):\n%s", want, brief)
+		}
+	}
+
+	if !strings.Contains(brief, "## Task Constraints\n") {
+		t.Errorf("merged dispatch brief missing the renamed \"## Task Constraints\" heading:\n%s", brief)
+	}
+	if strings.Contains(brief, "## Constraints\n") {
+		t.Errorf("merged dispatch brief still emits the old \"## Constraints\" heading:\n%s", brief)
+	}
+}
+
+// TestBuildWorkerBriefMergedDispatchKeepsNumberingAcrossUnresolvedTask
+// reproduces WR-01 (189-REVIEW.md): findDispatchTasks's own doc comment
+// claims a covered ID with no matching phase.Tasks entry is skipped
+// "defensively," but renderDispatchTaskItemsSection used to label each
+// block by its position in the FILTERED tasks slice, not its position in
+// the original covered-ID chain -- so dropping task "2" from phase.Tasks
+// shifted task "3"'s content one label to the left ("**Task 2:**" instead
+// of "**Task 3:**"), silently misattributing it, while task "2" vanished
+// with no trace. This builds the exact 3-task merged dispatch
+// TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria uses, but
+// omits the middle task from phase.Tasks (simulating a stale or renamed
+// task ID), and asserts every resolvable task still renders under its
+// correct original number and the unresolvable one is visibly marked rather
+// than silently dropped.
+func TestBuildWorkerBriefMergedDispatchKeepsNumberingAcrossUnresolvedTask(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+
+	task1 := colony.Task{
+		ID:              strPtr("1"),
+		Goal:            "first",
+		Constraints:     []string{"constraint-only-in-task-1"},
+		Hints:           []string{"hint-only-in-task-1"},
+		SuccessCriteria: []string{"criteria-only-in-task-1"},
+	}
+	// task "2" is deliberately OMITTED from phase.Tasks below -- simulating a
+	// stale/renamed covered task ID that dispatchCoveredTaskIDs still names
+	// but phase.Tasks no longer carries.
+	task3 := colony.Task{
+		ID:              strPtr("3"),
+		Goal:            "third",
+		Constraints:     []string{"constraint-only-in-task-3"},
+		Hints:           []string{"hint-only-in-task-3"},
+		SuccessCriteria: []string{"criteria-only-in-task-3"},
+	}
+
+	phase := colony.Phase{
+		ID:    1,
+		Name:  "Merged Dispatch Phase With A Stale Task ID",
+		Tasks: []colony.Task{task1, task3},
+	}
+	dispatch := codexBuildDispatch{
+		Name:           "Hammer-28",
+		Caste:          "builder",
+		TaskID:         "1",
+		CoveredTaskIDs: []string{"1", "2", "3"},
+		Task:           "1. first\n2. second\n3. third",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+	// Task 1 keeps its own label and content.
+	if !strings.Contains(brief, "**Task 1:**\n- constraint-only-in-task-1") {
+		t.Errorf("task 1's constraint did not render under \"**Task 1:**\":\n%s", brief)
+	}
+	// Task 3 must keep ITS OWN number -- not be shifted down into "Task 2"
+	// because task 2 was unresolved.
+	if !strings.Contains(brief, "**Task 3:**\n- constraint-only-in-task-3") {
+		t.Errorf("task 3's constraint did not render under its correct label \"**Task 3:**\" (numbering desync across the unresolved task):\n%s", brief)
+	}
+	// The exact corruption WR-01 found: task 3's content mislabeled as task 2.
+	if strings.Contains(brief, "**Task 2:**\n- constraint-only-in-task-3") {
+		t.Errorf("task 3's constraint was mislabeled \"**Task 2:**\" (the WR-01 numbering-desync bug):\n%s", brief)
+	}
+	for _, want := range []string{
+		"hint-only-in-task-1", "criteria-only-in-task-1",
+		"constraint-only-in-task-3", "hint-only-in-task-3", "criteria-only-in-task-3",
+	} {
+		if !strings.Contains(brief, want) {
+			t.Errorf("merged dispatch brief with a stale task ID is missing %q:\n%s", want, brief)
+		}
+	}
+	// Task 2's content must never appear (it doesn't exist in phase.Tasks),
+	// but its absence must be VISIBLE, not silent.
+	if strings.Contains(brief, "constraint-only-in-task-2") {
+		t.Errorf("unresolved task 2 should not contribute any content, but its constraint text appeared:\n%s", brief)
+	}
+	if !strings.Contains(brief, `Task 2 (id "2") could not be resolved`) {
+		t.Errorf("brief does not visibly mark task 2 as unresolved -- a worker has no way to tell \"task 2 has no constraints\" from \"task 2's constraints could not be found\":\n%s", brief)
+	}
+}
+
+// TestBuildWorkerBriefIsMostlyTaskForMergedDispatch is WR-02's fix
+// (189-REVIEW.md): TestBuildWorkerBriefIsMostlyTask's own fixture carries no
+// TaskID and no CoveredTaskIDs, so dispatchCoveredTaskIDs returns nil for it
+// and the merged-dispatch rendering findDispatchTasks/
+// renderDispatchTaskItemsSection add in this phase sits completely outside
+// that test's protection -- its "regression lock" claim ("any future addition
+// that pushes framework scaffolding past half the prompt fails here
+// regardless of what that addition is called") was not actually true for the
+// code path this phase added. This test applies the IDENTICAL share>=40
+// invariant, with the identical counted-section switch, to a real 3-task
+// merged dispatch (the same fixture
+// TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria uses), so a
+// future addition that pushes scaffolding past task content on the
+// merged-dispatch path fails here too, not only on the single-task path.
+// TestBuildWorkerBriefIsMostlyTask itself is untouched -- this is a sibling,
+// not a replacement.
+func TestBuildWorkerBriefIsMostlyTaskForMergedDispatch(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+
+	task1 := colony.Task{
+		ID:              strPtr("1"),
+		Goal:            "Add the exporter call to commands.rs",
+		Constraints:     []string{"constraint-only-in-task-1"},
+		Hints:           []string{"hint-only-in-task-1"},
+		SuccessCriteria: []string{"criteria-only-in-task-1"},
+	}
+	task2 := colony.Task{
+		ID:              strPtr("2"),
+		Goal:            "Pass its result to the dashboard view",
+		Constraints:     []string{"constraint-only-in-task-2"},
+		Hints:           []string{"hint-only-in-task-2"},
+		SuccessCriteria: []string{"criteria-only-in-task-2"},
+	}
+	task3 := colony.Task{
+		ID:              strPtr("3"),
+		Goal:            "Wire the dashboard render path",
+		Constraints:     []string{"constraint-only-in-task-3"},
+		Hints:           []string{"hint-only-in-task-3"},
+		SuccessCriteria: []string{"criteria-only-in-task-3"},
+	}
+	phase := colony.Phase{
+		ID:              1,
+		Name:            "Wire the exporter",
+		Description:     "Connect the vault exporter to the dashboard command",
+		SuccessCriteria: []string{"Dashboard renders exporter output"},
+		Tasks:           []colony.Task{task1, task2, task3},
+	}
+	dispatch := codexBuildDispatch{
+		Name:           "Hammer-27",
+		Caste:          "builder",
+		TaskID:         "1",
+		CoveredTaskIDs: []string{"1", "2", "3"},
+		Task:           "1. Add the exporter call to commands.rs\n2. Pass its result to the dashboard view\n3. Wire the dashboard render path",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+	taskChars := 0
+	for _, section := range splitBriefSections(brief) {
+		// Identical switch to TestBuildWorkerBriefIsMostlyTask's -- not
+		// weakened, not retuned, just applied to a different fixture.
+		switch section.Name {
+		case "Assignment", "Phase Objective", "Phase Success Criteria",
+			"Task Success Criteria", "Dependencies", "Task Constraints", "Hints",
+			"Verification Command":
+			taskChars += section.Chars
+		}
+	}
+
+	if len(brief) == 0 {
+		t.Fatal("empty worker brief")
+	}
+	share := float64(taskChars) / float64(len(brief)) * 100
+	t.Logf("merged-dispatch task-relevant share: %.1f%% (%d of %d chars)", share, taskChars, len(brief))
+	if share < 40 {
+		t.Errorf("task-relevant content is %.1f%% of the merged-dispatch worker brief (%d of %d chars); framework scaffolding now outweighs the task",
+			share, taskChars, len(brief))
+	}
+}
+
+// TestComposeBuildManifestBriefStatesHandoffSchemaOnceNotOnNativePath is the
+// duplication-avoidance proof for criterion 2 (D-04): composeBuildManifestBrief
+// (the wrapper-facing build brief -- dispatch.Brief in the JSON manifest Claude
+// Code and OpenCode workers read) must state codex.HandoffFieldsSummary so
+// those workers are told the exact handoff schema the finalizer enforces.
+// renderCodexBuildWorkerBrief's OWN output must NOT contain it, because that
+// raw output is fed to native-Codex workers as TaskBrief
+// (executeCodexBuildDispatches) -- and those workers already receive the
+// schema via renderResponseContract on a separate channel
+// (AssembleHostedPrompt/AssemblePrompt). Embedding it in the shared renderer
+// would show it to them twice.
+//
+// Every field named in codex.HandoffFieldsSummary is checked, not a
+// hand-picked couple, so this is an invariant over the constant's actual
+// content rather than a check that would stay green if a field were silently
+// dropped from one side.
+func TestComposeBuildManifestBriefStatesHandoffSchemaOnceNotOnNativePath(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-27",
+		Caste: "builder",
+		Task:  "Implement feature Y",
+	}
+	phase := colony.Phase{ID: 1, Name: "Test Phase"}
+	startedAt := time.Now()
+
+	// includeSteeringSections=false: this test's own doc comment describes
+	// composeBuildManifestBrief here as "the wrapper-facing build brief --
+	// dispatch.Brief in the JSON manifest Claude Code and OpenCode workers
+	// read" -- exactly the capsule-accompanied call shape (190-03). The
+	// handoff SCHEMA sentence under test is unconditional either way; this
+	// flag only governs the separate pheromone/prior-handoff sections.
+	composed := composeBuildManifestBrief(tmpDir, phase, dispatch, startedAt, false)
+	rawBrief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, startedAt)
+
+	fieldsPart := codex.HandoffFieldsSummary
+	if idx := strings.Index(fieldsPart, "("); idx >= 0 {
+		fieldsPart = fieldsPart[:idx]
+	}
+	wantFields := splitFieldTokens(fieldsPart)
+	if len(wantFields) == 0 {
+		t.Fatal("parsed zero fields from codex.HandoffFieldsSummary; test fixture is broken")
+	}
+
+	for _, field := range wantFields {
+		if !strings.Contains(composed, field) {
+			t.Errorf("composeBuildManifestBrief missing handoff-schema field %q; a wrapper-spawned worker was never told the finalizer's schema:\n%s", field, composed)
+		}
+		if strings.Contains(rawBrief, field) {
+			t.Errorf("renderCodexBuildWorkerBrief already contains handoff-schema field %q; native-Codex workers (whose TaskBrief is this raw output) would see the schema twice -- once here, once via renderResponseContract:\n%s", field, rawBrief)
+		}
 	}
 }
 
@@ -3265,6 +4311,140 @@ func TestBuildWorkerBriefIncludesCodegraphContext(t *testing.T) {
 	}
 }
 
+// TestBuildWorkerBriefIncludesSurveyAndResearch pins CONTEXT-01 and
+// CONTEXT-04: territory survey findings and phase research findings must be
+// demonstrably present in a build worker's actual prompt, not merely
+// resolvable by functions nothing calls. Neither requirement had a test
+// before this one — a grep for existing coverage
+// (`grep -n 'func Test' cmd/codex_build_test.go`) confirmed OmitsHeartbeat,
+// OmitsPlaybooks, IsMostlyTask, and IncludesCodegraphContext exist, and none
+// of them asserts on resolveSurveySection or resolvePhaseResearchSection.
+// The fixtures below are built from real files on disk in a temp colony,
+// not stubbed resolvers — the requirement is that content reaches the
+// prompt, and a stubbed resolver would prove only that a stub was called.
+func TestBuildWorkerBriefIncludesSurveyAndResearch(t *testing.T) {
+	t.Run("survey pointer list reaches the brief with real paths", func(t *testing.T) {
+		saveGlobals(t)
+
+		tmpDir := t.TempDir()
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		surveyDir := filepath.Join(dataDir, "survey")
+		if err := os.MkdirAll(surveyDir, 0755); err != nil {
+			t.Fatalf("mkdir survey dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(surveyDir, "BLUEPRINT.md"), []byte("# Blueprint\n\nThe survey found a Go monorepo with cmd/ and pkg/."), 0644); err != nil {
+			t.Fatalf("write survey doc: %v", err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		store = s
+
+		dispatch := codexBuildDispatch{Name: "Hammer-26", Caste: "builder", Task: "Wire the exporter"}
+		phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+		brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+		if !strings.Contains(brief, "### Territory Survey") {
+			t.Fatalf("worker brief missing Territory Survey section:\n%s", brief)
+		}
+		if !strings.Contains(brief, ".aether/data/survey/BLUEPRINT.md") {
+			t.Fatalf("worker brief missing the delivered repo-relative survey path:\n%s", brief)
+		}
+	})
+
+	t.Run("phase research reaches the brief with its content", func(t *testing.T) {
+		saveGlobals(t)
+
+		tmpDir := t.TempDir()
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		researchDir := filepath.Join(dataDir, "phase-research")
+		if err := os.MkdirAll(researchDir, 0755); err != nil {
+			t.Fatalf("mkdir research dir: %v", err)
+		}
+		researchBody := "## Key Patterns\n\nUse the widget factory pattern for the exporter wiring."
+		if err := os.WriteFile(filepath.Join(researchDir, "phase-1-research.md"), []byte(researchBody), 0644); err != nil {
+			t.Fatalf("write research doc: %v", err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		store = s
+
+		dispatch := codexBuildDispatch{Name: "Hammer-27", Caste: "builder", Task: "Wire the exporter"}
+		phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+		brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+		if !strings.Contains(brief, "## Phase Research") {
+			t.Fatalf("worker brief missing Phase Research section:\n%s", brief)
+		}
+		if !strings.Contains(brief, "widget factory pattern") {
+			t.Fatalf("worker brief missing the delivered research content:\n%s", brief)
+		}
+	})
+
+	t.Run("staleness notice from task 1 reaches the brief alongside the survey", func(t *testing.T) {
+		saveGlobals(t)
+
+		tmpDir := t.TempDir()
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		surveyDir := filepath.Join(dataDir, "survey")
+		if err := os.MkdirAll(surveyDir, 0755); err != nil {
+			t.Fatalf("mkdir survey dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(surveyDir, "BLUEPRINT.md"), []byte("# Blueprint\n\nsurvey content"), 0644); err != nil {
+			t.Fatalf("write survey doc: %v", err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		store = s
+		if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{}); err != nil {
+			t.Fatalf("save colony state: %v", err)
+		}
+
+		dispatch := codexBuildDispatch{Name: "Hammer-28", Caste: "builder", Task: "Wire the exporter"}
+		phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+		brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+		if !strings.Contains(brief, "never been surveyed") || !strings.Contains(brief, "/ant-colonize") {
+			t.Fatalf("worker brief missing the survey staleness notice:\n%s", brief)
+		}
+	})
+
+	t.Run("neither artifact present means neither section appears", func(t *testing.T) {
+		saveGlobals(t)
+
+		tmpDir := t.TempDir()
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			t.Fatalf("mkdir data dir: %v", err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		store = s
+
+		dispatch := codexBuildDispatch{Name: "Hammer-29", Caste: "builder", Task: "Wire the exporter"}
+		phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+		brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+
+		if strings.Contains(brief, "### Territory Survey") {
+			t.Errorf("worker brief has a Territory Survey heading with no survey data on disk:\n%s", brief)
+		}
+		if strings.Contains(brief, "## Phase Research") {
+			t.Errorf("worker brief has a Phase Research heading with no research data on disk:\n%s", brief)
+		}
+	})
+}
+
 func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	saveGlobals(t)
 
@@ -3302,5 +4482,69 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	matches, _ := filepath.Glob(filepath.Join(dataDir, "heartbeat-*.json"))
 	if len(matches) > 0 {
 		t.Errorf("expected heartbeat files cleaned up after dispatch, found: %v", matches)
+	}
+}
+
+// TestIndependentSpecialistsShareAWave guards the two halves of one fix. A real
+// phase spawned eleven dispatches across nine waves and took about an hour,
+// almost entirely waiting: the pre-wave specialists held hardcoded waves 1-8 and
+// each post-wave reviewer took its own incrementing wave, even though none of
+// them reads another's output.
+//
+// Collapsing the wave numbers alone would have changed nothing visible. The
+// wrapper obeys each step's Strategy field, so a step marked "serial" is still
+// executed one worker at a time no matter how many castes share its wave. Both
+// halves are asserted here because either alone is a no-op.
+func TestIndependentSpecialistsShareAWave(t *testing.T) {
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Integration and security review",
+		Description: "Design boundaries, review auth risk, and check accessibility before coding",
+		Mode:        colony.PhaseModeProduction,
+	}
+	queenCastes := map[string]bool{
+		"architect": true, "gatekeeper": true, "includer": true,
+		"tracker": true, "sage": true, "archaeologist": true, "oracle": true,
+	}
+
+	pre := queenBuildPreWaveDispatches(phase, queenCastes)
+	if len(pre) < 4 {
+		t.Fatalf("expected several pre-wave specialists, got %d", len(pre))
+	}
+	waves := map[int]int{}
+	for _, d := range pre {
+		waves[d.ExecutionWave]++
+	}
+	if len(waves) > 2 {
+		t.Errorf("pre-wave specialists occupy %d waves, want at most 2 (evidence, then planning): %v", len(waves), waves)
+	}
+
+	// Reviewers examine the same finished code; one wave between them.
+	post := queenBuildPostWaveDispatches(phase, map[string]bool{"auditor": true, "measurer": true, "chaos": true}, 9)
+	if len(post) != 3 {
+		t.Fatalf("expected 3 post-wave reviewers, got %d", len(post))
+	}
+	for _, d := range post {
+		if d.ExecutionWave != 9 {
+			t.Errorf("reviewer %s is on wave %d, want the single review wave 9", d.Caste, d.ExecutionWave)
+		}
+	}
+
+	// The half that actually buys wall-clock: a planning step of non-source-
+	// writing castes must be marked parallel, or the wrapper serialises it.
+	if got := executionStrategyForCastes("design", []string{"architect", "gatekeeper", "includer"}, colony.ModeInRepo); got != "parallel" {
+		t.Errorf("planning step strategy = %q, want parallel — collapsing waves without this changes nothing", got)
+	}
+
+	// And the safety half: anything that can write project source stays serial
+	// in a shared working tree, however many castes share the wave.
+	if got := executionStrategyForCastes("mixed", []string{"auditor", "chaos"}, colony.ModeInRepo); got != "serial" {
+		t.Errorf("step containing an unrestricted writer = %q, want serial in-repo", got)
+	}
+	if got := executionStrategyForCastes("wave", []string{"builder", "builder"}, colony.ModeInRepo); got != "serial" {
+		t.Errorf("builder task wave = %q, want serial in-repo", got)
+	}
+	if got := executionStrategyForCastes("mixed", []string{"auditor", "chaos"}, colony.ModeWorktree); got != "parallel" {
+		t.Errorf("worktree mode isolates workers; step = %q, want parallel", got)
 	}
 }

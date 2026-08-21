@@ -264,14 +264,17 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	}
 
 	manifest := codexBuildManifest{
-		Phase:        1,
-		PhaseName:    "Boundary build",
-		Root:         root,
-		ColonyMode:   string(colony.ColonyModeOrchestrator),
-		PlanOnly:     true,
-		DispatchMode: "plan-only",
-		GeneratedAt:  startedAt.Format(time.RFC3339),
-		State:        string(colony.StateEXECUTING),
+		Phase:           1,
+		PhaseName:       "Boundary build",
+		Root:            root,
+		ColonyMode:      string(colony.ColonyModeOrchestrator),
+		PlanOnly:        true,
+		DispatchMode:    "plan-only",
+		GeneratedAt:     startedAt.Format(time.RFC3339),
+		State:           string(colony.StateEXECUTING),
+		WorkerBriefs:    []string{},
+		Tasks:           []codexBuildTaskPlan{},
+		SuccessCriteria: []string{},
 		Dispatches: []codexBuildDispatch{{
 			Stage:  "wave",
 			Wave:   1,
@@ -283,8 +286,9 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 		}},
 		SelectedTasks: []string{taskID},
 		BoundaryQuestions: []discussQuestion{{
-			ID:     "pd_build_finalize_boundary",
-			Source: source,
+			ID:      "pd_build_finalize_boundary",
+			Source:  source,
+			Options: []string{},
 		}},
 	}
 	completion := codexExternalBuildCompletion{
@@ -461,6 +465,13 @@ func TestContinueFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 		result := dispatch
 		result.Status = "completed"
 		result.Summary = dispatch.Name + " cleared continue review"
+		// A completed result must relay a non-empty handoff (189-REVIEW.md
+		// CR-01): the finalizer now enforces the same promise every wrapper
+		// brief states.
+		result.Handoff = codex.WorkerHandoff{
+			VerificationStatus:     "pass",
+			NextWorkerInstructions: []string{dispatch.Name + " found no blocking issues"},
+		}
 		results = append(results, result)
 	}
 
@@ -511,7 +522,7 @@ func TestSealFinalizeBlocksUnresolvedOrchestratorBoundaryGuidance(t *testing.T) 
 		t.Fatalf("save state: %v", err)
 	}
 
-	planResult, err := runSealPlanOnly(root, false)
+	planResult, err := runSealPlanOnly(root, false, "")
 	if err != nil {
 		t.Fatalf("runSealPlanOnly: %v", err)
 	}

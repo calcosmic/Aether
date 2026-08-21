@@ -1,13 +1,159 @@
 <!-- Aether-managed: runtime spec at .aether/commands/swarm.yaml. Synced by aether update. -->
 ---
 name: ant-swarm
-description: "🔥 Real-time colony swarm display + stubborn bug destroyer"
+description: "🔥 Real-time colony swarm display + visible bug-destroyer workers"
 ---
 
-Use the Go `aether` CLI as the source of truth.
+Use the Go `aether` CLI as the source of truth. The runtime owns swarm artifacts, spawn-tree status, worker wave contracts, and final result persistence. The wrapper owns only visible platform worker ceremony.
 
-- For live worker visibility, execute `AETHER_OUTPUT_MODE=visual aether swarm --watch`.
-- To launch the stubborn bug-destroyer flow, execute `AETHER_OUTPUT_MODE=visual aether swarm "$ARGUMENTS"` directly.
-- The runtime owns the investigate -> fix -> verify worker waves. Do not hand-edit `.aether/data/` or manually reconstruct swarm artifacts.
-- If the user provides no problem description, prefer `aether swarm --watch`.
+## Watch Mode
+
+If the user provides no problem description, keep live visibility direct:
+
+```
+AETHER_OUTPUT_MODE=visual aether swarm --watch
+```
+
+Do not request a manifest for watch mode.
+
+## Swarm Manifest
+
+For a bug-destroyer target, ask the runtime for the authoritative swarm manifest:
+
+```
+AETHER_OUTPUT_MODE=json aether swarm --plan-only $ARGUMENTS
+```
+
+Parse `result.swarm_manifest`. This manifest is the only source for worker names, castes, roles, waves, task IDs, agent names, briefs, response contracts, and finalizer contract.
+
+Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the bug-destroyer display uses the same runtime manifest.
+
+If the runtime returns `dispatch_mode: agent-delegate`, this is the expected hosted-agent path. Do not run nested subprocess swarm workers. Dispatch the manifest workers through the current platform.
+
+## Runtime Spawn Ceremony
+
+Before spawning swarm workers, render the runtime-owned old-style bug-destroyer ceremony:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow swarm --manifest-file <manifest_file>
+```
+
+This output is display-only; do not parse it as state.
+
+## Live Worker Ceremony
+
+The visible live Task/subagent stack is part of the Aether ceremony.
+
+- Issue same-wave swarm workers as visible Task/subagent calls, not background-only dispatches.
+- Do not set `run_in_background`.
+- Do not describe workers as `background agents` or say you will be notified later.
+- Do not replace the live stack with a markdown worker table.
+- Each worker description parameter must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+- Preserve platform agent caste color/icon metadata by using the manifest `agent_name` as `subagent_type`.
+
+## Wave Execution
+
+For each dispatch in `swarm_manifest.dispatches`:
+
+1. Before each manifest wave, render:
+   `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow swarm --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
+2. Run:
+   `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Swarm" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
+3. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Inject the dispatch `brief`, `response_contract`, active signals, and exact task metadata.
+6. Require every worker to return a terminal structured result with: `name`, `caste`, `role`, `task`, `status`, `summary`, `files`, `tests`, `blockers`, `response`, and `duration`.
+7. After each worker returns, run:
+   `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
+8. Write that one terminal result to a temporary worker JSON file and render:
+   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow swarm --worker-file <worker_file>`
+
+Preserve the runtime wave order:
+
+1. Wave 1 investigation workers may run together.
+2. Wave 2 builder waits for wave 1 summaries.
+3. Wave 3 watcher waits for builder completion.
+
+The wrapper must not invent worker names, roles, or waves.
+
+## Completion Packet
+
+After all swarm workers have terminal results, write a temporary completion JSON file outside `.aether/data/`:
+
+```json
+{
+  "swarm_manifest": {
+    "...": "the exact result.swarm_manifest object"
+  },
+  "dispatches": [
+    {
+      "name": "Trace-12",
+      "caste": "tracker",
+      "role": "tracker",
+      "task": "Reproduce the issue and trace the failure path.",
+      "status": "completed",
+      "summary": "Tracked the issue to a missing nil guard.",
+      "files": [],
+      "tests": [],
+      "blockers": [],
+      "duration": 0,
+      "response": {
+        "role": "tracker",
+        "status": "completed",
+        "summary": "Tracked the issue to a missing nil guard.",
+        "findings": ["The panic starts in the session lookup path."],
+        "evidence": ["pkg/auth/handler.go"],
+        "root_cause": "missing session guard",
+        "recommendation": "Restore the guard and add a regression test.",
+        "proposed_fix": "",
+        "files_touched": [],
+        "tests_written": [],
+        "verification": []
+      }
+    }
+  ]
+}
+```
+
+Then finalize through the runtime:
+
+```
+AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <completion_file>
+```
+
+Render the user-facing closeout after the JSON finalizer succeeds:
+
+```
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow swarm --completion-file <completion_file>
+```
+
+## After Swarm
+
+Branch strictly on `swarm-finalize` output:
+
+1. Use the visual closeout's next-step line as the source of truth.
+2. Summarize which workers actually ran.
+3. Summarize the root cause, fix or blocker, files/tests touched, and verification evidence.
+4. Route first to the runtime-surfaced `next` command.
+
+## Inspecting And Cleaning Up A Swarm
+
+The runtime records every swarm's findings and solution itself while workers run.
+Two commands expose that state:
+
+- `aether swarm-findings-read --id <swarm-id>` — read the recorded findings and solution for a swarm.
+- `aether swarm-cleanup --id <swarm-id>` — remove a finished swarm's data directory once it is no longer needed.
+
+## Cross-Platform Drift Guard
+
+If you change swarm manifest handling, worker spawning, finalization, or closeout behavior here, update `.aether/commands/swarm.yaml`, both platform swarm wrappers, the Codex skill `aether-colony-build-cycle`, and `cmd/command_guide.go` in the same change. Verify `aether command-guide swarm --platform codex` still describes the matching Codex flow.
+
+## Guardrails
+
+- Do NOT run nested subprocess swarm workers from this wrapper.
+- Do NOT run `aether swarm` without `--plan-only` from this wrapper unless the user explicitly asks for raw/no-orchestration.
+- Do NOT hand-edit `.aether/data/`, `COLONY_STATE.json`, `session.json`, or pheromone files.
+- Do NOT copy command wrappers into target repos; Aether commands are published globally.
+- Do NOT invent worker names, castes, roles, waves, task IDs, or outputs; use `swarm_manifest`.
+- Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table.
 - If docs and runtime disagree, runtime wins.

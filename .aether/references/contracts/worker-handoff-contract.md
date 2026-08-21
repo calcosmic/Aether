@@ -37,7 +37,10 @@ Every worker handoff should include:
 - `assumptions`: facts believed but not proven.
 - `next_worker_instructions`: bounded next action.
 - `do_not_repeat`: dead ends already tried.
-- `freshness`: timestamp or statement that evidence followed the latest edit.
+- `freshness`: when the evidence was collected — an RFC3339 timestamp (e.g.
+  `2026-07-31T14:00:00Z`), or `not-run` if evidence was never collected.
+  Prose statements are tolerated but replaced with the packet's receipt time,
+  so prefer a real timestamp.
 
 ## Quality Bar
 
@@ -68,6 +71,6 @@ A handoff is useful when:
   "assumptions": ["hub install not run in this session"],
   "next_worker_instructions": "Run full suite after unrelated compile failure is resolved.",
   "do_not_repeat": ["Do not copy references into target repo .aether/references."],
-  "freshness": "Evidence collected after latest edit."
+  "freshness": "2026-07-31T14:00:00Z"
 }
 ```

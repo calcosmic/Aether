@@ -113,6 +113,7 @@ type sealPlanManifest struct {
 	FinalizeSurface           string                          `json:"finalize_surface"`
 	FinalizerCommand          string                          `json:"finalizer_command"`
 	Force                     bool                            `json:"force,omitempty"`
+	ForceReason               string                          `json:"force_reason,omitempty"`
 	WorkerTimeout             int                             `json:"worker_timeout_seconds,omitempty"`
 	Dispatches                []codexContinueExternalDispatch `json:"dispatches"`
 	DispatchContract          map[string]interface{}          `json:"dispatch_contract,omitempty"`
@@ -230,17 +231,25 @@ func finalCompletedPhase(state colony.ColonyState) (colony.Phase, bool) {
 	return phase, phase.Status == colony.PhaseCompleted
 }
 
-func runSealPlanOnly(root string, force bool) (map[string]interface{}, error) {
+func runSealPlanOnly(root string, force bool, forceReason string) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
-	state, err := validateSealReady(force)
+	state, incompletePhases, err := validateSealReady(force)
 	if err != nil {
 		return nil, err
 	}
+	if force && len(incompletePhases) > 0 && strings.TrimSpace(forceReason) == "" {
+		return nil, fmt.Errorf("force-sealing past %d unverified phase(s) requires a reason — rerun with `--reason \"why\"` so the override is recorded honestly", len(incompletePhases))
+	}
 	phase, ok := finalCompletedPhase(state)
 	if !ok {
-		return nil, fmt.Errorf("no completed final phase found for seal review")
+		if !force {
+			return nil, fmt.Errorf("no completed final phase found for seal review")
+		}
+		// Force-seal of a colony whose final phase never completed: the
+		// review still needs a target, so it reviews the last phase as-is.
+		phase = state.Plan.Phases[len(state.Plan.Phases)-1]
 	}
 
 	now := time.Now().UTC()
@@ -270,6 +279,7 @@ func runSealPlanOnly(root string, force bool) (map[string]interface{}, error) {
 		FinalizeSurface:   "awaiting_wrapper_completion",
 		FinalizerCommand:  "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>",
 		Force:             force,
+		ForceReason:       strings.TrimSpace(forceReason),
 		WorkerTimeout:     int(effectiveContinueReviewTimeout(0) / time.Second),
 		Dispatches:        dispatches,
 		DispatchContract: map[string]interface{}{
@@ -335,24 +345,35 @@ func sealAfterDiscussNext(force bool) string {
 	return "aether seal"
 }
 
-func validateSealReady(force bool) (colony.ColonyState, error) {
+// validateSealReady checks the colony can seal. With force, the
+// all-phases-completed rule becomes an OWNER OVERRIDE instead of a refusal:
+// the unverified phases are returned so the seal records them honestly —
+// this is the escape hatch for work done outside the colony, or a colony
+// wedged on its own gates, when the owner wants to file the project away
+// and move on. Never silent: callers must pair a force that overrides
+// something with a written reason.
+func validateSealReady(force bool) (colony.ColonyState, []string, error) {
 	state, err := loadActiveColonyState()
 	if err != nil {
-		return state, fmt.Errorf("%s", colonyStateLoadMessage(err))
+		return state, nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 	if len(state.Plan.Phases) == 0 {
-		return state, fmt.Errorf("No project plan. Run `aether plan` first.")
+		return state, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
 	}
+	incomplete := []string{}
 	for _, phase := range state.Plan.Phases {
 		if phase.Status != colony.PhaseCompleted {
-			return state, fmt.Errorf("all phases must be completed before sealing the colony")
+			incomplete = append(incomplete, fmt.Sprintf("phase %d — %s (%s)", phase.ID, phase.Name, emptyFallback(string(phase.Status), "pending")))
 		}
+	}
+	if len(incomplete) > 0 && !force {
+		return state, incomplete, fmt.Errorf("all phases must be completed before sealing the colony — or, if the work was finished outside the colony or you want to move on anyway, seal with `aether seal --force --reason \"why\"` (records an owner override naming the %d unverified phase(s))", len(incomplete))
 	}
 	blockers, _ := checkSealBlockers(store)
 	if len(blockers) > 0 && !force {
-		return state, fmt.Errorf("%s", renderBlockerSummary(blockers, nil))
+		return state, incomplete, fmt.Errorf("%s", renderBlockerSummary(blockers, nil))
 	}
-	return state, nil
+	return state, incomplete, nil
 }
 
 func plannedExternalSealReviewDispatches(root string, state colony.ColonyState, phase colony.Phase, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codexContinueExternalDispatch {
@@ -397,16 +418,22 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 		return err
 	}
 
-	state, err := validateSealReady(manifest.Force)
+	state, incompletePhases, err := validateSealReady(manifest.Force)
 	if err != nil {
 		return err
+	}
+	if manifest.Force && (len(incompletePhases) > 0) && strings.TrimSpace(manifest.ForceReason) == "" {
+		return fmt.Errorf("force-sealing past %d unverified phase(s) requires a reason — rerun `aether seal --plan-only --force --reason \"why\"` so the override is recorded honestly", len(incompletePhases))
 	}
 	if err := validateFinalizerManifestColonyMode("seal_manifest", manifest.ColonyMode, state); err != nil {
 		return err
 	}
 	phase, ok := finalCompletedPhase(state)
 	if !ok {
-		return fmt.Errorf("no completed final phase found for seal review")
+		if !manifest.Force {
+			return fmt.Errorf("no completed final phase found for seal review")
+		}
+		phase = state.Plan.Phases[len(state.Plan.Phases)-1]
 	}
 	if manifest.Phase != phase.ID {
 		return fmt.Errorf("seal_manifest phase = %d, current final phase = %d", manifest.Phase, phase.ID)
@@ -453,7 +480,15 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if !report.Passed && !manifest.Force {
 		return fmt.Errorf("%s", renderSealFinalReviewBlockers(sealFinalReviewGate{Report: report, ReportRel: sealFinalReviewReportRel, Ran: true}))
 	}
-	return completeSealRuntime(state)
+	override := sealOverride{
+		Forced:           manifest.Force,
+		Reason:           strings.TrimSpace(manifest.ForceReason),
+		IncompletePhases: incompletePhases,
+	}
+	if manifest.Force && !report.Passed {
+		override.OverriddenReviewBlocks = len(report.BlockingIssues)
+	}
+	return completeSealRuntime(state, override)
 }
 
 func mergeExternalSealReviewResults(manifest sealPlanManifest, results []codexContinueExternalDispatch) ([]codexContinueWorkerFlowStep, error) {
@@ -980,29 +1015,39 @@ func runSealFinalReview(root string, state colony.ColonyState, phase colony.Phas
 
 func plannedSealFinalReviewDispatches(root string, state colony.ColonyState, phase colony.Phase, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codex.WorkerDispatch {
 	capsule := resolveCodexWorkerContext()
-	pheromoneSection := resolvePheromoneSection()
+	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
+	// already renders "## Pheromone Signals" unconditionally whenever a signal
+	// is active (cmd/colony_prime_context.go:571). Populating a second,
+	// independent PheromoneSection field here would deliver the same steering
+	// text twice. See resolvePheromoneSection's doc comment for which callers
+	// still need it.
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
 	specs := queenSealReviewSpecs(state, phase, reviewDepth)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)
 		dispatches = append(dispatches, codex.WorkerDispatch{
-			ID:               fmt.Sprintf("seal-review-%d", idx),
-			WorkerName:       deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste)),
-			AgentName:        agentName,
-			AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
-			Caste:            spec.Caste,
-			TaskID:           fmt.Sprintf("seal-review-%s", spec.Caste),
-			TaskBrief:        renderSealFinalReviewBrief(root, state, phase, spec),
-			ContextCapsule:   capsule,
-			HandoffSection:   renderWorkerHandoffSection("seal", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste))),
-			Workflow:         "seal",
-			Phase:            phase.ID,
-			SkillSection:     resolveSkillSectionForWorkflow("seal", spec.Caste, spec.Task),
-			PheromoneSection: pheromoneSection,
-			Root:             root,
-			Timeout:          timeout,
-			Wave:             1,
+			ID:             fmt.Sprintf("seal-review-%d", idx),
+			WorkerName:     deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste)),
+			AgentName:      agentName,
+			AgentTOMLPath:  dispatchAgentPath(root, invoker, agentName),
+			Caste:          spec.Caste,
+			TaskID:         fmt.Sprintf("seal-review-%s", spec.Caste),
+			TaskBrief:      renderSealFinalReviewBrief(root, state, phase, spec),
+			ContextCapsule: capsule,
+			// D-190-05-A / 190-06: renderRelatedWorkflowHandoffSection, not
+			// renderWorkerHandoffSection -- capsule (above) already renders
+			// "## Previous Worker Handoffs" for "build"-workflow records
+			// (cmd/colony_prime_context.go:695). Same shape D-190-05-A found
+			// for continue, empirically reproduced here (throwaway probe,
+			// 190-06) whenever both a build- and a seal-workflow handoff exist.
+			HandoffSection: renderRelatedWorkflowHandoffSection("seal", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste))),
+			Workflow:       "seal",
+			Phase:          phase.ID,
+			SkillSection:   resolveSkillSectionForWorkflow("seal", spec.Caste, spec.Task),
+			Root:           root,
+			Timeout:        timeout,
+			Wave:           1,
 		})
 	}
 	return dispatches

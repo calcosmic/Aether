@@ -1,0 +1,128 @@
+package cmd
+
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
+)
+
+// TestMergedDispatchCreditsEveryCoveredTask locks the receipt side of the
+// one-worker-owns-a-chain design: when a single worker is given a run of
+// dependent steps, finishing it must mark EVERY step complete, not just the
+// first.
+//
+// Written to settle a downstream field report (2026-08-21, dashboard colony)
+// which said the opposite — "sent one worker to do all six jobs but recorded
+// it as having done only job #1" — and diagnosed it as build-finalize never
+// reading CoveredTaskIDs, on the evidence that the identifier does not appear
+// in cmd/codex_build_finalize.go.
+//
+// The identifier's absence is not the absence of the behaviour. Finalize
+// starts each reconciled dispatch from the MANIFEST's dispatch (which carries
+// CoveredTaskIDs verbatim), overlays only the reported status, and hands the
+// result to reconcileCompletedBuildTasks -> completedBuildTaskIDs ->
+// dispatchCoveredTaskIDs, which expands the covered chain. Run end to end
+// below, all three steps of a three-step chain finish `completed`.
+//
+// So the reported symptom is real but its stated cause is not, and the fix it
+// asked for would have been a no-op. The likeliest actual source is the
+// stage/finalize inconsistency reported alongside it, where an attempt commits
+// while its dispatches stay `planned` — in which case completedBuildTaskIDs
+// skips them for failing the status check, long before covered IDs matter.
+//
+// This test exists because nothing asserted the invariant either way, which is
+// why a plausible misreading of the code could stand unchallenged.
+func TestMergedDispatchCreditsEveryCoveredTask(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Credit every covered task"
+	ids := []string{"1.1", "1.2", "1.3"}
+	tasks := make([]colony.Task, 0, len(ids))
+	for i := range ids {
+		id := ids[i]
+		task := colony.Task{ID: &id, Goal: "Sequential step " + id, Status: colony.TaskPending}
+		if i > 0 {
+			// Dependencies are what put each step in its own single-dispatch
+			// wave, which is the only shape coalesceSequentialDispatches
+			// merges. Independent tasks share a wave and never merge, so a
+			// fixture without these silently proves nothing.
+			task.DependsOn = []string{ids[i-1]}
+		}
+		tasks = append(tasks, task)
+	}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "Merged chain", Description: "One worker, several dependent steps",
+			Status: colony.PhaseReady, Tasks: tasks,
+		}}},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("plan-only build: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+
+	var chain codexBuildDispatch
+	for _, dispatch := range manifest.Dispatches {
+		if len(dispatch.CoveredTaskIDs) > 1 {
+			chain = dispatch
+			break
+		}
+	}
+	if chain.Name == "" {
+		t.Fatalf("fixture produced no merged dispatch, so it cannot exercise covered-task crediting at all; dispatches: %+v", manifest.Dispatches)
+	}
+	if len(chain.CoveredTaskIDs) != len(ids) {
+		t.Fatalf("merged dispatch %s covers %v, want all of %v", chain.Name, chain.CoveredTaskIDs, ids)
+	}
+
+	results := make([]codexExternalBuildWorkerResult, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		worker := codexExternalBuildWorkerResult{
+			Stage: dispatch.Stage, Wave: dispatch.Wave, ExecutionWave: normalizedDispatchWave(dispatch),
+			Caste: dispatch.Caste, Name: dispatch.Name, TaskID: dispatch.TaskID,
+			Status: "completed", Summary: dispatch.Name + " finished its chain",
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"chain complete"},
+			},
+		}
+		if dispatch.Caste == "builder" {
+			worker.FilesModified = []string{"external-evidence.txt"}
+		}
+		results = append(results, worker)
+	}
+
+	// The real finalize reconciliation, not a hand-built dispatch slice: this
+	// is where a completion packet that carries no covered_task_ids field
+	// meets a manifest dispatch that does.
+	dispatches, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("mergeExternalBuildResults: %v", err)
+	}
+	if len(violations) > 0 {
+		t.Fatalf("unexpected contract violations on a well-formed completion packet: %+v", violations)
+	}
+
+	state, err := loadActiveColonyState()
+	if err != nil {
+		t.Fatalf("load colony state: %v", err)
+	}
+	reconcileCompletedBuildTasks(&state, 1, dispatches)
+
+	for _, task := range state.Plan.Phases[0].Tasks {
+		if task.Status != colony.TaskCompleted {
+			t.Fatalf("task %s is %q after one worker completed the whole chain it was briefed on (%v), want %q — the worker did the work and the receipt lost it, so the phase can never advance",
+				*task.ID, task.Status, chain.CoveredTaskIDs, colony.TaskCompleted)
+		}
+	}
+}

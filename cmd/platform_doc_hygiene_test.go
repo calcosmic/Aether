@@ -87,7 +87,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".claude/commands/ant/plan.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"## Depth Ceremony",
+				"## Decision Moment 1 — Depth Proposal",
+				"## Decision Moment 2 — Research Batch",
 				"aether host plan",
 				"result.plan_manifest",
 				"result.planning_manifest",
@@ -101,6 +102,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"Update watch files for tmux visibility",
 				"Write COLONY_STATE.json",
 				".aether/aether-utils.sh",
+				"## Depth Ceremony",
+				"## Planning Depth",
 			},
 		},
 		{
@@ -195,7 +198,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"aether host build",
+				"aether build $ARGUMENTS --plan-only",
 				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
@@ -221,7 +224,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			},
 			forbidden: []string{
 				"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
-				"It's safe to clear your context now.",
+				"safe to clear your context now.",
 				"/ant-resume",
 				"continue-verify.md",
 				"continue-gates.md",
@@ -288,9 +291,14 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file",
 			},
+			// "AskUserQuestion" left this forbidden list 2026-08-17: the ban
+			// predated the house interaction pattern, and the force-seal flow
+			// is exactly a decision that MUST be asked — the wrapper may never
+			// add --force on its own (TestForceSealWrapperAsksFirst requires
+			// the consent question). Invented option menus beyond that remain
+			// out.
 			forbidden: []string{
 				"manually update milestone via COLONY_STATE.json",
-				"AskUserQuestion",
 				".aether/aether-utils.sh",
 			},
 		},
@@ -398,7 +406,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".opencode/commands/ant/plan.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"## Depth Ceremony",
+				"## Decision Moment 1 — Depth Proposal",
+				"## Decision Moment 2 — Research Batch",
 				"aether host plan",
 				"result.plan_manifest",
 				"result.planning_manifest",
@@ -412,6 +421,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"Update watch files for tmux visibility",
 				"Write COLONY_STATE.json",
 				".aether/aether-utils.sh",
+				"## Depth Ceremony",
+				"## Planning Depth",
 			},
 		},
 		{
@@ -504,7 +515,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"aether host build",
+				"aether build $ARGUMENTS --plan-only",
 				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
@@ -528,7 +539,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			},
 			forbidden: []string{
 				"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
-				"It's safe to clear your context now.",
+				"safe to clear your context now.",
 				"/ant-resume",
 				"continue-verify.md",
 				"continue-gates.md",

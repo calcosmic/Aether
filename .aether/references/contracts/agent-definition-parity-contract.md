@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: agent-definition-parity-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Agent Definition Parity Contract
 description: "Contract for keeping Aether agent role intent aligned across Claude, OpenCode, Codex, and hub-published platform assets."
 output_types: [agent-review, platform-parity, source-audit]

@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: source-check-mirror-drift-playbook
 kind: playbook
 category: playbooks
+scope: aether-internal
 title: Source Check And Source Drift Playbook
 description: "What aether source-check validates and how to fix drift between canonical sources and generated wrappers."
 output_types: [source-audit, drift-report, parity-review]

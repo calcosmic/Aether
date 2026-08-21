@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -25,29 +26,79 @@ type codexExternalBuildCompletion struct {
 	Results          []codexExternalBuildWorkerResult `json:"results,omitempty"`
 	Workers          []codexExternalBuildWorkerResult `json:"workers,omitempty"`
 	Claims           *codexBuildClaims                `json:"claims,omitempty"`
+
+	// submittedRaw holds the wrapper's original decoded JSON value
+	// (map[string]any / []any / scalars), envelope-unwrapped, exactly as
+	// submitted -- before any field this Go struct doesn't declare was
+	// silently dropped by encoding/json.Unmarshal. It is set only by
+	// loadExternalBuildCompletion. It stays nil for completions constructed
+	// in-process (no submitted bytes exist), such as
+	// stageBuildAttemptCompletionFromWorkerRuns and every test that builds a
+	// codexExternalBuildCompletion literal -- those fall back to a struct
+	// round-trip via structuralInput().
+	//
+	// Deliberately unexported: encoding/json.Marshal skips unexported
+	// fields, so packet digests via jsonSHA256 stay byte-identical, and
+	// invopop/jsonschema reflection also skips it, so the committed schema
+	// does not drift.
+	submittedRaw any
+}
+
+// structuralInput returns the JSON value structural validation
+// (validateCompletionPacketStructure) should inspect: the wrapper's
+// submitted, envelope-unwrapped JSON when this completion came from
+// loadExternalBuildCompletion, or a struct round-trip via
+// completionPacketAsRaw when no submitted bytes exist (completions built
+// in-process, e.g. stageBuildAttemptCompletionFromWorkerRuns, or a
+// codexExternalBuildCompletion literal constructed directly by a test).
+func (c codexExternalBuildCompletion) structuralInput() (any, error) {
+	if c.submittedRaw != nil {
+		return c.submittedRaw, nil
+	}
+	return completionPacketAsRaw(c)
 }
 
 type codexExternalBuildWorkerResult struct {
-	Stage         string              `json:"stage,omitempty"`
-	Wave          int                 `json:"wave,omitempty"`
-	ExecutionWave int                 `json:"execution_wave,omitempty"`
-	Caste         string              `json:"caste,omitempty"`
-	Name          string              `json:"name"`
-	AntName       string              `json:"ant_name,omitempty"`
-	Task          string              `json:"task,omitempty"`
-	Status        string              `json:"status"`
-	Summary       string              `json:"summary,omitempty"`
-	TaskID        string              `json:"task_id,omitempty"`
-	TaskIndex     int                 `json:"task_index,omitempty"`
-	DependsOn     []string            `json:"depends_on,omitempty"`
-	Outputs       []string            `json:"outputs,omitempty"`
-	Blockers      []string            `json:"blockers,omitempty"`
-	Duration      float64             `json:"duration,omitempty"`
-	ToolCount     int                 `json:"tool_count,omitempty"`
-	FilesCreated  []string            `json:"files_created,omitempty"`
-	FilesModified []string            `json:"files_modified,omitempty"`
-	TestsWritten  []string            `json:"tests_written,omitempty"`
-	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
+	Stage         string `json:"stage,omitempty"`
+	Wave          int    `json:"wave,omitempty"`
+	ExecutionWave int    `json:"execution_wave,omitempty"`
+	Caste         string `json:"caste,omitempty"`
+	Name          string `json:"name"`
+	AntName       string `json:"ant_name,omitempty"`
+	Task          string `json:"task,omitempty"`
+	Status        string `json:"status"`
+	Summary       string `json:"summary,omitempty"`
+	TaskID        string `json:"task_id,omitempty"`
+	TaskIndex     int    `json:"task_index,omitempty"`
+	// CoveredTaskIDs names every OTHER manifest dispatch this worker's real
+	// work actually covered, for the case where the WRAPPER (not the
+	// runtime) bundled several manifest-listed dispatches into one worker
+	// call the manifest still lists as separate dispatches. This is the
+	// WORKER's own claim, submitted via the completion packet -- contrast
+	// codexBuildDispatch.CoveredTaskIDs (cmd/codex_build.go), which the
+	// RUNTIME writes when it coalesces a dependent chain into one dispatch
+	// before any worker runs (coalesceSequentialDispatches). Because this
+	// field is worker-supplied, the trust boundary inverts relative to that
+	// runtime-written analog: mergeExternalBuildResults validates every
+	// entry against the manifest's own dispatches before granting any
+	// credit, never trusting the claim blindly (191.1-PATTERNS.md Pattern
+	// 6) -- including the CLAIMANT itself (191.1-REVIEW.md CR-01): only a
+	// result that is itself a genuine, evidenced success and corresponds to
+	// a real dispatch in this manifest may grant credit to another. An entry
+	// naming a task ID absent from the manifest, claimed by two different
+	// results, or granted by a claimant that is
+	// failed/unevidenced/unrecognized, is a distinct, named contract
+	// violation, never a silent credit or a silently dropped field.
+	CoveredTaskIDs []string            `json:"covered_task_ids,omitempty"`
+	DependsOn      []string            `json:"depends_on,omitempty"`
+	Outputs        []string            `json:"outputs,omitempty"`
+	Blockers       []string            `json:"blockers,omitempty"`
+	Duration       float64             `json:"duration,omitempty"`
+	ToolCount      int                 `json:"tool_count,omitempty"`
+	FilesCreated   []string            `json:"files_created,omitempty"`
+	FilesModified  []string            `json:"files_modified,omitempty"`
+	TestsWritten   []string            `json:"tests_written,omitempty"`
+	Handoff        codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
 // effectiveName returns the worker name, falling back to AntName when Name is empty.
@@ -56,6 +107,35 @@ func (r codexExternalBuildWorkerResult) effectiveName() string {
 		return n
 	}
 	return strings.TrimSpace(r.AntName)
+}
+
+// completionContractError carries every violation found while validating a
+// submitted completion packet (D-05). Returning any violation is an
+// unconditional, whole-packet rejection (D-06) -- callers must not touch
+// colony state, the attempt journal, or the completion digest binding
+// before this error (or a nil/empty violations slice) has been decided.
+type completionContractError struct {
+	Violations []contractViolation
+}
+
+// Error renders a multi-line human summary: a first line naming the
+// violation count, followed by one indented line per violation in the form
+// "  - <worker>: <field> (<rule>): <message>" (the "<worker>: " prefix is
+// omitted when Worker is empty). The machine-readable Violations slice rides
+// the error envelope's `details` field separately -- see the build-finalize
+// cobra handler below.
+func (e *completionContractError) Error() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d completion packet violation(s)", len(e.Violations))
+	for _, v := range e.Violations {
+		b.WriteString("\n  - ")
+		if worker := strings.TrimSpace(v.Worker); worker != "" {
+			b.WriteString(worker)
+			b.WriteString(": ")
+		}
+		fmt.Fprintf(&b, "%s (%s): %s", v.Field, v.Rule, v.Message)
+	}
+	return b.String()
 }
 
 var buildFinalizeCmd = &cobra.Command{
@@ -71,12 +151,22 @@ var buildFinalizeCmd = &cobra.Command{
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		completion, err := loadExternalBuildCompletion(completionPath)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			var contractErr *completionContractError
+			if errors.As(err, &contractErr) {
+				outputError(1, err.Error(), contractErr.Violations)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return err
 		}
 		result, state, phase, dispatches, err := runCodexBuildFinalize(skillWorkspaceRoot(), phaseNum, completion, false)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			var contractErr *completionContractError
+			if errors.As(err, &contractErr) {
+				outputError(1, err.Error(), contractErr.Violations)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return err
 		}
 		outputWorkflow(result, renderBuildFinalizeVisual(state, phase, dispatches))
@@ -98,7 +188,12 @@ var buildCompletionStageCmd = &cobra.Command{
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		completion, err := loadExternalBuildCompletion(completionPath)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			var contractErr *completionContractError
+			if errors.As(err, &contractErr) {
+				outputError(1, err.Error(), contractErr.Violations)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return err
 		}
 		manifest := completion.activeManifest()
@@ -122,7 +217,12 @@ var buildCompletionStageCmd = &cobra.Command{
 		}
 		durablePath, digest, err := stageBuildAttemptCompletion(binding.Path, completion)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			var contractErr *completionContractError
+			if errors.As(err, &contractErr) {
+				outputError(1, err.Error(), contractErr.Violations)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return err
 		}
 		outputWorkflow(map[string]interface{}{
@@ -163,24 +263,122 @@ func loadExternalBuildCompletion(path string) (codexExternalBuildCompletion, err
 		return codexExternalBuildCompletion{}, fmt.Errorf("read completion file: %w", err)
 	}
 
-	var completion codexExternalBuildCompletion
-	if err := json.Unmarshal(data, &completion); err != nil {
+	// Decode the submitted bytes into a generic value FIRST -- this is what
+	// structural validation will ultimately see, unmodified by whatever the
+	// Go struct below does or does not know about (T-163.1-40).
+	var raw any
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return codexExternalBuildCompletion{}, fmt.Errorf("parse completion file: %w", err)
 	}
-	if completion.activeManifest() != nil {
+
+	var completion codexExternalBuildCompletion
+	typeErrorTolerated := false
+	if err := json.Unmarshal(data, &completion); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if !errors.As(err, &typeErr) {
+			return codexExternalBuildCompletion{}, fmt.Errorf("parse completion file: %w", err)
+		}
+		// encoding/json saves only the first type mismatch and keeps
+		// decoding the rest of the packet -- tolerate it here so a single
+		// wrong-typed field no longer aborts validation before it starts
+		// (T-163.1-43); remember it so a manifest-absent packet below gets a
+		// real structural violation instead of the bare
+		// "must include dispatch_manifest" message.
+		typeErrorTolerated = true
+	}
+	// A tolerated type error on the dispatch_manifest/manifest field itself
+	// still leaves activeManifest() non-nil: encoding/json allocates a
+	// zero-valued struct behind the pointer before it discovers the value
+	// it was given (e.g. a bare string) is not an object, and never rolls
+	// that allocation back. So activeManifest() alone cannot tell "no
+	// manifest" apart from "manifest field allocated but never actually
+	// populated" -- cross-check against raw, which reflects the submitted
+	// shape with no such allocation quirk. The cross-check must be
+	// key-specific (the key activeManifest() actually selected), not
+	// either-key: see manifestSelectionMatchesRaw (WR-163.1-02).
+	if completion.activeManifest() != nil && manifestSelectionMatchesRaw(completion, raw) {
+		completion.submittedRaw = raw
 		return completion, nil
 	}
 
+	// Envelope handling: retry the struct decode against `{"result": ...}`
+	// exactly as before, tolerating the same class of type error.
 	var envelope struct {
 		Result codexExternalBuildCompletion `json:"result"`
 	}
 	if err := json.Unmarshal(data, &envelope); err != nil {
-		return codexExternalBuildCompletion{}, fmt.Errorf("parse completion envelope: %w", err)
+		var typeErr *json.UnmarshalTypeError
+		if !errors.As(err, &typeErr) {
+			return codexExternalBuildCompletion{}, fmt.Errorf("parse completion envelope: %w", err)
+		}
+		typeErrorTolerated = true
 	}
-	if envelope.Result.activeManifest() == nil {
-		return codexExternalBuildCompletion{}, fmt.Errorf("completion file must include dispatch_manifest")
+
+	// Unwrap the raw value the same way the struct decode unwraps: only
+	// when the top-level object has neither a dispatch_manifest key nor a
+	// manifest key of its own, but does have a result key. An explicit JSON
+	// null under either manifest key counts as ABSENT here, mirroring the
+	// struct decode (which leaves a pointer field nil for null): wrappers
+	// that serialize absent fields as null -- typical JS/TS hosts, and the
+	// ts-host path is a live producer -- were accepted via the envelope
+	// path before the submitted-bytes rework and must stay accepted
+	// (WR-163.1-01). Any other non-null value under a manifest key blocks
+	// the unwrap so the top-level shape is what structural validation
+	// reports on, instead of being silently discarded.
+	unwrappedRaw := raw
+	if rawMap, ok := raw.(map[string]any); ok {
+		dispatchManifestValue, hasDispatchManifest := rawMap["dispatch_manifest"]
+		manifestValue, hasManifest := rawMap["manifest"]
+		if (!hasDispatchManifest || dispatchManifestValue == nil) && (!hasManifest || manifestValue == nil) {
+			if result, hasResult := rawMap["result"]; hasResult {
+				unwrappedRaw = result
+			}
+		}
 	}
-	return envelope.Result, nil
+
+	if envelope.Result.activeManifest() != nil && manifestSelectionMatchesRaw(envelope.Result, unwrappedRaw) {
+		envelope.Result.submittedRaw = unwrappedRaw
+		return envelope.Result, nil
+	}
+
+	if typeErrorTolerated {
+		if violations := validateCompletionPacketStructure(unwrappedRaw); len(violations) > 0 {
+			return codexExternalBuildCompletion{}, &completionContractError{Violations: violations}
+		}
+	}
+	return codexExternalBuildCompletion{}, fmt.Errorf("completion file must include dispatch_manifest")
+}
+
+// manifestSelectionMatchesRaw reports whether the manifest key
+// activeManifest() actually selected ("dispatch_manifest" when
+// DispatchManifest is non-nil, else "manifest") is present in raw as a
+// genuine JSON object. This is the ground truth loadExternalBuildCompletion
+// cross-checks the decoded struct's activeManifest() pointer against, since
+// a tolerated type error on that exact field leaves an
+// allocated-but-never-populated zero-value struct behind the pointer rather
+// than nil. Checking the SELECTED key -- not either key -- matters
+// (WR-163.1-02): for {"dispatch_manifest": "bad", "manifest": {valid}} the
+// tolerated type error allocates a zero DispatchManifest, activeManifest()
+// prefers it over the valid Manifest, and an either-key check would accept
+// the packet with a corrupt active manifest -- suppressing the structural
+// violation for the wrong-typed key and later failing with the misleading
+// "must come from `aether build --plan-only`" message instead.
+func manifestSelectionMatchesRaw(completion codexExternalBuildCompletion, raw any) bool {
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return false
+	}
+	var key string
+	switch {
+	case completion.DispatchManifest != nil:
+		key = "dispatch_manifest"
+	case completion.Manifest != nil:
+		key = "manifest"
+	default:
+		return false
+	}
+	_, isObject := rawMap[key].(map[string]any)
+	return isObject
 }
 
 func (c codexExternalBuildCompletion) activeManifest() *codexBuildManifest {
@@ -241,14 +439,64 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	// T-188-09 (D-10, D-11): a completion packet with no attempt binding at
+	// all is still accepted -- this branch is deliberately kept, not
+	// hardened into a refusal -- but it must never be silent. Warn on
+	// stderr immediately, every time this is detected, regardless of
+	// whether anything later in this function fails. The durable Events
+	// record is appended near the end of this function (alongside this
+	// same request's other Events, once `updatedState` is stable) rather
+	// than here: `state` is still reassigned wholesale by
+	// reconcilePriorCompletedPhaseTasksFromTrustedManifests below when a
+	// prior completed phase needs task-status repair, and an event
+	// appended to `state.Events` here would be silently discarded by that
+	// reassignment in that case -- appending later is the only placement
+	// that is correct on every occurrence, not just the common one.
+	if binding.Legacy {
+		visualFprintf(stderr, "warning: phase %d's build completion did not include the newer tracking details that link it back to one specific dispatched build, so it is being accepted using the older, less strictly checked method\n", phaseNum)
+	}
 	completionDigest, err := jsonSHA256(completion)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
 	}
-	if binding.Bound && binding.Record.CompletionSHA256 != "" && binding.Record.CompletionSHA256 != completionDigest {
+	if binding.Bound && buildAttemptCompletionSealed(binding.Record) && binding.Record.CompletionSHA256 != "" && binding.Record.CompletionSHA256 != completionDigest {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion packet does not match the result already bound to attempt %s", binding.Record.ID)
 	}
-	if binding.Bound && binding.Record.Status != buildAttemptBuilt && state.State == colony.StateBUILT && state.CurrentPhase == phaseNum {
+	// Route to committed-attempt reconciliation ONLY when THIS attempt is the
+	// one whose lifecycle was committed -- proved by its own terminal
+	// evidence, not by the colony happening to sit at BUILT.
+	//
+	// Without buildAttemptRecordedTerminalEvidence this condition also caught
+	// a brand-new attempt that has never been finalized, whenever the phase
+	// had been built before -- exactly what `--force` produces. That created a
+	// deadlock with no in-band exit, reported from a live colony on
+	// 2026-08-21 and reproduced by TestForcedRedispatchAfterBuiltIsNotADeadlock:
+	//
+	//   finalize:  "attempt X is already committed, so this different
+	//               completion packet cannot replace it ... run `aether continue`"
+	//   continue:  "no completed worker dispatches found -- build did not
+	//               produce verifiable results"
+	//
+	// Each pointed at the other. The finalize half is a message I added on
+	// 2026-08-19; it is correct for a genuinely committed attempt, and was
+	// sending users nowhere for an attempt that had committed nothing.
+	//
+	// The two situations look alike and are not:
+	//
+	//   partial commit     colony state committed, journal write lost.
+	//                      CompletionSHA256 set, Claims set, dispatches
+	//                      completed. Reconciling is right; `aether continue`
+	//                      genuinely works, because the dispatches are there.
+	//
+	//   forced redispatch  a fresh attempt on a phase whose PREVIOUS attempt
+	//                      built. CompletionSHA256 empty, Claims nil,
+	//                      dispatches still `planned`. Nothing of this attempt
+	//                      has been committed, so there is nothing to
+	//                      reconcile -- it is an ordinary finalize, and the
+	//                      stale BUILT is the state --force exists to replace.
+	if binding.Bound && binding.Record.Status != buildAttemptBuilt &&
+		buildAttemptRecordedTerminalEvidence(binding.Record) &&
+		state.State == colony.StateBUILT && state.CurrentPhase == phaseNum {
 		return reconcileCommittedExternalBuildAttempt(state, phaseNum, binding, completionDigest)
 	}
 	if binding.Bound && binding.Record.Status == buildAttemptBuilt {
@@ -279,10 +527,14 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
-	if err := validateExternalWorkerResultClaimPaths(root, completion.workerResults()); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	// D-06: the packet is atomic. Structural, claim-path, and dispatch-level
+	// checks all accumulate into one violation list before any state is
+	// touched -- no checkpoint save, attempt begin, digest bind, or
+	// transition happens until this returns clean.
+	if violations := validateCompletionPacketSemantics(root, completion); len(violations) > 0 {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, &completionContractError{Violations: violations}
 	}
-	dispatches, err := mergeExternalBuildResults(*manifest, completion.workerResults())
+	dispatches, _, err := mergeExternalBuildResults(*manifest, completion.workerResults())
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -345,6 +597,17 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	updatedState.Events = append(trimmedEvents(updatedState.Events),
 		fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", completedAt.Format(time.RFC3339), phaseNum),
 	)
+	if binding.Legacy {
+		// Same fact as the stderr warning above, repeated here so it survives
+		// past the terminal -- queryable later via `aether history`/`aether
+		// status` -- rather than only a fleeting print (D-11). Appended here,
+		// not immediately after validateBuildAttemptManifestBinding, because
+		// this is the first point after `updatedState` is fully settled (see
+		// the comment at the binding check above).
+		updatedState.Events = append(updatedState.Events,
+			fmt.Sprintf("%s|manifest_legacy_accepted|build-finalize|Phase %d build completion did not include the newer tracking details that link it back to one specific dispatched build, and was accepted using the older, less strictly checked method", completedAt.Format(time.RFC3339), phaseNum),
+		)
+	}
 
 	if err := transitionBuildAttempt(attemptRel, buildAttemptTerminal, "external terminal worker results recorded before lifecycle projection", dispatches, &claims, "external-task", nil); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist external terminal worker results", err)
@@ -383,6 +646,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 
 	// Worktree mode: merge back completed branches before marking phase done.
+	var worktreeMergeEvent string
 	if effectiveParallelMode(updatedState) == colony.ModeWorktree {
 		merged, failed, mergeErr := mergePhaseWorktrees(phaseNum)
 		if mergeErr != nil {
@@ -392,20 +656,33 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("worktree merge-back blocked: %s", strings.Join(failed, "; "))
 		}
 		if len(merged) > 0 {
-			updatedState.Events = append(updatedState.Events,
-				fmt.Sprintf("%s|worktree_merge|build-finalize|Merged %d worktree branch(es): %s",
-					completedAt.Format(time.RFC3339), len(merged), strings.Join(merged, ", ")),
-			)
+			worktreeMergeEvent = fmt.Sprintf("%s|worktree_merge|build-finalize|Merged %d worktree branch(es): %s",
+				completedAt.Format(time.RFC3339), len(merged), strings.Join(merged, ", "))
+			updatedState.Events = append(updatedState.Events, worktreeMergeEvent)
 		}
 	}
 
-	// Atomically commit the colony state mutation.
-	var committedState colony.ColonyState
-	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
-		committedState = updatedState
-		return nil
-	}); err != nil {
+	// Atomically commit the colony state mutation (CR-02, 188-REVIEW.md).
+	committedState, err := commitBuildFinalizeState(buildFinalizeCommitParams{
+		PhaseNum:           phaseNum,
+		StartedAt:          startedAt,
+		SelectedTaskIDs:    selectedTaskIDs,
+		ReviewDepth:        colony.NormalizeVerificationDepth(manifest.ReviewDepth),
+		Dispatches:         dispatches,
+		CompletedAt:        completedAt,
+		LegacyManifest:     binding.Legacy,
+		WorktreeMergeEvent: worktreeMergeEvent,
+		UpdatedState:       updatedState,
+	})
+	if err != nil {
 		finishAttempt(buildAttemptFailed, "failed to commit external built lifecycle state", err)
+		if errors.Is(err, errRuntimeStateSuperseded) {
+			// Propagate the supersession error directly rather than wrapping
+			// it in the generic "failed to save" message, which would read
+			// as a storage/IO failure instead of the concurrency refusal it
+			// actually is (CR-02).
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
 	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "external built lifecycle state committed", dispatches, &claims, "external-task", nil); err != nil {
@@ -415,30 +692,155 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	updatedState = committedState
 	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
+	// Collect pheromone suggestions once the build is durably committed.
+	// Called exactly once per finalize (never inside the dispatch loop
+	// above) so re-analysis cost scales with builds, not worker count.
+	suggestAnalyzeRan, pendingSuggestionCount := collectPendingSuggestions(root)
+
 	result := map[string]interface{}{
-		"phase":             phaseNum,
-		"phase_name":        updatedPhase.Name,
-		"state":             updatedState.State,
-		"plan_only":         false,
-		"dispatch_mode":     "external-task",
-		"dispatches":        codexBuildDispatchMaps(dispatches),
-		"dispatch_count":    len(dispatches),
-		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
-		"parallel_mode":     string(effectiveParallelMode(updatedState)),
-		"selected_tasks":    selectedTaskIDs,
-		"checkpoint":        displayDataPath(checkpointRel),
-		"manifest":          displayDataPath(manifestRel),
-		"claims_path":       displayDataPath(claimsRel),
-		"attempt":           displayDataPath(attemptRel),
-		"result_collection": displayDataPath(resultCollectionRel),
-		"idempotent":        false,
-		"next":              "aether continue",
+		"phase":                    phaseNum,
+		"phase_name":               updatedPhase.Name,
+		"state":                    updatedState.State,
+		"plan_only":                false,
+		"dispatch_mode":            "external-task",
+		"dispatches":               codexBuildDispatchMaps(dispatches),
+		"dispatch_count":           len(dispatches),
+		"wave_count":               len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
+		"parallel_mode":            string(effectiveParallelMode(updatedState)),
+		"selected_tasks":           selectedTaskIDs,
+		"checkpoint":               displayDataPath(checkpointRel),
+		"manifest":                 displayDataPath(manifestRel),
+		"claims_path":              displayDataPath(claimsRel),
+		"attempt":                  displayDataPath(attemptRel),
+		"result_collection":        displayDataPath(resultCollectionRel),
+		"idempotent":               false,
+		"next":                     "aether continue",
+		"suggest_analyze_ran":      suggestAnalyzeRan,
+		"pending_suggestion_count": pendingSuggestionCount,
+	}
+	if pendingSuggestionCount > 0 {
+		result["pending_suggestions_next"] = "aether suggest-approve"
 	}
 	if len(recoveryInstructions) > 0 {
 		result["recovery_instructions"] = recoveryInstructions
 	}
 	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
 	return result, updatedState, updatedPhase, dispatches, nil
+}
+
+// buildFinalizeCommitParams carries what commitBuildFinalizeState needs to
+// transition COLONY_STATE.json to StateBUILT for one phase.
+type buildFinalizeCommitParams struct {
+	PhaseNum           int
+	StartedAt          time.Time
+	SelectedTaskIDs    []string
+	ReviewDepth        colony.VerificationDepth
+	Dispatches         []codexBuildDispatch
+	CompletedAt        time.Time
+	LegacyManifest     bool
+	WorktreeMergeEvent string
+	UpdatedState       colony.ColonyState
+}
+
+// commitBuildFinalizeState is runCodexBuildFinalize's one write against
+// COLONY_STATE.json (CR-02, 188-REVIEW.md).
+//
+// This used to be `committedState = params.UpdatedState` inside the
+// UpdateJSONAtomically closure -- discarding the primitive's own fresh
+// on-disk read and replacing it wholesale with a value built earlier in
+// runCodexBuildFinalize (from a `state` loaded once, long before the
+// checkpoint save, build-attempt transitions, claims write, and, in
+// worktree mode, a full worktree merge). Any concurrent write to
+// COLONY_STATE.json during that window -- an operator pausing the colony --
+// was silently discarded and replaced. It now mutates only the freshly-read
+// value's own fields, re-validated by validateBuildFinalizeStateStillCurrent
+// first.
+//
+// Unlike the direct-build path's second commit (runCodexBuildWithOptions,
+// cmd/codex_build.go:692-707), which guards with
+// validateRuntimeStateStillCurrent(..., colony.StateEXECUTING) because it
+// commits a SEPARATE, EARLIER READY->EXECUTING checkpoint (SaveJSON, before
+// worker dispatch) moments before this second call, the external/wrapper
+// build-finalize flow never separately persists an EXECUTING checkpoint at
+// all -- aether build --plan-only (runCodexBuildPlanOnlyWithOptions) returns
+// a manifest without writing COLONY_STATE.json. This single write is the
+// entire READY->BUILT transition for that flow, so its currency guard
+// cannot require state.State == EXECUTING the way the direct path's second
+// commit does; see validateBuildFinalizeStateStillCurrent's own doc comment.
+func commitBuildFinalizeState(params buildFinalizeCommitParams) (colony.ColonyState, error) {
+	var committedState colony.ColonyState
+	err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
+		if err := validateBuildFinalizeStateStillCurrent(committedState, params.PhaseNum); err != nil {
+			return err
+		}
+		applyCodexBuildState(&committedState, params.PhaseNum, params.StartedAt, params.SelectedTaskIDs, params.ReviewDepth)
+		committedState.State = colony.StateBUILT
+		reconcileCompletedBuildTasks(&committedState, params.PhaseNum, params.Dispatches)
+		committedState.Events = append(trimmedEvents(committedState.Events),
+			fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", params.CompletedAt.Format(time.RFC3339), params.PhaseNum),
+		)
+		if params.LegacyManifest {
+			committedState.Events = append(committedState.Events,
+				fmt.Sprintf("%s|manifest_legacy_accepted|build-finalize|Phase %d build completion did not include the newer tracking details that link it back to one specific dispatched build, and was accepted using the older, less strictly checked method", params.CompletedAt.Format(time.RFC3339), params.PhaseNum),
+			)
+		}
+		if params.WorktreeMergeEvent != "" {
+			committedState.Events = append(committedState.Events, params.WorktreeMergeEvent)
+		}
+		return nil
+	})
+	return committedState, err
+}
+
+// validateBuildFinalizeStateStillCurrent re-checks, against a freshly-read
+// on-disk COLONY_STATE.json, that commitBuildFinalizeState's target phase is
+// still the one the colony expects to commit -- the same fail-closed
+// philosophy as validateRuntimeStateStillCurrent (cmd/codex_build.go), but
+// shaped for THIS transition. The external/wrapper build-finalize flow never
+// separately commits a READY->EXECUTING checkpoint before dispatch (see
+// commitBuildFinalizeState's own doc comment); confirmed by this codebase's
+// own fixtures (e.g. TestBuildFinalizeReconcilesJournalAfterBuiltStateCommit
+// seeds State: colony.StateREADY, Status: colony.PhaseReady before calling
+// runCodexBuildFinalize for the first time) -- so "still current" cannot
+// mean "state is still EXECUTING." CurrentPhase == 0 is also accepted: a
+// colony's very first phase may never have had CurrentPhase set by a prior
+// advancePhase call (setupExternalBuildAttemptTest's own fixture uses
+// CurrentPhase: 0 for phase 1). A concurrent pause, or a race that already
+// advanced this phase past build, must still be caught -- that is exactly
+// the clobber class CR-02 closes.
+func validateBuildFinalizeStateStillCurrent(state colony.ColonyState, phaseNum int) error {
+	if state.Paused {
+		return runtimeStateSupersededError(phaseNum, "colony is paused")
+	}
+	if state.CurrentPhase != phaseNum && state.CurrentPhase != 0 {
+		return runtimeStateSupersededError(phaseNum, fmt.Sprintf("current phase is %d", state.CurrentPhase))
+	}
+	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
+		return runtimeStateSupersededError(phaseNum, "phase is no longer present")
+	}
+	if state.Plan.Phases[phaseNum-1].Status == colony.PhaseCompleted {
+		return runtimeStateSupersededError(phaseNum, fmt.Sprintf("phase status is %s", state.Plan.Phases[phaseNum-1].Status))
+	}
+	return nil
+}
+
+// collectPendingSuggestions runs suggest-analyze exactly once after a build
+// has been durably committed, and reports its outcome without ever failing
+// the caller. A suggestion-engine failure must never fail a build that
+// otherwise succeeded (T-163-15) -- the error is logged to stderr, not
+// propagated, and the distinction between "ran and found nothing" (ran=true,
+// count=0) and "never ran" (ran=false) is kept visible on the return value
+// rather than silently collapsed to the same zero.
+func collectPendingSuggestions(root string) (ran bool, count int) {
+	suggestResult, err := runSuggestAnalyze(root, false)
+	if err != nil {
+		visualFprintf(stderr, "warning: suggest-analyze did not run at build finalize: %v\n", err)
+		return false, 0
+	}
+	if total, ok := suggestResult["total"].(int); ok {
+		count = total
+	}
+	return true, count
 }
 
 func validateBuildManifestPlanRevision(manifest codexBuildManifest, state colony.ColonyState) error {
@@ -506,7 +908,22 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 func reconcileCommittedExternalBuildAttempt(state colony.ColonyState, phaseNum int, binding buildAttemptManifestBinding, completionDigest string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	record := binding.Record
 	if record.CompletionSHA256 == "" || record.CompletionSHA256 != completionDigest || record.Claims == nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile its committed state without matching terminal evidence", record.ID)
+		// This is the idempotency path: re-submitting the SAME completion packet
+		// for an already-committed build returns the same result safely. A
+		// different packet is refused by design — a committed build is not
+		// superseded by a later one.
+		//
+		// The old message ("without matching terminal evidence") read as an
+		// invitation to go and produce matching evidence, which is impossible:
+		// any redispatch yields a new digest. A real session spent six worker
+		// dispatches discovering that, re-running the phase with four workers,
+		// then six, then the full eleven, before concluding it could not be
+		// done. Say what the situation is and name the path that works.
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf(
+			"build attempt %s is already committed, so this different completion packet cannot replace it. "+
+				"If files changed after the build signed off — a reviewer's findings fixed, for example — do not redispatch: "+
+				"run `aether continue`, which re-runs verification and accepts amended artifacts when it passes green",
+			record.ID)
 	}
 	manifestRel := strings.TrimPrefix(filepath.ToSlash(record.Manifest), ".aether/data/")
 	var finalManifest codexBuildManifest
@@ -606,19 +1023,66 @@ func buildExternalBuildRecoveryInstructions(phaseNum int, dispatches []codexBuil
 	return instructions, nil
 }
 
+// codexWorkerDispatchesForRecovery rebuilds dispatches for a retry.
+//
+// It used to set nine fields and pass dispatch.Task — the one-line task string
+// — as the whole brief. So a worker being retried *after failing* received
+// strictly less than the attempt that had already failed: no capsule, no
+// skills, no pheromones, no relay, no success criteria. Worst of all Root was
+// empty, and cmd.Dir is only set when Root is non-empty, so the retry ran in
+// the orchestrator's working directory rather than the repository it was
+// supposed to be fixing.
+//
+// A retry is the moment context matters most. It now carries everything the
+// original dispatch carried, and the handoff is re-resolved so the retry can
+// see what the failed attempt reported.
 func codexWorkerDispatchesForRecovery(dispatches []codexBuildDispatch, phaseNum int) []codex.WorkerDispatch {
+	root := resolveAetherRoot()
+	capsule := resolveCodexWorkerContext()
+	// PheromoneSection is deliberately NOT resolved here (D-190-03-A / 190-05):
+	// capsule already renders "## Pheromone Signals" unconditionally whenever a
+	// signal is active (cmd/colony_prime_context.go:571). These WorkerDispatch
+	// values are never passed through AssemblePrompt/AssembleHostedPrompt today
+	// (buildExternalBuildRecoveryInstructions only reads them in-memory for
+	// same-caste peer lookup), but populating a redundant PheromoneSection would
+	// leave a duplication trap for the moment a future change wires this into
+	// a live invocation, mirroring the pattern this plan just closed on the
+	// live native/direct dispatch path.
+	//
+	// HandoffSection is deliberately NOT resolved here either (D-190-05-A /
+	// 190-06), for the identical reason but a different field: capsule already
+	// renders "## Previous Worker Handoffs" for "build"-workflow records
+	// (cmd/colony_prime_context.go:695), and this function's per-dispatch
+	// HandoffSection used the SAME "build" workflow tag -- an exact duplicate
+	// of the capsule's own content, not the "materially different workflow"
+	// case 190-06 fixed for continue/colonize/plan/seal/swarm. Removed for
+	// consistency, same as PheromoneSection above.
+
 	workers := make([]codex.WorkerDispatch, 0, len(dispatches))
 	for _, dispatch := range dispatches {
+		brief := strings.TrimSpace(dispatch.Brief)
+		if brief == "" {
+			brief = dispatch.Task
+		}
+		agentName := strings.TrimSpace(dispatch.AgentName)
+		if agentName == "" {
+			agentName = codexAgentNameForCaste(dispatch.Caste)
+		}
 		workers = append(workers, codex.WorkerDispatch{
-			ID:         normalizedDispatchTaskID(dispatch),
-			WorkerName: dispatch.Name,
-			AgentName:  codexAgentNameForCaste(dispatch.Caste),
-			Caste:      dispatch.Caste,
-			TaskID:     dispatch.TaskID,
-			TaskBrief:  dispatch.Task,
-			Wave:       normalizedDispatchWave(dispatch),
-			Workflow:   "build",
-			Phase:      phaseNum,
+			ID:                normalizedDispatchTaskID(dispatch),
+			WorkerName:        dispatch.Name,
+			AgentName:         agentName,
+			Caste:             dispatch.Caste,
+			TaskID:            dispatch.TaskID,
+			TaskBrief:         brief,
+			ContextCapsule:    capsule,
+			SkillSection:      dispatch.SkillSection,
+			PermissionProfile: dispatch.PermissionProfile,
+			DeclaredPaths:     append([]string{}, dispatch.DeclaredPaths...),
+			Root:              root,
+			Wave:              normalizedDispatchWave(dispatch),
+			Workflow:          "build",
+			Phase:             phaseNum,
 		})
 	}
 	return workers
@@ -635,12 +1099,124 @@ func appendRecoveryOutcomesToLog(phaseNum int, budget *RecoveryBudget, entries [
 	return store.SaveJSON(rel, file)
 }
 
-func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExternalBuildWorkerResult) ([]codexBuildDispatch, error) {
+// validateCompletionPacketSemantics is the single entrypoint for validating
+// a submitted completion packet. It runs, in order, accumulating into one
+// slice and never short-circuiting on the first problem:
+//
+//  1. validateCompletionPacketStructure (cmd/contract_schema.go, plan 01) --
+//     structural/type/shape problems against the generated JSON Schema, run
+//     against completion.structuralInput(): the wrapper's submitted,
+//     envelope-unwrapped JSON when the packet came from
+//     loadExternalBuildCompletion, or a struct round-trip via
+//     completionPacketAsRaw only for packets constructed in-process
+//     (stageBuildAttemptCompletionFromWorkerRuns, and every test that builds
+//     a codexExternalBuildCompletion literal directly, where no submitted
+//     bytes exist to validate).
+//  2. validateExternalWorkerResultClaimPaths (task 1) -- claim-path
+//     violations across every worker and field.
+//  3. The dispatch-level checks inside mergeExternalBuildResults (task 2).
+//
+// A non-empty return means the whole packet is rejected (D-06): the caller
+// must not mutate colony state, the attempt journal, or the completion
+// digest binding until this returns. Plan 03 calls this same entrypoint
+// from cmd/build_attempt.go's stage-time path so stage-time validation
+// equals finalize-time validation (D-07).
+func validateCompletionPacketSemantics(root string, completion codexExternalBuildCompletion) []contractViolation {
+	var violations []contractViolation
+
+	if raw, err := completion.structuralInput(); err != nil {
+		violations = append(violations, contractViolation{
+			Rule:    "schema.marshal",
+			Message: fmt.Sprintf("failed to marshal completion packet for structural validation: %v", err),
+		})
+	} else {
+		violations = append(violations, validateCompletionPacketStructure(raw)...)
+	}
+
+	violations = append(violations, validateExternalWorkerResultClaimPaths(root, completion.workerResults())...)
+
+	if manifest := completion.activeManifest(); manifest != nil {
+		_, mergeViolations, _ := mergeExternalBuildResults(*manifest, completion.workerResults())
+		violations = append(violations, mergeViolations...)
+	}
+
+	return violations
+}
+
+// completionPacketAsRaw round-trips completion through encoding/json into a
+// generic decoded value (map[string]any / []any / scalars), the shape
+// validateCompletionPacketStructure expects.
+func completionPacketAsRaw(completion codexExternalBuildCompletion) (any, error) {
+	data, err := json.Marshal(completion)
+	if err != nil {
+		return nil, err
+	}
+	var raw any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+// Rule strings for mergeExternalBuildResults's dispatch-level violations.
+// Ambiguous or already-matched name collisions (from
+// selectExternalBuildResultForDispatch) are reported under
+// worker.duplicate_result -- both are the same underlying problem, a name
+// that does not resolve to exactly one worker result.
+const (
+	violationRuleNameRequired     = "worker.name_required"
+	violationRuleDuplicateResult  = "worker.duplicate_result"
+	violationRuleResultMissing    = "worker.result_missing"
+	violationRuleIdentityMismatch = "worker.identity_mismatch"
+	violationRuleStatusTerminal   = "worker.status_terminal"
+	violationRuleHandoffValid     = "handoff.valid"
+	// violationRuleCoveredTaskUnknown fires when a worker result's
+	// covered_task_ids names a task ID that resolves to no dispatch anywhere
+	// in the manifest -- an unrecognized claim, never silently accepted or
+	// silently dropped (191.1-PATTERNS.md Pattern 6).
+	violationRuleCoveredTaskUnknown = "worker.covered_task_unknown"
+	// violationRuleCoveredTaskDuplicate fires when two different worker
+	// results both claim covered_task_ids credit for the same task ID --
+	// the second claim is rejected rather than silently overwriting the
+	// first credit.
+	violationRuleCoveredTaskDuplicate = "worker.covered_task_duplicate"
+	// violationRuleCoveredTaskCreditUnevidenced fires when a covered_task_ids
+	// claim's own CLAIMANT fails validation (CR-01, 191.1-REVIEW.md): its own
+	// result is not a genuine success (completed/manually-reconciled), or
+	// carries no evidence at all (no outputs/files_created/files_modified/
+	// tests_written), or its name matches no dispatch anywhere in the
+	// manifest. A worker whose own work is unproven, absent, or
+	// unidentifiable can never durably credit ANOTHER dispatch as completed.
+	violationRuleCoveredTaskCreditUnevidenced = "worker.covered_task_credit_unevidenced"
+	// violationRuleBundledWorkSuspected is additive guidance (never a
+	// replacement for the genuine violationRuleResultMissing violations it
+	// rides alongside, D-04): it fires when exactly one dispatch has a real,
+	// evidenced completed result and one or more other dispatches have no
+	// result at all, naming the concrete covered_task_ids repair instead of
+	// leaving a dead-end refusal.
+	violationRuleBundledWorkSuspected = "worker.bundled_work_suspected"
+)
+
+// mergeExternalBuildResults merges a completion packet's worker results onto
+// the plan-only manifest's dispatches, accumulating every dispatch-level
+// problem it finds into a []contractViolation instead of returning on the
+// first one (D-05/D-06). err is reserved for genuine internal failures the
+// wrapper cannot fix by resubmitting a corrected packet; every case a
+// wrapper CAN fix becomes a violation and the loop keeps going so later
+// dispatches are still checked. When a dispatch's result cannot be resolved,
+// that slot keeps its original, unmodified manifest dispatch.
+func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExternalBuildWorkerResult) ([]codexBuildDispatch, []contractViolation, error) {
+	var violations []contractViolation
 	resultByName := make(map[string]codexExternalBuildWorkerResult, len(results))
 	for _, result := range results {
 		name := result.effectiveName()
 		if name == "" {
-			return nil, fmt.Errorf("external worker result missing name")
+			violations = append(violations, contractViolation{
+				Field:   "name",
+				Rule:    violationRuleNameRequired,
+				Message: "external worker result missing name",
+			})
+			continue
 		}
 		if existing, exists := resultByName[name]; exists {
 			if useIncoming, ok := preferCompletedResultOverTimeout(existing.Status, result.Status); ok {
@@ -649,31 +1225,219 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 				}
 				continue
 			}
-			return nil, fmt.Errorf("duplicate external worker result for %s", name)
+			violations = append(violations, contractViolation{
+				Worker:  name,
+				Field:   "name",
+				Value:   name,
+				Rule:    violationRuleDuplicateResult,
+				Message: fmt.Sprintf("duplicate external worker result for %s", name),
+			})
+			continue
 		}
 		resultByName[name] = result
+	}
+
+	// covered_task_ids resolution (FIELD-02, 191.1-PATTERNS.md Pattern 6) runs
+	// as its own pass, BEFORE the main per-dispatch loop below, and not
+	// inline inside it: the main loop unconditionally resets
+	// dispatches[i] = dispatch at the top of every iteration, so a credit
+	// written into dispatches[j] while processing the covering dispatch's own
+	// iteration would be silently overwritten once the loop reaches index j
+	// on its own turn (and a covering worker can equally sit at a HIGHER
+	// index than the dispatches it covers, so no loop ordering makes this
+	// safe as an inline mutation). Resolving credits first, into a lookup the
+	// main loop's own "missing result" branch consults, is what makes a
+	// covered dispatch never see a violationRuleResultMissing in the first
+	// place, honestly, regardless of index order.
+	dispatchIndexByTaskID := make(map[string]int, len(manifest.Dispatches))
+	for idx, d := range manifest.Dispatches {
+		if taskID := strings.TrimSpace(d.TaskID); taskID != "" {
+			if _, exists := dispatchIndexByTaskID[taskID]; !exists {
+				dispatchIndexByTaskID[taskID] = idx
+			}
+		}
+		// A manifest dispatch that is ITSELF a runtime-coalesced chain
+		// (coalesceSequentialDispatches) already covers more than its own
+		// primary TaskID; a worker's covered_task_ids claim must resolve
+		// against that full chain too, not just the chain's first step.
+		for _, covered := range d.CoveredTaskIDs {
+			if trimmed := strings.TrimSpace(covered); trimmed != "" {
+				if _, exists := dispatchIndexByTaskID[trimmed]; !exists {
+					dispatchIndexByTaskID[trimmed] = idx
+				}
+			}
+		}
+	}
+
+	type coveredTaskCredit struct {
+		coveringName   string
+		coveringResult codexExternalBuildWorkerResult
+	}
+	// WR-02 (191.1-REVIEW.md): iterate the SAME name-deduplicated
+	// resultByName map the main dispatch loop above already computes (post
+	// preferCompletedResultOverTimeout resolution), not the raw results
+	// slice. A worker that legitimately resubmits under its own identical
+	// name -- first timeout, then completed, both carrying the same
+	// covered_task_ids claim -- must be treated as ONE claim here too, the
+	// same way the main loop already treats it as one legitimate
+	// resubmission rather than a conflict. Iterating raw results made a
+	// worker's own resubmission trip violationRuleCoveredTaskDuplicate
+	// against itself.
+	dispatchNameSet := make(map[string]struct{}, len(manifest.Dispatches)*2)
+	for _, d := range manifest.Dispatches {
+		if name := strings.TrimSpace(d.Name); name != "" {
+			dispatchNameSet[name] = struct{}{}
+			dispatchNameSet[stripWorkerRetrySuffix(name)] = struct{}{}
+		}
+	}
+	coveredBy := make(map[int]coveredTaskCredit, len(resultByName))
+	for _, result := range resultByName {
+		if len(result.CoveredTaskIDs) == 0 {
+			continue
+		}
+		coveringName := result.effectiveName()
+		selfTaskID := strings.TrimSpace(result.TaskID)
+
+		// CR-01 (191.1-REVIEW.md): validate the CLAIMANT itself before
+		// validating any individual claimed task ID. Only a worker whose OWN
+		// result is a genuine, evidenced success and corresponds to a real
+		// dispatch in this manifest may grant covered_task_ids credit to
+		// ANOTHER dispatch -- never a failed/blocked/timeout result, never a
+		// claim carrying zero evidence, and never a fabricated name matching
+		// no dispatch anywhere. Every disqualification below is a distinct,
+		// named violation for EVERY task ID this claimant named (D-06: no
+		// silent drop) so a buggy or malicious packet is refused with an
+		// actionable reason instead of quietly losing the credit.
+		ownStatus := normalizeExternalBuildStatus(result.Status)
+		genuineSuccess := ownStatus == "completed" || ownStatus == "manually-reconciled"
+		hasEvidence := len(result.Outputs) > 0 || len(result.FilesCreated) > 0 || len(result.FilesModified) > 0 || len(result.TestsWritten) > 0
+		_, recognizedClaimant := dispatchNameSet[coveringName]
+		if !recognizedClaimant {
+			_, recognizedClaimant = dispatchNameSet[stripWorkerRetrySuffix(coveringName)]
+		}
+		if !genuineSuccess || !hasEvidence || !recognizedClaimant {
+			var reason string
+			switch {
+			case !recognizedClaimant:
+				reason = fmt.Sprintf("claimant %q matches no dispatch in the manifest", coveringName)
+			case !genuineSuccess:
+				reason = fmt.Sprintf("claimant %q has its own status %q, not a genuine success", coveringName, result.Status)
+			default:
+				reason = fmt.Sprintf("claimant %q carries no outputs, files_created, files_modified, or tests_written to evidence the claim", coveringName)
+			}
+			for _, raw := range result.CoveredTaskIDs {
+				coveredTaskID := strings.TrimSpace(raw)
+				if coveredTaskID == "" || coveredTaskID == selfTaskID {
+					continue
+				}
+				violations = append(violations, contractViolation{
+					Worker:  coveringName,
+					Field:   "covered_task_ids",
+					Value:   coveredTaskID,
+					Rule:    violationRuleCoveredTaskCreditUnevidenced,
+					Message: fmt.Sprintf("%s claims covered_task_ids credit for task %s, but %s; refused", coveringName, coveredTaskID, reason),
+				})
+			}
+			continue
+		}
+
+		for _, raw := range result.CoveredTaskIDs {
+			coveredTaskID := strings.TrimSpace(raw)
+			if coveredTaskID == "" || coveredTaskID == selfTaskID {
+				continue // Blank, or a self-reference to the covering dispatch's own task -- not another dispatch.
+			}
+			idx, exists := dispatchIndexByTaskID[coveredTaskID]
+			if !exists {
+				violations = append(violations, contractViolation{
+					Worker:  coveringName,
+					Field:   "covered_task_ids",
+					Value:   coveredTaskID,
+					Rule:    violationRuleCoveredTaskUnknown,
+					Message: fmt.Sprintf("%s claims covered_task_ids credit for task %s, but no dispatch in the manifest has that task ID", coveringName, coveredTaskID),
+				})
+				continue
+			}
+			if existing, already := coveredBy[idx]; already {
+				violations = append(violations, contractViolation{
+					Worker:  coveringName,
+					Field:   "covered_task_ids",
+					Value:   coveredTaskID,
+					Rule:    violationRuleCoveredTaskDuplicate,
+					Message: fmt.Sprintf("%s and %s both claim covered_task_ids credit for task %s; only one worker's result can be credited for it", existing.coveringName, coveringName, coveredTaskID),
+				})
+				continue
+			}
+			coveredBy[idx] = coveredTaskCredit{coveringName: coveringName, coveringResult: result}
+		}
 	}
 
 	dispatches := make([]codexBuildDispatch, len(manifest.Dispatches))
 	usedResults := make(map[string]bool, len(results))
 	for i, dispatch := range manifest.Dispatches {
+		dispatches[i] = dispatch
 		resultName, result, ok, err := selectExternalBuildResultForDispatch(dispatch.Name, resultByName, usedResults)
 		if err != nil {
-			return nil, err
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "name",
+				Rule:    violationRuleDuplicateResult,
+				Message: err.Error(),
+			})
+			continue
 		}
 		if !ok {
-			return nil, fmt.Errorf("missing external worker result for %s", dispatch.Name)
+			if credit, covered := coveredBy[i]; covered {
+				// A different worker's result honestly named this dispatch's
+				// task ID in covered_task_ids, validated above against the
+				// manifest: the wrapper bundled this dispatch's real work
+				// into that worker's single call. Credit it directly instead
+				// of reporting a missing result -- the work was actually
+				// done, just not filed under this dispatch's own name.
+				dispatch.Status = "completed"
+				dispatch.Summary = fmt.Sprintf("covered by %s via covered_task_ids", credit.coveringName)
+				if outputs := uniqueSortedStrings(append(append(append([]string{}, credit.coveringResult.Outputs...), credit.coveringResult.FilesCreated...), append(credit.coveringResult.FilesModified, credit.coveringResult.TestsWritten...)...)); len(outputs) > 0 {
+					dispatch.Outputs = outputs
+				}
+				dispatches[i] = dispatch
+				continue
+			}
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "name",
+				Rule:    violationRuleResultMissing,
+				Message: fmt.Sprintf("missing external worker result for %s", dispatch.Name),
+			})
+			continue
 		}
 		usedResults[resultName] = true
 		if err := validateExternalResultIdentity(dispatch, result); err != nil {
-			return nil, err
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "identity",
+				Rule:    violationRuleIdentityMismatch,
+				Message: err.Error(),
+			})
+			continue
 		}
 		status := normalizeExternalBuildStatus(result.Status)
 		if !isTerminalExternalBuildStatus(status) {
-			return nil, fmt.Errorf("external worker result for %s has non-terminal status %q", dispatch.Name, result.Status)
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "status",
+				Value:   result.Status,
+				Rule:    violationRuleStatusTerminal,
+				Message: fmt.Sprintf("external worker result for %s has non-terminal status %q", dispatch.Name, result.Status),
+			})
+			continue
 		}
 		if err := codex.ValidateWorkerHandoff(result.Handoff); err != nil {
-			return nil, fmt.Errorf("external worker result for %s has invalid handoff: %w", dispatch.Name, err)
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "handoff",
+				Rule:    violationRuleHandoffValid,
+				Message: fmt.Sprintf("external worker result for %s has invalid handoff: %v", dispatch.Name, err),
+			})
+			continue
 		}
 		dispatch.Status = status
 		dispatch.Summary = strings.TrimSpace(result.Summary)
@@ -684,7 +1448,53 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		}
 		dispatches[i] = dispatch
 	}
-	return dispatches, nil
+
+	// D-04/criterion 2b: additive guidance, appended only after every genuine
+	// violationRuleResultMissing violation above has already been recorded,
+	// and never removing or replacing any of them (the packet really is
+	// incomplete right now). When the packet's shape strongly resembles the
+	// field failure this plan closes -- exactly one dispatch with a real,
+	// evidenced completed result sitting next to one or more dispatches with
+	// no result at all -- name the specific worker, the specific missing
+	// dispatches, and the concrete covered_task_ids repair, instead of
+	// leaving only a dead-end refusal with no path forward.
+	var missingDispatchNames []string
+	for _, v := range violations {
+		if v.Rule == violationRuleResultMissing {
+			missingDispatchNames = append(missingDispatchNames, v.Worker)
+		}
+	}
+	if len(missingDispatchNames) > 0 {
+		var completedWithEvidence []codexBuildDispatch
+		for _, d := range dispatches {
+			if d.Status == "completed" && len(d.Outputs) > 0 {
+				completedWithEvidence = append(completedWithEvidence, d)
+			}
+		}
+		if len(completedWithEvidence) == 1 {
+			completed := completedWithEvidence[0]
+			missingTaskIDs := make([]string, 0, len(missingDispatchNames))
+			for _, name := range missingDispatchNames {
+				for _, d := range dispatches {
+					if d.Name == name && strings.TrimSpace(d.TaskID) != "" {
+						missingTaskIDs = append(missingTaskIDs, strings.TrimSpace(d.TaskID))
+						break
+					}
+				}
+			}
+			violations = append(violations, contractViolation{
+				Worker: completed.Name,
+				Field:  "covered_task_ids",
+				Rule:   violationRuleBundledWorkSuspected,
+				Message: fmt.Sprintf(
+					"%s is the only dispatch with a real, evidenced completed result; %s have no result at all. If %s's work actually covered them too, resubmit %s's result with covered_task_ids naming their task IDs (%s) instead of leaving them unreported.",
+					completed.Name, strings.Join(missingDispatchNames, ", "), completed.Name, completed.Name, strings.Join(missingTaskIDs, ", "),
+				),
+			})
+		}
+	}
+
+	return dispatches, violations, nil
 }
 
 func selectExternalBuildResultForDispatch(expectedName string, resultByName map[string]codexExternalBuildWorkerResult, used map[string]bool) (string, codexExternalBuildWorkerResult, bool, error) {
@@ -864,6 +1674,19 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 		if err := validateAndNormalizeBuildClaims(root, "completion claims", &claims); err != nil {
 			return codexBuildClaims{}, err
 		}
+		// codexBuildClaims.FilesCreated/FilesModified are non-omitempty --
+		// the completion-packet schema requires them present as arrays.
+		// validateAndNormalizeClaimPathsToRoot returns nil for an empty
+		// input (e.g. a legitimate verification-only submission with no
+		// file claims), which would otherwise marshal to JSON null and fail
+		// structural validation. Normalize to an empty (not nil) array so a
+		// genuinely empty claim set stays structurally valid.
+		if claims.FilesCreated == nil {
+			claims.FilesCreated = []string{}
+		}
+		if claims.FilesModified == nil {
+			claims.FilesModified = []string{}
+		}
 		return claims, nil
 	}
 
@@ -939,26 +1762,60 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 	return claims, nil
 }
 
-func validateExternalWorkerResultClaimPaths(root string, results []codexExternalBuildWorkerResult) error {
+// collectClaimPathViolations validates every path in paths against root,
+// accumulating one contractViolation per bad path instead of returning on
+// the first problem. Each violation names the worker and the concrete field
+// it came from (files_created, files_modified, tests_written, outputs) so a
+// wrapper author can act on the field, not a generic label. A claim under a
+// sanctioned .aether/data scratch prefix
+// (validateAndNormalizeClaimPathToRoot's ("", nil) branch) is accepted and
+// silently dropped, exactly as before -- never a violation.
+func collectClaimPathViolations(root, worker, field string, paths []string) []contractViolation {
+	var violations []contractViolation
+	for _, path := range uniqueSortedStrings(paths) {
+		if _, err := validateAndNormalizeClaimPathToRoot(root, field, path); err != nil {
+			violations = append(violations, contractViolation{
+				Worker:  worker,
+				Field:   field,
+				Value:   path,
+				Rule:    claimPathRuleFromError(err),
+				Message: err.Error(),
+			})
+		}
+	}
+	return violations
+}
+
+// claimPathRuleFromError extracts the machine-readable rule string a
+// validateAndNormalizeClaimPathToRoot error was wrapped with. Every return
+// path inside that function wraps its error with *claimPathRuleError, so
+// the fallback here is defensive only and should never trigger in practice.
+func claimPathRuleFromError(err error) string {
+	var ruleErr *claimPathRuleError
+	if errors.As(err, &ruleErr) {
+		return ruleErr.rule
+	}
+	return claimPathRuleEscapesRoot
+}
+
+// validateExternalWorkerResultClaimPaths validates every claimed path across
+// every worker and every claim field (outputs, files_created,
+// files_modified, tests_written), returning every violation found in one
+// pass rather than the first. Worker label comes from
+// codexExternalBuildWorkerResult.effectiveName(), falling back to "unnamed".
+func validateExternalWorkerResultClaimPaths(root string, results []codexExternalBuildWorkerResult) []contractViolation {
+	var violations []contractViolation
 	for _, result := range results {
 		name := result.effectiveName()
 		if name == "" {
 			name = "unnamed"
 		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s outputs", name), result.Outputs); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_created", name), result.FilesCreated); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_modified", name), result.FilesModified); err != nil {
-			return err
-		}
-		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s tests_written", name), result.TestsWritten); err != nil {
-			return err
-		}
+		violations = append(violations, collectClaimPathViolations(root, name, "outputs", result.Outputs)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "files_created", result.FilesCreated)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "files_modified", result.FilesModified)...)
+		violations = append(violations, collectClaimPathViolations(root, name, "tests_written", result.TestsWritten)...)
 	}
-	return nil
+	return violations
 }
 
 type codexResultCollectionReport struct {
@@ -994,7 +1851,7 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 		ReceivedResults:         len(results),
 		MatchedResults:          len(dispatches),
 		StatusCounts:            map[string]int{},
-		Policy:                  "A structurally valid completed or manually-reconciled worker result wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected.",
+		Policy:                  "A structurally valid completed or manually-reconciled worker result wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected. Claims under sanctioned .aether/data subpaths (planning/, phase-research/, survey/, worker-debug/, reviews/) are tolerated and dropped from the claim set.",
 		ApprovedTempPath:        finalizerCompletionTempPattern,
 		SensitiveOutputRedacted: true,
 	}
@@ -1144,28 +2001,84 @@ func validateAndNormalizeClaimPathsToRoot(root, field string, paths []string) ([
 	return uniqueSortedStrings(normalized), nil
 }
 
+// sanctionedDataClaimPrefixes lists the .aether/data/ subpaths a worker may
+// honestly claim because a real runtime instruction orders the write there:
+// the hook's scratch carve-outs (sanctionedDataWritePrefixes) plus the review
+// ledgers written via `aether review-ledger-write` (cmd/review_ledger.go —
+// e.g. .aether/data/reviews/history/ledger.json), which findingsInjectionForCaste
+// tells watcher/chaos/measurer/archaeologist/gatekeeper/auditor briefs to run.
+// A claim under one of these is accepted but dropped from the normalized claim
+// set: it is colony state, not repo evidence, so it must not feed claim or
+// criterion verification — and an honest declaration of a runtime-ordered
+// write must never fail the whole completion packet.
+func sanctionedDataClaimPrefixes() []string {
+	prefixes := make([]string, 0, len(sanctionedDataWritePrefixes)+1)
+	for _, prefix := range sanctionedDataWritePrefixes {
+		prefixes = append(prefixes, strings.TrimPrefix(prefix, "/"))
+	}
+	return append(prefixes, ".aether/data/reviews/")
+}
+
+// claimPathRuleError wraps a claim-path validation error with a
+// machine-readable rule classification. Callers (collectClaimPathViolations)
+// extract the rule via errors.As instead of string-matching the message, so
+// the rule stays correct even if the human-readable wording changes.
+type claimPathRuleError struct {
+	rule string
+	err  error
+}
+
+func (e *claimPathRuleError) Error() string { return e.err.Error() }
+func (e *claimPathRuleError) Unwrap() error { return e.err }
+
+// Rule strings for claim-path validation failures. There are exactly four:
+// a malicious null byte, a path that isn't repo-relative, a forbidden
+// .aether/data claim, and every other way a path fails to resolve inside
+// the repository boundary (escapes root, missing, symlink, directory,
+// ambiguous match, unavailable root).
+const (
+	claimPathRuleNullByte     = "claim_path.null_byte"
+	claimPathRuleRepoRelative = "claim_path.repo_relative"
+	claimPathRuleAetherData   = "claim_path.aether_data"
+	claimPathRuleEscapesRoot  = "claim_path.escapes_root"
+)
+
+// wrapClaimPathRule wraps a non-nil error with its rule classification.
+// A nil err is passed through unchanged (the ok-with-no-error success case).
+func wrapClaimPathRule(rule string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &claimPathRuleError{rule: rule, err: err}
+}
+
 func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, error) {
 	claimed = strings.TrimSpace(claimed)
 	if claimed == "" {
 		return "", nil
 	}
 	if strings.ContainsRune(claimed, 0) {
-		return "", fmt.Errorf("invalid %s claim %q: path contains a null byte", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleNullByte, fmt.Errorf("invalid %s claim %q: path contains a null byte", field, claimed))
 	}
 	policyClaim := filepath.ToSlash(filepath.Clean(filepath.FromSlash(strings.ReplaceAll(claimed, "\\", "/"))))
 	if filepath.IsAbs(claimed) || filepath.IsAbs(filepath.FromSlash(policyClaim)) || hasWindowsVolumePrefix(policyClaim) {
-		return "", fmt.Errorf("invalid %s claim %q: path must be repo-relative", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleRepoRelative, fmt.Errorf("invalid %s claim %q: path must be repo-relative", field, claimed))
 	}
 	if policyClaim == ".aether/data" || strings.HasPrefix(policyClaim, ".aether/data/") {
-		return "", fmt.Errorf("invalid %s claim %q: path must not be under .aether/data", field, claimed)
+		for _, prefix := range sanctionedDataClaimPrefixes() {
+			if strings.HasPrefix(policyClaim, prefix) {
+				return "", nil
+			}
+		}
+		return "", wrapClaimPathRule(claimPathRuleAetherData, fmt.Errorf("invalid %s claim %q: path must not be under .aether/data", field, claimed))
 	}
 	if strings.TrimSpace(root) == "" {
-		return "", fmt.Errorf("invalid %s claim %q: repository root is unavailable", field, claimed)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: repository root is unavailable", field, claimed))
 	}
 
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {
-		return "", fmt.Errorf("invalid %s claim %q: resolve repository root: %w", field, claimed, err)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: resolve repository root: %w", field, claimed, err))
 	}
 	rootEval, err := filepath.EvalSymlinks(rootAbs)
 	if err != nil {
@@ -1174,18 +2087,18 @@ func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, e
 
 	candidateAbs, directCandidate, err := candidateClaimAbsolutePath(rootAbs, claimed)
 	if err != nil {
-		return "", fmt.Errorf("invalid %s claim %q: %w", field, claimed, err)
+		return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: %w", field, claimed, err))
 	}
 	if rel, ok, err := normalizeExistingClaimPath(rootEval, candidateAbs, field, claimed); ok || err != nil {
-		return rel, err
+		return rel, wrapClaimPathRule(claimPathRuleEscapesRoot, err)
 	}
 
 	if directCandidate {
 		if rel, ok, err := findUnambiguousRepoRelativeClaimPath(rootAbs, rootEval, field, claimed); ok || err != nil {
-			return rel, err
+			return rel, wrapClaimPathRule(claimPathRuleEscapesRoot, err)
 		}
 	}
-	return "", fmt.Errorf("invalid %s claim %q: path does not exist inside repository", field, claimed)
+	return "", wrapClaimPathRule(claimPathRuleEscapesRoot, fmt.Errorf("invalid %s claim %q: path does not exist inside repository", field, claimed))
 }
 
 func hasWindowsVolumePrefix(path string) bool {

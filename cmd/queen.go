@@ -36,6 +36,9 @@ const queenDefaultContent = `# QUEEN.md — Colony Wisdom Hub
 
 ## Colony Charter
 > Colony name and goal.
+
+## Instincts
+> Instincts promoted by the consolidation pipeline.
 `
 
 // --- queen-init ---
@@ -325,70 +328,83 @@ var queenSeedFromHiveCmd = &cobra.Command{
 	Short: "Seed QUEEN.md with relevant hive wisdom",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		hub := resolveHubPath()
-		wisdomPath := filepath.Join(hub, "hive", "wisdom.json")
-		s := hubStore()
-		if s == nil {
+		seeded, skipped, total, err := seedQueenFromHive()
+		if err != nil {
+			outputError(1, err.Error(), nil)
 			return nil
 		}
-
-		var wisdom struct {
-			Entries []map[string]interface{} `json:"entries"`
-		}
-		if raw, err := os.ReadFile(wisdomPath); err != nil {
-			outputError(1, fmt.Sprintf("failed to read hive wisdom: %v", err), nil)
-			return nil
-		} else {
-			if err := json.Unmarshal(raw, &wisdom); err != nil {
-				log.Printf("queen-seed-from-hive: failed to unmarshal wisdom JSON: %v", err)
-			}
-		}
-
-		if len(wisdom.Entries) == 0 {
+		if total == 0 {
 			result := map[string]interface{}{"seeded": 0, "reason": "no hive wisdom entries"}
 			outputWorkflow(result, renderQueenActionVisual("queen-seed-from-hive", "Queen Hive Seed", result))
 			return nil
 		}
-
-		text, _, err := loadQueenText(s)
-		if err != nil {
-			outputError(1, fmt.Sprintf("failed to load QUEEN.md: %v", err), nil)
-			return nil
-		}
-
-		var entries []string
-		for _, e := range wisdom.Entries {
-			text, _ := e["text"].(string)
-			if text != "" {
-				entries = append(entries, fmt.Sprintf("- %s (hive wisdom)", sanitizeQueenInline(text)))
-			}
-		}
-
-		// Filter entries already present in QUEEN.md (per D-02)
-		var newEntries []string
-		for _, entry := range entries {
-			if !isEntryInText(text, entry) {
-				newEntries = append(newEntries, entry)
-			}
-		}
-
-		skippedCount := len(entries) - len(newEntries)
-
-		text = appendEntriesToQueenSection(text, "Wisdom", newEntries)
-
-		if err := writeQueenText(s, text); err != nil {
-			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
-			return nil
-		}
-
 		result := map[string]interface{}{
-			"seeded":  len(newEntries),
-			"skipped": skippedCount,
-			"total":   len(entries),
+			"seeded":  seeded,
+			"skipped": skipped,
+			"total":   total,
 		}
 		outputWorkflow(result, renderQueenActionVisual("queen-seed-from-hive", "Queen Hive Seeded", result))
 		return nil
 	},
+}
+
+// seedQueenFromHive appends hive wisdom entries not already present in
+// QUEEN.md and reports (seeded, skipped, total). Quiet — no output-envelope
+// side effects — so `aether init` calls it non-blockingly (RECLAIM-09:
+// v5.4.0 seeded cross-colony wisdom at init; the modern command had no
+// caller anywhere).
+func seedQueenFromHive() (int, int, int, error) {
+	hub := resolveHubPathQuiet()
+	if hub == "" {
+		return 0, 0, 0, fmt.Errorf("hub path unavailable")
+	}
+	raw, err := os.ReadFile(filepath.Join(hub, "hive", "wisdom.json"))
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to read hive wisdom: %v", err)
+	}
+	var wisdom struct {
+		Entries []map[string]interface{} `json:"entries"`
+	}
+	if err := json.Unmarshal(raw, &wisdom); err != nil {
+		log.Printf("queen-seed-from-hive: failed to unmarshal wisdom JSON: %v", err)
+	}
+	if len(wisdom.Entries) == 0 {
+		return 0, 0, 0, nil
+	}
+
+	s, err := storage.NewStore(hub)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to initialize hub store: %v", err)
+	}
+	text, _, err := loadQueenText(s)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to load QUEEN.md: %v", err)
+	}
+
+	var entries []string
+	for _, e := range wisdom.Entries {
+		entryText, _ := e["text"].(string)
+		if entryText != "" {
+			entries = append(entries, fmt.Sprintf("- %s (hive wisdom)", sanitizeQueenInline(entryText)))
+		}
+	}
+
+	// Filter entries already present in QUEEN.md (per D-02)
+	var newEntries []string
+	for _, entry := range entries {
+		if !isEntryInText(text, entry) {
+			newEntries = append(newEntries, entry)
+		}
+	}
+	skippedCount := len(entries) - len(newEntries)
+
+	if len(newEntries) > 0 {
+		text = appendEntriesToQueenSection(text, "Wisdom", newEntries)
+		if err := writeQueenText(s, text); err != nil {
+			return 0, skippedCount, len(entries), fmt.Errorf("failed to write QUEEN.md: %v", err)
+		}
+	}
+	return len(newEntries), skippedCount, len(entries), nil
 }
 
 // --- queen-migrate ---
@@ -669,6 +685,67 @@ func writeLocalQueenText(text string) error {
 		text += "\n"
 	}
 	return os.WriteFile(p, []byte(text), 0644)
+}
+
+// ensureQueenInstinctsSection self-heals a local QUEEN.md that predates the
+// "## Instincts" section by appending the header (and a short blockquote
+// description, matching the style of queenDefaultContent's other sections)
+// at the END of the file, then persisting it.
+//
+// Appending at the end is deliberate and load-bearing: the legacy local
+// template has no `---` delimiters, so pkg/memory's findSectionEnd treats
+// "no \n--- after the header" as "section runs to end of file". A mid-file
+// Instincts header would therefore cause entries meant for Instincts to be
+// appended after whatever unrelated section happened to follow it.
+//
+// Idempotent: if the local QUEEN.md on disk already contains a line equal
+// to "## Instincts", the file is left untouched. If no local QUEEN.md
+// exists yet, the in-memory default (which already contains "## Instincts")
+// is written out so the section is materialized on disk rather than merely
+// implied by the default template.
+func ensureQueenInstinctsSection() error {
+	p := localQueenPath()
+	if p == "" {
+		return fmt.Errorf("no local store")
+	}
+
+	fileExists := true
+	if _, err := os.Stat(p); err != nil {
+		if os.IsNotExist(err) {
+			fileExists = false
+		} else {
+			return err
+		}
+	}
+
+	text, err := loadLocalQueenText()
+	if err != nil {
+		return err
+	}
+
+	hasHeader := false
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "## Instincts" {
+			hasHeader = true
+			break
+		}
+	}
+
+	if hasHeader {
+		if fileExists {
+			// Already present on disk -- nothing to heal.
+			return nil
+		}
+		// No file yet, but the loaded default template already carries the
+		// section (new-colony template). Materialize it on disk.
+		return writeLocalQueenText(text)
+	}
+
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	text += "\n## Instincts\n> Instincts promoted by the consolidation pipeline.\n"
+	return writeLocalQueenText(text)
 }
 
 // promoteInstinctLocal promotes a single instinct to the local repo QUEEN.md only.

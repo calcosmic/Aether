@@ -52,7 +52,6 @@ type PermissionDecision struct {
 
 var repositoryReadOnlyCastes = map[string]struct{}{
 	"includer": {},
-	"scout":    {},
 }
 
 // PermissionProfileForCaste returns the smallest permission promise that the
@@ -91,10 +90,14 @@ func behavioralRestrictionsForCaste(caste string) []string {
 		return []string{"write test files only; do not modify project source"}
 	case "surveyor_disciplines", "surveyor_nest", "surveyor_pathogens", "surveyor_provisions":
 		return []string{"write survey artifacts under .aether/data/survey only"}
+	case "scout":
+		return []string{"write phase research artifacts under .aether/data/phase-research only"}
 	case "chronicler":
 		return []string{"write documentation artifacts only"}
 	case "architect", "route_setter", "sage":
 		return []string{"return structured analysis without repository writes"}
+	case "oracle":
+		return []string{"write escalated research findings under .aether/oracle and .aether/data/phase-research only"}
 	default:
 		return nil
 	}

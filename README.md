@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-27-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-60-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.41-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.61-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -121,15 +121,15 @@ This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
 platform, installs it locally, and then runs `aether install` for you. The npm
 package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.41` bootstraps Aether `1.0.41`.
+`aether-colony@1.0.61` bootstraps Aether `1.0.61`.
 
 **Option 1: Go binary**
 
 ```bash
-go install github.com/calcosmic/Aether@latest
+go install github.com/calcosmic/Aether/cmd/aether@latest
 ```
 
-Requires [Go 1.22+](https://go.dev/dl/).
+Requires [Go 1.26.5+](https://go.dev/dl/).
 
 After installing the binary, publish the bundled companion files to your local
 hub:
@@ -304,7 +304,7 @@ primary platforms.
 ├── hive/wisdom.json         Cross-colony wisdom (200 cap)
 ```
 
-**Runtime:** Go 1.22+  
+**Runtime:** Go 1.26.5+  
 **Distribution:** GoReleaser (Linux, macOS, Windows / amd64 + arm64)
 
   
@@ -477,7 +477,9 @@ aether resume
 
 `/ant-run` chains the build-verify-advance loop across multiple phases with intelligent pause conditions. Instead of running each command by hand, you engage autopilot and it handles the cycle automatically.
 
-It pauses — not crashes — when something needs attention: test failures, critical findings, new blockers, or runtime verification. Fix the issue, run `/ant-run` again, and it resumes.
+It streams its progress in your terminal as it works — an engage banner, live worker lines during each build, a phase-advancement block with a momentum ticker between phases, and a celebration when everything is done.
+
+It pauses — not crashes — when something needs attention: failed verification, unresolved blocker decisions, test-failure signals, failed quality/security gates, critical resilience findings, an uncommitted-changes marker, or the replan checkpoint (every 2 phases by default; `--continue` skips it). The pause prints its reason and the suggested next command. Fix the issue, run `/ant-run` again, and it resumes. (`aether run --dry-run` previews the plan and lists every pause trigger.)
 
 ```bash
 # Run all remaining phases automatically
@@ -608,7 +610,7 @@ Power-user commands for deep research, philosophical exploration, resilience tes
 | Command | Description |
 |---------|-------------|
 | `/ant-swarm "<bug>"` | Deploy 4 parallel scouts (Archaeologist, Pattern Hunter, Error Analyst, Web Researcher) to investigate and fix stubborn bugs. Cross-compares findings, ranks solutions by confidence, applies the best fix, and auto-rolls back on failure. No arguments shows a real-time swarm display. |
-| `/ant-oracle` | Deep research agent using an iterative RALF loop. Guided by a research wizard (topic, template, depth, confidence, scope, strategy). Subcommands: `stop`, `status`, `promote`. Flags: `--force-research`, `--no-visual`. |
+| `/ant-oracle` | Deep research agent using an iterative RALF loop. Guided by a scoping ritual (`oracle propose` suggests output shape, sources, depth and accuracy target; `oracle brief` records the approved core question; `oracle --from-brief` refuses to run without one). Subcommands: `propose`, `brief`, `status`, `stop`, `recover`, `save`, `promote`, `selftest`. Flags: `--depth`, `--confidence-target`, `--scope`, `--template`, `--max-iterations`, `--background`, `--follow`, `--from-brief`. |
 | `/ant-dream` | The Dreamer -- a philosophical wanderer that observes the codebase and writes 5-8 dream observations to `.aether/dreams/`. Categories: musing, observation, concern, emergence, archaeology, prophecy, undercurrent. May suggest pheromones. Flag: `--no-visual`. |
 | `/ant-interpret [date]` | The Interpreter -- grounds dreams in reality by validating each dream observation against the actual codebase. Rates each dream as confirmed, partially confirmed, unconfirmed, or refuted. Can inject pheromones or add items to TO-DOS based on findings. |
 | `/ant-chaos <target>` | The Chaos Ant -- resilience tester that probes 5 categories (edge cases, boundary conditions, error handling, state corruption, unexpected inputs) for a given file, module, or feature. Produces a structured report with severity ratings and reproduction steps. Auto-creates blocker flags for critical/high findings. Flag: `--no-visual`. |
@@ -664,7 +666,7 @@ slash commands for the same phases.
 ### 🔧 Step 0 -- Install Aether
 
 ```bash
-go install github.com/calcosmic/Aether@latest
+go install github.com/calcosmic/Aether/cmd/aether@latest
 aether install        # Publish the bundled companion files to your local hub
 ```
 
@@ -1070,7 +1072,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 <br>
 
-<code>go install github.com/calcosmic/Aether@latest</code>
+<code>go install github.com/calcosmic/Aether/cmd/aether@latest</code>
 
 <br>
 
@@ -1082,7 +1084,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.41 -- Released (Current)
+### 🎉 v1.0.41 -- Released
 
 - Restored universal classic ceremony parity across Codex lifecycle flows, including spawn plans, wave starts, worker completions, and closeouts.
 - Hardened Porter full-release readiness with persisted receipts, version agreement, binary smoke, Go/TypeScript/npm gates, and redacted failed-command diagnostics.
@@ -1159,7 +1161,7 @@ Aether is shaped by its community. Whether you are fixing a bug, adding a comman
 
 ### ✅ Prerequisites
 
-- **Go 1.22+** -- [Install Go](https://go.dev/dl/) if you don't have it
+- **Go 1.26.5+** -- [Install Go](https://go.dev/dl/) if you don't have it
 - **Git** -- For cloning and branching
 - **Node.js 18+** -- Optional for future rich ceremony narration and the npm
   bootstrap; the bundled narrator runtime is plain JS and does not require

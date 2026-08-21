@@ -20,28 +20,45 @@ import (
 )
 
 type codexBuildDispatch struct {
-	Stage         string   `json:"stage"`
-	Wave          int      `json:"wave,omitempty"`
-	ExecutionWave int      `json:"execution_wave,omitempty"`
-	Caste         string   `json:"caste"`
-	Name          string   `json:"name"`
-	Task          string   `json:"task"`
-	Status        string   `json:"status"`
-	Summary       string   `json:"summary,omitempty"`
-	TaskID        string   `json:"task_id,omitempty"`
-	TaskIndex     int      `json:"task_index,omitempty"`
-	DependsOn     []string `json:"depends_on,omitempty"`
-	DeclaredPaths []string `json:"declared_paths,omitempty"`
-	Outputs       []string `json:"outputs,omitempty"`
-	Blockers      []string `json:"blockers,omitempty"`
-	Duration      float64  `json:"duration,omitempty"`
+	Stage         string `json:"stage"`
+	Wave          int    `json:"wave,omitempty"`
+	ExecutionWave int    `json:"execution_wave,omitempty"`
+	Caste         string `json:"caste"`
+	AgentName     string `json:"agent_name,omitempty"`
+	// Model is the DISPLAY name of the model this caste's agent runs on
+	// (resolved from agent frontmatter slot + ANTHROPIC_DEFAULT_*_MODEL env),
+	// so wrapper-rendered spawn descriptions can show it. Nothing reads it
+	// to choose a model — routing stays with the platform's agent
+	// frontmatter, and automatic model selection stays rejected.
+	Model     string `json:"model,omitempty"`
+	Name      string `json:"name"`
+	Task      string `json:"task"`
+	Status    string `json:"status"`
+	Summary   string `json:"summary,omitempty"`
+	TaskID    string `json:"task_id,omitempty"`
+	TaskIndex int    `json:"task_index,omitempty"`
+	// CoveredTaskIDs lists every task this one worker took on. It holds more
+	// than one entry when a chain of dependent steps was merged into a single
+	// dispatch (see coalesceSequentialDispatches). TaskID stays the first of
+	// them so result matching and evidence keep working unchanged; this field
+	// exists so nothing downstream can believe the later steps were unassigned.
+	CoveredTaskIDs []string `json:"covered_task_ids,omitempty"`
+	DependsOn      []string `json:"depends_on,omitempty"`
+	DeclaredPaths  []string `json:"declared_paths,omitempty"`
+	Outputs        []string `json:"outputs,omitempty"`
+	Blockers       []string `json:"blockers,omitempty"`
+	Duration       float64  `json:"duration,omitempty"`
 	// Brief is the fully rendered worker prompt for wrapper-spawned workers.
 	// Build was the only workflow whose plan-only manifest carried no brief —
 	// colonize, plan, and heavy-continue all do — so everything the runtime
 	// assembles (phase objective, constraints, hints, criteria, pheromone
 	// signals, survey, handoffs) never reached the workers the user actually
 	// watches spawn. Wrappers must inject this verbatim, never reconstruct it.
-	Brief             string                  `json:"brief,omitempty"`
+	Brief string `json:"brief,omitempty"`
+	// BriefPath is the repo-display path to the file holding the verbatim
+	// composed brief (the same bytes as Brief above); the wrapper may read
+	// this instead of the inline Brief field.
+	BriefPath         string                  `json:"brief_path,omitempty"`
 	SkillSection      string                  `json:"skill_section,omitempty"`
 	SkillCount        int                     `json:"skill_count,omitempty"`
 	ColonySkills      int                     `json:"colony_skill_count,omitempty"`
@@ -60,31 +77,41 @@ type codexBuildTaskPlan struct {
 }
 
 type codexBuildManifest struct {
-	Phase                     int                                   `json:"phase"`
-	PhaseName                 string                                `json:"phase_name"`
-	PhaseMode                 colony.PhaseMode                      `json:"phase_mode,omitempty"`
-	Goal                      string                                `json:"goal,omitempty"`
-	Root                      string                                `json:"root"`
-	ColonyMode                string                                `json:"colony_mode,omitempty"`
-	PlanOnly                  bool                                  `json:"plan_only,omitempty"`
-	ParallelMode              string                                `json:"parallel_mode,omitempty"`
-	WaveExecution             []codexWaveExecutionPlan              `json:"wave_execution,omitempty"`
-	ExecutionPlan             []codexBuildExecutionPlan             `json:"execution_plan,omitempty"`
-	ColonyDepth               string                                `json:"colony_depth"`
-	DispatchMode              string                                `json:"dispatch_mode,omitempty"`
-	HostPlatform              string                                `json:"host_platform,omitempty"`
-	ExecutionOwner            string                                `json:"execution_owner,omitempty"`
-	WorkerDispatchOptIn       bool                                  `json:"worker_dispatch_opt_in,omitempty"`
-	GeneratedAt               string                                `json:"generated_at"`
-	PlanRevisionID            string                                `json:"plan_revision_id,omitempty"`
-	PlanStateHash             string                                `json:"plan_state_hash,omitempty"`
-	AttemptID                 string                                `json:"attempt_id,omitempty"`
-	AttemptPath               string                                `json:"attempt_path,omitempty"`
-	ExecutionBinding          *codex.ExecutionBinding               `json:"execution_binding,omitempty"`
-	State                     string                                `json:"state"`
-	Checkpoint                string                                `json:"checkpoint"`
-	ClaimsPath                string                                `json:"claims_path"`
-	WorkerBriefs              []string                              `json:"worker_briefs"`
+	Phase               int                       `json:"phase"`
+	PhaseName           string                    `json:"phase_name"`
+	PhaseMode           colony.PhaseMode          `json:"phase_mode,omitempty"`
+	Goal                string                    `json:"goal,omitempty"`
+	Root                string                    `json:"root"`
+	ColonyMode          string                    `json:"colony_mode,omitempty"`
+	PlanOnly            bool                      `json:"plan_only,omitempty"`
+	ParallelMode        string                    `json:"parallel_mode,omitempty"`
+	WaveExecution       []codexWaveExecutionPlan  `json:"wave_execution,omitempty"`
+	ExecutionPlan       []codexBuildExecutionPlan `json:"execution_plan,omitempty"`
+	ColonyDepth         string                    `json:"colony_depth"`
+	DispatchMode        string                    `json:"dispatch_mode,omitempty"`
+	HostPlatform        string                    `json:"host_platform,omitempty"`
+	ExecutionOwner      string                    `json:"execution_owner,omitempty"`
+	WorkerDispatchOptIn bool                      `json:"worker_dispatch_opt_in,omitempty"`
+	GeneratedAt         string                    `json:"generated_at"`
+	PlanRevisionID      string                    `json:"plan_revision_id,omitempty"`
+	PlanStateHash       string                    `json:"plan_state_hash,omitempty"`
+	AttemptID           string                    `json:"attempt_id,omitempty"`
+	AttemptPath         string                    `json:"attempt_path,omitempty"`
+	ExecutionBinding    *codex.ExecutionBinding   `json:"execution_binding,omitempty"`
+	State               string                    `json:"state"`
+	Checkpoint          string                    `json:"checkpoint"`
+	ClaimsPath          string                    `json:"claims_path"`
+	WorkerBriefs        []string                  `json:"worker_briefs"`
+	// ContextCapsule is the colony-prime grounding payload (state, decisions,
+	// phase learnings, instincts, hive wisdom, prior reviews, blockers, user
+	// preferences) for wrapper-spawned build workers. It is computed once per
+	// plan-only manifest, carried here at the top level rather than copied into
+	// every dispatch brief, and the wrapper reads it once and prepends it,
+	// verbatim, to each spawned worker's prompt. Only populated when planOnly —
+	// the hosted/subprocess path already computes and shares its own capsule
+	// (see executeCodexBuildDispatches), and the finalize record does not
+	// deliver prompts.
+	ContextCapsule            string                                `json:"context_capsule,omitempty"`
 	Dispatches                []codexBuildDispatch                  `json:"dispatches"`
 	SelectedTasks             []string                              `json:"selected_tasks,omitempty"`
 	Tasks                     []codexBuildTaskPlan                  `json:"tasks"`
@@ -102,6 +129,15 @@ type codexBuildManifest struct {
 	BoundaryQuestionsCreated  int                                   `json:"boundary_questions_created,omitempty"`
 	BoundaryQuestionsExisting int                                   `json:"boundary_questions_existing,omitempty"`
 	OrchestratorGuidance      *orchestratorBoundaryGuidance         `json:"orchestrator_boundary_guidance,omitempty"`
+	// CasteRoster lists every dispatchable caste and what it is good at, so a
+	// Queen deciding the team is choosing from the live registry rather than
+	// from memory. Without it the wrapper guesses at both the names and the
+	// roles, and an unrecognised name silently costs the phase a specialist.
+	CasteRoster []map[string]string `json:"caste_roster,omitempty"`
+	// CasteDecision records how the team was chosen: what the Queen proposed,
+	// what actually spawns, and every override the runtime applied. A Queen
+	// that proposes badly must produce a visible correction, not a silent one.
+	CasteDecision map[string]interface{} `json:"caste_decision,omitempty"`
 }
 
 type codexWaveExecutionPlan struct {
@@ -152,6 +188,16 @@ type codexBuildOptions struct {
 	DispatchWorkers         bool
 	CircuitBreakerThreshold int
 	Verbose                 bool
+	// Full gates the raw-prompt path of --print-brief. It has no effect on any
+	// mutating build path — only printWorkerBriefs reads it.
+	Full bool
+	// QueenCastes is the team the Queen proposed after reading the phase.
+	// Empty means no judgement was offered and the deterministic keyword
+	// engine decides — the behaviour of every caller before this existed.
+	QueenCastes []string
+	// QueenCasteReason is the Queen's stated reasoning, surfaced to the
+	// operator so a team choice is never unexplained.
+	QueenCasteReason string
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -224,15 +270,30 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		DispatchWorkers:   options.DispatchWorkers,
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
+	dispatches := plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, options.QueenCastes, options.QueenCasteReason)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
-	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
+	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	attachBuildDispatchContext(root, phase, dispatches, generatedAt)
+	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
+	// Write every dispatch's composed brief to disk and blank the inline copy
+	// once the write succeeds (clearInlineBrief=true) -- the ONLY dispatch
+	// path the interactive wrapper is allowed to call must never ship the
+	// same composed brief twice in one JSON response. A dispatch whose write
+	// fails keeps its inline Brief populated (see writeBuildWorkerBriefFiles).
+	// Clear the previous manifest's brief files first (190-190/WR-01) --
+	// this path writes {dispatch.Name}.md into a directory nothing else ever
+	// prunes, and dispatch names change whenever task wording, task selection
+	// or caste coalescing does.
+	cleanupStaleWorkerBriefs(phaseNum)
+	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, generatedAt, true)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 
 	parallelMode := effectiveParallelMode(state)
@@ -240,17 +301,21 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	executionPlan := buildExecutionPlans(dispatches, parallelMode)
 	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
 	providerDiagnostics := dispatchProviderDiagnostics(newCodexWorkerInvoker())
-	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	claimsRel := "last-build-claims.json"
-	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true, reviewDepth)
+	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, briefPaths, true, reviewDepth)
 	manifest.Phase = phaseNum
 	manifest.DispatchContract = dispatchContract
 	manifest.ProviderDiagnostics = providerDiagnostics
 	profileContract := workflowProfileContract(reviewDepth)
 	queenRecommendation := recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases))
 	manifest.QueenExecutionPolicy = policy
+	// The roster is what lets the wrapper's Queen choose from the live registry
+	// instead of from memory; the decision is the audit trail for what it chose
+	// and what the runtime overrode.
+	manifest.CasteRoster = queenCasteRoster()
+	manifest.CasteDecision = queenCasteDecisionSummary(phase, state, reviewDepth, options.QueenCastes, options.QueenCasteReason)
 	boundary, err := materializeOrchestratorBoundaryQuestions("build", state, phase, buildBoundaryQuestionCandidates(phase, selectedTaskIDs))
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -289,7 +354,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"queen_execution_policy":   policy,
 		"selected_tasks":           selectedTaskIDs,
 		"wrapper_contract": map[string]interface{}{
-			"source_command":          "aether host build <phase>",
+			"source_command":          "aether build <phase> --plan-only",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
 			"finalize_surface":        "awaiting_wrapper_completion",
@@ -378,7 +443,7 @@ func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, 
 	result["queen_execution_policy"] = policy
 	result["next"] = "Queen/main agent executes dispatch_manifest, then runs aether build-finalize"
 	result["wrapper_contract"] = map[string]interface{}{
-		"source_command":          "aether host build <phase>",
+		"source_command":          "aether build <phase> --plan-only",
 		"spawn_log_required":      true,
 		"spawn_complete_required": true,
 		"finalize_surface":        "awaiting_queen_completion",
@@ -465,9 +530,19 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
 	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
-	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
+	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, err
+	}
+	// Check the whole plan against the remaining helper budget before the first
+	// worker starts. The per-spawn ceiling is checked one worker at a time, so a
+	// ten-worker build with three slots left used to begin and stall in the
+	// middle -- paying for every worker that had already run. A budget that
+	// cannot be read is not treated as free.
+	if budgetState, budgetErr := spawnTreeBudgetState(); budgetErr == nil {
+		if fits, reason := spawnBudgetPreflight(len(dispatches), budgetState); !fits {
+			return nil, fmt.Errorf("%s", reason)
+		}
 	}
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
@@ -603,6 +678,12 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if err != nil {
 		attemptFinished = true
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
+		// Classic failure theatre: a halted build is announced as a framed
+		// operator moment, never a silent error return.
+		emitVisualProgress(renderDecisionBlock("⚠", "Wave Failure — Build Halted",
+			fmt.Sprintf("Phase %d dispatch failed: %v", phaseNum, err),
+			"The phase's state was rolled back; nothing half-done was kept.",
+			"Fix the cause, then rerun the build for this phase."))
 		return nil, err
 	}
 	if err := store.SaveJSON(claimsRel, terminalClaims); err != nil {
@@ -639,7 +720,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
 	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "built lifecycle state committed", dispatches, terminalClaims, mode, nil); err != nil {
-		fmt.Fprintf(stderr, "warning: built state committed but build attempt final status could not be recorded: %v\n", err)
+		visualFprintf(stderr, "warning: built state committed but build attempt final status could not be recorded: %v\n", err)
 	}
 	attemptFinished = true
 	updatedState = committedState
@@ -672,9 +753,16 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 
 	dispatchMaps := codexBuildDispatchMaps(dispatches)
 
+	// Suggestion analysis at build end — the same non-blocking hook the
+	// host-manifest finalize path runs; without this the direct build path
+	// never generated steering recommendations at all.
+	suggestAnalyzeRan, pendingSuggestionCount := collectPendingSuggestions(root)
+
 	result := map[string]interface{}{
 		"phase":                    phaseNum,
 		"colony_mode":              string(updatedState.EffectiveColonyMode()),
+		"suggest_analyze_ran":      suggestAnalyzeRan,
+		"pending_suggestions":      pendingSuggestionCount,
 		"review_depth":             string(reviewDepth),
 		"phase_name":               updatedPhase.Name,
 		"state":                    updatedState.State,
@@ -914,7 +1002,116 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 	return plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
 }
 
+// coalesceSequentialDispatches merges a chain of dependent single-task steps
+// into one worker.
+//
+// This is the one place the rule lives, so it can be read in full:
+//
+//	Two consecutive wave dispatches merge when the second is the only task in
+//	its wave, the first was the only task in its wave, they share a caste, and
+//	the second depends on the first and on nothing else.
+//
+// Everything else stays as it is. A wave holding more than one task is genuine
+// parallel work and is never touched; a chain that changes caste part way
+// through is two kinds of job and is left as two.
+//
+// The cost this removes is not theoretical. A phase of six dependent copy steps
+// became six workers -- "waves 11-16 each contain exactly one builder, reason:
+// single task in this wave" -- and each was a fresh agent that re-read the same
+// source list from scratch before doing its share. One of those pairs was
+// literally "copy the first six categories" and "copy the remaining six".
+func coalesceSequentialDispatches(dispatches []codexBuildDispatch) []codexBuildDispatch {
+	if len(dispatches) < 2 {
+		return dispatches
+	}
+
+	// A wave is eligible only if it holds exactly one dispatch. Count first.
+	perWave := map[int]int{}
+	for _, d := range dispatches {
+		if d.Stage == "wave" {
+			perWave[d.Wave]++
+		}
+	}
+
+	out := make([]codexBuildDispatch, 0, len(dispatches))
+	// chainEnd is the wave of the last step folded into the dispatch currently
+	// at the end of out. Read from the struct instead, a three-step chain would
+	// merge steps 1 and 2 and then reject step 3, because the merged dispatch
+	// still reports wave 1.
+	chainEnd := -1
+	for _, d := range dispatches {
+		if d.Stage != "wave" || len(out) == 0 {
+			out = append(out, d)
+			chainEnd = d.Wave
+			continue
+		}
+		prev := &out[len(out)-1]
+		if !dispatchesFormOneJob(*prev, d, perWave, chainEnd) {
+			out = append(out, d)
+			chainEnd = d.Wave
+			continue
+		}
+		mergeDispatchInto(prev, d)
+		chainEnd = d.Wave
+	}
+	return out
+}
+
+func dispatchesFormOneJob(prev, next codexBuildDispatch, perWave map[int]int, chainEnd int) bool {
+	if prev.Stage != "wave" || next.Stage != "wave" {
+		return false
+	}
+	if prev.Caste != next.Caste {
+		return false
+	}
+	if next.Wave != chainEnd+1 {
+		return false
+	}
+	if perWave[next.Wave] != 1 || perWave[chainEnd] != 1 {
+		return false
+	}
+	// The chain must be explicit. A task that declares no dependency may simply
+	// have been listed in order, and merging it would serialise work that was
+	// free to run alongside something else.
+	if len(next.DependsOn) != 1 {
+		return false
+	}
+	prevIDs := prev.CoveredTaskIDs
+	if len(prevIDs) == 0 {
+		prevIDs = []string{prev.TaskID}
+	}
+	for _, id := range prevIDs {
+		if next.DependsOn[0] == id {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeDispatchInto(target *codexBuildDispatch, next codexBuildDispatch) {
+	if len(target.CoveredTaskIDs) == 0 {
+		target.CoveredTaskIDs = []string{target.TaskID}
+		// Number the first step only once, and only when a second joins it.
+		target.Task = "1. " + strings.TrimSpace(target.Task)
+	}
+	target.CoveredTaskIDs = append(target.CoveredTaskIDs, next.TaskID)
+	target.Task = strings.TrimSpace(target.Task) + "\n" +
+		fmt.Sprintf("%d. %s", len(target.CoveredTaskIDs), strings.TrimSpace(next.Task))
+	target.DeclaredPaths = uniqueSortedStrings(append(append([]string{}, target.DeclaredPaths...), next.DeclaredPaths...))
+	// Wave and ExecutionWave stay at the first step's. The merged worker can
+	// start as soon as the chain's first step could, and it does the rest in
+	// order itself. Moving it to the last step's wave would make it wait for
+	// nothing.
+}
+
+// plannedBuildDispatchesForSelectionWithState plans with no Queen proposal, so
+// the deterministic keyword engine decides. Callers that have the Queen's
+// judgement use the ...WithJudgement variant.
 func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+	return plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, nil, "")
+}
+
+func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string) []codexBuildDispatch {
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
 	for _, taskID := range selectedTaskIDs {
@@ -927,8 +1124,9 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 	queenState := state
 	queenState.ColonyDepth = depth
 	queenState.VerificationDepth = string(reviewDepth)
-	queenCastes := queenBuildCasteSet(queenOrchestrate(phase, "build", queenState))
-	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth)
+	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState)
+	queenCastes := stringSet(queenJudgement.Final)
+	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth, stringSet(queenJudgement.Proposed))
 
 	if len(selected) == 0 {
 		dispatches = append(dispatches, queenBuildPreWaveDispatches(phase, queenCastes)...)
@@ -960,6 +1158,17 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 		}
 	}
 
+	// Worktree mode is deliberately excluded. There each worker gets its own
+	// copy of the repository and its changes are reconciled back per worker,
+	// with conflict detection keyed to the paths a task declared. Folding
+	// several tasks into one worker changes what "this worker produced this
+	// file" means, and the isolation model is the thing that makes worktree mode
+	// worth having. The saving this phase exists for lands in the default
+	// in-repo mode, which is what the CalVault run used.
+	if effectiveParallelMode(state) != colony.ModeWorktree {
+		dispatches = coalesceSequentialDispatches(dispatches)
+	}
+
 	if len(waves) == 0 && len(selected) == 0 {
 		caste := "builder"
 		if !queenCastes[caste] {
@@ -976,15 +1185,24 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 		})
 	}
 
-	nextVerificationWave := lastTaskExecutionWave + 1
+	// One review wave. Probe, Auditor, Measurer and Chaos are independent
+	// reviewers of the same finished code; none reads another's output, so they
+	// spawn together. The Watcher below stays in the wave after them because it
+	// is the final gate, not another reviewer.
+	reviewWave := lastTaskExecutionWave + 1
+	nextVerificationWave := reviewWave
+	reviewersSpawned := false
 	if len(selected) == 0 && queenCastes["probe"] {
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "probe", nextVerificationWave, "probe", "Independent probe verification of builder claims"))
-		nextVerificationWave++
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "probe", reviewWave, "probe", "Independent probe verification of builder claims"))
+		reviewersSpawned = true
 	}
 	if len(selected) == 0 {
-		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, nextVerificationWave)
+		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, reviewWave)
 		dispatches = append(dispatches, postWaveDispatches...)
-		nextVerificationWave += len(postWaveDispatches)
+		reviewersSpawned = reviewersSpawned || len(postWaveDispatches) > 0
+	}
+	if reviewersSpawned {
+		nextVerificationWave = reviewWave + 1
 	}
 
 	if queenCastes["watcher"] {
@@ -1013,9 +1231,24 @@ func queenBuildCasteSet(dispatches []CasteDispatch) map[string]bool {
 	return castes
 }
 
-func applyBuildDispatchPolicyCastes(queenCastes map[string]bool, phase colony.Phase, depth string, reviewDepth colony.VerificationDepth) {
-	delete(queenCastes, "measurer")
-	delete(queenCastes, "chaos")
+// applyBuildDispatchPolicyCastes applies the depth policy for the two most
+// expensive optional specialists.
+//
+// queenChose names castes the Queen asked for explicitly after reading the
+// phase. Those are exempt from the deletion below. Until they were, this
+// function ran one line after the Queen's team was computed and unconditionally
+// removed both — so a Queen that read "the dashboard feels sluggish" and asked
+// for a Measurer was overruled by a depth rule that had never seen the phase.
+// The decision record still said measurer; nothing spawned. Judgement that a
+// later line silently discards is worse than no judgement, because it reads as
+// working.
+func applyBuildDispatchPolicyCastes(queenCastes map[string]bool, phase colony.Phase, depth string, reviewDepth colony.VerificationDepth, queenChose map[string]bool) {
+	if !queenChose["measurer"] {
+		delete(queenCastes, "measurer")
+	}
+	if !queenChose["chaos"] {
+		delete(queenCastes, "chaos")
+	}
 
 	if (depth == "deep" || depth == "full") && reviewDepth == colony.VerificationDepthHeavy {
 		queenCastes["measurer"] = true
@@ -1037,20 +1270,32 @@ func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool
 		wave  int
 		task  string
 	}{
+		// Wave 1 — evidence gatherers. These two write artifacts (git history
+		// findings, phase research) that a planner may consult, so they go first.
 		{"archaeologist", "prep", 1, "Git history analysis before implementation"},
-		{"oracle", "research", 2, "Phase research and implementation risks"},
-		{"architect", "design", 3, "Design boundaries before coding"},
-		{"ambassador", "integration", 4, "External integration design before implementation"},
-		{"gatekeeper", "security", 5, "Security boundaries and auth risk review before implementation"},
-		{"includer", "accessibility", 6, "Accessibility requirements and inclusive interaction review"},
-		{"weaver", "refactor", 7, "Refactoring seams and simplification plan before implementation"},
-		{"tracker", "diagnosis", 7, "Root-cause investigation and regression context before implementation"},
-		{"keeper", "knowledge", 8, "Knowledge preservation plan for reusable patterns"},
-		{"chronicler", "documentation", 8, "Documentation surface and changelog planning"},
-		{"medic", "health", 8, "Runtime health and repair risk review"},
-		{"fixer", "repair", 8, "Repair strategy and remediation boundaries"},
-		{"porter", "delivery", 8, "Delivery, packaging, and release handling review"},
-		{"sage", "wisdom", 8, "Learning synthesis and reusable pattern capture"},
+		{"oracle", "research", 1, "Phase research and implementation risks"},
+
+		// Wave 2 — planners. Every one of these reads the same phase brief and
+		// produces an independent plan; none consumes another's output.
+		// findingsInjectionForCaste only appends a *write* instruction for four
+		// castes, so there is no read dependency between any pair here.
+		//
+		// They previously occupied waves 3-8, one or two per wave, which made a
+		// build serial before a line of code was written: a real phase spawned
+		// eleven dispatches across nine waves and took an hour, mostly waiting.
+		// Same workers, same coverage — concurrent instead of queued.
+		{"architect", "design", 2, "Design boundaries before coding"},
+		{"ambassador", "integration", 2, "External integration design before implementation"},
+		{"gatekeeper", "security", 2, "Security boundaries and auth risk review before implementation"},
+		{"includer", "accessibility", 2, "Accessibility requirements and inclusive interaction review"},
+		{"weaver", "refactor", 2, "Refactoring seams and simplification plan before implementation"},
+		{"tracker", "diagnosis", 2, "Root-cause investigation and regression context before implementation"},
+		{"keeper", "knowledge", 2, "Knowledge preservation plan for reusable patterns"},
+		{"chronicler", "documentation", 2, "Documentation surface and changelog planning"},
+		{"medic", "health", 2, "Runtime health and repair risk review"},
+		{"fixer", "repair", 2, "Repair strategy and remediation boundaries"},
+		{"porter", "delivery", 2, "Delivery, packaging, and release handling review"},
+		{"sage", "wisdom", 2, "Learning synthesis and reusable pattern capture"},
 	}
 	dispatches := make([]codexBuildDispatch, 0, len(plans))
 	for _, plan := range plans {
@@ -1072,14 +1317,16 @@ func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]boo
 		{"measurer", "measurement", "Performance and cost surface review after implementation"},
 		{"chaos", "resilience", "Resilience probing after specialist verification"},
 	}
+	// All post-wave reviewers examine the same finished code and share no
+	// inputs, so they occupy one wave. Each previously took its own
+	// incrementing wave, which serialised the review phase for no reason: an
+	// Auditor cannot learn anything from waiting for a Measurer.
 	dispatches := make([]codexBuildDispatch, 0, len(plans))
-	executionWave := startExecutionWave
 	for _, plan := range plans {
 		if !queenCastes[plan.caste] {
 			continue
 		}
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, plan.stage, executionWave, plan.caste, plan.task+findingsInjectionForCaste(plan.caste)))
-		executionWave++
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, plan.stage, startExecutionWave, plan.caste, plan.task+findingsInjectionForCaste(plan.caste)))
 	}
 	return dispatches
 }
@@ -1228,7 +1475,7 @@ func buildExecutionPlans(dispatches []codexBuildDispatch, parallelMode colony.Pa
 			ExecutionWave: executionWave,
 			Stage:         stage,
 			Wave:          taskWave,
-			Strategy:      executionStrategyForBuildStep(stage, len(dispatches), parallelMode),
+			Strategy:      executionStrategyForCastes(stage, castes, parallelMode),
 			WorkerCount:   len(dispatches),
 			Castes:        castes,
 			Reason:        executionReasonForBuildStep(stage, taskWave, len(dispatches), parallelMode),
@@ -1237,11 +1484,63 @@ func buildExecutionPlans(dispatches []codexBuildDispatch, parallelMode colony.Pa
 	return plans
 }
 
-func executionStrategyForBuildStep(stage string, workerCount int, parallelMode colony.ParallelMode) string {
-	if stage == "wave" && workerCount > 1 && parallelMode == colony.ModeWorktree {
+// nonSourceWritingCastes are castes whose dispatch brief confines them to
+// analysis, review evidence, or a scoped .aether/ artifact directory — never
+// project source or tests. Two of them running at once cannot collide on a
+// file, so a step containing only these is safe to spawn concurrently even in
+// in-repo mode, where every worker shares one working tree.
+//
+// Derived from behavioralRestrictionsForCaste in pkg/codex/permission_profile.go
+// and kept deliberately conservative: castes with no restriction at all
+// (builder, weaver, fixer, medic, porter, ambassador, keeper, chaos) may touch
+// anything, and probe writes test files, so any step containing one of those
+// stays serial. Note these are prompt-level promises, not a sandbox — which is
+// exactly why the list is short and errs toward serial.
+var nonSourceWritingCastes = map[string]bool{
+	"includer":             true, // the only enforced repository_read_only caste
+	"architect":            true,
+	"route_setter":         true,
+	"sage":                 true,
+	"archaeologist":        true,
+	"auditor":              true,
+	"gatekeeper":           true,
+	"measurer":             true,
+	"tracker":              true,
+	"watcher":              true,
+	"scout":                true,
+	"oracle":               true,
+	"chronicler":           true,
+	"surveyor_nest":        true,
+	"surveyor_disciplines": true,
+	"surveyor_pathogens":   true,
+	"surveyor_provisions":  true,
+}
+
+// executionStrategyForCastes decides whether a step's workers may spawn
+// together. Collapsing independent specialists into one wave achieves nothing
+// on its own: the wrapper obeys this field, so a wave marked serial is still
+// executed one worker at a time.
+//
+// Worktree mode isolates every worker in its own checkout, so anything may run
+// concurrently. In-repo mode shares one tree, so only steps composed entirely of
+// non-source-writing castes qualify.
+func executionStrategyForCastes(stage string, castes []string, parallelMode colony.ParallelMode) string {
+	if len(castes) < 2 {
+		return "serial"
+	}
+	if parallelMode == colony.ModeWorktree {
 		return "parallel"
 	}
-	return "serial"
+	if stage == "wave" {
+		// Task waves are builders sharing one tree. Never concurrent in-repo.
+		return "serial"
+	}
+	for _, caste := range castes {
+		if !nonSourceWritingCastes[strings.ToLower(strings.TrimSpace(caste))] {
+			return "serial"
+		}
+	}
+	return "parallel"
 }
 
 func executionReasonForBuildStep(stage string, taskWave int, workerCount int, parallelMode colony.ParallelMode) string {
@@ -1400,7 +1699,17 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	capsule := resolveCodexWorkerContext()
 	cleanupStaleWorkersBeforeDispatch(root)
 
-	pheromoneSection := resolvePheromoneSection()
+	// PheromoneSection is deliberately left unset here (D-190-03-A, closed by
+	// 190-05). capsule (resolveCodexWorkerContext(), above) already renders its
+	// own "## Pheromone Signals" section unconditionally whenever a signal is
+	// active (cmd/colony_prime_context.go:571) -- populating a second,
+	// independent PheromoneSection field on top of it would deliver the same
+	// steering text twice into AssemblePrompt/AssembleHostedPrompt
+	// (pkg/codex/prompt.go), under two different headings, to every
+	// native-dispatched worker (including every autopilot /ant-run build).
+	// The capsule is this path's sole steering channel now, mirroring the
+	// "one home" decision 190-03 already made for the wrapper plan-only flow.
+	// See resolvePheromoneSection's doc comment for which callers still need it.
 	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
 	indexByName := make(map[string]int, len(dispatches))
 	dispatchByName := make(map[string]codex.WorkerDispatch, len(dispatches))
@@ -1423,7 +1732,6 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			Workflow:          "build",
 			Phase:             phase.ID,
 			SkillSection:      resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
-			PheromoneSection:  pheromoneSection,
 			Root:              root,
 			TrackingRoot:      root,
 			Timeout:           workerTimeout,
@@ -1463,9 +1771,17 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	// Per D-09: render phase-end summary with actions needed (Phase 99 OUT-01)
 	renderPhaseEndSummary(summary, phase.ID)
 
-	// Clean up any worktrees that weren't properly finalized during dispatch
-	cleaned, orphaned, _ := cleanupBuildWorktrees(phase.ID)
-	if cleaned > 0 || orphaned > 0 {
+	// Clean up any worktrees that weren't properly finalized during dispatch.
+	// Per D-02, a destructive-capable path must never handle its own error
+	// silently — cleanupBuildWorktrees itself never destroys unsaved or
+	// unmerged work (CR-05), but if the state update it needs fails, that
+	// failure must be visible rather than swallowed, since it means the
+	// leftover Allocated/InProgress entries from this build were not
+	// examined at all.
+	cleaned, orphaned, cleanupErr := cleanupBuildWorktrees(phase.ID)
+	if cleanupErr != nil {
+		emitVisualProgress(fmt.Sprintf("Worktree cleanup could not run (%v) — any unfinalized worker workspaces from this build were left untouched", cleanupErr))
+	} else if cleaned > 0 || orphaned > 0 {
 		emitVisualProgress(fmt.Sprintf("Worktree cleanup: %d cleaned, %d orphaned", cleaned, orphaned))
 	}
 	for _, result := range results {
@@ -1605,6 +1921,17 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 	planHash, _ := planStateHash(state.Plan)
 
+	// Compute the colony-prime capsule once, only for the plan-only wrapper
+	// manifest — the hosted path (executeCodexBuildDispatches) already
+	// computes and shares its own capsule, and the finalize record does not
+	// deliver prompts. This is the single call site for this field; it must
+	// never be computed inside a per-dispatch loop (that would reintroduce
+	// the duplication CONTEXT-03 exists to prevent).
+	contextCapsule := ""
+	if planOnly {
+		contextCapsule = resolveCodexWorkerContext()
+	}
+
 	return codexBuildManifest{
 		Phase:                   phase.ID,
 		PhaseName:               phase.Name,
@@ -1628,6 +1955,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		Checkpoint:              checkpoint,
 		ClaimsPath:              claimsPath,
 		WorkerBriefs:            briefs,
+		ContextCapsule:          contextCapsule,
 		Dispatches:              append([]codexBuildDispatch{}, dispatches...),
 		SelectedTasks:           append([]string{}, selectedTaskIDs...),
 		Tasks:                   codexBuildTaskPlans(phase),
@@ -1724,6 +2052,9 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 		if strings.TrimSpace(dispatch.Brief) != "" {
 			entry["brief"] = dispatch.Brief
 		}
+		if strings.TrimSpace(dispatch.BriefPath) != "" {
+			entry["brief_path"] = dispatch.BriefPath
+		}
 		if strings.TrimSpace(dispatch.HandoffSection) != "" {
 			entry["handoff_section"] = dispatch.HandoffSection
 		}
@@ -1741,25 +2072,86 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 	return dispatchMaps
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
+// writeBuildWorkerBriefFiles writes each dispatch's composed worker brief to
+// a file on disk under buildDirRel/worker-briefs/{name}.md, falling back to
+// composeBuildManifestBrief when .Brief is already empty (mirroring the
+// direct dispatch path's long-standing fallback: some callers of
+// writeCodexBuildArtifacts never run attachBuildDispatchContext, so Brief can
+// arrive empty here).
+//
+// writeCodexBuildArtifacts (direct/native `aether build <phase>`) and
+// runCodexBuildPlanOnlyWithOptions (`aether build <phase> --plan-only`) both
+// converge on this single helper, distinguished only by clearInlineBrief:
+// the direct path needs .Brief to survive on disk in the manifest (two
+// existing tests require it -- TestWorkerBriefFileHoldsComposedBrief,
+// TestDispatchEntryCarriesBriefPath), so it passes false. The plan-only path
+// needs .Brief cleared once the file write succeeds, so the composed brief
+// never ships twice in the same JSON envelope (result.dispatches[] and
+// result.dispatch_manifest.dispatches[] both read off this same slice), so it
+// passes true.
+//
+// This function's OWN fallback composition (below, reached only when .Brief
+// arrives empty -- i.e. the direct path, since runCodexBuildPlanOnlyWithOptions
+// always runs attachBuildDispatchContext first) always passes
+// includeSteeringSections=true to composeBuildManifestBrief: the direct
+// path's manifest.json carries no ContextCapsule alongside this Brief (see
+// codexBuildManifest.ContextCapsule's doc comment -- "Only populated when
+// planOnly"), so this artifact must stay self-contained (190-03,
+// D-190-01-A). Do not change this to false -- that would zero out pheromone
+// and prior-handoff delivery on the one path that has no other channel for
+// them.
+//
+// A write failure returns (nil, nil, err) immediately, before any blanking
+// for that dispatch (or any dispatch after it) happens. The returned slice is
+// nil, not partially populated: every caller treats a non-nil error as fatal
+// and never inspects the dispatches value, so discarding it is simpler than
+// reasoning about a half-written slice. (190-190/IN-02: this comment used to
+// describe returning the slice with .Brief still populated and .BriefPath
+// empty, which is not what the code does.) The no-silent-drop guarantee is
+// still real and is what matters: the inline Brief is only ever cleared after
+// its file write has succeeded, so no path can lose a worker's prompt.
+func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, error) {
 	briefPaths := make([]string, 0, len(dispatches))
-	briefOutputs := map[string]string{}
-	finalOutputs := map[string][]string{}
 
 	for i := range dispatches {
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
-		content := renderCodexBuildWorkerBrief(root, phase, dispatches[i], startedAt)
+		content := dispatches[i].Brief
+		if strings.TrimSpace(content) == "" {
+			content = composeBuildManifestBrief(root, phase, dispatches[i], startedAt, true)
+			dispatches[i].Brief = content
+		}
 		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
 			return nil, nil, fmt.Errorf("failed to write worker brief for %s: %w", dispatches[i].Name, err)
 		}
 		displayPath := displayDataPath(briefRel)
 		briefPaths = append(briefPaths, displayPath)
-		briefOutputs[dispatches[i].Name] = displayPath
+		dispatches[i].BriefPath = displayPath
+		if clearInlineBrief {
+			// The file on disk is now the single source of truth for this
+			// dispatch's brief -- nothing downstream (codexBuildDispatchMaps or
+			// the manifest's own Dispatches value copy) may ship the same bytes
+			// a second time under the inline "brief" key.
+			dispatches[i].Brief = ""
+		}
 	}
 	sort.Strings(briefPaths)
 
+	return briefPaths, dispatches, nil
+}
+
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
+	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	briefOutputs := map[string]string{}
+	for i := range dispatches {
+		briefOutputs[dispatches[i].Name] = dispatches[i].BriefPath
+	}
+	finalOutputs := map[string][]string{}
+
 	if isFinalBuildDispatchMode(dispatchMode) {
-		var err error
 		finalOutputs, dispatches, err = writeCodexBuildOutcomeReports(root, phase, buildDirRel, dispatches, time.Now().UTC(), dispatchMode)
 		if err != nil {
 			return nil, nil, err
@@ -1828,13 +2220,37 @@ func reconcilePriorCompletedPhaseTasksForPlanOnly(root string, state colony.Colo
 func completedBuildTaskIDs(dispatches []codexBuildDispatch) map[string]struct{} {
 	completed := map[string]struct{}{}
 	for _, dispatch := range dispatches {
-		taskID := strings.TrimSpace(dispatch.TaskID)
-		if taskID == "" || strings.TrimSpace(dispatch.Status) != "completed" {
+		if strings.TrimSpace(dispatch.Status) != "completed" {
 			continue
 		}
-		completed[taskID] = struct{}{}
+		// A worker that owns a merged chain finishes every step in it, so every
+		// step it covered is complete. Reading TaskID alone left the later steps
+		// marked unfinished forever: the phase could never advance, and the one
+		// worker that did the work looked like it had only done the first bit.
+		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+			completed[taskID] = struct{}{}
+		}
 	}
 	return completed
+}
+
+// dispatchCoveredTaskIDs returns every task a dispatch is responsible for. For
+// an ordinary dispatch that is just its own task; for a merged chain it is all
+// of them.
+func dispatchCoveredTaskIDs(dispatch codexBuildDispatch) []string {
+	if len(dispatch.CoveredTaskIDs) > 0 {
+		out := make([]string, 0, len(dispatch.CoveredTaskIDs))
+		for _, id := range dispatch.CoveredTaskIDs {
+			if trimmed := strings.TrimSpace(id); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	}
+	if taskID := strings.TrimSpace(dispatch.TaskID); taskID != "" {
+		return []string{taskID}
+	}
+	return nil
 }
 
 func reconcilePriorCompletedPhaseTasksFromTrustedManifests(root string, state colony.ColonyState, phaseNum int) (colony.ColonyState, []string, error) {
@@ -2320,7 +2736,9 @@ func cloneColonyState(state colony.ColonyState) (colony.ColonyState, error) {
 
 func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
 	var b strings.Builder
-	b.WriteString("# Codex Build Dispatch\n\n")
+	// Platform-neutral heading: this brief is delivered verbatim to workers on
+	// every host platform (Claude, OpenCode, Codex), so it must not claim one.
+	b.WriteString("# Build Dispatch\n\n")
 	b.WriteString(fmt.Sprintf("- Worker: %s\n", dispatch.Name))
 	b.WriteString(fmt.Sprintf("- Caste: %s\n", dispatch.Caste))
 	if dispatch.Wave > 0 {
@@ -2357,45 +2775,11 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 		}
 	}
 
-	relatedTask := findDispatchTask(phase, dispatch)
-	if relatedTask != nil {
-		if len(relatedTask.Constraints) > 0 {
-			b.WriteString("\n## Constraints\n\n")
-			for _, item := range relatedTask.Constraints {
-				item = strings.TrimSpace(item)
-				if item == "" {
-					continue
-				}
-				b.WriteString("- ")
-				b.WriteString(item)
-				b.WriteString("\n")
-			}
-		}
-		if len(relatedTask.Hints) > 0 {
-			b.WriteString("\n## Hints\n\n")
-			for _, item := range relatedTask.Hints {
-				item = strings.TrimSpace(item)
-				if item == "" {
-					continue
-				}
-				b.WriteString("- ")
-				b.WriteString(item)
-				b.WriteString("\n")
-			}
-		}
-		if len(relatedTask.SuccessCriteria) > 0 {
-			b.WriteString("\n## Task Success Criteria\n\n")
-			for _, item := range relatedTask.SuccessCriteria {
-				item = strings.TrimSpace(item)
-				if item == "" {
-					continue
-				}
-				b.WriteString("- ")
-				b.WriteString(item)
-				b.WriteString("\n")
-			}
-		}
-	}
+	relatedTasks := findDispatchTasks(phase, dispatch)
+	renderDispatchTaskItemsSection(&b, "Task Constraints", relatedTasks, func(t *colony.Task) []string { return t.Constraints })
+	renderDispatchTaskItemsSection(&b, "Hints", relatedTasks, func(t *colony.Task) []string { return t.Hints })
+	renderDispatchTaskItemsSection(&b, "Task Success Criteria", relatedTasks, func(t *colony.Task) []string { return t.SuccessCriteria })
+	b.WriteString(renderUnresolvedDispatchTaskNotice(relatedTasks))
 
 	if len(phase.SuccessCriteria) > 0 {
 		b.WriteString("\n## Phase Success Criteria\n\n")
@@ -2448,11 +2832,20 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 		b.WriteString("\n")
 	}
 
+	// A smaller share than planning gets: the task must stay the bulk of a
+	// build brief (TestBuildWorkerBriefIsMostlyTask).
+	if colonyResearch := resolveColonyResearchSection(root, loadColonyResearchDocs(root), colonyResearchBuildBudgetChars); colonyResearch != "" {
+		b.WriteString("\n")
+		b.WriteString(colonyResearch)
+		b.WriteString("\n")
+	}
+
 	b.WriteString("\n## Expected Output\n\n")
 	b.WriteString("- ")
 	b.WriteString(expectedDispatchOutcome(dispatch))
 	b.WriteString("\n")
 
+	b.WriteString(renderVerificationCommandSection())
 	return b.String()
 }
 
@@ -2464,21 +2857,196 @@ func cleanupStaleBuildAttemptArtifacts(phaseNum int) {
 	for _, name := range []string{"verification.json", "gates.json", "continue.json", "review.json"} {
 		_ = os.Remove(filepath.Join(buildDir, name))
 	}
-	for _, name := range []string{"worker-briefs", "worker-reports"} {
-		_ = os.RemoveAll(filepath.Join(buildDir, name))
-	}
+	_ = os.RemoveAll(filepath.Join(buildDir, "worker-reports"))
+	cleanupStaleWorkerBriefs(phaseNum)
 }
 
-func findDispatchTask(phase colony.Phase, dispatch codexBuildDispatch) *colony.Task {
-	if dispatch.TaskID == "" {
+// cleanupStaleWorkerBriefs removes a phase's worker-brief directory so the
+// next manifest writes into an empty one.
+//
+// Split out of cleanupStaleBuildAttemptArtifacts for the plan-only path
+// (190-190/WR-01), which must NOT do what the rest of that function does:
+// clearing verification.json / gates.json / continue.json / review.json would
+// destroy a previous attempt's evidence, and clearing worker-reports would
+// destroy real worker output — neither is this planning step's to discard.
+//
+// Without this, repeated `--plan-only` runs for the same phase accumulated
+// dead files forever. Brief filenames are "{dispatch.Name}.md", and dispatch
+// names hash phase:task-index:task-goal-text, so any edit to a task's wording,
+// any --selected-tasks filter, or any different caste/coalescing decision
+// produced a NEW name and orphaned the old file. Re-running --plan-only
+// without --force is an ordinary supported flow (see the idle-plan-only
+// auto-supersede above, which exists precisely so it does not need --force),
+// and nothing else ever cleared this directory: clearActiveColonyRuntimeFiles
+// (entomb/abandon) and `aether init`'s sweep both leave .aether/data/build/
+// alone.
+//
+// Safe at the plan-only call site because any prior attempt has already been
+// superseded or interrupted by the time it runs — the manifest that referenced
+// those brief files is dead.
+//
+// Locked by TestPlanOnlyRerunDoesNotAccumulateStaleWorkerBriefs.
+func cleanupStaleWorkerBriefs(phaseNum int) {
+	if store == nil || phaseNum < 1 {
+		return
+	}
+	_ = os.RemoveAll(filepath.Join(store.BasePath(), "build", fmt.Sprintf("phase-%d", phaseNum), "worker-briefs"))
+}
+
+// coveredDispatchTask pairs a merged dispatch's covered task ID with its
+// resolved colony.Task (nil when the ID has no matching phase.Tasks entry)
+// and its 1-based POSITION within the original covered-ID chain --
+// dispatchCoveredTaskIDs's own order, stable across a stale or missing ID.
+// WR-01 (189-REVIEW.md): a filtered slice's own index used to double as the
+// "Task N:" label, so dropping one unresolved ID silently shifted every
+// later task's label down by one, misattributing its content. Carrying
+// Position separately makes that shift impossible.
+type coveredDispatchTask struct {
+	Position int
+	ID       string
+	Task     *colony.Task
+}
+
+// findDispatchTasks resolves every task a dispatch covers (via the
+// already-merge-aware dispatchCoveredTaskIDs) against phase.Tasks, in covered
+// order. It does not reimplement "which task IDs does this dispatch cover" --
+// that is dispatchCoveredTaskIDs's job, also used by completedBuildTaskIDs.
+//
+// A covered ID with no matching phase.Tasks entry is NEVER dropped from the
+// returned slice -- doing so used to corrupt every later task's "Task N:"
+// label (WR-01, 189-REVIEW.md). Its slot is kept with Task == nil and
+// Position set to its original 1-based place in the covered-ID chain, so
+// callers can both render subsequent tasks under their correct number
+// (renderDispatchTaskItemsSection) and visibly flag the gap instead of
+// silently vanishing it (renderUnresolvedDispatchTaskNotice). A stale or
+// renamed task ID must never panic or drop the rest of the brief.
+func findDispatchTasks(phase colony.Phase, dispatch codexBuildDispatch) []coveredDispatchTask {
+	coveredIDs := dispatchCoveredTaskIDs(dispatch)
+	if len(coveredIDs) == 0 {
 		return nil
 	}
+	byID := make(map[string]*colony.Task, len(phase.Tasks))
 	for i := range phase.Tasks {
-		if buildTaskID(phase.Tasks[i], i) == dispatch.TaskID {
-			return &phase.Tasks[i]
+		byID[buildTaskID(phase.Tasks[i], i)] = &phase.Tasks[i]
+	}
+	tasks := make([]coveredDispatchTask, 0, len(coveredIDs))
+	for i, id := range coveredIDs {
+		tasks = append(tasks, coveredDispatchTask{Position: i + 1, ID: id, Task: byID[id]})
+	}
+	return tasks
+}
+
+// renderDispatchTaskItemsSection appends a "## <heading>" section gathering
+// extract's items across every task in tasks. An entry whose Task could not
+// be resolved (Task == nil) contributes no items here -- it renders no
+// content in any of the three sections this function backs, and
+// renderUnresolvedDispatchTaskNotice is what visibly flags it, once, rather
+// than three times.
+//
+// Exactly one covered task renders byte-identical to the pre-merge-aware
+// brief: the heading appears whenever that task's raw item slice is
+// non-empty (matching the original single-task code's own behavior, even in
+// the edge case where every item trims to empty), with no "Task N:" label --
+// just that task's bullets.
+//
+// More than one covered task labels each task's block "**Task N:**" (N =
+// the task's 1-based POSITION within the original covered-ID chain --
+// dispatchCoveredTaskIDs's own order, matching mergeDispatchInto's own
+// numbering of dispatch.Task -- NOT the index into this function's own
+// possibly-gapped tasks slice; conflating the two is the exact numbering
+// desync WR-01 fixed, where a missing task shifted every later task's label
+// down by one), including only tasks with at least one non-empty item for
+// this section; a task with none (resolved or not) is skipped entirely
+// here, so no empty "Task N:" label with nothing under it is ever emitted.
+func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []coveredDispatchTask, extract func(*colony.Task) []string) {
+	if len(tasks) == 0 {
+		return
+	}
+
+	if len(tasks) == 1 {
+		if tasks[0].Task == nil {
+			return
+		}
+		items := extract(tasks[0].Task)
+		if len(items) == 0 {
+			return
+		}
+		b.WriteString("\n## ")
+		b.WriteString(heading)
+		b.WriteString("\n\n")
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			b.WriteString("- ")
+			b.WriteString(item)
+			b.WriteString("\n")
+		}
+		return
+	}
+
+	var body strings.Builder
+	any := false
+	for _, task := range tasks {
+		if task.Task == nil {
+			continue
+		}
+		var written []string
+		for _, item := range extract(task.Task) {
+			item = strings.TrimSpace(item)
+			if item != "" {
+				written = append(written, item)
+			}
+		}
+		if len(written) == 0 {
+			continue
+		}
+		any = true
+		body.WriteString(fmt.Sprintf("**Task %d:**\n", task.Position))
+		for _, item := range written {
+			body.WriteString("- ")
+			body.WriteString(item)
+			body.WriteString("\n")
 		}
 	}
-	return nil
+	if !any {
+		return
+	}
+	b.WriteString("\n## ")
+	b.WriteString(heading)
+	b.WriteString("\n\n")
+	b.WriteString(body.String())
+}
+
+// renderUnresolvedDispatchTaskNotice returns a "## Task Resolution Notice"
+// section listing every covered task ID findDispatchTasks could not resolve
+// against phase.Tasks, or "" when every covered task resolved (the
+// overwhelming common case, keeping ordinary briefs byte-identical to
+// before this fix). WR-01 (189-REVIEW.md): a stale or renamed task ID used
+// to vanish from the brief with no trace at all -- a worker had no way to
+// tell "this task has no constraints" apart from "this task's constraints
+// could not be found." Silence there is how a worker ends up judged on a
+// task it never saw.
+func renderUnresolvedDispatchTaskNotice(tasks []coveredDispatchTask) string {
+	var unresolved []coveredDispatchTask
+	for _, task := range tasks {
+		if task.Task == nil {
+			unresolved = append(unresolved, task)
+		}
+	}
+	if len(unresolved) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n## Task Resolution Notice\n\n")
+	for _, task := range unresolved {
+		b.WriteString(fmt.Sprintf(
+			"- Task %d (id %q) could not be resolved against this phase's task list. Its constraints, hints, and success criteria are NOT included above -- treat them as unknown, not absent, and check the phase plan directly before treating this task as unconstrained.\n",
+			task.Position, task.ID,
+		))
+	}
+	return b.String()
 }
 
 func expectedDispatchOutcome(dispatch codexBuildDispatch) string {
@@ -2546,7 +3114,28 @@ func dispatchRunStatus(dispatches []codexBuildDispatch) string {
 	return summarizeRunStatus(statuses...)
 }
 
-func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch) ([]codexBuildDispatch, error) {
+// ensureUniqueBuildDispatchNames allocates a collision-free worker name for
+// each dispatch. Names are checked against the full spawn-tree history so a
+// name reused from a genuinely different phase, or from a previously sealed
+// (finalized, i.e. successfully built) attempt of this same phase, still gets
+// a `-rN` suffix (D-09 spoofing guard, T-163.1-20).
+//
+// Spawn-tree entries carry no phase context (SpawnEntry has no phase field),
+// so re-planning the CURRENT phase's still-open attempt would otherwise see
+// its own prior names as "used" and rename every worker on every re-plan. To
+// keep names stable across re-plans, phaseNum's latest attempt record
+// (buildAttemptRecord.Dispatches) is consulted directly and its names are
+// excluded from the collision set, UNLESS that attempt already reached
+// buildAttemptBuilt -- the one status meaning workers actually ran and
+// produced attributable results under those names.
+//
+// Note this is intentionally not gated on buildAttemptStatusActive: whenever
+// this function actually runs, a same-phase prior attempt that WAS active has
+// already been forced through interruptLatestBuildAttempt by the caller (see
+// runCodexBuildPlanOnlyWithOptions / runCodexBuildWithOptions), so by the
+// time name allocation happens its status is always terminal (built, failed,
+// or interrupted) or nonexistent -- never one of the "active" enum values.
+func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch, phaseNum int) ([]codexBuildDispatch, error) {
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	entries, err := spawnTree.Parse()
 	if err != nil {
@@ -2556,6 +3145,14 @@ func ensureUniqueBuildDispatchNames(dispatches []codexBuildDispatch) ([]codexBui
 	used := make(map[string]bool, len(entries)+len(dispatches))
 	for _, entry := range entries {
 		used[entry.AgentName] = true
+	}
+
+	if phaseNum > 0 {
+		if _, record, ok := loadLatestBuildAttempt(phaseNum); ok && record.Status != buildAttemptBuilt {
+			for _, dispatch := range record.Dispatches {
+				delete(used, dispatch.Name)
+			}
+		}
 	}
 
 	allocated := make([]codexBuildDispatch, len(dispatches))
@@ -2701,6 +3298,11 @@ func resolveWorkerSkillAssignmentForWorkflow(workflow, caste, task string) codex
 
 func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []codexBuildDispatch, startedAt time.Time) {
 	for i := range dispatches {
+		// The wrapper spawns each dispatch with agent_name as the subagent
+		// type; the TS host used to enrich this and the direct plan-only
+		// path must carry it too.
+		dispatches[i].AgentName = codexAgentNameForCaste(dispatches[i].Caste)
+		dispatches[i].Model = resolveCasteModel(dispatches[i].Caste)
 		dispatches[i].PermissionProfile = codex.PermissionProfileForCaste(dispatches[i].Caste)
 		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section
@@ -2708,42 +3310,123 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 		dispatches[i].ColonySkills = assignment.ColonyCount
 		dispatches[i].DomainSkills = assignment.DomainCount
 		dispatches[i].MatchedSkills = append([]string{}, assignment.MatchedNames...)
-		dispatches[i].HandoffSection = renderWorkerHandoffSection("build", phase.ID, dispatches[i].Name)
-		// Brief must be composed after HandoffSection is set — it embeds it.
-		dispatches[i].Brief = composeBuildManifestBrief(root, phase, dispatches[i], startedAt)
+		// HandoffSection stays EMPTY on this path (190-190/CR-01). The
+		// manifest-level capsule (resolveCodexWorkerContext(), which renders
+		// "## Previous Worker Handoffs" at cmd/colony_prime_context.go:695)
+		// is the sole channel for prior-worker handoffs on every caller of
+		// attachBuildDispatchContext, and .claude/commands/ant/build.md says
+		// so to the wrapper in as many words: the capsule "is the SOLE source
+		// of pheromone signals and prior worker handoffs".
+		//
+		// Populating this field anyway shipped that same content a second
+		// time in result.dispatches[] AND (via the json:"handoff_section"
+		// tag on the typed manifest) in result.dispatch_manifest.dispatches[],
+		// contradicting 190-03's own "one home each" invariant, doubling the
+		// response payload, and leaving a trap for any wrapper that reads
+		// "here is this dispatch's handoff context" as an instruction to use
+		// it. Gating the brief's copy was not enough; this adjacent field
+		// carried the duplicate.
+		//
+		// The direct/native dispatch path is unaffected: it never calls this
+		// function and sets codex.WorkerDispatch.HandoffSection itself.
+		//
+		// Locked by TestPlanOnlyDispatchesCarryNoHandoffSection.
+		dispatches[i].HandoffSection = ""
+		// Brief is composed with includeSteeringSections=false, so it does
+		// not embed HandoffSection either (see below).
+		//
+		// includeSteeringSections=false (190-03, closing D-190-01-A): every
+		// caller of attachBuildDispatchContext also carries or inspects the
+		// manifest-level capsule alongside this brief -- the plan-only wrapper
+		// flow (runCodexBuildPlanOnlyWithOptions, which sets
+		// manifest.ContextCapsule from resolveCodexWorkerContext()) and the
+		// --print-brief inspector (printWorkerBriefs, which explicitly
+		// resolves and prepends the same capsule to simulate that exact
+		// flow). The capsule already renders "## Pheromone Signals" (D-190-01-A;
+		// cmd/colony_prime_context.go:571) and "## Previous Worker Handoffs"
+		// (cmd/colony_prime_context.go:695) unconditionally whenever either is
+		// active, so composing them again here would ship the same content
+		// twice to a wrapper-spawned worker. This is the ONLY caller that
+		// composes Brief ahead of a capsule prepend -- writeBuildWorkerBriefFiles's
+		// own fallback composition (used only when no capsule accompanies the
+		// artifact) keeps the old self-contained behavior.
+		dispatches[i].Brief = composeBuildManifestBrief(root, phase, dispatches[i], startedAt, false)
 	}
 }
 
 // composeBuildManifestBrief is the single source of the worker prompt that
-// ships in the plan-only manifest. It is the base task brief plus the steering
-// sections the wrapper has no other channel for: pheromone signals and prior
-// worker handoffs.
+// ships in the plan-only manifest and (as a self-contained artifact) the
+// direct-dispatch manifest.json. It is the base task brief plus the handoff
+// schema sentence (codex.HandoffFieldsSummary) -- always stated, since no
+// other channel states the OUTPUT contract this composer's callers need --
+// plus, when includeSteeringSections is true, the steering sections the
+// caller has no other channel for: pheromone signals and prior worker
+// handoffs (the INPUT context, distinct from the schema sentence above).
 //
-// The Go subprocess path deliberately does NOT use this composition — it
-// delivers PheromoneSection and HandoffSection separately through WorkerConfig
-// and pkg/codex/prompt.go, so embedding them in the shared renderer would
-// duplicate them there. --print-brief uses this composer so what the user
+// includeSteeringSections distinguishes composeBuildManifestBrief's two
+// still-valid callers (190-03, D-190-01-A): attachBuildDispatchContext (the
+// wrapper plan-only flow and its --print-brief simulation) passes false,
+// because those callers also carry the manifest-level capsule
+// (resolveCodexWorkerContext()) alongside this brief, and that capsule
+// already renders both "## Pheromone Signals" and "## Previous Worker
+// Handoffs" whenever either is active -- composing them again here would
+// duplicate what colony-prime already delivers (CLAUDE.md documents
+// pheromone signals as colony-prime-injected and the highest-retention-priority
+// section in its trim order; capsule is the established, multiply-consumed
+// channel, matching the same "one canonical source" reasoning Phase 190's own
+// criterion 3 already applied to hive wisdom). writeBuildWorkerBriefFiles's
+// own fallback composition (used only for the direct/native
+// `aether build <phase>` path, whose manifest.json carries no ContextCapsule
+// at all -- see codexBuildManifest.ContextCapsule's doc comment) passes true,
+// because that artifact has no accompanying capsule in the same JSON envelope
+// and must stay self-contained (TestWorkerBriefFileHoldsComposedBrief pins
+// this).
+//
+// The Go subprocess path (executeCodexBuildDispatches) deliberately does NOT
+// use this composition at all — it delivers PheromoneSection and
+// HandoffSection separately through WorkerConfig and pkg/codex/prompt.go, and
+// states the handoff schema itself via renderResponseContract on that same
+// separate channel, so embedding any of this in the shared renderer would
+// duplicate it there regardless of includeSteeringSections. --print-brief
+// uses this composer (via attachBuildDispatchContext) so what the user
 // inspects is exactly what the manifest carries.
-func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time) string {
+func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time, includeSteeringSections bool) string {
 	var b strings.Builder
 	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt))
+	b.WriteString(fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary))
 
-	if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
-		// The resolver emits its own "### Active Pheromone Signals" heading;
-		// rewrap under the "## Pheromone Signals" heading every caste agent
-		// definition's <pheromone_protocol> block is written against.
-		content := strings.TrimSpace(strings.TrimPrefix(pheromoneSection, "### Active Pheromone Signals"))
-		if content != "" {
-			b.WriteString("\n## Pheromone Signals\n\n")
-			b.WriteString(content)
-			b.WriteString("\n")
+	if includeSteeringSections {
+		if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
+			// The resolver emits its own "### Active Pheromone Signals" heading;
+			// rewrap under the "## Pheromone Signals" heading every caste agent
+			// definition's <pheromone_protocol> block is written against.
+			content := strings.TrimSpace(strings.TrimPrefix(pheromoneSection, "### Active Pheromone Signals"))
+			if content != "" {
+				b.WriteString("\n## Pheromone Signals\n\n")
+				b.WriteString(content)
+				b.WriteString("\n")
+			}
 		}
 	}
 
-	if handoff := strings.TrimSpace(dispatch.HandoffSection); handoff != "" {
-		b.WriteString("\n")
-		b.WriteString(handoff)
-		b.WriteString("\n")
+	// Verifying castes need to know what the tree already looked like: phases
+	// do not commit between themselves, so prior phases' verified work shows
+	// up as uncommitted changes and reads as this phase overreaching. Not a
+	// steering section in the pheromone/handoff sense -- the capsule carries
+	// neither a phase-baseline concept nor a per-caste gate, so this always
+	// renders regardless of includeSteeringSections.
+	if baselineAwareCastes[strings.ToLower(strings.TrimSpace(dispatch.Caste))] {
+		if section := renderPhaseBaselineSection(capturePhaseBaseline(root)); section != "" {
+			b.WriteString(section)
+		}
+	}
+
+	if includeSteeringSections {
+		if handoff := strings.TrimSpace(dispatch.HandoffSection); handoff != "" {
+			b.WriteString("\n")
+			b.WriteString(handoff)
+			b.WriteString("\n")
+		}
 	}
 
 	return b.String()
@@ -2764,6 +3447,27 @@ func resolveSkillSectionForWorkflow(workflow, caste, task string) string {
 // resolvePheromoneSection extracts active pheromone signals, groups them by
 // type, and formats them into a markdown section. Returns empty string if no signals
 // or if the store is not initialized.
+//
+// Calling contract (D-190-03-A / 190-05): this renders the SAME content
+// resolveCodexWorkerContext()'s capsule already includes under its own
+// "## Pheromone Signals" heading (cmd/colony_prime_context.go:571) whenever a
+// signal is active. A caller that sets codex.WorkerDispatch/WorkerConfig's
+// ContextCapsule to resolveCodexWorkerContext() must NOT also populate
+// PheromoneSection from this function -- AssemblePrompt/AssembleHostedPrompt
+// (pkg/codex/prompt.go) join ContextCapsule and PheromoneSection as two
+// separate, both-included parts with no dedup between them, so doing both
+// ships the same steering text twice under two different headings. This is
+// why executeCodexBuildDispatches (build, native/direct), plannedContinueReviewDispatches
+// and plannedContinueWatcherDispatch (continue), dispatchRealPlanningWorkersWithIterationContext
+// (plan), dispatchRealSurveyorsWithTimeout (colonize), plannedSealFinalReviewDispatches
+// (seal), and invokeSwarmWorker (swarm) do not call this function.
+//
+// Call this ONLY when the caller's ContextCapsule is a custom, lighter capsule
+// that does not itself render "## Pheromone Signals" -- today that means
+// runQuickScout (quick, renderQuickContextCapsule) and the Oracle worker
+// config builder (oracle, renderOracleContextCapsule), where this function is
+// the pheromone signals' sole delivery channel. Removing it from those two
+// callers would silently drop pheromone steering to zero, not deduplicate it.
 func resolvePheromoneSection() string {
 	if store == nil {
 		return ""

@@ -177,7 +177,11 @@ func (p *Pipeline) RunConsolidation(ctx context.Context) (*ConsolidationResult, 
 		}
 	}
 
-	// Promote queen-eligible instincts to QUEEN.md
+	// Promote queen-eligible instincts to QUEEN.md. Only an ID whose write
+	// actually succeeded enters result.QueenPromoted -- callers building
+	// skip-sets or reports from this result must see reality, not intent:
+	// a failed promotion left as "promoted" would both suppress fallback
+	// writers and report an instinct that never reached QUEEN.md.
 	for _, instID := range result.QueenEligible {
 		inst := p.findInstinct(instID)
 		if inst == nil {
@@ -188,6 +192,7 @@ func (p *Pipeline) RunConsolidation(ctx context.Context) (*ConsolidationResult, 
 			log.Printf("pipeline: queen promote %s failed: %v", instID, err)
 			continue
 		}
+		result.QueenPromoted = append(result.QueenPromoted, instID)
 	}
 
 	return result, nil

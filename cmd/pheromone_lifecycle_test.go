@@ -164,7 +164,7 @@ func TestPheromoneLifecycle_FocusSignal(t *testing.T) {
 		t.Errorf("display count = %v, want 1", displayResult["count"])
 	}
 	display := displayResult["display"].(string)
-	for _, want := range []string{"LIFE", "phase-scoped", "30d decay"} {
+	for _, want := range []string{"FOCUS (Pay attention here)", "phase-scoped", "30d decay"} {
 		if !strings.Contains(display, want) {
 			t.Errorf("display missing %q, got: %s", want, display)
 		}
@@ -291,7 +291,7 @@ func TestPheromoneLifecycle_RedirectSignal(t *testing.T) {
 		t.Fatalf("display should show 1 signal, got %d", len(displaySignals))
 	}
 	display := displayResult["display"].(string)
-	for _, want := range []string{"LIFE", "ttl", "60d decay"} {
+	for _, want := range []string{"REDIRECT (Hard constraints - DO NOT do this)", "ttl", "60d decay"} {
 		if !strings.Contains(display, want) {
 			t.Errorf("display missing %q, got: %s", want, display)
 		}

@@ -91,6 +91,13 @@ func buildPlanRevisionContext(root string, state colony.ColonyState, opts codexP
 		return nil, nil
 	}
 	if len(state.Plan.Phases) == 0 {
+		// There is nothing to revise, but supplied evidence must not vanish
+		// on the way. This branch used to return nil,nil, so on a fresh
+		// colony's first plan -- exactly when someone hands over Oracle
+		// findings -- the evidence was silently dropped.
+		if strings.TrimSpace(opts.RevisionReason) != "" || strings.TrimSpace(opts.RevisionType) != "" || len(opts.RevisionEvidence) > 0 {
+			return nil, fmt.Errorf("this colony has no phases yet, so there is nothing to revise; pass research to the first plan with `--research <path>` instead of `--revision-evidence`")
+		}
 		return nil, nil
 	}
 

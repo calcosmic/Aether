@@ -326,6 +326,38 @@ func emitContinueCeremonyFlowSequence(source string, phase colony.Phase, workerF
 	}, source, "continue", phase.ID, phase.Name, steps)
 }
 
+// emitSealConsolidationCeremony publishes the seal consolidation pass's
+// per-ant beats (D-06, LEARN-02) to the ceremony event stream, one step per
+// curation ant in orchestrator order, mirroring how build/continue/plan/
+// colonize dispatch sequences already publish their own per-worker wave.
+func emitSealConsolidationCeremony(s sealConsolidationSummary) {
+	if len(s.Ants) == 0 {
+		return
+	}
+	steps := make([]lifecycleCeremonyStep, 0, len(s.Ants))
+	for _, ant := range s.Ants {
+		status := "completed"
+		if !ant.Success {
+			status = "failed"
+		}
+		steps = append(steps, lifecycleCeremonyStep{
+			Wave:    1,
+			SpawnID: "seal-consolidation-" + ant.Name,
+			Caste:   ant.Name,
+			Name:    casteLabel(ant.Name),
+			TaskID:  ant.Name,
+			Task:    "seal consolidation",
+			Status:  status,
+			Message: ant.Detail,
+		})
+	}
+	emitLifecycleCeremonySequence(lifecycleCeremonyTopics{
+		WaveStart: events.CeremonyTopicSealWaveStart,
+		Spawn:     events.CeremonyTopicSealSpawn,
+		WaveEnd:   events.CeremonyTopicSealWaveEnd,
+	}, "aether-seal", "seal", 0, "Consolidation", steps)
+}
+
 func emitSkillActivationCeremonies(result skillInjectResult) {
 	if result.SkillCount == 0 {
 		return

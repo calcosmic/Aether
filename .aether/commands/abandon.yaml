@@ -1,0 +1,15 @@
+name: ant-abandon
+description: "🗑️ Discard a colony that is not worth finishing and start fresh"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether abandon $ARGUMENTS"
+flags:
+  - name: confirm
+    description: "Actually discard the colony (a timestamped backup is written first)"
+    type: boolean
+    default: false
+guardrails:
+  - "Do not write colony state files by hand from this command spec."
+  - "Never pass --confirm on the user's behalf without showing them the preview first."
+  - "If docs and runtime disagree, runtime wins."
+  - "Preview by default; --confirm required for any mutation."

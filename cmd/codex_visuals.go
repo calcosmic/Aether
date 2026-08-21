@@ -4,12 +4,17 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"math"
 	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -60,6 +65,20 @@ var casteEmojiMap = map[string]string{
 	"dreamer":       "💭",
 	"medic":         "🩹",
 	"fixer":         "\U0001F527",
+	// Curation ants (D-06): the 8 pkg/agent/curation ants
+	// (sentinel, nurse, critic, herald, janitor, archivist, librarian,
+	// scribe) plus "curator" for the aggregate orchestrator line. librarian
+	// gets the 🧠 emoji D-06 calls for -- it is the identity used by the
+	// phase-end learning beat.
+	"sentinel":  "🚨",
+	"nurse":     "🩺",
+	"critic":    "🧐",
+	"herald":    "📯",
+	"janitor":   "🧹",
+	"archivist": "🗄️",
+	"librarian": "🧠",
+	"scribe":    "🖋️",
+	"curator":   "🖼️",
 }
 
 var casteColorMap = map[string]string{
@@ -89,6 +108,16 @@ var casteColorMap = map[string]string{
 	"medic":         "96",
 	"fixer":         "33",
 	"porter":        "96",
+	// Curation ants (D-06)
+	"sentinel":  "91",
+	"nurse":     "92",
+	"critic":    "33",
+	"herald":    "94",
+	"janitor":   "90",
+	"archivist": "36",
+	"librarian": "35",
+	"scribe":    "37",
+	"curator":   "93",
 }
 
 var casteLabelMap = map[string]string{
@@ -118,6 +147,16 @@ var casteLabelMap = map[string]string{
 	"medic":         "Medic",
 	"fixer":         "Fixer",
 	"porter":        "Porter",
+	// Curation ants (D-06)
+	"sentinel":  "Sentinel",
+	"nurse":     "Nurse",
+	"critic":    "Critic",
+	"herald":    "Herald",
+	"janitor":   "Janitor",
+	"archivist": "Archivist",
+	"librarian": "Librarian",
+	"scribe":    "Scribe",
+	"curator":   "Curator",
 }
 
 var commandEmojiMap = map[string]string{
@@ -153,6 +192,7 @@ var commandEmojiMap = map[string]string{
 	"entomb":                 "⚰️",
 	"tunnels":                "🕳️",
 	"watch":                  "👁️",
+	"abandon":                "🗑️",
 	"pheromones":             "🎯",
 	"flags":                  "🚩",
 	"focus":                  "🔦",
@@ -179,6 +219,7 @@ var commandEmojiMap = map[string]string{
 	"bump-version":           "🚀",
 	"insert-phase":           "➕",
 	"quick":                  "⚡",
+	"ask":                    "💭",
 	"skill-create":           "🧪",
 	"data-clean":             "🧹",
 	"export-signals":         "📤",
@@ -313,8 +354,59 @@ func outputWorkflow(result interface{}, visual string) {
 	outputOK(result)
 }
 
+// currentStreamingCommand is the top-level command of this invocation, set by
+// the root PersistentPreRunE. The streaming emitters consult its ceremony
+// class: classifyCommandCeremonyLevel was written as the streaming taxonomy
+// and had zero production callers until this gate landed — the exact
+// built-but-never-called failure this repo documents.
+var currentStreamingCommand string
+
+// streamingAllowedForCurrentCommand: quiet-classified commands (finalizers,
+// plumbing subcommands) never stream progress; every other ceremony level may.
+// The classifier returns quiet for unknown commands too, so the gate silences
+// only the surfaces the taxonomy explicitly names — an unlisted subcommand
+// that legitimately prints (e.g. a monitor's stale-worker warning) keeps its
+// voice.
+func streamingAllowedForCurrentCommand() bool {
+	name := strings.TrimSpace(currentStreamingCommand)
+	if name == "" {
+		return true
+	}
+	if classifyCommandCeremonyLevel(name) != commandCeremonyLevelQuiet {
+		return true
+	}
+	return !isExplicitlyQuietCommand(name)
+}
+
+func isExplicitlyQuietCommand(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if strings.HasSuffix(name, "-finalize") {
+		return true
+	}
+	switch name {
+	case "command-guide", "spawn-log", "spawn-complete", "ceremony", "completion", "version", "generate-progress-bar", "version-check-cached":
+		return true
+	}
+	return false
+}
+
+// emitVisualLine writes a single progress line with one trailing newline, so
+// repeated calls stack as readable scrollback. emitVisualProgress adds a blank
+// line after each block, which is right for banners and wrong for a run that
+// emits fifty rounds.
+func emitVisualLine(line string) {
+	if !shouldRenderVisualOutput(stdout) || !streamingAllowedForCurrentCommand() {
+		return
+	}
+	line = strings.TrimRight(line, "\n")
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+	writeVisualOutput(stdout, line+"\n")
+}
+
 func emitVisualProgress(visual string) {
-	if !shouldRenderVisualOutput(stdout) {
+	if !shouldRenderVisualOutput(stdout) || !streamingAllowedForCurrentCommand() {
 		return
 	}
 	visual = strings.TrimSpace(visual)
@@ -324,10 +416,51 @@ func emitVisualProgress(visual string) {
 	writeVisualOutput(stdout, visual+"\n\n")
 }
 
+// writeVisualOutput is the single exit for every byte of human-facing visual
+// output — banners, workflow renders, progress, and the visual error branch of
+// outputError. Command naming is translated here rather than at the call sites
+// because there is no reliable way to keep ~500 prose strings scattered across
+// cmd/ individually correct: renderNextUp translated its own hints for months
+// while the error path two functions away, the welcome banner, the recovery
+// snapshot and every `Run \`aether plan\` first` message did not, so a Claude
+// Code user was still told to type commands that only exist inside the wrapper.
+//
+// Translating at the exit makes the raw form structurally unable to reach a
+// terminal on a slash-command platform, whatever new prose gets added later.
+// TestVisualOutputNeverLeaksRawWrapperCommands locks that.
 func writeVisualOutput(w io.Writer, text string) {
+	// Gated on visual mode, not applied unconditionally. Some callers (publish
+	// warnings, seal guidance) emit in both modes, and JSON is the machine
+	// surface: a wrapper reading `next` out of an envelope has to receive a
+	// command it can exec. Translation is a presentation concern and belongs
+	// only on the presentation path.
+	if shouldRenderVisualOutput(w) {
+		text = translateHintCommandsForPlatform(text, detectPlatform())
+	}
 	visualOutputMu.Lock()
 	defer visualOutputMu.Unlock()
 	fmt.Fprint(w, text)
+}
+
+// visualFprint, visualFprintf and visualFprintln are drop-in replacements for
+// the fmt equivalents at human-facing call sites. They exist so a renderer that
+// builds its output inline — rather than assembling one string and handing it
+// to writeVisualOutput — still gets platform command naming.
+//
+// Use these for anything a person reads. Machine surfaces (JSON envelopes,
+// NDJSON streams, XML exports, worker briefs, raw worker output under
+// --verbose) must keep using fmt directly, and are listed with their reasons in
+// visualWriterExemptions.
+func visualFprint(w io.Writer, a ...interface{}) {
+	writeVisualOutput(w, fmt.Sprint(a...))
+}
+
+func visualFprintf(w io.Writer, format string, a ...interface{}) {
+	writeVisualOutput(w, fmt.Sprintf(format, a...))
+}
+
+func visualFprintln(w io.Writer, a ...interface{}) {
+	writeVisualOutput(w, fmt.Sprintln(a...))
 }
 
 func spacedTitle(title string) string {
@@ -393,11 +526,12 @@ func renderArtifactsSection(paths ...string) string {
 }
 
 func renderNextUp(primary string, alternatives ...string) string {
+	platform := detectPlatform()
 	var b strings.Builder
 	b.WriteString("\n")
 	b.WriteString(renderBanner(commandEmoji("next-up"), "Next Up"))
 	if strings.TrimSpace(primary) != "" {
-		b.WriteString(primary)
+		b.WriteString(translateHintCommandsForPlatform(primary, platform))
 		b.WriteString("\n")
 	}
 	for _, alt := range alternatives {
@@ -406,10 +540,54 @@ func renderNextUp(primary string, alternatives ...string) string {
 			continue
 		}
 		b.WriteString("Alternative: ")
-		b.WriteString(alt)
+		b.WriteString(translateHintCommandsForPlatform(alt, platform))
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// hintCommandRe matches an `aether <verb>` mention, capturing any preceding
+// VAR=value assignment so literal shell invocations can be left alone.
+var hintCommandRe = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*=\S*\s+)?\baether ([a-z][a-z0-9-]*)`)
+
+// translateHintCommandsForPlatform rewrites next-step hints so they name the
+// command the user actually types. In Claude Code and OpenCode the lifecycle
+// commands are slash wrappers, so "Run `aether continue`" is not a command the
+// user can run — it is the runtime describing itself to itself.
+//
+// Only verbs in wrapperCommandNames are rewritten; `aether publish`,
+// `aether host plan`, `aether flag-resolve` and friends have no wrapper and
+// must survive verbatim. Invocations carrying an env prefix
+// (AETHER_OUTPUT_MODE=visual aether ...) are literal shell commands wrappers
+// execute, never something the user types, so they are left alone too.
+func translateHintCommandsForPlatform(s, platform string) string {
+	if platform == "codex" {
+		return s
+	}
+	return hintCommandRe.ReplaceAllStringFunc(s, func(match string) string {
+		groups := hintCommandRe.FindStringSubmatch(match)
+		if len(groups) != 3 {
+			return match
+		}
+		if strings.TrimSpace(groups[1]) != "" {
+			return match
+		}
+		if !wrapperCommandNames[groups[2]] {
+			return match
+		}
+		return "/ant-" + groups[2]
+	})
+}
+
+// platformCommandName returns the way a user on this platform types a runtime
+// verb: the slash wrapper where one exists, the raw CLI form otherwise. Use it
+// when building a command name for layout (padding, tables) — plain prose can
+// just say `aether <verb>` and let writeVisualOutput translate it.
+func platformCommandName(verb, platform string) string {
+	if platform != "codex" && wrapperCommandNames[verb] {
+		return "/ant-" + verb
+	}
+	return "aether " + verb
 }
 
 func renderContextClearGuidance() string {
@@ -417,23 +595,44 @@ func renderContextClearGuidance() string {
 }
 
 func detectPlatform() string {
-	if os.Getenv("AETHER_PLATFORM") != "" {
-		return os.Getenv("AETHER_PLATFORM")
+	if platform := strings.TrimSpace(os.Getenv("AETHER_PLATFORM")); platform != "" {
+		return platform
 	}
-	if os.Getenv("CODEX_CLI") != "" || os.Getenv("CODEX_API_KEY") != "" {
+	// The runtime's own dispatch-layer detector knows OpenCode and Codex from a
+	// wider set of signals; prefer it over the narrow env checks below so a
+	// Codex or OpenCode session is not mistaken for Claude and shown /ant-*
+	// commands it does not have.
+	switch codex.DetectActivePlatform() {
+	case codex.PlatformCodex:
+		return "codex"
+	case codex.PlatformOpenCode:
+		return "opencode"
+	}
+	if os.Getenv("CODEX_CLI") != "" || os.Getenv("CODEX_API_KEY") != "" || os.Getenv("CODEX_HOME") != "" {
 		return "codex"
 	}
 	return "claude"
 }
 
 func renderContextClearGuidanceForPlatform(platform string) string {
+	// SEE criterion: never advise clearing context without confirming the
+	// handoff is actually on disk. "Safe to clear" is a CLAIM — it may only
+	// appear when the handoff file verifiably exists; when it does not, the
+	// honest line is "don't clear yet", not a softer version of safe.
+	if handoffPath := filepath.Join(resolveAetherRootPath(), ".aether", "HANDOFF.md"); !fileExists(handoffPath) {
+		switch platform {
+		case "codex":
+			return "Handoff not confirmed on disk — don't clear your context yet. Run `aether status` first.\n"
+		default:
+			return "Handoff not confirmed on disk — don't clear your context yet. Run `/ant-status` first.\n"
+		}
+	}
+	confirmation := "Handoff saved (.aether/HANDOFF.md) — safe to clear your context now."
 	switch platform {
 	case "codex":
-		return "It's safe to clear your context now. Run `aether resume` to restore.\n"
-	case "opencode":
-		return "It's safe to clear your context now. Run `/ant-resume` to restore.\n"
+		return confirmation + " Run `aether resume` to restore.\n"
 	default:
-		return "It's safe to clear your context now. Run `/ant-resume` to restore.\n"
+		return confirmation + " Run `/ant-resume` to restore.\n"
 	}
 }
 
@@ -542,10 +741,16 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	}
 }
 
-func renderInitVisual(goal, scope, sessionID, dataDir string) string {
+func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Charter, hiveSeeded int, proposals []initProposal, researchDocs ...string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
 	b.WriteString(visualDividerStr())
+	if charter != nil {
+		// The classic birth ceremony: the approved charter is shown at the
+		// moment the colony is created, not stored silently.
+		b.WriteString(renderStageMarker("Charter"))
+		b.WriteString(renderCharterFields(*charter))
+	}
 	b.WriteString(renderStageMarker("Colony"))
 	b.WriteString("Queen charter accepted.\n")
 	b.WriteString("Goal: ")
@@ -560,21 +765,38 @@ func renderInitVisual(goal, scope, sessionID, dataDir string) string {
 	b.WriteString("Nest: ")
 	b.WriteString(dataDir)
 	b.WriteString("\n")
-	b.WriteString(renderNextUp(
-		`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
-		`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,
-		`Run `+"`aether colonize`"+` first if you want a quick codebase scan before planning.`,
-	))
+	if len(researchDocs) > 0 {
+		b.WriteString("Research: ")
+		b.WriteString(strings.Join(researchDocs, ", "))
+		b.WriteString("\n")
+	}
+	// The classic colony-born close — the moment the colony exists.
+	b.WriteString("\n👑 Queen has set the colony's intention\n\n")
+	b.WriteString(fmt.Sprintf("   %q\n\n", goal))
+	b.WriteString("   🟢 Colony Status: READY\n")
+	if hiveSeeded > 0 {
+		b.WriteString(fmt.Sprintf("   🧠 Hive wisdom: %d cross-colony pattern(s) seeded into QUEEN.md\n", hiveSeeded))
+	}
+	// Ranked, repo-aware next moves replace the old static trio that was
+	// identical for every repo on earth. Fallback to the generic three only
+	// when no proposals were computed (a proposal failure never fails init).
+	if len(proposals) > 0 {
+		b.WriteString(renderInitProposals(proposals))
+	} else {
+		b.WriteString(renderNextUp(
+			`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
+			`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,
+			`Run `+"`aether colonize`"+` first if you want a quick codebase scan before planning.`,
+		))
+	}
 	b.WriteString(renderContextClearGuidance())
 	return b.String()
 }
 
-// renderCharterDisplay produces a visual rendering of the 7-section colony charter.
-func renderCharterDisplay(ch colony.Charter) string {
+// renderCharterFields renders the seven charter fields as an aligned block —
+// shared by the standalone charter display and the init birth ceremony.
+func renderCharterFields(ch colony.Charter) string {
 	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("init"), "Colony Charter"))
-	b.WriteString(visualDividerStr())
-	b.WriteString(renderStageMarker("Charter"))
 	b.WriteString("  Intent:      ")
 	b.WriteString(emptyFallback(ch.Intent, "(none)"))
 	b.WriteString("\n")
@@ -596,6 +818,16 @@ func renderCharterDisplay(ch colony.Charter) string {
 	b.WriteString("  Constraints: ")
 	b.WriteString(emptyFallback(ch.Constraints, "(none)"))
 	b.WriteString("\n")
+	return b.String()
+}
+
+// renderCharterDisplay produces a visual rendering of the 7-section colony charter.
+func renderCharterDisplay(ch colony.Charter) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("init"), "Colony Charter"))
+	b.WriteString(visualDividerStr())
+	b.WriteString(renderStageMarker("Charter"))
+	b.WriteString(renderCharterFields(ch))
 	b.WriteString(visualDividerStr())
 	return b.String()
 }
@@ -751,7 +983,7 @@ func renderColonizeVisual(result map[string]interface{}) string {
 				b.WriteString(" ")
 				b.WriteString(d.Name)
 				b.WriteString("  ")
-				b.WriteString(d.Task)
+				b.WriteString(dispatchTaskLine(d.Task))
 				b.WriteString("\n")
 			}
 		}
@@ -796,7 +1028,7 @@ func renderColonizeDispatchPreview(root string, dispatches []codexSurveyorDispat
 		b.WriteString(" ")
 		b.WriteString(dispatch.Name)
 		b.WriteString("  ")
-		b.WriteString(dispatch.Task)
+		b.WriteString(dispatchTaskLine(dispatch.Task))
 		b.WriteString("\n")
 	}
 	b.WriteString("\nCoordination: ")
@@ -1122,7 +1354,7 @@ func renderPlanVisual(result map[string]interface{}) string {
 				b.WriteString(" ")
 				b.WriteString(d.Name)
 				b.WriteString("  ")
-				b.WriteString(d.Task)
+				b.WriteString(dispatchTaskLine(d.Task))
 				b.WriteString("\n")
 			}
 		}
@@ -1275,7 +1507,7 @@ func renderPlanDispatchPreview(goal string, dispatches []codexPlanningDispatch) 
 		b.WriteString(" ")
 		b.WriteString(dispatch.Name)
 		b.WriteString("  ")
-		b.WriteString(dispatch.Task)
+		b.WriteString(dispatchTaskLine(dispatch.Task))
 		b.WriteString("\n")
 	}
 	b.WriteString("\nCoordination: ")
@@ -1357,7 +1589,92 @@ func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
 	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
 }
 
-func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
+// renderSuggestedSteering renders the colony's unreviewed pheromone
+// suggestions as numbered proposals for a multiple-choice ask. The analysis
+// engine has stored these on colony state since v1.x and nothing ever showed
+// them to the operator — recommendations piled up invisibly while the approve
+// command sat on the orphan allowlist.
+func renderSuggestedSteering(state colony.ColonyState) string {
+	if state.PendingSuggestions == nil {
+		return ""
+	}
+	active := filterActiveSuggestions(state.PendingSuggestions)
+	if len(active) == 0 {
+		return ""
+	}
+	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
+	var b strings.Builder
+	b.WriteString(renderStageMarker("Suggested Steering"))
+	b.WriteString("The colony noticed patterns worth steering on — proposals only, nothing is written until you approve it:\n")
+	for i, suggestion := range active {
+		emoji := emojiFor[strings.ToUpper(strings.TrimSpace(suggestion.Type))]
+		if emoji == "" {
+			emoji = "🐜"
+		}
+		b.WriteString(fmt.Sprintf("  %d. %s [%s] %s\n", i+1, emoji, strings.ToUpper(strings.TrimSpace(suggestion.Type)), strings.TrimSpace(suggestion.Content)))
+		if reason := strings.TrimSpace(suggestion.Reason); reason != "" {
+			b.WriteString("     └── " + reason + "\n")
+		}
+		b.WriteString("     └── adopt: `aether suggest-approve --approve " + suggestion.ID + "`\n")
+	}
+	b.WriteString("Dismiss one with `aether suggest-approve --dismiss <id>`, or everything with `--dismiss-all`.\n")
+	return b.String()
+}
+
+// renderSteeringSignals shows the operator's active pheromone signals at the
+// moment they take effect — the build's Context stage. The signals were
+// always injected into every worker prompt; until this render, nothing told
+// the operator their steering was live, which made the steering loop feel
+// disconnected ("did my note do anything?").
+func renderSteeringSignals() string {
+	pf := loadPheromones()
+	var active []colony.PheromoneSignal
+	if pf != nil {
+		for _, sig := range pf.Signals {
+			if sig.Active {
+				active = append(active, sig)
+			}
+		}
+	}
+	if len(active) == 0 {
+		return "Steering signals: none — run `aether focus \"<area>\"` or `aether redirect \"<avoid>\"` to steer this build.\n"
+	}
+
+	sort.SliceStable(active, func(i, j int) bool {
+		return signalPriority(active[i].Type) < signalPriority(active[j].Type)
+	})
+
+	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
+	now := time.Now().UTC()
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Steering signals: %d active — injected into every worker prompt\n", len(active)))
+	const shown = 5
+	for i, sig := range active {
+		if i >= shown {
+			b.WriteString(fmt.Sprintf("  … and %d more — `aether pheromone-display` for the full view\n", len(active)-shown))
+			break
+		}
+		emoji := emojiFor[sig.Type]
+		if emoji == "" {
+			emoji = "🐜"
+		}
+		text := strings.TrimSpace(extractText(sig.Content))
+		if text == "" {
+			text = "(no content)"
+		}
+		if len(text) > 70 {
+			text = text[:67] + "..."
+		}
+		b.WriteString(fmt.Sprintf("  %s [%d%%] %q\n", emoji, int(math.Round(computeEffectiveStrength(sig, now)*100)), text))
+	}
+	return b.String()
+}
+
+func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
+	var policy codexQueenExecutionPolicy
+	if len(policyOpt) > 0 {
+		policy = policyOpt[0]
+	}
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d", phase.ID)))
 	b.WriteString(visualDividerStr())
@@ -1374,6 +1691,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 		b.WriteString("\n")
 	}
 	b.WriteString(renderStageMarker("Context"))
+	b.WriteString(renderSteeringSignals())
 	b.WriteString(renderStageMarker("Tasks"))
 	for _, task := range phase.Tasks {
 		b.WriteString("  [ ] ")
@@ -1385,6 +1703,10 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	}
 	b.WriteString("\n")
 	b.WriteString(renderStageMarker("Dispatch"))
+	if teamChoice := renderQueenTeamChoice(policy, dispatches); teamChoice != "" {
+		b.WriteString(teamChoice)
+		b.WriteString("\n")
+	}
 	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
 	b.WriteString(renderArtifactsSection(
 		displayDataPath(fmt.Sprintf("build/phase-%d/manifest.json", phase.ID)),
@@ -1410,7 +1732,11 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	return b.String()
 }
 
-func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
+func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
+	var policy codexQueenExecutionPolicy
+	if len(policyOpt) > 0 {
+		policy = policyOpt[0]
+	}
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Plan %d", phase.ID)))
 	b.WriteString(visualDividerStr())
@@ -1428,6 +1754,10 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
+	if teamChoice := renderQueenTeamChoice(policy, dispatches); teamChoice != "" {
+		b.WriteString(teamChoice)
+		b.WriteString("\n")
+	}
 	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
 	b.WriteString(renderNextUp(
 		`Use the JSON `+"`dispatch_manifest`"+` to spawn wrapper agents with the Task tool.`,
@@ -1530,9 +1860,13 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 		}
 	}
 
+	b.WriteString(renderLearningBeat(result["consolidation"]))
+	b.WriteString(renderSuggestedSteering(state))
+
 	if final {
 		b.WriteString(renderStageMarker("Colony Complete"))
-		b.WriteString("All planned phases are complete. The colony is ready for Crowned Anthill.\n")
+		b.WriteString(renderProjectComplete(state, len(state.Plan.Phases)))
+		b.WriteString("\n\nAll planned phases are complete. The colony is ready for Crowned Anthill.\n")
 		b.WriteString(renderNextUpVisual(nextUpSuggestionsForState(state)))
 		b.WriteString(renderContextClearGuidance())
 		return b.String()
@@ -1542,8 +1876,89 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 		b.WriteString(renderStageMarker("Next Phase"))
 		b.WriteString(fmt.Sprintf("Next phase ready: %d — %s\n", nextPhase.ID, nextPhase.Name))
 	}
+	// The classic end-of-phase footer: flags, steering signals with content
+	// and strength, and progress — the colony's whole picture at the moment
+	// you decide what to do next.
+	b.WriteString(renderStageMarker("Colony State"))
+	b.WriteString(renderPhaseEndFooter(state, phase.ID))
 	b.WriteString(renderNextUpVisual(nextUpSuggestionsForState(state)))
 	b.WriteString(renderContextClearGuidance())
+	return b.String()
+}
+
+// renderLearningBeat renders phase-end consolidation's result as a single
+// caste-styled "Learning" stage beat (D-06). raw is result["consolidation"]
+// (attachConsolidationSummary's map[string]interface{}), which may be nil
+// when no consolidation result was recorded at all -- e.g. an older report,
+// or a code path that forgot to attach it. The beat is pure (no store, no
+// I/O) and always renders something in one of four states: populated, zero,
+// failed, or absent. Silence is not a reachable output (D-07).
+func renderLearningBeat(raw interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderStageMarker("Learning"))
+	prefix := casteIdentity("librarian") + "  "
+
+	consolidation, ok := raw.(map[string]interface{})
+	if !ok || consolidation == nil {
+		b.WriteString(prefix)
+		b.WriteString("no consolidation result was recorded for this phase\n")
+		return b.String()
+	}
+
+	summary := phaseEndConsolidationSummary{
+		Ran:                 boolValue(consolidation["ran"]),
+		Reason:              stringValue(consolidation["reason"]),
+		PromotionCandidates: intValue(consolidation["promotion_candidates"]),
+		QueenEligible:       intValue(consolidation["queen_eligible"]),
+	}
+
+	b.WriteString(prefix)
+	b.WriteString(summary.LearningBeatLine())
+	b.WriteString("\n")
+	return b.String()
+}
+
+// renderSealConsolidationBeats renders a seal consolidation attempt as a
+// caste-styled "Consolidation" stage beat (D-06, LEARN-02). It is pure (no
+// store, no I/O) and always renders something: eight distinct per-ant lines
+// on success, or the loud "colony sealed WITHOUT consolidation" line on
+// failure. Silence about consolidation is not a reachable output, mirroring
+// renderLearningBeat's precedent.
+func renderSealConsolidationBeats(s sealConsolidationSummary) string {
+	var b strings.Builder
+	b.WriteString(renderStageMarker("Consolidation"))
+
+	if !s.Ran {
+		b.WriteString("colony sealed WITHOUT consolidation — ")
+		b.WriteString(strings.TrimSpace(s.Reason))
+		b.WriteString("\n")
+		return b.String()
+	}
+
+	for _, ant := range s.Ants {
+		icon := "✗"
+		if ant.Success {
+			icon = "✓"
+		}
+		b.WriteString("  ")
+		b.WriteString(icon)
+		b.WriteString(" ")
+		b.WriteString(casteIdentity(ant.Name))
+		b.WriteString("  ")
+		b.WriteString(ant.Detail)
+		b.WriteString("\n")
+	}
+
+	b.WriteString(fmt.Sprintf("Instincts decayed: %d, archived: %d; observations decayed: %d\n", s.InstinctsDecayed, s.InstinctsArchived, s.ObservationsDecayed))
+
+	reportLine := s.ReportPath
+	if reportLine == "" {
+		reportLine = "(not written)"
+	}
+	b.WriteString("Curation report: ")
+	b.WriteString(reportLine)
+	b.WriteString("\n")
+
 	return b.String()
 }
 
@@ -1575,7 +1990,7 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 			b.WriteString(" ")
 			b.WriteString(dispatch.Name)
 			b.WriteString("  ")
-			b.WriteString(strings.TrimSpace(dispatch.Task))
+			b.WriteString(dispatchTaskLine(dispatch.Task))
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
@@ -1621,6 +2036,7 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 	if blockers := stringSliceValue(result["blocking_issues"]); len(blockers) > 0 {
 		b.WriteString("Blocking issues\n")
 		b.WriteString(renderIndentedList(blockers))
+		b.WriteString(renderBlockedWayForward(mapValue(result["gates"])))
 	}
 	primary := `Fix the blocking issues, then run ` + "`aether continue`" + ` again.`
 	if next := strings.TrimSpace(stringValue(result["next"])); next != "" {
@@ -1634,6 +2050,55 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 		secondary = `Run ` + "`" + skip + "`" + ` only if you intend to abandon this phase and move on.`
 	}
 	b.WriteString(renderNextUp(primary, secondary))
+	return b.String()
+}
+
+// renderBlockedWayForward turns the failed gates' fix hints and recovery
+// options into the block's way forward — a critic that stops the line brings
+// its fix in the same breath, and the Fixer (/ant-unblock) is always on the
+// list so "it doesn't work" is never a dead end.
+func renderBlockedWayForward(gates map[string]interface{}) string {
+	lines := []string{}
+	seen := map[string]bool{}
+	appendLine := func(text string) {
+		text = strings.TrimSpace(text)
+		if text == "" || seen[text] {
+			return
+		}
+		seen[text] = true
+		lines = append(lines, text)
+	}
+	checks, _ := gates["checks"].([]interface{})
+	for _, raw := range checks {
+		check, _ := raw.(map[string]interface{})
+		if check == nil {
+			continue
+		}
+		if passed, _ := check["passed"].(bool); passed {
+			continue
+		}
+		appendLine(stringValue(check["fix_hint"]))
+		for _, option := range stringSliceValue(check["recovery_options"]) {
+			appendLine(option)
+		}
+	}
+	appendLine("Run /ant-unblock to dispatch the Fixer against the blocking issues")
+
+	var b strings.Builder
+	b.WriteString("🧭 Way forward\n")
+	shown := lines
+	const maxWayForwardLines = 6
+	if len(shown) > maxWayForwardLines {
+		shown = shown[:maxWayForwardLines]
+	}
+	for _, line := range shown {
+		b.WriteString("   └── ")
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	if extra := len(lines) - len(shown); extra > 0 {
+		b.WriteString(fmt.Sprintf("   └── (+%d more in the gate report)\n", extra))
+	}
 	return b.String()
 }
 
@@ -1674,6 +2139,20 @@ func renderContinueWorkerFlowValue(b *strings.Builder, raw interface{}) {
 		b.WriteString("Continue Worker Flow\n")
 		for _, step := range flow {
 			renderContinueWorkerFlowLine(b, step.Name, step.Caste, step.Status, step.Summary)
+			findings := make([]string, 0, len(step.Findings))
+			for _, finding := range step.Findings {
+				label := strings.TrimSpace(finding.Title)
+				if label == "" {
+					label = strings.TrimSpace(finding.Description)
+				}
+				if severity := strings.TrimSpace(finding.Severity); severity != "" && label != "" {
+					label = severity + ": " + label
+				}
+				if label != "" {
+					findings = append(findings, label)
+				}
+			}
+			renderContinueWorkerFlowDetail(b, findings, step.Recommendations, step.WeakSpots, step.EdgeCases, step.Blockers)
 		}
 	case []interface{}:
 		renderContinueWorkerFlowMap(b, flow)
@@ -1692,14 +2171,36 @@ func renderContinueWorkerFlowMap(b *strings.Builder, flow []interface{}) {
 			continue
 		}
 		renderContinueWorkerFlowLine(b, name, stringValue(step["caste"]), stringValue(step["status"]), stringValue(step["summary"]))
+		findings := []string{}
+		if rawFindings, ok := step["findings"].([]interface{}); ok {
+			for _, rawFinding := range rawFindings {
+				finding, _ := rawFinding.(map[string]interface{})
+				label := strings.TrimSpace(stringValue(finding["title"]))
+				if label == "" {
+					label = strings.TrimSpace(stringValue(finding["description"]))
+				}
+				if severity := strings.TrimSpace(stringValue(finding["severity"])); severity != "" && label != "" {
+					label = severity + ": " + label
+				}
+				if label != "" {
+					findings = append(findings, label)
+				}
+			}
+		}
+		renderContinueWorkerFlowDetail(b, findings,
+			stringSliceValue(step["recommendations"]),
+			stringSliceValue(step["weak_spots"]),
+			stringSliceValue(step["edge_cases_discovered"]),
+			stringSliceValue(step["blockers"]))
 	}
 }
 
 func renderContinueWorkerFlowLine(b *strings.Builder, name, caste, status, summary string) {
-	line := "  - " + strings.TrimSpace(name)
+	line := "  - "
 	if caste = strings.TrimSpace(caste); caste != "" {
-		line += " [" + caste + "]"
+		line += casteIdentity(caste) + " "
 	}
+	line += strings.TrimSpace(name)
 	if status = strings.TrimSpace(status); status != "" {
 		line += " " + status
 	}
@@ -1708,6 +2209,31 @@ func renderContinueWorkerFlowLine(b *strings.Builder, name, caste, status, summa
 	}
 	b.WriteString(line)
 	b.WriteString("\n")
+}
+
+// renderContinueWorkerFlowDetail is the progressive-disclosure layer beneath
+// each worker line: what the worker actually found, capped per category with
+// an honest overflow count — the data was always carried, never shown.
+func renderContinueWorkerFlowDetail(b *strings.Builder, findings, recommendations, weakSpots, edgeCases, blockers []string) {
+	const perCategoryCap = 2
+	writeCategory := func(label string, items []string) {
+		for i, item := range items {
+			if i >= perCategoryCap {
+				b.WriteString(fmt.Sprintf("      └── %s: (+%d more)\n", label, len(items)-perCategoryCap))
+				return
+			}
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			b.WriteString(fmt.Sprintf("      └── %s: %s\n", label, item))
+		}
+	}
+	writeCategory("found", findings)
+	writeCategory("recommends", recommendations)
+	writeCategory("weak spot", weakSpots)
+	writeCategory("edge case", edgeCases)
+	writeCategory("blocker", blockers)
 }
 
 func renderContinueGateSummaryMap(b *strings.Builder, gates map[string]interface{}) {
@@ -1733,10 +2259,76 @@ func mapValue(raw interface{}) map[string]interface{} {
 	return value
 }
 
+// renderDecisionBlock (SEE-06) is the one visually distinct frame for moments
+// that need the operator: a halted wave, a tripped breaker, a paused
+// autopilot. One shape everywhere, so "the colony needs you" is recognizable
+// at a glance instead of buried in prose.
+func renderDecisionBlock(emoji, title string, lines ...string) string {
+	var b strings.Builder
+	b.WriteString("━━━ " + emoji + " " + spacedTitle(title) + " ━━━\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// renderProjectComplete is the classic v5.4.0 project-complete celebration.
+// It fires once, when the final phase advances — from the autopilot loop and
+// from a final `aether continue` — and the runtime owns it: wrappers must not
+// hand-render this banner.
+func renderProjectComplete(state colony.ColonyState, phasesCompleted int) string {
+	goal := "(no goal recorded)"
+	if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	total := phasesCompleted
+	if len(state.Plan.Phases) > total {
+		total = len(state.Plan.Phases)
+	}
+	var b strings.Builder
+	rule := strings.Repeat("━", 50)
+	b.WriteString(rule + "\n")
+	b.WriteString("   🎉 " + spacedTitle("Project Complete") + " 🎉\n")
+	b.WriteString(rule + "\n\n")
+	b.WriteString(fmt.Sprintf("👑 Goal Achieved: %s\n", goal))
+	b.WriteString(fmt.Sprintf("📍 Phases Completed: %d\n\n", total))
+	b.WriteString("🐜 The colony rests. Well done!")
+	return b.String()
+}
+
+// crownedAnthillArt is the classic v5.4.0 seal ceremony drawing (seal.yaml
+// Step 7), byte-faithful to the original.
+const crownedAnthillArt = `        .     .
+       /|\   /|\
+      / | \ / | \
+     /  |  X  |  \
+    /   | / \ |   \
+   /    |/   \|    \
+  /     /     \     \
+ /____ /  ___  \ ____\
+      / /   \ \
+     / /     \ \
+    /_/       \_\
+     |  CROWNED |
+     | ANTHILL  |
+     |__________|`
+
 func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("seal"), "Seal"))
 	b.WriteString(visualDividerStr())
+	// The classic crowning ceremony: the anthill drawing, the letter-spaced
+	// title with the colony's version, then the facts.
+	b.WriteString(crownedAnthillArt)
+	b.WriteString("\n\n")
+	rule := strings.Repeat("━", 50)
+	b.WriteString(rule + "\n")
+	b.WriteString(fmt.Sprintf("   %s   v%d\n", spacedTitle("Crowned Anthill"), state.ColonyVersion))
+	b.WriteString(rule + "\n\n")
 	b.WriteString(renderStageMarker("Summary"))
 	b.WriteString("Colony sealed at Crowned Anthill.\n")
 	if state.Goal != nil {
@@ -1747,7 +2339,10 @@ func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	b.WriteString(fmt.Sprintf("Completed phases: %d\n", len(state.Plan.Phases)))
 	b.WriteString("Summary: ")
 	b.WriteString(summaryPath)
-	b.WriteString("\n")
+	b.WriteString("\n\n")
+	b.WriteString("The colony stands crowned and sealed.\n")
+	b.WriteString("Its wisdom lives on in QUEEN.md.\n")
+	b.WriteString("The anthill has reached its final form.\n")
 	b.WriteString(renderNextUp(
 		`Run `+"`aether entomb`"+` to archive this completed colony into chambers.`,
 		`Run `+"`aether init \"next goal\"`"+` if you want to start the next colony immediately.`,
@@ -1855,7 +2450,7 @@ func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCo
 	return b.String()
 }
 
-func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string, versionsMatch bool) string {
+func renderUpdateVisual(repoDir, hubVersion, localVersion, repoTransition string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string, versionsMatch bool) string {
 	var b strings.Builder
 	totalRemoved := syncDetailsRemoved(details)
 	b.WriteString(renderBanner(commandEmoji("update"), "Update"))
@@ -1869,6 +2464,12 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 	b.WriteString("Repo: ")
 	b.WriteString(repoDir)
 	b.WriteString("\n")
+	// The repo's own before/after is the question `/ant-update` exists to
+	// answer; hub and binary versions alone never told the user whether they
+	// had actually been behind.
+	if repoTransition != "" {
+		b.WriteString(repoTransition)
+	}
 	if hubVersion != "" {
 		b.WriteString("Hub version: ")
 		b.WriteString(hubVersion)
@@ -2146,15 +2747,22 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		}
 	}
 
-	// Worktree cleanup summary
-	if wtGC, ok := result["worktree_gc"].(map[string]interface{}); ok {
-		cleaned := intValue(wtGC["cleaned"])
-		orphaned := intValue(wtGC["orphaned"])
+	// Worktree preservation summary — this is where "your work is still
+	// here" has to appear on the exact screen a crash-recovery user sees.
+	// Nothing here is destroyed automatically (D-01); this only reports
+	// what was kept and what was forgotten because its path no longer
+	// exists on disk.
+	if errMsg := stringValue(result["worktree_gc_error"]); errMsg != "" {
+		b.WriteString(fmt.Sprintf("⚠️ Could not check worker workspaces for leftover work: %s\n", errMsg))
+	}
+	if wtPreserved, ok := result["worktrees_preserved"].(map[string]interface{}); ok {
+		cleaned := intValue(wtPreserved["cleaned"])
+		preserved := intValue(wtPreserved["preserved"])
 		if cleaned > 0 {
-			b.WriteString(fmt.Sprintf("🧹 %d stale worktree(s) cleaned up\n", cleaned))
+			b.WriteString(fmt.Sprintf("%d worker workspace(s) forgotten (their folder was already gone, nothing to keep)\n", cleaned))
 		}
-		if orphaned > 0 {
-			b.WriteString(fmt.Sprintf("⚠️ %d worktree(s) could not be cleaned — run `aether worktree-cleanup`\n", orphaned))
+		if preserved > 0 {
+			b.WriteString(fmt.Sprintf("Kept %d worker workspace(s) because they still hold work — nothing was deleted. Run `aether recover` to see them.\n", preserved))
 		}
 	}
 
@@ -2544,10 +3152,14 @@ func writeHistoryEntry(b *strings.Builder, entry map[string]interface{}) {
 	if label == "" {
 		label = "unknown time"
 	}
-	b.WriteString("• ")
+	// Classic activity-feed form: [time] icon [TYPE] source — every line
+	// carries an action icon so the feed reads at a glance.
+	b.WriteString("[")
 	b.WriteString(label)
+	b.WriteString("] ")
+	b.WriteString(historyEventIcon(eventType, msg))
 	if eventType != "" {
-		b.WriteString("  [")
+		b.WriteString(" [")
 		b.WriteString(eventType)
 		b.WriteString("]")
 	}
@@ -2560,6 +3172,33 @@ func writeHistoryEntry(b *strings.Builder, entry map[string]interface{}) {
 		b.WriteString("  ")
 		b.WriteString(msg)
 		b.WriteString("\n")
+	}
+}
+
+// historyEventIcon maps an event to the classic v5.4.0 activity-feed icon set
+// (colorize-log.sh): ⚡ spawn, ✅ complete, ❌ error, ✨ created, 📝 modified,
+// 🔬 research, ⚙️ executing.
+func historyEventIcon(eventType, message string) string {
+	probe := strings.ToUpper(eventType + " " + message)
+	switch {
+	case strings.Contains(probe, "SPAWN"):
+		return "⚡"
+	case strings.Contains(probe, "COMPLETE"), strings.Contains(probe, "SEALED"), strings.Contains(probe, "ADVANCE"):
+		return "✅"
+	case strings.Contains(probe, "ERROR"), strings.Contains(probe, "FAIL"), strings.Contains(probe, "BLOCK"):
+		return "❌"
+	case strings.Contains(probe, "CREATED"), strings.Contains(probe, "INIT"):
+		return "✨"
+	case strings.Contains(probe, "MODIFIED"), strings.Contains(probe, "REPAIR"), strings.Contains(probe, "UPDATE"):
+		return "📝"
+	case strings.Contains(probe, "RESEARCH"), strings.Contains(probe, "EXPLOR"), strings.Contains(probe, "SURVEY"):
+		return "🔬"
+	case strings.Contains(probe, "EXECUT"), strings.Contains(probe, "BUILD"):
+		return "⚙️"
+	case strings.Contains(probe, "PHASE"):
+		return "🐜"
+	default:
+		return "•"
 	}
 }
 
@@ -2664,23 +3303,10 @@ func renderFlagsVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("flags"), "Flags"))
 	b.WriteString(visualDividerStr())
-	entries := flagEntriesValue(result["flags"])
-	if len(entries) == 0 {
-		b.WriteString("No flags found.\n")
-	} else {
-		b.WriteString(fmt.Sprintf("Flags: %d\n\n", len(entries)))
-		for _, entry := range entries {
-			status := "active"
-			if entry.Resolved {
-				status = "resolved"
-			}
-			b.WriteString(fmt.Sprintf("  - %s [%s/%s] %s", emptyFallback(entry.ID, "(no id)"), entry.Type, status, emptyFallback(entry.Description, "(no description)")))
-			if entry.Phase != nil && *entry.Phase > 0 {
-				b.WriteString(fmt.Sprintf("  phase %d", *entry.Phase))
-			}
-			b.WriteString("\n")
-		}
-	}
+	// The classic 🚩 renderer (written in the restoration round, finally
+	// wired): one line per flag with nested detail, triage counts, and the
+	// Iron Law reminder when blockers are open.
+	b.WriteString(renderFlagsTable(flagEntriesValue(result["flags"])))
 	b.WriteString(renderNextUp(
 		`Run `+"`aether flag \"...\"`"+` to create a new flag.`,
 		`Run `+"`aether flag-resolve --id <id>`"+` after a blocker or issue is handled.`,
@@ -3280,6 +3906,143 @@ func renderSpawnPlan(phase colony.Phase, depth string) string {
 	return renderSpawnPlanForDispatches(plannedBuildDispatches(phase, depth), colony.ModeInRepo)
 }
 
+// renderQueenTeamChoice makes the Queen's team decision readable. The
+// rationale strings are composed on every build and carried in the dispatch
+// contract (SelectedReasons/PrunedReasons, cmd/codex_dispatch_contract.go) —
+// and until this renderer existed they were never shown to a human, so "why
+// didn't it use the security one?" required opening a JSON manifest.
+//
+// Everything printed here is read from the contract, never recomputed and
+// never hardcoded: the render test blanks the contract fields and asserts the
+// clauses disappear with them.
+func renderQueenTeamChoice(policy codexQueenExecutionPolicy, dispatches []codexBuildDispatch) string {
+	budget := policy.SpawnBudget
+	if budget == nil || (len(budget.SelectedReasons) == 0 && len(budget.PrunedReasons) == 0 && len(budget.PreservedCastes) == 0) {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("Queen's Team\n")
+
+	// One clause per selected caste, in dispatch order so the list reads the
+	// way the workers will actually spawn.
+	seen := map[string]bool{}
+	orderedCastes := make([]string, 0, len(budget.SelectedReasons))
+	for _, dispatch := range dispatches {
+		caste := strings.TrimSpace(dispatch.Caste)
+		if caste == "" || seen[caste] {
+			continue
+		}
+		seen[caste] = true
+		orderedCastes = append(orderedCastes, caste)
+	}
+	// Castes with a recorded reason but no dispatch row still get their clause.
+	for _, caste := range sortedStringKeys(budget.SelectedReasons) {
+		if !seen[caste] {
+			seen[caste] = true
+			orderedCastes = append(orderedCastes, caste)
+		}
+	}
+	for _, caste := range orderedCastes {
+		reason := strings.TrimSpace(budget.SelectedReasons[caste])
+		if reason == "" {
+			continue
+		}
+		b.WriteString("  ")
+		b.WriteString(casteIdentity(caste))
+		b.WriteString(" — ")
+		b.WriteString(reason)
+		b.WriteString("\n")
+	}
+
+	// Safety restorations and policy additions: when the runtime keeps a caste
+	// the depth flag or budget would have dropped, it says which caste and why
+	// instead of silently correcting.
+	//
+	// The preserved-castes clause renders ONLY when the budget actually cut
+	// something. PreservedCastes is the intersection of selected and required,
+	// which on an ordinary build always contains the Watcher — rendering it
+	// unconditionally would announce a "safety intervention" on every build,
+	// which is both noise and untrue. When nothing was pruned, nothing was
+	// protected from anything.
+	budgetCut := len(budget.PrunedReasons) > 0 || intDeref(budget.PrunedCastes) > 0 || intDeref(budget.PrunedWorkers) > 0
+	if budgetCut {
+		for _, caste := range budget.PreservedCastes {
+			reason := strings.TrimSpace(budget.SelectedReasons[caste])
+			if reason == "" {
+				reason = "required by safety policy for this phase"
+			}
+			b.WriteString("  Kept by safety policy: ")
+			b.WriteString(casteLabel(caste))
+			b.WriteString(" — ")
+			b.WriteString(reason)
+			b.WriteString("\n")
+		}
+	}
+	for _, caste := range budget.PolicyAddedCastes {
+		b.WriteString("  Added by build policy: ")
+		b.WriteString(casteLabel(caste))
+		b.WriteString("\n")
+	}
+
+	// The castes considered and not called, as ONE short clause. 27 castes
+	// exist; a per-build absentee table is exactly the ceremony the reshape
+	// removed, so at most three are named and the rest are a count.
+	if len(budget.PrunedReasons) > 0 {
+		pruned := sortedStringKeys(budget.PrunedReasons)
+		b.WriteString(fmt.Sprintf("  Not called (%d): ", len(pruned)))
+		shown := pruned
+		if len(shown) > 3 {
+			shown = shown[:3]
+		}
+		clauses := make([]string, 0, len(shown))
+		for _, caste := range shown {
+			reason := strings.TrimSpace(budget.PrunedReasons[caste])
+			if reason == "" {
+				clauses = append(clauses, casteLabel(caste))
+				continue
+			}
+			clauses = append(clauses, casteLabel(caste)+" — "+reason)
+		}
+		b.WriteString(strings.Join(clauses, "; "))
+		if remaining := len(pruned) - len(shown); remaining > 0 {
+			b.WriteString(fmt.Sprintf("; and %d more below the relevance threshold", remaining))
+		}
+		b.WriteString("\n")
+	}
+	if trimmed := intDeref(budget.PrunedWorkers); trimmed > 0 && len(budget.PrunedReasons) == 0 {
+		b.WriteString(fmt.Sprintf("  Trimmed to the worker cap: %d caste(s)\n", trimmed))
+	}
+
+	return b.String()
+}
+
+// queenPolicyFromResult recovers the typed Queen policy from a build result
+// map. The build paths store the struct value directly, so no JSON round-trip
+// is involved.
+func queenPolicyFromResult(result map[string]interface{}) codexQueenExecutionPolicy {
+	if policy, ok := result["queen_execution_policy"].(codexQueenExecutionPolicy); ok {
+		return policy
+	}
+	return codexQueenExecutionPolicy{}
+}
+
+func sortedStringKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func intDeref(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
 func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode colony.ParallelMode) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("spawn-plan"), "Spawn Plan"))
@@ -3313,7 +4076,7 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 			b.WriteString(" ")
 			b.WriteString(dispatch.Name)
 			b.WriteString("  ")
-			b.WriteString(strings.TrimSpace(dispatch.Task))
+			b.WriteString(dispatchTaskLine(dispatch.Task))
 			writeDispatchExecutionStatus(&b, dispatch)
 			b.WriteString("\n")
 		}
@@ -3321,6 +4084,42 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Total planned dispatches: %d\n", len(dispatches)))
+	b.WriteString(renderSpawnTeamExplanation(dispatches))
+	return b.String()
+}
+
+// renderSpawnTeamExplanation says, in one line a non-specialist can read, who
+// the Queen picked and how to ask for a different size.
+//
+// The plan above lists castes and task strings, which answers "what will run"
+// but never "why these, and how do I get fewer" — the question an operator
+// actually has when a small change appears to summon a committee. Without an
+// answer, the only discoverable lever is reading the source.
+func renderSpawnTeamExplanation(dispatches []codexBuildDispatch) string {
+	if len(dispatches) == 0 {
+		return ""
+	}
+
+	seen := map[string]bool{}
+	names := make([]string, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		caste := strings.TrimSpace(dispatch.Caste)
+		if caste == "" || seen[caste] {
+			continue
+		}
+		seen[caste] = true
+		names = append(names, casteLabel(caste))
+	}
+	if len(names) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("\nThe Queen chose this team for the phase: ")
+	b.WriteString(strings.Join(names, ", "))
+	b.WriteString(".\n")
+	b.WriteString("Want a smaller team? Add `--light`. Want every check? Add `--heavy`.\n")
+	b.WriteString("Safety castes a risky phase needs are kept at every size.\n")
 	return b.String()
 }
 
@@ -3374,6 +4173,17 @@ func writeDispatchExecutionStatus(b *strings.Builder, dispatch codexBuildDispatc
 	b.WriteString(icon)
 	b.WriteString(" ")
 	b.WriteString(status)
+	// A worker that surfaced something and a worker that came back with
+	// nothing to report are different outcomes, not two identical "completed"
+	// lines. Blockers are the actionable-finding channel in the result schema,
+	// so completion is qualified by it.
+	if status == "completed" {
+		if len(dispatch.Blockers) > 0 {
+			b.WriteString(fmt.Sprintf(" — flagged %d issue(s)", len(dispatch.Blockers)))
+		} else {
+			b.WriteString(" — nothing to flag")
+		}
+	}
 	if dispatch.Duration > 0 {
 		b.WriteString(fmt.Sprintf(" %.1fs", dispatch.Duration))
 	}
@@ -3589,7 +4399,82 @@ func casteANSIColor(caste string) string {
 }
 
 func casteIdentity(caste string) string {
-	return casteEmoji(caste) + " " + colorizeCaste(caste, casteLabel(caste))
+	// Classic house style (v5.4.0 caste-system.md): the caste glyph is always
+	// followed by the ant — 🔨🐜 Builder Hammer-42 — except when the glyph IS
+	// the generic ant, which stays single.
+	emoji := casteEmoji(caste)
+	if emoji != "🐜" {
+		emoji += "🐜"
+	}
+	return emoji + " " + colorizeCaste(caste, casteLabel(caste))
+}
+
+// casteModelSlot maps each caste to the model slot its agent definition
+// declares in `.claude/agents/ant/aether-<role>.md` frontmatter. DISPLAY
+// ONLY: the platform routes agents natively from that frontmatter; nothing
+// in the runtime reads this table to choose a model (automatic model routing
+// was rejected 2026-07-28 and stays rejected). To change a role's model,
+// edit the single `model:` line in its agent file — this table then fails
+// TestCasteModelSlotMatchesAgentFrontmatter until it agrees, which is the
+// point: a static table plus a parity test cannot go stale silently.
+// Castes with no agent file (colonizer, dreamer, the curation ants…) are
+// deliberately absent and get no model tag.
+var casteModelSlot = map[string]string{
+	"ambassador":    "sonnet",
+	"archaeologist": "opus",
+	"architect":     "opus",
+	"auditor":       "opus",
+	"builder":       "sonnet",
+	"chaos":         "sonnet",
+	"chronicler":    "inherit",
+	"fixer":         "sonnet",
+	"gatekeeper":    "opus",
+	"includer":      "inherit",
+	"keeper":        "inherit",
+	"measurer":      "opus",
+	"medic":         "sonnet",
+	"oracle":        "opus",
+	"porter":        "sonnet",
+	"probe":         "sonnet",
+	"queen":         "opus",
+	"route_setter":  "opus",
+	"sage":          "opus",
+	"scout":         "sonnet",
+	"surveyor":      "sonnet",
+	"tracker":       "opus",
+	"watcher":       "sonnet",
+	"weaver":        "sonnet",
+}
+
+// resolveCasteModel returns the display name of the model a caste's workers
+// actually run on: the ANTHROPIC_DEFAULT_<SLOT>_MODEL environment variable's
+// value when the user has redirected that slot (e.g. sonnet → glm-5-turbo),
+// otherwise the slot name itself. "inherit" agents run on whatever model the
+// session uses, shown as "session". Unknown castes get "" — no tag.
+func resolveCasteModel(caste string) string {
+	slot, ok := casteModelSlot[normalizeCasteKey(caste)]
+	if !ok {
+		return ""
+	}
+	if slot == "inherit" {
+		return "session"
+	}
+	if override := strings.TrimSpace(os.Getenv("ANTHROPIC_DEFAULT_" + strings.ToUpper(slot) + "_MODEL")); override != "" {
+		return override
+	}
+	return slot
+}
+
+// casteIdentityWithModel is casteIdentity plus the resolved model tag —
+// `🔨🐜 Builder [sonnet]` — used at SPAWN announcements only. Tagging every
+// identity line (status lists, history rows, ~30 call sites) would be noise;
+// the moment a worker is dispatched is where "which brain is this?" matters.
+func casteIdentityWithModel(caste string) string {
+	identity := casteIdentity(caste)
+	if model := resolveCasteModel(caste); model != "" {
+		identity += " [" + model + "]"
+	}
+	return identity
 }
 
 func colorizeCaste(caste, text string) string {
@@ -3854,4 +4739,47 @@ func truncateLines(text string, maxLines int) []string {
 		return lines
 	}
 	return append(lines[:maxLines], "...")
+}
+
+// dispatchTaskLine renders a dispatch's task for a one-line display.
+//
+// Phase 184 lets one worker own a chain of dependent steps, so a task can now
+// be a numbered list. Written straight into the dispatch line that produced
+// output like:
+//
+//	🔨 Builder Mason-67  1. Copy the daily-note templates
+//	2. Copy the meeting templates
+//
+// with the continuation unindented and the layout broken. The worker still
+// receives every step in full; only this display is summarised.
+func dispatchTaskLine(task string) string {
+	task = strings.TrimSpace(task)
+	if !strings.Contains(task, "\n") {
+		return task
+	}
+	lines := []string{}
+	for _, line := range strings.Split(task, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			lines = append(lines, trimmed)
+		}
+	}
+	if len(lines) <= 1 {
+		return strings.Join(lines, "")
+	}
+	// Only a merged chain is summarised, and it is recognised by the exact shape
+	// the merge writes: every line numbered from 1 in order. Plenty of ordinary
+	// task text runs to several lines -- a watcher's brief carries a follow-up
+	// instruction on its own line -- and reporting that as "+1 more step" would
+	// be a lie about how many things the worker was asked to do.
+	for i, line := range lines {
+		if !strings.HasPrefix(line, fmt.Sprintf("%d. ", i+1)) {
+			// Not a merged chain: leave it exactly as it was rendered before.
+			return task
+		}
+	}
+	first := strings.TrimSpace(strings.TrimPrefix(lines[0], "1."))
+	if len(lines) == 2 {
+		return fmt.Sprintf("%s (+1 more step)", first)
+	}
+	return fmt.Sprintf("%s (+%d more steps)", first, len(lines)-1)
 }

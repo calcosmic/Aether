@@ -323,40 +323,43 @@ var domainDetectCmd = &cobra.Command{
 	Short: "Detect project domain from file patterns",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		domains := []string{}
-
-		checks := map[string][]string{
-			"go":     {"go.mod", "go.sum"},
-			"web":    {"package.json", "next.config.js", "vite.config.ts"},
-			"ruby":   {"Gemfile", "Rakefile"},
-			"python": {"requirements.txt", "setup.py", "pyproject.toml"},
-			"rust":   {"Cargo.toml"},
-		}
-
 		// Search in project root (parent of .aether/data)
 		searchDir := "."
 		if store != nil {
 			searchDir = filepath.Dir(filepath.Dir(store.BasePath()))
 		}
-
-		for domain, files := range checks {
-			for _, f := range files {
-				if _, err := os.Stat(filepath.Join(searchDir, f)); err == nil {
-					domains = append(domains, domain)
-					break
-				}
-			}
-		}
-
-		if domains == nil {
-			domains = []string{}
-		}
-
 		outputOK(map[string]interface{}{
-			"domains": domains,
+			"domains": detectColonyDomains(searchDir),
 		})
 		return nil
 	},
+}
+
+// detectColonyDomains classifies a repo into domain tags from marker files.
+// Wired into init's automatic registry entry (the tags scope hive wisdom
+// retrieval) and still exposed via `aether domain-detect`.
+func detectColonyDomains(searchDir string) []string {
+	checks := []struct {
+		domain string
+		files  []string
+	}{
+		{"go", []string{"go.mod", "go.sum"}},
+		{"web", []string{"package.json", "next.config.js", "vite.config.ts"}},
+		{"ruby", []string{"Gemfile", "Rakefile"}},
+		{"python", []string{"requirements.txt", "setup.py", "pyproject.toml"}},
+		{"rust", []string{"Cargo.toml"}},
+	}
+
+	domains := []string{}
+	for _, check := range checks {
+		for _, f := range check.files {
+			if _, err := os.Stat(filepath.Join(searchDir, f)); err == nil {
+				domains = append(domains, check.domain)
+				break
+			}
+		}
+	}
+	return domains
 }
 
 func init() {

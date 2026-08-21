@@ -57,6 +57,11 @@ export declare function detectAvailablePlatforms(): Promise<Platform[]>;
  */
 export declare function selectWorkerPlatform(available: readonly Platform[], env?: NodeJS.ProcessEnv): Platform | undefined;
 export declare function formatWorkerPlatformSelectionMessage(available: readonly Platform[], env?: NodeJS.ProcessEnv): string;
+export { PREFLIGHT_DEFAULT_TIMEOUT_MS, resolvePreflightTimeoutMs } from "./preflight-config.js";
+/** Test-only: inject a mock temp-dir factory (e.g. to force a throw). */
+export declare function __setMakePreflightTempDir(fn: () => string): void;
+/** Test-only: restore the real temp-dir factory. */
+export declare function __restoreMakePreflightTempDir(): void;
 /**
  * Run a tiny worker-provider check before dispatching expensive workers.
  * This catches account/model/provider configuration failures before the host

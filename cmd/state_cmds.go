@@ -61,7 +61,7 @@ var stateMutateCmd = &cobra.Command{
 			return nil
 		}
 		expr := vars.remaining[len(vars.remaining)-1]
-		return executeExpression(expr, vars.vars)
+		return executeExpression(cmd, expr, vars.vars)
 	},
 }
 
@@ -255,7 +255,22 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 		outputError(1, "COLONY_STATE.json not found", nil)
 		return nil
 	}
-	switch field {
+	// 188-VERIFICATION.md Gap 2: Go's encoding/json resolves JSON object
+	// keys to struct fields case-insensitively on decode (colony.ColonyState
+	// .CurrentPhase carries json:"current_phase"), so a caller spelling this
+	// field differently -- "CURRENT_PHASE", "Current_Phase" -- previously
+	// fell straight through this switch's `default` case, completely
+	// bypassing the guard the dedicated "current_phase" case below enforces.
+	// Matching case-insensitively here, before the switch, routes every
+	// casing through that same guarded branch, which assigns
+	// state.CurrentPhase directly (never through the generic
+	// setNestedFieldJSON passthrough), so no casing of this one field can
+	// ever reach an advance-bypassing write again.
+	dispatchField := field
+	if strings.EqualFold(field, "current_phase") {
+		dispatchField = "current_phase"
+	}
+	switch dispatchField {
 	case "goal":
 		state.Goal = &value
 	case "state":
@@ -270,9 +285,20 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 			_ = tracer.LogStateTransition(*state.RunID, string(oldState), string(newState), "state-mutate")
 		}
 	case "current_phase":
+		// T-188-07: moving current_phase directly (outside a real `aether
+		// continue` advance) must prove it carries the same precondition
+		// check a real advance would run -- not merely that --guard was
+		// present on the command somewhere, but that it is a phase-advance
+		// guard for THIS exact phase number. The outer RunE's `enforceGuard`
+		// already re-ran the gate check itself when --guard was supplied;
+		// this only confirms the guard is the right kind for this field.
 		phaseNum := 0
 		if _, err := fmt.Sscanf(value, "%d", &phaseNum); err != nil {
 			outputError(1, fmt.Sprintf("invalid phase number %q", value), nil)
+			return nil
+		}
+		if err := validateCurrentPhaseGuard(cmd, phaseNum); err != nil {
+			outputError(1, err.Error(), nil)
 			return nil
 		}
 		if phaseNum > 0 && phaseNum <= len(state.Plan.Phases) {
@@ -323,7 +349,7 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 	return nil
 }
 
-func executeExpression(expr string, vars map[string]interface{}) error {
+func executeExpression(cmd *cobra.Command, expr string, vars map[string]interface{}) error {
 	data, err := store.ReadFile("COLONY_STATE.json")
 	if err != nil {
 		outputError(1, "COLONY_STATE.json not found", nil)
@@ -334,6 +360,11 @@ func executeExpression(expr string, vars map[string]interface{}) error {
 		if sub == "" {
 			continue
 		}
+		if err := guardCurrentPhaseSubExpression(cmd, sub, vars); err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		sub = normalizeCurrentPhaseExpressionCasing(sub)
 		data, err = applySubExpression(data, sub, vars)
 		if err != nil {
 			outputError(1, fmt.Sprintf("expression error: %v", exprError(sub, err)), nil)
@@ -349,6 +380,95 @@ func executeExpression(expr string, vars map[string]interface{}) error {
 	}
 	outputOK(map[string]interface{}{"updated": true, "expr": expr})
 	return nil
+}
+
+// validateCurrentPhaseGuard enforces the same "--guard phase-advance:<N>"
+// contract executeFieldMode's current_phase case has always required, for
+// the target phase number being written. Both the --field/--value path
+// (executeFieldMode) and the jq-like expression path (executeExpression,
+// via guardCurrentPhaseSubExpression below) funnel a raw current_phase write
+// through this one check (T-188-CR-03) -- a colony's phase must only move
+// forward through the normal advance process (a build, then letting it
+// advance), never by a direct state edit that skips those checks, no matter
+// which of state-mutate's two invocation syntaxes is used to reach it.
+func validateCurrentPhaseGuard(cmd *cobra.Command, phaseNum int) error {
+	if !cmd.Flags().Changed("guard") {
+		return fmt.Errorf("refused: a colony's phase can only move forward through the normal advance process (running a build then letting it advance) -- setting it directly requires proof that those same checks already passed, and none was supplied here")
+	}
+	guardFlag, _ := cmd.Flags().GetString("guard")
+	guardParts := strings.SplitN(guardFlag, ":", 2)
+	if len(guardParts) != 2 || guardParts[0] != "phase-advance" {
+		return fmt.Errorf("refused: a colony's phase can only move forward through the normal advance process -- the check supplied here is not the kind that proves a phase is actually ready to advance")
+	}
+	guardPhaseNum, convErr := strconv.Atoi(guardParts[1])
+	if convErr != nil || guardPhaseNum != phaseNum {
+		return fmt.Errorf("refused: a colony's phase can only move forward through the normal advance process -- the check supplied here was for a different phase number than the one being set")
+	}
+	return nil
+}
+
+// guardCurrentPhaseSubExpression is the expression-syntax twin of
+// executeFieldMode's current_phase guard (T-188-CR-03). `state-mutate
+// '.current_phase = N'` reaches executeExpression, a completely separate
+// code path from --field/--value, and previously carried no guard
+// requirement at all -- proven by the pre-existing (now updated)
+// TestStateMutateExpressionNumericStillWorks, which asserted this exact
+// mutation succeeded with no --guard flag anywhere. It detects only the
+// plain field-set shape (`.current_phase = <expr>`, the same reFieldSet
+// pattern applySubExpression itself dispatches on) targeting current_phase
+// itself or a sub-path of it; every other expression -- including field-sets
+// of any OTHER field -- returns nil (no guard required), so this does not
+// over-block the rest of the expression syntax.
+func guardCurrentPhaseSubExpression(cmd *cobra.Command, sub string, vars map[string]interface{}) error {
+	m := reFieldSet.FindStringSubmatch(sub)
+	if m == nil {
+		return nil
+	}
+	path := normalizeBracketPath(m[1])
+	// 188-VERIFICATION.md Gap 2: this used to be an exact, case-sensitive
+	// comparison against the literal "current_phase", so any other casing of
+	// the same path -- ".CURRENT_PHASE = N", ".Current_Phase = N" -- reached
+	// applySubExpression completely unguarded, even though encoding/json
+	// resolves all of them to the identical colony.ColonyState.CurrentPhase
+	// struct field on the next read (see executeFieldMode's matching fix for
+	// the --field/--value invocation form). Comparing case-insensitively
+	// here closes the same hole for the jq-like expression syntax.
+	lowerPath := strings.ToLower(path)
+	if lowerPath != "current_phase" && !strings.HasPrefix(lowerPath, "current_phase.") {
+		return nil
+	}
+	resolved := resolveValue(strings.TrimSpace(m[2]), vars)
+	var phaseNum int
+	if _, err := fmt.Sscanf(resolved, "%d", &phaseNum); err != nil {
+		return fmt.Errorf("invalid phase number in expression %q", sub)
+	}
+	return validateCurrentPhaseGuard(cmd, phaseNum)
+}
+
+// normalizeCurrentPhaseExpressionCasing rewrites a plain field-set
+// sub-expression (".<path> = <value>") so a current_phase target of ANY
+// casing is written through the single canonical lowercase "current_phase"
+// key, never a differently-cased duplicate. This matters specifically for
+// the expression syntax (unlike --field/--value, executeExpression never
+// round-trips through the colony.ColonyState struct -- it stays on raw JSON
+// bytes via sjson/gjson throughout) -- so without this, even a genuinely
+// guarded ".CURRENT_PHASE = N" would sjson.SetBytes a second, differently
+// -cased top-level key that persists in COLONY_STATE.json forever, silently
+// winning future case-insensitive decodes in whichever order the file's keys
+// happen to fall. Every other field-set target, and every non-field-set
+// expression shape, passes through byte-for-byte unchanged.
+func normalizeCurrentPhaseExpressionCasing(sub string) string {
+	m := reFieldSet.FindStringSubmatch(sub)
+	if m == nil {
+		return sub
+	}
+	path := normalizeBracketPath(m[1])
+	lowerPath := strings.ToLower(path)
+	if lowerPath != "current_phase" && !strings.HasPrefix(lowerPath, "current_phase.") {
+		return sub
+	}
+	canonicalPath := "current_phase" + path[len("current_phase"):]
+	return "." + canonicalPath + " = " + m[2]
 }
 
 func splitChainedAssignments(expr string) []string {

@@ -76,26 +76,38 @@ func TestFindingsInjectionForCaste_NonReviewCastes(t *testing.T) {
 
 // --- renderCodexContinueReviewBrief tests (RED phase) ---
 
-func TestContinueReviewBrief_GatekeeperHasFindingsInjection(t *testing.T) {
+// Gatekeeper and auditor have no Bash tool by design. Their briefs must
+// route findings through the result JSON (the runtime persists in-process
+// via persistReviewFindingsToLedgers) and must NEVER instruct the CLI —
+// that instruction was unsatisfiable and made both castes self-report
+// blocked, stalling phase advancement (Pocket-Chopper field report).
+
+func TestContinueReviewBrief_GatekeeperRoutesFindingsThroughResult(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Security hardening"}
-	spec := codexContinueReviewSpec{
-		Caste: "gatekeeper",
-		Task:  "Review the phase for security, release, and integrity blockers before advancement.",
+	var spec codexContinueReviewSpec
+	for _, s := range codexContinueReviewSpecs {
+		if s.Caste == "gatekeeper" {
+			spec = s
+			break
+		}
 	}
 	brief := renderCodexContinueReviewBrief("/tmp/test", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, spec)
 
-	if !strings.Contains(brief, "review-ledger-write") {
-		t.Error("gatekeeper brief should contain review-ledger-write")
+	if strings.Contains(brief, "review-ledger-write") {
+		t.Error("gatekeeper brief instructs a CLI command the caste cannot run")
 	}
 	if !strings.Contains(brief, "security") {
 		t.Error("gatekeeper brief should contain security")
 	}
-	if !strings.Contains(brief, "persist") {
-		t.Error("gatekeeper brief should contain persist findings language")
+	if !strings.Contains(brief, "findings array") {
+		t.Error("gatekeeper brief should route findings through the result's findings array")
+	}
+	if !strings.Contains(brief, "runtime records them") {
+		t.Error("gatekeeper brief should say the runtime records findings in the ledger")
 	}
 }
 
-func TestContinueReviewBrief_AuditorHasFindingsInjection(t *testing.T) {
+func TestContinueReviewBrief_AuditorRoutesFindingsThroughResult(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Quality audit"}
 	// Use the production spec which includes domain names in the Task text
 	var spec codexContinueReviewSpec
@@ -107,8 +119,11 @@ func TestContinueReviewBrief_AuditorHasFindingsInjection(t *testing.T) {
 	}
 	brief := renderCodexContinueReviewBrief("/tmp/test", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, spec)
 
-	if !strings.Contains(brief, "review-ledger-write") {
-		t.Error("auditor brief should contain review-ledger-write")
+	if strings.Contains(brief, "review-ledger-write") {
+		t.Error("auditor brief instructs a CLI command the caste cannot run")
+	}
+	if !strings.Contains(brief, "findings array") {
+		t.Error("auditor brief should route findings through the result's findings array")
 	}
 
 	// Must contain at least two of quality, security, performance
@@ -147,8 +162,8 @@ func TestContinueReviewBrief_GatekeeperNotReadonly(t *testing.T) {
 	if strings.Contains(brief, "read-only review") {
 		t.Error("gatekeeper brief should NOT say 'read-only review'")
 	}
-	if !strings.Contains(brief, "persist findings") {
-		t.Error("gatekeeper brief should say 'persist findings'")
+	if !strings.Contains(brief, "findings array") {
+		t.Error("gatekeeper brief should route findings through the result's findings array")
 	}
 }
 

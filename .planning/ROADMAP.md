@@ -28,10 +28,44 @@
 - **v1.23 Daily Driver Reliability** - Phases 145-151 (shipped 2026-05-21) — [Archive](milestones/v1.23-ROADMAP.md)
 - **v1.24 Hybrid Architecture Salvage** - Phases 152-159 (shipped 2026-05-24) — [Archive](milestones/v1.24-ROADMAP.md)
 - **v1.25 Switch It On** - Phases 160-171 (in progress, started 2026-07-25; DRAFT ROADMAP, not yet user-approved)
+- **v1.26 Intelligent Orchestration** - Phases 172-179 (roadmapped 2026-08-08)
 
 ## Phases
 
-### v1.25 Switch It On (DRAFT — awaiting user approval)
+### v1.26 Intelligent Orchestration
+
+**Milestone Goal:** The colony reads the work, sends only the workers that work needs, hands each one what it needs to know, and can prove what it cost — so a non-technical operator gets good results on an inexpensive model without tuning anything.
+
+**Supersedes v1.25 "Switch It On"** (reached 24%, 7 of 29 phases). Its live intent is absorbed; SEE, TYPED, RECLAIM and LOCK move to Future Requirements.
+
+**The organising finding:** four independent researchers, each verifying by reading and *running* this repository's code, converged on one thing — **most of this milestone already exists and was never wired to a caller.** The recursion policy engine (`.aether/ts-host/src/spawn-orchestrator.ts`, unreachable), the depth guard (`spawn-can-spawn` takes `--depth`, ignores it, always returns true), the 27-caste roster (`colony/agents/*.yaml`, zero readers), the skill lifecycle (8 of 9 commands unreferenced), the selection rationale (composed, carried into the manifest, discarded), and token measurement (parsed at every dispatch, persisted nowhere) all exist and reach nobody. The framing is therefore **switch on and prove**, not **design and build** — which is what makes the ordering load-bearing.
+
+**Why the ordering is not negotiable:**
+
+1. **Wiring Proof is Phase 172, first.** A ratchet written after the capabilities gets shaped to whatever shipped. This repo has four verified instances of "built, documented, never called" inside this exact feature area, and CLAUDE.md records that 18 of 25 milestones were framed around restoring something previously marked done.
+2. **Delegation Guard (173) precedes Spend Ledger (174).** The ledger's subtree roll-up walks parent/depth linkage that is recorded at spawn time and cannot be retrofitted to past runs. This resolves an explicit disagreement between the ARCHITECTURE and PITFALLS reports: the guard enforces with a deliberately conservative default (depth 2, tree total ~20 — the TS host's already-chosen numbers) without needing spend data, and the ledger then supplies the evidence to retune those numbers with the measurement recorded.
+3. **Spend Ledger (174) precedes the extensibility phases.** Extensibility changes what workers cost; without a working ledger every later efficiency claim is unfalsifiable.
+4. **Roster Reader (176) precedes Operator-Authored Agents (177).** Prove the reader against the shipped 27 YAMLs first, or reproduce the `colony/agents` zero-reader outcome at larger scale with users' files in it.
+5. **Skill security lands inside Phase 178, never a phase later.** A refusal rule shipped one phase after the authoring path is a published window in which malicious skills load.
+6. **Proof (179) is last** and depends on everything.
+
+**Phase count:** 8, against the research's suggested 7. The single split is ROSTER, into **176 Roster Reader** (ROSTER-01..02, the shipped 27) and **177 Operator-Authored Agents** (ROSTER-03..08, the user path). Keeping them in one phase would put the milestone's most historically-repeated failure mode behind an in-phase ordering note rather than behind a phase gate. Split, the reader must demonstrably change dispatch output before the user path is even planned.
+
+**Reshape (2026-08-13, owner-approved):** a four-perspective review graded the remaining phases against the owner's actual goal — a subscription user (no per-call billing) who wants the Queen selecting the right agents and skills, delegation where necessary, and effectiveness on a user-chosen inexpensive model, without the framework doing too much unnecessarily. Outcome: **174 slimmed to a token instrument** (dollars never headline, no price tables ever; the primary surface is one plain end-of-build line, with `aether spend` as the detail view); **176 shrunk to a wire-or-delete ruling** on the zero-reader YAMLs; **original 177 (Operator-Authored Agents, ROSTER-03..08) shelved to Future Requirements** — the owner selects among existing castes, they do not author new ones; **the freed Phase 177 slot now carries the milestone's one found gap: the Worker Delegation Grant** (Phase 173 built complete guards around a capability no ordinary worker was ever granted — only Queen and Route-Setter carry the dispatch tool on Claude Code, so "spawning where necessary" traced to nothing); **172.1 decided to its structural option only**; **179 gains a retune consumer** so measurement has a consequence. The review also confirmed the core goal already exists test-locked (Queen team sizing, reviewer gauntlet, safety floors, depth-2 sufficiency for horizontal reviewer fan-out).
+
+**How success criteria are written here.** CLAUDE.md's Definition of Done governs: *a requirement is satisfied only when a command exists that someone can run, and that command fails when the requirement is unmet.* Two corrections from this repo's own history shaped the criteria below. A criterion reading "fewer than 27 castes loaded" already passed and proved nothing. A token ledger's unit test asserted the same arithmetic its parser used, so a 186x undercount shipped green — which is why the spend criteria name the expected figures (102,050 / 102,550) rather than the intent ("measure tokens"). Where possible the criteria assert a **proportion or an invariant** (grand total equals the sum of the `self` column; the allowlist may only shrink; the depth cap numbers hold with five user agents installed) rather than the presence of a named section.
+
+- [x] **Phase 172: Wiring Proof** (2026-08-12) (14/14 plans built; verification `passed` against the **narrowed** criteria 1 and 4. Round 4 closed all five independently-reproduced defects CR-01..CR-05: the three job/trigger-level release-gate bypasses via a whitelist of workflow shape, the launderable last-word tolerance rule via full-path comparison, and the unpinned frozen anchor via a SHA-256 constant. Round 4's own review then found CR-06 — a NEW class: the ~18 steps running before the gate step in the same CI job are inspected by nothing this phase built, and any of them can neuter the gate via `$GITHUB_ENV`/`$GITHUB_PATH`. Per the agreed `172-STOP-RULE.md`, that triggers STOP-and-narrow rather than a round 5: criteria 1 and 4 now state what is proven and name the CR-06 residue explicitly. Criteria 2 and 3 hold exactly as originally written. Residue carried by Phase 172.1) - A registered subcommand with no caller fails CI, and every CLI flag named in `.aether/*.md` exists — the ratchet lands before the capabilities it constrains
+- [ ] **Phase 172.1: Gate Environment Integrity** (opened 2026-08-12 by step 3 of `172-STOP-RULE.md`; carries Phase 172's CR-06 residue; blocks nothing) - The gate step's command text is already tamper-evident; its execution environment, inherited from the ~18 steps ahead of it in the same CI job, is not
+- [ ] **Phase 173: Delegation Guard** - Depth is derived from the parent and refused past a cap, a whole-tree budget bounds what depth alone cannot, guards fail closed, and the operator watches the tree grow. Nothing gains the ability to delegate here
+- [ ] **Phase 174: Spend Ledger** (slimmed 2026-08-13) - Token usage is measured with stated arithmetic including cache tokens, persists past the process, separates estimates from measurements, reaches the operator as one plain end-of-build line — dollars never headline and no price table is ever built
+- [ ] **Phase 175: Orchestration Visibility** - The operator reads which workers the Queen chose and why, which it did not call, where the runtime overrode it, and which workers actually found something
+- [ ] **Phase 176: Roster Ruling** (shrunk 2026-08-13) - The 27 zero-reader caste YAMLs get an explicit recorded ruling — wired with executable proof, or deleted with the compiled registry staying authoritative — so no file remains that claims to define agents and defines nothing
+- [ ] **Phase 177: Worker Delegation Grant** (replaced 2026-08-13; original Operator-Authored Agents shelved to Future Requirements) - Ordinary workers whose tasks need helpers actually receive the delegation ability Phase 173 built guards for, per-caste and bounded, recorded in the spawn tree like every other spawn
+- [ ] **Phase 178: Skill Authoring Hardening** - One writer, real validation with named rules at create time and index time, security refusals at load, and selection that cannot be won by filename
+- [ ] **Phase 179: Proof** - Three real tasks on an inexpensive model with interventions counted, a downstream lifecycle run, a recorded before/after token measurement, and an interrupted task that resumes cold
+
+### v1.25 Switch It On (SUPERSEDED by v1.26, confirmed 2026-08-13 — the unchecked phases below are historical record, NOT pending scope; SEE/TYPED/RECLAIM/LOCK live in Future Requirements)
 
 **Milestone Goal:** Make Aether usable daily on an inexpensive model by switching on machinery that already exists and has never run.
 
@@ -46,10 +80,10 @@
 
 **Phase count and the SEE split:** SEE alone reached 14 requirements — too broad for one phase to stay independently verifiable. It splits along a real seam: **Phase 168 (Live Visibility)** covers everything that renders *during* a running command — the health meter, the TS host dashboard, the worker panel, incremental progress, next-step guidance, decision blocks, and the two decisions (what a "live panel" honestly means on Claude Code, and why caste identity feels absent) that gate what gets built. **Phase 169 (Charter & Standards)** covers everything that is a *document or standard*, not a live render — the charter ceremony structure, the progressive-disclosure output format, the task-packet format, and the data-safety guarantee that re-init doesn't silently wipe colony state. These test differently (live-behavior observation vs. document structure plus an automated data-safety test) and ship independently, which is why they're two phases rather than one 14-requirement phase or an arbitrary half-and-half split.
 
-**Where `build.md` is owned (CMD-05):** three phases touch `build.md` this milestone. **Phase 165 (Core Lifecycle Commands) is the sole structural owner** — it performs the full method-over-protocol rewrite. Phase 160 (Fail Loudly) may only make narrow, isolated edits to fix specific broken CLI call arguments inside it, and must merge *before* Phase 165, so the rewrite starts from corrected calls rather than stale ones. Phase 168 (Live Visibility) may only append a "what happens next" / visual-guidance layer on top of the file Phase 165 already restructured, and must merge *after* it. No other phase edits `build.md`'s structure. This ordering is enforced by the dependency chain below (165 depends on 160; 168 depends on 160 and, for this reason, effectively follows 165 in execution even though its formal dependency is the shared Phase 160 foundation — see the phase detail note).
+**Where `build.md` is owned (CMD-05):** four phases touch `build.md` this milestone (updated 2026-07-29: Phase 163 added as a content-only toucher — a two-bullet dispatch-instruction amendment for manifest-level context, no structural change; verified by the extended wrapper ceremony contract test). **Phase 165 (Core Lifecycle Commands) is the sole structural owner** — it performs the full method-over-protocol rewrite. Phase 160 (Fail Loudly) may only make narrow, isolated edits to fix specific broken CLI call arguments inside it, and must merge *before* Phase 165, so the rewrite starts from corrected calls rather than stale ones. Phase 168 (Live Visibility) may only append a "what happens next" / visual-guidance layer on top of the file Phase 165 already restructured, and must merge *after* it. No other phase edits `build.md`'s structure. This ordering is enforced by the dependency chain below (165 depends on 160; 168 depends on 160 and, for this reason, effectively follows 165 in execution even though its formal dependency is the shared Phase 160 foundation — see the phase detail note).
 
-- [ ] **Phase 160: Fail Loudly** - Seven broken CLI calls fixed, drift detection catches positional-argument drift, stderr suppression removed where load-bearing; `control-ts/` deleted as a standalone opener; `.aether/ts-host/` and `.aether/ts/` explicitly kept and verified untouched. Only narrow, isolated `build.md` call-argument fixes here — see the `build.md` ownership note above
-- [ ] **Phase 161: Cheap Models By Design** - `model-routing.yaml` (fully written, zero readers) gets wired to dispatch; routing becomes visible and user-editable; `colony/` gets distributed so this works outside the Aether repo
+- [x] **Phase 160: Fail Loudly** (8/8 plans) — completed 2026-07-28, verified+secured 2026-08-04 - Seven broken CLI calls fixed, drift detection catches positional-argument drift, stderr suppression removed where load-bearing; `control-ts/` deleted as a standalone opener; `.aether/ts-host/` and `.aether/ts/` explicitly kept and verified untouched. Only narrow, isolated `build.md` call-argument fixes here — see the `build.md` ownership note above
+- [ ] **Phase 161: Cheap Models By Design** - DESCOPED 2026-07-28: no automatic model selection (user decision — see phase detail). Residual scope: `colony/` distribution + zero-reader policy file reckoning. Phase 163 executes next; "cheap models" is served by context/clarity work, not allocation
 - [ ] **Phase 162: Switch On Learning** - The complete but never-invoked consolidation pipeline runs at phase end and seal; `pkg/learn` vs `pkg/memory` is reconciled; the Hive Brain default is a written decision, not an accident
 - [ ] **Phase 163: Context Reaches Workers** - The context capsule, survey, phase research, `suggest-analyze`, and the approved charter reach a wrapper-spawned worker's actual prompt — at manifest level, measured, and inspectable by a person
 - [ ] **Phase 164: Research Feeds Planning** - The Queen decides whether a phase needs research and, when it does, a worker runs automatically using the existing `confidence-loop.ts` (kept, not rebuilt) rather than a stub the user pastes findings into
@@ -161,7 +195,7 @@ Plans:
   2. Workers spawned during build receive pheromone signals, matched skills, survey data, colony goal, and phase description in their context -- nothing is silently dropped
   3. Oracle findings flow end-to-end: research results become instincts, instincts become learnings, learnings promote to QUEEN.md, and high-confidence instincts reach the Hive Brain
   4. All 9 flagship workflows (build, continue, plan, colonize, autopilot, seal, entomb, swarm, oracle) produce correct state mutations and ceremony output when run sequentially
-  5. Autopilot (`aether run`) respects all 10 Classic pause conditions -- it stops appropriately on test failures, critical chaos findings, quality gate failures, and other trigger events
+  5. Autopilot (`aether run`) respects all 10 Classic pause conditions -- it stops appropriately on test failures, critical chaos findings, quality gate failures, and other trigger events. *(Closed 2026-08-16: the pause engine is wired into the real run loop and proven by `TestGoldenAutopilotPauseConditions`; per-condition dispositions — including the retirement of the classic auditor-score condition, which has no Go counterpart — recorded in `.planning/decisions/autopilot-pause-conditions.md`.)*
 **Plans**: 3 plans
 
 ### Phase 149: Queen Execution Policy
@@ -333,7 +367,17 @@ Plans:
 - [x] 160-08-PLAN.md — LOUD-08 (D-02): build the /ant-unblock wrapper on Claude + OpenCode (wave 2, needs 03)
 
 ### Phase 161: Cheap Models By Design
-**Goal**: `colony/policies/model-routing.yaml` already maps every caste to a model tier -- builders, watchers, scouts, and surveyors to the cheap tier; oracle, architect, route-setter, and archaeologist to the expensive one. It has zero readers. This phase wires an existing, fully-written YAML to dispatch; it is not writing new routing logic. `colony/` also gets distributed, since `cmd/policy_loader.go:19` currently resolves a relative path and nothing embeds, publishes, or installs `colony/` to `~/.aether/system/colony` -- so every policy silently falls back to compiled defaults the moment Aether runs outside this repo.
+**Goal**: > **DESCOPED 2026-07-28 (user decision, pre-planning):** automatic model selection is
+> rejected. The user's intent behind "usable daily on an inexpensive model" is
+> capability — the colony works well when the USER runs it on a cheap model — not
+> allocation. Phase 163 (the clarity work that actually serves that intent) executes
+> next instead. What survives of this phase: the `colony/` distribution gap and the
+> wire-or-delete reckoning for the seven zero-reader policy files (with
+> `model-routing.yaml`'s likely fate being deletion or a strictly manual opt-in —
+> never default-on routing). Requirements MODEL-01..06 need revision before any
+> planning here.
+>
+> Original goal (superseded): `colony/policies/model-routing.yaml` already maps every caste to a model tier -- builders, watchers, scouts, and surveyors to the cheap tier; oracle, architect, route-setter, and archaeologist to the expensive one. It has zero readers. This phase wires an existing, fully-written YAML to dispatch; it is not writing new routing logic. `colony/` also gets distributed, since `cmd/policy_loader.go:19` currently resolves a relative path and nothing embeds, publishes, or installs `colony/` to `~/.aether/system/colony` -- so every policy silently falls back to compiled defaults the moment Aether runs outside this repo.
 **Depends on**: Phase 160
 **Requirements**: MODEL-01, MODEL-02, MODEL-03, MODEL-04, MODEL-05, MODEL-06
 **Success Criteria** (what must be TRUE):
@@ -354,20 +398,91 @@ Plans:
   3. *(Decision-shaped, not build-shaped)*: a written decision states which of `pkg/learn` or `pkg/memory` is authoritative and what happens to the other -- retired, or explicitly subordinate -- documented in the repo, not only implemented
   4. *(Decision-shaped)*: a written decision states whether the Hive Brain default changes from off to on, with the reasoning; if it stays off, the documentation stops implying it is on by default
   5. The same worker task, run once with colony memory populated and once with it wiped, produces demonstrably different output (referencing a prior instinct, wisdom entry, or pattern) -- recorded as a before/after comparison, not assumed
-**Plans**: TBD
+**Plans**: 6 plans in 4 waves
+
+Plans:
+**Wave 1**
+- [x] 162-01-PLAN.md — LEARN-04: hive default to promote, consent gate retired, AGENTS.md made true (wave 1)
+- [x] 162-02-PLAN.md — LEARN-01/03: make consolidation's QUEEN.md promotion target reachable before wiring it (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 162-03-PLAN.md — LEARN-01: phase-end consolidation on both continue paths + always-present learning beat (wave 2, needs 02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 162-04-PLAN.md — LEARN-02/03: seal eight-ant pass, report artifact, no-double-promotion reconciliation (wave 3, needs 01, 02, 03)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 162-05-PLAN.md — LEARN-05: deterministic populated-vs-wiped brief test + recorded before/after exhibit (wave 4, needs 01-04)
+- [x] 162-06-PLAN.md — LEARN-03/04: decision record + docs truth pass + docs-rot guard test (wave 4, needs 01, 03, 04)
 
 ### Phase 163: Context Reaches Workers
-**Goal**: Four things are confirmed disconnected from the active build path, independently verified by two review agents: the colony-prime context capsule, `survey-load`, phase research, and `suggest-analyze`. A fifth -- the approved colony charter -- has never reached a worker at all, despite governance detection being healthy. This phase reconnects `build-context.md` (the one build playbook Go currently omits) and carries context at manifest level, once per phase, rather than duplicating an 8K capsule across every worker dispatch -- which on an 8-worker phase would otherwise add roughly 16K tokens of overhead to a milestone about running cheaply.
+**Goal**: Everything the colony knows demonstrably arrives in a worker's actual prompt, measured and inspectable by a person. *(Goal corrected 2026-07-29 during planning, per Phase 163 D-07 and the phase research: two of the four "confirmed disconnected" items were already reconnected by commits `281dd34a` and `a2c8288e` on 2026-07-26 -- survey findings and phase research reach build workers today. `build-context.md` and `codexBuildPlaybooks()` were deleted in Phase 160 and stay dead.)* What is genuinely missing: the colony-prime context capsule never reaches a wrapper-spawned worker, the approved charter has never reached any worker, and `suggest-analyze` has never executed. This phase carries the capsule at manifest level -- once per build, not an 8K copy per dispatch -- adds charter to the same integrity-assessed pipeline plus a compliance gate, gives `suggest-analyze` its first caller, refines the existing `--print-brief` inspector into a ten-second checklist, and fixes the three worker write-contract contradictions folded in from Phase 160 (the `.aether/data/` guardrail workers were forced to evade, scout's read-only profile versus its own write instruction, and the `{}`-only artifacts schema).
 **Depends on**: Phase 160
 **Requirements**: CONTEXT-01, CONTEXT-02, CONTEXT-03, CONTEXT-04, CONTEXT-05, CONTEXT-06, CONTEXT-07, CONTEXT-08, CONTEXT-09
 **Success Criteria** (what must be TRUE):
-  1. `build-context.md` is part of the playbook sequence Go actually loads for a build (`codexBuildPlaybooks()`), where before it was the one playbook omitted
-  2. Running `aether build <n> --print-brief` (or equivalent) shows a human-readable dump of what a spawned worker's prompt actually contains -- a person can check context presence themselves, without reading Go source
-  3. That printed brief shows the context capsule, hive/pheromone sections, survey findings, phase research, and the approved charter's governance rules (e.g. "TDD required, ESLint enforced") all present -- where before an approved charter was invisible to every worker
-  4. `suggest-analyze` actually runs during a build and its pheromone suggestions appear for the user to approve or dismiss, visible in the build output
-  5. Total assembled context size is measured and reported (e.g. in the `--print-brief` output), so a person can see whether prompts are appropriately sized rather than needlessly stacked (colony-prime 8K + skills 8K + playbook injection 7K)
-  6. The same worker task, run once with this context path connected and once with it disconnected, produces a recorded before/after comparison on an inexpensive model
-**Plans**: TBD
+  1. A wrapper-spawned build worker receives the colony-prime context capsule, carried once at manifest level, and a named test fails when it stops arriving or starts duplicating per dispatch
+  2. Running `aether build <n> --print-brief` shows a sectioned checklist -- each context section present or absent, its size, and the total against a real budget -- with `--full` for the raw assembled prompt
+  3. That checklist shows the context capsule, pheromone signals, survey findings (with a staleness warning), phase research, and the approved charter's governance rules; an approved charter is no longer invisible to every worker, and an ignored mechanically-checkable charter rule surfaces as a gate finding at continue
+  4. `suggest-analyze` runs on every completed build, exactly once, and its suggestions appear once at closeout with copyable approve and dismiss commands
+  5. Total assembled context is measured against the budgets the codebase actually declares (colony-prime 8000/4000, skills 8000, phase research 3500, codegraph 2200) and bounded by an invariant test -- a guard on future additions, not a trimming programme *(the "playbook injection 7K" figure in the original criterion no longer exists; playbook injection was removed entirely)*
+  6. A worker told to write planning or research artifacts can do so without evading the guardrail, while colony state stays blocked; scout's permissions match its own brief; and the artifacts schema accepts named typed fields
+  7. *(CONTEXT-09, descoped per D-08)*: no staged benchmark. The inspector plus the phase's automated presence and budget tests are the evidence; real-world cheap-model validation happens through the user's own repos after the phase ships
+**Plans**: 6 plans
+
+Plans:
+- [x] 163-01-PLAN.md -- CONTEXT-02/03: context capsule reaches wrapper workers, once, at manifest level (wave 1)
+- [x] 163-02-PLAN.md -- CONTEXT-06/D-09: charter as a protected colony-prime section + charter compliance gate wired into continue (wave 1)
+- [x] 163-03-PLAN.md -- D-04/D-05: sanctioned scratch-dir allowlist in the hook, scout permission fix, artifacts schema fix, aligned rules docs (wave 1)
+- [x] 163-04-PLAN.md -- CONTEXT-01/04, D-07/D-10: survey staleness warning, survey+research presence tests, REQUIREMENTS.md rewording (wave 1)
+- [x] 163-05-PLAN.md -- CONTEXT-05/D-11: suggest-analyze gets a live caller at build-finalize, tick-to-approve at closeout (wave 1)
+- [x] 163-06-PLAN.md -- CONTEXT-07/08/09, D-06/D-03/D-08: --print-brief checklist default, --full, budget invariant (wave 2, needs 01, 02, 04)
+
+### Phase 163.2: ts-host preflight configurability: make the worker-platform preflight timeout configurable instead of hardcoded 20s, and reduce per-dispatch preflight cost (INSERTED)
+
+**Goal:** The paid provider preflight probe stops running on every dispatch and stops being un-tunable: a success is cached per platform for a configurable trust window (default 1h), both hosts honour one `AETHER_PREFLIGHT_TIMEOUT` knob with the same 45s default, the probe runs in a neutral temp directory instead of the repo, a deliberate skip announces itself, and a provider/auth failure clears the window immediately.
+**Requirements** (decision IDs from 163.2-CONTEXT.md; no REQUIREMENTS.md IDs are mapped to this inserted phase):
+  - D-01: time-based per-platform preflight success cache in a runtime state file
+  - D-02: TTL default 1h, tunable via `AETHER_PREFLIGHT_CACHE_TTL`, invalid values fall back
+  - D-03: auto-invalidation when a dispatch fails with a provider/auth-classified error
+  - D-04: the probe stays a real model round-trip; no cheap substitute, no model auto-selection
+  - D-05: one shared `AETHER_PREFLIGHT_TIMEOUT` across Go and the TS host; the hardcoded 20s is gone
+  - D-06: `AETHER_SKIP_PREFLIGHT` skip switch with a loud, never-silent notice
+  - D-07: the probe runs in a neutral temp directory, not the repo working tree
+**Depends on:** Phase 163
+**Plans:** 5/5 plans complete
+
+Plans:
+- [x] 163.2-01-PLAN.md -- D-01/D-02/D-06: preflight cost-policy layer (per-platform TTL success cache, skip switch, notices) (wave 1)
+- [x] 163.2-02-PLAN.md -- D-04/D-05/D-07: one Go probe runner - temp-dir cwd, shared timeout, Codex probe unified (wave 1)
+- [x] 163.2-03-PLAN.md -- D-04/D-05/D-06/D-07: TS host shared timeout knob, temp-dir probe, loud skip, dist rebuild (wave 1)
+- [x] 163.2-04-PLAN.md -- D-01/D-06: both dispatch chokepoints on one gate, shared trust window, adapter outcome field (wave 2, needs 01)
+- [x] 163.2-05-PLAN.md -- D-03/D-05: auth-failure invalidation, single documented knob surface, cross-host parity tests (wave 3, needs 01-04)
+
+### Phase 163.1: Wrapper-Runtime Completion Contract (INSERTED)
+
+**Goal:** A wrapper that follows the documented completion contract succeeds on the first submission, and a rejected submission is always recoverable — the contract layer (schema → docs → brief text → validator) agrees with itself because it is generated from one source of truth. Sourced from the 2026-07-31 real-world M4L usage diagnosis, verified against source by four review agents: every P0 there was a contract-vs-runtime disagreement no phase 160–171 owned end-to-end (Phase 165 owns only the wrapper markdown side).
+**Requirements** (verified file:line evidence in the diagnosis session):
+  1. Ship a completion-packet JSON Schema (nothing under `.aether/schemas/` covers the envelope today; the internal `workerClaimsSchema` in `pkg/codex/worker.go` covers a single worker's claims only) and validate against it.
+  2. Batch validation: `runCodexBuildFinalize` / `mergeExternalBuildResults` / `validateAndNormalizeClaimPathsToRoot` return on first violation — a wrapper discovers rules one resubmission at a time (six sequential round trips observed). Collect and return all violations at once.
+  3. Stage-time semantic validation or attempt rebinding: `build-completion-stage` binds the packet digest (`stageBuildAttemptCompletion`, cmd/build_attempt.go) before semantic worker-result validation runs, so a packet that finalize later rejects poisons the attempt — only a byte-identical resubmit is accepted, forcing new attempt → new manifest → renamed workers (`-r2` suffixes). The direct finalize path already validates before binding; staging must match it, or a non-terminal attempt must accept a corrected digest.
+  4. Verification honesty: `runVerificationStep` (cmd/codex_continue.go) reports `passed:true, skipped:true` when no command resolves, while the criteria gate then fails "required tests check was skipped" — green step report, red gate. A skipped-but-required check must surface as its own loud state. Also join backslash line continuations in documented commands (parser is strictly line-by-line).
+  5. Reconcile escape hatch: `evaluatePhaseCriterionEvidence` (cmd/criterion_evidence.go) takes no reconcile input; a criterion bound to an artifact a task legitimately did not modify is unsatisfiable without a false claim. Design one of: read-only artifact evidence (hash-verified without a modification claim), same-build cross-task claim satisfaction, or criterion rebind without full redispatch.
+  6. Composed brief file channel: the "pass dispatch.brief VERBATIM" wrapper contract is unsatisfiable for 6–22KB briefs given Read-tool long-line truncation. `worker-briefs/{name}.md` files exist but hold the base brief only (missing pheromone + handoff sections vs `composeBuildManifestBrief`); write the composed brief to the file, add `brief_path` to the dispatch entry, and sanction path-handoff across the 4 contract surfaces (Claude + OpenCode wrappers, Codex skill, cmd/command_guide.go — per build.yaml's drift guard).
+  7. Publish-order fix: the first `aether publish` after a version bump fails verification ("binary 1.0.44 does not match hub 1.0.43") because it verifies against the not-yet-synced hub; rerunning succeeds. Verify after sync, or sync before verify.
+**Depends on:** Phase 163
+**Plans:** 9/9 plans complete
+**Context:** The six S-size companions from the same diagnosis were fixed directly on 2026-07-31 (commits 4b54f88e, d636ad22, 1ea23e01, 4d9dae9a, 13b7b661, ee0ad076): sanctioned .aether/data claim tolerance, plan --accept fail-loudly, prose freshness coercion + contract doc fix, AETHER_PREFLIGHT_TIMEOUT, platform-neutral brief heading, python3 -m pytest recognition. This phase covers only the design-level remainder.
+
+Plans:
+- [x] 163.1-01-PLAN.md — Ship the completion-packet JSON Schema generated from the Go structs, with a drift gate and doc/wrapper pinning tests (req 1, D-03/D-04) [wave 1]
+- [x] 163.1-02-PLAN.md — Batch validation: one rejection carrying every violation, structural plus semantic (req 1/2, D-05/D-06) [wave 2]
+- [x] 163.1-03-PLAN.md — Stage-time validation before digest binding, and a rebind window that closes at first successful finalize (req 3, D-07/D-08) [wave 3]
+- [x] 163.1-04-PLAN.md — Composed brief written to worker-briefs/{name}.md with brief_path across all four contract surfaces, plus stable worker names across re-plans (req 6/3, D-12/D-09) [wave 1]
+- [x] 163.1-05-PLAN.md — Verification honesty: required skipped checks halt loudly; backslash line continuations parse whole (req 4, D-10/D-11) [wave 1]
+- [x] 163.1-06-PLAN.md — Read-only artifact evidence as the reconcile escape hatch, task-scoped and runtime-set only (req 5, D-01/D-02) [wave 2]
+- [x] 163.1-07-PLAN.md — First `aether publish` after a version bump passes verification (req 7) [wave 1]
+- [x] 163.1-08-PLAN.md — Gap closure: validate the bytes the wrapper submitted, so unknown fields and type errors are rejected together (req 1/2) [wave 1]
+- [x] 163.1-09-PLAN.md — Gap closure: criterion evidence and the --read-only-artifact escape hatch reach the plan-only → continue-finalize path (req 5) [wave 1]
 
 ### Phase 164: Research Feeds Planning
 **Goal**: Before a phase is planned, the Queen decides whether it needs research and states why; when it does, a research worker runs automatically and its findings persist and feed the plan directly -- restoring `v5.4.0` `plan.md` Step 3.6 "Phase Domain Research" choreography. Current `plan.md` contains zero references to Oracle; research is a standalone command the user must remember to run and paste in. Nothing in the review refuted this, and keeping the TS host (Phase 160's decision) makes it *easier*, not harder: `.aether/ts-host/src/confidence-loop.ts` (250 lines, with `maxIterations` already wired) is a working target-confidence loop. This phase uses it as-is; it does not reimplement a confidence loop.
@@ -379,7 +494,18 @@ Plans:
   3. Re-running plan on a phase re-researches from scratch rather than reusing stale findings, and territory survey context (where it exists) reaches both the research worker and the planner
   4. During a live plan run, a confidence readout is visible while research runs, using the existing `confidence-loop.ts` rather than a reimplementation, and the loop stops at the depth-bound target/iteration budget (fast 80%/4, balanced 90%/6, deep 95%/8, exhaustive 99%/12) with an accept override to exit early
   5. At plan time, the Queen proposes plan granularity, task decomposition depth, and verification depth with a plain-English reason each, and the user can accept or change any of them before planning proceeds
-**Plans**: TBD
+**Plans**: 11 plans (9 original in 4 waves + 2 gap-closure in 2 waves)
+- [x] 164-01-PLAN.md -- Territory survey reaches the research Scout; replans re-research (wave 1)
+- [x] 164-02-PLAN.md -- Queen's research recommendation: hints, reasons, batch card data (wave 1)
+- [x] 164-03-PLAN.md -- Research evidence scoring and depth-to-target/iteration binding, TS (wave 1)
+- [x] 164-04-PLAN.md -- Three-knob depth proposal with computed reasons, Go (wave 1)
+- [x] 164-05-PLAN.md -- Gate research dispatch on the approved batch; record overrides (wave 2)
+- [x] 164-06-PLAN.md -- Wire ConfidenceLoop into the plan path: live ceremony, early accept (wave 2)
+- [x] 164-07-PLAN.md -- Research reaches the planner's context; research failure is loud (wave 3)
+- [x] 164-08-PLAN.md -- Oracle escalation on stall, with scoped permissions (wave 3)
+- [x] 164-09-PLAN.md -- Two decision cards in both wrappers and the YAML source (wave 4)
+- [x] 164-10-PLAN.md -- Gap closure: Go-emitted permission_profile and brief reach the real worker (gap wave 1)
+- [x] 164-11-PLAN.md -- Gap closure: escalation resolves mid-loop phases and degrades instead of crashing (gap wave 2)
 
 ### Phase 165: Core Lifecycle Commands
 **Goal**: `init`, `plan`, `build`, and `continue` wrappers are rewritten to carry engineering method -- stage purpose, files to read, spawn choreography, stop conditions -- instead of protocol instructions whose primary job is parsing `result.manifest.dispatch_manifest`. Scoped by content, not line count: a short `oracle.md` is not evidence of hollowing, since its RALF loop moved into Go. **This phase is the sole structural owner of `build.md` for this milestone.** Phase 160 may only have made narrow, isolated fixes to specific broken call arguments inside it (merged first); Phase 168 may only append a "what happens next" / visual-guidance layer on top of the file this phase produces (merges after). No other phase restructures it.
@@ -391,7 +517,28 @@ Plans:
   3. A user reading `build.md` before running a build can describe what each stage does and what context/research a worker receives, without opening Go source
   4. `/ant-chaos`, `/ant-archaeology`, `/ant-dream`, `/ant-oracle`, `/ant-swarm`, `/ant-sage`, `/ant-colonize`, and `/ant-council` continue to work unchanged
   5. `build.md`'s structural rewrite is committed by this phase alone; the commit or a header comment states what Phase 160 fixed beforehand and reserves the trailer section Phase 168 appends afterward, so the merge order is traceable, not assumed
-**Plans**: TBD
+**Plans**: 10 plans in 6 waves (6 original + 4 gap-closure)
+
+Plans:
+**Wave 1**
+- [x] 165-01-PLAN.md — Contract destination + shared wrapper test toolkit + flat-mirror and retired-vocabulary invariants; resolves the three research open questions (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 165-02-PLAN.md — CMD-05: build.md rewrite on both platforms with the D-08 ownership handshake, skeleton density and parity tests (wave 2, needs 01)
+- [x] 165-03-PLAN.md — continue.md rewrite on both platforms; Classic verification beat restored, context-clear fence widened to the flat mirror (wave 2, needs 01)
+- [x] 165-04-PLAN.md — plan.md rewrite on both platforms; termination-condition prose restored without threshold arithmetic or invented flags (wave 2, needs 01)
+- [x] 165-05-PLAN.md — init.md rewrite on both platforms; 👑 intention beat restored, first dedicated init ceremony test (wave 2, needs 01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 165-06-PLAN.md — CMD-02/CMD-04 phase gate: cross-wrapper proportion invariant, specialist-command hash fence, CMD-03 human read-through (wave 3, needs 01-05)
+
+**Gap closure** *(from 165-VERIFICATION.md, status gaps_found; both plans are wave 1 of the gap-closure run and touch disjoint files, so they execute in parallel)*
+- [x] 165-07-PLAN.md — BLOCKER CR-01 + WR-05: route shelf promotion through the runtime (`shelfEntryToTodo` gets its first call site), remove the `active_todos` hand-write instruction from all three init.md surfaces, fence the phrasing in the init ceremony test, and write pheromones only after `aether init` succeeds
+- [x] 165-08-PLAN.md — WR-01 + WR-04: reconcile the contradictory `<read_only>` blocks in build.md and continue.md with their own Guardrails (plus a new consistency test), and move plan.md's Clarification Gate ahead of Decision Moment 2 so research approvals are never spent on a discarded manifest
+
+**Gap closure — round 2** *(from the 2026-08-03 re-verification, status gaps_found: Truth 8 / review CR-01 — 165-07's own fix left `shelf-promote-batch` running before the Approval consent gate. Sequential: the wrapper prose in 165-10 describes the runtime surface 165-09 builds)*
+- [x] 165-09-PLAN.md — BLOCKER CR-01 (runtime half) + WR-02/WR-03/WR-04/WR-05: `aether init` gains `--promote-shelf` / `--dismiss-shelf` and performs the promotion itself after colony state is created, so a cancel, a revised goal, or a failed init can never strand a backlog entry; init-ceremony seeds shelf todos too; CONTEXT.md and HANDOFF.md display them; batch commands stop reporting total failure as success (wave 1)
+- [x] 165-10-PLAN.md — BLOCKER CR-01 (wrapper half) + WR-06: all three init.md surfaces collect shelf IDs only and spend them inside the Approval `aether init` call, the `<failure_modes>` "write nothing on cancel" claim becomes true again, both batch commands become forbidden vocabulary fenced by a new ceremony subtest across all three surfaces, and the stale RED/GREEN test comment is retired (wave 2, needs 09)
 
 ### Phase 166: Full Colony On Demand
 **Goal**: All 27 castes are markdown and YAML and cost nothing at rest; none are deleted or merged. Dream is a command, not a caste -- corrected on restoration, since the earlier draft's "Sage and Dream at milestone close" language implied a Dream worker that cannot exist. This phase makes phase-fit caste selection actually provable: the old success criterion ("fewer than 27 castes loaded") already passes today and proves nothing, so it is replaced with a criterion that can fail. It also gives `colony/agents/*.yaml` its first Go reader -- today only the deleted `control-ts` ever read it.
@@ -472,10 +619,396 @@ Plans:
   5. If the benchmark runs, its colony-vs-solo result is recorded in the repository as the milestone's honest verdict, including if it is unfavourable
 **Plans**: TBD
 
+### Phase 172: Wiring Proof
+**Goal**: A capability added by this milestone cannot ship without a caller. The orphan ratchet exists, runs in CI, and blocks — before any of the capabilities it constrains are built, so it is shaped by the standard rather than by whatever shipped.
+**Depends on**: Nothing (first phase of v1.26)
+**Requirements**: WIRE-01, WIRE-02, WIRE-03
+**Success Criteria** (what must be TRUE):
+  1. Registering a new cobra subcommand with no caller outside its own definition file makes `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced` fail, naming the command — proven by a fixture that registers exactly such a command. The allowlist ships seeded with the scan's real output: 293 pre-existing orphans, 6 of them tagged `owner_phase: "178"` (the reviewed `skill-*` lifecycle set) — correcting the originally assumed count of eight `skill-*` lifecycle commands, which predated the scan and (wrongly) credited documentation mentions as caller evidence. The 293 figure was re-measured by 172-09 after keying caller evidence by resolved cobra command path instead of bare leaf name; the earlier figure of 278 was measured under leaf-keyed evidence, which is the exact defect GAP B/CR-04 found — `aether host colonize` silently credited the unrelated top-level `aether colonize`. Of the 293: 274 carry forward one-to-one from the pre-migration baseline (including all 6 `owner_phase: "178"` entries), 10 come from splitting 4 collapsed leaf entries (`get`, `set`, `registry`, `wisdom`) into the real commands each was invisibly covering, and 9 are newly revealed by the migration and tagged `reason: "path-collision-revealed"`. See `.aether/docs/orphan-allowlist-policy.md` and the frozen `cmd/testdata/orphan_allowlist_baseline_pre_path_migration.json` snapshot. A companion assertion, comparing **full command paths** (not bare leaf names) against a SHA-256-pinned pre-migration snapshot (`preMigrationSnapshotSHA256`, `TestPreMigrationSnapshotIsFrozen`), fails when the allowlist gains an entry it did not have in the committed baseline: **it may only shrink** — proven both by `TestPathMigrationRejectsASameLeafNewcomer` (a same-leaf-name newcomer, including the reviewer's own `aether colony-depth setup` counterexample) and by a generality loop rejecting newcomer paths built from all 278 frozen tolerated leaves at once. A permanent, hermetic regression test (`TestCallerEvidenceIsNotSharedBetweenSameLeafNames`) proves caller evidence for one command path can never leak to a same-leaf-name command at a different path, using a synthetic fixture that does not depend on `colonize`/`closeout` being fixed. *(Narrowed 2026-08-12 under `172-STOP-RULE.md`.)* **Residue, named explicitly and NOT closed by this phase:** this guarantees the allowlist can only shrink *whenever the guard test actually executes inside CI*. It does not by itself guarantee the guard always executes — CR-06 (see criterion 4) shows any of the ~18 steps that run before the gate step in the same CI job can alter the environment or replace the `go` binary the whole test run depends on, which would silence this assertion along with every other guard test in the same job, undetected by any mechanism this phase built
+  2. `aether spawn-can-spawn 5 --enforce` — the exact string `.aether/workers.md:292` instructs every worker to run — exits 0. Today it exits 1 with `Error: unknown flag: --enforce`
+  3. A test enumerates every `aether …` invocation in `.aether/*.md` and fails naming the file, the line, and the offending flag when an instruction names a flag the binary does not register. Seeded to fail today against `--enforce`, and it passes only once criterion 2 does
+  4. *(narrowed 2026-08-12 under `172-STOP-RULE.md`; original absolute wording was "The ratchet and the flag test run in the same CI command the release gate already runs — verified by deleting a caller and observing the gate go red, not by reading the workflow file")* The ratchet and the flag test run in the same CI command the release gate already runs, under a named step (`Verify subcommand wiring and CLI flag contracts`, `.github/workflows/ci.yml:99-100`) — proven by deleting a caller and observing `TestDeletingACallerMakesTheRatchetNameIt` name it, not by reading the workflow file. A whitelist of the workflow's root keys (`workflowRootAllowedKeys`), the `go` job's keys (`gateJobAllowedKeys`), each trigger's keys (`releaseTriggerAllowedKeys`), and the two gate steps' own keys (`gateStepAllowedKeys`) rejects any key outside a reviewed set by default, closing three independently-reproduced job/trigger-level disabling routes: `continue-on-error` at job scope, `env: GOFLAGS` at workflow/job/step scope, and `paths-ignore` under `on:` triggers. **Residue, tracked and explicitly NOT closed by this phase (CR-06):** the other ~18 steps that run earlier in the same `go:` job — Checkout, Setup Go, Setup Node, Install goreleaser, Validate goreleaser config, Build, Vet, and the rest — are not inspected by any mechanism this phase built. Any of them can write `GOFLAGS`/`GOTOOLCHAIN` to `$GITHUB_ENV`, or put a fake `go` earlier on `$PATH` via `$GITHUB_PATH`, or overwrite the `go` binary directly — all standard, documented GitHub Actions mechanisms available to any step sharing the job's runner and filesystem — and reproduce CR-02's outcome (the gate running zero tests and exiting 0) by a route the exact-equality pin, the execution harness, and the shape whitelist were each built to inspect the wrong text for. The gate step's command text is provably tamper-evident; the gate step's **execution environment**, inherited from every step that ran before it in the same job, is not
+**Plans**: 14 plans in 11 waves (plans 06-08 added 2026-08-11 to close the two confirmed verification gaps; plans 09-11 added 2026-08-11 after re-verification returned 2/4; plans 12-13 added 2026-08-12 as the FINAL build round under the agreed stop rule in `172-STOP-RULE.md` — five independently reproduced defects only: three job/trigger-level release-gate bypasses closed by a whitelist of workflow shape rather than more string searches, plus the launderable last-word tolerance rule and its unpinned frozen anchor)
+
+Plans:
+**Wave 1**
+- [x] 172-00-PLAN.md — wave 1 — WIRE-03 (precondition for WIRE-01): teach the one shared audit extractor to see `x=$(aether …)` invocations and to treat redirections as terminators, before anything downstream reads the world through it
+- [x] 172-01-PLAN.md — wave 1 — WIRE-02: make `aether spawn-can-spawn 5 --enforce` execute, with a real deny-to-non-zero-exit path
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 172-02-PLAN.md — wave 2 — WIRE-01: the orphan ratchet, its shrink-only allowlist seeded from real scanner output against the fixed extractor, and its self-tests
+- [x] 172-03-PLAN.md — wave 2 — WIRE-03: bring the top-level `.aether/*.md` corpus into scope, fix the drift it surfaces, and make the `--enforce` seed permanent
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 172-04-PLAN.md — wave 3 — WIRE-01 (D-12): shrink-only guard over the flag audit's skip list, plus the written policy
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 172-05-PLAN.md — wave 4 — D-15: named CI step, the delete-a-caller red/green proof, and correcting the phase's recorded orphan count
+
+**Wave 5** *(gap closure — blocked on Wave 4 verification)*
+- [x] 172-06-PLAN.md — wave 5 — WIRE-03 (gap 1): make the audit see the region a glued closing fence marker hid, fix the two live violations inside it, and fail a test when the defect shape returns anywhere in the corpus
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [x] 172-07-PLAN.md — wave 6 — WIRE-01, WIRE-02, WIRE-03 (gap 2, D-11, D-15): scope the blanket release-gate check to the step that can actually fail, and scan every guard file this phase created from one inventory
+- [x] 172-08-PLAN.md — wave 6 — WIRE-01, WIRE-03: make the extractor's substitution opener and closer one decision, and make the flag audit fail when it is reading nothing
+
+**Wave 7** *(gap closure — blocked on the 2026-08-11 re-verification)*
+- [x] 172-09-PLAN.md — wave 7 — WIRE-01 (gap B): key caller evidence by the resolved cobra command path so `aether host colonize` stops crediting the unrelated top-level `aether colonize`, migrate the allowlist and baseline to path keys against a committed pre-migration snapshot that proves tolerance did not widen
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [x] 172-10-PLAN.md — wave 8 — WIRE-01, WIRE-02, WIRE-03 (gap A, core): stop asserting on the workflow file's text — take the release gate's own command from `ci.yml`, run it against a deliberately broken tree, and require it to exit non-zero and to exit zero against an unbroken one
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [x] 172-11-PLAN.md — wave 9 — WIRE-01, WIRE-02, WIRE-03 (gap A, complements): the disabling routes execution cannot see — a commented-out step, a conditioned step, disabled `on:` triggers, and a job-level `if:` — plus honest `-run` extraction in both directions
+
+**Wave 10** *(gap closure — final round, blocked on the 2026-08-12 re-verification and code review)*
+- [x] 172-12-PLAN.md — wave 10 — WIRE-01, WIRE-02, WIRE-03 (CR-01, CR-02, CR-03): close the job-level and trigger-level bypasses with a whitelist of workflow shape — the workflow's root keys, the `go` job's keys, the trigger names and each trigger's keys, and the two gate steps' keys must be exactly a reviewed set in Go source, so `continue-on-error`, `env: GOFLAGS`, `paths-ignore` and every key nobody enumerated fail by default; plus the source stating plainly that the execution harness never sees the workflow's environment
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [x] 172-13-PLAN.md — wave 11 — WIRE-01 (CR-04, CR-05): compare allowlist entries by full command path against an explicit 272 + 12 + 9 = 293 accounting of the 172-09 migration instead of by bare last word, proven by re-running the verifier's own `aether colony-depth setup` counterexample red; and pin the frozen pre-migration snapshot's contents with a SHA-256 constant in Go source
+
+### Phase 172.1: Gate Environment Integrity (CR-06 residue)
+**Goal**: The release gate's *execution environment* is as tamper-evident as its command text already is. Today the gate step's command string is pinned, shape-whitelisted and execution-proven, but every one of the ~18 steps that run before it in the same CI job can silently change the environment that command runs in — and nothing inspects them.
+**Depends on**: Phase 172
+**Blocks**: Nothing. Phase 173 and later phases may proceed; they inherit the documented limit recorded in Phase 172's narrowed criteria 1 and 4 rather than a false guarantee.
+**Requirements**: carries the residue of WIRE-01 and WIRE-03; no new requirement IDs
+**Origin**: Opened 2026-08-12 by step 3 of `172-STOP-RULE.md`. CR-06 was found by Phase 172's own round-4 code review and independently confirmed by the round-4 verifier and the orchestrator. It is a NEW class of bypass, not one of the five Phase 172 was scoped to close — which is precisely why the stop rule directed it here instead of into a round 5.
+**The defect (CR-06)**: `.github/workflows/ci.yml` runs 18 steps before the gate step at line 99. `auditWorkflowShape` whitelists the workflow root keys, the trigger keys, the `go` job's keys and the two gate steps' keys — it never reads any other step's `run:` body. `runGateCommand` leaves `cmd.Env` nil, so the execution harness inherits the *local* environment and can never observe a workflow-declared one. So an earlier step doing `echo "GOFLAGS=-run=NONE" >> $GITHUB_ENV`, or adding a directory containing a fake `go` to `$GITHUB_PATH`, or overwriting the `go` binary outright, makes the gate run zero tests and exit 0 — the exact outcome of CR-02 — while every guard this phase built stays green.
+**Success Criteria** (what must be TRUE) — DECIDED 2026-08-13 (owner-approved reshape): approach 1 only. The interim blocklist approach (scanning step bodies for `$GITHUB_ENV`/`$GITHUB_PATH` writes) is REFUSED — it is blocklist-shaped over an adversarial surface, the exact failure mode that gave Phase 172 its unbounded 4-round tail.
+  1. The gate runs in its own CI job (or workflow) with no untrusted step ahead of it on the same runner, so there is no earlier step left to audit. Costs a second Go toolchain setup; makes the guarantee structural rather than inspected.
+**Priority note (2026-08-13)**: housekeeping-tier. This phase blocks nothing and adds no orchestration capability; schedule it opportunistically (e.g., alongside another CI-touching change), never ahead of 174/175/177/178/179.
+
+### Phase 173: Delegation Guard
+**Goal**: Recursive delegation is bounded by the runtime at the one chokepoint an LLM cannot route around — the spawn-recording call. Depth is derived from the parent's recorded entry rather than asserted by the caller, a whole-tree budget bounds what depth alone cannot, every guard fails closed, and the operator can watch the tree while it grows. **Nothing gains the ability to delegate in this phase**; enforcement lands before capability because parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs.
+**Depends on**: Phase 172
+**Requirements**: SPAWN-01, SPAWN-02, SPAWN-03, SPAWN-04, SPAWN-05, SPAWN-06, SPAWN-07, SPAWN-08
+**Success Criteria** (what must be TRUE):
+  1. `aether spawn-can-spawn --depth 99` returns `can_spawn: false` with a named reason, and a scripted spawn one level past the cap exits non-zero **and writes no spawn-tree entry**. Today the first returns `{"can_spawn":true}` for every input it has ever received
+  2. After a nested run in which every caller passes `--depth 0` exactly as `.aether/workers.md` instructs today, `aether spawn-tree-depth` reports the true depth (2 for a three-level tree — coordinator depth 0, its workers depth 1, their helpers depth 2, per D-05), because depth is derived from the parent entry and the caller-supplied value is ignored. Today this is structurally always 0
+  3. With the wave cap at 8 and the tree budget at 20, a run that never exceeds 8 workers in any single wave is refused at worker 21, and budget consumed in wave 1 is not restored in wave 2 — the two numbers are visibly different quantities, not one doing double duty
+  4. With `COLONY_STATE.json` and the spawn tree made unreadable, **every** delegation guard denies and exits non-zero (today `spawn-can-spawn-swarm` returns `can_spawn: true` on exactly this path), and the `PreToolUse` `Agent|Task` hook denies a spawn whose requester depth cannot be resolved
+  5. A spawn whose (caste, normalised task) already appears in its own ancestor chain is refused with the ancestor named — an A→B→A cycle that never exceeds the depth cap and would otherwise never terminate
+  6. `aether spawn-tree-active` renders the delegation tree indented by depth with parent attribution **while the run is in progress**, so a runaway subtree is visible before the run ends
+**Decision (not build-shaped)**: **SPAWN-06** — a written decision records what depth 0 means, replacing today's contradiction (`build.md` hardcodes `--depth 1` for manifest workers, `workers.md` hardcodes `--depth 0` for their children). This is a ruling to record, not an implementation to plan. Once recorded, criterion 2's expected number is fixed by it and a test asserts the manifest worker's recorded depth equals the chosen convention.
+**Plans**: 13 plans in 8 waves (plans 11-13 are gap closure from 173-VERIFICATION.md)
+- [x] 173-01-PLAN.md — Empirical PreToolUse subagent check (blocking Wave 0 gate for SPAWN-04)
+- [x] 173-02-PLAN.md — Depth derived at the recorder, and workers.md corrected to one convention
+- [x] 173-03-PLAN.md — Fail-closed inversion of spawn-can-spawn-swarm (D-19's named defect)
+- [x] 173-04-PLAN.md — Widened decision seam and the two-level depth cap
+- [x] 173-05-PLAN.md — Whole-run tree budget of 20, midden on ceiling, 75% warning line
+- [x] 173-06-PLAN.md — Ancestor-chain cycle refusal with the ancestor named
+- [x] 173-07-PLAN.md — PreToolUse Task deny path, bounded to the observed hook coverage
+- [x] 173-08-PLAN.md — Readable, indented, live delegation tree
+- [x] 173-09-PLAN.md — Orphan reaping, budget release, and the operator's orphans command
+- [x] 173-10-PLAN.md — CI registration, cross-guard fail-closed proof, allowlist shrink, named residue
+- [x] 173-11-PLAN.md — Gap closure: the spawn ledger's parser tells an absent ledger apart from a tampered one
+- [x] 173-12-PLAN.md — Gap closure: the whole-run budget refuses a tampered ledger, with the verifier's own reproduction locked into CI
+- [x] 173-13-PLAN.md — Gap closure: corrupted-ledger axis across every guard, and the residue record corrected to match
+
+### Phase 174: Spend Ledger (slimmed 2026-08-13 — a token instrument, not a billing instrument)
+**Goal**: Token usage is measured rather than asserted — with the arithmetic stated, cache tokens included, estimates never presentable as measurements, parent attribution recorded so a delegating worker's true cost is answerable — and the number reaches the operator without being asked for. Tokens are the unit that draws against the owner's subscription limits; **dollars never headline, and no model-price table is ever built** (USD appears only where the provider itself reported it, as a skippable footnote labelled as hypothetical API price). Ships before the later phases because without a working ledger every later efficiency claim is unfalsifiable.
+**Depends on**: Phase 173 (roll-up walks the parent linkage `spawn-log` records)
+**Requirements**: SPEND-01, SPEND-02, SPEND-03, SPEND-04, SPEND-05, SPEND-06, SPEND-07, SPEND-08
+**Success Criteria** (what must be TRUE):
+  1. Feeding Anthropic's own documented example (`input_tokens: 50`, `cache_read_input_tokens: 100000`, `cache_creation_input_tokens: 2000`, `output_tokens: 500`) through the parser yields **total input 102,050 and total 102,550**, and the four counts are stored and displayed as disjoint columns. The test asserts those literal figures from the provider's documentation, **not** the arithmetic the parser performs — the previous test restated the parser and let a 186x undercount (550 reported against 102,550 processed) ship green
+  2. After a build on the **wrapper path** — the one an operator actually runs — `aether spend` reports non-zero per-worker tokens and tool calls for the current run, and running it twice leaves every file byte-identical (an inspection command mutates nothing). Today `codexExternalBuildWorkerResult` has no usage field and `result.Usage` has zero readers in `cmd/`. **Measurement-source honesty (flagged by review):** a token figure relayed by the orchestrating LLM through the results JSON is an assertion, not a measurement — the wrapper-path figure must either come from a genuine artifact (e.g., a session transcript the runtime reads) or be stored tagged as non-provider-grade; it must never carry the `provider` source tag
+  3. A ledger holding two provider rows and one estimate row renders measured and estimated as **separate subtotals** with no single figure conflating them, and a derived per-phase metric over that mixed set is refused with a named reason unless `--include-estimates` is passed
+  4. Every ledger row records its parent attribution (the linkage `spawn-log` already stores), a per-parent roll-up is derivable, and no worker's spend is ever counted twice in any total — the grand total equals the sum of individual worker rows, asserted as an invariant. (The full self/subtree dual-column accountant view is deferred until worker delegation actually exists — Phase 177 grants it; a simple roll-up line suffices this phase)
+  5. The normal end of a build or continue prints **one plain-English line** sourced from the ledger — e.g., "This phase used ~N tokens (measured)" or "(partly estimated)" — with no figure derived from any character budget. This line, not `aether spend`, is the primary surface: a non-technical operator does not run inspection commands
+**Plans**: 2 of 9 shipped; remainder CUT 2026-08-14 by owner decision (see `.planning/HARDENING-PLAN.md`)
+- [x] 174-01-PLAN.md — Usage source tier and direct-path persistence
+- [x] 174-02-PLAN.md — Hook transcript-path capture and the wrapper usage-claim refusal
+- [~] 174-03..07, 174-09 — **CUT.** Ledger persistence, two transcript parsers, the
+      `aether spend` detail view, and the naming guards. This is bookkeeping
+      machinery around a number the operator can already obtain. The owner's
+      stated need is one line at the end of a run, not an inspection surface.
+- [→] 174-08 — **MOVED to Phase 185.** The one plain-English cost line is the only
+      user-visible part of this phase and survives the cut. It carries whatever
+      minimum persistence it turns out to need; if that reintroduces part of
+      174-03, that part is in scope for 185 and nothing else is.
+
+**Closure note (2026-08-14):** criteria 1 and 4 above are satisfied by the
+shipped plans. Criteria 2, 3 and 5 are NOT met and are not claimed — 5 moves to
+Phase 185, 2 and 3 are abandoned with the ledger. This phase is closed partial
+and honestly, not marked complete.
+
+### Phase 175: Orchestration Visibility
+**Goal**: The operator can read the Queen's team choice, the castes it did not call, the points where the runtime overrode it, and which workers actually found something — in plain English, from data the runtime already computes and currently discards. The highest value-to-cost item any researcher found: the rationale strings are composed on every build, carried into the JSON dispatch manifest, and never rendered to a human.
+**Depends on**: Phase 173, Phase 174
+**Requirements**: SEEN-01, SEEN-02, SEEN-03
+**Success Criteria** (what must be TRUE):
+  1. Before workers spawn, the Dispatch stage prints one plain-English clause per selected caste **and the castes that were considered and not called** — "why didn't it use the security one?" is answerable without opening a file. Removing the rationale from the manifest makes the render test fail, so the render cannot drift into hardcoded prose. **Brevity guard (2026-08-13):** the not-called castes render as one short clause naming only the castes a reader might expect (or a count), never a 20+-row absentee table per build — 27 castes exist and listing them all every run is exactly the ceremony this reshape removes
+  2. When the runtime restores a safety-required caste the Queen omitted, or trims the team to the worker cap, the output names the caste, the action and the reason. A scripted `--light` build of a production phase shows the restoration line rather than silently keeping the caste — today the correction happens and says nothing
+  3. The run summary distinguishes a worker that returned no actionable finding from one that did: a build with one finding-producing worker and one clean worker shows two different states, not two identical "completed" lines
+**Plans**: shipped outside the phase system, 2026-08-16 (SHIP-PROGRESS Item 3 "Phase 168 spirit + Phase 175"). Criterion 1: `renderQueenTeamChoice` with `TestQueenTeamChoiceRendersManifestRationaleVerbatim` (blanking the manifest rationale blanks the render — no hardcoded prose). Criterion 2: safety-restoration line, `TestQuietBuildDoesNotAnnounceSafetyInterventions` guards the negative direction. Criterion 3: `writeDispatchExecutionStatus` renders "— flagged N issue(s)" vs "— nothing to flag". Status table marked Complete 2026-08-16.
+
+### Phase 176: Roster Ruling — **CUT 2026-08-14**
+
+**Cut reason:** housekeeping. Deciding whether to wire or delete 27 files that
+nothing reads changes nothing a person using Aether can see. The compiled
+registry already works and is locked by tests. Revisit only if something
+concrete needs to read those files.
+
+<details><summary>Original definition (retained for reference)</summary>
+
+**Goal**: The zero-reader contradiction is resolved by an explicit, recorded, executed ruling — not by building a subsystem. 27 caste YAMLs in `colony/agents/` claim to define agents and define nothing; the Queen's selection already works from the compiled registry and is locked by named tests. The owner will never hot-edit a caste YAML, and the reader's real purpose was to enable the now-shelved user-authoring path. **Wire or delete — and the review's finding is that delete is the honest default** unless planning uncovers a concrete near-term consumer.
+**Depends on**: Phase 174
+**Requirements**: ROSTER-01, ROSTER-02
+**Success Criteria** (what must be TRUE):
+  1. A written ruling exists in the phase directory stating wire or delete, with the reason, dated — the same wire-or-delete reckoning Phase 161 prescribed for the zero-reader policy files. The ruling covers BOTH `colony/agents/*.yaml` AND `colony/policies/model-routing.yaml` (wiring one without ruling on the other recreates the original condition)
+  2. The ruling is executed and locked: **if delete** — the files are gone, the compiled `casteRelevanceRegistry` is documented as authoritative, and the orphan ratchet reflects the removal; **if wire** — editing a shipped caste's YAML observably changes dispatch output with no rebuild, corrupting it fails loudly naming the file, and the loader is covered by the original reader criteria (validate command, drift test, hub distribution, collision resolution)
+  3. Either way: no file remains in the repo that claims to define agents and defines nothing — asserted by a test or by the ratchet, not by a summary
+**Plans**: TBD
+
+</details>
+
+### Phase 177: Worker Delegation Grant — **CUT 2026-08-14**
+
+**Cut reason:** points the wrong way. This grants ordinary workers the ability
+to spawn their own helpers. The measured problem is that Aether already spawns
+far too many workers for the size of the job — one file-copy phase produced ten
+workers and 256k tokens for zero files copied. Adding a mechanism for more
+workers is the opposite of the correction being made.
+
+This also strands Phase 173's guards, which were built to bound a capability
+that now stays ungranted. That is accepted: the guards are cheap to keep and
+harmless while unused. It is recorded here so nobody later reads 173 as
+unfinished work.
+
+<details><summary>Original definition (retained for reference)</summary>
+
+**Goal**: The capability Phase 173 built its complete guard system around is actually granted. Today, on the owner's platform, only the Queen and Route-Setter agent definitions carry the dispatch tool — every ordinary worker (Builder, Watcher, Scout, Tracker, …) physically cannot spawn a helper, so `.aether/workers.md`'s spawn protocol is unreachable for them and the owner's "spawning where it's necessary" traces to nothing. This phase grants delegation **per-caste, deliberately, under the existing guards** — the depth cap, whole-run budget, cycle refusal, fail-closed checks and live tree from Phase 173 all apply from the first granted spawn.
+**Depends on**: Phase 173 (the guards MUST precede the grant — that ordering was the point of 173)
+**Requirements**: SPAWN-09, SPAWN-10, SPAWN-11
+**Success Criteria** (what must be TRUE):
+  1. A real build dispatches an ordinary worker (a granted caste, e.g. Builder) that spawns one helper via its own dispatch tool, and the helper completes and returns — observed on the wrapper path the owner actually runs, not asserted from documentation
+  2. That helper appears in the spawn tree with correct parent linkage and derived depth (recorded through `spawn-log` like every other spawn), the whole-run budget counts it, and `aether spawn-tree-active` shows it under its parent mid-run — the Phase 173 guards demonstrably see and bound worker-originated spawns
+  3. The grant is a per-caste decision, not a blanket: a written list states which castes carry the tool and why; a test asserts a non-granted caste's agent definition carries no dispatch tool; and the choice of granted castes is recorded as a decision the operator can read
+  4. A granted worker attempting a third delegation level (its helper spawning a helper) is refused by the existing guards — re-verified live after the grant, since the grant is exactly the change that makes this path reachable for the first time
+**Plans**: TBD
+
+</details>
+
+### Phase 178: Skill Authoring Hardening — **CUT 2026-08-14**
+
+**Cut reason:** letting people author their own skills is a new feature, not
+hardening, despite the name. Nobody is asking for it.
+
+**One piece is rescued into Phase 181:** the finding that a skill can win a slot
+in a worker's instructions by its filename rather than its relevance. That is a
+live cause of workers receiving irrelevant material, which is exactly what 181
+fixes. The security-refusal work is deferred with the authoring feature it
+protects — there is no user-authoring path to attack while none exists.
+
+<details><summary>Original definition (retained for reference)</summary>
+
+**Goal**: One writer, real validation with named enumerable rules at create time **and** index time, security refusals at load rather than at run, and selection that cannot be won by filename. Security lands in this phase and not the next: a refusal rule shipped a phase later is a published window in which malicious skills load.
+**Depends on**: Phase 172, Phase 174
+**Requirements**: SKILL-01, SKILL-02, SKILL-03, SKILL-04
+**Success Criteria** (what must be TRUE):
+  1. Every registered `skill-*` command has a caller outside its own definition file or has been removed — Phase 172's ratchet allowlist drops from 6 skill entries (tagged `owner_phase: "178"` in `cmd/testdata/orphan_allowlist.json`; corrected from the originally assumed 8 after Phase 172's honest scan) to 0, and the ratchet passes with none remaining. The measurement is the allowlist, not a summary claiming the commands were reclaimed
+  2. A skill named `aaa-my-notes` declaring all nine roles does not displace a shipped single-role skill from any worker's top-3, and when displacement does happen the injection report **names the dropped skill**. A test asserts that renaming a skill changes nothing about selection order — alphabetical position is no longer a selection input
+  3. Every platform's skill-create wrapper invokes `aether skill-create` and contains no instruction to hand-write `SKILL.md`; a wrapper-contract test fails if any wrapper writes the file directly. It fails today for Claude and OpenCode, which is why validation added to the runtime command would otherwise protect only Codex users
+  4. A skill with a typo'd role, an uncompilable detect pattern, a name collision, an empty body, or `` !`curl …` `` dynamic-context syntax is refused at create time and at index time, each reported with the file and the field. The index reports invalid skills rather than skipping them, so the file count and the index count can never disagree in silence
+**Plans**: TBD
+
+</details>
+
+---
+
+## Hardening phases (added 2026-08-14)
+
+Every phase below **removes** something. None adds a capability. They exist
+because a real job in a real project — copying 110 markdown files in an
+Obsidian vault with no program code in it — cost 256,292 tokens and 12.5
+minutes across three workers and copied zero files. Full evidence in
+`.planning/HARDENING-PLAN.md`.
+
+Each phase is independently completable and independently verifiable. Losing
+context part-way costs one phase, not the sequence.
+
+### Phase 180: Aether Stays Out Of Other People's Projects
+**Goal**: A worker running in a project that is not Aether never receives a document about Aether's own architecture, its Go runtime, its TypeScript host, or its internal contracts. Aether currently ships 73 internal reference documents (380KB) to a shared location every project reads from; one of them — describing which parts of Aether are written in Go versus TypeScript — is tagged `priority: critical` and addressed to every worker with the job title "builder", in every project.
+**Depends on**: nothing
+**Status**: COMPLETE 2026-08-14. 22 of 73 documents marked `scope: aether-internal`. Evidence: `TestAetherInternalReferencesStayOutOfOtherProjects`, `TestUniversalReferencesStillReachOtherProjects`, `TestAetherInternalReferencesStillLoadInsideAether`, `TestShippedInternalReferencesAreMarked` in `cmd/references_scope_test.go`, plus a live run of `aether reference-match` from a non-Aether directory before and after.
+**Success Criteria** (what must be TRUE):
+  1. A worker dispatched in a repository that is not Aether receives zero Aether-internal reference documents. Asserted by a test that composes a real worker's instructions against a non-Aether project fixture and fails if any Aether-internal document appears.
+  2. The same worker dispatched *inside* the Aether repo still receives the ones that genuinely apply — this is a scoping fix, not a deletion.
+  3. The test names the offending document when it fails, so a future addition that reintroduces the problem says which file did it.
+**Plans**: TBD
+
+### Phase 181: Reading Material Chosen By The Task
+**Goal**: What a worker is given to read is decided by what the task is, not by the worker's job title. Today the scoring weights expected-output-type at 4 points and job title at 3, while "does this match the actual task" is worth 2 — the lowest-weighted signal in the system. When nothing scores well, nothing is sent. Absorbs the one live finding rescued from cut Phase 178: selection must not be winnable by filename.
+**Depends on**: Phase 180
+**Status**: COMPLETE 2026-08-14. Evidence: `cmd/task_relevance_test.go` (six tests covering all five criteria), plus live `skill-match` and `reference-match` runs from a non-Aether directory showing 5 references and the AI design skill before, zero after, with controls proving genuine matches still land.
+**Success Criteria** (what must be TRUE):
+  1. Using the real CalVault task text ("copy 110 markdown files into a new folder tree"), a builder receives no design guide, no architecture contract, and no AI-integration material. Asserted with that literal task text, not a paraphrase.
+  2. Task relevance outranks job title and output type in the scoring, asserted directly rather than inferred from an outcome.
+  3. A worker whose task matches nothing receives an empty reading section rather than a filler selection — proven by a case that produces zero injected documents.
+  4. Renaming a skill or reference file changes nothing about what gets selected.
+  5. Nothing is ever injected mid-sentence: if a document must be truncated to fit, it is dropped instead. A test asserts no truncation marker can appear in composed worker instructions.
+
+### Phase 182: Specialists Earn Their Seat
+**Goal**: A specialist is dispatched because of what the phase *changes*, not because a word appeared in its description. Today a security specialist is summoned by any of *security, auth, crypto, secret, token, permission, credential, password, compliance, release, sign-off* occurring anywhere in the phase text, including in task constraints — so a phase that warns workers about a risk reads identically to one that creates it. The test-coverage specialist has a skip rule that cannot fire in practice: a phase must contain one of eight documentation words AND none of thirteen disqualifiers, and "build" is a disqualifier while the command that runs a phase is called build.
+**Depends on**: nothing (parallel with 180/181)
+**Success Criteria** (what must be TRUE):
+  1. A file-copying phase whose text says its sources are "read-only" and warns about a plugin summons no security specialist. Asserted with the real CalVault phase text.
+  2. A phase that genuinely changes login, passwords, tokens or permissions still summons one. Both directions asserted — this must not become a blanket removal.
+  3. A phase that writes no program code summons no test-coverage specialist, and this holds for a repository of markdown notes, not only for text containing the word "documentation".
+  4. When the runtime overrides the Queen's team choice, it says which caste, what it did, and why — in one line. Today the correction happens silently, which is how the CalVault override went unexplained.
+**Plans**: TBD
+
+### Phase 183: The Worker Limit Actually Limits
+**Goal**: The cap on how many workers a run may spawn is checked before dispatch and refuses or trims, instead of counting past itself and reporting the overrun afterwards. The count must also reset per command rather than carrying over — a build that inherits 17 of 20 already spent from the preceding continue cannot run.
+**Depends on**: nothing
+**Success Criteria** (what must be TRUE):
+  1. A run whose planned worker count exceeds the remaining budget is trimmed or refused **before** the first worker spawns, with a plain-English line saying what was dropped and why.
+  2. The counter resets when a new command begins; a build following a continue starts from its own budget. Asserted directly.
+  3. The failure log stops recording counts above the cap. The existing entries showing 27 and 37 workers against a cap of 20 are the regression case.
+  4. Recording a spawned worker either fully succeeds or fully fails; a partial write cannot consume budget for a worker that was never registered. This is the observed defect where re-registering the same worker cost a second budget slot.
+**Plans**: TBD
+
+### Phase 184: One Worker Owns A Run Of File Work
+**Goal**: A sequence of dependent operations over the same list is done by one worker, not split across several that each pay full startup cost and re-read the same source. Observed: six file-copy batches became six separate workers, and one operation was split into "the first six categories" and "the remaining six" for no stated reason.
+**Depends on**: nothing
+**Success Criteria** (what must be TRUE):
+  1. A phase of six dependent file operations over one source list dispatches one worker, not six. Asserted on the real task shape.
+  2. Independent work is still parallelised — this must not collapse into "always one worker". A phase with genuinely independent tasks still fans out.
+  3. The rule that decides "same run of work" is stated in one place and is readable, not spread across the planner's prose.
+**Plans**: TBD
+
+### Phase 185: One Honest Cost Line
+**Goal**: The end of a build or continue prints one plain-English line saying what it cost — "This phase used ~N tokens (measured)" or "(partly estimated)". Rescued from cut Phase 174 plan 08; it is the only user-visible part of that phase. Carries whatever minimum persistence it needs and nothing more. No ledger, no inspection command, no price table, no dollars.
+**Depends on**: Phase 174 plans 01–02 (shipped)
+**Success Criteria** (what must be TRUE):
+  1. A build on the wrapper path — the one actually typed — ends with one plain-English token line. Not an inspection command the operator must know to run.
+  2. A figure relayed by the orchestrating model is never labelled measured. Measured means it came from a real artifact; anything else says estimated. This is carried forward unchanged from Phase 174 because it is the honesty property that phase existed for.
+  3. No figure in the line derives from a character budget, and no model-price table exists anywhere in the new code. Asserted by a search that fails if one appears.
+**Plans**: TBD
+
+---
+
+### Phase 179: Proof
+**Goal**: The milestone's verdict, produced on real repositories with an inexpensive model and recorded whether or not it is favourable. Not satisfiable by tests — this phase is evidence, and the evidence is committed.
+**Depends on**: Phase 180, 181, 182, 183, 184, 185, then 175. (Rewritten 2026-08-14: dependencies on cut phases 176/177/178 removed; 172/173 already shipped.)
+**Requirements**: PROOF-01, PROOF-02, PROOF-03, PROOF-04
+**Success Criteria** (what must be TRUE):
+  1. Three real development tasks complete in real repositories on an inexpensive model, with the number of operator interventions **counted per task** and recorded in a committed artifact — a count, not a narrative
+  2. A full colony lifecycle (init → plan → build → continue → seal) runs in a downstream repo and `git status` in the Aether repo is clean at the end: Aether did not modify itself during the run
+  3. Tokens-per-phase measured by `aether spend` are recorded before and after this milestone, with the before figure taken from re-running an already-shipped phase so the two are comparable, and the record stands **including if the result is unfavourable**
+  4. A task interrupted mid-session resumes in a fresh session — new conversation, no scrollback — with the operator typing only `/ant-resume`, and the colony states what was in progress without being told
+  5. *(Added 2026-08-13 — measurement gains a consumer)* The before/after token record from criterion 3 is **acted on**: a written, dated retune decision either adjusts the Phase 173 defaults (depth cap, whole-run budget, team-size floors) with the measurement cited, or records why they stand unchanged. Measurement without a consumer is the gap the reshape review named; this criterion closes it without adding a phase
+**Sequencing note (2026-08-13)**: only criterion 3 depends on Phase 174; criteria 1, 2 and 4 depend on nothing in 175-178 and may be run early if the operator wants proof sooner.
+**Plans**: TBD
+**REMAPPED 2026-08-17**: Phase 179 is superseded by the Audit Addendum below. Its intent (real-task proof, PROOF-01..04) splits into Phase 186 (light comparative baseline) and Phase 192 (full showdown, which carries criteria 2, 4 and 5). Criterion 3's reference to `aether spend` — a command cut with SPEND-06 — is reconciled: tokens are measured harness-side from provider usage, and the Phase 185 cost line is validated against that measurement. Do not plan Phase 179 directly.
+
+## Audit Addendum (added 2026-08-17)
+
+Phases 186–192 close milestone v1.26. Source: the 2026-08-17 truth audit + hostile falsification review (frozen target of 12 outcome-level requirements; full programme in the approved implementation plan). Governing decisions: light comparative baseline before code changes, full 3-repeat benchmark at the finish line; BOTH Aether lanes (interactive and `/ant-run`) must be ≥ GSD; auxiliary commands (`/ant-oracle`, `/ant-dream`, chaos, archaeology, swarm, council) are preserved — simplification touches only the main lifecycle path.
+
+### Phase 186: Baseline Smoke (rescoped 2026-08-18)
+**Goal**: The benchmark harness exists and is proven to work end-to-end by ONE real Aether run on a neutral repo. The 12-run comparative baseline is CUT.
+
+**Rescope decision (2026-08-18, owner)**: the twelve-run GSD comparison is cut. Every fix phase (187–191) already carries its own fail-able wiring criteria and needs no number from a comparative baseline — the `Depends on: 186` lines were sequencing, not information. What is NOT cut is a single honest end-to-end run: this repo's history is eighteen of twenty-five milestones spent restoring things previously marked done, and wiring checks catch "never called" but not "runs, returns, and the answer is wrong" (the 2026-08-17 pre-compact snapshot wrote a blank `.aether/CONTEXT.md` and reported success). One real run on a repo Aether has never seen is the cheapest instrument that catches that class of failure. Beating GSD is a scoreboard; this run is a smoke alarm.
+
+**Depends on**: nothing — deliberately before all code changes.
+**Requirements**: PROOF-01, PROOF-03 (remapped; the comparative half of both now lands entirely in Phase 192)
+**Success Criteria**: (1) `bench/` committed and one documented command reproduces a run; (2) ONE `aether-interactive` run against `01-bug-fix` completes on a pinned neutral OSS repo with its transcript, operator log and acceptance-script exit code committed under `bench/results/<date>/`; (3) acceptance scripts predate the run timestamp, checkable by one command; (4) a read-only `aether build --print-brief --full` capture from a real mid-project colony is committed; (5) the hermetic profile boots, authenticates and completes one trivial task (already met by 186-01).
+**Explicitly not required**: GSD lanes, the autopilot lane, categories 02–04, and any cross-system comparison. All comparative measurement is Phase 192's job.
+**Consequence accepted**: Phase 192's provisional "median tokens ≤ 1.5× GSD's" target loses its ratifying baseline data and is now set blind — to be ratified or amended from 192's own first-repeat numbers.
+**Stop-check**: unchanged — no numbers within one week of harness work → cut harness scope, never grow it.
+**Plans**: 7 plans in 5 waves (01–06 complete; 07 rescoped from twelve runs to one)
+
+Plans:
+**Wave 1**
+- [x] 186-01-PLAN.md — Hermetic-profile smoke: a clean HOME boots, authenticates and completes one trivial task in BOTH systems (wave 1, alone — the locked sequencing gate)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 186-02-PLAN.md — Pin two neutral OSS substrate repos and write the four task specs plus per-task file allowlists
+- [x] 186-03-PLAN.md — Measurement libraries: harness-side token parsing, git cleanliness, operator log, plus a self-test against hand-computed fixtures
+- [x] 186-04-PLAN.md — Read-only `aether build --print-brief --full` capture from a real mid-project colony, with a checksum proof it mutated nothing
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 186-05-PLAN.md — Four deterministic acceptance scripts, committed before any run, with the git-history ordering checker
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 186-06-PLAN.md — The harness: one documented command per cell, permitted-inputs script, results-table generator, operator runbook
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 186-07-PLAN.md — **RESCOPED 2026-08-18**: execute ONE run (`aether-interactive` / `01-bug-fix`, operator at keyboard) and commit its evidence. Was: execute the twelve runs and commit the generated results table. Does NOT block 187–191.
+
+### Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
+**Goal**: No Aether command ever deletes unmerged or dirty work; worktree merge works outside Go repos.
+**Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — its criteria are self-contained wiring tests).
+**Success Criteria**: (1) fail-then-pass test: kill between dispatch and finalize → resume → work still present and surfaced with a named command (`gcOrphanedWorktrees` refuses/stashes dirty or unmerged worktrees and defers destruction to recover's scanner); (2) a worktree-mode build completes in a non-Go fixture repo (merge gate and `worktree-merge-back` use `resolveTestCommand()`, not hard-coded `go test ./...`); (3) `mergePhaseWorktrees` gains real-path tests.
+
+**Plans**: 4 plans in 3 waves
+
+Plans:
+**Wave 1**
+- [x] 187-01-PLAN.md — Shared dirty/unmerged safety guard + stash-not-discard preservation + plain-language report, with real-git tests (wave 1)
+- [x] 187-02-PLAN.md — `worktree-merge-back` gate driven by `resolveTestCommand()`; refuse-and-preserve when undeterminable; non-Go fixture tests (wave 1)
+
+**Wave 2** *(blocked on Wave 1)*
+- [x] 187-03-PLAN.md — `gcOrphanedWorktrees` becomes preserve-and-report; resume/continue/init report in plain English; new operator-only `worktree-reap`; fail-then-pass crash/resume tests (wave 2, needs 01)
+
+**Wave 3** *(blocked on Wave 2)*
+- [x] 187-04-PLAN.md — build-path merge gate (`mergePhaseWorktrees`) uses `resolveTestCommand()`; refuse-and-preserve when undeterminable; real-git fixture tests covering Node success, refusal, and non-destruction (wave 3, needs 03 — file-write ordering on `cmd/codex_build_worktree.go`, no compile-time dependency)
+
+### Phase 188: One Truth for Failures and Advances
+**Goal**: One failure ledger; one phase-advance discipline; every retry loop leaves a record.
+**Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — its criteria are self-contained wiring tests).
+**Success Criteria**: (1) a failure written by any component is read by colony-prime, autopilot, immune and memory-health (midden path unified); (2) both continue paths advance through one shared `advancePhase()` with the supersession check; (3) ungated `state-mutate --field current_phase` is refused; (4) grep-ratchet against non-atomic COLONY_STATE writes; (5) an exhausted retry loop leaves a readable record of what was tried; (6) a loud warning is logged when build-finalize accepts a legacy unbound manifest.
+
+### Phase 189: Complete Worker Contract
+**Goal**: Every worker sees its full task and the output contract the finalizer enforces; reviewers get the same context on every path.
+**Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope). Plan as ≥2 plans (build-side contract; reviewer parity).
+**Success Criteria**: (1) the brief for a merged dispatch contains every covered task's constraints and success criteria; (2) the brief contains the handoff/return schema the finalizer enforces; (3) continue's external dispatches carry capsule, skill and pheromone sections and the wrappers (all three platforms, parity-tested) instruct their delivery.
+
+### Phase 190: Lean, Non-Duplicated Delivery
+**Goal**: No context section delivered twice; briefs stop transiting the orchestrator byte-for-byte.
+**Depends on**: 189.
+**Success Criteria**: (1) plan-only manifests carry `brief_path` to files on disk and the wrapper passes paths (build.md prose updated to match); (2) `--print-brief` asserts zero duplicated sections (pheromones and handoffs get one home each); (3) TS-host hive double-injection removed (build path and continue dry-run `hive_section`); (4) orchestrator-relay byte count measurably drops.
+
+### Phase 191: Dead Wood
+**Goal**: Nothing remains that claims to define behaviour while defining nothing. Delivers ROSTER-01/02 and SKILL-01 as rulings-by-deletion.
+**Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — independent of 187–190).
+**Success Criteria**: (1) zero-reader configs deleted (`colony/agents/*.yaml`, `colony/phases/*.yaml`, `model-routing.yaml`, `autopilot.yaml`, `memory-rules.yaml`) with grep-ratchets against reappearance; (2) the four CWD-relative silent-fallback loaders resolved: each diffed against its compiled default, divergent values folded into the defaults, then files deleted — dev-checkout ceremony/visual output byte-identical before and after; (3) dead code removed (`pkg/trace/cost.go` + unconstructed pool path, `session-verify-fresh`, `newLearningValidator`, unreferenced skill-lifecycle commands); (4) false docs corrected (workers.md:825, CLAUDE.md trim-order and host-build claims); (5) `oracle-phase-directives.yaml` and all auxiliary commands untouched — `/ant-oracle` and `/ant-dream` smoke-pass.
+
+### Phase 191.1: Field Hardening — close the four 2026-08-21 field-reported defects (stage/finalize deadlock; completion packet cannot express wrapper-bundled work; continue checker returns check descriptions as verdicts; no honest re-entry for out-of-band work) with the field reproductions as executable test cases, per .planning/todos/pending/2026-08-21-*.md (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 191
+**Plans:** 4/3 plans complete
+
+Plans:
+- [x] TBD (run /gsd-plan-phase 191.1 to break down) (completed 2026-08-21)
+
+### Phase 192: Final Showdown
+**Goal**: The full benchmark (4 categories × 3 repeats × 3 lanes) with the acceptance gate applied. v1.26 completes only if the gate passes — not when implementation tasks are done.
+**Depends on**: 185, 187–191.
+**Requirements**: PROOF-01, PROOF-02, PROOF-03, PROOF-04 (remapped). **2026-08-18**: 192 now carries the comparative half of PROOF-01 and PROOF-03 in full, since the 12-run baseline that previously shared them is cut.
+**Baseline note (2026-08-18)**: criterion 2's "median tokens ≤ 1.5× GSD's" was to be owner-ratified against Phase 186's data. That data will not exist. The multiplier is therefore set blind: ratify or amend it from 192's own first repeat, recording the decision and its date before the remaining repeats are scored. Do not silently keep a number whose evidence was cut.
+**Success Criteria**: (1) both Aether lanes' success count within one run of GSD's or better (the honest tie rule at n=12 per lane); (2) guardrails hold — median tokens per successful task ≤ 1.5× GSD's (provisional, owner-ratified against 186 data), unscripted interventions ≤ GSD's, hallucinated completions = 0, recovery failures = 0, git cleanliness not worse than GSD, target-project history clean; (3) evidence committed favourable or not, reproducible via one command; (4) each frozen outcome 1–12 backed by a named test or committed artifact; (5) the Phase 185 cost line validated against harness-side usage; (6) dated retune decision consuming the measurements (Phase 173 defaults adjusted or affirmed); (7) Aether repo `git status` clean after downstream runs; (8) v1.26 closure paperwork (MILESTONES.md entry, archives).
+
+**Accepted residue (decisions, not oversights)**: the legacy unbound-manifest branch in attempt binding stays (loud warning added in 188); the build-time orchestrator-boundary gate stays prose-only (seal's finalizer backstops it).
+
+**Conditional phases 193+**: not planned. Adaptive Queen extensions, learning-intake wiring, instinct-application recording, semantic cross-store dedup, curation cadence, UX/dashboard work — each only with a stated hypothesis about which benchmark number it moves, triggered by the showdown failing (or one pre-showdown insertion if the light baseline exposes a doomed lane; likeliest candidate: autopilot consulting the same Queen judgement path interactive builds use). Maximum two remediation phases programme-wide. Showdown passes → stop building.
+
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 → 151 → 152 → 153 → 154 → 155 → 156 → 157 → 158 → 159 → 160 → 161 → 162 → 163 → 164 → 165 → 166 → 167 → 168 → 169 → 170 → 171
+**Execution Order (revised 2026-08-14):**
+
+Shipped: 145 → … → 172 → 173 → 174 *(closed partial at plan 2 of 9)*
+
+Remaining, in this order — **not** numeric order (revised 2026-08-17, Audit Addendum):
+
+**186** → **187** → **188** → **189** → **190** → **191** → **185** → **192**
+
+**Revised 2026-08-18**: 186 is rescoped to a single smoke run and **no longer gates anything**. 187, 188, 189→190 and 191 may start immediately and in parallel — each carries its own fail-able wiring criteria and never needed baseline numbers. 186's one run is a smoke alarm to be fired when convenient, not a gate. 185 is the rescued cost line, sequenced after 190 so it reports the leaner delivery. 192 is unchanged and remains the finish line — the full benchmark with the acceptance gate, now carrying all comparative measurement; 179 is remapped into 186+192 and must not be planned directly. (The 2026-08-14 hardening order completed through 175 on 2026-08-16.)
+
+**Cut 2026-08-14 by owner decision:** 176 (Roster Ruling), 177 (Worker Delegation Grant), 178 (Skill Authoring Hardening), and Phase 174 plans 03–07 and 09. Rationale in `.planning/HARDENING-PLAN.md`. Never-started v1.25 phases 161 and 166–171 remain not started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -496,13 +1029,34 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 159. End-to-End Acceptance | v1.24 | 3/3 | Complete | 2026-05-24 |
 | 160. Fail Loudly | v1.25 | 8/8 | Complete   | 2026-07-27 |
 | 161. Cheap Models By Design | v1.25 | 0/TBD | Not started | - |
-| 162. Switch On Learning | v1.25 | 0/TBD | Not started | - |
-| 163. Context Reaches Workers | v1.25 | 0/TBD | Not started | - |
-| 164. Research Feeds Planning | v1.25 | 0/TBD | Not started | - |
-| 165. Core Lifecycle Commands | v1.25 | 0/TBD | Not started | - |
+| 162. Switch On Learning | v1.25 | 6/6 | Complete    | 2026-08-04 |
+| 163. Context Reaches Workers | v1.25 | 6/6 | Complete   | 2026-07-29 |
+| 164. Research Feeds Planning | v1.25 | 11/11 | Complete    | 2026-08-02 |
+| 165. Core Lifecycle Commands | v1.25 | 10/10 | Complete    | 2026-08-03 |
 | 166. Full Colony On Demand | v1.25 | 0/TBD | Not started | - |
 | 167. Typed Control | v1.25 | 0/TBD | Not started | - |
 | 168. Your Eyes Back — Live Visibility | v1.25 | 0/TBD | Not started | - |
 | 169. Your Eyes Back — Charter & Standards | v1.25 | 0/TBD | Not started | - |
 | 170. Reclaim The Unreachable | v1.25 | 0/TBD | Not started | - |
 | 171. Prove It | v1.25 | 0/TBD | Not started | - |
+| 172. Wiring Proof | v1.26 | 14/14 | Complete    | 2026-08-12 |
+| 173. Delegation Guard | v1.26 | 13/13 | Complete   | 2026-08-13 |
+| 174. Spend Ledger | v1.26 | 2/9 | **Closed partial** — rest cut | 2026-08-14 |
+| 176. Roster Ruling | v1.26 | — | **Cut** | 2026-08-14 |
+| 177. Worker Delegation Grant | v1.26 | — | **Cut** | 2026-08-14 |
+| 178. Skill Authoring Hardening | v1.26 | — | **Cut** | 2026-08-14 |
+| 180. Aether Stays Out Of Other Projects | v1.26 | 1/1 | **Complete** | 2026-08-14 |
+| 181. Reading Material Chosen By The Task | v1.26 | 1/1 | **Complete** | 2026-08-14 |
+| 182. Specialists Earn Their Seat | v1.26 | 1/1 | **Complete** | 2026-08-15 |
+| 183. The Worker Limit Actually Limits | v1.26 | 1/1 | **Complete (partial)** | 2026-08-15 |
+| 184. One Worker Owns A Run Of File Work | v1.26 | 1/1 | **Complete** | 2026-08-15 |
+| 185. One Honest Cost Line | v1.26 | 0/TBD | Queued (after 190) | - |
+| 175. Orchestration Visibility | v1.26 | 1/1 | **Complete** | 2026-08-16 |
+| 179. Proof | v1.26 | — | **Remapped → 186 + 192** (2026-08-17) | - |
+| **186. Baseline Showdown (Light)** | v1.26 | 0/7 | **Planned** | - |
+| 187. Crash-Safe Worktrees & Ecosystem Neutrality | v1.26 | 9/4 | Complete    | 2026-08-19 |
+| 188. One Truth for Failures and Advances | v1.26 | 7/5 | Complete    | 2026-08-21 |
+| 189. Complete Worker Contract | v1.26 | 3/2 | Complete    | 2026-08-20 |
+| 190. Lean, Non-Duplicated Delivery | v1.26 | 6/2 | Complete    | 2026-08-21 |
+| 191. Dead Wood | v1.26 | 7/7 | Complete    | 2026-08-21 |
+| 192. Final Showdown | v1.26 | 0/TBD | Not started | - |

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -110,7 +111,8 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	// Set up hub directory
 	hubDir := resolveHubPathForHome(homeDir, channel)
-	hubResult := setupInstallHub(hubDir, packageDir)
+	// install resolves its own version explicitly, preserving today's behavior.
+	hubResult := setupInstallHub(hubDir, packageDir, resolveVersion(packageDir))
 	results = append(results, hubResult)
 	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
 		syncErrors = append(syncErrors, errVal)
@@ -269,6 +271,7 @@ type syncOptions struct {
 	include              syncFilter
 	mapRelPath           syncRelPathMapper
 	cleanupInclude       syncFilter
+	merge                syncMerger
 }
 
 // syncDir copies files from src to dest, optionally preserving changed local
@@ -339,6 +342,28 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 
 		// Check if file is unchanged or locally modified
 		if _, err := os.Stat(destPath); err == nil {
+			if opts.merge != nil {
+				destData, readErr := os.ReadFile(destPath)
+				if readErr != nil {
+					result.errors = append(result.errors, fmt.Sprintf("read %s: %v", destPath, readErr))
+					continue
+				}
+				mergedData, mergeErr := opts.merge(srcData, destData)
+				if mergeErr != nil {
+					result.errors = append(result.errors, fmt.Sprintf("merge %s: %v", destPath, mergeErr))
+					continue
+				}
+				if bytes.Equal(mergedData, destData) {
+					result.skipped++
+					continue
+				}
+				if writeErr := os.WriteFile(destPath, mergedData, 0644); writeErr != nil {
+					result.errors = append(result.errors, fmt.Sprintf("write %s: %v", destPath, writeErr))
+					continue
+				}
+				result.copied++
+				continue
+			}
 			srcHash, srcErr := fileSHA256(srcPath)
 			destHash, destErr := fileSHA256(destPath)
 			if srcErr == nil && destErr == nil && srcHash == destHash {
@@ -663,28 +688,69 @@ func cleanEmptyDirs(baseDir string) {
 // These are private/local paths that belong to individual colonies and should
 // never be published into the shared hub.
 var hubExcludeDirs = map[string]bool{
-	"data":          true,
-	"dreams":        true,
-	"oracle":        true,
-	"checkpoints":   true,
-	"locks":         true,
-	"temp":          true,
-	"archive":       true,
-	"chambers":      true,
-	"backups":       true,
-	".aether":       true,
-	"agents":        true,
-	"agents-claude": true,
-	"agents-codex":  true,
-	"skills-codex":  true,
-	"examples":      true,
-	"node_modules":  true,
-	"__pycache__":   true,
+	"data":            true,
+	"dreams":          true,
+	"oracle":          true,
+	"checkpoints":     true,
+	"locks":           true,
+	"temp":            true,
+	"archive":         true,
+	"chambers":        true,
+	"backups":         true,
+	".aether":         true,
+	"agents":          true,
+	"agents-claude":   true,
+	"agents-codex":    true,
+	"skills-codex":    true,
+	"examples":        true,
+	"node_modules":    true,
+	"__pycache__":     true,
+	"midden":          true,
+	"reviews-archive": true,
+	"events":          true,
+}
+
+// hubExcludeFiles are .aether/-relative file paths that must never be synced
+// to the hub. hubExcludeDirs covers private directories; these are the loose
+// per-colony working files that live beside the shipped source (session
+// snapshots, activity ledgers, this repo's own colony records). Exclusion is
+// two-sided: the file is never copied, and a copy already present in the hub
+// from an earlier publish is removed during stale-file cleanup.
+var hubExcludeFiles = map[string]bool{
+	"CONTEXT.md":          true,
+	"CROWNED-ANTHILL.md":  true,
+	"HANDOFF.md":          true,
+	"PAUSE_HANDOFF.md":    true,
+	"QUEEN.md":            true,
+	"error_ledger.json":   true,
+	"learnings.json":      true,
+	"ledger.jsonl":        true,
+	"manifest.json":       true,
+	"registry.json":       true,
+	"docs/constraints.md": true,
+}
+
+func hubExcludedFile(excludeFiles map[string]bool, relPath string) bool {
+	if len(excludeFiles) == 0 {
+		return false
+	}
+	return excludeFiles[filepath.ToSlash(filepath.Clean(relPath))]
 }
 
 // setupInstallHub creates the hub directory at ~/.aether/ and syncs companion files
 // from .aether/ to ~/.aether/system/.
-func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
+//
+// version must be the already-resolved version to write into the hub's version
+// files. Callers must resolve it themselves rather than letting this function
+// re-derive it: during publish, the source checkout's version.json is
+// authoritative, not the version baked into whichever binary happens to be
+// running (see cmd/publish_cmd.go's readRepoVersion comment) — an old binary's
+// ldflags Version would otherwise silently override a freshly bumped
+// version.json on the first publish after a version bump. If version is empty,
+// this function falls back to resolveVersion(packageDir) so no caller is left
+// writing an empty version, but callers on the publish path must never rely on
+// that fallback.
+func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} {
 	result := map[string]interface{}{
 		"label": "Hub",
 		"src":   ".aether/",
@@ -713,7 +779,7 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 	// landing at .codex/agents/agents/*.toml. Syncing just agents/ fixes this.
 	codexSrc := filepath.Join(packageDir, ".codex", "agents")
 	codexDest := filepath.Join(systemDir, "codex")
-	codexSyncResult := syncDirToHubWithExclusion(codexSrc, codexDest, nil, validateCodexAgentFile, isShippedAetherCodexAgent)
+	codexSyncResult := syncDirToHubWithExclusion(codexSrc, codexDest, nil, nil, validateCodexAgentFile, isShippedAetherCodexAgent)
 	result["codex_copied"] = codexSyncResult.copied
 	result["codex_skipped"] = codexSyncResult.skipped
 	if len(codexSyncResult.errors) > 0 {
@@ -760,7 +826,7 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 			include: isOraclePhaseDirectivesFile,
 		},
 	} {
-		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, pair.validate, pair.include)
+		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, nil, pair.validate, pair.include)
 		hubSyncResult.copied += syncRes.copied
 		hubSyncResult.skipped += syncRes.skipped
 		hubSyncResult.removed = append(hubSyncResult.removed, syncRes.removed...)
@@ -770,7 +836,7 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 		}
 	}
 
-	referenceSyncResult := syncDirToHubWithExclusion(filepath.Join(packageDir, ".aether", "references"), filepath.Join(hubDir, "references"), nil, nil, nil)
+	referenceSyncResult := syncDirToHubWithExclusion(filepath.Join(packageDir, ".aether", "references"), filepath.Join(hubDir, "references"), nil, nil, nil, nil)
 	hubSyncResult.copied += referenceSyncResult.copied
 	hubSyncResult.skipped += referenceSyncResult.skipped
 	hubSyncResult.removed = append(hubSyncResult.removed, referenceSyncResult.removed...)
@@ -801,9 +867,13 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 		result["registry"] = "preserved"
 	}
 
-	// Write version.json using git tags or ldflags (not the hardcoded default)
+	// Write version.json using the version the caller resolved (never re-derive
+	// it here — see the function comment above for why).
 	versionPath := filepath.Join(hubDir, "version.json")
-	resolved := resolveVersion(packageDir)
+	resolved := strings.TrimSpace(version)
+	if resolved == "" {
+		resolved = resolveVersion(packageDir)
+	}
 	versionContent := fmt.Sprintf(`{"version":"%s","updated_at":"now"}`, resolved)
 	if err := os.WriteFile(versionPath, []byte(versionContent), 0644); err != nil {
 		result["version_error"] = fmt.Sprintf("failed to write version: %v", err)
@@ -818,12 +888,12 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 // skipping excluded directories and unchanged files (by SHA-256 hash).
 // Also removes stale files in dest that no longer exist in src.
 func syncDirToHub(src, dest string) syncResult {
-	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, nil, nil)
+	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, hubExcludeFiles, nil, nil)
 }
 
-// syncDirToHubWithExclusion is like syncDirToHub but accepts a custom exclusion map.
-// Pass nil to exclude nothing.
-func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, validate syncValidator, include syncFilter) syncResult {
+// syncDirToHubWithExclusion is like syncDirToHub but accepts custom exclusion
+// maps for directories and exact file paths. Pass nil to exclude nothing.
+func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, excludeFiles map[string]bool, validate syncValidator, include syncFilter) syncResult {
 	// Default to no exclusions if nil
 	if exclude == nil {
 		exclude = map[string]bool{}
@@ -852,6 +922,17 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 	srcFiles := listFilesRecursiveWithExclusion(src, exclude)
 	if include != nil {
 		srcFiles = filterSyncFiles(srcFiles, include)
+	}
+	if len(excludeFiles) > 0 {
+		kept := make([]string, 0, len(srcFiles))
+		for _, relPath := range srcFiles {
+			if hubExcludedFile(excludeFiles, relPath) {
+				result.skipped++
+				continue
+			}
+			kept = append(kept, relPath)
+		}
+		srcFiles = kept
 	}
 	var ignored int
 	srcFiles, ignored = filterIgnoredSyncFiles(srcFiles)
@@ -901,7 +982,7 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 		srcSet[f] = struct{}{}
 	}
 	for _, relPath := range destFiles {
-		if syncPathIgnored(relPath) {
+		if syncPathIgnored(relPath) || hubExcludedFile(excludeFiles, relPath) {
 			destPath := filepath.Join(dest, relPath)
 			if err := os.Remove(destPath); err == nil {
 				result.removed = append(result.removed, relPath)

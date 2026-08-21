@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -358,6 +360,87 @@ func TestPipeline_RunConsolidation_PromotesCandidates(t *testing.T) {
 	if !found {
 		t.Error("expected instinct created from promotion candidate")
 	}
+}
+
+// queenEligibleInstinctFixture returns an instinct that clears both the
+// confidence bar (>= 0.75 post-decay) and the application bar (>= 3) for
+// QUEEN.md promotion.
+func queenEligibleInstinctFixture(id string) colony.InstinctEntry {
+	return colony.InstinctEntry{
+		ID:         id,
+		Trigger:    "recurring pattern in pkg/memory/pipeline.go",
+		Action:     "keep the queen promotion loop honest about failed writes",
+		Domain:     "testing",
+		TrustScore: 0.9,
+		TrustTier:  "trusted",
+		Confidence: 0.9,
+		Provenance: colony.InstinctProvenance{ApplicationCount: 3},
+		Archived:   false,
+	}
+}
+
+// TestPipeline_RunConsolidation_QueenPromotedTracksActualWrites pins WR-01:
+// ConsolidationResult.QueenPromoted must contain exactly the instinct IDs
+// whose QUEEN.md write SUCCEEDED. QueenEligible remains the eligibility
+// report; a failed PromoteInstinct (log-and-continue) must not surface its
+// ID as promoted, or downstream skip-sets suppress the one fallback writer
+// that could recover it while reports claim a write that never happened.
+func TestPipeline_RunConsolidation_QueenPromotedTracksActualWrites(t *testing.T) {
+	t.Run("successful write is recorded", func(t *testing.T) {
+		p, cleanup := newTestPipeline(t)
+		defer cleanup()
+
+		instincts := colony.InstinctsFile{
+			Version:   "1",
+			Instincts: []colony.InstinctEntry{queenEligibleInstinctFixture("inst_promoted_ok")},
+		}
+		if err := p.store.SaveJSON("instincts.json", instincts); err != nil {
+			t.Fatalf("save instincts: %v", err)
+		}
+
+		result, err := p.RunConsolidation(context.Background())
+		if err != nil {
+			t.Fatalf("run consolidation: %v", err)
+		}
+		if len(result.QueenEligible) != 1 || result.QueenEligible[0] != "inst_promoted_ok" {
+			t.Fatalf("precondition: expected QueenEligible == [inst_promoted_ok], got %v", result.QueenEligible)
+		}
+		if len(result.QueenPromoted) != 1 || result.QueenPromoted[0] != "inst_promoted_ok" {
+			t.Fatalf("expected QueenPromoted == [inst_promoted_ok] after a successful write, got %v", result.QueenPromoted)
+		}
+	})
+
+	t.Run("failed write is excluded", func(t *testing.T) {
+		p, cleanup := newTestPipeline(t)
+		defer cleanup()
+
+		// Make the QUEEN.md write fail deterministically: point QueenPath at
+		// a directory, so AtomicWrite's rename onto it must error.
+		queenDir := filepath.Join(p.store.BasePath(), "queen-as-dir")
+		if err := os.MkdirAll(queenDir, 0o755); err != nil {
+			t.Fatalf("mkdir queen dir: %v", err)
+		}
+		p.config.QueenPath = queenDir
+
+		instincts := colony.InstinctsFile{
+			Version:   "1",
+			Instincts: []colony.InstinctEntry{queenEligibleInstinctFixture("inst_promote_fails")},
+		}
+		if err := p.store.SaveJSON("instincts.json", instincts); err != nil {
+			t.Fatalf("save instincts: %v", err)
+		}
+
+		result, err := p.RunConsolidation(context.Background())
+		if err != nil {
+			t.Fatalf("run consolidation: %v", err)
+		}
+		if len(result.QueenEligible) != 1 {
+			t.Fatalf("precondition: expected the instinct to remain QueenEligible, got %v", result.QueenEligible)
+		}
+		if len(result.QueenPromoted) != 0 {
+			t.Fatalf("expected QueenPromoted to be empty when the QUEEN.md write failed (WR-01), got %v", result.QueenPromoted)
+		}
+	})
 }
 
 // TestPipeline_Stop verifies that Stop cancels the context and waits for goroutines

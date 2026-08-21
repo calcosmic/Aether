@@ -508,7 +508,7 @@ Run using the Bash tool with description "Refreshing colony context...": `prime_
 
 **PER WAVE:** Query midden for recent failures to inject into builder context:
 Run using the Bash tool with description "Checking midden for recent failures...":
-`midden_result=$(aether midden-recent-failures 3 2>/dev/null || echo '{"count":0,"failures":[]}')`
+`midden_result=$(aether midden-recent-failures --limit 3 2>/dev/null || echo '{"count":0,"failures":[]}')`
 
 Parse `midden_result`. If `count > 0`, format as `midden_context`:
 ```
@@ -558,19 +558,13 @@ For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, inclu
 - If the allocation is null, missing, or empty, set `worktree_context` to empty (no injection needed).
 - **Budget cap:** `worktree_context` must not exceed 1000 characters per worker.
 
-**PER WORKER:** Match and inject skills for the worker's role and task:
-Run using the Bash tool with description "Matching skills for {ant_name}...":
-```bash
-skill_inject_result=$(aether skill-inject --workflow "build" --role "builder" --task "{task_description}" 2>/dev/null) || skill_inject_result='{"result":{"skill_section":"","colony_count":0,"domain_count":0}}'
-skill_section=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.skill_section // ""')
-skill_colony_count=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.colony_count // 0')
-skill_domain_count=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.domain_count // 0')
-```
+**PER WORKER:** Skills for the worker's role and task:
 
-Display per worker:
-```
-  🧠 Skills: {colony_count} colony + {domain_count} domain loaded for builder
-```
+`skill-inject`, the CLI command this step used to call, was deleted in Phase 191 as dead CLI
+surface (SKILL-01). Skill matching and injection is not a separate shell step:
+`composeBuildManifestBrief` calls the live matching logic directly, in-process, once per
+worker, while assembling that worker's brief — `skill_section` below is already part of the
+brief text by the time it reaches the worker prompt. There is nothing to run here.
 
 **PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `aether spawn-log --parent "Queen" --caste "builder" --name "{ant_name}" --task "{task_description}" --depth 0 && aether context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
 
@@ -669,7 +663,8 @@ aether midden-write --category "abandoned-approach" --message "Tried: initial ap
 # Enter memory pipeline for learning observation tracking (MID-02)
 aether memory-capture \
   --type "failure" \
-  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)"```
+  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)"
+```
 
 Spawn sub-workers ONLY if 3x complexity:
 - Check spawn budget using Bash tool with description: `aether spawn-can-spawn --depth {depth}`
@@ -731,7 +726,8 @@ aether midden-write --category "worker_failure" --message "Builder ${ant_name} f
 # Capture failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}"```
+  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}"
+```
 
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete --name "{ant_name}" --status "completed" --summary "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
 
@@ -800,7 +796,7 @@ After processing all wave results, check if any midden error category has reache
 
 Run using the Bash tool with description "Checking midden thresholds...":
 ```bash
-midden_result=$(aether midden-recent-failures 50 2>/dev/null || echo '{"count":0,"failures":[]}')
+midden_result=$(aether midden-recent-failures --limit 50 2>/dev/null || echo '{"count":0,"failures":[]}')
 midden_count=$(echo "$midden_result" | jq '.count // 0')
 
 if [[ "$midden_count" -gt 0 ]]; then

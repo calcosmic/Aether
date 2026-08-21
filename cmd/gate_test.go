@@ -1374,8 +1374,11 @@ func TestEffectiveGateAutoResolveThresholds_Defaults(t *testing.T) {
 	gateCmdTestSetup(t)
 
 	thresholds := effectiveGateAutoResolveThresholds()
-	if len(thresholds) != 6 {
-		t.Fatalf("expected 6 default thresholds, got %d", len(thresholds))
+	// 7 since Phase 163 added charter_compliance alongside the original 6
+	// soft_block gates (auditor, complexity, tdd_evidence, anti_pattern,
+	// verification_loop, spawn_gate).
+	if len(thresholds) != 7 {
+		t.Fatalf("expected 7 default thresholds, got %d", len(thresholds))
 	}
 	if thresholds["auditor"].Threshold != 0.0 {
 		t.Errorf("expected auditor threshold 0.0, got %f", thresholds["auditor"].Threshold)
@@ -1465,10 +1468,11 @@ func TestEffectiveGateAutoResolveThresholds_NoConfig(t *testing.T) {
 	}
 	store = s
 
-	// No config.json exists -- defaults returned
+	// No config.json exists -- defaults returned. 7 since Phase 163 added
+	// charter_compliance alongside the original 6 soft_block gates.
 	thresholds := effectiveGateAutoResolveThresholds()
-	if len(thresholds) != 6 {
-		t.Fatalf("expected 6 defaults when no config, got %d", len(thresholds))
+	if len(thresholds) != 7 {
+		t.Fatalf("expected 7 defaults when no config, got %d", len(thresholds))
 	}
 }
 

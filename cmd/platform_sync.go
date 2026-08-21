@@ -37,11 +37,16 @@ type repoSyncPair struct {
 	cleanupInclude       syncFilter
 	cleanupLegacyClaude  bool
 	consumerOnly         bool
+	merge                syncMerger
 }
 
 type syncValidator func(srcPath, relPath string, data []byte) error
 type syncFilter func(relPath string) bool
 type syncRelPathMapper func(relPath string) string
+
+// syncMerger combines shipped template bytes with existing destination bytes.
+// Returning the destination bytes unchanged marks the file as up to date.
+type syncMerger func(templateData, existingData []byte) ([]byte, error)
 
 type codexAgentDefinition struct {
 	Name                  string   `toml:"name"`
@@ -85,7 +90,7 @@ func repoSyncPairs() []repoSyncPair {
 			cleanupInclude: isManagedAetherSystemPath,
 			consumerOnly:   true,
 		},
-		{hubRel: "settings/claude", destRel: "../.claude", label: "Settings (claude)", preserveLocalChanges: true, include: isClaudeSettingsFile},
+		{hubRel: "settings/claude", destRel: "../.claude", label: "Settings (claude)", preserveLocalChanges: true, include: isClaudeSettingsFile, merge: mergeClaudeSettings},
 		{hubRel: "rules", destRel: "../.claude/rules", label: "Rules (claude)"},
 	}
 }
@@ -110,8 +115,8 @@ func codexSkillShims() []codexSkillShim {
 		{
 			Dir:         "aether-skill-loader",
 			Name:        "aether-skill-loader",
-			Description: "Use when Aether worker context needs skills; load matched skill content from the runtime on demand.",
-			Body:        "Run `aether skill-inject --workflow <workflow> --role <role> --task \"<task>\"` to fetch the relevant shipped and custom Aether skills. Do not preload full skill mirrors.",
+			Description: "Explains where Aether worker skill content comes from -- no on-demand loader command exists.",
+			Body:        "Skill content is already included automatically in the worker brief text returned by `aether build`, `aether colonize`, `aether plan`, and `aether continue` -- it is assembled in-process from the matched shipped and custom Aether skills. There is no separate command to fetch it on demand (skill-inject, the CLI command this shim used to call, was deleted in Phase 191 as dead CLI surface -- its underlying matching logic is what dispatches use automatically). Do not preload full skill mirrors.",
 		},
 		{
 			Dir:         "aether-colony-creation",
@@ -770,6 +775,35 @@ func ensureRepoLocalScaffold(localAether string) syncResult {
 			continue
 		}
 		result.copied++
+	}
+
+	// A durable-state marker, because .aether/ is indistinguishable from a
+	// build cache to an outside observer: repo root, untracked, dominated by
+	// ts-host/node_modules. A routine disk cleanup deleted one on 2026-08-16
+	// for exactly that reason (.planning/field-reports/
+	// 2026-08-16-init-obsidian-vault.md §4) — no colony existed there, but a
+	// running colony would have been destroyed.
+	markerPath := filepath.Join(localAether, "WHAT-IS-THIS.md")
+	if _, err := os.Stat(markerPath); os.IsNotExist(err) {
+		marker := `# What is this directory?
+
+This is Aether's colony state for this repository — durable working memory,
+not a build cache. Deleting it destroys any colony running here: its goal,
+phase plan, learned lessons, and steering signals.
+
+Safe to delete: ts-host/node_modules/ only (npm packages, ~60 MB — Aether
+reinstalls them on demand).
+
+Everything else here should be treated like your project's own files.
+Managed by the aether CLI (https://github.com/calcosmic/Aether).
+`
+		if writeErr := os.WriteFile(markerPath, []byte(marker), 0644); writeErr != nil {
+			result.errors = append(result.errors, fmt.Sprintf("write %s: %v", markerPath, writeErr))
+		} else {
+			result.copied++
+		}
+	} else if err == nil {
+		result.skipped++
 	}
 
 	gitignorePath := filepath.Join(localAether, ".gitignore")

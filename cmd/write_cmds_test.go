@@ -784,8 +784,12 @@ func TestSpawnLogLegacyFlagAliases(t *testing.T) {
 	if got, want := result["task"], "implementing auth"; got != want {
 		t.Fatalf("task = %v, want %q", got, want)
 	}
-	if got := int(result["depth"].(float64)); got != 0 {
-		t.Fatalf("depth = %d, want 0", got)
+	// "Queen" is a coordinator sentinel (spawnRootParentNames, D-05): a spawn
+	// naming it as parent is recorded at depth 1, not the caller's unset
+	// (zero-value) --depth flag. See TestSpawnLogIgnoresCallerSuppliedDepth
+	// for the direct proof that the claimed --depth is never trusted.
+	if got := int(result["depth"].(float64)); got != 1 {
+		t.Fatalf("depth = %d, want 1 (Queen is a coordinator sentinel under D-05)", got)
 	}
 }
 
@@ -960,7 +964,13 @@ func TestSpawnCanSpawn(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	store = s
 
-	rootCmd.SetArgs([]string{"spawn-can-spawn", "--depth", "3"})
+	// Depth 1 (not 3): Phase 173's spawnMaxDelegationDepth cap denies a
+	// requester depth of 3 (prospective child depth 4, past the cap of 2).
+	// This test's purpose is confirming the flag-only form resolves and
+	// reports a result, not exercising the cap itself — see
+	// cmd/spawn_enforce_test.go's TestSpawnCanSpawnDeniesPastDepthCap and
+	// TestSpawnCanSpawnAllowsWithinCap for the dedicated cap proofs.
+	rootCmd.SetArgs([]string{"spawn-can-spawn", "--depth", "1"})
 
 	err := rootCmd.Execute()
 	if err != nil {

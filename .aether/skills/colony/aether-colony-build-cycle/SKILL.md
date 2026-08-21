@@ -177,15 +177,15 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --complet
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status`.
 2. Surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.
-3. Run the TS host manifest command:
+3. Run the Go runtime manifest command:
 
 ```bash
-aether host build --dry-run <phase>
+aether build <phase> --plan-only
 ```
 
 4. Save the full JSON envelope to a temporary manifest file outside
    `.aether/data/`.
-5. Parse `result.manifest.dispatch_manifest`.
+5. Parse `result.dispatch_manifest`.
 6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
    build workers.
 7. Render the user-facing spawn ceremony:
@@ -201,9 +201,17 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 10. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
    descriptions. Do not use background-only dispatch as the ceremony, and do not
    replace the live stack with a markdown worker table.
-11. Enforce read cache discipline for every worker: pass runtime briefs verbatim,
-   treat "File unchanged since last read" as an instruction to use earlier content,
-   and mark workers `blocked` if they keep re-reading the same unchanged file.
+11. Enforce read cache discipline for every worker: pass runtime briefs verbatim.
+   `dispatch.brief_path` (a repo-display path to the file holding the composed
+   brief, byte for byte) is now the routine channel every dispatch carries --
+   the runtime writes the composed brief to disk and reports the path, so
+   inline JSON briefs of 6-22KB never hit Read-tool long-line truncation.
+   Inline `dispatch.brief` appears only in the rare case where the runtime
+   could not write the file for that dispatch; honor it verbatim when it is
+   the only one present. Whichever one a dispatch carries, use it verbatim,
+   never merge, summarize, or reconstruct. Treat "File unchanged since last
+   read" as an instruction to use earlier content, and mark workers `blocked`
+   if they keep re-reading the same unchanged file.
 12. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
 13. After each terminal result, render `aether ceremony worker-complete`.

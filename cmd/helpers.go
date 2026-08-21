@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -35,7 +34,10 @@ func outputOK(result interface{}) {
 func outputError(code int, message string, details interface{}) {
 	markRenderedCommandError(code)
 	if shouldRenderVisualOutput(stderr) {
-		fmt.Fprint(stderr, renderVisualError(message, details))
+		// Through writeVisualOutput, not fmt.Fprint: that is where command
+		// naming is translated for slash-command platforms, and an error is
+		// the moment a user most needs a command they can actually type.
+		writeVisualOutput(stderr, renderVisualError(message, details))
 		return
 	}
 	envelope := struct {
@@ -192,30 +194,6 @@ func renderVisualError(message string, details interface{}) string {
 	return b.String()
 }
 
-// newLearningValidator returns a memory.LearningValidator callback that
-// bridges observation promotions to the learning store. When an observation
-// is promoted with trust >= 0.8, any learning entry with matching content
-// and status=hypothesis is upgraded to validated.
-func newLearningValidator(s *storage.Store) func(string, float64) {
-	return func(content string, trustScore float64) {
-		if s == nil || trustScore < 0.8 {
-			return
-		}
-		learnStore := learn.NewColonyStore(s)
-		entries, err := learnStore.List(learn.EntryFilter{Status: learn.StatusHypothesis})
-		if err != nil {
-			return
-		}
-		for _, e := range entries {
-			if e.Content == content {
-				e.Status = learn.StatusValidated
-				_ = learnStore.Replace(e.ID, e)
-				return
-			}
-		}
-	}
-}
-
 // resolveSurveySection reads available survey artifacts from .aether/data/survey/
 // and returns a markdown section summarizing them. Returns empty string if no
 // survey data exists or if the store is not initialized.
@@ -246,6 +224,12 @@ func resolveSurveySection() string {
 
 	var b strings.Builder
 	b.WriteString("### Territory Survey\n\n")
+	// Say how old the map is before handing over the pointer list (D-10) — a
+	// worker (and the brief inspector) should never ground on the survey
+	// without knowing whether it is fresh or stale.
+	if notice := surveyStalenessNotice(); notice != "" {
+		b.WriteString(notice)
+	}
 	// Real repo-relative paths, not bare filenames. A worker handed "BLUEPRINT.md"
 	// with no directory cannot resolve it; ".aether/data/survey/BLUEPRINT.md" it
 	// can open directly. The colony data dir is always <root>/.aether/data by

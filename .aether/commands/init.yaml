@@ -13,8 +13,12 @@ ceremony_contract:
   authority: "Go owns colony state creation, session files, charter persistence, and canonical init visuals."
   wrapper_role: "Ask scoping questions and synthesize an approved charter, then pass that charter to Go; do not write state files directly."
 intent_refinement:
+  - "Shelf Backlog collects the user's chosen shelf IDs only; Approval spends them inside the same `aether init` call, after consent."
   - "Do not treat init-research as the final charter. It is only a deterministic codebase scan."
+  - "Low-signal branch: when init-research returns detected_type \"unknown\" with empty languages, frameworks, and governance, the scan found nothing to go on. Say that plainly, do not present or paraphrase the generated charter, and drive Intent Refinement purely from the user's stated goal. When detected_type is \"knowledge_base\" the repo is a notes vault: skip all code-toolchain framing and ask about the content instead."
   - "If prior_colonies.count > 0, show a Prior Context section (up to 3 recent colonies' goals and outcomes from prior_colonies.recent) before asking for the new goal."
+  - "Run `aether research list` before the scoping questions. If a saved research document relates to this goal, offer it and, with the user's approval, pass it as `--research <path>` so the planning workers read it instead of rediscovering it. Never attach a document the user has not agreed to."
+  - "Research is a pointer, not charter content. Do not paste a research document's text into the charter; the charter is governance, research is evidence."
   - "Before creating colony state, ask one compact batch of 4-7 AI-led scoping questions when the goal is vague or broad."
   - "Questions should clarify target users, success criteria, non-goals, constraints, risk tolerance, affected systems, and the first useful milestone."
   - "Synthesize the raw goal, user answers, and init-research scan into a deeper charter JSON. Do not simply echo the runtime-generated charter."
@@ -22,7 +26,27 @@ intent_refinement:
   - "Separate deterministic scan warnings from AI-synthesized pheromones. README/changelog/license/formatter suggestions are housekeeping, not strategic colony guidance."
   - "Suggest at most 3 synthesized pheromones, and only when they are specific to the user's clarified intent. Let the user approve each one before writing it."
   - "Run `AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\"` after approval."
+wrapper_additions:
+  stage_skeleton: |
+    Every init stage except Required Cross-Stage State and Cross-Platform Drift
+    Guard follows the same shape: a colony beat line, then Purpose, then Reads,
+    then the stage's imperative instructions, then Stop conditions. init spawns
+    no workers, so no stage carries a Spawns line -- that absence is itself
+    useful method, and it is why init.md has no host-manifest step. Required
+    Cross-Stage State carries `refined_goal`, `synthesized_charter`,
+    `synthesized_pheromones`, `selected_colony_mode`, `approved_pheromones`,
+    and `next_action` forward once each is produced.
+  intention_beat: |
+    At Approval, once the user consents, the Queen names the colony's intention
+    -- "Queen has set the colony's intention" followed by the approved
+    refined_goal -- before the runtime init call. The init banner itself is
+    runtime-rendered by init_ceremony.go; the wrapper narrates the moment, it
+    does not draw the banner.
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "Do not claim init spawned implementation workers; it is a guided setup ritual until later lifecycle commands dispatch work."
+  - "All persistence goes through the `aether init` call in Approval (with `--colony-mode` and `--charter-json`) and `aether pheromone-write`; the wrapper never writes state files."
+  - "Do not hand-render the init banner or any runtime-owned ceremony banner; init_ceremony.go owns it."
   - "If docs and runtime disagree, runtime wins."
+  - "Promoted shelf entries are recorded as colony todos by `aether init`, never appended to a session or state file by the wrapper. The promotion itself happens inside that `aether init` call via `--promote-shelf` / `--dismiss-shelf`, after consent -- the wrapper never runs `shelf-promote-batch` or `shelf-dismiss-batch`, so a cancel or a failed init leaves the shelf untouched."
+  - "Approved pheromones are written with `aether pheromone-write` only after `aether init` returns success, so a cancelled or failed init persists nothing."

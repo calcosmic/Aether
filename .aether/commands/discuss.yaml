@@ -10,8 +10,8 @@ codex_orchestration:
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 ceremony_contract:
   class: "guided_ritual"
-  authority: "Go owns pending-decision persistence, REDIRECT emission, and visual question rendering."
-  wrapper_role: "Present runtime questions and captured answers clearly; do not invent answers or imply worker dispatch."
+  authority: "Go owns pending-decision persistence, REDIRECT emission, and visual question rendering. The typed intake `aether discuss --add-question ... --grounding ...` materializes Queen-composed questions into the same pipeline; the runtime refuses ungrounded questions and dedups by --source slug."
+  wrapper_role: "Compose 3-5 questions from THIS goal and THIS codebase (status + discuss-analyze + survey docs), each citing what it is grounded in; materialize via --add-question; present everything pending as real multiple choice; persist picks via --resolve. Fall back to the runtime's generator only when discuss-analyze returns no scan context or the goal is empty. Never invent answers or imply worker dispatch."
 guardrails:
   - "Do not write `pending-decisions.json`, `pheromones.json`, or `COLONY_STATE.json` by hand from this command spec."
   - "Do not render Scout/Builder/Watcher worker theatre for discuss; this is a guided clarification ritual, not a spawned-worker lifecycle."

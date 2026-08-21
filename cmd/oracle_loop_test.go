@@ -830,10 +830,19 @@ func TestFinalizeOracleLoopRubricOutput(t *testing.T) {
 	if !ok {
 		t.Fatalf("finalizeOracleLoop output missing plan_revision_option: %#v", result["plan_revision_option"])
 	}
-	if command := stringValue(revisionOption["command"]); !strings.Contains(command, "--revision-evidence \".aether/oracle/synthesis.md\"") {
-		t.Fatalf("Oracle revision command points at the wrong synthesis artifact: %q", command)
+	// The evidence must be the durable saved document, not the workspace copy.
+	// .aether/oracle/synthesis.md is swept into archive/<timestamp>/ the moment
+	// the next research question is asked, so a plan-revision command citing it
+	// goes stale as soon as the operator researches anything else.
+	evidence := stringValue(revisionOption["command"])
+	if !strings.Contains(evidence, "--revision-evidence \".aether/research/") {
+		t.Fatalf("Oracle revision command should cite the durable research document, got: %q", evidence)
 	}
-	if _, err := os.Stat(paths.SynthesisPath); err != nil {
+	savedDocument := stringValue(result["research_document"])
+	if savedDocument == "" {
+		t.Fatal("a completed run did not save a durable research document")
+	}
+	if _, err := os.Stat(filepath.Join(paths.Root, savedDocument)); err != nil {
 		t.Fatalf("Oracle revision evidence does not exist: %v", err)
 	}
 
@@ -984,5 +993,72 @@ func TestOracleReadyForCompletion(t *testing.T) {
 				t.Errorf("oracleReadyForCompletion() = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+// TestOracleStopsOnDiminishingReturns exercises the chain that decides whether
+// deep research can stop paying for answers it already has.
+//
+// The loop measures novelty every iteration and increments Novelty.Consecutive
+// Low when an answer mostly repeats its predecessor. The only line that read
+// that counter used to sit inside oracleProgressedSince:
+//
+//	if state.Novelty.ConsecutiveLow >= 3 { return false }
+//	return false
+//
+// Both branches were identical, so the measurement was computed and thrown
+// away. With no diminishing-returns exit the loop could stop only on the
+// confidence target, the iteration cap, or a manual kill — at --depth deep, up
+// to thirty real worker subprocesses chasing 95% confidence, unable to stop
+// however little each one added.
+//
+// This drives the real path: repeated answers through applyOracleWorkerResponse
+// until the counter trips.
+func TestOracleStopsOnDiminishingReturns(t *testing.T) {
+	plan := oraclePlanFile{Questions: []oracleQuestion{{ID: "q1", Text: "How does the transport clock lock?", Status: "open"}}}
+	state := oracleStateFile{TargetConfidence: 95, Novelty: noveltyTracker{Threshold: 0.15}}
+
+	// The same answer, restated. Confidence never reaches the target, so
+	// without a novelty exit this loop would run to the iteration cap.
+	repeated := oracleWorkerResponse{
+		QuestionID: "q1",
+		Status:     "partial",
+		Confidence: 40,
+		Summary:    "The transport clock uses metro with quantize to lock to the Live grid.",
+	}
+
+	var err error
+	for i := 1; i <= 4; i++ {
+		state.Iteration = i
+		state, plan, err = applyOracleWorkerResponse(state, plan, repeated)
+		if err != nil {
+			t.Fatalf("iteration %d: %v", i, err)
+		}
+	}
+
+	if state.Novelty.ConsecutiveLow < oracleNoveltyStallLimit {
+		t.Fatalf("repeated answers did not accumulate low novelty: ConsecutiveLow = %d, want >= %d", state.Novelty.ConsecutiveLow, oracleNoveltyStallLimit)
+	}
+	if !oracleDiminishingReturns(state) {
+		t.Fatalf("loop would not stop after %d repeated answers; deep research keeps paying for nothing", state.Novelty.ConsecutiveLow)
+	}
+	if oracleReadyForCompletion(plan, state) {
+		t.Fatalf("fixture reached the confidence target, so it does not prove the novelty exit is what stops the loop")
+	}
+
+	// A genuinely new answer must reset the counter, or research would stop the
+	// moment it hit one repetitive round.
+	state.Iteration = 5
+	state, _, err = applyOracleWorkerResponse(state, plan, oracleWorkerResponse{
+		QuestionID: "q1",
+		Status:     "partial",
+		Confidence: 55,
+		Summary:    "Pattern storage relies on pattrstorage bindings that survive a session reload, unlike plain value objects.",
+	})
+	if err != nil {
+		t.Fatalf("novel iteration: %v", err)
+	}
+	if oracleDiminishingReturns(state) {
+		t.Fatalf("a novel answer did not reset the stall counter: ConsecutiveLow = %d", state.Novelty.ConsecutiveLow)
 	}
 }

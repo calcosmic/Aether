@@ -21,6 +21,7 @@ import { callGoJSON } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { HOST_COMMANDS, type ParsedHostArgs } from "./command-registry.js";
 import { dispatchWorkers } from "./worker-dispatch.js";
+import type { BuildDispatch, ContinueExternalDispatch, PlanningDispatch } from "./types.js";
 export { buildHostGoArgs } from "./command-registry.js";
 export type { ParsedHostArgs } from "./command-registry.js";
 /** Test-only: inject a mock callGoJSON. */
@@ -44,14 +45,48 @@ export declare function __setPreflightWorkerPlatform(fn: PreflightWorkerPlatform
 export declare function __restorePreflightWorkerPlatform(): void;
 /** Restore all test mocks at once. */
 export declare function __restoreAllMocks(): void;
-export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand };
+export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand, toWorkerDispatches };
 /** Parse command-line arguments for the TS host. */
 export declare function parseArgs(argv: string[]): ParsedHostArgs;
+type HostInjectedDispatchFields = {
+    task_brief?: string;
+};
+type PlanDispatchLike = PlanningDispatch & HostInjectedDispatchFields;
+type ContinueDispatchLike = ContinueExternalDispatch & HostInjectedDispatchFields;
+declare function toWorkerDispatches(dispatches: Array<PlanDispatchLike | ContinueDispatchLike>): BuildDispatch[];
 /**
  * Run the dry-run path for any dispatched command: fetch the manifest,
  * render ceremony, show DRY RUN badge, exit without dispatching workers.
  */
 declare function runDryRunDispatchedCommand(bridge: GoBridgeOptions, parsed: ParsedHostArgs, definition: typeof HOST_COMMANDS[number]): Promise<void>;
+/** Per-phase outcome reported by `runResearchConfidenceLoop`. */
+export interface ResearchLoopPhaseSummary {
+    phaseId: number;
+    iterations: number;
+    finalConfidence: number;
+    stopReason: string;
+}
+/** Summary returned by `runResearchConfidenceLoop`. */
+export interface ResearchLoopSummary {
+    phases: ResearchLoopPhaseSummary[];
+    /**
+     * Phase IDs escalated from Scout to Oracle (D-04). A phase appears here at
+     * most once: its loop stopped with reason "diminishing_returns" below the
+     * confidence target at deep or exhaustive depth, and the escalated Oracle
+     * dispatch was sent exactly once \u2014 Oracle's own RALF loop (runOracleLoop)
+     * drives the rest, not a second ConfidenceLoop.
+     */
+    escalations: number[];
+}
+/**
+ * Give the plan path a real confidence loop (RESEARCH-07). Constructs one
+ * `ConfidenceLoop` per approved research phase \u2014 never a batch average \u2014 and
+ * iterates each phase's Scout until its depth-bound target is met or its
+ * iteration budget runs out (RESEARCH-08 / D-12), printing a ceremony line
+ * every iteration (D-09) and an early-accept prompt at most once per phase
+ * when progress stalls or nears target (D-10).
+ */
+export declare function runResearchConfidenceLoop(bridge: GoBridgeOptions, parsed: ParsedHostArgs, researchDispatches: PlanDispatchLike[]): Promise<ResearchLoopSummary>;
 /**
  * Run the dispatched build pipeline: fetch manifest, dispatch workers,
  * write completion file, call finalizer, render ceremony.

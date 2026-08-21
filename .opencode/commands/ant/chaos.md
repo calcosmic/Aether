@@ -202,6 +202,10 @@ For each scenario, produce a finding in this format. Display each to the termina
    Expected behavior: {what should happen}
    Actual/likely behavior: {what would happen instead}
 
+   🛡️ Suggested hardening: {the smallest concrete change that closes this
+   gap, with a file reference — a strengthener brings the strengthening;
+   Builder applies it}
+
 {If no weakness was found in this category:}
 ✅ Resilient: {what the code does well in this category}
    {Brief explanation of why this area is solid}
@@ -234,8 +238,9 @@ Scenarios probed: 5
 
 {If any findings:}
 🎲 CHAOS REPORT: Found {findings_count} weakness(es) —
-{For each finding, one line:}
+{For each finding, one line + its hardening:}
    ({N}) {severity}: {concise description} [{file}]
+       └── harden: {suggested_hardening}
 
 {If all categories were resilient:}
 ✅ RESILIENCE CONFIRMED: All 5 categories passed investigation.
@@ -274,7 +279,8 @@ After the display report, output the machine-readable JSON summary:
         "description": "{detailed description}",
         "reproduction_steps": ["{step1}", "{step2}", "{step3}"],
         "expected_behavior": "{what should happen}",
-        "actual_behavior": "{what would happen instead}"
+        "actual_behavior": "{what would happen instead}",
+        "suggested_hardening": "{one concrete hardening step with a file reference; null for resilient scenarios}"
       }
     ],
     "summary": {

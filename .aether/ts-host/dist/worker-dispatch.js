@@ -15,6 +15,7 @@
 import { callGoJSON, callGoJSONAsync, cleanupCompletionDir, writeCompletionFile, } from "./go-bridge.js";
 import { normalizeSpawnClaims } from "./claims-parser.js";
 import { dispatchWaves } from "./wave-orchestrator.js";
+import { resolvePreflightTimeoutMs } from "./preflight-config.js";
 // ---------------------------------------------------------------------------
 // Single worker dispatch
 // ---------------------------------------------------------------------------
@@ -163,8 +164,6 @@ async function dispatchRealWorker(opts, dispatch) {
         request.context_capsule = dispatch.context_capsule;
     if (dispatch.skill_section !== undefined)
         request.skill_section = dispatch.skill_section;
-    if (dispatch.hive_section !== undefined)
-        request.hive_section = dispatch.hive_section;
     if (dispatch.pheromone_section !== undefined)
         request.pheromone_section = dispatch.pheromone_section;
     if (dispatch.handoff_section !== undefined)
@@ -244,9 +243,16 @@ async function dispatchRealWorker(opts, dispatch) {
 }
 // Go remains authoritative and rejects stale or broadened values. This fallback
 // covers dynamically spawned children that are not present in a Go manifest.
-function permissionProfileForCaste(caste) {
+// The read-only predicate mirrors `repositoryReadOnlyCastes` in
+// pkg/codex/permission_profile.go exactly (currently just "includer") --
+// Go's ResolvePermissionProfile rejects any mismatch outright rather than
+// downgrading, so this fallback must never grant a broader or narrower
+// profile than the canonical Go map. Exported so
+// test/dispatch-field-fidelity.test.ts can assert against it directly and
+// catch drift the next time Go's read-only set changes.
+export function permissionProfileForCaste(caste) {
     const normalized = caste.trim().toLowerCase().replace(/^aether-/, "").replaceAll("-", "_");
-    const readOnly = normalized === "scout" || normalized === "includer";
+    const readOnly = normalized === "includer";
     const filesystem = readOnly ? "repository_read_only" : "workspace_write";
     return {
         schema_version: 1,
@@ -277,14 +283,37 @@ function normalizeTerminalStatus(value) {
             throw new Error(`Go worker adapter returned invalid terminal status "${value}"`);
     }
 }
+/**
+ * Mirror of hostedPreflightAttempts in pkg/codex/platform_dispatch.go.
+ * Pinned by TestHostsAgreeOnPreflightRetryAttempts in
+ * cmd/preflight_docs_test.go — change one side without the other and that
+ * test fails.
+ */
+export const PREFLIGHT_GO_ATTEMPTS = 2;
+/** Startup slack added on top of the Go side's worst-case retry budget. */
+const PREFLIGHT_ADAPTER_SLACK_MS = 30_000;
+/**
+ * Node-side kill budget for the `internal-worker-adapter --preflight` call.
+ *
+ * Must exceed the Go side's full preflight budget — the resolved
+ * AETHER_PREFLIGHT_TIMEOUT (not the 45s constant: the knob is configurable)
+ * times hostedPreflightAttempts — plus startup slack. At a hardcoded 30s
+ * Node SIGTERM'd the adapter before the Go retry could ever fire (27 July
+ * incident); a hardcoded 120s reintroduced the same failure for any
+ * AETHER_PREFLIGHT_TIMEOUT above ~45s, killing the adapter mid-retry.
+ * Floored at 120s so the wrapper never gets tighter than the old constant.
+ */
+export function resolvePreflightAdapterBudgetMs() {
+    return Math.max(120_000, resolvePreflightTimeoutMs() * PREFLIGHT_GO_ATTEMPTS + PREFLIGHT_ADAPTER_SLACK_MS);
+}
 /** Ask the Go-owned adapter layer to select and preflight the worker provider. */
 export async function preflightGoWorkerProvider(opts, context) {
     try {
-        // Must exceed the Go side's full preflight budget (hostedPreflightTimeout
-        // x hostedPreflightAttempts in pkg/codex/platform_dispatch.go, 45s x 2)
-        // plus startup slack. At 30s Node SIGTERM'd the adapter before the Go
-        // retry could ever fire, so the retry existed only on the direct-Go path.
-        return await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight"], 120_000);
+        const response = await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight"], resolvePreflightAdapterBudgetMs());
+        if (response.preflight?.notice && response.preflight.notice.trim()) {
+            process.stderr.write(`${response.preflight.notice}\n`);
+        }
+        return response;
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);

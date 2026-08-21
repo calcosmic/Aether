@@ -78,6 +78,26 @@ var discussCmd = &cobra.Command{
 			return nil
 		}
 
+		// Typed intake for Queen-composed questions: the wrapper's model
+		// composes questions from THIS goal and THIS codebase, and this
+		// path materializes them into the same pending-decisions pipeline
+		// the canned generator uses — same resolution, same REDIRECT
+		// emission, same clarified-intent injection into worker context.
+		if question, _ := cmd.Flags().GetString("add-question"); strings.TrimSpace(question) != "" {
+			optionsRaw, _ := cmd.Flags().GetString("options")
+			category, _ := cmd.Flags().GetString("category")
+			grounding, _ := cmd.Flags().GetString("grounding")
+			hard, _ := cmd.Flags().GetBool("hard")
+			source, _ := cmd.Flags().GetString("source")
+			result, err := addComposedDiscussQuestion(question, optionsRaw, category, grounding, source, hard)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return nil
+			}
+			outputWorkflow(result, renderComposedQuestionVisual(result))
+			return nil
+		}
+
 		maxQuestions, _ := cmd.Flags().GetInt("max-questions")
 		if maxQuestions <= 0 {
 			maxQuestions = 3
@@ -99,7 +119,136 @@ func init() {
 	discussCmd.Flags().Bool("dry-run", false, "Analyze and preview questions without writing pending decisions")
 	discussCmd.Flags().String("resolve", "", "Clarification decision ID to resolve")
 	discussCmd.Flags().String("answer", "", "Resolution text for --resolve")
+	discussCmd.Flags().String("add-question", "", "Materialize a composed clarification question (Queen-composed intake)")
+	discussCmd.Flags().String("options", "", "Pipe-separated answer options for --add-question (optional; empty = freeform)")
+	discussCmd.Flags().String("category", "", "Category for --add-question: surface, integration, scope, verification, or analysis")
+	discussCmd.Flags().String("grounding", "", "What the composed question is based on — REQUIRED with --add-question")
+	discussCmd.Flags().Bool("hard", false, "Mark the composed question's answer as a hard constraint (REDIRECT on resolve)")
+	discussCmd.Flags().String("source", "", "Stable dedup slug for --add-question (default derived from the question)")
 	rootCmd.AddCommand(discussCmd)
+}
+
+// composedQuestionCategories is the closed category vocabulary for
+// wrapper-composed questions — the same four the canned generator uses plus
+// "analysis". Closed on purpose: a typed category is what downstream
+// suppression (clarificationSuppressedBySignals) and rendering key on.
+var composedQuestionCategories = map[string]bool{
+	"surface": true, "integration": true, "scope": true, "verification": true, "analysis": true,
+}
+
+// addComposedDiscussQuestion materializes ONE wrapper-composed question into
+// pending-decisions.json — the typed intake behind the Queen-composed
+// discuss flow. Grounding is refused when empty: a composed question must
+// cite the scan fact or state datum it derives from, or it is the
+// same-three-canned-questions problem wearing a new coat. Dedup is by
+// source slug, exactly as canned questions dedup, so re-running the
+// composition never doubles questions.
+func addComposedDiscussQuestion(question, optionsRaw, category, grounding, source string, hard bool) (map[string]interface{}, error) {
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	goal := strings.TrimSpace(derefGoal(state.Goal))
+	if goal == "" {
+		return nil, fmt.Errorf("the colony goal is empty; run `aether init \"goal\"` again before composing questions")
+	}
+
+	question = strings.TrimSpace(question)
+	grounding = strings.TrimSpace(grounding)
+	if grounding == "" {
+		return nil, fmt.Errorf("--add-question requires --grounding: state what this question is based on (a scan fact, a survey finding, the goal's wording) — ungrounded questions are the canned-question problem again")
+	}
+	category = strings.ToLower(strings.TrimSpace(category))
+	if category == "" {
+		category = "analysis"
+	}
+	if !composedQuestionCategories[category] {
+		return nil, fmt.Errorf("unknown --category %q: must be one of surface, integration, scope, verification, analysis", category)
+	}
+
+	options := []string{}
+	for _, opt := range strings.Split(optionsRaw, "|") {
+		if opt = strings.TrimSpace(opt); opt != "" {
+			options = append(options, opt)
+		}
+	}
+
+	source = strings.TrimSpace(source)
+	if source == "" {
+		digest := sha256.Sum256([]byte(strings.ToLower(question)))
+		source = "wrapper:q-" + hex.EncodeToString(digest[:4])
+	} else if !strings.HasPrefix(source, "wrapper:") {
+		source = "wrapper:" + source
+	}
+
+	scope := pendingDecisionScopeFromState(state)
+	pending := loadPendingDecisionFile()
+	activePending, _ := filterPendingDecisionFileForScope(pending, scope)
+	if existing, ok := clarificationDecisionIndex(activePending)[source]; ok {
+		status := "pending"
+		if existing.Resolved {
+			status = "already_resolved"
+		}
+		return map[string]interface{}{
+			"created":   false,
+			"id":        existing.ID,
+			"status":    status,
+			"source":    source,
+			"question":  question,
+			"grounding": grounding,
+		}, nil
+	}
+
+	decision := PendingDecision{
+		ID:             fmt.Sprintf("pd_%d", time.Now().UnixNano()),
+		Type:           clarificationDecisionType,
+		Description:    formatClarificationDescription(question, options),
+		Source:         source,
+		HardConstraint: hard,
+		Grounding:      grounding,
+		Resolved:       false,
+		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+	}
+	stampPendingDecisionScope(&decision, scope)
+	pending.Decisions = append(pending.Decisions, decision)
+	if err := store.SaveJSON(pendingDecisionsFile, pending); err != nil {
+		return nil, fmt.Errorf("failed to save composed question: %w", err)
+	}
+
+	return map[string]interface{}{
+		"created":   true,
+		"id":        decision.ID,
+		"status":    "new",
+		"source":    source,
+		"category":  category,
+		"question":  question,
+		"options":   options,
+		"grounding": grounding,
+		"hard":      hard,
+		"next":      fmt.Sprintf("Resolve with `aether discuss --resolve %s --answer \"...\"` after the user picks.", decision.ID),
+	}, nil
+}
+
+func renderComposedQuestionVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("discuss"), "Question Composed"))
+	b.WriteString(visualDividerStr())
+	if !boolValue(result["created"]) {
+		fmt.Fprintf(&b, "Already tracked (%s): %s\n", stringValue(result["status"]), stringValue(result["question"]))
+		fmt.Fprintf(&b, "   └── id %s\n", stringValue(result["id"]))
+		return b.String()
+	}
+	fmt.Fprintf(&b, "❓ %s\n", stringValue(result["question"]))
+	if opts := stringSliceValue(result["options"]); len(opts) > 0 {
+		fmt.Fprintf(&b, "   └── options: %s\n", strings.Join(opts, " | "))
+	}
+	fmt.Fprintf(&b, "   └── based on: %s\n", stringValue(result["grounding"]))
+	if boolValue(result["hard"]) {
+		b.WriteString("   └── hard constraint: the answer becomes a REDIRECT signal\n")
+	}
+	fmt.Fprintf(&b, "   └── id %s\n", stringValue(result["id"]))
+	b.WriteString(renderNextUp(stringValue(result["next"])))
+	return b.String()
 }
 
 func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interface{}, error) {
@@ -990,7 +1139,9 @@ func clarifiedIntentEntrySource(source string, entry clarifiedIntentEntry, index
 }
 
 func clarificationIsHardConstraint(decision PendingDecision) bool {
-	return strings.HasSuffix(strings.TrimSpace(decision.Source), ":hard")
+	// The typed field decides; the legacy ":hard" source suffix remains a
+	// fallback so existing pending decisions keep their meaning.
+	return decision.HardConstraint || strings.HasSuffix(strings.TrimSpace(decision.Source), ":hard")
 }
 
 func buildClarificationRedirect(decision PendingDecision, answer string) string {

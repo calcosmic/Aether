@@ -12,6 +12,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import stripAnsi from "strip-ansi";
+
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
@@ -150,7 +152,23 @@ function saveSnapshot(name: string, content: string): void {
   writeFileSync(path, content, "utf-8");
 }
 
-function assertSnapshot(name: string, actual: string): void {
+function assertSnapshot(name: string, rawActual: string): void {
+  // Compare (and store) ANSI-free text. These snapshots assert LAYOUT --
+  // glyphs, spacing, box drawing, wording -- and the stored fixtures have
+  // never contained escape codes, so colour was already outside what they
+  // could catch. What they DID catch was the caller's environment: run under
+  // a parent that exports FORCE_COLOR (every agent harness, and most CI
+  // runners) the renderers emit colour and every box snapshot failed, while
+  // the identical code passed in a plain shell. A test whose result depends
+  // on who invoked it is not evidence about the code.
+  //
+  // Caste colours stay asserted where they are actually decided -- Go's
+  // casteColorMap, locked by TestCasteIdentityUsesHouseStyle -- not here.
+  //
+  // Same reasoning as the .welcomed marker and REPO_ROOT above: declare the
+  // environment the fixture assumes rather than inherit it.
+  const actual = stripAnsi(rawActual);
+
   if (UPDATE_SNAPSHOTS) {
     saveSnapshot(name, actual);
     return;

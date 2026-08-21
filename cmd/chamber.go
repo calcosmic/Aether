@@ -33,7 +33,12 @@ var chamberCreateCmd = &cobra.Command{
 		totalPhases, _ := cmd.Flags().GetInt("total-phases")
 
 		aetherRoot := storage.ResolveAetherRoot(context.Background())
-		chamberDir := filepath.Join(aetherRoot, ".aether", "chambers", name)
+		chambersBase := filepath.Join(aetherRoot, ".aether", "chambers")
+		chamberDir, err := safeIdentifierSegment(chambersBase, "chamber name", name)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 
 		if err := os.MkdirAll(chamberDir, 0755); err != nil {
 			outputError(2, fmt.Sprintf("failed to create chamber directory: %v", err), nil)

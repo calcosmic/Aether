@@ -75,13 +75,34 @@ const (
 	fallbackPlanningDependencyBehavior         = "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first."
 	fallbackPlanningExtendedDependencyBehavior = "Real worker dispatch requires an authenticated platform dispatcher. Supporting planning castes may contribute evidence, and route-setter finalization is selected by caste identity rather than fixed array position."
 	fallbackSurveyFallbackBehavior             = "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first."
-	fallbackPlanningFallbackBehavior           = "Normal planning does not fall back to local synthesis. If Scout or Route-Setter workers are unavailable, blocked, failed, or timed out, stop with recovery guidance; only explicit `aether plan --synthetic` may produce dispatch_mode=synthetic local preview artifacts."
-	fallbackSurveyResultCollectionPolicy       = "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files."
-	fallbackPlanningResultCollectionPolicy     = "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid."
+	// fallbackPlanningFallbackBehavior deliberately does NOT match
+	// colony/policies/dispatch-contract.yaml's (now-deleted) planning
+	// fallback_behavior text. 191-02's field-by-field diff found this field
+	// diverging, but folding the YAML's stale "synthesize locally" text into
+	// this constant -- the plan's literal default fold direction -- would
+	// silently regress a deliberate, already-shipped, already-tested
+	// fail-closed design: TestPlanIncludesDispatchContract
+	// (cmd/codex_plan_test.go), TestPlanVisualOutputShowsDispatchContractDetails
+	// (cmd/codex_visuals_test.go), and the committed golden fixture
+	// (cmd/testdata/golden_plan.txt) all pin THIS text -- not the YAML's --
+	// as correct, and none of the three could ever have been exercising the
+	// real colony/ file (Go's test runner sets CWD to the package directory,
+	// so the bare "colony/policies/..." path never resolved in any of them).
+	// Deleting the stale file fixes a real dev-checkout/every-other-install
+	// inconsistency rather than preserving it. See 191-02-SUMMARY.md.
+	fallbackPlanningFallbackBehavior       = "Normal planning does not fall back to local synthesis. If Scout or Route-Setter workers are unavailable, blocked, failed, or timed out, stop with recovery guidance; only explicit `aether plan --synthetic` may produce dispatch_mode=synthetic local preview artifacts."
+	fallbackSurveyResultCollectionPolicy   = "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files."
+	fallbackPlanningResultCollectionPolicy = "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid."
 )
 
 var (
-	fallbackSurveyFallbackVisibility   = []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"}
+	fallbackSurveyFallbackVisibility = []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"}
+	// fallbackPlanningFallbackVisibility deliberately does NOT match
+	// colony/policies/dispatch-contract.yaml's (now-deleted) planning
+	// fallback_visibility list, for the same reason documented above
+	// fallbackPlanningFallbackBehavior: "synthetic"/"synthetic_warning" are
+	// the tested, golden-fixture-locked, fail-closed design this constant
+	// must keep describing, not the stale YAML's "provider_diagnostics".
 	fallbackPlanningFallbackVisibility = []string{"dispatch_mode", "planning_warning", "synthetic", "synthetic_warning", "artifact_source", "plan_source", "planning_loop"}
 )
 
@@ -700,8 +721,51 @@ func persistDispatchWorkerHandoff(dispatch codex.WorkerDispatch, result codex.Di
 	})
 }
 
-// renderWorkerHandoffSection renders the handoff context section for a worker.
+// renderWorkerHandoffSection renders the handoff context section for a
+// worker, under the shared "## Previous Worker Handoffs" heading -- the SAME
+// heading the colony-prime capsule (resolveCodexWorkerContext(), which
+// unconditionally renders a "build"-workflow-scoped copy whenever a matching
+// record exists, cmd/colony_prime_context.go:695) uses.
+//
+// A caller whose ContextCapsule is resolveCodexWorkerContext() and who ALSO
+// needs a DIFFERENT workflow's handoffs delivered (e.g. continue's relay of
+// sibling continue-review/watcher handoffs, distinct from the capsule's own
+// build-carryover) must call renderRelatedWorkflowHandoffSection instead.
+// Calling this function a second time for such a caller would deliver two
+// "## Previous Worker Handoffs" sections into the same assembled prompt --
+// the exact shape D-190-05-A found on continue's native review/watcher
+// dispatch paths, closed by Phase 190 Plan 06.
 func renderWorkerHandoffSection(workflow string, phaseID int, workerName string) string {
+	return renderHandoffSectionNamed(workflow, phaseID, workerName, "worker_handoffs", "## Previous Worker Handoffs\n\n")
+}
+
+// renderRelatedWorkflowHandoffSection renders handoff records for a workflow
+// OTHER than the "build" workflow the shared colony-prime capsule always
+// carries (cmd/colony_prime_context.go:695) -- e.g. a "continue"-workflow
+// handoff left by a sibling continue dispatch (a review caste, or the
+// watcher) for the current or preceding phase.
+//
+// Use this instead of renderWorkerHandoffSection when the caller's
+// ContextCapsule is resolveCodexWorkerContext(): that capsule already
+// delivers "build"-workflow handoffs under "## Previous Worker Handoffs", so
+// calling renderWorkerHandoffSection a second time for a DIFFERENT workflow
+// would still collide on the same heading even though the underlying
+// records differ (D-190-05-A) -- this repo's own convention treats a
+// repeated HEADING as "the same section delivered twice" regardless of
+// whether the body content is identical. This function renders under a
+// distinct heading instead, so both the cross-phase build-carryover content
+// (capsule) and the same-workflow sibling-relay content (this function)
+// keep exactly one home each, and neither is silently dropped to zero.
+func renderRelatedWorkflowHandoffSection(workflow string, phaseID int, workerName string) string {
+	return renderHandoffSectionNamed(workflow, phaseID, workerName, "related_worker_handoffs", "## Related Worker Handoffs\n\nHandoffs from other workers on this same workflow -- distinct from any cross-phase build handoff above.\n\n")
+}
+
+// renderHandoffSectionNamed is the shared implementation behind
+// renderWorkerHandoffSection and renderRelatedWorkflowHandoffSection. The
+// filtering and per-record rendering are identical between the two; only the
+// heading (and its section-template identity, for colonies that override
+// section headers) differs.
+func renderHandoffSectionNamed(workflow string, phaseID int, workerName string, sectionName string, fallbackHeading string) string {
 	if store == nil {
 		return ""
 	}
@@ -728,14 +792,14 @@ func renderWorkerHandoffSection(workflow string, phaseID int, workerName string)
 		return ""
 	}
 	sort.SliceStable(filtered, func(i, j int) bool {
-		return filtered[i].Freshness > filtered[j].Freshness
+		return handoffFreshnessTime(filtered[i].Freshness).After(handoffFreshnessTime(filtered[j].Freshness))
 	})
 	if len(filtered) > 5 {
 		filtered = filtered[:5]
 	}
 
 	var b strings.Builder
-	writeSectionHeader(&b, "worker_handoffs", "## Previous Worker Handoffs\n\n")
+	writeSectionHeader(&b, sectionName, fallbackHeading)
 	for _, record := range filtered {
 		title := strings.TrimSpace(record.WorkerName)
 		if title == "" {
@@ -744,12 +808,16 @@ func renderWorkerHandoffSection(workflow string, phaseID int, workerName string)
 		if record.TaskID != "" {
 			title += " (" + record.TaskID + ")"
 		}
-		b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.WorkerHeaderFormat }, "### %s\n", title))
+		b.WriteString(fmtOrFallback(sectionName, func(t *sectionTemplate) string { return t.WorkerHeaderFormat }, "### %s\n", title))
+		// Caste, wave and age were stored on every record and rendered on none,
+		// so a reader could not tell whether a handoff came from the worker
+		// beside it or from a build three days ago — and weighted them equally.
+		b.WriteString(fmt.Sprintf("- From: %s\n", handoffProvenance(record)))
 		if record.Status != "" || record.VerificationStatus != "" {
-			b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.StatusFormat }, "- Status: %s; verification: %s\n", firstNonEmpty(record.Status, "unknown"), firstNonEmpty(record.VerificationStatus, "unknown")))
+			b.WriteString(fmtOrFallback(sectionName, func(t *sectionTemplate) string { return t.StatusFormat }, "- Status: %s; verification: %s\n", firstNonEmpty(record.Status, "unknown"), firstNonEmpty(record.VerificationStatus, "unknown")))
 		}
 		if record.Summary != "" {
-			b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.SummaryFormat }, "- Summary: %s\n", record.Summary))
+			b.WriteString(fmtOrFallback(sectionName, func(t *sectionTemplate) string { return t.SummaryFormat }, "- Summary: %s\n", record.Summary))
 		}
 		appendHandoffList(&b, "Changed files", record.ChangedFiles)
 		appendHandoffList(&b, "Commands run", record.CommandsRun)
@@ -784,7 +852,10 @@ func buildWorkerHandoffRecord(dispatch codex.WorkerDispatch, result codex.Dispat
 		}
 		summary = strings.TrimSpace(result.WorkerResult.Summary)
 		handoff = result.WorkerResult.Handoff
-		if workerHandoffEmpty(handoff) {
+		// IN-01 (189-REVIEW.md): reuses the single canonical
+		// freshness-inclusive emptiness check (pkg/codex) instead of a
+		// third hand-copied definition.
+		if codex.IsEmptyWorkerHandoffIncludingFreshness(handoff) {
 			handoff = codex.WorkerHandoff{
 				ChangedFiles:       append(append(append([]string{}, result.WorkerResult.FilesCreated...), result.WorkerResult.FilesModified...), result.WorkerResult.TestsWritten...),
 				KnownFailures:      append([]string{}, result.WorkerResult.Blockers...),
@@ -859,11 +930,11 @@ func pruneWorkerHandoffRecords(records []workerHandoffRecord, limit int) []worke
 		return records
 	}
 	sort.SliceStable(records, func(i, j int) bool {
-		return records[i].Freshness > records[j].Freshness
+		return handoffFreshnessTime(records[i].Freshness).After(handoffFreshnessTime(records[j].Freshness))
 	})
 	pruned := append([]workerHandoffRecord(nil), records[:limit]...)
 	sort.SliceStable(pruned, func(i, j int) bool {
-		return pruned[i].Freshness < pruned[j].Freshness
+		return handoffFreshnessTime(pruned[i].Freshness).Before(handoffFreshnessTime(pruned[j].Freshness))
 	})
 	return pruned
 }
@@ -879,18 +950,6 @@ func verificationStatusForWorkerStatus(status string) string {
 	default:
 		return "partial"
 	}
-}
-
-func workerHandoffEmpty(h codex.WorkerHandoff) bool {
-	return len(h.ChangedFiles) == 0 &&
-		len(h.CommandsRun) == 0 &&
-		strings.TrimSpace(h.VerificationStatus) == "" &&
-		len(h.KnownFailures) == 0 &&
-		len(h.OpenDecisions) == 0 &&
-		len(h.Assumptions) == 0 &&
-		len(h.NextWorkerInstructions) == 0 &&
-		len(h.DoNotRepeat) == 0 &&
-		strings.TrimSpace(h.Freshness) == ""
 }
 
 func appendHandoffList(b *strings.Builder, label string, values []string) {
@@ -942,4 +1001,62 @@ func buildToWorkerDispatches(dispatches []codexBuildDispatch) []codex.WorkerDisp
 		}
 	}
 	return result
+}
+
+// handoffFreshnessTime turns a handoff's Freshness into something orderable.
+//
+// Freshness is normally RFC3339, but pkg/codex/handoff.go deliberately
+// preserves the literal "not-run" for a worker whose verification never
+// executed. Three sorts compared the field as a raw string, and "not-run"
+// collates above every "2026-…" timestamp — so un-run handoffs took the top of
+// the five-record window a worker actually reads, and survived pruning ahead of
+// real ones. The relay built to stop workers repeating each other was
+// preferentially handing them the entries with nothing in them.
+//
+// An unparsable value sorts as the zero time, i.e. last, which is what
+// "we do not know when this happened, or it never ran" should mean.
+func handoffFreshnessTime(freshness string) time.Time {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(freshness))
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
+}
+
+// handoffProvenance states who wrote a handoff, from where in the build, and
+// how long ago — the three fields the record already carried and never showed.
+func handoffProvenance(record workerHandoffRecord) string {
+	parts := []string{}
+	if caste := strings.TrimSpace(record.Caste); caste != "" {
+		parts = append(parts, caste)
+	}
+	if record.Wave > 0 {
+		parts = append(parts, fmt.Sprintf("wave %d", record.Wave))
+	}
+	parts = append(parts, handoffAgePhrase(record.Freshness))
+	return strings.Join(parts, " · ")
+}
+
+// handoffAgePhrase renders age in the terms a reader judges relevance by.
+// An un-run or undated handoff says so plainly rather than being presented
+// with the same authority as a fresh one.
+func handoffAgePhrase(freshness string) string {
+	recorded := handoffFreshnessTime(freshness)
+	if recorded.IsZero() {
+		if strings.EqualFold(strings.TrimSpace(freshness), "not-run") {
+			return "verification never ran"
+		}
+		return "undated"
+	}
+	age := time.Since(recorded)
+	switch {
+	case age < time.Minute:
+		return "recorded just now"
+	case age < time.Hour:
+		return fmt.Sprintf("recorded %dm ago", int(age.Minutes()))
+	case age < 24*time.Hour:
+		return fmt.Sprintf("recorded %dh ago", int(age.Hours()))
+	default:
+		return fmt.Sprintf("recorded %dd ago", int(age.Hours()/24))
+	}
 }

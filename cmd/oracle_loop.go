@@ -50,6 +50,10 @@ type oracleScopeProfile struct {
 	IncludeRecentLearnings bool
 }
 
+// oracleDeepRunIterations is the round count at which a run counts as "deep"
+// for effort decisions -- the `deep` preset's own cap.
+const oracleDeepRunIterations = 30
+
 var oracleDepthLevels = map[string]oracleDepthConfig{
 	"quick":      {5, 60, "Quick", "Fast overview, up to 5 iterations"},
 	"balanced":   {15, 85, "Balanced", "Standard research, up to 15 iterations"},
@@ -94,13 +98,28 @@ func inferOracleTemplate(topic string) string {
 		return "bug-investigation"
 	case containsAnyOracleKeyword(lower, "architecture", "architectural", "design", "refactor", "system design", "scalability", "structure"):
 		return "architecture-review"
-	case containsAnyOracleKeyword(lower, "evaluate", "evaluation", "compare", " vs ", "versus", "adopt", "library", "framework", "tooling", "dependency"):
+	// "Should the cache use SQLite or Postgres?" is the most common way a
+	// choice between two technologies gets phrased, and it matched none of the
+	// comparison verbs.
+	case containsAnyOracleKeyword(lower, "evaluate", "evaluation", "compare", " vs ", "versus", "adopt", "library", "framework", "tooling", "dependency"),
+		oracleLooksLikeChoice(lower):
 		return "tech-eval"
 	case containsAnyOracleKeyword(lower, "best practice", "best practices", "patterns", "conventions", "idiomatic", "how should"):
 		return "research-brief"
 	default:
 		return "custom"
 	}
+}
+
+// oracleLooksLikeChoice spots a question that weighs one option against
+// another -- "should the cache use SQLite or Postgres", "which should we pick".
+// It requires both a deciding verb and an alternative, so ordinary prose
+// containing "or" does not trip it.
+func oracleLooksLikeChoice(lower string) bool {
+	if !strings.Contains(lower, " or ") {
+		return false
+	}
+	return containsAnyOracleKeyword(lower, "should", "which", "choose", "pick", "prefer", "better")
 }
 
 func resolveOracleScope(topic, requested string) (oracleScopeProfile, error) {
@@ -156,7 +175,9 @@ func inferOracleAutoScope(topic string) string {
 	repoKeywords := []string{
 		"this repo", "this repository", "current repo", "current repository", "codebase", "aether", "colony",
 		"phase", "build", "continue", "seal", "codex", "claude", "opencode", "pheromone", "runtime", "cli",
-		"local", "source checkout",
+		// "local" on its own matched ordinary words like "local cache" and
+		// forced repo-only evidence onto questions that needed the web.
+		"local runtime", "local checkout", "source checkout",
 	}
 	externalKeywords := []string{
 		"latest", "current", "today", "at the moment", "top ", "github repo", "github repos", "market",
@@ -309,6 +330,11 @@ type oracleStateFile struct {
 	ControllerPID      int            `json:"controller_pid,omitempty"`
 	Depth              string         `json:"depth,omitempty"`
 	Novelty            noveltyTracker `json:"novelty,omitempty"`
+	// CoreQuestion and SuccessCriteria carry the approved research brief into
+	// the run, so the saved research records what was actually asked rather
+	// than a template-generated paraphrase of the topic.
+	CoreQuestion    string   `json:"core_question,omitempty"`
+	SuccessCriteria []string `json:"success_criteria,omitempty"`
 }
 
 type oraclePlanFile struct {
@@ -353,6 +379,7 @@ type oraclePaths struct {
 	GapsPath         string
 	SynthesisPath    string
 	ResearchPlanPath string
+	ProgressPath     string
 	StopPath         string
 	LoopPath         string
 	AgentName        string
@@ -453,6 +480,16 @@ func oracleTruthyValue(value string) bool {
 	}
 }
 
+// oracleStateHasStaleController reports whether a run claims to be active
+// behind a controller process that is gone. It only reads.
+func oracleStateHasStaleController(state oracleStateFile) bool {
+	status := strings.TrimSpace(state.Status)
+	if !strings.EqualFold(status, "active") && !strings.EqualFold(status, "planned") {
+		return false
+	}
+	return state.ControllerPID > 0 && !oracleProcessExists(state.ControllerPID)
+}
+
 func oracleStatusResult(root string) (map[string]interface{}, error) {
 	paths := oracleWorkspacePaths(root)
 	state, _ := loadOracleStateFile(paths.StatePath)
@@ -460,17 +497,24 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
 	active := strings.EqualFold(state.Status, "active") || strings.EqualFold(state.Status, "planned")
-	if active && state.ControllerPID > 0 && !oracleProcessExists(state.ControllerPID) {
+
+	// Detect a dead controller, but do not repair one. Status is the
+	// inspection command, and inspection must not mutate -- `--follow` polls
+	// this state every couple of seconds, and a PID race here would have it
+	// rewriting state.json underneath a live run. `aether oracle recover`
+	// performs the repair when the operator asks for it.
+	staleController := false
+	if active && oracleStateHasStaleController(state) {
+		staleController = true
+		active = false
 		state.Status = "blocked"
 		state.StopReason = "stale_controller"
-		state.Summary = fmt.Sprintf("Oracle controller PID %d is no longer running; saved research files are preserved.", state.ControllerPID)
-		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
-		_ = writeOracleStateFile(paths.StatePath, state)
-		_ = os.Remove(paths.LoopPath)
-		active = false
+		state.Summary = fmt.Sprintf("Oracle controller PID %d is no longer running; saved research files are preserved. Run `aether oracle recover` to clear the run.", state.ControllerPID)
 	}
 	next := "aether oracle \"research topic\""
 	switch {
+	case staleController:
+		next = "aether oracle recover"
 	case active:
 		next = "aether oracle stop"
 	case fileExists(paths.ResearchPlanPath):
@@ -478,43 +522,44 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"mode":               "status",
-		"active":             active,
-		"status":             emptyFallback(strings.TrimSpace(state.Status), "idle"),
-		"topic":              strings.TrimSpace(state.Topic),
-		"scope":              emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
-		"template":           emptyFallback(strings.TrimSpace(state.Template), "custom"),
-		"platform":           emptyFallback(strings.TrimSpace(state.Platform), oracleDetectedPlatform()),
-		"phase":              emptyFallback(strings.TrimSpace(state.Phase), "idle"),
-		"iteration":          state.Iteration,
-		"max_iterations":     state.MaxIterations,
-		"overall_confidence": state.OverallConfidence,
-		"target_confidence":  state.TargetConfidence,
-		"question_count":     questionCount,
-		"answered_count":     answeredCount,
-		"touched_count":      touchedCount,
-		"focus_areas":        append([]string(nil), state.FocusAreas...),
-		"active_question_id": strings.TrimSpace(state.ActiveQuestionID),
-		"active_question":    strings.TrimSpace(state.ActiveQuestionText),
-		"active_attempt":     state.ActiveAttempt,
-		"active_reasoning":   strings.TrimSpace(state.ActiveReasoning),
-		"active_timeout_sec": state.ActiveTimeoutSec,
-		"active_elapsed_sec": state.ActiveElapsedSec,
-		"active_started_at":  strings.TrimSpace(state.ActiveStartedAt),
-		"active_deadline_at": strings.TrimSpace(state.ActiveDeadlineAt),
-		"last_artifact_path": strings.TrimSpace(state.LastArtifactPath),
-		"controller_pid":     state.ControllerPID,
-		"stop_reason":        strings.TrimSpace(state.StopReason),
-		"summary":            strings.TrimSpace(state.Summary),
-		"state_path":         paths.StatePath,
-		"plan_path":          paths.PlanPath,
-		"synthesis_path":     paths.SynthesisPath,
-		"research_plan":      paths.ResearchPlanPath,
-		"has_state":          fileExists(paths.StatePath),
-		"has_plan":           fileExists(paths.PlanPath),
-		"has_synthesis":      fileExists(paths.SynthesisPath),
-		"has_research_plan":  fileExists(paths.ResearchPlanPath),
-		"next":               next,
+		"mode":                   "status",
+		"active":                 active,
+		"state_repair_available": staleController,
+		"status":                 emptyFallback(strings.TrimSpace(state.Status), "idle"),
+		"topic":                  strings.TrimSpace(state.Topic),
+		"scope":                  emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
+		"template":               emptyFallback(strings.TrimSpace(state.Template), "custom"),
+		"platform":               emptyFallback(strings.TrimSpace(state.Platform), oracleDetectedPlatform()),
+		"phase":                  emptyFallback(strings.TrimSpace(state.Phase), "idle"),
+		"iteration":              state.Iteration,
+		"max_iterations":         state.MaxIterations,
+		"overall_confidence":     state.OverallConfidence,
+		"target_confidence":      state.TargetConfidence,
+		"question_count":         questionCount,
+		"answered_count":         answeredCount,
+		"touched_count":          touchedCount,
+		"focus_areas":            append([]string(nil), state.FocusAreas...),
+		"active_question_id":     strings.TrimSpace(state.ActiveQuestionID),
+		"active_question":        strings.TrimSpace(state.ActiveQuestionText),
+		"active_attempt":         state.ActiveAttempt,
+		"active_reasoning":       strings.TrimSpace(state.ActiveReasoning),
+		"active_timeout_sec":     state.ActiveTimeoutSec,
+		"active_elapsed_sec":     state.ActiveElapsedSec,
+		"active_started_at":      strings.TrimSpace(state.ActiveStartedAt),
+		"active_deadline_at":     strings.TrimSpace(state.ActiveDeadlineAt),
+		"last_artifact_path":     strings.TrimSpace(state.LastArtifactPath),
+		"controller_pid":         state.ControllerPID,
+		"stop_reason":            strings.TrimSpace(state.StopReason),
+		"summary":                strings.TrimSpace(state.Summary),
+		"state_path":             paths.StatePath,
+		"plan_path":              paths.PlanPath,
+		"synthesis_path":         paths.SynthesisPath,
+		"research_plan":          paths.ResearchPlanPath,
+		"has_state":              fileExists(paths.StatePath),
+		"has_plan":               fileExists(paths.PlanPath),
+		"has_synthesis":          fileExists(paths.SynthesisPath),
+		"has_research_plan":      fileExists(paths.ResearchPlanPath),
+		"next":                   next,
 	}, nil
 }
 
@@ -571,6 +616,10 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 		background = true
 		autoBackground = true
 	}
+
+	// Read the approved brief before the workspace is archived below. The
+	// archive sweep is what consumes it, so a brief is never reused.
+	approvedBrief := approvedBriefForTopic(root, topic)
 
 	paths := oracleWorkspacePaths(root)
 	if fileExists(paths.LoopPath) {
@@ -645,10 +694,16 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 		ControllerPID:     os.Getpid(),
 		Depth:             depthCfg.Label,
 	}
+	coreQuestion := ""
+	if approvedBrief != nil {
+		coreQuestion = approvedBrief.CoreQuestion
+		state.CoreQuestion = approvedBrief.CoreQuestion
+		state.SuccessCriteria = approvedBrief.SuccessCriteria
+	}
 	plan := oraclePlanFile{
 		Version:     "1.1",
 		Sources:     map[string]oracleSource{},
-		Questions:   buildBriefInformedQuestions(topic, brief, detectedType, scopeProfile),
+		Questions:   buildOracleQuestionPlan(topic, brief, detectedType, coreQuestion, scopeProfile),
 		CreatedAt:   now,
 		LastUpdated: now,
 	}
@@ -841,6 +896,8 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		return nil, err
 	}
 
+	emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventRunStart, state))
+
 	iterationsRun := 0
 	for state.Iteration < state.MaxIterations {
 		if ctx.Err() != nil {
@@ -855,6 +912,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		state.Phase = nextOraclePhase(plan, state)
 		if previousPhase != "" && previousPhase != state.Phase {
 			emitOraclePhaseTransition(previousPhase, state.Phase, state.Iteration)
+			transition := newOracleProgressEvent(oracleProgressEventPhaseTransition, state)
+			transition.PreviousPhase = previousPhase
+			appendOracleProgressEvent(paths.ProgressPath, transition)
 		}
 		target := selectOracleQuestionSmart(plan, state)
 		emitOracleIteration(state.Iteration, target.Text, state.Phase)
@@ -881,7 +941,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			return nil, err
 		}
 
-		emitVisualProgress(renderOracleIterationPreview(state, plan))
+		// One line per round rather than a repeated banner: a deep run is
+		// thirty of these, and the operator wants to watch confidence climb.
+		emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventIterationStart, state))
 
 		before := snapshotOracleProgress(plan, state)
 		iterationsRun++
@@ -896,7 +958,7 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			loopStopReason string
 		)
 		for attempt := 1; attempt <= defaultOracleMaxAttempts; attempt++ {
-			policy := oracleAttemptPolicyForPhase(state.Phase, attempt)
+			policy := oracleAttemptPolicyForPhase(state.Phase, attempt, state.MaxIterations)
 			startedAt := time.Now().UTC()
 			deadlineAt := startedAt.Add(policy.Timeout)
 			responsePath = oracleResponsePath(paths, state.Iteration, attempt)
@@ -915,6 +977,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			if err := writeOracleResearchPlan(paths.ResearchPlanPath, state, plan); err != nil {
 				return nil, err
 			}
+			attemptEvent := newOracleProgressEvent(oracleProgressEventAttemptStart, state)
+			attemptEvent.Attempt = attempt
+			appendOracleProgressEvent(paths.ProgressPath, attemptEvent)
 
 			result, invokeErr = runOracleIterationAttempt(ctx, invoker, paths, state, plan, detectedType, languages, frameworks, target, attempt, policy, responsePath)
 			if ctx.Err() != nil {
@@ -1013,6 +1078,7 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		}
 
 		state.OverallConfidence = oracleOverallConfidence(plan)
+		appendOracleProgressEvent(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventIterationEnd, state))
 		state.Platform = oracleInvokerPlatform(invoker)
 		state.ActiveAttempt = 0
 		state.ActiveReasoning = ""
@@ -1040,6 +1106,16 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 				return nil, err
 			}
 			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "blocked", "no_progress", "aether oracle status")
+		}
+		if oracleDiminishingReturns(state) {
+			state.Status = "complete"
+			state.Phase = "verify"
+			state.StopReason = "diminishing_returns"
+			state.Summary = fmt.Sprintf("Oracle stopped at %d%% confidence after %d iterations: the last %d answers added no new ground.", state.OverallConfidence, iterationsRun, oracleNoveltyStallLimit)
+			if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+				return nil, err
+			}
+			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "complete", "diminishing_returns", "aether oracle status")
 		}
 		if oracleReadyForCompletion(plan, state) {
 			state.Status = "complete"
@@ -1269,6 +1345,26 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		return nil, err
 	}
 
+	// Every exit funnels through here -- target reached, iteration cap,
+	// diminishing returns, no progress, manual stop, worker failure -- so this
+	// is the one place that can promise a terminal line for anyone following.
+	emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventRunEnd, state))
+
+	// A run that reached a conclusion gets its write-up saved somewhere the
+	// next run cannot destroy. Blocked and manually stopped runs do not --
+	// `aether oracle save` keeps those on request.
+	researchDocument := ""
+	if (status == "complete" || stopReason == "max_iterations_reached") && isCanonicalOracleWorkspace(paths) {
+		saved, saveErr := saveOracleResearchDocument(paths, state, plan, "")
+		if saveErr != nil {
+			// Worth saying out loud: the run succeeded but its write-up is
+			// still only in the workspace, where the next run will sweep it.
+			emitVisualLine(fmt.Sprintf("⚠ research completed but could not be saved durably (%v) — run `aether oracle save` before starting another run", saveErr))
+		} else {
+			researchDocument = saved
+		}
+	}
+
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
 	result := map[string]interface{}{
 		"mode":               "run",
@@ -1317,10 +1413,21 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"original_prompt":    strings.TrimSpace(state.Topic),
 		"synthesized_prompt": buildSynthesizedPrompt(plan, state),
 	}
+	if researchDocument != "" {
+		result["research_document"] = researchDocument
+		result["next"] = fmt.Sprintf("aether init --research %s \"<goal>\"", researchDocument)
+	}
 	if status == "complete" {
-		evidencePath, err := filepath.Rel(paths.Root, paths.SynthesisPath)
-		if err != nil {
-			return nil, fmt.Errorf("resolve Oracle synthesis evidence path: %w", err)
+		// Cite the durable copy when there is one: synthesis.md is swept into
+		// the archive the moment the next research question is asked, so a
+		// pointer to it goes stale immediately.
+		evidencePath := researchDocument
+		if evidencePath == "" {
+			rel, err := filepath.Rel(paths.Root, paths.SynthesisPath)
+			if err != nil {
+				return nil, fmt.Errorf("resolve Oracle synthesis evidence path: %w", err)
+			}
+			evidencePath = rel
 		}
 		evidencePath = filepath.ToSlash(evidencePath)
 		result["plan_revision_option"] = planRevisionRecommendation(
@@ -1635,6 +1742,7 @@ func oracleWorkspacePaths(root string) oraclePaths {
 		GapsPath:         filepath.Join(dir, "gaps.md"),
 		SynthesisPath:    filepath.Join(dir, "synthesis.md"),
 		ResearchPlanPath: filepath.Join(dir, "research-plan.md"),
+		ProgressPath:     filepath.Join(dir, "progress.jsonl"),
 		StopPath:         filepath.Join(dir, ".stop"),
 		LoopPath:         filepath.Join(dir, ".loop-active"),
 		AgentName:        "aether-oracle",
@@ -2000,6 +2108,14 @@ func formulateOracleBrief(root, topic, detectedType string, languages, framework
 	return brief
 }
 
+// loadColonyGoal returns the goal of an *active* colony, and nothing otherwise.
+//
+// It used to return whatever goal was last written, so standalone research done
+// before or after a colony -- the common case -- inherited the goal of an
+// unrelated, often already-finished project. A live run shows the cost: an
+// iteration was spent on "How does investigating <truncated topic> advance the
+// colony goal of: Fix TS host typecheck..." for a colony that had already
+// completed and had nothing to do with the question being asked.
 func loadColonyGoal(root string) string {
 	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
 	data, err := os.ReadFile(statePath)
@@ -2007,9 +2123,14 @@ func loadColonyGoal(root string) string {
 		return ""
 	}
 	var state struct {
-		Goal *string `json:"goal"`
+		Goal  *string `json:"goal"`
+		State string  `json:"state"`
 	}
 	if err := json.Unmarshal(data, &state); err != nil || state.Goal == nil {
+		return ""
+	}
+	// Same emptiness test `aether init` uses to decide a colony is not in play.
+	if strings.EqualFold(strings.TrimSpace(state.State), string(colony.StateIDLE)) {
 		return ""
 	}
 	return strings.TrimSpace(*state.Goal)
@@ -2063,6 +2184,41 @@ func scanCodebaseStructure(root string) string {
 		count++
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// buildOracleQuestionPlan puts the operator's approved core question first.
+//
+// Without a brief the loop opens on a generated question that splices the raw
+// topic into a template, which is how a run once spent its first iteration on a
+// 300-character question nobody had asked. When the operator has approved a core
+// question, that is the question the loop should open on.
+func buildOracleQuestionPlan(topic, brief, detectedType, coreQuestion string, profile oracleScopeProfile) []oracleQuestion {
+	generated := buildBriefInformedQuestions(topic, brief, detectedType, profile)
+	coreQuestion = strings.Join(strings.Fields(strings.TrimSpace(coreQuestion)), " ")
+	if coreQuestion == "" {
+		return generated
+	}
+
+	questions := make([]oracleQuestion, 0, len(generated)+1)
+	questions = append(questions, oracleQuestion{
+		Text:              coreQuestion,
+		Status:            "open",
+		Confidence:        0,
+		KeyFindings:       []oracleFinding{},
+		IterationsTouched: []int{},
+	})
+	for _, question := range generated {
+		// The generated boundary question restates the core question badly
+		// once the operator has written a real one.
+		if strings.EqualFold(strings.TrimSpace(question.Text), coreQuestion) {
+			continue
+		}
+		questions = append(questions, question)
+	}
+	for i := range questions {
+		questions[i].ID = fmt.Sprintf("q%d", i+1)
+	}
+	return questions
 }
 
 func buildBriefInformedQuestions(topic string, brief string, detectedType string, profiles ...oracleScopeProfile) []oracleQuestion {
@@ -2142,10 +2298,13 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 	}
 
 	if scopeProfile.IncludeColonyGoal {
-		// Colony goal relevance question
+		// Colony goal relevance question. Both halves are trimmed hard: the
+		// unbounded version produced a 300-character splice of a truncated
+		// topic and a truncated goal that no worker could answer as asked.
 		goal := extractBriefSection(brief, "Colony Goal")
 		if goal != "" && !strings.Contains(goal, "(no colony goal set)") {
-			nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topicLabel, goal))
+			goal = truncateString(strings.Join(strings.Fields(goal), " "), 120)
+			nextQ(fmt.Sprintf("Which parts of the active colony goal (%s) does this research bear on, and which does it not?", goal))
 		}
 	}
 
@@ -3016,24 +3175,54 @@ func escapeOracleTableCell(text string) string {
 	return strings.ReplaceAll(text, "|", "\\|")
 }
 
+// isCanonicalOracleWorkspace reports whether these paths describe the colony's
+// real Oracle workspace rather than a throwaway probe.
+//
+// `oracle selftest` runs a genuine round -- that is the point of it -- through
+// an isolated workspace under .aether/oracle/.selftest. Without this check its
+// round finalizes like any other and saves a durable research document, so
+// checking that Oracle works would litter the operator's saved research with
+// answers to a question they never asked.
+func isCanonicalOracleWorkspace(paths oraclePaths) bool {
+	return paths.Dir == oracleWorkspacePaths(paths.Root).Dir
+}
+
 func writeOracleLoopMarker(path string, state oracleStateFile) error {
+	// This marker used to carry a pointer to a checked-in copy of the worker
+	// prompt under .aether/utils/. Nothing loaded that file -- the real prompt
+	// is composed here by buildOracleWorkerConfig and
+	// renderOracleContextCapsule -- so the copy could only drift away from what
+	// workers actually receive. Both the file and the pointer are gone.
 	marker := strings.TrimSpace(fmt.Sprintf(`---
 iteration: %d
 max_iterations: %d
 phase: %s
 target_confidence: %d
 controller_pid: %d
-oracle_md_path: .aether/utils/oracle/oracle.md
 ---
 Oracle research loop active
 `, state.Iteration, state.MaxIterations, emptyFallback(state.Phase, "survey"), state.TargetConfidence, state.ControllerPID)) + "\n"
 	return os.WriteFile(path, []byte(marker), 0644)
 }
 
+// oracleSurveyIterationCap bounds the breadth-first survey phase to a quarter
+// of the run (minimum three rounds). Nothing goes unexamined: past the cap the
+// loop moves to investigate, and selectOracleQuestionSmart still prefers
+// untouched questions -- they simply get looked at properly rather than skimmed.
+func oracleSurveyIterationCap(maxIterations int) int {
+	cap := maxIterations / 4
+	if cap < 3 {
+		cap = 3
+	}
+	return cap
+}
+
 func nextOraclePhase(plan oraclePlanFile, state oracleStateFile) string {
-	for _, q := range plan.Questions {
-		if len(q.IterationsTouched) == 0 {
-			return "survey"
+	if state.Iteration <= oracleSurveyIterationCap(state.MaxIterations) {
+		for _, q := range plan.Questions {
+			if len(q.IterationsTouched) == 0 {
+				return "survey"
+			}
 		}
 	}
 	if oracleReadyForCompletion(plan, state) || state.Iteration >= state.MaxIterations {
@@ -3073,11 +3262,32 @@ func oracleProgressedSince(before oracleProgressSnapshot, plan oraclePlanFile, s
 			return true
 		}
 	}
-	// Diminishing returns check: if novelty < threshold for 3 consecutive iterations, stop
-	if state.Novelty.ConsecutiveLow >= 3 {
-		return false
-	}
 	return false
+}
+
+// oracleNoveltyStallLimit is how many consecutive low-novelty iterations end the
+// loop. Three keeps a single repetitive answer from stopping research early
+// while still catching a loop that has started circling.
+const oracleNoveltyStallLimit = 3
+
+// oracleDiminishingReturns reports whether the last few iterations added
+// nothing new.
+//
+// The loop measures novelty every iteration — Jaccard distance between this
+// answer's keywords and the last one's — and increments a counter when an
+// answer mostly repeats its predecessor. Until now the only line that read that
+// counter sat inside oracleProgressedSince and returned false either way, so
+// the measurement was computed and discarded. The effect was that the loop
+// could stop only on the confidence target, the iteration cap, or a manual
+// stop: at --depth deep that is up to thirty real worker subprocesses chasing
+// 95% confidence, unable to stop early no matter how little it was learning.
+//
+// The check is separate from oracleProgressedSince deliberately. That answers
+// "did anything change at all", which is a fault condition; this answers "is
+// what changed still worth paying for", which is a budget condition. Folding
+// the second into the first is what produced the dead branch.
+func oracleDiminishingReturns(state oracleStateFile) bool {
+	return state.Novelty.ConsecutiveLow >= oracleNoveltyStallLimit
 }
 
 func containsOracleIteration(items []int, target int) bool {
@@ -3560,7 +3770,11 @@ func oracleWorkerConfigOverrides(policy oracleAttemptPolicy) []string {
 	return overrides
 }
 
-func defaultOracleAttemptPolicy(phase string, attempt int) oracleAttemptPolicy {
+// defaultOracleAttemptPolicy chooses reasoning effort and the watchdog for one
+// attempt. maxIterations stands in for how deep a run the operator asked for:
+// a run with thirty or more rounds is a deep run whatever label it carries, and
+// that also covers an explicit --max-iterations without a --depth flag.
+func defaultOracleAttemptPolicy(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 	policy := oracleAttemptPolicy{
 		ReasoningEffort: defaultOracleReasoningEffort,
 		Timeout:         defaultOracleTimeout,
@@ -3569,6 +3783,16 @@ func defaultOracleAttemptPolicy(phase string, attempt int) oracleAttemptPolicy {
 
 	switch strings.ToLower(strings.TrimSpace(phase)) {
 	case "survey":
+		// Survey is breadth-first, so it runs cheap by default. On a deep run
+		// that was wrong: survey holds until every question has been touched
+		// once, so roughly the first third of a thirty-round run was spent at
+		// the lowest effort and the shortest watchdog. Someone who asked for
+		// depth should not get the shallow setting for a third of it.
+		if maxIterations >= oracleDeepRunIterations {
+			policy.ReasoningEffort = "medium"
+			policy.Timeout = 5 * time.Minute
+			break
+		}
 		policy.ReasoningEffort = "low"
 		policy.Timeout = 3 * time.Minute
 	case "verify":

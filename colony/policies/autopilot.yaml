@@ -1,8 +1,0 @@
-autopilot:
-  pause_conditions:
-    - "test_failure"
-    - "critical_chaos"
-    - "security_gate_failure"
-    - "quality_gate_failure"
-    - "runtime_verification_needed"
-  replan_interval: 3

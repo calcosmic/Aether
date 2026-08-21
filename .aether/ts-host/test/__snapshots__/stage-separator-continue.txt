@@ -1,2 +1,2 @@
 ──── 👁️ Spawning 1 Watcher in serial ────
-  👁️ Watcher Keen-37  Verify TS ceremony adapter lifecycle snapshots •
+  👁️🐜 Watcher [sonnet] Keen-37  Verify TS ceremony adapter lifecycle snapshots •

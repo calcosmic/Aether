@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -330,7 +331,7 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 		t.Fatalf("save state: %v", err)
 	}
 
-	planResult, err := runSealPlanOnly(root, false)
+	planResult, err := runSealPlanOnly(root, false, "")
 	if err != nil {
 		t.Fatalf("run seal plan-only: %v", err)
 	}
@@ -341,6 +342,10 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 		results[i].Status = "completed"
 		results[i].Summary = results[i].Name + " cleared final review"
 		results[i].Report = "# Final review\n\nNo blockers."
+		// A completed result must relay a non-empty handoff (189-REVIEW.md
+		// CR-01): the finalizer now enforces the same promise every wrapper
+		// brief states.
+		results[i].Handoff = codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{results[i].Name + " found no blocking issues"}}
 		switch results[i].Caste {
 		case "gatekeeper":
 			results[i].Findings = []codexReviewFinding{{

@@ -1,5 +1,32 @@
 [
   {
+    "name": "abandon",
+    "short_description": "Discard the current colony and start fresh",
+    "flags": [
+      "confirm"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "public_lifecycle",
+    "since_version": "v1.0.53",
+    "historical_presence": {
+      "v1.0.53": true,
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v5.4.0": false
+    },
+    "stability_score": 8
+  },
+  {
     "name": "activity-log",
     "short_description": "Append an entry to the activity log",
     "flags": [
@@ -218,32 +245,6 @@
     "has_subcommands": false,
     "output_mode": "unknown",
     "classification": "internal_runtime",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "autopilot-check-replan",
-    "short_description": "Check if replan is recommended",
-    "flags": [
-      "interval"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
     "since_version": "v1.10",
     "historical_presence": {
       "v1.10": true,
@@ -548,8 +549,11 @@
     "name": "build",
     "short_description": "Dispatch a real Codex build packet with worker briefs, claims, and spawn tracking",
     "flags": [
+      "caste-reason",
+      "castes",
       "circuit-breaker-threshold",
       "force",
+      "full",
       "heavy",
       "light",
       "no-suggest",
@@ -1216,7 +1220,8 @@
     "name": "colony-prime",
     "short_description": "Assemble full colony context for worker prompt injection",
     "flags": [
-      "compact"
+      "compact",
+      "question"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -1429,11 +1434,14 @@
     "name": "continue",
     "short_description": "Verify the active build packet, close dispatched workers, and advance honestly",
     "flags": [
+      "caste-reason",
+      "castes",
       "classic-ceremony",
       "heavy",
       "light",
       "no-learn",
       "plan-only",
+      "read-only-artifact",
       "reconcile-task",
       "skip-watchers",
       "synthetic",
@@ -1488,6 +1496,34 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "contract-schema",
+    "short_description": "Generate or verify the completion-packet JSON Schema against the Go structs",
+    "flags": [
+      "check",
+      "write"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "internal_runtime",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 8
   },
   {
     "name": "council",
@@ -1959,10 +1995,16 @@
     "name": "discuss",
     "short_description": "Surface intent clarifications before planning and record resolved answers",
     "flags": [
+      "add-question",
       "answer",
+      "category",
       "dry-run",
+      "grounding",
+      "hard",
       "max-questions",
-      "resolve"
+      "options",
+      "resolve",
+      "source"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -2518,7 +2560,7 @@
   },
   {
     "name": "flag-auto-resolve",
-    "short_description": "Auto-resolve flags matching patterns (e.g., old flags)",
+    "short_description": "Resolve flags older than an explicit --max-days (age-based housekeeping only)",
     "flags": [
       "max-days"
     ],
@@ -3185,56 +3227,6 @@
     "stability_score": 91
   },
   {
-    "name": "hive-opt-in",
-    "short_description": "Consent this colony to receiving cross-project wisdom in worker context",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.25",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": false,
-      "v1.17": false,
-      "v1.18": false,
-      "v1.19": false,
-      "v1.20": false,
-      "v1.21": false,
-      "v1.25": true,
-      "v5.4.0": false
-    },
-    "stability_score": 10
-  },
-  {
-    "name": "hive-opt-out",
-    "short_description": "Withdraw this colony's consent to receiving cross-project wisdom",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.25",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": false,
-      "v1.17": false,
-      "v1.18": false,
-      "v1.19": false,
-      "v1.20": false,
-      "v1.21": false,
-      "v1.25": true,
-      "v5.4.0": false
-    },
-    "stability_score": 10
-  },
-  {
     "name": "hive-promote",
     "short_description": "End-to-end abstract + store pipeline for wisdom promotion",
     "flags": [
@@ -3485,6 +3477,9 @@
       "charter-json",
       "colony-mode",
       "confirm-reinit",
+      "dismiss-shelf",
+      "promote-shelf",
+      "research",
       "scope"
     ],
     "parent_command": "",
@@ -3506,34 +3501,6 @@
       "v5.4.0": false
     },
     "stability_score": 91
-  },
-  {
-    "name": "init-ceremony",
-    "short_description": "Run the full colony init ceremony (scan, charter, brief, approve)",
-    "flags": [
-      "colony-mode",
-      "scope",
-      "target"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_lifecycle",
-    "since_version": "v1.11",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 82
   },
   {
     "name": "init-research",
@@ -4768,12 +4735,20 @@
     "flags": [
       "background",
       "confidence-target",
+      "context",
+      "core-question",
       "depth",
       "dry-run",
+      "follow",
+      "follow-interval",
+      "from-brief",
       "max-iterations",
       "min-confidence",
+      "name",
       "scope",
-      "template"
+      "success-criteria",
+      "template",
+      "topic"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -5032,6 +5007,14 @@
       "v5.4.0": true
     },
     "stability_score": 100
+  },
+  {
+    "name": "phase-commits",
+    "short_description": "Get or set the per-phase git save-point behaviour",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
   },
   {
     "name": "phase-insert",
@@ -5359,11 +5342,14 @@
       "accept",
       "depth",
       "force",
+      "full",
       "max-iterations",
       "plan-only",
       "planning-depth",
+      "print-brief",
       "refresh",
       "repair-artifact",
+      "research",
       "revision-evidence",
       "revision-reason",
       "revision-type",
@@ -5441,6 +5427,64 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "plan-research-approve",
+    "short_description": "Answer the Queen's phase research proposal batch",
+    "flags": [
+      "approve-all",
+      "auto",
+      "flip"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 8
+  },
+  {
+    "name": "plan-research-escalate",
+    "short_description": "Build an Oracle dispatch escalating a stalled phase research Scout",
+    "flags": [
+      "confidence",
+      "phase",
+      "target"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "internal_runtime",
+    "since_version": "v1.25",
+    "historical_presence": {
+      "v1.10": false,
+      "v1.11": false,
+      "v1.12": false,
+      "v1.13": false,
+      "v1.14": false,
+      "v1.17": false,
+      "v1.18": false,
+      "v1.19": false,
+      "v1.20": false,
+      "v1.21": false,
+      "v1.25": true,
+      "v5.4.0": false
+    },
+    "stability_score": 8
   },
   {
     "name": "porter",
@@ -6282,6 +6326,14 @@
     "stability_score": 91
   },
   {
+    "name": "research",
+    "short_description": "Browse research documents saved from completed Oracle runs",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "resume-colony",
     "short_description": "Restore colony context from handoff and mark the session resumed",
     "flags": [
@@ -6556,7 +6608,8 @@
     "short_description": "Seal a completed colony and write a summary artifact",
     "flags": [
       "force",
-      "plan-only"
+      "plan-only",
+      "reason"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -7136,30 +7189,6 @@
     "stability_score": 64
   },
   {
-    "name": "skill-cache-rebuild",
-    "short_description": "Force rebuild of skills index cache",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "skill-create",
     "short_description": "Create a new repo-local pheromone skill",
     "flags": [
@@ -7211,113 +7240,9 @@
     "stability_score": 64
   },
   {
-    "name": "skill-detect",
-    "short_description": "Detect domain skills matching codebase file patterns",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-diff",
-    "short_description": "Compare user skill with shipped version",
-    "flags": [
-      "skill"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-index",
-    "short_description": "Build skills index from installed skills",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "skill-index-read",
     "short_description": "Read cached skills index",
     "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-inject",
-    "short_description": "Load matched skills into prompt section text",
-    "flags": [
-      "budget",
-      "compact",
-      "role",
-      "task",
-      "workflow"
-    ],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -7344,30 +7269,6 @@
     "flags": [
       "skill"
     ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-list",
-    "short_description": "List all installed skills",
-    "flags": [],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -7418,60 +7319,6 @@
     "name": "skill-manifest-read",
     "short_description": "Read the skills manifest",
     "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-match",
-    "short_description": "Match skills to worker role and task",
-    "flags": [
-      "role",
-      "task",
-      "workflow"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "skill-parse-frontmatter",
-    "short_description": "Parse SKILL.md frontmatter and return as JSON",
-    "flags": [
-      "file"
-    ],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -7672,7 +7519,9 @@
     "name": "spawn-can-spawn",
     "short_description": "Check if spawning is allowed at given depth",
     "flags": [
-      "depth"
+      "depth",
+      "enforce",
+      "name"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -7827,6 +7676,16 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "spawn-orphans",
+    "short_description": "List helpers that have exceeded the reap threshold, or clear them",
+    "flags": [
+      "clear"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "spawn-track",
@@ -8093,6 +7952,7 @@
     "short_description": "Analyze codebase for patterns worth capturing as pheromone suggestions",
     "flags": [
       "dry-run",
+      "force",
       "target"
     ],
     "parent_command": "",
@@ -8433,91 +8293,10 @@
     "stability_score": 45
   },
   {
-    "name": "swarm-findings-add",
-    "short_description": "Append a finding to a swarm",
-    "flags": [
-      "agent",
-      "finding",
-      "id"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "swarm-findings-init",
-    "short_description": "Create an empty findings file for a swarm",
-    "flags": [
-      "id"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "swarm-findings-read",
     "short_description": "Return all findings for a swarm",
     "flags": [
       "id"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "swarm-solution-set",
-    "short_description": "Set the solution for a swarm",
-    "flags": [
-      "id",
-      "solution"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -9174,6 +8953,18 @@
     "stability_score": 91
   },
   {
+    "name": "verify-out-of-band",
+    "short_description": "Re-verify current disk state against a phase's real success criteria and close stuck work",
+    "flags": [
+      "acknowledge-legacy-criteria",
+      "force",
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
     "name": "version",
     "short_description": "Print aether version",
     "flags": [
@@ -9541,7 +9332,8 @@
     "name": "worktree-cleanup",
     "short_description": "Clean up worktree after merge",
     "flags": [
-      "branch"
+      "branch",
+      "force"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -9666,6 +9458,19 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "worktree-reap",
+    "short_description": "Remove finished worker workspaces",
+    "flags": [
+      "branch",
+      "force",
+      "include-unmerged",
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
   },
   {
     "name": "closeout",
@@ -10408,6 +10213,56 @@
       "mode"
     ],
     "parent_command": "parallel-mode",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.10",
+    "historical_presence": {
+      "v1.10": true,
+      "v1.11": true,
+      "v1.12": true,
+      "v1.13": true,
+      "v1.14": true,
+      "v1.17": true,
+      "v1.18": true,
+      "v1.19": true,
+      "v1.20": true,
+      "v1.21": true,
+      "v5.4.0": false
+    },
+    "stability_score": 91
+  },
+  {
+    "name": "get",
+    "short_description": "Show whether the colony commits each verified phase",
+    "flags": [],
+    "parent_command": "phase-commits",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.10",
+    "historical_presence": {
+      "v1.10": true,
+      "v1.11": true,
+      "v1.12": true,
+      "v1.13": true,
+      "v1.14": true,
+      "v1.17": true,
+      "v1.18": true,
+      "v1.19": true,
+      "v1.20": true,
+      "v1.21": true,
+      "v5.4.0": false
+    },
+    "stability_score": 91
+  },
+  {
+    "name": "set",
+    "short_description": "Turn the per-phase git save-point on or off",
+    "flags": [
+      "mode"
+    ],
+    "parent_command": "phase-commits",
     "has_subcommands": false,
     "output_mode": "unknown",
     "classification": "public_utility",

@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: command-wrapper-generation-playbook
 kind: playbook
 category: playbooks
+scope: aether-internal
 title: Command Wrapper Generation Playbook
 description: "Playbook for creating and verifying cross-platform command wrappers."
 output_types: [wrapper-plan, platform-parity]

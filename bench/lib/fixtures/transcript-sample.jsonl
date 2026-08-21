@@ -1,0 +1,4 @@
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"do the task"}]},"uuid":"11111111-0000-0000-0000-000000000001","timestamp":"2026-08-17T20:00:00Z"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","role":"assistant","content":[{"type":"text","text":"working on it"}],"usage":{"input_tokens":50,"cache_read_input_tokens":100000,"cache_creation_input_tokens":2000,"output_tokens":500}},"uuid":"11111111-0000-0000-0000-000000000002","timestamp":"2026-08-17T20:00:05Z"}
+{"type":"hook_success","hookName":"PreToolUse","uuid":"11111111-0000-0000-0000-000000000003","timestamp":"2026-08-17T20:00:06Z"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","role":"assistant","content":[{"type":"text","text":"done"}],"usage":{"input_tokens":10,"cache_read_input_tokens":20,"cache_creation_input_tokens":30,"output_tokens":40}},"uuid":"11111111-0000-0000-0000-000000000004","timestamp":"2026-08-17T20:00:10Z"}

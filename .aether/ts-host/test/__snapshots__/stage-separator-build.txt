@@ -1,2 +1,2 @@
 ──── 🔨 Spawning 1 Builder in parallel ────
-  🔨 Builder Bolt-69  Align TS ceremony adapter lifecycle snapshots with Go contract names •
+  🔨🐜 Builder [sonnet] Bolt-69  Align TS ceremony adapter lifecycle snapshots with Go contract names •

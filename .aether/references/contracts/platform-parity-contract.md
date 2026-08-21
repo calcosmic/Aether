@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: platform-parity-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Platform Parity Contract
 description: "Contract for keeping Claude, OpenCode, and Codex surfaces aligned without pretending they are identical."
 output_types: [platform-parity, architecture-review, distribution-review, parity-review]

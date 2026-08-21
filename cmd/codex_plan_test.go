@@ -243,6 +243,44 @@ func TestMDSRepoDetectionProducesMaxForLivePlanningSurface(t *testing.T) {
 	}
 }
 
+func TestPlanAcceptWithExistingPlanFailsLoudly(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Reuse the current plan"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Existing phase",
+				Status: colony.PhaseReady,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Use the existing plan", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"plan", "--accept"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --accept returned unexpected execute error: %v", err)
+	}
+	out := stdout.(*bytes.Buffer).String()
+	errOut := stderr.(*bytes.Buffer).String()
+	if strings.Contains(out, `"existing_plan":true`) || strings.Contains(out, `"existing_plan": true`) {
+		t.Fatalf("plan --accept with an existing plan must fail loudly, not silently reprint the plan:\n%s", out)
+	}
+	if !strings.Contains(errOut, `"ok":false`) {
+		t.Fatalf("expected error envelope on stderr, got:\nstdout=%s\nstderr=%s", out, errOut)
+	}
+	if !strings.Contains(errOut, "--refresh") || !strings.Contains(errOut, "--repair-artifact") {
+		t.Fatalf("error must direct the user to --refresh or --repair-artifact, got: %s", errOut)
+	}
+}
+
 func TestPlanReturnsExistingPlanWithoutRefresh(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -3069,7 +3107,7 @@ func TestMergeExternalPlanResults_RejectsNamelessResult(t *testing.T) {
 	}
 }
 
-func TestPlanningWorkerBriefGatekeeperIncludesReviewLedgerInstruction(t *testing.T) {
+func TestPlanningWorkerBriefGatekeeperNeverInstructsCLI(t *testing.T) {
 	root := t.TempDir()
 	survey := codexSurveyContext{}
 	spec, ok := planningWorkerSpecForCaste("gatekeeper")
@@ -3078,8 +3116,11 @@ func TestPlanningWorkerBriefGatekeeperIncludesReviewLedgerInstruction(t *testing
 	}
 
 	brief := renderPlanningWorkerBrief(root, survey, spec)
-	if !strings.Contains(brief, "review-ledger-write") {
-		t.Fatalf("gatekeeper planning brief missing review-ledger-write instruction:\n%s", brief)
+	// Gatekeeper has no Bash tool by design; an instruction to run
+	// `aether review-ledger-write` is unsatisfiable and made the caste
+	// self-report blocked (Pocket-Chopper field report).
+	if strings.Contains(brief, "review-ledger-write") {
+		t.Fatalf("gatekeeper planning brief instructs a CLI command the caste cannot run:\n%s", brief)
 	}
 	if !strings.Contains(brief, "This is a review task") {
 		t.Fatalf("gatekeeper planning brief missing review task indicator:\n%s", brief)

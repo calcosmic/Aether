@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: codex-direct-cli-ux-playbook
 kind: playbook
 category: playbooks
+scope: aether-internal
 title: Codex Direct CLI UX Playbook
 description: "How Codex users interact with Aether via direct CLI, visual output system, and runtime-native UX."
 output_types: [platform-review, ux-review, codex-guide]

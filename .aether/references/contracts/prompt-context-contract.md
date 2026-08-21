@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: prompt-context-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Prompt Context Contract
 description: "Contract for what may be injected into worker prompts and how context should be budgeted."
 output_types: [prompt-review, context-review, architecture-review]

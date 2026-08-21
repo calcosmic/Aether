@@ -133,6 +133,12 @@ func (cb *CircuitBreaker) emitCircuitBreakerTripped(phase colony.Phase, wave int
 		fmt.Sprintf("%d consecutive worker failures (threshold: %d)", count, threshold),
 		fmt.Sprintf("circuit breaker tripped for %s", workerName),
 		"aether-build")
+
+	// The classic failure theatre: a tripped breaker is an operator moment,
+	// not just a bus event nobody watches.
+	emitVisualProgress(renderDecisionBlock("⚠", "Circuit Breaker Tripped",
+		fmt.Sprintf("%s failed %d time(s) in a row (threshold: %d).", workerName, count, threshold),
+		"The colony is redistributing its work to a same-caste peer where one exists."))
 }
 
 // emitCircuitBreakerRedistributed publishes a circuit breaker redistribution event via the ceremony event bus.

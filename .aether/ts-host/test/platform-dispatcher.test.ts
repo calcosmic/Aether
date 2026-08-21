@@ -7,7 +7,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,9 +23,14 @@ import {
   classifyPlatformError,
   preflightWorkerPlatform,
   selectWorkerPlatform,
+  resolvePreflightTimeoutMs,
+  PREFLIGHT_DEFAULT_TIMEOUT_MS,
+  __setMakePreflightTempDir,
+  __restoreMakePreflightTempDir,
   type Platform,
   type WorkerConfig,
 } from "../src/platform-dispatcher.js";
+import { __resetPreflightTimeoutWarnings } from "../src/preflight-config.js";
 import { parseWorkerClaims } from "../src/claims-parser.js";
 
 import { REPO_ROOT } from "./repo-root.js";
@@ -144,6 +149,148 @@ exit 0
       } finally {
         restoreEnv(pathKey, previous);
       }
+    }
+  });
+
+  // --- resolvePreflightTimeoutMs tests (D-05) ---
+
+  const preflightTimeoutCases: Array<[string, number]> = [
+    ["90s", 90_000],
+    ["1500ms", 1500],
+    ["2m", 120_000],
+    // WR-01: Go-style compound and hour-unit durations must parse identically
+    // on both hosts — "one knob, one value, both hosts".
+    ["1m30s", 90_000],
+    ["1h", 3_600_000],
+    ["1.5h", 5_400_000],
+    ["1h30m", 5_400_000],
+    ["2m30s500ms", 150_500],
+    ["", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+    ["banana", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+    ["-5s", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+    ["0s", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+    ["45", PREFLIGHT_DEFAULT_TIMEOUT_MS],
+  ];
+
+  for (const [input, expected] of preflightTimeoutCases) {
+    it(`resolvePreflightTimeoutMs resolves "${input}" to ${expected}ms`, () => {
+      const previous = process.env["AETHER_PREFLIGHT_TIMEOUT"];
+      process.env["AETHER_PREFLIGHT_TIMEOUT"] = input;
+      try {
+        assert.equal(resolvePreflightTimeoutMs(), expected);
+      } finally {
+        restoreEnv("AETHER_PREFLIGHT_TIMEOUT", previous);
+      }
+    });
+  }
+
+  it("resolvePreflightTimeoutMs default is exactly 45000ms, matching Go's hostedPreflightTimeout", () => {
+    assert.equal(PREFLIGHT_DEFAULT_TIMEOUT_MS, 45_000);
+  });
+
+  it("resolvePreflightTimeoutMs warns loudly (once per value) when falling back on an unparseable value (WR-01)", () => {
+    __resetPreflightTimeoutWarnings();
+    const previous = process.env["AETHER_PREFLIGHT_TIMEOUT"];
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    let captured = "";
+    process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+      captured += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf-8");
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      process.env["AETHER_PREFLIGHT_TIMEOUT"] = "totally-not-a-duration";
+      assert.equal(resolvePreflightTimeoutMs(), PREFLIGHT_DEFAULT_TIMEOUT_MS);
+      assert.match(captured, /Warning: AETHER_PREFLIGHT_TIMEOUT="totally-not-a-duration"/);
+      assert.match(captured, /falling back to 45000ms/);
+
+      // Second resolve with the same bad value must not repeat the warning.
+      const firstLength = captured.length;
+      assert.equal(resolvePreflightTimeoutMs(), PREFLIGHT_DEFAULT_TIMEOUT_MS);
+      assert.equal(captured.length, firstLength, "warning must be deduped per value");
+    } finally {
+      process.stderr.write = originalWrite;
+      restoreEnv("AETHER_PREFLIGHT_TIMEOUT", previous);
+      __resetPreflightTimeoutWarnings();
+    }
+  });
+
+  it("platform-dispatcher.ts has no hardcoded preflight timeout literal", () => {
+    const source = readFileSync(join(REPO_ROOT, ".aether", "ts-host", "src", "platform-dispatcher.ts"), "utf-8");
+    assert.ok(!source.includes("20_000"), "source must not contain the old hardcoded 20_000ms literal");
+    assert.ok(
+      !source.includes("AETHER_PREFLIGHT_TIMEOUT_MS"),
+      "source must not introduce a separate _MS env var (D-05: one knob, both hosts)"
+    );
+  });
+
+  // --- probe cwd isolation tests (D-07) ---
+
+  it("preflightWorkerPlatform isolates the probe cwd to a throwaway aether-preflight-* directory", async () => {
+    const repoLikeTempDir = mkdtempSync(join(tmpdir(), "aether-repo-like-"));
+    const providerDir = mkdtempSync(join(tmpdir(), "aether-pwd-provider-"));
+    const pwdMarkerPath = join(providerDir, "pwd.txt");
+    const codexPath = join(providerDir, "codex");
+    writeFileSync(
+      codexPath,
+      `#!/bin/sh
+pwd -P > "${pwdMarkerPath}"
+exit 0
+`,
+      { mode: 0o755 }
+    );
+    const previous = process.env["AETHER_CODEX_PATH"];
+    process.env["AETHER_CODEX_PATH"] = codexPath;
+    try {
+      await preflightWorkerPlatform("codex", repoLikeTempDir);
+      assert.ok(existsSync(pwdMarkerPath), "the pwd-recording provider should have run");
+      const recordedDir = readFileSync(pwdMarkerPath, "utf-8").trim();
+      assert.notEqual(recordedDir, repoLikeTempDir, "probe must not run in the passed cwd");
+      const baseName = recordedDir.split("/").pop() ?? "";
+      assert.ok(
+        baseName.startsWith("aether-preflight-"),
+        `probe directory should start with aether-preflight-, got ${recordedDir}`
+      );
+    } finally {
+      restoreEnv("AETHER_CODEX_PATH", previous);
+    }
+  });
+
+  it("preflight falls back to cwd when the temp dir cannot be created", async () => {
+    const repoLikeTempDir = mkdtempSync(join(tmpdir(), "aether-repo-like-"));
+    const providerDir = mkdtempSync(join(tmpdir(), "aether-pwd-provider-"));
+    const pwdMarkerPath = join(providerDir, "pwd.txt");
+    const codexPath = join(providerDir, "codex");
+    writeFileSync(
+      codexPath,
+      `#!/bin/sh
+pwd -P > "${pwdMarkerPath}"
+exit 0
+`,
+      { mode: 0o755 }
+    );
+    const previous = process.env["AETHER_CODEX_PATH"];
+    process.env["AETHER_CODEX_PATH"] = codexPath;
+    __setMakePreflightTempDir(() => {
+      throw new Error("forced mkdtemp failure");
+    });
+    try {
+      await assert.doesNotReject(
+        () => preflightWorkerPlatform("codex", repoLikeTempDir),
+        "a temp-dir creation failure must not fail the preflight"
+      );
+      assert.ok(existsSync(pwdMarkerPath), "the provider should still have run using the fallback cwd");
+      const recordedDir = readFileSync(pwdMarkerPath, "utf-8").trim();
+      // Compare canonical paths: macOS resolves TMPDIR through /private, so
+      // the subprocess's `pwd -P` may report the physical path while
+      // repoLikeTempDir is the logical mkdtempSync() return value.
+      assert.equal(
+        recordedDir,
+        realpathSync(repoLikeTempDir),
+        "probe should fall back to the passed cwd"
+      );
+    } finally {
+      __restoreMakePreflightTempDir();
+      restoreEnv("AETHER_CODEX_PATH", previous);
     }
   });
 

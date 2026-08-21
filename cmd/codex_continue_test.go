@@ -519,6 +519,10 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 			TaskID:  dispatch.TaskID,
 			Status:  "completed",
 			Summary: dispatch.Name + " cleared wrapper continue review",
+			// A completed result must relay a non-empty handoff (189-REVIEW.md
+			// CR-01): the finalizer now enforces the same promise every
+			// wrapper brief states.
+			Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{dispatch.Name + " found no blocking issues"}},
 		})
 	}
 	completion := codexExternalContinueCompletion{
@@ -1950,16 +1954,29 @@ func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	blockingIssues := stringSliceValue(result["blocking_issues"])
+	// H-04: the reconcile note is visible as an operational issue, while the
+	// claim-evidence failure is what actually blocks.
+	operational := stringSliceValue(result["operational_issues"])
 	hasWarning := false
-	for _, issue := range blockingIssues {
+	for _, issue := range operational {
 		if strings.Contains(issue, "manually reconciled") {
 			hasWarning = true
 			break
 		}
 	}
 	if !hasWarning {
-		t.Fatalf("expected blocking issues to contain reconcile warning, got %v", blockingIssues)
+		t.Fatalf("expected operational issues to contain reconcile note, got %v", operational)
+	}
+	blockingIssues := stringSliceValue(result["blocking_issues"])
+	hasClaimBlock := false
+	for _, issue := range blockingIssues {
+		if strings.Contains(issue, "claim") {
+			hasClaimBlock = true
+			break
+		}
+	}
+	if !hasClaimBlock {
+		t.Fatalf("expected a claim-evidence blocking issue, got %v", blockingIssues)
 	}
 }
 
@@ -2589,6 +2606,115 @@ func TestVerificationCommandParserAcceptsBunAndNpxCommands(t *testing.T) {
 	}
 	if commands.Type != "npx tsc --noEmit" {
 		t.Fatalf("types command = %q, want npx tsc --noEmit", commands.Type)
+	}
+}
+
+// python3 -m pytest is the correct spelling for src-layout-less Python repos
+// (bare pytest omits the repo root from sys.path). A documented test command
+// in that spelling must be recognized, not silently discarded to the heuristic.
+func TestVerificationCommandParserAcceptsPythonModuleInvocations(t *testing.T) {
+	commands := extractVerificationCommands("## Commands\n" +
+		"- Tests: `python3 -m pytest`\n")
+	if commands.Test != "python3 -m pytest" {
+		t.Fatalf("tests command = %q, want python3 -m pytest", commands.Test)
+	}
+
+	for _, cmd := range []string{"python -m pytest -q", "python3 -m unittest", "uv run pytest"} {
+		if kind := detectVerificationCommandKind(cmd); kind != "tests" {
+			t.Fatalf("detectVerificationCommandKind(%q) = %q, want tests", cmd, kind)
+		}
+	}
+}
+
+// The pyproject heuristic must not emit bare pytest — it fails with
+// ModuleNotFoundError in every src-layout-less repo.
+func TestHeuristicVerificationCommandsUsePythonModulePytest(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte("[project]\nname = \"x\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commands := resolveCodexVerificationCommands(root)
+	if commands.Test != "python3 -m pytest" {
+		t.Fatalf("heuristic test command = %q, want python3 -m pytest", commands.Test)
+	}
+}
+
+// TestExtractVerificationCommandsJoinsLineContinuations locks in D-11: a
+// documented command split across two lines with a trailing backslash, in
+// this repo's own CLAUDE.md style (a `go test` invocation with `-race` on
+// the continuation), must parse as one command rather than being truncated
+// to its first fragment.
+func TestExtractVerificationCommandsJoinsLineContinuations(t *testing.T) {
+	commands := extractVerificationCommands("## Verification Commands\n\n" +
+		"```bash\n" +
+		"# Run Go tests with race detection\n" +
+		"go test ./... \\\n" +
+		"  -race\n" +
+		"```\n")
+	if commands.Test != "go test ./... -race" {
+		t.Fatalf("test command = %q, want %q", commands.Test, "go test ./... -race")
+	}
+}
+
+// TestExtractVerificationCommandsJoinsThreeLineContinuationChain proves the
+// join is not limited to a single hop — a chain of continuations must all
+// fold into one command.
+func TestExtractVerificationCommandsJoinsThreeLineContinuationChain(t *testing.T) {
+	commands := extractVerificationCommands("## Verification Commands\n\n" +
+		"```bash\n" +
+		"# Run Go tests\n" +
+		"go test ./... \\\n" +
+		"  -race \\\n" +
+		"  -run TestFoo\n" +
+		"```\n")
+	if commands.Test != "go test ./... -race -run TestFoo" {
+		t.Fatalf("test command = %q, want %q", commands.Test, "go test ./... -race -run TestFoo")
+	}
+}
+
+// TestExtractVerificationCommandsTrailingBackslashBeforeClosingFenceDoesNotPanic
+// covers the edge case where the last content line before a closing fence
+// ends with a continuation backslash and there is no further line to join —
+// the parser must drop the backslash and stop cleanly rather than panicking
+// or consuming the fence delimiter as command content.
+func TestExtractVerificationCommandsTrailingBackslashBeforeClosingFenceDoesNotPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("extractVerificationCommands panicked: %v", r)
+		}
+	}()
+	commands := extractVerificationCommands("## Verification Commands\n\n" +
+		"```bash\n" +
+		"# Run Go tests\n" +
+		"go test ./... \\\n" +
+		"```\n")
+	if commands.Test != "go test ./..." {
+		t.Fatalf("test command = %q, want %q", commands.Test, "go test ./...")
+	}
+}
+
+// TestExtractVerificationCommandsPreservesMidLineBackslash asserts a
+// backslash that is not the final character of a line (a Windows-style path
+// segment here) is ordinary content, not a continuation marker.
+func TestExtractVerificationCommandsPreservesMidLineBackslash(t *testing.T) {
+	commands := extractVerificationCommands("## Verification Commands\n\n" +
+		"```bash\n" +
+		"# Build the binary\n" +
+		"go build -o C:\\Users\\test\\aether.exe ./cmd/aether\n" +
+		"```\n")
+	if commands.Build != `go build -o C:\Users\test\aether.exe ./cmd/aether` {
+		t.Fatalf("build command = %q, want %q", commands.Build, `go build -o C:\Users\test\aether.exe ./cmd/aether`)
+	}
+}
+
+// TestJoinFencedLineContinuationsSkipsProseOutsideFences guards against
+// joining lines outside a fenced block, which would corrupt table and label
+// parsing that depends on line boundaries.
+func TestJoinFencedLineContinuationsSkipsProseOutsideFences(t *testing.T) {
+	content := "A sentence that trails off \\\nand continues on the next line.\n"
+	joined := joinFencedLineContinuations(content)
+	if strings.Join(joined, "\n") != content {
+		t.Fatalf("prose outside a fence was modified: %q, want unchanged %q", strings.Join(joined, "\n"), content)
 	}
 }
 
@@ -3331,7 +3457,7 @@ func TestRunVerificationStepUsesConfigurableTimeout(t *testing.T) {
 		t.Skip("sleep command not available on Windows")
 	}
 
-	step := runVerificationStep(context.Background(), t.TempDir(), "tests", "sleep 5", 100*time.Millisecond)
+	step := runVerificationStep(context.Background(), t.TempDir(), "tests", false, "sleep 5", 100*time.Millisecond)
 
 	if step.Passed {
 		t.Fatal("verification step passed, want timeout failure")
@@ -3345,6 +3471,115 @@ func TestRunVerificationStepUsesConfigurableTimeout(t *testing.T) {
 	if !strings.Contains(step.Summary, "--verification-timeout") {
 		t.Fatalf("summary missing recovery flag: %q", step.Summary)
 	}
+}
+
+// TestRunVerificationStepRequiredSkipHalts locks in D-10: a check the phase's
+// own criteria require must never report Passed:true when nothing ran. Both
+// skip paths — no command resolved at all, and a resolved command that turns
+// out not to exist in this repository — must halt with Blocked:true instead
+// of quietly passing.
+func TestRunVerificationStepRequiredSkipHalts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh -c not available on Windows")
+	}
+
+	t.Run("empty command", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "tests", true, "", time.Second)
+		if step.Passed {
+			t.Fatalf("Passed = true, want false: %+v", step)
+		}
+		if !step.Blocked {
+			t.Fatalf("Blocked = false, want true: %+v", step)
+		}
+		if !step.Skipped {
+			t.Fatalf("Skipped = false, want true: %+v", step)
+		}
+		if !step.Required {
+			t.Fatalf("Required = false, want true: %+v", step)
+		}
+		for _, marker := range []string{"no verification command resolved", "AGENTS.md", "## Verification Commands", ".aether/data/codebase.md"} {
+			if !strings.Contains(step.Summary, marker) {
+				t.Fatalf("summary missing %q: %q", marker, step.Summary)
+			}
+		}
+	})
+
+	t.Run("unresolvable command", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "tests", true, "definitely-not-a-real-command-xyz-12345", 5*time.Second)
+		if step.Passed {
+			t.Fatalf("Passed = true, want false: %+v", step)
+		}
+		if !step.Blocked {
+			t.Fatalf("Blocked = false, want true: %+v", step)
+		}
+		if !step.Skipped {
+			t.Fatalf("Skipped = false, want true: %+v", step)
+		}
+		if !step.Required {
+			t.Fatalf("Required = false, want true: %+v", step)
+		}
+		if !strings.Contains(step.Summary, "definitely-not-a-real-command-xyz-12345") {
+			t.Fatalf("summary missing the command that failed: %q", step.Summary)
+		}
+		for _, marker := range []string{"AGENTS.md", "## Verification Commands", ".aether/data/codebase.md"} {
+			if !strings.Contains(step.Summary, marker) {
+				t.Fatalf("summary missing %q: %q", marker, step.Summary)
+			}
+		}
+	})
+
+	t.Run("blocked required step agrees with the criterion gate", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "tests", true, "", time.Second)
+		passed, _, issue := evaluateCriterionCheck("tests", []codexVerificationStep{step}, codexClaimVerification{}, codexWatcherVerification{})
+		if passed {
+			t.Fatalf("evaluateCriterionCheck passed a blocked required step: %+v", step)
+		}
+		if issue != "required tests check was skipped" {
+			t.Fatalf("gate issue = %q, want %q", issue, "required tests check was skipped")
+		}
+	})
+}
+
+// TestRunVerificationStepOptionalSkipWarns locks in the Phase 160 D-01
+// enrichment side of the same branch: a check not named by any of the
+// phase's bound criterion requirements still just warns and lets the
+// watcher carry verification, exactly as it did before this plan.
+func TestRunVerificationStepOptionalSkipWarns(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh -c not available on Windows")
+	}
+
+	t.Run("empty command", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "lint", false, "", time.Second)
+		if !step.Passed {
+			t.Fatalf("Passed = false, want true: %+v", step)
+		}
+		if !step.Skipped {
+			t.Fatalf("Skipped = false, want true: %+v", step)
+		}
+		if step.Blocked {
+			t.Fatalf("Blocked = true, want false: %+v", step)
+		}
+		if step.Required {
+			t.Fatalf("Required = true, want false: %+v", step)
+		}
+	})
+
+	t.Run("unresolvable command", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "lint", false, "definitely-not-a-real-command-xyz-12345", 5*time.Second)
+		if !step.Passed {
+			t.Fatalf("Passed = false, want true: %+v", step)
+		}
+		if !step.Skipped {
+			t.Fatalf("Skipped = false, want true: %+v", step)
+		}
+		if step.Blocked {
+			t.Fatalf("Blocked = true, want false: %+v", step)
+		}
+		if step.Required {
+			t.Fatalf("Required = true, want false: %+v", step)
+		}
+	})
 }
 
 func TestVerificationTimeoutBlockerUsesVerificationTimeoutRecovery(t *testing.T) {
@@ -3746,17 +3981,239 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	blockingIssues := stringSliceValue(result["blocking_issues"])
-	hasReconcileWarning := false
-	for _, issue := range blockingIssues {
+	// H-04: the reconcile note lives in operational issues; the claim-evidence
+	// failure is the blocking issue.
+	operational := stringSliceValue(result["operational_issues"])
+	hasReconcileNote := false
+	for _, issue := range operational {
 		if strings.Contains(issue, "manually reconciled") {
-			hasReconcileWarning = true
+			hasReconcileNote = true
 			break
 		}
 	}
-	if !hasReconcileWarning {
-		t.Fatalf("expected blocking issues to mention reconcile, got %v", blockingIssues)
+	if !hasReconcileNote {
+		t.Fatalf("expected operational issues to mention reconcile, got %v", operational)
 	}
+	blockingIssues := stringSliceValue(result["blocking_issues"])
+	hasClaimBlock := false
+	for _, issue := range blockingIssues {
+		if strings.Contains(issue, "claim") {
+			hasClaimBlock = true
+			break
+		}
+	}
+	if !hasClaimBlock {
+		t.Fatalf("expected a claim-evidence blocking issue, got %v", blockingIssues)
+	}
+}
+
+// TestReconcileTaskReadOnlyEvidenceSatisfiesCriterion is the end-to-end proof
+// for D-01/D-02 (163.1-06 Task 3): a phase whose criterion is bound to a
+// source file the task legitimately never modified reproduces the observed
+// M4L failure (blocked on the criterion-specific issue) with
+// --reconcile-task alone, opens exactly for that artifact with
+// --read-only-artifact, records the evidence without ever manufacturing a
+// false files_modified claim, and re-blocks on tampering.
+//
+// Modelled on TestContinue_ReconcileDoesNotBypassClaims: same colony-state
+// fixture shape, seedContinueBuildPacket, rootCmd.SetArgs, and
+// parseLifecycleEnvelope assertions. --reconcile-task unconditionally adds a
+// "manually reconciled" warning to blocking_issues (proven by
+// TestContinue_ReconcileDoesNotBypassClaims and left untouched by this
+// plan — Task 2's action explicitly forbids weakening that test), so
+// "blocked" stays true across every run in this test regardless of the
+// read-only escape hatch. The escape hatch is proven instead by the
+// criterion-specific blocking issue disappearing and criteria_passed
+// flipping to true, which is what this test asserts.
+func TestReconcileTaskReadOnlyEvidenceSatisfiesCriterion(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Read-only evidence satisfies a criterion bound to an untouched file"
+	now := time.Now().UTC()
+	taskID := "1.1"
+
+	untouchedPath := filepath.Join(root, "untouched_source.go")
+	untouchedOriginal := []byte("package untouched\n")
+	if err := os.WriteFile(untouchedPath, untouchedOriginal, 0644); err != nil {
+		t.Fatalf("write untouched source: %v", err)
+	}
+
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Read-only escape hatch",
+		Status: colony.PhaseInProgress,
+		Tasks: []colony.Task{
+			{
+				ID:              &taskID,
+				Goal:            "Test-only task whose criterion binds an untouched source file",
+				Status:          colony.TaskCompleted,
+				SuccessCriteria: []string{"Untouched source still behaves"},
+				EvidenceRequirements: []colony.CriterionEvidenceRequirement{
+					{Criterion: "Untouched source still behaves", TaskID: taskID, Artifacts: []string{"untouched_source.go"}},
+				},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan:           colony.Plan{Phases: []colony.Phase{phase}},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Read-only escape hatch", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-601", Task: "Test-only task whose criterion binds an untouched source file", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-602", Task: "Independent verification before advancement", Status: "completed"},
+	})
+
+	// seedContinueBuildPacket doesn't set the bound-v1 criterion evidence
+	// contract on the manifest; add it here.
+	manifestRel := filepath.ToSlash(filepath.Join("build", "phase-1", "manifest.json"))
+	var buildManifest codexBuildManifest
+	if err := store.LoadJSON(manifestRel, &buildManifest); err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	buildManifest.CriterionEvidencePolicy = criterionEvidencePolicyBoundV1
+	buildManifest.EvidenceRequirements = flattenPhaseCriterionEvidenceRequirements(phase)
+	if err := store.SaveJSON(manifestRel, buildManifest); err != nil {
+		t.Fatalf("save manifest: %v", err)
+	}
+
+	// The task's claims legitimately never mention the untouched file --
+	// this reproduces the observed M4L failure: a test-only task whose
+	// criterion is bound to a source file it did not modify.
+	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+		BuildPhase: 1,
+		Timestamp:  now.Format(time.RFC3339),
+		TaskClaims: []codexBuildTaskClaim{{TaskID: taskID, FilesModified: []string{"unrelated_test.go"}}},
+	}); err != nil {
+		t.Fatalf("overwrite claims: %v", err)
+	}
+
+	var outBuf bytes.Buffer
+	stdout = &outBuf
+	t.Cleanup(func() { stdout = os.Stdout })
+
+	// Without --read-only-artifact: --reconcile-task alone blocks, and the
+	// block includes the untouched criterion's specific issue.
+	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue (no read-only-artifact) returned error: %v", err)
+	}
+	env := parseLifecycleEnvelope(t, outBuf.String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true without --read-only-artifact, got %v", result)
+	}
+	blockingIssuesBefore := stringSliceValue(result["blocking_issues"])
+	if !anyContains(blockingIssuesBefore, "was not claimed by the current build for task 1.1") {
+		t.Fatalf("expected the untouched-artifact blocking issue, got %v", blockingIssuesBefore)
+	}
+
+	// With --read-only-artifact: the criterion-specific blocking issue
+	// disappears and criteria_passed flips to true -- the escape hatch opens
+	// for exactly this artifact.
+	resetFlags(rootCmd)
+	outBuf.Reset()
+	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID, "--read-only-artifact", taskID + ":untouched_source.go"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue (with read-only-artifact) returned error: %v", err)
+	}
+	env2 := parseLifecycleEnvelope(t, outBuf.String())
+	result2 := env2["result"].(map[string]interface{})
+	blockingIssuesAfter := stringSliceValue(result2["blocking_issues"])
+	if anyContains(blockingIssuesAfter, "was not claimed by the current build for task 1.1") {
+		t.Fatalf("criterion-specific blocking issue survived --read-only-artifact: %v", blockingIssuesAfter)
+	}
+	if anyContains(blockingIssuesAfter, "changed after build evidence was recorded") {
+		t.Fatalf("unexpected tamper block on first recording: %v", blockingIssuesAfter)
+	}
+	verification2, ok := result2["verification"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected verification field in result, got %#v", result2)
+	}
+	if enforced, _ := verification2["criteria_enforced"].(bool); !enforced {
+		t.Fatalf("expected criteria_enforced:true, got %v", verification2)
+	}
+	if passed, _ := verification2["criteria_passed"].(bool); !passed {
+		t.Fatalf("expected criteria_passed:true once read-only evidence is recorded, got %v", verification2)
+	}
+
+	// Proof of D-01: the claims file carries a read_only entry scoped to
+	// task 1.1, and the task's files_modified claim list is unchanged -- no
+	// false modification claim was manufactured.
+	var claims codexBuildClaims
+	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
+		t.Fatalf("load claims: %v", err)
+	}
+	var recordedEvidence *codexBuildArtifactEvidence
+	for i := range claims.ArtifactEvidence {
+		if claims.ArtifactEvidence[i].Path == "untouched_source.go" {
+			recordedEvidence = &claims.ArtifactEvidence[i]
+		}
+	}
+	if recordedEvidence == nil || !recordedEvidence.ReadOnly || recordedEvidence.ReadOnlyTaskID != taskID {
+		t.Fatalf("expected read-only evidence for untouched_source.go scoped to task %s, got %+v", taskID, claims.ArtifactEvidence)
+	}
+	foundTaskClaim := false
+	for _, tc := range claims.TaskClaims {
+		if tc.TaskID != taskID {
+			continue
+		}
+		foundTaskClaim = true
+		if len(tc.FilesModified) != 1 || tc.FilesModified[0] != "unrelated_test.go" {
+			t.Fatalf("task %s files_modified changed unexpectedly: %v", taskID, tc.FilesModified)
+		}
+		for _, f := range tc.FilesModified {
+			if f == "untouched_source.go" {
+				t.Fatalf("a false files_modified claim was created for untouched_source.go")
+			}
+		}
+	}
+	if !foundTaskClaim {
+		t.Fatalf("expected a task claim entry for %s, got %+v", taskID, claims.TaskClaims)
+	}
+
+	// Tamper: edit the artifact after recording, then re-run the ORIGINAL
+	// reconcile command (no --read-only-artifact this time -- the evidence
+	// was already durably recorded above). Evaluation re-checks the current
+	// hash against the recorded one on every run, so it must block again.
+	if err := os.WriteFile(untouchedPath, []byte("package untouched\n\n// changed\n"), 0644); err != nil {
+		t.Fatalf("mutate artifact: %v", err)
+	}
+	resetFlags(rootCmd)
+	outBuf.Reset()
+	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue (tamper) returned error: %v", err)
+	}
+	env3 := parseLifecycleEnvelope(t, outBuf.String())
+	result3 := env3["result"].(map[string]interface{})
+	if blocked, _ := result3["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true after tampering, got %v", result3)
+	}
+	blockingIssues3 := stringSliceValue(result3["blocking_issues"])
+	if !anyContains(blockingIssues3, "changed after build evidence was recorded") {
+		t.Fatalf("expected tamper blocking issue after editing the artifact, got %v", blockingIssues3)
+	}
+}
+
+func anyContains(items []string, substr string) bool {
+	for _, item := range items {
+		if strings.Contains(item, substr) {
+			return true
+		}
+	}
+	return false
 }
 
 func withTestWorkspace(t *testing.T, root string) {
@@ -4660,6 +5117,7 @@ func TestMergeExternalContinuePropagatesReportFields(t *testing.T) {
 			Blockers: []string{},
 			Duration: 15.0,
 			Report:   "# Watcher Report\n\nTests passed.",
+			Handoff:  codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"all checks passed"}},
 		},
 		{
 			Stage:    "review",
@@ -4673,6 +5131,7 @@ func TestMergeExternalContinuePropagatesReportFields(t *testing.T) {
 			Blockers: []string{"secret-found"},
 			Duration: 22.5,
 			Report:   "# Gatekeeper Report\n\nOne blocker found.",
+			Handoff:  codex.WorkerHandoff{VerificationStatus: "fail", KnownFailures: []string{"secret-found"}, NextWorkerInstructions: []string{"rotate the exposed secret"}},
 		},
 	}
 
@@ -4777,6 +5236,10 @@ func TestContinueFinalizeWritesWorkerOutcomeReports(t *testing.T) {
 			Status:   "completed",
 			Summary:  dispatch.Name + " completed",
 			Duration: float64(i+1) * 10.0,
+			// A completed result must relay a non-empty handoff (189-REVIEW.md
+			// CR-01): the finalizer now enforces the same promise every
+			// wrapper brief states.
+			Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{dispatch.Name + " found no blocking issues"}},
 		}
 		// Give report content to first worker, leave second empty
 		if i == 0 {
@@ -4870,8 +5333,8 @@ func TestMergeExternalContinueResultsToleratesMissing(t *testing.T) {
 		},
 	}
 	results := []codexContinueExternalDispatch{
-		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green"},
-		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues"},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"all checks passed"}}},
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{"no security issues found"}}},
 	}
 
 	flow, err := mergeExternalContinueResults(plan, results)
@@ -5474,9 +5937,9 @@ func TestContinueVisualAnnouncesDeterministicVerificationFlow(t *testing.T) {
 	for _, want := range []string{
 		"Running deterministic verification for phase 1 before watcher/review workers",
 		"Continue Worker Flow",
-		"Deterministic verification [system] completed",
-		"Continue watcher [system] skipped",
-		"Review wave [system] skipped",
+		"Deterministic verification completed",
+		"Continue watcher skipped",
+		"Review wave skipped",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("visual output missing %q:\n%s", want, output)

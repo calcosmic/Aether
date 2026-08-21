@@ -702,8 +702,19 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 
 		// Verify no canonical state mutation. The only new top-level data path is
 		// the Go-owned build journal used to recover external dispatch attempts.
+		// `.cache_*` files are the pkg/cache SessionCache's read-through disk
+		// persistence — a cross-invocation performance cache, not colony state
+		// (gitignored, rebuilt from source JSON on demand, purged by
+		// `aether cache-clean`). Assembling the context capsule for the
+		// plan-only manifest (CONTEXT-02/03) reads COLONY_STATE.json through
+		// that cache, which may write a `.cache_COLONY_STATE.json` sibling.
 		after := snapshotDataDir(t, dataDir)
 		delete(after, "build")
+		for name := range after {
+			if strings.HasPrefix(name, ".cache_") {
+				delete(after, name)
+			}
+		}
 		assertDataDirUnchanged(t, before, after)
 		stateAfter, err := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
 		if err != nil {

@@ -1,0 +1,176 @@
+[
+  {
+    "file": "cmd/abandon_cmd.go",
+    "function": "runAbandon",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/autofix.go",
+    "function": "cobra:autofix-rollback",
+    "primitive": "AtomicWrite",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/build_flow_cmds.go",
+    "function": "cobra:update-progress",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/codex_build.go",
+    "function": "runCodexBuildWithOptions",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/codex_colonize.go",
+    "function": "updateSurveyState",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/codex_plan.go",
+    "function": "runCodexPlanWithOptions",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/codex_workflow_cmds.go",
+    "function": "completeSealRuntime",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/colony_cmds.go",
+    "function": "cobra:set",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "runMigrateState",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/entomb_cmd.go",
+    "function": "cobra:entomb",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/error_cmds.go",
+    "function": "cobra:error-add",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/init_cmd.go",
+    "function": "cobra:init \u003cgoal\u003e",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/internal_cmds.go",
+    "function": "cobra:instinct-apply",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/phase_commit.go",
+    "function": "cobra:set \u003con|off\u003e",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "cobra:pause-colony",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "cobra:resume-colony",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "loadResumeState",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/state_cmds.go",
+    "function": "executeExpression",
+    "primitive": "AtomicWrite",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/state_cmds.go",
+    "function": "executeFieldMode",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/state_cmds.go",
+    "function": "executeRevertGuard",
+    "primitive": "AtomicWrite",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/state_extra.go",
+    "function": "cobra:phase-insert",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/state_extra.go",
+    "function": "cobra:state-write [json-blob]",
+    "primitive": "AtomicWrite",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/state_extra.go",
+    "function": "cobra:state-write [json-blob]",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/state_load.go",
+    "function": "loadColonyStateWithCompatibilityRepair",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/state_repair.go",
+    "function": "repairMissingPlanFromArtifacts",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/suggest_approve.go",
+    "function": "cobra:suggest-approve",
+    "primitive": "AtomicWrite",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/worktree.go",
+    "function": "cobra:worktree-allocate",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/worktree.go",
+    "function": "cobra:worktree-merge-back",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  },
+  {
+    "file": "cmd/worktree.go",
+    "function": "cobra:worktree-orphan-scan",
+    "primitive": "SaveJSON",
+    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
+  }
+]

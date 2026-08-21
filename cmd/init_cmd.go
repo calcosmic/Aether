@@ -50,6 +50,9 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
+		promoteShelfRaw, _ := cmd.Flags().GetString("promote-shelf")
+		dismissShelfRaw, _ := cmd.Flags().GetString("dismiss-shelf")
+
 		dataDir := store.BasePath()
 		aetherDir := filepath.Dir(dataDir)
 
@@ -90,10 +93,25 @@ var initCmd = &cobra.Command{
 					}
 					// Confirmed — fall through; the backup below preserves the state.
 				} else {
-					// Active (non-sealed) colony — block
-					outputError(1, fmt.Sprintf("colony already initialized (state=%s, phase=%d, goal=%q)",
-						existing.State, existing.CurrentPhase, ptrStr(existing.Goal)), nil)
-					return nil
+					// Active (non-sealed) colony. Abandoning one mid-flight is a
+					// real thing to want — a goal turns out not to be worth
+					// finishing — and there was no way to do it. Entomb requires
+					// Crowned Anthill, so the only route was to seal work you had
+					// just decided to bin, which runs the full ceremony over it
+					// and promotes its instincts to the cross-colony hive.
+					//
+					// Same confirmation and same timestamped backup as the sealed
+					// path: destroying a colony's memory requires saying so out
+					// loud, but it must be possible to say.
+					if confirmed, _ := cmd.Flags().GetBool("confirm-reinit"); !confirmed {
+						outputError(1, fmt.Sprintf(
+							"this repository has an active colony (goal: %q, state: %s, phase %d). "+
+								"Starting a new one replaces it. If the work is finished, `aether seal` then `aether entomb` archives it properly. "+
+								"To abandon it and start fresh, rerun with --confirm-reinit; the old state is backed up under .aether/data/backups/ and can be restored by copying the .bak file back over COLONY_STATE.json.",
+							ptrStr(existing.Goal), existing.State, existing.CurrentPhase), nil)
+						return nil
+					}
+					// Confirmed — fall through; the backup below preserves the state.
 				}
 			}
 		}
@@ -111,6 +129,18 @@ var initCmd = &cobra.Command{
 				return nil
 			}
 			charter = &ch
+		}
+
+		// --research records a pointer to work the operator already had done,
+		// most often a saved Oracle run. It is stored on state rather than
+		// folded into the charter: charter fields are capped at 2000 characters
+		// and reach workers as hard rules, while research is evidence a worker
+		// may argue with.
+		researchDocs, _ := cmd.Flags().GetStringArray("research")
+		researchDocs, researchErr := validateColonyResearchDocs(skillWorkspaceRoot(), researchDocs)
+		if researchErr != nil {
+			outputError(1, researchErr.Error(), nil)
+			return nil
 		}
 
 		// Rotate trace file if it has grown too large
@@ -134,8 +164,17 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
-		// Clear stale session from any prior colony to prevent old decisions from leaking in.
+		// Clear the prior colony's conversational residue so it cannot leak
+		// into the new colony's workers. This is not bookkeeping:
+		// pending-decisions.json renders into every worker prompt as
+		// CLARIFIED INTENT, and handoffs/worker-handoffs.json renders as
+		// Previous Worker Handoffs — leaving them behind briefs workers on a
+		// new goal with the previous project's decisions (RUNTIME-01, locked
+		// by TestInitClearsPriorColonyDecisionResidue).
 		_ = os.Remove(filepath.Join(dataDir, "session.json"))
+		_ = os.Remove(filepath.Join(dataDir, "pending-decisions.json"))
+		_ = os.Remove(filepath.Join(dataDir, "assumptions.json"))
+		_ = os.RemoveAll(filepath.Join(dataDir, "handoffs"))
 
 		// Backup old colony state before overwriting (sealed colony fresh-init).
 		// The backup is mandatory, not best-effort: if it cannot be written, the
@@ -158,12 +197,72 @@ var initCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "backed up previous colony state to %s\nrestore with: cp %q %q\n", backupFile, backupFile, statePath)
 		}
 
-		// Clean up any leftover worktrees from previous colony
-		if cleaned, orphaned, err := gcOrphanedWorktrees(); err == nil && (cleaned > 0 || orphaned > 0) {
-			fmt.Fprintf(os.Stderr, "warning: cleaned %d stale worktree(s), %d orphaned\n", cleaned, orphaned)
+		// Check any leftover worktrees from a previous colony. Nothing here
+		// is destroyed automatically (D-01) — dirty or unmerged work is
+		// kept, not deleted, and every occurrence is reported (D-02).
+		// gcOrphanedWorktrees itself already names the deliberate-removal
+		// command per entry via reportWorktreePreservation; this summary
+		// line intentionally says "aether recover" rather than repeating
+		// the destructive command's own name, since TestWorktreeReapHasNoLifecycleCaller
+		// (cmd/worktree_crash_safety_test.go) fails the build if this file
+		// contains that literal string — a lifecycle path must not even
+		// mention the destruction command by name, let alone call it.
+		var wtPreserved int
+		if cleaned, preserved, err := gcOrphanedWorktrees(); err == nil {
+			wtPreserved = preserved
+			if cleaned > 0 || preserved > 0 {
+				fmt.Fprintf(os.Stderr, "worker workspaces from a previous colony: %d forgotten (already gone), %d kept because they still hold work — run `aether recover` to see them\n", cleaned, preserved)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: could not check previous colony's worker workspaces for leftover work: %v\n", err)
 		}
-		// Also remove the worktrees directory entirely to ensure a clean slate
-		_ = os.RemoveAll(filepath.Join(aetherDir, "worktrees"))
+		// wtPreserved only counts entries gcOrphanedWorktrees actually saw,
+		// and it only ever iterates state.Worktrees. A worktree created by
+		// `git worktree add` but killed before its state entry was appended
+		// (the exact crash window this phase exists for) is invisible to
+		// that count — it looks like "nothing preserved" even though it may
+		// hold uncommitted or unmerged work. Scan the directory on disk,
+		// independent of state, before trusting wtPreserved == 0 (WR-06,
+		// 187-VERIFICATION.md GAP-3).
+		worktreesDir := filepath.Join(aetherDir, "worktrees")
+		gitRoot := filepath.Dir(aetherDir)
+		knownPaths := map[string]bool{}
+		var wtScanState colony.ColonyState
+		if loadErr := store.LoadJSON("COLONY_STATE.json", &wtScanState); loadErr == nil {
+			for _, wt := range wtScanState.Worktrees {
+				p := wt.Path
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(gitRoot, p)
+				}
+				knownPaths[p] = true
+			}
+		}
+		unrecorded := scanUnrecordedWorktrees(gitRoot, worktreesDir, knownPaths)
+		var unrecordedUnsafe []worktreeSafety
+		for _, safety := range unrecorded {
+			if !safety.Safe {
+				unrecordedUnsafe = append(unrecordedUnsafe, safety)
+			}
+		}
+		if len(unrecordedUnsafe) > 0 {
+			wtPreserved += len(unrecordedUnsafe)
+			for _, safety := range unrecordedUnsafe {
+				reportWorktreePreservation(safety, fmt.Sprintf("found on disk but not yet recorded (likely interrupted mid-creation): %s", safety.Reason))
+			}
+		}
+
+		// Remove the worktrees directory entirely to ensure a clean slate,
+		// but only when nothing was preserved. Removing it unconditionally
+		// would silently undo every preservation gcOrphanedWorktrees just
+		// made — init would become the new data-loss path the moment
+		// gcOrphanedWorktrees stopped being one. Do not remove this guard;
+		// doing so reintroduces the exact defect this phase was created to
+		// fix.
+		if wtPreserved == 0 {
+			_ = os.RemoveAll(worktreesDir)
+		} else {
+			fmt.Fprintf(os.Stderr, "the previous colony's worker workspaces were left in place because they still hold work — run `aether recover` to see them\n")
+		}
 
 		// Clean up reviews from any prior colony
 		_ = os.RemoveAll(filepath.Join(dataDir, "reviews"))
@@ -196,10 +295,33 @@ var initCmd = &cobra.Command{
 			ParallelMode: colony.ModeInRepo,
 		}
 		state.Charter = charter
+		state.ResearchDocs = researchDocs
 
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			outputError(1, fmt.Sprintf("failed to create COLONY_STATE.json: %v", err), nil)
 			return nil
+		}
+
+		// Phase 165 gap CR-01: promotion must stay below the state save and
+		// above the session build. Every refusal branch above this line
+		// (empty goal, active colony, sealed colony without --confirm-reinit,
+		// in-progress seal, invalid scope/colony-mode/charter JSON, failed
+		// state save) returns before this ever runs, so a failed `aether init`
+		// writes nothing to shelf.json. Do not move this call upward.
+		shelfPromoted, shelfDismissed, shelfFailed := applyInitShelfSelections(store, promoteShelfRaw, dismissShelfRaw, goal)
+		if len(shelfFailed) > 0 {
+			fmt.Fprintf(os.Stderr, "warning: could not apply shelf selection(s): %s\n", strings.Join(shelfFailed, ", "))
+		}
+
+		// Ranked next-move proposals, computed from what the repo actually
+		// contains — the runtime proposes, the wrapper asks, the user picks.
+		// The top proposal replaces the old hardcoded "aether plan" as the
+		// recorded suggestion.
+		repoRoot := filepath.Dir(aetherDir)
+		proposals := computeInitProposals(repoRoot, goal, priorStateBackup != "")
+		suggestedNext := "aether plan"
+		if len(proposals) > 0 {
+			suggestedNext = proposals[0].Command
 		}
 
 		// Create session.json
@@ -210,8 +332,8 @@ var initCmd = &cobra.Command{
 			ColonyMode:       colonyMode,
 			CurrentPhase:     0,
 			CurrentMilestone: "",
-			SuggestedNext:    "aether plan",
-			ActiveTodos:      []string{},
+			SuggestedNext:    suggestedNext,
+			ActiveTodos:      promotedShelfTodos(store, goal),
 			Summary:          "Colony initialized",
 		}
 
@@ -222,7 +344,7 @@ var initCmd = &cobra.Command{
 
 		if _, err := syncColonyArtifacts(state, colonyArtifactOptions{
 			CommandName:   "init",
-			SuggestedNext: "aether plan",
+			SuggestedNext: suggestedNext,
 			Summary:       "Colony initialized",
 			HandoffTitle:  "Initialized Colony",
 			WriteHandoff:  true,
@@ -243,6 +365,21 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
+		// Cross-colony bookkeeping (RECLAIM-02/09) — both NON-BLOCKING,
+		// matching the seal-time hive-promotion precedent: registry and hive
+		// failures warn, never stop an init. The registry entry carries the
+		// domain tags that scope hive wisdom retrieval for this repo.
+		registryDomains := detectColonyDomains(repoRoot)
+		if _, regErr := upsertColonyRegistryEntry(repoRoot, goal, registryDomains, true); regErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not register colony in hub registry: %v\n", regErr)
+		}
+		hiveSeeded := 0
+		if automaticHiveReadEnabled() {
+			if seeded, _, _, seedErr := seedQueenFromHive(); seedErr == nil {
+				hiveSeeded = seeded
+			}
+		}
+
 		// Load active shelf for wrapper consumption
 		shelfEntries, _ := loadActiveShelf(store)
 		result := map[string]interface{}{
@@ -256,12 +393,24 @@ var initCmd = &cobra.Command{
 			"data_dir":            dataDir,
 			"shelf_backlog":       shelfEntries,
 			"shelf_backlog_count": len(shelfEntries),
+			"shelf_promoted":      shelfPromoted,
+			"shelf_dismissed":     shelfDismissed,
+			"shelf_failed":        shelfFailed,
 		}
+		if len(researchDocs) > 0 {
+			// Echo what was accepted so the operator can see the pointer landed
+			// rather than trusting that it did.
+			result["research_docs"] = researchDocs
+		}
+		result["registry_domains"] = registryDomains
+		result["hive_seeded"] = hiveSeeded
+		result["proposals"] = proposals
+		result["suggested_next"] = suggestedNext
 		if priorStateBackup != "" {
 			result["prior_state_backup"] = priorStateBackup
 			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
 		}
-		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir))
+		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, hiveSeeded, proposals, researchDocs...))
 		return nil
 	},
 }
@@ -289,7 +438,10 @@ func init() {
 	initCmd.Flags().String("scope", string(colony.ScopeProject), "Colony scope: project or meta")
 	initCmd.Flags().String("colony-mode", string(colony.ColonyModeColony), "Colony mode: colony or orchestrator")
 	initCmd.Flags().String("charter-json", "", "Approved charter data as JSON string")
-	initCmd.Flags().Bool("confirm-reinit", false, "Confirm replacing a sealed colony's state (a timestamped backup is written to .aether/data/backups/)")
+	initCmd.Flags().StringArray("research", nil, "Repository-relative path to a research document this colony should be planned from, e.g. a saved Oracle run under .aether/research (repeatable)")
+	initCmd.Flags().Bool("confirm-reinit", false, "Confirm replacing an existing colony's state, sealed or active (a timestamped backup is written to .aether/data/backups/)")
+	initCmd.Flags().String("promote-shelf", "", "Comma-separated shelf entry IDs to promote into this colony as todos")
+	initCmd.Flags().String("dismiss-shelf", "", "Comma-separated shelf entry IDs to dismiss from the backlog")
 	rootCmd.AddCommand(initCmd)
 }
 

@@ -181,14 +181,17 @@ You are a **Builder Ant** in the Aether Colony...
 ### Skills
 
 The shared skill sources live in `.aether/skills/`.
-For Codex, installed skills are copied into the global Codex skills directory and matched by
-the `aether skill-*` commands against worker role, workspace files, and package manifests.
+For Codex, installed skills are copied into the global Codex skills directory and matched
+in-process by the Go runtime's skill-matching logic against worker role, workspace files,
+and package manifests -- there is no standalone `skill-*` CLI surface (Phase 191 deleted the
+8 CLI wrappers as dead code; the matching and injection logic itself is unconditionally
+load-bearing and unaffected).
 
 Skills are not a separate Codex plugin bundle. Codex agent definitions remain in
 `.codex/agents/*.toml`, and the Go CLI handles skill indexing, matching, and injection.
 
 Skills are automatically matched and injected into worker prompts during `build`,
-`colonize`, and `plan` dispatches.
+`colonize`, `plan`, and `continue` dispatches.
 
 Codex lifecycle orchestration skills are intentionally separate from worker skill
 injection. `aether-colony-creation`, `aether-colony-research`, and
@@ -199,7 +202,7 @@ summarize before or around the runtime command. They must stay aligned with
 ### Pheromone Signals
 
 Active pheromone signals are automatically injected into worker prompts during
-`build`, `colonize`, and `plan` dispatches.
+`build`, `colonize`, `plan`, and `continue` dispatches.
 
 Pheromone signals work identically across all platforms via the `aether` CLI:
 
@@ -297,8 +300,6 @@ aether phase-insert --after 1 --name "Fix auth" --description "Stabilize auth fl
 aether run --headless --max-phases 3
 aether swarm "build flakes in auth"
 aether oracle "auth flake investigation"
-aether skill-match --workflow build --role builder --task "react form validation"
-aether skill-inject --workflow build --role builder --task "react form validation"
 aether data-clean        # Clean test artifacts
 ```
 
@@ -461,6 +462,19 @@ Runtime note:
 | Deep research | `/ant-oracle` | `/ant-oracle` | Use the `aether-oracle` agent plus `aether skill-*` and research commands |
 | View pheromones | `/ant-pheromones` | `/ant-pheromones` | `aether pheromone-display` |
 
+### Next-step hints
+
+The runtime adapts its "Next Up" suggestions to the active platform: Claude
+Code and OpenCode see slash wrappers (`/ant-continue`), Codex sees the raw CLI
+(`aether continue`), because Codex has no slash commands. Detection reads
+`AETHER_PLATFORM` first, then the active-platform signals, then the process
+tree. If a nested or wrapped invocation is ever misdetected and you see
+`/ant-*` suggestions, export the platform explicitly:
+
+```bash
+export AETHER_PLATFORM=codex
+```
+
 ---
 
-*Updated for Aether v1.0.41 -- 2026-05-20*
+*Updated for Aether v1.0.61 — 2026-08-21*

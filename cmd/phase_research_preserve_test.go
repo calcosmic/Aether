@@ -92,7 +92,7 @@ func TestPhaseResearchTemplateCarriesSixSections(t *testing.T) {
 		Findings:   []codexScoutFinding{{Area: "architecture", Discovery: "exporter lives in cmd/exporter.go", Source: "survey"}},
 		StudyFiles: []string{"cmd/exporter.go"},
 	}
-	written, preserved, err := writePhaseResearchArtifacts(root, dir, codexSurveyContext{}, report, phases, map[string]codexArtifactSnapshot{}, nil)
+	written, preserved, _, err := writePhaseResearchArtifacts(root, dir, codexSurveyContext{}, report, phases, map[string]codexArtifactSnapshot{}, nil)
 	if err != nil {
 		t.Fatalf("write artifacts: %v", err)
 	}

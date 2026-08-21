@@ -238,6 +238,11 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		if state.Goal != nil {
 			result["goal"] = *state.Goal
 		}
+		if workflow == "build" {
+			if active := filterActiveSuggestions(state.PendingSuggestions); len(active) > 0 {
+				result["pending_suggestions_block"] = renderPendingSuggestionsBlock(active)
+			}
+		}
 		if next := strings.TrimSpace(stringValue(result["completion_next"])); next != "" {
 			result["next"] = next
 		} else {
@@ -378,7 +383,7 @@ func renderCeremonyQueenFrame(workflow string, manifest map[string]interface{}, 
 	}
 
 	var b strings.Builder
-	b.WriteString("👑 Queen Orchestration")
+	b.WriteString("👑🐜 Queen Orchestration")
 	if len(parts) > 0 {
 		b.WriteString(": ")
 		b.WriteString(strings.Join(parts, " | "))
@@ -577,6 +582,14 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 	writeCeremonyCloseoutNotice(&b, result)
 	writeCeremonyWorkerSummary(&b, result)
 	writeCeremonyPlanSummary(&b, result)
+	if block := strings.TrimSpace(stringValue(result["pending_suggestions_block"])); block != "" {
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Suggestions From This Build"))
+		b.WriteString(block)
+		if !strings.HasSuffix(block, "\n") {
+			b.WriteString("\n")
+		}
+	}
 	if readiness := strings.TrimSpace(stringValue(result["porter_readiness"])); readiness != "" {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Post-Seal: Delivery Readiness"))
@@ -585,8 +598,54 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 			b.WriteString("\n")
 		}
 	}
+	if workflow == "build" {
+		// The build's ending: the colony's whole picture (flags, signals,
+		// progress) plus the handoff verdict — "safe to clear" appears only
+		// when the handoff is verifiably on disk, checked at render time,
+		// never inferred from the finalize having succeeded.
+		phaseID := intValue(result["completion_phase"])
+		if phaseID == 0 {
+			phaseID = intValue(result["current_phase"])
+		}
+		var state colony.ColonyState
+		if store != nil && store.LoadJSON("COLONY_STATE.json", &state) == nil && phaseID > 0 {
+			b.WriteString("\n")
+			b.WriteString(renderStageMarker("Colony State"))
+			b.WriteString(renderPhaseEndFooter(state, phaseID))
+		}
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Handoff"))
+		if phaseID > 0 && phaseHandoffRecordsExist(phaseID) {
+			fmt.Fprintf(&b, "📦 Worker handoffs recorded for phase %d — the next phase's workers inherit this build's context.\n", phaseID)
+			b.WriteString(renderContextClearGuidance())
+		} else {
+			b.WriteString("📦 No worker handoffs recorded for this phase — don't clear your context yet; the next workers would start blind.\n")
+		}
+	}
 	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
 	b.WriteString(renderNextUp(next))
+	return b.String()
+}
+
+// renderPendingSuggestionsBlock renders the once-at-the-end, tick-to-approve
+// list D-11 asks for: each active suggestion's type, content, reason, and
+// ID, followed by the exact copyable approve/dismiss commands for that ID.
+// Callers must pass suggestions already filtered by filterActiveSuggestions
+// -- this function does not re-implement dismissed filtering.
+func renderPendingSuggestionsBlock(suggestions []colony.PendingSuggestion) string {
+	var b strings.Builder
+	for i, s := range suggestions {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "[%s] %s\n", s.Type, s.Content)
+		if reason := strings.TrimSpace(s.Reason); reason != "" {
+			fmt.Fprintf(&b, "  Reason: %s\n", reason)
+		}
+		fmt.Fprintf(&b, "  ID: %s\n", s.ID)
+		fmt.Fprintf(&b, "  Approve: aether suggest-approve --approve %s\n", s.ID)
+		fmt.Fprintf(&b, "  Dismiss: aether suggest-approve --dismiss %s\n", s.ID)
+	}
 	return b.String()
 }
 
@@ -1079,7 +1138,7 @@ func writeCeremonyPhaseLine(b *strings.Builder, manifest map[string]interface{})
 
 func writeCeremonyDispatchLine(b *strings.Builder, dispatch ceremonyDispatch, prefix string) {
 	b.WriteString(prefix)
-	b.WriteString(casteIdentity(dispatch.Caste))
+	b.WriteString(casteIdentityWithModel(dispatch.Caste))
 	b.WriteString(" ")
 	b.WriteString(emptyFallback(dispatch.Name, "worker"))
 	if dispatch.AgentName != "" && dispatch.AgentName != dispatch.Name {

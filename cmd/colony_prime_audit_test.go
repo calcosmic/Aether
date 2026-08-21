@@ -21,7 +21,11 @@ import (
 //  3. survey context   -> buildContextCapsuleOutput() fallback or renderCodexBuildWorkerBrief()
 //  4. phase research   -> renderCodexBuildWorkerBrief() playbooks section
 //  5. matched skills   -> resolveSkillSectionForWorkflow() -> WorkerConfig.SkillSection
-//  6. midden/graveyard -> buildContextCapsuleOutput() midden section (context.go line ~817)
+//  6. midden/graveyard -> buildColonyPrimeOutput()'s own "midden" section
+//     (cmd/colony_prime_context.go, closed by 188-VERIFICATION.md Gap 1 /
+//     188-07 -- this used to say buildContextCapsuleOutput(), which never
+//     actually had a midden section; see TestOneMiddenEntryReachesColonyPrimeCapsule
+//     in cmd/midden_unification_test.go for the direct-execution proof)
 func TestColonyPrimeAAC005Audit(t *testing.T) {
 	saveGlobalsCmd(t)
 
@@ -127,16 +131,18 @@ func TestColonyPrimeAAC005Audit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create midden entries
-	if err := os.MkdirAll(filepath.Join(s.BasePath(), "midden"), 0755); err != nil {
-		t.Fatal(err)
-	}
+	// Create midden entries at the canonical flat path (middenCanonicalPath
+	// == "midden.json"). This used to seed the legacy nested "midden/midden.json"
+	// path, which is not read by anything since Phase 188 unified the midden
+	// path -- self-consistent with the readback below only because both used
+	// the same wrong path, never actually proving the entry reached the real
+	// worker capsule (188-VERIFICATION.md Gap 1).
 	midden := colony.MiddenFile{
 		Entries: []colony.MiddenEntry{
 			{ID: "m1", Timestamp: now, Category: "build", Source: "builder", Message: "Build failed on compilation"},
 		},
 	}
-	if err := s.SaveJSON("midden/midden.json", midden); err != nil {
+	if err := s.SaveJSON(middenCanonicalPath, midden); err != nil {
 		t.Fatal(err)
 	}
 
@@ -227,14 +233,20 @@ func TestColonyPrimeAAC005Audit(t *testing.T) {
 	t.Logf("  3. survey context: buildContextCapsuleOutput() fallback or renderCodexBuildWorkerBrief()")
 	t.Logf("  4. phase research: renderCodexBuildWorkerBrief() playbooks section")
 	t.Logf("  5. matched skills: resolveSkillSectionForWorkflow() -> WorkerConfig.SkillSection")
-	t.Logf("  6. midden/graveyard: buildContextCapsuleOutput() midden section (context.go ~line 817)")
+	t.Logf("  6. midden/graveyard: buildColonyPrimeOutput()'s own \"midden\" section (188-07)")
 
-	// Verify that the midden data can be read (it goes through the context capsule path, not colony-prime)
+	// Verify that the midden data can be read via the canonical helper...
 	var middenCheck colony.MiddenFile
-	if err := s.LoadJSON("midden/midden.json", &middenCheck); err != nil {
+	if err := s.LoadJSON(middenCanonicalPath, &middenCheck); err != nil {
 		t.Errorf("AAC-005 midden: cannot read midden data: %v", err)
 	} else if len(middenCheck.Entries) == 0 {
 		t.Error("AAC-005 midden: no midden entries found")
+	}
+	// ...and, unlike before 188-07, that it actually reaches the real worker
+	// capsule captured above -- not merely a self-consistent readback of the
+	// same fixture path it was seeded at.
+	if !strings.Contains(capsule, "Build failed on compilation") {
+		t.Error("AAC-005 midden: capsule (resolveCodexWorkerContext()) does not carry the seeded midden entry")
 	}
 
 	// Log all included sections for audit trail
@@ -250,7 +262,7 @@ func TestColonyPrimeAAC005Audit(t *testing.T) {
 	}
 }
 
-// TestColonyPrimeSectionsPresent verifies all 15 colony-prime sections appear
+// TestColonyPrimeSectionsPresent verifies all 16 colony-prime sections appear
 // when their data sources are populated.
 func TestColonyPrimeSectionsPresent(t *testing.T) {
 	saveGlobalsCmd(t)
@@ -259,9 +271,7 @@ func TestColonyPrimeSectionsPresent(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	store = s
 
-	// Hive retrieval is off by default; this test asserts on hive content,
-	// so it opts in explicitly rather than relying on an implicit default.
-	enableHiveForTest(t)
+	// Hive retrieval is on by default (D-01/D-02); no opt-in needed.
 
 	// Set up hub directory
 	hubDir := filepath.Join(tmpDir, "hub")
@@ -359,16 +369,15 @@ func TestColonyPrimeSectionsPresent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create midden
-	if err := os.MkdirAll(filepath.Join(s.BasePath(), "midden"), 0755); err != nil {
-		t.Fatal(err)
-	}
+	// Create midden at the canonical flat path (see the matching comment in
+	// TestColonyPrimeAAC005Audit above -- this used to seed the legacy
+	// nested "midden/midden.json" path, which nothing reads).
 	midden := colony.MiddenFile{
 		Entries: []colony.MiddenEntry{
 			{ID: "m1", Timestamp: now, Category: "build", Source: "builder", Message: "Test midden entry"},
 		},
 	}
-	if err := s.SaveJSON("midden/midden.json", midden); err != nil {
+	if err := s.SaveJSON(middenCanonicalPath, midden); err != nil {
 		t.Fatal(err)
 	}
 
@@ -411,7 +420,7 @@ func TestColonyPrimeSectionsPresent(t *testing.T) {
 	// Execute: get the output
 	output := buildColonyPrimeOutput(false)
 
-	// Verify all 15 expected sections are present in the ledger
+	// Verify all 16 expected sections are present in the ledger
 	expectedSections := []string{
 		"state",
 		"review_depth",
@@ -428,6 +437,7 @@ func TestColonyPrimeSectionsPresent(t *testing.T) {
 		"clarified_intent",
 		"blockers",
 		"medic_health",
+		"midden",
 	}
 
 	// Build a set of all section names from included + trimmed + blocked
@@ -538,8 +548,12 @@ func TestColonyPrimeGracefulWithMissingData(t *testing.T) {
 		t.Error("buildColonyPrimeOutput.Used should be > 0")
 	}
 
-	// No warnings expected
-	if len(output.Warnings) > 0 {
-		t.Errorf("buildColonyPrimeOutput.Warnings = %v, want empty for clean data", output.Warnings)
+	// Hive retrieval is on by default (D-01/D-02) and withheld-wisdom reasons
+	// surface unconditionally, so an empty hub now produces exactly one
+	// "no hive or eternal data" warning rather than none. This is the
+	// deliberate Site 3 meaning change: colony-prime is never silent about
+	// why wisdom was withheld.
+	if len(output.Warnings) != 1 || !strings.Contains(output.Warnings[0], "hive_wisdom") {
+		t.Errorf("buildColonyPrimeOutput.Warnings = %v, want exactly one hive_wisdom fallback warning for an empty hub", output.Warnings)
 	}
 }

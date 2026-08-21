@@ -56,6 +56,46 @@ var casteRelevanceRegistry = []CasteRelevanceProfile{
 }
 
 // casteRelevanceScore returns a 0-100 score for how relevant a caste is to a phase.
+// keywordGatedCastes only spawn on a real keyword hit, never on base score.
+// Their value is entirely conditional on the phase touching an external
+// surface; with no such surface there is nothing for them to review.
+var keywordGatedCastes = map[string]bool{
+	"ambassador": true,
+	"gatekeeper": true,
+}
+
+// containsKeyword matches a keyword that begins at a word boundary. Plain
+// substring matching dispatched an Ambassador to a local slugify phase because
+// "api" sits inside "cAPItalize" — a false positive that spends a whole worker
+// run and makes caste selection look arbitrary.
+//
+// The match is anchored at the start only, not both ends: "structure" must
+// still match "structured" and "test" must match "tests", because those are
+// the same concept inflected. Requiring a boundary at both ends silently
+// dropped the Architect from design phases.
+func containsKeyword(text, keyword string) bool {
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return false
+	}
+	for offset := 0; offset < len(text); {
+		idx := strings.Index(text[offset:], keyword)
+		if idx < 0 {
+			return false
+		}
+		start := offset + idx
+		if start == 0 || !isWordByte(text[start-1]) {
+			return true
+		}
+		offset = start + 1
+	}
+	return false
+}
+
+func isWordByte(b byte) bool {
+	return b == '_' || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
 func casteRelevanceScore(phase colony.Phase, caste string) int {
 	profile := findProfile(caste)
 	if profile == nil {
@@ -68,11 +108,20 @@ func casteRelevanceScore(phase colony.Phase, caste string) int {
 	// Keyword matching
 	keywordMatches := 0
 	for _, kw := range profile.Keywords {
-		if strings.Contains(text, kw) {
+		if containsKeyword(text, kw) {
 			keywordMatches++
 		}
 	}
 	score += keywordMatches * 10
+
+	// Castes whose work only exists when the phase actually touches their
+	// domain must not ride in on base score alone. An ambassador dispatched to
+	// a local string-utility phase can only report that it had no work to do,
+	// which costs a worker run and reads to the user as the colony being
+	// confused.
+	if keywordMatches == 0 && keywordGatedCastes[caste] {
+		return 0
+	}
 
 	// Condition matching
 	for _, cond := range profile.Conditions {
@@ -215,9 +264,35 @@ func spawnThreshold(flowType string, state colony.ColonyState) int {
 	switch flowType {
 	case "build", "continue":
 		if flowType == "continue" && stateVerificationDepth(state) == colony.VerificationDepthHeavy {
+			// Heavy is an explicit request for breadth, so the bar stays low.
 			return 25
 		}
-		return 30 // Allow more castes through; Queen filters later
+		// A base-20 caste scores 30 on a single keyword hit, so a threshold of
+		// 30 meant one incidental word bought a full agent run. The old value
+		// carried the comment "Allow more castes through; Queen filters later"
+		// — and no Queen filtered, because no Queen existed. The system
+		// deliberately over-selected on the promise of a downstream filter that
+		// was never written.
+		//
+		// Deliberately left at 30, and deliberately NOT raised. Raising it was
+		// tried and measured, and the measurement killed the idea:
+		//
+		//   phase "Migrate user data to new schema"      -> architect, 1 hit  (correct)
+		//   phase "latency and memory ... is unchanged"  -> measurer,  2 hits (waste)
+		//
+		// The false positive scores HIGHER than the true positive, because
+		// counting keyword hits is anti-correlated with correctness once
+		// negation is in play. At 40 the wasteful Measurer survived and the DB
+		// migration lost its Architect — strictly worse on both counts. No
+		// threshold separates those two phases, because the signal that
+		// distinguishes them is meaning, not word frequency.
+		//
+		// So this number is not the lever. queenApplyJudgement is: a reader can
+		// see that "unchanged" negates the words around it and that a migration
+		// needs design review whether or not it repeats the word "schema".
+		// Keep this as the floor that holds when no model intervenes, and put
+		// the effort into the judgement layer instead of retuning this.
+		return 30
 	case "plan":
 		return 40
 	case "colonize", "swarm":
@@ -239,9 +314,15 @@ func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.C
 		case colony.VerificationDepthLight:
 			return caste == "watcher"
 		case colony.VerificationDepthHeavy:
+			// Heavy is an explicit request for the full gauntlet, so Probe
+			// stays even where it has little to chew on.
 			return caste == "watcher" || caste == "gatekeeper" || caste == "auditor" || caste == "probe"
 		default:
-			return caste == "watcher" || caste == "probe"
+			// Standard gates Probe on the phase actually having produced code.
+			// Build requires a Probe under the same condition, so leaving this
+			// unconditional billed a documentation phase for two Probes, one on
+			// each side of the same phase.
+			return caste == "watcher" || (caste == "probe" && queenPhaseProducesTestableCode(phase))
 		}
 	case "plan":
 		return caste == "scout" || caste == "route_setter"

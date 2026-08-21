@@ -82,3 +82,89 @@ func humanizePheromoneDuration(d time.Duration) string {
 	}
 	return fmt.Sprintf("%dm", minutes)
 }
+
+// pheromoneSectionHeadings is the classic v5.4.0 pheromone display order and
+// framing: each signal type gets an emoji heading with a plain-English
+// parenthetical, so the display explains itself.
+var pheromoneSectionHeadings = []struct {
+	Type    string
+	Heading string
+}{
+	{"FOCUS", "🎯 FOCUS (Pay attention here)"},
+	{"REDIRECT", "🚫 REDIRECT (Hard constraints - DO NOT do this)"},
+	{"FEEDBACK", "💬 FEEDBACK (Guidance to consider)"},
+}
+
+// renderClassicPheromoneSections renders active signals in the classic
+// sectioned house style: letter-spaced banner, emoji-headed groups, one
+// signal per line as [NN%] "text" with a nested lifetime line, and a decay
+// footer.
+func renderClassicPheromoneSections(signals []colony.PheromoneSignal, now time.Time) string {
+	var b strings.Builder
+	rule := strings.Repeat("━", 50)
+	b.WriteString(rule + "\n")
+	b.WriteString("   A C T I V E   P H E R O M O N E S\n")
+	b.WriteString(rule + "\n\n")
+
+	grouped := map[string][]colony.PheromoneSignal{}
+	var otherTypes []string
+	for _, sig := range signals {
+		grouped[sig.Type] = append(grouped[sig.Type], sig)
+	}
+	known := map[string]bool{"FOCUS": true, "REDIRECT": true, "FEEDBACK": true}
+	for _, sig := range signals {
+		if !known[sig.Type] && !containsString(otherTypes, sig.Type) {
+			otherTypes = append(otherTypes, sig.Type)
+		}
+	}
+
+	writeGroup := func(heading string, group []colony.PheromoneSignal) {
+		if len(group) == 0 {
+			return
+		}
+		b.WriteString(heading + "\n\n")
+		for _, sig := range group {
+			percent := int(math.Round(computeEffectiveStrength(sig, now) * 100))
+			text := strings.TrimSpace(extractText(sig.Content))
+			if text == "" {
+				text = "(no content)"
+			}
+			b.WriteString(fmt.Sprintf("   [%d%%] %q\n", percent, text))
+			detail := signalAgeSummary(sig, now)
+			if life := signalLifetimeSummary(sig, now); life != "" {
+				if detail != "" {
+					detail += ", "
+				}
+				detail += life
+			}
+			if detail != "" {
+				b.WriteString("      └── " + detail + "\n")
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	for _, section := range pheromoneSectionHeadings {
+		writeGroup(section.Heading, grouped[section.Type])
+	}
+	for _, other := range otherTypes {
+		writeGroup("🐜 "+other, grouped[other])
+	}
+
+	b.WriteString(rule + "\n")
+	b.WriteString(fmt.Sprintf("%d signal(s) active | Decay: FOCUS 30d, REDIRECT 60d, FEEDBACK 90d\n", len(signals)))
+	return b.String()
+}
+
+// signalAgeSummary renders how long ago a signal was left, in days.
+func signalAgeSummary(sig colony.PheromoneSignal, now time.Time) string {
+	createdAt, err := time.Parse(time.RFC3339, sig.CreatedAt)
+	if err != nil {
+		return ""
+	}
+	days := int(now.Sub(createdAt).Hours() / 24)
+	if days < 0 {
+		days = 0
+	}
+	return fmt.Sprintf("%dd ago", days)
+}

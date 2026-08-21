@@ -449,8 +449,10 @@ Prune stale backups and temp files. This runs automatically — failures never a
 
 Run using the Bash tool with description "Pruning stale backups...":
 ```bash
-aether backup-prune-global```
+aether backup-prune-global
+```
 
 Run using the Bash tool with description "Cleaning temp files...":
 ```bash
-aether temp-clean```
+aether temp-clean
+```

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -74,6 +75,7 @@ func dispatchBatchByWaveWithVisuals(
 	}
 	sort.Ints(waveNumbers)
 
+	platform := codex.PlatformFromInvoker(invoker)
 	results := make([]codex.DispatchResult, 0, len(dispatches))
 	for _, wave := range waveNumbers {
 		waveDispatches := waves[wave]
@@ -86,11 +88,18 @@ func dispatchBatchByWaveWithVisuals(
 
 		waveResults, err := codex.DispatchWaveWithObserver(ctx, invoker, waveDispatches, observer, parallelWithinWave)
 		if err != nil {
+			// D-03: invalidate the trust window using whatever results were
+			// collected from prior successful waves before this error.
+			invalidatePreflightCacheOnProviderFailure(platform, results)
 			return nil, err
 		}
 		results = append(results, waveResults...)
 	}
 
+	// D-03: a provider/auth-classified dispatch failure clears the trust
+	// window so the next command re-probes. Placement is after dispatch, not
+	// before -- this is the reaction to a completed dispatch.
+	invalidatePreflightCacheOnProviderFailure(platform, results)
 	return results, nil
 }
 
@@ -131,7 +140,11 @@ func preflightWorkerProvider(ctx context.Context, invoker codex.WorkerInvoker, d
 			break
 		}
 	}
-	status := preflighter.Preflight(ctx, root)
+	platform := codex.PlatformFromInvoker(invoker)
+	status, outcome := gatedProviderPreflight(ctx, preflighter, platform, root, time.Now())
+	if outcome.Notice != "" {
+		visualFprintf(stderr, "%s\n", outcome.Notice)
+	}
 	if status.Available {
 		return nil
 	}

@@ -14,6 +14,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// internalWorkerAdapterSchemaVersion stays 1: the Preflight field on
+// internalWorkerAdapterResponse below is additive and optional, and the TS
+// host asserts schema_version === 1.
 const (
 	internalWorkerAdapterSchemaVersion = 1
 	internalWorkerRequestMaxBytes      = 2 << 20
@@ -34,7 +37,6 @@ type internalWorkerDispatchRequest struct {
 	TaskBrief         string                  `json:"task_brief,omitempty"`
 	ContextCapsule    string                  `json:"context_capsule,omitempty"`
 	SkillSection      string                  `json:"skill_section,omitempty"`
-	HiveSection       string                  `json:"hive_section,omitempty"`
 	PheromoneSection  string                  `json:"pheromone_section,omitempty"`
 	HandoffSection    string                  `json:"handoff_section,omitempty"`
 	TimeoutMS         int64                   `json:"timeout_ms,omitempty"`
@@ -54,11 +56,17 @@ type internalWorkerResult struct {
 	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
 	ScoutReport   json.RawMessage            `json:"scout_report,omitempty"`
 	ToolCount     int                        `json:"tool_count,omitempty"`
-	Blockers      []string                   `json:"blockers,omitempty"`
-	Spawns        []string                   `json:"spawns,omitempty"`
-	Duration      float64                    `json:"duration,omitempty"`
-	Error         string                     `json:"error,omitempty"`
-	Handoff       codex.WorkerHandoff        `json:"handoff,omitempty"`
+	// Usage is populated only by codex.AttachWorkerUsage on the real
+	// dispatch boundary (pkg/codex/platform_dispatch.go). It was silently
+	// dropped by mapInternalWorkerResult before Phase 174 (SPEND-01) --
+	// a genuine provider measurement already existed in memory and never
+	// reached this durable adapter result.
+	Usage    codex.WorkerUsage   `json:"usage,omitempty"`
+	Blockers []string            `json:"blockers,omitempty"`
+	Spawns   []string            `json:"spawns,omitempty"`
+	Duration float64             `json:"duration,omitempty"`
+	Error    string              `json:"error,omitempty"`
+	Handoff  codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
 type internalWorkerAdapterResponse struct {
@@ -72,6 +80,7 @@ type internalWorkerAdapterResponse struct {
 	ExecutionBinding    *codex.ExecutionBinding   `json:"execution_binding,omitempty"`
 	ProviderRunID       string                    `json:"provider_run_id,omitempty"`
 	Worker              *internalWorkerResult     `json:"worker,omitempty"`
+	Preflight           *preflightOutcome         `json:"preflight,omitempty"`
 }
 
 var internalWorkerAdapterCmd = &cobra.Command{
@@ -137,7 +146,11 @@ func runInternalWorkerAdapter(ctx context.Context, requestPath string, preflight
 	if preflight {
 		status := availability
 		if provider, ok := invoker.(codex.WorkerProviderPreflighter); ok {
-			status = provider.Preflight(ctx, root)
+			var outcome preflightOutcome
+			status, outcome = gatedProviderPreflight(ctx, provider, platform, root, time.Now())
+			if outcome.Source != "" && outcome.Notice != "" {
+				response.Preflight = &outcome
+			}
 		}
 		response.Availability = status
 		if !status.Available {
@@ -194,6 +207,12 @@ func runInternalWorkerAdapter(ctx context.Context, requestPath string, preflight
 		}
 	}
 	result, invokeErr := invokeInternalWorker(ctx, invoker, config, observer)
+	// D-03: a provider/auth-classified worker error clears this platform's
+	// trust window here too, so the TS-hosted path invalidates just like the
+	// direct-Go dispatch path in cmd/dispatch_runtime.go.
+	if providerAuthFailure(result.Error) || providerAuthFailure(invokeErr) {
+		_ = clearPreflightCache(platform)
+	}
 	if err := validateInternalWorkerResult(request, &result, invokeErr); err != nil {
 		if request.ExecutionBinding != nil && strings.EqualFold(strings.TrimSpace(request.Workflow), "build") {
 			failed := &internalWorkerResult{
@@ -381,7 +400,7 @@ func internalWorkerConfig(root string, invoker codex.WorkerInvoker, request inte
 	if timeout > internalWorkerTimeoutMax {
 		return codex.WorkerConfig{}, fmt.Errorf("worker timeout cannot exceed %v", internalWorkerTimeoutMax)
 	}
-	skillSection := joinInternalWorkerSections(request.SkillSection, request.HiveSection)
+	skillSection := strings.TrimSpace(request.SkillSection)
 	config := codex.WorkerConfig{
 		AgentName:         agentName,
 		AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
@@ -406,16 +425,6 @@ func internalWorkerConfig(root string, invoker codex.WorkerInvoker, request inte
 		}
 	}
 	return config, nil
-}
-
-func joinInternalWorkerSections(sections ...string) string {
-	joined := make([]string, 0, len(sections))
-	for _, section := range sections {
-		if section = strings.TrimSpace(section); section != "" {
-			joined = append(joined, section)
-		}
-	}
-	return strings.Join(joined, "\n\n")
 }
 
 func validateInternalWorkerResult(request internalWorkerDispatchRequest, result *codex.WorkerResult, invokeErr error) error {
@@ -476,6 +485,7 @@ func mapInternalWorkerResult(result codex.WorkerResult, invokeErr error) *intern
 		Artifacts:     result.Artifacts,
 		ScoutReport:   result.ScoutReport,
 		ToolCount:     result.ToolCount,
+		Usage:         result.Usage,
 		Blockers:      append([]string(nil), result.Blockers...),
 		Spawns:        append([]string(nil), result.Spawns...),
 		Duration:      result.Duration.Seconds(),

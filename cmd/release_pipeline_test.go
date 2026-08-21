@@ -129,7 +129,7 @@ func TestReleasePipelineE2E(t *testing.T) {
 	hubDir := t.TempDir()
 
 	// 3. Run publish sync logic (call setupInstallHub directly)
-	hubResult := setupInstallHub(hubDir, sourceDir)
+	hubResult := setupInstallHub(hubDir, sourceDir, version)
 	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
 		t.Fatalf("hub setup failed: %s", errVal)
 	}
@@ -215,7 +215,7 @@ func TestPublishHubSync(t *testing.T) {
 	hubDir := t.TempDir()
 
 	// 3. Run publish sync
-	hubResult := setupInstallHub(hubDir, sourceDir)
+	hubResult := setupInstallHub(hubDir, sourceDir, version)
 	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
 		t.Fatalf("hub setup failed: %s", errVal)
 	}

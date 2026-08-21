@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -549,11 +550,14 @@ var spawnCanSpawnSwarmCmd = &cobra.Command{
 
 		var state colony.ColonyState
 		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			// No state = no spawns, budget available
-			outputOK(map[string]interface{}{
-				"can_spawn":        true,
-				"remaining_budget": 5,
+			// A guard that cannot read its own data and answers "yes" reports a
+			// checked answer it never checked (D-19). Deny instead of assuming
+			// an empty colony.
+			outputError(1, "colony state unreadable: cannot verify spawn budget", map[string]interface{}{
+				"can_spawn":        false,
+				"remaining_budget": 0,
 				"current_spawns":   0,
+				"reason":           "state-unreadable",
 			})
 			return nil
 		}
@@ -566,19 +570,58 @@ var spawnCanSpawnSwarmCmd = &cobra.Command{
 			}
 		}
 
+		// Before plan 173-11, agent.SpawnTree.Parse() treated a missing file
+		// as "empty" (nil error) the same way it treated an unreadable one --
+		// it had no way to distinguish the two. Corrected 2026-08-13:
+		// Parse() now returns a distinct, non-nil error whenever
+		// spawn-tree.txt exists but cannot be read or does not parse as
+		// valid spawn-tree content; only the file's genuine absence (or
+		// zero/whitespace-only content) still parses to empty. This os.Stat
+		// check stays anyway -- it is a cheap, explicit check that names its
+		// own "tree-unreadable" reason before Parse() ever runs, not a
+		// workaround for something Parse() itself now handles correctly. A
+		// fresh colony with no spawn-tree.txt yet must still count zero and
+		// be allowed to spawn, which the os.IsNotExist branch below still
+		// guarantees.
 		currentSpawns := 0
-		data, err := store.ReadFile("spawn-tree.txt")
-		if err == nil {
-			lines := splitLines(string(data))
-			for _, line := range lines {
-				fields := splitLineFields(line)
-				for _, f := range fields {
-					if f == "active" || f == "running" {
-						currentSpawns++
-						break
-					}
+		treePath := filepath.Join(store.BasePath(), "spawn-tree.txt")
+		info, statErr := os.Stat(treePath)
+		switch {
+		case statErr == nil && info.IsDir():
+			outputError(1, "spawn tree unreadable: cannot verify spawn budget", map[string]interface{}{
+				"can_spawn":        false,
+				"remaining_budget": 0,
+				"current_spawns":   0,
+				"reason":           "tree-unreadable",
+			})
+			return nil
+		case statErr != nil && !os.IsNotExist(statErr):
+			outputError(1, "spawn tree unreadable: cannot verify spawn budget", map[string]interface{}{
+				"can_spawn":        false,
+				"remaining_budget": 0,
+				"current_spawns":   0,
+				"reason":           "tree-unreadable",
+			})
+			return nil
+		case statErr == nil:
+			entries, parseErr := agent.NewSpawnTree(store, "spawn-tree.txt").Parse()
+			if parseErr != nil {
+				outputError(1, "spawn tree unreadable: cannot verify spawn budget", map[string]interface{}{
+					"can_spawn":        false,
+					"remaining_budget": 0,
+					"current_spawns":   0,
+					"reason":           "tree-unreadable",
+				})
+				return nil
+			}
+			for _, entry := range entries {
+				if agent.IsLiveSpawnStatus(entry.Status) {
+					currentSpawns++
 				}
 			}
+		default:
+			// statErr != nil && os.IsNotExist(statErr): no spawn-tree.txt yet,
+			// a fresh colony has zero spawns -- not an error.
 		}
 
 		canSpawn := currentSpawns < maxBudget

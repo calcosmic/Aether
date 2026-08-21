@@ -223,25 +223,13 @@ mkdir -p ~/.aether/skills/domain/{SKILL_NAME}
 
 Use the Write tool to create `~/.aether/skills/domain/{SKILL_NAME}/SKILL.md` with the assembled content.
 
-**4b. Verify frontmatter parses correctly**
+**4b. Verify the file was written correctly**
 
-Run using the Bash tool with description "Verifying skill frontmatter...":
+Use the Read tool to open `~/.aether/skills/domain/{SKILL_NAME}/SKILL.md` and confirm the frontmatter block (between the `---` markers) contains `name`, `description`, and `type` matching what was just assembled, followed by the body content. If anything is missing or malformed, rewrite the file and check again.
 
-```bash
-aether skill-parse-frontmatter ~/.aether/skills/domain/{SKILL_NAME}/SKILL.md
-```
+The skill is picked up automatically the next time any worker's skill section is assembled (the matching logic scans skill directories live) -- there is no separate cache-rebuild step to run.
 
-Check the output. If the result contains `"ok": true` (or the parsed JSON shows the correct name and type), the skill is valid. If parsing fails, fix the frontmatter and retry once.
-
-**4c. Rebuild skill cache**
-
-Run using the Bash tool with description "Rebuilding skill cache...":
-
-```bash
-aether skill-cache-rebuild
-```
-
-**4d. Show the result**
+**4c. Show the result**
 
 Display the generated skill to the user:
 
@@ -257,7 +245,7 @@ Skill Created: {SKILL_NAME}
 
 Then show the full content of the SKILL.md file.
 
-**4e. Offer adjustments**
+**4d. Offer adjustments**
 
 Use AskUserQuestion to ask:
 

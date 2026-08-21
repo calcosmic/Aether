@@ -19,6 +19,14 @@ type WorkerHandoff struct {
 	Freshness              string     `json:"freshness,omitempty"`
 }
 
+// HandoffFieldsSummary is the single canonical description of every field a
+// WorkerHandoff carries. renderResponseContract (native-Codex dispatch path)
+// and the wrapper-facing build/continue brief composers (Claude Code and
+// OpenCode dispatch paths) all reference this one constant instead of
+// hand-copying the sentence, so the schema stated to a worker can never drift
+// from the schema ValidateWorkerHandoff actually enforces.
+const HandoffFieldsSummary = "changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness (an RFC3339 timestamp for when evidence was collected, or \"not-run\")"
+
 // IsEmptyWorkerHandoff reports whether a handoff carries no relay content at
 // all. Handoffs are the memory the next phase's workers receive; a
 // content-free record occupies a slot in that memory while telling the next
@@ -42,13 +50,12 @@ func ValidateWorkerHandoff(h WorkerHandoff) error {
 	default:
 		return fmt.Errorf("verification_status must be pass, fail, partial, not_run, or unknown")
 	}
-	freshness := strings.TrimSpace(h.Freshness)
-	if freshness == "" || freshness == "not-run" {
-		return nil
-	}
-	if _, err := time.Parse(time.RFC3339, freshness); err != nil {
-		return fmt.Errorf("freshness must be RFC3339 or not-run: %w", err)
-	}
+	// freshness accepts any string. The shipped handoff contract promises
+	// "timestamp or statement", and workers (LLMs) routinely send prose like
+	// "Evidence collected after latest edit." Rejecting the whole completion
+	// packet over phrasing was the single most expensive downstream failure
+	// mode; NormalizeWorkerHandoff coerces non-RFC3339 statements to the
+	// receipt time so stored records stay lexicographically sortable.
 	return nil
 }
 
@@ -74,13 +81,54 @@ func NormalizeWorkerHandoff(root string, h WorkerHandoff) WorkerHandoff {
 	if strings.TrimSpace(h.VerificationStatus) == "" {
 		h.VerificationStatus = "unknown"
 	}
-	if strings.TrimSpace(h.Freshness) == "" {
+	freshness := strings.TrimSpace(h.Freshness)
+	switch {
+	case freshness == "":
 		h.Freshness = time.Now().UTC().Format(time.RFC3339)
+	case strings.EqualFold(freshness, "not-run"), strings.EqualFold(freshness, "not_run"), strings.EqualFold(freshness, "not run"):
+		h.Freshness = "not-run"
+	default:
+		if _, err := time.Parse(time.RFC3339, freshness); err != nil {
+			// A prose statement ("Evidence collected after latest edit.") is
+			// contract-legal but not sortable; stamp the receipt time instead.
+			h.Freshness = time.Now().UTC().Format(time.RFC3339)
+		}
 	}
 	return h
 }
 
-func workerHandoffIsEmpty(h WorkerHandoff) bool {
+// IsEmptyWorkerHandoffIncludingFreshness is IsEmptyWorkerHandoff plus a
+// Freshness check. IN-01 (189-REVIEW.md): this repo used to carry THREE
+// near-identical "is this handoff empty" functions (this one, an unexported
+// duplicate of it in cmd/codex_dispatch_contract.go, and the exported
+// IsEmptyWorkerHandoff above) -- close enough in name and shape that seeing
+// one of them called somewhere in the persistence path made it reasonable,
+// but wrong, to conclude emptiness rejection was already handled generally.
+// That confusion is named as a contributing factor to CR-01 (the finding
+// this same review round's blocker fix closes).
+//
+// The two are genuinely NOT interchangeable, which is why this stays a
+// second function rather than folding into IsEmptyWorkerHandoff:
+//
+//   - IsEmptyWorkerHandoff (terminal rejection): used where a "completed"
+//     result is about to be accepted or persisted for good
+//     (persistExternalBuildHandoffs, mergeExternalContinueResults). Freshness
+//     alone must NOT count as content there -- a bare timestamp with nothing
+//     else relayed is exactly the "written but empty" record those checks
+//     exist to reject.
+//   - This function (pre-synthesis fallback decision): used where a raw,
+//     not-yet-normalized handoff is being checked to decide whether to
+//     synthesize a richer one from other claim data (normalizeWorkerClaims,
+//     buildWorkerHandoffRecord). Both call sites run BEFORE
+//     NormalizeWorkerHandoff stamps a blank Freshness to "now", so an
+//     explicit, worker-supplied Freshness value here is a signal the worker
+//     said something (e.g. "not-run") that a synthesized replacement must
+//     not silently overwrite.
+//
+// Only ONE definition of the freshness-inclusive check now exists (this
+// one, exported so cmd's copy could be deleted in the same fix); callers in
+// both packages converge on it instead of each keeping their own copy.
+func IsEmptyWorkerHandoffIncludingFreshness(h WorkerHandoff) bool {
 	return len(h.ChangedFiles) == 0 &&
 		len(h.CommandsRun) == 0 &&
 		strings.TrimSpace(h.VerificationStatus) == "" &&

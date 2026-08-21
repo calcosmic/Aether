@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: source-of-truth-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Source Of Truth Contract
 description: "Contract for deciding which Aether file wins when source, mirror, generated, hub, and runtime files disagree."
 output_types: [source-audit, conflict-review, architecture-review]

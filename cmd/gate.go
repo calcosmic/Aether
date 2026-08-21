@@ -14,7 +14,6 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -319,7 +318,12 @@ func extractTestCommand(content string) string {
 	return ""
 }
 
-// checkNoCriticalFlags checks for CRITICAL severity error records in the colony state.
+// checkNoCriticalFlags checks for CRITICAL severity error records in the
+// colony state. Deliberately NOT the Iron Law check: this gate also runs
+// pre-build, and the classic law scopes to ADVANCEMENT — you may build with
+// an open blocker (autopilot pauses on it, continue refuses to advance past
+// it), so the blocker-flag check lives in checkUnresolvedBlockerFlags and is
+// wired into the continue gates only.
 func checkNoCriticalFlags() gateCheck {
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
@@ -351,6 +355,45 @@ func checkNoCriticalFlags() gateCheck {
 		Passed: true,
 		Detail: "no critical flags",
 	}
+}
+
+// checkUnresolvedBlockerFlags enforces the classic Iron Law: "No phase
+// advancement with unresolved blockers." It reads blocker-type flags from
+// pending-decisions.json (flags.json fallback). This regressed silently in
+// the Go port — the continue gates claimed to run a flag check "every time
+// for safety" while never opening the flags file, so a blocker raised with
+// /ant-flag did not actually block /ant-continue. Blockers cannot be
+// acknowledged away — only resolved. Locked by TestBlockerFlagBlocksContinue.
+func checkUnresolvedBlockerFlags() gateCheck {
+	var ff colony.FlagsFile
+	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
+		if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
+			return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}
+		}
+	}
+	blockerDescriptions := []string{}
+	for _, flag := range ff.Decisions {
+		if flag.Resolved || !strings.EqualFold(strings.TrimSpace(flag.Type), "blocker") {
+			continue
+		}
+		desc := strings.TrimSpace(flag.Description)
+		if desc == "" {
+			desc = flag.ID
+		}
+		blockerDescriptions = append(blockerDescriptions, desc)
+	}
+	if len(blockerDescriptions) > 0 {
+		shown := blockerDescriptions
+		if len(shown) > 3 {
+			shown = shown[:3]
+		}
+		return gateCheck{
+			Name:   "no_unresolved_blockers",
+			Passed: false,
+			Detail: fmt.Sprintf("%d unresolved blocker flag(s): %s", len(blockerDescriptions), strings.Join(shown, "; ")),
+		}
+	}
+	return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}
 }
 
 // checkAllTasksCompleted verifies that all tasks in a phase have completed status.
@@ -542,6 +585,209 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 	return findingsCheck, executedCheck
 }
 
+// governanceInvocationTokens maps a governanceDetectors label (cmd/init_research.go)
+// to the substring its tool's CLI invocation is expected to contain in a
+// verification step's Command. Only labels in the "linter", "formatter", and
+// "test" categories are mechanically checkable per D-09's Open Question 2 --
+// "CI:" and "Build:" categories are deliberately excluded (CI runs outside
+// the colony's observation; build tools are not conduct rules).
+var governanceInvocationTokens = map[string]string{
+	"ESLint":        "eslint",
+	"Prettier":      "prettier",
+	"Biome":         "biome",
+	"golangci-lint": "golangci-lint",
+	"pytest":        "pytest",
+	"Jest":          "jest",
+	"Vitest":        "vitest",
+}
+
+// governanceConfigFilesForLabel returns every governanceDetectors config file
+// associated with a label, restricted to the linter/formatter/test
+// categories checkCharterComplianceGate is scoped to enforce.
+func governanceConfigFilesForLabel(label string) []string {
+	var files []string
+	for _, det := range governanceDetectors {
+		if det.label != label {
+			continue
+		}
+		switch det.category {
+		case "linter", "formatter", "test":
+			files = append(files, det.file)
+		}
+	}
+	return files
+}
+
+// parseCharterGovernanceLabels parses generateCharter's Governance string
+// (cmd/init_research.go:1640-1662 -- "Linting: <labels>. CI: <labels>. ..."
+// joined with ". ", labels comma-separated) into category -> declared labels.
+func parseCharterGovernanceLabels(governance string) map[string][]string {
+	result := map[string][]string{}
+	governance = strings.TrimSpace(governance)
+	if governance == "" {
+		return result
+	}
+	for _, part := range strings.Split(governance, ".") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		idx := strings.Index(part, ":")
+		if idx < 0 {
+			continue
+		}
+		category := strings.TrimSpace(part[:idx])
+		labelsStr := strings.TrimSpace(part[idx+1:])
+		if labelsStr == "" {
+			continue
+		}
+		var labels []string
+		for _, l := range strings.Split(labelsStr, ",") {
+			if l = strings.TrimSpace(l); l != "" {
+				labels = append(labels, l)
+			}
+		}
+		if len(labels) > 0 {
+			result[category] = labels
+		}
+	}
+	return result
+}
+
+// checkCharterComplianceGate enforces the mechanically-checkable subset of
+// the colony charter's Governance string (Linting/Testing/Formatting
+// categories only -- see governanceInvocationTokens) and returns two gate
+// checks, copying checkAntiPatternGate's two-check shape:
+//
+//   - "charter_compliance" (soft_block): fails when a governance tool is
+//     declared in the charter AND its config file still exists in the repo
+//     AND no verification step's Command references the tool's invocation
+//     token. That triple condition is deliberately narrow: it is exactly
+//     "the colony declared this tool, the tool is still installed, and
+//     nothing ran it" (the ignored-rule case D-09 names), and it cannot fire
+//     on a repo that simply dropped a tool (charter drift is not a worker's
+//     fault to be blocked for).
+//   - "charter_compliance_executed" (hard_block): fails when the scan could
+//     not run at all (no store, or COLONY_STATE.json could not be loaded).
+//
+// "CI:" and "Build:" governance categories are intentionally never checked
+// here -- CI runs outside the colony's observation and build tools are not
+// conduct rules.
+//
+// Intent, Vision, Goals, TechStack and KeyRisks reach workers through the
+// colony-prime charter section as *orientation*, not as hard rules, and are
+// not gated here. This comment previously said they arrived "as prose hard
+// rules"; they arrived as nothing at all -- colony-prime emitted only
+// Governance and Constraints -- which is why the claim went unnoticed for so
+// long. TestColonyPrimeIncludesCharterIntentAndGoals now pins the delivery.
+func checkCharterComplianceGate(steps []codexVerificationStep) (gateCheck, gateCheck) {
+	findingsCheck := gateCheck{Name: "charter_compliance"}
+	executedCheck := gateCheck{Name: "charter_compliance_executed"}
+
+	if store == nil {
+		executedCheck.Passed = false
+		executedCheck.Detail = "charter compliance scan could not execute: no store initialized, colony root unresolvable"
+		executedCheck.FixHint = gateRecoveryTemplate("charter_compliance")
+		executedCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+		findingsCheck.Passed = true
+		findingsCheck.Detail = "charter compliance scan did not run: no store initialized"
+		return findingsCheck, executedCheck
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		executedCheck.Passed = false
+		executedCheck.Detail = fmt.Sprintf("charter compliance scan could not execute: %v", err)
+		executedCheck.FixHint = gateRecoveryTemplate("charter_compliance")
+		executedCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+		findingsCheck.Passed = true
+		findingsCheck.Detail = "charter compliance scan did not run: could not load colony state"
+		return findingsCheck, executedCheck
+	}
+
+	root := filepath.Join(filepath.Dir(store.BasePath()), "..")
+
+	var governance string
+	if state.Charter != nil {
+		governance = strings.TrimSpace(state.Charter.Governance)
+	}
+	if governance == "" || governance == charterNoGovernanceFallback {
+		executedCheck.Passed = true
+		executedCheck.Detail = "charter compliance scan executed: no charter governance declared"
+		findingsCheck.Passed = true
+		findingsCheck.Detail = "no mechanically-checkable governance rules declared; nothing to enforce"
+		return findingsCheck, executedCheck
+	}
+
+	labelsByCategory := parseCharterGovernanceLabels(governance)
+	var declaredLabels []string
+	for _, category := range []string{"Linting", "Testing", "Formatting"} {
+		declaredLabels = append(declaredLabels, labelsByCategory[category]...)
+	}
+
+	checkedCount := 0
+	var violations []string
+	for _, label := range declaredLabels {
+		configFiles := governanceConfigFilesForLabel(label)
+		if len(configFiles) == 0 {
+			continue // unknown label -- nothing mechanical to check
+		}
+		configExists := false
+		for _, f := range configFiles {
+			if _, statErr := os.Stat(filepath.Join(root, f)); statErr == nil {
+				configExists = true
+				break
+			}
+		}
+		if !configExists {
+			// Charter drift: the colony declared a tool the repo no longer
+			// has configured. Not a violation -- do not manufacture a false
+			// block over something outside the worker's control.
+			continue
+		}
+		token, ok := governanceInvocationTokens[label]
+		if !ok {
+			continue
+		}
+		checkedCount++
+		exercised := false
+		for _, step := range steps {
+			if strings.Contains(strings.ToLower(step.Command), strings.ToLower(token)) {
+				exercised = true
+				break
+			}
+		}
+		if !exercised {
+			violations = append(violations, label)
+		}
+	}
+
+	executedCheck.Passed = true
+	executedCheck.Detail = fmt.Sprintf("charter compliance scan executed: checked %d of %d declared governance label(s)", checkedCount, len(declaredLabels))
+
+	if len(violations) > 0 {
+		sort.Strings(violations)
+		findingsCheck.Passed = false
+		findingsCheck.Detail = fmt.Sprintf("declared governance tool(s) not exercised by any verification step: %s", strings.Join(violations, ", "))
+		findingsCheck.FixHint = gateRecoveryTemplate("charter_compliance")
+		findingsCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
+	} else {
+		findingsCheck.Passed = true
+		findingsCheck.Detail = fmt.Sprintf("checked %d declared governance label(s), no compliance violations", checkedCount)
+	}
+
+	return findingsCheck, executedCheck
+}
+
 // runPreBuildGates checks preconditions before dispatching a build.
 // Returns an error with the specific gate name if any check fails.
 // Note: Phase state validation is handled by validateCodexBuildState;
@@ -665,6 +911,10 @@ var gateRecoveryTemplates = map[string]string{
 		"1. Review the critical anti-patterns listed above\n" +
 		"2. Fix each critical finding (exposed secrets, SQL injection, crash patterns)\n" +
 		"3. Re-run `/ant-continue` to re-scan",
+	"charter_compliance": "Charter compliance gate failed: a declared governance tool was not exercised.\n" +
+		"1. Review the unexercised tool(s) named above\n" +
+		"2. Run the tool, or add it to a verification step's command\n" +
+		"3. Re-run `/ant-continue` to re-scan",
 	"complexity": "Complexity gate failed: Code exceeds maintainability thresholds.\n" +
 		"1. Review files exceeding 300 lines or 50-line functions\n" +
 		"2. Refactor to reduce complexity\n" +
@@ -714,11 +964,12 @@ func gateRecoveryTemplate(name string) string {
 
 // alwaysRunGates lists gates that always execute regardless of prior results.
 var alwaysRunGates = map[string]bool{
-	"tests_pass":            true,
-	"flags":                 true,
-	"watcher_veto":          true,
-	"no_critical_flags":     true,
-	"anti_pattern_executed": true,
+	"tests_pass":                  true,
+	"flags":                       true,
+	"watcher_veto":                true,
+	"no_critical_flags":           true,
+	"anti_pattern_executed":       true,
+	"charter_compliance_executed": true,
 }
 
 // GateClassificationTier represents the severity tier of a gate.
@@ -742,19 +993,21 @@ type gateClassificationEntry struct {
 // Gatekeeper and watcher_veto are compile-time hard_block per D-06.
 var gateClassifications = map[string]gateClassificationEntry{
 	// hard_block gates (6): security, quality veto, human escalation, and pre-checks
-	"gatekeeper":            {hardBlock, "Security CVE findings require human judgment"},
-	"watcher_veto":          {hardBlock, "Watcher has final say by colony design"},
-	"flags":                 {hardBlock, "Flags represent intentional human escalation"},
-	"tests_pass":            {hardBlock, "Broken build is always a hard block"},
-	"no_critical_flags":     {hardBlock, "Critical errors existing is always a hard block"},
-	"anti_pattern_executed": {hardBlock, "A safety scan which could not run must never be reported as passing"},
-	// soft_block gates (6): quality findings that auto-resolve when non-critical
-	"auditor":           {softBlock, "Quality findings auto-resolve when non-critical"},
-	"complexity":        {softBlock, "Maintainability thresholds are advisory until verified"},
-	"tdd_evidence":      {softBlock, "Missing test claims can be fulfilled by re-build"},
-	"anti_pattern":      {softBlock, "Critical patterns are actionable but non-blocking when addressed"},
-	"verification_loop": {softBlock, "Build failures are transient and retriable"},
-	"spawn_gate":        {softBlock, "Missing spawns are recoverable by re-dispatch"},
+	"gatekeeper":                  {hardBlock, "Security CVE findings require human judgment"},
+	"watcher_veto":                {hardBlock, "Watcher has final say by colony design"},
+	"flags":                       {hardBlock, "Flags represent intentional human escalation"},
+	"tests_pass":                  {hardBlock, "Broken build is always a hard block"},
+	"no_critical_flags":           {hardBlock, "Critical errors existing is always a hard block"},
+	"anti_pattern_executed":       {hardBlock, "A safety scan which could not run must never be reported as passing"},
+	"charter_compliance_executed": {hardBlock, "A compliance scan which could not run must never be reported as passing"},
+	// soft_block gates (7): quality findings that auto-resolve when non-critical
+	"auditor":            {softBlock, "Quality findings auto-resolve when non-critical"},
+	"complexity":         {softBlock, "Maintainability thresholds are advisory until verified"},
+	"tdd_evidence":       {softBlock, "Missing test claims can be fulfilled by re-build"},
+	"anti_pattern":       {softBlock, "Critical patterns are actionable but non-blocking when addressed"},
+	"charter_compliance": {softBlock, "Declared governance tools going unexercised are actionable but non-blocking when addressed"},
+	"verification_loop":  {softBlock, "Build failures are transient and retriable"},
+	"spawn_gate":         {softBlock, "Missing spawns are recoverable by re-dispatch"},
 	// advisory gates (2): diagnostic/logging only
 	"medic":   {advisory, "Health diagnostics are informational only"},
 	"runtime": {advisory, "User-reported issues are logged but never gate advancement"},
@@ -843,12 +1096,13 @@ type gateAutoResolveThreshold struct {
 // The depth multiplier adjusts these values: light depth multiplies by 1.5,
 // standard by 1.0, heavy by 0.0 (no auto-resolve).
 var gateAutoResolveThresholds = map[string]gateAutoResolveThreshold{
-	"auditor":           {0.0, "Any auditor finding in continue flow is auto-resolvable -- structural quality gates handled at review, not gate level"},
-	"complexity":        {0.0, "Complexity findings are advisory -- auto-resolvable in continue flow"},
-	"tdd_evidence":      {0.0, "Missing test claims can be fulfilled by re-build -- auto-resolvable"},
-	"anti_pattern":      {0.0, "Anti-pattern findings are actionable but non-blocking when addressed"},
-	"verification_loop": {0.0, "Verification failures are transient and retriable"},
-	"spawn_gate":        {0.0, "Missing spawns are recoverable by re-dispatch"},
+	"auditor":            {0.0, "Any auditor finding in continue flow is auto-resolvable -- structural quality gates handled at review, not gate level"},
+	"complexity":         {0.0, "Complexity findings are advisory -- auto-resolvable in continue flow"},
+	"tdd_evidence":       {0.0, "Missing test claims can be fulfilled by re-build -- auto-resolvable"},
+	"anti_pattern":       {0.0, "Anti-pattern findings are actionable but non-blocking when addressed"},
+	"charter_compliance": {0.0, "Charter compliance findings are actionable but non-blocking when addressed"},
+	"verification_loop":  {0.0, "Verification failures are transient and retriable"},
+	"spawn_gate":         {0.0, "Missing spawns are recoverable by re-dispatch"},
 }
 
 // effectiveGateAutoResolveThresholds returns the threshold map with any
@@ -1210,9 +1464,6 @@ var gateClassifyCmd = &cobra.Command{
 }
 
 func renderGateClassifyTable() {
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Gate", "Classification", "Rationale"})
-
 	type entry struct {
 		name string
 		gateClassificationEntry
@@ -1228,10 +1479,15 @@ func renderGateClassifyTable() {
 		return entries[i].name < entries[j].name
 	})
 
+	// Classic headed style: one line per gate, rationale nested beneath.
+	var b strings.Builder
 	for _, e := range entries {
-		t.AppendRow(table.Row{e.name, string(e.Tier), e.Rationale})
+		b.WriteString(fmt.Sprintf("🚧 %s (%s)\n", e.name, string(e.Tier)))
+		if rationale := strings.TrimSpace(e.Rationale); rationale != "" {
+			b.WriteString("   └── " + rationale + "\n")
+		}
 	}
-	fmt.Fprintln(stdout, t.Render())
+	visualFprintln(stdout, strings.TrimRight(b.String(), "\n"))
 }
 
 var gateAutoResolveCmd = &cobra.Command{
@@ -1257,9 +1513,6 @@ func renderGateAutoResolveTable() {
 }
 
 func renderGateAutoResolveTableWith(thresholds map[string]gateAutoResolveThreshold) {
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Gate", "Threshold", "Light", "Standard", "Heavy", "Rationale"})
-
 	type entry struct {
 		name string
 		gateAutoResolveThreshold
@@ -1272,13 +1525,19 @@ func renderGateAutoResolveTableWith(thresholds map[string]gateAutoResolveThresho
 		return entries[i].name < entries[j].name
 	})
 
+	// Classic headed style: per-gate line with the depth-adjusted thresholds
+	// in prose, rationale nested beneath.
+	var b strings.Builder
 	for _, e := range entries {
-		light := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthLight))
-		standard := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthStandard))
-		heavy := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthHeavy))
-		t.AppendRow(table.Row{e.name, fmt.Sprintf("%.1f", e.Threshold), light, standard, heavy, e.Rationale})
+		light := e.Threshold * autoResolveDepthMultiplier(colony.VerificationDepthLight)
+		standard := e.Threshold * autoResolveDepthMultiplier(colony.VerificationDepthStandard)
+		heavy := e.Threshold * autoResolveDepthMultiplier(colony.VerificationDepthHeavy)
+		b.WriteString(fmt.Sprintf("🚧 %s: base %.1f (light %.1f / standard %.1f / heavy %.1f)\n", e.name, e.Threshold, light, standard, heavy))
+		if rationale := strings.TrimSpace(e.Rationale); rationale != "" {
+			b.WriteString("   └── " + rationale + "\n")
+		}
 	}
-	fmt.Fprintln(stdout, t.Render())
+	visualFprintln(stdout, strings.TrimRight(b.String(), "\n"))
 }
 
 func init() {

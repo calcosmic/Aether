@@ -136,6 +136,14 @@ Branch strictly on `swarm-finalize` output:
 3. Summarize the root cause, fix or blocker, files/tests touched, and verification evidence.
 4. Route first to the runtime-surfaced `next` command.
 
+## Inspecting And Cleaning Up A Swarm
+
+The runtime records every swarm's findings and solution itself while workers run.
+Two commands expose that state:
+
+- `aether swarm-findings-read --id <swarm-id>` — read the recorded findings and solution for a swarm.
+- `aether swarm-cleanup --id <swarm-id>` — remove a finished swarm's data directory once it is no longer needed.
+
 ## Cross-Platform Drift Guard
 
 If you change swarm manifest handling, worker spawning, finalization, or closeout behavior here, update `.aether/commands/swarm.yaml`, both platform swarm wrappers, the Codex skill `aether-colony-build-cycle`, and `cmd/command_guide.go` in the same change. Verify `aether command-guide swarm --platform codex` still describes the matching Codex flow.

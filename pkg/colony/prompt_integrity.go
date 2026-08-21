@@ -7,6 +7,21 @@ import (
 	"strings"
 )
 
+// RepoPlaceholder is the token that replaces a source repository's name when a
+// colony-specific learning is generalised for the cross-colony hive.
+//
+// It lives here, beside the sanitizer, because it MUST survive
+// SanitizeSignalContent. It previously did not: the placeholder was "<repo>",
+// which xmlTagPattern classifies as an XML structural tag, so hive promotion
+// rejected the very placeholder hive promotion had just inserted. Since a
+// learning drawn from a repository almost always names that repository, nearly
+// every promotion was silently discarded and the hive stayed empty while the
+// read path injected an empty section into every worker dispatch.
+//
+// TestRepoPlaceholderSurvivesSanitizer locks the invariant. Any future change
+// to this value or to the rule set must keep that test green.
+const RepoPlaceholder = "[repo]"
+
 type PromptTrustClass string
 
 const (

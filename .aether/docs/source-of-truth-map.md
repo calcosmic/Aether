@@ -106,8 +106,11 @@ source chain for those commands is:
    Current lifecycle skills: `aether-colony-creation`,
    `aether-colony-research`, and `aether-colony-build-cycle`.
 4. Generated Codex shims in `~/.codex/skills/aether/` that route Codex to
-   `aether command-guide` and `aether skill-inject` instead of mirroring all
-   shipped skill bodies.
+   `aether command-guide` instead of mirroring all shipped skill bodies. The
+   `aether-skill-loader` shim explains that worker skill content already
+   arrives automatically in build/colonize/plan/continue dispatch responses
+   (`skill-inject`, the CLI command it used to route to, was deleted
+   in Phase 191 as dead CLI surface).
 5. `aether command-guide <command> --platform <platform>` for runtime-readable
    orchestration guidance.
 6. `.aether/ts-host/src/command-registry.ts` and `.aether/ts-host/src/host.ts`

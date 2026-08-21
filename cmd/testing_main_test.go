@@ -21,6 +21,14 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("AETHER_OUTPUT_MODE", "json")
 	_ = os.Setenv(hivePolicyEnv, "promote")
 
+	// Spawn-line model tags resolve ANTHROPIC_DEFAULT_*_MODEL at render
+	// time; a developer whose shell redirects those slots would otherwise
+	// see every golden fixture with a spawn line fail. Neutralize for the
+	// suite — tests that exercise the override use t.Setenv.
+	_ = os.Unsetenv("ANTHROPIC_DEFAULT_SONNET_MODEL")
+	_ = os.Unsetenv("ANTHROPIC_DEFAULT_OPUS_MODEL")
+	_ = os.Unsetenv("ANTHROPIC_DEFAULT_HAIKU_MODEL")
+
 	// Isolate the whole suite from the developer's real hub. This TestMain
 	// enables hive promotion above, and the v1.25 multi-agent review found
 	// TestSealPromoteInstincts had promoted its fixture into the user's actual

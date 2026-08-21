@@ -114,6 +114,7 @@ export interface DispatchOptions extends GoBridgeOptions {
  * @returns Dispatch result with name, status, and summary
  */
 export declare function dispatchSingleWorker(opts: DispatchOptions, dispatch: BuildDispatch): Promise<DispatchResult>;
+export declare function permissionProfileForCaste(caste: string): PermissionProfile;
 export interface PermissionDecision {
     schema_version: number;
     platform: string;
@@ -152,7 +153,31 @@ export interface GoWorkerAdapterResponse {
     execution_binding?: ExecutionBinding;
     provider_run_id?: string;
     worker?: GoWorkerAdapterWorker;
+    /** Additive/optional: "probe" | "cache" | "skipped". Omitted when the probe ran normally with no notice. */
+    preflight?: {
+        source: string;
+        notice?: string;
+    };
 }
+/**
+ * Mirror of hostedPreflightAttempts in pkg/codex/platform_dispatch.go.
+ * Pinned by TestHostsAgreeOnPreflightRetryAttempts in
+ * cmd/preflight_docs_test.go — change one side without the other and that
+ * test fails.
+ */
+export declare const PREFLIGHT_GO_ATTEMPTS = 2;
+/**
+ * Node-side kill budget for the `internal-worker-adapter --preflight` call.
+ *
+ * Must exceed the Go side's full preflight budget — the resolved
+ * AETHER_PREFLIGHT_TIMEOUT (not the 45s constant: the knob is configurable)
+ * times hostedPreflightAttempts — plus startup slack. At a hardcoded 30s
+ * Node SIGTERM'd the adapter before the Go retry could ever fire (27 July
+ * incident); a hardcoded 120s reintroduced the same failure for any
+ * AETHER_PREFLIGHT_TIMEOUT above ~45s, killing the adapter mid-retry.
+ * Floored at 120s so the wrapper never gets tighter than the old constant.
+ */
+export declare function resolvePreflightAdapterBudgetMs(): number;
 /** Ask the Go-owned adapter layer to select and preflight the worker provider. */
 export declare function preflightGoWorkerProvider(opts: GoBridgeOptions, context: string): Promise<GoWorkerAdapterResponse>;
 export declare function sanitizeWorkerDiagnosticOutput(value: string): string;

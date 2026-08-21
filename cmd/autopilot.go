@@ -83,10 +83,7 @@ func checkAutopilotPauseConditions() string {
 	}
 
 	// 3. Critical chaos findings from midden
-	var middenFile struct {
-		Entries []colony.MiddenEntry `json:"entries"`
-	}
-	if err := store.LoadJSON("midden/midden.json", &middenFile); err == nil {
+	if middenFile, err := loadMiddenFile(store); err == nil {
 		for _, entry := range middenFile.Entries {
 			if strings.Contains(strings.ToLower(entry.Category), "chaos") {
 				for _, tag := range entry.Tags {
@@ -126,7 +123,7 @@ var autopilotInitCmd = &cobra.Command{
 			CurrentPhase:   0,
 			Status:         "initialized",
 			Headless:       false,
-			ReplanInterval: 3,
+			ReplanInterval: 2,
 			Phases:         make([]autopilotPhaseStatus, 0, phases),
 			LastUpdated:    now,
 		}
@@ -301,61 +298,6 @@ var autopilotStopCmd = &cobra.Command{
 	},
 }
 
-// --- autopilot-check-replan ---
-
-var autopilotCheckReplanCmd = &cobra.Command{
-	Use:   "autopilot-check-replan",
-	Short: "Check if replan is recommended",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-		interval := mustGetInt(cmd, "interval")
-
-		var state autopilotState
-		if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
-			outputOK(map[string]interface{}{"replan": false, "reason": "not initialized"})
-			return nil
-		}
-
-		if state.Status != "running" {
-			outputOK(map[string]interface{}{"replan": false, "reason": "autopilot not running"})
-			return nil
-		}
-
-		completedPhases := 0
-		for _, p := range state.Phases {
-			if normalizeAutopilotPhaseStatus(p.Status) == "completed" {
-				completedPhases++
-			}
-		}
-
-		if interval > 0 && completedPhases > 0 && completedPhases%interval == 0 {
-			outputOK(map[string]interface{}{
-				"replan":         true,
-				"reason":         "interval_reached",
-				"completed":      completedPhases,
-				"interval":       interval,
-				"next_replan_at": completedPhases + interval,
-			})
-		} else {
-			nextReplan := completedPhases + interval - (completedPhases % interval)
-			if interval == 0 || completedPhases == 0 {
-				nextReplan = interval
-			}
-			outputOK(map[string]interface{}{
-				"replan":         false,
-				"completed":      completedPhases,
-				"interval":       interval,
-				"next_replan_at": nextReplan,
-			})
-		}
-		return nil
-	},
-}
-
 // --- autopilot-set-headless ---
 
 var autopilotSetHeadlessCmd = &cobra.Command{
@@ -459,12 +401,11 @@ func init() {
 	autopilotInitCmd.Flags().Int("phases", 0, "Number of phases (required)")
 	autopilotUpdateCmd.Flags().Int("phase", 0, "Phase number (required)")
 	autopilotUpdateCmd.Flags().String("status", "", "Phase status (required)")
-	autopilotCheckReplanCmd.Flags().Int("interval", 3, "Replan interval in phases")
 	autopilotSetHeadlessCmd.Flags().Bool("value", false, "Headless mode value")
 
 	for _, c := range []*cobra.Command{
 		autopilotInitCmd, autopilotUpdateCmd, autopilotStatusCmd,
-		autopilotStopCmd, autopilotCheckReplanCmd,
+		autopilotStopCmd,
 		autopilotSetHeadlessCmd, autopilotHeadlessCheckCmd,
 		autopilotResumeCmd,
 	} {

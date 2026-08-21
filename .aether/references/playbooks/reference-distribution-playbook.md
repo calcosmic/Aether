@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: reference-distribution-playbook
 kind: playbook
 category: playbooks
+scope: aether-internal
 title: Reference Distribution Playbook
 description: "Install/update/publish flow for global Aether references."
 output_types: [distribution-review, install-plan, update-plan, publish-plan]

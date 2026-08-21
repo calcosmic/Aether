@@ -719,8 +719,31 @@ func clearActiveColonyRuntimeFiles(aetherRoot, dataDir string) error {
 	if err := os.RemoveAll(filepath.Join(dataDir, "reviews")); err != nil {
 		return err
 	}
-	// Clean up worktrees directory and any tracked worktree entries
-	if err := os.RemoveAll(filepath.Join(aetherRoot, ".aether", "worktrees")); err != nil {
+
+	// Clean up the worktrees directory and any tracked worktree entries --
+	// but never at the cost of uncommitted or unmerged worker output
+	// (187-VERIFICATION.md GAP-5). Both callers (entomb, abandon) have
+	// already reset COLONY_STATE.json's Worktrees field to nil by the time
+	// this runs, so a state-only check would see "nothing tracked" and wipe
+	// unconditionally -- the same blind spot GAP-3 closed for `init`. Scan
+	// the directory on disk directly instead, exactly like init's fix does,
+	// and leave the directory in place if anything on it still holds work.
+	worktreesDir := filepath.Join(aetherRoot, ".aether", "worktrees")
+	unrecorded := scanUnrecordedWorktrees(aetherRoot, worktreesDir, map[string]bool{})
+	var unsafe []worktreeSafety
+	for _, safety := range unrecorded {
+		if !safety.Safe {
+			unsafe = append(unsafe, safety)
+		}
+	}
+	if len(unsafe) > 0 {
+		for _, safety := range unsafe {
+			reportWorktreePreservation(safety, fmt.Sprintf("found in a worker workspace that was about to be cleared: %s", safety.Reason))
+		}
+		fmt.Fprintf(os.Stderr, "some worker workspaces still hold work, so they were left in place instead of being cleared -- run `aether recover` to see them\n")
+		return nil
+	}
+	if err := os.RemoveAll(worktreesDir); err != nil {
 		return err
 	}
 	return nil

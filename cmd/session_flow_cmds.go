@@ -257,8 +257,14 @@ var resumeColonyCmd = &cobra.Command{
 			}
 		}
 
-		// Clean up any orphaned worktrees before resuming
-		gcCleaned, gcOrphaned, gcErr := gcOrphanedWorktrees()
+		// Preserve-and-report pass over tracked worktrees before resuming.
+		// This is the exact path a crash-recovery user reaches — it must
+		// never destroy what resume was invoked to recover (D-01), and it
+		// must surface what happened rather than silently dropping the
+		// result (D-02). This is the single most important report in the
+		// phase: it is the screen the user sees when resuming after a
+		// crash, and it is where "your work is still here" has to appear.
+		gcCleaned, gcPreserved, gcErr := gcOrphanedWorktrees()
 
 		// Detect stale FOCUS pheromones (D-07, D-08)
 		var staleSignalsList []staleSignalInfo
@@ -283,12 +289,15 @@ var resumeColonyCmd = &cobra.Command{
 		result["handoff_found"] = handoffText != ""
 		result["handoff_path"] = handoffPath
 		if gcErr != nil {
+			// Surfaced by name (worktree_gc_error) so the dashboard renderer
+			// can report it — a captured-but-never-rendered error is the
+			// same as a discarded one from the user's point of view.
 			result["worktree_gc_error"] = gcErr.Error()
 		}
-		if gcCleaned > 0 || gcOrphaned > 0 {
-			result["worktree_gc"] = map[string]interface{}{
-				"cleaned":  gcCleaned,
-				"orphaned": gcOrphaned,
+		if gcCleaned > 0 || gcPreserved > 0 {
+			result["worktrees_preserved"] = map[string]interface{}{
+				"cleaned":   gcCleaned,
+				"preserved": gcPreserved,
 			}
 		}
 		if len(staleSignalsList) > 0 {
@@ -353,12 +362,12 @@ func loadResumeState(handoffText string, noHandoff bool) (colony.ColonyState, bo
 }
 
 func warnResumeHandoffFallback(currentState, handoffState colony.ColonyState) {
-	fmt.Fprintln(stderr, "warning: COLONY_STATE.json is not runnable; attempting to restore from HANDOFF.md")
+	visualFprintln(stderr, "warning: COLONY_STATE.json is not runnable; attempting to restore from HANDOFF.md")
 
 	currentGoal := colonyStateGoalText(currentState)
 	handoffGoal := colonyStateGoalText(handoffState)
 	if currentGoal != "" && handoffGoal != "" && !goalsMatch(currentGoal, handoffGoal) {
-		fmt.Fprintf(stderr, "warning: HANDOFF.md goal %q does not match current COLONY_STATE.json goal %q\n", handoffGoal, currentGoal)
+		visualFprintf(stderr, "warning: HANDOFF.md goal %q does not match current COLONY_STATE.json goal %q\n", handoffGoal, currentGoal)
 	}
 
 	warnIfHandoffOlderThanCurrentState()
@@ -380,7 +389,7 @@ func warnIfHandoffOlderThanCurrentState() {
 		return
 	}
 	if handoffInfo.ModTime().Before(stateInfo.ModTime()) {
-		fmt.Fprintf(stderr, "warning: HANDOFF.md is older than COLONY_STATE.json; verify the recovered colony before continuing\n")
+		visualFprintf(stderr, "warning: HANDOFF.md is older than COLONY_STATE.json; verify the recovered colony before continuing\n")
 	}
 }
 

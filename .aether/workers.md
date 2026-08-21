@@ -43,7 +43,8 @@ Always log spawns to the spawn tree for visualization:
 
 ```bash
 # When spawning a worker
-aether spawn-log --parent "Prime-1" --caste "builder" --name "Hammer-42" --task "implementing auth module" --depth 0
+aether spawn-log --parent "Prime-1" --caste "builder" --name "Hammer-42" --task "implementing auth module" --depth 1
+# --depth is advisory only; the recorded depth is derived from --parent.
 
 # When worker completes
 aether spawn-complete --name "Hammer-42" --status "completed" --summary "auth module with 5 tests"
@@ -61,6 +62,22 @@ Claude Code resolves these slots via environment variables in `~/.claude/setting
 - `ANTHROPIC_DEFAULT_OPUS_MODEL` -> opus slot
 - `ANTHROPIC_DEFAULT_SONNET_MODEL` -> sonnet slot
 - `ANTHROPIC_DEFAULT_HAIKU_MODEL` -> haiku slot
+
+**Seeing which model a worker runs on.** Every spawn line shows the worker's
+model in brackets — `🔨🐜 Builder [sonnet] Mason-67` — resolved from the
+agent's declared slot and any `ANTHROPIC_DEFAULT_*_MODEL` redirect (so if
+your sonnet slot points at `glm-5-turbo`, the line says `[glm-5-turbo]`).
+Agents that declare `inherit` show `[session]` — they run on whatever model
+your session uses. This is display only; nothing in Aether picks models.
+
+**Changing one role's model is a one-line edit.** Open
+`.claude/agents/ant/aether-<role>.md` (for example `aether-builder.md`) and
+change the single `model:` line near the top — say `model: sonnet` to
+`model: opus`. That's the whole change: the platform routes from that line,
+and the spawn display follows it. (The display table in
+`cmd/codex_visuals.go` is checked against these files by
+`TestCasteModelSlotMatchesAgentFrontmatter`, so a mismatch fails the build
+rather than showing a stale tag.)
 
 > **Historical note:** A model-per-caste routing system using environment variable injection
 > at spawn time was previously built and archived (see `.aether/archive/model-routing/`).
@@ -264,15 +281,25 @@ Every spawn must display its caste emoji:
 
 | Depth | Role | Can Spawn? | Max Sub-Spawns | Behavior |
 |-------|------|------------|----------------|----------|
-| 0 | Queen | Yes | 4 | Dispatch initial workers |
-| 1 | Prime Worker / Builder | Yes | 4 | Orchestrate phase, spawn specialists |
-| 2 | Specialist | Yes (if surprised) | 2 | Focused work, spawn only for unexpected complexity |
-| 3 | Deep Specialist | No | 0 | Complete work inline, no further delegation |
+| 0 | Coordinator (Queen) | Yes | 4 | Dispatch initial workers |
+| 1 | Worker | Yes | 4 | Orchestrate phase, spawn helpers for genuine surprises |
+| 2 | Helper | No | 0 | Complete work inline, no further delegation |
 
-**Global Cap:** Maximum 10 workers per phase to prevent runaway spawning.
+A worker's depth can go no deeper than 2 (its helpers). A helper cannot spawn
+anyone — there is no depth 3.
 
-**Spawn Decision Criteria (Depth 2+):**
-Only spawn if you encounter genuine surprise:
+**Spawn Budgets:** Two separate limits work together, and neither one does the
+other's job. In any single wave the coordinator sends at most 4 to 8 workers
+at once. Across the whole run, no more than 20 helpers may ever be spawned in
+total — that count includes the coordinator's own workers, not just their
+helpers — and budget spent in one wave is not given back in the next. Depth
+alone cannot be the safety limit: a coordinator sending 8 workers, each of
+whom sends helpers of their own, is 8 workers wide and 2 levels deep — 73
+workers in total — while never once breaking the depth rule above. That is
+why one number cannot do both jobs.
+
+**Spawn Decision Criteria (Depth 1):**
+Only spawn a helper if you encounter genuine surprise:
 - Task is 3x larger than expected
 - Discovered a sub-domain requiring different expertise
 - Found blocking dependency that needs parallel investigation
@@ -325,8 +352,9 @@ child_name=$(aether generate-ant-name "{caste}" | jq -r '.result')
 
 **Step 3: Log the spawn and update swarm display**
 ```bash
-aether spawn-log --parent "{your_name}" --caste "{child_caste}" --name "{child_name}" --task "{task_summary}" --depth 0
-aether swarm-display-update "{child_name}" "{child_caste}" "excavating" "{task_summary}" "{your_name}" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
+aether spawn-log --parent "{your_name}" --caste "{child_caste}" --name "{child_name}" --task "{task_summary}" --depth 1
+# --depth is advisory only; the recorded depth is derived from --parent.
+aether swarm-display-update --agent "{child_name}" --id "{your_name}" --status "excavating"
 ```
 
 **Step 4: Use Task tool**
@@ -373,7 +401,7 @@ Return a compressed summary:
 ```bash
 # After Task tool returns
 aether spawn-complete --name "{child_name}" --status "{status}" --summary "{summary}"
-aether swarm-display-update "{child_name}" "{child_caste}" "completed" "{summary}" "{your_name}" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
+aether swarm-display-update --agent "{child_name}" --id "{your_name}" --status "completed"
 ```
 
 ---
@@ -794,7 +822,12 @@ Read .aether/workers.md for role definitions.
 
 Workers participate in the wisdom pipeline through their work products:
 
-1. **Build work** produces observations (via `memory-capture` in continue step)
+1. **Build work** produces observations automatically during continue -- not via a wrapper-invoked
+   `memory-capture` call, but through `pkg/learn`'s own in-process capture, `captureContinueLearning()`
+   (`cmd/codex_continue_finalize.go:1458`), called from both continue paths (`cmd/codex_continue.go:962`,
+   the default path, and `cmd/codex_continue_finalize.go:521`, the heavy-review path). Eligible runs are
+   recorded as a hypothesis entry in `pkg/learn`'s own colony store (`.aether/data/learn/`), then handed
+   to phase-end consolidation (`runPhaseEndConsolidation`, same call site) for further curation.
 2. **Observations** auto-promote to instincts after threshold (2 for patterns)
 3. **Instincts** are stored in COLONY_STATE.json with confidence scores
 4. **High-confidence instincts** (>= 0.8) are promoted to Hive Brain at seal

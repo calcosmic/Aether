@@ -28,7 +28,11 @@ If the CLI reports the hub version is **newer than the binary version**, surface
 Wrappers and runtime may disagree. Fix from the Aether source repo with:
   aether publish
 or download the released binary here with:
-  aether update --force --download-binary
+  /ant-update --force --download-binary
 ```
+
+`aether publish` has no slash wrapper — it is run from the Aether source repo,
+so it keeps its CLI form. `/ant-update` does have one, and takes the same flags,
+so name it the way the reader types it.
 
 This skew means command wrappers may describe behavior the installed runtime does not have — the worst failure mode for a wrapper/runtime split. Treat it as action-required, not informational.

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,16 +181,6 @@ func TestEvaluatePhaseCriterionEvidenceRejectsMissingAndStaleArtifacts(t *testin
 			},
 			wantIssue: "cannot be verified",
 		},
-		{
-			name: "changed after build",
-			mutate: func(t *testing.T, root string) {
-				t.Helper()
-				if err := os.WriteFile(filepath.Join(root, "docs", "guide.md"), []byte("changed\n"), 0644); err != nil {
-					t.Fatalf("change guide: %v", err)
-				}
-			},
-			wantIssue: "changed after build evidence",
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			phase := criterionEvidenceTestPhase()
@@ -201,6 +192,99 @@ func TestEvaluatePhaseCriterionEvidenceRejectsMissingAndStaleArtifacts(t *testin
 			}
 		})
 	}
+}
+
+// TestChangedArtifactAcceptedOnlyWhenVerificationReRanGreen covers the case that
+// made the review-and-fix loop impossible.
+//
+// The build hashes every artifact it claims, so continue can detect a change
+// made after sign-off. But the colony's reviewers run inside the build, and
+// fixing what they find necessarily lands afterwards — so Aether blocked on the
+// work its own Probe and Watcher had just demanded, and the only sanctioned
+// route was re-running most of the phase to re-take the hash.
+//
+// Continue re-runs the repository's real verification before advancing, so a
+// changed artifact with a green suite is an amendment. A changed artifact
+// without one is still exactly what the hash was for.
+func TestChangedArtifactAcceptedOnlyWhenVerificationReRanGreen(t *testing.T) {
+	changeGuide := func(t *testing.T, root string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, "docs", "guide.md"), []byte("fixed after review\n"), 0644); err != nil {
+			t.Fatalf("change guide: %v", err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name       string
+		steps      []codexVerificationStep
+		wantPassed bool
+		wantText   string
+	}{
+		{
+			name:       "verification re-ran green: amendment accepted",
+			steps:      passingCriterionSteps(),
+			wantPassed: true,
+			wantText:   "amended after build evidence",
+		},
+		{
+			name: "verification failed: still blocked",
+			steps: []codexVerificationStep{
+				{Name: "tests", Command: "go test ./...", Passed: false, Summary: "tests failed"},
+			},
+			wantPassed: false,
+			wantText:   "verification did not re-run green",
+		},
+		{
+			// The trap. runVerificationStep marks an optional step Passed:true
+			// when no command resolves, so trusting Passed alone would accept an
+			// amendment on the strength of checks that never executed.
+			name: "only skipped steps: still blocked",
+			steps: []codexVerificationStep{
+				{Name: "tests", Passed: true, Skipped: true, Summary: "no command resolved; skipped"},
+				{Name: "lint", Passed: true, Skipped: true, Summary: "no command resolved; skipped"},
+			},
+			wantPassed: false,
+			wantText:   "verification did not re-run green",
+		},
+		{
+			name: "blocked step disqualifies the run",
+			steps: []codexVerificationStep{
+				{Name: "tests", Command: "go test ./...", Passed: true},
+				{Name: "build", Blocked: true, Required: true, Summary: "blocked: no verification command resolved"},
+			},
+			wantPassed: false,
+			wantText:   "verification did not re-run green",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			phase := criterionEvidenceTestPhase()
+			root, manifest := setupCriterionEvidenceTest(t, phase)
+			changeGuide(t, root)
+
+			evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, tc.steps, codexClaimVerification{Present: true, Passed: true}, codexWatcherVerification{})
+
+			haystack := strings.Join(append(append([]string{}, evaluation.BlockingIssues...), collectCriterionEvidenceLines(evaluation)...), "\n")
+			if !strings.Contains(haystack, tc.wantText) {
+				t.Fatalf("evaluation did not mention %q: %+v", tc.wantText, evaluation)
+			}
+			if tc.wantPassed {
+				for _, issue := range evaluation.BlockingIssues {
+					if strings.Contains(issue, "guide.md") {
+						t.Fatalf("amended artifact still blocked: %q", issue)
+					}
+				}
+			}
+		})
+	}
+}
+
+func collectCriterionEvidenceLines(evaluation criterionEvidenceEvaluation) []string {
+	lines := []string{}
+	for _, criterion := range evaluation.Criteria {
+		lines = append(lines, criterion.Evidence...)
+		lines = append(lines, criterion.BlockingIssues...)
+	}
+	return lines
 }
 
 func TestSnapshotBuildArtifactRejectsSymlinkEscape(t *testing.T) {
@@ -224,14 +308,48 @@ func TestEvaluatePhaseCriterionEvidenceRequiresTaskOwnedClaimsAndExecutedChecks(
 	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
 		t.Fatalf("load claims: %v", err)
 	}
+	// An artifact absent from every claim list — per-task and aggregate —
+	// must still block. (An artifact claimed by ANY task in the build may
+	// satisfy a task-bound criterion; that path is covered by
+	// TestCriterionAcceptsArtifactClaimedByAnotherTask.)
 	claims.TaskClaims = nil
+	claims.FilesCreated = nil
+	claims.FilesModified = nil
+	claims.TestsWritten = nil
 	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
-		t.Fatalf("save aggregate-only claims: %v", err)
+		t.Fatalf("save empty claims: %v", err)
 	}
 	evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, []codexVerificationStep{{Name: "tests", Skipped: true, Summary: "not resolved"}}, codexClaimVerification{Present: true, Passed: true}, codexWatcherVerification{})
 	issues := strings.Join(evaluation.BlockingIssues, "\n")
 	if evaluation.Passed || !strings.Contains(issues, "was not claimed by the current build for task 1.1") || !strings.Contains(issues, "required tests check was skipped") {
 		t.Fatalf("evaluation issues = %q", issues)
+	}
+}
+
+// TestCriterionAcceptsArtifactClaimedByAnotherTask locks the daily-driver fix
+// from the 1.0.47 acceptance run: a task-bound criterion may verify against an
+// artifact another task in the same build claimed (TDD plans bind an
+// implementation task's criterion to the test file the test task wrote). The
+// artifact is hash-recorded at build time either way, so tamper detection is
+// unchanged.
+func TestCriterionAcceptsArtifactClaimedByAnotherTask(t *testing.T) {
+	phase := criterionEvidenceTestPhase()
+	root, manifest := setupCriterionEvidenceTest(t, phase)
+	var claims codexBuildClaims
+	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
+		t.Fatalf("load claims: %v", err)
+	}
+	// Move every per-task claim to a different task id; aggregate lists keep
+	// the artifacts so the build as a whole still claims them.
+	for i := range claims.TaskClaims {
+		claims.TaskClaims[i].TaskID = "9.9"
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("save cross-task claims: %v", err)
+	}
+	evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, passingCriterionSteps(), codexClaimVerification{Present: true, Passed: true}, codexWatcherVerification{})
+	if !evaluation.Passed {
+		t.Fatalf("cross-task claimed artifact blocked: %v", evaluation.BlockingIssues)
 	}
 }
 
@@ -253,5 +371,202 @@ func TestRunCodexContinueVerificationAllowsBoundArtifactOnlyPhase(t *testing.T) 
 	}
 	if strings.Contains(strings.Join(report.BlockingIssues, "\n"), "no deterministic verification command") {
 		t.Fatalf("artifact-only phase was incorrectly forced to run a shell command: %+v", report.BlockingIssues)
+	}
+}
+
+// TestRunCodexContinueVerificationBlocksRequiredCheckWithNoResolvableCommand
+// wires D-10 end to end through the real call site: a phase whose task
+// criteria bind the "tests" check, run against a repo with no resolvable
+// test command (setupCriterionEvidenceTest's temp root has no go.mod,
+// package.json, or any other ecosystem marker). The "tests" step must report
+// blocked, never passed, and the criterion gate must agree.
+func TestRunCodexContinueVerificationBlocksRequiredCheckWithNoResolvableCommand(t *testing.T) {
+	phase := criterionEvidenceTestPhase()
+	root, manifest := setupCriterionEvidenceTest(t, phase)
+
+	report, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, 0, time.Second, true)
+
+	var testsStep *codexVerificationStep
+	for i := range report.Steps {
+		if report.Steps[i].Name == "tests" {
+			testsStep = &report.Steps[i]
+		}
+	}
+	if testsStep == nil {
+		t.Fatalf("no tests step in report: %+v", report.Steps)
+	}
+	if testsStep.Passed {
+		t.Fatalf("tests step reported passed with no resolvable command: %+v", testsStep)
+	}
+	if !testsStep.Blocked {
+		t.Fatalf("tests step not marked blocked: %+v", testsStep)
+	}
+	if !strings.Contains(testsStep.Summary, "blocked") {
+		t.Fatalf("tests step summary does not say blocked: %q", testsStep.Summary)
+	}
+	if report.CriteriaPassed {
+		t.Fatalf("criteria passed despite blocked required tests check: %+v", report)
+	}
+}
+
+// TestCriterionReadOnlyEvidence proves the task-scoped read-only bypass (D-01,
+// D-02): a criterion bound to an artifact the task legitimately did not
+// modify can be satisfied by hash-verified evidence marked ReadOnly and
+// scoped to that task's ID, integrity checks are unaffected, and the bypass
+// never crosses task boundaries or applies with an empty task scope.
+func TestCriterionReadOnlyEvidence(t *testing.T) {
+	taskID := "1.1"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Read-only evidence",
+		Status: colony.PhaseInProgress,
+		Tasks: []colony.Task{
+			{
+				ID:              &taskID,
+				Goal:            "Test-only task",
+				Status:          colony.TaskCompleted,
+				SuccessCriteria: []string{"Untouched source still behaves"},
+				EvidenceRequirements: []colony.CriterionEvidenceRequirement{
+					{Criterion: "Untouched source still behaves", TaskID: taskID, Artifacts: []string{"untouched.go"}},
+				},
+			},
+		},
+	}
+
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	artifactPath := filepath.Join(root, "untouched.go")
+	original := []byte("package untouched\n")
+	if err := os.WriteFile(artifactPath, original, 0644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	manifest := codexContinueManifest{
+		Present: true,
+		Path:    "build/phase-1/manifest.json",
+		Data: codexBuildManifest{
+			Phase:                   1,
+			ClaimsPath:              ".aether/data/last-build-claims.json",
+			CriterionEvidencePolicy: criterionEvidencePolicyBoundV1,
+			EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(phase),
+		},
+	}
+
+	saveClaimsWithReadOnly := func(t *testing.T, readOnlyTaskID string) {
+		t.Helper()
+		evidence, err := snapshotBuildArtifact(root, "untouched.go")
+		if err != nil {
+			t.Fatalf("snapshot artifact: %v", err)
+		}
+		evidence.ReadOnly = true
+		evidence.ReadOnlyTaskID = readOnlyTaskID
+		claims := codexBuildClaims{
+			BuildPhase:       1,
+			Timestamp:        time.Now().UTC().Format(time.RFC3339),
+			ArtifactEvidence: []codexBuildArtifactEvidence{evidence},
+		}
+		if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+			t.Fatalf("save claims: %v", err)
+		}
+	}
+
+	t.Run("matching task scoped read-only evidence satisfies the criterion", func(t *testing.T) {
+		saveClaimsWithReadOnly(t, taskID)
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		if !evaluation.Passed {
+			t.Fatalf("evaluation = %+v, want pass via read-only evidence", evaluation)
+		}
+		if len(evaluation.Criteria) != 1 || len(evaluation.Criteria[0].BlockingIssues) != 0 {
+			t.Fatalf("criteria = %+v, want zero blocking issues", evaluation.Criteria)
+		}
+		joined := strings.Join(evaluation.Criteria[0].Evidence, "\n")
+		if !strings.Contains(joined, "(read-only)") {
+			t.Fatalf("evidence = %q, want read-only marker", joined)
+		}
+	})
+
+	t.Run("tampering after recording still blocks", func(t *testing.T) {
+		saveClaimsWithReadOnly(t, taskID)
+		if err := os.WriteFile(artifactPath, []byte("package untouched\n\n// changed\n"), 0644); err != nil {
+			t.Fatalf("mutate artifact: %v", err)
+		}
+		defer func() {
+			if err := os.WriteFile(artifactPath, original, 0644); err != nil {
+				t.Fatalf("restore artifact: %v", err)
+			}
+		}()
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		issues := strings.Join(evaluation.BlockingIssues, "\n")
+		if evaluation.Passed || !strings.Contains(issues, "changed after build evidence was recorded") {
+			t.Fatalf("evaluation = %+v, want tamper block", evaluation)
+		}
+	})
+
+	t.Run("cross-task read-only evidence satisfies any requirement naming the path (D-01 amended)", func(t *testing.T) {
+		// Operator-recorded read-only evidence is hash-verified and attests
+		// the path's state for the whole run; scoping it to one task made a
+		// phase whose two tasks bind the same untouched file unsatisfiable
+		// (the recording guard allows one task per path per run).
+		saveClaimsWithReadOnly(t, "2.1")
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		if !evaluation.Passed {
+			t.Fatalf("evaluation = %+v, want cross-task read-only evidence to satisfy", evaluation)
+		}
+	})
+
+	t.Run("empty read-only task id satisfies nothing", func(t *testing.T) {
+		saveClaimsWithReadOnly(t, "")
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		issues := strings.Join(evaluation.BlockingIssues, "\n")
+		if evaluation.Passed || !strings.Contains(issues, "was not claimed by the current build for task 1.1") {
+			t.Fatalf("evaluation = %+v, want block for empty read-only task id", evaluation)
+		}
+	})
+
+	t.Run("unclaimed non-read-only artifact still blocks unchanged", func(t *testing.T) {
+		claims := codexBuildClaims{BuildPhase: 1, Timestamp: time.Now().UTC().Format(time.RFC3339)}
+		if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+			t.Fatalf("save claims: %v", err)
+		}
+		evaluation := evaluatePhaseCriterionEvidence(root, phase, manifest, nil, codexClaimVerification{}, codexWatcherVerification{})
+		issues := strings.Join(evaluation.BlockingIssues, "\n")
+		if evaluation.Passed || !strings.Contains(issues, "was not claimed by the current build for task 1.1") {
+			t.Fatalf("evaluation = %+v, want unchanged blocking behavior", evaluation)
+		}
+	})
+}
+
+// TestArtifactEvidenceReadOnlyNotSettableByWorker locks the self-attestation
+// guard (Pitfall 3, T-163.1-26): attachBuildArtifactEvidence replaces
+// claims.ArtifactEvidence wholesale from the three claim lists, so a
+// worker-submitted completion packet that sets read_only:true directly on an
+// artifact_evidence entry must never survive into stored claims.
+func TestArtifactEvidenceReadOnlyNotSettableByWorker(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "handled.go"), []byte("package handled\n"), 0644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	packetJSON := `{
+		"files_created": ["handled.go"],
+		"artifact_evidence": [
+			{"path":"x","sha256":"deadbeef","size":1,"read_only":true,"read_only_task_id":"1.1"}
+		],
+		"build_phase": 1
+	}`
+	var claims codexBuildClaims
+	if err := json.Unmarshal([]byte(packetJSON), &claims); err != nil {
+		t.Fatalf("unmarshal worker packet: %v", err)
+	}
+	if len(claims.ArtifactEvidence) != 1 || !claims.ArtifactEvidence[0].ReadOnly {
+		t.Fatalf("test setup: expected worker-submitted read_only to decode true, got %+v", claims.ArtifactEvidence)
+	}
+
+	attachBuildArtifactEvidence(root, &claims)
+
+	for _, entry := range claims.ArtifactEvidence {
+		if entry.ReadOnly {
+			t.Fatalf("worker-submitted read_only evidence survived attachBuildArtifactEvidence: %+v", claims.ArtifactEvidence)
+		}
 	}
 }

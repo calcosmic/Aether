@@ -430,16 +430,18 @@ func TestAutopilotSuccessStatusCountsAsCompleted(t *testing.T) {
 		t.Fatalf("autopilot-update returned error: %v", err)
 	}
 
-	buf.Reset()
-	rootCmd.SetArgs([]string{"autopilot-check-replan", "--interval", "1"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-check-replan returned error: %v", err)
-	}
-
 	env := parseEnvelope(t, buf.String())
 	result := env["result"].(map[string]interface{})
-	if result["replan"] != true {
-		t.Fatalf("expected replan:true after success status normalization, got %v", result)
+	if result["status"] != "completed" {
+		t.Fatalf("expected success status normalized to completed, got %v", result["status"])
+	}
+
+	var state autopilotState
+	if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
+		t.Fatalf("load autopilot state: %v", err)
+	}
+	if len(state.Phases) != 1 || state.Phases[0].Status != "completed" {
+		t.Fatalf("expected phase 1 recorded as completed, got %+v", state.Phases)
 	}
 }
 
@@ -977,11 +979,17 @@ func TestOracleCompatibilityAppliesSurveyAttemptPolicy(t *testing.T) {
 	}
 
 	first := capturing.configs[0]
-	if first.Timeout != 3*time.Minute {
-		t.Fatalf("survey timeout = %v, want 3m", first.Timeout)
+	// This run is --depth exhaustive. Survey holds until every question has
+	// been touched once, so the cheap survey setting used to apply to the
+	// opening stretch of the longest runs -- someone who asked for fifty
+	// rounds got the shallowest reasoning and the shortest watchdog for the
+	// first several. Deep and exhaustive runs now survey at medium/5m; quick
+	// runs still survey at low/3m (TestOracleDeepSurveyUsesMediumReasoning).
+	if first.Timeout != 5*time.Minute {
+		t.Fatalf("survey timeout on an exhaustive run = %v, want 5m", first.Timeout)
 	}
-	if !containsString(first.ConfigOverrides, `model_reasoning_effort="low"`) {
-		t.Fatalf("config overrides = %v, want survey low reasoning override", first.ConfigOverrides)
+	if !containsString(first.ConfigOverrides, `model_reasoning_effort="medium"`) {
+		t.Fatalf("config overrides = %v, want medium reasoning on an exhaustive run's survey", first.ConfigOverrides)
 	}
 	if first.ResponsePath == "" {
 		t.Fatal("expected controller-managed oracle response path to be set")
@@ -1018,7 +1026,7 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
 	originalPolicy := oracleAttemptPolicyForPhase
-	oracleAttemptPolicyForPhase = func(phase string, attempt int) oracleAttemptPolicy {
+	oracleAttemptPolicyForPhase = func(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 		return oracleAttemptPolicy{
 			ReasoningEffort: "low",
 			Timeout:         250 * time.Millisecond,
@@ -1071,7 +1079,7 @@ func TestOracleCompatibilityEnforcesAttemptWatchdog(t *testing.T) {
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
 	originalPolicy := oracleAttemptPolicyForPhase
-	oracleAttemptPolicyForPhase = func(phase string, attempt int) oracleAttemptPolicy {
+	oracleAttemptPolicyForPhase = func(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 		return oracleAttemptPolicy{
 			ReasoningEffort: "low",
 			Timeout:         40 * time.Millisecond,
@@ -1139,7 +1147,7 @@ func TestOracleCompatibilityShortCircuitsOnValidResponseFile(t *testing.T) {
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
 	originalPolicy := oracleAttemptPolicyForPhase
-	oracleAttemptPolicyForPhase = func(phase string, attempt int) oracleAttemptPolicy {
+	oracleAttemptPolicyForPhase = func(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 		return oracleAttemptPolicy{
 			ReasoningEffort: "low",
 			Timeout:         250 * time.Millisecond,
@@ -1195,23 +1203,49 @@ func TestOracleCompatibilityRejectsDuplicateActiveLoop(t *testing.T) {
 	}
 }
 
-type oracleCompletingInvoker struct{}
+type oracleCompletingInvoker struct {
+	calls int
+}
+
+// oracleDistinctAnswers gives each iteration genuinely different content.
+//
+// This invoker previously returned one identical summary and recommendation
+// every call, which no real Oracle does — each iteration targets a different
+// open question and writes a different answer. The loop now measures novelty
+// between consecutive answers and stops when three in a row add no new ground,
+// so a fixture that repeats itself verbatim trips that exit before the plan is
+// finished. Varying the text keeps this test measuring what it is named for —
+// that the autonomous loop runs to completion — rather than accidentally
+// measuring the stall detector.
+var oracleDistinctAnswers = []string{
+	"The loop controller selects the next open question and merges the reply into plan state.",
+	"Confidence is recomputed per question after every merge, then aggregated across the plan.",
+	"Sources are deduplicated by URL and given stable identifiers before findings reference them.",
+	"Stop conditions cover the iteration cap, the confidence target, operator interrupts and novelty stalls.",
+	"Per-attempt watchdogs bound each dispatch so a hung worker cannot stall the whole run.",
+	"Resumable state lets an interrupted run continue from its last recorded iteration.",
+	"Derived reports are rewritten after each merge so synthesis and gaps stay current.",
+	"Archived runs retain prior plans so a repeated topic can be compared against earlier evidence.",
+}
 
 func (i *oracleCompletingInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	answer := oracleDistinctAnswers[i.calls%len(oracleDistinctAnswers)]
+	i.calls++
+
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
 		QuestionID: oracleTestActiveQuestionID(cfg.Root),
 		Status:     "answered",
 		Confidence: 99,
-		Summary:    "Autonomous oracle loop produced a source-backed answer.",
+		Summary:    answer,
 		Findings: []oracleWorkerFinding{{
-			Text: "Autonomous oracle loop produced a source-backed answer.",
+			Text: answer,
 			Evidence: []oracleWorkerEvidence{{
 				Title:    "Oracle loop implementation",
 				Location: "cmd/oracle_loop.go",
 				Type:     "codebase",
 			}},
 		}},
-		Recommendation: "Continue until all planned questions are answered.",
+		Recommendation: answer,
 	}); err != nil {
 		return codex.WorkerResult{}, err
 	}
@@ -1407,7 +1441,12 @@ description: "Reference used to verify Oracle worker prompt injection."
 output_types: [prd]
 agent_roles: [architect]
 task_types: [requirements]
-task_keywords: [requirements]
+# Phase 181: this fixture used to match on output type alone, which is the
+# behaviour that put an AI design guide in front of a worker creating folders.
+# The keywords now match the topic this test actually asks about ("release
+# parity"), so the test still proves Oracle workers receive reference injection
+# rather than proving that irrelevant documents are injected.
+task_keywords: [requirements, release, parity]
 workflow_triggers: [plan]
 priority: high
 version: "1.0"

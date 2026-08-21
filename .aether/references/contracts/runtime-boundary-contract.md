@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: runtime-boundary-contract
 kind: contract
 category: contracts
+scope: aether-internal
 title: Runtime Boundary Contract
 description: "Contract defining ownership boundaries between Go runtime, TypeScript orchestration host, editable assets, and Bash glue."
 output_types: [boundary-review, architecture-review, integration-test]

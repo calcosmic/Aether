@@ -130,7 +130,8 @@ For each pattern in `learning.patterns_observed`:
 ```bash
 aether memory-capture \
   --type "success" \
-  --content "${pattern.trigger}: ${pattern.action} (evidence: ${pattern.evidence})"```
+  --content "${pattern.trigger}: ${pattern.action} (evidence: ${pattern.evidence})"
+```
 - Increment `success_capture_count`
 
 The cap of 2 prevents observation count inflation when builds produce many patterns. Each captured pattern enters learning-observations.json with a content hash for deduplication across builds.

@@ -108,45 +108,35 @@ var reviewLedgerWriteCmd = &cobra.Command{
 			return nil
 		}
 
-		// Load existing ledger
-		prefix := domainPrefixes[domain]
-		ledgerPath := fmt.Sprintf("reviews/%s/ledger.json", domain)
-
-		var lf colony.ReviewLedgerFile
-		if err := store.LoadJSON(ledgerPath, &lf); err != nil {
-			lf = colony.ReviewLedgerFile{Entries: []colony.ReviewLedgerEntry{}}
+		// Critics must bring solutions: a CRITICAL finding with no
+		// suggestion is "it doesn't work" with the power to stop the line
+		// and nothing anyone can act on. The write is refused, naming the
+		// finding, so the reviewer supplies the smallest change that would
+		// make it pass (or files it at a lower severity).
+		for i, f := range findings {
+			if strings.EqualFold(strings.TrimSpace(f.Severity), "CRITICAL") && strings.TrimSpace(f.Suggestion) == "" {
+				desc := strings.TrimSpace(f.Description)
+				if len(desc) > 80 {
+					desc = desc[:77] + "..."
+				}
+				outputError(1, fmt.Sprintf("finding %d (%q) is CRITICAL but carries no suggestion — a critical finding must name a proposed fix or next step; add a suggestion or lower the severity", i+1, desc), nil)
+				return nil
+			}
 		}
-		if lf.Entries == nil {
-			lf.Entries = []colony.ReviewLedgerEntry{}
-		}
 
-		// Build and append entries
-		now := time.Now().UTC().Format(time.RFC3339)
+		inputs := make([]reviewLedgerFindingInput, 0, len(findings))
 		for _, f := range findings {
-			idx := colony.NextEntryIndex(lf.Entries, prefix, phase)
-			id := colony.FormatEntryID(prefix, phase, idx)
-
-			entry := colony.ReviewLedgerEntry{
-				ID:          id,
-				Phase:       phase,
-				PhaseName:   phaseName,
-				Agent:       agent,
-				AgentName:   agentName,
-				GeneratedAt: now,
-				Status:      "open",
-				Severity:    colony.ReviewSeverity(strings.ToUpper(f.Severity)),
+			inputs = append(inputs, reviewLedgerFindingInput{
+				Severity:    f.Severity,
 				File:        f.File,
 				Line:        f.Line,
 				Category:    f.Category,
 				Description: f.Description,
 				Suggestion:  f.Suggestion,
-			}
-			lf.Entries = append(lf.Entries, entry)
+			})
 		}
-
-		// Recompute summary and save
-		lf.Summary = colony.ComputeSummary(lf.Entries)
-		if err := store.SaveJSON(ledgerPath, lf); err != nil {
+		lf, err := appendReviewLedgerEntries(domain, phase, phaseName, agent, agentName, inputs)
+		if err != nil {
 			outputError(2, fmt.Sprintf("failed to save ledger: %v", err), nil)
 			return nil
 		}
@@ -159,6 +149,128 @@ var reviewLedgerWriteCmd = &cobra.Command{
 		})
 		return nil
 	},
+}
+
+// reviewLedgerFindingInput is one finding to append to a domain ledger —
+// the shared shape behind both the review-ledger-write CLI and the runtime's
+// own in-process persistence.
+type reviewLedgerFindingInput struct {
+	Severity    string
+	File        string
+	Line        int
+	Category    string
+	Description string
+	Suggestion  string
+}
+
+// appendReviewLedgerEntries is the single ledger-write path: load the
+// domain's ledger, append the findings as open entries, recompute the
+// summary, save. Both the CLI command and persistReviewFindingsToLedgers go
+// through here so the two can never diverge on entry shape or ID assignment.
+func appendReviewLedgerEntries(domain string, phase int, phaseName, agent, agentName string, findings []reviewLedgerFindingInput) (colony.ReviewLedgerFile, error) {
+	prefix := domainPrefixes[domain]
+	ledgerPath := fmt.Sprintf("reviews/%s/ledger.json", domain)
+
+	var lf colony.ReviewLedgerFile
+	if err := store.LoadJSON(ledgerPath, &lf); err != nil {
+		lf = colony.ReviewLedgerFile{Entries: []colony.ReviewLedgerEntry{}}
+	}
+	if lf.Entries == nil {
+		lf.Entries = []colony.ReviewLedgerEntry{}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, f := range findings {
+		idx := colony.NextEntryIndex(lf.Entries, prefix, phase)
+		id := colony.FormatEntryID(prefix, phase, idx)
+
+		entry := colony.ReviewLedgerEntry{
+			ID:          id,
+			Phase:       phase,
+			PhaseName:   phaseName,
+			Agent:       agent,
+			AgentName:   agentName,
+			GeneratedAt: now,
+			Status:      "open",
+			Severity:    colony.ReviewSeverity(strings.ToUpper(f.Severity)),
+			File:        f.File,
+			Line:        f.Line,
+			Category:    f.Category,
+			Description: f.Description,
+			Suggestion:  f.Suggestion,
+		}
+		lf.Entries = append(lf.Entries, entry)
+	}
+
+	lf.Summary = colony.ComputeSummary(lf.Entries)
+	if err := store.SaveJSON(ledgerPath, lf); err != nil {
+		return lf, err
+	}
+	return lf, nil
+}
+
+// persistReviewFindingsToLedgers writes the structured findings review
+// workers RETURN into their domain review ledgers, in-process. This exists
+// because the alternative — briefing the workers to run
+// `aether review-ledger-write` themselves — was unsatisfiable for the very
+// castes it targeted: auditor and gatekeeper have no Bash tool by design
+// ("strictly read-only"), so they self-reported blocked and the block
+// stopped phase advancement (Pocket-Chopper field report). The runtime owns
+// .aether/data writes; the workers own the findings.
+//
+// Non-fatal by contract: a ledger write failure is bookkeeping, and
+// bookkeeping must never block an advance. Returns how many findings were
+// persisted and human-readable notes for anything skipped.
+func persistReviewFindingsToLedgers(phase int, phaseName string, steps []codexContinueWorkerFlowStep) (int, []string) {
+	if store == nil {
+		return 0, []string{"review findings not persisted: no store initialized"}
+	}
+	persisted := 0
+	var notes []string
+	for _, step := range steps {
+		if len(step.Findings) == 0 {
+			continue
+		}
+		caste := strings.ToLower(strings.TrimSpace(step.Caste))
+		allowed := map[string]bool{}
+		for _, d := range agentAllowedDomains[caste] {
+			allowed[d] = true
+		}
+		byDomain := map[string][]reviewLedgerFindingInput{}
+		for _, f := range step.Findings {
+			domain := strings.ToLower(strings.TrimSpace(f.Domain))
+			if domain == "" && len(agentAllowedDomains[caste]) == 1 {
+				domain = agentAllowedDomains[caste][0]
+			}
+			if !validDomains[domain] {
+				notes = append(notes, fmt.Sprintf("%s finding skipped: no valid review domain (%q)", step.Name, f.Domain))
+				continue
+			}
+			byDomain[domain] = append(byDomain[domain], reviewLedgerFindingInput{
+				Severity:    f.Severity,
+				File:        f.File,
+				Line:        f.Line,
+				Category:    f.Category,
+				Description: f.Description,
+				Suggestion:  f.Suggestion,
+			})
+		}
+		for domain, inputs := range byDomain {
+			agent := caste
+			if !allowed[domain] {
+				// The caste is not registered for this domain; record the
+				// findings without an agent attribution rather than dropping
+				// them or faking a mapping.
+				agent = ""
+			}
+			if _, err := appendReviewLedgerEntries(domain, phase, phaseName, agent, step.Name, inputs); err != nil {
+				notes = append(notes, fmt.Sprintf("failed to persist %d %s finding(s) from %s: %v", len(inputs), domain, step.Name, err))
+				continue
+			}
+			persisted += len(inputs)
+		}
+	}
+	return persisted, notes
 }
 
 // --- review-ledger-read ---

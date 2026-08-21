@@ -32,6 +32,44 @@ type buildAttemptTransition struct {
 	Summary   string `json:"summary,omitempty"`
 }
 
+// outOfBandVerificationRecord is the provenance a build attempt carries when
+// it was closed by the operator-invoked `verify-out-of-band` ceremony
+// (cmd/verify_out_of_band.go) instead of a worker dispatch: real work
+// happened outside the build pipeline (a hand edit, a pair session), and
+// this records that the ceremony re-verified the phase's OWN success
+// criteria against CURRENT disk state, fresh, before closing -- never a
+// worker's self-report. Its presence on a buildAttemptRecord is what
+// distinguishes an out-of-band closure from a genuine worker-verified one
+// (191.1-CONTEXT.md D-09/D-11); a record carrying this field never also
+// carries a fabricated Dispatches/WorkerRuns entry -- see
+// closeBuildAttemptOutOfBand's own doc comment and
+// TestVerifyOutOfBandNeverSynthesizesWorkerReceipts
+// (cmd/verify_out_of_band_test.go).
+type outOfBandVerificationRecord struct {
+	VerifiedAt string `json:"verified_at"`
+	Phase      int    `json:"phase"`
+	// Policy is the phase's criterion evidence policy at verification time
+	// (criterionEvidencePolicyBoundV1 / criterionEvidencePolicyLegacyUnbound
+	// / criterionEvidencePolicyNotRequired) -- what kind of evidence this
+	// verification pass was actually able to gather.
+	Policy string `json:"policy"`
+	// CriteriaChecked lists every success criterion (bound or free-prose)
+	// this pass evaluated.
+	CriteriaChecked []string `json:"criteria_checked,omitempty"`
+	// ChecksRun lists which of build/types/lint/tests actually executed
+	// (skipped checks -- no command resolved -- are excluded).
+	ChecksRun []string `json:"checks_run,omitempty"`
+	// ArtifactsHashed lists every declared artifact path that was hash-
+	// verified against disk NOW as part of this pass.
+	ArtifactsHashed []string `json:"artifacts_hashed,omitempty"`
+	// AcknowledgedLegacy records whether the operator supplied the separate,
+	// explicit acknowledgment required for a phase with only free-prose
+	// success criteria (T-191.1-03-04) -- false for a bound phase, where no
+	// acknowledgment is needed or accepted.
+	AcknowledgedLegacy bool   `json:"acknowledged_legacy,omitempty"`
+	Summary            string `json:"summary"`
+}
+
 type buildAttemptRecord struct {
 	SchemaVersion    int                      `json:"schema_version"`
 	ID               string                   `json:"id"`
@@ -63,6 +101,11 @@ type buildAttemptRecord struct {
 	Recoverable      bool                     `json:"recoverable"`
 	RecoveryCommand  string                   `json:"recovery_command,omitempty"`
 	History          []buildAttemptTransition `json:"history"`
+	// OutOfBandVerification is set ONLY by closeBuildAttemptOutOfBand, never
+	// by any worker dispatch or build-finalize path. Its presence marks this
+	// attempt as closed by the operator-invoked verify-out-of-band ceremony
+	// rather than by real worker results.
+	OutOfBandVerification *outOfBandVerificationRecord `json:"out_of_band_verification,omitempty"`
 }
 
 type latestBuildAttemptPointer struct {
@@ -190,6 +233,53 @@ func transitionBuildAttempt(attemptRel, status, summary string, dispatches []cod
 	return nil
 }
 
+// closeBuildAttemptOutOfBand transitions an existing build attempt to a
+// closed, sealed state (buildAttemptBuilt) carrying out-of-band verification
+// provenance -- called ONLY from cmd/verify_out_of_band.go's
+// closeOutOfBandCeremony, which is itself only reachable when a human types
+// `aether verify-out-of-band <phase> --force`
+// (TestVerifyOutOfBandHasNoLifecycleCaller,
+// cmd/verify_out_of_band_reachability_test.go).
+//
+// T-191.1-03-02 (the honesty invariant): this closure deliberately never
+// reads OR writes record.Dispatches or record.WorkerRuns anywhere in its
+// body. That is not an oversight to be caught by review -- it is the whole
+// mechanism the honesty ratchet
+// (TestVerifyOutOfBandNeverSynthesizesWorkerReceipts) depends on: whatever
+// UpdateJSONAtomically loaded from disk for those two fields is exactly what
+// gets written back, unchanged, because nothing in this function's closure
+// ever assigns to them. A future edit that adds such an assignment is
+// exactly the fabrication path that ratchet exists to catch.
+func closeBuildAttemptOutOfBand(attemptRel string, provenance outOfBandVerificationRecord) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	now := time.Now().UTC()
+	var record buildAttemptRecord
+	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
+		if record.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(record.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		record.Status = buildAttemptBuilt
+		record.UpdatedAt = now.Format(time.RFC3339Nano)
+		record.CompletedAt = now.Format(time.RFC3339Nano)
+		record.Recoverable = false
+		record.RecoveryCommand = ""
+		record.Error = ""
+		provenanceCopy := provenance
+		record.OutOfBandVerification = &provenanceCopy
+		record.History = append(record.History, buildAttemptTransition{
+			Status:    buildAttemptBuilt,
+			Timestamp: now.Format(time.RFC3339Nano),
+			Summary:   "closed by verify-out-of-band: " + strings.TrimSpace(provenance.Summary),
+		})
+		return nil
+	}); err != nil {
+		return fmt.Errorf("close build attempt out-of-band: %w", err)
+	}
+	return nil
+}
+
 func prepareBuildAttemptManifestBinding(attemptRel string, manifest *codexBuildManifest) error {
 	if manifest == nil {
 		return fmt.Errorf("build manifest is required")
@@ -309,7 +399,7 @@ func bindBuildAttemptCompletion(attemptRel string, completion codexExternalBuild
 		if record.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(record.ID) == "" {
 			return fmt.Errorf("invalid build attempt record")
 		}
-		if record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
+		if buildAttemptCompletionSealed(record) && record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
 			return fmt.Errorf("completion packet does not match the result already bound to attempt %s", record.ID)
 		}
 		record.CompletionSHA256 = digest
@@ -342,10 +432,18 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 	if existing.ID != strings.TrimSpace(manifest.AttemptID) || existing.Phase != manifest.Phase {
 		return "", "", fmt.Errorf("build completion attempt identity does not match journal record")
 	}
-	if existing.CompletionSHA256 != "" && existing.CompletionSHA256 != digest {
+	// D-07: staging validates exactly what finalize validates, before
+	// anything is bound. A packet finalize would reject must never write the
+	// durable completion file or bind a digest/path to the attempt -- this is
+	// the same entrypoint build-finalize calls (cmd/codex_build_finalize.go),
+	// run here before any write so staging and finalizing never disagree.
+	if violations := validateCompletionPacketSemantics(buildAttemptWorkspaceRoot(), completion); len(violations) > 0 {
+		return "", "", &completionContractError{Violations: violations}
+	}
+	if buildAttemptCompletionSealed(existing) && existing.CompletionSHA256 != "" && existing.CompletionSHA256 != digest {
 		return "", "", fmt.Errorf("completion packet does not match the result already bound to attempt %s", existing.ID)
 	}
-	if existing.CompletionPath != "" && filepath.ToSlash(existing.CompletionPath) != displayPath {
+	if buildAttemptCompletionSealed(existing) && existing.CompletionPath != "" && filepath.ToSlash(existing.CompletionPath) != displayPath {
 		return "", "", fmt.Errorf("build attempt %s already points to another completion packet", existing.ID)
 	}
 	durableAbsolute := filepath.Join(store.BasePath(), filepath.FromSlash(completionRel))
@@ -361,16 +459,18 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var record buildAttemptRecord
+	var previousCompletionPath string
 	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
 		if record.ID != strings.TrimSpace(manifest.AttemptID) || record.Phase != manifest.Phase {
 			return fmt.Errorf("build completion attempt identity does not match journal record")
 		}
-		if record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
+		if buildAttemptCompletionSealed(record) && record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
 			return fmt.Errorf("completion packet does not match the result already bound to attempt %s", record.ID)
 		}
-		if record.CompletionPath != "" && filepath.ToSlash(record.CompletionPath) != displayPath {
+		if buildAttemptCompletionSealed(record) && record.CompletionPath != "" && filepath.ToSlash(record.CompletionPath) != displayPath {
 			return fmt.Errorf("build attempt %s already points to another completion packet", record.ID)
 		}
+		previousCompletionPath = strings.TrimSpace(record.CompletionPath)
 		record.CompletionSHA256 = digest
 		record.CompletionPath = displayPath
 		record.UpdatedAt = now
@@ -389,6 +489,16 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 			_ = os.Remove(durableAbsolute)
 		}
 		return "", "", fmt.Errorf("stage build completion: %w", err)
+	}
+	// D-08: while unsealed, a rebind may point the attempt at a different
+	// durable completion path (durableBuildCompletionPath is a pure function
+	// of phase+attempt ID today, so this rarely changes in practice, but
+	// nothing should be left on disk claiming to belong to this attempt once
+	// the record no longer points at it -- T-163.1-13).
+	if previousCompletionPath != "" && previousCompletionPath != displayPath {
+		if previousRel := strings.TrimPrefix(filepath.ToSlash(previousCompletionPath), ".aether/data/"); previousRel != "" {
+			_ = os.Remove(filepath.Join(store.BasePath(), filepath.FromSlash(previousRel)))
+		}
 	}
 	return displayPath, digest, nil
 }
@@ -605,6 +715,39 @@ func buildAttemptStatusTerminal(status string) bool {
 	default:
 		return false
 	}
+}
+
+// buildAttemptCompletionSealed reports whether record's completion packet
+// binding is permanently locked (D-08). It compares against
+// buildAttemptBuilt specifically -- not buildAttemptStatusTerminal and not
+// the buildAttemptTerminal status constant -- because buildAttemptTerminal
+// is written by build-finalize (cmd/codex_build_finalize.go, at the
+// "external terminal worker results recorded" transition) BEFORE finalize
+// has actually committed the built lifecycle state (cmd/codex_build_finalize.go,
+// at the "external built lifecycle state committed" transition). Gating the
+// seal on buildAttemptTerminal would close the rebind window before finalize
+// had succeeded -- the exact regression D-08 exists to prevent. `failed` and
+// `interrupted` attempts are recoverable and must stay rebindable too.
+func buildAttemptCompletionSealed(record buildAttemptRecord) bool {
+	return strings.TrimSpace(record.Status) == buildAttemptBuilt
+}
+
+// buildAttemptRecordedTerminalEvidence reports whether this attempt itself got
+// as far as recording terminal worker evidence -- the transition that writes
+// the completion digest and the claims together, immediately before the
+// lifecycle commit.
+//
+// It is the difference between "this attempt was committed and its journal
+// write was lost" and "this attempt has never been finalized at all". Only the
+// first is reconcilable; treating the second as reconcilable produced a
+// deadlock with no in-band exit (see the routing comment in
+// cmd/codex_build_finalize.go and TestForcedRedispatchAfterBuiltIsNotADeadlock).
+//
+// Both halves are required. The digest alone would admit an attempt whose
+// evidence was recorded but whose claims never landed, and Claims alone would
+// admit one with no packet bound to it.
+func buildAttemptRecordedTerminalEvidence(record buildAttemptRecord) bool {
+	return strings.TrimSpace(record.CompletionSHA256) != "" && record.Claims != nil
 }
 
 func buildAttemptSummary(record buildAttemptRecord) map[string]interface{} {

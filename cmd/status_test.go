@@ -72,6 +72,10 @@ func TestStatusNoColony(t *testing.T) {
 
 func TestStatusNoColonyVisual(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pinned to Codex: this test asserts output content, and Codex is the
+	// platform that names commands in the raw CLI form. Naming itself is
+	// covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "codex")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -418,7 +422,7 @@ func TestStatusShowsInlinePheromoneStrength(t *testing.T) {
 	}
 
 	output := buf.String()
-	for _, want := range []string{"Active Pheromones", "Strength", "Life", "Avoid global state", "Focus on lifecycle output", "0.91", "0.83", "phase-scoped", "ttl"} {
+	for _, want := range []string{"Active Pheromones", "[91%]", "[83%]", "Avoid global state", "Focus on lifecycle output", "phase-scoped", "ttl"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("status output missing %q\n%s", want, output)
 		}
@@ -672,11 +676,11 @@ func TestStatusMemoryHealth(t *testing.T) {
 	if !strings.Contains(output, "Memory Health") {
 		t.Errorf("output missing 'Memory Health'\ngot:\n%s", output)
 	}
-	if !strings.Contains(output, "Wisdom Entries") {
-		t.Errorf("output missing 'Wisdom Entries' row")
+	if !strings.Contains(output, "Wisdom entries") {
+		t.Errorf("output missing 'Wisdom entries' row")
 	}
-	if !strings.Contains(output, "Recent Failures") {
-		t.Errorf("output missing 'Recent Failures' row")
+	if !strings.Contains(output, "Recent failures") {
+		t.Errorf("output missing 'Recent failures' row")
 	}
 }
 
@@ -1401,6 +1405,11 @@ func ptrFloat64(f float64) *float64 {
 
 func TestStatusShowsRecoveryDoorway(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pinned to Codex: this test asserts the recovery command is surfaced at
+	// all, and Codex names it in the raw CLI form the fixture seeds. That the
+	// same command reaches a Claude user as `/ant-build 2 --task 2.1` is
+	// covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "codex")
 	saveGlobals(t)
 	resetRootCmd(t)
 

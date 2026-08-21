@@ -25,7 +25,28 @@ const (
 	envOpenCodePath     = "AETHER_OPENCODE_PATH"
 	envOpenCodePrimary  = "AETHER_OPENCODE_PRIMARY_AGENT"
 	envOpenCodeAgentURL = "AETHER_OPENCODE_AGENT_URL"
-	defaultProbeTimout  = 3 * time.Second
+	// defaultProbeTimout is the budget for the CHEAP auth probe (`claude auth
+	// status --json`, `codex login status`) -- not the model round-trip
+	// preflight below, which has its own, much larger budget.
+	//
+	// It was 3s with no retry and no override. Idle, these probes answer in
+	// 0.05-0.3s, so 3s looks generous; but they occasionally stall well past
+	// it (a token refresh reaching the network is the likeliest cause), and a
+	// stall was fatal -- the worker never started, on a machine where the CLI
+	// was installed and logged in the whole time.
+	//
+	// Observed on 2026-08-21 in two unrelated places on the same day: a
+	// Formica build lost two of four workers to `claude auth status failed:
+	// timed out` while the OTHER TWO STARTED FINE on the same credentials
+	// (proof the auth was healthy and the probe was not), and this repo's own
+	// suite lost TestCodexReadOnlyProfileSelectsReadOnlySandbox to `codex
+	// login status failed: timed out`, passing on a rerun.
+	//
+	// This is the same lesson hostedPreflightTimeout already learned and
+	// wrote down (20s -> 45s plus one retry, after a run died 22s in while a
+	// hand-run probe answered in 5). The cheap probe never got the same
+	// treatment, so it kept failing the same way for the same reason.
+	defaultProbeTimout = 10 * time.Second
 )
 
 const defaultOpenCodePrimaryAgent = "aether-worker-router"
@@ -193,9 +214,34 @@ func (s *SelectedInvoker) InvokeWithProgress(ctx context.Context, config WorkerC
 		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: platform %s does not support worker dispatch", s.selected.Platform())
 	}
 	if invoker, ok := s.selected.(ProgressAwareWorkerInvoker); ok {
-		return invoker.InvokeWithProgress(ctx, config, observer)
+		result, err := invoker.InvokeWithProgress(ctx, config, observer)
+		return AttachWorkerUsage(result, config), err
 	}
-	return s.selected.Invoke(ctx, config)
+	result, err := s.selected.Invoke(ctx, config)
+	return AttachWorkerUsage(result, config), err
+}
+
+// AttachWorkerUsage records what the run cost, at the one boundary every real
+// dispatch passes through.
+//
+// Attaching at each dispatcher's return would mean eight sites and a ninth the
+// next time a transport is added; the ledger's whole value is that no dispatch
+// can quietly leave it, so it is populated where the paths converge. Usage
+// already present is left alone so a dispatcher that learns to report its own
+// is not overwritten.
+func AttachWorkerUsage(result WorkerResult, config WorkerConfig) WorkerResult {
+	if !result.Usage.Empty() {
+		return result
+	}
+	if usage, ok := ParseUsage(result.RawOutput); ok {
+		result.Usage = usage
+		return result
+	}
+	// No provider figure. Record a labelled estimate rather than nothing: an
+	// absent row shrinks the measured total and makes a regression read as an
+	// improvement.
+	result.Usage = EstimateUsage(config.assembledPromptChars())
+	return result
 }
 
 func (s *SelectedInvoker) IsAvailable(ctx context.Context) bool {
@@ -698,7 +744,9 @@ func (c *ClaudeDispatcher) Preflight(ctx context.Context, root string) Availabil
 		"--permission-mode", "plan",
 		"--strict-mcp-config",
 	}
-	return runHostedProviderPreflight(ctx, status, root, args)
+	// root is intentionally not used as the probe's working directory (D-07)
+	// — the shared runner isolates every probe into its own temp directory.
+	return runHostedProviderPreflight(ctx, status, args, "")
 }
 
 func (o *OpenCodeDispatcher) Preflight(ctx context.Context, root string) AvailabilityStatus {
@@ -713,7 +761,9 @@ func (o *OpenCodeDispatcher) Preflight(ctx context.Context, root string) Availab
 		"--format", "json",
 		"Return exactly OK.",
 	}
-	return runHostedProviderPreflight(ctx, status, root, args)
+	// root is intentionally not used as the probe's working directory (D-07)
+	// — the shared runner isolates every probe into its own temp directory.
+	return runHostedProviderPreflight(ctx, status, args, "")
 }
 
 // The preflight is a real model round-trip, so it inherits cold-start and
@@ -729,7 +779,17 @@ var (
 	hostedPreflightAttempts = 2
 )
 
-func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, root string, args []string) AvailabilityStatus {
+// makePreflightTempDir is a var so tests can force the failure path
+// and prove a temp-dir failure never bricks dispatch.
+//
+// The probe tests provider liveness and model config, not repo config, and
+// running it in the repo pulled in that repo's provider startup cost and
+// produced false failures (163.1 deferred item, closed by D-07).
+var makePreflightTempDir = func() (string, error) {
+	return os.MkdirTemp("", "aether-preflight-")
+}
+
+func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, args []string, stdin string) AvailabilityStatus {
 	binary := strings.TrimSpace(status.Binary)
 	if binary == "" {
 		binary = string(status.Platform)
@@ -737,7 +797,7 @@ func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, 
 
 	var failure AvailabilityStatus
 	for attempt := 1; attempt <= hostedPreflightAttempts; attempt++ {
-		result, timedOut := attemptHostedProviderPreflight(ctx, status, root, args, binary)
+		result, timedOut := attemptHostedProviderPreflight(ctx, status, args, stdin, binary)
 		if result.Available {
 			return result
 		}
@@ -749,13 +809,38 @@ func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, 
 	return failure
 }
 
-func attemptHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, root string, args []string, binary string) (AvailabilityStatus, bool) {
-	probeCtx, cancel := context.WithTimeout(ctx, hostedPreflightTimeout)
+// resolvedPreflightTimeout returns the probe budget, honoring the
+// AETHER_PREFLIGHT_TIMEOUT env var (Go duration syntax, e.g. "90s") so slow
+// hosts can widen it without a rebuild. Invalid or non-positive values fall
+// back to the compiled default — a broken env var must not brick dispatch.
+func resolvedPreflightTimeout() time.Duration {
+	envValue := strings.TrimSpace(os.Getenv("AETHER_PREFLIGHT_TIMEOUT"))
+	if envValue == "" {
+		return hostedPreflightTimeout
+	}
+	timeout, err := time.ParseDuration(envValue)
+	if err != nil || timeout <= 0 {
+		return hostedPreflightTimeout
+	}
+	return timeout
+}
+
+func attemptHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, args []string, stdin string, binary string) (AvailabilityStatus, bool) {
+	probeCtx, cancel := context.WithTimeout(ctx, resolvedPreflightTimeout())
 	defer cancel()
 
 	cmd := exec.CommandContext(probeCtx, binary, args...)
-	if root := strings.TrimSpace(root); root != "" {
-		cmd.Dir = root
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	// Run the probe from a neutral temp directory instead of the process
+	// working directory (D-07): a hostile or heavily configured repo cannot
+	// use the probe's cwd to load its own MCP servers, hooks or plugins. A
+	// temp-dir creation failure must never brick dispatch, so it degrades to
+	// leaving cmd.Dir unset rather than failing the probe.
+	if dir, err := makePreflightTempDir(); err == nil {
+		defer os.RemoveAll(dir)
+		cmd.Dir = dir
 	}
 	configureWorkerCommand(cmd)
 	if status.Platform == PlatformOpenCode {
@@ -826,7 +911,7 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 		}, err
 	}
 	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + RenderPermissionProfileSection(permission) + "\n\n" + renderResponseContract(config))
-	args := []string{"-p", prompt, "--output-format", "json", "--json-schema", string(schemaJSON), "--agent", strings.TrimSpace(config.AgentName)}
+	args := claudeBaseWorkerArgs(prompt, string(schemaJSON), config.AgentName)
 	if permission.Profile.Name == PermissionRepositoryReadOnly {
 		args = append(args, "--permission-mode", "plan")
 	} else {
@@ -838,6 +923,26 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 		args = append(args, "--permission-mode", "acceptEdits", "--settings", settingsPath)
 	}
 	return invokeHostedWorker(ctx, c, config, observer, args, "claude")
+}
+
+// claudeBaseWorkerArgs builds the invariant part of the Claude CLI vector.
+//
+// stream-json, not plain json: a worker that emits its claims in an earlier
+// assistant turn and then keeps talking leaves the plain-json envelope
+// carrying only the final prose, so the claims are unrecoverable and the run
+// fails "no worker claims found" — the deterministic v1.0.47 continue blocker.
+// stream-json emits every turn as its own NDJSON line, and
+// hostedJSONTextCandidates already scans lines newest-first, so claims survive
+// wherever the worker put them. --verbose is required by the CLI for
+// stream-json under --print.
+func claudeBaseWorkerArgs(prompt, schemaJSON, agentName string) []string {
+	return []string{
+		"-p", prompt,
+		"--output-format", "stream-json",
+		"--verbose",
+		"--json-schema", schemaJSON,
+		"--agent", strings.TrimSpace(agentName),
+	}
 }
 
 func (o *OpenCodeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
@@ -1587,24 +1692,86 @@ func reorderDispatchers(dispatchers []PlatformDispatcher, preferred ...Platform)
 	return out
 }
 
+// resolvedAvailabilityProbeTimeout returns the auth-probe budget, honoring
+// AETHER_PROBE_TIMEOUT (Go duration syntax, e.g. "30s") so a slow host can
+// widen it without a rebuild -- the same escape hatch AETHER_PREFLIGHT_TIMEOUT
+// gives the model round-trip probe, which this one lacked entirely. An invalid
+// or non-positive value falls back to the compiled default: a mistyped env var
+// must not brick dispatch.
+func resolvedAvailabilityProbeTimeout() time.Duration {
+	envValue := strings.TrimSpace(os.Getenv("AETHER_PROBE_TIMEOUT"))
+	if envValue == "" {
+		return defaultProbeTimout
+	}
+	timeout, err := time.ParseDuration(envValue)
+	if err != nil || timeout <= 0 {
+		return defaultProbeTimout
+	}
+	return timeout
+}
+
+// availabilityProbeAttempts mirrors hostedPreflightAttempts: one retry, and
+// only for timeouts. A timeout is the transient case. Missing credentials, a
+// missing binary or a bad subcommand fail identically twice and must surface
+// immediately rather than costing the user a second wait.
+//
+// Declared as a var so tests can exercise both the retry and its absence.
+var availabilityProbeAttempts = 2
+
 func runAvailabilityProbe(ctx context.Context, binary string, args ...string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	var output string
+	var err error
+	for attempt := 0; attempt < availabilityProbeAttempts; attempt++ {
+		output, err = runAvailabilityProbeOnce(ctx, binary, args...)
+		if err == nil || !errors.Is(err, errAvailabilityProbeTimeout) {
+			return output, err
+		}
+		// Only a timeout retries, and only while the CALLER's context is
+		// still live -- an inherited deadline or a cancelled command must not
+		// be retried past its owner's intent.
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return output, err
+}
+
+// errAvailabilityProbeTimeout marks the retryable case. It is matched with
+// errors.Is rather than by string so the retry decision cannot drift from the
+// message the user eventually sees.
+var errAvailabilityProbeTimeout = errors.New("timed out")
+
+func runAvailabilityProbeOnce(ctx context.Context, binary string, args ...string) (string, error) {
+	probeCtx := ctx
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultProbeTimout)
+		probeCtx, cancel = context.WithTimeout(ctx, resolvedAvailabilityProbeTimeout())
 		defer cancel()
 	}
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := exec.CommandContext(probeCtx, binary, args...)
+	// Without this the budget above is advisory, not real. The provider CLIs
+	// are wrappers that spawn children; cancelling the context kills only the
+	// direct child, and cmd.Run() then blocks until every inherited pipe
+	// closes -- which means until the grandchild exits on its own. A 10s
+	// budget could burn far longer than 10s and still report "timed out".
+	//
+	// configureWorkerCommand is the machinery that already solves this for
+	// workers and for the model round-trip preflight: a process group, a
+	// Cancel that signals the whole group, and a WaitDelay backstop that
+	// closes the pipes rather than waiting forever. This probe was the one
+	// caller building a bare exec.CommandContext and inheriting none of it.
+	configureWorkerCommand(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	output := combinedWorkerOutput(stdout.String(), stderr.String())
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return output, fmt.Errorf("timed out")
+		if probeCtx.Err() == context.DeadlineExceeded {
+			return output, errAvailabilityProbeTimeout
 		}
 		return output, err
 	}

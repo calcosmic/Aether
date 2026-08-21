@@ -691,7 +691,8 @@ var worktreeMergeBackCmd = &cobra.Command{
 	Use:   "worktree-merge-back",
 	Short: "Merge a worktree branch back to main with safety gates",
 	Long: "Merges a tracked worktree branch back to the main branch. " +
-		"Two gates must pass before merge: (1) go test ./... in the worktree, " +
+		"Two gates must pass before merge: (1) the project's test command, " +
+		"resolved from CLAUDE.md or the project's language, run in the worktree, " +
 		"(2) clash detection to prevent file conflicts. On failure, a blocker " +
 		"flag is created. On success, the worktree is cleaned up automatically.",
 	Args: cobra.NoArgs,
@@ -746,9 +747,33 @@ var worktreeMergeBackCmd = &cobra.Command{
 		}
 
 		// Step 2: Gate 1 -- Run tests in worktree directory
+		testCommand := strings.TrimSpace(resolveTestCommand())
+		if testCommand == "" {
+			// D-03: cannot determine how to test this project -- refuse to
+			// merge and preserve the work exactly where it is. Returning here
+			// (before the timeout context is created and before Step 5's
+			// auto-cleanup) is load-bearing: falling through would run
+			// `git worktree remove --force` and `git branch -d` on the very
+			// branch this refusal exists to protect.
+			blockerDesc := fmt.Sprintf("Merge blocked: cannot determine how to test this project for %s", branch)
+			if createErr := createBlocker(store, blockerDesc, "worktree-merge-back"); createErr != nil {
+				outputError(2, fmt.Sprintf("cannot determine how to test this project AND failed to create blocker: %v", createErr), nil)
+				return nil
+			}
+			outputError(2, fmt.Sprintf(
+				"merge blocked: cannot determine how to test this project. "+
+					"Aether looked in CLAUDE.md and .aether/data/codebase.md for a test "+
+					"command for %s and found none. The work has been left exactly where "+
+					"it is, on its own branch, untouched. Add a test command to CLAUDE.md "+
+					"(for example, a line like \"Run tests: npm test\") and the merge can "+
+					"proceed.", branch), nil)
+			return nil
+		}
+
 		testCtx, testCancel := context.WithTimeout(context.Background(), BuildTimeout)
 		defer testCancel()
-		testCmd := exec.CommandContext(testCtx, "go", "test", "./...")
+		testFields := strings.Fields(testCommand)
+		testCmd := exec.CommandContext(testCtx, testFields[0], testFields[1:]...)
 		testCmd.Dir = wtAbsPath // CRITICAL: run in worktree directory (absolute path)
 		testOutput, testErr := testCmd.CombinedOutput()
 		if testErr != nil {
@@ -806,7 +831,50 @@ var worktreeMergeBackCmd = &cobra.Command{
 			return nil
 		}
 
-		// Step 5: Auto-cleanup
+		// Step 5: Auto-cleanup -- gated on worktreeDestructionSafety
+		// (D-01/187-VERIFICATION.md GAP-1). The merge above only proves the
+		// worktree's committed HEAD is now safely on main; it says nothing
+		// about uncommitted content left sitting alongside it. `git worktree
+		// remove --force` deletes that content silently, so the safety
+		// verdict must be computed and branched on before any destructive
+		// git command runs.
+		safety := worktreeDestructionSafety(aetherRoot, *entry)
+		if !safety.Safe {
+			_, detail, preserveErr := preserveWorktreeWork(aetherRoot, *entry, safety)
+			if preserveErr != nil {
+				detail = fmt.Sprintf("could not stash automatically (%v); branch %s was left alone", preserveErr, entry.Branch)
+			}
+			reportWorktreePreservation(safety, detail)
+
+			// The merge already succeeded and is durable on main -- only the
+			// destructive cleanup step is skipped. Leave the entry marked
+			// orphaned so `aether recover` / `worktree-reap` can find it,
+			// rather than merged (which would suggest nothing is left to
+			// look at).
+			preservedNow := time.Now().UTC().Format(time.RFC3339)
+			state.Worktrees[entryIndex].Status = colony.WorktreeOrphaned
+			state.Worktrees[entryIndex].UpdatedAt = preservedNow
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				outputError(2, fmt.Sprintf("failed to save colony state: %v", err), nil)
+				return nil
+			}
+			store.AppendJSONL("state-changelog.jsonl", map[string]interface{}{
+				"action":    "worktree-merge-preserved",
+				"branch":    entry.Branch,
+				"path":      entry.Path,
+				"timestamp": preservedNow,
+			})
+			outputOK(map[string]interface{}{
+				"merged":     true,
+				"branch":     entry.Branch,
+				"worktree":   entry.Path,
+				"status":     "merged",
+				"cleaned_up": false,
+				"preserved":  detail,
+			})
+			return nil
+		}
+
 		pruneCtx, pruneCancel := context.WithTimeout(context.Background(), GitTimeout)
 		defer pruneCancel()
 

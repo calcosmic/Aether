@@ -188,10 +188,6 @@ func (h *poolStreamHandler) OnComplete(result *llm.StreamResult) {
 	if h.onTokenUsage != nil {
 		h.onTokenUsage(result.Model, result.Usage.InputTokens, result.Usage.OutputTokens)
 	}
-	if h.tracer != nil && h.runID != "" {
-		cost := trace.CalculateCost(result.Model, result.Usage.InputTokens, result.Usage.OutputTokens)
-		_ = h.tracer.LogTokenUsage(h.runID, result.Model, result.Usage.InputTokens, result.Usage.OutputTokens, cost, "agent-pool")
-	}
 }
 
 func (h *poolStreamHandler) OnError(err error) {

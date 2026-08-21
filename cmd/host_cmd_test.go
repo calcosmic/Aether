@@ -64,6 +64,13 @@ func TestHostPlanAndContinueForwardRawFlags(t *testing.T) {
 	if err := os.WriteFile(hostPath, []byte("// test host\n"), 0644); err != nil {
 		t.Fatalf("write host file: %v", err)
 	}
+	tsHostDir := filepath.Dir(filepath.Dir(hostPath))
+	if err := os.WriteFile(filepath.Join(tsHostDir, "package.json"), []byte(`{"name":"aether-ts-host"}`), 0644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tsHostDir, "package-lock.json"), []byte(`{"lockfileVersion":3}`), 0644); err != nil {
+		t.Fatalf("write package-lock.json: %v", err)
+	}
 	withWorkingDir(t, root)
 	cwd, err := os.Getwd()
 	if err != nil {

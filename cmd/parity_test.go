@@ -26,6 +26,7 @@ type ParitySnapshot struct {
 // Only entries where the YAML name differs from the Cobra Use field are listed.
 // Commands not listed here have a direct 1:1 name match with the runtime.
 var yamlToRuntimeName = map[string]string{
+	"ask":            "colony-prime",
 	"assumptions":    "assumptions-analyze",
 	"export-signals": "pheromone-export-xml",
 	"import-signals": "pheromone-import-xml",

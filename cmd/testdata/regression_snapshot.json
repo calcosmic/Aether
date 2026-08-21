@@ -1,7 +1,7 @@
 {
   "audit_dimensions": {
     "command_contracts": {
-      "command_count": 398,
+      "command_count": 394,
       "lifecycle_contracts": 18,
       "output_modes": [
         "json",
@@ -12,7 +12,7 @@
       ]
     },
     "worker_economy": {
-      "documented_castes": 26,
+      "documented_castes": 35,
       "dispatched_castes": 18,
       "chat_only_castes": 0,
       "visual_functions": 9
@@ -30,9 +30,9 @@
       "home_sync_pair_count": 7
     },
     "gate_classifications": {
-      "total_gates": 14,
-      "hard_block": 6,
-      "soft_block": 6,
+      "total_gates": 16,
+      "hard_block": 7,
+      "soft_block": 7,
       "advisory": 2
     }
   },

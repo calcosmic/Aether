@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: stale-publish-diagnosis-playbook
 kind: playbook
 category: playbooks
+scope: aether-internal
 title: Stale Publish Diagnosis Playbook
 description: "Detecting and recovering from stale hub versions, channel mismatches, and outdated publishes."
 output_types: [diagnosis-report, distribution-review, recovery-plan]

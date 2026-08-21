@@ -210,8 +210,92 @@ func TestStateMutateExpressionStringNotDoubleQuoted(t *testing.T) {
 	}
 }
 
+// TestStateMutateExpressionNumericStillWorks used to prove
+// `.current_phase = 3` succeeded via the expression syntax with no --guard
+// flag anywhere -- exactly the bypass CR-03 (188-REVIEW.md) closes:
+// state-mutate's `--field current_phase` path already required a matching
+// `--guard phase-advance:<N>`, but the free-form jq-like expression syntax
+// reached the same destructive field through executeExpression, a
+// completely separate code path with no field-name-specific validation at
+// all. This test now asserts the expression syntax is refused exactly like
+// --field is, proving both paths share one gated way to move current_phase.
+// See TestStateMutateExpressionCurrentPhaseSucceedsWithMatchingGuard for the
+// (still working, now gated) success case, and
+// TestStateMutateExpressionNonCurrentPhaseFieldRemainsUnguarded for proof
+// this does not over-block other fields.
 func TestStateMutateExpressionNumericStillWorks(t *testing.T) {
-	// Numeric values should still use SetRawBytes (raw JSON).
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// No --guard at all -- the exact shape this test used to prove succeeded.
+	rootCmd.SetArgs([]string{"state-mutate", `.current_phase = 2`})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected `.current_phase = N` with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded expression-syntax current_phase mutation")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateExpressionCurrentPhaseSucceedsWithMatchingGuard proves the
+// expression syntax is still usable for current_phase -- just gated the
+// same way --field is -- and that numeric values still round-trip through
+// SetRawBytes (raw JSON, not a quoted string), the original property
+// TestStateMutateExpressionNumericStillWorks protected.
+func TestStateMutateExpressionCurrentPhaseSucceedsWithMatchingGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+
+	rootCmd.SetArgs([]string{"state-mutate", "--guard", "phase-advance:2", `.current_phase = 2`})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected cobra error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected a matching phase-advance guard to allow the expression-syntax mutation, got: %v", env)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 2 {
+		t.Errorf("current_phase = %d, want 2", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateExpressionNonCurrentPhaseFieldRemainsUnguarded proves the
+// new guard does not over-block: expression-syntax mutations of any OTHER
+// field must keep working with no --guard at all, exactly as before.
+func TestStateMutateExpressionNonCurrentPhaseFieldRemainsUnguarded(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	var buf bytes.Buffer
@@ -234,14 +318,425 @@ func TestStateMutateExpressionNumericStillWorks(t *testing.T) {
 	}
 	s.SaveJSON("COLONY_STATE.json", state)
 
-	rootCmd.SetArgs([]string{"state-mutate", `.current_phase = 3`})
+	rootCmd.SetArgs([]string{"state-mutate", `.milestone = "Brood Stable"`})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected an unguarded, non-current_phase expression mutation to still succeed, got: %v", env)
+	}
+
 	var updated colony.ColonyState
 	s.LoadJSON("COLONY_STATE.json", &updated)
-	if updated.CurrentPhase != 3 {
-		t.Errorf("current_phase = %d, want 3", updated.CurrentPhase)
+	if updated.Milestone != "Brood Stable" {
+		t.Errorf("milestone = %q, want %q", updated.Milestone, "Brood Stable")
+	}
+}
+
+// --- T-188-07: state-mutate --field current_phase must require a matching
+// phase-advance guard. These use newTestStoreWithRoot (not newTestStore)
+// because a --guard value routes through enforceGuard -> runGateCheck ->
+// checkTestsPass, which shells out to a resolved test command; without an
+// isolated AETHER_ROOT that resolution can walk up to this very repo's
+// CLAUDE.md and try to run `go test ./...` recursively from inside a test.
+
+// phaseAdvanceReadyState returns a fixture colony where phase 2's
+// phase-advance preconditions genuinely pass: phase 1 already completed,
+// phase 2 has one task and it is completed, and there are no critical error
+// records. This is the one fixture shape shared by the "guard matches"
+// success case and the "guard target mismatch" refusal case below.
+func phaseAdvanceReadyState() colony.ColonyState {
+	goal := "current_phase guard test"
+	taskID := "2.1"
+	return colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "phase one", Status: colony.PhaseCompleted},
+				{ID: 2, Name: "phase two", Status: colony.PhaseReady, Tasks: []colony.Task{
+					{ID: &taskID, Goal: "finish phase two", Status: colony.TaskCompleted},
+				}},
+			},
+		},
+	}
+}
+
+func TestStateMutateCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// No --guard at all.
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "current_phase", "--value", "2"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected state-mutate --field current_phase with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded current_phase mutation")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1", updated.CurrentPhase)
+	}
+}
+
+func TestStateMutateCurrentPhaseRejectsWrongGuardType(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// A task-complete guard is the wrong kind of guard for current_phase.
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "current_phase", "--value", "2", "--guard", "task-complete:2.1"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected current_phase with a task-complete guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, wrong-guard-type mutation")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1", updated.CurrentPhase)
+	}
+}
+
+func TestStateMutateCurrentPhaseRejectsMismatchedGuardTarget(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// The guard is a genuine, passing phase-advance guard -- but for phase 2,
+	// while --value asks to set current_phase to 3. The mismatch must refuse.
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "current_phase", "--value", "3", "--guard", "phase-advance:2"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected mismatched guard target (phase-advance:2 for --value 3) to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, mismatched-target mutation")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1", updated.CurrentPhase)
+	}
+}
+
+func TestStateMutateCurrentPhaseSucceedsWithMatchingGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+
+	// A genuine, matching phase-advance guard for the exact phase being set
+	// must still work exactly as it does today.
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "current_phase", "--value", "2", "--guard", "phase-advance:2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected cobra error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected a matching phase-advance guard to succeed, got: %v", env)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 2 {
+		t.Errorf("current_phase = %d, want 2", updated.CurrentPhase)
+	}
+}
+
+// --- 188-VERIFICATION.md Gap 2: the guard above matches the field name
+// "current_phase" EXACTLY, but Go's encoding/json resolves JSON object keys
+// to struct fields case-insensitively on decode -- so "CURRENT_PHASE" (or
+// any other casing) reaches setNestedFieldJSON/applyFieldSet completely
+// unguarded, writes a second, differently-cased top-level key, and that key
+// silently wins the very next JSON round-trip (colony.ColonyState.CurrentPhase
+// is tagged `json:"current_phase"`). These tests reproduce the verifier's own
+// two throwaway probes as permanent regression coverage, for BOTH invocation
+// forms (--field and the jq-like expression syntax), and prove the
+// already-working matching-guard case is unaffected by casing either.
+
+// TestStateMutateFieldCaseInsensitiveCurrentPhaseRequiresGuard proves
+// `--field CURRENT_PHASE` (all-uppercase) with no --guard is refused exactly
+// like the canonical lowercase spelling, and leaves the file untouched.
+func TestStateMutateFieldCaseInsensitiveCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// No --guard at all, and a differently-cased field name.
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "CURRENT_PHASE", "--value", "99"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected state-mutate --field CURRENT_PHASE with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded CURRENT_PHASE mutation")
+	}
+	// The same reload every real consumer uses (store.LoadJSON, which is
+	// exactly encoding/json's case-insensitive struct decode) must still
+	// report the original value -- this is the verifier's own probe
+	// assertion, not merely "some error was returned".
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1 -- CURRENT_PHASE bypassed the guard", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateFieldMixedCaseCurrentPhaseRequiresGuard is the same proof
+// for a mixed-case spelling ("Current_Phase"), confirming the fix is a
+// genuine case-insensitive match and not a hardcoded second literal.
+func TestStateMutateFieldMixedCaseCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "Current_Phase", "--value", "99"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected state-mutate --field Current_Phase with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded Current_Phase mutation")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1 -- Current_Phase bypassed the guard", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateFieldCaseInsensitiveCurrentPhaseSucceedsWithMatchingGuard
+// proves the fix does not merely block every casing -- a genuinely
+// guarded, differently-cased request still succeeds, is applied through the
+// canonical lowercase key (never a second, differently-cased duplicate key
+// left sitting in the file), and reads back correctly.
+func TestStateMutateFieldCaseInsensitiveCurrentPhaseSucceedsWithMatchingGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "CURRENT_PHASE", "--value", "2", "--guard", "phase-advance:2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected cobra error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected a matching phase-advance guard to allow CURRENT_PHASE, got: %v", env)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 2 {
+		t.Errorf("current_phase = %d, want 2", updated.CurrentPhase)
+	}
+
+	rawData, _ := s.ReadFile("COLONY_STATE.json")
+	if gjson.GetBytes(rawData, "CURRENT_PHASE").Exists() {
+		t.Errorf("COLONY_STATE.json has a stray CURRENT_PHASE key alongside current_phase: %s", string(rawData))
+	}
+}
+
+// TestStateMutateExpressionCaseInsensitiveCurrentPhaseRequiresGuard is the
+// expression-syntax twin of the --field test above: `.CURRENT_PHASE = N`
+// with no --guard must be refused too, closing the second invocation form
+// CR-03 (188-REVIEW.md) left open for non-exact casing.
+func TestStateMutateExpressionCaseInsensitiveCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// No --guard at all -- the exact shape the verifier's own probe used.
+	rootCmd.SetArgs([]string{"state-mutate", `.CURRENT_PHASE = 99`})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected `.CURRENT_PHASE = N` with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded .CURRENT_PHASE expression")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1 -- .CURRENT_PHASE bypassed the guard", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateExpressionMixedCaseCurrentPhaseRequiresGuard is the
+// mixed-case expression-syntax variant, mirroring the --field mixed-case
+// test above.
+func TestStateMutateExpressionMixedCaseCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	rootCmd.SetArgs([]string{"state-mutate", `.Current_Phase = 99`})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected `.Current_Phase = N` with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded .Current_Phase expression")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1 -- .Current_Phase bypassed the guard", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateExpressionCaseInsensitiveCurrentPhaseSucceedsWithMatchingGuard
+// proves the expression-syntax fix, like the --field fix, still allows a
+// genuinely guarded differently-cased request through -- applied via the
+// canonical lowercase key, no stray duplicate left behind.
+func TestStateMutateExpressionCaseInsensitiveCurrentPhaseSucceedsWithMatchingGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+
+	rootCmd.SetArgs([]string{"state-mutate", "--guard", "phase-advance:2", `.CURRENT_PHASE = 2`})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected cobra error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected a matching phase-advance guard to allow .CURRENT_PHASE, got: %v", env)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 2 {
+		t.Errorf("current_phase = %d, want 2", updated.CurrentPhase)
+	}
+
+	rawData, _ := s.ReadFile("COLONY_STATE.json")
+	if gjson.GetBytes(rawData, "CURRENT_PHASE").Exists() {
+		t.Errorf("COLONY_STATE.json has a stray CURRENT_PHASE key alongside current_phase: %s", string(rawData))
 	}
 }

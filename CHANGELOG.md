@@ -7,6 +7,201 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.58] - 2026-08-17
+
+### Fixed
+
+- **Publish no longer leaks private session files into the hub.** The Aether
+  repo's own `.aether/` folder does double duty — shipped source plus the
+  colony working data from developing Aether on itself. The publish
+  exclusion list matched directory names only, so loose working files
+  (session handoff snapshots, activity ledgers, failure logs, review
+  archives, this repo's own colony memory) were swept into
+  `~/.aether/system/` alongside the real product. Exclusion now covers
+  exact file paths too, and is two-sided: the next publish also removes
+  copies that leaked under earlier versions. Locked by
+  `TestHubPublishExcludesPrivateColonyFiles`, which pins the exclusion
+  floor so an entry cannot be silently dropped. The machine-local
+  `registry.json` (personal repo paths) is also untracked from git and
+  ignored going forward.
+
+## [1.0.57] - 2026-08-17
+
+Colony Conversation & Judgement: the colony becomes something you talk WITH,
+not just watch — every proposal is asked, every block brings a way forward,
+and three field-reported breakages are fixed.
+
+### Added
+
+- **`/ant-ask` — ask the colony anything.** "Where are we?", "why did phase 3
+  block?", "what changed?" answered from the colony's own memory with zero
+  setup. The briefing assembler gained its first parameterization: a question
+  boosts the sections it is about and pulls in recent activity, read-only by
+  locked test.
+- **Queen-composed clarification questions.** The discuss flow composes 3–5
+  questions from THIS goal and THIS codebase instead of the same canned trio;
+  every composed question must cite what it is grounded in or the runtime
+  refuses it. Answers land in the unchanged pipeline (hard constraints still
+  become REDIRECT signals) and the canned generator remains the typed
+  fallback.
+- **A git save-point after every verified phase.** Exactly the files the
+  phase's workers reported changing — the owner's dirty, untracked, and even
+  pre-staged files can never be swept in — with a greppable
+  `aether(phase-N):` subject and an `Aether-Phase` trailer for the
+  Archaeologist. Never pushes (argv invariant test); a commit failure pauses
+  autopilot via the previously-dead marker instead of blocking. Off switch:
+  `aether phase-commits set off`.
+- **Worker model tags on spawn lines.** `🔨🐜 Builder [sonnet] Mason-67`,
+  resolved from agent frontmatter plus any `ANTHROPIC_DEFAULT_*_MODEL`
+  redirect. Display only — routing stays with the platform, and a parity test
+  pins the display table to the agent files so it cannot go stale.
+- **Ranked post-init proposals.** Init proposes the sensible next moves
+  computed from the actual repo (colonize first for existing code, discuss
+  first for broad goals) with plain-English reasons; the wrapper asks, the
+  recorded suggestion is the real top proposal instead of a hardcoded
+  constant.
+- **The classic end-of-phase footer.** Every phase end shows open flags 🚩
+  with triage counts, active steering signals with content and strength,
+  phase/task progress bars, an honestly-verified "safe to clear your context"
+  line, and the next command as the user's choice via a real question — the
+  build wrapper never rolls into verification on its own.
+- **Deliberately-RED phases.** A typed `expect_failing_tests` field lets the
+  route-setter plan TDD red-first phases whose deliverable IS a failing test
+  run; verification inverts the tests check (green blocks, red advances), and
+  timeouts are never credited as the expected failure.
+- **Force seal (owner override).** `aether seal --force --reason "why"` files
+  a project away past unverified phases, open blockers, and review blocks —
+  for work finished outside the colony or a colony wedged on its own gates.
+  Never silent: the reason is required, a `sealed_forced` event names every
+  unverified phase, CROWNED-ANTHILL.md carries a permanent Owner Override
+  section, and the wrapper asks before ever forcing.
+
+### Fixed
+
+- **Spawn budget counted all-time history** (field report): the append-only
+  spawn ledger made any repo that ever finished more than 20 helpers
+  permanently unable to spawn again, with no recovery command able to clear
+  it. Fallback counting is live-helpers-only, and the deny message names the
+  actual cause instead of claiming "no run is recorded" when one exists.
+- **Review castes were briefed to run a CLI they cannot run** (field report):
+  auditor and gatekeeper have no Bash by design, yet their briefs instructed
+  `aether review-ledger-write` — they self-reported blocked and stalled the
+  phase. The runtime now persists the findings workers return, in-process.
+- **The flags gate silently lied**: it claimed to run "every time for safety"
+  but never opened the flags file, so a blocker raised with `/ant-flag`
+  blocked nothing. The classic Iron Law is restored, advancement-scoped:
+  blockers stop `continue` (never `build`), cannot be acknowledged away, and
+  machine-raised blockers clear on green verification evidence — while
+  chaos-raised and owner-raised blockers never auto-clear. The age-based
+  auto-resolve no longer defaults to resolving problems by growing old.
+- **Critics must bring solutions**: structured review findings now actually
+  feed the blocking decision (they were decorative); a blocking finding
+  carries its fix in the same breath or names `/ant-unblock`, CRITICAL ledger
+  writes without a suggestion are refused, Watcher issues carry
+  suggestion+blocking, every Chaos finding carries a concrete
+  `suggested_hardening`, and blocked output gains a Way Forward section.
+- **The classic flag renderer was dead code**: written during the restoration
+  round, never wired — `/ant-flags` now actually uses it.
+
+## [1.0.56] - 2026-08-16
+
+The v5.4.0 richness restoration: the colony you can watch work, back on the
+modern runtime. Almost everything here is reconnection — machinery that
+existed, computed, and rendered for nobody.
+
+### Added
+
+- **The classic caste identity is back.** Every worker renders glyph-plus-ant
+  (`🔨🐜 Builder Mason-67`), the v5.4.0 house style, locked by test. Continue
+  worker lines carry full identity instead of a bare `[caste]` tag, and the
+  moment of dispatch announces itself again (`──── 🔨🐜 Spawning 3 Builders in
+  parallel ────`).
+- **The autopilot narrates the whole run.** `/ant-run` streams an AUTOPILOT
+  ENGAGED banner, a header per phase, live worker lines, a PHASE ADVANCEMENT
+  block with a momentum ticker between phases, a framed pause block with the
+  reason and next step, and two celebrations at the end — including the classic
+  `🎉 P R O J E C T   C O M P L E T E` with "The colony rests. Well done!".
+  The classic pause engine is wired into the real loop (it had been connected
+  to a code path the run never called), the replan checkpoint is back on its
+  classic every-2-phases default, `--headless` queues the pause as a reviewable
+  decision, and `--dry-run` previews every phase plus the full pause-trigger
+  list. Proven end to end by a test that completes a multi-phase colony —
+  the previous evidence completed zero phases.
+- **The great ceremonies are back.** `aether init` shows the approved charter
+  and closes with the colony-born banner (👑 intention, 🟢 READY, 🧠 hive
+  wisdom seeded); the final `aether continue` celebrates project completion;
+  `aether seal` draws the CROWNED ANTHILL and speaks the closing incantation.
+- **Sectioned displays everywhere.** The pheromone view returns to its classic
+  form — emoji headings that explain themselves (`🎯 FOCUS (Pay attention
+  here)`), `[85%]` strengths, nested age/decay detail, a plain-English decay
+  footer — and the same house style now covers flags, blockers, gate and
+  failure classifications, memory health, review findings, and the loop-safety
+  feed. An invariant test fails on the next machine-table anywhere.
+- **Status explains its health score.** The five component signals (build
+  velocity, error rate, signal health, memory, colony age) render beneath the
+  health line, with real values where placeholders used to sit.
+- **History reads like the classic activity feed** — `[time] ⚡ worker_spawned`
+  with per-action icons, and continue shows what each worker actually found as
+  nested detail with honest overflow counts.
+- **Init does its cross-colony bookkeeping again.** A new colony registers
+  itself in the machine-level registry with detected domain tags and seeds
+  QUEEN.md from hive wisdom, both announced in the birth ceremony. Sealing
+  marks the entry inactive. Medic's `--fix` creates a named rollback
+  checkpoint and prints the undo command.
+
+### Fixed
+
+- `autofix-rollback` restored the checkpoint *envelope* over the colony state
+  file — corrupting exactly what it promised to restore. Never caught because
+  nothing called it. Fixed and wired into the medic flow.
+- Autopilot's dry-run steps section silently vanished in visual mode (a type
+  mismatch between the in-process and JSON-round-trip result shapes).
+- The ceremony-level taxonomy (`worker_theatre`/`guided_ritual`/`dashboard`/
+  `progress`/`quiet`), written and tested with zero callers, now gates
+  streaming: plumbing commands stay quiet, lifecycle commands narrate.
+- The clear-context advice only claims "Handoff saved" when the handoff file
+  actually exists on disk.
+- Three redundant swarm state mutators (`swarm-findings-init/add`,
+  `swarm-solution-set`) retired — the swarm run has recorded its own findings
+  in-process for some time; `swarm-findings-read` and `swarm-cleanup` are now
+  documented as the inspection and housekeeping paths. Orphan allowlist
+  291 → 279, with dated dispositions for the XML archival lane and the
+  zero-reader policy files recorded in `.planning/decisions/`.
+
+## [1.0.55] - 2026-08-16
+
+### Added
+
+- The Oracle setup ritual is now real runtime, not wrapper prose: `oracle propose` suggests scope/depth/accuracy and how much clarifying to do, `oracle brief` records the approved core question, and `oracle --from-brief` refuses to run without one. The approved question opens the research.
+- Live research visibility: every Oracle round appends to a progress log regardless of output mode, and `oracle status --follow` (or `--background --follow`) streams one line per round — phase, round N of M, confidence against target, current question. The previous per-round display was a guaranteed no-op on every background run.
+- `aether oracle selftest` proves the research machinery end to end with one real round in a throwaway workspace; non-zero exit when the dispatcher, agent definition, artifacts, or progress log are broken.
+- Completed research is saved durably to `.aether/research/<date>-<slug>.md` with front matter (core question, confidence, rounds); `oracle save` keeps a stopped run, `aether research` lists what's saved. The workspace copy is swept by the next run; the saved copy is not.
+- Research handoff: `aether init --research <path>` and `aether plan --research <path>` record a pointer on colony state, and the runtime carries the document's contents into planning, phase-research, and build worker briefs (budget-bounded, framed as evidence not instructions). `plan --print-brief` confirms delivery before a plan run is paid for.
+- Orchestration visibility: the Dispatch stage renders the Queen's team choice from the manifest rationale — one clause per selected caste, a short clause for castes considered and not called, and a named line whenever the runtime keeps a safety caste against the depth flag. Completed workers say whether they flagged anything or came back clean. `aether status` shows the colony health line the vital-signs computation always produced.
+- Knowledge-repo support: a directory of notes with zero code (Obsidian/Logseq vault, docs archive) now scans as a knowledge base — no CI/LICENSE/README housekeeping suggestions, risks about content loss and broken links instead of regression, and a charter describing note counts. `.aether/` gains a WHAT-IS-THIS.md marker so disk cleanups can tell durable colony state from a build cache.
+
+### Fixed
+
+- A new colony no longer inherits the previous colony's clarified decisions, assumptions, or worker handoff notes — re-init clears them, so workers stop being briefed with a finished project's context.
+- Deep and exhaustive Oracle runs no longer spend their opening third at the lowest reasoning effort; the survey phase is capped at a quarter of the round budget and runs at medium effort on deep runs.
+- Oracle research questions no longer splice in the goal of an inactive, unrelated colony, and the colony-goal question stays under 240 characters.
+- `aether oracle status` is read-only; repairing a dead controller moved to `aether oracle recover`.
+- "A unknown project" and the pile of "No X detected" filler lines are gone from generated charters; an empty scan now says plainly that it found nothing.
+- The Claude and OpenCode Oracle agent definitions described a Stop-hook loop and `--legacy` flag that never existed; they now describe the controller-owned loop the runtime actually runs, fenced by tests that fail on invented paths.
+- The session-freshness tools (`session-verify-fresh`, `session-clear`) — documented for years, called by nothing — are now reachable from the medic wrapper and off the orphan allowlist.
+
+## [1.0.48] - 2026-08-04
+
+### Fixed
+
+- Review workers that emit their results before the final turn are no longer lost, so `/ant-continue` advances at standard depth instead of blocking.
+- Next-step hints name the command you actually type (`/ant-continue` in Claude Code and OpenCode, raw CLI in Codex).
+- Recovery hints name commands that exist; a new audit checks every runtime-emitted hint against the real command tree.
+- Archive extraction is contained to its staging directory (path-traversal entries are rejected).
+- Caste keywords match on word boundaries, so an Ambassador is no longer dispatched to local-only phases.
+- Planners no longer bind "unchanged file" criteria to artifact claims, which used to block phases with no easy recovery.
+- 41 stale flat command mirrors regenerated; the guard now covers all 61 wrappers.
+
 ## [1.0.40] - 2026-05-19
 
 ### Added

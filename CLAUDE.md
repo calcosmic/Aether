@@ -1,7 +1,24 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.42
-> **Last Updated:** 2026-07-26
+> **Current Version:** v1.0.61
+> **Last Updated:** 2026-08-17
+
+> ## READ THIS BEFORE YOU WRITE ANYTHING TO THE OWNER
+>
+> The owner is non-technical. Every word this repo invented — ratchet, residue,
+> caste, pheromone, colony, seal, midden, orphan, allowlist, hub, wrapper, Queen —
+> means nothing to him. Translate each one inline, every single time, including in
+> questions and option labels. Test output is jargon too: say "I ran the full test
+> suite and everything passed", never "18/18 packages, race detection, vet clean".
+> Finding IDs (CR-06, WR-04) and criterion numbers are internal bookkeeping — say
+> what the problem *is* instead of naming its code.
+>
+> **The check:** re-read your message as someone who has never opened a file here.
+> If any sentence needs a file, a code, or a repo word to make sense, rewrite it.
+>
+> Full guidance in "Communication Style" below. This has been restated three times
+> because it kept being missed — the fix is behaviour, not more text. Do not edit
+> this file in response to a too-technical answer. Rewrite the answer.
 
 ---
 
@@ -9,7 +26,7 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.41 |
+| Version | v1.0.61 |
 | Slash commands | 60 (Claude) + 60 (OpenCode); Codex uses native CLI + 27 TOML agents |
 | Agent definitions | 27 |
 | Skills | 86 (55 colony + 31 domain) |
@@ -34,7 +51,7 @@ This rule exists because the project's own audits caught the alternative failing
 - `.planning/v1.14-MILESTONE-AUDIT.md:406` — *"the 96-02 SUMMARY claimed this wiring existed, but the implementation was never added."* The milestone shipped 19/19.
 - v1.23 marked `WORKFLOW-01..11` **Satisfied** with VERIFICATION.md missing, SUMMARY.md missing, and the traceability box unchecked. Its own note: *"This is 1–2 hours of paperwork, not engineering work."*
 - `suggest-analyze` was ticked complete in v1.11. Its only call site sat in a playbook the runtime never loaded, behind `2>/dev/null`, followed by *"If suggest-analyze returns error: Skip without error, continue."* It had never executed once.
-- The learning pipeline has been declared restored in v1.10, v1.11, v1.13 and v1.23. `consolidation-phase-end` and `consolidation-seal` still have no caller.
+- The learning pipeline has been declared restored in v1.10, v1.11, v1.13 and v1.23. `consolidation-phase-end` and `consolidation-seal` had no caller until v1.25 (Phase 162) wired them into the continue and seal paths, locked by named wiring tests.
 
 18 of 25 milestones have been framed around restoring, recovering or repairing something previously marked done. That is what a non-executable definition of done produces.
 
@@ -49,6 +66,41 @@ This rule exists because the project's own audits caught the alternative failing
 - Always include a short plain-English, "for dummies" explanation alongside technical details when explaining work to the user.
 - Explain what changed, why it matters, and what it means for the user before going deep on implementation details.
 - Translate jargon the first time it appears. Summarize command output and error logs unless exact lines are needed for the next action.
+
+### The owner is non-technical. This repo's vocabulary is invented.
+
+Aether names things after an ant colony. **None of these words mean anything
+outside this repo**, and using one untranslated is the same as using a word
+the reader has never seen. Assume zero prior knowledge of every term below,
+every time — including in questions, option labels, and progress updates.
+
+| Repo word | What it actually means |
+|---|---|
+| Colony | One project Aether is working on, start to finish |
+| Queen | The coordinator that decides which helpers to send at a task |
+| Caste / worker | A type of AI helper with one job (write code, check the work, research) |
+| Pheromone | A note you leave that steers the helpers ("focus here", "never do this") |
+| Instinct / wisdom | A lesson the system learned and now reuses automatically |
+| Hive | Shared lessons pooled across all your projects, not just this one |
+| Hub (`~/.aether/`) | The installed copy on your machine that every project reads from |
+| Wrapper | The `/ant-…` menu commands you type; they call the real program underneath |
+| Runtime / the Go binary | The actual program that does the work and holds the truth |
+| Seal / entomb | Mark a project finished / file it away in the archive |
+| Midden | The log of things that went wrong, kept so the system stops repeating them |
+| Playbook | An old instruction document; most are no longer read by the program |
+| Orphan | A feature that was built but nothing ever calls, so it never runs |
+| Ratchet | An automatic check that can only get stricter, never looser |
+| Allowlist | The written list of known exceptions a check agrees to ignore for now |
+
+### Questions must be answerable without opening a file
+
+When asking the owner to choose between options, each option must state the
+real-world consequence in ordinary words **before** any file path, command
+name, or repo term appears. Paths and identifiers are evidence for the choice,
+not the description of it — put them at the end, or in a skippable aside.
+
+If an option cannot be understood without knowing what a word in it means,
+the option is written wrong. Rewrite it; do not expect the owner to look it up.
 
 ## UX Architecture
 
@@ -66,11 +118,11 @@ Aether uses a hybrid UX model: the Go runtime owns truth, platform wrappers own 
 ### Caste Identity System
 
 Each worker caste has three visual components:
-1. **Emoji prefix** — decorative icon (e.g., `🔨` for Builder, `👁️` for Watcher)
+1. **Emoji prefix** — caste glyph followed by the ant, the classic v5.4.0 house style (e.g., `🔨🐜` for Builder, `👁️🐜` for Watcher; the generic fallback stays a single `🐜`)
 2. **ANSI-colored label** — the primary identity, colored by caste (e.g., "Builder" in yellow)
 3. **Deterministic name** — hash-based per caste+task (e.g., "Mason-67")
 
-Format: `🔨 Builder Mason-67  Task description`
+Format: `🔨🐜 Builder Mason-67  Task description` (locked by `TestCasteIdentityUsesHouseStyle`)
 
 Color maps in `cmd/codex_visuals.go`: `casteColorMap` (ANSI codes), `casteEmojiMap` (single emoji), `casteLabelMap` (human-readable name). Functions: `casteIdentity()`, `casteLabel()`, `casteEmoji()`.
 
@@ -117,11 +169,50 @@ should not need to remember `--verification-depth` or timeout flag combinations.
 
 | Flow | Light | Standard | Heavy |
 |------|-------|----------|-------|
-| **Build** | Builder + Watcher + Probe (max 5 workers) | + Auditor + Gatekeeper (max 6) | Full safety castes (max 8) |
+| **Build** | max 5 workers | the phase's own budget (4–8) | at least 8 |
 | **Continue** | Watcher only (max 3 workers) | Watcher + Probe (max 4) | + Gatekeeper + Auditor + Probe (max 6) |
-| **Seal** | Auditor only (max 4 workers) | + Probe (max 4) | + Gatekeeper (max 5) |
+| **Seal** | no Gatekeeper, Auditor or Probe (max 4 workers) | max 4 | max 5 |
 
-*For dummies: The Queen looks at what kind of work the phase is doing and decides how many safety checks to run. A simple docs phase might just get a quick look (light), while a security phase gets the full team (heavy).*
+Build depth adjusts the phase's own mode/risk budget: **light** lowers it,
+**heavy** raises it, and **standard** leaves it alone — standard means the
+Queen's ordinary judgement, which mode and risk already express. A flat standard
+ceiling would weaken exactly the phases that need most help.
+
+**Castes the phase requires bypass the cap entirely** — a high-risk or
+production phase keeps its Auditor at every depth
+(`queenBuildSafetyRequiredCastes`), so choosing light removes optional
+specialists, never safety ones.
+
+**A required caste must be able to do something on this phase.** Because
+required castes bypass the budget, marking one unconditionally makes every
+depth flag a lie for that caste. Two were:
+
+| Caste | Was required when | Is required when |
+|-------|-------------------|------------------|
+| Probe | always, on every build | the phase produces testable code — not documentation-only, not discovery (`queenPhaseProducesTestableCode`) |
+| Gatekeeper | risk is high, **or mode is production**, or security wording | risk is high, or the phase names a security surface (`queenPhaseHasSecuritySignal`) |
+| Watcher | always | always — unchanged, and must stay so |
+| Auditor | risk is high, or production, or security wording | unchanged |
+
+Probe on a documentation phase has no code to cover, and the standard continue
+path required one too, so a single phase paid for two Probes that could only
+report having found nothing. Gatekeeper is a *security* specialist, and mode is
+inferred from wording — so most real phases infer production and were summoning
+a security auditor for work like "add a CSV export".
+
+Asserted by `TestProbeIsRequiredOnlyWhereItCanFindSomething`,
+`TestGatekeeperNeedsASecuritySignal`, `TestWatcherIsAlwaysRequiredOnBuild`, and
+`TestHighRiskPhaseKeepsBothReviewers`. The Watcher test exists because gating a
+caste for cost is a different decision from gating the one thing that checks
+the work: a build with no Watcher reports success by assertion.
+
+These numbers are asserted by `TestBuildWorkerCapHonoursVerificationDepth`. They
+were previously documented but not implemented: the build branch consulted only
+mode and risk, so a *light* build of a production phase returned 8 and a *heavy*
+build of a discovery phase returned 5. If this table and the code disagree
+again, that test fails.
+
+*For dummies: The Queen looks at what kind of work the phase is doing and decides how many workers to send. Writing a README does not need a test-coverage specialist, and adding a CSV export does not need a security auditor — so those no longer turn up. Work that touches passwords, tokens or logins still gets the security reviewer, and every build still gets a Watcher checking it. Picking "light" never switches off the safety checks a risky phase needs — it only drops the optional extras.*
 
 Wrappers should explain the Queen's choice briefly in plain English and reserve
 manual depth flags for advanced overrides. If docs and runtime disagree, runtime wins.
@@ -354,13 +445,31 @@ Runtime note:
 
 `.aether/docs/command-playbooks/*.md` are reference documentation for the
 build/continue methodology. Since v1.25 they are NOT loaded by the runtime and
-NOT injected into worker or orchestrator prompts — execution behavior lives in
-the host-manifest flow (`aether host build` → spawn from `dispatch_manifest` →
-`build-finalize`), and workers receive the lean runtime-composed brief.
+NOT injected into worker or orchestrator prompts — workers receive the lean
+runtime-composed brief instead. Execution behavior lives in one of two
+distinct flows, not a single "host-manifest flow":
+
+- **Interactive wrapper (the primary, documented path):**
+  `aether build $ARGUMENTS --plan-only` returns a manifest, the wrapper
+  spawns workers from it directly, then `aether build-finalize` commits the
+  result. `.claude/commands/ant/build.md` explicitly forbids running
+  `aether host build` from this path — "the TS host hop is off the
+  interactive build path."
+- **Autopilot / host-driven (a separate lane, reached only via `aether run`
+  or another host-driven invocation — never the interactive wrapper):**
+  `aether host build` → the TS host fetches the same `dispatch_manifest` →
+  the host itself dispatches workers → `aether build-finalize`.
 
 Authority note:
-- `.claude/commands/ant/build.md` and `continue.md` describe the host-manifest
-  flow directly; there is no playbook indirection.
+- `.claude/commands/ant/build.md` describes the plan-only/wrapper-driven flow
+  above, not the host-manifest flow — it never touches the TS host.
+  `continue.md`'s relationship to the host is different again: its default
+  path also never touches the host and runs verification entirely inside the
+  Go runtime process, with no manifest step at all; only its opt-in
+  heavy-review path (`--classic-ceremony` / `--verification-depth heavy`)
+  fetches a manifest from `aether host continue --dry-run` — a real host
+  touch point, but dry-run only, where the wrapper still performs the
+  reviewer spawning rather than the host dispatching itself.
 - OpenCode maintains mirrored command specs in `.opencode/commands/ant/*.md`.
 - Agent parity model: `.claude/agents/ant/*.md`, `.opencode/agents/*.md`, and
   `.codex/agents/*.toml` are canonical platform sources. `aether publish`
@@ -480,15 +589,24 @@ on demand. They come in two categories:
 | `~/.aether/system/skills/` | Published hub mirror of shipped skills |
 | `~/.aether/skills/domain/` | Custom user-created domain skills |
 | repo `.aether/skills/` | Repo-specific custom skills only |
-| `~/.codex/skills/aether/` | Small Codex shim set that routes to `aether skill-inject` |
+| `~/.codex/skills/aether/` | Small Codex shim set; the `aether-skill-loader` shim explains that skill content already arrives automatically in dispatch responses |
 
 ### How Matching Works
 
-1. Colony-prime builds a skills index via `skill-index` (cached for performance)
-2. `skill-match` scores each skill against the current worker using:
+Matching and injection are Go functions (`matchSkillsForWorkflow`, `renderSkillInjectResult`
+in `cmd/skills.go`) called directly, in-process, from the worker-brief assembler — not a
+separate CLI step. Phase 191 deleted the 8 standalone CLI wrappers that used to expose this
+as `skill-index`/`skill-detect`/`skill-match`/`skill-inject`/`skill-list`/`skill-diff`/
+`skill-parse-frontmatter`/`skill-cache-rebuild` (SKILL-01 — confirmed dead CLI surface with no
+caller anywhere; the underlying functions were preserved unconditionally because
+`composeBuildManifestBrief` calls them for every worker brief). For each worker:
+
+1. A live scan of installed skills is built (no separate index-build step)
+2. Each skill is scored against the current worker using:
+   - Workflow context (`build`, `colonize`, `plan`, `continue`)
    - Worker role (builder, watcher, etc.)
-   - Active pheromone signals (FOCUS/REDIRECT)
-   - `skill-detect` patterns matched against the codebase
+   - Task keywords from the worker assignment
+   - Detected file/package patterns matched against the codebase
 3. Top 3 colony skills + top 3 domain skills are selected per worker
 
 ### Skill Injection
@@ -496,21 +614,7 @@ on demand. They come in two categories:
 Skill content is injected separately from colony-prime context:
 
 - Own 8K character budget (independent of the colony-prime token budget)
-- Injected into builder and watcher prompts
-- `skill-inject` assembles matched skills into a prompt section
-
-### Subcommands
-
-| Subcommand | Purpose |
-|------------|---------|
-| `skill-index` | Build/read cached skills index |
-| `skill-detect` | Detect domain skills matching codebase |
-| `skill-match` | Match skills to worker by role + task + pheromones |
-| `skill-inject` | Load matched skills into prompt section |
-| `skill-list` | List all installed skills |
-| `skill-parse-frontmatter` | Parse SKILL.md frontmatter to JSON |
-| `skill-diff` | Compare user skill with shipped version |
-| `skill-cache-rebuild` | Force rebuild of index cache |
+- Injected into builder and watcher prompts automatically as part of brief assembly
 
 ### Custom Skills
 
@@ -541,9 +645,11 @@ Colony-prime assembles worker context within a character budget to avoid prompt 
 4. Hive wisdom
 5. Context capsule
 6. User preferences
-7. QUEEN.md wisdom
-8. Pheromone signals (trimmed last -- highest retention priority)
-9. Blockers (NEVER trimmed)
+7. QUEEN wisdom (global)
+8. QUEEN wisdom (local)
+9. Pheromone signals / active signals (trimmed last -- highest retention priority)
+
+Blockers are NEVER trimmed, regardless of budget.
 
 Trimmed sections are logged for debugging. See `pheromone-write` subcommand for implementation.
 
@@ -554,6 +660,13 @@ Trimmed sections are logged for debugging. See `pheromone-write` subcommand for 
 The Hive Brain is the intelligent layer for cross-colony knowledge sharing. It stores
 generalized wisdom derived from colony instincts, scoped by domain, and shared across
 all colonies on the same machine.
+
+Cross-colony flow is controlled by a single switch, `AETHER_HIVE_POLICY`: unset or
+empty resolves to `promote` (worker retrieval AND automatic seal-time promotion
+both on by default), `read` enables retrieval only, `off` disables both, and any
+unrecognized value fails safe to `off` with a stderr warning naming it. There is no
+separate per-colony consent gate. See `.aether/docs/learning-system-authority.md`
+for the full decision record and its reasoning.
 
 ### Storage
 
@@ -835,7 +948,7 @@ Key additions:
 - Standalone instinct storage with full provenance
 - jq-based graph layer for instinct relationships
 - 8 curation ants with orchestrated execution
-- Lifecycle integration: `consolidation-phase-end` and `consolidation-seal` exist as working CLI subcommands; no lifecycle command invokes either one yet (Phase 162 wires this)
+- Lifecycle integration: both `consolidation-phase-end` and `consolidation-seal` have runtime callers — phase-end consolidation runs automatically on durable phase advance during `/ant-continue`, and the full eight-ant seal pass runs automatically during `/ant-seal`. Both remain directly invocable as the manual inspection path, and both are non-blocking. See `.aether/docs/learning-system-authority.md` for the authority decision and the named tests enforcing this
 
 ### Curation Ants
 
@@ -911,4 +1024,4 @@ For Codex-specific rules and agents, see `.codex/CODEX.md`
 
 ---
 
-*Updated for Aether v1.0.42 — 2026-07-26*
+*Updated for Aether v1.0.61 — 2026-08-21*

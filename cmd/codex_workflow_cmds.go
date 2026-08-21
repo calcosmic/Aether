@@ -15,7 +15,6 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -72,6 +71,16 @@ var planCmd = &cobra.Command{
 		revisionType, _ := cmd.Flags().GetString("revision-type")
 		revisionReason, _ := cmd.Flags().GetString("revision-reason")
 		revisionEvidence, _ := cmd.Flags().GetStringArray("revision-evidence")
+		researchDocs, _ := cmd.Flags().GetStringArray("research")
+
+		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
+			fullFlag, _ := cmd.Flags().GetBool("full")
+			if err := printPlanningBriefs(skillWorkspaceRoot(), fullFlag); err != nil {
+				outputError(1, err.Error(), nil)
+			}
+			return nil
+		}
+
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -92,6 +101,7 @@ var planCmd = &cobra.Command{
 			RevisionType:      revisionType,
 			RevisionReason:    revisionReason,
 			RevisionEvidence:  revisionEvidence,
+			ResearchDocs:      researchDocs,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -123,15 +133,18 @@ var buildCmd = &cobra.Command{
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
+		queenCastes, _ := cmd.Flags().GetStringArray("castes")
+		queenCasteReason, _ := cmd.Flags().GetString("caste-reason")
 
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			worker, _ := cmd.Flags().GetString("worker")
+			fullFlag, _ := cmd.Flags().GetBool("full")
 			err := printWorkerBriefs(
 				skillWorkspaceRoot(),
 				phaseNum,
 				selectedTasks,
 				worker,
-				buildPrintBriefOptions(workerTimeout, forceBuild, lightFlag, heavyFlag, verificationDepth),
+				buildPrintBriefOptions(workerTimeout, forceBuild, lightFlag, heavyFlag, fullFlag, verificationDepth),
 			)
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -147,13 +160,15 @@ var buildCmd = &cobra.Command{
 				LightFlag:         lightFlag,
 				HeavyFlag:         heavyFlag,
 				VerificationDepth: verificationDepth,
+				QueenCastes:       queenCastes,
+				QueenCasteReason:  queenCasteReason,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
 				return nil
 			}
 			reviewDepthPlan := reviewDepthFromResult(result)
-			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan))
+			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan, queenPolicyFromResult(result)))
 			return nil
 		}
 
@@ -189,7 +204,7 @@ var buildCmd = &cobra.Command{
 			}
 		}
 		reviewDepthBuild := reviewDepthFromResult(result)
-		outputWorkflow(result, renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild))
+		outputWorkflow(result, renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result)))
 		return nil
 	},
 }
@@ -213,6 +228,8 @@ var continueCmd = &cobra.Command{
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
+		continueCastes, _ := cmd.Flags().GetStringArray("castes")
+		continueCasteReason, _ := cmd.Flags().GetString("caste-reason")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		classicCeremony, _ := cmd.Flags().GetBool("classic-ceremony")
 		if classicCeremony {
@@ -225,12 +242,15 @@ var continueCmd = &cobra.Command{
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
 				ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+				ReadOnlyArtifacts:   normalizeCLIStringList(mustGetStringArray(cmd, "read-only-artifact")),
 				WorkerTimeout:       workerTimeout,
 				VerificationTimeout: verificationTimeout,
 				LightFlag:           lightFlag,
 				HeavyFlag:           heavyFlag,
 				SkipWatchers:        skipWatchers,
 				VerificationDepth:   verificationDepth,
+				QueenCastes:         continueCastes,
+				QueenCasteReason:    continueCasteReason,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -242,6 +262,7 @@ var continueCmd = &cobra.Command{
 
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot(), codexContinueOptions{
 			ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+			ReadOnlyArtifacts:   normalizeCLIStringList(mustGetStringArray(cmd, "read-only-artifact")),
 			WorkerTimeout:       workerTimeout,
 			VerificationTimeout: verificationTimeout,
 			LightFlag:           lightFlag,
@@ -356,10 +377,11 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
+		forceFlag, _ := cmd.Flags().GetBool("force")
+		forceReason, _ := cmd.Flags().GetString("reason")
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		if planOnly {
-			forceFlag, _ := cmd.Flags().GetBool("force")
-			result, err := runSealPlanOnly(resolveAetherRootPath(), forceFlag)
+			result, err := runSealPlanOnly(resolveAetherRootPath(), forceFlag, forceReason)
 			if err != nil {
 				renderRecoveryMenu("seal", err.Error(), nil)
 				return nil
@@ -368,42 +390,90 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
-		state, err := loadActiveColonyState()
+		// The same readiness rules as the heavy path: with --force the
+		// all-phases-completed rule becomes an owner override (recorded
+		// with a reason), because sometimes the work was finished OUTSIDE
+		// the colony, or the colony is wedged on its own gates, and the
+		// owner's call to file the project away must win.
+		state, incompletePhases, err := validateSealReady(forceFlag)
 		if err != nil {
-			renderRecoveryMenu("seal", colonyStateLoadMessage(err), nil)
+			renderRecoveryMenu("seal", err.Error(), nil)
 			return nil
-		}
-		if len(state.Plan.Phases) == 0 {
-			renderRecoveryMenu("seal", "No project plan. Run `aether plan` first.", nil)
-			return nil
-		}
-
-		for _, phase := range state.Plan.Phases {
-			if phase.Status != colony.PhaseCompleted {
-				renderRecoveryMenu("seal", "all phases must be completed before sealing the colony", nil)
-				return nil
-			}
 		}
 
 		// Check for blocker-severity flags
 		blockers, issues := checkSealBlockers(store)
 		if len(blockers) > 0 {
-			forceFlag, _ := cmd.Flags().GetBool("force")
 			if !forceFlag {
 				renderRecoveryMenu("seal", renderBlockerSummary(blockers, issues), nil)
 				return nil
 			}
 			// --force: warn but continue
-			fmt.Fprintln(stdout, fmt.Sprintf("WARNING: Overriding %d blocker(s) with --force", len(blockers)))
+			visualFprintln(stdout, fmt.Sprintf("WARNING: Overriding %d blocker(s) with --force", len(blockers)))
 		} else if len(issues) > 0 {
-			fmt.Fprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
+			visualFprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
 		}
 
-		return completeSealRuntime(state)
+		override := sealOverride{Forced: forceFlag, Reason: strings.TrimSpace(forceReason), IncompletePhases: incompletePhases, OverriddenBlockers: len(blockers)}
+		if forceFlag && (len(incompletePhases) > 0 || len(blockers) > 0) && override.Reason == "" {
+			renderRecoveryMenu("seal", fmt.Sprintf("force-sealing overrides %d unverified phase(s) and %d open blocker(s) — a reason is required so the override is recorded honestly: rerun with `--reason \"why\"`", len(incompletePhases), len(blockers)), nil)
+			return nil
+		}
+
+		return completeSealRuntime(state, override)
 	},
 }
 
-func completeSealRuntime(state colony.ColonyState) error {
+// sealOverride records what an owner-forced seal skipped — the honesty
+// payload the seal event, result, and CROWNED-ANTHILL.md all carry. A
+// forced seal is legitimate (work done outside the colony, a wedged gate);
+// a SILENT forced seal is not.
+type sealOverride struct {
+	Forced                 bool
+	Reason                 string
+	IncompletePhases       []string
+	OverriddenBlockers     int
+	OverriddenReviewBlocks int
+}
+
+func (o sealOverride) overrodeAnything() bool {
+	return o.Forced && (len(o.IncompletePhases) > 0 || o.OverriddenBlockers > 0 || o.OverriddenReviewBlocks > 0)
+}
+
+func completeSealRuntime(state colony.ColonyState, override sealOverride) error {
+	// Snapshot the instinct entries eligible for THIS seal's own local/hive
+	// promotion loop (D-08) before consolidation below decays trust scores
+	// and archives stale instincts. Consolidation's archival floor operates
+	// on TrustScore, an independent axis from the Confidence bar this seal
+	// loop uses -- an instinct the seal ceremony judges promotion-worthy by
+	// Confidence must not be silently pulled out from under it by maintenance
+	// running earlier in the very same seal. Captured before
+	// runSealConsolidation() runs so a mutation in one axis cannot race the
+	// decision on the other.
+	sealEligibleEntries, sealEligibleErr := loadActiveInstinctEntriesFromStore(store)
+
+	// Learning consolidation (LEARN-02): run the eight-ant curation pass plus
+	// decay/archive/promotion BEFORE the local promotion loop below, so its
+	// QueenPromotedIDs are available to make that loop subordinate (D-09,
+	// Task 2) and Task 3 can render its per-ant beats.
+	sealConsolidation := runSealConsolidation()
+
+	// D-09: pkg/memory's RunConsolidation (invoked inside runSealConsolidation
+	// above) is the AUTHORITATIVE writer of QUEEN.md's "## Instincts" section
+	// at seal -- it already promoted every QueenEligible instinct (confidence
+	// >= 0.75 AND >= 3 recorded applications) before this function reached
+	// here. The loop below is explicitly SUBORDINATE: it promotes only
+	// instincts the authoritative pipeline did NOT already promote, because
+	// QueenEligible's application-history bar is one a young colony never
+	// clears, and deleting this loop would make seal promote nothing in
+	// practice for most colonies. Do not "simplify" this back into a second
+	// independent scan that double-writes an instinct pkg/memory already
+	// wrote under "## Instincts" into "## Wisdom" as well.
+	queenAlreadyPromoted := make(map[string]struct{}, len(sealConsolidation.QueenPromotedIDs))
+	for _, id := range sealConsolidation.QueenPromotedIDs {
+		queenAlreadyPromoted[id] = struct{}{}
+	}
+
 	// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md and Hive Brain (D-08, CERE-02)
 	var repoName string
 	if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
@@ -423,10 +493,18 @@ func completeSealRuntime(state colony.ColonyState) error {
 	var hiveEligibleCount int
 	var hivePromotedCount int
 	var hivePromotionFailures int
-	if entries, err := loadActiveInstinctEntriesFromStore(store); err == nil {
+	if entries, err := sealEligibleEntries, sealEligibleErr; err == nil {
 		for _, entry := range entries {
 			if entry.Confidence >= 0.8 && entry.Action != "" {
-				if err := promoteInstinctLocal(store, entry.ID, entry.Action); err == nil {
+				if _, alreadyPromoted := queenAlreadyPromoted[entry.ID]; alreadyPromoted {
+					// pkg/memory already wrote this instinct into QUEEN.md's
+					// "## Instincts" section this seal (D-09) -- the colony
+					// promoted it, a different writer did the writing. Do not
+					// call promoteInstinctLocal again, but still count it so
+					// sealEnrichment.InstinctsPromoted and CROWNED-ANTHILL.md
+					// report the full promoted set.
+					promotedInstinctNames = append(promotedInstinctNames, entry.ID)
+				} else if err := promoteInstinctLocal(store, entry.ID, entry.Action); err == nil {
 					promotedInstinctNames = append(promotedInstinctNames, entry.ID)
 				}
 			}
@@ -450,15 +528,43 @@ func completeSealRuntime(state colony.ColonyState) error {
 		}
 	}
 
+	// WR-03: the loop above inspects only pre-consolidation snapshot entries
+	// with Confidence >= 0.8, but pkg/memory's QueenEligible bar is
+	// POST-decay confidence >= 0.75 (plus 3 applications) -- so a
+	// pipeline-promoted instinct whose snapshot confidence sits in
+	// [0.75, 0.8) would silently vanish from sealEnrichment.InstinctsPromoted
+	// and CROWNED-ANTHILL.md's "Promoted Instincts" section. Fold every
+	// actually-pipeline-promoted ID into the reported set so the report
+	// matches what reached QUEEN.md. Hive promotion above deliberately keeps
+	// the snapshot's >= 0.8 bar: a NEW instinct created by consolidation
+	// during this very seal is absent from the snapshot and becomes
+	// hive-eligible at the next seal -- a documented one-seal lag, not a bug.
+	promotedSeen := make(map[string]struct{}, len(promotedInstinctNames))
+	for _, id := range promotedInstinctNames {
+		promotedSeen[id] = struct{}{}
+	}
+	for _, id := range sealConsolidation.QueenPromotedIDs {
+		if _, ok := promotedSeen[id]; !ok {
+			promotedInstinctNames = append(promotedInstinctNames, id)
+		}
+	}
+
+	// Render the eight-ant consolidation beats (D-06, LEARN-02) so the
+	// ceremony reads consolidation -> promotion -> hive: printed here, after
+	// the promotion loop above has run, and before the hive reporting lines
+	// below.
+	visualFprint(stdout, renderSealConsolidationBeats(sealConsolidation))
+	emitSealConsolidationCeremony(sealConsolidation)
+
 	// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
 	if hivePromotedCount > 0 {
-		fmt.Fprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
+		visualFprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
 	}
 	if hivePromotionFailures > 0 {
-		fmt.Fprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
+		visualFprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
 	}
 	if hiveEligibleCount > 0 && !automaticHivePromotionEnabled() {
-		fmt.Fprintln(stdout, fmt.Sprintf("Hive auto-promotion is disabled; %d eligible instinct(s) remain project-local", hiveEligibleCount))
+		visualFprintln(stdout, fmt.Sprintf("Hive auto-promotion is disabled; %d eligible instinct(s) remain project-local", hiveEligibleCount))
 	}
 
 	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
@@ -468,7 +574,17 @@ func completeSealRuntime(state colony.ColonyState) error {
 	state.State = colony.StateCOMPLETED
 	state.Milestone = "Crowned Anthill"
 	state.MilestoneUpdatedAt = &now
-	state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|sealed|seal|Colony sealed at Crowned Anthill", now))
+	if override.overrodeAnything() {
+		// A forced seal is a real event in the colony's history, not a
+		// footnote: name what was skipped and why, so the Archaeologist and
+		// anyone reading history sees an honest record.
+		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf(
+			"%s|sealed_forced|seal|Colony force-sealed by owner (%d unverified phase(s), %d overridden blocker(s)): %s",
+			now, len(override.IncompletePhases), override.OverriddenBlockers+override.OverriddenReviewBlocks, override.Reason,
+		))
+	} else {
+		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|sealed|seal|Colony sealed at Crowned Anthill", now))
+	}
 
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		outputError(2, fmt.Sprintf("failed to save colony state: %v", err), nil)
@@ -478,7 +594,7 @@ func completeSealRuntime(state colony.ColonyState) error {
 	// Shelf candidate detection (before archiving)
 	candidates, _ := detectShelfCandidates(state, store)
 	if len(candidates) > 0 {
-		fmt.Fprintln(stdout, shelfCandidateSummary(candidates))
+		visualFprintln(stdout, shelfCandidateSummary(candidates))
 	}
 
 	// Scan for high-severity open findings before building summary
@@ -502,6 +618,8 @@ func completeSealRuntime(state colony.ColonyState) error {
 		ShelfCandidates:       candidates,
 		FinalReview:           finalReview,
 		ReviewBacklog:         reviewBacklog,
+		ConsolidationReport:   sealConsolidation.ReportPath,
+		Override:              override,
 	}
 
 	summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
@@ -520,20 +638,37 @@ func completeSealRuntime(state colony.ColonyState) error {
 	}, "aether-seal")
 	updateSessionSummary("seal", "aether entomb", "Colony sealed")
 
+	// Hub registry (RECLAIM-02, non-blocking): the sealed colony's entry goes
+	// inactive with its final goal recorded, so `aether registry-list` reads
+	// as a true history of colonies on this machine.
+	sealGoal := ""
+	if state.Goal != nil {
+		sealGoal = strings.TrimSpace(*state.Goal)
+	}
+	if _, regErr := upsertColonyRegistryEntry(filepath.Dir(filepath.Dir(store.BasePath())), sealGoal, nil, false); regErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not update hub registry at seal: %v\n", regErr)
+	}
+
 	result := map[string]interface{}{
 		"sealed":    true,
 		"milestone": state.Milestone,
 		"summary":   summaryPath,
 		"next":      "aether entomb",
 	}
+	if override.overrodeAnything() {
+		result["force_sealed"] = true
+		result["force_reason"] = override.Reason
+		result["unverified_phases"] = override.IncompletePhases
+		result["overridden_blockers"] = override.OverriddenBlockers + override.OverriddenReviewBlocks
+	}
 	addOrchestratorBoundaryGuidance(result, "seal", state, "aether entomb", nil)
 	outputWorkflow(result, renderSealVisual(state, summaryPath))
 
 	if shouldRenderVisualOutput(stdout) {
-		fmt.Fprint(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
+		writeVisualOutput(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
 		readinessSummary := buildPorterReadinessSummary()
-		fmt.Fprint(stdout, readinessSummary)
-		fmt.Fprintln(stdout, "\nRun `/ant-porter` or `aether porter check` to validate and deliver.")
+		writeVisualOutput(stdout, readinessSummary)
+		writeVisualOutput(stdout, "\nRun `aether porter check` to validate and deliver.\n")
 	}
 	return nil
 }
@@ -944,23 +1079,24 @@ func checkSealBlockers(s *storage.Store) (blockers []colony.FlagEntry, issues []
 	return blockers, issues
 }
 
-// renderBlockerSummary formats blocker and issue flags as a table with resolution hints.
+// renderBlockerSummary formats blocker and issue flags in the classic headed
+// style with resolution hints.
 func renderBlockerSummary(blockers []colony.FlagEntry, issues []colony.FlagEntry) string {
 	var b strings.Builder
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"ID", "Description", "Type", "Created"})
 	for _, entry := range blockers {
-		desc := entry.Description
-		if len(desc) > 40 {
-			desc = desc[:37] + "..."
+		b.WriteString(fmt.Sprintf("🚩 %s\n", strings.TrimSpace(entry.Description)))
+		detail := entry.ID
+		if entry.Type != "" {
+			detail += ", " + entry.Type
 		}
-		t.AppendRow(table.Row{entry.ID, desc, entry.Type, entry.CreatedAt})
+		if entry.CreatedAt != "" {
+			detail += ", created " + entry.CreatedAt
+		}
+		b.WriteString("   └── " + detail + "\n")
 	}
-	t.SetStyle(table.StyleRounded)
-	b.WriteString(t.Render())
-	b.WriteString("\n\nBLOCKED: Resolve blockers above or use --force to override.\n")
+	b.WriteString("\nBLOCKED: Resolve blockers above or use --force to override.\n")
 	for _, bl := range blockers {
-		b.WriteString(fmt.Sprintf("  aether flag %s --resolve\n", bl.ID))
+		b.WriteString(fmt.Sprintf("  aether flag-resolve --id %s\n", bl.ID))
 	}
 	if len(issues) > 0 {
 		b.WriteString(fmt.Sprintf("\nNOTE: %d issue-severity flag(s) also unresolved.\n", len(issues)))
@@ -997,6 +1133,13 @@ type sealEnrichment struct {
 	ShelfCandidates       []colony.ShelfEntry
 	FinalReview           *sealFinalReviewReport
 	ReviewBacklog         []colony.ReviewLedgerEntry
+	// ConsolidationReport is the path to the scribe's persisted curation
+	// report (LEARN-02, <.aether>/CURATION-REPORT.md), surfaced here so it
+	// is discoverable from CROWNED-ANTHILL.md as well as from stdout.
+	ConsolidationReport string
+	// Override carries the owner's force-seal record, when one happened —
+	// what was skipped and why, written into the summary permanently.
+	Override sealOverride
 }
 
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
@@ -1011,6 +1154,23 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 	b.WriteString(fmt.Sprintf("- Completed phases: %d\n", len(state.Plan.Phases)))
 	if state.CurrentPhase > 0 {
 		b.WriteString(fmt.Sprintf("- Final phase: %d\n", state.CurrentPhase))
+	}
+	if enrichment.Override.overrodeAnything() {
+		b.WriteString("\n## Owner Override (Force Seal)\n")
+		b.WriteString("This colony was sealed by an explicit owner decision, not by its own verification finishing.\n")
+		b.WriteString(fmt.Sprintf("- Reason: %s\n", enrichment.Override.Reason))
+		if len(enrichment.Override.IncompletePhases) > 0 {
+			b.WriteString(fmt.Sprintf("- Unverified phases (%d):\n", len(enrichment.Override.IncompletePhases)))
+			for _, name := range enrichment.Override.IncompletePhases {
+				b.WriteString("  - " + name + "\n")
+			}
+		}
+		if enrichment.Override.OverriddenBlockers > 0 {
+			b.WriteString(fmt.Sprintf("- Open blocker flags overridden: %d\n", enrichment.Override.OverriddenBlockers))
+		}
+		if enrichment.Override.OverriddenReviewBlocks > 0 {
+			b.WriteString(fmt.Sprintf("- Final-review blocking findings overridden: %d\n", enrichment.Override.OverriddenReviewBlocks))
+		}
 	}
 	// Add review warnings section if any high-severity open findings exist
 	if len(warnings) > 0 {
@@ -1078,6 +1238,9 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 	}
 	b.WriteString(fmt.Sprintf("| FOCUS signals expired | %d |\n", enrichment.SignalsExpired))
 	b.WriteString(fmt.Sprintf("| Flags resolved | %d |\n", enrichment.FlagsResolved))
+	if enrichment.ConsolidationReport != "" {
+		b.WriteString(fmt.Sprintf("| Curation report | %s |\n", enrichment.ConsolidationReport))
+	}
 
 	if len(enrichment.InstinctsPromoted) > 0 {
 		b.WriteString("\n### Promoted Instincts\n")
@@ -1156,6 +1319,9 @@ func init() {
 	planCmd.Flags().String("revision-type", "", "Why a refreshed plan is needed: manual, user_feedback, research, verification_failure, or scope_change")
 	planCmd.Flags().String("revision-reason", "", "Traceable explanation for refreshing a plan after completed work")
 	planCmd.Flags().StringArray("revision-evidence", nil, "Repository-relative evidence file supporting the revision (repeatable)")
+	planCmd.Flags().StringArray("research", nil, "Repository-relative research document to plan from, e.g. a saved Oracle run under .aether/research (repeatable; persisted so later plan runs keep it)")
+	planCmd.Flags().Bool("print-brief", false, "Print which context sections the planning workers would receive (present/absent, size). Reads state; mutates nothing")
+	planCmd.Flags().Bool("full", false, "With --print-brief, also print each planning worker's assembled brief")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results")
@@ -1163,19 +1329,26 @@ func init() {
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("force", false, "Force redispatch of the current active phase after an interrupted build")
 	buildCmd.Flags().Bool("plan-only", false, "Emit the build dispatch manifest for wrapper-spawned workers; opens a durable build attempt (superseded automatically on re-entry) but spawns nothing. For a pure read, use --print-brief")
-	buildCmd.Flags().Bool("print-brief", false, "Print the exact prompt each worker would receive, with a section-by-section composition breakdown. Reads state; mutates nothing")
+	buildCmd.Flags().Bool("print-brief", false, "Print a ten-second checklist of which context sections arrived (present/absent, size, total against budget). Add --full for the raw assembled prompt. Reads state; mutates nothing")
+	buildCmd.Flags().Bool("full", false, "With --print-brief, print the raw assembled prompt and composition table instead of the checklist. No effect without --print-brief")
 	buildCmd.Flags().String("worker", "", "With --print-brief, print only the named worker's prompt")
 	buildCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	buildCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build dispatches (e.g. 15m)")
 	buildCmd.Flags().Bool("light", false, "Force light review (skip heavy agents on intermediate phases)")
 	buildCmd.Flags().Bool("heavy", false, "Force heavy review (full quality gauntlet on any phase)")
 	buildCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
+	// The Queen's team choice. Supplied by the wrapper after it has read the
+	// phase; omitted means the deterministic keyword engine decides, which is
+	// what every caller did before judgement existed.
+	buildCmd.Flags().StringArray("castes", nil, "Queen's proposed worker castes for this phase (repeatable or comma-separated). Safety castes the phase requires are added back automatically; the worker budget still applies")
+	buildCmd.Flags().String("caste-reason", "", "Why the Queen chose that team, shown to the operator alongside the roster")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results")
 	buildCompletionStageCmd.Flags().String("completion-file", "", "JSON file containing the accepted dispatch_manifest and external worker results")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
+	continueCmd.Flags().StringArray("read-only-artifact", nil, "Record hash-verified read-only evidence for an artifact a reconciled task did not modify, as <task-id>:<path> (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
 	continueCmd.Flags().Bool("heavy", false, "Force heavy review (full review gauntlet)")
@@ -1183,6 +1356,11 @@ func init() {
 	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
 	continueCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
+	// Continue is the expensive flow: every reviewer is a full agent run. The
+	// Queen chooses the team after reading the phase; without a proposal the
+	// keyword engine decides, as before.
+	continueCmd.Flags().StringArray("castes", nil, "Queen's proposed review castes for this phase (repeatable or comma-separated). The Watcher and any review the phase requires are added back automatically")
+	continueCmd.Flags().String("caste-reason", "", "Why the Queen chose that review team")
 	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
 	continueCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	continueCmd.Flags().Bool("classic-ceremony", false, "Emit the heavy continue review manifest for wrapper-spawned classic ceremony reviewers")
@@ -1191,7 +1369,8 @@ func init() {
 	continueFinalizeCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
-	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")
+	sealCmd.Flags().Bool("force", false, "Owner override: seal past unverified phases, open blockers, and review blocks (recorded; requires --reason when it overrides anything)")
+	sealCmd.Flags().String("reason", "", "Why the seal is being forced — recorded in the colony's history and CROWNED-ANTHILL.md")
 	sealCmd.Flags().Bool("plan-only", false, "Print the final seal review manifest without mutating colony state or spawning workers")
 	sealFinalizeCmd.Flags().String("completion-file", "", "JSON file containing seal_manifest and external review worker results")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")

@@ -848,7 +848,8 @@ aether midden-write --category "abandoned-approach" --message "Tried: initial ap
 # Enter memory pipeline for learning observation tracking (MID-02)
 aether memory-capture \
   --type "failure" \
-  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)"```
+  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)"
+```
 
 Spawn sub-workers ONLY if 3x complexity:
 - Check spawn budget using Bash tool with description: `aether spawn-can-spawn --depth {depth}`
@@ -910,7 +911,8 @@ aether midden-write --category "worker_failure" --message "Builder ${ant_name} f
 # Capture failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}"```
+  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}"
+```
 
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete --name "{ant_name}" --status "completed" --summary "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
 
@@ -979,7 +981,7 @@ After processing all wave results, check if any midden error category has reache
 
 Run using the Bash tool with description "Checking midden thresholds...":
 ```bash
-midden_result=$(aether midden-recent-failures 50 2>/dev/null || echo '{"count":0,"failures":[]}')
+midden_result=$(aether midden-recent-failures --limit 50 2>/dev/null || echo '{"count":0,"failures":[]}')
 midden_count=$(echo "$midden_result" | jq '.count // 0')
 
 if [[ "$midden_count" -gt 0 ]]; then
@@ -1395,7 +1397,8 @@ aether midden-write --category "verification" --message "Watcher verification fa
 # Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Verification failed: ${issue_title} - ${issue_description}"```
+  --content "Verification failed: ${issue_title} - ${issue_description}"
+```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
 

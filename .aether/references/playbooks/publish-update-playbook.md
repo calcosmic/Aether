@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: publish-update-playbook
 kind: playbook
 category: playbooks
+scope: aether-internal
 title: Publish Update Playbook
 description: "Playbook for publishing Aether source changes and validating downstream update behavior."
 output_types: [publish-plan, update-plan, distribution-review]

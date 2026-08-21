@@ -28,6 +28,18 @@ aether host seal $ARGUMENTS
 
 Parse `result.seal_manifest`. If the runtime returns blockers or recovery guidance, surface that output and stop. Do not fabricate review results.
 
+**Force-seal (owner override, asked — never assumed):** when the runtime
+refuses because phases were never verified (work finished outside the colony)
+or blockers are open, and the user wants to move on, present the choice as a
+real question (the AskUserQuestion tool): "Force the seal — files the project
+away now, recording exactly what was skipped and why" versus "Keep working —
+resolve what's blocking first". If they choose force, ask them (in the same
+question or a follow-up) for a one-line reason in their own words, then rerun
+with `--force --reason "<their words>"`. The override is permanent history:
+the colony's record and its summary will name every unverified phase and the
+reason. NEVER add `--force` on your own initiative, and never invent the
+reason.
+
 Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the final-review display uses the same runtime manifest.
 
 Expected manifest:

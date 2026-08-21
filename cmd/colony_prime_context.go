@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,19 @@ import (
 	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
+
+// Budget constants for buildColonyPrimeOutput (D-03). Named so every later
+// measurement (e.g. Plan 06's budget-ceiling invariant test) refers to the
+// same number instead of a literal that can silently drift out of sync.
+const (
+	colonyPrimeBudgetChars        = 8000
+	colonyPrimeCompactBudgetChars = 4000
+)
+
+// charterNoGovernanceFallback is generateCharter's placeholder string
+// (cmd/init_research.go) for a colony where no governance tooling was
+// detected. It carries no binding rule, so it must not surface as one.
+const charterNoGovernanceFallback = "No formal governance detected -- colony should establish conventions"
 
 type colonyPrimeOutput struct {
 	Context       string            `json:"context"`
@@ -331,10 +345,27 @@ func buildPriorReviewsSection(s *storage.Store, compact bool) (colonyPrimeSectio
 	}, totalOpen
 }
 
+// colonyPrimeOptions parameterizes the briefing assembler. Question is the
+// ask-mode addition: when set, sections that overlap the question's words
+// get a relevance boost (so "why is phase 3 blocked?" ranks blockers above
+// boilerplate) and an activity-tail section joins the roster. colony-prime
+// had taken zero inputs since it was written; this is its first
+// parameterization, kept behind an options struct so the next one does not
+// change every call site again.
+type colonyPrimeOptions struct {
+	Compact  bool
+	Question string
+}
+
 func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
-	budget := 8000
+	return buildColonyPrimeOutputOpts(colonyPrimeOptions{Compact: compact})
+}
+
+func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
+	compact := opts.Compact
+	budget := colonyPrimeBudgetChars
 	if compact {
-		budget = 4000
+		budget = colonyPrimeCompactBudgetChars
 	}
 	result := colonyPrimeOutput{
 		Budget:   budget,
@@ -351,16 +382,30 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		return result
 	}
 
-	sc := cache.NewSessionCache(store.BasePath())
-	sc.ClearStale(24 * time.Hour)
+	// Ask mode (--question) is a pure inspection and must leave
+	// .aether/data byte-identical — the session cache both writes
+	// acceleration entries and prunes stale ones, so ask mode bypasses it
+	// entirely. Locked by TestColonyPrimeQuestionIsReadOnly.
+	askMode := strings.TrimSpace(opts.Question) != ""
+	var sc *cache.SessionCache
+	if !askMode {
+		sc = cache.NewSessionCache(store.BasePath())
+		sc.ClearStale(24 * time.Hour)
+	}
+	cachedLoad := func(path, rel string, dest interface{}) error {
+		if sc != nil {
+			if err := sc.Load(path, dest); err == nil {
+				return nil
+			}
+		}
+		return store.LoadJSON(rel, dest)
+	}
 
 	sections := make([]colonyPrimeSection, 0, 9)
 
 	var state colony.ColonyState
 	statePath := filepath.Join(store.BasePath(), "COLONY_STATE.json")
-	if err := sc.Load(statePath, &state); err != nil {
-		_ = store.LoadJSON("COLONY_STATE.json", &state)
-	}
+	_ = cachedLoad(statePath, "COLONY_STATE.json", &state)
 
 	var stateSection strings.Builder
 	writeSectionHeader(&stateSection, "state", "## Colony State\n\n")
@@ -428,6 +473,94 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		})
 	}
 
+	// Charter section (CONTEXT-06, D-09): the colony charter is
+	// user-approved governance and must reach every worker as a binding
+	// rule, not background information -- silence is what made the charter
+	// decorative in the first place. Skip entirely when there is nothing to
+	// say (no charter, or generateCharter's "no formal governance" fallback):
+	// an empty heading is noise that costs budget. Do NOT string-concatenate
+	// this into any brief renderer -- routing it through colonyPrimeSection
+	// is the security control (T-163-03); it inherits AssessPromptSource and
+	// RankContextCandidates below for free, same as every other section.
+	if state.Charter != nil {
+		governanceText := strings.TrimSpace(state.Charter.Governance)
+		if governanceText == charterNoGovernanceFallback {
+			governanceText = ""
+		}
+		constraintsText := strings.TrimSpace(state.Charter.Constraints)
+
+		// Intent, Vision, Goals, TechStack and KeyRisks are synthesized from the
+		// operator's own words at init and shown for approval, then were never
+		// read by anything: only Governance and Constraints reached a worker.
+		// A colony could capture exactly what the operator wanted, store it,
+		// and tell the workers none of it — which on this repo meant five
+		// populated fields silently withheld while the one empty field was the
+		// only thing forwarded.
+		//
+		// They are emitted as context, deliberately below the hard-rules block
+		// and under their own framing. Governance and Constraints are approved
+		// rules; intent and risks are orientation. Presenting them as equally
+		// binding would make the "hard rules" sentence untrue and invite a
+		// worker to treat a vision statement as a constraint.
+		type charterContextField struct {
+			label string
+			value string
+		}
+		contextFields := []charterContextField{
+			{"Intent", strings.TrimSpace(state.Charter.Intent)},
+			{"Vision", strings.TrimSpace(state.Charter.Vision)},
+			{"Goals", strings.TrimSpace(state.Charter.Goals)},
+			{"Tech stack", strings.TrimSpace(state.Charter.TechStack)},
+			{"Key risks", strings.TrimSpace(state.Charter.KeyRisks)},
+		}
+		hasContextField := false
+		for _, field := range contextFields {
+			if field.value != "" {
+				hasContextField = true
+				break
+			}
+		}
+
+		if governanceText != "" || constraintsText != "" || hasContextField {
+			var charterSB strings.Builder
+			writeSectionHeader(&charterSB, "charter", charterFallbackHeading+"\n\n")
+			if governanceText != "" || constraintsText != "" {
+				charterSB.WriteString("The colony operator approved the following governance. These are hard rules every worker must follow, not background information:\n\n")
+				if governanceText != "" {
+					charterSB.WriteString(fmt.Sprintf("Governance: %s\n", governanceText))
+				}
+				if constraintsText != "" {
+					charterSB.WriteString(fmt.Sprintf("Constraints: %s\n", constraintsText))
+				}
+			}
+			if hasContextField {
+				if governanceText != "" || constraintsText != "" {
+					charterSB.WriteString("\n")
+				}
+				charterSB.WriteString("The operator described the work this way. Treat it as orientation for judgement calls, not as additional hard rules:\n\n")
+				for _, field := range contextFields {
+					if field.value == "" {
+						continue
+					}
+					charterSB.WriteString(fmt.Sprintf("%s: %s\n", field.label, field.value))
+				}
+			}
+			charterProtected, charterPreserveReason := protectedSectionPolicy("charter")
+			sections = append(sections, colonyPrimeSection{
+				name:              "charter",
+				title:             "Charter",
+				source:            statePath,
+				content:           charterSB.String(),
+				priority:          9,
+				freshnessScore:    1.0,
+				confirmationScore: 1.0,
+				relevanceScore:    sectionRelevanceScore("charter"),
+				protected:         charterProtected,
+				preserveReason:    charterPreserveReason,
+			})
+		}
+	}
+
 	now := time.Now().UTC()
 	pf, phErr := loadPheromonesOnce(store, sc)
 	if phErr == nil && len(pf.Signals) > 0 {
@@ -475,12 +608,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	}
 	var instFile colony.InstinctsFile
 	instinctsPath := filepath.Join(store.BasePath(), "instincts.json")
-	instinctsLoaded := false
-	if err := sc.Load(instinctsPath, &instFile); err == nil {
-		instinctsLoaded = true
-	} else if err := store.LoadJSON("instincts.json", &instFile); err == nil {
-		instinctsLoaded = true
-	}
+	instinctsLoaded := cachedLoad(instinctsPath, "instincts.json", &instFile) == nil
 	if instinctsLoaded {
 		for _, inst := range instFile.Instincts {
 			if inst.Archived {
@@ -585,19 +713,13 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	}
 	hiveEntries := readHiveWisdomEntriesForDomains(hubDir, 5, readRegistryDomainsForRepo(hubDir, repoRoot), &fallbacks)
 
-	// Surface why hive wisdom was withheld — but only once the colony has
-	// actually opted in. These reasons were previously collected and dropped on
-	// the floor, so the section vanished with no explanation, which contradicts
-	// the design rule that cross-project wisdom adoption is never silent.
-	//
-	// Not-opted-in is deliberately excluded: it is the default state of every
-	// colony, and warning about it on every single colony-prime call would train
-	// users to ignore warnings. The case worth reporting is the confusing one —
-	// a user who DID opt in, sees no wisdom, and needs to know whether the hub is
-	// empty, the domain did not match, or everything has decayed to dormant.
-	if hiveRetrievalOptedIn() {
-		result.Warnings = append(result.Warnings, fallbacks...)
-	}
+	// Surface why hive wisdom was withheld. Retrieval is default-on per D-02 —
+	// there is no per-colony opt-in state to distinguish anymore, so these
+	// reasons always surface unconditionally rather than being silently
+	// dropped. A colony that expects wisdom and sees none needs to know
+	// whether the hub is empty, the domain didn't match, everything decayed
+	// to dormant, or AETHER_HIVE_POLICY=off disabled retrieval entirely.
+	result.Warnings = append(result.Warnings, fallbacks...)
 
 	hiveLines := buildHiveWisdomLines(hiveEntries)
 	if len(hiveLines) > 0 {
@@ -810,6 +932,65 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		}
 	}
 
+	// Midden (recent failures) -- 188-VERIFICATION.md Gap 1: this function
+	// (via resolveCodexWorkerContext -> buildColonyPrimeOutput, the one
+	// every live build/continue/colonize/plan/seal/swarm worker dispatch
+	// actually calls) had zero midden-reading code, before or after this
+	// phase's original five plans. Uses the canonical shared helper
+	// (cmd/midden_shared.go) -- never a hand-built read path, which is
+	// exactly the split Phase 188 existed to end. Filtered to
+	// still-unacknowledged entries only (an acknowledged failure has
+	// already been handled -- resurfacing it forever would grow this
+	// section without bound) and hard-capped at
+	// middenCapsuleSectionEntryLimit, newest first, so the "protected"
+	// (never-trimmed) status this section carries (see
+	// protectedSectionPolicy's "midden" case) stays safe no matter how many
+	// failures accumulate in midden.json over a colony's lifetime.
+	if midden, middenErr := loadMiddenFile(store); middenErr == nil && len(midden.Entries) > 0 {
+		unacked := make([]colony.MiddenEntry, 0, len(midden.Entries))
+		for _, entry := range midden.Entries {
+			if entry.Acknowledged != nil && *entry.Acknowledged {
+				continue
+			}
+			unacked = append(unacked, entry)
+		}
+		if len(unacked) > 0 {
+			sort.SliceStable(unacked, func(i, j int) bool {
+				return unacked[i].Timestamp > unacked[j].Timestamp
+			})
+			const middenCapsuleSectionEntryLimit = 5
+			shown := unacked
+			remaining := 0
+			if len(shown) > middenCapsuleSectionEntryLimit {
+				remaining = len(shown) - middenCapsuleSectionEntryLimit
+				shown = shown[:middenCapsuleSectionEntryLimit]
+			}
+			var middenSB strings.Builder
+			writeSectionHeader(&middenSB, "midden", "## Recent Failures\n\n")
+			middenTimestamps := make([]string, 0, len(shown))
+			for _, entry := range shown {
+				middenSB.WriteString(fmtOrFallback("midden", func(t *sectionTemplate) string { return t.EntryFormat }, "- [%s] %s\n", entry.Category, truncateString(entry.Message, 160)))
+				middenTimestamps = append(middenTimestamps, entry.Timestamp)
+			}
+			if remaining > 0 {
+				fmt.Fprintf(&middenSB, "+%d more unacknowledged\n", remaining)
+			}
+			middenProtected, middenPreserveReason := protectedSectionPolicy("midden")
+			sections = append(sections, colonyPrimeSection{
+				name:              "midden",
+				title:             "Recent Failures",
+				source:            filepath.Join(store.BasePath(), middenCanonicalPath),
+				content:           middenSB.String(),
+				priority:          9,
+				freshnessScore:    latestFreshnessScore(now, 0.75, middenTimestamps...),
+				confirmationScore: 1.0,
+				relevanceScore:    sectionRelevanceScore("midden"),
+				protected:         middenProtected,
+				preserveReason:    middenPreserveReason,
+			})
+		}
+	}
+
 	// Medic health section — inject critical issues from last scan
 	if lastScan, err := loadMedicLastScan(store.BasePath()); err == nil {
 		var criticalIssues []HealthIssue
@@ -845,6 +1026,15 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		}
 	}
 
+	// Ask mode: recent activity is history colony-prime never carried —
+	// state.Events is frequently empty while activity.log holds the real
+	// feed — and a question about "what happened" needs it.
+	if strings.TrimSpace(opts.Question) != "" {
+		if tail := buildActivityTailSection(); tail != nil {
+			sections = append(sections, *tail)
+		}
+	}
+
 	result.Sections = len(sections)
 	allowedCandidates := make([]colony.ContextCandidate, 0, len(sections))
 	for _, sec := range sections {
@@ -858,6 +1048,10 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			result.Ledger.Blocked = append(result.Ledger.Blocked, sec.ledgerItem())
 			continue
 		}
+		// Question-aware relevance: a small additive boost for sections
+		// whose content overlaps the question's words, on top of the static
+		// per-section score — no new ranking system.
+		sec.relevanceScore += questionRelevanceBoost(opts.Question, sec)
 		allowedCandidates = append(allowedCandidates, sec.rankingCandidate())
 	}
 
@@ -905,14 +1099,122 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	return result
 }
 
+// questionRelevanceBoost scores how much a section's content overlaps the
+// question's words — keyword overlap only, deliberately: it nudges ranking
+// under budget pressure so the sections a question is ABOUT survive the
+// trim; it never invents relevance. Zero when there is no question.
+func questionRelevanceBoost(question string, sec colonyPrimeSection) float64 {
+	question = strings.ToLower(strings.TrimSpace(question))
+	if question == "" {
+		return 0
+	}
+	haystack := strings.ToLower(sec.name + " " + sec.title + " " + sec.content)
+	matched := 0
+	total := 0
+	for _, word := range strings.Fields(question) {
+		word = strings.Trim(word, "?.,!\"'")
+		if len(word) < 4 {
+			continue
+		}
+		total++
+		if strings.Contains(haystack, word) {
+			matched++
+		}
+	}
+	if total == 0 || matched == 0 {
+		return 0
+	}
+	return 2.0 * float64(matched) / float64(total)
+}
+
+// buildActivityTailSection carries the last entries of activity.log — the
+// history feed an ask question about "what happened" needs. state.Events is
+// frequently empty (nothing durable writes it between phases) while
+// activity.log holds the real per-command record; /ant-history reads only
+// the former, which is exactly why "what changed?" had no good answer.
+func buildActivityTailSection() *colonyPrimeSection {
+	if store == nil {
+		return nil
+	}
+	lines, err := store.ReadJSONL("activity.log")
+	if err != nil || len(lines) == 0 {
+		return nil
+	}
+	const activityTailMax = 20
+	if len(lines) > activityTailMax {
+		lines = lines[len(lines)-activityTailMax:]
+	}
+	var b strings.Builder
+	b.WriteString("## Recent Activity\n\n")
+	for _, raw := range lines {
+		var entry map[string]interface{}
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			continue
+		}
+		ts := strings.TrimSpace(stringValue(entry["timestamp"]))
+		action := strings.TrimSpace(stringValue(entry["action"]))
+		detail := strings.TrimSpace(stringValue(entry["detail"]))
+		if action == "" {
+			continue
+		}
+		if ts != "" {
+			fmt.Fprintf(&b, "- %s %s", ts, action)
+		} else {
+			fmt.Fprintf(&b, "- %s", action)
+		}
+		if detail != "" {
+			fmt.Fprintf(&b, " — %s", detail)
+		}
+		b.WriteString("\n")
+	}
+	protected, preserveReason := protectedSectionPolicy("activity_tail")
+	return &colonyPrimeSection{
+		name:              "activity_tail",
+		title:             "Recent Activity",
+		source:            filepath.Join(store.BasePath(), "activity.log"),
+		content:           b.String(),
+		priority:          6,
+		freshnessScore:    1.0,
+		confirmationScore: 1.0,
+		relevanceScore:    sectionRelevanceScore("activity_tail"),
+		protected:         protected,
+		preserveReason:    preserveReason,
+	}
+}
+
 func resolveCodexWorkerContext() string {
-	context := strings.TrimSpace(buildColonyPrimeOutput(true).PromptSection)
+	context, _ := resolveCodexWorkerContextWithTrim()
+	return context
+}
+
+// resolveCodexWorkerContextWithTrim returns the same capsule
+// resolveCodexWorkerContext returns, plus the names of the sections the token
+// budget dropped while assembling it.
+//
+// The trim list exists so a caller can tell a DELIBERATE omission from a
+// SILENT one. --print-brief needs exactly that distinction (190-190/WR-02):
+// a steering section that is absent because the budget evicted it is a real
+// but explicable finding about this colony's context pressure, while a
+// section absent with no eviction on record is a delivery defect. Reporting
+// both as the same failure would either cry wolf on a busy colony or stay
+// quiet on a genuine drop.
+//
+// Callers that only need the text keep using resolveCodexWorkerContext, which
+// delegates here so there is one assembly path and the capsule's side effects
+// (hive retrieval recording, ledger writes) happen once per call, not twice.
+func resolveCodexWorkerContextWithTrim() (string, []string) {
+	output := buildColonyPrimeOutput(true)
+	context := strings.TrimSpace(output.PromptSection)
+	trimmed := append([]string(nil), output.Trimmed...)
 	if context == "" {
+		// Fallback assembly: a different builder with its own budget, so the
+		// colony-prime trim ledger above does not describe it.
 		context = buildContextCapsuleOutput(true, 8, 3, 2, 220).PromptSection
+		trimmed = nil
 	}
 	if len(context) < 128 {
 		fmt.Fprintf(os.Stderr, "⚠ Context capsule below minimum threshold (%d chars, min 128) — dispatch blocked to prevent zero-context worker execution\n", len(context))
-		return ""
+		return "", trimmed
 	}
-	return context
+	return context, trimmed
 }

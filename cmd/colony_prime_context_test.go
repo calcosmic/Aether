@@ -167,9 +167,7 @@ section_templates:
 	}
 	store = s
 
-	// This test asserts on the custom hive_wisdom header template, so it must
-	// opt into hive retrieval explicitly — it is off by default.
-	enableHiveForTest(t)
+	// Hive retrieval is on by default (D-01/D-02); no opt-in needed.
 
 	stdout = &bytes.Buffer{}
 	stderr = &bytes.Buffer{}
@@ -912,5 +910,229 @@ section_templates:
 	}
 	if !strings.Contains(ctx, "CUSTOM - [Phase 1] learned something (confidence: 85%, classification: pattern)") {
 		t.Fatalf("expected custom memory entry format, got:\n%s", ctx)
+	}
+}
+
+// buildRichColonyPrimeFixture populates a store with data that exercises
+// every section colony-prime.md's section_templates defines (state,
+// review_depth, pheromones, instincts, decisions, learnings, worker_handoffs,
+// hive_wisdom, learned_memory, global_queen_md, user_preferences,
+// local_queen_wisdom, clarified_intent, blockers, medic_health) so a
+// before/after render comparison actually exercises every template field
+// instead of only the ones a sparse fixture happens to reach.
+func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *storage.Store {
+	t.Helper()
+
+	hubDir := filepath.Join(tmpDir, "hub")
+	if err := os.MkdirAll(filepath.Join(hubDir, "hive"), 0755); err != nil {
+		t.Fatalf("mkdir hub hive: %v", err)
+	}
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	store = s
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+
+	goal := "191-02 fold-and-delete byte-identical proof"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Fixture Phase", Status: colony.PhaseReady, Tasks: []colony.Task{
+					{Status: "open", Goal: "do the fixture thing"},
+				}},
+			},
+		},
+		ParallelMode:      colony.ModeInRepo,
+		VerificationDepth: string(colony.VerificationDepthHeavy),
+		Memory: colony.Memory{
+			Decisions: []colony.Decision{
+				{Phase: 1, Claim: "claim", Rationale: "rationale"},
+			},
+			PhaseLearnings: []colony.PhaseLearning{
+				{Phase: 1, PhaseName: "Fixture Phase", Learnings: []colony.Learning{
+					{Claim: "learned", Status: "verified"},
+				}},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{Type: "FOCUS", Content: json.RawMessage(`"pay attention here"`), CreatedAt: time.Now().UTC().Format(time.RFC3339), Active: true},
+		},
+	}
+	if err := s.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("save pheromones: %v", err)
+	}
+
+	instinctsFile := colony.InstinctsFile{
+		Instincts: []colony.InstinctEntry{
+			{Trigger: "test", Action: "action", Confidence: 0.8},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instinctsFile); err != nil {
+		t.Fatalf("save instincts: %v", err)
+	}
+
+	entries := []map[string]interface{}{
+		{
+			"phase":          1,
+			"content":        "learned something",
+			"confidence":     0.85,
+			"classification": "pattern",
+			"evidence":       map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
+		},
+	}
+	if err := s.SaveJSON("entries.json", entries); err != nil {
+		t.Fatalf("save entries: %v", err)
+	}
+
+	pendingFile := colony.FlagsFile{
+		Decisions: []colony.FlagEntry{
+			{ID: "1", Description: "Q: what?", Type: "clarification", Resolved: true, Resolution: "answer", CreatedAt: time.Now().UTC().Format(time.RFC3339)},
+			{ID: "2", Description: "blocker desc", Type: "blocker", Resolved: false, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
+		},
+	}
+	if err := s.SaveJSON("pending-decisions.json", pendingFile); err != nil {
+		t.Fatalf("save pending decisions: %v", err)
+	}
+
+	medicScan := MedicLastScan{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Issues: []HealthIssue{
+			{Severity: "critical", Message: "critical issue", File: "cmd/example.go"},
+		},
+	}
+	if err := s.SaveJSON("medic-last-scan.json", medicScan); err != nil {
+		t.Fatalf("save medic scan: %v", err)
+	}
+
+	records := workerHandoffFile{
+		Entries: []workerHandoffRecord{
+			{
+				ID:                 "1",
+				Workflow:           "build",
+				Phase:              1,
+				WorkerName:         "Builder-1",
+				Status:             "completed",
+				VerificationStatus: "pass",
+				Summary:            "did work",
+				Freshness:          time.Now().UTC().Format(time.RFC3339),
+			},
+		},
+	}
+	if err := s.SaveJSON(workerHandoffsPath, records); err != nil {
+		t.Fatalf("save handoffs: %v", err)
+	}
+
+	globalQueenContent := "## Patterns\n\n- Always write tests first\n\n## User Preferences\n\n- Speak plain English\n"
+	if err := os.WriteFile(filepath.Join(hubDir, "QUEEN.md"), []byte(globalQueenContent), 0644); err != nil {
+		t.Fatalf("write global queen: %v", err)
+	}
+	hiveData := hiveWisdomData{
+		Entries: []hiveWisdomEntry{{
+			ID:         "hw1",
+			Text:       "Hive wisdom: prefer composition over inheritance",
+			Confidence: 0.85,
+			Domain:     "go",
+			AccessedAt: time.Now().UTC().Format(time.RFC3339),
+		}},
+	}
+	hiveJSON, err := json.MarshalIndent(hiveData, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal hive wisdom: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hubDir, "hive", "wisdom.json"), hiveJSON, 0644); err != nil {
+		t.Fatalf("write hive wisdom: %v", err)
+	}
+
+	localQueenPath := filepath.Join(filepath.Dir(dataDir), "QUEEN.md")
+	localQueenContent := "## Patterns\n\n- Local wisdom entry\n"
+	if err := os.WriteFile(localQueenPath, []byte(localQueenContent), 0644); err != nil {
+		t.Fatalf("write local queen: %v", err)
+	}
+
+	return s
+}
+
+// TestColonyPrimeMdDeletionProducesByteIdenticalOutput is 191-02's Layer 1
+// (Go-level) proof: colony-prime.md's real, pre-deletion content -- captured
+// verbatim in cmd/testdata/191-02-colony-prime-original.md before this task
+// touched anything -- must render EXACTLY the same worker-context text as the
+// post-deletion state (colonyPrimeTemplatesPathOverride pointed at a path
+// that does not exist, forcing every section onto its Go-compiled fallback).
+//
+// If this test passes before colony/prompts/colony-prime.md is deleted, the
+// fold in cmd/colony_prime_context.go is complete. If it still passes AFTER
+// deletion (re-run in the same task, per 191-02-PLAN.md Task 2), that is the
+// mechanical proof the fold survived the deletion -- not an assumption.
+func TestColonyPrimeMdDeletionProducesByteIdenticalOutput(t *testing.T) {
+	saveGlobals(t)
+
+	// Render 1: the real, original colony-prime.md content (frozen in
+	// testdata so this test does not depend on the live file's continued
+	// existence -- it must still compile and pass once that file is gone).
+	tmpDir1 := t.TempDir()
+	dataDir1 := filepath.Join(tmpDir1, ".aether", "data")
+	os.MkdirAll(dataDir1, 0755)
+	buildRichColonyPrimeFixture(t, tmpDir1, dataDir1)
+
+	originalPath, err := filepath.Abs(filepath.Join("testdata", "191-02-colony-prime-original.md"))
+	if err != nil {
+		t.Fatalf("resolve testdata path: %v", err)
+	}
+	if _, err := os.Stat(originalPath); err != nil {
+		t.Fatalf("testdata fixture missing (must be captured before colony-prime.md is deleted): %v", err)
+	}
+	colonyPrimeTemplatesPathOverride = originalPath
+	resetColonyPrimeTemplatesCache()
+	beforeOutput := buildColonyPrimeOutput(false)
+	if strings.TrimSpace(beforeOutput.Context) == "" {
+		t.Fatal("before-render produced empty context -- fixture did not exercise the loader")
+	}
+
+	// Render 2: simulate colony-prime.md having been deleted -- every
+	// section falls back to its Go-compiled default.
+	tmpDir2 := t.TempDir()
+	dataDir2 := filepath.Join(tmpDir2, ".aether", "data")
+	os.MkdirAll(dataDir2, 0755)
+	buildRichColonyPrimeFixture(t, tmpDir2, dataDir2)
+
+	colonyPrimeTemplatesPathOverride = filepath.Join(tmpDir2, "nonexistent-colony-prime.md")
+	resetColonyPrimeTemplatesCache()
+	afterOutput := buildColonyPrimeOutput(false)
+	if strings.TrimSpace(afterOutput.Context) == "" {
+		t.Fatal("after-render produced empty context -- fixture did not exercise the loader")
+	}
+
+	if beforeOutput.Context != afterOutput.Context {
+		t.Fatalf("colony-prime output is NOT byte-identical before vs after colony-prime.md deletion\n--- BEFORE (real file) ---\n%s\n--- AFTER (Go fallback) ---\n%s", beforeOutput.Context, afterOutput.Context)
+	}
+
+	// A sanity check that this fixture reaches sections beyond just "state"
+	// -- otherwise the byte-identical assertion above would be trivially
+	// true for the wrong reason (nothing substantive was compared).
+	mustContain := []string{
+		"## Colony State", "## Review Depth", "## Pheromone Signals",
+		"## Active Instincts", "## Key Decisions", "## Phase Learnings",
+		"## Previous Worker Handoffs", "## HIVE WISDOM", "## LEARNED MEMORY",
+		"## GLOBAL QUEEN WISDOM", "## USER PREFERENCES", "## LOCAL QUEEN WISDOM",
+		"## CLARIFIED INTENT", "## Active Blockers", "## Colony Health Issues",
+	}
+	for _, want := range mustContain {
+		if !strings.Contains(beforeOutput.Context, want) {
+			t.Errorf("fixture did not exercise section %q -- byte-identical proof is incomplete for this section", want)
+		}
 	}
 }

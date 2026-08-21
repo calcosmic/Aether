@@ -2,29 +2,31 @@ Running deterministic verification for phase 1 before watcher/review workers (ti
 ── Dispatch ──
 Continue Verification 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
-  👁️ Watcher Worker-XX  Phase: 1 — Golden phase
+──── 👁️🐜 Spawning Worker-XX — Phase: 1 — Golden phase ────
+  👁️🐜 Watcher [sonnet] Worker-XX  Phase: 1 — Golden phase
 
-… 👁️ Watcher Worker-XX  starting wave 1  Phase: 1 — Golden phase
+… 👁️🐜 Watcher [sonnet] Worker-XX  starting wave 1  Phase: 1 — Golden phase
 
-… 👁️ Watcher Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
+… 👁️🐜 Watcher Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
 
-✓ 👁️ Watcher Worker-XX  completed 0.0s  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
+✓ 👁️🐜 Watcher Worker-XX  completed 0.0s  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
 
-  Step 1/4: Verification (1s)
+  Step 1/4: Verification (0s)
 ── Dispatch ──
 Continue Review 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
-  🧪 Probe Worker-XX  Phase: 1 — Golden phase
+──── 🧪🐜 Spawning Worker-XX — Phase: 1 — Golden phase ────
+  🧪🐜 Probe [sonnet] Worker-XX  Phase: 1 — Golden phase
 
-… 🧪 Probe Worker-XX  starting wave 1  Phase: 1 — Golden phase
+… 🧪🐜 Probe [sonnet] Worker-XX  starting wave 1  Phase: 1 — Golden phase
 
-… 🧪 Probe Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
+… 🧪🐜 Probe Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
 
-✓ 🧪 Probe Worker-XX  completed 0.0s  FakeInvoker completed task continue-review-probe for worker Worker-XX (caste: probe)
+✓ 🧪🐜 Probe Worker-XX  completed 0.0s  FakeInvoker completed task continue-review-probe for worker Worker-XX (caste: probe)
 
-  Step 2/4: Housekeeping (1s)
-  Step 3/4: Advance (1s)
-Ceremony complete in 1s
+  Step 2/4: Housekeeping (0s)
+  Step 3/4: Advance (0s)
+Ceremony complete in 0s
 ━━ 👁️ C O N T I N U E ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Review depth: standard (Phase 1 of 2)
@@ -35,10 +37,11 @@ Workers
   - Worker-XX
   - Worker-XX
 Continue Worker Flow
-  - Deterministic verification [system] completed — deterministic verification completed: 3 passed, 1 skipped
-  - Worker-XX [watcher] completed — Watcher Worker-XX completed independent verification before advancement
-  - Worker-XX [probe] completed — Probe Worker-XX completed continue review before advancement
-  - Signal housekeeping [system] completed — 0 active -> 0 active
+  - 🐜 Ant Deterministic verification completed — deterministic verification completed: 3 passed, 1 skipped
+  - 👁️🐜 Watcher Worker-XX completed — Watcher Worker-XX completed independent verification before advancement
+  - 🧪🐜 Probe Worker-XX completed — Probe Worker-XX completed continue review before advancement
+  - 🐜 Ant Signal housekeeping completed — 0 active -> 0 active
+  - 🧠🐜 Librarian Phase-end consolidation completed — colony observed nothing new this phase
 Verification passed during continue
 ━━ 🗂️ A R T I F A C T S ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -50,9 +53,16 @@ Verification passed during continue
 Workers closed: 2
 ── Housekeeping ──
 Signals: 0 active -> 0 active after housekeeping
+── Learning ──
+🧠🐜 Librarian  colony observed nothing new this phase
 ── Next Phase ──
 Next phase ready: 2 — Next golden phase
+── Colony State ──
+🚩 Flags: none open
+Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
+📍 [Phase 1/2] [████████░░░░░░░░] 50%
+   └── Tasks [████████████████] 1/1 in phase 1
 
 ━━ 🐜 N E X T   U P ━━
-Run `aether build 2` to start the next phase
-It's safe to clear your context now. Run `/ant-resume` to restore.
+Run `/ant-build 2` to start the next phase
+Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant-resume` to restore.

@@ -33,6 +33,7 @@ import {
   preflightGoWorkerProvider,
   toWorkerResults,
   type DispatchOptions,
+  type DispatchResult,
 } from "./worker-dispatch.js";
 import { createSpawnOrchestrator, type SpawnOrchestrator } from "./spawn-orchestrator.js";
 import {
@@ -43,7 +44,14 @@ import {
 } from "./ceremony-adapter.js";
 import { ConfidenceLoop, type ConfidenceLoopOptions, type ConfidenceResult } from "./confidence-loop.js";
 import { ConfidenceEvaluator, type EvaluatedConfidence, type ConfidenceInput } from "./confidence-evaluator.js";
+import {
+  ResearchConfidenceEvaluator,
+  researchLoopOptions,
+  researchLoopPreset,
+} from "./research-confidence.js";
 import type { WorkerClaims } from "./claims-parser.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type {
   BuildDispatch,
   BuildManifest,
@@ -125,7 +133,7 @@ export function __restoreAllMocks(): void {
 }
 
 // Test-only: exported runner functions for integration testing.
-export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand };
+export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand, toWorkerDispatches };
 
 import { runLifecycle, type LifecycleOptions } from "./lifecycle.js";
 import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
@@ -133,7 +141,6 @@ import { runWatchDisplay, type WatchDisplayOptions } from "./watch-display.js";
 import { runSwarmDisplay, type SwarmDisplayOptions } from "./swarm-display.js";
 import { createNarrator } from "./narrator.js";
 import { startEventBridge } from "./event-bridge.js";
-import { readHiveWisdom, resolveDomainTags } from "./hive-injector.js";
 
 /** Parse command-line arguments for the TS host. */
 export function parseArgs(argv: string[]): ParsedHostArgs {
@@ -358,7 +365,6 @@ interface CeremonyDispatchLike {
   execution_wave?: number;
   wave?: number;
   skill_section?: string;
-  hive_section?: string;
   task?: string;
   task_brief?: string;
 }
@@ -412,7 +418,6 @@ interface BuildManifestResult {
 }
 
 type HostInjectedDispatchFields = {
-  hive_section?: string;
   task_brief?: string;
 };
 
@@ -426,6 +431,16 @@ type ContinueManifestResult = ContinueCompletion;
 
 type ContinueDispatchLike = ContinueExternalDispatch & HostInjectedDispatchFields;
 
+// This function is the Go -> worker fidelity boundary: every field a
+// dispatch carries must be explicitly copied through, renamed, or
+// consciously classified as unmapped. A field silently dropped here fails
+// loudly at Go's ResolvePermissionProfile exact-equality check (CR-01) or
+// not at all (CR-02) -- both were true for months because every test that
+// touched this function mocked it instead of calling it. `permission_profile`
+// must never be invented locally: it is copied through verbatim from the Go
+// manifest, never constructed here. test/dispatch-field-fidelity.test.ts
+// guards this function directly (no mock) so a newly added Go field that
+// isn't mapped here fails that test until someone consciously classifies it.
 function toWorkerDispatches(
   dispatches: Array<PlanDispatchLike | ContinueDispatchLike>
 ): BuildDispatch[] {
@@ -448,9 +463,16 @@ function toWorkerDispatches(
     if (dispatch.skill_section !== undefined) {
       workerDispatch.skill_section = dispatch.skill_section;
     }
-    if (dispatch.task_brief !== undefined) workerDispatch.task_brief = dispatch.task_brief;
-    if (dispatch.hive_section !== undefined) {
-      workerDispatch.hive_section = dispatch.hive_section;
+    // Precedence: host-injected `task_brief` (build/continue paths) wins over
+    // Go-emitted `brief` (plan-time phase_research dispatches). Only fall
+    // back to `brief` when `task_brief` was never injected.
+    if (dispatch.task_brief !== undefined) {
+      workerDispatch.task_brief = dispatch.task_brief;
+    } else if (typeof dispatch.brief === "string" && dispatch.brief !== "") {
+      workerDispatch.task_brief = dispatch.brief;
+    }
+    if (dispatch.permission_profile !== undefined) {
+      workerDispatch.permission_profile = dispatch.permission_profile;
     }
     if (dispatch.matched_skills !== undefined) {
       workerDispatch.matched_skills = dispatch.matched_skills;
@@ -482,44 +504,21 @@ function emitSkillSummary(dispatches: CeremonyDispatchLike[]): void {
   }
 }
 
-/** Build a hive wisdom injection summary line */
-function emitHiveSummary(dispatches: CeremonyDispatchLike[]): void {
-  const hiveCount = dispatches.filter(
-    (d) => typeof d.hive_section === "string" && d.hive_section.trim() !== ""
-  ).length;
-  if (hiveCount > 0) {
-    process.stderr.write(`Injecting hive wisdom into ${hiveCount} worker prompts.\n`);
-  }
-}
-
-/**
- * Prepare the hive wisdom section for a dispatch pipeline.
- * Resolves domain tags, reads hive wisdom, and returns a formatted section.
- * Graceful degradation: any failure logs a warning and returns empty string.
- */
-async function prepareHiveSection(bridge: GoBridgeOptions): Promise<string> {
-  try {
-    const domains = await resolveDomainTags(bridge);
-    return await readHiveWisdom({
-      goBinaryPath: bridge.goBinaryPath,
-      cwd: bridge.cwd,
-      domains,
-      minConfidence: 0.5,
-      maxEntries: 10,
-      budgetChars: 2500,
-    });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`Warning: hive-read failed: ${msg}\n`);
-    return "";
-  }
-}
-
 async function preflightHostWorkerDispatch(
   bridge: GoBridgeOptions,
   context: string,
   fallbackDiagnostic?: string
 ): Promise<void> {
+  // D-06: a skipped preflight must never be silent, on either the
+  // compat/test-hook path or the production Go-adapter path below.
+  const skipRaw = process.env["AETHER_SKIP_PREFLIGHT"]?.trim().toLowerCase();
+  if (skipRaw && ["1", "true", "yes", "on"].includes(skipRaw)) {
+    process.stderr.write(
+      "Warning: preflight skipped via AETHER_SKIP_PREFLIGHT — provider auth and model config were NOT verified before dispatch\n"
+    );
+    return;
+  }
+
   // Compatibility-only test hooks. Production always delegates selection and
   // provider preflight to the Go adapter boundary below.
   if (_detectAvailablePlatformsRef) {
@@ -589,11 +588,11 @@ async function runDryRunDispatchedCommand(
     ?? [];
   const manifestObj = dispatchManifest ?? planManifest ?? planningManifest ?? continueManifest;
 
-  // Attach hive wisdom to each dispatch (dry-run also fetches wisdom per RESEARCH.md Q4)
-  const hiveSection = await prepareHiveSection(bridge);
-  for (const d of dispatches) {
-    d.hive_section = hiveSection;
-  }
+  // Hive wisdom is no longer computed or attached here (Phase 190). It
+  // arrives exactly once, already embedded in each dispatch's
+  // context_capsule by Go's colony-prime capsule -- attaching a second,
+  // independently-computed copy here duplicated the same "## HIVE WISDOM
+  // (Cross-Colony Patterns)" section in every worker's assembled prompt.
 
   // Playbook injection removed to match cmd/codex_build.go. Playbooks are
   // orchestrator guidance; appending them to every worker's task_brief told a
@@ -616,9 +615,6 @@ async function runDryRunDispatchedCommand(
   // Skill injection summary
   emitSkillSummary(dispatches);
 
-  // Hive wisdom injection summary
-  emitHiveSummary(dispatches);
-
   // Output manifest JSON to stdout
   process.stdout.write(JSON.stringify({ ok: true, dry_run: true, manifest: manifestResult }, null, 2) + "\n");
 }
@@ -627,10 +623,17 @@ async function runDryRunDispatchedCommand(
 // Iteration ceremony helpers (ITER-06)
 // ---------------------------------------------------------------------------
 
-/** Render an iteration marker between dispatch waves. */
-function renderIterationCeremony(result: ConfidenceResult): void {
+/**
+ * Render an iteration marker between dispatch waves.
+ *
+ * @param result - The ConfidenceResult from the last evaluate call.
+ * @param prefix - Optional label prepended before "Iteration" (research path
+ *   passes `${scoutName} phase ${id}`). Omitting it produces a byte-identical
+ *   line to the build path's original output.
+ */
+function renderIterationCeremony(result: ConfidenceResult, prefix?: string): void {
   const parts: string[] = [
-    `Iteration ${result.iterationCount}:`,
+    `${prefix ? `${prefix} ` : ""}Iteration ${result.iterationCount}:`,
     `confidence ${result.currentConfidence}%`,
     `(delta ${result.delta >= 0 ? "+" : ""}${result.delta}%,`,
     `budget ${result.budgetRemaining} workers remaining)`,
@@ -644,6 +647,286 @@ function renderIterationCeremony(result: ConfidenceResult): void {
 /** Render the final iteration stop reason. */
 function renderIterationComplete(stopReason: string): void {
   emitCeremonyOutput(`\u2500\u2500 Iteration complete: ${stopReason} \u2500\u2500`);
+}
+
+// ---------------------------------------------------------------------------
+// Research confidence loop (RESEARCH-07 / RESEARCH-08)
+// ---------------------------------------------------------------------------
+
+/**
+ * Default worker budget for a single research phase's ConfidenceLoop.
+ * Mirrors the build path's `?? 20` fallback (see spawnBudget in
+ * `runDispatchedBuildCommand`) \u2014 the depth preset's maxIterations (4/6/8/12,
+ * always well under 20) is the binding cap in practice; this budget is the
+ * secondary safety net T-164-16 requires.
+ */
+const RESEARCH_LOOP_DEFAULT_BUDGET = 20;
+
+/** Documented range for --target (see host.ts usage text: "70-99"). */
+function clampResearchConfidenceTarget(value: number): number {
+  return Math.min(99, Math.max(70, value));
+}
+
+/** Documented range for --max-iterations (see host.ts usage text: "2-12"). */
+function clampResearchMaxIterations(value: number): number {
+  return Math.min(12, Math.max(2, value));
+}
+
+/** Per-phase outcome reported by `runResearchConfidenceLoop`. */
+export interface ResearchLoopPhaseSummary {
+  phaseId: number;
+  iterations: number;
+  finalConfidence: number;
+  stopReason: string;
+}
+
+/** Summary returned by `runResearchConfidenceLoop`. */
+export interface ResearchLoopSummary {
+  phases: ResearchLoopPhaseSummary[];
+  /**
+   * Phase IDs escalated from Scout to Oracle (D-04). A phase appears here at
+   * most once: its loop stopped with reason "diminishing_returns" below the
+   * confidence target at deep or exhaustive depth, and the escalated Oracle
+   * dispatch was sent exactly once \u2014 Oracle's own RALF loop (runOracleLoop)
+   * drives the rest, not a second ConfidenceLoop.
+   */
+  escalations: number[];
+}
+
+/** Depths at which a stalled phase is worth the heavier Oracle researcher. */
+function isEscalationEligibleDepth(depth: string): boolean {
+  const normalised = depth.trim().toLowerCase();
+  return normalised === "deep" || normalised === "exhaustive";
+}
+
+/**
+ * Extract the phase ID a research dispatch targets from its task_id
+ * ("plan-research-phase-<ID>", cmd/phase_research.go:90). Returns undefined
+ * when the task_id doesn't match the expected shape.
+ */
+function researchDispatchPhaseId(dispatch: { task_id?: string }): number | undefined {
+  const match = /^plan-research-phase-(\d+)$/.exec(dispatch.task_id ?? "");
+  if (!match) return undefined;
+  return parseInt(match[1]!, 10);
+}
+
+/**
+ * Read a phase's research artifact from disk. A missing file is treated as
+ * empty markdown \u2014 the evidence scorer naturally grades an empty artifact at
+ * its base score, no special-casing needed.
+ */
+function readPhaseResearchMarkdown(cwd: string, phaseId: number): string {
+  const filePath = join(cwd, ".aether", "data", "phase-research", `phase-${phaseId}-research.md`);
+  try {
+    return readFileSync(filePath, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+/** Derive a self-assessed gap count from a worker's claimed blockers, if any. */
+function selfAssessedGapsFromDispatchResult(result: DispatchResult | undefined): number {
+  return result?.blockers?.length ?? 0;
+}
+
+/** Per-phase state tracked across dispatch rounds inside the research loop. */
+interface ResearchPhaseState {
+  dispatch: PlanDispatchLike;
+  phaseId: number;
+  loop: ConfidenceLoop;
+  prompted: boolean;
+  lastResult?: ConfidenceResult;
+  finalStopReason?: string;
+}
+
+/**
+ * Give the plan path a real confidence loop (RESEARCH-07). Constructs one
+ * `ConfidenceLoop` per approved research phase \u2014 never a batch average \u2014 and
+ * iterates each phase's Scout until its depth-bound target is met or its
+ * iteration budget runs out (RESEARCH-08 / D-12), printing a ceremony line
+ * every iteration (D-09) and an early-accept prompt at most once per phase
+ * when progress stalls or nears target (D-10).
+ */
+export async function runResearchConfidenceLoop(
+  bridge: GoBridgeOptions,
+  parsed: ParsedHostArgs,
+  researchDispatches: PlanDispatchLike[],
+): Promise<ResearchLoopSummary> {
+  if (researchDispatches.length === 0) {
+    return { phases: [], escalations: [] };
+  }
+
+  const depth = parsed.depth ?? "balanced";
+  const preset = researchLoopPreset(depth);
+  const loopOpts: ConfidenceLoopOptions = researchLoopOptions(depth, RESEARCH_LOOP_DEFAULT_BUDGET);
+  if (parsed.targetConfidence) {
+    const parsedTarget = parseInt(parsed.targetConfidence, 10);
+    if (!Number.isNaN(parsedTarget)) {
+      loopOpts.confidenceTarget = clampResearchConfidenceTarget(parsedTarget);
+    }
+  }
+  if (parsed.maxIterations) {
+    const parsedMax = parseInt(parsed.maxIterations, 10);
+    if (!Number.isNaN(parsedMax)) {
+      loopOpts.maxIterations = clampResearchMaxIterations(parsedMax);
+    }
+  }
+  const confidenceTarget = loopOpts.confidenceTarget ?? preset.confidenceTarget;
+  const escalationEligible = isEscalationEligibleDepth(depth);
+
+  const evaluator = new ResearchConfidenceEvaluator();
+
+  const phases = new Map<number, ResearchPhaseState>();
+  for (const dispatch of researchDispatches) {
+    const phaseId = researchDispatchPhaseId(dispatch);
+    if (phaseId === undefined) continue; // Malformed dispatch; nothing to key the loop on.
+    phases.set(phaseId, {
+      dispatch,
+      phaseId,
+      loop: new ConfidenceLoop(loopOpts),
+      prompted: false,
+    });
+  }
+
+  const active = new Map(phases);
+  // Phases whose loop stalled below target at deep/exhaustive depth (D-04).
+  // Populated inside the round loop below, consumed by the escalation round
+  // once every phase has finished its own confidence loop.
+  const escalationCandidates: ResearchPhaseState[] = [];
+
+  while (active.size > 0) {
+    const activeStates = [...active.values()];
+    const roundDispatches = toWorkerDispatches(activeStates.map((state) => state.dispatch));
+    const dispatchOpts: DispatchOptions = {
+      goBinaryPath: bridge.goBinaryPath,
+      cwd: bridge.cwd,
+      simulateWorkers: parsed.simulate,
+      workflow: "plan",
+    };
+    const workerResults = await _dispatchWorkersRef(dispatchOpts, roundDispatches);
+    const resultByName = new Map(workerResults.map((r) => [r.name, r] as const));
+
+    for (const state of activeStates) {
+      const markdown = readPhaseResearchMarkdown(bridge.cwd, state.phaseId);
+      const selfAssessedGaps = selfAssessedGapsFromDispatchResult(resultByName.get(state.dispatch.name));
+      const evaluated = evaluator.evaluate({
+        markdown,
+        repoRoot: bridge.cwd,
+        selfAssessedGaps,
+      });
+
+      const loopResult = state.loop.evaluate(evaluated.score, 1);
+      state.lastResult = loopResult;
+      renderIterationCeremony(loopResult, `${state.dispatch.name} phase ${state.phaseId}`);
+
+      let stopReason = loopResult.stopReason;
+      let finished = !loopResult.shouldContinue;
+
+      // Early-accept prompt (D-10): at most once per phase, evaluated before
+      // the --accept override below forces a stop.
+      if (!state.prompted) {
+        const stalledBelowTarget =
+          loopResult.stopReason === "diminishing_returns" && loopResult.currentConfidence < confidenceTarget;
+        const nearTarget =
+          loopResult.shouldContinue && loopResult.currentConfidence >= confidenceTarget - 5;
+        if (stalledBelowTarget || nearTarget) {
+          state.prompted = true;
+          emitCeremonyOutput(
+            `phase ${state.phaseId} research at ${loopResult.currentConfidence}%, ` +
+              `gaining ${loopResult.delta}%/iteration \u2014 accept now or keep digging? ` +
+              `(re-run with --accept to accept)`
+          );
+        }
+      }
+
+      // Non-interactive accept (D-10): stop every still-active phase after
+      // its current iteration. No per-iteration nagging.
+      if (parsed.accept && loopResult.shouldContinue) {
+        finished = true;
+        stopReason = "accepted";
+      }
+
+      if (finished) {
+        state.finalStopReason = stopReason;
+        renderIterationComplete(stopReason);
+        active.delete(state.phaseId);
+
+        // D-04: escalate Scout -> Oracle only when the loop truly stalled
+        // (diminishing_returns) below target, and only at deep/exhaustive
+        // depth. confidence_target_met and max_iterations_met never escalate.
+        if (escalationEligible && stopReason === "diminishing_returns" && loopResult.currentConfidence < confidenceTarget) {
+          escalationCandidates.push(state);
+        }
+      }
+    }
+  }
+
+  // Escalation round (D-04): dispatched once, outside the per-phase
+  // ConfidenceLoop above. Oracle owns its own RALF iteration
+  // (cmd/oracle_loop.go runOracleLoop) -- nesting a second ConfidenceLoop
+  // around it here would mean two drivers for one worker.
+  //
+  // CR-03: an unwrapped call here previously crashed the whole plan run --
+  // any plan-research-escalate failure (a phase Go can't resolve, a
+  // subprocess error, a malformed envelope) propagated straight out of
+  // runResearchConfidenceLoop and killed the node process. D-08 makes every
+  // path through this block non-fatal: research (and its escalation) is
+  // enrichment, never a gate. Both the per-candidate call and the final
+  // escalation dispatch wave below degrade to a named warning and continue.
+  const escalations: number[] = [];
+  if (escalationCandidates.length > 0) {
+    const escalationDispatches: PlanDispatchLike[] = [];
+    for (const state of escalationCandidates) {
+      const stalledAt = state.lastResult?.currentConfidence ?? 0;
+      emitCeremonyOutput(
+        `Oracle escalation: phase ${state.phaseId} research stalled at ${stalledAt}% against a ` +
+          `${confidenceTarget}% target — escalating Scout to Oracle`
+      );
+      try {
+        const escalateResult = _callGoJSONRef<{ dispatch: PlanDispatchLike }>(bridge, [
+          "plan-research-escalate",
+          "--phase", String(state.phaseId),
+          "--confidence", String(stalledAt),
+          "--target", String(confidenceTarget),
+        ]);
+        escalationDispatches.push(escalateResult.dispatch);
+        escalations.push(state.phaseId);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        emitCeremonyOutput(
+          `Warning: Oracle escalation unavailable for phase ${state.phaseId}: ${message}. ` +
+            `Planning continues -- research is enrichment, never a gate (D-08).`
+        );
+        continue;
+      }
+    }
+    if (escalationDispatches.length > 0) {
+      const escalationDispatchOpts: DispatchOptions = {
+        goBinaryPath: bridge.goBinaryPath,
+        cwd: bridge.cwd,
+        simulateWorkers: parsed.simulate,
+        workflow: "plan",
+      };
+      try {
+        await _dispatchWorkersRef(escalationDispatchOpts, toWorkerDispatches(escalationDispatches));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        emitCeremonyOutput(
+          `Warning: Oracle escalation dispatch failed: ${message}. ` +
+            `Planning continues -- research is enrichment, never a gate (D-08).`
+        );
+      }
+    }
+  }
+
+  const summaryPhases: ResearchLoopPhaseSummary[] = [...phases.values()].map((state) => ({
+    phaseId: state.phaseId,
+    iterations: state.lastResult?.iterationCount ?? 0,
+    finalConfidence: state.lastResult?.currentConfidence ?? 0,
+    stopReason: state.finalStopReason ?? state.lastResult?.stopReason ?? "",
+  }));
+
+  return { phases: summaryPhases, escalations };
 }
 
 // ---------------------------------------------------------------------------
@@ -698,9 +981,6 @@ async function dispatchBuildWave(
 
   // Skill injection summary (D-07)
   emitSkillSummary(dispatches);
-
-  // Hive wisdom injection summary
-  emitHiveSummary(dispatches);
 
   // Dispatch workers
   if (!buildManifest.execution_binding) {
@@ -795,11 +1075,10 @@ async function runDispatchedBuildCommand(
     throw new Error("Build manifest contains no dispatches. Nothing to build.");
   }
 
-  // Step 1b: Resolve hive wisdom and attach to each dispatch
-  const hiveSection = await prepareHiveSection(bridge);
-  for (const d of dispatches) {
-    d.hive_section = hiveSection;
-  }
+  // Step 1b removed: hive wisdom is no longer separately resolved and
+  // attached here (Phase 190). Each dispatch's context_capsule already
+  // carries Go's colony-prime "## HIVE WISDOM (Cross-Colony Patterns)"
+  // section; recomputing and attaching a second copy duplicated it.
 
   // Step 1c removed: build playbooks are no longer injected into worker briefs.
   // See the note in runDryRunDispatchedCommand and cmd/codex_build.go.
@@ -848,13 +1127,6 @@ async function runDispatchedBuildCommand(
 
   while (true) {
     iterationCount++;
-
-    // Re-attach hive wisdom for iterations after the first (dispatches are re-fetched)
-    if (iterationCount > 1) {
-      for (const d of dispatches) {
-        d.hive_section = hiveSection;
-      }
-    }
 
     // Build iteration feedback from previous iteration's blockers
     let iterationFeedback: string | undefined;
@@ -984,11 +1256,10 @@ async function runDispatchedPlanCommand(
     throw new Error("Plan manifest contains no dispatches. Nothing to plan.");
   }
 
-  // Step 1b: Resolve hive wisdom and attach to each dispatch
-  const hiveSection = await prepareHiveSection(bridge);
-  for (const d of dispatches) {
-    d.hive_section = hiveSection;
-  }
+  // Step 1b removed: hive wisdom is no longer separately resolved and
+  // attached here (Phase 190). Each dispatch's context_capsule already
+  // carries Go's colony-prime "## HIVE WISDOM (Cross-Colony Patterns)"
+  // section; recomputing and attaching a second copy duplicated it.
 
   // Step 1c removed: plan playbooks are no longer injected into worker briefs.
   // See the note in runDryRunDispatchedCommand and cmd/codex_build.go.
@@ -1002,24 +1273,52 @@ async function runDispatchedPlanCommand(
   const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
   renderManifestCeremony(ceremony, "plan", ceremonyEnvelope, dispatches);
 
-  // Step 3b: Hive wisdom injection summary
-  emitHiveSummary(dispatches);
+  // Step 4: Research phases get their own confidence loop (RESEARCH-07)
+  // before the rest of the wave dispatches. This preserves today's ordering
+  // contract -- all wave-1 research completes before the wave-2 Route-Setter
+  // -- while giving research its own depth-bound iteration budget (D-12).
+  const researchPart = dispatches.filter((d) => d.stage === "phase_research");
+  const rest = dispatches.filter((d) => d.stage !== "phase_research");
 
-  // Step 4: Dispatch planning workers
+  let researchSummary: ResearchLoopSummary = { phases: [], escalations: [] };
+  let researchMappedResults: WorkerResult[] = [];
+  if (researchPart.length > 0) {
+    researchSummary = await runResearchConfidenceLoop(bridge, parsed, researchPart);
+    researchMappedResults = researchPart.map((dispatch): WorkerResult => {
+      const phaseId = researchDispatchPhaseId(dispatch);
+      const phaseSummary = researchSummary.phases.find((p) => p.phaseId === phaseId);
+      const summary = phaseSummary
+        ? `Research phase ${phaseSummary.phaseId} reached ${phaseSummary.finalConfidence}% confidence after ${phaseSummary.iterations} iteration(s) (${phaseSummary.stopReason}).`
+        : "Research phase completed.";
+      return {
+        name: dispatch.name,
+        status: "completed",
+        summary,
+        caste: dispatch.caste,
+        task: dispatch.task,
+        stage: "phase_research",
+      };
+    });
+  }
+
+  // Step 5: Dispatch the remaining planning workers (Route-Setter, etc.)
   const dispatchOpts: DispatchOptions = {
     goBinaryPath: bridge.goBinaryPath,
     cwd: bridge.cwd,
     simulateWorkers: parsed.simulate,
     workflow: "plan",
   };
-  const buildDispatches = toWorkerDispatches(dispatches);
-  const workerResults = await _dispatchWorkersRef(dispatchOpts, buildDispatches);
-  const mappedResults = toWorkerResults(buildDispatches, workerResults);
+  let mappedResults: WorkerResult[] = researchMappedResults;
+  if (rest.length > 0) {
+    const buildDispatches = toWorkerDispatches(rest);
+    const workerResults = await _dispatchWorkersRef(dispatchOpts, buildDispatches);
+    mappedResults = [...researchMappedResults, ...toWorkerResults(buildDispatches, workerResults)];
+  }
 
-  // Step 5: Render worker-complete ceremony
+  // Step 6: Render worker-complete ceremony
   renderWorkerCeremony(ceremony, "plan", mappedResults);
 
-  // Step 6: Write completion file and call finalizer
+  // Step 7: Write completion file and call finalizer
   const completion = {
     plan_manifest: planManifest,
     dispatches: mappedResults,
@@ -1035,10 +1334,14 @@ async function runDispatchedPlanCommand(
   ]);
   cleanupCompletionDir(completionPath);
 
-  // Step 7: Render closeout
+  // Step 8: Render closeout
   emitCeremonyOutput(ceremony.renderCloseout("plan", completionPath));
 
-  process.stdout.write(JSON.stringify({ ok: true, completion_file: completionPath }, null, 2) + "\n");
+  process.stdout.write(JSON.stringify({
+    ok: true,
+    completion_file: completionPath,
+    research_iterations: researchSummary,
+  }, null, 2) + "\n");
 }
 
 /**
@@ -1063,11 +1366,10 @@ async function runDispatchedContinueCommand(
     throw new Error("Continue manifest contains no dispatches. Nothing to continue.");
   }
 
-  // Step 1b: Resolve hive wisdom and attach to each dispatch
-  const hiveSection = await prepareHiveSection(bridge);
-  for (const d of dispatches) {
-    d.hive_section = hiveSection;
-  }
+  // Step 1b removed: hive wisdom is no longer separately resolved and
+  // attached here (Phase 190). Each dispatch's context_capsule already
+  // carries Go's colony-prime "## HIVE WISDOM (Cross-Colony Patterns)"
+  // section; recomputing and attaching a second copy duplicated it.
 
   // Step 2: Ask Go to select and preflight the provider (unless simulating)
   if (!parsed.simulate) {
@@ -1077,9 +1379,6 @@ async function runDispatchedContinueCommand(
   // Step 3: Render spawn-plan and wave-start ceremony
   const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };
   renderManifestCeremony(ceremony, "continue", ceremonyEnvelope, dispatches);
-
-  // Step 3b: Hive wisdom injection summary
-  emitHiveSummary(dispatches);
 
   // Step 4: Dispatch review workers
   const dispatchOpts: DispatchOptions = {

@@ -115,8 +115,14 @@ var colonyPrimeCmd = &cobra.Command{
 		}
 
 		compact, _ := cmd.Flags().GetBool("compact")
-		result := buildColonyPrimeOutput(compact)
-		emitPromptIntegrityEvents("colony-prime", colonyPrimeIntegrityRecords(result))
+		question, _ := cmd.Flags().GetString("question")
+		result := buildColonyPrimeOutputOpts(colonyPrimeOptions{Compact: compact, Question: question})
+		if strings.TrimSpace(question) == "" {
+			emitPromptIntegrityEvents("colony-prime", colonyPrimeIntegrityRecords(result))
+		}
+		// Ask mode (--question) is a pure inspection: no event emission, no
+		// writes — the briefing is read, ranked, and returned. Locked by
+		// TestColonyPrimeQuestionIsReadOnly.
 		outputOK(result)
 		return nil
 	},
@@ -137,11 +143,11 @@ var pheromoneDisplayCmd = &cobra.Command{
 
 		pf := loadPheromones()
 		if pf == nil {
-			outputOK(map[string]interface{}{
+			outputWorkflow(map[string]interface{}{
 				"signals": []interface{}{},
 				"count":   0,
 				"display": "No pheromone signals found.",
-			})
+			}, renderPheromoneDisplayVisual("", 0, pendingSteeringSection()))
 			return nil
 		}
 
@@ -160,11 +166,11 @@ var pheromoneDisplayCmd = &cobra.Command{
 		}
 
 		if len(filtered) == 0 {
-			outputOK(map[string]interface{}{
+			outputWorkflow(map[string]interface{}{
 				"signals": []interface{}{},
 				"count":   0,
 				"display": "No pheromone signals found.",
-			})
+			}, renderPheromoneDisplayVisual("", 0, pendingSteeringSection()))
 			return nil
 		}
 
@@ -181,25 +187,10 @@ var pheromoneDisplayCmd = &cobra.Command{
 			return extractText(filtered[i].Content) < extractText(filtered[j].Content)
 		})
 
-		// Format as text table
-		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("%-10s %-10s %-10s %-24s %s\n", "TYPE", "PRIORITY", "STRENGTH", "LIFE", "CONTENT"))
-		sb.WriteString(strings.Repeat("-", 110) + "\n")
-		for _, sig := range filtered {
-			strength := fmt.Sprintf("%.2f", computeEffectiveStrength(sig, now))
-			life := signalLifetimeSummary(sig, now)
-			text := extractText(sig.Content)
-			if len(text) > 60 {
-				text = text[:57] + "..."
-			}
-			if len(life) > 24 {
-				life = life[:21] + "..."
-			}
-			sb.WriteString(fmt.Sprintf("%-10s %-10s %-10s %-24s %s\n", sig.Type, sig.Priority, strength, life, text))
-		}
-
-		display := sb.String()
-		fmt.Fprintf(stdout, "%s", display)
+		// Classic sectioned view (v5.4.0 house style): emoji-headed groups
+		// with a plain-English explanation, one signal per line with its
+		// nested lifetime detail — never a fixed-width machine table.
+		display := renderClassicPheromoneSections(filtered, now)
 
 		// Build serializable signals list
 		signals := make([]map[string]interface{}, len(filtered))
@@ -218,13 +209,50 @@ var pheromoneDisplayCmd = &cobra.Command{
 			signals[i] = entry
 		}
 
-		outputOK(map[string]interface{}{
+		outputWorkflow(map[string]interface{}{
 			"signals": signals,
 			"count":   len(filtered),
 			"display": display,
-		})
+		}, renderPheromoneDisplayVisual(display, len(filtered), pendingSteeringSection()))
 		return nil
 	},
+}
+
+// renderPheromoneDisplayVisual renders the signal table for a human reader.
+//
+// This command used to print the bare table to stdout and then a JSON envelope
+// on top of it, in every output mode — so `/ant-pheromones` showed a user a
+// table followed by a wall of JSON, with no banner and no next step. It was the
+// only lifecycle command with no Next Up block.
+func renderPheromoneDisplayVisual(display string, count int, suggestions string) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("pheromones"), "Pheromone Signals"))
+	b.WriteString(visualDividerStr())
+
+	if count == 0 {
+		b.WriteString("No active signals. Workers are running on colony context alone.\n")
+		if suggestions != "" {
+			b.WriteString(suggestions)
+		}
+		b.WriteString(renderNextUp(
+			"Run `aether focus \"<area>\"` to point the colony at something specific.",
+			"Run `aether redirect \"<pattern>\"` to set a hard constraint workers must not break.",
+			"Run `aether status` to see where the colony is before steering it.",
+		))
+		return b.String()
+	}
+
+	b.WriteString(strings.TrimRight(display, "\n"))
+	b.WriteString("\n")
+	if suggestions != "" {
+		b.WriteString(suggestions)
+	}
+	b.WriteString(renderNextUp(
+		"Run `aether build <phase>` — these signals are injected into every worker prompt.",
+		"Run `aether feedback \"<note>\"` to adjust behaviour without adding a hard constraint.",
+		"Run `aether redirect \"<pattern>\"` if something here needs to become a hard constraint.",
+	))
+	return b.String()
 }
 
 var pheromoneSnapshotInjectCmd = &cobra.Command{
@@ -286,6 +314,7 @@ var pheromoneMergeBackCmd = &cobra.Command{
 
 func init() {
 	colonyPrimeCmd.Flags().Bool("compact", false, "Use 4000 char budget instead of 8000")
+	colonyPrimeCmd.Flags().String("question", "", "Ask mode: boost sections relevant to this question and include recent activity (read-only)")
 
 	pheromoneDisplayCmd.Flags().String("type", "", "Filter by signal type (FOCUS/REDIRECT/FEEDBACK)")
 	pheromoneDisplayCmd.Flags().Bool("active-only", true, "Only show active signals")
@@ -330,4 +359,14 @@ func extractText(raw json.RawMessage) string {
 		}
 	}
 	return strings.TrimSpace(string(raw))
+}
+
+// pendingSteeringSection loads colony state quietly and renders its active
+// pending suggestions — empty when there is no colony or nothing pending.
+func pendingSteeringSection() string {
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return ""
+	}
+	return renderSuggestedSteering(state)
 }

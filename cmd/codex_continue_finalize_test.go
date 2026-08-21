@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -93,5 +97,307 @@ func TestBuildLearningContent_MultipleWorkers(t *testing.T) {
 	}
 	if !strings.Contains(content, "Lesson 2") {
 		t.Errorf("expected lesson from worker 2, got: %s", content)
+	}
+}
+
+// TestContinueFinalizeRefusesToAdvanceOnSupersededState is the finalize-path
+// twin of TestContinueStaleStateDoesNotOverwritePausedState
+// (cmd/codex_continue_test.go): a concurrent process (an operator running
+// `aether pause-colony`, or any other writer) mutates COLONY_STATE.json's
+// Paused flag during the window between continue-finalize's own state read
+// (validateExternalContinueState, at the very top of runCodexContinueFinalize)
+// and its atomic commit (advanceExternalContinue, at the very end) -- exactly
+// the class of race 188-CONTEXT.md's D-04/D-05 exist to close.
+// validateExternalContinueState never checks Paused (only
+// validateRuntimeStateStillCurrent does), so nothing earlier in the flow
+// would catch this on its own -- before this fix, advanceExternalContinue had
+// no supersession check at all and would silently clobber the concurrent
+// write. This test seeds the mutation directly via the store, immediately
+// before calling runCodexContinueFinalize, mirroring the "writing a competing
+// state change directly via the store, simulating a concurrent process"
+// technique from 188-02-PLAN.md Task 3 -- there is no live worker dispatch
+// inside the finalize path to hook mid-call the way the default path's sibling
+// test does.
+func TestContinueFinalizeRefusesToAdvanceOnSupersededState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Continue finalize does not advance over pause"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Pause during continue-finalize",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Pause while finalize runs", Status: colony.TaskCompleted}},
+				},
+				{
+					ID:     2,
+					Name:   "Must not be readied",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Wait for explicit resume", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+	seedContinueBuildPacket(t, dataDir, 1, "Pause during continue-finalize", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-supersede", Task: "Pause while finalize runs", Status: "completed", TaskID: taskID},
+	})
+
+	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{LightFlag: true, SkipWatchers: true})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
+	}
+	plan, ok := planResult["continue_manifest"].(codexContinuePlanManifest)
+	if !ok {
+		t.Fatalf("expected continue_manifest in result, got %#v", planResult["continue_manifest"])
+	}
+
+	// Simulate a concurrent process pausing the colony after continue-finalize
+	// would have read state, but before it commits -- the external-dispatch
+	// completion window this criterion targets is exactly this kind of gap.
+	var pausedState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &pausedState); err != nil {
+		t.Fatalf("load state for mutation: %v", err)
+	}
+	pausedAt := time.Now().UTC().Format(time.RFC3339)
+	pausedState.Paused = true
+	pausedState.PausedAt = &pausedAt
+	if err := store.SaveJSON("COLONY_STATE.json", pausedState); err != nil {
+		t.Fatalf("write competing state change: %v", err)
+	}
+
+	result, _, _, _, _, _, err := runCodexContinueFinalize(root, codexExternalContinueCompletion{
+		ContinueManifest: &plan,
+		Dispatches:       []codexContinueExternalDispatch{},
+	}, false, 0, false)
+	if err != nil {
+		t.Fatalf("runCodexContinueFinalize returned an error instead of a blocked result: %v", err)
+	}
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Errorf("result[blocked] = %v, want true (result: %#v)", result["blocked"], result)
+	}
+	if superseded, _ := result["superseded"].(bool); !superseded {
+		t.Errorf("result[superseded] = %v, want true (result: %#v)", result["superseded"], result)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Errorf("result[advanced] = %v, want false", result["advanced"])
+	}
+
+	var after colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &after); err != nil {
+		t.Fatalf("reload state after finalize: %v", err)
+	}
+	if !after.Paused {
+		t.Fatalf("expected the competing Paused=true write to survive; got Paused=%v", after.Paused)
+	}
+	if after.Plan.Phases[0].Status == colony.PhaseCompleted {
+		t.Fatalf("phase 1 was advanced to completed despite the superseded (paused) state")
+	}
+	if after.CurrentPhase != 1 {
+		t.Fatalf("current phase = %d, want 1 (unchanged)", after.CurrentPhase)
+	}
+	if after.Plan.Phases[1].Status == colony.PhaseReady {
+		t.Fatalf("superseded finalize readied phase 2")
+	}
+}
+
+// TestFinalizeBlockedExternalContinueDoesNotOverwritePausedState reproduces
+// CR-01 (188-REVIEW.md): finalizeBlockedExternalContinue's write used to be
+// `blockedState := state; ...; store.SaveJSON("COLONY_STATE.json",
+// blockedState)` -- a raw, non-atomic snapshot of whatever `state` its
+// caller (runCodexContinueFinalize) captured once at the very top of the
+// call, before verification, gates, and review ran. Any concurrent write to
+// COLONY_STATE.json during that window (an operator pause, a background
+// writer) was silently discarded and replaced wholesale.
+//
+// This calls finalizeBlockedExternalContinue directly with a `state` value
+// that is already stale relative to what is on disk -- exactly what
+// runCodexContinueFinalize would have captured before a concurrent pause --
+// mirroring the technique TestContinueFinalizeRefusesToAdvanceOnSupersededState
+// uses for the (already-fixed) advance path, and the exact throwaway-probe
+// technique 188-REVIEW.md's CR-01 finding itself used.
+func TestFinalizeBlockedExternalContinueDoesNotOverwritePausedState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Blocked continue-finalize does not overwrite a concurrent pause"
+	buildStartedAt := time.Now().UTC()
+	taskID := "1.1"
+	staleState := colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &buildStartedAt,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Pause during blocked continue-finalize",
+				Status: colony.PhaseInProgress,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Pause while finalize blocks", Status: colony.TaskCompleted}},
+			}},
+		},
+	}
+	createTestColonyState(t, dataDir, staleState)
+
+	// Simulate a concurrent process pausing the colony after
+	// runCodexContinueFinalize would have captured `state` (at its very top,
+	// before verification/gates/review ran) but before
+	// finalizeBlockedExternalContinue's write -- the exact gap CR-01 closes.
+	var paused colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &paused); err != nil {
+		t.Fatalf("load state for mutation: %v", err)
+	}
+	pausedAt := time.Now().UTC().Format(time.RFC3339)
+	paused.Paused = true
+	paused.PausedAt = &pausedAt
+	if err := store.SaveJSON("COLONY_STATE.json", paused); err != nil {
+		t.Fatalf("write competing pause: %v", err)
+	}
+
+	phase := staleState.Plan.Phases[0]
+	result, _, err := finalizeBlockedExternalContinue(
+		staleState, phase,
+		codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+		codexContinueGateReport{BlockingIssues: []string{"forced gate failure for CR-01 regression test"}},
+		nil, "", nil, buildStartedAt.Add(time.Minute),
+		"verification.json", "gates.json", nil, colony.VerificationDepthLight,
+	)
+	if err != nil {
+		t.Fatalf("finalizeBlockedExternalContinue returned an error instead of a superseded result: %v", err)
+	}
+	if superseded, _ := result["superseded"].(bool); !superseded {
+		t.Errorf("result[superseded] = %v, want true (result: %#v)", result["superseded"], result)
+	}
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Errorf("result[blocked] = %v, want true (result: %#v)", result["blocked"], result)
+	}
+
+	var after colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &after); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if !after.Paused {
+		t.Fatalf("expected the competing Paused=true write to survive; got Paused=%v", after.Paused)
+	}
+}
+
+// TestContinueFinalizeRejectsCompletedWorkerWithoutHandoff reproduces CR-01
+// (189-REVIEW.md): continueExternalBriefWithHandoffSchema tells every
+// wrapper-spawned continue watcher and reviewer "An empty handoff is
+// rejected" (cmd/codex_continue_plan.go) -- the identical sentence build's
+// brief already carries -- but continue's own finalize chain had no
+// equivalent check anywhere. mergeExternalContinueResults only ran
+// codex.ValidateWorkerHandoff, which format-checks VerificationStatus and
+// explicitly accepts "" as valid, so a completed worker relaying a fully
+// empty handoff sailed straight through and was persisted into
+// handoffs/worker-handoffs.json. This is the finalize-path twin of build's
+// own regression test (TestBuildFinalizeRejectsCompletedWorkerWithoutHandoff,
+// cmd/build_attempt_external_test.go): it drives the real entry point
+// (runCodexContinueFinalize), not a lower-level helper directly.
+func TestContinueFinalizeRejectsCompletedWorkerWithoutHandoff(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, _, _, _ := setupIntermediateContinueState(t, "Continue finalize rejects a content-free handoff")
+
+	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{LightFlag: true, SkipWatchers: false})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
+	}
+	plan, ok := planResult["continue_manifest"].(codexContinuePlanManifest)
+	if !ok {
+		t.Fatalf("expected continue_manifest in result, got %#v", planResult["continue_manifest"])
+	}
+	if len(plan.Dispatches) == 0 {
+		t.Fatalf("expected at least one planned dispatch (the watcher is always required); got none")
+	}
+	var watcher codexContinueExternalDispatch
+	found := false
+	for _, d := range plan.Dispatches {
+		if d.Caste == "watcher" {
+			watcher = d
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected a watcher dispatch in the plan; got castes %v", dispatchCastes(plan.Dispatches))
+	}
+
+	// A completed result carrying a fully empty (but explicitly present)
+	// handoff -- the exact shape 189-REVIEW.md's CR-01 probe proved sails
+	// through unrejected today.
+	emptyHandoffResult := codexContinueExternalDispatch{
+		Stage:   watcher.Stage,
+		Wave:    watcher.Wave,
+		Caste:   watcher.Caste,
+		Name:    watcher.Name,
+		Task:    watcher.Task,
+		TaskID:  watcher.TaskID,
+		Status:  "completed",
+		Summary: "looks fine",
+		Handoff: codex.WorkerHandoff{},
+	}
+
+	_, _, _, _, _, _, err = runCodexContinueFinalize(root, codexExternalContinueCompletion{
+		ContinueManifest: &plan,
+		Dispatches:       []codexContinueExternalDispatch{emptyHandoffResult},
+	}, false, 0, false)
+	if err == nil {
+		t.Fatal("completed continue worker with an explicitly empty handoff was accepted; the finalizer must reject content-free relays, matching build's own enforcement")
+	}
+	if !strings.Contains(err.Error(), "handoff") {
+		t.Fatalf("rejection should name the missing handoff, got: %v", err)
+	}
+
+	// The no-handoff-at-all case: the submitted JSON never includes a
+	// "handoff" key whatsoever, rather than an explicit empty object.
+	// codexContinueExternalDispatch.Handoff is a value type (not a pointer),
+	// so decode it from real JSON that omits the key entirely and confirm --
+	// as data, not assertion -- that this decodes to the identical zero
+	// value an explicit `"handoff":{}` would produce. A result that provides
+	// NO handoff at all must not fare better than one providing an empty
+	// one.
+	var decodedNoHandoff codexContinueExternalDispatch
+	noHandoffJSON := []byte(`{"stage":"verification","caste":"watcher","name":"` + watcher.Name + `","status":"completed","summary":"looks fine"}`)
+	if err := json.Unmarshal(noHandoffJSON, &decodedNoHandoff); err != nil {
+		t.Fatalf("unmarshal no-handoff-at-all fixture: %v", err)
+	}
+	if !codex.IsEmptyWorkerHandoff(decodedNoHandoff.Handoff) {
+		t.Fatalf("test setup error: JSON omitting \"handoff\" entirely should decode to an empty handoff, got %+v", decodedNoHandoff.Handoff)
+	}
+	decodedNoHandoff.Wave = watcher.Wave
+	decodedNoHandoff.Task = watcher.Task
+	decodedNoHandoff.TaskID = watcher.TaskID
+
+	_, _, _, _, _, _, err = runCodexContinueFinalize(root, codexExternalContinueCompletion{
+		ContinueManifest: &plan,
+		Dispatches:       []codexContinueExternalDispatch{decodedNoHandoff},
+	}, false, 0, false)
+	if err == nil {
+		t.Fatal("completed continue worker submitting no \"handoff\" key at all was accepted; it must be rejected exactly like an explicitly empty handoff")
+	}
+	if !strings.Contains(err.Error(), "handoff") {
+		t.Fatalf("rejection should name the missing handoff, got: %v", err)
 	}
 }

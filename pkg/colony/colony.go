@@ -172,6 +172,31 @@ func (m ParallelMode) Valid() bool {
 // ErrInvalidParallelMode is returned when a parallel mode value is not recognized.
 var ErrInvalidParallelMode = fmt.Errorf("invalid parallel mode")
 
+// PhaseCommitMode controls whether the runtime makes a git commit when a
+// phase durably advances. Empty means ON — the save-point after every
+// verified phase is the default behaviour; `aether phase-commits set off`
+// turns it off per colony.
+type PhaseCommitMode string
+
+const (
+	PhaseCommitsOn  PhaseCommitMode = "on"
+	PhaseCommitsOff PhaseCommitMode = "off"
+)
+
+// Valid reports whether m is a recognized phase-commit mode.
+func (m PhaseCommitMode) Valid() bool {
+	switch m {
+	case PhaseCommitsOn, PhaseCommitsOff:
+		return true
+	}
+	return false
+}
+
+// Enabled reports whether phase commits should run: on unless explicitly off.
+func (m PhaseCommitMode) Enabled() bool {
+	return m != PhaseCommitsOff
+}
+
 // ColonyMode represents the top-level execution posture for a colony.
 type ColonyMode string
 
@@ -299,38 +324,60 @@ type PendingSuggestion struct {
 
 // ColonyState is the top-level colony state matching COLONY_STATE.json.
 type ColonyState struct {
-	Version            string               `json:"version"`
-	Goal               *string              `json:"goal"`
-	Scope              ColonyScope          `json:"scope,omitempty"`
-	ColonyMode         ColonyMode           `json:"colony_mode,omitempty"`
-	ColonyName         *string              `json:"colony_name"`
-	ColonyVersion      int                  `json:"colony_version"`
-	State              State                `json:"state"`
-	CurrentPhase       int                  `json:"current_phase"`
-	SessionID          *string              `json:"session_id"`
-	InitializedAt      *time.Time           `json:"initialized_at"`
-	BuildStartedAt     *time.Time           `json:"build_started_at"`
-	Plan               Plan                 `json:"plan"`
-	Memory             Memory               `json:"memory"`
-	Errors             Errors               `json:"errors"`
-	Signals            []Signal             `json:"signals"`
-	Graveyards         []Graveyard          `json:"graveyards"`
-	Events             []string             `json:"events"`
-	ColonyDepth        string               `json:"colony_depth,omitempty"`
-	VerificationDepth  string               `json:"verification_depth,omitempty"`
-	PlanGranularity    PlanGranularity      `json:"plan_granularity,omitempty"`
-	ParallelMode       ParallelMode         `json:"parallel_mode,omitempty"`
-	TerritorySurveyed  *string              `json:"territory_surveyed,omitempty"`
-	Milestone          string               `json:"milestone"`
-	MilestoneUpdatedAt *string              `json:"milestone_updated_at,omitempty"`
-	Paused             bool                 `json:"paused,omitempty"`
-	PausedAt           *string              `json:"paused_at,omitempty"`
-	Worktrees          []WorktreeEntry      `json:"worktrees,omitempty"`
-	RunID              *string              `json:"run_id,omitempty"`
-	GateResults        []GateResultEntry    `json:"gate_results,omitempty"`
-	Charter            *Charter             `json:"charter,omitempty"`
-	PendingSuggestions *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
-	LastAnalyzeCommit  *string              `json:"last_analyze_commit,omitempty"`
+	Version           string      `json:"version"`
+	Goal              *string     `json:"goal"`
+	Scope             ColonyScope `json:"scope,omitempty"`
+	ColonyMode        ColonyMode  `json:"colony_mode,omitempty"`
+	ColonyName        *string     `json:"colony_name"`
+	ColonyVersion     int         `json:"colony_version"`
+	State             State       `json:"state"`
+	CurrentPhase      int         `json:"current_phase"`
+	SessionID         *string     `json:"session_id"`
+	InitializedAt     *time.Time  `json:"initialized_at"`
+	BuildStartedAt    *time.Time  `json:"build_started_at"`
+	Plan              Plan        `json:"plan"`
+	Memory            Memory      `json:"memory"`
+	Errors            Errors      `json:"errors"`
+	Signals           []Signal    `json:"signals"`
+	Graveyards        []Graveyard `json:"graveyards"`
+	Events            []string    `json:"events"`
+	ColonyDepth       string      `json:"colony_depth,omitempty"`
+	VerificationDepth string      `json:"verification_depth,omitempty"`
+	// SpawnReapThresholdMinutes is how long a live spawn-tree entry may go
+	// without activity before the automatic reaper (SPAWN-08) marks it
+	// abandoned and releases its whole-run budget slot. A pointer with
+	// omitempty so an unset value is distinguishable from a deliberate zero,
+	// and so state files written before this field existed still round-trip
+	// unchanged. When nil, the reaper uses a default of 120 minutes.
+	//
+	// The default is generous on purpose: this system has no liveness
+	// signal for a spawned helper (no heartbeat, no periodic "still working"
+	// touch), so a shorter threshold would reap slow-but-working helpers
+	// indistinguishably from abandoned ones. Killing live work is a worse
+	// failure than a ghost holding a budget slot for a while — the failure
+	// modes are not symmetric, so the default leans conservative.
+	SpawnReapThresholdMinutes *int                 `json:"spawn_reap_threshold_minutes,omitempty"`
+	PlanGranularity           PlanGranularity      `json:"plan_granularity,omitempty"`
+	ParallelMode              ParallelMode         `json:"parallel_mode,omitempty"`
+	PhaseCommits              PhaseCommitMode      `json:"phase_commits,omitempty"`
+	TerritorySurveyed         *string              `json:"territory_surveyed,omitempty"`
+	Milestone                 string               `json:"milestone"`
+	MilestoneUpdatedAt        *string              `json:"milestone_updated_at,omitempty"`
+	Paused                    bool                 `json:"paused,omitempty"`
+	PausedAt                  *string              `json:"paused_at,omitempty"`
+	Worktrees                 []WorktreeEntry      `json:"worktrees,omitempty"`
+	RunID                     *string              `json:"run_id,omitempty"`
+	GateResults               []GateResultEntry    `json:"gate_results,omitempty"`
+	Charter                   *Charter             `json:"charter,omitempty"`
+	PendingSuggestions        *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
+	LastAnalyzeCommit         *string              `json:"last_analyze_commit,omitempty"`
+	// ResearchDocs are repository-relative paths the operator pointed this
+	// colony at, typically saved Oracle runs under .aether/research. They are
+	// pointers, not content: the runtime reads them when composing worker
+	// briefs. Deliberately not folded into Charter, whose fields are capped at
+	// 2000 characters and are rendered to workers as hard rules -- research is
+	// evidence, not governance. omitempty keeps older state files round-tripping.
+	ResearchDocs []string `json:"research_docs,omitempty"`
 }
 
 // EffectiveScope returns the compatibility-safe colony scope.
@@ -598,6 +645,16 @@ type Phase struct {
 	SuccessCriteria      []string                       `json:"success_criteria"`
 	EvidenceRequirements []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
 	WatcherFailureCount  int                            `json:"watcher_failure_count,omitempty"`
+	// ExpectFailingTests marks a deliberately-RED phase: its deliverable is
+	// failing tests that prove a defect exists (classic TDD red-first).
+	// Continue's verification inverts the tests check for such a phase — a
+	// failing test run is the expected outcome, and a PASSING run blocks
+	// advancement instead. This is a discrete typed field rather than a
+	// PhaseMode value because RED is orthogonal to discovery/prototype/
+	// production: a production-mode defect-reproduction phase is exactly the
+	// case that produced it (prose-to-control-flow: control flow rides typed
+	// fields, and mode readers need no stance for this one).
+	ExpectFailingTests bool `json:"expect_failing_tests,omitempty"`
 }
 
 // Task represents a single task within a phase.

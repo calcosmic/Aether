@@ -3,6 +3,7 @@ schema_version: "1.0"
 id: skills-references-boundary-field-guide
 kind: field-guide
 category: field-guides
+scope: aether-internal
 title: Skills And References Boundary Field Guide
 description: "When to create a skill vs a reference, and how each system works in the Aether worker pipeline."
 output_types: [architecture-review, skill-plan, reference-system]

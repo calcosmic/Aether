@@ -190,6 +190,11 @@ func TestGoldenPlanVisualOutput(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pin the platform: command naming in visual output is platform-specific,
+	// so an unpinned golden records whatever host the suite happened to run on.
+	// Claude Code is the primary platform, so the golden locks its naming.
+	// Codex and OpenCode naming is covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "claude")
 
 	goal := "Golden workflow test colony"
 	createTestColonyState(t, dataDir, colony.ColonyState{
@@ -211,7 +216,7 @@ func TestGoldenPlanVisualOutput(t *testing.T) {
 	// Verify golden content expectations (only when not updating)
 	if !*updateGolden {
 		clean := normalizeForGolden(output)
-		for _, want := range []string{"P L A N", "P L A N   D I S P A T C H", "Planning Wave", "aether build 1"} {
+		for _, want := range []string{"P L A N", "P L A N   D I S P A T C H", "Planning Wave", "/ant-build 1"} {
 			if !strings.Contains(clean, want) {
 				t.Errorf("plan golden output missing %q", want)
 			}
@@ -230,6 +235,11 @@ func TestGoldenBuildVisualOutput(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pin the platform: command naming in visual output is platform-specific,
+	// so an unpinned golden records whatever host the suite happened to run on.
+	// Claude Code is the primary platform, so the golden locks its naming.
+	// Codex and OpenCode naming is covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "claude")
 
 	goal := "Golden workflow test colony"
 	taskOneID := "g-task-1"
@@ -271,7 +281,7 @@ func TestGoldenBuildVisualOutput(t *testing.T) {
 			"── Context ──", "── Tasks ──", "── Dispatch ──",
 			"── Verification", "── Housekeeping ──",
 			"── Colony Complete ──",
-			"It's safe to clear your context now.",
+			"safe to clear your context now.",
 		} {
 			if !strings.Contains(clean, want) {
 				t.Errorf("build golden output missing %q", want)
@@ -291,6 +301,11 @@ func TestGoldenContinueVisualOutput(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	// Pin the platform: command naming in visual output is platform-specific,
+	// so an unpinned golden records whatever host the suite happened to run on.
+	// Claude Code is the primary platform, so the golden locks its naming.
+	// Codex and OpenCode naming is covered by TestVisualOutputNeverLeaksRawWrapperCommands.
+	t.Setenv("AETHER_PLATFORM", "claude")
 
 	goal := "Golden workflow test colony"
 	now := mustParseRFC3339(t, "2026-04-20T11:00:00Z")
@@ -325,6 +340,18 @@ func TestGoldenContinueVisualOutput(t *testing.T) {
 		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Task: "Independent verification", Status: "spawned"},
 	}
 	seedContinueBuildPacket(t, dataDir, 1, "Golden phase", goal, dispatches)
+
+	// Seed empty-but-VALID instincts/observations files so phase-end
+	// consolidation (D-04) runs cleanly to a deterministic zero-state beat
+	// instead of a load failure whose error text embeds this test's
+	// t.TempDir() path -- which would make the checked-in golden fixture
+	// mismatch on every run since that path is different each time.
+	if err := store.SaveJSON("instincts.json", colony.InstinctsFile{Instincts: []colony.InstinctEntry{}}); err != nil {
+		t.Fatalf("seed instincts.json: %v", err)
+	}
+	if err := store.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatalf("seed learning-observations.json: %v", err)
+	}
 
 	stdout = &bytes.Buffer{}
 	rootCmd.SetArgs([]string{"continue"})

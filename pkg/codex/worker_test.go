@@ -130,6 +130,59 @@ func TestParseWorkerOutputPreservesTopLevelScoutReport(t *testing.T) {
 	}
 }
 
+// TestWorkerArtifactsSchemaAcceptsNamedFields pins the D-05 artifacts schema
+// fix: the {}-only schema now carries named typed properties (behavior 4)
+// while additionalProperties stays false so an unnamed extra property is
+// still rejected (behavior 5) — asserted directly against the schema map, the
+// same way a JSON Schema validator would evaluate it.
+func TestWorkerArtifactsSchemaAcceptsNamedFields(t *testing.T) {
+	schema := workerClaimsSchema()
+	artifacts, ok := schema.Properties["artifacts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("artifacts schema missing or wrong type: %+v", schema.Properties["artifacts"])
+	}
+
+	// additionalProperties stays false: an unnamed extra property (e.g.
+	// "unnamed_field") has no entry in properties and is not in required, so a
+	// strict validator rejects it. Prove the schema does not carry it.
+	additionalProperties, ok := artifacts["additionalProperties"].(bool)
+	if !ok || additionalProperties {
+		t.Fatalf("artifacts schema additionalProperties = %v, want false", artifacts["additionalProperties"])
+	}
+
+	props, ok := artifacts["properties"].(map[string]interface{})
+	if !ok || len(props) == 0 {
+		t.Fatalf("artifacts schema properties map is empty: %+v", artifacts["properties"])
+	}
+	if _, present := props["unnamed_field"]; present {
+		t.Fatal("artifacts schema unexpectedly declares an unnamed_field property")
+	}
+
+	// Behavior 4: the schema validates an object carrying a named string
+	// field — research_file is the artifact cmd/phase_research.go:124 orders.
+	researchFile, ok := props["research_file"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("artifacts schema missing research_file property: %+v", props)
+	}
+	fieldType, ok := researchFile["type"].([]string)
+	if !ok || !stringListContains(fieldType, "string") {
+		t.Fatalf("research_file type = %v, want a type list including \"string\"", researchFile["type"])
+	}
+
+	// Every declared property must be listed in required — this is the
+	// existing strict-schema convention (nullable-if-optional, not
+	// omittable), pinned repo-wide by TestWorkerClaimsSchemaStrictObjects.
+	required, ok := artifacts["required"].([]string)
+	if !ok {
+		t.Fatalf("artifacts schema required list missing or wrong type: %+v", artifacts["required"])
+	}
+	for name := range props {
+		if !stringListContains(required, name) {
+			t.Fatalf("artifacts schema required list missing %q", name)
+		}
+	}
+}
+
 func stringListContains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
@@ -984,7 +1037,7 @@ EOF
 		t.Fatalf("failed to read captured args: %v", err)
 	}
 	argsText := string(argsData)
-	for _, want := range []string{"--output-format\njson", "--json-schema", `"ant_name"`} {
+	for _, want := range []string{"--output-format\nstream-json", "--verbose", "--json-schema", `"ant_name"`} {
 		if !strings.Contains(argsText, want) {
 			t.Fatalf("captured args missing %q:\n%s", want, argsText)
 		}

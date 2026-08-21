@@ -199,7 +199,7 @@ func TestSealPlanOnlyEmitsExplicitOrchestratorColonyMode(t *testing.T) {
 	}
 	createTestColonyState(t, dataDir, state)
 
-	result, err := runSealPlanOnly(root, false)
+	result, err := runSealPlanOnly(root, false, "")
 	if err != nil {
 		t.Fatalf("runSealPlanOnly: %v", err)
 	}

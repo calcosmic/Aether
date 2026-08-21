@@ -1,0 +1,17 @@
+# Allowlist for bench/tasks/02-brownfield-feature.md
+# Any changed path in the substrate clone that does not match one of the
+# patterns below is counted as an unnecessary modification.
+
+# task-content block: the three files the feature genuinely requires,
+# per the task's own "Done means" section, plus the existing test
+# directory in case the solution adds test coverage for the new check
+# (this repo's own convention is to commit tests alongside source).
+src/types.ts
+src/ZodError.ts
+src/locales/en.ts
+src/__tests__/*.test.ts
+
+# lane working state — not counted as unnecessary
+.aether/**
+.planning/**
+.claude/**

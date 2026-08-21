@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -57,6 +59,33 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 
 	startedAt := time.Now()
 
+	// The context capsule is manifest-level, not per-dispatch (CONTEXT-07): it
+	// is resolved once here for display only. Nothing below may write it into
+	// single[0].Brief or any dispatch — that would reintroduce the per-dispatch
+	// duplication plan 01 removed.
+	capsule, budgetTrimmed := resolveBriefContextCapsule()
+
+	// D-05/D-06 covered "twice". This covers "never" (190-190/WR-02): the
+	// duplication gate below only ever recorded a heading seen more than
+	// once, so a change that stopped delivering an active pheromone signal or
+	// a stored handoff to EITHER channel left --print-brief exiting 0,
+	// indistinguishable from a healthy build. The gate's own error text
+	// promised "exactly once" while the code enforced only "not more than
+	// once". Both halves are now real.
+	//
+	// This is a capsule-level property, not a per-dispatch one — with
+	// includeSteeringSections=false the brief never carries these sections at
+	// all, so the capsule is the only place they can be — hence one check
+	// ahead of the loop rather than N identical ones inside it.
+	if missing, evicted := absentBriefSections(capsule, expectedBriefSections(state), budgetTrimmed); len(missing) > 0 || len(evicted) > 0 {
+		for _, section := range evicted {
+			fmt.Fprintf(os.Stderr, "⚠ %q is not in the worker context: the token budget evicted it while assembling the capsule. The data exists; workers will not see it this build.\n", section)
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("dispatch context is missing %s: the source data exists and the capsule's trim ledger does not account for the omission, so this content reaches no worker (each owned section must appear exactly once in the assembled worker context)", strings.Join(missing, ", "))
+		}
+	}
+
 	matched := 0
 	var out strings.Builder
 
@@ -73,14 +102,55 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		attachBuildDispatchContext(root, phase, single, startedAt)
 		brief := single[0].Brief
 
+		// D-05/D-06: assert zero duplicated sections on the SAME assembled text
+		// (capsule + brief + skill section) renderBriefComposition/
+		// renderBriefChecklist already treat as the total assembled worker
+		// context — a repeated owned heading or a repeated handoff-schema
+		// sentence means the worker would receive the same steering content
+		// twice. This must fail --print-brief regardless of which mode
+		// (checklist or --full) is active, so it runs once here, ahead of
+		// either rendering branch.
+		// single[0].HandoffSection is included even though
+		// attachBuildDispatchContext now deliberately leaves it empty
+		// (190-190/CR-01): it is a field that ships on the wire in
+		// result.dispatches[] and result.dispatch_manifest.dispatches[], so
+		// if anything ever repopulates it the duplicate must trip this gate
+		// rather than slip past it the way it did before. Empty today, it
+		// contributes nothing to the counts.
+		assembled := capsule + "\n" + brief + "\n" + single[0].SkillSection + "\n" + single[0].HandoffSection
+		if duplicated := duplicatedBriefSections(assembled); len(duplicated) > 0 {
+			return fmt.Errorf("dispatch %s delivers duplicated context: %s (each owned section and the handoff schema must appear exactly once in the assembled worker context)", dispatch.Name, strings.Join(duplicated, ", "))
+		}
+
 		out.WriteString(strings.Repeat("━", 72))
 		out.WriteString(fmt.Sprintf("\n%s  %s  (%s)\n", casteEmoji(dispatch.Caste), dispatch.Name, dispatch.Caste))
 		out.WriteString(strings.Repeat("━", 72))
 		out.WriteString("\n\n")
-		out.WriteString(brief)
-		out.WriteString("\n")
-		out.WriteString(renderBriefComposition(brief))
-		out.WriteString("\n")
+
+		if options.Full {
+			// Print every piece a wrapper-spawned worker actually receives
+			// (WR-04): the manifest-level capsule (clearly marked as such,
+			// since it is resolved once above and shared across dispatches,
+			// not per-worker), then the brief, then the skill section. The
+			// wrapper contract (.claude/commands/ant/build.md:97) prompts
+			// workers with context_capsule + brief + skill_section, so
+			// --full printing brief alone was not "exactly what the worker
+			// receives" despite the function's own doc comment promising it.
+			out.WriteString("── Context Capsule (manifest-level) ──\n\n")
+			out.WriteString(capsule)
+			out.WriteString("\n\n")
+			out.WriteString(brief)
+			if skill := single[0].SkillSection; skill != "" {
+				out.WriteString("\n\n── Skill Section ──\n\n")
+				out.WriteString(skill)
+			}
+			out.WriteString("\n")
+			out.WriteString(renderBriefComposition(capsule, brief, single[0].SkillSection))
+			out.WriteString("\n")
+		} else {
+			out.WriteString(renderBriefChecklist(single[0], brief, capsule))
+			out.WriteString("\n")
+		}
 	}
 
 	if matched == 0 {
@@ -101,12 +171,27 @@ type briefSection struct {
 	Chars int
 }
 
-// renderBriefComposition breaks a brief into its markdown sections and reports
-// the size of each as a share of the whole, largest first. The point is to make
-// it obvious when framework scaffolding outweighs the worker's actual task.
-func renderBriefComposition(brief string) string {
+// renderBriefComposition breaks the full assembled worker context -- the
+// manifest-level capsule, the composed brief, and the per-dispatch skill
+// section -- into named parts and reports the size of each as a share of the
+// whole, largest first. The point is to make it obvious when framework
+// scaffolding outweighs the worker's actual task.
+//
+// The denominator is capsule+brief+skills, not brief alone (WR-04): the
+// wrapper contract (.claude/commands/ant/build.md:97) prompts workers with
+// context_capsule + brief + skill_section, and the checklist's own TOTAL
+// line (renderBriefChecklist) already uses that same three-way sum, so
+// --full's composition table must agree with the checklist about what "the
+// total assembled context" means for the same prompt.
+func renderBriefComposition(capsule, brief, skillSection string) string {
 	sections := splitBriefSections(brief)
-	total := len(brief)
+	if len(capsule) > 0 {
+		sections = append(sections, briefSection{Name: "Context Capsule (manifest-level)", Chars: len(capsule)})
+	}
+	if len(skillSection) > 0 {
+		sections = append(sections, briefSection{Name: "Skill Section", Chars: len(skillSection)})
+	}
+	total := len(capsule) + len(brief) + len(skillSection)
 	if total == 0 {
 		return ""
 	}
@@ -156,13 +241,15 @@ var briefOwnedSections = map[string]bool{
 	"Constraints":              true,
 	"Hints":                    true,
 	"Task Success Criteria":    true,
+	"Task Resolution Notice":   true,
 	"Phase Success Criteria":   true,
 	"Heartbeat Protocol":       true,
 	"Relevant Playbooks":       true,
 	"Pheromone Signals":        true,
 	"Territory Survey":         true,
 	"Phase Research":           true,
-	"Codegraph Context":        true,
+	"Verification Command":     true,
+	"Codebase Graph Context":   true,
 	"Previous Worker Handoffs": true,
 	"Expected Output":          true,
 }
@@ -201,6 +288,190 @@ func splitBriefSections(brief string) []briefSection {
 	return sections
 }
 
+// handoffSectionDuplicationAnchorChars is how many leading characters of
+// codex.HandoffFieldsSummary anchor the handoff-sentence duplication check.
+// The handoff schema sentence has no "## " heading of its own (189's D-04
+// design -- it is plain text appended after composeBuildManifestBrief's base
+// render), so splitBriefSections's heading walk cannot see it repeat; a
+// substring of the constant's own content is used instead of a hand-copied
+// piece of English, so the anchor can never drift from the schema
+// ValidateWorkerHandoff actually enforces. 40 chars of this specific,
+// generated sentence is long enough that it cannot plausibly false-match
+// unrelated prose.
+const handoffSectionDuplicationAnchorChars = 40
+
+// handoffSectionDuplicationAnchor returns the stable substring
+// duplicatedBriefSections counts occurrences of.
+func handoffSectionDuplicationAnchor() string {
+	if len(codex.HandoffFieldsSummary) <= handoffSectionDuplicationAnchorChars {
+		return codex.HandoffFieldsSummary
+	}
+	return codex.HandoffFieldsSummary[:handoffSectionDuplicationAnchorChars]
+}
+
+// duplicatedBriefSectionHandoffLabel is the name duplicatedBriefSections
+// reports when the handoff-schema sentence repeats. It has no heading of its
+// own, so it is not a member of briefOwnedSections -- this label exists only
+// to give a duplication finding a human-readable name distinct from any real
+// heading.
+const duplicatedBriefSectionHandoffLabel = "Handoff Schema"
+
+// duplicatedBriefSections reports every owned heading (per briefOwnedSections)
+// or the handoff-schema sentence that occurs more than once in assembled --
+// the same capsule + composed brief + skill-section text printWorkerBriefs
+// already has in hand for --full rendering, and the same denominator
+// renderBriefComposition/renderBriefChecklist already use (WR-04: capsule +
+// brief + skills, not brief alone).
+//
+// It performs two independent counting passes: heading occurrences via the
+// same "## " walk splitBriefSections uses, but COUNTING every occurrence
+// instead of splitBriefSections's first-wins/restart behavior (a second
+// "## Pheromone Signals" today silently becomes a second, same-named
+// briefSection entry that renderBriefComposition/renderBriefChecklist never
+// flag as a repeat); and occurrences of a stable anchor drawn from
+// codex.HandoffFieldsSummary's own text, since the handoff sentence carries
+// no heading for the first pass to see.
+//
+// Returns the sorted, deduplicated names of anything found more than once;
+// an empty slice when nothing repeats -- the healthy, common case.
+func duplicatedBriefSections(assembled string) []string {
+	counts := make(map[string]int)
+	for _, line := range strings.Split(assembled, "\n") {
+		if !strings.HasPrefix(line, "## ") {
+			continue
+		}
+		heading := strings.TrimSpace(strings.TrimPrefix(line, "## "))
+		if !briefOwnedSections[heading] {
+			// An unrecognized "## " heading belongs to injected content
+			// (e.g. a playbook), not the brief's own structure -- mirrors
+			// splitBriefSections's existing exclusion exactly.
+			continue
+		}
+		counts[heading]++
+	}
+
+	if anchor := handoffSectionDuplicationAnchor(); anchor != "" {
+		if n := strings.Count(assembled, anchor); n > 1 {
+			counts[duplicatedBriefSectionHandoffLabel] = n
+		}
+	}
+
+	duplicated := make([]string, 0, len(counts))
+	for name, n := range counts {
+		if n > 1 {
+			duplicated = append(duplicated, name)
+		}
+	}
+	sort.Strings(duplicated)
+	return duplicated
+}
+
+// resolveBriefContextCapsule is the seam --print-brief resolves its capsule
+// through, and is a variable for exactly one reason: the absence gate below
+// has a branch the healthy runtime cannot be coaxed into producing on demand
+// (a section whose source data exists, absent from the capsule, with no
+// eviction on record). Without a seam that branch could only ever be
+// unit-tested — and a test that exercises the checker but not the call site
+// still passes when the call site is deleted, which is the failure this
+// repo's definition of done exists to prevent.
+//
+// Production code must not reassign it.
+var resolveBriefContextCapsule = resolveCodexWorkerContextWithTrim
+
+// briefExpectedSection ties a heading a worker is supposed to receive to the
+// data that makes it expected and to the capsule section name the token
+// budget uses when it evicts one.
+type briefExpectedSection struct {
+	// Heading is the "## " heading the assembled worker context must carry.
+	Heading string
+	// SectionName is colony-prime's internal name for the same section, which
+	// is what appears in the capsule's trim ledger.
+	SectionName string
+	// Expected reports whether the underlying data exists at all. A section
+	// with no data is not missing — it has nothing to say.
+	Expected func() bool
+}
+
+// expectedBriefSections lists the steering sections whose absence is a defect
+// rather than an empty set.
+//
+// Both are INPUT context resolved from stored colony data, and both are
+// rendered by the capsule and by nothing else on this path, so "the data
+// exists but the heading does not appear" is decidable here without guessing.
+// Deliberately narrow: sections whose presence depends on phase shape
+// (Dependencies, Hints, Territory Survey) have no such crisp predicate and
+// would produce false alarms.
+// It takes the whole state, not the inspected phase, because the capsule
+// resolves handoffs against state.CurrentPhase
+// (cmd/colony_prime_context.go:695). Asking about a different phase number
+// than the capsule used would make --print-brief on any non-current phase
+// report a delivery defect that does not exist.
+func expectedBriefSections(state colony.ColonyState) []briefExpectedSection {
+	return []briefExpectedSection{
+		{
+			Heading:     "Pheromone Signals",
+			SectionName: "pheromones",
+			// filterSignalsForPrompt, not resolvePheromoneSection: the
+			// capsule renders its "## Pheromone Signals" heading exactly when
+			// filterSignalsForPrompt returns a non-empty set
+			// (cmd/colony_prime_context.go:566-571), while
+			// resolvePheromoneSection uses a DIFFERENT predicate
+			// (sig.Active && effective strength >= 0.1, cmd/context.go:1392).
+			// Two predicates that can disagree would make this gate report a
+			// delivery defect whenever they did.
+			Expected: func() bool {
+				var pf colony.PheromoneFile
+				if store == nil || store.LoadJSON("pheromones.json", &pf) != nil {
+					return false
+				}
+				return len(filterSignalsForPrompt(pf.Signals, time.Now())) > 0
+			},
+		},
+		{
+			Heading:     "Previous Worker Handoffs",
+			SectionName: "worker_handoffs",
+			// Same arguments the capsule itself uses
+			// (cmd/colony_prime_context.go:695) so the two agree on what
+			// "there is a handoff to deliver" means.
+			Expected: func() bool {
+				return strings.TrimSpace(renderWorkerHandoffSection("build", state.CurrentPhase, "")) != ""
+			},
+		},
+	}
+}
+
+// absentBriefSections splits expected-but-absent sections into two buckets:
+// missing (no explanation on record — a delivery defect) and evicted (the
+// capsule's token budget dropped it, which is deliberate and explicable).
+//
+// Callers fail on the first and warn on the second. Collapsing them would
+// either make --print-brief fail on any context-heavy colony or let a genuine
+// silent drop pass; the trim ledger is what separates the two.
+func absentBriefSections(assembled string, expected []briefExpectedSection, budgetTrimmed []string) (missing []string, evicted []string) {
+	trimmed := make(map[string]bool, len(budgetTrimmed))
+	for _, name := range budgetTrimmed {
+		trimmed[strings.TrimSpace(name)] = true
+	}
+
+	for _, section := range expected {
+		if section.Expected == nil || !section.Expected() {
+			continue
+		}
+		if strings.Contains(assembled, "## "+section.Heading) {
+			continue
+		}
+		if trimmed[section.SectionName] {
+			evicted = append(evicted, section.Heading)
+			continue
+		}
+		missing = append(missing, section.Heading)
+	}
+
+	sort.Strings(missing)
+	sort.Strings(evicted)
+	return missing, evicted
+}
+
 func truncateSectionName(name string, max int) string {
 	if len(name) <= max {
 		return name
@@ -212,15 +483,197 @@ func truncateSectionName(name string, max int) string {
 }
 
 // buildPrintBriefOptions mirrors the depth flags the real build path honours, so
-// a printed brief matches what would actually be dispatched.
-func buildPrintBriefOptions(workerTimeout time.Duration, force, light, heavy bool, verificationDepth string) codexBuildOptions {
+// a printed brief matches what would actually be dispatched. full threads the
+// --full flag through so printWorkerBriefs knows whether to render the raw
+// prompt or the checklist.
+func buildPrintBriefOptions(workerTimeout time.Duration, force, light, heavy, full bool, verificationDepth string) codexBuildOptions {
 	return codexBuildOptions{
 		WorkerTimeout:     workerTimeout,
 		Force:             force,
 		LightFlag:         light,
 		HeavyFlag:         heavy,
 		VerificationDepth: verificationDepth,
+		Full:              full,
 	}
+}
+
+// briefTaskContentAllowanceChars bounds everything an assembled worker
+// context carries that has no named budget constant of its own: assignment,
+// dependencies, constraints, hints, success criteria, pheromone signals,
+// previous worker handoffs, and the territory survey pointer list. This is a
+// judgement call, not a measurement — it exists so the budget ceiling
+// (D-03's growth guard) has a concrete number to sum against, distinct from
+// the grounding budgets (capsule, skills, research, codegraph) that already
+// declare their own constants. If real usage shows this is consistently too
+// tight or too loose, that is a finding to raise, not a number to creep.
+const briefTaskContentAllowanceChars = 6000
+
+// assembledContextBudgetCeilingChars is the derived ceiling for the total
+// assembled worker context: the sum of every named budget constant plus the
+// task-content allowance above. It is derived, never a literal — a literal
+// would silently drift the moment any budget constant moves.
+//
+// Sums colonyPrimeCompactBudgetChars, not colonyPrimeBudgetChars (WR-03):
+// every capsule this codebase actually delivers to a worker goes through
+// resolveCodexWorkerContext(), which always calls
+// buildColonyPrimeOutput(true) -- the compact budget. Summing the
+// non-compact constant here made the ceiling ~4000 chars looser than the
+// real delivery budget, so this guard couldn't trip until reality had
+// drifted 2x past its actual cap.
+func assembledContextBudgetCeilingChars() int {
+	return colonyPrimeCompactBudgetChars +
+		skillInjectNormalBudgetChars +
+		phaseResearchBriefBudgetChars +
+		codegraphWorkerContextBudgetChars +
+		briefTaskContentAllowanceChars
+}
+
+// briefChecklistRow is one line of the D-06 inspector checklist: a named
+// context section, whether it arrived, its size, and an optional annotation
+// (used for the survey staleness notice).
+type briefChecklistRow struct {
+	Label   string
+	Present bool
+	Chars   int
+	Note    string
+}
+
+// locateChecklistSection finds an exact heading line (e.g. "## Phase
+// Research" or "### Territory Survey") inside text and returns whether it is
+// present, plus the character span from that heading through the next "## "
+// or "### " heading line, or the end of the text. Unlike splitBriefSections,
+// this does not depend on the heading being registered in
+// briefOwnedSections, so it works for headings the checklist needs to detect
+// (the charter heading inside the capsule, the survey's own "### " heading)
+// without needing that registry's exact spelling to match. Named distinctly
+// from oracle_loop.go's extractBriefSection (a different, single-value
+// helper) to avoid collision.
+func locateChecklistSection(text, heading string) (present bool, chars int) {
+	idx := strings.Index(text, heading)
+	if idx < 0 {
+		return false, 0
+	}
+	rest := text[idx:]
+	pieces := strings.SplitAfter(rest, "\n")
+	if len(pieces) == 0 {
+		return true, len(rest)
+	}
+	size := len(pieces[0])
+	for _, piece := range pieces[1:] {
+		if strings.HasPrefix(piece, "## ") || strings.HasPrefix(piece, "### ") {
+			break
+		}
+		size += len(piece)
+	}
+	return true, size
+}
+
+// checklistRowFor builds a checklist row by locating heading inside brief.
+func checklistRowFor(brief, label, heading string) briefChecklistRow {
+	present, chars := locateChecklistSection(brief, heading)
+	return briefChecklistRow{Label: label, Present: present, Chars: chars}
+}
+
+// checklistRowForEither builds a checklist row by locating heading inside
+// EITHER brief or capsule, whichever carries it (190-03, D-190-01-A). Since
+// composeBuildManifestBrief now omits pheromone signals and prior worker
+// handoffs from the brief for every caller that also carries a capsule (the
+// checklist's own caller included), those two sections live in the capsule
+// exclusively -- checking brief alone (checklistRowFor's behavior) would
+// report them ABSENT even though the worker still receives them, which is
+// exactly the misreport renderBriefChecklist's own doc comment warns against
+// ("a section the runtime silently stopped delivering shows up as ABSENT
+// here even if the state that would produce it still exists" -- the inverse
+// error, reporting ABSENT for a section that IS delivered elsewhere, is just
+// as wrong). Checking both sources keeps this row honest regardless of which
+// side currently owns the content.
+func checklistRowForEither(brief, capsule, label, heading string) briefChecklistRow {
+	if present, chars := locateChecklistSection(brief, heading); present {
+		return briefChecklistRow{Label: label, Present: true, Chars: chars}
+	}
+	if present, chars := locateChecklistSection(capsule, heading); present {
+		return briefChecklistRow{Label: label, Present: true, Chars: chars}
+	}
+	return briefChecklistRow{Label: label, Present: false, Chars: 0}
+}
+
+// renderBriefChecklist is the default `--print-brief` output (D-06): a
+// ten-second, sectioned answer to "which context arrived and which did not,"
+// with sizes and a total against a real, derived budget. It reports what the
+// worker would actually receive — brief sections plus the manifest-level
+// capsule and skill section read for display only — never what the database
+// contains, so a section the runtime silently stopped delivering shows up as
+// ABSENT here even if the state that would produce it still exists.
+func renderBriefChecklist(dispatch codexBuildDispatch, brief, capsule string) string {
+	var rows []briefChecklistRow
+
+	taskChars := 0
+	taskAnyPresent := false
+	for _, section := range splitBriefSections(brief) {
+		switch section.Name {
+		case "Assignment", "Phase Objective", "Phase Success Criteria",
+			"Task Success Criteria", "Dependencies", "Task Constraints",
+			"Constraints", "Hints":
+			taskChars += section.Chars
+			taskAnyPresent = true
+		}
+	}
+	rows = append(rows, briefChecklistRow{Label: "Assignment & Task Content", Present: taskAnyPresent, Chars: taskChars})
+
+	territoryRow := checklistRowFor(brief, "Territory Survey", "### Territory Survey")
+	if territoryRow.Present {
+		switch {
+		case strings.Contains(brief, "STALE MAP WARNING"):
+			territoryRow.Note = "STALE MAP WARNING — codebase map may not match the tree, run /ant-colonize"
+		case strings.Contains(brief, "never been surveyed"):
+			territoryRow.Note = "territory has never been surveyed"
+		}
+	}
+	rows = append(rows, territoryRow)
+
+	rows = append(rows, checklistRowFor(brief, "Phase Research", "## Phase Research"))
+	rows = append(rows, checklistRowFor(brief, "Colony Research", "## Colony Research"))
+	rows = append(rows, checklistRowFor(brief, "Codegraph Context", "## Codebase Graph Context"))
+	rows = append(rows, checklistRowForEither(brief, capsule, "Pheromone Signals", "## Pheromone Signals"))
+	rows = append(rows, checklistRowForEither(brief, capsule, "Previous Worker Handoffs", "## Previous Worker Handoffs"))
+	rows = append(rows, checklistRowFor(brief, "Expected Output", "## Expected Output"))
+
+	capsulePresent := strings.TrimSpace(capsule) != ""
+	rows = append(rows, briefChecklistRow{Label: "Context Capsule (manifest-level)", Present: capsulePresent, Chars: len(capsule)})
+
+	charterPresent, charterChars := locateChecklistSection(capsule, charterSectionHeading())
+	rows = append(rows, briefChecklistRow{Label: "Charter (inside capsule)", Present: charterPresent, Chars: charterChars})
+
+	var b strings.Builder
+	b.WriteString(strings.Repeat("─", 72))
+	b.WriteString("\n  CONTEXT CHECKLIST\n")
+	b.WriteString(strings.Repeat("─", 72))
+	b.WriteString("\n")
+
+	for _, row := range rows {
+		marker := "ABSENT"
+		if row.Present {
+			marker = "present"
+		}
+		b.WriteString(fmt.Sprintf("  %-34s %-9s %6d\n", truncateSectionName(row.Label, 34), marker, row.Chars))
+		if row.Note != "" {
+			b.WriteString(fmt.Sprintf("    ⚠ %s\n", row.Note))
+		}
+	}
+
+	skillChars := len(dispatch.SkillSection)
+	total := len(capsule) + len(brief) + skillChars
+	ceiling := assembledContextBudgetCeilingChars()
+	pct := 0.0
+	if ceiling > 0 {
+		pct = float64(total) / float64(ceiling) * 100
+	}
+
+	b.WriteString(strings.Repeat("─", 72))
+	b.WriteString(fmt.Sprintf("\n  %-34s %6d / %-6d %5.1f%%\n", "TOTAL (capsule+brief+skills)", total, ceiling, pct))
+	b.WriteString("\n  Run with --full to print the raw assembled prompt.\n")
+
+	return b.String()
 }
 
 var _ = colony.PhaseModeProduction

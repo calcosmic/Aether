@@ -375,6 +375,50 @@ func classifyDirectory(target string) dirClassification {
 	return dirClassification{Type: "unknown", Signals: []string{"no strong structural signals detected"}}
 }
 
+// sourceFileExtensions is what makes a file "code" for knowledge-repo
+// detection. Deliberately broad: one hit disqualifies nothing on its own, but
+// the knowledge_base class requires zero of these AND zero detected languages,
+// so a real code repo can never be misclassified.
+var sourceFileExtensions = map[string]bool{
+	".go": true, ".js": true, ".ts": true, ".jsx": true, ".tsx": true,
+	".py": true, ".rb": true, ".rs": true, ".java": true, ".kt": true,
+	".swift": true, ".c": true, ".h": true, ".cpp": true, ".cc": true,
+	".cs": true, ".php": true, ".scala": true, ".sh": true, ".bash": true,
+	".zsh": true, ".sql": true, ".vue": true, ".svelte": true, ".ex": true,
+	".exs": true, ".erl": true, ".hs": true, ".lua": true, ".r": true,
+	".pl": true, ".dart": true, ".m": true, ".mm": true, ".zig": true,
+}
+
+// classifyKnowledgeRepo recognises a directory of notes — an Obsidian or
+// Logseq vault, a docs archive, a diary. The field report that motivated this
+// (.planning/field-reports/2026-08-16-init-obsidian-vault.md) documents a
+// 538-file vault scanning as detected_type "unknown" with every discriminating
+// field empty, which produced a charter warning a personal diary about
+// "regression risk" and five CI/LICENSE housekeeping suggestions.
+//
+// The gate is conservative on purpose: any detected language or any source
+// file at all disqualifies, so this can only ever claim repos the code
+// detectors found nothing in.
+func classifyKnowledgeRepo(languages []string, markdownCount, sourceCount, fileCount int, vaultMarkers []string) (dirClassification, bool) {
+	if len(languages) > 0 || sourceCount > 0 {
+		return dirClassification{}, false
+	}
+	hasVaultMarker := len(vaultMarkers) > 0
+	mostlyMarkdown := fileCount > 0 && markdownCount >= 10 && markdownCount*2 >= fileCount
+	if !hasVaultMarker && !mostlyMarkdown {
+		return dirClassification{}, false
+	}
+
+	signals := make([]string, 0, 3)
+	if fileCount > 0 {
+		signals = append(signals, fmt.Sprintf("%d markdown files (%d%% of %d files), no source code", markdownCount, markdownCount*100/fileCount, fileCount))
+	}
+	for _, marker := range vaultMarkers {
+		signals = append(signals, marker+" vault configuration found")
+	}
+	return dirClassification{Type: "knowledge_base", Signals: signals}, true
+}
+
 // --- Deep governance parsers ---
 
 // parseEslintrcDeep parses ESLint config files for rules and extends.
@@ -1331,6 +1375,34 @@ func parseDependencyFiles(target string) []techStackDetail {
 func generatePheromoneSuggestions(target string, governance governanceInfo, dirClass dirClassification, techStack []techStackDetail) []pheromoneSuggestion {
 	var suggestions []pheromoneSuggestion
 
+	// A knowledge repo gets no code housekeeping. The field-report vault
+	// received five suggestions — CI, LICENSE, README, formatter, "no
+	// documentation detected" (for 538 files of documentation) — with a 100%
+	// discard rate. Only the secrets guards carry over, because a vault can
+	// leak credentials as easily as a codebase can.
+	if dirClass.Type == "knowledge_base" {
+		if hasFile(target, ".env") || hasFile(target, ".env.local") {
+			suggestions = append(suggestions, pheromoneSuggestion{
+				Type:    "REDIRECT",
+				Content: "never commit secrets or .env files to version control",
+				Reason:  ".env file detected in project root",
+			})
+		}
+		if hasFile(target, ".env") && !fileContains(target, ".gitignore", ".env") {
+			suggestions = append(suggestions, pheromoneSuggestion{
+				Type:    "REDIRECT",
+				Content: "add .env to .gitignore to prevent secret leaks",
+				Reason:  ".env exists without .gitignore entry",
+			})
+		}
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "preserve existing notes and their links -- prefer moving and merging over deleting",
+			Reason:  "knowledge repo: the content is the asset, and lost notes rarely announce themselves",
+		})
+		return suggestions
+	}
+
 	// --- Original 10 patterns (preserved unchanged) ---
 
 	// 1. .env or .env.local exists -> REDIRECT about secrets
@@ -1617,7 +1689,7 @@ func generatePheromoneSuggestions(target string, governance governanceInfo, dirC
 }
 
 // generateCharter produces charter data from scan results.
-func generateCharter(goal, detected string, governance governanceInfo, readmeSummary string, gitHistory gitHistoryInfo, languages []string, frameworks []string, isGitRepo bool, pheromoneSuggestions []pheromoneSuggestion) colony.Charter {
+func generateCharter(goal, detected string, governance governanceInfo, readmeSummary string, gitHistory gitHistoryInfo, languages []string, frameworks []string, isGitRepo bool, pheromoneSuggestions []pheromoneSuggestion, markdownCount int) colony.Charter {
 	ch := colony.Charter{}
 
 	// Intent: use the goal string directly
@@ -1626,14 +1698,22 @@ func generateCharter(goal, detected string, governance governanceInfo, readmeSum
 		ch.Intent = "Build and ship quality software"
 	}
 
-	// Vision: combine detected type with governance tools
+	// Vision: combine detected type with governance tools. Never emit filler
+	// that reads as a bug — the previous fallthrough printed "A unknown
+	// project" verbatim on any repo the detectors could not read. When the
+	// scan learned nothing, say that plainly instead.
 	var govTools []string
 	govTools = append(govTools, governance.Linters...)
 	govTools = append(govTools, governance.Formatters...)
 	govTools = append(govTools, governance.CIConfigs...)
-	if len(govTools) > 0 {
+	switch {
+	case detected == "knowledge_base":
+		ch.Vision = fmt.Sprintf("A knowledge base of %d markdown notes", markdownCount)
+	case detected == "unknown" || detected == "":
+		ch.Vision = "Project type not determined from automated scan"
+	case len(govTools) > 0:
 		ch.Vision = "A " + detected + " project with " + joinWithCommaAnd(govTools)
-	} else {
+	default:
 		ch.Vision = "A " + detected + " project"
 	}
 
@@ -1662,12 +1742,18 @@ func generateCharter(goal, detected string, governance governanceInfo, readmeSum
 
 	// Goals
 	ch.Goals = "Goal: " + goal + ". Focus on quality, maintainability, and shipping working software."
+	if detected == "knowledge_base" {
+		ch.Goals = "Goal: " + goal + ". Focus on preserving content and keeping the notes organised and findable."
+	}
 
 	// TechStack
 	ch.TechStack = generateTechStack(languages, frameworks)
+	if detected == "knowledge_base" {
+		ch.TechStack = "Markdown notes; no build toolchain"
+	}
 
 	// KeyRisks
-	ch.KeyRisks = generateKeyRisks(governance, isGitRepo, pheromoneSuggestions)
+	ch.KeyRisks = generateKeyRisks(detected, governance, isGitRepo, pheromoneSuggestions)
 
 	// Constraints
 	ch.Constraints = generateConstraints(governance)
@@ -1704,7 +1790,32 @@ func generateTechStack(languages []string, frameworks []string) string {
 }
 
 // generateKeyRisks produces risk heuristics from governance data and pheromone suggestions.
-func generateKeyRisks(governance governanceInfo, isGitRepo bool, pheromoneSuggestions []pheromoneSuggestion) string {
+func generateKeyRisks(detected string, governance governanceInfo, isGitRepo bool, pheromoneSuggestions []pheromoneSuggestion) string {
+	// A knowledge repo's risks are about the content, not a deployment
+	// pipeline it will never have. The field-report vault was warned about
+	// "manual deployment risk" and "regression risk" — for a personal diary.
+	if detected == "knowledge_base" {
+		risks := []string{
+			"Content loss during reorganisation -- moves and merges are safer than deletes",
+			"Broken links between notes when files are renamed or moved",
+			"Duplicated or orphaned notes accumulating unnoticed",
+		}
+		if !isGitRepo {
+			risks = append(risks, "Not a git repository -- no history to recover lost notes from")
+		}
+		return strings.Join(risks, ". ")
+	}
+
+	// When the scan learned nothing at all, one honest sentence beats three
+	// speculative warnings about tooling the project may not even need.
+	if detected == "unknown" && len(governance.CIConfigs) == 0 && len(governance.TestFrameworks) == 0 && len(governance.Linters) == 0 {
+		risks := []string{"Automated scan could not assess risks -- judge them from the stated goal"}
+		if !isGitRepo {
+			risks = append(risks, "Not a git repository -- no version control")
+		}
+		return strings.Join(risks, ". ")
+	}
+
 	var risks []string
 
 	if len(governance.CIConfigs) == 0 {
@@ -1824,6 +1935,9 @@ var initResearchCmd = &cobra.Command{
 		topLevelDirs := []string{}
 		isGitRepo := false
 		fileCount := 0
+		markdownCount := 0
+		sourceFileCount := 0
+		vaultMarkers := []string{}
 		totalDirs := 0
 		var readmeSummary string
 		var largestFiles []fileInfo
@@ -1842,6 +1956,9 @@ var initResearchCmd = &cobra.Command{
 				}
 				if e.Name() == ".git" {
 					isGitRepo = true
+				}
+				if e.Name() == ".obsidian" || e.Name() == ".logseq" {
+					vaultMarkers = append(vaultMarkers, e.Name())
 				}
 			} else {
 				entryNames[e.Name()] = true
@@ -1889,6 +2006,14 @@ var initResearchCmd = &cobra.Command{
 
 			fileCount++
 
+			// Markdown-vs-source tally for knowledge-repo detection.
+			switch ext := strings.ToLower(filepath.Ext(d.Name())); {
+			case ext == ".md" || ext == ".markdown":
+				markdownCount++
+			case sourceFileExtensions[ext]:
+				sourceFileCount++
+			}
+
 			// Read README.md summary (first 500 chars)
 			if strings.EqualFold(d.Name(), "README.md") {
 				data, err := os.ReadFile(path)
@@ -1933,12 +2058,25 @@ var initResearchCmd = &cobra.Command{
 
 		techStackDetail := parseDependencyFiles(target)
 		dirClass := classifyDirectory(target)
+		// A directory of notes with zero code is a knowledge repo, and every
+		// code-shaped judgement downstream (housekeeping pheromones, regression
+		// risks, "A unknown project") is wrong for it.
+		if knowledgeClass, isKnowledge := classifyKnowledgeRepo(languages, markdownCount, sourceFileCount, fileCount, vaultMarkers); isKnowledge {
+			dirClass = knowledgeClass
+			detected = "knowledge_base"
+		}
 		governanceDetails := deepParseGovernance(target)
 		pheromoneSuggestions := generatePheromoneSuggestions(target, governance, dirClass, techStackDetail)
-		charter := generateCharter(goal, detected, governance, readmeSummary, gitHistory, languages, frameworks, isGitRepo, pheromoneSuggestions)
+		charter := generateCharter(goal, detected, governance, readmeSummary, gitHistory, languages, frameworks, isGitRepo, pheromoneSuggestions, markdownCount)
 		contextSummary := generateColonyContextSummary(detected, languages, dirClass, techStackDetail, governance, pheromoneSuggestions, isGitRepo, fileCount)
 
-		outputOK(map[string]interface{}{
+		researchDisplayData := ceremonyResearchData{
+			TechStackDetail:      techStackDetail,
+			DirClassification:    dirClass,
+			GovernanceDetails:    governanceDetails,
+			ColonyContextSummary: contextSummary,
+		}
+		outputWorkflow(map[string]interface{}{
 			"detected_type":          detected,
 			"languages":              languages,
 			"frameworks":             frameworks,
@@ -1957,9 +2095,33 @@ var initResearchCmd = &cobra.Command{
 			"dir_classification":     dirClass,
 			"governance_details":     governanceDetails,
 			"colony_context_summary": contextSummary,
-		})
+			"launch_brief":           synthesizeLaunchBrief(goal, &charter, researchDisplayData),
+		}, renderInitResearchVisual(charter, pheromoneSuggestions, researchDisplayData))
 		return nil
 	},
+}
+
+// renderInitResearchVisual is the human rendering of the research scan: the
+// proposed charter, the codebase findings, and the suggested steering signals
+// — proposals only; nothing here is written until it is explicitly approved.
+func renderInitResearchVisual(charter colony.Charter, suggestions []pheromoneSuggestion, data ceremonyResearchData) string {
+	var b strings.Builder
+	b.WriteString(renderCharterDisplay(charter))
+	if research := renderResearchDisplay(data); research != "" {
+		b.WriteString(research)
+	}
+	if len(suggestions) > 0 {
+		b.WriteString(renderStageMarker("Suggested Signals"))
+		b.WriteString("Proposed steering signals — nothing is written until you approve it:\n")
+		for i, s := range suggestions {
+			b.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, strings.ToUpper(strings.TrimSpace(s.Type)), s.Content))
+			if reason := strings.TrimSpace(s.Reason); reason != "" {
+				b.WriteString(fmt.Sprintf("     └── %s\n", reason))
+			}
+		}
+		b.WriteString("Approve one with `aether focus`, `aether redirect`, or `aether feedback`.\n")
+	}
+	return b.String()
 }
 
 func init() {
