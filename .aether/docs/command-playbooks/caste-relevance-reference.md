@@ -21,7 +21,7 @@
 | ambassador | 20 | api, sdk, oauth, external service, integration, webhook, third-party |
 | tracker | 20 | bug, fix, regression, investigate failure, root cause, issue |
 | weaver | 20 | refactor, cleanup, modernize, extract, simplify, restructure |
-| keeper | 10 | knowledge, pattern, convention, standard, document, preserve, wisdom |
+| keeper | 10 | knowledge, convention, preserve, wisdom, institutional |
 | chronicler | 15 | documentation, docs, guide, readme, changelog, manual |
 | includer | 15 | accessibility, a11y, wcag, screen reader, aria, inclusive |
 | surveyor-provisions | 10 | dependency, dependencies, provisions, external, stack, package |
@@ -68,14 +68,15 @@ Source: `spawnThreshold`
 - Always: `surveyor-provisions`, `surveyor-nest`, `surveyor-disciplines`, `surveyor-pathogens`
 
 ### Swarm
-- Always: `tracker`, `scout`, `archaeologist`, `builder`, `watcher`
+- Always: `tracker`, `builder`, `watcher`
+- By keyword relevance: `scout` (investigation wording), `archaeologist` (legacy/history wording)
 - High-risk phases: + `gatekeeper`
 
 ### Seal
 | Depth | Required Castes |
 |-------|----------------|
 | light | (none) |
-| standard | `auditor`, `probe` |
+| standard | `auditor`, `probe` (probe only when the phase produces testable code) |
 | heavy | `gatekeeper`, `auditor`, `probe` |
 
 Source: `isAlwaysRequired`

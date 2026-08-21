@@ -42,7 +42,11 @@ var casteRelevanceRegistry = []CasteRelevanceProfile{
 	{Caste: "ambassador", Keywords: []string{"api", "sdk", "oauth", "external service", "external integration", "integration", "webhook", "third-party", "stripe", "sendgrid", "twilio", "openai", "aws", "azure", "gcp"}, BaseScore: 20},
 	{Caste: "tracker", Keywords: []string{"bug", "fix", "regression", "investigate failure", "root cause", "issue"}, BaseScore: 20},
 	{Caste: "weaver", Keywords: []string{"refactor", "cleanup", "modernize", "extract", "simplify", "restructure"}, BaseScore: 20},
-	{Caste: "keeper", Keywords: []string{"knowledge", "pattern", "convention", "standard", "document", "preserve", "wisdom"}, BaseScore: 10},
+	// "pattern", "standard" and "document" are everyday engineering words, and
+	// at base 10 two incidental hits cleared the continue threshold — a phase
+	// that merely mentioned documenting a standard summoned a Keeper.
+	// "document" belongs to chronicler; keeper keys on preservation intent.
+	{Caste: "keeper", Keywords: []string{"knowledge", "convention", "preserve", "wisdom", "institutional"}, BaseScore: 10},
 	{Caste: "chronicler", Keywords: []string{"documentation", "docs", "guide", "readme", "changelog", "manual"}, BaseScore: 15},
 	{Caste: "includer", Keywords: []string{"accessibility", "a11y", "wcag", "screen reader", "aria", "inclusive"}, BaseScore: 15},
 	{Caste: "surveyor-provisions", Keywords: []string{"dependency", "dependencies", "provisions", "external", "integration", "stack", "package"}, BaseScore: 10},

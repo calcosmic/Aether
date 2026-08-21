@@ -96,7 +96,7 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 				},
 			},
 			state: colony.ColonyState{},
-			want:  []string{"tracker", "scout", "archaeologist", "builder", "watcher"},
+			want:  []string{"tracker", "builder", "watcher"},
 		},
 		{
 			flow: "seal",
