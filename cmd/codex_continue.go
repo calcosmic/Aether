@@ -2957,7 +2957,7 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 		TimedOut:       timedOut,
 		TimeoutSeconds: int(timeout / time.Second),
 		ExitCode:       exitCode,
-		Summary:        successSummaryForStep(name, exitCode, err),
+		Summary:        successSummaryForStep(name, exitCode, output, err),
 		Output:         output,
 	}
 	if err != nil {
@@ -3963,22 +3963,39 @@ func trimCommandOutput(output string) string {
 	return strings.Join(lines[len(lines)-20:], "\n")
 }
 
-func successSummaryForStep(name string, exitCode int, err error) string {
+// successSummaryForStep composes the evidence line for a PASSING
+// verification step. WR-01 (191.1-REVIEW.md): this used to return a bare,
+// hardcoded per-check-name constant ("tests passed", "build succeeded", ...)
+// for every passing run -- honest about the outcome, but carrying nothing
+// that varies per run, so a downstream reader could not tell "this run
+// passed" from "the check named tests always says tests passed". This now
+// mirrors failureSummaryForStep's own, already-correct pattern for a failing
+// run: the base outcome plus the real exit code and the command's own
+// trailing output line, when one exists.
+func successSummaryForStep(name string, exitCode int, output string, err error) string {
 	if err != nil {
 		return fmt.Sprintf("%s failed", name)
 	}
+	base := ""
 	switch name {
 	case "build":
-		return "build succeeded"
+		base = "build succeeded"
 	case "types":
-		return "type checks passed"
+		base = "type checks passed"
 	case "lint":
-		return "lint passed"
+		base = "lint passed"
 	case "tests":
-		return "tests passed"
+		base = "tests passed"
 	default:
-		return fmt.Sprintf("%s passed", name)
+		base = fmt.Sprintf("%s passed", name)
 	}
+	if trimmed := strings.TrimSpace(output); trimmed != "" {
+		lines := strings.Split(trimmed, "\n")
+		if last := strings.TrimSpace(lines[len(lines)-1]); last != "" {
+			return fmt.Sprintf("%s (exit %d): %s", base, exitCode, last)
+		}
+	}
+	return fmt.Sprintf("%s (exit %d)", base, exitCode)
 }
 
 // classifyVerificationError inspects command output and exit code to determine

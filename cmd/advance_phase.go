@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -139,11 +143,80 @@ type pendingContinueAdvancePayload struct {
 // (T-191.1-02-03) -- a genuinely different build that happened in between is
 // discarded, never blindly replayed.
 type pendingContinueAdvanceRecord struct {
-	PhaseID        int                           `json:"phase_id"`
-	BuildStartedAt *time.Time                    `json:"build_started_at,omitempty"`
-	Source         string                        `json:"source"`
-	CreatedAt      time.Time                     `json:"created_at"`
-	Payload        pendingContinueAdvancePayload `json:"payload"`
+	PhaseID        int        `json:"phase_id"`
+	BuildStartedAt *time.Time `json:"build_started_at,omitempty"`
+	// WorkspaceFingerprint is a content-sensitive digest of the on-disk
+	// workspace at preservation time (CR-02, 191.1-REVIEW.md) -- see
+	// pendingContinueAdvanceWorkspaceFingerprint's own doc comment for why
+	// this is a distinct primitive from codex.WorkspaceFingerprint, not a
+	// reuse of it.
+	WorkspaceFingerprint string                        `json:"workspace_fingerprint,omitempty"`
+	Source               string                        `json:"source"`
+	CreatedAt            time.Time                     `json:"created_at"`
+	Payload              pendingContinueAdvancePayload `json:"payload"`
+}
+
+// pendingContinueAdvanceWorkspaceFingerprint returns a content-sensitive
+// digest of the on-disk workspace at root, for the CR-02 (191.1-REVIEW.md)
+// freshness check: does the workspace a preserved verification covered still
+// match the workspace that exists right now at replay time?
+//
+// This is deliberately a DIFFERENT primitive from codex.WorkspaceFingerprint
+// (pkg/codex/execution_binding.go), not a reuse of it. That function
+// identifies WHICH checkout/branch a worker is bound to and explicitly
+// excludes file content by design ("workers are expected to modify files ...
+// so content hashes would reject valid work") because its job spans the
+// whole build, where legitimate worker edits are the norm. The
+// preserve/replay window this guards is the opposite case: nothing is
+// supposed to change here (the colony is paused, no build is running), so
+// content sensitivity is exactly the property needed -- a hand edit between
+// preserve and replay (no new commit, same branch) must change this value,
+// which codex.WorkspaceFingerprint would deliberately never do.
+//
+// When root is a git checkout, the fingerprint covers the current commit
+// plus every uncommitted change against it (git diff HEAD, which covers
+// both staged and unstaged modifications to tracked files) and every
+// untracked/status change (git status --porcelain) -- cheap, because git
+// does the change-detection internally rather than this function hashing
+// every file in the tree, matching D-07's "cheap re-apply" framing. .aether/data
+// is gitignored in a real checkout, so the colony's own bookkeeping churn
+// (verification.json, gates.json, COLONY_STATE.json) is naturally excluded
+// without this function needing to know that path itself.
+//
+// When root is not a git checkout (or git is unavailable), this falls back
+// to a directory-identity-only digest -- matching codex.WorkspaceFingerprint's
+// own directory-mode fallback -- so a non-git workspace preserves today's
+// behavior exactly (a constant fingerprint that always matches itself)
+// rather than gaining a new refusal path where none existed before.
+func pendingContinueAdvanceWorkspaceFingerprint(root string) string {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		root = "."
+	}
+	if head, err := runGitForWorkspaceFingerprint(root, "rev-parse", "HEAD"); err == nil {
+		diff, _ := runGitForWorkspaceFingerprint(root, "diff", "HEAD", "--")
+		status, _ := runGitForWorkspaceFingerprint(root, "status", "--porcelain")
+		sum := sha256.Sum256([]byte("git\x00" + head + "\x00" + diff + "\x00" + status))
+		return fmt.Sprintf("%x", sum)
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		abs = root
+	}
+	sum := sha256.Sum256([]byte("directory\x00" + filepath.Clean(abs)))
+	return fmt.Sprintf("%x", sum)
+}
+
+func runGitForWorkspaceFingerprint(root string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = root
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
 }
 
 // pendingContinueAdvancePath follows the existing
@@ -155,17 +228,19 @@ func pendingContinueAdvancePath(phaseID int) string {
 }
 
 // preservePendingContinueAdvance durably stores an already-computed continue
-// advance payload for later replay, keyed to phaseID + buildStartedAt.
+// advance payload for later replay, keyed to phaseID + buildStartedAt +
+// (CR-02) a content fingerprint of the workspace right now.
 func preservePendingContinueAdvance(phaseID int, buildStartedAt *time.Time, source string, now time.Time, payload pendingContinueAdvancePayload) error {
 	if store == nil {
 		return fmt.Errorf("no store initialized")
 	}
 	return store.SaveJSON(pendingContinueAdvancePath(phaseID), pendingContinueAdvanceRecord{
-		PhaseID:        phaseID,
-		BuildStartedAt: buildStartedAt,
-		Source:         source,
-		CreatedAt:      now,
-		Payload:        payload,
+		PhaseID:              phaseID,
+		BuildStartedAt:       buildStartedAt,
+		WorkspaceFingerprint: pendingContinueAdvanceWorkspaceFingerprint(buildAttemptWorkspaceRoot()),
+		Source:               source,
+		CreatedAt:            now,
+		Payload:              payload,
 	})
 }
 
@@ -190,10 +265,12 @@ func preserveIfPausedSupersession(phaseID int, buildStartedAt *time.Time, source
 
 // loadPendingContinueAdvance returns the pending record for phaseID if one
 // exists AND its BuildStartedAt identity matches currentBuildStartedAt
-// exactly. A missing record returns ok=false. A record whose identity does
-// NOT match is discarded (deleted) as a side effect and also returns
-// ok=false (T-191.1-02-02/03) -- it can never be replayed, not now and not
-// on a later call either.
+// exactly AND (CR-02, 191.1-REVIEW.md) its preserved workspace fingerprint
+// still matches the workspace right now. A missing record returns ok=false.
+// A record whose identity or workspace fingerprint does NOT match is
+// discarded (deleted) as a side effect and also returns ok=false
+// (T-191.1-02-02/03) -- it can never be replayed, not now and not on a later
+// call either.
 func loadPendingContinueAdvance(phaseID int, currentBuildStartedAt *time.Time) (pendingContinueAdvanceRecord, bool) {
 	var record pendingContinueAdvanceRecord
 	if store == nil {
@@ -207,7 +284,17 @@ func loadPendingContinueAdvance(phaseID int, currentBuildStartedAt *time.Time) (
 	// check uses -- reused here rather than duplicated, so this identity
 	// check can never silently diverge from the one advancePhase itself
 	// applies at commit time.
-	if record.PhaseID != phaseID || !runtimeStartedAtMatches(record.BuildStartedAt, currentBuildStartedAt) {
+	identityMatches := record.PhaseID == phaseID && runtimeStartedAtMatches(record.BuildStartedAt, currentBuildStartedAt)
+	// CR-02: identity (phase + build) matching is necessary but not
+	// sufficient -- neither it nor advancePhase's own currency check touches
+	// the filesystem. A workspace fingerprint mismatch means real work
+	// happened outside the build pipeline between preserve and replay (a
+	// hand edit, a pair session -- FIELD-05's own justification for
+	// existing, cmd/verify_out_of_band.go) and the preserved payload no
+	// longer describes the workspace that exists right now; it must never
+	// be blindly replayed.
+	workspaceMatches := record.WorkspaceFingerprint == pendingContinueAdvanceWorkspaceFingerprint(buildAttemptWorkspaceRoot())
+	if !identityMatches || !workspaceMatches {
 		clearPendingContinueAdvance(phaseID)
 		return pendingContinueAdvanceRecord{}, false
 	}

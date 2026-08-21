@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -243,6 +244,115 @@ func TestStalePendingAdvanceDiscardedNotReplayed(t *testing.T) {
 	}
 	if persisted.Plan.Phases[0].Status != colony.PhaseInProgress {
 		t.Errorf("persisted phase 1 status = %q, want %q -- a stale record must never silently advance the phase", persisted.Plan.Phases[0].Status, colony.PhaseInProgress)
+	}
+}
+
+// runGitFixtureCommand runs a git command in dir, failing the test with the
+// command's combined output on error -- the test-side equivalent of a real
+// developer's shell, used to build a genuine git checkout for the CR-02
+// content-fingerprint reproduction below.
+func runGitFixtureCommand(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
+	}
+}
+
+// TestReplayRefusesWhenWorkspaceChangedBetweenPreserveAndReplay is the CR-02
+// regression lock (191.1-REVIEW.md): loadPendingContinueAdvance's freshness
+// check used to compare ONLY phase ID and BuildStartedAt -- both fields
+// already present in COLONY_STATE.json, never touching the filesystem -- so
+// real work landing on disk between preserve and replay (a hand edit, a pair
+// session; FIELD-05's own justification for existing, cmd/verify_out_of_band.go)
+// was invisible to it. This reproduces the field shape literally: a passing
+// verification is preserved, then main.go on disk is overwritten with
+// invalid Go syntax WITHOUT starting a new build (so BuildStartedAt never
+// moves), then the colony resumes. The corrupted workspace must never be
+// silently replayed as though it were still the one the preserved
+// verification covered.
+func TestReplayRefusesWhenWorkspaceChangedBetweenPreserveAndReplay(t *testing.T) {
+	buildStartedAt := time.Date(2026, 8, 21, 9, 0, 0, 0, time.UTC)
+	phases := []colony.Phase{
+		{ID: 1, Name: "Phase One", Status: colony.PhaseInProgress, Tasks: []colony.Task{{ID: strPtr("1.1"), Goal: "phase one work", Status: colony.TaskPending}}},
+	}
+	dataDir := pauseRaceFixture(t, phases, 1, &buildStartedAt, false)
+	root := filepath.Dir(filepath.Dir(dataDir))
+
+	// A REAL git checkout, committed clean -- production Aether always runs
+	// inside one (codex.WorkspaceFingerprint itself assumes git), and
+	// .aether/data is gitignored in a real checkout, so the colony's own
+	// bookkeeping churn (verification.json, gates.json, COLONY_STATE.json)
+	// must never itself be mistaken for a workspace change below.
+	runGitFixtureCommand(t, root, "init")
+	runGitFixtureCommand(t, root, "config", "user.email", "test@example.com")
+	runGitFixtureCommand(t, root, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".aether/data/\n"), 0644); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+	runGitFixtureCommand(t, root, "add", "-A")
+	runGitFixtureCommand(t, root, "commit", "-m", "initial")
+
+	phase := phases[0]
+	verification, assessment, gates, review, reviewDepth := pendingAdvanceFixturePayload()
+	pendingPath := filepath.Join(dataDir, "build", "phase-1", "pending-advance.json")
+
+	rewriteColonyState(t, dataDir, func(s *colony.ColonyState) { s.Paused = true })
+	callerState := colony.ColonyState{CurrentPhase: 1, BuildStartedAt: &buildStartedAt, Plan: colony.Plan{Phases: phases}}
+
+	result, _, _, _, _, err := advanceExternalContinue(
+		dataDir, callerState, phase, codexContinueManifest{},
+		verification, assessment, gates, review,
+		"build/phase-1/review.json", nil, nil,
+		time.Now().UTC(), "build/phase-1/verification.json", "build/phase-1/gates.json",
+		reviewDepth,
+	)
+	if err != nil {
+		t.Fatalf("advanceExternalContinue returned error: %v", err)
+	}
+	if superseded, _ := result["superseded"].(bool); !superseded {
+		t.Fatalf("setup failed: expected a superseded result while paused, got: %+v", result)
+	}
+	if _, statErr := os.Stat(pendingPath); statErr != nil {
+		t.Fatalf("precondition failed: pending-advance.json was not created by setup: %v", statErr)
+	}
+
+	// Real work happens OUTSIDE the build pipeline between preserve and
+	// replay: main.go is overwritten with invalid Go syntax. No new build is
+	// started, so BuildStartedAt never moves -- the identity check alone
+	// would see nothing wrong.
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("this is not valid go source }{\n"), 0644); err != nil {
+		t.Fatalf("corrupt main.go: %v", err)
+	}
+
+	rewriteColonyState(t, dataDir, func(s *colony.ColonyState) { s.Paused = false })
+	resumedState := colony.ColonyState{CurrentPhase: 1, BuildStartedAt: &buildStartedAt, Plan: colony.Plan{Phases: phases}}
+
+	outcome := replayPendingContinueAdvance(resumedState, phase, "continue-finalize", time.Now().UTC())
+	if outcome.Handled {
+		if advanced, _ := outcome.Result["advanced"].(bool); advanced {
+			t.Fatalf("CR-02: replay advanced the phase using a workspace that was corrupted between preserve and replay -- main.go on disk is now invalid Go syntax and was NEVER re-checked by the replay path")
+		}
+	}
+
+	// Whether Handled is true (a blocked/superseded shape) or false (fall
+	// through to the caller's ordinary fresh-verification path), the phase
+	// must NOT have silently advanced on the strength of stale, no-longer-
+	// true evidence.
+	onDisk := readColonyStateFile(t, dataDir)
+	var persisted colony.ColonyState
+	if err := json.Unmarshal(onDisk, &persisted); err != nil {
+		t.Fatalf("unmarshal persisted COLONY_STATE.json: %v", err)
+	}
+	if persisted.Plan.Phases[0].Status == colony.PhaseCompleted {
+		t.Fatalf("CR-02: phase 1 status = %q after a replay against a workspace corrupted between preserve and replay -- the broken main.go was never re-examined", persisted.Plan.Phases[0].Status)
+	}
+
+	// The record must be gone so a LATER, still-corrupted replay attempt
+	// cannot succeed either -- discarded, not merely skipped once.
+	if _, statErr := os.Stat(pendingPath); !os.IsNotExist(statErr) {
+		t.Fatalf("stale pending-advance.json (workspace mismatch) still exists (stat err: %v); it must be discarded, not merely ignored", statErr)
 	}
 }
 

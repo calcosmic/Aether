@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -115,6 +116,48 @@ func TestCriterionCheckFailureBranchStillUsesSummary(t *testing.T) {
 	}
 	if strings.Contains(issue, "go test ./...") {
 		t.Errorf("evaluateCriterionCheck issue = %q, must not contain the raw command", issue)
+	}
+}
+
+// TestPassingCheckEvidenceVariesPerRun is the WR-01 regression lock
+// (191.1-REVIEW.md): successSummaryForStep used to return a hardcoded,
+// per-check-name constant ("tests passed", "build succeeded", ...) for
+// EVERY passing run, carrying no exit code, duration, or real command
+// output -- an evidence line honest about the outcome but useless for
+// telling "this run passed" apart from "the check named tests always says
+// tests passed". The failure branch (failureSummaryForStep) already
+// composed a summary that varies per run (exit code plus a real trailing
+// output line); this locks the same property for the passing branch.
+func TestPassingCheckEvidenceVariesPerRun(t *testing.T) {
+	root := t.TempDir()
+	stepA := runVerificationStep(context.Background(), root, "tests", true, "echo run-A-marker", 5*time.Second)
+	stepB := runVerificationStep(context.Background(), root, "tests", true, "echo run-B-marker", 5*time.Second)
+
+	if !stepA.Passed || !stepB.Passed {
+		t.Fatalf("both runs must pass to exercise the passing-check evidence path: stepA.Passed=%v stepB.Passed=%v", stepA.Passed, stepB.Passed)
+	}
+	if stepA.Summary == stepB.Summary {
+		t.Fatalf("two different passing runs of the same check produced the identical summary %q -- this is the exact static tautology WR-01 exists to close", stepA.Summary)
+	}
+	if !strings.Contains(stepA.Summary, "run-A-marker") {
+		t.Errorf("stepA.Summary = %q, want it to contain this run's real observed output %q", stepA.Summary, "run-A-marker")
+	}
+	if !strings.Contains(stepB.Summary, "run-B-marker") {
+		t.Errorf("stepB.Summary = %q, want it to contain this run's real observed output %q", stepB.Summary, "run-B-marker")
+	}
+	if !strings.Contains(stepA.Summary, "exit 0") {
+		t.Errorf("stepA.Summary = %q, want it to carry the observed exit status", stepA.Summary)
+	}
+
+	// The composed criterion evidence -- what actually reaches a downstream
+	// checker -- must carry the same real content through, not just
+	// step.Summary in isolation.
+	passed, evidence, _ := evaluateCriterionCheck("tests", []codexVerificationStep{stepA}, codexClaimVerification{}, codexWatcherVerification{})
+	if !passed {
+		t.Fatalf("evaluateCriterionCheck(tests) passed = false, want true")
+	}
+	if !strings.Contains(evidence, "run-A-marker") {
+		t.Errorf("evaluateCriterionCheck evidence = %q, want it to carry the real observed output, not a static tautology", evidence)
 	}
 }
 
