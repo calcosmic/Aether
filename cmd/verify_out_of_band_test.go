@@ -349,6 +349,103 @@ func TestVerifyOutOfBandRefusesLegacyCriteriaWithoutAcknowledgment(t *testing.T)
 	}
 }
 
+// TestCloseOutOfBandCeremonyNeverSealsWithoutAdvancing is the CR-03
+// regression lock (191.1-REVIEW.md): closeOutOfBandCeremony used to close
+// (irreversibly seal -- Recoverable:false, RecoveryCommand:"") the build
+// attempt BEFORE calling advancePhase, so a currency refusal from
+// advancePhase (paused colony, stale phase/build identity -- any of the
+// same reasons this phase's own supersession machinery exists to catch)
+// left the attempt permanently sealed while the phase never advanced at
+// all. This reproduces the field shape deterministically (no race
+// required): a genuinely satisfied phase, paused directly on disk (an
+// entirely ordinary, first-class operational state) between gathering
+// fresh evidence and closing.
+func TestCloseOutOfBandCeremonyNeverSealsWithoutAdvancing(t *testing.T) {
+	root, _ := setupOutOfBandStuckFixture(t, boundPassingOutOfBandPhase())
+	_ = root
+
+	attemptRel, before, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("fixture did not produce a build attempt")
+	}
+	if before.Status != buildAttemptAwaiting {
+		t.Fatalf("fixture broken: attempt status = %q, want %q", before.Status, buildAttemptAwaiting)
+	}
+	if !before.Recoverable || strings.TrimSpace(before.RecoveryCommand) == "" {
+		t.Fatalf("fixture broken: attempt is not recoverable before the ceremony runs: recoverable=%v recovery_command=%q", before.Recoverable, before.RecoveryCommand)
+	}
+
+	// Confirm fresh evidence genuinely passes BEFORE introducing the pause
+	// -- this is a colony whose real, current work is done; only the
+	// currency check should refuse it, never the evidence itself.
+	report, _, err := executeVerifyOutOfBand(context.Background(), 1, false, false)
+	if err != nil {
+		t.Fatalf("report-only invocation returned error: %v", err)
+	}
+	if !report.Passed {
+		t.Fatalf("expected fresh evidence to genuinely pass before the pause is introduced, got blocking issues: %v", report.BlockingIssues)
+	}
+
+	// Pause the colony directly on disk.
+	var paused colony.ColonyState
+	if updateErr := store.UpdateJSONAtomically("COLONY_STATE.json", &paused, func() error {
+		paused.Paused = true
+		return nil
+	}); updateErr != nil {
+		t.Fatalf("pause colony state: %v", updateErr)
+	}
+
+	_, result, err := executeVerifyOutOfBand(context.Background(), 1, true, false)
+	if err == nil {
+		t.Fatalf("expected the ceremony to refuse while the colony is paused, got success: %+v", result)
+	}
+	if !strings.Contains(err.Error(), "paused") {
+		t.Fatalf("refusal should name the pause as the reason, got: %v", err)
+	}
+
+	var after buildAttemptRecord
+	if loadErr := store.LoadJSON(attemptRel, &after); loadErr != nil {
+		t.Fatalf("reload attempt after refused ceremony: %v", loadErr)
+	}
+	if after.Status != buildAttemptAwaiting {
+		t.Fatalf("CR-03: attempt status = %q after a refused ceremony, want unchanged %q -- the ceremony sealed the attempt without ever advancing the phase", after.Status, buildAttemptAwaiting)
+	}
+	if !after.Recoverable {
+		t.Fatal("CR-03: attempt Recoverable flipped to false by a refused ceremony -- the only recorded recovery path was destroyed for nothing")
+	}
+	if strings.TrimSpace(after.RecoveryCommand) == "" {
+		t.Fatal("CR-03: attempt RecoveryCommand was cleared by a refused ceremony")
+	}
+	if after.OutOfBandVerification != nil {
+		t.Fatal("CR-03: attempt carries out-of-band provenance despite the ceremony never actually advancing the phase")
+	}
+
+	var state colony.ColonyState
+	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
+		t.Fatalf("reload colony state: %v", loadErr)
+	}
+	if state.Plan.Phases[0].Status == colony.PhaseCompleted {
+		t.Fatal("phase advanced despite the ceremony being refused")
+	}
+
+	// The colony resuming later must still be able to close it honestly --
+	// nothing was left in a state ceremony can no longer recover from.
+	rewriteErr := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
+		state.Paused = false
+		return nil
+	})
+	if rewriteErr != nil {
+		t.Fatalf("resume colony state: %v", rewriteErr)
+	}
+	_, resumedResult, resumedErr := executeVerifyOutOfBand(context.Background(), 1, true, false)
+	if resumedErr != nil {
+		t.Fatalf("ceremony refused a genuinely satisfied, resumed phase: %v", resumedErr)
+	}
+	if resumedResult == nil || resumedResult["advanced"] != true {
+		t.Fatalf("ceremony did not advance the phase once resumed: %+v", resumedResult)
+	}
+}
+
 // --- Task 2: the honesty ratchet ------------------------------------------
 
 // TestVerifyOutOfBandNeverSynthesizesWorkerReceipts is the honesty ratchet

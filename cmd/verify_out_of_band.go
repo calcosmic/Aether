@@ -364,17 +364,21 @@ func outOfBandRefusalError(phaseNum int, report outOfBandReport) error {
 // unreachable from every automatic lifecycle entry point, under this exact
 // name, via the same AST call-graph guard worktree-reap's own reachability
 // ratchet uses.
+//
+// CR-03 (191.1-REVIEW.md): advancePhase runs FIRST, and the build attempt
+// (an irreversible write -- Recoverable:false, RecoveryCommand:"") is only
+// closed AFTER advancePhase has actually committed. advancePhase's own
+// validateRuntimeStateStillCurrent is the ONE currency check this whole
+// ceremony ultimately depends on (a paused colony, a stale phase/build
+// identity -- any of the same reasons this phase's own supersession
+// machinery exists to catch); running it before the irreversible write means
+// a refusal here leaves the build attempt exactly as it was -- still
+// recoverable -- instead of permanently sealed with the phase never having
+// advanced at all. See TestCloseOutOfBandCeremonyNeverSealsWithoutAdvancing
+// (cmd/verify_out_of_band_test.go) for the reproduction this ordering fixes.
 func closeOutOfBandCeremony(phaseNum int, state colony.ColonyState, report outOfBandReport, attemptRel string, attemptRecord buildAttemptRecord, hasAttempt bool, acknowledgeLegacy bool) (map[string]interface{}, error) {
 	now := time.Now().UTC()
 	provenance := buildOutOfBandProvenance(now, phaseNum, report, acknowledgeLegacy)
-
-	attemptClosed := false
-	if hasAttempt && strings.TrimSpace(attemptRecord.Status) != buildAttemptBuilt {
-		if err := closeBuildAttemptOutOfBand(attemptRel, provenance); err != nil {
-			return nil, err
-		}
-		attemptClosed = true
-	}
 
 	advanceResult, err := advancePhase(advancePhaseParams{
 		PhaseID:                phaseNum,
@@ -385,6 +389,19 @@ func closeOutOfBandCeremony(phaseNum int, state colony.ColonyState, report outOf
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	attemptClosed := false
+	if hasAttempt && strings.TrimSpace(attemptRecord.Status) != buildAttemptBuilt {
+		if err := closeBuildAttemptOutOfBand(attemptRel, provenance); err != nil {
+			// The phase itself has ALREADY advanced by this point -- it is
+			// genuinely complete, not stuck. Only the build attempt
+			// journal's out-of-band marker failed to write, a much smaller,
+			// self-describing failure that must never be reported as though
+			// the whole ceremony failed.
+			return nil, fmt.Errorf("phase %d advanced, but recording the out-of-band provenance on its build attempt failed (the phase is NOT stuck; only the build attempt journal entry needs reconciling): %w", phaseNum, err)
+		}
+		attemptClosed = true
 	}
 
 	result := map[string]interface{}{
