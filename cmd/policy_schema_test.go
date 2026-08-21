@@ -15,12 +15,24 @@ import (
 // than the fixture copies under the (now-deleted) control-ts test tree — a
 // strict improvement, since a fixture can silently drift from the file the
 // runtime actually loads. During the port, every live file was diff'd
-// against its former fixture counterpart: all eight matched exactly except
-// dispatch-contract.yaml, where the live file is a strict superset
-// (execution_models, deadline_policies, dependency_behaviors,
+// against its former fixture counterpart: all matched exactly except
+// dispatch-contract.yaml, where the live file was (at the time) a strict
+// superset (execution_models, deadline_policies, dependency_behaviors,
 // fallback_behaviors, fallback_visibility, result_collection_policies added
-// on top of the fields this test asserts) — no divergence was found in any
-// field this test checks.
+// on top of the fields this test asserted) — no divergence was found in any
+// field this test checked.
+//
+// dispatch-contract.yaml itself was deleted in the LATER, differently-scoped
+// "191-dead-wood" phase (Plan 02, ROADMAP criterion 2): it was one of four
+// CWD-relative silent-fallback loaders whose real file only ever resolved
+// from a maintainer's own dev-checkout CWD, never from an installed Aether
+// run. Its three fields this test checked (max_workers_per_phase,
+// spawn_depth_limits, timeout_defaults) were never modeled by
+// loadDispatchContractPolicy's dispatchContractPolicy struct in the first
+// place (confirmed by a full-file read before deletion) -- deleting the file
+// changed no runtime behavior, but did remove the schema surface this test
+// validated. Its three checks were removed below rather than left pointing
+// at a file that no longer exists.
 //
 // This test is intentionally narrow: it asserts presence and shallow type of
 // the required-field surface below, not a full typed policy loader. A typed
@@ -131,9 +143,14 @@ var policySchemaChecks = []policyFieldCheck{
 	{"safety-gates.yaml", "safety_gates.chaos_scan", "bool", nil},
 	{"safety-gates.yaml", "safety_gates.auditor_score_threshold", "numeric", nil},
 
-	{"dispatch-contract.yaml", "dispatch_contract.max_workers_per_phase", "numeric", nil},
-	{"dispatch-contract.yaml", "dispatch_contract.spawn_depth_limits", "map", nil},
-	{"dispatch-contract.yaml", "dispatch_contract.timeout_defaults", "map", nil},
+	// dispatch-contract.yaml (max_workers_per_phase, spawn_depth_limits,
+	// timeout_defaults) was removed here in Phase 191 Plan 02: the file
+	// itself was deleted (ROADMAP criterion 2 -- a CWD-relative
+	// silent-fallback loader with zero readers for these three specific
+	// fields; loadDispatchContractPolicy's dispatchContractPolicy struct
+	// never modeled them, confirmed by full-file read before deletion).
+	// There is nothing left under colony/policies/dispatch-contract.yaml
+	// for this schema check to validate.
 
 	{"pheromone-lifecycle.yaml", "pheromone_lifecycle.default_ttl_days", "numeric", nil},
 	{"pheromone-lifecycle.yaml", "pheromone_lifecycle.max_active_signals", "numeric", nil},
