@@ -128,13 +128,6 @@ type policyFieldCheck struct {
 }
 
 var policySchemaChecks = []policyFieldCheck{
-	{"model-routing.yaml", "model_routing.default_provider", "string", "anthropic"},
-
-	{"memory-rules.yaml", "memory_rules.max_learnings", "numeric", nil},
-	{"memory-rules.yaml", "memory_rules.learning_retention_days", "numeric", nil},
-	{"memory-rules.yaml", "memory_rules.instinct_cap", "numeric", nil},
-	{"memory-rules.yaml", "memory_rules.event_cap", "numeric", nil},
-
 	{"skill-creation.yaml", "skill_creation.allowed", "bool", true},
 	{"skill-creation.yaml", "skill_creation.max_skills_per_colony", "numeric", nil},
 	{"skill-creation.yaml", "skill_creation.require_wisdom_threshold", "numeric", nil},
@@ -160,15 +153,6 @@ var policySchemaChecks = []policyFieldCheck{
 	{"signal-rules.yaml", "signal_rules.auto_emit_on_phase_complete", "bool", nil},
 	{"signal-rules.yaml", "signal_rules.max_feedback_per_phase", "numeric", nil},
 	{"signal-rules.yaml", "signal_rules.hard_constraint_prefixes", "listContains", []string{"[error-pattern]", "[redirect]"}},
-
-	{"autopilot.yaml", "autopilot.replan_interval", "numeric", nil},
-	{"autopilot.yaml", "autopilot.pause_conditions", "listContains", []string{
-		"test_failure",
-		"critical_chaos",
-		"security_gate_failure",
-		"quality_gate_failure",
-		"runtime_verification_needed",
-	}},
 }
 
 // lookupPolicyDottedPath walks a dotted path (e.g. "safety_gates.security_scan")

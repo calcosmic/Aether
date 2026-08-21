@@ -15,22 +15,19 @@ package cmd
 // (.claude/, .opencode/, .codex/), skills, and the publish/install
 // manifest.
 //
-// THREE of the ROADMAP's named 39 -- colony/policies/model-routing.yaml,
+// The ROADMAP's remaining THREE -- colony/policies/model-routing.yaml,
 // colony/policies/autopilot.yaml, and colony/policies/memory-rules.yaml --
-// are deliberately NOT deleted and are NOT in this ratchet's path list.
-// Fresh re-verification found a real, currently-passing reader that
-// 191-CONTEXT.md's planning pass missed: cmd/policy_schema_test.go
-// (introduced in Phase 160, 2026-07-28, weeks before this phase's planning
-// pass began) reads all three live from colony/policies/*.yaml via
-// os.ReadFile inside TestPolicySchemaRequiredFields, and t.Fatalf's if any
-// is missing. Deleting them would have broken a currently-passing test, not
-// a stale scaffold -- so ROSTER-02, which explicitly names
-// colony/policies/model-routing.yaml, is NOT fully delivered by this plan.
-// See 191-01-SUMMARY.md for the complete finding and evidence. A future
-// ruling on the remaining three files must update
-// cmd/policy_schema_test.go's policySchemaChecks table in the same change
-// that deletes them (or explicitly rule that this schema test counts as a
-// legitimate reader and the files stay).
+// were initially held back by 191-01: fresh re-verification found a real,
+// currently-passing reader the planning pass missed (cmd/policy_schema_test.go's
+// TestPolicySchemaRequiredFields read all three via os.ReadFile and t.Fatalf'd
+// if any was missing). The orchestrator's ruling at wave-1 merge (191-01-SUMMARY.md
+// documents the finding; sibling 191-02 established that schema test is itself
+// the deleted Phase-161 policy machinery's validator, not a live consumer):
+// the files and their policySchemaChecks rows were deleted TOGETHER in one
+// change, after a fresh sweep confirmed zero production readers across Go,
+// the TS host, wrappers on all three platforms, skills, and the publish
+// manifest. All three are ratcheted below with the other 36 -- ROSTER-02 is
+// now fully delivered.
 //
 // This is deliberately a Tier-1 existence check (191-PATTERNS.md, "The
 // Ratchet House Style" section), not an AST scanner: the property being guarded is
@@ -68,10 +65,15 @@ import (
 // definitions. Deliberately not computed from a directory listing -- both
 // source directories no longer exist post-deletion, which would make a
 // listing-based approach vacuous (191-PATTERNS.md's Tier-1 guidance states
-// this explicitly). Deliberately excludes
-// colony/policies/{model-routing,autopilot,memory-rules}.yaml -- see this
-// file's header comment for why those three are not ratcheted here.
+// this explicitly). Includes colony/policies/{model-routing,autopilot,
+// memory-rules}.yaml, deleted at wave-1 merge together with their
+// policy_schema_test.go rows -- see this file's header comment.
 var zeroReaderColonyConfigPaths = []string{
+	// colony/policies/*.yaml -- the three ruled at wave-1 merge.
+	filepath.Join("colony", "policies", "model-routing.yaml"),
+	filepath.Join("colony", "policies", "autopilot.yaml"),
+	filepath.Join("colony", "policies", "memory-rules.yaml"),
+
 	// colony/agents/*.yaml -- 27 entries.
 	filepath.Join("colony", "agents", "ambassador.yaml"),
 	filepath.Join("colony", "agents", "archaeologist.yaml"),
@@ -135,30 +137,38 @@ func TestZeroReaderColonyConfigsDoNotReappear(t *testing.T) {
 }
 
 // TestZeroReaderColonyConfigsListIsComplete asserts zeroReaderColonyConfigPaths
-// has exactly 36 entries in the expected 27 (colony/agents) + 9
-// (colony/phases) shape, so a future edit that drops or misplaces an entry
-// fails loudly instead of silently narrowing this ratchet's coverage.
+// has exactly 39 entries in the expected 3 (colony/policies) + 27
+// (colony/agents) + 9 (colony/phases) shape, so a future edit that drops or
+// misplaces an entry fails loudly instead of silently narrowing this
+// ratchet's coverage.
 func TestZeroReaderColonyConfigsListIsComplete(t *testing.T) {
+	const wantPolicies = 3
 	const wantAgents = 27
 	const wantPhases = 9
-	const want = wantAgents + wantPhases
+	const want = wantPolicies + wantAgents + wantPhases
 
 	if len(zeroReaderColonyConfigPaths) != want {
-		t.Fatalf("zeroReaderColonyConfigPaths has %d entries, want exactly %d (%d colony/agents/*.yaml + %d colony/phases/*.yaml) -- Phase 191 Plan 01 deleted exactly this set; a shorter list silently checks fewer paths than were actually deleted", len(zeroReaderColonyConfigPaths), want, wantAgents, wantPhases)
+		t.Fatalf("zeroReaderColonyConfigPaths has %d entries, want exactly %d (%d colony/policies/*.yaml + %d colony/agents/*.yaml + %d colony/phases/*.yaml) -- Phase 191 deleted exactly this set; a shorter list silently checks fewer paths than were actually deleted", len(zeroReaderColonyConfigPaths), want, wantPolicies, wantAgents, wantPhases)
 	}
 
+	policiesDir := filepath.Join("colony", "policies")
 	agentsDir := filepath.Join("colony", "agents")
 	phasesDir := filepath.Join("colony", "phases")
-	var agents, phases int
+	var policies, agents, phases int
 	for _, p := range zeroReaderColonyConfigPaths {
 		switch filepath.Dir(p) {
+		case policiesDir:
+			policies++
 		case agentsDir:
 			agents++
 		case phasesDir:
 			phases++
 		default:
-			t.Errorf("unexpected entry %q in zeroReaderColonyConfigPaths -- every entry must live directly under colony/agents/ or colony/phases/ (the 3 held-back colony/policies/*.yaml files are deliberately excluded; see this file's header comment)", filepath.ToSlash(p))
+			t.Errorf("unexpected entry %q in zeroReaderColonyConfigPaths -- every entry must live directly under colony/policies/, colony/agents/ or colony/phases/", filepath.ToSlash(p))
 		}
+	}
+	if policies != wantPolicies {
+		t.Errorf("found %d colony/policies/*.yaml entries in zeroReaderColonyConfigPaths, want %d", policies, wantPolicies)
 	}
 	if agents != wantAgents {
 		t.Errorf("found %d colony/agents/*.yaml entries in zeroReaderColonyConfigPaths, want %d", agents, wantAgents)
