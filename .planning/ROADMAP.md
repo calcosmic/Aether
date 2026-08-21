@@ -1048,5 +1048,5 @@ Remaining, in this order — **not** numeric order (revised 2026-08-17, Audit Ad
 | 188. One Truth for Failures and Advances | v1.26 | 6/5 | Complete   | 2026-08-19 |
 | 189. Complete Worker Contract | v1.26 | 3/2 | Complete    | 2026-08-20 |
 | 190. Lean, Non-Duplicated Delivery | v1.26 | 6/2 | Complete    | 2026-08-21 |
-| 191. Dead Wood | v1.26 | 0/TBD | Not started | - |
+| 191. Dead Wood | v1.26 | 6/7 | In Progress|  |
 | 192. Final Showdown | v1.26 | 0/TBD | Not started | - |
