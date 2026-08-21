@@ -31,6 +31,20 @@ import (
 // "goes through the context capsule path, not colony-prime". This test
 // exercises the real path (`pr-context`) rather than the misattributed one,
 // per this repo's Definition of Done ("prefer invariants over name checks").
+//
+// 188-07 update: 188-VERIFICATION.md's Gap 1 went further than this test's
+// own framing above -- it found that pr-context is not merely "not the
+// function the plan's interface notes cited", it is also not on any live
+// worker-dispatch path at all (grep across cmd/*.go found zero callers
+// outside its own file, tests, and backups), while the function that IS on
+// every live path (resolveCodexWorkerContext -> buildColonyPrimeOutput, the
+// real "colony-prime") had zero midden-reading code, before or after this
+// phase's original five plans. That is now fixed directly in
+// buildColonyPrimeOutputOpts (cmd/colony_prime_context.go) -- see
+// TestOneMiddenEntryReachesColonyPrimeCapsule below for the proof on the
+// REAL path. This test is kept unchanged: pr-context's own midden section is
+// still real, live-adjacent (used by CI's TestIntegrationPRContext), and
+// worth continued regression coverage in its own right.
 func TestOneMiddenEntryReachesAllFourConsumers(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -127,5 +141,139 @@ func TestOneMiddenEntryReachesAllFourConsumers(t *testing.T) {
 	if detected < 1 {
 		t.Errorf("[immune regressed] immune-auto-scar detected = %v, want >= 1 -- either the path is unreadable again or entry.Message did not reach the scar detector",
 			scarResult["detected"])
+	}
+}
+
+// TestOneMiddenEntryReachesColonyPrimeCapsule closes 188-VERIFICATION.md's
+// Gap 1: resolveCodexWorkerContext() / buildColonyPrimeOutput() -- the
+// function every live build, continue, colonize, plan, seal, and swarm
+// worker dispatch actually calls for its context capsule -- previously had
+// zero midden-reading code, before or after this phase's original five
+// plans. The verifier proved this with a throwaway probe (written and
+// deleted during verification): after appendMiddenEntry wrote a recognizable
+// failure message, resolveCodexWorkerContext() returned a capsule with no
+// trace of it. This test is that same probe shape, made permanent: write a
+// failure record through the canonical shared writer, build the REAL
+// capsule, and assert the record's message reaches the assembled prompt text
+// -- exactly once (Phase 190's one-home law: cmd/build_pheromone_190_05_test.go
+// -- no section may be delivered to a worker twice).
+func TestOneMiddenEntryReachesColonyPrimeCapsule(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "colony-prime midden capsule test"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Testing", Status: colony.PhaseInProgress},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("seed COLONY_STATE.json: %v", err)
+	}
+
+	const wantMessage = "SENTINEL-188-07 adversarial probe found a real bug in colony-prime"
+	if err := appendMiddenEntry(s, "chaos", "test", wantMessage, []string{"critical"}); err != nil {
+		t.Fatalf("appendMiddenEntry: %v", err)
+	}
+
+	capsule := resolveCodexWorkerContext()
+	if !strings.Contains(capsule, wantMessage) {
+		t.Fatalf("[colony-prime regressed] resolveCodexWorkerContext() capsule does not carry the entry written through appendMiddenEntry -- Gap 1 reopened:\n%s", capsule)
+	}
+	if n := strings.Count(capsule, wantMessage); n != 1 {
+		t.Fatalf("[one-home violated] colony-prime's capsule carries the failure record %d times, want exactly 1:\n%s", n, capsule)
+	}
+}
+
+// TestMiddenCapsuleSectionOmittedWhenNoFailures proves the new section does
+// not print an empty "Recent Failures" heading (or otherwise appear) when
+// midden.json has no entries at all -- the same "don't show empty sections"
+// discipline every other colony-prime section already follows.
+func TestMiddenCapsuleSectionOmittedWhenNoFailures(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "colony-prime midden capsule empty test"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Testing", Status: colony.PhaseInProgress},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("seed COLONY_STATE.json: %v", err)
+	}
+
+	capsule := resolveCodexWorkerContext()
+	if strings.Contains(capsule, "Recent Failures") {
+		t.Errorf("capsule rendered a Recent Failures section with no midden entries at all:\n%s", capsule)
+	}
+}
+
+// TestMiddenCapsuleSectionOmitsAcknowledgedEntries proves an acknowledged
+// failure (one already handled, per midden-acknowledge) does not keep
+// consuming capsule budget forever -- only unacknowledged entries are
+// eligible for inclusion.
+func TestMiddenCapsuleSectionOmitsAcknowledgedEntries(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "colony-prime midden acknowledged test"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Testing", Status: colony.PhaseInProgress},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("seed COLONY_STATE.json: %v", err)
+	}
+
+	const wantMessage = "SENTINEL-188-07-ACKNOWLEDGED already handled, should not resurface"
+	if err := appendMiddenEntry(s, "chaos", "test", wantMessage, nil); err != nil {
+		t.Fatalf("appendMiddenEntry: %v", err)
+	}
+
+	var mf colony.MiddenFile
+	if err := s.LoadJSON("midden.json", &mf); err != nil {
+		t.Fatalf("load midden.json: %v", err)
+	}
+	if len(mf.Entries) != 1 {
+		t.Fatalf("expected exactly 1 seeded midden entry, got %d", len(mf.Entries))
+	}
+	acked := true
+	mf.Entries[0].Acknowledged = &acked
+	if err := s.SaveJSON("midden.json", mf); err != nil {
+		t.Fatalf("save acknowledged midden.json: %v", err)
+	}
+
+	capsule := resolveCodexWorkerContext()
+	if strings.Contains(capsule, wantMessage) {
+		t.Errorf("capsule surfaced an already-acknowledged midden entry:\n%s", capsule)
 	}
 }

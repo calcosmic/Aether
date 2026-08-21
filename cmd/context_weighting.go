@@ -212,6 +212,8 @@ func sectionRelevanceScore(name string) float64 {
 		return 0.40
 	case "charter":
 		return 0.90
+	case "midden":
+		return 0.90
 	default:
 		return 0.25
 	}
@@ -233,6 +235,24 @@ func protectedSectionPolicy(name string) (bool, string) {
 		return true, "cross-colony wisdom must survive trimming"
 	case "charter":
 		return true, "approved charter rules bind every worker"
+	case "midden":
+		// 188-VERIFICATION.md Gap 1 / CLAUDE.md's documented trim order
+		// (Rolling summary -> Phase learnings -> Key decisions -> Hive
+		// wisdom -> Context capsule -> User preferences -> QUEEN wisdom
+		// global/local -> Pheromone signals) has never actually named
+		// midden-derived content -- it did not exist as a colony-prime
+		// section before this fix, so there was nothing to place. Per this
+		// task's own instruction ("if ambiguous, put it with the
+		// failure/blocker tier"), unresolved failures are treated the same
+		// as active blockers: both represent something already known to be
+		// wrong that a worker should never silently operate blind to. This
+		// is made safe against budget blowout by bounding the CONTENT
+		// itself, not the protection: the section only ever holds a small,
+		// hard-capped number of still-unacknowledged entries (see the
+		// midden section assembly in buildColonyPrimeOutputOpts), so
+		// "never trimmed" never means "unbounded" the way an ever-growing
+		// midden.json itself could.
+		return true, "unresolved failures must survive trimming"
 	default:
 		return false, ""
 	}
