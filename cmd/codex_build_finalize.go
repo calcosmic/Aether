@@ -82,9 +82,13 @@ type codexExternalBuildWorkerResult struct {
 	// runtime-written analog: mergeExternalBuildResults validates every
 	// entry against the manifest's own dispatches before granting any
 	// credit, never trusting the claim blindly (191.1-PATTERNS.md Pattern
-	// 6). An entry naming a task ID absent from the manifest, or claimed by
-	// two different results, is a distinct, named contract violation, never
-	// a silent credit or a silently dropped field.
+	// 6) -- including the CLAIMANT itself (191.1-REVIEW.md CR-01): only a
+	// result that is itself a genuine, evidenced success and corresponds to
+	// a real dispatch in this manifest may grant credit to another. An entry
+	// naming a task ID absent from the manifest, claimed by two different
+	// results, or granted by a claimant that is
+	// failed/unevidenced/unrecognized, is a distinct, named contract
+	// violation, never a silent credit or a silently dropped field.
 	CoveredTaskIDs []string            `json:"covered_task_ids,omitempty"`
 	DependsOn      []string            `json:"depends_on,omitempty"`
 	Outputs        []string            `json:"outputs,omitempty"`
@@ -1176,6 +1180,14 @@ const (
 	// the second claim is rejected rather than silently overwriting the
 	// first credit.
 	violationRuleCoveredTaskDuplicate = "worker.covered_task_duplicate"
+	// violationRuleCoveredTaskCreditUnevidenced fires when a covered_task_ids
+	// claim's own CLAIMANT fails validation (CR-01, 191.1-REVIEW.md): its own
+	// result is not a genuine success (completed/manually-reconciled), or
+	// carries no evidence at all (no outputs/files_created/files_modified/
+	// tests_written), or its name matches no dispatch anywhere in the
+	// manifest. A worker whose own work is unproven, absent, or
+	// unidentifiable can never durably credit ANOTHER dispatch as completed.
+	violationRuleCoveredTaskCreditUnevidenced = "worker.covered_task_credit_unevidenced"
 	// violationRuleBundledWorkSuspected is additive guidance (never a
 	// replacement for the genuine violationRuleResultMissing violations it
 	// rides alongside, D-04): it fires when exactly one dispatch has a real,
@@ -1261,13 +1273,74 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		coveringName   string
 		coveringResult codexExternalBuildWorkerResult
 	}
-	coveredBy := make(map[int]coveredTaskCredit, len(results))
-	for _, result := range results {
+	// WR-02 (191.1-REVIEW.md): iterate the SAME name-deduplicated
+	// resultByName map the main dispatch loop above already computes (post
+	// preferCompletedResultOverTimeout resolution), not the raw results
+	// slice. A worker that legitimately resubmits under its own identical
+	// name -- first timeout, then completed, both carrying the same
+	// covered_task_ids claim -- must be treated as ONE claim here too, the
+	// same way the main loop already treats it as one legitimate
+	// resubmission rather than a conflict. Iterating raw results made a
+	// worker's own resubmission trip violationRuleCoveredTaskDuplicate
+	// against itself.
+	dispatchNameSet := make(map[string]struct{}, len(manifest.Dispatches)*2)
+	for _, d := range manifest.Dispatches {
+		if name := strings.TrimSpace(d.Name); name != "" {
+			dispatchNameSet[name] = struct{}{}
+			dispatchNameSet[stripWorkerRetrySuffix(name)] = struct{}{}
+		}
+	}
+	coveredBy := make(map[int]coveredTaskCredit, len(resultByName))
+	for _, result := range resultByName {
 		if len(result.CoveredTaskIDs) == 0 {
 			continue
 		}
 		coveringName := result.effectiveName()
 		selfTaskID := strings.TrimSpace(result.TaskID)
+
+		// CR-01 (191.1-REVIEW.md): validate the CLAIMANT itself before
+		// validating any individual claimed task ID. Only a worker whose OWN
+		// result is a genuine, evidenced success and corresponds to a real
+		// dispatch in this manifest may grant covered_task_ids credit to
+		// ANOTHER dispatch -- never a failed/blocked/timeout result, never a
+		// claim carrying zero evidence, and never a fabricated name matching
+		// no dispatch anywhere. Every disqualification below is a distinct,
+		// named violation for EVERY task ID this claimant named (D-06: no
+		// silent drop) so a buggy or malicious packet is refused with an
+		// actionable reason instead of quietly losing the credit.
+		ownStatus := normalizeExternalBuildStatus(result.Status)
+		genuineSuccess := ownStatus == "completed" || ownStatus == "manually-reconciled"
+		hasEvidence := len(result.Outputs) > 0 || len(result.FilesCreated) > 0 || len(result.FilesModified) > 0 || len(result.TestsWritten) > 0
+		_, recognizedClaimant := dispatchNameSet[coveringName]
+		if !recognizedClaimant {
+			_, recognizedClaimant = dispatchNameSet[stripWorkerRetrySuffix(coveringName)]
+		}
+		if !genuineSuccess || !hasEvidence || !recognizedClaimant {
+			var reason string
+			switch {
+			case !recognizedClaimant:
+				reason = fmt.Sprintf("claimant %q matches no dispatch in the manifest", coveringName)
+			case !genuineSuccess:
+				reason = fmt.Sprintf("claimant %q has its own status %q, not a genuine success", coveringName, result.Status)
+			default:
+				reason = fmt.Sprintf("claimant %q carries no outputs, files_created, files_modified, or tests_written to evidence the claim", coveringName)
+			}
+			for _, raw := range result.CoveredTaskIDs {
+				coveredTaskID := strings.TrimSpace(raw)
+				if coveredTaskID == "" || coveredTaskID == selfTaskID {
+					continue
+				}
+				violations = append(violations, contractViolation{
+					Worker:  coveringName,
+					Field:   "covered_task_ids",
+					Value:   coveredTaskID,
+					Rule:    violationRuleCoveredTaskCreditUnevidenced,
+					Message: fmt.Sprintf("%s claims covered_task_ids credit for task %s, but %s; refused", coveringName, coveredTaskID, reason),
+				})
+			}
+			continue
+		}
+
 		for _, raw := range result.CoveredTaskIDs {
 			coveredTaskID := strings.TrimSpace(raw)
 			if coveredTaskID == "" || coveredTaskID == selfTaskID {

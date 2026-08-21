@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -250,6 +251,170 @@ func TestWrapperBundledWorkerRejectsUnknownCoveredTaskID(t *testing.T) {
 			t.Fatalf("contested dispatch ended completed %d times, want exactly 1", creditedOnce)
 		}
 	})
+}
+
+// TestCoveredTaskCreditNotConfusedByLegitimateRetryResubmission is the WR-02
+// regression lock (191.1-REVIEW.md): a worker that legitimately resubmits
+// under its own identical name -- first timeout, then completed, both
+// carrying the same covered_task_ids claim -- must not trip
+// violationRuleCoveredTaskDuplicate against itself. Before the fix, the
+// coveredBy pass iterated the raw, non-deduplicated results slice instead of
+// the same resultByName map (post preferCompletedResultOverTimeout
+// resolution) the main dispatch loop already computes two lines above it,
+// so this exact resubmission shape was treated as two different claimants
+// fighting over the same task.
+func TestCoveredTaskCreditNotConfusedByLegitimateRetryResubmission(t *testing.T) {
+	_, manifest, taskDispatches := setupWrapperBundledManifestTest(t, []string{"1.1", "1.2"})
+	primary := taskDispatches[0]
+	covered := taskDispatches[1]
+
+	baseline := externalResultsForManifest(manifest)
+	results := resultsExcluding(baseline, covered.Name)
+	results = withCoveredTaskIDs(results, primary.Name, []string{covered.TaskID})
+
+	var primaryResult codexExternalBuildWorkerResult
+	for _, r := range results {
+		if r.effectiveName() == primary.Name {
+			primaryResult = r
+		}
+	}
+	// Simulate a wrapper-side resend: the SAME worker name submits a second
+	// result, this time timeout, carrying the identical covered_task_ids
+	// claim -- a real shape preferCompletedResultOverTimeout already treats
+	// as one legitimate resubmission in the main dispatch loop.
+	retry := primaryResult
+	retry.Status = "timeout"
+	results = append(results, retry)
+
+	dispatches, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("mergeExternalBuildResults: %v", err)
+	}
+	for _, v := range violations {
+		if v.Rule == violationRuleCoveredTaskDuplicate {
+			t.Fatalf("unexpected %s violation for a legitimate same-name resubmission: %+v", violationRuleCoveredTaskDuplicate, v)
+		}
+	}
+	byName := make(map[string]codexBuildDispatch, len(dispatches))
+	for _, d := range dispatches {
+		byName[d.Name] = d
+	}
+	got, ok := byName[covered.Name]
+	if !ok || got.Status != "completed" {
+		t.Fatalf("dispatch %s status = %+v, want completed -- the legitimate resubmission must still credit its covered_task_ids claim", covered.Name, got)
+	}
+}
+
+// TestCoveredTaskCreditRefusedFromFailedUnevidencedClaimant is the CR-01
+// regression lock (191.1-REVIEW.md): a worker whose OWN submitted result is
+// failed, with zero files/outputs, must not be able to grant full completed
+// credit -- durably written into COLONY_STATE.json task statuses via
+// reconcileCompletedBuildTasks -- to a dispatch it never touched, simply by
+// naming it in covered_task_ids. Worse (see the sibling test below), the
+// claimant did not even need to correspond to a real dispatch at all before
+// this fix.
+func TestCoveredTaskCreditRefusedFromFailedUnevidencedClaimant(t *testing.T) {
+	root, manifest, taskDispatches := setupWrapperBundledManifestTest(t, []string{"1.1", "1.2"})
+	primary := taskDispatches[0]
+	other := taskDispatches[1]
+
+	baseline := externalResultsForManifest(manifest)
+	results := resultsExcluding(baseline, other.Name)
+	for i := range results {
+		if results[i].effectiveName() == primary.Name {
+			results[i].Status = "failed"
+			results[i].FilesModified = nil
+			results[i].FilesCreated = nil
+			results[i].TestsWritten = nil
+			results[i].Outputs = nil
+		}
+	}
+	results = withCoveredTaskIDs(results, primary.Name, []string{other.TaskID})
+
+	dispatches, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("mergeExternalBuildResults: %v", err)
+	}
+	for _, d := range dispatches {
+		if d.Name == other.Name && d.Status == "completed" {
+			t.Fatalf("CR-01: dispatch %s was credited completed via covered_task_ids from claimant %s, whose own status is failed and carries zero evidence", d.Name, primary.Name)
+		}
+	}
+	found := false
+	for _, v := range violations {
+		if v.Rule == violationRuleCoveredTaskCreditUnevidenced && v.Value == other.TaskID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no %s violation for a covered_task_ids claim from a failed, unevidenced claimant; violations: %+v", violationRuleCoveredTaskCreditUnevidenced, violations)
+	}
+
+	// The full build-finalize entrypoint must refuse the whole packet (D-06
+	// whole-packet rejection), not just silently withhold credit.
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+	_, _, _, _, err = runCodexBuildFinalize(root, 1, completion, false)
+	if err == nil {
+		t.Fatal("expected runCodexBuildFinalize to refuse a packet granting covered_task_ids credit from a failed, unevidenced claimant")
+	}
+	var contractErr *completionContractError
+	if !errors.As(err, &contractErr) {
+		t.Fatalf("expected a *completionContractError, got %T: %v", err, err)
+	}
+}
+
+// TestCoveredTaskCreditRefusedFromFabricatedClaimant is the CR-01 regression
+// lock (191.1-REVIEW.md): a covered_task_ids claim from a worker name
+// matching NO dispatch anywhere in the manifest must be refused, even when
+// that fabricated entry's own status is completed and it carries
+// plausible-looking evidence.
+func TestCoveredTaskCreditRefusedFromFabricatedClaimant(t *testing.T) {
+	root, manifest, taskDispatches := setupWrapperBundledManifestTest(t, []string{"2.1", "2.2"})
+	other := taskDispatches[1]
+
+	baseline := externalResultsForManifest(manifest)
+	results := resultsExcluding(baseline, other.Name)
+	results = append(results, codexExternalBuildWorkerResult{
+		Name:           "totally-fabricated-ghost-worker",
+		Status:         "completed",
+		Summary:        "totally-fabricated-ghost-worker completed externally",
+		FilesModified:  []string{"external-evidence.txt"},
+		CoveredTaskIDs: []string{other.TaskID},
+		Handoff: codex.WorkerHandoff{
+			CommandsRun:            []string{"go test ./..."},
+			VerificationStatus:     "pass",
+			NextWorkerInstructions: []string{"ghost done"},
+		},
+	})
+
+	dispatches, violations, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("mergeExternalBuildResults: %v", err)
+	}
+	for _, d := range dispatches {
+		if d.Name == other.Name && d.Status == "completed" {
+			t.Fatalf("CR-01: dispatch %s was credited completed via covered_task_ids from a fabricated worker name matching no manifest dispatch", d.Name)
+		}
+	}
+	found := false
+	for _, v := range violations {
+		if v.Rule == violationRuleCoveredTaskCreditUnevidenced && v.Value == other.TaskID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no %s violation for a covered_task_ids claim from a fabricated claimant; violations: %+v", violationRuleCoveredTaskCreditUnevidenced, violations)
+	}
+
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+	_, _, _, _, err = runCodexBuildFinalize(root, 1, completion, false)
+	if err == nil {
+		t.Fatal("expected runCodexBuildFinalize to refuse a packet granting covered_task_ids credit from a fabricated claimant")
+	}
+	var contractErr *completionContractError
+	if !errors.As(err, &contractErr) {
+		t.Fatalf("expected a *completionContractError, got %T: %v", err, err)
+	}
 }
 
 // TestFinalizeSuspectsBundledWorkOnOneOfNShape is the fix-direction-(b) lock
