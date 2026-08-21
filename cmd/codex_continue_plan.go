@@ -172,12 +172,12 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		// separate PheromoneSection verbatim as well, delivering each
 		// signal to every heavy-depth reviewer twice. Mirrors build's
 		// 190-03 decision; PheromoneSection deliberately left unset.
-		ContextCapsule: resolveCodexWorkerContext(),
-		Dispatches:          dispatches,
-		DispatchMode:        "plan-only",
-		FinalizeSurface:     "awaiting_wrapper_completion",
-		RequiresFinalizer:   true,
-		ReviewDepth:         string(reviewDepth),
+		ContextCapsule:    resolveCodexWorkerContext(),
+		Dispatches:        dispatches,
+		DispatchMode:      "plan-only",
+		FinalizeSurface:   "awaiting_wrapper_completion",
+		RequiresFinalizer: true,
+		ReviewDepth:       string(reviewDepth),
 	}
 	boundary, err := materializeOrchestratorBoundaryQuestions("continue", state, phase, continueBoundaryQuestionCandidates(phase, verification, assessment))
 	if err != nil {

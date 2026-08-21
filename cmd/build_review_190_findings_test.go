@@ -486,5 +486,3 @@ func TestNativeDispatchHandoffStaysExactlyOnceViaCapsule(t *testing.T) {
 		t.Fatalf("native dispatch's assembled prompt carries the stored handoff's own text %d times, want exactly 1:\n%s", n, assembled)
 	}
 }
-
-

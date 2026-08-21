@@ -88,7 +88,7 @@ func assembledFromConfig190_05(cfg codex.WorkerConfig) steeringResult190_05 {
 		handoffSection:   cfg.HandoffSection,
 		skillSection:     cfg.SkillSection,
 		pheromoneSection: cfg.PheromoneSection,
-		taskBrief:         cfg.TaskBrief,
+		taskBrief:        cfg.TaskBrief,
 	}
 }
 
@@ -98,7 +98,7 @@ func assembledFromDispatch190_05(d codex.WorkerDispatch) steeringResult190_05 {
 		handoffSection:   d.HandoffSection,
 		skillSection:     d.SkillSection,
 		pheromoneSection: d.PheromoneSection,
-		taskBrief:         d.TaskBrief,
+		taskBrief:        d.TaskBrief,
 	}
 }
 
