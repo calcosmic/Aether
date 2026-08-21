@@ -499,3 +499,244 @@ func TestStateMutateCurrentPhaseSucceedsWithMatchingGuard(t *testing.T) {
 		t.Errorf("current_phase = %d, want 2", updated.CurrentPhase)
 	}
 }
+
+// --- 188-VERIFICATION.md Gap 2: the guard above matches the field name
+// "current_phase" EXACTLY, but Go's encoding/json resolves JSON object keys
+// to struct fields case-insensitively on decode -- so "CURRENT_PHASE" (or
+// any other casing) reaches setNestedFieldJSON/applyFieldSet completely
+// unguarded, writes a second, differently-cased top-level key, and that key
+// silently wins the very next JSON round-trip (colony.ColonyState.CurrentPhase
+// is tagged `json:"current_phase"`). These tests reproduce the verifier's own
+// two throwaway probes as permanent regression coverage, for BOTH invocation
+// forms (--field and the jq-like expression syntax), and prove the
+// already-working matching-guard case is unaffected by casing either.
+
+// TestStateMutateFieldCaseInsensitiveCurrentPhaseRequiresGuard proves
+// `--field CURRENT_PHASE` (all-uppercase) with no --guard is refused exactly
+// like the canonical lowercase spelling, and leaves the file untouched.
+func TestStateMutateFieldCaseInsensitiveCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// No --guard at all, and a differently-cased field name.
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "CURRENT_PHASE", "--value", "99"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected state-mutate --field CURRENT_PHASE with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded CURRENT_PHASE mutation")
+	}
+	// The same reload every real consumer uses (store.LoadJSON, which is
+	// exactly encoding/json's case-insensitive struct decode) must still
+	// report the original value -- this is the verifier's own probe
+	// assertion, not merely "some error was returned".
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1 -- CURRENT_PHASE bypassed the guard", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateFieldMixedCaseCurrentPhaseRequiresGuard is the same proof
+// for a mixed-case spelling ("Current_Phase"), confirming the fix is a
+// genuine case-insensitive match and not a hardcoded second literal.
+func TestStateMutateFieldMixedCaseCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "Current_Phase", "--value", "99"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected state-mutate --field Current_Phase with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded Current_Phase mutation")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1 -- Current_Phase bypassed the guard", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateFieldCaseInsensitiveCurrentPhaseSucceedsWithMatchingGuard
+// proves the fix does not merely block every casing -- a genuinely
+// guarded, differently-cased request still succeeds, is applied through the
+// canonical lowercase key (never a second, differently-cased duplicate key
+// left sitting in the file), and reads back correctly.
+func TestStateMutateFieldCaseInsensitiveCurrentPhaseSucceedsWithMatchingGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+
+	rootCmd.SetArgs([]string{"state-mutate", "--field", "CURRENT_PHASE", "--value", "2", "--guard", "phase-advance:2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected cobra error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected a matching phase-advance guard to allow CURRENT_PHASE, got: %v", env)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 2 {
+		t.Errorf("current_phase = %d, want 2", updated.CurrentPhase)
+	}
+
+	rawData, _ := s.ReadFile("COLONY_STATE.json")
+	if gjson.GetBytes(rawData, "CURRENT_PHASE").Exists() {
+		t.Errorf("COLONY_STATE.json has a stray CURRENT_PHASE key alongside current_phase: %s", string(rawData))
+	}
+}
+
+// TestStateMutateExpressionCaseInsensitiveCurrentPhaseRequiresGuard is the
+// expression-syntax twin of the --field test above: `.CURRENT_PHASE = N`
+// with no --guard must be refused too, closing the second invocation form
+// CR-03 (188-REVIEW.md) left open for non-exact casing.
+func TestStateMutateExpressionCaseInsensitiveCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	// No --guard at all -- the exact shape the verifier's own probe used.
+	rootCmd.SetArgs([]string{"state-mutate", `.CURRENT_PHASE = 99`})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected `.CURRENT_PHASE = N` with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded .CURRENT_PHASE expression")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1 -- .CURRENT_PHASE bypassed the guard", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateExpressionMixedCaseCurrentPhaseRequiresGuard is the
+// mixed-case expression-syntax variant, mirroring the --field mixed-case
+// test above.
+func TestStateMutateExpressionMixedCaseCurrentPhaseRequiresGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+	beforeData, _ := s.ReadFile("COLONY_STATE.json")
+
+	rootCmd.SetArgs([]string{"state-mutate", `.Current_Phase = 99`})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] == true {
+		t.Fatalf("expected `.Current_Phase = N` with no --guard to be refused, got: %v", env)
+	}
+
+	afterData, _ := s.ReadFile("COLONY_STATE.json")
+	if string(beforeData) != string(afterData) {
+		t.Error("COLONY_STATE.json changed on disk despite the refused, unguarded .Current_Phase expression")
+	}
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 1 {
+		t.Errorf("current_phase = %d, want unchanged 1 -- .Current_Phase bypassed the guard", updated.CurrentPhase)
+	}
+}
+
+// TestStateMutateExpressionCaseInsensitiveCurrentPhaseSucceedsWithMatchingGuard
+// proves the expression-syntax fix, like the --field fix, still allows a
+// genuinely guarded differently-cased request through -- applied via the
+// canonical lowercase key, no stray duplicate left behind.
+func TestStateMutateExpressionCaseInsensitiveCurrentPhaseSucceedsWithMatchingGuard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	s.SaveJSON("COLONY_STATE.json", phaseAdvanceReadyState())
+
+	rootCmd.SetArgs([]string{"state-mutate", "--guard", "phase-advance:2", `.CURRENT_PHASE = 2`})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected cobra error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected a matching phase-advance guard to allow .CURRENT_PHASE, got: %v", env)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 2 {
+		t.Errorf("current_phase = %d, want 2", updated.CurrentPhase)
+	}
+
+	rawData, _ := s.ReadFile("COLONY_STATE.json")
+	if gjson.GetBytes(rawData, "CURRENT_PHASE").Exists() {
+		t.Errorf("COLONY_STATE.json has a stray CURRENT_PHASE key alongside current_phase: %s", string(rawData))
+	}
+}

@@ -255,7 +255,22 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 		outputError(1, "COLONY_STATE.json not found", nil)
 		return nil
 	}
-	switch field {
+	// 188-VERIFICATION.md Gap 2: Go's encoding/json resolves JSON object
+	// keys to struct fields case-insensitively on decode (colony.ColonyState
+	// .CurrentPhase carries json:"current_phase"), so a caller spelling this
+	// field differently -- "CURRENT_PHASE", "Current_Phase" -- previously
+	// fell straight through this switch's `default` case, completely
+	// bypassing the guard the dedicated "current_phase" case below enforces.
+	// Matching case-insensitively here, before the switch, routes every
+	// casing through that same guarded branch, which assigns
+	// state.CurrentPhase directly (never through the generic
+	// setNestedFieldJSON passthrough), so no casing of this one field can
+	// ever reach an advance-bypassing write again.
+	dispatchField := field
+	if strings.EqualFold(field, "current_phase") {
+		dispatchField = "current_phase"
+	}
+	switch dispatchField {
 	case "goal":
 		state.Goal = &value
 	case "state":
@@ -349,6 +364,7 @@ func executeExpression(cmd *cobra.Command, expr string, vars map[string]interfac
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		sub = normalizeCurrentPhaseExpressionCasing(sub)
 		data, err = applySubExpression(data, sub, vars)
 		if err != nil {
 			outputError(1, fmt.Sprintf("expression error: %v", exprError(sub, err)), nil)
@@ -409,7 +425,16 @@ func guardCurrentPhaseSubExpression(cmd *cobra.Command, sub string, vars map[str
 		return nil
 	}
 	path := normalizeBracketPath(m[1])
-	if path != "current_phase" && !strings.HasPrefix(path, "current_phase.") {
+	// 188-VERIFICATION.md Gap 2: this used to be an exact, case-sensitive
+	// comparison against the literal "current_phase", so any other casing of
+	// the same path -- ".CURRENT_PHASE = N", ".Current_Phase = N" -- reached
+	// applySubExpression completely unguarded, even though encoding/json
+	// resolves all of them to the identical colony.ColonyState.CurrentPhase
+	// struct field on the next read (see executeFieldMode's matching fix for
+	// the --field/--value invocation form). Comparing case-insensitively
+	// here closes the same hole for the jq-like expression syntax.
+	lowerPath := strings.ToLower(path)
+	if lowerPath != "current_phase" && !strings.HasPrefix(lowerPath, "current_phase.") {
 		return nil
 	}
 	resolved := resolveValue(strings.TrimSpace(m[2]), vars)
@@ -418,6 +443,32 @@ func guardCurrentPhaseSubExpression(cmd *cobra.Command, sub string, vars map[str
 		return fmt.Errorf("invalid phase number in expression %q", sub)
 	}
 	return validateCurrentPhaseGuard(cmd, phaseNum)
+}
+
+// normalizeCurrentPhaseExpressionCasing rewrites a plain field-set
+// sub-expression (".<path> = <value>") so a current_phase target of ANY
+// casing is written through the single canonical lowercase "current_phase"
+// key, never a differently-cased duplicate. This matters specifically for
+// the expression syntax (unlike --field/--value, executeExpression never
+// round-trips through the colony.ColonyState struct -- it stays on raw JSON
+// bytes via sjson/gjson throughout) -- so without this, even a genuinely
+// guarded ".CURRENT_PHASE = N" would sjson.SetBytes a second, differently
+// -cased top-level key that persists in COLONY_STATE.json forever, silently
+// winning future case-insensitive decodes in whichever order the file's keys
+// happen to fall. Every other field-set target, and every non-field-set
+// expression shape, passes through byte-for-byte unchanged.
+func normalizeCurrentPhaseExpressionCasing(sub string) string {
+	m := reFieldSet.FindStringSubmatch(sub)
+	if m == nil {
+		return sub
+	}
+	path := normalizeBracketPath(m[1])
+	lowerPath := strings.ToLower(path)
+	if lowerPath != "current_phase" && !strings.HasPrefix(lowerPath, "current_phase.") {
+		return sub
+	}
+	canonicalPath := "current_phase" + path[len("current_phase"):]
+	return "." + canonicalPath + " = " + m[2]
 }
 
 func splitChainedAssignments(expr string) []string {
