@@ -214,6 +214,43 @@ again, that test fails.
 
 *For dummies: The Queen looks at what kind of work the phase is doing and decides how many workers to send. Writing a README does not need a test-coverage specialist, and adding a CSV export does not need a security auditor — so those no longer turn up. Work that touches passwords, tokens or logins still gets the security reviewer, and every build still gets a Watcher checking it. Picking "light" never switches off the safety checks a risky phase needs — it only drops the optional extras.*
 
+### Team Check-In and Owner Decisions (2026-08-21)
+
+**Builds pause for the owner before spawning.** After the spawn plan renders,
+the wrapper shows a check-in card (`aether ceremony team-checkin`) — one line
+per worker with the Queen's reason, `REQUIRED` or `OPTIONAL` marking, and the
+castes already pruned — then asks: proceed, trim optional workers, or
+redirect. Required castes are presented as fixed because the runtime re-adds
+them whatever is proposed; the card only offers choices the runtime will
+honor. `aether build --no-checkin` skips the pause; autopilot never sees it.
+Locked by `TestTeamCheckinCardShowsReasonAndRequiredMarking` and
+`TestTeamCheckinDoesNotMutate`.
+
+**Workers' questions route to the owner, not to more agents.** Handoff
+`open_decisions` surface via `aether handoff-decisions`; the owner's answers
+are stored by `aether decision-answer` as resolved clarifications and reach
+every later worker prompt as CLARIFIED INTENT. Wrappers ask at wave
+boundaries, the post-build checkpoint, and before continue's steering
+checkpoint; an unanswered question never blocks. Locked end-to-end by
+`TestResolvedOpenDecisionReachesNextWorkerPrompt`; the worker-side rule (ask,
+don't guess) by `TestResponseContractTellsWorkersToRouteJudgementCalls`.
+
+**Spawn-economy floors added in the same round:** seal's Probe needs testable
+code (`TestSealProbeRequiresTestableCode`); swarm's Scout/Archaeologist are
+relevance-selected, only the tracker/builder/watcher trio is mandatory
+(`TestSwarmTrivialBugSkipsHistoryAndResearch`); every build-selectable caste
+must have a dispatch path (`TestEveryBuildSelectableCasteCanDispatch`); the
+fast continue path honors `--castes`
+(`TestContinueFastPathHonoursCasteProposal`); light colonize sends two
+surveyors, not four (`TestColonizeLightDepthTrimsSurveyors`).
+
+*For dummies: before spending anything, the build now shows you its team and
+waits for your OK — safety checkers stay, extras are yours to drop, and the
+system remembers what you drop. When a worker hits a question only you can
+answer, it asks you at the next natural break instead of sending another
+helper to guess. And five places that used to send helpers with nothing to do
+have been shut off.*
+
 Wrappers should explain the Queen's choice briefly in plain English and reserve
 manual depth flags for advanced overrides. If docs and runtime disagree, runtime wins.
 

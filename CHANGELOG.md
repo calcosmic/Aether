@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Team check-in before every build.** After the Queen shows her spawn plan,
+  the build pauses and asks the owner to proceed, trim optional workers, or
+  redirect — with a one-line reason per worker and safety workers marked as
+  fixed (the runtime re-adds required castes regardless, so the card never
+  offers a removal it would silently undo). Skippable with
+  `aether build --no-checkin`; autopilot is unaffected. Rendered by the new
+  `aether ceremony team-checkin` (locked read-only by
+  `TestTeamCheckinDoesNotMutate`; card contents by
+  `TestTeamCheckinCardShowsReasonAndRequiredMarking`).
+- **Workers' open questions now reach the owner, not another agent.** Every
+  worker handoff already carried `open_decisions`; they were delivered only
+  into the next worker's prompt. New `aether handoff-decisions` lists the
+  unanswered ones and `aether decision-answer` records the owner's ruling as
+  a resolved clarification — which the context assembler already injects
+  into every later worker prompt as CLARIFIED INTENT. Build wrappers ask at
+  wave boundaries and the post-build checkpoint; continue asks before its
+  steering checkpoint. An unanswered question never blocks a build. End to
+  end relay locked by `TestResolvedOpenDecisionReachesNextWorkerPrompt`;
+  workers are told to route judgement calls there instead of guessing
+  (`TestResponseContractTellsWorkersToRouteJudgementCalls`).
+
+### Fixed
+
+- **Five useless-spawn leaks closed.** Sealing a colony no longer requires a
+  test-coverage Probe when the final phase produced no testable code
+  (`TestSealProbeRequiresTestableCode`); a bug swarm no longer always
+  summons a researcher and a git-history digger — they now ride on keyword
+  relevance like every other specialist
+  (`TestSwarmTrivialBugSkipsHistoryAndResearch`); a caste with no build
+  dispatch path can no longer be selected onto a build team, where it
+  consumed a budget slot and silently displaced a real specialist
+  (`TestEveryBuildSelectableCasteCanDispatch`); the everyday continue path
+  now honours the Queen's `--castes` proposal instead of only the heavy
+  plan-only path (`TestContinueFastPathHonoursCasteProposal`), and the
+  Keeper no longer arrives on incidental words like "standard" or
+  "document" (`TestContinueDoesNotSummonKeeperOnIncidentalWords`); and
+  `--verification-depth light` finally means something for colonize — two
+  surveyors instead of a fixed four
+  (`TestColonizeLightDepthTrimsSurveyors`).
+
 ## [1.0.58] - 2026-08-17
 
 ### Fixed
