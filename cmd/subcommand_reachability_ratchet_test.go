@@ -193,6 +193,20 @@ var pathCollisionRevealedOrphans = map[string]bool{
 	// TestOrphanAllowlistOnlyShrinks carries the same rationale at its call
 	// site; this is the other half of the same on-the-record decision.
 	"aether worktree-reap": true,
+
+	// Phase 191.1 (2026-08-21), the same kind of reviewed exemption as
+	// worktree-reap immediately above: "aether verify-out-of-band" is a
+	// brand-new command (FIELD-05,
+	// .planning/todos/pending/2026-08-21-no-reentry-path-for-out-of-band-work.md)
+	// with no pre-migration entry at all. It is listed here deliberately
+	// because its own reachability ratchet
+	// (TestVerifyOutOfBandHasNoLifecycleCaller,
+	// cmd/verify_out_of_band_reachability_test.go) requires it to have NO
+	// caller anywhere except a human typing it — an invented wrapper, hook,
+	// or script call would itself violate that guarantee. This is the other
+	// half of the same on-the-record decision as its entries in
+	// testdata/orphan_allowlist.json and testdata/orphan_allowlist_baseline.json.
+	"aether verify-out-of-band": true,
 }
 
 // loadPreMigrationReasonByLeaf reads the frozen, byte-identical,
