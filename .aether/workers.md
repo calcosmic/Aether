@@ -822,7 +822,12 @@ Read .aether/workers.md for role definitions.
 
 Workers participate in the wisdom pipeline through their work products:
 
-1. **Build work** produces observations (via `memory-capture` in continue step)
+1. **Build work** produces observations automatically during continue -- not via a wrapper-invoked
+   `memory-capture` call, but through `pkg/learn`'s own in-process capture, `captureContinueLearning()`
+   (`cmd/codex_continue_finalize.go:1458`), called from both continue paths (`cmd/codex_continue.go:962`,
+   the default path, and `cmd/codex_continue_finalize.go:521`, the heavy-review path). Eligible runs are
+   recorded as a hypothesis entry in `pkg/learn`'s own colony store (`.aether/data/learn/`), then handed
+   to phase-end consolidation (`runPhaseEndConsolidation`, same call site) for further curation.
 2. **Observations** auto-promote to instincts after threshold (2 for patterns)
 3. **Instincts** are stored in COLONY_STATE.json with confidence scores
 4. **High-confidence instincts** (>= 0.8) are promoted to Hive Brain at seal

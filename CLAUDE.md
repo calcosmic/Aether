@@ -445,13 +445,31 @@ Runtime note:
 
 `.aether/docs/command-playbooks/*.md` are reference documentation for the
 build/continue methodology. Since v1.25 they are NOT loaded by the runtime and
-NOT injected into worker or orchestrator prompts — execution behavior lives in
-the host-manifest flow (`aether host build` → spawn from `dispatch_manifest` →
-`build-finalize`), and workers receive the lean runtime-composed brief.
+NOT injected into worker or orchestrator prompts — workers receive the lean
+runtime-composed brief instead. Execution behavior lives in one of two
+distinct flows, not a single "host-manifest flow":
+
+- **Interactive wrapper (the primary, documented path):**
+  `aether build $ARGUMENTS --plan-only` returns a manifest, the wrapper
+  spawns workers from it directly, then `aether build-finalize` commits the
+  result. `.claude/commands/ant/build.md` explicitly forbids running
+  `aether host build` from this path — "the TS host hop is off the
+  interactive build path."
+- **Autopilot / host-driven (a separate lane, reached only via `aether run`
+  or another host-driven invocation — never the interactive wrapper):**
+  `aether host build` → the TS host fetches the same `dispatch_manifest` →
+  the host itself dispatches workers → `aether build-finalize`.
 
 Authority note:
-- `.claude/commands/ant/build.md` and `continue.md` describe the host-manifest
-  flow directly; there is no playbook indirection.
+- `.claude/commands/ant/build.md` describes the plan-only/wrapper-driven flow
+  above, not the host-manifest flow — it never touches the TS host.
+  `continue.md`'s relationship to the host is different again: its default
+  path also never touches the host and runs verification entirely inside the
+  Go runtime process, with no manifest step at all; only its opt-in
+  heavy-review path (`--classic-ceremony` / `--verification-depth heavy`)
+  fetches a manifest from `aether host continue --dry-run` — a real host
+  touch point, but dry-run only, where the wrapper still performs the
+  reviewer spawning rather than the host dispatching itself.
 - OpenCode maintains mirrored command specs in `.opencode/commands/ant/*.md`.
 - Agent parity model: `.claude/agents/ant/*.md`, `.opencode/agents/*.md`, and
   `.codex/agents/*.toml` are canonical platform sources. `aether publish`
@@ -632,9 +650,11 @@ Colony-prime assembles worker context within a character budget to avoid prompt 
 4. Hive wisdom
 5. Context capsule
 6. User preferences
-7. QUEEN.md wisdom
-8. Pheromone signals (trimmed last -- highest retention priority)
-9. Blockers (NEVER trimmed)
+7. QUEEN wisdom (global)
+8. QUEEN wisdom (local)
+9. Pheromone signals / active signals (trimmed last -- highest retention priority)
+
+Blockers are NEVER trimmed, regardless of budget.
 
 Trimmed sections are logged for debugging. See `pheromone-write` subcommand for implementation.
 
