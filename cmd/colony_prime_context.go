@@ -932,6 +932,65 @@ func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
 		}
 	}
 
+	// Midden (recent failures) -- 188-VERIFICATION.md Gap 1: this function
+	// (via resolveCodexWorkerContext -> buildColonyPrimeOutput, the one
+	// every live build/continue/colonize/plan/seal/swarm worker dispatch
+	// actually calls) had zero midden-reading code, before or after this
+	// phase's original five plans. Uses the canonical shared helper
+	// (cmd/midden_shared.go) -- never a hand-built read path, which is
+	// exactly the split Phase 188 existed to end. Filtered to
+	// still-unacknowledged entries only (an acknowledged failure has
+	// already been handled -- resurfacing it forever would grow this
+	// section without bound) and hard-capped at
+	// middenCapsuleSectionEntryLimit, newest first, so the "protected"
+	// (never-trimmed) status this section carries (see
+	// protectedSectionPolicy's "midden" case) stays safe no matter how many
+	// failures accumulate in midden.json over a colony's lifetime.
+	if midden, middenErr := loadMiddenFile(store); middenErr == nil && len(midden.Entries) > 0 {
+		unacked := make([]colony.MiddenEntry, 0, len(midden.Entries))
+		for _, entry := range midden.Entries {
+			if entry.Acknowledged != nil && *entry.Acknowledged {
+				continue
+			}
+			unacked = append(unacked, entry)
+		}
+		if len(unacked) > 0 {
+			sort.SliceStable(unacked, func(i, j int) bool {
+				return unacked[i].Timestamp > unacked[j].Timestamp
+			})
+			const middenCapsuleSectionEntryLimit = 5
+			shown := unacked
+			remaining := 0
+			if len(shown) > middenCapsuleSectionEntryLimit {
+				remaining = len(shown) - middenCapsuleSectionEntryLimit
+				shown = shown[:middenCapsuleSectionEntryLimit]
+			}
+			var middenSB strings.Builder
+			writeSectionHeader(&middenSB, "midden", "## Recent Failures\n\n")
+			middenTimestamps := make([]string, 0, len(shown))
+			for _, entry := range shown {
+				middenSB.WriteString(fmtOrFallback("midden", func(t *sectionTemplate) string { return t.EntryFormat }, "- [%s] %s\n", entry.Category, truncateString(entry.Message, 160)))
+				middenTimestamps = append(middenTimestamps, entry.Timestamp)
+			}
+			if remaining > 0 {
+				fmt.Fprintf(&middenSB, "+%d more unacknowledged\n", remaining)
+			}
+			middenProtected, middenPreserveReason := protectedSectionPolicy("midden")
+			sections = append(sections, colonyPrimeSection{
+				name:              "midden",
+				title:             "Recent Failures",
+				source:            filepath.Join(store.BasePath(), middenCanonicalPath),
+				content:           middenSB.String(),
+				priority:          9,
+				freshnessScore:    latestFreshnessScore(now, 0.75, middenTimestamps...),
+				confirmationScore: 1.0,
+				relevanceScore:    sectionRelevanceScore("midden"),
+				protected:         middenProtected,
+				preserveReason:    middenPreserveReason,
+			})
+		}
+	}
+
 	// Medic health section — inject critical issues from last scan
 	if lastScan, err := loadMedicLastScan(store.BasePath()); err == nil {
 		var criticalIssues []HealthIssue
