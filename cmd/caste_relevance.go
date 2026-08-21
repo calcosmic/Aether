@@ -374,7 +374,10 @@ func stateVerificationDepth(state colony.ColonyState) colony.VerificationDepth {
 func casteAllowedForFlow(caste, flowType string) bool {
 	switch flowType {
 	case "build":
-		return !strings.HasPrefix(caste, "surveyor-")
+		// route_setter plans phases; the build composer has no dispatch for
+		// it, so selecting it only displaced a real specialist
+		// (TestEveryBuildSelectableCasteCanDispatch).
+		return caste != "route_setter" && !strings.HasPrefix(caste, "surveyor-")
 	case "continue":
 		return oneOf(caste, "watcher", "gatekeeper", "auditor", "probe", "measurer", "chaos", "includer", "keeper", "sage", "medic", "fixer")
 	case "plan":

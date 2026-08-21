@@ -1263,42 +1263,59 @@ func applyBuildDispatchPolicyCastes(queenCastes map[string]bool, phase colony.Ph
 	}
 }
 
-func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool) []codexBuildDispatch {
-	plans := []struct {
-		caste string
-		stage string
-		wave  int
-		task  string
-	}{
-		// Wave 1 — evidence gatherers. These two write artifacts (git history
-		// findings, phase research) that a planner may consult, so they go first.
-		{"archaeologist", "prep", 1, "Git history analysis before implementation"},
-		{"oracle", "research", 1, "Phase research and implementation risks"},
+// queenBuildPreWavePlans and queenBuildPostWavePlans are the only routes by
+// which a selected specialist caste becomes a build dispatch. They are
+// package-level so TestEveryBuildSelectableCasteCanDispatch can prove that
+// every caste the Queen may select for a build appears in some dispatch
+// path — a caste selectable but absent here consumes a budget slot and
+// silently displaces a specialist that would actually have run.
+var queenBuildPreWavePlans = []struct {
+	caste string
+	stage string
+	wave  int
+	task  string
+}{
+	// Wave 1 — evidence gatherers. These two write artifacts (git history
+	// findings, phase research) that a planner may consult, so they go first.
+	{"archaeologist", "prep", 1, "Git history analysis before implementation"},
+	{"oracle", "research", 1, "Phase research and implementation risks"},
 
-		// Wave 2 — planners. Every one of these reads the same phase brief and
-		// produces an independent plan; none consumes another's output.
-		// findingsInjectionForCaste only appends a *write* instruction for four
-		// castes, so there is no read dependency between any pair here.
-		//
-		// They previously occupied waves 3-8, one or two per wave, which made a
-		// build serial before a line of code was written: a real phase spawned
-		// eleven dispatches across nine waves and took an hour, mostly waiting.
-		// Same workers, same coverage — concurrent instead of queued.
-		{"architect", "design", 2, "Design boundaries before coding"},
-		{"ambassador", "integration", 2, "External integration design before implementation"},
-		{"gatekeeper", "security", 2, "Security boundaries and auth risk review before implementation"},
-		{"includer", "accessibility", 2, "Accessibility requirements and inclusive interaction review"},
-		{"weaver", "refactor", 2, "Refactoring seams and simplification plan before implementation"},
-		{"tracker", "diagnosis", 2, "Root-cause investigation and regression context before implementation"},
-		{"keeper", "knowledge", 2, "Knowledge preservation plan for reusable patterns"},
-		{"chronicler", "documentation", 2, "Documentation surface and changelog planning"},
-		{"medic", "health", 2, "Runtime health and repair risk review"},
-		{"fixer", "repair", 2, "Repair strategy and remediation boundaries"},
-		{"porter", "delivery", 2, "Delivery, packaging, and release handling review"},
-		{"sage", "wisdom", 2, "Learning synthesis and reusable pattern capture"},
-	}
-	dispatches := make([]codexBuildDispatch, 0, len(plans))
-	for _, plan := range plans {
+	// Wave 2 — planners. Every one of these reads the same phase brief and
+	// produces an independent plan; none consumes another's output.
+	// findingsInjectionForCaste only appends a *write* instruction for four
+	// castes, so there is no read dependency between any pair here.
+	//
+	// They previously occupied waves 3-8, one or two per wave, which made a
+	// build serial before a line of code was written: a real phase spawned
+	// eleven dispatches across nine waves and took an hour, mostly waiting.
+	// Same workers, same coverage — concurrent instead of queued.
+	{"architect", "design", 2, "Design boundaries before coding"},
+	{"ambassador", "integration", 2, "External integration design before implementation"},
+	{"gatekeeper", "security", 2, "Security boundaries and auth risk review before implementation"},
+	{"includer", "accessibility", 2, "Accessibility requirements and inclusive interaction review"},
+	{"weaver", "refactor", 2, "Refactoring seams and simplification plan before implementation"},
+	{"tracker", "diagnosis", 2, "Root-cause investigation and regression context before implementation"},
+	{"keeper", "knowledge", 2, "Knowledge preservation plan for reusable patterns"},
+	{"chronicler", "documentation", 2, "Documentation surface and changelog planning"},
+	{"medic", "health", 2, "Runtime health and repair risk review"},
+	{"fixer", "repair", 2, "Repair strategy and remediation boundaries"},
+	{"porter", "delivery", 2, "Delivery, packaging, and release handling review"},
+	{"sage", "wisdom", 2, "Learning synthesis and reusable pattern capture"},
+}
+
+var queenBuildPostWavePlans = []struct {
+	caste string
+	stage string
+	task  string
+}{
+	{"auditor", "audit", "Quality and compliance review after implementation"},
+	{"measurer", "measurement", "Performance and cost surface review after implementation"},
+	{"chaos", "resilience", "Resilience probing after specialist verification"},
+}
+
+func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool) []codexBuildDispatch {
+	dispatches := make([]codexBuildDispatch, 0, len(queenBuildPreWavePlans))
+	for _, plan := range queenBuildPreWavePlans {
 		if !queenCastes[plan.caste] {
 			continue
 		}
@@ -1308,21 +1325,12 @@ func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool
 }
 
 func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, startExecutionWave int) []codexBuildDispatch {
-	plans := []struct {
-		caste string
-		stage string
-		task  string
-	}{
-		{"auditor", "audit", "Quality and compliance review after implementation"},
-		{"measurer", "measurement", "Performance and cost surface review after implementation"},
-		{"chaos", "resilience", "Resilience probing after specialist verification"},
-	}
 	// All post-wave reviewers examine the same finished code and share no
 	// inputs, so they occupy one wave. Each previously took its own
 	// incrementing wave, which serialised the review phase for no reason: an
 	// Auditor cannot learn anything from waiting for a Measurer.
-	dispatches := make([]codexBuildDispatch, 0, len(plans))
-	for _, plan := range plans {
+	dispatches := make([]codexBuildDispatch, 0, len(queenBuildPostWavePlans))
+	for _, plan := range queenBuildPostWavePlans {
 		if !queenCastes[plan.caste] {
 			continue
 		}
@@ -1339,8 +1347,13 @@ func queenBuildTaskCaste(task colony.Task, queenCastes map[string]bool) string {
 	return queenBuildFallbackTaskCaste(queenCastes)
 }
 
+// queenBuildTaskFallbackCastes is the ordered chain of castes a phase task can
+// be assigned to when its suggested caste was not selected. Package-level for
+// the same dispatchability invariant as the wave plan tables above.
+var queenBuildTaskFallbackCastes = []string{"builder", "scout", "oracle", "weaver", "tracker", "fixer"}
+
 func queenBuildFallbackTaskCaste(queenCastes map[string]bool) string {
-	for _, caste := range []string{"builder", "scout", "oracle", "weaver", "tracker", "fixer"} {
+	for _, caste := range queenBuildTaskFallbackCastes {
 		if queenCastes[caste] {
 			return caste
 		}
