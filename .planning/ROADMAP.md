@@ -975,6 +975,16 @@ Plans:
 **Depends on**: nothing (2026-08-18: was 186; unblocked by the 186 rescope — independent of 187–190).
 **Success Criteria**: (1) zero-reader configs deleted (`colony/agents/*.yaml`, `colony/phases/*.yaml`, `model-routing.yaml`, `autopilot.yaml`, `memory-rules.yaml`) with grep-ratchets against reappearance; (2) the four CWD-relative silent-fallback loaders resolved: each diffed against its compiled default, divergent values folded into the defaults, then files deleted — dev-checkout ceremony/visual output byte-identical before and after; (3) dead code removed (`pkg/trace/cost.go` + unconstructed pool path, `session-verify-fresh`, `newLearningValidator`, unreferenced skill-lifecycle commands); (4) false docs corrected (workers.md:825, CLAUDE.md trim-order and host-build claims); (5) `oracle-phase-directives.yaml` and all auxiliary commands untouched — `/ant-oracle` and `/ant-dream` smoke-pass.
 
+### Phase 191.1: Field Hardening — close the four 2026-08-21 field-reported defects (stage/finalize deadlock; completion packet cannot express wrapper-bundled work; continue checker returns check descriptions as verdicts; no honest re-entry for out-of-band work) with the field reproductions as executable test cases, per .planning/todos/pending/2026-08-21-*.md (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 191
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 191.1 to break down)
+
 ### Phase 192: Final Showdown
 **Goal**: The full benchmark (4 categories × 3 repeats × 3 lanes) with the acceptance gate applied. v1.26 completes only if the gate passes — not when implementation tasks are done.
 **Depends on**: 185, 187–191.
