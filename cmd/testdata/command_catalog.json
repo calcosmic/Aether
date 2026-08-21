@@ -1992,6 +1992,19 @@
     "stability_score": 91
   },
   {
+    "name": "decision-answer",
+    "short_description": "Record the owner's answer to a worker's open decision",
+    "flags": [
+      "answer",
+      "phase",
+      "question",
+      "source"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "discuss",
     "short_description": "Surface intent clarifications before planning and record resolved answers",
     "flags": [
@@ -3146,6 +3159,16 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "handoff-decisions",
+    "short_description": "List workers' open decisions awaiting an owner answer (read-only)",
+    "flags": [
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "history",
