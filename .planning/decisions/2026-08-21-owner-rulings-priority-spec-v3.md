@@ -13,7 +13,9 @@ time.
   It becomes a priority-ordered backlog, merged with the remaining approved
   programme (185, 186-07, 192) into one ranked list the owner blesses and
   work proceeds top-down. The Phase-192 stop rule is superseded by that
-  ranked list.
+  ranked list. The spec's own dependency-aware order (its stated purpose)
+  governs, repaired per the audit; working projection:
+  `.planning/research/priority-spec-v3-backlog.md`.
 
 - **D2 — Automatic model routing: APPROVED (reverses the prior rejection).**
   The owner explicitly chose "allow it automatically": the system may route
