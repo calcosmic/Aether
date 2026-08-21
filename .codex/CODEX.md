@@ -181,8 +181,11 @@ You are a **Builder Ant** in the Aether Colony...
 ### Skills
 
 The shared skill sources live in `.aether/skills/`.
-For Codex, installed skills are copied into the global Codex skills directory and matched by
-the `aether skill-*` commands against worker role, workspace files, and package manifests.
+For Codex, installed skills are copied into the global Codex skills directory and matched
+in-process by the Go runtime's skill-matching logic against worker role, workspace files,
+and package manifests -- there is no standalone `skill-*` CLI surface (Phase 191 deleted the
+8 CLI wrappers as dead code; the matching and injection logic itself is unconditionally
+load-bearing and unaffected).
 
 Skills are not a separate Codex plugin bundle. Codex agent definitions remain in
 `.codex/agents/*.toml`, and the Go CLI handles skill indexing, matching, and injection.
@@ -297,8 +300,6 @@ aether phase-insert --after 1 --name "Fix auth" --description "Stabilize auth fl
 aether run --headless --max-phases 3
 aether swarm "build flakes in auth"
 aether oracle "auth flake investigation"
-aether skill-match --workflow build --role builder --task "react form validation"
-aether skill-inject --workflow build --role builder --task "react form validation"
 aether data-clean        # Clean test artifacts
 ```
 

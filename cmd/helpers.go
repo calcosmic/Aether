@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -193,30 +192,6 @@ func renderVisualError(message string, details interface{}) string {
 	// Append generic hint for unmatched errors (per D-05)
 	b.WriteString("\nRun `aether patrol` for diagnostics or `aether status` to check colony health.\n")
 	return b.String()
-}
-
-// newLearningValidator returns a memory.LearningValidator callback that
-// bridges observation promotions to the learning store. When an observation
-// is promoted with trust >= 0.8, any learning entry with matching content
-// and status=hypothesis is upgraded to validated.
-func newLearningValidator(s *storage.Store) func(string, float64) {
-	return func(content string, trustScore float64) {
-		if s == nil || trustScore < 0.8 {
-			return
-		}
-		learnStore := learn.NewColonyStore(s)
-		entries, err := learnStore.List(learn.EntryFilter{Status: learn.StatusHypothesis})
-		if err != nil {
-			return
-		}
-		for _, e := range entries {
-			if e.Content == content {
-				e.Status = learn.StatusValidated
-				_ = learnStore.Replace(e.ID, e)
-				return
-			}
-		}
-	}
 }
 
 // resolveSurveySection reads available survey artifacts from .aether/data/survey/

@@ -92,42 +92,44 @@ var yamlRuntimeCommandRe = regexp.MustCompile(`(?m)^\s*command:\s*"(.*)"\s*$`)
 // binary even though the literal token is not `aether`.
 var binPathAssignRe = regexp.MustCompile(`^\s*([A-Za-z_][A-Za-z0-9_]*)=.*/aether"?\s*$`)
 
-// skillLifecycleOrphanCandidates carries D-08's queryable reason tag: any of
-// these eight LEAF names the scanner actually reports as an orphan is tagged
-// "skill-lifecycle" / owner_phase "178", because Phase 178's success
-// criterion measures this exact set reaching zero. This is the reviewed
-// source list, kept leaf-keyed because that is how the set was reviewed and
-// named in CONTEXT.md ("8 skill entries") — resolveSkillLifecyclePaths turns
-// it into the path-keyed map every consumer actually looks up against.
-var skillLifecycleOrphanCandidates = map[string]bool{
-	"skill-index":             true,
-	"skill-detect":            true,
-	"skill-match":             true,
-	"skill-inject":            true,
-	"skill-list":              true,
-	"skill-diff":              true,
-	"skill-parse-frontmatter": true,
-	"skill-cache-rebuild":     true,
+// skillLifecycleDeletedCommands records SKILL-01's reviewed eight-command set
+// (CONTEXT.md's "8 skill entries" — skill-index, skill-detect, skill-match,
+// skill-inject, skill-list, skill-diff, skill-parse-frontmatter,
+// skill-cache-rebuild), originally the set Phase 178's success criterion
+// measured "reaching zero" via wiring. Phase 191 delivered SKILL-01 by
+// deleting the entire reviewed set as dead CLI surface instead — the
+// standalone cobra.Command wrappers are gone; matchSkillsForWorkflow and its
+// live in-process caller (cmd/codex_build.go's composeBuildManifestBrief)
+// were preserved unconditionally. There is no longer a "reaches zero" count
+// to measure: the set reached zero by not existing. Kept leaf-keyed, as the
+// original set was, for the same audit-trail reason it was reviewed by name.
+var skillLifecycleDeletedCommands = []string{
+	"skill-index",
+	"skill-detect",
+	"skill-match",
+	"skill-inject",
+	"skill-list",
+	"skill-diff",
+	"skill-parse-frontmatter",
+	"skill-cache-rebuild",
 }
 
-// resolveSkillLifecyclePaths resolves every reviewed leaf name in
-// skillLifecycleOrphanCandidates through the real cobra tree and returns the
-// path-keyed set writeOrphanAllowlist and the D-08 assertion block both look
-// up against. Never hand-written: a leaf name that fails to resolve to a
-// real, non-root command t.Fatalf's by name, because a silently unresolvable
-// name would make the D-08 assertion (and Phase 178's finish line, which
-// measures this exact set reaching zero) vacuous.
-func resolveSkillLifecyclePaths(t *testing.T) map[string]bool {
+// assertSkillLifecycleCommandsStayDeleted proves each of SKILL-01's eight
+// reviewed leaf names no longer resolves to a real, registered command via
+// rootCmd.Find — the reachability ratchet's own proof mechanism, inverted
+// from "must resolve" (pre-191, when the set was orphaned-but-present) to
+// "must never resolve again" (post-191, when the set was deleted outright).
+// A leaf name that resolves again is a regression: either it was
+// reintroduced by accident and must be deleted again, or it is a genuinely
+// new command that happens to reuse a retired name and that reuse must be
+// recorded on purpose, never silently allowed to pass.
+func assertSkillLifecycleCommandsStayDeleted(t *testing.T) {
 	t.Helper()
-	paths := make(map[string]bool, len(skillLifecycleOrphanCandidates))
-	for leaf := range skillLifecycleOrphanCandidates {
-		target, _, err := rootCmd.Find([]string{leaf})
-		if err != nil || target == nil || target == rootCmd {
-			t.Fatalf("reviewed skill-lifecycle leaf name %q did not resolve to a real, registered command via rootCmd.Find — the D-08 assertion would be vacuous", leaf)
+	for _, leaf := range skillLifecycleDeletedCommands {
+		if target, _, err := rootCmd.Find([]string{leaf}); err == nil && target != nil && target != rootCmd {
+			t.Errorf("skill-lifecycle command %q resolved to %q — Phase 191 deleted this entire reviewed set as dead CLI surface (SKILL-01); if it is back, either it has a new, real caller (update this ratchet with that evidence) or it must be deleted again", leaf, target.CommandPath())
 		}
-		paths[target.CommandPath()] = true
 	}
-	return paths
 }
 
 // pathCollisionRevealedOrphans is 172-09's one deliberate, on-the-record
@@ -1004,16 +1006,15 @@ func loadOrphanAllowlist(t *testing.T, path string) []orphanAllowlistEntry {
 // testdata/orphan_allowlist.json ONLY — never the baseline (D-11).
 func writeOrphanAllowlist(t *testing.T, orphans []string) {
 	t.Helper()
-	skillPaths := resolveSkillLifecyclePaths(t)
 	preByLeaf := loadPreMigrationReasonByLeaf(t)
 	entries := make([]orphanAllowlistEntry, 0, len(orphans))
 	for _, name := range orphans {
 		reason, owner := "unreviewed-pre-existing", "RECLAIM"
 		switch {
-		case skillPaths[name]:
-			// Path-keyed skill-lifecycle set: keeps skill-lifecycle / 178
-			// regardless of migration status.
-			reason, owner = "skill-lifecycle", "178"
+		// The skill-lifecycle / 178 case was removed in Phase 191: that
+		// reviewed eight-command set was deleted outright (SKILL-01), so none
+		// of its names can ever appear in a fresh orphan scan again -- there
+		// is nothing left for this branch to match.
 		case pathCollisionRevealedOrphans[name]:
 			// 172-09's one deliberate, on-the-record disposition (D-07):
 			// newly revealed by the path-keying migration, recorded honestly
@@ -1197,41 +1198,26 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 			len(unallowed), formatOrphanFailureMessage(unallowed))
 	}
 
-	// D-08: every name in the reviewed eight-item skill-lifecycle set
-	// (CONTEXT.md's "8 skill entries", the set Phase 178's success criterion
-	// measures reaching zero) that the scan reports as an orphan must carry
-	// owner_phase 178, so that criterion stays queryable. This is NOT "every
+	// D-08 (Phase 191 SKILL-01 ruling-by-deletion): the reviewed eight-item
+	// skill-lifecycle set (CONTEXT.md's "8 skill entries", originally the set
+	// Phase 178's success criterion measured "reaching zero" via wiring) was
+	// instead deleted outright as dead CLI surface — skill-index, skill-detect,
+	// skill-match, skill-inject, skill-list, skill-diff,
+	// skill-parse-frontmatter, and skill-cache-rebuild no longer exist as
+	// invocable commands. matchSkillsForWorkflow and its live in-process
+	// caller (cmd/codex_build.go's composeBuildManifestBrief) were preserved
+	// unconditionally — this was a CLI-surface deletion, not a logic deletion.
+	// There is no longer an owner_phase "178" count to measure: the set
+	// reached zero by not existing, not by being wired up. This is NOT "every
 	// entry whose name happens to begin with skill-" — skill_lifecycle.go's
 	// unrelated authoring commands (skill-archive, skill-patch, skill-pin,
-	// skill-promote, skill-view, skill-list-lifecycle) are a different
-	// subsystem and correctly fall through to "unreviewed-pre-existing".
-	skillPaths := resolveSkillLifecyclePaths(t)
-	for path := range skillPaths {
-		for _, e := range allowlist {
-			if e.Name == path && e.OwnerPhase != "178" {
-				t.Errorf("%q is one of the eight reviewed skill-lifecycle orphan candidates but carries owner_phase %q, want \"178\"", path, e.OwnerPhase)
-			}
-		}
-	}
-
-	// D-08 count survives the migration: exactly 6 live entries carry
-	// owner_phase 178, and each one is one of the reviewed skill-lifecycle
-	// paths. Phase 178's success criterion is that this set reaches zero; if
-	// the path-key migration silently changed the count, that criterion
-	// becomes unmeasurable.
-	var phase178 []string
+	// skill-promote, skill-view, skill-list-lifecycle) are a different,
+	// unreviewed subsystem and correctly fall through to
+	// "unreviewed-pre-existing".
+	assertSkillLifecycleCommandsStayDeleted(t)
 	for _, e := range allowlist {
 		if e.OwnerPhase == "178" {
-			phase178 = append(phase178, e.Name)
-		}
-	}
-	if len(phase178) != 6 {
-		sort.Strings(phase178)
-		t.Errorf("expected exactly 6 live entries with owner_phase \"178\", found %d: %s", len(phase178), strings.Join(phase178, ", "))
-	}
-	for _, name := range phase178 {
-		if !skillPaths[name] {
-			t.Errorf("%q carries owner_phase \"178\" but is not one of the eight reviewed skill-lifecycle paths", name)
+			t.Errorf("%q still carries owner_phase \"178\", but Phase 191 deleted the entire reviewed skill-lifecycle set (SKILL-01) rather than wiring it — no live orphan should carry this owner_phase anymore", e.Name)
 		}
 	}
 }

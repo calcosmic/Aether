@@ -79,7 +79,7 @@ Spawn ALL Wave 1 workers in a single message using multiple visible Task tool ca
 Per worker:
 - Inject worktree context (if worktree mode)
 - Inject graveyard caution context
-- Inject skills via `aether skill-inject`
+- Skills are matched and injected automatically, in-process, while the brief is assembled (`skill-inject` was deleted in Phase 191 as dead CLI surface -- SKILL-01)
 - Inject colony context (`prompt_section`)
 
 Builder prompt returns JSON with: `ant_name`, `task_id`, `status`, `summary`, `tool_count`, `files_created`, `files_modified`, `tests_written`, `blockers`.

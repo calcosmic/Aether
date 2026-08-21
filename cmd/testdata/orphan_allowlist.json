@@ -1015,39 +1015,14 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-detect",
-    "reason": "skill-lifecycle",
-    "owner_phase": "178"
-  },
-  {
-    "name": "aether skill-diff",
-    "reason": "skill-lifecycle",
-    "owner_phase": "178"
-  },
-  {
-    "name": "aether skill-index",
-    "reason": "skill-lifecycle",
-    "owner_phase": "178"
-  },
-  {
     "name": "aether skill-index-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether skill-inject",
-    "reason": "skill-lifecycle",
-    "owner_phase": "178"
-  },
-  {
     "name": "aether skill-is-user-created",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether skill-list",
-    "reason": "skill-lifecycle",
-    "owner_phase": "178"
   },
   {
     "name": "aether skill-list-lifecycle",
@@ -1058,11 +1033,6 @@
     "name": "aether skill-manifest-read",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether skill-match",
-    "reason": "skill-lifecycle",
-    "owner_phase": "178"
   },
   {
     "name": "aether skill-patch",

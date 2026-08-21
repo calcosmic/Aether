@@ -40,14 +40,13 @@ Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include
 
 Run using the Bash tool with description "Dispatching watcher...": `aether spawn-log --parent "Queen" --caste "watcher" --name "{watcher_name}" --task "Independent verification" --depth 0`
 
-**Load skills for the Watcher role (NON-BLOCKING):**
+**Skills for the Watcher role:**
 
-```bash
-skill_inject_result=$(aether skill-inject --workflow "build" --role "watcher" --task "{verification_context}" 2>/dev/null)
-skill_section=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.skill_section // ""')
-```
-
-Display: `🧠 Skills loaded for watcher verification`
+`skill-inject`, the CLI command this step used to call, was deleted in Phase 191 as dead CLI
+surface (SKILL-01). Skill loading is not a separate shell step: `composeBuildManifestBrief`
+calls the live matching logic directly, in-process, while assembling the Watcher's brief —
+`skill_section` is already part of the brief text by the time it reaches the worker prompt
+below. There is nothing to run here.
 
 **Watcher Worker Prompt (CLEAN OUTPUT):**
 ```

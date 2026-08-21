@@ -115,8 +115,8 @@ func codexSkillShims() []codexSkillShim {
 		{
 			Dir:         "aether-skill-loader",
 			Name:        "aether-skill-loader",
-			Description: "Use when Aether worker context needs skills; load matched skill content from the runtime on demand.",
-			Body:        "Run `aether skill-inject --workflow <workflow> --role <role> --task \"<task>\"` to fetch the relevant shipped and custom Aether skills. Do not preload full skill mirrors.",
+			Description: "Explains where Aether worker skill content comes from -- no on-demand loader command exists.",
+			Body:        "Skill content is already included automatically in the worker brief text returned by `aether build`, `aether colonize`, `aether plan`, and `aether continue` -- it is assembled in-process from the matched shipped and custom Aether skills. There is no separate command to fetch it on demand (skill-inject, the CLI command this shim used to call, was deleted in Phase 191 as dead CLI surface -- its underlying matching logic is what dispatches use automatically). Do not preload full skill mirrors.",
 		},
 		{
 			Dir:         "aether-colony-creation",
