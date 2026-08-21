@@ -69,7 +69,7 @@ type WorkerResult struct {
 	WorkerName    string                     // The worker's assigned name
 	Caste         string                     // Worker caste
 	TaskID        string                     // Task identifier
-	Status        string                     // "completed", "failed", "blocked", or "timeout"
+	Status        string                     // "completed", "completed_no_change", "failed", "blocked", "interrupted", or "timeout"
 	Summary       string                     // Worker's self-reported summary
 	FilesCreated  []string                   // Files the worker claims to have created
 	FilesModified []string                   // Files the worker claims to have modified
@@ -809,9 +809,9 @@ func renderResponseContract(config WorkerConfig) string {
 	if root == "" {
 		root = "."
 	}
-	statusLine := "completed, failed, blocked"
+	statusLine := "completed, completed_no_change, failed, blocked"
 	if strings.EqualFold(strings.TrimSpace(config.Caste), "builder") {
-		statusLine = "code_written, completed, failed, blocked"
+		statusLine = "code_written, completed, completed_no_change, failed, blocked"
 	}
 	scoutReportLine := ""
 	if workerClaimsShouldIncludeScoutReport(config) {
@@ -827,6 +827,8 @@ Return ONLY a single JSON object as your final response.
 - Do not wrap the JSON in markdown code fences.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
 - Set status to one of: %s.
+- If the required behavior ALREADY exists and you proved it, report status completed_no_change with disposition "verified_existing", put the exact verification commands you ran in handoff commands_run, and set handoff verification_status to pass. NEVER fabricate an edit just to have changed files — an honest no-change with evidence is a first-class success; one without evidence is rejected.
+- If you are stopped by a rate limit or quota, report status interrupted (not failed): preserve your work, describe the last durable state in the handoff, and the colony will resume the unfinished slice.
 - Report blockers truthfully. If blocked, explain why in blockers.
 - Include handoff with %s.
 - %s
@@ -1023,6 +1025,16 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 		claims.Status = status
 	case "code_written":
 		claims.Status = "completed"
+	// Honest no-change success (ruling D6) — before this case existed, a
+	// worker truthfully reporting completed_no_change fell into the default
+	// branch and was coerced to "failed": the accounting schema punished
+	// honesty, which is exactly the incentive-to-lie the spec forbids.
+	case "completed_no_change", "no_change", "no-change", "verified_existing", "already_complete", "already_correct":
+		claims.Status = "completed_no_change"
+	// Quota/rate-limit stop is a resumable interruption, never a code
+	// failure (ruling D7).
+	case "interrupted", "rate_limit", "rate_limited", "suspended_quota":
+		claims.Status = "interrupted"
 	default:
 		if len(claims.Blockers) > 0 {
 			claims.Status = "blocked"

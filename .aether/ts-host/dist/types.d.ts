@@ -658,7 +658,7 @@ export interface OrchestratorBoundaryQuestionSummary {
  * Terminal worker status values accepted by Go finalizers.
  * Matches isTerminalExternalBuildStatus in cmd/codex_build_finalize.go.
  */
-export type TerminalWorkerStatus = "completed" | "failed" | "blocked" | "timeout" | "manually-reconciled" | "code_written";
+export type TerminalWorkerStatus = "completed" | "completed_no_change" | "interrupted" | "failed" | "blocked" | "timeout" | "manually-reconciled" | "code_written";
 export interface CeremonyPayload {
     phase?: number;
     phase_name?: string;

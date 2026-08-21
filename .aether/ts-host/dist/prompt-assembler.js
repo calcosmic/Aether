@@ -246,8 +246,8 @@ ${config.task}
  */
 export function renderResponseContract(config) {
     const statusValues = config.caste.toLowerCase() === "builder"
-        ? "code_written, completed, failed, blocked"
-        : "completed, failed, blocked";
+        ? "code_written, completed, completed_no_change, failed, blocked"
+        : "completed, completed_no_change, failed, blocked";
     return `## Final Response Contract
 
 Return ONLY a single JSON object as your final response.

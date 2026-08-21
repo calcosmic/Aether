@@ -89,9 +89,16 @@ type codexExternalBuildWorkerResult struct {
 	// results, or granted by a claimant that is
 	// failed/unevidenced/unrecognized, is a distinct, named contract
 	// violation, never a silent credit or a silently dropped field.
-	CoveredTaskIDs []string            `json:"covered_task_ids,omitempty"`
-	DependsOn      []string            `json:"depends_on,omitempty"`
-	Outputs        []string            `json:"outputs,omitempty"`
+	CoveredTaskIDs []string `json:"covered_task_ids,omitempty"`
+	// Disposition qualifies a completed_no_change status (ruling D6): the
+	// only recognized value is "verified_existing" — the worker proved the
+	// required behavior already exists rather than merely finding nothing to
+	// do. One success status with a disposition, never a second terminal
+	// state machine. Raw status "verified_existing" is folded into
+	// status=completed_no_change + this disposition by the merge path.
+	Disposition string              `json:"disposition,omitempty"`
+	DependsOn   []string            `json:"depends_on,omitempty"`
+	Outputs     []string            `json:"outputs,omitempty"`
 	Blockers       []string            `json:"blockers,omitempty"`
 	Duration       float64             `json:"duration,omitempty"`
 	ToolCount      int                 `json:"tool_count,omitempty"`
@@ -1170,6 +1177,18 @@ const (
 	violationRuleIdentityMismatch = "worker.identity_mismatch"
 	violationRuleStatusTerminal   = "worker.status_terminal"
 	violationRuleHandoffValid     = "handoff.valid"
+	// violationRuleNoChangeEvidence fires when a completed_no_change result
+	// cannot say what it verified. An honest "nothing needed changing" is a
+	// first-class success (owner ruling D6), but only WITH evidence: a
+	// summary stating why, a passing handoff verification_status, and the
+	// commands_run that prove somebody actually checked. Without those it is
+	// indistinguishable from a worker that did nothing — the exact free-pass
+	// loophole the phantom-build guards exist to close.
+	violationRuleNoChangeEvidence = "worker.no_change_evidence"
+	// violationRuleDispositionUnknown fires on a disposition value outside
+	// the vocabulary ("" or "verified_existing"): one success status with a
+	// disposition, never a second terminal state machine (ruling D6).
+	violationRuleDispositionUnknown = "worker.disposition_unknown"
 	// violationRuleCoveredTaskUnknown fires when a worker result's
 	// covered_task_ids names a task ID that resolves to no dispatch anywhere
 	// in the manifest -- an unrecognized claim, never silently accepted or
@@ -1309,8 +1328,16 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		// silent drop) so a buggy or malicious packet is refused with an
 		// actionable reason instead of quietly losing the credit.
 		ownStatus := normalizeExternalBuildStatus(result.Status)
-		genuineSuccess := ownStatus == "completed" || ownStatus == "manually-reconciled"
+		genuineSuccess := isSuccessfulExternalBuildStatus(ownStatus)
 		hasEvidence := len(result.Outputs) > 0 || len(result.FilesCreated) > 0 || len(result.FilesModified) > 0 || len(result.TestsWritten) > 0
+		// A completed_no_change claimant's evidence is the verification it
+		// ran, not files it changed (it changed none, honestly). Its
+		// commands_run satisfy the evidence requirement here; the merge
+		// loop's no_change_evidence gate independently enforces the full
+		// evidence rule on the claimant's own result.
+		if !hasEvidence && isNoChangeExternalBuildStatus(ownStatus) {
+			hasEvidence = len(result.Handoff.CommandsRun) > 0
+		}
 		_, recognizedClaimant := dispatchNameSet[coveringName]
 		if !recognizedClaimant {
 			_, recognizedClaimant = dispatchNameSet[stripWorkerRetrySuffix(coveringName)]
@@ -1439,7 +1466,44 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 			})
 			continue
 		}
+		disposition := strings.ToLower(strings.TrimSpace(result.Disposition))
+		if disposition == "" && rawStatusCarriesVerifiedExisting(result.Status) {
+			disposition = "verified_existing"
+		}
+		if disposition != "" && disposition != "verified_existing" {
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "disposition",
+				Value:   result.Disposition,
+				Rule:    violationRuleDispositionUnknown,
+				Message: fmt.Sprintf("external worker result for %s has unknown disposition %q; the only recognized value is verified_existing", dispatch.Name, result.Disposition),
+			})
+			continue
+		}
+		if disposition != "" && !isNoChangeExternalBuildStatus(status) {
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "disposition",
+				Value:   result.Disposition,
+				Rule:    violationRuleDispositionUnknown,
+				Message: fmt.Sprintf("external worker result for %s carries disposition %q on status %q; a disposition only qualifies completed_no_change", dispatch.Name, disposition, status),
+			})
+			continue
+		}
+		if isNoChangeExternalBuildStatus(status) {
+			if missing := noChangeEvidenceMissing(result); len(missing) > 0 {
+				violations = append(violations, contractViolation{
+					Worker:  dispatch.Name,
+					Field:   "status",
+					Value:   result.Status,
+					Rule:    violationRuleNoChangeEvidence,
+					Message: fmt.Sprintf("external worker result for %s claims completed_no_change without evidence — missing: %s", dispatch.Name, strings.Join(missing, "; ")),
+				})
+				continue
+			}
+		}
 		dispatch.Status = status
+		dispatch.Disposition = disposition
 		dispatch.Summary = strings.TrimSpace(result.Summary)
 		dispatch.Blockers = uniqueSortedStrings(result.Blockers)
 		dispatch.Duration = result.Duration
@@ -1637,6 +1701,16 @@ func normalizeExternalBuildStatus(status string) string {
 	switch status {
 	case "complete", "done", "success", "succeeded", "passed", "code_written":
 		return "completed"
+	// An honest "nothing needed changing" is one success status (ruling D6);
+	// verified_existing arrives as a raw status from workers but is a
+	// DISPOSITION on completed_no_change, folded in by the merge path.
+	case "no_change", "no-change", "nochange", "unchanged", "completed_no_change",
+		"verified_existing", "already_complete", "already_correct":
+		return "completed_no_change"
+	// A quota/rate-limit stop is a resumable interruption, never an
+	// ordinary code failure (ruling D7, spec §5 StopFailure semantics).
+	case "interrupted", "suspended_quota", "rate_limit", "rate_limited":
+		return "interrupted"
 	case "fail", "error":
 		return "failed"
 	case "timed_out", "cancelled", "canceled":
@@ -1650,11 +1724,57 @@ func normalizeExternalBuildStatus(status string) string {
 
 func isTerminalExternalBuildStatus(status string) bool {
 	switch status {
-	case "completed", "failed", "blocked", "timeout", "manually-reconciled":
+	case "completed", "completed_no_change", "interrupted", "failed", "blocked", "timeout", "manually-reconciled":
 		return true
 	default:
 		return false
 	}
+}
+
+// isSuccessfulExternalBuildStatus reports whether a terminal status counts
+// as the work SUCCEEDING. interrupted is deliberately absent: it is terminal
+// (the worker stopped and the record is final) but the work is unfinished
+// and resumable — counting it as success would complete tasks nobody did.
+func isSuccessfulExternalBuildStatus(status string) bool {
+	switch status {
+	case "completed", "completed_no_change", "manually-reconciled":
+		return true
+	default:
+		return false
+	}
+}
+
+func isNoChangeExternalBuildStatus(status string) bool {
+	return status == "completed_no_change"
+}
+
+// rawStatusCarriesVerifiedExisting reports whether the worker's RAW status
+// spelling asserted the stronger claim ("this already exists and I proved
+// it") rather than merely "no change was needed" — folded into the
+// disposition so the distinction survives normalization.
+func rawStatusCarriesVerifiedExisting(rawStatus string) bool {
+	switch strings.ToLower(strings.TrimSpace(rawStatus)) {
+	case "verified_existing", "already_complete", "already_correct":
+		return true
+	default:
+		return false
+	}
+}
+
+// noChangeEvidenceMissing lists which of the three required evidence pieces
+// a completed_no_change result lacks; empty means the evidence rule is met.
+func noChangeEvidenceMissing(result codexExternalBuildWorkerResult) []string {
+	missing := []string{}
+	if strings.TrimSpace(result.Summary) == "" {
+		missing = append(missing, "summary stating why no change was needed")
+	}
+	if !strings.EqualFold(strings.TrimSpace(result.Handoff.VerificationStatus), "pass") {
+		missing = append(missing, "handoff verification_status: pass")
+	}
+	if len(result.Handoff.CommandsRun) == 0 {
+		missing = append(missing, "handoff commands_run naming what was checked")
+	}
+	return missing
 }
 
 func parseManifestGeneratedAt(manifest codexBuildManifest) time.Time {

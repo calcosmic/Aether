@@ -31,11 +31,15 @@ type codexBuildDispatch struct {
 	// to choose a model — routing stays with the platform's agent
 	// frontmatter, and automatic model selection stays rejected.
 	Model     string `json:"model,omitempty"`
-	Name      string `json:"name"`
-	Task      string `json:"task"`
-	Status    string `json:"status"`
-	Summary   string `json:"summary,omitempty"`
-	TaskID    string `json:"task_id,omitempty"`
+	Name    string `json:"name"`
+	Task    string `json:"task"`
+	Status  string `json:"status"`
+	Summary string `json:"summary,omitempty"`
+	// Disposition qualifies a completed_no_change status: "verified_existing"
+	// means the worker proved the required behavior already exists (ruling
+	// D6). Empty for every other status.
+	Disposition string `json:"disposition,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
 	TaskIndex int    `json:"task_index,omitempty"`
 	// CoveredTaskIDs lists every task this one worker took on. It holds more
 	// than one entry when a chain of dependent steps was merged into a single
@@ -1853,9 +1857,15 @@ func validateRuntimeBuildDispatchResults(phase colony.Phase, dispatches []codexB
 	}
 
 	failed := make([]string, 0)
+	noChangeCount := 0
+	successCount := 0
 	for _, dispatch := range dispatches {
 		status := strings.ToLower(strings.TrimSpace(dispatch.Status))
-		if status == "completed" {
+		if isSuccessfulExternalBuildStatus(status) {
+			successCount++
+			if isNoChangeExternalBuildStatus(status) {
+				noChangeCount++
+			}
 			continue
 		}
 		if status == "" {
@@ -1880,6 +1890,14 @@ func validateRuntimeBuildDispatchResults(phase colony.Phase, dispatches []codexB
 		return nil
 	}
 	if phase.Mode == colony.PhaseModeDiscovery && hasDurableDiscoveryDispatchEvidence(dispatches) {
+		return nil
+	}
+	// Every successful dispatch honestly reported completed_no_change
+	// (ruling D6): the phase's work was to verify existing behavior, so
+	// demanding file changes here would force the fake edit the accounting
+	// contract exists to forbid. Result-level evidence was already enforced
+	// where the results were merged.
+	if successCount > 0 && noChangeCount == successCount {
 		return nil
 	}
 	if claims == nil || len(claims.FilesCreated)+len(claims.FilesModified)+len(claims.TestsWritten) == 0 {
@@ -2233,7 +2251,14 @@ func reconcilePriorCompletedPhaseTasksForPlanOnly(root string, state colony.Colo
 func completedBuildTaskIDs(dispatches []codexBuildDispatch) map[string]struct{} {
 	completed := map[string]struct{}{}
 	for _, dispatch := range dispatches {
-		if strings.TrimSpace(dispatch.Status) != "completed" {
+		// completed_no_change completes its tasks too (ruling D6): the task
+		// was to make the behavior true, and the worker proved it already
+		// is. Skipping it here would leave the task unfinished forever and
+		// block phase advance — the same trap the merged-chain fix below
+		// closed for coverage. interrupted stays excluded: terminal, not
+		// success.
+		status := strings.TrimSpace(dispatch.Status)
+		if status != "completed" && !isNoChangeExternalBuildStatus(status) {
 			continue
 		}
 		// A worker that owns a merged chain finishes every step in it, so every

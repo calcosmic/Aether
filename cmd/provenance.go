@@ -18,18 +18,27 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 
 	completedCount := 0
 	for _, r := range results {
-		if normalizeExternalBuildStatus(r.Status) == "completed" && isBuildImplementationWorker(r) {
-			completedCount++
-			if len(r.FilesModified) > 0 || len(r.FilesCreated) > 0 || len(r.TestsWritten) > 0 {
-				return nil // At least one valid provenance entry found
-			}
+		status := normalizeExternalBuildStatus(r.Status)
+		if !isSuccessfulExternalBuildStatus(status) || !isBuildImplementationWorker(r) {
+			continue
+		}
+		completedCount++
+		if len(r.FilesModified) > 0 || len(r.FilesCreated) > 0 || len(r.TestsWritten) > 0 {
+			return nil // At least one valid provenance entry found
+		}
+		// An honest completed_no_change result satisfies provenance WITH its
+		// evidence (ruling D6): the work was to verify, and the commands_run
+		// prove somebody did. Evidence-free no-change still falls through to
+		// rejection — the phantom-build guard keeps its teeth (SAFE-02).
+		if isNoChangeExternalBuildStatus(status) && len(noChangeEvidenceMissing(r)) == 0 {
+			return nil
 		}
 	}
 
 	if completedCount == 0 {
 		return fmt.Errorf("build provenance: no workers completed successfully -- all %d worker(s) are in a non-success state", len(results))
 	}
-	return fmt.Errorf("build provenance: %d worker(s) completed but none reported file changes (created, modified, or tests) -- the build produced no changes", completedCount)
+	return fmt.Errorf("build provenance: %d worker(s) completed but none reported file changes (created, modified, or tests) or evidenced no-change verification -- the build produced no changes", completedCount)
 }
 
 func validateBuildProvenanceForManifest(manifest *codexBuildManifest, results []codexExternalBuildWorkerResult) error {
@@ -136,11 +145,19 @@ func traceContinueProvenance(dispatches []codexBuildDispatch) error {
 
 	completedCount := 0
 	for _, d := range dispatches {
-		if d.Status == "completed" {
-			completedCount++
-			if len(d.Outputs) == 0 {
-				return fmt.Errorf("continue provenance: worker %q claims completion but has no file outputs -- possible phantom build", d.Name)
-			}
+		if !isSuccessfulExternalBuildStatus(d.Status) {
+			continue
+		}
+		completedCount++
+		// completed_no_change is exempt from the file-outputs requirement:
+		// its evidence is the verification it ran, already enforced by the
+		// finalizer's no_change_evidence gate before this status could be
+		// stored (ruling D6).
+		if isNoChangeExternalBuildStatus(d.Status) {
+			continue
+		}
+		if len(d.Outputs) == 0 {
+			return fmt.Errorf("continue provenance: worker %q claims completion but has no file outputs -- possible phantom build", d.Name)
 		}
 	}
 

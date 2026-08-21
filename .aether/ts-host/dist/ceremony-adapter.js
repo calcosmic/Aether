@@ -9,6 +9,12 @@ import { execFileSync } from "node:child_process";
 import { writeCompletionFile } from "./go-bridge.js";
 const TERMINAL_WORKER_STATUSES = new Set([
     "completed",
+    // Honest no-change success (owner ruling D6) and resumable quota
+    // interruption (D7) — mirrored from cmd/codex_build_finalize.go's
+    // isTerminalExternalBuildStatus; both sides must agree or the host lane
+    // rejects results the Go finalizer accepts.
+    "completed_no_change",
+    "interrupted",
     "failed",
     "blocked",
     "timeout",

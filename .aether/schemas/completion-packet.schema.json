@@ -249,6 +249,9 @@
         "summary": {
           "type": "string"
         },
+        "disposition": {
+          "type": "string"
+        },
         "task_id": {
           "type": "string"
         },
@@ -685,6 +688,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "disposition": {
+          "type": "string"
         },
         "depends_on": {
           "items": {

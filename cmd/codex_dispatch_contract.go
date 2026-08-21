@@ -941,8 +941,13 @@ func pruneWorkerHandoffRecords(records []workerHandoffRecord, limit int) []worke
 
 func verificationStatusForWorkerStatus(status string) string {
 	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "completed", "manually-reconciled":
+	case "completed", "completed_no_change", "manually-reconciled":
 		return "pass"
+	// interrupted (ruling D7): the worker stopped before verifying — the
+	// work is resumable, so the honest verification answer is "not run",
+	// never "fail".
+	case "interrupted":
+		return "not_run"
 	case "failed", "blocked", "timeout":
 		return "fail"
 	case "":

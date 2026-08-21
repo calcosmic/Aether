@@ -729,7 +729,7 @@ function workerClaimsSchema(): Record<string, unknown> {
       ant_name: { type: "string" },
       caste: { type: "string" },
       task_id: { type: "string" },
-      status: { type: "string", enum: ["completed", "code_written", "failed", "blocked"] },
+      status: { type: "string", enum: ["completed", "code_written", "completed_no_change", "interrupted", "failed", "blocked"] },
       summary: { type: "string" },
       files_created: stringArray,
       files_modified: stringArray,
