@@ -610,6 +610,7 @@
     "validate-worker-response",
     "verify-castes",
     "verify-claims",
+    "verify-out-of-band",
     "version",
     "version-check-cached",
     "versions",

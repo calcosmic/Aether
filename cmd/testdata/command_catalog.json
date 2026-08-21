@@ -8953,6 +8953,18 @@
     "stability_score": 91
   },
   {
+    "name": "verify-out-of-band",
+    "short_description": "Re-verify current disk state against a phase's real success criteria and close stuck work",
+    "flags": [
+      "acknowledge-legacy-criteria",
+      "force",
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
     "name": "version",
     "short_description": "Print aether version",
     "flags": [

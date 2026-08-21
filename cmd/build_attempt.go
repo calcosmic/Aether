@@ -32,6 +32,44 @@ type buildAttemptTransition struct {
 	Summary   string `json:"summary,omitempty"`
 }
 
+// outOfBandVerificationRecord is the provenance a build attempt carries when
+// it was closed by the operator-invoked `verify-out-of-band` ceremony
+// (cmd/verify_out_of_band.go) instead of a worker dispatch: real work
+// happened outside the build pipeline (a hand edit, a pair session), and
+// this records that the ceremony re-verified the phase's OWN success
+// criteria against CURRENT disk state, fresh, before closing -- never a
+// worker's self-report. Its presence on a buildAttemptRecord is what
+// distinguishes an out-of-band closure from a genuine worker-verified one
+// (191.1-CONTEXT.md D-09/D-11); a record carrying this field never also
+// carries a fabricated Dispatches/WorkerRuns entry -- see
+// closeBuildAttemptOutOfBand's own doc comment and
+// TestVerifyOutOfBandNeverSynthesizesWorkerReceipts
+// (cmd/verify_out_of_band_test.go).
+type outOfBandVerificationRecord struct {
+	VerifiedAt string `json:"verified_at"`
+	Phase      int    `json:"phase"`
+	// Policy is the phase's criterion evidence policy at verification time
+	// (criterionEvidencePolicyBoundV1 / criterionEvidencePolicyLegacyUnbound
+	// / criterionEvidencePolicyNotRequired) -- what kind of evidence this
+	// verification pass was actually able to gather.
+	Policy string `json:"policy"`
+	// CriteriaChecked lists every success criterion (bound or free-prose)
+	// this pass evaluated.
+	CriteriaChecked []string `json:"criteria_checked,omitempty"`
+	// ChecksRun lists which of build/types/lint/tests actually executed
+	// (skipped checks -- no command resolved -- are excluded).
+	ChecksRun []string `json:"checks_run,omitempty"`
+	// ArtifactsHashed lists every declared artifact path that was hash-
+	// verified against disk NOW as part of this pass.
+	ArtifactsHashed []string `json:"artifacts_hashed,omitempty"`
+	// AcknowledgedLegacy records whether the operator supplied the separate,
+	// explicit acknowledgment required for a phase with only free-prose
+	// success criteria (T-191.1-03-04) -- false for a bound phase, where no
+	// acknowledgment is needed or accepted.
+	AcknowledgedLegacy bool   `json:"acknowledged_legacy,omitempty"`
+	Summary            string `json:"summary"`
+}
+
 type buildAttemptRecord struct {
 	SchemaVersion    int                      `json:"schema_version"`
 	ID               string                   `json:"id"`
@@ -63,6 +101,11 @@ type buildAttemptRecord struct {
 	Recoverable      bool                     `json:"recoverable"`
 	RecoveryCommand  string                   `json:"recovery_command,omitempty"`
 	History          []buildAttemptTransition `json:"history"`
+	// OutOfBandVerification is set ONLY by closeBuildAttemptOutOfBand, never
+	// by any worker dispatch or build-finalize path. Its presence marks this
+	// attempt as closed by the operator-invoked verify-out-of-band ceremony
+	// rather than by real worker results.
+	OutOfBandVerification *outOfBandVerificationRecord `json:"out_of_band_verification,omitempty"`
 }
 
 type latestBuildAttemptPointer struct {
@@ -186,6 +229,53 @@ func transitionBuildAttempt(attemptRel, status, summary string, dispatches []cod
 		return nil
 	}); err != nil {
 		return fmt.Errorf("update build attempt: %w", err)
+	}
+	return nil
+}
+
+// closeBuildAttemptOutOfBand transitions an existing build attempt to a
+// closed, sealed state (buildAttemptBuilt) carrying out-of-band verification
+// provenance -- called ONLY from cmd/verify_out_of_band.go's
+// closeOutOfBandCeremony, which is itself only reachable when a human types
+// `aether verify-out-of-band <phase> --force`
+// (TestVerifyOutOfBandHasNoLifecycleCaller,
+// cmd/verify_out_of_band_reachability_test.go).
+//
+// T-191.1-03-02 (the honesty invariant): this closure deliberately never
+// reads OR writes record.Dispatches or record.WorkerRuns anywhere in its
+// body. That is not an oversight to be caught by review -- it is the whole
+// mechanism the honesty ratchet
+// (TestVerifyOutOfBandNeverSynthesizesWorkerReceipts) depends on: whatever
+// UpdateJSONAtomically loaded from disk for those two fields is exactly what
+// gets written back, unchanged, because nothing in this function's closure
+// ever assigns to them. A future edit that adds such an assignment is
+// exactly the fabrication path that ratchet exists to catch.
+func closeBuildAttemptOutOfBand(attemptRel string, provenance outOfBandVerificationRecord) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	now := time.Now().UTC()
+	var record buildAttemptRecord
+	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
+		if record.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(record.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		record.Status = buildAttemptBuilt
+		record.UpdatedAt = now.Format(time.RFC3339Nano)
+		record.CompletedAt = now.Format(time.RFC3339Nano)
+		record.Recoverable = false
+		record.RecoveryCommand = ""
+		record.Error = ""
+		provenanceCopy := provenance
+		record.OutOfBandVerification = &provenanceCopy
+		record.History = append(record.History, buildAttemptTransition{
+			Status:    buildAttemptBuilt,
+			Timestamp: now.Format(time.RFC3339Nano),
+			Summary:   "closed by verify-out-of-band: " + strings.TrimSpace(provenance.Summary),
+		})
+		return nil
+	}); err != nil {
+		return fmt.Errorf("close build attempt out-of-band: %w", err)
 	}
 	return nil
 }

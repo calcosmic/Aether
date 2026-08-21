@@ -1265,6 +1265,11 @@
     "owner_phase": "RECLAIM"
   },
   {
+    "name": "aether verify-out-of-band",
+    "reason": "deliberately-operator-invoked-only",
+    "owner_phase": "191.1"
+  },
+  {
     "name": "aether version-check-cached",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
