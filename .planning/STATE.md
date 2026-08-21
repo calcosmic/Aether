@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.26
 milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
-status: planning
+status: ready_to_plan
 stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
 last_updated: "2026-08-21T09:38:13.075Z"
 last_activity: 2026-08-21
 progress:
   total_phases: 52
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 63
   completed_plans: 122
-  percent: 100
+  percent: 15
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-08-08)
 
 ## Current Position
 
-Phase: 191.1
+Phase: 192
 Plan: Not started
 Status: Ready to plan
 Progress: 9 of 16 phases in this milestone
@@ -60,7 +60,7 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 
 **Velocity:**
 
-- Total plans completed: 65 (v1.26, all Phase 172)
+- Total plans completed: 69 (v1.26, all Phase 172)
 - Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 

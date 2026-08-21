@@ -980,7 +980,7 @@ Plans:
 **Goal:** [Urgent work - to be planned]
 **Requirements**: TBD
 **Depends on:** Phase 191
-**Plans:** 3/3 plans complete
+**Plans:** 4/3 plans complete
 
 Plans:
 - [x] TBD (run /gsd-plan-phase 191.1 to break down) (completed 2026-08-21)
