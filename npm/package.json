@@ -7,7 +7,7 @@
   },
   "description": "Bootstrap installer for the Aether ant colony CLI",
   "engines": {
-    "node": "\u003e=18"
+    "node": ">=18"
   },
   "files": [
     "bin",
@@ -40,5 +40,5 @@
   "scripts": {
     "test": "node --test test/*.test.js"
   },
-  "version": "1.0.61"
+  "version": "1.0.62"
 }
