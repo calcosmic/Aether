@@ -141,7 +141,7 @@ func TestContinueReviewHandoffStaysExactlyOnceViaOwnHeading(t *testing.T) {
 	seedRelatedWorkflowHandoff190_06(t, "continue", phase.ID, "PriorContinueReviewer-Seed-190-06", ownSentinel)
 
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches(root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy)
+	dispatches := plannedContinueReviewDispatches(root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy, nil, "")
 	if len(dispatches) == 0 {
 		t.Fatal("fixture broken: expected non-empty continue review dispatches at heavy depth")
 	}
@@ -253,7 +253,7 @@ func TestNineCommandsDeliverHandoffExactlyOnce(t *testing.T) {
 		seedRelatedWorkflowHandoff190_06(t, "continue", phase.ID, "PriorContinueReviewer-Breadth-190-06", ownSentinel)
 
 		invoker := &codex.FakeInvoker{}
-		dispatches := plannedContinueReviewDispatches(root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy)
+		dispatches := plannedContinueReviewDispatches(root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy, nil, "")
 		if len(dispatches) == 0 {
 			t.Fatal("fixture broken: expected non-empty continue review dispatches")
 		}

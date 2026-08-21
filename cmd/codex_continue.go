@@ -841,7 +841,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers)
+	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers, options.QueenCastes, options.QueenCasteReason)
 	reviewReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "review.json"))
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
@@ -1316,7 +1316,7 @@ func continueReviewSpecForCaste(caste string) (codexContinueReviewSpec, bool) {
 	return codexContinueReviewSpec{}, false
 }
 
-func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool) codexContinueReviewReport {
+func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
@@ -1340,7 +1340,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 		return report
 	}
 
-	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth)
+	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth, queenCastes, queenCasteReason)
 	if len(dispatches) == 0 {
 		report.Workers = append(report.Workers, continueReviewSkippedFlowStep(continueReviewSkippedSummary(reviewDepth)))
 		report.Passed = true
@@ -1416,7 +1416,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 	return report
 }
 
-func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codex.WorkerDispatch {
+func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, queenCastes []string, queenCasteReason string) []codex.WorkerDispatch {
 	capsule := resolveCodexWorkerContext()
 	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
 	// already renders "## Pheromone Signals" unconditionally whenever a signal is
@@ -1425,7 +1425,10 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 	// AssemblePrompt/AssembleHostedPrompt. See resolvePheromoneSection's doc
 	// comment for which callers still need it.
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
-	specs := queenContinueReviewSpecs(phase, reviewDepth)
+	// The Queen's --castes proposal used to be honoured only on the heavy
+	// plan-only path; the default path called the nil-proposal variant, so on
+	// the continue users actually run the keyword engine was unchallenged.
+	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)

@@ -393,6 +393,8 @@ func TestPlannedContinueReviewDispatchesUseQueenSelectedMeasurer(t *testing.T) {
 		&codex.FakeInvoker{},
 		0,
 		colony.VerificationDepthStandard,
+		nil,
+		"",
 	)
 
 	if !continueWorkerDispatchHasCaste(dispatches, "measurer") {

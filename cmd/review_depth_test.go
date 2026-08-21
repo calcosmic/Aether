@@ -316,7 +316,7 @@ func TestBuildDispatch_FinalPhase_HeavyRegardlessOfLight(t *testing.T) {
 func TestContinueReviewDispatch_LightMode_SkipsAll(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight, nil, "")
 	if len(dispatches) != 0 {
 		t.Errorf("light mode review should produce 0 dispatches, got %d", len(dispatches))
 	}
@@ -325,7 +325,7 @@ func TestContinueReviewDispatch_LightMode_SkipsAll(t *testing.T) {
 func TestContinueReviewDispatch_HeavyMode_SpawnsAll3(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy, nil, "")
 	if len(dispatches) != 3 {
 		t.Errorf("heavy mode review should produce 3 dispatches (gatekeeper, auditor, probe), got %d", len(dispatches))
 	}
@@ -348,7 +348,7 @@ func TestContinueReviewDispatch_LightMode_HandlesEmptyGracefully(t *testing.T) {
 	// a report with Passed=true when dispatches is empty.
 	phase := colony.Phase{ID: 3, Name: "Feature work"}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight, nil, "")
 	if len(dispatches) != 0 {
 		t.Fatalf("expected 0 dispatches in light mode, got %d", len(dispatches))
 	}
@@ -520,7 +520,7 @@ func TestResolveVerificationDepthFlag_BoolPriority(t *testing.T) {
 func TestContinueReviewDispatch_StandardMode_SpawnsProbeOnly(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthStandard)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthStandard, nil, "")
 	if len(dispatches) != 1 {
 		t.Errorf("standard mode review should produce 1 dispatch (probe only), got %d", len(dispatches))
 	}
