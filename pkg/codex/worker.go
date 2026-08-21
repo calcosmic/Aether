@@ -1036,11 +1036,28 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 	case "interrupted", "rate_limit", "rate_limited", "suspended_quota":
 		claims.Status = "interrupted"
 	default:
+		// An unrecognized status is a broken contract, not evidence of
+		// nothing. Overwriting it with a bare "failed" threw away the one
+		// piece of diagnostic information available: a real build halted on
+		// "Keen-6=failed" with an empty error message, an empty summary, no
+		// blockers, and a worker report still reading "Status: spawned" --
+		// nothing anywhere recorded what the worker had actually said. The
+		// coercion stays (an unknown status cannot be trusted as success),
+		// but what it displaced is now written down.
+		reported := strings.TrimSpace(claims.Status)
 		if len(claims.Blockers) > 0 {
 			claims.Status = "blocked"
-		} else {
-			claims.Status = "failed"
+			break
 		}
+		claims.Status = "failed"
+		note := "worker returned no status"
+		if reported != "" {
+			note = fmt.Sprintf("worker returned unrecognized status %q", reported)
+		}
+		if summary := strings.TrimSpace(claims.Summary); summary != "" {
+			note += "; its summary said: " + summary
+		}
+		claims.Blockers = append(claims.Blockers, note)
 	}
 	claims.FilesCreated = normalizeClaimPaths(config.Root, claims.FilesCreated)
 	claims.FilesModified = normalizeClaimPaths(config.Root, claims.FilesModified)

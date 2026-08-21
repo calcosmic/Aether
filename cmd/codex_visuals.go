@@ -39,32 +39,36 @@ const aetherWordmark = `
 `
 
 var casteEmojiMap = map[string]string{
-	"queen":         "👑",
-	"builder":       "🔨",
-	"watcher":       "👁️",
-	"scout":         "🔍",
-	"colonizer":     "🗺️",
-	"surveyor":      "📊",
-	"architect":     "🏛️",
-	"chaos":         "🎲",
-	"archaeologist": "🏺",
-	"oracle":        "🔮",
-	"route_setter":  "📋",
-	"ambassador":    "🔌",
-	"auditor":       "👥",
-	"chronicler":    "📝",
-	"gatekeeper":    "⚔️",
-	"porter":        "📦",
-	"guardian":      "🛡️",
-	"includer":      "♿",
-	"keeper":        "📚",
-	"measurer":      "⚡",
-	"probe":         "🧪",
-	"tracker":       "🐛",
-	"weaver":        "🔄",
-	"dreamer":       "💭",
-	"medic":         "🩹",
-	"fixer":         "\U0001F527",
+	"queen":                "👑",
+	"builder":              "🔨",
+	"watcher":              "👁️",
+	"scout":                "🔍",
+	"colonizer":            "🗺️",
+	"surveyor":             "📊",
+	"surveyor_nest":        "📊",
+	"surveyor_provisions":  "📊",
+	"surveyor_disciplines": "📊",
+	"surveyor_pathogens":   "📊",
+	"architect":            "🏛️",
+	"chaos":                "🎲",
+	"archaeologist":        "🏺",
+	"oracle":               "🔮",
+	"route_setter":         "📋",
+	"ambassador":           "🔌",
+	"auditor":              "👥",
+	"chronicler":           "📝",
+	"gatekeeper":           "⚔️",
+	"porter":               "📦",
+	"guardian":             "🛡️",
+	"includer":             "♿",
+	"keeper":               "📚",
+	"measurer":             "⚡",
+	"probe":                "🧪",
+	"tracker":              "🐛",
+	"weaver":               "🔄",
+	"dreamer":              "💭",
+	"medic":                "🩹",
+	"fixer":                "\U0001F527",
 	// Curation ants (D-06): the 8 pkg/agent/curation ants
 	// (sentinel, nurse, critic, herald, janitor, archivist, librarian,
 	// scribe) plus "curator" for the aggregate orchestrator line. librarian
@@ -82,32 +86,36 @@ var casteEmojiMap = map[string]string{
 }
 
 var casteColorMap = map[string]string{
-	"queen":         "35",
-	"builder":       "33",
-	"watcher":       "36",
-	"scout":         "32",
-	"colonizer":     "34",
-	"surveyor":      "34",
-	"architect":     "95",
-	"chaos":         "31",
-	"archaeologist": "93",
-	"oracle":        "35",
-	"route_setter":  "94",
-	"ambassador":    "96",
-	"auditor":       "37",
-	"chronicler":    "92",
-	"gatekeeper":    "91",
-	"guardian":      "96",
-	"includer":      "96",
-	"keeper":        "92",
-	"measurer":      "93",
-	"probe":         "36",
-	"tracker":       "31",
-	"weaver":        "95",
-	"dreamer":       "90",
-	"medic":         "96",
-	"fixer":         "33",
-	"porter":        "96",
+	"queen":                "35",
+	"builder":              "33",
+	"watcher":              "36",
+	"scout":                "32",
+	"colonizer":            "34",
+	"surveyor":             "34",
+	"surveyor_nest":        "34",
+	"surveyor_provisions":  "34",
+	"surveyor_disciplines": "34",
+	"surveyor_pathogens":   "34",
+	"architect":            "95",
+	"chaos":                "31",
+	"archaeologist":        "93",
+	"oracle":               "35",
+	"route_setter":         "94",
+	"ambassador":           "96",
+	"auditor":              "37",
+	"chronicler":           "92",
+	"gatekeeper":           "91",
+	"guardian":             "96",
+	"includer":             "96",
+	"keeper":               "92",
+	"measurer":             "93",
+	"probe":                "36",
+	"tracker":              "31",
+	"weaver":               "95",
+	"dreamer":              "90",
+	"medic":                "96",
+	"fixer":                "33",
+	"porter":               "96",
 	// Curation ants (D-06)
 	"sentinel":  "91",
 	"nurse":     "92",
@@ -121,32 +129,40 @@ var casteColorMap = map[string]string{
 }
 
 var casteLabelMap = map[string]string{
-	"queen":         "Queen",
-	"builder":       "Builder",
-	"watcher":       "Watcher",
-	"scout":         "Scout",
-	"colonizer":     "Colonizer",
-	"surveyor":      "Surveyor",
-	"architect":     "Architect",
-	"chaos":         "Chaos",
-	"archaeologist": "Archaeologist",
-	"oracle":        "Oracle",
-	"route_setter":  "Route-Setter",
-	"ambassador":    "Ambassador",
-	"auditor":       "Auditor",
-	"chronicler":    "Chronicler",
-	"gatekeeper":    "Gatekeeper",
-	"guardian":      "Guardian",
-	"includer":      "Includer",
-	"keeper":        "Keeper",
-	"measurer":      "Measurer",
-	"probe":         "Probe",
-	"tracker":       "Tracker",
-	"weaver":        "Weaver",
-	"dreamer":       "Dreamer",
-	"medic":         "Medic",
-	"fixer":         "Fixer",
-	"porter":        "Porter",
+	"queen":     "Queen",
+	"builder":   "Builder",
+	"watcher":   "Watcher",
+	"scout":     "Scout",
+	"colonizer": "Colonizer",
+	"surveyor":  "Surveyor",
+	// The four surveyors all collapsed to the same glyph and the same word, so
+	// a colonize rendered four identical "Surveyor" lines and the only thing
+	// telling them apart was a generated name. They share the family glyph and
+	// each says what it actually surveys.
+	"surveyor_nest":        "Surveyor: architecture",
+	"surveyor_provisions":  "Surveyor: dependencies",
+	"surveyor_disciplines": "Surveyor: conventions",
+	"surveyor_pathogens":   "Surveyor: risks",
+	"architect":            "Architect",
+	"chaos":                "Chaos",
+	"archaeologist":        "Archaeologist",
+	"oracle":               "Oracle",
+	"route_setter":         "Route-Setter",
+	"ambassador":           "Ambassador",
+	"auditor":              "Auditor",
+	"chronicler":           "Chronicler",
+	"gatekeeper":           "Gatekeeper",
+	"guardian":             "Guardian",
+	"includer":             "Includer",
+	"keeper":               "Keeper",
+	"measurer":             "Measurer",
+	"probe":                "Probe",
+	"tracker":              "Tracker",
+	"weaver":               "Weaver",
+	"dreamer":              "Dreamer",
+	"medic":                "Medic",
+	"fixer":                "Fixer",
+	"porter":               "Porter",
 	// Curation ants (D-06)
 	"sentinel":  "Sentinel",
 	"nurse":     "Nurse",
@@ -4077,6 +4093,7 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 			b.WriteString(dispatch.Name)
 			b.WriteString("  ")
 			b.WriteString(dispatchTaskLine(dispatch.Task))
+			b.WriteString(dispatchCoveredTasksNote(dispatch))
 			writeDispatchExecutionStatus(&b, dispatch)
 			b.WriteString("\n")
 		}
@@ -4084,6 +4101,7 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Total planned dispatches: %d\n", len(dispatches)))
+	b.WriteString(renderCoveredTaskSummary(dispatches))
 	b.WriteString(renderSpawnTeamExplanation(dispatches))
 	return b.String()
 }
@@ -4752,6 +4770,45 @@ func truncateLines(text string, maxLines int) []string {
 //
 // with the continuation unindented and the layout broken. The worker still
 // receives every step in full; only this display is summarised.
+// dispatchCoveredTasksNote names the tasks a merged chain worker owns.
+//
+// Merged chains rendered as "first step (+2 more steps)", which says the
+// worker does more but never which task IDs those are. An operator counting
+// nine tasks against six workers has no way to see that three were folded in,
+// and a real colony concluded three tasks had "no slot" and hand-reconciled
+// work that already had a proper claimant. Naming the IDs is the difference
+// between a plan you can reconcile against and one you have to guess at.
+func dispatchCoveredTasksNote(dispatch codexBuildDispatch) string {
+	if len(dispatch.CoveredTaskIDs) < 2 {
+		return ""
+	}
+	return "  [covers tasks " + strings.Join(dispatch.CoveredTaskIDs, ", ") + "]"
+}
+
+// renderCoveredTaskSummary states the task-count arithmetic outright, so a
+// worker count lower than the task count reads as deliberate folding rather
+// than as tasks that were dropped.
+func renderCoveredTaskSummary(dispatches []codexBuildDispatch) string {
+	folded := 0
+	covered := 0
+	for _, dispatch := range dispatches {
+		if len(dispatch.CoveredTaskIDs) < 2 {
+			continue
+		}
+		folded++
+		covered += len(dispatch.CoveredTaskIDs)
+	}
+	if folded == 0 {
+		return ""
+	}
+	workerWord := "worker"
+	if folded > 1 {
+		workerWord = "workers"
+	}
+	return fmt.Sprintf("%d dependent tasks were folded into %d %s — every task still has a claimant, listed above.\n",
+		covered, folded, workerWord)
+}
+
 func dispatchTaskLine(task string) string {
 	task = strings.TrimSpace(task)
 	if !strings.Contains(task, "\n") {

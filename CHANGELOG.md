@@ -85,6 +85,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what actually happens — the handoff is kept and passed to whoever picks
   the work up next, and the phase is restarted by the operator.
 - Restored `gofmt` compliance to three Go sources committed unformatted.
+- **A failed worker now has to say why.** A real build halted on
+  "Keen-6=failed" with an empty reason, an empty summary, no blockers, and a
+  worker report still saying "spawned" — nothing anywhere recorded what the
+  worker had actually reported. Any status outside the recognised list was
+  overwritten with a bare "failed" and the word the worker used was thrown
+  away. The coercion stays (an unknown answer cannot be trusted as success),
+  but what it displaced is now written down and shown
+  (`TestUnrecognizedWorkerStatusSaysWhatItWas`, `TestMissingWorkerStatusSaysSo`).
+- **Configuring one check no longer switches off the others.** Adding a
+  "## Verification Commands" section naming a build command made the test
+  command the same file had been supplying all along disappear, because the
+  scan narrowed to the section and discarded everything outside it. A section
+  may now add precision, never remove a command the file already provided
+  (`TestAddingAVerificationSectionDoesNotUnresolveOtherCommands`).
+- **A blocked build no longer points at a place you are not allowed to
+  write.** The halt guidance offered `.aether/data/codebase.md` as somewhere
+  to configure a command; that path is guarded and the write is refused,
+  leaving no exit at all. It now names only the files anyone can edit
+  (`TestBlockedVerificationGuidanceOnlyNamesWritablePlaces`).
+- **Tasks folded into another worker are now named.** When dependent tasks are
+  merged into one worker the plan said "(+2 more steps)" without saying which
+  tasks those were, so a nine-task phase showing six workers looked like three
+  tasks had been dropped — and a real colony hand-reconciled work that already
+  had a claimant. The plan now names them and states the arithmetic
+  (`TestSpawnPlanNamesTheTasksAMergedWorkerCovers`).
+- **The build summary no longer claims a repair it did not make.** A column
+  headed "Recovered" counted the recovery actions the system *decided on*, not
+  workers that actually recovered — so a real build reported "1 recovered" for
+  a worker that was still failed when it halted seconds later. The column now
+  reads "Recovery Planned" and says what it counts
+  (`TestWaveSummaryDoesNotClaimARepairItDidNotMake`). The underlying gap is
+  unchanged and deliberate: deciding on a retry and carrying one out are still
+  two different things, and nothing in this lane re-dispatches.
+- **The four surveyors no longer look identical.** All four collapsed to one
+  glyph and the word "Surveyor", so a codebase survey printed four
+  indistinguishable lines; each now says what it surveys
+  (`TestEachSurveyorSaysWhatItSurveys`).
 - **A light codebase survey wrote nothing at all.** Choosing the cheaper
   survey correctly sent two surveyors instead of four, then the survey
   refused to save because four documents it had deliberately not asked for

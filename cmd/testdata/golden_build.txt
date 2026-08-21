@@ -9,7 +9,7 @@ Phase: Golden phase
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨🐜 Builder Worker-XX  First golden task (+1 more step)
+  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks g-task-1, g-task-2]
 
 Post-Wave: Probe
   Execution: serial — post-wave independent verification of builder claims
@@ -22,6 +22,7 @@ Post-Wave: Watcher
 Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher
 
 Total planned dispatches: 3
+2 dependent tasks were folded into 1 worker — every task still has a claimant, listed above.
 
 The Queen chose this team for the phase: Builder, Probe, Watcher.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
@@ -86,7 +87,7 @@ Queen's Team
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks g-task-1, g-task-2]  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
 
 Post-Wave: Probe
   Execution: serial — post-wave independent verification of builder claims
@@ -99,6 +100,7 @@ Post-Wave: Watcher
 Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
 
 Total planned dispatches: 3
+2 dependent tasks were folded into 1 worker — every task still has a claimant, listed above.
 
 The Queen chose this team for the phase: Builder, Probe, Watcher.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.

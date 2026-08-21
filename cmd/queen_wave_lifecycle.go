@@ -192,7 +192,9 @@ func queenWaveLifecycle(
 			Status:    "completed",
 			Completed: succeeded,
 			Total:     len(waveDispatches),
-			Message: fmt.Sprintf("wave %d/%d complete -- %d succeeded, %d recovered, %d escalated",
+			// %d recovery action(s) planned -- see renderWaveSummaryTable: the
+			// orchestrator decides and records; it does not itself re-dispatch.
+			Message: fmt.Sprintf("wave %d/%d complete -- %d succeeded, %d recovery action(s) planned, %d escalated",
 				i+1, totalWaves, succeeded, len(waveRecovered), waveEscalated),
 		})
 
@@ -251,7 +253,12 @@ func renderWaveSummaryTable(summary WaveLifecycleSummary) {
 		return
 	}
 	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Wave", "Dispatched", "Succeeded", "Failed", "Recovered", "Escalated"})
+	// "Recovery Planned", not "Recovered": this column counts the recovery
+	// actions the orchestrator DECIDED on, and nothing in this lane carries a
+	// retry out. A real build reported "1 recovered" for a worker that was
+	// still failed when the build halted seconds later. Naming it for what it
+	// counts stops the summary claiming a repair that never happened.
+	t.AppendHeader(table.Row{"Wave", "Dispatched", "Succeeded", "Failed", "Recovery Planned", "Escalated"})
 	for _, w := range summary.Waves {
 		t.AppendRow(table.Row{w.Wave, w.Dispatched, w.Succeeded, w.Failed, len(w.Recovered), w.Escalated})
 	}

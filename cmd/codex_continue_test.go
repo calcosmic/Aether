@@ -3499,7 +3499,11 @@ func TestRunVerificationStepRequiredSkipHalts(t *testing.T) {
 		if !step.Required {
 			t.Fatalf("Required = false, want true: %+v", step)
 		}
-		for _, marker := range []string{"no verification command resolved", "AGENTS.md", "## Verification Commands", ".aether/data/codebase.md"} {
+		// .aether/data/codebase.md is deliberately absent: the write guard
+		// refuses that path, so offering it left a blocked halt whose only
+		// suggested exit was itself blocked. The halt must still point
+		// somewhere actionable -- that requirement is what these markers test.
+		for _, marker := range []string{"no verification command resolved", "AGENTS.md", "## Verification Commands"} {
 			if !strings.Contains(step.Summary, marker) {
 				t.Fatalf("summary missing %q: %q", marker, step.Summary)
 			}
@@ -3523,10 +3527,17 @@ func TestRunVerificationStepRequiredSkipHalts(t *testing.T) {
 		if !strings.Contains(step.Summary, "definitely-not-a-real-command-xyz-12345") {
 			t.Fatalf("summary missing the command that failed: %q", step.Summary)
 		}
-		for _, marker := range []string{"AGENTS.md", "## Verification Commands", ".aether/data/codebase.md"} {
+		for _, marker := range []string{"AGENTS.md", "## Verification Commands"} {
 			if !strings.Contains(step.Summary, marker) {
 				t.Fatalf("summary missing %q: %q", marker, step.Summary)
 			}
+		}
+	})
+
+	t.Run("guidance never names a path the write guard refuses", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "tests", true, "", time.Second)
+		if strings.Contains(step.Summary, ".aether/data") {
+			t.Fatalf("halt guidance offers a protected path as the way out: %q", step.Summary)
 		}
 	})
 

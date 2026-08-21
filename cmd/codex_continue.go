@@ -2564,10 +2564,19 @@ func loadVerificationCommandsFromMarkdown(path, heading string) codexVerificatio
 	}
 
 	content := string(data)
-	if section := extractMarkdownSection(content, heading); section != "" {
-		content = section
+	section := extractMarkdownSection(content, heading)
+	if section == "" {
+		return extractVerificationCommands(content)
 	}
-	return extractVerificationCommands(content)
+	// The named section is the more precise signal, so it wins slot by slot
+	// -- but it must never DELETE a command the rest of the file already
+	// provided. Narrowing to the section discarded everything outside it, so
+	// adding a "## Verification Commands" section naming only a build command
+	// silently unresolved the test command the same file had been supplying
+	// all along, and the phase then failed a check it had been passing.
+	commands := extractVerificationCommands(section)
+	mergeCodexVerificationCommands(&commands, extractVerificationCommands(content))
+	return commands
 }
 
 func extractMarkdownSection(content, heading string) string {
@@ -2895,7 +2904,12 @@ func setVerificationCommand(commands *codexVerificationCommands, kind, command s
 // that actionable pointer, shared by both blocked-return sites below so the
 // three locations never drift apart.
 func blockedVerificationConfigGuidance() string {
-	return `configure a real command in AGENTS.md, in CLAUDE.md under "## Verification Commands", or in .aether/data/codebase.md`
+	// .aether/data/codebase.md is deliberately NOT offered here. It is read
+	// as a source, but .aether/data is a protected path -- an agent following
+	// this guidance to write there is refused by the write guard, which left
+	// the operator alternating between a blocked halt and a blocked write
+	// with no exit. Only the two paths anyone can actually edit are named.
+	return `configure a real command in AGENTS.md, or in CLAUDE.md under "## Verification Commands" (one line per check, e.g. "- tests: go test ./...")`
 }
 
 // applyExpectedTestFailure inverts the tests check's expectation for a
