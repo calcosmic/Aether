@@ -589,15 +589,24 @@ on demand. They come in two categories:
 | `~/.aether/system/skills/` | Published hub mirror of shipped skills |
 | `~/.aether/skills/domain/` | Custom user-created domain skills |
 | repo `.aether/skills/` | Repo-specific custom skills only |
-| `~/.codex/skills/aether/` | Small Codex shim set that routes to `aether skill-inject` |
+| `~/.codex/skills/aether/` | Small Codex shim set; the `aether-skill-loader` shim explains that skill content already arrives automatically in dispatch responses |
 
 ### How Matching Works
 
-1. Colony-prime builds a skills index via `skill-index` (cached for performance)
-2. `skill-match` scores each skill against the current worker using:
+Matching and injection are Go functions (`matchSkillsForWorkflow`, `renderSkillInjectResult`
+in `cmd/skills.go`) called directly, in-process, from the worker-brief assembler — not a
+separate CLI step. Phase 191 deleted the 8 standalone CLI wrappers that used to expose this
+as `skill-index`/`skill-detect`/`skill-match`/`skill-inject`/`skill-list`/`skill-diff`/
+`skill-parse-frontmatter`/`skill-cache-rebuild` (SKILL-01 — confirmed dead CLI surface with no
+caller anywhere; the underlying functions were preserved unconditionally because
+`composeBuildManifestBrief` calls them for every worker brief). For each worker:
+
+1. A live scan of installed skills is built (no separate index-build step)
+2. Each skill is scored against the current worker using:
+   - Workflow context (`build`, `colonize`, `plan`, `continue`)
    - Worker role (builder, watcher, etc.)
-   - Active pheromone signals (FOCUS/REDIRECT)
-   - `skill-detect` patterns matched against the codebase
+   - Task keywords from the worker assignment
+   - Detected file/package patterns matched against the codebase
 3. Top 3 colony skills + top 3 domain skills are selected per worker
 
 ### Skill Injection
@@ -605,21 +614,7 @@ on demand. They come in two categories:
 Skill content is injected separately from colony-prime context:
 
 - Own 8K character budget (independent of the colony-prime token budget)
-- Injected into builder and watcher prompts
-- `skill-inject` assembles matched skills into a prompt section
-
-### Subcommands
-
-| Subcommand | Purpose |
-|------------|---------|
-| `skill-index` | Build/read cached skills index |
-| `skill-detect` | Detect domain skills matching codebase |
-| `skill-match` | Match skills to worker by role + task + pheromones |
-| `skill-inject` | Load matched skills into prompt section |
-| `skill-list` | List all installed skills |
-| `skill-parse-frontmatter` | Parse SKILL.md frontmatter to JSON |
-| `skill-diff` | Compare user skill with shipped version |
-| `skill-cache-rebuild` | Force rebuild of index cache |
+- Injected into builder and watcher prompts automatically as part of brief assembly
 
 ### Custom Skills
 
