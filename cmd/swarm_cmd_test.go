@@ -150,8 +150,11 @@ func TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult(t *testing.T) {
 	if got := result["status"]; got != "completed" {
 		t.Fatalf("status = %v, want completed", got)
 	}
-	if got := result["worker_count"]; got != float64(6) {
-		t.Fatalf("worker_count = %v, want 6", got)
+	// Trio + Queen-selected gatekeeper for an auth bug; Scout and
+	// Archaeologist are relevance-selected now and this wording carries no
+	// research or history signal (TestSwarmTrivialBugSkipsHistoryAndResearch).
+	if got := result["worker_count"]; got != float64(4) {
+		t.Fatalf("worker_count = %v, want 4", got)
 	}
 	if got := result["autopilot_available"]; got != true {
 		t.Fatalf("autopilot_available = %v, want true", got)
@@ -166,8 +169,8 @@ func TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult(t *testing.T) {
 		t.Fatalf("next = %v, want aether build 1", got)
 	}
 
-	if len(invoker.configs) != 6 {
-		t.Fatalf("expected 6 worker configs, got %d", len(invoker.configs))
+	if len(invoker.configs) != 4 {
+		t.Fatalf("expected 4 worker configs, got %d", len(invoker.configs))
 	}
 	for _, cfg := range invoker.configs {
 		if strings.TrimSpace(cfg.ResponsePath) == "" {
@@ -182,7 +185,7 @@ func TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read spawn-tree: %v", err)
 	}
-	for _, caste := range []string{"tracker", "scout", "archaeologist", "gatekeeper", "builder", "watcher"} {
+	for _, caste := range []string{"tracker", "gatekeeper", "builder", "watcher"} {
 		if !strings.Contains(string(spawnTreeData), "|Swarm|"+caste+"|") {
 			t.Fatalf("spawn tree missing %s entry:\n%s", caste, string(spawnTreeData))
 		}
@@ -197,7 +200,7 @@ func TestAllSwarmPlansUseQueenSelectedGatekeeperForAuthBug(t *testing.T) {
 	if !swarmPlansHaveCaste(plans, "gatekeeper") {
 		t.Fatalf("swarm plans missing Queen-selected gatekeeper: %+v", plans)
 	}
-	for _, caste := range []string{"tracker", "scout", "archaeologist", "builder", "watcher"} {
+	for _, caste := range []string{"tracker", "builder", "watcher"} {
 		if !swarmPlansHaveCaste(plans, caste) {
 			t.Fatalf("swarm plans missing required %s: %+v", caste, plans)
 		}
@@ -285,8 +288,8 @@ func TestSwarmPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 		t.Fatalf("finalizer_command = %v", got)
 	}
 	workers := result["workers"].([]interface{})
-	if len(workers) != 6 {
-		t.Fatalf("workers = %d, want 6", len(workers))
+	if len(workers) != 4 {
+		t.Fatalf("workers = %d, want 4", len(workers))
 	}
 	if !workerMapsHaveCaste(workers, "gatekeeper") {
 		t.Fatalf("workers missing Queen-selected gatekeeper: %+v", workers)
@@ -386,7 +389,7 @@ func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read spawn-tree: %v", err)
 	}
-	for _, caste := range []string{"tracker", "scout", "archaeologist", "builder", "watcher"} {
+	for _, caste := range []string{"tracker", "builder", "watcher"} {
 		if !strings.Contains(string(spawnTreeData), "|Swarm|"+caste+"|") {
 			t.Fatalf("spawn tree missing %s entry:\n%s", caste, string(spawnTreeData))
 		}

@@ -335,9 +335,12 @@ func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.C
 		if caste == "gatekeeper" && phaseRiskLevel(phase) == "high" {
 			return true
 		}
+		// Scout and Archaeologist used to be unconditionally required here, so
+		// a one-line typo fix paid for a researcher and a git-history dig that
+		// could only report finding nothing. They now ride on keyword
+		// relevance like every other specialist; the investigate/fix/verify
+		// trio stays mandatory because a swarm without them is not a swarm.
 		return caste == "tracker" ||
-			caste == "scout" ||
-			caste == "archaeologist" ||
 			caste == "builder" ||
 			caste == "watcher"
 	case "seal":

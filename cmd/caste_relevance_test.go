@@ -349,10 +349,21 @@ func TestQueenOrchestrate_SwarmUsesInvestigationAndFixCastes(t *testing.T) {
 
 	dispatches := queenOrchestrate(phase, "swarm", colony.ColonyState{})
 
-	for _, caste := range []string{"tracker", "scout", "archaeologist", "builder", "watcher"} {
+	for _, caste := range []string{"tracker", "builder", "watcher"} {
 		if !HasCaste(dispatches, caste) {
 			t.Errorf("Swarm: expected %s", caste)
 		}
+	}
+	// "Investigate a failing parser bug" is investigation wording, so Scout is
+	// selected on relevance — the mandatory floor is only the
+	// investigate/fix/verify trio (see TestSwarmTrivialBugSkipsHistoryAndResearch).
+	if !HasCaste(dispatches, "scout") {
+		t.Error("Swarm: investigation wording should select scout via relevance")
+	}
+	// Nothing in this phase names legacy code or git history, so the
+	// Archaeologist stays home.
+	if HasCaste(dispatches, "archaeologist") {
+		t.Error("Swarm: archaeologist selected with no history signal in the phase")
 	}
 }
 
