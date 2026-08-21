@@ -27,6 +27,15 @@ type WorkerHandoff struct {
 // from the schema ValidateWorkerHandoff actually enforces.
 const HandoffFieldsSummary = "changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness (an RFC3339 timestamp for when evidence was collected, or \"not-run\")"
 
+// HandoffOpenDecisionsGuidance is the worker-side half of the owner-decision
+// relay. Wrappers surface open_decisions to the project owner at wave
+// boundaries and answers come back as CLARIFIED INTENT — which only works if
+// workers route judgement calls there instead of researching around them or
+// guessing silently. Stated once here and referenced by every prompt channel
+// (renderResponseContract and the wrapper-facing brief composers) so the rule
+// cannot drift between platforms.
+const HandoffOpenDecisionsGuidance = "When you hit a preference or product judgement the project owner could answer, do not research around it or guess silently: record the question in open_decisions, take the least-committal path, and note the assumption in assumptions."
+
 // IsEmptyWorkerHandoff reports whether a handoff carries no relay content at
 // all. Handoffs are the memory the next phase's workers receive; a
 // content-free record occupies a slot in that memory while telling the next

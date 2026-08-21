@@ -829,10 +829,11 @@ Return ONLY a single JSON object as your final response.
 - Set status to one of: %s.
 - Report blockers truthfully. If blocked, explain why in blockers.
 - Include handoff with %s.
+- %s
 - Keep summary concise and concrete.
 - Include artifacts as an object with research_file, survey_file, and plan_file. Set the one the task brief ordered you to produce (e.g. renderPhaseResearchBrief's research file path); set the rest to null.
 %s
-`, filepath.Clean(root), statusLine, HandoffFieldsSummary, scoutReportLine))
+`, filepath.Clean(root), statusLine, HandoffFieldsSummary, HandoffOpenDecisionsGuidance, scoutReportLine))
 }
 
 func workerClaimsSchemaForConfig(config WorkerConfig) jsonSchema {

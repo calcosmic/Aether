@@ -3406,7 +3406,7 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time, includeSteeringSections bool) string {
 	var b strings.Builder
 	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt))
-	b.WriteString(fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary))
+	b.WriteString(fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected. %s\n", codex.HandoffFieldsSummary, codex.HandoffOpenDecisionsGuidance))
 
 	if includeSteeringSections {
 		if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {

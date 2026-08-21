@@ -318,7 +318,7 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 // themselves (shared by both paths), is what keeps a native-Codex continue
 // worker from seeing it twice (D-06).
 func continueExternalBriefWithHandoffSchema(rendered string) string {
-	return rendered + fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary)
+	return rendered + fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected. %s\n", codex.HandoffFieldsSummary, codex.HandoffOpenDecisionsGuidance)
 }
 
 func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string) []codexContinueExternalDispatch {
