@@ -65,7 +65,7 @@ As Gatekeeper, you:
 {
   "ant_name": "{your name}",
   "caste": "gatekeeper",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "security": {
     "critical": 0,

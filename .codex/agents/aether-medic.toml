@@ -63,7 +63,7 @@ Never mutate colony data without explicit authorization. By default, the Medic o
   "ant_name": "{your name}",
   "caste": "medic",
   "task_id": "{task_id}",
-  "status": "code_written | failed | blocked",
+  "status": "code_written | completed_no_change | failed | blocked",
   "summary": "What you diagnosed and repaired",
   "files_created": [],
   "files_modified": [],

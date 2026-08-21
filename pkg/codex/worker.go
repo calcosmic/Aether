@@ -828,7 +828,7 @@ Return ONLY a single JSON object as your final response.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
 - Set status to one of: %s.
 - If the required behavior ALREADY exists and you proved it, report status completed_no_change with disposition "verified_existing", put the exact verification commands you ran in handoff commands_run, and set handoff verification_status to pass. NEVER fabricate an edit just to have changed files — an honest no-change with evidence is a first-class success; one without evidence is rejected.
-- If you are stopped by a rate limit or quota, report status interrupted (not failed): preserve your work, describe the last durable state in the handoff, and the colony will resume the unfinished slice.
+- If you are stopped by a rate limit or quota, report status interrupted (not failed): save what you completed and describe the last durable state in your handoff. The handoff is kept and handed to whoever picks the work up next; the phase itself is restarted by the operator, so leave next_worker_instructions precise enough to continue from.
 - Report blockers truthfully. If blocked, explain why in blockers.
 - Include handoff with %s.
 - %s

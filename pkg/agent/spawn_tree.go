@@ -526,6 +526,10 @@ func normalizeSpawnStatus(status string) string {
 		return "timeout"
 	case "manual", "manually_reconciled":
 		return "manually-reconciled"
+	case "no_change", "no-change", "nochange", "unchanged", "verified_existing", "already_complete", "already_correct":
+		return "completed_no_change"
+	case "rate_limit", "rate_limited", "suspended_quota":
+		return "interrupted"
 	}
 	return sanitizeSpawnField(status)
 }
@@ -805,7 +809,10 @@ func IsLiveSpawnStatus(status string) bool {
 // IsTerminalSpawnStatus reports whether a worker status should be treated as finished.
 func IsTerminalSpawnStatus(status string) bool {
 	switch normalizeSpawnStatus(status) {
-	case "completed", "failed", "blocked", "timeout", "superseded", "manually-reconciled", "skipped", SpawnStatusAbandoned:
+	// completed_no_change (an honest success) and interrupted (a resumable
+	// stop) are terminal too. Without them a worker reporting either is
+	// neither live nor finished, so it disappears from the status view.
+	case "completed", "completed_no_change", "interrupted", "failed", "blocked", "timeout", "superseded", "manually-reconciled", "skipped", SpawnStatusAbandoned:
 		return true
 	default:
 		return false

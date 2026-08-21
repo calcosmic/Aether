@@ -115,7 +115,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "keeper",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was accomplished in plain terms",
   "patterns_archived": [
     {"name": "pattern-name", "path": "patterns/architecture/pattern-name.md", "status": "new"}

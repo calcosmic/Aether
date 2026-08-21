@@ -49,6 +49,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The honest "nothing needed changing" result now actually works
+  everywhere.** The `completed_no_change` and `interrupted` statuses were
+  taught to the build path and left unknown to every other place that judges
+  a worker's status, so a worker that followed the new contract truthfully
+  was punished for it: the continue review gate blocked phase advance on it
+  (`TestContinueWatcherPassesOnAnHonestNoChange`), the finalizer routed it
+  into recovery and asked for the work to be redone, its wave counted it as
+  a failure, the seal gate treated a required reviewer as absent, closeout
+  dropped it from the tally, the status dashboard showed it as neither
+  running nor finished, and finalization reported it as an unexpected
+  status. Every one of those decision points now reads the vocabulary from
+  one place, asserted as an invariant across all of them
+  (`TestNoChangeSuccessIsHonouredWhereverStatusIsJudged`,
+  `TestFinishedWorkerStatusesAreRecognisedNotDropped`,
+  `TestInterruptedIsTerminalButNeverCountedAsSuccess`), with a ratchet that
+  fails when a new hand-rolled success list appears
+  (`TestNoHandRolledWorkerSuccessLists`). The same three fixes landed on the
+  TypeScript host lane, which had its own copies. The 55 agent definitions
+  across Claude, OpenCode and Codex that still listed only
+  `completed | failed | blocked` now name the no-change outcome too.
+- **The no-change evidence rule was enforced on one lane only.** A
+  `completed_no_change` claim buys an exemption from the "show me the files
+  you changed" requirement, and that exemption was granted on the in-process
+  dispatch lane without checking anything — reopening the phantom-build
+  loophole for any worker that simply said the words. Both lanes now apply
+  one shared rule — a summary, a passing handoff verification, and the
+  commands actually run — and the gate is asserted at its call site, not
+  just as a function that exists
+  (`TestRuntimeLaneDemandsNoChangeEvidence`,
+  `TestRuntimeNoChangeEvidenceGateIsWiredIntoDispatch`).
+- **The worker contract no longer promises a resume that does not exist.**
+  Workers stopped by a quota limit were told "the colony will resume the
+  unfinished slice"; nothing resumes a worker. The contract now describes
+  what actually happens — the handoff is kept and passed to whoever picks
+  the work up next, and the phase is restarted by the operator.
+- Restored `gofmt` compliance to three Go sources committed unformatted.
+- **A light codebase survey wrote nothing at all.** Choosing the cheaper
+  survey correctly sent two surveyors instead of four, then the survey
+  refused to save because four documents it had deliberately not asked for
+  were missing — so `/ant-colonize` aborted and produced no artifacts. The
+  requirement is now what this survey's own team promised, while a surveyor
+  that was sent still owes every one of its files, and a survey with no
+  surveyors is still rejected (`TestLightColonizeStillWritesItsSurvey`).
+- **A worker crediting another worker's already-done task got the wrong
+  stamp.** When one worker verified tasks belonging to several dispatches,
+  the credited dispatches were recorded as ordinary completions with no
+  files — and the next step then halted them as suspected phantom builds.
+  They now inherit the claimant's actual outcome.
+- **Manually reconciled work no longer reads as a phantom build.** Counting
+  it as a success meant it was also asked for file outputs it cannot have by
+  definition, which halted the manual recovery path.
+- **The word "document" belonged to no worker.** A note said it had been
+  handed from the knowledge-keeper to the documentation writer, but the
+  documentation writer's keyword was "documentation", which never matches the
+  bare word — so a phase asking to document something summoned neither
+  (`TestChroniclerOwnsTheWordDocument`).
 - **Five useless-spawn leaks closed.** Sealing a colony no longer requires a
   test-coverage Probe when the final phase produced no testable code
   (`TestSealProbeRequiresTestableCode`); a bug swarm no longer always

@@ -96,16 +96,16 @@ type codexExternalBuildWorkerResult struct {
 	// do. One success status with a disposition, never a second terminal
 	// state machine. Raw status "verified_existing" is folded into
 	// status=completed_no_change + this disposition by the merge path.
-	Disposition string              `json:"disposition,omitempty"`
-	DependsOn   []string            `json:"depends_on,omitempty"`
-	Outputs     []string            `json:"outputs,omitempty"`
-	Blockers       []string            `json:"blockers,omitempty"`
-	Duration       float64             `json:"duration,omitempty"`
-	ToolCount      int                 `json:"tool_count,omitempty"`
-	FilesCreated   []string            `json:"files_created,omitempty"`
-	FilesModified  []string            `json:"files_modified,omitempty"`
-	TestsWritten   []string            `json:"tests_written,omitempty"`
-	Handoff        codex.WorkerHandoff `json:"handoff,omitempty"`
+	Disposition   string              `json:"disposition,omitempty"`
+	DependsOn     []string            `json:"depends_on,omitempty"`
+	Outputs       []string            `json:"outputs,omitempty"`
+	Blockers      []string            `json:"blockers,omitempty"`
+	Duration      float64             `json:"duration,omitempty"`
+	ToolCount     int                 `json:"tool_count,omitempty"`
+	FilesCreated  []string            `json:"files_created,omitempty"`
+	FilesModified []string            `json:"files_modified,omitempty"`
+	TestsWritten  []string            `json:"tests_written,omitempty"`
+	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
 // effectiveName returns the worker name, falling back to AntName when Name is empty.
@@ -963,12 +963,14 @@ func reconcileCommittedExternalBuildAttempt(state colony.ColonyState, phaseNum i
 func buildExternalBuildRecoveryInstructions(phaseNum int, dispatches []codexBuildDispatch) ([]map[string]interface{}, error) {
 	var failed []codexBuildDispatch
 	for _, dispatch := range dispatches {
-		switch strings.ToLower(strings.TrimSpace(dispatch.Status)) {
-		case "", "completed", "manually-reconciled":
+		// An honest completed_no_change is a success (ruling D6), so it must
+		// never be routed into recovery/redispatch. Asking a worker to redo
+		// work it correctly reported as already done is the fake-edit
+		// pressure the no-change status exists to remove.
+		if !externalBuildDispatchNeedsRecovery(dispatch.Status) {
 			continue
-		default:
-			failed = append(failed, dispatch)
 		}
+		failed = append(failed, dispatch)
 	}
 	if len(failed) == 0 {
 		return nil, nil
@@ -1420,7 +1422,21 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 				// into that worker's single call. Credit it directly instead
 				// of reporting a missing result -- the work was actually
 				// done, just not filed under this dispatch's own name.
+				// The credited dispatch inherits the claimant's outcome, not
+				// a hardcoded "completed". A completed_no_change claimant
+				// covered work that produced no files by definition; stamping
+				// it "completed" made the covered dispatch fail continue
+				// provenance for having no outputs -- the honest result
+				// punished one hop downstream.
 				dispatch.Status = "completed"
+				creditStatus := normalizeExternalBuildStatus(credit.coveringResult.Status)
+				if isNoChangeExternalBuildStatus(creditStatus) {
+					dispatch.Status = creditStatus
+					dispatch.Disposition = strings.ToLower(strings.TrimSpace(credit.coveringResult.Disposition))
+					if dispatch.Disposition == "" && rawStatusCarriesVerifiedExisting(credit.coveringResult.Status) {
+						dispatch.Disposition = "verified_existing"
+					}
+				}
 				dispatch.Summary = fmt.Sprintf("covered by %s via covered_task_ids", credit.coveringName)
 				if outputs := uniqueSortedStrings(append(append(append([]string{}, credit.coveringResult.Outputs...), credit.coveringResult.FilesCreated...), append(credit.coveringResult.FilesModified, credit.coveringResult.TestsWritten...)...)); len(outputs) > 0 {
 					dispatch.Outputs = outputs
@@ -1736,12 +1752,25 @@ func isTerminalExternalBuildStatus(status string) bool {
 // (the worker stopped and the record is final) but the work is unfinished
 // and resumable — counting it as success would complete tasks nobody did.
 func isSuccessfulExternalBuildStatus(status string) bool {
-	switch status {
+	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "completed", "completed_no_change", "manually-reconciled":
 		return true
 	default:
 		return false
 	}
+}
+
+// externalBuildDispatchNeedsRecovery reports whether a dispatch's terminal
+// status means the work must be redispatched. An honest completed_no_change
+// is a success (ruling D6) and must never be routed into recovery: asking a
+// worker to redo work it correctly reported as already done is exactly the
+// fake-edit pressure the no-change status exists to remove.
+func externalBuildDispatchNeedsRecovery(status string) bool {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "" {
+		return false
+	}
+	return !isSuccessfulExternalBuildStatus(status)
 }
 
 func isNoChangeExternalBuildStatus(status string) bool {
@@ -1764,14 +1793,25 @@ func rawStatusCarriesVerifiedExisting(rawStatus string) bool {
 // noChangeEvidenceMissing lists which of the three required evidence pieces
 // a completed_no_change result lacks; empty means the evidence rule is met.
 func noChangeEvidenceMissing(result codexExternalBuildWorkerResult) []string {
+	return noChangeEvidenceMissingFrom(result.Summary, result.Handoff.VerificationStatus, result.Handoff.CommandsRun)
+}
+
+// noChangeEvidenceMissingFrom is the single definition of the no-change
+// evidence rule. It takes the three pieces directly so BOTH lanes can apply
+// it: the external/wrapper lane through mergeExternalBuildResults, and the
+// in-process runtime lane through validateRuntimeNoChangeEvidence. When this
+// rule lived only on the external result type, the runtime lane accepted an
+// evidence-free completed_no_change and passed a build with no changes and
+// nothing checked -- the phantom-build loophole, reopened on one lane.
+func noChangeEvidenceMissingFrom(summary, verificationStatus string, commandsRun []string) []string {
 	missing := []string{}
-	if strings.TrimSpace(result.Summary) == "" {
+	if strings.TrimSpace(summary) == "" {
 		missing = append(missing, "summary stating why no change was needed")
 	}
-	if !strings.EqualFold(strings.TrimSpace(result.Handoff.VerificationStatus), "pass") {
+	if !strings.EqualFold(strings.TrimSpace(verificationStatus), "pass") {
 		missing = append(missing, "handoff verification_status: pass")
 	}
-	if len(result.Handoff.CommandsRun) == 0 {
+	if len(commandsRun) == 0 {
 		missing = append(missing, "handoff commands_run naming what was checked")
 	}
 	return missing
@@ -1971,7 +2011,7 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 		ReceivedResults:         len(results),
 		MatchedResults:          len(dispatches),
 		StatusCounts:            map[string]int{},
-		Policy:                  "A structurally valid completed or manually-reconciled worker result wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected. Claims under sanctioned .aether/data subpaths (planning/, phase-research/, survey/, worker-debug/, reviews/) are tolerated and dropped from the claim set.",
+		Policy:                  "A structurally valid successful worker result (completed, completed_no_change, or manually-reconciled) wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected. Claims under sanctioned .aether/data subpaths (planning/, phase-research/, survey/, worker-debug/, reviews/) are tolerated and dropped from the claim set.",
 		ApprovedTempPath:        finalizerCompletionTempPattern,
 		SensitiveOutputRedacted: true,
 	}
@@ -1981,9 +2021,19 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 			status = "unknown"
 		}
 		report.StatusCounts[status]++
-		switch status {
-		case "completed", "manually-reconciled":
-		case "timeout":
+		switch {
+		case isSuccessfulExternalBuildStatus(status):
+			// completed, completed_no_change and manually-reconciled are all
+			// successes; none is an unexpected status at finalization.
+		case status == "interrupted":
+			report.Issues = append(report.Issues, codexResultCollectionIssue{
+				Worker: dispatch.Name,
+				Caste:  dispatch.Caste,
+				Status: status,
+				Kind:   "worker_interrupted",
+				Detail: "worker stopped before finishing its slice; the work is unfinished and the phase can be redispatched",
+			})
+		case status == "timeout":
 			report.Issues = append(report.Issues, codexResultCollectionIssue{
 				Worker: dispatch.Name,
 				Caste:  dispatch.Caste,
@@ -1991,7 +2041,7 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 				Kind:   "collection_timeout",
 				Detail: "worker reached terminal timeout status before a valid completed result was collected",
 			})
-		case "failed", "blocked":
+		case status == "failed" || status == "blocked":
 			report.Issues = append(report.Issues, codexResultCollectionIssue{
 				Worker: dispatch.Name,
 				Caste:  dispatch.Caste,

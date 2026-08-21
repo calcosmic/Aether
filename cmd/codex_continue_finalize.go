@@ -830,7 +830,7 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 		}
 		watcher := codexWatcherVerification{
 			Present: true,
-			Passed:  status == "completed" || status == "manually-reconciled",
+			Passed:  isSuccessfulExternalBuildStatus(status),
 			Status:  status,
 			Worker:  strings.TrimSpace(step.Name),
 			Summary: summary,
@@ -932,7 +932,7 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			continue
 		}
 		report.Workers = append(report.Workers, step)
-		if status == "completed" || status == "manually-reconciled" {
+		if isSuccessfulExternalBuildStatus(status) {
 			// Typed blocking: a completed review whose STRUCTURED findings
 			// carry blocking (or CRITICAL severity, treated as implicitly
 			// blocking) still stops the line — previously only raw blocker

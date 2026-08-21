@@ -1809,7 +1809,7 @@ func runCodexContinueWatcherVerification(ctx context.Context, root string, phase
 
 	return codexWatcherVerification{
 			Present: true,
-			Passed:  status == "completed" || status == "manually-reconciled",
+			Passed:  isSuccessfulExternalBuildStatus(status),
 			Status:  status,
 			Worker:  workerName,
 			Summary: summary,
@@ -1951,8 +1951,8 @@ func evaluateContinueWatcherVerification(manifest codexContinueManifest) codexWa
 		status := continueWorkerFlowStatus(dispatch.Status)
 		summary := strings.TrimSpace(dispatch.Summary)
 		if summary == "" {
-			switch status {
-			case "completed", "manually-reconciled":
+			switch {
+			case isSuccessfulExternalBuildStatus(status):
 				summary = "watcher verification completed before advancement"
 			default:
 				summary = fmt.Sprintf("watcher verification did not complete cleanly: %s", status)
@@ -1960,7 +1960,7 @@ func evaluateContinueWatcherVerification(manifest codexContinueManifest) codexWa
 		}
 		watcher := codexWatcherVerification{
 			Present: true,
-			Passed:  status == "completed" || status == "manually-reconciled",
+			Passed:  isSuccessfulExternalBuildStatus(status),
 			Status:  status,
 			Worker:  strings.TrimSpace(dispatch.Name),
 			Summary: summary,
@@ -3603,8 +3603,16 @@ func continueWorkerFlowStatus(status string) string {
 }
 
 func continueReviewStatusBlocks(status string) bool {
-	switch continueWorkerFlowStatus(status) {
-	case "completed", "manually-reconciled", "skipped", watcherStatusEnvironmentBlocked:
+	status = continueWorkerFlowStatus(status)
+	// A reviewer that honestly reports completed_no_change verified the work
+	// and found nothing to change (ruling D6). Blocking advancement on it
+	// would punish the honest answer and force a fabricated finding --
+	// interrupted still blocks, because that work is genuinely unfinished.
+	if isSuccessfulExternalBuildStatus(status) {
+		return false
+	}
+	switch status {
+	case "skipped", watcherStatusEnvironmentBlocked:
 		return false
 	default:
 		return true
@@ -3644,8 +3652,8 @@ func emitContinueVerificationStart(phase colony.Phase, verificationTimeout time.
 }
 
 func continueWatcherDefaultSummary(status string) string {
-	switch continueWorkerFlowStatus(status) {
-	case "completed", "manually-reconciled":
+	switch {
+	case isSuccessfulExternalBuildStatus(continueWorkerFlowStatus(status)):
 		return "Continue watcher completed independent verification"
 	default:
 		return fmt.Sprintf("continue watcher finished with status %s", continueWorkerFlowStatus(status))
@@ -3658,8 +3666,8 @@ func continueWatcherFlowSummary(name, status, summary string) string {
 		name = "watcher"
 	}
 	status = continueWorkerFlowStatus(status)
-	switch status {
-	case "completed", "manually-reconciled":
+	switch {
+	case isSuccessfulExternalBuildStatus(status):
 		return fmt.Sprintf("Watcher %s completed independent verification before advancement", name)
 	default:
 		summary = strings.TrimSpace(summary)
@@ -3898,8 +3906,8 @@ func continueReviewFlowSummary(step codexContinueWorkerFlowStep) string {
 	if role == "" {
 		role = "Review"
 	}
-	switch status {
-	case "completed", "manually-reconciled":
+	switch {
+	case isSuccessfulExternalBuildStatus(status):
 		return fmt.Sprintf("%s %s completed continue review before advancement", role, name)
 	default:
 		return fmt.Sprintf("%s %s closed continue review with status %s", role, name, status)

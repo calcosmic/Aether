@@ -54,7 +54,7 @@ If 3 attempted fixes fail:
 {
   "ant_name": "{your name}",
   "caste": "tracker",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "symptom": "",
   "root_cause": "",

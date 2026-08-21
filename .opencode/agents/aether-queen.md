@@ -188,7 +188,7 @@ Return structured JSON at session completion:
 {
   "ant_name": "Queen",
   "caste": "queen",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was accomplished across all phases",
   "phases_completed": [
     {

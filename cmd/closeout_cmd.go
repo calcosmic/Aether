@@ -177,7 +177,9 @@ func closeoutCompletionDetails(path string) map[string]interface{} {
 	for _, worker := range workers {
 		status := normalizeCloseoutWorkerStatus(worker)
 		switch status {
-		case "completed", "passed", "success", "manually-reconciled":
+		// completed_no_change is a success with evidence (ruling D6); leaving
+		// it out silently dropped honest workers from the closeout tally.
+		case "completed", "completed_no_change", "passed", "success", "manually-reconciled":
 			completed++
 		case "blocked":
 			blocked++
@@ -250,7 +252,7 @@ func closeoutWorkerMaps(raw map[string]interface{}) []map[string]interface{} {
 
 func isVerifiedCloseoutWorkerResult(worker map[string]interface{}) bool {
 	switch normalizeCloseoutWorkerStatus(worker) {
-	case "completed", "blocked", "failed", "timeout", "manually-reconciled":
+	case "completed", "completed_no_change", "interrupted", "blocked", "failed", "timeout", "manually-reconciled":
 		return true
 	default:
 		return false

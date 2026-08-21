@@ -10,6 +10,7 @@
 
 import type { WorkerClaims } from "./claims-parser.js";
 import type { ConfidenceMetric } from "./types.js";
+import { isSuccessfulWorkerStatus } from "./worker-status.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -123,8 +124,10 @@ export class ConfidenceEvaluator {
 
     // Count completed workers
     const totalWorkers = claims.length;
-    const completedWorkers = claims.filter(
-      (c) => c.status === "completed"
+    // completed_no_change counts as a completed worker (ruling D6);
+    // scoring it as incomplete penalised the honest answer.
+    const completedWorkers = claims.filter((c) =>
+      isSuccessfulWorkerStatus(c.status)
     ).length;
 
     // Compute score

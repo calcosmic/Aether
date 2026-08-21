@@ -388,7 +388,7 @@ Spawn limits: Depth 1→4, Depth 2→2, Depth 3→0
 Return a compressed summary:
 {
   "ant_name": "{child_name}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "1-2 sentences of what happened",
   "files_touched": ["path1", "path2"],
   "key_findings": ["finding1", "finding2"],
@@ -801,7 +801,7 @@ Read .aether/workers.md for role definitions.
 
 --- OUTPUT FORMAT ---
 {
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What the phase accomplished",
   "tasks_completed": ["1.1", "1.2"],
   "tasks_failed": [],

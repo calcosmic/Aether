@@ -149,11 +149,14 @@ func traceContinueProvenance(dispatches []codexBuildDispatch) error {
 			continue
 		}
 		completedCount++
-		// completed_no_change is exempt from the file-outputs requirement:
-		// its evidence is the verification it ran, already enforced by the
-		// finalizer's no_change_evidence gate before this status could be
-		// stored (ruling D6).
-		if isNoChangeExternalBuildStatus(d.Status) {
+		// Two successes are exempt from the file-outputs requirement.
+		// completed_no_change: its evidence is the verification it ran,
+		// already enforced by the finalizer's no_change_evidence gate before
+		// this status could be stored (ruling D6). manually-reconciled: an
+		// operator reconciled it by hand, so it has no worker outputs by
+		// definition -- demanding them halts the manual recovery path with a
+		// phantom-build accusation.
+		if isNoChangeExternalBuildStatus(d.Status) || d.Status == "manually-reconciled" {
 			continue
 		}
 		if len(d.Outputs) == 0 {

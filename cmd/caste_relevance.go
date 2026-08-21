@@ -46,8 +46,12 @@ var casteRelevanceRegistry = []CasteRelevanceProfile{
 	// at base 10 two incidental hits cleared the continue threshold — a phase
 	// that merely mentioned documenting a standard summoned a Keeper.
 	// "document" belongs to chronicler; keeper keys on preservation intent.
+	// Chronicler's keyword is "document", not "documentation": keyword
+	// matching anchors on the LEFT boundary only, so "documentation" never
+	// matched the word "document" and the handoff the line above describes
+	// was never actually made -- the word ended up owned by nobody.
 	{Caste: "keeper", Keywords: []string{"knowledge", "convention", "preserve", "wisdom", "institutional"}, BaseScore: 10},
-	{Caste: "chronicler", Keywords: []string{"documentation", "docs", "guide", "readme", "changelog", "manual"}, BaseScore: 15},
+	{Caste: "chronicler", Keywords: []string{"document", "docs", "guide", "readme", "changelog", "manual"}, BaseScore: 15},
 	{Caste: "includer", Keywords: []string{"accessibility", "a11y", "wcag", "screen reader", "aria", "inclusive"}, BaseScore: 15},
 	{Caste: "surveyor-provisions", Keywords: []string{"dependency", "dependencies", "provisions", "external", "integration", "stack", "package"}, BaseScore: 10},
 	{Caste: "surveyor-nest", Keywords: []string{"architecture", "structure", "layout", "map", "chamber", "directory"}, BaseScore: 10},

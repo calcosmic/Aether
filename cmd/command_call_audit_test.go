@@ -1068,7 +1068,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	// by contract (a failed phase commit warns and writes the autopilot
 	// pause marker; it never gates advancement), so the toggle is
 	// enrichment, not a gate.
-	"phase-commits":               true,
+	"phase-commits": true,
 	// handoff-decisions / decision-answer (2026-08-21, team check-in round):
 	// the worker-question relay is non-blocking by contract — an unanswered
 	// question never stops a build, it resurfaces at the next boundary, and

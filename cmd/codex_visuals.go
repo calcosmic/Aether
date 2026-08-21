@@ -1087,7 +1087,7 @@ func renderSurveyorResults(surveyors []codexSurveyorDispatch) string {
 	totalDuration := 0.0
 	for _, s := range surveyors {
 		status := normalizeRuntimeDispatchStatus(s.Status)
-		if status == "completed" {
+		if isSuccessfulExternalBuildStatus(status) {
 			completed++
 		}
 		fmt.Fprintf(&b, "  %s %s %s  %s", dispatchStatusIcon(status), casteIdentity(s.Caste), s.Name, status)
@@ -1162,7 +1162,7 @@ func renderPlanningWorkerResults(workers []codexPlanningDispatch) string {
 	totalDuration := 0.0
 	for _, w := range workers {
 		status := normalizeRuntimeDispatchStatus(w.Status)
-		if status == "completed" {
+		if isSuccessfulExternalBuildStatus(status) {
 			completed++
 		}
 		fmt.Fprintf(&b, "  %s %s %s  %s", dispatchStatusIcon(status), casteIdentity(w.Caste), w.Name, status)
@@ -1188,9 +1188,9 @@ func renderPlanningWorkerResults(workers []codexPlanningDispatch) string {
 
 func dispatchStatusIcon(status string) string {
 	switch normalizeRuntimeDispatchStatus(status) {
-	case "completed", "passed", "success", "manually-reconciled":
+	case "completed", "completed_no_change", "passed", "success", "manually-reconciled":
 		return "\u2713"
-	case "blocked":
+	case "blocked", "interrupted":
 		return "!"
 	case "failed", "timeout", "superseded":
 		return "\u2717"

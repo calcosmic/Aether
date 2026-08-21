@@ -30,7 +30,7 @@ type codexBuildDispatch struct {
 	// so wrapper-rendered spawn descriptions can show it. Nothing reads it
 	// to choose a model — routing stays with the platform's agent
 	// frontmatter, and automatic model selection stays rejected.
-	Model     string `json:"model,omitempty"`
+	Model   string `json:"model,omitempty"`
 	Name    string `json:"name"`
 	Task    string `json:"task"`
 	Status  string `json:"status"`
@@ -40,7 +40,7 @@ type codexBuildDispatch struct {
 	// D6). Empty for every other status.
 	Disposition string `json:"disposition,omitempty"`
 	TaskID      string `json:"task_id,omitempty"`
-	TaskIndex int    `json:"task_index,omitempty"`
+	TaskIndex   int    `json:"task_index,omitempty"`
 	// CoveredTaskIDs lists every task this one worker took on. It holds more
 	// than one entry when a chain of dependent steps was merged into a single
 	// dispatch (see coalesceSequentialDispatches). TaskID stays the first of
@@ -1840,6 +1840,9 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	}
 
 	claims := codex.ExtractClaims(results)
+	if err := validateRuntimeNoChangeEvidence(results); err != nil {
+		return dispatches, claims, mode, err
+	}
 	requireFileEvidence := false
 	switch codex.PlatformFromInvoker(invoker) {
 	case codex.PlatformCodex, codex.PlatformClaude, codex.PlatformOpenCode:
@@ -1849,6 +1852,31 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 		return dispatches, claims, mode, err
 	}
 	return dispatches, claims, mode, nil
+}
+
+// validateRuntimeNoChangeEvidence applies the no-change evidence rule on the
+// in-process dispatch lane. A completed_no_change claim buys an exemption
+// from the file-changes requirement, so it must pay for it with the same
+// evidence the external lane demands: a summary saying why, a passing
+// handoff verification, and the commands actually run.
+func validateRuntimeNoChangeEvidence(results []codex.DispatchResult) error {
+	for _, result := range results {
+		if !isNoChangeExternalBuildStatus(normalizeExternalBuildStatus(result.Status)) {
+			continue
+		}
+		if result.WorkerResult == nil {
+			return fmt.Errorf("worker %s claims completed_no_change with no result payload -- an honest no-change needs the verification it ran", result.WorkerName)
+		}
+		missing := noChangeEvidenceMissingFrom(
+			result.WorkerResult.Summary,
+			result.WorkerResult.Handoff.VerificationStatus,
+			result.WorkerResult.Handoff.CommandsRun,
+		)
+		if len(missing) > 0 {
+			return fmt.Errorf("worker %s claims completed_no_change without evidence -- missing: %s", result.WorkerName, strings.Join(missing, "; "))
+		}
+	}
+	return nil
 }
 
 func validateRuntimeBuildDispatchResults(phase colony.Phase, dispatches []codexBuildDispatch, claims *codex.ClaimsSummary, requireFileEvidence bool) error {
@@ -1895,8 +1923,9 @@ func validateRuntimeBuildDispatchResults(phase colony.Phase, dispatches []codexB
 	// Every successful dispatch honestly reported completed_no_change
 	// (ruling D6): the phase's work was to verify existing behavior, so
 	// demanding file changes here would force the fake edit the accounting
-	// contract exists to forbid. Result-level evidence was already enforced
-	// where the results were merged.
+	// contract exists to forbid. This exemption is only safe because the
+	// evidence rule ran first -- validateRuntimeNoChangeEvidence on this
+	// lane, the merge path's no_change_evidence gate on the external one.
 	if successCount > 0 && noChangeCount == successCount {
 		return nil
 	}

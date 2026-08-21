@@ -40,7 +40,10 @@ func runtimeVisualDispatchObserver(spawnTree *agent.SpawnTree, activePrefix stri
 			emitCodexDispatchWorkerStarted(event.Dispatch, wave)
 		case "running", "active":
 			emitCodexDispatchWorkerRunning(event.Dispatch, wave, event.Message)
-		case "completed", "failed", "blocked", "timeout", "superseded", "manually-reconciled":
+		// completed_no_change and interrupted are terminal too (rulings D6/D7):
+		// without them the worker never renders as finished and sits showing
+		// as still running for the rest of the build.
+		case "completed", "completed_no_change", "interrupted", "failed", "blocked", "timeout", "superseded", "manually-reconciled":
 			emitCodexDispatchWorkerFinished(event.Dispatch, dispatchLifecycleResult(event))
 		}
 	}

@@ -154,7 +154,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "chronicler",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was accomplished — scope surveyed, files created or updated",
   "scope_surveyed": ["src/api/", "src/auth/", "README.md"],
   "files_created": [

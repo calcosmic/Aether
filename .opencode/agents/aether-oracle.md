@@ -150,7 +150,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "oracle",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What you discovered and recommend",
   "key_findings": [
     {

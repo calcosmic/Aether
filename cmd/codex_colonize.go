@@ -179,7 +179,7 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 		}
 	}
 
-	surveyFiles, preservedWorkerArtifacts, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, surveySnapshots)
+	surveyFiles, preservedWorkerArtifacts, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, queenSurveyorSpecs(), surveySnapshots)
 	if err != nil {
 		return nil, err
 	}
@@ -855,9 +855,9 @@ func applySurveyDispatchResult(dispatch *codexSurveyorDispatch, result codex.Dis
 	}
 }
 
-func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dispatches []codexSurveyorDispatch, snapshots map[string]codexArtifactSnapshot) ([]string, int, error) {
+func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dispatches []codexSurveyorDispatch, roster []surveyorSpec, snapshots map[string]codexArtifactSnapshot) ([]string, int, error) {
 	generatedAt := time.Now().UTC().Format(time.RFC3339)
-	dispatchByOutput, err := surveyDispatchesByRequiredOutput(dispatches)
+	dispatchByOutput, err := surveyDispatchesByRequiredOutput(dispatches, roster)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -915,7 +915,13 @@ func ensureSurveyArtifactPathWritable(path, name string) error {
 	return nil
 }
 
-func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch) (map[string]codexSurveyorDispatch, error) {
+// surveyDispatchesByRequiredOutput resolves which surveyor owns each required
+// survey document. roster is the survey's INTENDED team (depth-aware): the
+// requirement is the union of what the roster promised and what the dispatch
+// set claims, so a deliberately smaller light survey is not asked for
+// documents it never planned to write, while a surveyor that was supposed to
+// run and went missing from the results is still caught.
+func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch, roster []surveyorSpec) (map[string]codexSurveyorDispatch, error) {
 	required := make(map[string]bool, len(requiredSurveyMarkdownFiles))
 	for _, name := range requiredSurveyMarkdownFiles {
 		required[name] = true
@@ -935,9 +941,42 @@ func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch) (map[s
 		}
 	}
 
+	// Demanding all seven documents whatever the roster meant a light
+	// colonize -- which correctly sends two surveyors instead of four --
+	// aborted with "missing required surveyor output DISCIPLINES.md" and
+	// wrote nothing at all. The requirement is the union of the intended
+	// roster and the dispatch set: a surveyor that was planned or that turned
+	// up still owes every one of its own files.
+	expected := map[string]string{}
+	owe := func(caste, owner string) {
+		caste = strings.TrimSpace(caste)
+		for _, spec := range surveyorSpecs {
+			if spec.Caste != caste {
+				continue
+			}
+			for _, output := range spec.Outputs {
+				if required[output] {
+					expected[output] = owner
+				}
+			}
+		}
+	}
+	for _, spec := range roster {
+		owe(spec.Caste, spec.Caste)
+	}
+	for _, dispatch := range dispatches {
+		owe(dispatch.Caste, firstNonEmpty(dispatch.Name, dispatch.Caste))
+	}
+	if len(expected) == 0 {
+		return nil, fmt.Errorf("no surveyor in this survey owns any required output; the survey would write nothing")
+	}
 	for _, name := range requiredSurveyMarkdownFiles {
+		owner, owed := expected[name]
+		if !owed {
+			continue
+		}
 		if _, ok := byOutput[name]; !ok {
-			return nil, fmt.Errorf("missing required surveyor output %s", name)
+			return nil, fmt.Errorf("missing required surveyor output %s owed by %s", name, owner)
 		}
 	}
 	return byOutput, nil

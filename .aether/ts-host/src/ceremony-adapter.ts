@@ -7,6 +7,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { isTerminalWorkerStatus } from "./worker-status.js";
 
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { writeCompletionFile } from "./go-bridge.js";
@@ -34,21 +35,6 @@ export type CeremonyCommandRunner = (
   opts: GoBridgeOptions,
   args: string[]
 ) => string;
-
-const TERMINAL_WORKER_STATUSES = new Set([
-  "completed",
-  // Honest no-change success (owner ruling D6) and resumable quota
-  // interruption (D7) — mirrored from cmd/codex_build_finalize.go's
-  // isTerminalExternalBuildStatus; both sides must agree or the host lane
-  // rejects results the Go finalizer accepts.
-  "completed_no_change",
-  "interrupted",
-  "failed",
-  "blocked",
-  "timeout",
-  "manually-reconciled",
-  "code_written",
-]);
 
 function runGoCeremonyCommand(opts: GoBridgeOptions, args: string[]): string {
   try {
@@ -83,11 +69,7 @@ function isTerminalWorkerResult(data: unknown): boolean {
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
     return false;
   }
-  const status = (data as Record<string, unknown>)["status"];
-  return (
-    typeof status === "string" &&
-    TERMINAL_WORKER_STATUSES.has(status.trim().toLowerCase())
-  );
+  return isTerminalWorkerStatus((data as Record<string, unknown>)["status"]);
 }
 
 export class GoCeremonyAdapter implements CeremonyAdapter {

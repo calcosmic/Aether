@@ -231,7 +231,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "includer",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was analyzed and overall accessibility posture",
   "wcag_target": "WCAG 2.1 AA",
   "analysis_method": "manual static analysis",

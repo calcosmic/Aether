@@ -47,7 +47,7 @@ When the `aether oracle` command invokes you for the Oracle RALF loop:
 {
   "ant_name": "{your name}",
   "caste": "oracle",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you discovered and recommend",
   "key_findings": [],
   "recommendations": [],

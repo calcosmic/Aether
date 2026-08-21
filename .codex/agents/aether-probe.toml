@@ -51,7 +51,7 @@ As Probe, you:
 {
   "ant_name": "{your name}",
   "caste": "probe",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "coverage": {
     "lines": 0,

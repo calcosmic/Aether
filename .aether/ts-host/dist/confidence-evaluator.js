@@ -7,6 +7,7 @@
  *
  * Bridges to ConfidenceMetric for use by ConfidenceLoop.
  */
+import { isSuccessfulWorkerStatus } from "./worker-status.js";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -89,7 +90,9 @@ export class ConfidenceEvaluator {
         }
         // Count completed workers
         const totalWorkers = claims.length;
-        const completedWorkers = claims.filter((c) => c.status === "completed").length;
+        // completed_no_change counts as a completed worker (ruling D6);
+        // scoring it as incomplete penalised the honest answer.
+        const completedWorkers = claims.filter((c) => isSuccessfulWorkerStatus(c.status)).length;
         // Compute score
         let score = BASE_SCORE;
         // Test pass rate bonus

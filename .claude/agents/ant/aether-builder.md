@@ -129,7 +129,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "builder",
   "task_id": "{task_id}",
-  "status": "code_written" | "failed" | "blocked",
+  "status": "code_written" | "completed_no_change" | "failed" | "blocked",
   "summary": "What you accomplished",
   "files_created": [],
   "files_modified": [],

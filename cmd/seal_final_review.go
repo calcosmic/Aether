@@ -902,7 +902,10 @@ func sealFinalReviewSatisfiesGate(passed bool, workers []codexContinueWorkerFlow
 		if caste == "" {
 			continue
 		}
-		if normalizeRuntimeDispatchStatus(worker.Status) == "completed" {
+		// A required reviewer that honestly reported completed_no_change did
+		// its job (ruling D6); excluding it failed the seal gate for a caste
+		// that had in fact run.
+		if isSuccessfulExternalBuildStatus(normalizeRuntimeDispatchStatus(worker.Status)) {
 			seen[caste] = true
 		}
 	}

@@ -460,8 +460,8 @@ func validateInternalWorkerResult(request internalWorkerDispatchRequest, result 
 	if result.TaskID != expectedTaskID {
 		return fmt.Errorf("worker provider result task identity does not match the issued request")
 	}
-	if invokeErr != nil && result.Status == "completed" {
-		return fmt.Errorf("worker provider returned completed with an invocation error")
+	if invokeErr != nil && isSuccessfulExternalBuildStatus(result.Status) {
+		return fmt.Errorf("worker provider returned a success status with an invocation error")
 	}
 	return nil
 }

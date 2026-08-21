@@ -219,7 +219,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "sage",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was analyzed and the headline finding",
   "analysis_scope": {
     "directory": "src/auth/",

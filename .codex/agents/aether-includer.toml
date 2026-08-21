@@ -70,7 +70,7 @@ As Includer, you:
 {
   "ant_name": "{your name}",
   "caste": "includer",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "wcag_level": "AA",
   "compliance_percent": 0,

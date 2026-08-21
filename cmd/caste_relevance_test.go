@@ -765,3 +765,23 @@ func TestFilterCastesByMinScore(t *testing.T) {
 		t.Fatalf("filtered castes = %+v, want builder and watcher in original order", filtered)
 	}
 }
+
+// TestChroniclerOwnsTheWordDocument: the keeper trim moved "document" away
+// from keeper on the stated grounds that it "belongs to chronicler", but
+// chronicler's keyword was "documentation" and keyword matching anchors only
+// on the left boundary — so "documentation" never matched the word
+// "document" and neither caste owned it.
+func TestChroniclerOwnsTheWordDocument(t *testing.T) {
+	phase := colony.Phase{Name: "Document the export module"}
+	if !containsKeyword(collectPhaseText(phase), "document") {
+		t.Fatal("control failed: the phase text does not contain the word document")
+	}
+	chronicler := casteRelevanceScore(phase, "chronicler")
+	base := casteRelevanceScore(colony.Phase{Name: "Add a CSV export"}, "chronicler")
+	if chronicler <= base {
+		t.Fatalf("a phase asking to document something must score chronicler above its base (%d), got %d", base, chronicler)
+	}
+	if keeper := casteRelevanceScore(phase, "keeper"); keeper > casteRelevanceScore(colony.Phase{Name: "Add a CSV export"}, "keeper") {
+		t.Fatal("keeper must not score on the word document -- it keys on preservation intent")
+	}
+}

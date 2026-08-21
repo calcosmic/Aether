@@ -109,7 +109,7 @@ Your spawn context may include a `## Pheromone Signals` section containing colon
   "ant_name": "{your name}",
   "caste": "medic",
   "task_id": "{task_id}",
-  "status": "code_written | failed | blocked",
+  "status": "code_written | completed_no_change | failed | blocked",
   "summary": "What you diagnosed and repaired",
   "files_created": [],
   "files_modified": [],

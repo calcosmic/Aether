@@ -177,7 +177,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "gatekeeper",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was audited and overall supply chain health assessment",
   "ecosystems_scanned": ["npm", "python"],
   "manifests_read": ["package.json", "package-lock.json", "requirements.txt"],

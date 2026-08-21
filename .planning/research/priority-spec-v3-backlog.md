@@ -42,7 +42,17 @@ one canonical command registry with generated aliases (ruling D5).
   display + owner check-in (2026-08-21, v1.0.62); swarm/seal/colonize spawn
   floors; honest `completed_no_change`/`verified_existing` outcomes with
   mandatory evidence + resumable `interrupted` (2026-08-21 evening, commit
-  969a2bda — UNPUBLISHED pending fresh-eyes review of 043c2745..HEAD).
+  969a2bda). The fresh-eyes review gate then ran (2026-08-21, next session)
+  and found the vocabulary half-wired: over twenty decision points outside
+  the build path (plus three on the TypeScript host) still judged worker
+  success by hand-rolled status lists, and
+  the evidence rule was enforced on the external lane only — an
+  evidence-free `completed_no_change` passed on the in-process lane,
+  reopening the phantom-build loophole. Fixed and locked by
+  `TestNoChangeSuccessIsHonouredWhereverStatusIsJudged`,
+  `TestNoHandRolledWorkerSuccessLists`,
+  `TestRuntimeLaneDemandsNoChangeEvidence` and
+  `TestRuntimeNoChangeEvidenceGateIsWiredIntoDispatch`. Still UNPUBLISHED.
 - Codex grades this the largest correctness gap (C−/D). Extend the existing
   attempt journals/manifest — no parallel stores (ruling D3).
 

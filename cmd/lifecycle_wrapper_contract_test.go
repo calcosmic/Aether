@@ -533,9 +533,17 @@ var specialistCommandSurfaceHashes = map[string]string{
 	".opencode/commands/ant/swarm.md":       "a8f81e0474550915399d66a05effe03a41b5ed073e189242bc070770ae5f8529",
 	".opencode/commands/ant/colonize.md":    "316767bf23b35618eaeebf34965cc8ca494ba7adcc35e2504a1dd35e7ff9cf99",
 	".opencode/commands/ant/council.md":     "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
-	".claude/agents/ant/aether-sage.md":     "0aa31295823dd86bea964a08fb7bdc616867205185b1e994572f5ce1878711e2",
-	".opencode/agents/aether-sage.md":       "5934cb2fa2dd207b583488e9ea45ff08b1b86ba787daeb5fb8a8e854bd3109df",
-	".codex/agents/aether-sage.toml":        "5c9b0ec77ed1d2e4ad73c1b5b6051cf96809f420cf39fffcf557c97890b3d97c",
+	// aether-sage hashes updated 2026-08-21 (no-change vocabulary round): the
+	// worker response contract gained completed_no_change as a first-class
+	// success (ruling D6), and every agent definition that spells out its own
+	// status list was updated in lockstep -- a definition still offering only
+	// completed|failed|blocked contradicts the runtime brief the same worker
+	// receives, and pushes it back to the choose-between-failing-and-faking
+	// bind the status exists to remove. Status list only; sage's behaviour,
+	// tools and flow are unchanged.
+	".claude/agents/ant/aether-sage.md": "912f971e37130449211b6db3520948c808d845fb40a9203efd9afd0568688353",
+	".opencode/agents/aether-sage.md":   "e9bb127682e1cdf668e219ecb18168b7a62f9d18c67bf69e28ef672178708c70",
+	".codex/agents/aether-sage.toml":    "307dbfece02d48abe20166579526d8d9a07590f6f48a671a56a8d800a08e71cb",
 }
 
 // specialistCommandGuideVerbs are the seven CMD-04 surfaces that also have a

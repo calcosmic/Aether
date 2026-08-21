@@ -160,7 +160,7 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 		return nil, err
 	}
 
-	surveyFiles, preservedWorkerArtifacts, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, manifest.Snapshots)
+	surveyFiles, preservedWorkerArtifacts, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, queenSurveyorSpecs(), manifest.Snapshots)
 	if err != nil {
 		return nil, err
 	}

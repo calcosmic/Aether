@@ -66,9 +66,12 @@ func preferCompletedResultOverTimeout(existingStatus, incomingStatus string) (us
 	existing := normalizeExternalBuildStatus(existingStatus)
 	incoming := normalizeExternalBuildStatus(incomingStatus)
 	switch {
-	case existing == "timeout" && (incoming == "completed" || incoming == "manually-reconciled"):
+	// Any genuine success outranks a timeout placeholder, completed_no_change
+	// included (ruling D6) -- otherwise an honest no-change result arriving
+	// after a placeholder is rejected as a duplicate terminal result.
+	case existing == "timeout" && isSuccessfulExternalBuildStatus(incoming):
 		return true, true
-	case incoming == "timeout" && (existing == "completed" || existing == "manually-reconciled"):
+	case incoming == "timeout" && isSuccessfulExternalBuildStatus(existing):
 		return false, true
 	default:
 		return false, false

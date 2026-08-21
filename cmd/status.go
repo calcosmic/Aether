@@ -1167,7 +1167,7 @@ func loadSpawnActivitySummaryForState(s *storage.Store, state *colony.ColonyStat
 		case agent.IsTerminalSpawnStatus(entry.Status):
 			summary.RecentOutcomeEntries = append(summary.RecentOutcomeEntries, entry)
 			switch entry.Status {
-			case "completed", "manually-reconciled":
+			case "completed", "completed_no_change", "manually-reconciled":
 				summary.CompletedCount++
 			case "blocked":
 				summary.BlockedCount++
@@ -1278,7 +1278,7 @@ func withoutLiveSpawnEntries(summary spawnActivitySummary) spawnActivitySummary 
 	}
 	for _, entry := range summary.Entries {
 		switch entry.Status {
-		case "completed", "manually-reconciled":
+		case "completed", "completed_no_change", "manually-reconciled":
 			filtered.CompletedCount++
 		case "blocked":
 			filtered.BlockedCount++

@@ -163,7 +163,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "measurer",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was analyzed and overall performance assessment",
   "project_type": "node" | "python" | "go" | "ruby" | "java" | "unknown",
   "analysis_method": "static + dynamic" | "static only" | "dynamic only",

@@ -102,7 +102,9 @@ func queenWaveLifecycle(
 		succeeded := 0
 		failed := 0
 		for _, result := range waveResults {
-			if result.Status == "completed" {
+			// completed_no_change counts as a success (ruling D6); counting
+			// it as failed sent an honest worker into wave recovery.
+			if isSuccessfulExternalBuildStatus(result.Status) {
 				succeeded++
 			} else {
 				failed++

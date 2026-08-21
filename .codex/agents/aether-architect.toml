@@ -49,7 +49,7 @@ When asked to evaluate existing architecture:
 {
   "ant_name": "{your name}",
   "caste": "architect",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you designed and why",
   "design_decisions": [],
   "design_output_path": ".aether/data/research/architect-{phase_id}.md",

@@ -156,7 +156,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "archaeologist",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was excavated and overall regression risk assessment",
   "change_zone": ["src/auth/session.js", "src/auth/middleware.js"],
   "regression_risks": [

@@ -135,7 +135,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "tracker",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was accomplished — root cause found or escalation needed",
   "symptom": "Exact observable behavior that triggered the investigation",
   "root_cause": "The specific mechanism causing the bug, with file and line",

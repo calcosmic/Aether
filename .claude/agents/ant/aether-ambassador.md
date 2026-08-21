@@ -125,7 +125,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "ambassador",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was accomplished — integration target and what was built",
   "integration_target": "Name of the API or SDK integrated (e.g., Stripe, Twilio, GitHub)",
   "files_created": ["src/integrations/stripe.ts", "src/integrations/stripe.test.ts"],
