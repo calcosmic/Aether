@@ -1130,7 +1130,16 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 	queenState.VerificationDepth = string(reviewDepth)
 	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState)
 	queenCastes := stringSet(queenJudgement.Final)
-	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth, stringSet(queenJudgement.Proposed))
+	// queenAskedFor is the Queen's explicit proposal, not the effective team
+	// after the required-caste floor unions itself in. D-08 (deterministic
+	// checks are the floor, reviewers are judgement) and ruling D11 rule 4
+	// (a phase is verified once) both rest on this distinction: the build's
+	// verification-stage watcher below is gated on queenAskedFor, not
+	// queenCastes, so the required-caste floor still guarantees a checker
+	// somewhere in the pipeline (continue's deterministic floor) without
+	// forcing a second, redundant reviewer dispatch at the build boundary.
+	queenAskedFor := stringSet(queenJudgement.Proposed)
+	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth, queenAskedFor)
 
 	if len(selected) == 0 {
 		dispatches = append(dispatches, queenBuildPreWaveDispatches(phase, queenCastes)...)
@@ -1209,7 +1218,16 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 		nextVerificationWave = reviewWave + 1
 	}
 
-	if queenCastes["watcher"] {
+	// D-08 / ruling D11 rule 4: each phase is verified once. The program's
+	// free checks (build, types, lint, tests, claimed-files-exist, criterion
+	// evidence) are the deterministic floor and run on every phase regardless
+	// -- agent review lives in `continue`, not here. The build side dispatches
+	// a watcher into its own "verification" stage only when the Queen's
+	// proposal explicitly named one; the required-caste floor restoring
+	// "watcher" into queenCastes no longer forces a build-time dispatch, so
+	// the same caste is not summoned at both the build and continue
+	// boundaries unless the Queen asks.
+	if queenAskedFor["watcher"] {
 		dispatches = append(dispatches, codexBuildDispatch{
 			Stage:         "verification",
 			ExecutionWave: nextVerificationWave,

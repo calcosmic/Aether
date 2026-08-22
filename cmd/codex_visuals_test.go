@@ -422,10 +422,18 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "/ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "safe to clear your context now."} {
+	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
+	// proposal, so the spawn plan no longer has a "Post-Wave: Watcher" step
+	// and the dispatch count drops from 4 to 3. The Queen's Team card still
+	// names Watcher (it lists the required-castes floor, not the dispatch
+	// list), which is why "Watcher" alone still must appear.
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Total planned dispatches: 3", "Execution: serial", "single task in this wave", "/ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "safe to clear your context now."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
+	}
+	if strings.Contains(output, "Post-Wave: Watcher") {
+		t.Errorf("build visual output unexpectedly contains a watcher post-wave with no explicit Queen proposal\n%s", output)
 	}
 }
 

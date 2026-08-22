@@ -66,8 +66,11 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 		ColonyDepth:       "full",
 		VerificationDepth: string(colony.VerificationDepthLight),
 	}
+	// Phase 193 (D-08): watcher drops off the build-side dispatch list too --
+	// no explicit Queen proposal named it here, so the build leaves review to
+	// `continue`.
 	routineDispatches := plannedBuildDispatchesForSelectionWithState(routinePhase, routineState, nil, colony.VerificationDepthLight)
-	if got, want := regressionBuildCastes(routineDispatches), []string{"builder", "probe", "watcher"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	if got, want := regressionBuildCastes(routineDispatches), []string{"builder", "probe"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("routine UI build dispatches = %v, want lean Queen plan %v", got, want)
 	}
 	for _, caste := range []string{"gatekeeper", "oracle", "chaos", "measurer"} {

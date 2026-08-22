@@ -529,6 +529,14 @@ func TestContinueReviewDispatch_StandardMode_SpawnsProbeOnly(t *testing.T) {
 	}
 }
 
+// TestBuildDispatch_StandardMode_IncludesWatcherAndProbe guards standard
+// depth's build-side dispatch shape. Phase 193 (D-08) changed what "includes
+// watcher" means here: the build's verification stage dispatches a watcher
+// only when the Queen's proposal explicitly named one (none was made in this
+// call, so the deterministic engine decided) -- the required-castes floor
+// restoring watcher no longer forces a build-time dispatch by itself. Probe
+// still dispatches at standard depth because that dispatch (queenCastes, not
+// queenAskedFor) is untouched by this change.
 func TestBuildDispatch_StandardMode_IncludesWatcherAndProbe(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthStandard)
@@ -548,8 +556,8 @@ func TestBuildDispatch_StandardMode_IncludesWatcherAndProbe(t *testing.T) {
 			t.Error("standard mode should skip chaos dispatch")
 		}
 	}
-	if !hasWatcher {
-		t.Error("standard mode should include watcher dispatch")
+	if hasWatcher {
+		t.Error("standard mode should not include a build-side watcher dispatch without an explicit Queen proposal")
 	}
 	if !hasProbe {
 		t.Error("standard mode should include probe dispatch")

@@ -86,13 +86,15 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	result := envelope["result"].(map[string]interface{})
 	// Phase 184: the two golden tasks form a dependent chain of single-task
 	// waves with the same caste, so they are now one worker rather than two.
-	if got := int(result["dispatch_count"].(float64)); got != 5 {
+	// Phase 193 (D-08): the build's verification stage no longer dispatches a
+	// watcher without an explicit Queen proposal, so this drops from 5 to 4.
+	if got := int(result["dispatch_count"].(float64)); got != 4 {
 		// Modeless phase resolves to prototype: prose "Research" in a task no
 		// longer spawns an Oracle (typed phase mode). The keyword-gated
 		// external castes (ambassador, gatekeeper) no longer spawn either:
 		// this phase replaces internal build dispatch and has no external
 		// surface or auth boundary for them to review.
-		t.Fatalf("dispatch_count = %d, want 5", got)
+		t.Fatalf("dispatch_count = %d, want 4", got)
 	}
 	// Phase 184: the two chained tasks are one worker, so one task wave.
 	if got := int(result["wave_count"].(float64)); got != 1 {
@@ -106,8 +108,10 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	// concurrently instead of queued.
 	// Phase 184: one fewer execution wave, because the two chained tasks are one
 	// worker rather than two waves of one.
-	if got := int(result["execution_wave_count"].(float64)); got != 3 {
-		t.Fatalf("execution_wave_count = %d, want 3 execution waves", got)
+	// Phase 193 (D-08): no watcher wave without an explicit Queen proposal, so
+	// this drops from 3 to 2.
+	if got := int(result["execution_wave_count"].(float64)); got != 2 {
+		t.Fatalf("execution_wave_count = %d, want 2 execution waves", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
@@ -118,8 +122,10 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 	// Was 6 while each reviewer held its own wave. Independent reviewers now
 	// share one step; see TestIndependentSpecialistsShareAWave.
-	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 3 {
-		t.Fatalf("execution_plan = %#v, want 3 execution stages", result["execution_plan"])
+	// Phase 193 (D-08): no verification stage without an explicit Queen
+	// proposal, so this drops from 3 to 2.
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 2 {
+		t.Fatalf("execution_plan = %#v, want 2 execution stages", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -142,12 +148,14 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 5 {
-		t.Fatalf("expected 5 manifest dispatches, got %d", len(manifest.Dispatches))
+	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
+	// proposal, so this drops from 5 to 4.
+	if len(manifest.Dispatches) != 4 {
+		t.Fatalf("expected 4 manifest dispatches, got %d", len(manifest.Dispatches))
 	}
-	// Phase 184: five workers, so five briefs. The two chained tasks share one.
-	if len(manifest.WorkerBriefs) != 5 {
-		t.Fatalf("expected 5 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	// Phase 184: four workers, so four briefs. The two chained tasks share one.
+	if len(manifest.WorkerBriefs) != 4 {
+		t.Fatalf("expected 4 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
@@ -182,10 +190,14 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected spawn-tree.txt: %v", err)
 	}
-	for _, want := range []string{"|Queen|builder|", "|Queen|watcher|", "|Queen|probe|"} {
+	// Phase 193 (D-08): no watcher without an explicit Queen proposal.
+	for _, want := range []string{"|Queen|builder|", "|Queen|probe|"} {
 		if !strings.Contains(string(spawnTreeData), want) {
 			t.Fatalf("spawn tree missing %q\n%s", want, string(spawnTreeData))
 		}
+	}
+	if strings.Contains(string(spawnTreeData), "|Queen|watcher|") {
+		t.Fatalf("spawn tree unexpectedly contains a watcher dispatch with no explicit Queen proposal\n%s", string(spawnTreeData))
 	}
 
 	var state colony.ColonyState
@@ -627,12 +639,14 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 	// Phase 184: a dependent chain of single-task waves sharing a caste is now
 	// one worker instead of several.
-	if got := int(result["dispatch_count"].(float64)); got != 6 {
-		t.Fatalf("dispatch_count = %d, want 6", got)
+	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
+	// proposal, so this drops from 6 to 5.
+	if got := int(result["dispatch_count"].(float64)); got != 5 {
+		t.Fatalf("dispatch_count = %d, want 5", got)
 	}
 	dispatches := result["dispatches"].([]interface{})
-	if len(dispatches) != 6 {
-		t.Fatalf("dispatches = %d, want 6", len(dispatches))
+	if len(dispatches) != 5 {
+		t.Fatalf("dispatches = %d, want 5", len(dispatches))
 	}
 	for _, raw := range dispatches {
 		dispatch := raw.(map[string]interface{})
@@ -685,10 +699,12 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	// occupy a single "mixed" step.
 	// Phase 184 removed one more: the two chained task waves are now a single
 	// worker, so there is one "wave" step rather than two.
-	if len(executionPlan) != 4 {
-		t.Fatalf("execution_plan = %d, want 4 steps: %#v", len(executionPlan), executionPlan)
+	// Phase 193 (D-08): no trailing verification stage without an explicit
+	// Queen proposal, so this drops from 4 to 3.
+	if len(executionPlan) != 3 {
+		t.Fatalf("execution_plan = %d, want 3 steps: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"design", "wave", "mixed", "verification"}
+	wantStages := []string{"design", "wave", "mixed"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})
@@ -1086,9 +1102,13 @@ func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
 	}
 	// The reviewers (probe, measurer, chaos) previously took a wave each. They
 	// examine the same finished code and share no inputs, so they now collapse
-	// into one "mixed" step. The property this test guards — the watcher runs
-	// after every specialist — is unchanged and asserted below.
-	wantStages := []string{"wave", "mixed", "verification"}
+	// into one "mixed" step.
+	// Phase 193 (D-08): the build side no longer dispatches a watcher into a
+	// trailing verification stage without an explicit Queen proposal (none was
+	// made here) -- the program's free checks are the floor, and agent review
+	// lives in `continue`. So the property this test now guards is the
+	// opposite of its old name: no verification stage is planned at all.
+	wantStages := []string{"wave", "mixed"}
 	if strings.Join(gotStages, ",") != strings.Join(wantStages, ",") {
 		t.Fatalf("execution stages = %v, want %v", gotStages, wantStages)
 	}
@@ -1106,9 +1126,10 @@ func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
 		}
 	}
 
-	last := manifest.ExecutionPlan[len(manifest.ExecutionPlan)-1]
-	if last.Stage != "verification" || !containsString(last.Castes, "watcher") {
-		t.Fatalf("final execution step = %+v, want watcher verification", last)
+	for _, step := range manifest.ExecutionPlan {
+		if step.Stage == "verification" || containsString(step.Castes, "watcher") {
+			t.Fatalf("no verification-stage watcher should be planned without a Queen proposal: %+v", step)
+		}
 	}
 	contract, ok := result["dispatch_contract"].(map[string]interface{})
 	if !ok {
@@ -1235,10 +1256,16 @@ func TestBuildPlanOnlyManifestQueenExecutionPolicyExposesSpawnBudget(t *testing.
 	if got := intValue(rawBudget["overflow_required_workers"]); got < 0 {
 		t.Fatalf("spawn_budget.overflow_required_workers = %d, want non-negative", got)
 	}
-	for _, caste := range []string{"builder", "watcher"} {
+	// Phase 193 (D-08): watcher no longer appears here without an explicit
+	// Queen proposal (none was made in this fixture) -- the build's
+	// verification stage dispatches no reviewer implicitly.
+	for _, caste := range []string{"builder"} {
 		if !containsString(stringSliceValue(rawBudget["castes"]), caste) {
 			t.Fatalf("spawn_budget.castes missing %s: %#v", caste, rawBudget["castes"])
 		}
+	}
+	if containsString(stringSliceValue(rawBudget["castes"]), "watcher") {
+		t.Fatalf("spawn_budget.castes unexpectedly includes watcher with no explicit Queen proposal: %#v", rawBudget["castes"])
 	}
 	counts, ok := rawBudget["counts"].(map[string]interface{})
 	if !ok {
@@ -1348,16 +1375,26 @@ func TestCodexBuildPlanOnlySpawnBudgetPreservesSafetyCastesUnderLightAndHeavy(t 
 				t.Fatalf("queen_execution_policy.spawn_budget missing for %s", tt.name)
 			}
 
+			// watcher stays on the required-castes floor (the safety
+			// computation this test's name is about) but Phase 193 (D-08)
+			// stops it from reaching the build's own dispatch list or
+			// spawn_budget.castes without an explicit Queen proposal (none
+			// was made here) -- that reviewer pass now lives in `continue`.
 			for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
 				if !containsString(policy.SpawnBudget.RequiredCastes, caste) {
 					t.Fatalf("spawn_budget.required_castes missing %s: %+v", caste, policy.SpawnBudget.RequiredCastes)
 				}
+			}
+			for _, caste := range []string{"builder", "probe", "gatekeeper", "auditor"} {
 				if !containsString(policy.SpawnBudget.Castes, caste) {
 					t.Fatalf("spawn_budget.castes missing %s: %+v", caste, policy.SpawnBudget.Castes)
 				}
 				if !buildManifestHasCaste(manifest, caste) {
 					t.Fatalf("manifest dispatches missing %s after %s pruning: %v", caste, tt.wantDepth, buildManifestCastes(manifest))
 				}
+			}
+			if buildManifestHasCaste(manifest, "watcher") {
+				t.Fatalf("manifest dispatches unexpectedly include watcher with no explicit Queen proposal: %v", buildManifestCastes(manifest))
 			}
 		})
 	}
@@ -1524,16 +1561,25 @@ func TestCodexBuildPlanOnlyPhaseFiveSafetyVerificationKeepsRequiredCastes(t *tes
 	if budget == nil {
 		t.Fatal("spawn_budget missing from manifest policy")
 	}
+	// watcher stays on the required-castes floor but Phase 193 (D-08) stops it
+	// from reaching the build's own dispatch list without an explicit Queen
+	// proposal (none was made here) -- that reviewer pass now lives in
+	// `continue`.
 	for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
 		if !containsString(budget.RequiredCastes, caste) {
 			t.Fatalf("required_castes missing %s: %+v", caste, budget.RequiredCastes)
 		}
+	}
+	for _, caste := range []string{"builder", "probe", "gatekeeper", "auditor"} {
 		if !containsString(budget.Castes, caste) {
 			t.Fatalf("castes missing required %s: %+v", caste, budget.Castes)
 		}
 		if !buildManifestHasCaste(manifest, caste) {
 			t.Fatalf("manifest dispatches missing required %s: %v", caste, buildManifestCastes(manifest))
 		}
+	}
+	if buildManifestHasCaste(manifest, "watcher") {
+		t.Fatalf("manifest dispatches unexpectedly include watcher with no explicit Queen proposal: %v", buildManifestCastes(manifest))
 	}
 }
 
@@ -1735,10 +1781,12 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
-	if got, want := buildManifestCastes(manifest), []string{"builder", "probe", "measurer", "chaos", "watcher"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	// Phase 193 (D-08): watcher drops off the lean plan too -- no explicit
+	// Queen proposal named it, so the build side leaves review to `continue`.
+	if got, want := buildManifestCastes(manifest), []string{"builder", "probe", "measurer", "chaos"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("dispatch castes = %v, want lean Queen plan %v", got, want)
 	}
-	for _, caste := range []string{"archaeologist", "oracle", "architect", "gatekeeper"} {
+	for _, caste := range []string{"archaeologist", "oracle", "architect", "gatekeeper", "watcher"} {
 		if buildManifestHasCaste(manifest, caste) {
 			t.Fatalf("routine UI phase should not include %s; got %v", caste, buildManifestCastes(manifest))
 		}
@@ -2310,8 +2358,11 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	if len(manifest.SelectedTasks) != 1 || manifest.SelectedTasks[0] != taskTwoID {
 		t.Fatalf("manifest selected tasks = %v, want [%s]", manifest.SelectedTasks, taskTwoID)
 	}
-	if len(manifest.Dispatches) != 2 {
-		t.Fatalf("expected 2 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
+	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
+	// proposal, so a targeted redispatch of one task is now just that one
+	// worker.
+	if len(manifest.Dispatches) != 1 {
+		t.Fatalf("expected 1 manifest dispatch for targeted redispatch, got %d", len(manifest.Dispatches))
 	}
 	for _, dispatch := range manifest.Dispatches {
 		if dispatch.TaskID != "" && dispatch.TaskID != taskTwoID {

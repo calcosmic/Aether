@@ -237,9 +237,16 @@ func TestQueenChoiceReachesTheDispatchList(t *testing.T) {
 	if !spawned["measurer"] {
 		t.Errorf("Queen asked for a Measurer and none spawned; castes = %v", casteKeys(spawned))
 	}
-	// The floor still holds in the same list.
-	if !spawned["watcher"] {
-		t.Errorf("Watcher must spawn regardless of the proposal; castes = %v", casteKeys(spawned))
+	// Phase 193 (D-08): the floor no longer holds in the same list. Watcher
+	// is still restored into the required-castes floor (proven separately by
+	// TestQueenCannotDropTheWatcher against queenApplyJudgement itself), but
+	// the build's own verification-stage dispatch now fires only when the
+	// Queen's proposal explicitly named the watcher -- it did not here, so
+	// no build-side watcher spawns. Agent review for an unrequested watcher
+	// lives in `continue`, not the build boundary (ruling D11 rule 4: a
+	// phase is verified once).
+	if spawned["watcher"] {
+		t.Errorf("watcher must not spawn at the build boundary without an explicit Queen proposal; castes = %v", casteKeys(spawned))
 	}
 }
 
