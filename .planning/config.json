@@ -9,6 +9,7 @@
     "security_enforcement": false,
     "ai_integration_phase": false,
     "plan_checker": true,
-    "context_window": 1000000
+    "context_window": 1000000,
+    "test_gate_timeout": 1500
   }
 }
