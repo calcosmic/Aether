@@ -79,6 +79,12 @@ type codexContinueVerificationReport struct {
 	// floor is claimed files plus criterion evidence, with no fallback that
 	// hands verification responsibility to a reviewer.
 	Warnings []string `json:"warnings,omitempty"`
+	// CheckFixAttempt is set when a failing check with no reviewer dispatched
+	// drew D-02/D-03's single bounded automatic builder fix attempt. nil
+	// means no attempt ran (the floor passed, a reviewer was dispatched, or
+	// nothing was eligible) -- see applyAutomaticCheckFixAttempt
+	// (cmd/check_fix_attempt.go).
+	CheckFixAttempt *checkFixAttemptRecord `json:"check_fix_attempt,omitempty"`
 }
 
 type codexWatcherVerification struct {
@@ -448,6 +454,10 @@ type codexContinueRecoveryPlan struct {
 	RedispatchTasks   []string `json:"redispatch_tasks,omitempty"`
 	RedispatchCommand string   `json:"redispatch_command,omitempty"`
 	SkipCommand       string   `json:"skip_command,omitempty"`
+	// CheckFixCommand is set only when D-02's automatic fix attempt ran and
+	// the re-run still failed: the single exact command to re-run the
+	// builder by hand (D-02, FLOOR-02) -- never a menu.
+	CheckFixCommand string `json:"check_fix_command,omitempty"`
 }
 
 type codexContinueAssessment struct {
@@ -1581,9 +1591,10 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	// apply, full stop. Dispatch (when it happens) reuses floor.Steps and
 	// floor.Claims for the reviewer's brief context rather than re-running
 	// verification a second time.
+	dispatchReviewer, skipped := continueWatcherDecision(state, phase, manifest, buildWatcher, skipWatchers)
 	var continueWatcher codexWatcherVerification
 	var watcherFlow *codexContinueWorkerFlowStep
-	if dispatch, skipped := continueWatcherDecision(state, phase, manifest, buildWatcher, skipWatchers); dispatch {
+	if dispatchReviewer {
 		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, floor.Steps, floor.Claims, buildWatcher, workerTimeout)
 	} else {
 		continueWatcher = skipped
@@ -1592,6 +1603,16 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	if !watcher.Present {
 		watcher = buildWatcher
 	}
+
+	// D-02/D-03: when a free check failed and no reviewer was dispatched,
+	// attempt exactly one bounded automatic builder fix and use its result
+	// as the effective floor for the rest of this function.
+	// applyAutomaticCheckFixAttempt itself decides eligibility (the floor
+	// already passing, a reviewer having been dispatched, no failing shell
+	// step, or a fix attempt already recorded for this phase and check all
+	// return the floor unchanged) -- this call site never re-derives that
+	// decision, so there is exactly one place it is made.
+	floor, checkFixAttempt := applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, dispatchReviewer)
 
 	checksPassed := floor.ChecksPassed
 	blockers := append([]string{}, floor.BlockingIssues...)
@@ -1637,6 +1658,7 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,
 		Warnings:                   warnings,
+		CheckFixAttempt:            checkFixAttempt,
 	}, watcherFlow
 }
 
@@ -2091,6 +2113,16 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	if len(redispatchTasks) > 0 {
 		recovery.RedispatchTasks = uniqueSortedStrings(redispatchTasks)
 		recovery.RedispatchCommand = buildTargetedRedispatchCommand(phase.ID, recovery.RedispatchTasks)
+	}
+	// D-02: when the automatic fix attempt ran and the re-run still failed,
+	// the recovery plan carries the single exact command to re-run the
+	// builder by hand -- never a menu.
+	if fix := verification.CheckFixAttempt; fix != nil && fix.Outcome == "still_failing" {
+		fixCommand := buildTargetedRedispatchCommand(phase.ID, fix.FailureIndex.ImplicatedTaskIDs)
+		if strings.TrimSpace(fixCommand) == "" {
+			fixCommand = buildForceRedispatchCommand(phase.ID)
+		}
+		recovery.CheckFixCommand = fixCommand
 	}
 
 	passed := verification.ChecksPassed && positiveEvidence
@@ -3270,6 +3302,31 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		}
 	}
 	checks = append(checks, ownerCheck)
+
+	// check_fix_attempt gate (D-02, D-03): when a failing check with no
+	// reviewer dispatched drew the single bounded automatic builder fix
+	// attempt and the re-run still failed, this gate fails and names the
+	// exact command to re-run the builder by hand -- more specific than the
+	// generic verification_steps_passed gate above, which already blocks for
+	// the same underlying reason. nil CheckFixAttempt (no attempt ran)
+	// carries no gate entry at all -- there is nothing to report.
+	if fix := verification.CheckFixAttempt; fix != nil {
+		fixCheck := gateCheck{
+			Name:   "check_fix_attempt",
+			Passed: fix.Outcome != "still_failing",
+			Detail: fmt.Sprintf("one automatic fix attempt ran for the %s check (%s)", fix.Check, fix.Outcome),
+		}
+		if !fixCheck.Passed {
+			fixCommand := buildTargetedRedispatchCommand(phase.ID, fix.FailureIndex.ImplicatedTaskIDs)
+			if strings.TrimSpace(fixCommand) == "" {
+				fixCommand = buildForceRedispatchCommand(phase.ID)
+			}
+			fixCheck.FixHint = fmt.Sprintf("The automatic fix attempt did not resolve the %s check; run this command by hand", fix.Check)
+			fixCheck.RecoveryOptions = []string{fixCommand}
+			blockers = append(blockers, fixCheck.Detail)
+		}
+		checks = append(checks, fixCheck)
+	}
 
 	// The operational_evidence gate was removed: it hardcoded Passed=true
 	// regardless of assessment.OperationalIssues, so it was a gate that could

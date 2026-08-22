@@ -166,6 +166,13 @@ type buildAttemptRecord struct {
 	// runCodexBuildFinalize when skipVerify is false. It is a report, never
 	// an advancement gate -- see buildFreeCheckReport's doc comment.
 	FreeChecks *buildFreeCheckReport `json:"free_checks,omitempty"`
+	// CheckFix is set ONLY on a NEW attempt record created for D-02/D-03's
+	// single bounded automatic builder fix attempt (attachCheckFixAttempt,
+	// called from the continue verification path in cmd/codex_continue.go).
+	// Its presence is what distinguishes a check-fix attempt from an
+	// ordinary phase build attempt -- see checkFixAttemptRecord's own doc
+	// comment for the append-only guarantee this field depends on.
+	CheckFix *checkFixAttemptRecord `json:"check_fix,omitempty"`
 }
 
 type latestBuildAttemptPointer struct {
@@ -361,6 +368,96 @@ func attachBuildFreeCheckReport(attemptRel string, report buildFreeCheckReport) 
 		record.FreeChecks = &reportCopy
 		return nil
 	})
+}
+
+// checkFixAttemptRecord is the provenance a build attempt carries when it
+// exists ONLY because the verification floor's single bounded automatic
+// builder fix attempt created it (D-02, D-03), rather than a fresh phase
+// build. It always lives on a NEW attempt record produced through
+// beginBuildAttempt/transitionBuildAttempt like any other attempt -- it
+// never overwrites or mutates the parent attempt's own Dispatches, Claims,
+// or Status (TestFixAttemptNeverOverwritesTheFirstResult); the two exist as
+// separate, independently-readable journal entries, the same append-only
+// discipline outOfBandVerificationRecord already established for a
+// differently-caused non-worker closure.
+type checkFixAttemptRecord struct {
+	// RecordedAt is when this fix attempt's outcome was recorded (after the
+	// re-run floor completed), not when the attempt began.
+	RecordedAt string `json:"recorded_at"`
+	Phase      int    `json:"phase"`
+	// Check is the name of the failing verification step this attempt was
+	// sent to fix (for example "tests").
+	Check string `json:"check"`
+	// Reason is a plain-English clause naming why this attempt exists (D-03:
+	// "fixing the failed tests check") -- distinct from the parent build
+	// attempt's own summary, and never overwrites it.
+	Reason string `json:"reason"`
+	// ParentAttemptID is the build attempt ID the failing check belonged to
+	// -- the attempt this fix attempt is following up on, not replacing.
+	ParentAttemptID string `json:"parent_attempt_id,omitempty"`
+	// FailureIndex is the compact index the fix builder was given -- never
+	// the whole command log (D-02, cmd/check_fix_attempt.go).
+	FailureIndex checkFailureIndex `json:"failure_index"`
+	// Outcome is "fixed" when the re-run floor passed, or "still_failing"
+	// when it did not -- checked by the check_fix_attempt gate
+	// (cmd/codex_continue.go) to decide whether continue blocks.
+	Outcome string `json:"outcome"`
+}
+
+// attachCheckFixAttempt attaches D-02/D-03's fix-attempt provenance to a
+// build attempt record, and touches nothing else on the record: not Status,
+// not Dispatches (those are set through transitionBuildAttempt, called
+// separately, the same as any other attempt), not History. Mirrors
+// attachBuildFreeCheckReport's narrow-setter discipline. Called only from
+// the continue verification path (cmd/codex_continue.go), and only on the
+// NEW attempt record beginBuildAttempt created for this fix attempt -- never
+// on the parent attempt whose failing check triggered it.
+func attachCheckFixAttempt(attemptRel string, record checkFixAttemptRecord) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	var existing buildAttemptRecord
+	return store.UpdateJSONAtomically(attemptRel, &existing, func() error {
+		if existing.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(existing.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		recordCopy := record
+		existing.CheckFix = &recordCopy
+		return nil
+	})
+}
+
+// listBuildAttemptsForPhase loads every attempt record recorded for a phase
+// (every "build/phase-<N>/attempts/*.json" file, skipping the
+// "*.completion.json" siblings), oldest and newest alike -- the append-only
+// journal in full, not just the latest pointer. Used to detect whether a
+// check-fix attempt for a given check has already been recorded for this
+// phase (planCheckFixAttempt, cmd/check_fix_attempt.go), which
+// loadLatestBuildAttempt alone cannot answer once a later ordinary build
+// attempt has superseded the fix attempt as "latest".
+func listBuildAttemptsForPhase(phaseNum int) []buildAttemptRecord {
+	if store == nil || phaseNum < 1 {
+		return nil
+	}
+	dir := filepath.Join(store.BasePath(), "build", fmt.Sprintf("phase-%d", phaseNum), "attempts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var records []buildAttemptRecord
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".completion.json") {
+			continue
+		}
+		rel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "attempts", name))
+		var record buildAttemptRecord
+		if err := store.LoadJSON(rel, &record); err != nil {
+			continue
+		}
+		records = append(records, record)
+	}
+	return records
 }
 
 func prepareBuildAttemptManifestBinding(attemptRel string, manifest *codexBuildManifest) error {

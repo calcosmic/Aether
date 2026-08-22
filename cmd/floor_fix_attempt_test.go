@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -136,5 +138,250 @@ func TestFailureIndexNeverCarriesTheWholeLog(t *testing.T) {
 	}
 	if !index.Truncated {
 		t.Fatalf("expected Truncated=true for an output this much larger than the excerpt bound")
+	}
+}
+
+// TestFailedCheckSendsExactlyOneBuilderFixAttempt proves a failing check with
+// no reviewer dispatched produces exactly one builder dispatch whose reason
+// names the failing check, and no reviewer dispatch of any kind.
+func TestFailedCheckSendsExactlyOneBuilderFixAttempt(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
+	phase := colony.Phase{ID: 1, Name: "One bounded fix attempt"}
+	manifest := codexContinueManifest{}
+
+	verification, watcherFlow := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+
+	if watcherFlow != nil {
+		t.Fatalf("expected no reviewer dispatch of any kind, got watcherFlow=%+v", watcherFlow)
+	}
+	if verification.Watcher.Present && verification.Watcher.Status != "skipped" {
+		t.Fatalf("expected no reviewer dispatched, got watcher=%+v", verification.Watcher)
+	}
+	if verification.CheckFixAttempt == nil {
+		t.Fatalf("expected a check fix attempt to have run")
+	}
+	if verification.CheckFixAttempt.Check != "tests" {
+		t.Fatalf("CheckFixAttempt.Check = %q, want %q", verification.CheckFixAttempt.Check, "tests")
+	}
+	if !strings.Contains(verification.CheckFixAttempt.Reason, "tests") {
+		t.Fatalf("CheckFixAttempt.Reason = %q, want it to name the tests check", verification.CheckFixAttempt.Reason)
+	}
+
+	records := listBuildAttemptsForPhase(phase.ID)
+	var builderDispatchCount, fixRecords int
+	for _, r := range records {
+		if r.CheckFix != nil {
+			fixRecords++
+		}
+		for _, d := range r.Dispatches {
+			if d.Caste == "builder" {
+				builderDispatchCount++
+			}
+			if d.Caste == "watcher" {
+				t.Fatalf("expected no watcher dispatch of any kind, found one in %+v", d)
+			}
+		}
+	}
+	if fixRecords != 1 {
+		t.Fatalf("expected exactly 1 fix-attempt journal record, got %d", fixRecords)
+	}
+	if builderDispatchCount != 1 {
+		t.Fatalf("expected exactly 1 builder dispatch, got %d", builderDispatchCount)
+	}
+}
+
+// TestSecondFailureBlocksAndNamesTheCommand proves that after the fix
+// attempt, a still-failing check blocks continue and the reported recovery
+// carries one exact command to re-run the builder by hand.
+func TestSecondFailureBlocksAndNamesTheCommand(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
+	phase := colony.Phase{ID: 1, Name: "Still failing after the fix attempt"}
+	manifest := codexContinueManifest{}
+
+	verification, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	if verification.ChecksPassed {
+		t.Fatalf("expected the phase to still be blocked after the fix attempt (FakeInvoker does not repair the repo), got %+v", verification)
+	}
+	if verification.CheckFixAttempt == nil || verification.CheckFixAttempt.Outcome != "still_failing" {
+		t.Fatalf("expected CheckFixAttempt.Outcome=still_failing, got %+v", verification.CheckFixAttempt)
+	}
+
+	now := time.Now().UTC()
+	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{SkipWatchers: true}, now)
+	if assessment.Passed {
+		t.Fatalf("expected continue to block, got %+v", assessment)
+	}
+	if strings.TrimSpace(assessment.Recovery.CheckFixCommand) == "" {
+		t.Fatalf("expected Recovery.CheckFixCommand to name one exact command, got empty")
+	}
+
+	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, nil)
+	var fixGate *gateCheck
+	for i := range gates.Checks {
+		if gates.Checks[i].Name == "check_fix_attempt" {
+			fixGate = &gates.Checks[i]
+		}
+	}
+	if fixGate == nil {
+		t.Fatalf("expected a check_fix_attempt gate entry, got %+v", gates.Checks)
+	}
+	if fixGate.Passed {
+		t.Fatalf("expected check_fix_attempt gate to fail, got %+v", fixGate)
+	}
+	if len(fixGate.RecoveryOptions) != 1 {
+		t.Fatalf("expected exactly one recovery command, got %v", fixGate.RecoveryOptions)
+	}
+}
+
+// TestFixAttemptNeverOverwritesTheFirstResult proves the attempt journal
+// after the fix attempt contains both the original attempt and the fix
+// attempt as separate entries, and the original's dispatches, claims and
+// status are byte-identical to before.
+func TestFixAttemptNeverOverwritesTheFirstResult(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
+	phase := colony.Phase{ID: 1, Name: "Original attempt preserved"}
+
+	originalDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-1", Task: "Original work", Status: "completed"},
+	}
+	attemptRel, err := beginBuildAttempt(colony.ColonyState{}, phase.ID, phase, time.Now().UTC(), nil, "", "", "", "test-owner", originalDispatches)
+	if err != nil {
+		t.Fatalf("begin original build attempt: %v", err)
+	}
+	claims := &codexBuildClaims{BuildPhase: phase.ID}
+	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "original build complete", originalDispatches, claims, "real", nil); err != nil {
+		t.Fatalf("transition original build attempt: %v", err)
+	}
+	var before buildAttemptRecord
+	if err := store.LoadJSON(attemptRel, &before); err != nil {
+		t.Fatalf("load original attempt: %v", err)
+	}
+
+	manifest := codexContinueManifest{}
+	verification, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	if verification.CheckFixAttempt == nil {
+		t.Fatalf("expected a fix attempt to have run")
+	}
+
+	var after buildAttemptRecord
+	if err := store.LoadJSON(attemptRel, &after); err != nil {
+		t.Fatalf("reload original attempt: %v", err)
+	}
+	beforeJSON, _ := json.Marshal(before)
+	afterJSON, _ := json.Marshal(after)
+	if string(beforeJSON) != string(afterJSON) {
+		t.Fatalf("original attempt was mutated by the fix attempt:\nbefore=%s\nafter=%s", beforeJSON, afterJSON)
+	}
+
+	records := listBuildAttemptsForPhase(phase.ID)
+	if len(records) != 2 {
+		t.Fatalf("expected 2 separate attempt records (original + fix), got %d: %+v", len(records), records)
+	}
+	fixCount := 0
+	for _, r := range records {
+		if r.CheckFix != nil {
+			fixCount++
+			if r.CheckFix.ParentAttemptID != before.ID {
+				t.Fatalf("fix attempt ParentAttemptID = %q, want %q", r.CheckFix.ParentAttemptID, before.ID)
+			}
+		}
+	}
+	if fixCount != 1 {
+		t.Fatalf("expected exactly 1 record carrying CheckFix, got %d", fixCount)
+	}
+}
+
+// TestNoSecondAutomaticFixAttempt proves that with the fix attempt already
+// recorded for this phase and check, a further continue run does not send
+// another builder automatically.
+func TestNoSecondAutomaticFixAttempt(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
+	phase := colony.Phase{ID: 1, Name: "No second automatic attempt"}
+	manifest := codexContinueManifest{}
+
+	first, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	if first.CheckFixAttempt == nil {
+		t.Fatalf("expected the first run to draw a fix attempt")
+	}
+	recordsAfterFirst := listBuildAttemptsForPhase(phase.ID)
+
+	second, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	if second.CheckFixAttempt != nil {
+		t.Fatalf("expected the second run to send no further automatic fix attempt, got %+v", second.CheckFixAttempt)
+	}
+	recordsAfterSecond := listBuildAttemptsForPhase(phase.ID)
+	if len(recordsAfterSecond) != len(recordsAfterFirst) {
+		t.Fatalf("expected no new attempt record from the second run: before=%d after=%d", len(recordsAfterFirst), len(recordsAfterSecond))
+	}
+}
+
+// TestFixAttemptIsCountedSeparately proves the fix attempt appears in the
+// dispatch count the team card and cost line read, distinguishable from the
+// original build's workers.
+func TestFixAttemptIsCountedSeparately(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
+	phase := colony.Phase{ID: 1, Name: "Fix attempt counted separately"}
+
+	originalDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-1", Task: "Original work", Status: "completed"},
+		{Stage: "wave", Wave: 1, Caste: "watcher", Name: "Keen-1", Task: "Verify", Status: "completed"},
+	}
+	attemptRel, err := beginBuildAttempt(colony.ColonyState{}, phase.ID, phase, time.Now().UTC(), nil, "", "", "", "test-owner", originalDispatches)
+	if err != nil {
+		t.Fatalf("begin original build attempt: %v", err)
+	}
+	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "original build complete", originalDispatches, nil, "real", nil); err != nil {
+		t.Fatalf("transition original build attempt: %v", err)
+	}
+
+	manifest := codexContinueManifest{}
+	verification, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	if verification.CheckFixAttempt == nil {
+		t.Fatalf("expected a fix attempt to have run")
+	}
+
+	var original buildAttemptRecord
+	if err := store.LoadJSON(attemptRel, &original); err != nil {
+		t.Fatalf("load original attempt: %v", err)
+	}
+	if len(original.Dispatches) != 2 {
+		t.Fatalf("original attempt's own dispatch count changed: got %d, want 2", len(original.Dispatches))
+	}
+
+	records := listBuildAttemptsForPhase(phase.ID)
+	var fixRecord *buildAttemptRecord
+	for i := range records {
+		if records[i].CheckFix != nil {
+			fixRecord = &records[i]
+		}
+	}
+	if fixRecord == nil {
+		t.Fatalf("expected a fix-attempt record in the journal")
+	}
+	if len(fixRecord.Dispatches) != 1 || fixRecord.Dispatches[0].Caste != "builder" {
+		t.Fatalf("expected the fix attempt's own dispatch count to be exactly 1 builder, got %+v", fixRecord.Dispatches)
+	}
+	if fixRecord.ID == original.ID {
+		t.Fatalf("fix attempt shares an ID with the original attempt, not counted separately")
 	}
 }
