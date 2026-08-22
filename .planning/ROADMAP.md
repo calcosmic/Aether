@@ -56,6 +56,7 @@
 **Requirements**: FLOOR-01, FLOOR-02, FLOOR-03, FLOOR-04
 
 **Success Criteria** (what must be TRUE):
+
 1. Turning off every optional reviewer (through any speed setting, review policy, or the "skip watchers" flag) still leaves the build/types/lint/tests/files-exist/evidence checks running — a test walks every possible skip path and fails if even one lets a check through unrun (`TestDeterministicChecksCannotBeSkipped`).
 2. On a test project with zero reviewer helpers sent, the phase moves forward when the automatic checks pass and is stopped when they fail — proven in both directions through the `continue` command on a fixture project.
 3. A requirement that today silently expects a "Watcher" (the reviewer caste that checks work) to have run is satisfied by the automatic checks alone when no Watcher was sent, and running the manual "I already checked this by hand" command (`continue-finalize --reconcile-task`) counts as real proof (`TestGateAcceptsDeterministicEvidenceWithoutReviewer`).
@@ -64,10 +65,21 @@
 **Plans**: 5 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 193-01-PLAN.md — Tracer: a phase with no reviewer is still checked, and the checks decide (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 193-02-PLAN.md — The build side runs free checks only; verified once (wave 2)
 - [ ] 193-03-PLAN.md — Nothing can turn a check off, and the flag text says so (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 193-04-PLAN.md — No gate demands a reviewer: reconciliation, re-run evidence, owner confirmation (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 193-05-PLAN.md — Targeted per phase, full at the end; one bounded fix attempt (wave 4)
 
 ### Phase 194: The Queen Decides the Team
@@ -79,6 +91,7 @@ Plans:
 **Requirements**: TEAM-01, TEAM-02, TEAM-03, TEAM-04, TEAM-05
 
 **Success Criteria** (what must be TRUE):
+
 1. On an ordinary job, the only helper required by default is the one that writes the code (the "builder" caste); no other helper type is required just because of guessed project type or keyword — the old rule that always sent a reviewer (`TestWatcherIsAlwaysRequiredOnBuild`) is formally retired.
 2. A side-by-side test shows a plain CSV-export feature gets no forced reviewer, while a password-reset feature gets a security reviewer, with the reason ("this touches credentials") shown on screen (`TestReviewerForcedOnlyByNamedRisk`).
 3. Every worker that gets sent carries a one-sentence, plain-English reason the owner can read; if a proposed team includes a worker with no reason, that worker is rejected by name, not silently allowed (`TestNoWorkerWithoutStatedReason`).
@@ -96,6 +109,7 @@ Plans:
 **Requirements**: JOBS-01, JOBS-02, JOBS-03, JOBS-04
 
 **Success Criteria** (what must be TRUE):
+
 1. The Queen can combine multiple tasks into one job with a stated reason; if a proposed grouping would do a task before something it depends on, it is rejected by name instead of silently going through.
 2. A combined job's instructions carry every task's requirements, and finishing the job marks every one of those tasks as done, not just the first (`TestMergedDispatchCreditsEveryCoveredTask`).
 3. Given the real six-batch file-copy failure from a past project as a test fixture, the default grouping (with no explicit instruction) produces one worker instead of six, because the tasks share files and depend on each other.
@@ -112,6 +126,7 @@ Plans:
 **Requirements**: COST-01, COST-02, COST-03, COST-04, COST-05
 
 **Success Criteria** (what must be TRUE):
+
 1. Every build and continue ends with one line stating token usage per worker and in total, clearly marking which numbers are measured versus estimated — no dollar amount as the headline, no price table anywhere (`TestBuildEndsWithOneCostLine`).
 2. On the Claude Code / OpenCode chat path — the one the owner actually uses day to day — worker results report their real token usage, so that cost line has real numbers instead of blanks.
 3. Running `aether spend` shows token usage per worker for the current run without changing any files on disk, and none of its numbers are guessed from text length.
@@ -129,6 +144,7 @@ Plans:
 **Requirements**: NEXT-01, NEXT-02, NEXT-03, NEXT-04, NEXT-05, NEXT-06
 
 **Success Criteria** (what must be TRUE):
+
 1. One shared piece of logic, given the project's saved state, produces everything the owner needs: where things stand, what changed, any open flags, the recommended next step, the exact command to run, 2-4 other options, whether it is safe to close the chat, and any paused/recoverable state.
 2. Every command's closing message (starting, discussing, planning, building, continuing, pausing, resuming, sealing/finishing, updating, recovering, checking status) is generated from that same shared logic, and the machine-readable version carries the identical information (`TestEveryLifecycleCommandEndsWithNextAction`).
 3. An automatic check counts how many places in the codebase still hand-type a command name instead of using the shared logic, and fails the build if that count ever grows from today's recorded baseline (`TestNextActionNeverHardcoded`).
@@ -147,6 +163,7 @@ Plans:
 **Requirements**: SHOW-01, SHOW-02, SHOW-03, SHOW-04, SHOW-05
 
 **Success Criteria** (what must be TRUE):
+
 1. What the owner sees in the chat for planning, continuing, and sealing (finishing) a project matches what the direct command-line view shows — no more thinner "chat mode" summary (`TestWrapperPathRendersSameCeremonyAsDirectPath`).
 2. Every piece of information the program already calculates is shown, not silently dropped: which checks passed, evidence for each requirement, how long each worker took, plan confidence, resume progress by phase, recent decisions, a drift warning, specialist findings, and a heads-up before build if something is blocked — checked as a rule that never lets these slip through, not a page that happens to have the right heading (`TestRenderedVisualsShowEveryCarriedField`).
 3. While `continue` (the check-and-advance command) is running, the owner sees each check's progress appear live as it happens, not only a summary at the very end.
@@ -165,6 +182,7 @@ Plans:
 **Requirements**: PROOF-05, PROOF-06, PROOF-07, PROOF-08
 
 **Success Criteria** (what must be TRUE):
+
 1. With the owner watching, one real end-to-end run is fired on a real task, and its result — whatever it shows, good or bad — is written down.
 2. A full three-way comparison — Aether run by hand, Aether on autopilot, and the competing tool GSD — is run on the finished system, recording tokens spent, time taken, how often a human had to step in, how many workers were sent, whether the work was truly complete, any unrecoverable stuck moments, and whether the code was left clean and ready to commit.
 3. The milestone is only considered done once all of these hold together: a one-task bug fix costs one worker plus the free checks; a CSV-export-sized job costs four workers or fewer across the whole build-and-check cycle; the typical token cost per finished task is no more than 1.5x what GSD uses; the number of times a human had to step in is no worse than GSD's; and zero runs get stuck beyond recovery.
