@@ -3,6 +3,7 @@ created: 2026-08-01T12:00:00Z
 title: continue-finalize does not count --reconcile-task as recorded reconciliation for the implementation_evidence gate
 area: cmd/continue
 source: Phase 163.1 code-review fix pass (WR-04 strengthening), commit 8a516aa7
+resolves_phase: 193
 audit_acknowledged:
   milestone: v1.26
   at: 2026-08-22

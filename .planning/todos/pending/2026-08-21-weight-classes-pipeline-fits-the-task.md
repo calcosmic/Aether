@@ -3,6 +3,7 @@ created: 2026-08-21T00:00:00Z
 title: Weight classes — the pipeline should fit the task; small work should get the small machine automatically
 area: orchestration/UX
 source: Owner feedback, 2026-08-21, after using Aether in downstream repos
+resolves_phase: 194
 audit_acknowledged:
   milestone: v1.26
   at: 2026-08-22
