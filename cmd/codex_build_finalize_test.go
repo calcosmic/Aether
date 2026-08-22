@@ -1489,6 +1489,11 @@ func TestValidateCompletionPacketSemanticsReturnsAllViolations(t *testing.T) {
 	manifest, completion := prepareExternalBuildCompletion(t, root)
 	_ = manifest
 
+	// Phase 193 (D-08): the fixture's second worker was the build-side
+	// watcher ("Keen-6"), dispatched only because the required-caste floor
+	// forced it with no Queen proposal. That implicit dispatch is gone, so
+	// the second worker here is now the probe ("Check-80") the fixture
+	// still produces unconditionally.
 	for i := range completion.Dispatches {
 		switch completion.Dispatches[i].effectiveName() {
 		case "Forge-86":
@@ -1497,7 +1502,7 @@ func TestValidateCompletionPacketSemanticsReturnsAllViolations(t *testing.T) {
 			// invalid handoff (task 2's mergeExternalBuildResults).
 			completion.Dispatches[i].FilesModified = []string{"/etc/passwd"}
 			completion.Dispatches[i].Handoff.VerificationStatus = "not-a-real-status"
-		case "Keen-6":
+		case "Check-80":
 			// Two more independent violations, again spanning both layers,
 			// on a second worker: an escaping claim path and a non-terminal
 			// status.
@@ -1514,7 +1519,7 @@ func TestValidateCompletionPacketSemanticsReturnsAllViolations(t *testing.T) {
 	rules := map[string]bool{}
 	for _, v := range violations {
 		rules[v.Rule] = true
-		if v.Worker != "Forge-86" && v.Worker != "Keen-6" {
+		if v.Worker != "Forge-86" && v.Worker != "Check-80" {
 			t.Errorf("violation attributed to unexpected worker %q: %+v", v.Worker, v)
 		}
 	}
@@ -1641,7 +1646,7 @@ func TestBuildFinalizeCLIRejectsMultiViolationPacketWithStructuredDetails(t *tes
 			completion.Dispatches[i].FilesModified = []string{"/etc/passwd"}
 			completion.Dispatches[i].Handoff.VerificationStatus = "not-a-real-status"
 			violationCount += 2
-		case "Keen-6":
+		case "Check-80":
 			completion.Dispatches[i].TestsWritten = []string{"../outside.go"}
 			completion.Dispatches[i].Status = "running"
 			violationCount += 2

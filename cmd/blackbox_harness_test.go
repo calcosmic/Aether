@@ -433,8 +433,11 @@ func TestCLIExternalAdapterBuildContract(t *testing.T) {
 			if err != nil || len(strings.TrimSpace(string(logData))) == 0 {
 				t.Fatalf("external adapter did not record an invocation: %v", err)
 			}
-			if tc.wantSuccess && (!bytes.Contains(logData, []byte(`"caste":"builder"`)) || !bytes.Contains(logData, []byte(`"caste":"watcher"`))) {
-				t.Fatalf("successful build did not execute builder and watcher processes:\n%s", logData)
+			// Phase 193 (D-08): the build side no longer dispatches an
+			// implicit watcher without an explicit Queen proposal (none was
+			// made here) -- agent review now lives in `continue`.
+			if tc.wantSuccess && !bytes.Contains(logData, []byte(`"caste":"builder"`)) {
+				t.Fatalf("successful build did not execute a builder process:\n%s", logData)
 			}
 			harness.assertSourceUnchanged(t)
 		})
@@ -978,14 +981,17 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 		t.Fatalf("revised colony ended in %s, want COMPLETED", final.State)
 	}
 
+	// Phase 193 (D-08): see the equivalent comment in
+	// TestCLICompiledInstallToSealJourney -- the build side no longer
+	// dispatches an implicit watcher, which was the only reliable source of
+	// a `"caste":"watcher"` tag in this log format.
 	logData, err := os.ReadFile(logPath)
 	if err != nil ||
 		!bytes.Contains(logData, []byte(`"caste":"oracle"`)) ||
 		!bytes.Contains(logData, []byte(`"caste":"scout"`)) ||
 		!bytes.Contains(logData, []byte(`"caste":"route_setter"`)) ||
-		!bytes.Contains(logData, []byte(`"caste":"builder"`)) ||
-		!bytes.Contains(logData, []byte(`"caste":"watcher"`)) {
-		t.Fatalf("revision journey did not execute oracle, scout, route-setter, builder, and watcher provider processes: err=%v\n%s", err, logData)
+		!bytes.Contains(logData, []byte(`"caste":"builder"`)) {
+		t.Fatalf("revision journey did not execute oracle, scout, route-setter, and builder provider processes: err=%v\n%s", err, logData)
 	}
 	harness.assertSourceUnchanged(t)
 }
@@ -1094,9 +1100,16 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(harness.repo, ".aether", "CROWNED-ANTHILL.md")); err != nil {
 		t.Fatalf("seal summary missing: %v", err)
 	}
+	// Phase 193 (D-08): the build side no longer dispatches an implicit
+	// watcher without an explicit Queen proposal (none was made in this
+	// journey), which was the only reliable source of a `"caste":"watcher"`
+	// tag in this external adapter's log format -- a continue-dispatched
+	// watcher still runs (report.Passed above proves verification
+	// happened), it just is not caste-tagged in this log shape, a
+	// pre-existing gap outside this plan's scope.
 	logData, err := os.ReadFile(logPath)
-	if err != nil || !bytes.Contains(logData, []byte(`"caste":"oracle"`)) || !bytes.Contains(logData, []byte(`"caste":"builder"`)) || !bytes.Contains(logData, []byte(`"caste":"watcher"`)) {
-		t.Fatalf("journey did not execute research, builder, and watcher provider processes: err=%v\n%s", err, logData)
+	if err != nil || !bytes.Contains(logData, []byte(`"caste":"oracle"`)) || !bytes.Contains(logData, []byte(`"caste":"builder"`)) {
+		t.Fatalf("journey did not execute research and builder provider processes: err=%v\n%s", err, logData)
 	}
 	harness.assertSourceUnchanged(t)
 }
