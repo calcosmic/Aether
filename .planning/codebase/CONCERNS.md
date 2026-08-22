@@ -1,274 +1,180 @@
+---
+title: Codebase Concerns
+last_mapped_commit: 92252d01
+---
+
 # Codebase Concerns
 
-**Analysis Date:** 2026-08-01
+**Analysis Date:** 2026-08-22
 
 ## Tech Debt
 
-### State Corruption via Full-File Reconstruction
-
-**Issue:** Colony state mutations in playbooks and commands reconstruct the entire COLONY_STATE.json in LLM context, then write via `state-mutate`. When context is stale (from previous colonies or conversation context), this produces "Frankenstein" state mixing old and new data.
-
-**Files:** `cmd/codex_continue.go` (state advance logic), `.claude/commands/ant/continue.md` (orchestration), `.claude/commands/ant/init.md` (colony initialization)
-
-**Impact:** Colony state data loss, phase tracking corruption, cross-colony data contamination. Documented instance: donation page plan data merged into animation colony state.
-
-**Fix approach:** Replace full-file reconstruction with targeted `state-mutate '<jq_expression>'` calls for each field change. The mutation function exists in state-api.sh and does atomic locked read-modify-write, eliminating LLM-context-stale-data vector.
-
-### Learning Pipeline Never Executes
-
-**Issue:** `consolidation-phase-end` and `consolidation-seal` commands exist, are documented, and are tested, but have no real callers. The entire wisdom consolidation pipeline (Observe→Promote→Queen→Consolidate) only runs inside these two isolated commands; no lifecycle command invokes them.
-
-**Files:** `cmd/graph_consolidation_cmds.go` (command definitions at line 205 and 270), `pkg/memory/pipeline.go` (pipeline construction at line 217, 303), `cmd/doc_consolidation_claims_test.go` (test that verifies they have no callers — this is intentional)
-
-**Impact:** Colony learning disabled by default. Workers cannot extract instincts or promote patterns. The Queen never receives learned preferences. Cross-colony hive brain remains empty. Claimed features (automatic pattern capture, phase learning) are non-functional.
-
-**Fix approach:** Phase 162 work: wire real callers into `/ant-continue` and `/ant-seal` lifecycle. Update all documentation claims in CLAUDE.md, AGENTS.md, and `.aether/docs/structural-learning-stack.md` when wiring completes.
-
-### Machinery Exists But Is Never Wired
-
-**Issue:** Verified by specialist review July 2026 — Aether capability is rarely deleted; it is built, tested, documented, and never called. Confirmed examples:
-
-- `pkg/colony/policies/` (7 of 10 policy files unread)
-- `colony-vital-signs` health computation (0 readers — unplugged from `/ant-status`)
-- Approved charter governance detection (zero reader references in `cmd/colony_prime_context.go`)
-- Check-antipattern Gatekeeper security scan (playbook redirects stderr to `/dev/null`, silent failures)
-
-**Files:** Multiple; see `.claude/projects/-Users-callumcowie-repos-Aether/memory/project_orphaned_playbooks.md` for verified examples with line citations
-
-**Impact:** Users get partial or non-functional features because the calling machinery was never wired. Static analysis (grep, linting) cannot catch this; only execution reveals wiring gaps.
-
-**Fix approach:** When triaging feature gaps, grep for **callers**, not just definitions. Execute commands before concluding they work. Treat the Go runtime in `cmd/` and Codex guides (`AGENTS.md`, `.codex/CODEX.md`) as authoritative; verify against execution.
-
-## Known Bugs
-
-### Interrupted Phase Builds Strand Worktree Branches
-
-**Issue:** GSD's `execute-phase` merges each wave's worktree branches back and deletes them at phase end. When a run is interrupted (context exhaustion, crash, spend limit), branch cleanup never runs. Orphaned branches accumulate with no owner and are never reaped.
-
-**Files:** `.aether/data/` worktree refs, `cmd/worktree*.go` cleanup logic
-
-**Impact:** Dead branches accumulate indefinitely (audit 2026-07-27 found 10 accumulated since May 2026). While cleanup is needed, the risk of data loss is overstated by commit counts: `git rev-list --count main..<branch>` reports diverged lineage, not real lost changes.
-
-**Fix approach:** Audit before deletion using: (1) grep main for branch feature headlines, (2) verify all files the branch ADDED exist in main, (3) for genuinely new source files, grep main for branch symbols (scaffold often splits across files). Record tip SHAs in ledger before deletion; `git branch <name> <sha>` restores until gc.
-
-### Untracked Plan Files Lost on Worktree Merge-Back
-
-**Issue:** GSD executor agents write phase plan files (PLAN.md, SUMMARY.md, RESEARCH.md, VALIDATION.md) but do not commit them before the orchestrator force-removes the worktree. These untracked files vanish without recovery.
-
-**Files:** `.planning/` directory (tracked but gitignored), GSD executor agents' file output
-
-**Impact:** Planning artifacts and summaries are lost, breaking post-phase analysis and carry-forward context.
-
-**Fix approach:** Require GSD executor agents to commit planning artifacts with `git add -f .planning/` before returning (files need force-add due to gitignore). Confirm with `git log --stat -1` that SUMMARY.md is in the commit before returning.
-
-### .planning is Gitignored but Tracked
-
-**Issue:** `.planning/` matches a `.gitignore` entry (line 123) while ~71 files under it are tracked. Already-tracked files commit normally; any **new** file fails `git add` with "paths are ignored by one of your .gitignore files" and is silently omitted from commits.
-
-**Files:** `.gitignore` line 123: `.planning/`, GSD planning operations
-
-**Impact:** New phase plans, research summaries, and validations created by GSD workflows fail to commit. The check `gsd-sdk query commit` returns `committed: false` for these paths.
-
-**Fix approach:** Use `git add -f .planning/<filename>` for all new files in `.planning/`. Consider removing `.planning/` from gitignore and letting the hub publish job manage cleanup, or use a prefix-pattern (e.g., gitignore only `.planning/*.tmp`).
-
-### Version String Republish Defeats Freshness Check
-
-**Issue:** v1.0.43 was published at least twice (2026-07-28, then again 2026-07-30 after phase-163 fixes) without bumping the version number. Downstream binary reporting "1.0.43, hub aligned" can be missing fixes that are inside v1.0.43. Only version agreement check runs; it silently passes when the binary is stale.
-
-**Files:** Release tag logic, `aether version --check` command, `aether publish` workflow
-
-**Impact:** Fixes to a release version go undeployed to users running downstream colonies. Version agreement is the only downstream freshness check, and same-number republish silently defeats it.
-
-**Fix approach:** **Always bump version before `aether publish` when behavior changes.** When triaging downstream bugs, verify fix commits are ancestors of what was actually published, not just compare version strings.
-
-## Security Considerations
-
-### Permission Profile Write Guardrail Contradiction
-
-**Issue:** Platform rules mark `.aether/data/` as protected ("never modify programmatically"), but Aether's own planning workers must write artifacts there (`planning/phase-plan.json`, `SCOUT.md`, iteration state). The permission profile says `repository_read_only` yet the worker brief orders writing phase-plan.json. Workers must work around the guardrail.
-
-**Files:** `pkg/codex/permission_profile.go` line 96 (profile enforcement), `.claude/rules/aether-colony.md` (states protected paths), `.aether/docs/known-issues.md` line 52–68 (documented contradiction)
-
-**Impact:** A guardrail that the system's own workers must evade trains workers to bypass security restrictions. Neither respected nor effective — worse than no guardrail.
-
-**Fix approach:** Phase 163 scope (Context Reaches Workers). Carve out `.aether/data/planning/`, `.aether/data/phase-research/`, and `.aether/data/survey/` as declared-writable for workers, or route artifact writes through CLI. Update rules file to match actual system intent.
-
-### Provider Availability Preflight Is Not Post-Launch Guarantee
-
-**Issue:** Before worker launch, Aether checks whether a platform CLI exists and appears authenticated (categories: `binary_missing`, `auth_probe_failed`, `auth_inactive`, `invalid_auth_output`, `credentials_missing`, `probe_skipped`). This does not prove the later worker request will be accepted by provider API, account, proxy, or upstream.
-
-**Files:** `pkg/codex/platform_dispatch.go` (provider preflight), `cmd/codex_build.go` (dispatch logic)
-
-**Impact:** Post-launch provider/API/auth failures can look like worker parse failures if the provider returns error payload instead of worker claims JSON. Users may see generic "parse worker output: no JSON found" instead of a clear setup problem.
-
-**Fix approach:** Classify post-launch provider/API/auth payloads before worker-result parsing. Surface sanitized provider problem description before generic JSON-parse errors.
-
-### Multiline Pheromone Content Injection Risk
-
-**Issue:** Pheromone signals are now sanitized (XML tags rejected, angle brackets escaped, shell injection patterns blocked, 500-char cap), but sanitization runs **after** prompt injection sanitization logic. Attack surface is reduced but not eliminated.
-
-**Files:** `cmd/pheromone_cmds.go` (sanitization logic), `cmd/colony_prime_context.go` (injection into prompts)
-
-**Impact:** LLM instruction override attempts are detected and rejected, but edge cases around escaping and multiline payloads may persist.
-
-**Fix approach:** Run sanitization **before** content acceptance, not after prompts are composed. Add integration tests for common injection patterns (multiline "system:" prefixes, escaped quotes in bash contexts).
-
-## Performance Bottlenecks
-
-### Large Orchestrator Files Limit Readability and Testability
-
-**Issue:** Core orchestrators are large monolithic files:
-- `cmd/codex_continue.go` (3908 lines)
-- `cmd/codex_build.go` (2888 lines)
-- `cmd/oracle_loop.go` (3654 lines)
-- `cmd/codex_visuals.go` (3857 lines)
-
-**Files:** `cmd/codex_continue.go`, `cmd/codex_build.go`, `cmd/oracle_loop.go`, `cmd/codex_visuals.go`
-
-**Impact:** Single-file changes require scanning thousands of lines. Testing individual functions requires understanding large initialization chains. Refactoring is risky; impacts are hard to trace.
-
-**Fix approach:** Split large files by concern (e.g., `codex_continue_verification.go`, `codex_continue_gates.go`, `codex_visuals_caste.go`). Maintain single entry point but allow independent testing of sub-functions.
-
-### No Deterministic Verification Command Fallback Is Silent
-
-**Issue:** Verification step retrieval can fail to resolve a deterministic command. When no verification command exists for a phase, execution falls back silently. Workers then see no test command and cannot verify their work.
-
-**Files:** `cmd/codex_continue.go` (verification resolution), verification step data structures
-
-**Impact:** Phases with no explicit verification command get no verification. Watcher cannot assess work quality. Gate evaluation proceeds with missing data.
-
-**Fix approach:** Make verification failure visible (warning in report, not silent fallback). If no deterministic command exists, surface to user before phase dispatch or require explicit watcher override.
-
-## Fragile Areas
-
-### Slash Command Documentation Parity Drifts
-
-**Issue:** `.claude/commands/ant/*.md` and `.opencode/commands/ant/*.md` describe platform-specific UX but can drift from the Go CLI surface when commands change. No automated sync keeps mirrors aligned.
-
-**Files:** `.claude/commands/ant/` (60 commands), `.opencode/commands/ant/` (60 commands), `cmd/` (Go implementations)
-
-**Impact:** Users follow outdated command examples. Platform wrappers claim to expose options that no longer exist or miss new flags.
-
-**Fix approach:** Treat Go runtime in `cmd/` and Codex guides (`AGENTS.md`, `.codex/CODEX.md`) as authoritative first. Run periodic (monthly) command-doc sweeps to audit mirror parity. Consider generating wrappers from YAML source (`aether/commands/*.yaml`) to reduce manual sync burden.
-
-### Visual Output Depends on Terminal Mode
-
-**Issue:** Caste colors, live previews, progress bars only render in visual/TTY mode (`codex_visuals.go`). Non-interactive terminals or JSON mode disable visuals silently.
-
-**Files:** `cmd/codex_visuals.go` (rendering logic), environment checks (`AETHER_FORCE_VISUAL=1`)
-
-**Impact:** Users in CI/scripts get no visual feedback. Formatting decisions (colors, emojis, progress) are hidden without explanation.
-
-**Fix approach:** Log visual-mode decisions when `AETHER_FORCE_VISUAL` is set or terminal detection fails. Offer fallback ASCII-art mode for non-TTY environments.
-
-### Worker Artifact Contracts Are Behavioral, Not Enforced
-
-**Issue:** Build/plan workers are expected to follow artifact contracts (phase-plan.json format, survey structure, claims schema), but Aether cannot enforce contract adherence. If a worker ignores the contract, Aether falls back to local synthesis silently.
-
-**Files:** `cmd/codex_plan.go` (plan artifact handling), `cmd/codex_build.go` (claims handling), `pkg/codex/dispatch.go` (worker result parsing)
-
-**Impact:** Workers trained to expect enforcement but getting silent fallback. Plan/claims data may be stale synthesis rather than real worker output.
-
-**Fix approach:** Make artifact contract violations visible: log actual vs. expected schema, emit warnings. Require explicit worker override to proceed with fallback synthesis.
-
-## Scaling Limits
-
-### Hive Wisdom Capped at 200 Entries
-
-**Issue:** Cross-colony hive brain `wisdom.json` caps at 200 entries with LRU eviction. Large projects or long-running repositories quickly exceed this cap and lose older patterns.
-
-**Files:** `pkg/memory/` (wisdom storage), `~/.aether/hive/wisdom.json` (200-entry cap)
-
-**Impact:** As repository ages or colony count grows, general wisdom is evicted before being widely useful. Cross-colony pattern sharing degrades over time.
-
-**Fix approach:** Consider tiered wisdom (hot cache 200, archive 1000+, searchable by tag/domain). Implement configurable cap and eviction strategy.
-
-### Event Bus TTL May Drop Events During Long Phases
-
-**Issue:** Event bus stores JSONL events with TTL cleanup. Long-running phases or delayed continue operations may lose events before consolidation runs.
-
-**Files:** `pkg/events/` (event bus implementation), `cmd/codex_continue.go` (event usage during verification)
-
-**Impact:** Learning and pattern observation may be incomplete if events expire before consolidation.
-
-**Fix approach:** Extend TTL for in-flight phase events (do not clean up events from the current phase until it completes). Implement event retention policy tied to phase lifecycle.
-
-## Dependencies at Risk
-
-### TypeScript Host Coupling
-
-**Issue:** Go runtime embeds TypeScript host assets (`//go:embed` in `embedded_assets.go:13`). TypeScript host holds the only playbook loader, confidence loop, and dashboard/swarm display. Deleting TS host breaks Go build.
-
-**Files:** `cmd/embedded_assets.go` line 13, `.aether/ts-host/` (embedded), Go import dependencies
-
-**Impact:** Tight coupling makes architecture changes risky. Removing or updating the TS host requires coordinating Go build changes. No way to test Go-only scenarios.
-
-**Fix approach:** Separate embed from import; embed should be optional. Consider moving dashboard and playbook loading into Go for full runtime ownership.
-
-### Playbook Execution Silently Fails
-
-**Issue:** Playbook commands like `check-antipattern` (Gatekeeper security scan) redirect stderr to `/dev/null`. Execution failures are silent; no error propagates to verify gates.
-
-**Files:** Playbook CLI invocations (pattern: `command 2>/dev/null`), `cmd/gate.go`
-
-**Impact:** Security/quality gate can pass despite command failures. Users believe gate ran when execution failed.
-
-**Fix approach:** Remove stderr redirect for production (`/dev/null` useful for dev but not for release). Capture and report stderr when gate commands fail. Test gate behavior with intentional command failures.
-
-## Missing Critical Features
-
-### No Automatic Feature Flagging
-
-**Issue:** Feature capabilities (curation ants, hive wisdom, consolidation pipeline) are built but have no feature flags. System toggles between "capability fully disabled" (no caller) or "fully enabled" (when wired), with no gradual rollout path.
-
-**Files:** Various — no feature flag infrastructure present
-
-**Impact:** When consolidation is wired, all deployments immediately start running expensive pipeline. No way to roll out gradually or test at scale.
-
-**Fix approach:** Implement feature flags for new capabilities. Allow opt-in testing before making features default.
-
-### No Cross-Platform CLI Sync
-
-**Issue:** `aether update` in other repos only syncs from the hub. No automated check ensures Claude/OpenCode command specs match current Go CLI flags or new options.
-
-**Files:** `cmd/publish_cmd.go`, `aether update` logic
-
-**Impact:** Platform-specific commands drift independently from Go CLI. Users on different platforms see different UX for the same logical operation.
-
-**Fix approach:** Generate wrapper command specs from YAML source (`aether/commands/*.yaml`) instead of maintaining three separate mirrors. Regenerate on each publish.
-
-## Test Coverage Gaps
-
-### Playbook CLI Execution Not Tested End-to-End
-
-**Issue:** Playbook commands are called from within verify gates and orchestrators but are not tested as executed commands. Only flag presence is validated, not actual behavior.
-
-**Files:** `cmd/cli_flag_audit_test.go` (checks flag names only), playbook integration points
-
-**Impact:** Broken playbooks only fail in production when a user's phase runs verification. No pre-release validation of command behavior.
-
-**Fix approach:** Add integration tests that actually execute sample playbook commands. Verify both success and failure paths. Make test failures block release.
-
-### Consolidation Pipeline Wiring Never Tested Live
-
-**Issue:** The learning pipeline is built and unit-tested but has no end-to-end test that verifies it actually runs during a full `/ant-continue` → `/ant-seal` lifecycle.
-
-**Files:** `cmd/doc_consolidation_claims_test.go` (documents this intentionally), `cmd/codex_continue.go`, `cmd/seal_cmd.go`
-
-**Impact:** When consolidation wiring is added, no existing test will catch if integration was incomplete. Risk of another "machinery built but never called" incident.
-
-**Fix approach:** Add explicit test verifying that consolidation-phase-end and consolidation-seal execute inside the continue/seal lifecycle (even if just a smoke test that they don't error).
-
-### CI Oracle Heartbeat Test Is Flaky
-
-**Issue:** Oracle deep-research loop has a CI heartbeat test that fails intermittently. Rerunning once often passes (test noise), but twice-in-a-row indicates real issue.
-
-**Files:** Test related to oracle loop in CI
-
-**Impact:** Flaky test reduces confidence in test suite. Developers learn to rerun flaky tests instead of investigating root cause.
-
-**Fix approach:** Investigate the oracle loop timeout/resource contention. Increase timeout if legitimate, fix race condition if not. Lock with deterministic test that fails predictably.
+**Large monolithic lifecycle files:**
+- Issue: Three core lifecycle files exceed reasonable single-file complexity: `cmd/codex_continue.go` (4155 lines), `cmd/codex_build.go` (3582 lines), `cmd/codex_plan.go` (3431 lines)
+- Files: `cmd/codex_continue.go`, `cmd/codex_build.go`, `cmd/codex_plan.go`
+- Impact: Difficult to review, test, and maintain. Changes to one area risk breaking distant logic. Test files are equally large (`codex_continue_test.go` = 7300 lines)
+- Fix approach: Refactor into focused packages (e.g., separate verification, dispatch, state-advance logic). Start with the smallest file (`codex_plan.go`) to establish the splitting pattern
+
+**Worker write-guard contradiction:**
+- Issue: `.aether/data/` is marked protected ("never modify programmatically") in platform rules, but Aether's own planning workers must write artifacts there (`planning/phase-plan.json`, `SCOUT.md`, survey results). The Write tool guardrail blocks these paths, forcing workers to stage files elsewhere and move them
+- Files: `pkg/codex/permission_profile.go:96`, `.aether/docs/known-issues.md:52–68`, worker dispatch briefs
+- Impact: Workers must evade the protection mechanism that's supposed to prevent accidental mutations. Guardrails that the system's own code bypasses reduce trust in all guardrails
+- Fix approach: Carve out `.aether/data/planning/`, `.aether/data/phase-research/`, `.aether/data/survey/`, `.aether/data/worker-debug/` as declared-writable in the permission profile and platform rules. These are runtime-artifact directories with reviewed workflows; they should not be protected
+
+**Dual continue-lane parity requirement not automatically enforced:**
+- Issue: Three separate continue implementations (`cmd/codex_continue.go`, `cmd/codex_continue_plan.go`, `cmd/codex_continue_finalize.go`) must stay behaviorally identical. The milestone brief (v1.27) names this as a standing concern requiring manual verification
+- Files: `cmd/codex_continue.go`, `cmd/codex_continue_plan.go`, `cmd/codex_continue_finalize.go`
+- Impact: Changes to verification logic, gate behavior, or state advancement in one file risk silently diverging from the others. No test currently asserts end-to-end parity across the three lanes
+- Fix approach: Add `TestContinueLanesParity` that runs the same fixture through all three entry points and asserts identical outcomes on blocking issues, advancement decisions, and state mutations
+
+**293 orphaned commands in allowlist:**
+- Issue: `cmd/testdata/orphan_allowlist.json` documents 293 commands with no callers. These are registered, discoverable, and unmaintained
+- Files: `cmd/testdata/orphan_allowlist.json`, all referenced commands
+- Impact: Users can discover and attempt to run commands that are broken, incomplete, or vestigial. The allowlist is a holding pen, not a solution; it only prevents the check from failing
+- Fix approach: This is a long-term cleanup. In the short term, three things reduce friction: (1) mark high-risk orphans for deletion (not just "tolerated"); (2) route common discovery attempts (typos, aliases) to the replacement command with a helpful message; (3) run the shrink-focused audits named in `orphan-allowlist-policy.md` before each release. Phase 185 (skill-related command cleanup) targets a subset of 6
 
 ---
 
-*Concerns audit: 2026-08-01*
+## Known Bugs
+
+**Evidence gate blocks finalize when reconciliation is supplied:**
+- Symptoms: An operator runs `aether continue --plan-only`, supplies `--reconcile-task`, and `aether continue-finalize` still blocks with "verification passed but no implementation evidence or reconciliation was recorded"
+- Files: `cmd/codex_continue.go:3061`, `cmd/codex_continue_finalize.go`
+- Trigger: Use the external wrapper path (plan-only + finalize) with task reconciliation. The direct `aether continue` path correctly accepts the reconciliation
+- Workaround: Use the direct `aether continue` path instead of the plan-only + finalize lanes
+- Fix: The finalize path must register `--reconcile-task` as recorded evidence in the `implementation_evidence` gate. Phase 193 analysis confirmed the gate read is present but reconciliation registration is missing
+
+**Same phase verified twice across build and continue boundaries:**
+- Symptoms: The same files are reviewed by the Watcher (verification stage) and again by the Probe/Auditor (continue review). Phase measurement on 2026-08-22 shows a one-task bug fix dispatching 8 workers (build: builder, watcher, auditor, probe, tracker; continue: watcher, auditor, probe) vs v5.4.0's 3–4. Much of the cost is duplicate review
+- Files: `cmd/codex_build.go` (verification stage), `cmd/codex_continue.go` (continue review dispatch)
+- Impact: Unnecessary token spend on repeated checks. The D11 decision (2026-08-22) rules that deterministic checks run on every phase, but reviewer workers should be chosen once, not twice per phase
+- Fix approach: Unify verification: move all reviewer dispatch into the continue workflow. The build-side verification stage becomes deterministic checks only (types, lint, tests, "claimed files exist"). Phase 193 onwards
+
+---
+
+## Security Considerations
+
+**Bare auth probe output not sanitized in error messages:**
+- Risk: When provider preflight fails, the auth probe may echo raw tokens, credentials, or API responses. Known issue states these must not appear in docs, wrapper narration, debug summaries, or generated context
+- Files: `cmd/provider_availability.go`, worker-output parsing paths
+- Current mitigation: `sanitizeProviderOutput` should scrub these. Check that all error paths use it
+- Recommendations: Add a pre-commit check that scans error output for secrets patterns; never pass raw provider stdout to templates or worker prompts; log raw output to `.aether/data/worker-debug/` only (not visible to user)
+
+**Publish workflow does not guard dirty working tree:**
+- Risk: `aether publish` builds the binary and syncs hub from the **working tree with no clean guard**. Uncommitted edits ship silently. Runbook warns to check `git status` first, but the command itself does not enforce it
+- Files: `cmd/publish.go`
+- Current mitigation: The runbook requires manual preflight (`git status --porcelain` must be empty); breaking CI (force push) currently blocked by `.github/workflows` permissions
+- Recommendations: Add a `--force` flag gate to `aether publish` that requires explicit confirmation if the tree is dirty. Default: fail with a message pointing to the runbook. This makes "what is deployed" always traceable to a commit
+
+**Provider availability preflight does not guarantee later success:**
+- Risk: Preflight (binary exists, auth probe succeeds) is not a post-launch API guarantee. Real worker request could still fail due to rate limits, account suspension, upstream outages, or proxy failures
+- Files: `cmd/provider_availability.go`, worker dispatch paths
+- Current mitigation: `aether continue` blocks advancement and suggests recovery. Downstream guidance should be improved
+- Recommendations: Classification of post-launch failures before worker-result parsing (Phase 1.1 in the hardening backlog) so users see "provider/account/proxy problem" instead of "JSON parse failure"
+
+---
+
+## Performance Bottlenecks
+
+**TS-host preflight timeout hardcoded and not configurable:**
+- Problem: `.aether/ts-host/src/platform-dispatcher.ts:155` uses a hardcoded 20-second timeout for worker platform availability probes. No `AETHER_*PREFLIGHT*` env var or config key exists to tune it
+- Files: `.aether/ts-host/src/platform-dispatcher.ts:155`
+- Cause: Slow provider auth (e.g., slow OAuth flow, geo-latency) can exceed the timeout and appear as a preflight failure. M4L colony measured ~$0.59 per dispatch attributable to repeated preflight attempts on timeout
+- Improvement path: (1) Make timeout configurable via env var `AETHER_PREFLIGHT_TIMEOUT_MS` (default 20000); (2) log actual preflight duration to track patterns; (3) consider async preflight in parallel with worker dispatch (fire probe in background while build context loads)
+
+**Large test files with full scenario coverage cause slow test runs:**
+- Problem: `cmd/codex_continue_test.go` (7300 lines), `cmd/codex_build_test.go` (4550 lines), `cmd/codex_plan_test.go` (3131 lines) bundle comprehensive scenario coverage in single test files. Each small change triggers full file compilation and execution
+- Files: Large test files listed above
+- Cause: Monolithic test organization; no split between unit and integration scenarios
+- Improvement path: Refactor test files to separate unit (fast, no fixtures) from integration (slow, realistic). Keep the comprehensive scenarios but run them in a separate test target (e.g., `go test -tags=integration`)
+
+---
+
+## Fragile Areas
+
+**Worktree merge-back is spawned but not completed:**
+- Files: `cmd/codex_build_worktree.go`, `cmd/worktree_test.go`
+- Why fragile: Agents spawn isolated git worktrees for parallel work but the automatic merge-back step is incomplete. Orphaned branches with valuable code remain after worktree cleanup. Manual `aether worktree-merge-back` exists but is not called automatically
+- Safe modification: (1) Add a post-build hook that automatically merges successful worktree branches back to main (with safety checks: verify merge is conflict-free, check that code passed verification); (2) add `TestWorktreeAutoMergeCompletes` asserting that the merge happens and branch is cleaned; (3) handle merge failures gracefully (preserve branch, notify operator, block phase advancement until resolved)
+
+**Wrapper triplet byte-identity requires manual maintenance:**
+- Files: `.claude/commands/ant/*.md`, `.opencode/commands/ant/*.md`, `.codex/agents/*.toml`
+- Why fragile: Three separate implementations of each command must stay byte-identical or behavioral parity suffers. The test-enforcer (`TestBuildWrapperStageSkeletonAndParity` and `parity_test.go`) detects divergence but cannot fix it. Edits must be made to all three copies by hand
+- Safe modification: (1) Accept that the test will catch divergence; (2) if adding a new command, generate all three from a shared template or use a pre-commit hook that enforces the triplet edit rule; (3) document in DEVELOPMENT.md that editing an ant command requires edits to `.claude/`, `.opencode/`, and `.codex/` versions
+
+**Wrapper-runtime contract relies on documentation, not enforcement:**
+- Files: `.aether/docs/wrapper-runtime-ux-contract.md`, wrapper implementations
+- Why fragile: The contract says wrappers must not mutate state or duplicate verification logic, but these are guidelines, not guards. A wrapper that edits `.aether/data/` or calls a verification subcommand would only be caught in review, not by CI
+- Safe modification: (1) Add a linter that scans wrapper markdown for known risky patterns (directly reading/writing `.aether/data/`, calling verification subcommands, editing pheromones without the runtime); (2) make violations a CI gate failure; (3) document the list of approved state-mutation APIs wrappers can use (if any)
+
+**Hub publish version agreement verification depends on running extra commands:**
+- Files: `cmd/publish.go`, the runbook at `.aether/docs/publish-update-runbook.md`
+- Why fragile: `aether publish` should fail if binary and hub versions disagree, but the runbook warns that verification requires two separate manual commands (`aether version --check` and `aether integrity`). If forgotten, the publish silently succeeds with mismatched versions downstream
+- Safe modification: (1) Make `aether publish` always run version agreement verification as part of sync (not a separate command); (2) fail the publish command if they disagree; (3) log the check result so it's visible in CI; (4) document that `aether publish --force-version-mismatch` is the only way to override (and make that flag require a recorded reason)
+
+---
+
+## Test Coverage Gaps
+
+**Worktree edge cases have incomplete coverage:**
+- What's not tested: Concurrent worktree creation failures, merge conflicts during merge-back, git gc racing with worktree operations, orphaned worktree recovery after kill -9
+- Files: `cmd/codex_build_worktree_test.go`, `cmd/worktree_test.go`
+- Risk: Real interrupted builds can leave the worktree state in an unrecoverable condition. The `worktree-reap` command attempts recovery but edge cases exist where reap itself fails or leaves branches behind
+- Priority: High — worktree state affects all parallel builds and has no UI recovery path besides `aether recover`
+
+**Provider availability edge cases:**
+- What's not tested: Auth probe succeeds but actual worker request fails (post-launch failure); preflight timeout interaction with slow networks; provider availability returning different results on retry
+- Files: `cmd/provider_availability_test.go`
+- Risk: Users may be told a platform is ready when it's not, leading to confusing worker failures
+- Priority: Medium — most users are on fast networks. Matters for slow cloud auth and proxy deployments
+
+**Dual-verification lane parity:**
+- What's not tested: The same blocking issue should be caught identically on the build-side verification stage and the continue review. No test runs a phase through both lanes and asserts identical blocking behavior
+- Files: `cmd/codex_build_test.go`, `cmd/codex_continue_test.go`
+- Risk: A bug in one verification path could silently pass in the other, leading to divergent behavior
+- Priority: High (v1.27 concern) — this is explicitly named in the milestone brief as a dual-lane parity issue
+
+---
+
+## Scaling Limits
+
+**Orphan allowlist growth unchecked:**
+- Current capacity: 293 commands (as of 172-09 migration)
+- Limit: When orphans exceed ~10% of total registered commands (~50 today), maintenance burden increases significantly
+- Scaling path: Establish a quarterly "orphan reduction sprint" that targets 10% shrinkage per quarter. Use keyword/ownership tagging in the allowlist to group related orphans for coordinated cleanup (e.g., "skill-related": 6 commands, targeted for Phase 185)
+
+**Very large test files slow down development iteration:**
+- Current capacity: `codex_continue_test.go` at 7300 lines; test runs take >60s on a single file
+- Limit: When a single test file takes >90s to run, iteration velocity drops noticeably
+- Scaling path: Split test files by concern (unit vs. integration vs. scenario), run unit tests by default, integration as a separate gate. Mark slow tests with `// integration` or a build tag
+
+---
+
+## Scaling Limits
+
+**State file lock contention under parallel builds:**
+- Current capacity: In-repo parallel mode allows multiple workers writing to `.aether/data/COLONY_STATE.json` simultaneously with file-level locking
+- Limit: Under worktree mode with 8+ parallel workers, lock contention on state reads could become a bottleneck
+- Scaling path: (1) Measure state-lock contention under v1.27's expected load; (2) if needed, transition to worker-scoped state snapshots (each worker reads the phase state once, writes results to its own file, then merge at finalize); (3) consider a lightweight append-only event log instead of single shared mutable file
+
+---
+
+## Dependencies at Risk
+
+**TypeScript host unpublished and maintenance-light:**
+- Risk: `.aether/ts-host/` is the bridge to Claude/OpenCode dispatch but is not published independently and gets minimal test coverage. Changes to the Aether Go runtime can break ts-host integration
+- Impact: If ts-host diverges from Go behavior, the wrapper path (plan-only + finalize) produces different results than the direct path
+- Migration plan: (1) Publish ts-host as an npm package (aether-ts-host) so it can be versioned separately; (2) add cross-platform parity tests that run the same scenario through Go and ts-host and assert identical outcomes; (3) establish a ts-host update frequency (e.g., publish together with Go releases)
+
+---
+
+## Missing Critical Features
+
+**No read-only safety mode for sensitive operations:**
+- Problem: Commands like `aether publish`, `aether seal`, and `aether-entomb` mutate state directly. There's no `--dry-run` that is guaranteed not to mutate. Users cannot preview their effect
+- Blocks: Safe testing of publish workflows; users lack confidence in one-way operations like seal and entomb
+- Notes: Some commands have `--dry-run` but it historically mutated state (fixed in v1.25 with locked tests). A comprehensive read-only mode would require significant refactoring of the state-write paths
+
+---
+
+*Concerns audit: 2026-08-22*

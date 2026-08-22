@@ -1,151 +1,130 @@
+---
+last_mapped_commit: 92252d01
+---
+
 # External Integrations
 
-**Analysis Date:** 2026-08-01
+**Analysis Date:** 2026-08-22
 
 ## APIs & External Services
 
-**LLM Services:**
-- Anthropic Claude - Core AI provider
-  - SDK/Client: github.com/anthropics/anthropic-sdk-go v1.29.0 (`pkg/llm/client.go`)
-  - Auth: ANTHROPIC_API_KEY (environment variable, required)
-  - Models supported: claude-sonnet-4-20250514 (default), configurable via `WithModel()` option
-  - Features: Message streaming, tool use, configurable token limits
+**LLM Provider:**
+- Anthropic Claude API - Worker reasoning and tool use for all 27 agent castes
+  - SDK/Client: `github.com/anthropics/anthropic-sdk-go` v1.29.0 (`pkg/llm/client.go`, `pkg/llm/tools.go`)
+  - Auth: `ANTHROPIC_API_KEY` environment variable (or Anthropic SDK default resolution)
+  - Models: claude-sonnet-4-20250514 (default configurable via `WithModel()`)
+  - Token limits: 4096 output tokens (configurable via `WithMaxTokens()`)
+  - Usage: Worker dispatch, verification, tool calling for build/continue/seal phases
 
-**Platform APIs:**
-- Codex CLI - Internal platform integration (optional)
-  - Auth: CODEX_API_KEY (environment variable, optional)
-  - Detection: CODEX_CLI environment flag (`cmd/codex_visuals.go`)
-
-**Binary Distribution:**
-- GitHub Releases - Downloads and updates
-  - Endpoint: https://github.com/calcosmic/Aether/releases/download/
-  - Supported platforms: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, windows/arm64
-  - Retry logic: maxRetries=3, maxRedirects=5, defaultDownloadTimeout=60s (`pkg/downloader/downloader.go`)
-  - Verification: SHA-256 checksum validation
+**Platform Dispatchers (No External API):**
+- Claude Code - Local agent execution via `.claude/agents/` and `.claude/commands/`
+- OpenCode - Local agent execution via `.opencode/agents/` and `.opencode/commands/` (requires local OpenCode server running)
+- Codex CLI - Local agent execution via `.codex/agents/` (TOML format, native CLI)
+  - Selection via `AETHER_WORKER_PLATFORM` env var; no external API calls
 
 ## Data Storage
 
-**Databases:**
-- SQLite 3 (embedded)
-  - Connection: File-based, typically at `.aether/data/colony.db`
-  - Client: Standard Go database/sql with modernc.org/sqlite driver
-  - Initialization: WAL mode enabled for concurrent access
-  - Stores: Colony state, skills, instincts, curation data, observations
-  - Location in code: `pkg/learn/sqlite_store.go`, `pkg/learn/sqlite_schema.go`
+**Local Filesystem:**
+- Colony state: `.aether/data/COLONY_STATE.json` - Atomic JSON operations via `pkg/storage/`
+- Pheromone signals: `.aether/data/pheromones.json` - Plain-text signal ledger
+- Learning observations: `.aether/data/learning/` - JSONL event bus (per-phase)
+- Constraints: `.aether/data/constraints.json` - Focus/redirect directives
+- Midden (failure log): `.aether/data/midden/midden.json` - Failure tracking
+- Survey data: `.aether/data/survey/` - Territory analysis results
+- Session data: `.aether/data/session.json` - Recovery checkpoint
+- File locking: `.aether/locks/` - Platform-specific lock files (Unix fcntl, Windows file locking)
 
-**File Storage:**
-- Local filesystem only
-  - JSON files with atomic write operations (`pkg/storage/storage.go`)
-  - JSONL event bus persistence (`pkg/events/bus.go`)
-  - File locking for cross-process safety (`pkg/storage/lock_unix.go`, `pkg/storage/lock_windows.go`)
-  - Locations: `.aether/data/` directory tree (COLONY_STATE.json, pheromones.json, instincts.json, etc.)
+**SQLite (Optional, Opt-In):**
+- Learning database: `~/.aether/colonies/[colony-id]/memories.db` (WAL mode, single-writer per instance)
+  - Stores: observations with evidence, classification, confidence, phase/caste context
+  - Implementation: `pkg/learn/sqlite_store.go` (`SQLiteColonyStore`)
+  - Migrations: Automatic on first open; uses `database/sql` standard lib
+  - Purpose: Persistent cross-session instinct storage with trust scoring
 
-**Caching:**
-- In-memory only
-  - LRU-based wisdom cache (200 entries max) at `~/.aether/hive/wisdom.json`
-  - Event bus with TTL-based pruning (configurable retention)
-  - No external cache service (Redis, Memcached) used
+**Hive Brain (Cross-Colony):**
+- Shared wisdom: `~/.aether/hive/wisdom.json` - 200-entry LRU cache of generalized instincts across projects
+  - Domains: Scoped by project domain tags (e.g., "web", "api", "mobile")
+  - Promotion: High-confidence instincts (>= 0.8) auto-promoted at seal time
+  - Retrieval: Domain-filtered injection into worker briefs
+
+**Eternal Memory (Legacy Fallback):**
+- High-value signals: `~/.aether/eternal/memory.json` - Superseded by Hive Brain, kept for backward compatibility
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Custom - API key based
-  - Implementation: Environment variable (ANTHROPIC_API_KEY) passed to Anthropic SDK
-  - Per-request: Included in all Claude API calls via SDK
-  - No OAuth, JWT, or session management
+- Custom local auth model - No external identity provider; all identity is local file-based
+  - ANTHROPIC_API_KEY - Required for LLM calls (user provides at setup)
+  - GitHub token - `GITHUB_TOKEN` used in CI/CD workflows (via `secrets.GITHUB_TOKEN` in Actions) for release publishing
+
+**Secrets Storage:**
+- Environment variables only (no credential files committed)
+- `.env` files ignored in development; never committed to git
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None - All errors are logged to stderr or captured in CLI output
-- No external error tracking service (Sentry, Rollbar) integrated
+- None - Errors are logged locally to stdout/stderr and recorded in midden.json
+- No external error tracking service integration
 
 **Logs:**
-- Stdout/stderr - Standard streams
-- JSONL event bus - Structured events with TTL stored locally (`pkg/events/bus.go`)
-- No remote logging service integration
+- Approach: Structured event bus (`pkg/events/`) with JSON lines format (JSONL) to `.aether/data/events/`
+- TTL cleanup: Events auto-expire (24h default, configurable per event type)
+- Midden review: `/ant-midden-review` for human-readable failure analysis
+
+**Build Output:**
+- Terminal formatting via `pkg/terminal/` (tables, progress bars, colored output)
+- Narration: TypeScript narrator (`pkg/codex/`, `.aether/ts/narrator.ts`) formats SSE events for platform display
+- Visuals dump: `aether visuals-dump --json` exports caste identities and colors
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- GitHub - Source repository (github.com/calcosmic/Aether)
-- GitHub Releases - Binary distribution
-- Local hub directory - Cross-colony sharing and updates
+- GitHub Releases (`github.com/calcosmic/Aether/releases/`) - Primary binary distribution
+- npm registry (`https://www.npmjs.com/package/aether-colony`) - Bootstrap wrapper distribution
 
 **CI Pipeline:**
-- GitHub Actions - Implied by .github directory structure
-- Binary build: goreleaser v2 (`.goreleaser.yml`)
-  - Build hook: `go mod tidy`, git diff validation, `TestDocCLIAlignment` test
-  - Snapshots use AETHER_RELEASE_VERSION override or git describe
+- GitHub Actions (`.github/workflows/`)
+  - `ci.yml` - Runs on every PR and push to main; tests Go, TypeScript, npm, goreleaser
+  - `release.yml` - Manual triggered; builds release binaries, publishes to GitHub + npm
+- Test matrix: race detection, linting (go vet), unit tests, type checking (TypeScript), npm audit
+
+**Release Pipeline:**
+- Goreleaser 2.x (`.goreleaser.yml`) - Cross-platform builds (Linux, macOS, Windows; amd64, arm64)
+- Before hooks: `go mod tidy`, version alignment checks, doc CLI alignment tests
+- After: SHA-256 checksums, archive creation, version tagging
+- npm sync: `npm/package.json` version must match `.aether/version.json` for stable releases
+
+**Deployment:**
+- User's machine: `aether publish --channel stable` publishes to `~/.aether/system/` (hub)
+- Target repos: `aether update --force` syncs from hub (no binary re-downloaded unless `--download-binary` flag)
 
 ## Environment Configuration
 
 **Required env vars:**
-- ANTHROPIC_API_KEY - Claude API authentication (failure without it: `llm.NewClient()` returns error in `pkg/llm/client.go`)
+- `ANTHROPIC_API_KEY` - Anthropic API authentication (required at runtime for any LLM worker dispatch)
 
 **Optional env vars:**
-- CODEX_CLI - Set if running on Codex platform
-- CODEX_API_KEY - Codex platform authentication
-- AETHER_RELEASE_VERSION - Override version at build time (used by goreleaser snapshot)
+- `AETHER_WORKER_PLATFORM` - Worker dispatch target (`claude`, `opencode`, `codex`); auto-detected if unset
+- `AETHER_RELEASE_VERSION` - Override version during build (goreleaser only)
+- `AETHER_RELEASE_BASE_URL` - Override GitHub Releases download URL (npm bootstrap)
+- `AETHER_RELEASE_ACCEPTANCE_DIR` - Test-only; sets staged release directory
+- `AETHER_HIVE_POLICY` - Control cross-colony wisdom sharing (`promote` default, `read`, `off`)
+- `AETHER_UPDATE_SNAPSHOTS` - Testing flag for snapshot refreshes
 
 **Secrets location:**
-- Environment variables only
-- `.env` files: Not committed, user-configured per machine
-- No vault integration (HashiCorp Vault, AWS Secrets Manager)
+- ANTHROPIC_API_KEY: User's shell profile or local `.env` (never committed)
+- GITHUB_TOKEN: GitHub Actions secrets (`.github/workflows/` read at runtime)
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- None detected - Aether is command-driven, not event-driven from external sources
+- None - Aether is purely pull-based (user runs commands, workers execute)
 
 **Outgoing:**
-- None - No outbound webhooks or callbacks to external systems
-
-## Network & Connectivity
-
-**HTTP Client:**
-- Go standard library net/http (`pkg/downloader/downloader.go`)
-- Retry logic for GitHub release downloads (maxRetries=3)
-- Redirect handling (maxRedirects=5)
-- Timeout: defaultDownloadTimeout=60s
-
-**WebSocket:**
-- github.com/gorilla/websocket v1.5.3 - Used for streaming responses (`pkg/llm/streaming.go`)
-- Streaming support with event handling
-
-## Multi-Tenant & Cross-Colony
-
-**Hub (Local):**
-- `~/.aether/` - User-level shared hub for all colonies on same machine
-- Contains: System skills, commands, agents, wisdom, eternal memory
-- File-based distribution via `aether publish` and `aether update`
-
-**Registry:**
-- `~/.aether/registry/` - Tracks all local colonies with domain tags
-- File-based, not a networked service
-
-**Hive Brain:**
-- `~/.aether/hive/wisdom.json` - Cross-colony wisdom with LRU eviction (200 entries max)
-- Domain-scoped retrieval for colony-specific relevance
-- No central server; all colonies on same machine share the hub directory
-
-## Platform Wrappers
-
-**Claude Code:**
-- Commands: 60 markdown files in `.claude/commands/ant/`
-- Agents: 27 definitions in `.claude/agents/ant/`
-- No API calls; wrappers orchestrate Go runtime
-
-**OpenCode:**
-- Commands: Mirrored from `.claude/` into `.opencode/commands/ant/`
-- Dependencies: @opencode-ai/plugin v1.1.63, @kilocode/plugin v7.2.22
-- Agents: Separate definitions in `.opencode/agents/`
-
-**Codex:**
-- Agents: TOML definitions in `.codex/agents/`
-- Native CLI support with no wrapper indirection
-- CODEX.md rules file for Codex-specific behavior
+- GitHub Releases API - Publish binaries at release time (`pkg/downloader/` reverse flow used in CI)
+- npm registry - Push new versions at stable release time (GitHub Actions workflow step)
 
 ---
 
-*Integration audit: 2026-08-01*
+*Integration audit: 2026-08-22*

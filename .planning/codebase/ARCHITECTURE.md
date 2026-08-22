@@ -1,266 +1,327 @@
-<!-- refreshed: 2026-08-01 -->
+---
+last_mapped_commit: 92252d01
+---
+
+<!-- refreshed: 2026-08-22 -->
 # Architecture
 
-**Analysis Date:** 2026-08-01
+**Analysis Date:** 2026-08-22
 
 ## System Overview
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Aether CLI (Cobra Root)                          │
-│                cmd/aether/main.go → cmd.Execute()                   │
-│       rootCmd orchestrates 60+ subcommands across cmd/*.go          │
-└──────────┬──────────────────────────────────────────────────────────┘
-           │
-           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│               Command Handlers (500+ files in cmd/)                  │
-│  Build, Continue, Seal, Plan, Status, Learning, Pheromones         │
-└──────────┬──────────────────────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────┬──────────────────────┬───────────────────────┐
-│  Core State Layer    │  Persistence Layer   │  Worker System        │
-│  Colony State        │  Atomic Writes       │  Agent Pool           │
-│  `pkg/colony/`       │  File Locking        │  `pkg/agent/`         │
-│                      │  `pkg/storage/`      │  Caste Dispatch       │
-└──────────┬───────────┴──────────┬───────────┴───────────┬───────────┘
-           │                      │                       │
-           ▼                      ▼                       ▼
-┌─────────────────────┐ ┌──────────────────────┐ ┌──────────────────┐
-│  Event Bus          │ │  Learning Pipeline   │ │  Codex Host      │
-│  Pub/Sub + TTL      │ │  Trust Scoring       │ │  TS Dispatch     │
-│  `pkg/events/`      │ │  Hive Wisdom         │ │  `pkg/codex/`    │
-└─────────────────────┘ │  `pkg/learn/`        │ └──────────────────┘
-                         └──────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                    WRAPPER LAYER (Presentation)                       │
+│                                                                       │
+│  .claude/commands/ant/*.md  (Claude Code)                             │
+│  .opencode/commands/ant/*.md (OpenCode)                               │
+│  .codex/agents/*.toml       (Codex — agent definitions only)          │
+│                                                                       │
+│  Role: Render user experience, spawn workers via platform tools,     │
+│        manage ceremony and narration, read runtime output.            │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+                    (fetch manifest)
+                    (spawn workers)
+                    (finalize results)
+                             │
+┌────────────────────────────▼────────────────────────────────────────┐
+│                    GO RUNTIME (Truth Owner)                          │
+│                                                                       │
+│  cmd/                                                                 │
+│  ├── root.go              CLI entry + store initialization            │
+│  ├── codex_build.go       Build orchestration and dispatch logic      │
+│  ├── codex_continue.go    Verification + gating + learning           │
+│  ├── codex_continue_plan.go (Continue manifest generation)           │
+│  ├── codex_continue_finalize.go (State commitment)                  │
+│  ├── codex_build_finalize.go (Build result absorption)              │
+│  ├── skills.go            Worker brief assembly + skill matching     │
+│  ├── criterion_evidence.go (Success criteria verification)           │
+│  ├── consolidation_lifecycle.go (Learning consolidation)            │
+│  └── ...                  (80+ subcommands for orchestration)         │
+│                                                                       │
+│  pkg/                                                                 │
+│  ├── agent/               Agent pool, spawn tree, task routing       │
+│  ├── codex/               Runtime state machines, contracts           │
+│  ├── colony/              Phase plans, tasks, state definitions       │
+│  ├── memory/              Learning pipeline, instincts, promotion    │
+│  ├── storage/             JSON persistence, file locking             │
+│  ├── events/              Event bus with TTL                         │
+│  ├── graph/               Knowledge graph (instinct relationships)   │
+│  ├── exchange/            XML import/export for signals/wisdom       │
+│  ├── llm/                 LLM provider routing + adapters            │
+│  ├── learn/               Structural learning stack, ants            │
+│  └── trace/               Audit logging                              │
+│                                                                       │
+│  Role: Owns all state mutations, verification, gating, learning,    │
+│        phase advancement, and command orchestration.                │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+                   (JSON serialization)
+                             │
+┌────────────────────────────▼────────────────────────────────────────┐
+│                    LOCAL STATE (Gitignored)                          │
+│                                                                       │
+│  .aether/data/                                                        │
+│  ├── COLONY_STATE.json      Phase plan + phase status + instincts   │
+│  ├── session.json            Session bookkeeping                     │
+│  ├── pheromones.json         Active signals (FOCUS/REDIRECT/FEEDBACK)│
+│  ├── pending-decisions.json  Unanswered open decisions               │
+│  ├── assumptions.json        Plan assumptions + validation           │
+│  ├── behavior-observations.jsonl (Learning observations)            │
+│  ├── midden/                 Failure tracking per category           │
+│  ├── survey/                 Territory survey results                │
+│  └── handoffs/               Worker-to-worker relay notes            │
+│                                                                       │
+│  .aether/data/phase-research/  (Scout writes phase research)        │
+│  .aether/data/worker-debug/    (Debug artifacts from workers)       │
+│                                                                       │
+│  Role: Source of truth for colony state, governed by runtime only.  │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Responsibilities
 
-| Component | Responsibility | Files |
-|-----------|----------------|-------|
-| **CLI Entry** | Binary startup, error handling | `cmd/aether/main.go`, `cmd/root.go` |
-| **Command Routing** | Cobra registration, flag parsing | `cmd/*.go` (500+ files) |
-| **State Management** | Colony lifecycle, phases, tasks | `pkg/colony/colony.go` |
-| **Event Bus** | Pub/sub messaging, TTL, JSONL log | `pkg/events/bus.go`, `pkg/events/event.go` |
-| **Agent Pool** | Worker spawning, caste assignment | `pkg/agent/pool.go`, `pkg/agent/agent.go` |
-| **Stream Manager** | Worker output multiplexing | `pkg/agent/stream_multiplexer.go` |
-| **Atomic Storage** | Cross-process safe writes, locking | `pkg/storage/storage.go`, `pkg/storage/lock.go` |
-| **Learning Pipeline** | Observation capture, instinct promotion | `pkg/learn/learn.go`, `pkg/learn/curator.go` |
-| **Hive Wisdom** | Cross-colony knowledge, confidence | `pkg/learn/hive_store.go` |
-| **Codex Dispatch** | TS host work distribution | `pkg/codex/dispatch.go`, `pkg/codex/execution_binding.go` |
-| **Knowledge Graph** | Code patterns, relationships | `pkg/graph/doc.go` |
-| **Output Formatting** | Terminal colors, visuals | `pkg/terminal/output.go` |
-| **Streaming LLM** | Token callbacks, stream handlers | `pkg/llm/stream.go` |
+| Component | Responsibility | File |
+|-----------|----------------|------|
+| **Runtime (Go)** | State mutations, orchestration, verification, gating, learning | `cmd/*.go`, `pkg/` |
+| **Wrapper (Markdown)** | Ceremony, narration, worker spawning, user interaction | `.claude/commands/ant/`, `.opencode/commands/ant/` |
+| **Agent Pool** | Parallel task dispatch, streaming, resource limits | `pkg/agent/pool.go` |
+| **Skill Matcher** | Worker context assembly, skill injection | `cmd/skills.go` |
+| **Build Flow** | Phase → Tasks → Dispatches → Workers → Results | `cmd/codex_build.go` |
+| **Continue Flow** | Verification → Gates → Learning → Advance | `cmd/codex_continue.go` |
+| **State Store** | JSON persistence, atomic updates, file locking | `pkg/storage/store.go` |
+| **Learning Pipeline** | Observations → Instincts → QUEEN.md → Hive wisdom | `pkg/memory/pipeline.go` |
 
 ## Pattern Overview
 
-**Overall:** Event-driven CLI with layered persistence and caste-based worker orchestration
+**Overall:** Layered separation of concerns with Go runtime owning state and wrappers owning presentation.
 
 **Key Characteristics:**
-- **Cobra CLI** — 60+ subcommands in `cmd/` with PersistentPreRunE initialization
-- **State as JSON** — COLONY_STATE.json is source of truth, mutated atomically via `store.UpdateFile()`
-- **Event-driven** — Events published to `event-bus.jsonl`, agents subscribe via Triggers
-- **Caste roles** — Workers assigned (builder, watcher, scout, oracle, etc.) based on task type
-- **Learning loop** — Observations scored, promoted to instincts, then hive wisdom at seal
-- **Streaming output** — Real-time worker tokens via `pkg/llm` handlers
+- **State centralization:** All mutable state lives in `.aether/data/` JSON files, governed exclusively by Go runtime commands
+- **Wrapper delegation:** Markdown wrappers fetch JSON manifests, spawn workers via platform tools, and finalize results by handing JSON to the runtime
+- **Contract-driven:** Communication between wrapper and runtime is mediated by YAML command definitions (`.aether/commands/*.yaml`) and documented contracts (`.aether/docs/wrapper-host-contract.md`)
+- **Manifest-based dispatch:** Build and heavy-continue use plan-only to generate manifests; wrappers interpret manifests and spawn workers; finalizers absorb results
 
 ## Layers
 
-**CLI Command Layer:**
-- **Purpose:** Parse user input, mutate state, orchestrate agent spawning
-- **Location:** `cmd/` (500+ files, one per command or command family)
-- **Contains:** Cobra command structs, argument parsing, output formatting
-- **Depends on:** `pkg/colony`, `pkg/agent`, `pkg/storage`, `pkg/codex`
-- **Used by:** `aether` binary entry point
+**Wrapper Layer (Presentation):**
+- Purpose: User experience, ceremony, worker spawning, narration
+- Location: `.claude/commands/ant/`, `.opencode/commands/ant/`, `.codex/agents/`
+- Contains: Markdown command files + Codex agent definitions
+- Depends on: Go runtime (via CLI and JSON output)
+- Used by: Users via CLI slash commands or platform UI
 
-**State Management:**
-- **Purpose:** Define colony lifecycle (phases, tasks, instincts, signals)
-- **Location:** `pkg/colony/colony.go` and related types
-- **Contains:** ColonyState struct, Phase/Task, WorktreeStatus, State constants
-- **Depends on:** `pkg/storage` (persistence), Go stdlib JSON
-- **Used by:** All command handlers, build/continue orchestration
+**Runtime Layer (Orchestration & Truth):**
+- Purpose: Command execution, state management, orchestration, verification
+- Location: `cmd/*.go`
+- Contains: Cobra command handlers, main control flows, event dispatch
+- Depends on: Shared packages (`pkg/`)
+- Used by: Wrappers (via CLI), other commands via RPC
 
-**Event Bus & Pub/Sub:**
-- **Purpose:** Async inter-component messaging with TTL expiry
-- **Location:** `pkg/events/bus.go`, `pkg/events/event.go`
-- **Contains:** Event type (id, topic, payload, ttl), Bus with topic matching
-- **Depends on:** `pkg/storage` (JSONL append), Go stdlib
-- **Used by:** Agent triggers, learning pipeline events, observation recording
+**Shared Packages (Infrastructure):**
+- Purpose: Reusable logic for agents, state, learning, events
+- Location: `pkg/agent/`, `pkg/colony/`, `pkg/memory/`, `pkg/storage/`, `pkg/codex/`, `pkg/events/`, `pkg/graph/`, `pkg/exchange/`
+- Contains: Type definitions, business logic, persistence adapters
+- Used by: Runtime (`cmd/`) and one another
 
-**Worker System:**
-- **Purpose:** Spawn, lifecycle, and coordinate agent execution
-- **Location:** `pkg/agent/` (pool, registry, spawn tree, stream manager)
-- **Contains:** Agent interface (Execute, Caste, Triggers), Pool, StreamManager
-- **Depends on:** `pkg/events` (triggers), `pkg/llm` (streaming)
-- **Used by:** Build/continue commands, autopilot
-
-**Atomic Persistence:**
-- **Purpose:** Crash-safe file operations with cross-process locking
-- **Location:** `pkg/storage/storage.go`, `pkg/storage/lock.go`
-- **Contains:** Store (atomic writes, read-modify-write), FileLocker (Unix/Windows)
-- **Depends on:** OS file I/O, platform-specific locking primitives
-- **Used by:** All JSON state mutations, event bus appends, learning storage
-
-**Learning & Wisdom:**
-- **Purpose:** Capture observations, score trust, promote to cross-colony hive
-- **Location:** `pkg/learn/learn.go`, curator.go, hive_store.go
-- **Contains:** Entry/Evidence types, LearnStore interface, Trust scoring
-- **Depends on:** `pkg/storage`, SQLite (hive), Go stdlib
-- **Used by:** Build completion, seal, hive read for colony-prime injection
-
-**Codex TS Integration:**
-- **Purpose:** Dispatch work to TypeScript host (Claude Code, OpenCode)
-- **Location:** `pkg/codex/dispatch.go`, execution_binding.go, handoff.go
-- **Contains:** Dispatch structs, ExecutionBinding, Handoff (file changes, assumptions)
-- **Depends on:** `pkg/colony` (state), OS process management
-- **Used by:** Build attempt workers, platform-specific wrappers
-
-**Knowledge Graph:**
-- **Purpose:** Store code relationships, patterns, insights
-- **Location:** `pkg/graph/doc.go` and related types
-- **Contains:** Graph types, persistence interface
-- **Depends on:** `pkg/storage`
-- **Used by:** Learning, pattern detection, cross-colony recommendations
+**State Layer (Truth Store):**
+- Purpose: Persistent truth for colony, phases, learnings
+- Location: `.aether/data/` (gitignored)
+- Contains: JSON files (COLONY_STATE.json, session.json, pheromones.json, etc.)
+- Accessed: Only via Go runtime commands; wrappers never read/write directly
 
 ## Data Flow
 
-### Primary Path: Build Command
+### Primary Request Path (Build → Continue)
 
-1. **CLI invocation:** `aether host build --phase 1` (or `/ant-build 1` from wrapper)
-2. **Command handler:** `buildPhaseCmd.RunE()` in `cmd/build_flow_cmds.go`
-3. **Load state:** `store.LoadJSON("COLONY_STATE.json", &state)` via `pkg/storage`
-4. **Validate:** Phase pending, tasks ready, no blockers
-5. **Create attempt:** Record to `build/phase-N/attempts/{attemptID}.json` with manifest
-6. **Spawn workers:** Agent pool creates builder/watcher/scout via `pkg/agent`
-7. **Dispatch:** Send manifest to TS host via `pkg/codex/dispatch`
-8. **Stream output:** Multiplex worker stdout/stderr via `pkg/agent/stream_multiplexer`
-9. **Record completion:** Update attempt record, transition phase status
-10. **Emit event:** Publish to event bus for learnings pipeline
-11. **Promote learnings:** Curator promotes observations to instincts
-12. **Mutate state:** `store.UpdateFile()` to update COLONY_STATE.json atomically
+1. **User invokes `/ant-build N`** (`.claude/commands/ant/build.md`)
+2. **Wrapper fetches manifest:** `aether build N --plan-only` → returns `codexBuildManifest` JSON (`cmd/codex_build.go:runCodexBuildPlanOnly`)
+3. **Runtime assembles manifest:**
+   - Loads phase from COLONY_STATE.json
+   - Breaks phase into tasks
+   - Composes worker briefs (phase objective, constraints, pheromones, skills, prior handoffs)
+   - Selects castes via Queen judgement (`cmd/codex_build.go:castesForBuild`)
+   - Generates dispatches with wave execution plan
+4. **Wrapper renders spawn plan** and spawns workers via platform agents using `agent_name` from each dispatch
+5. **Worker executes with injected brief**, produces results (changed files, test evidence, errors)
+6. **Wrapper finalizes results:** Stages completion JSON, then calls `aether build-finalize --completion-file <path>` (`cmd/codex_build_finalize.go`)
+7. **Runtime absorbs results:**
+   - Verifies claims match evidence
+   - Stores worker outputs and artifacts
+   - Updates task status
+   - Returns closeout JSON
+8. **User invokes `/ant-continue`** (`.claude/commands/ant/continue.md`)
+9. **Runtime verification (default path):** `aether continue --verification-depth standard` runs verification commands, gate checks, and learning all in-process (`cmd/codex_continue.go`)
+   - Runs verification steps (build, type check, lint, test)
+   - Checks gate criteria (security, quality, performance)
+   - Captures learning observations
+   - Advances phase if gates pass
+   - Returns verification + gate + learning report
+10. **Wrapper renders closeout**, routes to next phase or `/ant-seal`
 
-### Secondary Path: Seal & Hive Promotion
+### Heavy Continue Path (Manifest-Based Review)
 
-1. **Seal invocation:** `aether host seal` (or `/ant-seal`)
-2. **Archive:** Compress colony records to `.aether/archive/`
-3. **Extract instincts:** Load instincts with confidence >= 0.8 from state
-4. **Hive promotion:** Call `hive-promote` to abstract and store in `~/.aether/hive/wisdom.json`
-5. **QUEEN update:** Append learned patterns to `~/.aether/QUEEN.md`
-6. **Finalize:** Mark colony as COMPLETED
+1. **User invokes `/ant-continue --verification-depth heavy`** or `--classic-ceremony`
+2. **Wrapper fetches manifest:** `aether host continue --dry-run --classic-ceremony $ARGS` → TS host calls `aether continue --plan-only --classic-ceremony` → returns `codexContinueManifest` JSON
+3. **Runtime assembles continue manifest:**
+   - Runs default verification (same as step 9 above)
+   - If deep review requested, generates dispatches for Watcher + Gatekeeper + Auditor + Probe
+   - Includes candidate tasks for reconciliation, artifact evidence paths
+4. **Wrapper renders spawn plan** and spawns review workers via agents
+5. **Reviewers consume brief verbatim**, analyze code/tests/artifacts, produce review summary
+6. **Wrapper finalizes:** `aether continue-finalize --completion-file <path>` (`cmd/codex_continue_finalize.go`)
+7. **Runtime commits learning and advances phase**
 
-### Event Bus Flow
+### State Mutation Boundaries
 
-1. **Publish:** `bus.Publish(topic, payload)` → appends JSON line to `event-bus.jsonl`
-2. **Query:** `bus.Query(pattern)` with optional ttl filter
-3. **TTL pruning:** Events expire after 30 days (default), auto-pruned on read
-4. **Lock protection:** File locked during append to prevent corruption across processes
+- **Read-only by wrapper:** Only via `aether status` (visual output), manifest commands (plan-only)
+- **Mutated only by runtime:** Build-finalize, continue-finalize, advance-phase, seal
+- **Never by wrapper:** COLONY_STATE.json, session.json, pheromones.json, instincts.json
 
 ## Key Abstractions
 
-**Caste Enum:**
-- Defined in: `pkg/agent/agent.go`
-- Values: CasteBuilder, CasteWatcher, CasteScout, CasteOracle, CasteCurator, CasteArchitect, CasteRouteSetter, CasteColonizer, CasteArchaeologist
-- Used for: Skill matching, worker spawn selection, behavioral customization
+**Phase & Task:**
+- Purpose: Represent a unit of work and its decomposition
+- Examples: `pkg/colony/phase.go`, `cmd/codex_build.go` (task planning)
+- Pattern: Immutable data structures loaded from COLONY_STATE.json, used to generate dispatches
 
-**Agent Interface:**
-- Methods: Name(), Caste(), Triggers(), Execute(ctx, event)
-- Extension: Implement + register to add new worker behavior
-- Used by: Agent pool for dispatch, event bus for trigger matching
+**Dispatch:**
+- Purpose: One worker assignment with full context
+- Examples: `cmd/codex_build.go:codexBuildDispatch` (build), `cmd/codex_continue.go` (review)
+- Pattern: Manifest includes all dispatches; wrapper interprets and spawns; finalizer absorbs results
 
-**Trigger System:**
-- Pattern: Topic (with `*` wildcard), optional Filter map
-- Matching: TopicMatch() in events package supports prefix/exact match
-- Use: Agents subscribe to specific event topics for auto-activation
+**Manifest:**
+- Purpose: Complete, immutable plan for a workflow (build or continue)
+- Examples: `cmd/codex_build.go:codexBuildManifest`, `cmd/codex_continue.go:codexContinueManifest`
+- Pattern: Returned by plan-only commands; wrapper uses it to spawn workers; no in-manifest mutation
 
-**Evidence & Trust Scoring:**
-- Fields: RunID, Phase, Workers, FilesTouched, GatesPassed, Confidence, Timestamp
-- Confidence range: 0.0 to 1.0, starts at 0.75 for pattern observations
-- Promotion: Instinct promoted to hive when confidence >= 0.8 at seal
+**Worker Brief:**
+- Purpose: Full context injected into a worker's prompt
+- Includes: Phase objective, constraints, hints, success criteria, pheromones, skills, prior handoffs, decision clarifications
+- Location: Written to disk by runtime at brief generation time; passed verbatim to worker (`cmd/codex_build.go:Brief` field)
+- Pattern: Wrapper reads `brief_path` from dispatch and passes text to agent; agent receives it as part of prompt context
 
-**Handoff Pattern:**
-- Contents: Changed files, commands run, verification status, open decisions, assumptions
-- Storage: `.aether/data/handoffs/worker-handoffs.json`
-- Injection: Prepended to next worker's prompt as "Previous Worker Handoff"
+**Colony State:**
+- Purpose: Complete, persistent snapshot of colony progress
+- Location: `.aether/data/COLONY_STATE.json`
+- Contains: Goal, plan, phase list, phase status, instincts with confidence scores, pheromones
+- Mutated: Only by runtime finalizers (`build-finalize`, `continue-finalize`, phase advance)
+- Pattern: Loaded fresh on every command; atomically updated via `store.UpdateJSONAtomically()`
 
-**Build Attempt Record:**
-- Stored at: `build/phase-N/attempts/{id}.json`
-- Fields: ID, Phase, Status, StartedAt, Dispatches, Claims, WorkerRuns, History
-- Lifecycle: prepared → awaiting_external → dispatching → terminal → built/failed/interrupted
+**Instinct:**
+- Purpose: Learned pattern with provenance and confidence
+- Examples: `pkg/colony/instincts.go`, `pkg/memory/pipeline.go`
+- Pattern: Captured during build, promoted during continue-finalize, consolidated at seal, promoted to hive if confidence >= 0.8
+
+**Pheromone (Signal):**
+- Purpose: User-directed colony steering (FOCUS/REDIRECT/FEEDBACK)
+- Location: `.aether/data/pheromones.json`
+- Pattern: User emits via `/ant-focus`, `/ant-redirect`, `/ant-feedback`; runtime injects into colony-prime context; workers see and respond; signals decay or expire at phase boundaries
+
+**Hive Wisdom:**
+- Purpose: Cross-colony learned patterns
+- Location: `~/.aether/hive/wisdom.json` (hub-level, shared across all repos)
+- Pattern: High-confidence instincts promoted at seal; domain-scoped retrieval during colony-prime context assembly
 
 ## Entry Points
 
-**Binary Entry:**
-- File: `cmd/aether/main.go`
-- Logic: `func main()` → `cmd.Execute()` → `rootCmd.Execute()`
-- Invocation: `aether <subcommand> [args]`
-- Exit: 0 on success, 1+ on error
+**Primary User Commands:**
+- `/ant-init "<goal>"` → `cmd/init_cmd.go` (initializes COLONY_STATE.json with plan)
+- `/ant-plan` → `cmd/plan_cmd.go` (generates phase plan)
+- `/ant-build <phase>` → `.claude/commands/ant/build.md` (wrapper) → `aether build $ARGS --plan-only` (runtime)
+- `/ant-continue` → `.claude/commands/ant/continue.md` (wrapper) → `aether continue` (runtime, default) or `aether host continue --dry-run` (heavy path)
+- `/ant-seal` → `cmd/seal_cmd.go` (finalizes colony, promotes learnings to hive)
 
-**Root Command:**
-- File: `cmd/root.go` (line 170+)
-- PersistentPreRunE: Initializes `store` + `tracer` unless command in skip list
-- Subcommands: Registered via `rootCmd.AddCommand()` in init blocks throughout `cmd/*.go`
+**Go Runtime Commands (Invoked by Wrappers):**
+- `aether build <phase> --plan-only` → `cmd/codex_build.go:runCodexBuildPlanOnly()` (generates JSON manifest)
+- `aether build-finalize --completion-file <file>` → `cmd/codex_build_finalize.go` (absorbs worker results)
+- `aether continue [--verification-depth <level>]` → `cmd/codex_continue.go:runCodexContinue()` (all-in-one verification + gating + learning)
+- `aether host continue --dry-run --classic-ceremony` → TS host (Typescript; spawned as subprocess) calls back `aether continue --plan-only --classic-ceremony`
+- `aether continue-finalize --completion-file <file>` → `cmd/codex_continue_finalize.go` (absorbs review results, commits learning)
 
-**Key Command Entry Points:**
-- **Build:** `cmd/build_flow_cmds.go` → buildPhaseCmd.RunE()
-- **Continue:** `cmd/continue_flow_cmds.go` → continueCmd.RunE()
-- **Seal:** `cmd/seal.go` → sealCmd.RunE()
-- **Plan:** `cmd/plan_generate_cmd.go` → planGenerateCmd.RunE()
-- **Status:** `cmd/status_display.go` → statusDisplayCmd.RunE()
+**Administrative Commands:**
+- `aether status` → Visual output (JSON with `--output json`)
+- `aether phase <N>` → Phase details
+- `aether colonize` → Codebase analysis (scaffolds .aether/)
+- `aether seal` → Finalize colony, promote instincts to hive
 
 ## Architectural Constraints
 
-- **Single-threaded per invocation:** Each CLI command runs sequentially; concurrency via TS host dispatch
-- **Global state initialization:** `store` and `tracer` init once in rootCmd.PersistentPreRunE
-- **No circular imports:** `pkg/` never imports `cmd/`; clean dependency tree
-- **Cross-process safety:** All file ops use `store` with FileLocker (platform-specific)
-- **JSON mutations atomic:** Always wrapped in `store.UpdateFile()` with exclusive lock
-- **Agent dispatch:** Two entry points only: build phase → agent.Pool.Spawn(), continue → agent.Pool.Spawn()
-
-## Anti-Patterns to Avoid
-
-### State Mutation Without Lock
-
-**What:** Code reads state.json, modifies in memory, writes without atomic operation
-**Why wrong:** Race condition if two commands run concurrently; corruption on crash mid-write
-**Do this:** Use `store.UpdateFile(path, mutator)` — `pkg/storage/storage.go:60`
-
-### Direct os.ReadFile/WriteFile for JSON
-
-**What:** Code uses `os.ReadFile()` / `os.WriteFile()` directly on JSON
-**Why wrong:** No atomic guarantee, no validation, lost versions
-**Do this:** Use `store.LoadJSON()` / `store.SaveJSON()` — `pkg/storage/storage.go`
-
-### Event Trigger Without Caste Filter
-
-**What:** Agent listens to event topic without checking caste or phase
-**Why wrong:** Agent may execute in wrong context; tasks interfere
-**Do this:** Include Trigger.Filter or caste check in Execute() — `pkg/agent/agent.go:30`
-
-### Learning Without Provenance
-
-**What:** Code adds learning entry without full Evidence struct
-**Why wrong:** Can't trace source; can't cross-validate across colonies
-**Do this:** Always include Evidence with RunID, Phase, Workers — `pkg/learn/learn.go:45`
-
-## Error Handling
-
-**Strategy:** Commands return error to Cobra; CLI formats and exits
-
-**Patterns:**
-- Command RunE returns `error`
-- Root command catches via Cobra
-- Recoverable errors include recovery command in output
-- Fatal errors exit with code 1
-- Build failures logged to midden for learning
+- **Threading:** Go runtime is single-threaded per invocation (one CLI run = one command = one thread sequence). Agent pool uses goroutines for concurrent worker execution during `aether build` and `aether host build` (subprocess), but the interactive wrapper runs sequentially.
+- **Global state:** Store (storage.Store) is initialized once at CLI startup; shared across command execution via package-level `var store *storage.Store` in `cmd/root.go`. No concurrent mutation; `UpdateJSONAtomically()` serializes updates via file locking.
+- **Circular imports:** None enforced; packages are layered: `cmd/` imports `pkg/*`, `pkg/` does not import `cmd/`.
+- **Manifest immutability:** Once a manifest is returned by a plan-only command, it is never re-fetched during that workflow. Wrapper interprets it and spawns workers; no in-flight manifest updates.
+- **Worker isolation:** Each worker receives the full brief at spawn time; no in-prompt context sharing or consensus building between workers during execution.
+- **Output contracts:** All JSON output is defined by strict struct types (e.g., `codexBuildManifest`, `codexContinueReport`). Wrappers parse only declared fields.
 
 ## Cross-Cutting Concerns
 
-**Logging:** No structured logs in Go layer; output only via `pkg/terminal`
-**Validation:** Phase/task checks in command handlers before state mutation
-**Authentication:** None in Go binary; TS wrappers handle platform auth
-**Observability:** Tracer records command invocations to `.aether/data/trace.jsonl`
+**Logging:** Audit trail via `pkg/trace/tracer.go`; events written to `.aether/data/events/` JSONL files with TTL cleanup.
+
+**Validation:** Success criteria defined in phase; verified by `cmd/criterion_evidence.go` during continue gate checks. Claims (files, tests) verified against evidence.
+
+**Authentication:** Not built into runtime; delegated to platform (user's IDE login, GitHub token for git, etc.). Runtime does not manage secrets.
+
+**Learning & Consolidation:** Observations captured during worker handoff → promoted to instincts → consolidated at seal via 9-ant curation pipeline (`pkg/learn/curation_ants.go`) → high-confidence instincts promoted to hive.
+
+**Signal Management:** Pheromones (FOCUS/REDIRECT/FEEDBACK) managed via `cmd/pheromone_*.go` commands; injected into colony-prime context at worker dispatch time; decay/expiry at phase boundaries.
+
+## Anti-Patterns
+
+### State Mutation in Wrappers
+
+**What happens:** Wrapper directly edits COLONY_STATE.json, session.json, or pheromones.json.
+
+**Why it's wrong:** State is the runtime's source of truth. Wrapper mutations bypass runtime invariants (atomic updates, consistency checks). Next runtime command loads stale or corrupted state.
+
+**Do this instead:** Route all state changes through Go runtime commands. For steering, use `/ant-focus`, `/ant-redirect`, `/ant-feedback` (which call runtime subcommands). For manual state surgery, use `aether state-mutate` (developer-only, logged to audit trail).
+
+**Test:** `cmd/command_guide.go` documents guardrails; `cmd/codex_build_test.go` asserts wrapper contract violations.
+
+### Manifest Reuse Across Workflows
+
+**What happens:** Wrapper fetches a manifest for build, then attempts to reuse it for a subsequent continue after user makes decisions.
+
+**Why it's wrong:** Manifest is a point-in-time snapshot. If user invokes `/ant-focus` or `/ant-redirect` between build and continue, the manifest is stale and no longer reflects current signals. Workers see outdated context.
+
+**Do this instead:** Fetch a fresh manifest after any workflow-altering user decision. Build.md enforces this: after discuss redirects, the guard says "request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest."
+
+**Test:** `cmd/orchestrator_boundary_clarification.go` guards orchestrator transitions; `cmd/codex_build_test.go` tests manifest freshness after discuss.
+
+### Wrapper-Based Verification Reimplementation
+
+**What happens:** Wrapper parses build output and tries to determine if verification passed, rather than trusting the runtime's verification report.
+
+**Why it's wrong:** Verification logic (success criteria, gate policies, failure classification) is complex and owned by the runtime. Wrapper reimplementation drifts from reality.
+
+**Do this instead:** Parse the JSON report from `aether continue` (or the continue-finalize result). Trust `passed`, `criteria_passed`, `blocking_issues` fields.
+
+**Test:** `cmd/codex_continue_test.go` asserts verification gate contracts.
+
+## Error Handling
+
+**Strategy:** Two-tier (checked errors in Go, visible recovery in wrapper).
+
+**Patterns:**
+- **Build errors:** Worker produces output → claims checked against evidence → if claims fail, task marked failed → finalize returns error detail; wrapper routes to `/ant-continue` for retry or `/ant-redirect` for guidance
+- **Verification errors:** Verification step fails → classified by error class (product, environment, timeout) → gate fails → finalize returns recovery command; wrapper follows recovery (e.g., "re-run build with X environment var set")
+- **Learning errors:** Promotion failures logged but never block seal; seal completes and returns warnings
+- **Orchestration errors:** Runtime returns structured error with `next_action`; wrapper follows it (e.g., "Run `/ant-discuss`")
+
+## Verification Gates
+
+**Goal:** Ensure build work is correct and safe before advancing.
+
+**Gates run during `/ant-continue`:**
+1. **Verification:** Build commands (compile, test, lint) re-run in the repo after workers complete. Pass/fail only; not a review.
+2. **Criteria:** Success criteria defined in phase checked against artifacts produced (files, test counts, coverage %).
+3. **Gatekeeper:** Security gate (secret detection, antipattern scan).
+4. **Auditor:** Quality gate (code metrics, no regression).
+5. **Probe:** Test coverage gate (analyzer suggests gaps).
+
+**Watcher (default continue path only):** If a verification step fails and there's no deterministic recovery, Watcher analyzes the failure and suggests a fix. Wrapper offers it as an action (e.g., "Add an environment variable" or "Run again — the test is flaky").
 
 ---
 
-*Architecture analysis: 2026-08-01*
+*Architecture analysis: 2026-08-22*
