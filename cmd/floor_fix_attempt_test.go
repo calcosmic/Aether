@@ -287,6 +287,16 @@ func TestSecondFailureBlocksAndNamesTheCommand(t *testing.T) {
 	if len(fixGate.RecoveryOptions) != 1 {
 		t.Fatalf("expected exactly one recovery command, got %v", fixGate.RecoveryOptions)
 	}
+	// WR-02 (193-REVIEW.md): the gate's Detail is read by the (explicitly
+	// non-technical) project owner and must never leak a raw internal
+	// snake_case token (e.g. "still_failing") -- it must read in plain
+	// English instead.
+	if strings.Contains(fixGate.Detail, "_") {
+		t.Fatalf("expected check_fix_attempt Detail to contain no raw snake_case token, got %q", fixGate.Detail)
+	}
+	if !strings.Contains(fixGate.Detail, "still failing") {
+		t.Fatalf("expected check_fix_attempt Detail to say the check is still failing in plain English, got %q", fixGate.Detail)
+	}
 }
 
 // TestFixAttemptNeverOverwritesTheFirstResult proves the attempt journal

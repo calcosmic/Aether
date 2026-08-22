@@ -3311,10 +3311,21 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 	// the same underlying reason. nil CheckFixAttempt (no attempt ran)
 	// carries no gate entry at all -- there is nothing to report.
 	if fix := verification.CheckFixAttempt; fix != nil {
+		// WR-02 (193-REVIEW.md): fix.Outcome is one of two internal
+		// snake_case enum values ("fixed"/"still_failing", set in
+		// check_fix_attempt.go). CLAUDE.md requires every string this
+		// program writes to the (explicitly non-technical) project owner
+		// to be plain English with no raw code-style tokens, so this
+		// translates the enum before it ever reaches Detail rather than
+		// interpolating it directly.
+		outcomeText := "fixed it"
+		if fix.Outcome == "still_failing" {
+			outcomeText = "the check is still failing"
+		}
 		fixCheck := gateCheck{
 			Name:   "check_fix_attempt",
 			Passed: fix.Outcome != "still_failing",
-			Detail: fmt.Sprintf("one automatic fix attempt ran for the %s check (%s)", fix.Check, fix.Outcome),
+			Detail: fmt.Sprintf("one automatic fix attempt ran for the %s check — %s", fix.Check, outcomeText),
 		}
 		if !fixCheck.Passed {
 			fixCommand := buildTargetedRedispatchCommand(phase.ID, fix.FailureIndex.ImplicatedTaskIDs)
