@@ -16,7 +16,7 @@
 
 - [ ] **FLOOR-01**: The program's own checks — build, types, lint, tests, "claimed files exist", "each success criterion has evidence" — run on every phase, and no depth flag, review policy, team proposal or `--skip-watchers` can skip them (a test walks every skip path and fails if any path omits a check)
 - [ ] **FLOOR-02**: A phase with zero reviewer workers advances when the free checks pass and is blocked when they fail (end-to-end through `continue` on a fixture colony, both directions asserted)
-- [ ] **FLOOR-03**: No gate demands a checker worker implicitly — a criterion bound to `required_checks: watcher` (or any reviewer caste) is satisfied by deterministic evidence when no such worker was dispatched, and `continue-finalize` counts `--reconcile-task` as recorded reconciliation (closes the 2026-08-01 todo)
+- [x] **FLOOR-03**: No gate demands a checker worker implicitly — a criterion bound to `required_checks: watcher` (or any reviewer caste) is satisfied by deterministic evidence when no such worker was dispatched, and `continue-finalize` counts `--reconcile-task` as recorded reconciliation (closes the 2026-08-01 todo)
 - [x] **FLOOR-04**: A phase is verified once — the build-side verification stage runs free checks only, agent review lives in `continue`, and no caste is dispatched at both boundaries for the same phase unless the Queen explicitly asks (asserted over a real manifest + continue plan pair)
 
 ### The Queen decides the team (TEAM)
@@ -95,7 +95,7 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 |-------------|-------|--------|
 | FLOOR-01 | Phase 193 | Pending |
 | FLOOR-02 | Phase 193 | Pending |
-| FLOOR-03 | Phase 193 | Pending |
+| FLOOR-03 | Phase 193 | Complete |
 | FLOOR-04 | Phase 193 | Complete |
 | TEAM-01 | Phase 194 | Pending |
 | TEAM-02 | Phase 194 | Pending |
