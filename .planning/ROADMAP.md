@@ -29,10 +29,141 @@
 - ✅ **v1.24 Hybrid Architecture Salvage** — Phases 152-159 (shipped 2026-05-24) — [Archive](milestones/v1.24-ROADMAP.md)
 - ⏹ **v1.25 Switch It On** — Phases 160-171 (SUPERSEDED by v1.26 at 24%, 2026-08-13; phase record in `milestones/v1.25-phases/`, roadmap text preserved inside the v1.26 archive)
 - ✅ **v1.26 Intelligent Orchestration** — Phases 172-191.1 (shipped 2026-08-22, product v1.0.63, override close) — [Archive](milestones/v1.26-ROADMAP.md)
-
-Next: **v1.27 "The Queen Decides, the Program Checks"** — brief in `research/v1.27-milestone-brief.md`; created by `/gsd-new-milestone`.
+- 🚧 **v1.27 The Queen Decides, the Program Checks** — Phases 193-199 (in progress, started 2026-08-22)
 
 ## Phases
+
+### v1.27 The Queen Decides, the Program Checks
+
+**Goal:** Aether stops burning tokens on workers nobody needed — the model's judgement picks the team and says why, the program's free checks are the floor that never moves, each phase is verified once, the cost is printed, and the owner can see every decision — so a one-task bug fix costs one worker plus checks.
+
+- [ ] **Phase 193: Free Checks Are the Floor** - The program's own checks run on every phase and can never be skipped, so work can safely finish without a human-like reviewer.
+- [ ] **Phase 194: The Queen Decides the Team** - Which AI helpers get sent becomes judgement, not a fixed rule — a one-task fix costs one worker, not eight.
+- [ ] **Phase 195: Coherent Jobs** - Related tasks bundle into one job for one worker instead of one worker per task.
+- [ ] **Phase 196: See What It Cost** - Every run ends with one honest cost line, and model choices carry a reason.
+- [ ] **Phase 197: One Answer to "What Next?"** - Every command ends by saying exactly what to do next, from one shared source of truth.
+- [ ] **Phase 198: Put the Thrown-Away Data Back on Screen** - The detail the older version used to show comes back, in the chat view too.
+- [ ] **Phase 199: Proof** - A live run and a full comparison prove the changes actually work.
+
+## Phase Details
+
+### Phase 193: Free Checks Are the Floor
+
+**Goal**: The program's own automatic checks — does the code build, do the types check, does the linter pass, do the tests pass, do the files a worker claims to have created actually exist, and does each requirement have real evidence — run on every phase and can never be skipped. These checks become the safety floor, so a phase can safely finish even when no AI reviewer ("caste" — a type of AI helper with one job) was sent to check it by hand.
+
+**Depends on**: Nothing (first phase of this milestone)
+
+**Requirements**: FLOOR-01, FLOOR-02, FLOOR-03, FLOOR-04
+
+**Success Criteria** (what must be TRUE):
+1. Turning off every optional reviewer (through any speed setting, review policy, or the "skip watchers" flag) still leaves the build/types/lint/tests/files-exist/evidence checks running — a test walks every possible skip path and fails if even one lets a check through unrun (`TestDeterministicChecksCannotBeSkipped`).
+2. On a test project with zero reviewer helpers sent, the phase moves forward when the automatic checks pass and is stopped when they fail — proven in both directions through the `continue` command on a fixture project.
+3. A requirement that today silently expects a "Watcher" (the reviewer caste that checks work) to have run is satisfied by the automatic checks alone when no Watcher was sent, and running the manual "I already checked this by hand" command (`continue-finalize --reconcile-task`) counts as real proof (`TestGateAcceptsDeterministicEvidenceWithoutReviewer`).
+4. A real build followed by a real `continue` (the command that checks work and decides whether to move to the next phase) proves no single AI helper type is sent to check the same phase twice unless the Queen (the coordinator that decides which helpers to send) explicitly asks for that (`TestPhaseVerifiedOnce`).
+
+**Plans**: TBD
+
+### Phase 194: The Queen Decides the Team
+
+**Goal**: Which AI helpers ("workers") get sent to do a job becomes the Queen's judgement call, not a fixed rule. A reviewer worker is only forced onto a job when it touches something genuinely risky — passwords, payments, deleting data, migrations, or a release — and the program says why in plain words. A one-task bug fix costs one worker plus the free checks from Phase 193, not eight.
+
+**Depends on**: Phase 193 (the free checks have to be the safety net in place before workers can be trusted to skip)
+
+**Requirements**: TEAM-01, TEAM-02, TEAM-03, TEAM-04, TEAM-05
+
+**Success Criteria** (what must be TRUE):
+1. On an ordinary job, the only helper required by default is the one that writes the code (the "builder" caste); no other helper type is required just because of guessed project type or keyword — the old rule that always sent a reviewer (`TestWatcherIsAlwaysRequiredOnBuild`) is formally retired.
+2. A side-by-side test shows a plain CSV-export feature gets no forced reviewer, while a password-reset feature gets a security reviewer, with the reason ("this touches credentials") shown on screen (`TestReviewerForcedOnlyByNamedRisk`).
+3. Every worker that gets sent carries a one-sentence, plain-English reason the owner can read; if a proposed team includes a worker with no reason, that worker is rejected by name, not silently allowed (`TestNoWorkerWithoutStatedReason`).
+4. A sample one-task bug fix — measured today at 8 workers, versus 3-4 back in the older (v5.4.0) version of Aether — is sent one worker plus the free checks, whether the team came from the assistant's own proposal or the automatic fallback (`TestOneTaskBugFixIsOneWorkerPlusChecks`).
+5. The owner's manual controls — picking helpers by name, asking for "heavy" or "light" review, and the pre-build "here's who I'm sending, OK?" check-in card — all still work after this change.
+
+**Plans**: TBD
+
+### Phase 195: Coherent Jobs
+
+**Goal**: The Queen can bundle several related tasks into one job for one worker, instead of sending a separate worker per task. Related tasks (same files, or one depends on another) get grouped by default even with no explicit instruction — so, for example, six near-identical file-copy steps become one job instead of six.
+
+**Depends on**: Phase 194 (grouping tasks into jobs only makes sense once the Queen, not a fixed keyword rule, is deciding the team)
+
+**Requirements**: JOBS-01, JOBS-02, JOBS-03, JOBS-04
+
+**Success Criteria** (what must be TRUE):
+1. The Queen can combine multiple tasks into one job with a stated reason; if a proposed grouping would do a task before something it depends on, it is rejected by name instead of silently going through.
+2. A combined job's instructions carry every task's requirements, and finishing the job marks every one of those tasks as done, not just the first (`TestMergedDispatchCreditsEveryCoveredTask`).
+3. Given the real six-batch file-copy failure from a past project as a test fixture, the default grouping (with no explicit instruction) produces one worker instead of six, because the tasks share files and depend on each other.
+4. The same grouping behavior works when workers run in their own isolated copy of the code ("worktree" mode) — grouping is no longer switched off there.
+
+**Plans**: TBD
+
+### Phase 196: See What It Cost
+
+**Goal**: Every build (running a phase) and continue (checking and advancing it) ends with one honest, plain-English line stating how many tokens (the unit AI usage is billed in) it cost — never a dollar figure as the headline. The team card that shows who is being sent also shows which AI model each one uses and why, so nothing quietly uses an expensive model with no reason on record.
+
+**Depends on**: Phase 194 (there is nothing coherent to put a cost on until the Queen, not a keyword engine, is choosing the team)
+
+**Requirements**: COST-01, COST-02, COST-03, COST-04, COST-05
+
+**Success Criteria** (what must be TRUE):
+1. Every build and continue ends with one line stating token usage per worker and in total, clearly marking which numbers are measured versus estimated — no dollar amount as the headline, no price table anywhere (`TestBuildEndsWithOneCostLine`).
+2. On the Claude Code / OpenCode chat path — the one the owner actually uses day to day — worker results report their real token usage, so that cost line has real numbers instead of blanks.
+3. Running `aether spend` shows token usage per worker for the current run without changing any files on disk, and none of its numbers are guessed from text length.
+4. The pre-build team card names each worker's AI model and the reason for that choice; routine roles (the documentation writer, the knowledge-keeper, the accessibility checker) no longer silently default ("inherit") to whatever model was last used, and any worker kept on the expensive model has a written reason (`TestRoutineBuilderIsSonnetNeverInherit`, `TestOpusRequiresRecordedReason`).
+5. Three abandoned branches of half-finished cost-tracking work sitting in the codebase are each reviewed and either merged in (with a written reason) or deleted (with a written reason) — none left dangling.
+
+**Plans**: TBD
+
+### Phase 197: One Answer to "What Next?"
+
+**Goal**: Every Aether command ends by telling the owner, in one consistent way, what just happened and exactly what to type next — instead of each command guessing or occasionally naming a command that no longer exists. Opening a new chat session in a project that already has a colony (an in-progress project Aether is tracking) greets the owner with where things stand.
+
+**Depends on**: Phase 194 (the "next step" advice needs to reflect the Queen's real team decisions, not the old keyword logic)
+
+**Requirements**: NEXT-01, NEXT-02, NEXT-03, NEXT-04, NEXT-05, NEXT-06
+
+**Success Criteria** (what must be TRUE):
+1. One shared piece of logic, given the project's saved state, produces everything the owner needs: where things stand, what changed, any open flags, the recommended next step, the exact command to run, 2-4 other options, whether it is safe to close the chat, and any paused/recoverable state.
+2. Every command's closing message (starting, discussing, planning, building, continuing, pausing, resuming, sealing/finishing, updating, recovering, checking status) is generated from that same shared logic, and the machine-readable version carries the identical information (`TestEveryLifecycleCommandEndsWithNextAction`).
+3. An automatic check counts how many places in the codebase still hand-type a command name instead of using the shared logic, and fails the build if that count ever grows from today's recorded baseline (`TestNextActionNeverHardcoded`).
+4. Starting a new chat session in a project with an existing colony shows a "here's where you left off" card automatically, generated by the same shared logic (`TestSessionStartCardReflectsState`).
+5. Typing the short command `/ant-pause` and the older long name `/ant-pause-colony` both work identically, and running the update command detects and fixes any project where the short version is missing (`TestCanonicalAliasDelegates`).
+6. The recommended next command is never one that is not actually available in the current project — recommending a command that does not exist is a failing test case.
+
+**Plans**: TBD
+
+### Phase 198: Put the Thrown-Away Data Back on Screen
+
+**Goal**: Restore the detail the older (v5.4.0) version of Aether used to show — which checks passed, evidence for each requirement, how long each worker took, plan confidence, resume progress, recent decisions, and warnings — that the program already calculates today but currently throws away instead of displaying. The chat view (Claude Code / OpenCode) shows the same level of detail as the direct command-line view.
+
+**Depends on**: Phase 197 (the closing cards this phase enriches are the same ones generated by the shared "what next" logic built in Phase 197)
+
+**Requirements**: SHOW-01, SHOW-02, SHOW-03, SHOW-04, SHOW-05
+
+**Success Criteria** (what must be TRUE):
+1. What the owner sees in the chat for planning, continuing, and sealing (finishing) a project matches what the direct command-line view shows — no more thinner "chat mode" summary (`TestWrapperPathRendersSameCeremonyAsDirectPath`).
+2. Every piece of information the program already calculates is shown, not silently dropped: which checks passed, evidence for each requirement, how long each worker took, plan confidence, resume progress by phase, recent decisions, a drift warning, specialist findings, and a heads-up before build if something is blocked — checked as a rule that never lets these slip through, not a page that happens to have the right heading (`TestRenderedVisualsShowEveryCarriedField`).
+3. While `continue` (the check-and-advance command) is running, the owner sees each check's progress appear live as it happens, not only a summary at the very end.
+4. Sealing (marking a project finished) always asks the owner to confirm first and always runs the "what did we learn" review before finishing.
+5. Three things the team deliberately chose to leave out — one shared terminal window, boxed section borders, and the old "clear the chat now?" prompt — stay out, and a test locks that choice so they do not quietly come back.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 199: Proof
+
+**Goal**: Prove, with the owner watching, that the changes above actually work — on one live real-world task, then on a full head-to-head comparison against the older system and against the competing tool GSD. The milestone only counts as finished once a one-task bug fix really does cost one worker plus the free checks.
+
+**Depends on**: Phases 193, 194, 195, 196, 197, 198 (proof requires the finished system, not a partial one)
+
+**Requirements**: PROOF-05, PROOF-06, PROOF-07, PROOF-08
+
+**Success Criteria** (what must be TRUE):
+1. With the owner watching, one real end-to-end run is fired on a real task, and its result — whatever it shows, good or bad — is written down.
+2. A full three-way comparison — Aether run by hand, Aether on autopilot, and the competing tool GSD — is run on the finished system, recording tokens spent, time taken, how often a human had to step in, how many workers were sent, whether the work was truly complete, any unrecoverable stuck moments, and whether the code was left clean and ready to commit.
+3. The milestone is only considered done once all of these hold together: a one-task bug fix costs one worker plus the free checks; a CSV-export-sized job costs four workers or fewer across the whole build-and-check cycle; the typical token cost per finished task is no more than 1.5x what GSD uses; the number of times a human had to step in is no worse than GSD's; and zero runs get stuck beyond recovery.
+4. A task that gets interrupted partway through picks back up correctly in a brand-new chat session — the owner never has to re-explain what was already in progress.
+
+**Plans**: TBD
 
 <details>
 <summary>✅ v1.26 Intelligent Orchestration (Phases 172-191.1) — SHIPPED 2026-08-22 (override close)</summary>

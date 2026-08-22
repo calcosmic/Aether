@@ -93,12 +93,45 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| FLOOR-01 | Phase 193 | Pending |
+| FLOOR-02 | Phase 193 | Pending |
+| FLOOR-03 | Phase 193 | Pending |
+| FLOOR-04 | Phase 193 | Pending |
+| TEAM-01 | Phase 194 | Pending |
+| TEAM-02 | Phase 194 | Pending |
+| TEAM-03 | Phase 194 | Pending |
+| TEAM-04 | Phase 194 | Pending |
+| TEAM-05 | Phase 194 | Pending |
+| JOBS-01 | Phase 195 | Pending |
+| JOBS-02 | Phase 195 | Pending |
+| JOBS-03 | Phase 195 | Pending |
+| JOBS-04 | Phase 195 | Pending |
+| COST-01 | Phase 196 | Pending |
+| COST-02 | Phase 196 | Pending |
+| COST-03 | Phase 196 | Pending |
+| COST-04 | Phase 196 | Pending |
+| COST-05 | Phase 196 | Pending |
+| NEXT-01 | Phase 197 | Pending |
+| NEXT-02 | Phase 197 | Pending |
+| NEXT-03 | Phase 197 | Pending |
+| NEXT-04 | Phase 197 | Pending |
+| NEXT-05 | Phase 197 | Pending |
+| NEXT-06 | Phase 197 | Pending |
+| SHOW-01 | Phase 198 | Pending |
+| SHOW-02 | Phase 198 | Pending |
+| SHOW-03 | Phase 198 | Pending |
+| SHOW-04 | Phase 198 | Pending |
+| SHOW-05 | Phase 198 | Pending |
+| PROOF-05 | Phase 199 | Pending |
+| PROOF-06 | Phase 199 | Pending |
+| PROOF-07 | Phase 199 | Pending |
+| PROOF-08 | Phase 199 | Pending |
 
 **Coverage:**
-- v1 requirements: 34 total
-- Mapped to phases: 0
-- Unmapped: 34 ⚠️
+- v1 requirements: 33 total
+- Mapped to phases: 33
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-22*
-*Last updated: 2026-08-22 after initial definition*
+*Last updated: 2026-08-22 after roadmap creation (7 phases, 193-199, 33/33 mapped)*
