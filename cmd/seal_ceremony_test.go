@@ -263,6 +263,41 @@ func TestRenderBlockerSummary(t *testing.T) {
 	}
 }
 
+// TestRenderBlockerSummaryUsesOwnBlockerRecoveryCommand proves WR-01
+// (193-REVIEW.md): an owner-confirmation blocker is computed live and never
+// written to pending-decisions.json, so the generic "aether flag-resolve
+// --id <ID>" line would always fail for it. The summary must print that
+// blocker's own RecoveryCommand instead, and must not offer the
+// unresolvable flag-resolve invocation for it -- while an ordinary
+// persisted-flag blocker (no RecoveryCommand set) keeps the existing
+// flag-resolve line unchanged.
+func TestRenderBlockerSummaryUsesOwnBlockerRecoveryCommand(t *testing.T) {
+	ownerBlocker := colony.FlagEntry{
+		ID:              "owner-confirm-1-abc123",
+		Description:     `Phase 1: "A human judged this looks right" needs your confirmation.`,
+		Type:            "blocker",
+		Source:          "owner_confirmation",
+		RecoveryCommand: `aether decision-answer --question 'no program check or reviewer could verify it' --answer 'confirmed' --phase 1`,
+	}
+	persistedBlocker := colony.FlagEntry{
+		ID:          "blk-002",
+		Description: "A persisted blocker flag",
+		Type:        "blocker",
+	}
+
+	out := renderBlockerSummary([]colony.FlagEntry{ownerBlocker, persistedBlocker}, nil)
+
+	if !strings.Contains(out, "aether decision-answer") {
+		t.Fatalf("summary must offer the owner-confirmation blocker's real recovery command, got:\n%s", out)
+	}
+	if strings.Contains(out, "flag-resolve --id owner-confirm") {
+		t.Fatalf("summary must not offer an unresolvable flag-resolve command for an owner-confirmation blocker, got:\n%s", out)
+	}
+	if !strings.Contains(out, "aether flag-resolve --id blk-002") {
+		t.Fatalf("summary must keep the flag-resolve line for an ordinary persisted-flag blocker, got:\n%s", out)
+	}
+}
+
 // TestCountResolvedFlags unit tests the countResolvedFlags helper.
 func TestCountResolvedFlags(t *testing.T) {
 	s, _ := setupSealTestStore(t)

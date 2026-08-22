@@ -120,13 +120,21 @@ func ownerConfirmationSealBlockers(state colony.ColonyState) []colony.FlagEntry 
 		}
 		phaseID := phase.ID
 		for _, c := range outstandingOwnerConfirmations(phase.ID, report.Criteria) {
+			command := ownerConfirmationCommand(phase.ID, c.TaskID, c.Criterion)
 			blockers = append(blockers, colony.FlagEntry{
 				ID:          fmt.Sprintf("owner-confirm-%d-%s", phase.ID, handoffDecisionID(ownerConfirmationQuestionText(phase.ID, c.TaskID, c.Criterion))),
 				Type:        "blocker",
-				Description: fmt.Sprintf("Phase %d: %q needs your confirmation -- no program check or reviewer could verify it. Run: %s", phase.ID, c.Criterion, ownerConfirmationCommand(phase.ID, c.TaskID, c.Criterion)),
+				Description: fmt.Sprintf("Phase %d: %q needs your confirmation -- no program check or reviewer could verify it. Run: %s", phase.ID, c.Criterion, command),
 				Phase:       &phaseID,
 				Source:      "owner_confirmation",
 				CreatedAt:   report.GeneratedAt,
+				// This blocker is computed live, never persisted to
+				// pending-decisions.json (see this function's doc comment),
+				// so the generic `aether flag-resolve --id <ID>` line
+				// renderBlockerSummary would otherwise print can never
+				// resolve it -- carry its real recovery command instead
+				// (WR-01, 193-REVIEW.md).
+				RecoveryCommand: command,
 			})
 		}
 	}

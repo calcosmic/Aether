@@ -1115,6 +1115,18 @@ func renderBlockerSummary(blockers []colony.FlagEntry, issues []colony.FlagEntry
 	}
 	b.WriteString("\nBLOCKED: Resolve blockers above or use --force to override.\n")
 	for _, bl := range blockers {
+		// A blocker with its own RecoveryCommand (e.g. an owner-confirmation
+		// blocker, which is computed live and never written to
+		// pending-decisions.json) is not resolvable through
+		// `aether flag-resolve` -- that command can only look up IDs that
+		// exist in the flags file, so printing it here would hand the
+		// (non-technical) owner a command guaranteed to fail. Print the
+		// blocker's real recovery command instead; only fall back to
+		// flag-resolve for ordinary persisted flags (WR-01, 193-REVIEW.md).
+		if bl.RecoveryCommand != "" {
+			b.WriteString("  " + bl.RecoveryCommand + "\n")
+			continue
+		}
 		b.WriteString(fmt.Sprintf("  aether flag-resolve --id %s\n", bl.ID))
 	}
 	if len(issues) > 0 {
