@@ -48,3 +48,7 @@ Two independent repos, same day, same terminal state, five dead escape routes ea
 #1 real-world failure mode observed in the field. Direct hit on Phase 192's gates ("recovery
 failures = 0", "unscripted interventions ≤ GSD's"). The stage/finalize deadlock fix in flight
 (formica session) removes the WORST symptom; this removes the cause.
+
+---
+
+**Closed 2026-08-22:** resolved by Phase 191.1 (verification passed 6/6 on 2026-08-21) or disproven/fixed as recorded above; filed at the v1.26 close.

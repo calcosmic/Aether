@@ -7,7 +7,7 @@ file changes).
 ## 191.1-01: `TestPackedNPMReleaseCandidateContract` fails on a pre-existing version mismatch
 
 - **Status:** acknowledged
-- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/MILESTONE-CONTEXT.md
+- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/research/v1.27-milestone-brief.md
 
 - **Found during:** Task 2 verification (`go test ./cmd/... -count=1`).
 - **Symptom:** `npm version "1.0.59" does not match source version "1.0.60"` (release_candidate_blackbox_test.go:51).

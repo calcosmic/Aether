@@ -36,11 +36,26 @@ That means:
 
 - **v1.26 Intelligent Orchestration — SHIPPED 2026-08-22** (override close: three items carried into v1.27 — the one-line cost summary, the one live benchmark run, and the full showdown)
 - **Product version: v1.0.63** (binary and hub agree; published 2026-08-21)
-- **Next: v1.27 "The Queen Decides, the Program Checks"** — brief in `.planning/MILESTONE-CONTEXT.md`; governing rulings D11/D12 in `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`
+- **Next: v1.27 "The Queen Decides, the Program Checks"** — brief in `.planning/research/v1.27-milestone-brief.md`; governing rulings D11/D12 in `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
 - Measured 2026-08-22 with today's Queen at standard settings: a one-task bug fix is sent 8 workers (v5.4.0 sent 3-4); a CSV-export phase guessed "production" gets 9 (v5.4.0: 5-6). Most of the gap is the same files reviewed two or three times. This is what v1.27 exists to fix
 - Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
-- `v5.4.0` tag remains the Classic behaviour baseline; the 2026-08-22 display audit lists 19 Classic elements absent today and 13 thinner (recorded in `MILESTONE-CONTEXT.md`)
+- `v5.4.0` tag remains the Classic behaviour baseline; the 2026-08-22 display audit lists 19 Classic elements absent today and 13 thinner (recorded in `research/v1.27-milestone-brief.md`)
+
+## Current Milestone: v1.27 The Queen Decides, the Program Checks
+
+**Goal:** Aether stops burning tokens on workers nobody needed — the model's judgement picks the team and says why, the program's free checks are the floor that never moves, each phase is verified once, the cost is printed, and the owner can see every decision — so a one-task bug fix costs one worker plus checks.
+
+**Target features:**
+- Free checks are the floor: build, types, lint, tests, claimed-files-exist and criterion evidence run on every phase and cannot be skipped; a phase with zero reviewer workers advances on them
+- The Queen decides the team: reviewer workers are judgement with a stated reason; the program forces one only for a named high-risk signal; each phase is verified once
+- Coherent jobs, not one worker per task
+- See what it cost: one plain cost line per build, `aether spend`, model + reason on the team card, no silent `inherit`
+- One answer to "what next?": one resolver behind every closing card, a real session-start greeting, a safe-to-clear light, `/ant-pause` with the long name as alias
+- Put the thrown-away data back on screen: the Classic elements the chat path never renders
+- Proof: the benchmark run on the improved system, with a 1-task bug fix ≤ 1 worker + checks as the gate
+
+**Governing rulings:** D11 (deterministic checks are the floor, reviewers are judgement) and D12 (order amendment) — `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`; full brief `.planning/research/v1.27-milestone-brief.md`.
 
 ## Previous Milestone: v1.26 Intelligent Orchestration — Shipped 2026-08-22
 
@@ -257,7 +272,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 ### Active
 
 Defined per milestone in `REQUIREMENTS.md`. v1.27's requirements are written by
-`/gsd-new-milestone` from `MILESTONE-CONTEXT.md` (seven features: free checks are
+`/gsd-new-milestone` from `research/v1.27-milestone-brief.md` (seven features: free checks are
 the floor; the Queen decides the team; coherent jobs; see what it cost; one answer
 to "what next?"; put the thrown-away data back on screen; proof).
 
@@ -311,7 +326,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Open v1.27 with `/gsd-new-milestone` (brief: `.planning/MILESTONE-CONTEXT.md`), then `/gsd-plan-phase 193`.
+Open v1.27 with `/gsd-new-milestone` (brief: `.planning/research/v1.27-milestone-brief.md`), then `/gsd-plan-phase 193`.
 
 ## Evolution
 

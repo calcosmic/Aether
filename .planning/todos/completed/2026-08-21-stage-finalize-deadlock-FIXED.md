@@ -101,3 +101,7 @@ stop exercising the deadlock.
 
 **For anyone already stuck** in this state on disk: re-running `aether build-finalize` with the
 same completion packet now works. `aether recover` still clears it and remains correct.
+
+---
+
+**Closed 2026-08-22:** resolved by Phase 191.1 (verification passed 6/6 on 2026-08-21) or disproven/fixed as recorded above; filed at the v1.26 close.

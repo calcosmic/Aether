@@ -30,7 +30,7 @@
 - ⏹ **v1.25 Switch It On** — Phases 160-171 (SUPERSEDED by v1.26 at 24%, 2026-08-13; phase record in `milestones/v1.25-phases/`, roadmap text preserved inside the v1.26 archive)
 - ✅ **v1.26 Intelligent Orchestration** — Phases 172-191.1 (shipped 2026-08-22, product v1.0.63, override close) — [Archive](milestones/v1.26-ROADMAP.md)
 
-Next: **v1.27 "The Queen Decides, the Program Checks"** — brief in `MILESTONE-CONTEXT.md`; created by `/gsd-new-milestone`.
+Next: **v1.27 "The Queen Decides, the Program Checks"** — brief in `research/v1.27-milestone-brief.md`; created by `/gsd-new-milestone`.
 
 ## Phases
 

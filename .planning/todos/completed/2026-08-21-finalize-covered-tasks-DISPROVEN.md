@@ -58,3 +58,7 @@ which is the point of this entry.
 Second possibility worth one check before assuming: the downstream colony may have been running a
 binary older than `c0a4669c` (2026-08-15), the commit that introduced covered-task crediting. Ask
 what `aether version` reported there.
+
+---
+
+**Closed 2026-08-22:** resolved by Phase 191.1 (verification passed 6/6 on 2026-08-21) or disproven/fixed as recorded above; filed at the v1.26 close.

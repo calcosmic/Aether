@@ -6,7 +6,7 @@ because they are unrelated to the task that found them (Scope Boundary rule).
 ## 172-00 (Task 1)
 
 - **Status:** acknowledged
-- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/MILESTONE-CONTEXT.md
+- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/research/v1.27-milestone-brief.md
 
 - **`.aether/docs/command-playbooks/continue-advance.md` — malformed fence
   closer near line 503.** The line reads `--ttl "30d"` immediately followed
@@ -37,7 +37,7 @@ because they are unrelated to the task that found them (Scope Boundary rule).
 ## 172-07 (both tasks)
 
 - **Status:** acknowledged
-- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/MILESTONE-CONTEXT.md
+- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/research/v1.27-milestone-brief.md
 
 - **`pkg/codex` `TestCodexReadOnlyProfileSelectsReadOnlySandbox` fails only
   under full-suite load, not in isolation.** Running `go test ./... -count=1

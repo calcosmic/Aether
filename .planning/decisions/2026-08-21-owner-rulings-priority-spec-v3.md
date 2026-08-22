@@ -61,4 +61,4 @@ time.
   pulled ahead of the remaining bookkeeping, recovery, seal and SPEC stages,
   which stay in the ratified order behind it. Stage 1's unfinished items
   (append-only results, supersession, evidence fingerprints) are carried, not
-  dropped. Brief: `.planning/MILESTONE-CONTEXT.md` (v1.27).
+  dropped. Brief: `.planning/research/v1.27-milestone-brief.md` (v1.27).

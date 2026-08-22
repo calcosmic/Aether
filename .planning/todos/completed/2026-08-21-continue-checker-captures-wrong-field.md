@@ -49,3 +49,7 @@ check definition (its `description`/`command`) instead of the check's actual out
 Confirmed compounding factor: `--skip-watchers` does not route around it because bound criteria
 listing `watcher` in `required_checks` treat "skipped" as not-passed — the phase stays blocked
 either way.
+
+---
+
+**Closed 2026-08-22:** resolved by Phase 191.1 (verification passed 6/6 on 2026-08-21) or disproven/fixed as recorded above; filed at the v1.26 close.

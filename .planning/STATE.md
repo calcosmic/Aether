@@ -1,19 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.26
-milestone_name: Intelligent Orchestration
-status: Awaiting next milestone
-stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
-last_updated: "2026-08-22T11:19:19.180Z"
+milestone: v1.27
+milestone_name: The Queen Decides, the Program Checks
+status: planning
+last_updated: "2026-08-22T11:24:40.880Z"
 last_activity: 2026-08-22
-last_activity_desc: Milestone v1.26 completed and archived
-state_head: 492f714a54156aaccf2ab31916eedf517b722930
 progress:
-  total_phases: 19
-  completed_phases: 15
-  total_plans: 66
-  completed_plans: 66
-  percent: 79
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -23,17 +20,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Starting milestone v1.27 "The Queen Decides, the Program Checks" — brief in `.planning/MILESTONE-CONTEXT.md`
+**Current focus:** Starting milestone v1.27 "The Queen Decides, the Program Checks" — brief in `.planning/research/v1.27-milestone-brief.md`
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: Milestone v1.26 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-22 — Milestone v1.26 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-22 — Milestone v1.27 started
 
 ## Performance Metrics
 
@@ -122,7 +119,7 @@ Carried forward from v1.25 (superseded) and v1.23:
 | Workflow | WORKFLOW-01 … WORKFLOW-09 | Deferred | v1.25 roadmap |
 | Runtime | RUNTIME-01, RUNTIME-02 | Deferred | v1.25 roadmap |
 
-Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/MILESTONE-CONTEXT.md` or is an archived-phase leftover; acknowledging suppresses the audit line only until the artifact changes again.
+Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/research/v1.27-milestone-brief.md` or is an archived-phase leftover; acknowledging suppresses the audit line only until the artifact changes again.
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
@@ -149,9 +146,8 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/MILE
 | deferred_items | 190/deferred-items.md: Stale ceremony-adapter snapshot fixtures (pre-existing, unrelated to hive_sectio | acknowledged | 2026-08-22 | v1.26 |
 | deferred_items | 191.1/deferred-items.md: 191.1-01: `TestPackedNPMReleaseCandidateContract` fails on a pre-existing versio | acknowledged | 2026-08-22 | v1.26 |
 
-
 ## Session Continuity
 
 Last session: 2026-08-22
-Stopped at: v1.26 closed and archived; v1.27 brief written (`MILESTONE-CONTEXT.md`); next `/gsd-new-milestone`
-Resume file: .planning/MILESTONE-CONTEXT.md
+Stopped at: v1.26 closed and archived; v1.27 brief written (`research/v1.27-milestone-brief.md`); next `/gsd-new-milestone`
+Resume file: .planning/research/v1.27-milestone-brief.md

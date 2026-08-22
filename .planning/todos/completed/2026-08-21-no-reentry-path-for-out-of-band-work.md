@@ -51,3 +51,7 @@ Three independent repos in one day dead-ended on this family. Direct hit on Phas
 ("recovery failures = 0", "unscripted interventions ≤ GSD's"). Recommend folding this + the
 bundling expressibility + the checker wrong-field into one pre-showdown field-hardening phase,
 alongside the deadlock fix already in flight (formica session).
+
+---
+
+**Closed 2026-08-22:** resolved by Phase 191.1 (verification passed 6/6 on 2026-08-21) or disproven/fixed as recorded above; filed at the v1.26 close.
