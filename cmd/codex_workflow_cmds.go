@@ -1360,7 +1360,7 @@ func init() {
 	continueCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
 	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
 	continueCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
-	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
+	continueCmd.Flags().Bool("skip-watchers", false, "Skip AI reviewer workers for this run; the program's own checks (build, types, lint, tests) still run either way")
 	// Continue is the expensive flow: every reviewer is a full agent run. The
 	// Queen chooses the team after reading the phase; without a proposal the
 	// keyword engine decides, as before.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/spf13/pflag"
 )
 
 // FLOOR-01 (193-03): no reviewer-skip path may leave the deterministic
@@ -410,3 +411,52 @@ func TestFailingCheckStillBlocksOnEverySkipPath(t *testing.T) {
 	}
 }
 
+// continueFlagCheckSkipPairingAllowance records flags whose help text
+// legitimately pairs a skip/disable word with a check word, with the reason
+// it is not a false claim. An exception here is a recorded decision, not a
+// silent pass -- keep this list short (Task 2, 193-03).
+var continueFlagCheckSkipPairingAllowance = map[string]string{
+	"skip-watchers": "the corrected text pairs \"skip\" with the check words on purpose, to say the checks are NOT skipped -- the exact clarification D-01 requires",
+}
+
+// TestNoContinueFlagClaimsToSkipAChecked walks continueCmd's registered
+// flags and fails if any flag's usage string pairs a skip/disable word with
+// a check word (build, type, lint, test, verification, check), unless the
+// flag is named in continueFlagCheckSkipPairingAllowance with a reason. This
+// asserts on the pairing, not on any single flag name, so a future flag
+// inherits the guard automatically.
+func TestNoContinueFlagClaimsToSkipAChecked(t *testing.T) {
+	skipWords := []string{"skip", "disable"}
+	checkWords := []string{"build", "type", "lint", "test", "verification", "check"}
+
+	continueCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		usage := strings.ToLower(f.Usage)
+		hasSkip := false
+		for _, w := range skipWords {
+			if strings.Contains(usage, w) {
+				hasSkip = true
+				break
+			}
+		}
+		if !hasSkip {
+			return
+		}
+		var checkWord string
+		for _, w := range checkWords {
+			if strings.Contains(usage, w) {
+				checkWord = w
+				break
+			}
+		}
+		if checkWord == "" {
+			return
+		}
+		if reason, ok := continueFlagCheckSkipPairingAllowance[f.Name]; ok {
+			if strings.TrimSpace(reason) == "" {
+				t.Errorf("--%s is allow-listed with an empty reason; every allowance needs a one-line reason", f.Name)
+			}
+			return
+		}
+		t.Errorf("--%s help text pairs a skip/disable word with the check word %q, implying a check can be turned off: %q", f.Name, checkWord, f.Usage)
+	})
+}
