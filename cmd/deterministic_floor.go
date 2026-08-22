@@ -24,6 +24,11 @@ type deterministicFloorResult struct {
 	ChecksPassed   bool
 	BlockingIssues []string
 	Warnings       []string
+	// Scope records how much of the project's tests this pass actually ran
+	// (D-07) -- targeted to the packages this phase's changed files
+	// touched, the full suite, or none (no tests command resolved at all).
+	// See deriveVerificationScope (cmd/verification_scope.go).
+	Scope verificationScope
 }
 
 // runDeterministicFloor computes the deterministic floor: the four shell
@@ -46,6 +51,12 @@ func runDeterministicFloor(ctx context.Context, root string, phase colony.Phase,
 	}
 	verificationTimeout = effectiveContinueVerificationTimeout(verificationTimeout)
 	commands := resolveCodexVerificationCommands(root)
+	// D-07: scope the tests command to what this phase touched, falling back
+	// to the full run whenever that scope cannot be honestly derived -- see
+	// deriveVerificationScope's doc comment (cmd/verification_scope.go) for
+	// the full rule set, including why build/types/lint are never scoped.
+	scope, scopedCommands := deriveVerificationScope(root, phase, isLastPhaseOfActivePlan(phase.ID), loadRawBuildClaimsForScope(manifest), commands)
+	commands = scopedCommands
 	requiredChecks := requiredVerificationChecks(phase)
 	steps := []codexVerificationStep{
 		runVerificationStep(ctx, root, "build", requiredChecks["build"], commands.Build, verificationTimeout),
@@ -107,5 +118,6 @@ func runDeterministicFloor(ctx context.Context, root string, phase colony.Phase,
 		ChecksPassed:   checksPassed,
 		BlockingIssues: blockers,
 		Warnings:       warnings,
+		Scope:          scope,
 	}
 }
