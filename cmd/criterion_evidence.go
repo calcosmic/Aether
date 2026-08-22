@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -59,6 +61,14 @@ type codexCriterionVerification struct {
 	Evidence          []string `json:"evidence,omitempty"`
 	BlockingIssues    []string `json:"blocking_issues,omitempty"`
 	Summary           string   `json:"summary"`
+	// State carries a criterion classification beyond plain pass/fail (D-05,
+	// 193-CONTEXT.md). Empty for an ordinarily evaluated criterion.
+	// criterionStateNeedsOwnerConfirmation (cmd/criterion_owner_confirmation.go)
+	// marks a criterion no deterministic source could prove and no reviewer
+	// was dispatched to judge -- Passed stays true (the phase still
+	// advances) but this field is the separate signal the
+	// owner_confirmation_pending gate and `aether seal` read.
+	State string `json:"state,omitempty"`
 }
 
 type criterionEvidenceEvaluation struct {
@@ -418,6 +428,19 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 		evidenceByPath[filepath.ToSlash(strings.TrimSpace(item.Path))] = item
 	}
 
+	// D-04: computed at most once per evaluation, and only if a "claims"
+	// check actually needs the fallback (see the loop below) -- re-running a
+	// builder's reported shell commands is real work and must not happen on
+	// every phase whose claims already verify normally.
+	var builderEvidenceCache *builderEvidenceResult
+	builderEvidenceOnce := func() builderEvidenceResult {
+		if builderEvidenceCache == nil {
+			computed := reRunBuilderReportedEvidence(context.Background(), root, phase, effectiveContinueVerificationTimeout(0))
+			builderEvidenceCache = &computed
+		}
+		return *builderEvidenceCache
+	}
+
 	evaluation.Passed = true
 	for _, requirement := range requirements {
 		result := codexCriterionVerification{
@@ -502,8 +525,25 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 			}
 			evaluation.Deterministic = true
 		}
+		needsOwnerConfirmation := false
+		var ownerConfirmationIssues []string
 		for _, check := range requirement.Checks {
 			outcome := evaluateCriterionCheckDetail(check, steps, claimsVerification, watcher)
+			// D-04: the program's own re-run of what the builder's handoff
+			// reported (commands_run re-executed, changed_files confirmed on
+			// disk) is an ADDITIONAL deterministic evidence source for the
+			// "claims" check -- never a substitute for a check that ran and
+			// failed, and never satisfied by the handoff's mere presence
+			// (reRunBuilderReportedEvidence only reports what it itself
+			// observed). This never widens any other check.
+			if !outcome.Passed && strings.EqualFold(strings.TrimSpace(check), "claims") {
+				builderEvidence := builderEvidenceOnce()
+				if ok, evidence := builderEvidence.satisfied(); ok {
+					outcome = criterionCheckOutcome{Passed: true, Evidence: evidence, Deterministic: true}
+				} else if detail := builderEvidence.blockingDetail(); detail != "" {
+					outcome.Issue = outcome.Issue + "; " + detail
+				}
+			}
 			if outcome.Passed {
 				result.Evidence = append(result.Evidence, outcome.Evidence)
 				if outcome.Deterministic {
@@ -511,17 +551,35 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 				}
 				continue
 			}
+			// D-05: an ABSENCE of any provable source (no reviewer dispatched
+			// and no deterministic floor proof for a "watcher"-bound check) is
+			// recorded for the owner instead of blocking -- a check that
+			// genuinely ran and failed (outcome.AbsentProof stays false) still
+			// blocks below, unchanged.
+			if outcome.AbsentProof {
+				needsOwnerConfirmation = true
+				ownerConfirmationIssues = append(ownerConfirmationIssues, outcome.Issue)
+				continue
+			}
 			result.BlockingIssues = append(result.BlockingIssues, outcome.Issue)
 		}
 		result.Passed = len(result.BlockingIssues) == 0
-		if result.Passed {
-			result.Summary = "criterion satisfied by fresh bound evidence"
-		} else {
+		switch {
+		case !result.Passed:
 			result.Summary = "criterion lacks required fresh evidence"
 			evaluation.Passed = false
 			for _, issue := range result.BlockingIssues {
 				evaluation.BlockingIssues = append(evaluation.BlockingIssues, fmt.Sprintf("criterion %q%s: %s", requirement.Criterion, criterionTaskSuffix(requirement.TaskID), issue))
 			}
+		case needsOwnerConfirmation:
+			// The phase still advances (result.Passed stays true): only the
+			// State field marks this criterion as needing the owner's
+			// confirmation. No worker is dispatched because of it.
+			result.State = criterionStateNeedsOwnerConfirmation
+			result.Summary = "no deterministic source or dispatched reviewer could prove this criterion; recorded for the owner to confirm"
+			result.Evidence = append(result.Evidence, fmt.Sprintf("needs_owner_confirmation: %s", strings.Join(ownerConfirmationIssues, "; ")))
+		default:
+			result.Summary = "criterion satisfied by fresh bound evidence"
 		}
 		evaluation.Criteria = append(evaluation.Criteria, result)
 	}
@@ -617,6 +675,15 @@ type criterionCheckOutcome struct {
 	Evidence      string
 	Issue         string
 	Deterministic bool
+	// AbsentProof is true only for the "watcher" check's no-dispatch-and-no-
+	// deterministic-proof outcome (D-05): the criterion asked for a
+	// reviewer's judgment, none was dispatched, and no free check can
+	// substitute -- an ABSENCE of any provable source, not a check that ran
+	// and failed. evaluatePhaseCriterionEvidence uses this to distinguish
+	// "mark needs_owner_confirmation" from "block" -- a dispatched watcher
+	// that failed, or any other check that genuinely ran and failed, leaves
+	// this false and still blocks.
+	AbsentProof bool
 }
 
 // evaluateCriterionCheckDetail evaluates a single named check. The "watcher"
@@ -650,7 +717,10 @@ func evaluateCriterionCheckDetail(check string, steps []codexVerificationStep, c
 		if evidence, ok := deterministicFloorSatisfies(steps, claims); ok {
 			return criterionCheckOutcome{Passed: true, Evidence: evidence, Deterministic: true}
 		}
-		return criterionCheckOutcome{Issue: "no reviewer was dispatched and the deterministic floor (verification checks and current-build claims) did not supply proof"}
+		return criterionCheckOutcome{
+			Issue:       "no reviewer was dispatched and the deterministic floor (verification checks and current-build claims) did not supply proof",
+			AbsentProof: true,
+		}
 	default:
 		for _, step := range steps {
 			if strings.EqualFold(strings.TrimSpace(step.Name), check) {
@@ -745,4 +815,154 @@ func verificationReRunProvesArtifacts(steps []codexVerificationStep) (string, bo
 		return "", false
 	}
 	return fmt.Sprintf("verification re-ran green (%s)", strings.Join(executed, ", ")), true
+}
+
+// builderCommandRerunResult is the program's own outcome from re-executing
+// one command a builder's persisted worker handoff (pkg/codex.WorkerHandoff,
+// via workerHandoffRecord) reported having run (commands_run). The worker's
+// own claim that it ran the command and it passed is never trusted directly
+// -- only this struct's Passed/Unresolvable fields, set from the program's
+// own re-execution, count as evidence (D-04).
+type builderCommandRerunResult struct {
+	TaskID       string
+	Command      string
+	Passed       bool
+	Unresolvable bool
+	Summary      string
+}
+
+// builderFileCheckResult is the program's own existence check, right now,
+// for one file a builder's handoff reported having changed (changed_files).
+type builderFileCheckResult struct {
+	TaskID string
+	Path   string
+	Exists bool
+}
+
+// builderEvidenceResult is reRunBuilderReportedEvidence's outcome: exactly
+// what the program itself re-ran and re-checked from this phase's already-
+// persisted worker handoffs. It creates no build dispatch, no claims record,
+// and no reviewer verdict -- see TestEvidenceReRunNeverFabricatesAWorkerReceipt.
+type builderEvidenceResult struct {
+	Commands []builderCommandRerunResult
+	Files    []builderFileCheckResult
+}
+
+// satisfied reports whether this phase's builder-reported evidence, re-run
+// and re-checked by the program itself, proves the "claims" check: at least
+// one reported command was actually re-executed (not merely unresolvable in
+// this repository) and passed, no re-executed command failed, and every
+// reported changed file exists on disk right now. An empty handoff (nothing
+// recorded) proves nothing either way.
+func (r builderEvidenceResult) satisfied() (bool, string) {
+	ranAndPassed := make([]string, 0, len(r.Commands))
+	for _, c := range r.Commands {
+		if c.Unresolvable {
+			continue
+		}
+		if !c.Passed {
+			return false, ""
+		}
+		ranAndPassed = append(ranAndPassed, c.Command)
+	}
+	if len(ranAndPassed) == 0 {
+		return false, ""
+	}
+	for _, f := range r.Files {
+		if !f.Exists {
+			return false, ""
+		}
+	}
+	return true, fmt.Sprintf("program re-ran the builder-reported command(s) itself (%s) and confirmed the builder-reported changed file(s) exist", strings.Join(uniqueSortedStrings(ranAndPassed), ", "))
+}
+
+// blockingDetail names the first concrete problem the re-run found -- a
+// command that genuinely ran and failed, or a reported changed file that
+// does not exist -- so the criterion's blocking issue names something real
+// rather than just "claims were missing". Returns "" when there is nothing
+// substantive to add (no handoffs, or nothing failed).
+func (r builderEvidenceResult) blockingDetail() string {
+	for _, c := range r.Commands {
+		if !c.Unresolvable && !c.Passed {
+			return fmt.Sprintf("builder-reported command re-run failed: %s (%s)", c.Command, c.Summary)
+		}
+	}
+	for _, f := range r.Files {
+		if !f.Exists {
+			return fmt.Sprintf("builder-reported changed file does not exist on disk: %s", f.Path)
+		}
+	}
+	return ""
+}
+
+// reRunBuilderReportedEvidence re-runs, itself, what a builder's persisted
+// handoff for this phase reported having run (commands_run), and confirms on
+// disk right now that every file it reported having changed (changed_files)
+// actually exists. It never trusts the handoff's own word -- only what the
+// program itself observes counts (D-04, ruling D11: "the worker's word alone
+// never satisfies a criterion"). It reads the phase's already-persisted
+// worker handoffs (loadWorkerHandoffRecords) and re-executes each reported
+// command through the same primitive runVerificationStep uses elsewhere; it
+// creates no build dispatch, no claims record, and no reviewer verdict.
+// TestEvidenceReRunNeverFabricatesAWorkerReceipt asserts this directly.
+func reRunBuilderReportedEvidence(ctx context.Context, root string, phase colony.Phase, timeout time.Duration) builderEvidenceResult {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	result := builderEvidenceResult{}
+	records, err := loadWorkerHandoffRecords()
+	if err != nil || len(records) == 0 {
+		return result
+	}
+	timeout = effectiveContinueVerificationTimeout(timeout)
+	seenCommands := map[string]struct{}{}
+	seenFiles := map[string]struct{}{}
+	for _, record := range records {
+		if record.Phase != phase.ID {
+			continue
+		}
+		for _, command := range record.CommandsRun {
+			command = strings.TrimSpace(command)
+			if command == "" {
+				continue
+			}
+			key := record.TaskID + "\x00" + command
+			if _, dup := seenCommands[key]; dup {
+				continue
+			}
+			seenCommands[key] = struct{}{}
+			step := runVerificationStep(ctx, root, "builder-reported", false, command, timeout)
+			result.Commands = append(result.Commands, builderCommandRerunResult{
+				TaskID:  record.TaskID,
+				Command: command,
+				// step.Skipped is true ONLY for the empty-command case (never
+				// reached here, command is non-empty) or the unresolvable
+				// case -- both mark Passed:true as a convenience for
+				// optional shell checks. That convenience must not leak into
+				// "this command genuinely ran and passed" here.
+				Passed:       !step.Skipped && step.Passed,
+				Unresolvable: step.Skipped,
+				Summary:      step.Summary,
+			})
+		}
+		for _, path := range record.ChangedFiles {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			key := record.TaskID + "\x00" + path
+			if _, dup := seenFiles[key]; dup {
+				continue
+			}
+			seenFiles[key] = struct{}{}
+			exists := false
+			if normalized, normErr := normalizeCriterionArtifactPath(path); normErr == nil {
+				if _, statErr := snapshotBuildArtifact(root, normalized); statErr == nil {
+					exists = true
+				}
+			}
+			result.Files = append(result.Files, builderFileCheckResult{TaskID: record.TaskID, Path: path, Exists: exists})
+		}
+	}
+	return result
 }

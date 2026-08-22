@@ -212,7 +212,7 @@ func TestCheckSealBlockers(t *testing.T) {
 	s, _ := setupSealTestStore(t)
 
 	// No flags file: should return empty
-	blockers, issues := checkSealBlockers(s)
+	blockers, issues := checkSealBlockers(s, colony.ColonyState{})
 	if len(blockers) != 0 || len(issues) != 0 {
 		t.Errorf("expected empty with no flags file, got %d blockers, %d issues", len(blockers), len(issues))
 	}
@@ -229,7 +229,7 @@ func TestCheckSealBlockers(t *testing.T) {
 	}
 	_ = s.SaveJSON("pending-decisions.json", flags)
 
-	blockers, issues = checkSealBlockers(s)
+	blockers, issues = checkSealBlockers(s, colony.ColonyState{})
 	if len(blockers) != 1 || blockers[0].ID != "b1" {
 		t.Errorf("expected 1 unresolved blocker 'b1', got %d: %v", len(blockers), blockers)
 	}

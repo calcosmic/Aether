@@ -406,7 +406,7 @@ var sealCmd = &cobra.Command{
 		}
 
 		// Check for blocker-severity flags
-		blockers, issues := checkSealBlockers(store)
+		blockers, issues := checkSealBlockers(store, state)
 		if len(blockers) > 0 {
 			if !forceFlag {
 				renderRecoveryMenu("seal", renderBlockerSummary(blockers, issues), nil)
@@ -1061,25 +1061,40 @@ func collectOpenReviewBacklog(s *storage.Store, limit int) []colony.ReviewLedger
 }
 
 // checkSealBlockers loads flags from pending-decisions.json (fallback flags.json),
-// splits unresolved entries into blockers and issues.
-func checkSealBlockers(s *storage.Store) (blockers []colony.FlagEntry, issues []colony.FlagEntry) {
+// splits unresolved entries into blockers and issues, and appends any
+// outstanding needs_owner_confirmation criteria (D-05, 193-CONTEXT.md) as
+// synthetic blocker-shaped entries -- computed live from each phase's
+// persisted continue verification report, not from a second file on disk,
+// so there is nothing extra to keep in sync when an owner answers one via
+// `aether decision-answer`.
+func checkSealBlockers(s *storage.Store, state colony.ColonyState) (blockers []colony.FlagEntry, issues []colony.FlagEntry) {
 	var ff colony.FlagsFile
-	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
-		if err2 := s.LoadJSON("flags.json", &ff); err2 != nil {
-			return nil, nil
+	if err := s.LoadJSON("pending-decisions.json", &ff); err == nil {
+		for _, f := range ff.Decisions {
+			if f.Resolved {
+				continue
+			}
+			switch f.Type {
+			case "blocker":
+				blockers = append(blockers, f)
+			case "issue":
+				issues = append(issues, f)
+			}
+		}
+	} else if err2 := s.LoadJSON("flags.json", &ff); err2 == nil {
+		for _, f := range ff.Decisions {
+			if f.Resolved {
+				continue
+			}
+			switch f.Type {
+			case "blocker":
+				blockers = append(blockers, f)
+			case "issue":
+				issues = append(issues, f)
+			}
 		}
 	}
-	for _, f := range ff.Decisions {
-		if f.Resolved {
-			continue
-		}
-		switch f.Type {
-		case "blocker":
-			blockers = append(blockers, f)
-		case "issue":
-			issues = append(issues, f)
-		}
-	}
+	blockers = append(blockers, ownerConfirmationSealBlockers(state)...)
 	return blockers, issues
 }
 

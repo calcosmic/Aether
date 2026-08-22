@@ -369,7 +369,7 @@ func validateSealReady(force bool) (colony.ColonyState, []string, error) {
 	if len(incomplete) > 0 && !force {
 		return state, incomplete, fmt.Errorf("all phases must be completed before sealing the colony — or, if the work was finished outside the colony or you want to move on anyway, seal with `aether seal --force --reason \"why\"` (records an owner override naming the %d unverified phase(s))", len(incomplete))
 	}
-	blockers, _ := checkSealBlockers(store)
+	blockers, _ := checkSealBlockers(store, state)
 	if len(blockers) > 0 && !force {
 		return state, incomplete, fmt.Errorf("%s", renderBlockerSummary(blockers, nil))
 	}

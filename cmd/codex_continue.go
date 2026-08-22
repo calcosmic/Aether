@@ -3241,6 +3241,36 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		checks = append(checks, evidenceCheck)
 	}
 
+	// owner_confirmation_pending gate (D-05, 193-CONTEXT.md): surfaces every
+	// outstanding needs_owner_confirmation criterion without blocking
+	// continue -- the phase still advances (D-05: "the phase advances;
+	// aether seal blocks until the owner has confirmed it"). No worker is
+	// dispatched because of this gate. The ONE exception: when this phase is
+	// the plan's LAST phase, advancing here and sealing are the same act (an
+	// unconfirmed criterion could otherwise ride straight through to a
+	// completed colony with nobody ever asked), so the gate MUST fail here.
+	// A gate that can never fail on the one boundary where it matters is
+	// worse than none (the operational_evidence precedent immediately
+	// below).
+	ownerPending := outstandingOwnerConfirmations(phase.ID, verification.Criteria)
+	ownerCheck := gateCheck{Name: "owner_confirmation_pending", Passed: true, Detail: "nothing is waiting on your confirmation"}
+	if len(ownerPending) > 0 {
+		details := make([]string, 0, len(ownerPending))
+		recovery := make([]string, 0, len(ownerPending))
+		for _, c := range ownerPending {
+			details = append(details, fmt.Sprintf("%q%s", c.Criterion, criterionTaskSuffix(c.TaskID)))
+			recovery = append(recovery, ownerConfirmationCommand(phase.ID, c.TaskID, c.Criterion))
+		}
+		ownerCheck.Detail = fmt.Sprintf("%d requirement(s) could not be checked automatically or by a reviewer and need your confirmation: %s", len(ownerPending), strings.Join(details, "; "))
+		ownerCheck.RecoveryOptions = recovery
+		if isLastPhaseOfActivePlan(phase.ID) {
+			ownerCheck.Passed = false
+			ownerCheck.FixHint = "Confirm each item above with the aether decision-answer command shown, then run /ant-continue again"
+			blockers = append(blockers, ownerCheck.Detail)
+		}
+	}
+	checks = append(checks, ownerCheck)
+
 	// The operational_evidence gate was removed: it hardcoded Passed=true
 	// regardless of assessment.OperationalIssues, so it was a gate that could
 	// not gate. An always-pass check is worse than no check — it reads as
