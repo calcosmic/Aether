@@ -40,13 +40,29 @@ func ownerConfirmationAnswered(phaseID int, taskID, criterion string) bool {
 	return answered[normalizeDecisionText(ownerConfirmationQuestionText(phaseID, taskID, criterion))]
 }
 
+// shellQuote wraps s in single quotes so it is safe to paste into a POSIX
+// shell command line, escaping any embedded single quote as the standard
+// close-quote/escaped-literal-quote/reopen-quote sequence ('\''). This is
+// deliberately NOT Go's %q: %q escapes for Go source syntax, not a shell --
+// it leaves $, backticks, and other shell metacharacters untouched, so a
+// criterion's own free-form text (authored by the planning LLM, possibly
+// influenced by external content) could otherwise expand a variable or
+// execute a command substitution when the reader -- explicitly
+// non-technical, per this repo's own CLAUDE.md -- copies the shown command
+// into a terminal (CR-02, 193-REVIEW.md).
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // ownerConfirmationCommand is the exact `aether decision-answer` invocation
 // the owner runs to resolve one outstanding criterion -- surfaced verbatim
 // by the owner_confirmation_pending gate's RecoveryOptions and by the seal
 // blocker text, so the owner never has to construct the question text by
-// hand.
+// hand. The question text is shell-quoted (shellQuote), not Go-quoted
+// (%q), because it embeds untrusted criterion text into a command the
+// owner is told to paste into a real shell (CR-02, 193-REVIEW.md).
 func ownerConfirmationCommand(phaseID int, taskID, criterion string) string {
-	return fmt.Sprintf("aether decision-answer --question %q --answer \"confirmed\" --phase %d", ownerConfirmationQuestionText(phaseID, taskID, criterion), phaseID)
+	return fmt.Sprintf("aether decision-answer --question %s --answer 'confirmed' --phase %d", shellQuote(ownerConfirmationQuestionText(phaseID, taskID, criterion)), phaseID)
 }
 
 // isLastPhaseOfActivePlan reports whether phaseID is the last phase of the
