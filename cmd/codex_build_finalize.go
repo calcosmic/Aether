@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -637,6 +638,29 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := store.SaveJSON(manifestRel, finalManifest); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build manifest: %w", err)
 	}
+
+	// D-08 / ruling D11 rule 2: the program's own free checks (build, types,
+	// lint, tests, claimed-files-exist, criterion evidence) run at build time
+	// and are recorded as a report on the attempt journal -- never as an
+	// advancement gate here. Advancing the phase is `continue`'s decision
+	// alone (TestBuildFinalizeFreeChecksDoNotAdvanceThePhase). skipVerify
+	// keeps its existing meaning: it is the switch for whether the free
+	// checks run at all at build time; no new flag is added.
+	if !skipVerify {
+		contManifest := codexContinueManifest{Present: true, Path: manifestRel, Data: finalManifest}
+		watcher := evaluateContinueWatcherVerification(contManifest)
+		floor := runDeterministicFloor(context.Background(), root, updatedPhase, contManifest, watcher, 0)
+		report := buildFreeCheckReportFromFloor(phaseNum, completedAt, floor)
+		if err := attachBuildFreeCheckReport(attemptRel, report); err != nil {
+			// A report the runtime failed to write is not a reason to fail a
+			// build that otherwise completed -- warn and move on. It never
+			// gates advancement either way.
+			visualFprintf(stderr, "warning: could not record the build-time check report for phase %d: %v\n", phaseNum, err)
+		} else if !report.Passed {
+			visualFprintf(stderr, "warning: the program's own checks did not all pass for phase %d (%s) -- this does not block the build; the next step (`aether continue`) decides whether the phase can advance\n", phaseNum, report.Summary)
+		}
+	}
+
 	if err := recordExternalBuildSpawnTree(dispatches); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}

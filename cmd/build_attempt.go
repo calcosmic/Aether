@@ -70,6 +70,62 @@ type outOfBandVerificationRecord struct {
 	Summary            string `json:"summary"`
 }
 
+// buildFreeCheckReport is a report of what the program's own deterministic
+// checks (build, types, lint, tests) found at build-finalize time. It is
+// explicitly NOT an advancement gate -- advancement (phase status, task
+// status) is `continue`'s decision alone, proven by
+// TestBuildFinalizeFreeChecksDoNotAdvanceThePhase
+// (cmd/phase_verified_once_test.go), which asserts a passing-checks finalize
+// and a failing-checks finalize commit byte-identical phase/task status. D-08
+// / ruling D11 rule 2: the program's free checks are the floor everywhere,
+// but the build boundary only records them here -- it never blocks or
+// advances on them itself.
+type buildFreeCheckReport struct {
+	RecordedAt string `json:"recorded_at"`
+	Phase      int    `json:"phase"`
+	// ChecksRun lists only the checks (of build/types/lint/tests) that
+	// actually executed a resolved command.
+	ChecksRun []string `json:"checks_run,omitempty"`
+	// ChecksSkipped lists checks with no resolved command for this project.
+	ChecksSkipped []string `json:"checks_skipped,omitempty"`
+	// Failed lists the checks that ran and did not pass.
+	Failed  []string `json:"failed,omitempty"`
+	Passed  bool     `json:"passed"`
+	Summary string   `json:"summary"`
+}
+
+// buildFreeCheckReportFromFloor converts a deterministicFloorResult (the
+// single shared floor body from cmd/deterministic_floor.go, also used by both
+// continue lanes) into the report build-finalize attaches to the attempt
+// journal. It is a pure conversion -- no I/O, no decision.
+func buildFreeCheckReportFromFloor(phaseNum int, recordedAt time.Time, floor deterministicFloorResult) buildFreeCheckReport {
+	report := buildFreeCheckReport{
+		RecordedAt: recordedAt.UTC().Format(time.RFC3339),
+		Phase:      phaseNum,
+		Passed:     floor.ChecksPassed,
+	}
+	for _, step := range floor.Steps {
+		switch {
+		case step.Skipped:
+			report.ChecksSkipped = append(report.ChecksSkipped, step.Name)
+		case !step.Passed:
+			report.ChecksRun = append(report.ChecksRun, step.Name)
+			report.Failed = append(report.Failed, step.Name)
+		default:
+			report.ChecksRun = append(report.ChecksRun, step.Name)
+		}
+	}
+	switch {
+	case len(report.Failed) > 0:
+		report.Summary = fmt.Sprintf("checks failed: %s", strings.Join(report.Failed, ", "))
+	case len(report.ChecksRun) == 0:
+		report.Summary = "no tests to run in this project"
+	default:
+		report.Summary = fmt.Sprintf("checks passed: %s", strings.Join(report.ChecksRun, ", "))
+	}
+	return report
+}
+
 type buildAttemptRecord struct {
 	SchemaVersion    int                      `json:"schema_version"`
 	ID               string                   `json:"id"`
@@ -106,6 +162,10 @@ type buildAttemptRecord struct {
 	// attempt as closed by the operator-invoked verify-out-of-band ceremony
 	// rather than by real worker results.
 	OutOfBandVerification *outOfBandVerificationRecord `json:"out_of_band_verification,omitempty"`
+	// FreeChecks is set ONLY by attachBuildFreeCheckReport, called from
+	// runCodexBuildFinalize when skipVerify is false. It is a report, never
+	// an advancement gate -- see buildFreeCheckReport's doc comment.
+	FreeChecks *buildFreeCheckReport `json:"free_checks,omitempty"`
 }
 
 type latestBuildAttemptPointer struct {
@@ -278,6 +338,29 @@ func closeBuildAttemptOutOfBand(attemptRel string, provenance outOfBandVerificat
 		return fmt.Errorf("close build attempt out-of-band: %w", err)
 	}
 	return nil
+}
+
+// attachBuildFreeCheckReport attaches the program's own deterministic
+// build-time checks to an attempt record as a report field, and touches
+// nothing else on the record: not Status, not Dispatches, not History, not
+// Recoverable. D-08 / ruling D11 rule 2 require the free checks to be
+// recorded, never to gate or advance a phase -- a setter this narrow makes
+// that impossible to violate by accident, the same discipline
+// closeBuildAttemptOutOfBand uses for OutOfBandVerification. Called only
+// from runCodexBuildFinalize, and only when skipVerify is false.
+func attachBuildFreeCheckReport(attemptRel string, report buildFreeCheckReport) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	var record buildAttemptRecord
+	return store.UpdateJSONAtomically(attemptRel, &record, func() error {
+		if record.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(record.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		reportCopy := report
+		record.FreeChecks = &reportCopy
+		return nil
+	})
 }
 
 func prepareBuildAttemptManifestBinding(attemptRel string, manifest *codexBuildManifest) error {
