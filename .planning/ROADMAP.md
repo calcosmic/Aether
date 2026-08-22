@@ -61,7 +61,14 @@
 3. A requirement that today silently expects a "Watcher" (the reviewer caste that checks work) to have run is satisfied by the automatic checks alone when no Watcher was sent, and running the manual "I already checked this by hand" command (`continue-finalize --reconcile-task`) counts as real proof (`TestGateAcceptsDeterministicEvidenceWithoutReviewer`).
 4. A real build followed by a real `continue` (the command that checks work and decides whether to move to the next phase) proves no single AI helper type is sent to check the same phase twice unless the Queen (the coordinator that decides which helpers to send) explicitly asks for that (`TestPhaseVerifiedOnce`).
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 193-01-PLAN.md — Tracer: a phase with no reviewer is still checked, and the checks decide (wave 1)
+- [ ] 193-02-PLAN.md — The build side runs free checks only; verified once (wave 2)
+- [ ] 193-03-PLAN.md — Nothing can turn a check off, and the flag text says so (wave 2)
+- [ ] 193-04-PLAN.md — No gate demands a reviewer: reconciliation, re-run evidence, owner confirmation (wave 3)
+- [ ] 193-05-PLAN.md — Targeted per phase, full at the end; one bounded fix attempt (wave 4)
 
 ### Phase 194: The Queen Decides the Team
 
