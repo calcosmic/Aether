@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -182,5 +184,120 @@ func TestBuildFinalizeFreeChecksDoNotAdvanceThePhase(t *testing.T) {
 			t.Errorf("task %d status differs by free-check outcome: pass=%s fail=%s",
 				i, passState.Plan.Phases[0].Tasks[i].Status, failState.Plan.Phases[0].Tasks[i].Status)
 		}
+	}
+}
+
+// TestPhaseVerifiedOnce proves ruling D11 rule 4
+// (.planning/decisions/2026-08-22-queen-decides-program-checks.md) for the
+// specific claim Task 1 of this plan makes true: the watcher is not
+// dispatched at both the build boundary and the continue boundary for the
+// same phase unless the Queen's proposal explicitly named it. It plans a
+// real build manifest (plannedBuildDispatchesWithJudgement) and a real
+// continue plan (plannedContinueReviewDispatches + continueWatcherDecision,
+// the two functions that decide continue's dispatched castes) for the same
+// phase, and asserts on the intersection of the two caste sets as a set --
+// not on any stage name or single hardcoded caste name beyond "watcher"
+// itself -- so a future change that moves the watcher dispatch to a
+// different stage still gets caught.
+//
+// Measured baseline this exists to prevent (2026-08-22, before this plan):
+// a one-task bug fix was sent 8 workers, 3 of them verification on the
+// continue side, because the build side ALSO always dispatched a watcher
+// under the required-caste floor with no Queen proposal involved.
+//
+// Scope note (this plan's own frontmatter, "flagged_assumptions": "FLOOR-04
+// edge probe row is unclassified -- NOT auto-resolved"): probe, auditor and
+// gatekeeper still legitimately double-dispatch today on production/security
+// phases with NO explicit Queen proposal on either side -- both the build
+// and continue deterministic engines (queenOrchestrate, and for continue at
+// non-light depth, cmd/caste_relevance.go isAlwaysRequired's "continue" case)
+// independently decide a security-shaped or testable-code phase needs the
+// same specialist. That is real, and it is NOT something this plan's Task 1
+// touches -- the plan explicitly scopes required-caste floor changes to
+// Phase 194 ("Phase 194 moves the required-caste floor; 193 only stops the
+// duplicate [watcher] dispatch"). Asserting full intersection-emptiness
+// across every caste here would fail on the production and high-risk rows
+// for a real, pre-existing reason this plan does not fix -- that would be
+// testing Phase 194's claim, not this plan's. This test is scoped to the
+// watcher claim Task 1 actually delivers; the wider probe/auditor/gatekeeper
+// gap is recorded in 193-02-SUMMARY.md and the WINDOWS.md defect ledger for
+// Phase 194 to close.
+func TestPhaseVerifiedOnce(t *testing.T) {
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	production := phaseVerifiedOncePhase("Ship the release", "Production deploy", colony.PhaseModeProduction)
+
+	for _, tc := range []struct {
+		name               string
+		phase              colony.Phase
+		proposedCastes     []string
+		casteReason        string
+		wantWatcherOverlap bool
+	}{
+		{
+			name:  "documentation-only, no proposal",
+			phase: phaseVerifiedOncePhase("Write the README", "Documentation only, no code changes", colony.PhaseModeMaintenance),
+		},
+		{
+			name:  "prototype, no proposal",
+			phase: phaseVerifiedOncePhase("Add a hello endpoint", "Implement the /hello route", colony.PhaseModePrototype),
+		},
+		{
+			name:  "production, no proposal",
+			phase: production,
+		},
+		{
+			name:  "high-risk, no proposal",
+			phase: phaseVerifiedOncePhase("Password reset", "Let users reset their password via an emailed token", colony.PhaseModeProduction),
+		},
+		{
+			// The row proving this test measures the rule, not mere
+			// emptiness: an explicit proposal naming the watcher makes the
+			// intersection non-empty, on purpose, on both sides.
+			name:               "production, explicit watcher proposal",
+			phase:              production,
+			proposedCastes:     []string{"builder", "watcher"},
+			casteReason:        "owner asked for an explicit watcher pass",
+			wantWatcherOverlap: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{tc.phase}}}
+
+			buildDispatches := plannedBuildDispatchesWithJudgement(
+				tc.phase, state, nil, colony.VerificationDepthStandard, tc.proposedCastes, tc.casteReason,
+			)
+			buildCastes := map[string]bool{}
+			for _, d := range buildDispatches {
+				buildCastes[d.Caste] = true
+			}
+
+			continueDispatches := plannedContinueReviewDispatches(
+				"/tmp", tc.phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+				&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, tc.proposedCastes, tc.casteReason,
+			)
+			continueCastes := map[string]bool{}
+			for _, d := range continueDispatches {
+				continueCastes[d.Caste] = true
+			}
+			if dispatchWatcher, _ := continueWatcherDecision(state, tc.phase, codexContinueManifest{}, codexWatcherVerification{}, false); dispatchWatcher {
+				continueCastes["watcher"] = true
+			}
+
+			intersection := map[string]bool{}
+			for caste := range buildCastes {
+				if continueCastes[caste] {
+					intersection[caste] = true
+				}
+			}
+
+			watcherOverlap := intersection["watcher"]
+			if watcherOverlap != tc.wantWatcherOverlap {
+				t.Fatalf("watcher in build∩continue = %v, want %v (build=%v continue=%v intersection=%v)",
+					watcherOverlap, tc.wantWatcherOverlap, buildCastes, continueCastes, intersection)
+			}
+		})
 	}
 }
