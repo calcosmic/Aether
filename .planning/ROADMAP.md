@@ -80,7 +80,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 193-05-PLAN.md — Targeted per phase, full at the end; one bounded fix attempt (wave 4)
+- [x] 193-05-PLAN.md — Targeted per phase, full at the end; one bounded fix attempt (wave 4)
 
 ### Phase 194: The Queen Decides the Team
 

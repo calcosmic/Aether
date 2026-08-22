@@ -4,17 +4,17 @@ milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 current_phase: 193
 current_phase_name: Free Checks Are the Floor
-status: executing
-stopped_at: Completed 193-04-PLAN.md
-last_updated: "2026-08-22T15:49:00.310Z"
+status: verifying
+stopped_at: Completed 193-05-PLAN.md
+last_updated: "2026-08-22T16:27:45.126Z"
 last_activity: 2026-08-22
 last_activity_desc: Phase 193 execution started
-state_head: 8dafb1b2cffc8143bc802c9ac412b86c0df32f89
+state_head: 911f91a3f01afd9e5bba09bd8153d21bd40e5059
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 
 Phase: 193 (Free Checks Are the Floor) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-22 — Phase 193 execution started
 
 ## Performance Metrics
@@ -55,6 +55,7 @@ Last activity: 2026-08-22 — Phase 193 execution started
 | Phase 193 P02 | 62min | 3 tasks | 13 files |
 | Phase 193 P03 | 23min | 2 tasks | 2 files |
 | Phase 193 P04 | 70min | 3 tasks | 12 files |
+| Phase 193 P05 | 43min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,8 @@ Last activity: 2026-08-22 — Phase 193 execution started
 - [Phase 193]: 193-03: --skip-watchers help text corrected to state plainly that only AI reviewer workers are skipped and the program's own checks (build, types, lint, tests) always run; TestNoContinueFlagClaimsToSkipAChecked guards every continueCmd flag going forward — D-01 (193-CONTEXT.md); plain-English mandate (CLAUDE.md)
 - [Phase 193]: FLOOR-03 closed: reconcile-task counted as evidence on both continue lanes, builder evidence re-run by the program (D-04), unprovable criteria marked needs_owner_confirmation and seal blocks until answered (D-05) — continueTasksSupportAdvancement's H-04 branch now requires only task.Verified for a reconciled task; reRunBuilderReportedEvidence re-executes a builder's reported commands itself; owner_confirmation_pending gate + checkSealBlockers extension route through the existing decision-answer and force-override paths
 - [Phase 193]: 193-04: Tasks 2 (builder evidence re-run) and 3 (owner confirmation) landed in one commit, not two -- both edit the same per-check evaluation loop in evaluatePhaseCriterionEvidence and could not be cleanly split by git hunk — Task 1 (reconciliation) was cleanly separable via git add -p and is its own commit
+- [Phase 193]: Verification tests are scoped to the Go packages a phase's changed files touched (D-07), falling back to the full run whenever that scope cannot be honestly derived or on the plan's final phase; only the tests command is ever scoped. — Narrowing a compiler or linter changes what it can see, so build/types/lint always run as configured; only the tests command has a safe scoped runner (go test ./dir/...).
+- [Phase 193]: A failing free check with no reviewer dispatched draws exactly one automatic builder fix attempt (D-02/D-03), recorded as a brand-new append-only entry in the build attempt journal; a second automatic attempt never happens and continue blocks with one exact re-run command if the re-run still fails. — The fix attempt must never overwrite the original result and must be visibly countable on the team card and cost line; a new attempt record is the same append-only discipline the out-of-band verification record already established.
 
 ### Pending Todos
 
@@ -166,6 +169,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-22T15:49:00.295Z
-Stopped at: Completed 193-04-PLAN.md
+Last session: 2026-08-22T16:27:45.111Z
+Stopped at: Completed 193-05-PLAN.md
 Resume file: None
