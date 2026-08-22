@@ -2,9 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
+current_phase: 193
 status: planning
-last_updated: "2026-08-22T11:24:40.880Z"
+stopped_at: Phase 193 context gathered
+last_updated: "2026-08-22T11:40:01.849Z"
 last_activity: 2026-08-22
+last_activity_desc: v1.27 roadmap created
+state_head: ae1e4812b77be147e24e5b01cb707c7f157a68ef
 progress:
   total_phases: 7
   completed_phases: 0
@@ -148,6 +152,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-22
-Stopped at: v1.26 closed and archived; v1.27 brief written (`research/v1.27-milestone-brief.md`); roadmap created (7 phases, 193-199); next `/gsd-plan-phase 193`
-Resume file: .planning/ROADMAP.md
+Last session: 2026-08-22T11:40:01.837Z
+Stopped at: Phase 193 context gathered
+Resume file: .planning/phases/193-free-checks-are-the-floor/193-CONTEXT.md
