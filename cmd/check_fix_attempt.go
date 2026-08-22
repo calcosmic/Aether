@@ -176,7 +176,7 @@ const maxAutomaticCheckFixAttempts = 1
 // when a fix attempt for this exact phase and check has already been
 // recorded maxAutomaticCheckFixAttempts times (D-02: "never a second
 // automatic attempt").
-func planCheckFixAttempt(state colony.ColonyState, phase colony.Phase, floor deterministicFloorResult, reviewerDispatched bool) (checkFixAttemptRecord, bool) {
+func planCheckFixAttempt(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, floor deterministicFloorResult, reviewerDispatched bool) (checkFixAttemptRecord, bool) {
 	if floor.ChecksPassed || reviewerDispatched {
 		return checkFixAttemptRecord{}, false
 	}
@@ -192,7 +192,13 @@ func planCheckFixAttempt(state colony.ColonyState, phase colony.Phase, floor det
 	if _, record, ok := loadLatestBuildAttempt(phase.ID); ok {
 		parentAttemptID = record.ID
 	}
-	claims := loadRawBuildClaimsForScope(codexContinueManifest{})
+	// WR-01 (193-REVIEW.md): the real manifest for this continue run must be
+	// threaded through, not a zero-value codexContinueManifest{} -- a
+	// non-default ClaimsPath (the external/wrapper lane's completion
+	// packets can set one) would otherwise be silently ignored, and
+	// loadRawBuildClaimsForScope would always fall back to the default
+	// last-build-claims.json, reading stale or missing claims.
+	claims := loadRawBuildClaimsForScope(manifest)
 	index := buildCheckFailureIndex(*failing, claims, phase)
 
 	return checkFixAttemptRecord{
@@ -245,7 +251,7 @@ func countCheckFixAttempts(phaseNum int, check string) int {
 // re-run the floor exactly once. Never dispatches a reviewer. Never loops --
 // the re-run's result is used as-is, whether it fixed the check or not.
 func applyAutomaticCheckFixAttempt(ctx context.Context, root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, floor deterministicFloorResult, buildWatcher codexWatcherVerification, workerTimeout, verificationTimeout time.Duration, reviewerDispatched bool) (deterministicFloorResult, *checkFixAttemptRecord) {
-	record, ok := planCheckFixAttempt(state, phase, floor, reviewerDispatched)
+	record, ok := planCheckFixAttempt(state, phase, manifest, floor, reviewerDispatched)
 	if !ok {
 		return floor, nil
 	}

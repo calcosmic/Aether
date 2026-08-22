@@ -141,6 +141,54 @@ func TestFailureIndexNeverCarriesTheWholeLog(t *testing.T) {
 	}
 }
 
+// TestPlanCheckFixAttemptHonoursNonDefaultClaimsPath proves WR-01
+// (193-REVIEW.md): planCheckFixAttempt must thread the real continue
+// manifest through to loadRawBuildClaimsForScope, not a zero-value
+// codexContinueManifest{}. A manifest naming a non-default ClaimsPath (the
+// external/wrapper lane's completion packets can set one) must actually be
+// read -- before the fix, this was silently ignored in favor of the
+// default last-build-claims.json, which does not exist in this fixture, so
+// ImplicatedTaskIDs would come back empty instead of naming the task whose
+// claimed changed file the failure implicates.
+func TestPlanCheckFixAttemptHonoursNonDefaultClaimsPath(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	taskID := "1.1"
+	phase := colony.Phase{
+		ID:    1,
+		Name:  "Non-default claims path",
+		Tasks: []colony.Task{{ID: &taskID, Goal: "Land the fix"}},
+	}
+	customClaims := codexBuildClaims{
+		TaskClaims: []codexBuildTaskClaim{
+			{TaskID: taskID, FilesModified: []string{"cmd/widget.go"}},
+		},
+	}
+	claimsRel := "custom/wrapper-claims.json"
+	if err := store.SaveJSON(claimsRel, customClaims); err != nil {
+		t.Fatalf("save custom claims file: %v", err)
+	}
+	manifest := codexContinueManifest{
+		Present: true,
+		Data:    codexBuildManifest{ClaimsPath: ".aether/data/" + claimsRel},
+	}
+	failingStep := codexVerificationStep{
+		Name: "tests", Command: "go test ./...", ExitCode: 1,
+		Output: "cmd/widget.go:10: assertion failed", Summary: "tests failed (exit 1)",
+	}
+	floor := deterministicFloorResult{ChecksPassed: false, Steps: []codexVerificationStep{failingStep}}
+
+	record, ok := planCheckFixAttempt(colony.ColonyState{}, phase, manifest, floor, false)
+	if !ok {
+		t.Fatalf("expected a fix attempt to be planned")
+	}
+	if len(record.FailureIndex.ImplicatedTaskIDs) != 1 || record.FailureIndex.ImplicatedTaskIDs[0] != taskID {
+		t.Fatalf("expected ImplicatedTaskIDs=[%s] read from the manifest's own non-default ClaimsPath, got %v", taskID, record.FailureIndex.ImplicatedTaskIDs)
+	}
+}
+
 // TestFailedCheckSendsExactlyOneBuilderFixAttempt proves a failing check with
 // no reviewer dispatched produces exactly one builder dispatch whose reason
 // names the failing check, and no reviewer dispatch of any kind.
