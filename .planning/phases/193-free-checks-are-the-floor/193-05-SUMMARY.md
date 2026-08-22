@@ -242,3 +242,12 @@ Flagged for Phase 194 (already recorded in `.planning/WINDOWS.md` by 193-02, unc
 ---
 *Phase: 193-free-checks-are-the-floor*
 *Completed: 2026-08-22*
+
+## Self-Check: PASSED
+
+Recorded by the execute-phase orchestrator after the plan returned without this section (every other plan in the phase carried one):
+
+- Key files present on disk: `cmd/verification_scope.go`, `cmd/check_fix_attempt.go`, `cmd/verification_scope_test.go`, `cmd/floor_fix_attempt_test.go` — all four found.
+- Commits: `git log --oneline --grep="193-05"` returns 5 commits (`b3625a18`, `587ee81c`, `c3504c17`, `911f91a3`, `4e5c9adb`).
+- Post-wave gate on the final tree (2026-08-22): `go build ./...` exit 0, `go vet ./...` exit 0, `go test ./...` exit 0 — 18 packages ok, `cmd` in 387.9s.
+- Working tree clean apart from the untracked, gitignored `.gsd/` sentinel and `.planning/milestone.lock`.
