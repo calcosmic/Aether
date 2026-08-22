@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 193
 current_phase_name: Free Checks Are the Floor
 status: executing
-stopped_at: Phase 193 context gathered
-last_updated: "2026-08-22T12:07:12.256Z"
+stopped_at: Completed 193-01-PLAN.md
+last_updated: "2026-08-22T13:08:49.063Z"
 last_activity: 2026-08-22
-last_activity_desc: v1.27 roadmap created
-state_head: 6a35db5e96c2c2e388a62f3d9771fe67a78aa4dc
+last_activity_desc: Phase 193 execution started
+state_head: ee805ec10ebc7ef2f24b8e5d3c8eb12ddd08d5d2
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,17 +25,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Starting milestone v1.27 "The Queen Decides, the Program Checks" — brief in `.planning/research/v1.27-milestone-brief.md`
+**Current focus:** Phase 193 — Free Checks Are the Floor
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 193 (Free Checks Are the Floor) — READY TO EXECUTE
-Plan: —
+Phase: 193 (Free Checks Are the Floor) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-22 — v1.27 roadmap created
+Last activity: 2026-08-22 — Phase 193 execution started
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Last activity: 2026-08-22 — v1.27 roadmap created
 |------|----------|-------|-------|
 | Phase 172 P05 | 25min | 2 tasks | 4 files |
 | Phase 173 P10 | 70min | 4 tasks | 5 files |
+| Phase 193 P01 | 50min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ Last activity: 2026-08-22 — v1.27 roadmap created
 - [Phase 172]: ROADMAP.md Phase 172/178 criteria corrected to the scan's real numbers: 278 seeded orphans, 6 owned by phase 178, replacing the pre-scan assumption of 8
 - [Phase 173]: Plan 10: orphan_allowlist.json earned zero removals -- all five spawn-related candidates remain genuine orphans against the live reachability ratchet because .aether/workers.md is not a caller corpus this ratchet scans
 - [Phase 173]: Plan 10: ROADMAP criterion 4 left byte-identical -- the cross-guard fail-closed proof establishes a narrower claim than the criterion's literal wording; whether it is satisfied is left to verification, per 173-RESIDUE.md residue 7
+- [Phase 193]: Deterministic floor promoted to the primary verification anchor; a dispatched reviewer verdict can only ADD a block, never supply the pass — runDeterministicFloor uses the build-time watcher (already resolved), never a live continue-time dispatch -- avoids re-running shell verification twice for a reviewer brief and guarantees a reviewer cannot supply a pass. Both continue lanes now share this one function.
+- [Phase 193]: syntheticCriterionRequirements default checks drop watcher (D-06) — Unbound criteria now get claims plus the matching free check, never a reviewer caste by default; a dispatched reviewer that fails still blocks separately.
 
 ### Pending Todos
 
@@ -153,6 +156,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-22T11:40:01.837Z
-Stopped at: Phase 193 context gathered
-Resume file: .planning/phases/193-free-checks-are-the-floor/193-CONTEXT.md
+Last session: 2026-08-22T13:08:49.049Z
+Stopped at: Completed 193-01-PLAN.md
+Resume file: None

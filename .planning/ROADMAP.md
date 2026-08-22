@@ -67,7 +67,7 @@
 Plans:
 **Wave 1**
 
-- [ ] 193-01-PLAN.md — Tracer: a phase with no reviewer is still checked, and the checks decide (wave 1)
+- [x] 193-01-PLAN.md — Tracer: a phase with no reviewer is still checked, and the checks decide (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
