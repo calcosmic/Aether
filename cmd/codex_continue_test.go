@@ -5624,10 +5624,11 @@ func TestRunCodexContinueVerificationSkipsWatcherForRawBindEPERM(t *testing.T) {
 func TestRunCodexContinueVerificationWarnsWhenAllCommandsAreSkipped(t *testing.T) {
 	// Zero resolvable verification commands used to hard-block advancement,
 	// which stranded every repo outside the five detected ecosystems at its
-	// first continue with no visible remedy. The contract now: verification
-	// responsibility passes to the watcher, and the situation surfaces as an
-	// explicit warning. With --skip-watchers the user has knowingly chosen to
-	// advance on claims alone.
+	// first continue with no visible remedy. The contract now (D-01, Phase
+	// 193): the floor is claimed files plus criterion evidence, no fallback
+	// hands verification responsibility to a reviewer, and the situation
+	// surfaces as a plain-English warning. With --skip-watchers the user has
+	// knowingly chosen to advance on claims alone.
 	saveGlobals(t)
 
 	s, tmpDir := newTestStore(t)
@@ -5653,8 +5654,11 @@ func TestRunCodexContinueVerificationWarnsWhenAllCommandsAreSkipped(t *testing.T
 	if !report.ChecksPassed {
 		t.Fatalf("all-skipped verification must not hard-block: %+v", report.BlockingIssues)
 	}
-	if !strings.Contains(strings.Join(report.Warnings, "\n"), "no deterministic verification command") {
-		t.Fatalf("all-skipped state must surface as an explicit warning: %+v", report.Warnings)
+	if !strings.Contains(strings.Join(report.Warnings, "\n"), "no tests to run in this project") {
+		t.Fatalf("all-skipped state must surface as a plain-English warning: %+v", report.Warnings)
+	}
+	if strings.Contains(strings.ToLower(strings.Join(report.Warnings, "\n")), "watcher") {
+		t.Fatalf("all-skipped warning must not hand verification responsibility to a reviewer: %+v", report.Warnings)
 	}
 	for _, step := range report.Steps {
 		if !step.Skipped {

@@ -140,11 +140,19 @@ func bindSyntheticPlanEvidence(phases []colony.Phase) []colony.Phase {
 	return bound
 }
 
+// syntheticCriterionRequirements derives the default evidence checks for a
+// criterion that has no explicit `evidence_requirements` binding. The
+// synthetic default IS the deterministic floor (D-06, ruling D11 rule 2): it
+// names "claims" plus whichever free check the criterion's own wording
+// matches (build/types/lint/tests), and no reviewer caste. A reviewer worker
+// is never a synthetic default requirement -- if one is dispatched anyway and
+// fails, it still blocks (evaluateCriterionCheckDetail's "watcher" case), but
+// nothing here asks for one to exist.
 func syntheticCriterionRequirements(criteria []string) []colony.CriterionEvidenceRequirement {
 	requirements := make([]colony.CriterionEvidenceRequirement, 0, len(criteria))
 	for _, criterion := range nonEmptyCriteria(criteria) {
 		lower := strings.ToLower(criterion)
-		checks := []string{"claims", "watcher"}
+		checks := []string{"claims"}
 		switch {
 		case strings.Contains(lower, "test") || strings.Contains(lower, "coverage"):
 			checks = append(checks, "tests")
@@ -495,15 +503,15 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 			evaluation.Deterministic = true
 		}
 		for _, check := range requirement.Checks {
-			passed, evidence, issue := evaluateCriterionCheck(check, steps, claimsVerification, watcher)
-			if passed {
-				result.Evidence = append(result.Evidence, evidence)
-				if check != "watcher" {
+			outcome := evaluateCriterionCheckDetail(check, steps, claimsVerification, watcher)
+			if outcome.Passed {
+				result.Evidence = append(result.Evidence, outcome.Evidence)
+				if outcome.Deterministic {
 					evaluation.Deterministic = true
 				}
 				continue
 			}
-			result.BlockingIssues = append(result.BlockingIssues, issue)
+			result.BlockingIssues = append(result.BlockingIssues, outcome.Issue)
 		}
 		result.Passed = len(result.BlockingIssues) == 0
 		if result.Passed {
@@ -598,19 +606,51 @@ func criterionClaimSets(claims codexBuildClaims) map[string]map[string]bool {
 	return sets
 }
 
-func evaluateCriterionCheck(check string, steps []codexVerificationStep, claims codexClaimVerification, watcher codexWatcherVerification) (bool, string, string) {
+// criterionCheckOutcome is the result of evaluating one named check
+// (claims/watcher/build/types/lint/tests) against the current verification
+// run. Deterministic distinguishes evidence the program produced itself
+// (a shell check, a claims re-verify, a re-hashed artifact) from evidence
+// that came from a dispatched reviewer's verdict -- the distinction the
+// per-criterion loop uses to set criterionEvidenceEvaluation.Deterministic.
+type criterionCheckOutcome struct {
+	Passed        bool
+	Evidence      string
+	Issue         string
+	Deterministic bool
+}
+
+// evaluateCriterionCheckDetail evaluates a single named check. The "watcher"
+// case has three outcomes (D-06, FLOOR-03): a dispatched reviewer that
+// passed satisfies it (not deterministic -- a worker's word); a dispatched
+// reviewer that did not pass still blocks; and no reviewer dispatched at all
+// (or a "skipped" status, which is the same thing in effect) is satisfied
+// only when deterministicFloorSatisfies finds genuine proof -- so a criterion
+// asking for "watcher" review can still fail with nothing behind it, which is
+// the "an always-pass check is worse than no check" precedent this file
+// already follows for the removed operational_evidence gate.
+func evaluateCriterionCheckDetail(check string, steps []codexVerificationStep, claims codexClaimVerification, watcher codexWatcherVerification) criterionCheckOutcome {
 	check = strings.ToLower(strings.TrimSpace(check))
 	switch check {
 	case "claims":
 		if claims.Present && claims.Passed && !claims.Skipped {
-			return true, "current-build claims verified", ""
+			return criterionCheckOutcome{Passed: true, Evidence: "current-build claims verified", Deterministic: true}
 		}
-		return false, "", "current-build claims were missing, skipped, or failed verification"
+		return criterionCheckOutcome{Issue: "current-build claims were missing, skipped, or failed verification"}
 	case "watcher":
-		if watcher.Present && watcher.Passed && !strings.EqualFold(strings.TrimSpace(watcher.Status), "skipped") {
-			return true, fmt.Sprintf("watcher %s passed", firstNonEmpty(watcher.Worker, "verification")), ""
+		dispatchedStatusSkipped := watcher.Present && strings.EqualFold(strings.TrimSpace(watcher.Status), "skipped")
+		if watcher.Present && watcher.Passed && !dispatchedStatusSkipped {
+			return criterionCheckOutcome{Passed: true, Evidence: fmt.Sprintf("watcher %s passed", firstNonEmpty(watcher.Worker, "verification")), Deterministic: false}
 		}
-		return false, "", "an executed Watcher review did not pass"
+		if watcher.Present && !watcher.Passed && !dispatchedStatusSkipped {
+			return criterionCheckOutcome{Issue: "an executed Watcher review did not pass"}
+		}
+		// No reviewer was dispatched at all, or its status is "skipped" --
+		// the check is satisfied only if the deterministic floor genuinely
+		// supplies proof.
+		if evidence, ok := deterministicFloorSatisfies(steps, claims); ok {
+			return criterionCheckOutcome{Passed: true, Evidence: evidence, Deterministic: true}
+		}
+		return criterionCheckOutcome{Issue: "no reviewer was dispatched and the deterministic floor (verification checks and current-build claims) did not supply proof"}
 	default:
 		for _, step := range steps {
 			if strings.EqualFold(strings.TrimSpace(step.Name), check) {
@@ -620,16 +660,56 @@ func evaluateCriterionCheck(check string, steps []codexVerificationStep, claims 
 					// raw configured shell command (step.Command) -- a
 					// downstream colony's embedded checker was reporting the
 					// check's own definition as if it were the finding.
-					return true, fmt.Sprintf("%s check passed: %s", check, strings.TrimSpace(step.Summary)), ""
+					return criterionCheckOutcome{Passed: true, Evidence: fmt.Sprintf("%s check passed: %s", check, strings.TrimSpace(step.Summary)), Deterministic: true}
 				}
 				if step.Skipped {
-					return false, "", fmt.Sprintf("required %s check was skipped", check)
+					return criterionCheckOutcome{Issue: fmt.Sprintf("required %s check was skipped", check)}
 				}
-				return false, "", fmt.Sprintf("required %s check failed: %s", check, step.Summary)
+				return criterionCheckOutcome{Issue: fmt.Sprintf("required %s check failed: %s", check, step.Summary)}
 			}
 		}
-		return false, "", fmt.Sprintf("required %s check was not present", check)
+		return criterionCheckOutcome{Issue: fmt.Sprintf("required %s check was not present", check)}
 	}
+}
+
+// evaluateCriterionCheck is a thin three-value wrapper around
+// evaluateCriterionCheckDetail so cmd/verify_out_of_band.go and every other
+// existing caller compiles unchanged.
+func evaluateCriterionCheck(check string, steps []codexVerificationStep, claims codexClaimVerification, watcher codexWatcherVerification) (bool, string, string) {
+	outcome := evaluateCriterionCheckDetail(check, steps, claims, watcher)
+	return outcome.Passed, outcome.Evidence, outcome.Issue
+}
+
+// deterministicFloorSatisfies reports whether the program's own checks --
+// current-build claims plus verification that actually executed and passed,
+// or no verification command resolving for this repository at all (D-01) --
+// provide genuine proof for a criterion that would otherwise need a
+// dispatched reviewer's verdict. It returns false whenever any step that ran
+// did not pass, when any step is Blocked, or when claims failed, so this
+// path can still fail -- an always-pass check is worse than no check.
+func deterministicFloorSatisfies(steps []codexVerificationStep, claims codexClaimVerification) (string, bool) {
+	if !claims.Passed {
+		return "", false
+	}
+	executedAny := false
+	for _, step := range steps {
+		if step.Blocked {
+			return "", false
+		}
+		if !step.Skipped && !step.Passed {
+			return "", false
+		}
+		if !step.Skipped {
+			executedAny = true
+		}
+	}
+	if proof, ok := verificationReRunProvesArtifacts(steps); ok {
+		return fmt.Sprintf("no reviewer was dispatched; %s and current-build claims verified", proof), true
+	}
+	if !executedAny {
+		return "no reviewer was dispatched; no verification command resolved in this repository and current-build claims verified", true
+	}
+	return "", false
 }
 
 func criterionTaskSuffix(taskID string) string {

@@ -74,8 +74,10 @@ type codexContinueVerificationReport struct {
 	Passed                     bool                         `json:"passed"`
 	BlockingIssues             []string                     `json:"blocking_issues,omitempty"`
 	// Warnings surface non-blocking verification observations — most
-	// importantly "no deterministic verification command resolved", which used
-	// to be a silent hard-block and is now a visible handover to the watcher.
+	// importantly "no tests to run in this project" (D-01, Phase 193), which
+	// used to be a silent hard-block; it is now a visible warning that the
+	// floor is claimed files plus criterion evidence, with no fallback that
+	// hands verification responsibility to a reviewer.
 	Warnings []string `json:"warnings,omitempty"`
 }
 
@@ -1575,7 +1577,13 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
 
-	// Compute shell verification pass/fail before deciding whether to spawn watcher.
+	// The deterministic floor (shell steps + claims, and criteria evidence
+	// below) is computed unconditionally, before any reviewer decision is
+	// consulted, and is what sets checksPassed (ruling D11 rule 2). Zero
+	// executed checks no longer hands verification responsibility to a
+	// reviewer -- it used to, and that fallback is gone (D-01): when nothing
+	// shell-verifiable resolved, the floor is claimed files plus criterion
+	// evidence, and a warning makes the situation visible.
 	shellChecksPassed := true
 	executedChecks := 0
 	for _, step := range steps {
@@ -1587,48 +1595,18 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 			shellChecksPassed = false
 		}
 	}
-	// Zero executed checks no longer hard-fails. It used to set
-	// shellChecksPassed=false, which blocked any repo outside the five detected
-	// ecosystems from ever advancing past its first continue — with no remedy
-	// visible to the user. When nothing shell-verifiable resolved, verification
-	// responsibility passes to the watcher below (shellChecksPassed stays true,
-	// so the watcher path runs); a warning makes the situation visible. A user
-	// who also passes --skip-watchers has explicitly chosen to advance on
-	// claims alone, and that choice is theirs.
 
+	// continueWatcherDecision resolves only whether a reviewer is dispatched
+	// at all -- it never consults shellChecksPassed, so the deterministic
+	// result can never cause a dispatch (D-08): dispatch happens because the
+	// Queen sent a reviewer and none of the existing auto-skip reasons apply,
+	// full stop.
 	var continueWatcher codexWatcherVerification
 	var watcherFlow *codexContinueWorkerFlowStep
-	if skipWatchers {
-		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
-	} else if shellChecksPassed && isEnvironmentBlockedWatcher(buildWatcher) {
-		continueWatcher = buildWatcher
-	} else if summary, ok := continueWatcherHostBoundarySkipSummary(manifest); ok {
-		continueWatcher = resolveHostBoundaryWatcher(buildWatcher, summary)
-	} else if shellChecksPassed {
-		invoker := newCodexWorkerInvoker()
-		if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
-			// Auto-skip: shell verification passed but no authenticated worker provider is available.
-			// No point spawning a watcher that will immediately fail.
-			continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; " + dispatchAvailabilityMessage(invoker) + " but runtime verification passed"}
-		} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
-			// LOOP-01: Auto-skip watcher after consecutive failure threshold.
-			emitLoopBreakEvent("watcher_skip",
-				fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
-				"auto-skipped watcher, advancing on runtime verification",
-				"aether-continue")
-			continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
-		} else {
-			continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
-		}
-	} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
-		// LOOP-01: Auto-skip watcher after consecutive failure threshold.
-		emitLoopBreakEvent("watcher_skip",
-			fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
-			"auto-skipped watcher, advancing on runtime verification",
-			"aether-continue")
-		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
-	} else {
+	if dispatch, skipped := continueWatcherDecision(state, phase, manifest, buildWatcher, skipWatchers); dispatch {
 		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+	} else {
+		continueWatcher = skipped
 	}
 	watcher := continueWatcher
 	if !watcher.Present {
@@ -1639,7 +1617,7 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	blockers := []string{}
 	warnings := []string{}
 	if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
-		warnings = append(warnings, "no deterministic verification command resolved in this repository; verification relies on the watcher — add real build/test commands to CLAUDE.md to enable shell checks")
+		warnings = append(warnings, "no tests to run in this project; verification relies on the files a worker changed and evidence for each success criterion — add real build/test commands to CLAUDE.md to enable shell checks")
 	}
 	if !shellChecksPassed {
 		for _, step := range steps {
@@ -1707,6 +1685,44 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		BlockingIssues:             blockers,
 		Warnings:                   warnings,
 	}, watcherFlow
+}
+
+// continueWatcherDecision decides whether continue dispatches a reviewer
+// worker at all. It never consults the deterministic verification result --
+// the removed comment block above named the exact fallback this replaces
+// ("zero executed checks hands verification to a watcher"); that coupling is
+// gone. Every existing non-dispatch reason keeps its own explicit skipped
+// status: --skip-watchers, a build-side watcher already environment-blocked,
+// a host-boundary (wrapper-mediated) skip, no worker provider available, or
+// the consecutive-failure circuit breaker (LOOP-01). Returning dispatch=true
+// means only "none of those apply" -- the caller still runs the reviewer and
+// its own outcome is evaluated afterward.
+func continueWatcherDecision(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, buildWatcher codexWatcherVerification, skipWatchers bool) (bool, codexWatcherVerification) {
+	if skipWatchers {
+		return false, codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
+	}
+	if isEnvironmentBlockedWatcher(buildWatcher) {
+		return false, buildWatcher
+	}
+	if summary, ok := continueWatcherHostBoundarySkipSummary(manifest); ok {
+		return false, resolveHostBoundaryWatcher(buildWatcher, summary)
+	}
+	invoker := newCodexWorkerInvoker()
+	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
+		// Auto-skip: no authenticated worker provider is available. No point
+		// dispatching a watcher that will immediately fail; the deterministic
+		// floor still decides.
+		return false, codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; " + dispatchAvailabilityMessage(invoker) + "; advancing on the deterministic floor"}
+	}
+	if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
+		// LOOP-01: Auto-skip watcher after consecutive failure threshold.
+		emitLoopBreakEvent("watcher_skip",
+			fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
+			"auto-skipped watcher, advancing on the deterministic floor",
+			"aether-continue")
+		return false, codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on the deterministic floor.", getWatcherFailureCount(state, phase.ID))}
+	}
+	return true, codexWatcherVerification{}
 }
 
 func runCodexContinueWatcherVerification(ctx context.Context, root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification, workerTimeout time.Duration) (codexWatcherVerification, *codexContinueWorkerFlowStep) {
