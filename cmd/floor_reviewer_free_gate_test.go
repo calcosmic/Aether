@@ -257,6 +257,20 @@ func writeWorkerHandoffRecords(t *testing.T, records ...workerHandoffRecord) {
 	}
 }
 
+// writeReRunnableMakefile writes a Makefile with a "pass" target (exits 0)
+// and a "fail" target (exits non-zero) into root. CR-01 (193-REVIEW.md)
+// narrowed reRunBuilderReportedEvidence to only actually execute commands
+// whose first token names a recognised build/test runner -- "true"/"false"
+// no longer qualify, so these fixtures use "make pass"/"make fail" as the
+// allowlisted stand-ins the pre-CR-01 tests used bare true/false for.
+func writeReRunnableMakefile(t *testing.T, root string) {
+	t.Helper()
+	content := "pass:\n\t@true\n\nfail:\n\t@false\n"
+	if err := os.WriteFile(filepath.Join(root, "Makefile"), []byte(content), 0644); err != nil {
+		t.Fatalf("write Makefile: %v", err)
+	}
+}
+
 // TestBuilderReportedCommandIsReRunByTheProgram proves D-04: the program
 // itself re-executes a command a builder's handoff reported having run --
 // never trusting the handoff's own word -- and the re-run can fail.
@@ -265,10 +279,11 @@ func TestBuilderReportedCommandIsReRunByTheProgram(t *testing.T) {
 		saveGlobals(t)
 		s, root := newTestStore(t)
 		store = s
+		writeReRunnableMakefile(t, root)
 		phase := colony.Phase{ID: 1, Name: "Builder evidence re-run"}
 		writeWorkerHandoffRecords(t, workerHandoffRecord{
 			ID: "build:1.1:Forge-1:1", Workflow: "build", Phase: 1, TaskID: "1.1", WorkerName: "Forge-1",
-			CommandsRun: []string{"true"},
+			CommandsRun: []string{"make pass"},
 		})
 
 		evidence := reRunBuilderReportedEvidence(context.Background(), root, phase, 5*time.Second)
@@ -288,10 +303,11 @@ func TestBuilderReportedCommandIsReRunByTheProgram(t *testing.T) {
 		saveGlobals(t)
 		s, root := newTestStore(t)
 		store = s
+		writeReRunnableMakefile(t, root)
 		phase := colony.Phase{ID: 1, Name: "Builder evidence re-run failure"}
 		writeWorkerHandoffRecords(t, workerHandoffRecord{
 			ID: "build:1.1:Forge-1:1", Workflow: "build", Phase: 1, TaskID: "1.1", WorkerName: "Forge-1",
-			CommandsRun: []string{"false"},
+			CommandsRun: []string{"make fail"},
 		})
 
 		evidence := reRunBuilderReportedEvidence(context.Background(), root, phase, 5*time.Second)
@@ -309,6 +325,67 @@ func TestBuilderReportedCommandIsReRunByTheProgram(t *testing.T) {
 	})
 }
 
+// TestBuilderReportedCommandRerunRefusesUnsafeCommands proves CR-01
+// (193-REVIEW.md): a builder-reported command that is not a plain,
+// argv-shaped build/test runner invocation is never executed -- neither
+// through a shell nor otherwise. It points the malicious string at a
+// marker file that must never appear, covering both a chained-command
+// attempt (";") and a command-substitution attempt ("$(...)").
+func TestBuilderReportedCommandRerunRefusesUnsafeCommands(t *testing.T) {
+	t.Run("chained command via semicolon is refused and never executes", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+		marker := filepath.Join(root, "pwned-semicolon.txt")
+		phase := colony.Phase{ID: 1, Name: "Refuses chained builder-reported commands"}
+		malicious := "go test ./... ; touch " + marker
+		writeWorkerHandoffRecords(t, workerHandoffRecord{
+			ID: "build:1.1:Forge-1:1", Workflow: "build", Phase: 1, TaskID: "1.1", WorkerName: "Forge-1",
+			CommandsRun: []string{malicious},
+		})
+
+		evidence := reRunBuilderReportedEvidence(context.Background(), root, phase, 5*time.Second)
+
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("expected the chained command NEVER to execute, but marker file was created: %s", marker)
+		}
+		if len(evidence.Commands) != 1 {
+			t.Fatalf("expected exactly one recorded command result, got %+v", evidence.Commands)
+		}
+		if !evidence.Commands[0].Unresolvable || evidence.Commands[0].Passed {
+			t.Fatalf("expected the unsafe command to be recorded as refused (unresolvable, not passed), got %+v", evidence.Commands[0])
+		}
+		if ok, _ := evidence.satisfied(); ok {
+			t.Fatalf("expected builder evidence NOT satisfied when the only reported command is refused, got %+v", evidence)
+		}
+	})
+
+	t.Run("command substitution via $() is refused and never executes", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+		marker := filepath.Join(root, "pwned-subshell.txt")
+		phase := colony.Phase{ID: 1, Name: "Refuses substitution builder-reported commands"}
+		malicious := "$(touch " + marker + ")"
+		writeWorkerHandoffRecords(t, workerHandoffRecord{
+			ID: "build:1.1:Forge-1:1", Workflow: "build", Phase: 1, TaskID: "1.1", WorkerName: "Forge-1",
+			CommandsRun: []string{malicious},
+		})
+
+		evidence := reRunBuilderReportedEvidence(context.Background(), root, phase, 5*time.Second)
+
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("expected the substitution command NEVER to execute, but marker file was created: %s", marker)
+		}
+		if len(evidence.Commands) != 1 {
+			t.Fatalf("expected exactly one recorded command result, got %+v", evidence.Commands)
+		}
+		if !evidence.Commands[0].Unresolvable || evidence.Commands[0].Passed {
+			t.Fatalf("expected the unsafe command to be recorded as refused (unresolvable, not passed), got %+v", evidence.Commands[0])
+		}
+	})
+}
+
 // TestBuilderReportedFilesMustExistOnDisk proves the second half of D-04: a
 // handoff naming a changed file that is not on disk right now yields a
 // blocking issue naming that file, even when the command itself passed.
@@ -316,13 +393,14 @@ func TestBuilderReportedFilesMustExistOnDisk(t *testing.T) {
 	saveGlobals(t)
 	s, root := newTestStore(t)
 	store = s
+	writeReRunnableMakefile(t, root)
 	if err := os.WriteFile(filepath.Join(root, "exists.txt"), []byte("x"), 0644); err != nil {
 		t.Fatalf("write existing file: %v", err)
 	}
 	phase := colony.Phase{ID: 1, Name: "Builder evidence file check"}
 	writeWorkerHandoffRecords(t, workerHandoffRecord{
 		ID: "build:1.1:Forge-1:1", Workflow: "build", Phase: 1, TaskID: "1.1", WorkerName: "Forge-1",
-		CommandsRun:  []string{"true"},
+		CommandsRun:  []string{"make pass"},
 		ChangedFiles: []string{"exists.txt", "missing.txt"},
 	})
 
@@ -358,10 +436,11 @@ func TestEvidenceReRunNeverFabricatesAWorkerReceipt(t *testing.T) {
 	saveGlobals(t)
 	s, root := newTestStore(t)
 	store = s
+	writeReRunnableMakefile(t, root)
 	phase := colony.Phase{ID: 1, Name: "Never fabricates a worker receipt"}
 	writeWorkerHandoffRecords(t, workerHandoffRecord{
 		ID: "build:1.1:Forge-1:1", Workflow: "build", Phase: 1, TaskID: "1.1", WorkerName: "Forge-1",
-		CommandsRun: []string{"true"},
+		CommandsRun: []string{"make pass"},
 	})
 
 	_ = reRunBuilderReportedEvidence(context.Background(), root, phase, 5*time.Second)

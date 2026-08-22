@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -931,18 +932,22 @@ func reRunBuilderReportedEvidence(ctx context.Context, root string, phase colony
 				continue
 			}
 			seenCommands[key] = struct{}{}
-			step := runVerificationStep(ctx, root, "builder-reported", false, command, timeout)
+			// CR-01 (193-REVIEW.md): command is a builder's own self-reported
+			// text -- an LLM agent's output that may itself have been
+			// influenced by content it read during the phase. It is never
+			// passed to a shell (runVerificationStep/runShellCommandContext,
+			// which use sh -c, are for THIS PROJECT'S OWN resolved
+			// build/test/lint commands, not attacker- or LLM-influenced
+			// strings). reRunOneBuilderCommand refuses and records as
+			// Unresolvable anything that is not a plain, argv-shaped
+			// build/test runner invocation.
+			passed, unresolvable, summary := reRunOneBuilderCommand(ctx, root, command, timeout)
 			result.Commands = append(result.Commands, builderCommandRerunResult{
-				TaskID:  record.TaskID,
-				Command: command,
-				// step.Skipped is true ONLY for the empty-command case (never
-				// reached here, command is non-empty) or the unresolvable
-				// case -- both mark Passed:true as a convenience for
-				// optional shell checks. That convenience must not leak into
-				// "this command genuinely ran and passed" here.
-				Passed:       !step.Skipped && step.Passed,
-				Unresolvable: step.Skipped,
-				Summary:      step.Summary,
+				TaskID:       record.TaskID,
+				Command:      command,
+				Passed:       passed,
+				Unresolvable: unresolvable,
+				Summary:      summary,
 			})
 		}
 		for _, path := range record.ChangedFiles {
@@ -965,4 +970,88 @@ func reRunBuilderReportedEvidence(ctx context.Context, root string, phase colony
 		}
 	}
 	return result
+}
+
+// builderReportedCommandRunners lists the first-token build/test runners
+// this program trusts enough to actually execute when a builder
+// self-reports having run them (CR-01, 193-REVIEW.md). This is
+// deliberately narrower than looksLikeVerificationCommand
+// (cmd/codex_continue.go), which also treats echo/printf/true/false/sh/
+// bash as "verification-shaped" for display/classification purposes only
+// -- none of those belong in a list that leads to real execution of
+// builder-authored text, because every one of them is a way to run
+// something else (echo/printf can carry payloads a caller pipes
+// elsewhere, true/false are no-ops that prove nothing, sh/bash are a
+// shell in disguise).
+var builderReportedCommandRunners = map[string]bool{
+	"go": true, "npm": true, "npx": true, "pnpm": true, "yarn": true, "bun": true,
+	"cargo": true, "pytest": true, "python": true, "python3": true, "uv": true,
+	"make": true, "mvn": true, "gradle": true, "dotnet": true,
+	"golangci-lint": true, "ruff": true, "pyright": true, "mypy": true,
+}
+
+// builderReportedCommandMetacharacters are shell metacharacters that must
+// never appear in a builder-reported command this program is about to
+// execute itself. Their presence means the string is not a plain,
+// argv-shaped runner invocation -- it is an attempt to chain commands,
+// substitute output, redirect, or otherwise reach a shell (CR-01,
+// 193-REVIEW.md). reRunOneBuilderCommand never runs a command through
+// sh -c, but this check is defense in depth: it also blocks a string like
+// "go test ./..." from resolving to a runner and then silently carrying a
+// metacharacter-laden argument no test runner would ever need.
+const builderReportedCommandMetacharacters = ";&|$`><(){}\n\r"
+
+// commandSafeToReRun reports whether a builder-reported command is safe
+// for this program to execute itself: its first token names a recognised
+// build/test/lint runner, and the string contains none of the shell
+// metacharacters that would let it do anything beyond invoking that
+// runner with plain arguments.
+func commandSafeToReRun(command string) bool {
+	if strings.ContainsAny(command, builderReportedCommandMetacharacters) {
+		return false
+	}
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return false
+	}
+	return builderReportedCommandRunners[fields[0]]
+}
+
+// reRunOneBuilderCommand re-executes ONE builder-reported command itself,
+// via argv (exec.CommandContext with the command's own fields, never a
+// shell), and only when commandSafeToReRun allows it. CR-01
+// (193-REVIEW.md): a builder's self-reported commands_run text is
+// untrusted input -- an LLM agent's own output, possibly influenced by
+// content it read during the phase -- and must never reach sh -c the way
+// this project's own resolved verification commands do
+// (runVerificationStep/runShellCommandContext). A refused command is
+// always reported unresolvable, never silently dropped and never counted
+// as a pass.
+func reRunOneBuilderCommand(ctx context.Context, root, command string, timeout time.Duration) (passed, unresolvable bool, summary string) {
+	if !commandSafeToReRun(command) {
+		return false, true, fmt.Sprintf("%q is not a recognised build/test runner command (or contains shell metacharacters); the program refused to execute it", command)
+	}
+	fields := strings.Fields(command)
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cmd := exec.CommandContext(runCtx, fields[0], fields[1:]...)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "AETHER_OUTPUT_MODE=")
+	output, err := cmd.CombinedOutput()
+	trimmed := trimCommandOutput(string(output))
+	if err != nil {
+		if cmd.ProcessState == nil {
+			// The runner binary itself could not be started (not on PATH
+			// in this environment) -- that is this program's environment
+			// lacking the tool, not the builder-reported command genuinely
+			// failing.
+			return false, true, fmt.Sprintf("%s: command unavailable in this repository; skipped", command)
+		}
+		exitCode := cmd.ProcessState.ExitCode()
+		if isCommandUnresolvable(trimmed, exitCode) {
+			return false, true, fmt.Sprintf("%s: command unavailable in this repository (exit %d); skipped", command, exitCode)
+		}
+		return false, false, fmt.Sprintf("builder-reported command re-run failed: %s (exit %d)", command, exitCode)
+	}
+	return true, false, fmt.Sprintf("program re-ran the builder-reported command itself (%s) and it passed", command)
 }
