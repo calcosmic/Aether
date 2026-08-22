@@ -1,0 +1,231 @@
+# Milestone Context — v1.27 "The Queen Decides, the Program Checks"
+
+**Written:** 2026-08-22, from a brainstorming session with the owner.
+**Governing rulings:** D11 and D12 in
+`.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`; the full
+D11 record is `.planning/decisions/2026-08-22-queen-decides-program-checks.md`.
+**Spec basis:** Aether Priority Implementation Spec v3 (ratified as the
+governing backlog 2026-08-21, `.planning/research/priority-spec-v3-backlog.md`,
+amended 2026-08-22 by D12) and the Codex audit of 2026-08-21
+(`.aether/dreams/AETHER_PRIORITY_SPEC_V3_ANALYSIS_2026-08-21.md`).
+
+> The owner is non-technical. Every phase below must end in a command that
+> fails when the requirement is unmet (CLAUDE.md Definition of Done). Explain
+> progress in plain English; this repo's invented vocabulary means nothing to
+> him.
+
+---
+
+## Goal (one sentence)
+
+Aether stops burning tokens on workers nobody needed: the model's judgement
+picks the team and says why, the program's free checks are the floor that
+never moves, each phase is verified once, the cost is printed, and the owner
+can see every decision — so a one-task bug fix costs one worker plus checks.
+
+## The owner's four pains (all four confirmed 2026-08-22)
+
+1. **"I don't know what to do next."** A command finishes and the next step is
+   guessed, wrong, or names a command that doesn't exist.
+2. **"Things get stuck."** A project lands in a state the tool won't accept and
+   the way out is expensive, destructive, or missing.
+3. **"It looks thin compared to before."** The v5.4.0 (shell-era) version
+   showed banners, worker names, per-check results, choices; today feels
+   hollow. An audit on 2026-08-22 found 19 Classic elements absent and 13
+   thinner; much of the missing data is already computed and discarded.
+4. **"Too heavy for small jobs."** Reviewer panels and 10-minute checks for a
+   button.
+
+The owner's deciding criterion for this milestone: **stop burning tokens on
+pointless spawning.**
+
+## Evidence that drove the shape
+
+- Measured 2026-08-22 with today's Queen at standard settings (nothing
+  spawned): a 1-task bug fix → **8 workers** (build: builder, watcher,
+  auditor, probe, tracker; continue: watcher, auditor, probe). v5.4.0 sent
+  3–4. CSV-export phase judged "production" → 9 vs v5.4.0's 5–6. A 2-task
+  user guide → 6 vs 4.
+- Three causes: the same files are reviewed two or three times (build-side
+  verification stage + continue review); "production" is inferred from
+  wording and adds two required workers and a budget of 8; the worker budget
+  is a ceiling that gets filled by keyword hits on everyday words ("fix",
+  "issue", "release", "document").
+- v5.4.0's rules: one builder per task + one Watcher by default; every other
+  worker needed a concrete trigger (a depth flag the owner chose, a keyword,
+  package.json existing, measured coverage < 80%); workers told not to
+  sub-spawn for < 10 tool calls; the chat narrated every spawn and completion.
+- The spec the owner ratified already says "QUICK means zero reviewer agents,
+  not zero deterministic validation" (§7). The code contradicted it: Watcher
+  unconditional, Probe wherever code exists, Auditor on inferred production.
+- Nobody has measured token cost since the hardening round; the one benchmark
+  run (186-07) was never fired.
+
+## Target features (become the phases; keep this order)
+
+### 1. Free checks are the floor
+The program's own checks — build, types, lint, tests, "claimed files exist",
+"each success criterion has evidence" — run on every phase and cannot be
+skipped by any depth flag, review policy, or proposal. A phase with zero
+reviewer workers advances when they pass and blocks when they fail. No gate
+may synthesize a hidden checker-worker requirement (spec §2.10; today
+`required_checks: watcher` treats "skipped" as not-passed, and
+`resolveHostBoundaryWatcher` / provenance expect a watcher).
+*Proves:* `TestDeterministicChecksCannotBeSkipped`,
+`TestGateAcceptsDeterministicEvidenceWithoutReviewer`,
+`TestNoPhaseAdvancesWithoutDeterministicEvidence`.
+
+### 2. The Queen decides the team
+Required castes shrink to: builder (non-discovery) — nothing else. Reviewer
+workers are forced only by a named high-risk signal (credentials/auth,
+payments, data deletion, migrations, release sign-off), each with a reason
+string shown on the team card. The chat's proposal (`--castes` +
+`--caste-reason`, existing since 2026-08-21) is the primary team source with
+one line per worker; the keyword engine is the autopilot/no-proposal fallback
+and is retuned to the same floor. Each phase is verified once: the build-side
+verification stage becomes free checks only; agent review lives in continue.
+Retire `TestWatcherIsAlwaysRequiredOnBuild` through the test-deletion ledger,
+citing D11; keep the negative half of
+`TestProbeIsRequiredOnlyWhereItCanFindSomething`.
+*Proves:* `TestOneTaskBugFixIsOneWorkerPlusChecks` (end to end: the sample
+phase yields one dispatch), `TestNoWorkerWithoutStatedReason`,
+`TestReviewerForcedOnlyByNamedRisk` (table: CSV export → none; password reset
+→ gatekeeper with reason), `TestPhaseVerifiedOnce`.
+
+### 3. Coherent jobs, not one worker per task
+The Queen can group tasks into jobs with a reason; the runtime validates
+dependency order, records coverage through the existing
+`covered_task_ids` chain (`TestMergedDispatchCreditsEveryCoveredTask` already
+locks crediting), and refuses groupings that break dependencies. Default
+grouping without a proposal clusters by shared files / dependency chain,
+extending `coalesceSequentialDispatches` beyond consecutive same-caste
+steps. Worktree mode supports grouped jobs.
+*Proves:* the real CalVault failure as a fixture — six file-copy batches
+become one worker; a grouping that violates `depends_on` is refused by name.
+
+### 4. See what it cost
+Every build and continue ends with one plain cost line (per worker and
+total; measured vs estimated labelled — never dollars as the headline, no
+price table). `aether spend` is the detail view. Salvage the prior art on
+the three preserved branches (`worktree-agent-a47f…`, `…a59f…`, `…aa57…`,
+"preserve: uncommitted spend-ledger work", 2026-08-21) and
+`pkg/codex/usage.go` (four-field disjoint arithmetic already fixed and
+tested: 102,650 / 102,110). The team card shows each worker's model and the
+reason; routine roles never carry `inherit` (chronicler, keeper, includer do
+today); the ten roles on the expensive model are retuned by proposal — the
+owner rules — with an Opus reason recorded where it stays.
+*Proves:* `TestBuildEndsWithOneCostLine`,
+`TestRoutineBuilderIsSonnetNeverInherit`, `TestOpusRequiresRecordedReason`.
+Absorbs old Phase 185.
+
+### 5. One answer to "what next?"
+One pure resolver over canonical state produces: current state/phase, what
+changed, open flags and signals, Queen recommendation, exact next command,
+2–4 alternatives, context-health (KEEP / SAFE / CLEAR_RECOMMENDED with
+reasons), recovery/checkpoint state (spec §7's eight fields). All 84
+`renderNextUp` call sites route through it; a ratchet asserts the count of
+hand-typed `/ant-…` command strings outside the resolver only shrinks (57
+copies of `/ant-continue` today). A `SessionStart` hook
+(`aether hook-session-start`) prints the "colony detected" card from the
+resolver — replacing the CLAUDE.md paragraph that asks Claude to remember.
+Canonical short commands: `/ant-pause` (+ `/ant-pause-colony` alias) via an
+`aliases:` field in the command YAML and generated wrappers; `aether update`
+reconciles and reports.
+*Proves:* `TestNextActionNeverHardcoded` (ratchet),
+`TestEveryLifecycleCommandEndsWithNextAction`,
+`TestSessionStartCardReflectsState`, `TestCanonicalAliasDelegates`.
+
+### 6. Put the thrown-away data back on screen
+From the 2026-08-22 Classic-vs-current audit (19 gaps, 13 weakened; see the
+list in this session's record below). Priority: the data that is already
+carried and never rendered — per-check verification report (build ✓ / types
+✓ / tests 12/12 / coverage N%), success-criteria evidence lines, worker
+durations and tool counts, plan confidence/iterations, resume per-phase
+progress + recent decisions + drift note, specialist finding blocks,
+build-start blocker advisory. Fix the structural cause: the JSON-mode
+finalizers (`plan-finalize`, `seal-finalize`, `continue-finalize`) each own
+a richer screen the chat path never sees, and `ceremony closeout` is thinner
+than all three. Then the three real gaps: live verification progress lines,
+seal confirmation, wisdom review before sealing. Respect the recorded
+"deliberately dropped" decisions (one-terminal streaming, headed sections,
+verified safe-to-clear line).
+*Proves:* `TestWrapperPathRendersSameCeremonyAsDirectPath` (closeout ==
+direct visual for plan/continue/seal), `TestRenderedVisualsShowEveryCarriedField`
+(an invariant over the result map, not a named-section check).
+
+### 7. Proof
+Fire 186-07 (one live run, owner present), then the full 192 showdown
+(Aether interactive, Aether autopilot, GSD; tokens, time, interventions,
+worker count, completion truth, recovery failures, git cleanliness).
+Acceptance: 1-task bug fix ≤ 1 worker + checks; CSV export ≤ 4 workers total
+across build and continue; median tokens per successful task within the
+existing ≤ 1.5× GSD gate; unscripted interventions ≤ GSD's; recovery
+failures 0. Milestone completes only when this gate passes.
+
+## Explicitly NOT in this milestone (stay in the ratified order behind it)
+
+SPEC-first `/ant-init` and `/ant-spec`; whole-colony seal audit with flag
+dispositions (RESOLVED / CARRY_TO_SHELF / PROPOSE_NEXT_INIT / ARCHIVE_NOTE /
+FORCE_SEAL_DEBT); quota/budget controller and rate-limit interruption; Oracle
+planning; Portal; progressive skills / agent slimming; Claude hooks beyond
+SessionStart; Stage 1's remaining bookkeeping (append-only results,
+supersession, evidence fingerprints, proof-obligation preflight) unless a
+phase above needs one — then do the minimum and say so. A separate
+"featherweight lane" is dropped: it falls out of feature 2.
+
+## Constraints and standing rules
+
+- Go runtime owns truth; the chat proposes, Go validates/records (ruling D3).
+- Safety outranks everything (D4) — but "safety" means the deterministic
+  floor and named-risk forcing, not a mandatory reviewer agent (D11).
+- No second state store. No dollars headline. No all-reviewers-on-Opus.
+- Auxiliary commands stay (`/ant-oracle`, `/ant-dream`, chaos, archaeology,
+  swarm, council); simplification touches only the main lifecycle path.
+- Wrapper triplets (`.claude`, `.opencode`, flat mirrors) are byte-identical
+  by test; edit all three.
+- `.planning` is plain `git add` now (resolved 2026-08-21).
+- Every phase: reproduce the failure first (fail-then-pass), assert
+  proportions/invariants over named sections, and never claim done from a
+  summary — run the command.
+
+## Risks named to the owner
+
+1. The fear that created the mandatory checker (a build nobody checks
+   reports success by assertion) is answered by feature 1 landing first.
+2. The Queen may over-spawn anyway: reason-per-worker, the marginal-value
+   gate (landed 2026-08-21), the cost line and the check-in card make it
+   visible — visibility is the only thing that has ever worked here.
+3. Retuning model choices is judgement, not mechanics: feature 4 proposes,
+   the owner rules.
+
+## Classic-vs-current display audit (2026-08-22), for feature 6
+
+Gaps (absent today): visual checkpoint for UI work; post-build wisdom
+review; build duration; git checkpoint line; graveyard lines; context-loaded
+beats (survey/research/pattern); per-check verification report; success-
+criteria evidence; live verification progress; runtime-verification prompt;
+seal confirmation; wisdom review before seal; Sage analytics at seal; status
+mascot header; dreams/survey/escalated/data-safety lines; resume drift note;
+resume per-phase progress; resume recent decisions (data carried, never
+read); last-command/session lines.
+Weakened: seal ceremony only on the raw bypass path; Chronicler doc audit
+optional; plan confidence/iterations hidden on the chat path; plan criteria
+only when a phase has no tasks; phase-advancement block collapsed to one
+line; project-complete block partial and absent on the heavy-review path;
+tool-count line dead on the wrapper path; specialist findings reduced to one
+generic line; resume "Next:" without reason; signal strength not shown; init
+approval loop reduced to three fixed choices; blocker advisory before build
+gone; commit-suggestion prompt replaced by an automatic commit with no
+decision record.
+Deliberately dropped (do not restore): tmux/second-terminal panel; bordered
+tables in status; "clear context now?" prompt (replaced by the verified
+safe-to-clear line); glyph-only caste icons.
+
+## Carried in from v1.26 at close
+
+- 186-07 live smoke run and Phase 192 full showdown → feature 7.
+- Phase 185 cost line → feature 4.
+- Pending todos: spec-builder (`/ant-spec`, v1.28+), weight classes
+  (absorbed by feature 2), ts-host probe timeout twin (unchanged, low),
+  continue-finalize `--reconcile-task` evidence gate (touch in feature 1 if
+  it blocks a zero-reviewer phase).

@@ -45,3 +45,20 @@ time.
 - **D10 — Artifact retention/security:** content hashes, restrictive local
   permissions, configurable retention, secret scanning/redaction before
   persistence; never commit subscription transcripts by default.
+
+## Added 2026-08-22
+
+- **D11 — Reviewer workers are the Queen's call; the floor is deterministic
+  checks.** Ruled by the owner 2026-08-22. Full record:
+  `2026-08-22-queen-decides-program-checks.md`. Supersedes "Watcher always
+  required on build" and "Probe required wherever code is testable".
+
+- **D12 — Order amendment for milestone v1.27.** The owner's deciding criterion
+  for the next milestone is "stop burning tokens on pointless spawning". v1.27
+  therefore leads with team judgement + single verification (spec §2.8, §2.10,
+  §7 review tiers, §11 workstreams), the cost line and model display (§5), and
+  the universal next-action card plus Classic display restoration (§7, §16) —
+  pulled ahead of the remaining bookkeeping, recovery, seal and SPEC stages,
+  which stay in the ratified order behind it. Stage 1's unfinished items
+  (append-only results, supersession, evidence fingerprints) are carried, not
+  dropped. Brief: `.planning/MILESTONE-CONTEXT.md` (v1.27).

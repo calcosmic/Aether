@@ -118,3 +118,16 @@ No second state stores. No Portal-first. No all-reviewers-on-Opus. No
 monolithic unbounded Builder runs. Safety outranks SPEC, preferences,
 skills and learned policy (ruling D4). Legacy colonies run in compatibility
 mode with explicit draft-SPEC proposals (ruling D9).
+
+## Amendment 2026-08-22 (ruling D12)
+
+Milestone v1.27 "The Queen decides, the program checks" takes the following
+slices out of order, by owner ruling, because they are what stops pointless
+spawning: marginal-value + judgement-first team selection with a deterministic
+floor (§2.8, §2.10, §7 review tiers, ruling D11); one verification per phase
+(§2.9 evidence dedup); workstream clustering (§11); the cost line and model
+display (§5, Phase 185 absorbed); the universal next-action resolver, safe-clear
+state, canonical `/ant-pause` alias (§3, §7); Classic display restoration
+(§16). Stages 1 (remaining), 2 (budget controller, recovery), 3, 5, 7, 8 keep
+their ratified order after v1.27. Phase 186-07 + 192 become v1.27's proof
+phase, run on the improved system as the ratified order intended.
