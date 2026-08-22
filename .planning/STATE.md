@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 172.1
-current_phase_name: gate environment integrity — not started; blocks nothing; stays in the backlog
+current_phase: 194
+current_phase_name: The Queen Decides the Team
 status: planning
-stopped_at: Phase 193 complete, ready to plan Phase 172.1
+stopped_at: Phase 193 complete, ready to plan Phase 194
 last_updated: "2026-08-22T17:22:49.655Z"
 last_activity: 2026-08-22
-last_activity_desc: Phase 193 complete, transitioned to Phase 172.1
+last_activity_desc: Phase 193 complete (verified 4/4, review clean), transitioned to Phase 194
 state_head: e11d0a19ba8e8b1a825abeb6b71d2f34e1dfa48b
 progress:
   total_phases: 7
@@ -25,17 +25,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 193 — Free Checks Are the Floor
+**Current focus:** Phase 194 — The Queen Decides the Team (next to discuss and plan)
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 172.1 — gate environment integrity — not started; blocks nothing; stays in the backlog
+Phase: 194 — The Queen Decides the Team
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-08-22 — Phase 193 complete, transitioned to Phase 172.1
+Status: Ready to plan (no 194 context yet — run /gsd-discuss-phase 194 first)
+Last activity: 2026-08-22 — Phase 193 complete: 5/5 plans, verification 4/4, code review clean after 6 fixes; transitioned to Phase 194
 
 ## Performance Metrics
 
@@ -79,6 +79,10 @@ Last activity: 2026-08-22 — Phase 193 complete, transitioned to Phase 172.1
 - [Phase 172]: ROADMAP.md Phase 172/178 criteria corrected to the scan's real numbers: 278 seeded orphans, 6 owned by phase 178, replacing the pre-scan assumption of 8
 - [Phase 173]: Plan 10: orphan_allowlist.json earned zero removals -- all five spawn-related candidates remain genuine orphans against the live reachability ratchet because .aether/workers.md is not a caller corpus this ratchet scans
 - [Phase 173]: Plan 10: ROADMAP criterion 4 left byte-identical -- the cross-guard fail-closed proof establishes a narrower claim than the criterion's literal wording; whether it is satisfied is left to verification, per 173-RESIDUE.md residue 7
+- [Phase 193]: The deterministic floor (`runDeterministicFloor`, one body for both continue lanes) is the only source of a pass; a reviewer verdict can only add a block. Locked by `TestDeterministicFloorIsTheOnlySourceOfAPass` and `TestBothContinueLanesApplyTheSameFloor`
+- [Phase 193]: Build-side reviewer dispatch is gated on the Queen's explicit proposal, not the required-caste floor; the Watcher is verified once (`TestPhaseVerifiedOnce`). Probe/Auditor/Gatekeeper double-dispatch is recorded in `.planning/WINDOWS.md` #1 for Phase 194
+- [Phase 193]: Builder-reported commands are re-run only when they match a fixed allowlist of build/test runners, contain no shell metacharacters, and run via argv — never `sh -c` (code-review fix CR-01); owner-facing commands are shell-quoted (CR-02)
+- [Phase 193]: An unprovable criterion becomes `needs_owner_confirmation`: the phase advances, seal blocks until `aether decision-answer` records the answer; a failing free check with no reviewer sent gets exactly one automatic builder fix attempt, append-only in the attempt journal, then blocks with one command
 - [Phase 193]: Deterministic floor promoted to the primary verification anchor; a dispatched reviewer verdict can only ADD a block, never supply the pass — runDeterministicFloor uses the build-time watcher (already resolved), never a live continue-time dispatch -- avoids re-running shell verification twice for a reviewer brief and guarantees a reviewer cannot supply a pass. Both continue lanes now share this one function.
 - [Phase 193]: syntheticCriterionRequirements default checks drop watcher (D-06) — Unbound criteria now get claims plus the matching free check, never a reviewer caste by default; a dispatched reviewer that fails still blocks separately.
 - [Phase 193]: [Phase 193 P02] Build's verification-stage watcher dispatch now gates on the Queen's explicit proposal (queenAskedFor/queenJudgement.Proposed), not the effective caste set that always includes watcher via the required-caste floor -- the required-caste floor itself is untouched (Phase 194's territory).
@@ -100,7 +104,9 @@ Last activity: 2026-08-22 — Phase 193 complete, transitioned to Phase 172.1
 - [x] Phase 175: Orchestration Visibility — shipped 2026-08-16 (outside the phase system; SHIP-PROGRESS Item 3)
 - [x] Truth audit + hostile review + implementation programme approved — 2026-08-17
 - [~] Phase 186: rescoped 2026-08-18 — plans 01-06 shipped; plan 07 cut from twelve runs to one non-gating smoke run, to be fired when convenient
-- [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality ← **next**
+- [x] Phase 193: Free Checks Are the Floor — executed and verified 2026-08-22 (v1.27)
+- [ ] Discuss + plan Phase 194: The Queen Decides the Team ← **next**
+- [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
 - [ ] Plan Phase 190: Lean, Non-Duplicated Delivery (after 189)
@@ -111,6 +117,8 @@ Last activity: 2026-08-22 — Phase 193 complete, transitioned to Phase 172.1
 
 ### Blockers/Concerns
 
+- ⚠️ [Phase 193] Open in the defect ledger (`.planning/WINDOWS.md` #1): Probe/Auditor/Gatekeeper can still be sent at both the build and continue boundaries on production/security phases with no explicit Queen ask, because each flow derives "always required" independently. Phase 194 retires that rule; `/gsd-ship` blocks while the entry is open
+- ℹ️ [Phase 193] GSD tooling: `phase.complete` advanced STATE to backlog entry 172.1 (the next unchecked roadmap box) — corrected by hand to Phase 194; expect the same after each v1.27 phase while 172.1 sits in the backlog list
 - ~~Roadmap is unapproved~~ — resolved 2026-08-14. This line was stale: it said not to start Phase 172 until sign-off, and 172, 173 and part of 174 were then executed anyway. Recorded because a gate that gets ignored without anyone noticing is the failure mode this project keeps rediscovering.
 - **Phases 176, 177 and 178 are cut, not deferred.** If a future session finds Phase 173's delegation guards bounding a capability nobody has, that is expected and accepted — Phase 177 was the grant, and it was cut deliberately. Do not "restore" it.
 - **Phase 173 and Phase 178 carry research flags from the research phase.** Platform nested-spawn behaviour is MEDIUM confidence and both vendors broke it within the last quarter (Claude Code strips the Agent tool from some subagent types; OpenCode has an open "subagents can infinitely recurse, no max depth" defect). The skill supply-chain threat surface is actively evolving. Re-verify vendor docs and open issues at planning time for both
@@ -169,6 +177,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-22T16:27:45.111Z
-Stopped at: Phase 193 complete, ready to plan Phase 172.1
+Last session: 2026-08-22T17:23:51.000Z
+Stopped at: Phase 193 complete, ready to plan Phase 194
 Resume file: None

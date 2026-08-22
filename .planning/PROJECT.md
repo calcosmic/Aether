@@ -36,7 +36,7 @@ That means:
 
 - **v1.26 Intelligent Orchestration — SHIPPED 2026-08-22** (override close: three items carried into v1.27 — the one-line cost summary, the one live benchmark run, and the full showdown)
 - **Product version: v1.0.63** (binary and hub agree; published 2026-08-21)
-- **Next: v1.27 "The Queen Decides, the Program Checks"** — brief in `.planning/research/v1.27-milestone-brief.md`; governing rulings D11/D12 in `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`
+- **v1.27 in progress — Phase 193 "Free Checks Are the Floor" complete 2026-08-22** (5/5 plans, verification 4/4, FLOOR-01..04 satisfied): the program's build/types/lint/tests, claimed-files-exist and per-criterion evidence checks now decide advancement on every phase, cannot be skipped by any flag or depth, and a phase with zero reviewer workers advances on them; one bounded automatic fix attempt when a check fails. Brief in `.planning/research/v1.27-milestone-brief.md`; governing rulings D11/D12 in `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
 - Measured 2026-08-22 with today's Queen at standard settings: a one-task bug fix is sent 8 workers (v5.4.0 sent 3-4); a CSV-export phase guessed "production" gets 9 (v5.4.0: 5-6). Most of the gap is the same files reviewed two or three times. This is what v1.27 exists to fix
 - Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
@@ -268,6 +268,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - Hardening H1-H5: no internals leak into other projects, task-first skill scoring, castes with nothing to do refused, the worker cap caps -- v1.26
 - Crash-safe worktrees, one canonical failure log, atomic phase advance, complete non-duplicated briefs, field hardening -- v1.26 (Phases 187-191.1)
 - Team check-in before spawning, owner decision routing, honest `completed_no_change` / `verified_existing` results -- v1.26 (2026-08-21)
+- Free checks are the floor: one `runDeterministicFloor` body for both continue lanes decides advancement; no flag, depth or proposal can skip a check; build-side reviewer only on an explicit Queen ask (Watcher verified once); reconciliation and program-re-run builder evidence count as proof; unprovable criteria wait for the owner; verification scoped per phase and full at the end; exactly one bounded automatic fix attempt (FLOOR-01..04) -- v1.27 (Phase 193)
 
 ### Active
 
@@ -305,7 +306,11 @@ Long-lived items not tied to a milestone:
 | Rescope v1.26 to hardening: cut 174 (plans 3-9), 176, 177, 178 (2026-08-14) | Removing things until a small job costs a small amount; shipped as 180-184 | Good |
 | Phase 192 "stop building when the benchmark passes" rule (2026-08-17) | Superseded 2026-08-21 when the owner ratified the priority spec as the backlog (D1) | — Superseded |
 | Automatic model routing approved, after the cost line, reasons always shown (D2, 2026-08-21) | Reverses the 2026-07-28 rejection | — Pending (v1.27 feature 4) |
-| Reviewer workers are the Queen's call; the floor is deterministic checks (D11, 2026-08-22) | Replaces "Watcher always required on build"; a 1-task bug fix must cost 1 worker + checks | — Pending (v1.27 features 1-2) |
+| Reviewer workers are the Queen's call; the floor is deterministic checks (D11, 2026-08-22) | Replaces "Watcher always required on build"; a 1-task bug fix must cost 1 worker + checks | Partial — floor shipped (Phase 193); team judgement pending (Phase 194) |
+| The floor is computed from the build-time reviewer value; a reviewer verdict can only ever add a block, never supply a pass (193-01, 2026-08-22) | `TestDeterministicFloorIsTheOnlySourceOfAPass`; both continue lanes share one body, parity table-tested | Good |
+| Build-side reviewer dispatch gated on the Queen's explicit proposal, not the required-caste floor (193-02, 2026-08-22) | Watcher no longer reviewed twice; Probe/Auditor/Gatekeeper double-dispatch recorded in `.planning/WINDOWS.md` #1 for Phase 194 | Good — gap deferred |
+| A criterion no machine can prove becomes `needs_owner_confirmation`: the phase advances, seal waits for the answer via `aether decision-answer` (193-04, D-05) | No reviewer is ever spawned to guess at it; `--force --reason` still overrides | Good |
+| Exactly one automatic builder fix attempt when a free check fails with no reviewer sent; append-only journal entry, then stop with one command (193-05, D-02/D-03) | Distinct from the declined 2026-08-21 recovery retry — one bounded repair, never a loop, never a reviewer first | Good |
 | v1.27 order amendment: team judgement, single verification, cost line, next-action card, Classic display restoration first (D12, 2026-08-22) | Owner criterion: stop burning tokens on pointless spawning | — Pending |
 
 ## Context
@@ -313,7 +318,7 @@ Long-lived items not tied to a milestone:
 Shipped v1.26 on 2026-08-22: 571 commits, 1,223 files changed, +171,000 / −39,221 lines over 15 days.
 Tech stack: Go 1.24 runtime (`cmd/`, `pkg/`), thin markdown wrappers for Claude Code and OpenCode, runtime-native Codex lane, a kept TypeScript host for autopilot dispatch. 5,000+ Go tests; full suite with race detection is the release gate.
 Owner feedback themes (2026-08-21/22): builds feel heavy for small jobs; the next step after a command is often unclear; projects get stuck with an expensive way out; the display feels thin compared with v5.4.0.
-Known debt: Phase 172.1 (CI gate environment), Phase 173's one pending human check, the TS-host probe-timeout twin, `continue-finalize`'s `--reconcile-task` evidence gate, 22 acknowledged deferred items (STATE.md).
+Known debt: Phase 172.1 (CI gate environment), Phase 173's one pending human check, the TS-host probe-timeout twin, 22 acknowledged deferred items (STATE.md). Closed 2026-08-22: `continue-finalize`'s `--reconcile-task` evidence gate (Phase 193, `TestFinalizeCountsReconcileTaskAsEvidence`). Open in the defect ledger (`.planning/WINDOWS.md` #1): Probe/Auditor/Gatekeeper can still be sent at both the build and continue boundaries without an explicit ask — Phase 194's job.
 
 ## Explicit Deferrals
 
@@ -326,7 +331,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Open v1.27 with `/gsd-new-milestone` (brief: `.planning/research/v1.27-milestone-brief.md`), then `/gsd-plan-phase 193`.
+Phase 193 is complete and verified. Next: `/gsd-discuss-phase 194` (The Queen Decides the Team), then `/gsd-plan-phase 194` — it retires the always-required-Watcher rule and closes the Probe/Auditor/Gatekeeper double-dispatch gap the Phase 193 ledger records.
 
 ## Evolution
 
@@ -371,7 +376,7 @@ This document evolves at phase transitions and milestone boundaries.
 - Smart depth defaults — auto-select depth from phase position + code change risk signals
 - User depth override — tick-a-box UI at `/ant-plan` start to override either depth before plan creation
 
-*Last updated: 2026-08-04 — Phase 162 (switch on learning) complete: verification 7/7, LEARN-01..05 done*
+*Last updated: 2026-08-22 — Phase 193 (Free Checks Are the Floor) complete: verification 4/4, FLOOR-01..04 done*
 
 ### v1.16 Hybrid Runtime Boundary and Orchestration Recovery (shipped)
 
