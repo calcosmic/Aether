@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 193
 current_phase_name: Free Checks Are the Floor
 status: executing
-stopped_at: Completed 193-02-PLAN.md
-last_updated: "2026-08-22T14:13:25.826Z"
+stopped_at: Completed 193-03-PLAN.md
+last_updated: "2026-08-22T14:38:58.525Z"
 last_activity: 2026-08-22
 last_activity_desc: Phase 193 execution started
-state_head: 06a6688795ee2fba312a0d75ae7432dfdcd5a123
+state_head: 20e372ed6471d3edee0c3a7dff8cc8952d2939ab
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 ## Current Position
 
 Phase: 193 (Free Checks Are the Floor) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-08-22 — Phase 193 execution started
 
@@ -53,6 +53,7 @@ Last activity: 2026-08-22 — Phase 193 execution started
 | Phase 173 P10 | 70min | 4 tasks | 5 files |
 | Phase 193 P01 | 50min | 2 tasks | 7 files |
 | Phase 193 P02 | 62min | 3 tasks | 13 files |
+| Phase 193 P03 | 23min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,8 @@ Last activity: 2026-08-22 — Phase 193 execution started
 - [Phase 193]: syntheticCriterionRequirements default checks drop watcher (D-06) — Unbound criteria now get claims plus the matching free check, never a reviewer caste by default; a dispatched reviewer that fails still blocks separately.
 - [Phase 193]: [Phase 193 P02] Build's verification-stage watcher dispatch now gates on the Queen's explicit proposal (queenAskedFor/queenJudgement.Proposed), not the effective caste set that always includes watcher via the required-caste floor -- the required-caste floor itself is untouched (Phase 194's territory).
 - [Phase 193]: [Phase 193 P02] Discovered (flagged, not fixed): probe, auditor and gatekeeper still legitimately double-dispatch on production/security phases with no explicit Queen proposal, because build and continue independently derive the same required caste from the same phase content. Recorded in .planning/WINDOWS.md for Phase 194 (moves the required-caste floor).
+- [Phase 193]: 193-03: no implementation change needed in cmd/codex_continue.go -- runDeterministicFloor (193-01) already runs unconditionally before every reviewer-skip path is consulted, so all ten FLOOR-01 skip-path rows pass against pre-existing code — Plan explicitly allows this outcome; tests kept as regression guards
+- [Phase 193]: 193-03: --skip-watchers help text corrected to state plainly that only AI reviewer workers are skipped and the program's own checks (build, types, lint, tests) always run; TestNoContinueFlagClaimsToSkipAChecked guards every continueCmd flag going forward — D-01 (193-CONTEXT.md); plain-English mandate (CLAUDE.md)
 
 ### Pending Todos
 
@@ -160,6 +163,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-22T14:13:25.812Z
-Stopped at: Completed 193-02-PLAN.md
+Last session: 2026-08-22T14:38:58.510Z
+Stopped at: Completed 193-03-PLAN.md
 Resume file: None
