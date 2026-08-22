@@ -1564,47 +1564,27 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		ctx = context.Background()
 	}
 	now := time.Now().UTC()
-	verificationTimeout = effectiveContinueVerificationTimeout(verificationTimeout)
-	commands := resolveCodexVerificationCommands(root)
-	requiredChecks := requiredVerificationChecks(phase)
-	steps := []codexVerificationStep{
-		runVerificationStep(ctx, root, "build", requiredChecks["build"], commands.Build, verificationTimeout),
-		runVerificationStep(ctx, root, "types", requiredChecks["types"], commands.Type, verificationTimeout),
-		runVerificationStep(ctx, root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
-		runVerificationStep(ctx, root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
-	}
-	steps = applyExpectedTestFailure(steps, phase)
-	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
 
-	// The deterministic floor (shell steps + claims, and criteria evidence
-	// below) is computed unconditionally, before any reviewer decision is
-	// consulted, and is what sets checksPassed (ruling D11 rule 2). Zero
-	// executed checks no longer hands verification responsibility to a
-	// reviewer -- it used to, and that fallback is gone (D-01): when nothing
-	// shell-verifiable resolved, the floor is claimed files plus criterion
-	// evidence, and a warning makes the situation visible.
-	shellChecksPassed := true
-	executedChecks := 0
-	for _, step := range steps {
-		if step.Skipped {
-			continue
-		}
-		executedChecks++
-		if !step.Passed {
-			shellChecksPassed = false
-		}
-	}
+	// The deterministic floor is computed first, with whatever watcher value
+	// is already resolved (buildWatcher -- from the manifest, no live action
+	// needed) -- never with a live dispatch this call might still make below.
+	// It is what sets checksPassed (ruling D11 rule 2): a reviewer dispatched
+	// afterward can only ever ADD a block on top of this result, never
+	// supply the pass (TestDeterministicFloorIsTheOnlySourceOfAPass).
+	floor := runDeterministicFloor(ctx, root, phase, manifest, buildWatcher, verificationTimeout)
 
 	// continueWatcherDecision resolves only whether a reviewer is dispatched
-	// at all -- it never consults shellChecksPassed, so the deterministic
-	// result can never cause a dispatch (D-08): dispatch happens because the
-	// Queen sent a reviewer and none of the existing auto-skip reasons apply,
-	// full stop.
+	// at all -- it never consults the floor's result, so the deterministic
+	// outcome can never cause a dispatch (D-08): dispatch happens because
+	// the Queen sent a reviewer and none of the existing auto-skip reasons
+	// apply, full stop. Dispatch (when it happens) reuses floor.Steps and
+	// floor.Claims for the reviewer's brief context rather than re-running
+	// verification a second time.
 	var continueWatcher codexWatcherVerification
 	var watcherFlow *codexContinueWorkerFlowStep
 	if dispatch, skipped := continueWatcherDecision(state, phase, manifest, buildWatcher, skipWatchers); dispatch {
-		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, floor.Steps, floor.Claims, buildWatcher, workerTimeout)
 	} else {
 		continueWatcher = skipped
 	}
@@ -1613,37 +1593,16 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		watcher = buildWatcher
 	}
 
-	checksPassed := shellChecksPassed
-	blockers := []string{}
-	warnings := []string{}
-	if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
-		warnings = append(warnings, "no tests to run in this project; verification relies on the files a worker changed and evidence for each success criterion — add real build/test commands to CLAUDE.md to enable shell checks")
-	}
-	if !shellChecksPassed {
-		for _, step := range steps {
-			if !step.Passed && !step.Skipped {
-				if step.ErrorClass == ErrorClassEnvironment && phase.Mode != colony.PhaseModeProduction {
-					warnings = append(warnings, fmt.Sprintf("%s environment issue (not blocking for %s phase): %s", step.Name, phase.Mode, step.Summary))
-				} else {
-					blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
-				}
-			}
-		}
-		// If all failures were environment warnings, allow checks to pass.
-		if len(blockers) == 0 && len(warnings) > 0 {
-			checksPassed = true
-			for _, w := range warnings {
-				fmt.Fprintf(os.Stderr, "⚠ %s\n", w)
-			}
-		}
-	}
+	checksPassed := floor.ChecksPassed
+	blockers := append([]string{}, floor.BlockingIssues...)
+	warnings := append([]string{}, floor.Warnings...)
 	if watcher.Present && !watcher.Passed && watcher.Status != "skipped" {
 		summary := strings.TrimSpace(watcher.Summary)
 		if summary == "" {
 			summary = "watcher verification did not complete cleanly"
 		}
 		if watcher.Status == "timeout" && checksPassed {
-			// Advisory: watcher timed out but runtime verification (build, types, lint, tests)
+			// Advisory: watcher timed out but the deterministic floor
 			// passed independently. Treat as warning, not a hard block.
 			blockers = append(blockers, fmt.Sprintf(
 				"watcher %s timed out; runtime verification passed independently", watcher.Worker))
@@ -1653,12 +1612,6 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 			checksPassed = false
 			blockers = append(blockers, summary)
 		}
-	}
-
-	criteria := evaluatePhaseCriterionEvidence(root, phase, manifest, steps, claims, watcher)
-	if criteria.Enforced && !criteria.Passed {
-		checksPassed = false
-		blockers = append(blockers, criteria.BlockingIssues...)
 	}
 
 	// LOOP-01: Update watcher failure counter based on watcher outcome.
@@ -1672,14 +1625,14 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	return codexContinueVerificationReport{
 		Phase:                      phase.ID,
 		GeneratedAt:                now.Format(time.RFC3339),
-		VerificationTimeoutSeconds: int(verificationTimeout / time.Second),
-		Steps:                      steps,
-		Claims:                     claims,
+		VerificationTimeoutSeconds: int(effectiveContinueVerificationTimeout(verificationTimeout) / time.Second),
+		Steps:                      floor.Steps,
+		Claims:                     floor.Claims,
 		Watcher:                    watcher,
-		CriteriaPolicy:             criteria.Policy,
-		CriteriaEnforced:           criteria.Enforced,
-		CriteriaPassed:             criteria.Passed,
-		Criteria:                   criteria.Criteria,
+		CriteriaPolicy:             floor.Criteria.Policy,
+		CriteriaEnforced:           floor.Criteria.Enforced,
+		CriteriaPassed:             floor.Criteria.Passed,
+		Criteria:                   floor.Criteria.Criteria,
 		ChecksPassed:               checksPassed,
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,

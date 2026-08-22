@@ -244,31 +244,39 @@ func continuePlanOnlySourceCommand(reviewDepth colony.VerificationDepth, skipWat
 	return strings.Join(parts, " ")
 }
 
+// runCodexContinueVerificationSnapshot serves BOTH runCodexContinuePlanOnly
+// (codex_continue_plan.go:110) and runCodexContinueFinalize
+// (codex_continue_finalize.go:175) -- the two paths an external wrapper
+// actually drives. It shares runDeterministicFloor with the in-process lane
+// (codex_continue.go's runCodexContinueVerification), so the shell steps,
+// claims verification, and criterion evidence evaluation -- including the
+// executed-check counting, the environment-issue warning downgrade, and the
+// zero-executed-checks plain-English warning -- are structurally identical on
+// both lanes rather than a discipline to keep in sync by hand
+// (TestBothContinueLanesApplyTheSameFloor). Criterion evidence evaluation
+// used to be entirely absent here, which made the criterion gate -- and
+// therefore the --read-only-artifact escape hatch (readonly_evidence.go) --
+// dead on the external-review path: only the direct `aether continue` path
+// ever called evaluatePhaseCriterionEvidence. That gap is now closed by
+// sharing the floor.
 func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manifest codexContinueManifest, now time.Time, verificationTimeout time.Duration, skipWatchers bool) codexContinueVerificationReport {
-	commands := resolveCodexVerificationCommands(root)
-	requiredChecks := requiredVerificationChecks(phase)
-	steps := []codexVerificationStep{
-		runVerificationStep(context.Background(), root, "build", requiredChecks["build"], commands.Build, verificationTimeout),
-		runVerificationStep(context.Background(), root, "types", requiredChecks["types"], commands.Type, verificationTimeout),
-		runVerificationStep(context.Background(), root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
-		runVerificationStep(context.Background(), root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
-	}
-	steps = applyExpectedTestFailure(steps, phase)
-	claims := verifyCodexBuildClaims(root, manifest)
 	watcher := evaluateContinueWatcherVerification(manifest)
 	if skipWatchers {
 		watcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on runtime-owned verification commands"}
 	}
 
-	checksPassed := true
-	blockers := []string{}
-	for _, step := range steps {
-		if !step.Passed && !step.Skipped {
-			checksPassed = false
-			blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
-		}
-	}
-	if watcher.Present && !watcher.Passed {
+	floor := runDeterministicFloor(context.Background(), root, phase, manifest, watcher, verificationTimeout)
+
+	checksPassed := floor.ChecksPassed
+	blockers := append([]string{}, floor.BlockingIssues...)
+	// A watcher that was never dispatched (Present:false) or whose status is
+	// "skipped" must not contribute a block here -- only a dispatched
+	// watcher that did not pass does. This corrects the asymmetry the
+	// in-process lane never had: `watcher.Present && !watcher.Passed` alone
+	// treated a skipped-status watcher the same as a genuinely failed one,
+	// because isSuccessfulExternalBuildStatus("skipped") is false, so
+	// Passed is false for a skip too.
+	if watcher.Present && !watcher.Passed && !strings.EqualFold(strings.TrimSpace(watcher.Status), "skipped") {
 		checksPassed = false
 		summary := strings.TrimSpace(watcher.Summary)
 		if summary == "" {
@@ -277,33 +285,21 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 		blockers = append(blockers, summary)
 	}
 
-	// This snapshot serves BOTH runCodexContinuePlanOnly (codex_continue_plan.go:110)
-	// and runCodexContinueFinalize (codex_continue_finalize.go:175) -- the two
-	// paths an external wrapper actually drives. Its previous omission of
-	// criterion evidence evaluation is what made the criterion gate -- and
-	// therefore the --read-only-artifact escape hatch (readonly_evidence.go)
-	// -- dead on the external-review path: only the direct `aether continue`
-	// path (codex_continue.go:1596) ever called evaluatePhaseCriterionEvidence.
-	criteria := evaluatePhaseCriterionEvidence(root, phase, manifest, steps, claims, watcher)
-	if criteria.Enforced && !criteria.Passed {
-		checksPassed = false
-		blockers = append(blockers, criteria.BlockingIssues...)
-	}
-
 	return codexContinueVerificationReport{
 		Phase:                      phase.ID,
 		GeneratedAt:                now.Format(time.RFC3339),
-		VerificationTimeoutSeconds: int(verificationTimeout / time.Second),
-		Steps:                      steps,
-		Claims:                     claims,
+		VerificationTimeoutSeconds: int(effectiveContinueVerificationTimeout(verificationTimeout) / time.Second),
+		Steps:                      floor.Steps,
+		Claims:                     floor.Claims,
 		Watcher:                    watcher,
-		CriteriaPolicy:             criteria.Policy,
-		CriteriaEnforced:           criteria.Enforced,
-		CriteriaPassed:             criteria.Passed,
-		Criteria:                   criteria.Criteria,
+		CriteriaPolicy:             floor.Criteria.Policy,
+		CriteriaEnforced:           floor.Criteria.Enforced,
+		CriteriaPassed:             floor.Criteria.Passed,
+		Criteria:                   floor.Criteria.Criteria,
 		ChecksPassed:               checksPassed,
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,
+		Warnings:                   floor.Warnings,
 	}
 }
 
