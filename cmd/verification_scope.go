@@ -87,6 +87,15 @@ func deriveVerificationScope(root string, phase colony.Phase, isFinalPhase bool,
 	if len(packages) == 0 {
 		return full("the files this phase changed don't map to a runnable part of the test suite, so the full run covers it")
 	}
+	if containsString(packages, "./...") {
+		// A changed file directly at the repository root maps to the same
+		// "./..." pattern the full run already uses (goPackagePathsForChangedFiles),
+		// so the derived scope is not narrower than a full run at all --
+		// report it honestly as full rather than as "targeted to 1
+		// package(s)", which would understate how much of the suite
+		// actually ran (IN-01, 193-REVIEW.md).
+		return full("a file at the top level of the project was changed, so there's no smaller area to limit the run to -- the full run covers it")
+	}
 
 	scopedTest, ok := scopedGoTestCommand(testCommand, packages)
 	if !ok {

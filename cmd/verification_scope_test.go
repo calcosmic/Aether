@@ -141,21 +141,33 @@ func TestFinalPhaseAlwaysRunsFull(t *testing.T) {
 // never be replaced with a string comparison of the command.
 func TestScopedCommandNeverBroadensTheRun(t *testing.T) {
 	fixtures := []struct {
-		name   string
-		claims codexBuildClaims
+		name     string
+		claims   codexBuildClaims
+		wantMode string
 	}{
-		{"single package", codexBuildClaims{FilesModified: []string{"cmd/foo.go"}}},
-		{"two packages", codexBuildClaims{FilesCreated: []string{"pkg/a/a.go"}, FilesModified: []string{"pkg/b/b.go"}}},
-		{"nested package", codexBuildClaims{TestsWritten: []string{"pkg/deep/nested/dir/thing_test.go"}}},
-		{"root package", codexBuildClaims{FilesModified: []string{"main.go"}}},
+		{"single package", codexBuildClaims{FilesModified: []string{"cmd/foo.go"}}, verificationScopeTargeted},
+		{"two packages", codexBuildClaims{FilesCreated: []string{"pkg/a/a.go"}, FilesModified: []string{"pkg/b/b.go"}}, verificationScopeTargeted},
+		{"nested package", codexBuildClaims{TestsWritten: []string{"pkg/deep/nested/dir/thing_test.go"}}, verificationScopeTargeted},
+		// A changed file at the repository root maps to the same "./..."
+		// pattern the full run already uses, so this must be reported as
+		// full (not "targeted to 1 package(s)") -- IN-01, 193-REVIEW.md.
+		{"root package", codexBuildClaims{FilesModified: []string{"main.go"}}, verificationScopeFull},
 	}
 	commands := codexVerificationCommands{Test: "go test ./..."}
 
 	for _, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
 			scope, _ := deriveVerificationScope("/repo", colony.Phase{ID: 1}, false, fixture.claims, commands)
-			if scope.Mode != verificationScopeTargeted {
-				t.Fatalf("Mode = %q, want %q", scope.Mode, verificationScopeTargeted)
+			if scope.Mode != fixture.wantMode {
+				t.Fatalf("Mode = %q, want %q", scope.Mode, fixture.wantMode)
+			}
+			if scope.Mode == verificationScopeFull {
+				if strings.Contains(scope.Reason, "targeted") {
+					t.Fatalf("full-mode Reason must not claim to be targeted, got %q", scope.Reason)
+				}
+				if !strings.Contains(scope.Reason, "top level") && !strings.Contains(scope.Reason, "root") {
+					t.Fatalf("full-mode Reason for a root-level change should name that, got %q", scope.Reason)
+				}
 			}
 			for _, pkg := range scope.Packages {
 				// Every targeted package pattern must be a recursive
