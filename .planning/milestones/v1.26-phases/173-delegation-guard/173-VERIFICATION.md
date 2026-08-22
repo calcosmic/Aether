@@ -8,13 +8,19 @@ re_verification:
   previous_status: gaps_found
   previous_score: "5/6 ROADMAP success criteria fully verified; 1 falsified with a demonstrated exploit"
   gaps_closed:
+
     - "Every delegation guard fails closed when its inputs are unreadable (ROADMAP Phase 173 success criterion 4, and the phase's own goal statement: 'every guard fails closed') — the corrupted-ledger route this verifier demonstrated is now refused, byte-identically re-reproduced in this session"
   gaps_remaining: []
   regressions: []
 human_verification:
+
   - test: "Run a real /ant-build (or /ant-continue) that hits either the depth cap or the whole-run budget ceiling, and read the output as the owner would — not the raw JSON, the narration shown in the terminal."
     expected: "The refusal names the helper, its would-be parent, and the reason, in plain English, inside the ceremony narration."
     why_human: "173-RESIDUE.md residue 8 states this explicitly as unproven: no plan in this phase, including the three gap-closure plans, touches build.md or continue.md. The Go-level Detail/error string is proven correct and present in the CLI's own JSON/error output (confirmed again in this re-verification's manual reproductions), but whether it reaches the wrapper-level narration a non-technical operator actually reads has never been observed. Carried forward unchanged from the initial verification — no plan since has addressed it."
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
+  status: human_needed
 ---
 
 # Phase 173: Delegation Guard Verification Report
@@ -94,24 +100,30 @@ $ COLONY_DATA_DIR=<scratch>/data aether spawn-log --parent Queen --caste builder
 {"ok":true,"result":{"budget_consumed":1,"budget_max":20,...,"recorded":true,...}}
 exit: 0
 ```
+
 A colony with no ledger file and no run-state file at all can still spawn its first helper.
 
 **Step 2 — my original exploit, re-run against the fixed binary:**
 
 ```
+
 # Legitimately exhaust the 20-helper whole-run budget
+
 $ for i in 1..20: aether spawn-log --parent Queen --caste builder --name "W$i" --task "task $i" --depth 0
 
 # Confirm the 21st is correctly refused (control)
+
 $ aether spawn-log --parent Queen --caste builder --name W21 --task "task 21" --depth 0
 {"ok":false,"error":"whole-run helper budget exhausted: 20 of 20 helpers already spawned
 (counted across the entire ledger because no run is recorded); Queen may not spawn another","code":1}
 exit: 1
 
 # The exact attack that worked this morning
+
 $ echo "garbage not pipe format" > <scratch>/data/spawn-tree.txt
 
 # Retry the identical, already-refused request
+
 $ aether spawn-log --parent Queen --caste builder --name W22-BYPASS --task "task 22" --depth 0
 {"ok":false,"error":"whole-run helper budget unverifiable (verify spawn-tree.txt: spawn_tree:
 spawn-tree.txt: spawn ledger is present but its content is not a valid spawn ledger: line 1 has
@@ -119,6 +131,7 @@ spawn-tree.txt: spawn ledger is present but its content is not a valid spawn led
 exit: 1
 
 # The tampering evidence was NOT erased -- the file is still exactly the garbage I wrote
+
 $ cat <scratch>/data/spawn-tree.txt
 garbage not pipe format
 ```
@@ -131,8 +144,11 @@ tampered file untouched as evidence.
 reproduction), re-run against the fixed binary, both variants:**
 
 ```
+
 # A valid, genuinely active run, fully exhausted at 20 helpers (started_at set in the past so
+
 # the entries fall inside the run's own window, confirmed by the control refusal below)
+
 $ for i in 1..20: aether spawn-log --parent Queen --caste builder --name "V$i" --task "task $i" --depth 0
 $ aether spawn-log --parent Queen --caste builder --name V21 --task "task 21" --depth 0
 {"ok":false,"error":"whole-run helper budget exhausted: 20 of 20 helpers already spawned in
@@ -140,6 +156,7 @@ this run; Queen may not spawn another","code":1}
 exit: 1   # control: budget genuinely full, counted via the run window this time
 
 # Variant A: delete the run-record file entirely, leaving the valid, full ledger untouched
+
 $ rm <scratch>/data/spawn-runs.json
 $ aether spawn-log --parent Queen --caste builder --name V22-BYPASS --task "task 22" --depth 0
 {"ok":false,"error":"whole-run helper budget exhausted: 20 of 20 helpers already spawned
@@ -147,6 +164,7 @@ $ aether spawn-log --parent Queen --caste builder --name V22-BYPASS --task "task
 exit: 1
 
 # Variant B (fresh scratch colony, same setup): replace the run-record file with a directory
+
 $ rm <scratch2>/data/spawn-runs.json && mkdir <scratch2>/data/spawn-runs.json
 $ aether spawn-log --parent Queen --caste builder --name D21-BYPASS --task "task 21" --depth 0
 {"ok":false,"error":"whole-run helper budget unverifiable (resolve current run: spawn_tree: read
@@ -154,6 +172,7 @@ $ aether spawn-log --parent Queen --caste builder --name D21-BYPASS --task "task
 exit: 1
 
 # The harder combined variant: corrupt the ledger too, in the same already-run-record-deleted colony
+
 $ echo "more garbage" > <scratch>/data/spawn-tree.txt
 $ aether spawn-log --parent Queen --caste builder --name V23-BYPASS --task "task 23" --depth 0
 {"ok":false,"error":"whole-run helper budget unverifiable (verify spawn-tree.txt: ... line 1 has

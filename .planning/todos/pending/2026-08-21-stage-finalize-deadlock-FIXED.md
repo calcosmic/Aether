@@ -3,14 +3,19 @@ created: 2026-08-21T00:00:00Z
 title: "[FIXED 2026-08-21] Stage/finalize deadlock — both exits pointed at each other"
 area: cmd/codex_build_finalize.go + cmd/provenance.go
 source: Downstream field report (Cosmic Dashboard colony, 2026-08-21) + orchestrator trace
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
 ---
 
 ## Problem (reproduced downstream; recover fixed it)
 
 Recording build results is two steps: stage, then finalize. In the failure, staging marked the
 attempt "committed" but left the workers marked "planned". Then:
+
 - finalize refused: "build attempt X is already committed, so this different completion packet
   cannot replace it… run `aether continue`" (cmd/codex_build_finalize.go:869)
+
 - continue refused: "continue provenance: no completed worker dispatches found — build did not
   produce verifiable results" (cmd/provenance.go:148) and pointed back at the build.
 Circular; no in-band exit. `aether recover` diagnosed and cleared it correctly (good — 187's

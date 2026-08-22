@@ -6,12 +6,18 @@ score: 7/7 must-haves verified
 overrides_applied: 0
 gaps: []
 human_verification:
+
   - test: "Run `/ant-init` in a Claude Code session and verify the 7-section charter is displayed (tech_stack, key_risks, constraints sections visible)"
     expected: "Charter output shows all 7 sections including the 3 new fields (Tech Stack, Key Risks, Constraints)"
     why_human: "Wrapper ceremony is a markdown-driven flow that requires an actual LLM session to invoke -- cannot simulate the full `/ant-init` -> `init-research` -> charter display -> approval pipeline from the CLI alone"
+
   - test: "Run `aether init-ceremony \"goal\"` in a real terminal (not piped) and interact with the numbered-list prompts"
     expected: "Charter displayed with all 7 sections, 3 options presented (Proceed/Revise/Cancel), selecting 1 creates COLONY_STATE.json with charter, selecting 3 exits cleanly with no artifacts"
     why_human: "The ceremony requires an interactive TTY. Tests use mocked stdin but the real terminal behavior (TTY detection, ANSI rendering, stdin buffering) should be validated by a human"
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
+  status: human_needed
 ---
 
 # Phase 72: Smart Init Charter Verification Report

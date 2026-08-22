@@ -1,60 +1,39 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.26
-milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
-status: ready_to_plan
+milestone_name: Intelligent Orchestration
+status: Awaiting next milestone
 stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
-last_updated: "2026-08-21T09:38:13.075Z"
-last_activity: 2026-08-21
+last_updated: "2026-08-22T11:19:19.180Z"
+last_activity: 2026-08-22
+last_activity_desc: Milestone v1.26 completed and archived
+state_head: 492f714a54156aaccf2ab31916eedf517b722930
 progress:
-  total_phases: 52
-  completed_phases: 8
-  total_plans: 63
-  completed_plans: 122
-  percent: 15
+  total_phases: 19
+  completed_phases: 15
+  total_plans: 66
+  completed_plans: 66
+  percent: 79
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-08)
+See: .planning/PROJECT.md (updated 2026-08-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 191 — dead-wood
-**Milestone:** v1.26 — hardening (rescoped 2026-08-14) plus the Audit Addendum (2026-08-17, phases 186-192). Governing documents: `.planning/HARDENING-PLAN.md` (with its 2026-08-17 addendum) and ROADMAP.md's "Audit Addendum" section; the frozen 12-outcome target lives in the approved implementation plan of 2026-08-17.
-**Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases)
-**Product version:** v1.0.63 (binary is authoritative; published 2026-08-21 after the review gate found and fixed 13 truth-reporting defects)
+**Current focus:** Starting milestone v1.27 "The Queen Decides, the Program Checks" — brief in `.planning/MILESTONE-CONTEXT.md`
+**Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
+**Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
+**Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 192
-Plan: Not started
-Status: Ready to plan
-Progress: 9 of 16 phases in this milestone
-Last activity: 2026-08-21
-
-**Order from here (revised 2026-08-18):** 187, 188, 189→190 and 191 may start
-NOW, in any order and in parallel — the 186 rescope removed their only
-dependency, and each carries its own fail-able wiring criteria. Then 185, then
-
-192. Phase 186's remaining plan is one smoke run: fire it when convenient, it
-
-gates nothing. 192 is
-the full benchmark with the acceptance gate; the milestone completes only when
-that gate passes, not when the tasks are done.
-
-**The finish line (HARDENING-PLAN.md + 2026-08-17 addendum):** a small job
-costs one or two workers and finishes in minutes; one screen says who was
-dispatched, why, and what it cost; Aether never sends its own internals into
-someone else's project; the audit fix phases land; and the full benchmark
-shows both Aether lanes at least as good as GSD without brute-forcing tokens.
-When Phase 192's gate passes, building stops.
-
-**Owner constraints (2026-08-17):** auxiliary commands stay (/ant-oracle,
-/ant-dream, chaos, archaeology, swarm, council...); simplification touches
-only the main lifecycle path. Both Aether lanes (interactive and /ant-run)
-must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
+Phase: Milestone v1.26 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-22 — Milestone v1.26 completed and archived
 
 ## Performance Metrics
 
@@ -143,8 +122,36 @@ Carried forward from v1.25 (superseded) and v1.23:
 | Workflow | WORKFLOW-01 … WORKFLOW-09 | Deferred | v1.25 roadmap |
 | Runtime | RUNTIME-01, RUNTIME-02 | Deferred | v1.25 roadmap |
 
+Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/MILESTONE-CONTEXT.md` or is an archived-phase leftover; acknowledging suppresses the audit line only until the artifact changes again.
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| uat_gaps | 173/173-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
+| uat_gaps | 72/72-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
+| uat_gaps | 76/76-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
+| verification_gaps | 173/173-VERIFICATION.md | human_needed | 2026-08-22 | v1.26 |
+| verification_gaps | 71/71-VERIFICATION.md | gaps_found | 2026-08-22 | v1.26 |
+| verification_gaps | 72/72-VERIFICATION.md | human_needed | 2026-08-22 | v1.26 |
+| verification_gaps | 76/76-VERIFICATION.md | human_needed | 2026-08-22 | v1.26 |
+| todos | 2026-08-01-finalize-reconcile-task-evidence-gate.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-01-ts-host-preflight-hardcoded-timeout.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-20-spec-builder-feature.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-completion-packet-cannot-express-bundled-work.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-continue-checker-captures-wrong-field.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-finalize-covered-tasks-DISPROVEN.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-no-reentry-path-for-out-of-band-work.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-stage-finalize-deadlock-FIXED.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-weight-classes-pipeline-fits-the-task.md | (presence-only) | 2026-08-22 | v1.26 |
+| deferred_items | 172/deferred-items.md: 172-00 (Task 1)  - **`.aether/docs/command-playbooks/continue-advance.md` — malf | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 172/deferred-items.md: 172-07 (both tasks)  - **`pkg/codex` `TestCodexReadOnlyProfileSelectsReadOnlySan | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 188/deferred-items.md: 2. `cmd/colony_prime_audit_test.go` and `cmd/medic_repair_test.go` seed the nest | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 190/deferred-items.md: D-190-01-A: Pheromone signals and prior-worker handoffs render twice in the plan | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 190/deferred-items.md: Stale ceremony-adapter snapshot fixtures (pre-existing, unrelated to hive_sectio | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 191.1/deferred-items.md: 191.1-01: `TestPackedNPMReleaseCandidateContract` fails on a pre-existing versio | acknowledged | 2026-08-22 | v1.26 |
+
+
 ## Session Continuity
 
-Last session: 2026-08-13T20:44:38.413Z
-Stopped at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
-Resume file: .planning/phases/174-spend-ledger/174-CONTEXT.md
+Last session: 2026-08-22
+Stopped at: v1.26 closed and archived; v1.27 brief written (`MILESTONE-CONTEXT.md`); next `/gsd-new-milestone`
+Resume file: .planning/MILESTONE-CONTEXT.md

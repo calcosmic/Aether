@@ -3,6 +3,9 @@ created: 2026-08-21T00:00:00Z
 title: One worker doing N tasks cannot be honestly reported — the completion packet allows exactly one task per entry, and every escape route loops
 area: cmd/codex_build_finalize.go + completion packet schema + wrapper instructions
 source: TWO independent downstream repos (Cosmic Dashboard 2026-08-21; second repo same day)
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
 ---
 
 ## The reconciled diagnosis
@@ -11,6 +14,7 @@ Three findings that looked contradictory are one story:
 
 1. ba5cfe23 (formica session) proved finalize DOES credit CoveredTaskIDs end-to-end — when the
    RUNTIME did the coalescing, the manifest carries the covered list, and the chain expands. True.
+
 2. Both field repos still ended with one worker's six/five tasks credited as ONE. Also true.
 3. The bridge: in the field failures the WRAPPER (the orchestrating AI) bundled N dispatches into
    one worker on its own — the manifest still lists N separate dispatches with no covered-chain.

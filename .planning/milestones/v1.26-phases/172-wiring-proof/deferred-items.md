@@ -5,6 +5,9 @@ because they are unrelated to the task that found them (Scope Boundary rule).
 
 ## 172-00 (Task 1)
 
+- **Status:** acknowledged
+- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/MILESTONE-CONTEXT.md
+
 - **`.aether/docs/command-playbooks/continue-advance.md` — malformed fence
   closer near line 503.** The line reads `--ttl "30d"` immediately followed
   by a closing triple-backtick fence marker on the SAME line, with no
@@ -32,6 +35,9 @@ because they are unrelated to the task that found them (Scope Boundary rule).
   line, if the glued shape ever returns anywhere in the audited corpus.
 
 ## 172-07 (both tasks)
+
+- **Status:** acknowledged
+- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/MILESTONE-CONTEXT.md
 
 - **`pkg/codex` `TestCodexReadOnlyProfileSelectsReadOnlySandbox` fails only
   under full-suite load, not in isolation.** Running `go test ./... -count=1

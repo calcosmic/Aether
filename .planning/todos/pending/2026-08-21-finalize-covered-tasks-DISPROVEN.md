@@ -3,6 +3,9 @@ created: 2026-08-21T00:00:00Z
 title: "[DISPROVEN 2026-08-21] Build finalize credits only the primary TaskID"
 area: cmd/codex_build_finalize.go
 source: Downstream field report (Cosmic Dashboard colony, 2026-08-21) + orchestrator code check
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
 ---
 
 ## Problem

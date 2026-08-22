@@ -4,6 +4,10 @@ phase: 173-delegation-guard
 source: [173-VERIFICATION.md]
 started: 2026-08-13T14:30:00Z
 updated: 2026-08-13T14:30:00Z
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
+  gap_snapshot: "partial::scenarios=1"
 ---
 
 ## Current Test

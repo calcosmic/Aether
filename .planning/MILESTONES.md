@@ -1,5 +1,64 @@
 # Aether Milestones
 
+## v1.26 Intelligent Orchestration (Shipped: 2026-08-22)
+
+**Closeout type:** override_closeout — closed by owner decision on 2026-08-22 so the
+next milestone (v1.27, priority-spec backlog) can start; three items carry forward.
+**Known verification overrides:** 22 newly acknowledged, 0 carried forward from a
+prior close (see STATE.md Deferred Items).
+
+**Phases completed:** 172, 173, 174 (closed at plan 2 by owner ruling), 175 (shipped
+outside the phase system), 180–184 (hardening items H1–H5), 186 (6/7), 187, 188, 189,
+190, 191, 191.1 — 66 plans in the phase archive (`milestones/v1.26-phases/`), plus the
+2026-08-20/21 sessions that landed outside GSD (team check-in, owner decision routing,
+honest no-change results, the review-gate fixes). Product versions v1.0.47 → v1.0.63.
+
+**Stats:** 571 commits, 1,223 files changed, +171,000 / −39,221 lines, 2026-08-08 → 2026-08-22.
+
+**Key accomplishments:**
+
+- **A wiring ratchet that cannot be argued past** — any program feature with no caller
+  fails CI, seeded honestly at 278 existing orphans and allowed only to shrink; the
+  release gate is proven by execution, not by reading its text (Phase 172).
+- **Delegation guards that fail closed** — depth derived from the parent, a whole-run
+  ceiling of 20 helpers, cycle detection, tamper-refusing ledgers (Phase 173).
+- **Token measurement with stated arithmetic** — the 186× undercount found and fixed,
+  cache tokens counted, estimates separated from measurements (Phase 174, plans 1–2).
+- **Removing things until a small job costs a small amount** — Aether's own internals
+  no longer leak into other projects' workers, skills are chosen by the task, castes
+  with nothing to do are refused, the worker cap actually caps (Phases 180–184).
+- **Crash-safe worktrees and one truth for failures** — no destruction path without a
+  safety gate, one canonical failure log, atomic phase advance, pause cannot be
+  clobbered (Phases 187, 188).
+- **Workers get the whole brief and nothing twice** — merged dispatches carry every
+  covered task; pheromones and handoffs reach a worker exactly once; 39 zero-reader
+  config files and 8 dead commands deleted with reappearance ratchets (Phases 189–191).
+- **Field hardening from three downstream repos in one day** — bundled workers can
+  file honestly, the embedded checker reports real verdicts, out-of-band work has an
+  honest re-entry (`aether verify-out-of-band`) that can never fabricate receipts
+  (Phase 191.1).
+- **The owner in the loop** — builds pause on a team card before spawning; workers
+  route judgement calls to the owner instead of guessing; "nothing needed changing" is
+  an honest result with evidence (2026-08-21, v1.0.62–63).
+
+### Known Gaps (14 of 35 requirements unchecked at close)
+
+- Carried into v1.27: SPEND-02, SPEND-07, SPEND-08 (the one-line cost summary —
+  v1.27 feature 4); PROOF-01..04 (the benchmark — v1.27 feature 7).
+- Dropped by recorded owner ruling 2026-08-14: SPEND-05, SPEND-06, SPAWN-09..11
+  (worker delegation grant cut — "we are trying to reduce worker count").
+- Deferred off the golden path 2026-08-17: SKILL-03, SKILL-04.
+
+### Carried forward
+
+- Phase 185 (one honest cost line) → v1.27 feature 4.
+- Phase 186-07 (one live benchmark run, owner present) and Phase 192 (full showdown)
+  → v1.27 feature 7, run on the improved system as the ratified order intended.
+- Phase 172.1 (CI gate environment integrity) — blocks nothing; stays in the backlog.
+- Phase 173 has one pending human check: a delegation refusal seen in a real run.
+
+---
+
 ## v1.19 Roadmap Archive: v1.19 TypeScript Host Cutover + Oracle Confidence Recovery (Backfilled: 2026-08-21)
 
 **Note:** Synthesized from archive snapshot by `/gsd-health --backfill`. Original completion date unknown.

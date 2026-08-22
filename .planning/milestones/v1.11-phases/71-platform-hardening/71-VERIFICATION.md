@@ -5,74 +5,99 @@ status: gaps_found
 score: 7/12 must-haves verified
 overrides_applied: 0
 gaps:
+
   - truth: "Uncommitted process tracking and worker cleanup code is committed and tested"
     status: failed
     reason: "The 71-01 files (process_tracker.go, process_group_unix.go, codex_worker_cleanup.go, etc.) exist in the working tree but are NOT committed on the current branch (codex/fix-opencode-subagent-dispatch). The 71-01 commit (cdb008fb) is on main but is NOT an ancestor of the current branch HEAD. Git status shows all 71-01 artifact files as modified/untracked."
     artifacts:
+
       - path: "pkg/codex/process_tracker.go"
         issue: "Untracked file in working tree, not committed on current branch"
+
       - path: "pkg/codex/process_group_unix.go"
         issue: "Untracked file in working tree, not committed on current branch"
+
       - path: "cmd/codex_worker_cleanup.go"
         issue: "Untracked file in working tree, not committed on current branch"
+
       - path: "cmd/verification_process_group_unix.go"
         issue: "Untracked file in working tree, not committed on current branch"
     missing:
+
       - "Commit the 71-01 foundation files on the current branch (cherry-pick cdb008fb or merge main)"
   - truth: "state-mutate --verify-only and --revert flags are functional"
     status: failed
     reason: "Both flags are registered (lines 860-861 in state_cmds.go) but the RunE function (lines 26-53) never reads or handles them. No code checks for 'verify-only' or 'revert' flag values. The flags are dead -- setting them has no effect on command behavior."
     artifacts:
+
       - path: "cmd/state_cmds.go"
         issue: "Flags registered at lines 860-861 but RunE (lines 26-53) has no verify-only/revert handling"
     missing:
+
       - "Add verifyOnly, _ := cmd.Flags().GetBool('verify-only') handling in stateMutateCmd RunE"
       - "Add revert, _ := cmd.Flags().GetString('revert') handling in stateMutateCmd RunE"
   - truth: "All 25 agent types produce valid dispatch manifests via codexBuildManifest"
     status: failed
     reason: "Plan 71-01 specified creating a test that iterates over all 25 caste names calling codexAgentFileForCaste and codexAgentNameForCaste. Only 1 agent type (ambassador) is tested in codex_build_test.go line 414. No test validates all 25 castes produce correct TOML filenames."
     artifacts:
+
       - path: "cmd/codex_build_test.go"
         issue: "Only tests codexAgentNameForCaste for ambassador caste (line 414), not all 25"
     missing:
+
       - "Create test that iterates all 25 castes and validates codexAgentFileForCaste returns non-empty .toml filename"
   - truth: "suggest-approve subcommand produces real data (not hardcoded empty)"
     status: partial
     reason: "suggest-approve returns hardcoded empty suggestions array ([]interface{}{}). Command is callable and registered (PLAT-04 satisfied) but does not produce real data. This is a compatibility stub."
     artifacts:
+
       - path: "cmd/compatibility_cmds.go"
         issue: "suggestApproveCmd RunE returns hardcoded empty suggestions"
     missing:
+
       - "Wire suggest-approve to read actual pending suggestions from colony state"
   - truth: "chamber-compare subcommand produces real data (not hardcoded empty)"
     status: partial
     reason: "chamber-compare returns hardcoded empty matches/diffs arrays. Command is callable and registered (PLAT-04 satisfied) but does not perform actual comparison."
     artifacts:
+
       - path: "cmd/chamber.go"
         issue: "chamberCompareCmd RunE returns hardcoded empty matches and diffs"
     missing:
+
       - "Wire chamber-compare to read chamber archive and compare against current state"
   - truth: "PLAT-05: All 50 commands produce correct output on all 3 platforms"
     status: partial
     reason: "Smoke test validates all 318 Go subcommands respond to --help (VERIFIED). However, PLAT-05 requires verifying correct output on all 3 platforms (Claude Code, OpenCode, Codex CLI). Go runtime validation covers the shared backend but platform-specific output rendering cannot be verified programmatically."
     artifacts:
+
       - path: "cmd/smoke_test.go"
         issue: "Tests Go subcommands only; does not test Claude Code slash commands or OpenCode commands"
     missing:
+
       - "Human verification needed: test 50 slash commands on each platform for correct output"
+
 human_verification:
+
   - test: "Run 10 representative slash commands on Claude Code platform"
     expected: "Each command produces expected output without errors"
     why_human: "Platform-specific rendering and markdown wrapper behavior cannot be tested via Go tests"
+
   - test: "Run 10 representative slash commands on OpenCode platform"
     expected: "Each command produces expected output matching Claude Code behavior"
     why_human: "OpenCode wrapper parity requires interactive testing"
+
   - test: "Verify Codex CLI dispatches all 25 agent types without errors"
     expected: "Each agent type spawns correctly with proper TOML configuration"
     why_human: "Codex CLI is a separate binary interface that requires running codex commands"
+
   - test: "Verify state-mutate --verify-only behavior manually"
     expected: "Command checks guard precondition and reports result without mutating state"
     why_human: "Flag is registered but not wired -- needs manual confirmation of expected vs actual behavior"
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
+  status: gaps_found
 ---
 
 # Phase 71: Platform Hardening Verification Report

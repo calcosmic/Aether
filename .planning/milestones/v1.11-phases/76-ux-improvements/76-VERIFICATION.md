@@ -5,18 +5,26 @@ status: human_needed
 score: 4/4
 overrides_applied: 0
 human_verification:
+
   - test: "Run aether status in a fresh repo with no colony"
     expected: "Welcome banner renders with ant emoji, divider, and 3 quick-start commands (lay-eggs, init, status)"
     why_human: "Requires interactive terminal (TTY) to verify emoji rendering and visual alignment"
+
   - test: "Run aether build 1 with an initialized colony"
     expected: "Progress bar animates through Prepare, Context, Dispatch, Verify, Complete steps with elapsed timing"
     why_human: "Requires interactive terminal to see live progress bar updates (non-TTY shows plain text only)"
+
   - test: "Run aether status with a stale colony (InitializedAt > 7 days ago)"
     expected: "Warnings section appears between signals and progress with warning emoji banner and stale state warning"
     why_human: "Requires interactive terminal to verify visual layout of warnings section"
+
   - test: "Set AETHER_OUTPUT_MODE=json and run aether status"
     expected: "JSON output only -- no welcome banner, no friendly errors, no warnings section"
     why_human: "Requires verifying JSON envelope format matches expected structure (no visual artifacts leaked)"
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
+  status: human_needed
 ---
 
 # Phase 76: UX Improvements Verification Report

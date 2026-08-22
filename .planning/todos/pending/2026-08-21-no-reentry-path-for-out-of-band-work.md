@@ -3,6 +3,9 @@ created: 2026-08-21T00:00:00Z
 title: Work done outside the dispatch machinery has no honest re-entry path — the only exit is fabricating worker receipts, which the system rightly refuses
 area: verification/reconciliation ceremony
 source: Third downstream repo report, 2026-08-21 (photo-scoring colony)
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
 ---
 
 ## The situation (field-verified)
@@ -14,6 +17,7 @@ ledger cannot be brought to agree with reality:
 - Closing the open attempt would require filing results for nine workers that never ran,
   describing verification that never happened — fabrication, which the session correctly refused
   (the honesty rules held; this is the system's values working).
+
 - "The runtime correctly refuses to sign off on evidence it didn't produce, and it has no cheap
   way to re-verify." Four attempts, then a justified stop: "It's costing more than it returns."
 
@@ -26,6 +30,7 @@ without evidence, and three botched hand-edits. The gates work. They lack an hon
    packet cannot express it → planned-forever dispatches → deadlock
    ([[2026-08-21-completion-packet-cannot-express-bundled-work]],
    [[2026-08-21-stage-finalize-deadlock]]).
+
 2. This repo: work arrived OUTSIDE the pipeline entirely (owner pair-work) → no re-entry.
 
 Common root: the ledger accepts evidence only from its own dispatch pipeline. Reality that arrives

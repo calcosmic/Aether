@@ -3,6 +3,9 @@ created: 2026-08-21T00:00:00Z
 title: Weight classes — the pipeline should fit the task; small work should get the small machine automatically
 area: orchestration/UX
 source: Owner feedback, 2026-08-21, after using Aether in downstream repos
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
 ---
 
 ## The owner's observation (verbatim intent)
@@ -15,8 +18,10 @@ things. And that seems almost better for certain things."
 
 - The heavy machinery caught 20+ real defects across phases 187-191 that every worker's
   self-check had passed. On complex/multi-part/high-stakes work it is the product.
+
 - On small work (a button, a copy tweak, a small bug) it is disproportionate: 10-minute
   verification runs and reviewer panels for picture-hanging. The field sessions felt this.
+
 - Partial machinery already exists and should be surfaced better TODAY: `/ant-quick`, `--light`,
   discovery-mode → light, and the 187-hardened caste pruning (Probe only where testable code
   exists, Gatekeeper only on security signals).
@@ -28,6 +33,7 @@ A routing layer whose first question is "how big is this, really?" — task-size
 
 - **Featherweight:** spec → build → tweak, single worker, owner in the loop, receipts kept to the
   honest minimum (changed files + verification status). No reviewer panel, no research pass.
+
 - **Middleweight:** today's standard depth.
 - **Heavyweight:** today's heavy depth (security/final/high-risk unchanged — safety floors from
   187 are never dropped by lane choice).

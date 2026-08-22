@@ -3,6 +3,9 @@ created: 2026-08-21T00:00:00Z
 title: Continue's embedded verification worker returns the wrong subprocess field as its verdict
 area: cmd/codex_continue
 source: Downstream field report (Cosmic Dashboard colony, 2026-08-21)
+audit_acknowledged:
+  milestone: v1.26
+  at: 2026-08-22
 ---
 
 ## Problem
@@ -36,6 +39,7 @@ showdown gate: "unscripted interventions ≤ GSD's" and "recovery failures = 0".
 
 The watcher spawned inside `aether continue` failed 3 of 5 runs. The verdict field came back
 holding the check's own COMMAND or DESCRIPTION strings rather than a result:
+
 - one failure's stated reason: literally `/ant-continue 2>&1 | tail -100`
 - two "successful" runs reported: "Check exit code of plan-only continue run" and
   "Preview what /ant-continue would do without mutating state"

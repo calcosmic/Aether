@@ -6,6 +6,9 @@ or silently ignored.
 
 ## D-190-01-A: Pheromone signals and prior-worker handoffs render twice in the plan-only wrapper flow
 
+- **Status:** acknowledged
+- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/MILESTONE-CONTEXT.md
+
 **RESOLVED by 190-03.** `composeBuildManifestBrief` now takes an
 `includeSteeringSections` flag; `attachBuildDispatchContext` (the wrapper
 plan-only flow and the `--print-brief` inspector that simulates it) passes
@@ -237,6 +240,9 @@ scope-boundary rule (only auto-fix issues directly caused by the current task's 
 ## From 190-02 (TS-host hive double-injection removal)
 
 ### Stale ceremony-adapter snapshot fixtures (pre-existing, unrelated to hive_section)
+
+- **Status:** acknowledged
+- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/MILESTONE-CONTEXT.md
 
 **Found during:** Task 3 verification (`npm test --prefix .aether/ts-host`)
 

@@ -21,6 +21,9 @@ disconnected from correctness, only from performance realism).
 
 ## 2. `cmd/colony_prime_audit_test.go` and `cmd/medic_repair_test.go` seed the nested path too
 
+- **Status:** acknowledged
+- **Deferred at:** v1.26 close, 2026-08-22 — carried per .planning/MILESTONE-CONTEXT.md
+
 Both were read in full and confirmed **not broken** by this plan's changes — not logged as
 issues, just noted here for whoever next touches midden plumbing:
 
