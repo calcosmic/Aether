@@ -195,6 +195,19 @@ func TestContinuePlanOnlyReadOnlyArtifactRefusesClaimedArtifact(t *testing.T) {
 // fails loudly instead of silently proceeding -- T-163.1-45). A suite
 // containing only the happy path would pass even if --read-only-artifact
 // disabled criterion checking on this route entirely.
+//
+// Scope note (193-04, FLOOR-03): this function's "allowed blocking classes"
+// were pinned before commit 9208ff48 (H-04) made a reconciled+verified task
+// advance in the general case; the happy-path subtest below already reflects
+// that fix and is unaffected by 193-04's further change to
+// continueTasksSupportAdvancement (dropping the claimsSatisfied requirement
+// for a reconciled task -- this fixture's general claim check already passes
+// via files_modified, so that further change is a no-op here). The scenario
+// 193-04 actually changes -- a reconciled task with NO general claims at all,
+// on both continue lanes -- is covered by TestFinalizeCountsReconcileTaskAsEvidence
+// and TestReconcileIsNotABypass (cmd/floor_reviewer_free_gate_test.go), not
+// by this file, which stays scoped to the --read-only-artifact criterion-
+// evidence path specifically.
 func TestContinueFinalizeReadOnlyArtifactEvidenceCriteriaPassAndDetectsTamper(t *testing.T) {
 	t.Run("criteria pass and claims are preserved when evidence is recorded", func(t *testing.T) {
 		root, taskID, _ := setupContinueCriterionEvidenceFinalizeFixture(t)

@@ -49,6 +49,21 @@ var continueFinalizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
+		// FLOOR-03 (closes the 2026-08-01 folded todo): --reconcile-task is
+		// registered on THIS command too now, not only on `continue
+		// --plan-only`. It unions with whatever ReconcileTaskIDs the plan
+		// manifest already carries (recorded at plan-only time) rather than
+		// replacing it, so an operator can record reconciliation at finalize
+		// time even for a task nobody thought to reconcile earlier.
+		// validateExternalContinueState (inside runCodexContinueFinalize)
+		// validates the merged list against the phase exactly as it already
+		// validates the plan's own list, so an unknown task ID is still
+		// refused by name.
+		if flagReconcileTaskIDs := normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")); len(flagReconcileTaskIDs) > 0 {
+			if activeManifest := completion.activeManifest(); activeManifest != nil {
+				activeManifest.ReconcileTaskIDs = mergeReconcileTaskIDs(activeManifest.ReconcileTaskIDs, flagReconcileTaskIDs)
+			}
+		}
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout, noLearn)
 		if err != nil {
 			outputError(1, err.Error(), nil)

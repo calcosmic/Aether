@@ -1370,6 +1370,7 @@ func init() {
 	continueCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	continueCmd.Flags().Bool("classic-ceremony", false, "Emit the heavy continue review manifest for wrapper-spawned classic ceremony reviewers")
 	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results")
+	continueFinalizeCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled at finalize time, combined with any already recorded when the build was planned (repeatable or comma-separated); this command does not accept --read-only-artifact directly, so record that evidence earlier via continue --plan-only --read-only-artifact")
 	continueFinalizeCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	continueFinalizeCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")

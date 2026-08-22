@@ -1895,6 +1895,18 @@ func TestClassifyTaskStillMissingWhenNoStatuses(t *testing.T) {
 	}
 }
 
+// TestContinueBlocksWhenReconciledTaskLacksClaimEvidence: renamed in spirit,
+// not in name, by 193-04 (FLOOR-03, closes the 2026-08-01 folded todo). Its
+// premise used to be "a reconciled task with empty builder claims blocks";
+// that premise is exactly what continueTasksSupportAdvancement's H-04 branch
+// now refuses to require, because an operator reconciling work done outside
+// the pipeline structurally has no claims file to satisfy. This phase has no
+// bound success criteria (criterion evidence policy: not_required), so the
+// deterministic floor is the shell checks alone -- once those pass, the
+// reconciled task with empty claims now ADVANCES. See
+// TestContinue_ReconcileDoesNotBypassClaims immediately below for the
+// still-true half of "not a bypass": a reconciled task whose deterministic
+// floor genuinely fails still blocks.
 func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
@@ -1905,7 +1917,7 @@ func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Block when reconciled task lacks builder claim evidence"
+	goal := "Reconciled task with empty builder claims and no bound criteria"
 	now := time.Now().UTC()
 	taskID := "1.1"
 	createTestColonyState(t, dataDir, colony.ColonyState{
@@ -1944,11 +1956,11 @@ func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if blocked, _ := result["blocked"].(bool); !blocked {
-		t.Fatalf("expected blocked:true when reconciled task lacks claim evidence, got %v", result)
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false -- reconciled task with a passing deterministic floor and no bound criteria advances even with empty builder claims (FLOOR-03), got %v", result)
 	}
-	if advanced, _ := result["advanced"].(bool); advanced {
-		t.Fatalf("expected advanced:false when reconciled task lacks claim evidence, got %v", result)
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true, got %v", result)
 	}
 
 	reconciled := stringSliceValue(result["reconciled_tasks"])
@@ -1956,29 +1968,20 @@ func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	// H-04: the reconcile note is visible as an operational issue, while the
-	// claim-evidence failure is what actually blocks.
+	// The reconcile stays visible as a non-blocking operational note.
 	operational := stringSliceValue(result["operational_issues"])
-	hasWarning := false
+	hasNote := false
 	for _, issue := range operational {
 		if strings.Contains(issue, "manually reconciled") {
-			hasWarning = true
+			hasNote = true
 			break
 		}
 	}
-	if !hasWarning {
+	if !hasNote {
 		t.Fatalf("expected operational issues to contain reconcile note, got %v", operational)
 	}
-	blockingIssues := stringSliceValue(result["blocking_issues"])
-	hasClaimBlock := false
-	for _, issue := range blockingIssues {
-		if strings.Contains(issue, "claim") {
-			hasClaimBlock = true
-			break
-		}
-	}
-	if !hasClaimBlock {
-		t.Fatalf("expected a claim-evidence blocking issue, got %v", blockingIssues)
+	if blockingIssues := stringSliceValue(result["blocking_issues"]); len(blockingIssues) != 0 {
+		t.Fatalf("expected no blocking issues, got %v", blockingIssues)
 	}
 }
 
@@ -3941,25 +3944,39 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Reconcile does not bypass claims verification"
+	// 193-04 (FLOOR-03): "reconcile is not a bypass" is now proven by binding
+	// this task's own criterion explicitly to the "claims" check -- the one
+	// way claims can still gate a reconciled task under the new contract
+	// (continueTasksSupportAdvancement no longer requires claimsSatisfied
+	// generically; a bound criterion's own evaluation is what can still
+	// block). With empty claims and no persisted builder handoff for the
+	// program's own re-run fallback (Task 2, D-04) to draw on, the "claims"
+	// check genuinely fails, so criterion evidence fails, so the
+	// deterministic floor fails, so the reconciled task still blocks.
+	goal := "Reconcile does not bypass a bound claims criterion"
 	now := time.Now().UTC()
 	taskID := "1.1"
+	criterion := "Builder claims recorded for the manual fix"
+	phase := colony.Phase{
+		ID:              1,
+		Name:            "Reconcile bypass test",
+		Status:          colony.PhaseInProgress,
+		SuccessCriteria: []string{criterion},
+		Tasks: []colony.Task{{
+			ID:                   &taskID,
+			Goal:                 "Needs git evidence",
+			Status:               colony.TaskInProgress,
+			SuccessCriteria:      []string{criterion},
+			EvidenceRequirements: []colony.CriterionEvidenceRequirement{{Criterion: criterion, TaskID: taskID, Checks: []string{"claims"}}},
+		}},
+	}
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version:        "3.0",
 		Goal:           &goal,
 		State:          colony.StateBUILT,
 		CurrentPhase:   1,
 		BuildStartedAt: &now,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{
-					ID:     1,
-					Name:   "Reconcile bypass test",
-					Status: colony.PhaseInProgress,
-					Tasks:  []colony.Task{{ID: &taskID, Goal: "Needs git evidence", Status: colony.TaskInProgress}},
-				},
-			},
-		},
+		Plan:           colony.Plan{Phases: []colony.Phase{phase}},
 	})
 
 	dispatches := []codexBuildDispatch{
@@ -3975,6 +3992,20 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 		t.Fatalf("failed to write empty claims: %v", err)
 	}
 
+	// seedContinueBuildPacket doesn't set the bound-v1 criterion evidence
+	// contract on the manifest; add it here (same pattern as
+	// setupContinueCriterionEvidenceFinalizeFixture).
+	manifestRel := filepath.ToSlash(filepath.Join("build", "phase-1", "manifest.json"))
+	var buildManifest codexBuildManifest
+	if err := store.LoadJSON(manifestRel, &buildManifest); err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	buildManifest.CriterionEvidencePolicy = criterionEvidencePolicyBoundV1
+	buildManifest.EvidenceRequirements = flattenPhaseCriterionEvidenceRequirements(phase)
+	if err := store.SaveJSON(manifestRel, buildManifest); err != nil {
+		t.Fatalf("save manifest: %v", err)
+	}
+
 	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("continue returned error: %v", err)
@@ -3983,10 +4014,10 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
 	if blocked, _ := result["blocked"].(bool); !blocked {
-		t.Fatalf("expected blocked:true when reconciled task lacks evidence, got %v", result)
+		t.Fatalf("expected blocked:true when a criterion bound to \"claims\" has no evidence, got %v", result)
 	}
 	if advanced, _ := result["advanced"].(bool); advanced {
-		t.Fatalf("expected advanced:false when reconciled task lacks evidence, got %v", result)
+		t.Fatalf("expected advanced:false when reconciled task lacks bound evidence, got %v", result)
 	}
 
 	reconciled := stringSliceValue(result["reconciled_tasks"])
@@ -3994,8 +4025,8 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	// H-04: the reconcile note lives in operational issues; the claim-evidence
-	// failure is the blocking issue.
+	// The reconcile note lives in operational issues; the bound criterion's
+	// claim-evidence failure is the blocking issue.
 	operational := stringSliceValue(result["operational_issues"])
 	hasReconcileNote := false
 	for _, issue := range operational {

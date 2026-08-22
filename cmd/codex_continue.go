@@ -1972,6 +1972,20 @@ func environmentBlockedLaunchSummary(original string) string {
 	return summary + ": " + original
 }
 
+// mergeReconcileTaskIDs unions --reconcile-task values recorded live at
+// continue-finalize time with the reconcile task IDs already persisted on
+// the plan manifest (recorded at `aether continue --plan-only` time),
+// deduplicated and sorted. Closes the 2026-08-01 folded todo: before this,
+// continue-finalize had no --reconcile-task flag at all, so an operator
+// could only record reconciliation up front at plan-only time, never after.
+func mergeReconcileTaskIDs(planIDs, flagIDs []string) []string {
+	if len(flagIDs) == 0 {
+		return append([]string{}, planIDs...)
+	}
+	merged := append(append([]string{}, planIDs...), flagIDs...)
+	return uniqueSortedStrings(merged)
+}
+
 func validateContinueReconcileTasks(phase colony.Phase, reconcileTaskIDs []string) error {
 	if len(reconcileTaskIDs) == 0 {
 		return nil
@@ -2126,13 +2140,25 @@ func continueTasksSupportAdvancement(tasks []codexContinueTaskAssessment, claims
 		case "missing", "needs_redispatch", "implemented_unverified", "simulated":
 			return false
 		case "manually_reconciled":
-			// H-04: a manually reconciled task must be able to advance when
-			// phase verification passed — the runtime's own recovery hint is
-			// `--reconcile-task <id>`, and excluding reconciled tasks here
-			// made that hint a dead loop. Reconcile is still not a bypass:
-			// builder-claim verification must also pass, so a failed dispatch
-			// with an empty claims file stays blocked.
-			if !task.Verified || !claimsSatisfied {
+			// H-04, extended by FLOOR-03 (.planning/todos/pending/2026-08-01-
+			// finalize-reconcile-task-evidence-gate.md, folded into 193-04): a
+			// manually reconciled task must be able to advance when the
+			// deterministic floor (build/types/lint/tests, claimed-files-exist,
+			// and each criterion's evidence -- task.Verified is
+			// verification.ChecksPassed, which already folds criterion evidence
+			// in via runDeterministicFloor) passed, even when no builder-claims
+			// file exists to satisfy claimsSatisfied. An operator reconciling
+			// work done entirely outside the pipeline has no claims file to
+			// satisfy by construction -- requiring one anyway is precisely the
+			// asymmetry that deadlocked the finalize lane (the direct
+			// `aether continue` path could still hand-record claims; the
+			// external wrapper lane had no way to record --reconcile-task at
+			// finalize time at all until this plan added the flag). Reconcile
+			// is still not a bypass: a reconciled task whose deterministic
+			// floor failed still blocks, and an UNRECONCILED task's builder-
+			// claim failure still blocks via the "implemented_unverified" /
+			// "needs_redispatch" outcomes above, untouched by this change.
+			if !task.Verified {
 				return false
 			}
 		}
