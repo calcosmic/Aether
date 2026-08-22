@@ -37,7 +37,7 @@
 
 **Goal:** Aether stops burning tokens on workers nobody needed — the model's judgement picks the team and says why, the program's free checks are the floor that never moves, each phase is verified once, the cost is printed, and the owner can see every decision — so a one-task bug fix costs one worker plus checks.
 
-- [ ] **Phase 193: Free Checks Are the Floor** - The program's own checks run on every phase and can never be skipped, so work can safely finish without a human-like reviewer.
+- [x] **Phase 193: Free Checks Are the Floor** - The program's own checks run on every phase and can never be skipped, so work can safely finish without a human-like reviewer. (completed 2026-08-22)
 - [ ] **Phase 194: The Queen Decides the Team** - Which AI helpers get sent becomes judgement, not a fixed rule — a one-task fix costs one worker, not eight.
 - [ ] **Phase 195: Coherent Jobs** - Related tasks bundle into one job for one worker instead of one worker per task.
 - [ ] **Phase 196: See What It Cost** - Every run ends with one honest cost line, and model choices carry a reason.
