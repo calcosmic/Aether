@@ -206,3 +206,7 @@ Flagged for Phase 194 (already recorded in `.planning/WINDOWS.md`): probe, audit
 ---
 *Phase: 193-free-checks-are-the-floor*
 *Completed: 2026-08-22*
+
+## Self-Check: PASSED
+
+All created files (`cmd/phase_verified_once_test.go`, `.planning/WINDOWS.md`, this SUMMARY) and all six task commits (`af3f0dbf`, `c5ca8520`, `7d10e05f`, `39116539`, `5be06a78`, `f833479f`) plus the SUMMARY/ledger commit (`06a66887`) verified present in git history.

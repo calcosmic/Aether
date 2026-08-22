@@ -71,7 +71,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 193-02-PLAN.md — The build side runs free checks only; verified once (wave 2)
+- [x] 193-02-PLAN.md — The build side runs free checks only; verified once (wave 2)
 - [ ] 193-03-PLAN.md — Nothing can turn a check off, and the flag text says so (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*

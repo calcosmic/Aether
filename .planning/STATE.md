@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 193
 current_phase_name: Free Checks Are the Floor
 status: executing
-stopped_at: Completed 193-01-PLAN.md
-last_updated: "2026-08-22T13:08:49.063Z"
+stopped_at: Completed 193-02-PLAN.md
+last_updated: "2026-08-22T14:13:25.826Z"
 last_activity: 2026-08-22
 last_activity_desc: Phase 193 execution started
-state_head: ee805ec10ebc7ef2f24b8e5d3c8eb12ddd08d5d2
+state_head: 06a6688795ee2fba312a0d75ae7432dfdcd5a123
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 ## Current Position
 
 Phase: 193 (Free Checks Are the Floor) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-08-22 — Phase 193 execution started
 
@@ -52,6 +52,7 @@ Last activity: 2026-08-22 — Phase 193 execution started
 | Phase 172 P05 | 25min | 2 tasks | 4 files |
 | Phase 173 P10 | 70min | 4 tasks | 5 files |
 | Phase 193 P01 | 50min | 2 tasks | 7 files |
+| Phase 193 P02 | 62min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ Last activity: 2026-08-22 — Phase 193 execution started
 - [Phase 173]: Plan 10: ROADMAP criterion 4 left byte-identical -- the cross-guard fail-closed proof establishes a narrower claim than the criterion's literal wording; whether it is satisfied is left to verification, per 173-RESIDUE.md residue 7
 - [Phase 193]: Deterministic floor promoted to the primary verification anchor; a dispatched reviewer verdict can only ADD a block, never supply the pass — runDeterministicFloor uses the build-time watcher (already resolved), never a live continue-time dispatch -- avoids re-running shell verification twice for a reviewer brief and guarantees a reviewer cannot supply a pass. Both continue lanes now share this one function.
 - [Phase 193]: syntheticCriterionRequirements default checks drop watcher (D-06) — Unbound criteria now get claims plus the matching free check, never a reviewer caste by default; a dispatched reviewer that fails still blocks separately.
+- [Phase 193]: [Phase 193 P02] Build's verification-stage watcher dispatch now gates on the Queen's explicit proposal (queenAskedFor/queenJudgement.Proposed), not the effective caste set that always includes watcher via the required-caste floor -- the required-caste floor itself is untouched (Phase 194's territory).
+- [Phase 193]: [Phase 193 P02] Discovered (flagged, not fixed): probe, auditor and gatekeeper still legitimately double-dispatch on production/security phases with no explicit Queen proposal, because build and continue independently derive the same required caste from the same phase content. Recorded in .planning/WINDOWS.md for Phase 194 (moves the required-caste floor).
 
 ### Pending Todos
 
@@ -108,6 +111,7 @@ Last activity: 2026-08-22 — Phase 193 execution started
 - **`pkg/trace/cost.go` holds a stale model-price table that contradicts Phase 174's D-02 ("no model-price table is ever built"), and it repeats the 186x undercount shape** — `CalculateCost` multiplies only input and output tokens and ignores cache tokens entirely, against hardcoded rates for retired model names. It is called from `pkg/agent/pool.go:192`; no live caller was found under `cmd/` for any of the three dispatch platforms, so it is probably dead, but that was not proven exhaustively. **Deliberately OUT OF SCOPE for Phase 174** (surfaced by 174-RESEARCH.md Open Question 1, resolved there as owner residue). Phase 174 prevents a second instance — the new spend surface carries greps that fail if a price table or any token-to-dollar arithmetic appears — but the existing one needs an owner ruling: delete it as dead code, or fix its arithmetic. Plan 174-09's SUMMARY must restate this so it does not evaporate with the phase.
 
 - `gopkg.in/yaml.v3` is archived and author-declared unmaintained. v1.26 makes YAML the format a non-technical user hand-writes, which changes the risk profile. The migration to `go.yaml.in/yaml/v3` is a mechanical import swap and is deliberately unbundled — it gets its own plan, not a rider on the roster work
+- [Phase 193] Probe/auditor/gatekeeper double-dispatch (build AND continue independently require the same caste with no explicit Queen proposal) is unresolved -- flagged for Phase 194, tracked in .planning/WINDOWS.md (kind: unmet-truth). Not a blocker to sealing 193 (out of this plan's declared scope), but Phase 194 planning must account for it.
 
 ## Deferred Items
 
@@ -156,6 +160,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-22T13:08:49.049Z
-Stopped at: Completed 193-01-PLAN.md
+Last session: 2026-08-22T14:13:25.812Z
+Stopped at: Completed 193-02-PLAN.md
 Resume file: None
