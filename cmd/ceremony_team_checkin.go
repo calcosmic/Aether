@@ -101,6 +101,14 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 		}
 		b.WriteString("\n")
 	}
+	if announcement := composeForcedReviewerAnnouncement(forcedReviewerRecordsFromManifest(manifest)); announcement != "" {
+		b.WriteString("\nNot sent with this team, but required at the check after the work is done:\n")
+		for _, line := range strings.Split(announcement, "\n") {
+			b.WriteString("  ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
 	if len(prunedReasons) > 0 {
 		prunedCastes := make([]string, 0, len(prunedReasons))
 		for caste := range prunedReasons {
@@ -120,6 +128,15 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	}
 	b.WriteString("\nRequired workers stay — they are the safety floor. Optional workers can be trimmed.\n")
 
+	forcedRecords := forcedReviewerRecordsFromManifest(manifest)
+	forced := map[string]interface{}{}
+	for _, record := range forcedRecords {
+		forced[record.Caste] = map[string]interface{}{
+			"signals": record.Signals,
+			"reason":  record.Reason,
+		}
+	}
+
 	result := map[string]interface{}{
 		"workflow":     workflow,
 		"required":     required,
@@ -127,8 +144,36 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 		"reasons":      reasons,
 		"what_it_does": whatItDoes,
 		"pruned":       prunedReasons,
+		"forced":       forced,
 	}
 	return result, b.String()
+}
+
+// forcedReviewerRecordsFromManifest reads the "forced_reviewers" field back
+// out of a lifecycle manifest map (the JSON form of []codexForcedReviewerRecord,
+// cmd/codex_build.go) so the card can render the exact set the build recorded
+// (D-05) without re-deriving anything.
+func forcedReviewerRecordsFromManifest(manifest map[string]interface{}) []codexForcedReviewerRecord {
+	raw, ok := manifest["forced_reviewers"].([]interface{})
+	if !ok {
+		return nil
+	}
+	records := make([]codexForcedReviewerRecord, 0, len(raw))
+	for _, entry := range raw {
+		row := mapValue(entry)
+		caste := strings.TrimSpace(stringValue(row["caste"]))
+		if caste == "" {
+			continue
+		}
+		records = append(records, codexForcedReviewerRecord{
+			Caste:   caste,
+			Signals: stringSliceValue(row["signals"]),
+			Matches: stringSliceValue(row["matches"]),
+			Sources: stringSliceValue(row["sources"]),
+			Reason:  strings.TrimSpace(stringValue(row["reason"])),
+		})
+	}
+	return records
 }
 
 // casteRosterProduces returns the roster's "produces" prose for a caste, the

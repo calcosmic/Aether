@@ -150,6 +150,13 @@ type codexBuildManifest struct {
 	// The build ANNOUNCES this record; it never dispatches the reviewer
 	// itself (D-05) — that happens at the checking step (continue).
 	ForcedReviewers []codexForcedReviewerRecord `json:"forced_reviewers,omitempty"`
+	// ForcedReviewerAnnouncement is the owner-facing sentence(s) composed from
+	// ForcedReviewers (one line per forced caste) — "a security reviewer will
+	// check this at the verification step — this touches logins (the plan
+	// mentions "password reset")". The build never dispatches a forced
+	// reviewer (D-05); this field is how the build ANNOUNCES one before any
+	// worker spawns. Empty when no reviewer is forced.
+	ForcedReviewerAnnouncement string `json:"forced_reviewer_announcement,omitempty"`
 }
 
 // codexForcedReviewerRecord is the durable, JSON form of a forcedReviewer
@@ -161,6 +168,47 @@ type codexForcedReviewerRecord struct {
 	Matches []string `json:"matches"`
 	Sources []string `json:"sources"`
 	Reason  string   `json:"reason"`
+}
+
+// composeForcedReviewerAnnouncement turns the build's recorded forced-reviewer
+// set into the owner-facing sentences the check-in card and manifest both
+// render (D-05): one sentence per forced caste, in the exact shape the ruling
+// gives — "a security reviewer will check this at the verification step —
+// this touches logins (the plan mentions "password reset")". Uses the plain
+// human name (forcedReviewerPlainLabel), never the registry identifier
+// (CLAUDE.md's plain-English mandate). Empty input renders nothing — no
+// announcement, no empty heading.
+func composeForcedReviewerAnnouncement(records []codexForcedReviewerRecord) string {
+	if len(records) == 0 {
+		return ""
+	}
+	sentences := make([]string, 0, len(records))
+	for _, record := range records {
+		reason := strings.TrimSpace(record.Reason)
+		if reason == "" {
+			continue
+		}
+		sentences = append(sentences, fmt.Sprintf(
+			"a %s will check this at the verification step — %s",
+			forcedReviewerPlainLabel(record.Caste), reason,
+		))
+	}
+	return strings.Join(sentences, "\n")
+}
+
+// forcedReviewerPlainLabel names a forced-reviewer caste the way the owner
+// reads it, never the registry identifier — "security reviewer", not
+// "gatekeeper"; "quality reviewer", not "auditor" (D-04's two reviewer
+// castes are the only ones this table can force).
+func forcedReviewerPlainLabel(caste string) string {
+	switch strings.TrimSpace(caste) {
+	case "gatekeeper":
+		return "security reviewer"
+	case "auditor":
+		return "quality reviewer"
+	default:
+		return strings.ToLower(casteLabel(caste)) + " reviewer"
+	}
 }
 
 type codexWaveExecutionPlan struct {
@@ -365,6 +413,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	// once, here, and recorded — never dispatched at build (D-05). Continue
 	// reads this record via queenForcedContinueReviewers.
 	manifest.ForcedReviewers = forcedReviewerRecords(queenForcedReviewersForPhase(phase))
+	manifest.ForcedReviewerAnnouncement = composeForcedReviewerAnnouncement(manifest.ForcedReviewers)
 	boundary, err := materializeOrchestratorBoundaryQuestions("build", state, phase, buildBoundaryQuestionCandidates(phase, selectedTaskIDs))
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err

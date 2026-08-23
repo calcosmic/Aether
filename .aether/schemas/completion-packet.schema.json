@@ -544,6 +544,9 @@
             "$ref": "#/$defs/codexForcedReviewerRecord"
           },
           "type": "array"
+        },
+        "forced_reviewer_announcement": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
