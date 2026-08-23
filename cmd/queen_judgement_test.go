@@ -40,7 +40,7 @@ func TestQueenCannotSkipSecurityReviewOnSecurityWork(t *testing.T) {
 		t.Fatalf("gatekeeper must be restored on credential work; final = %v", judgement.Final)
 	}
 
-	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, []string{"builder"}, "straightforward form work", nil)
+	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, []string{"builder"}, "straightforward form work", nil, nil)
 	found := false
 	for _, dispatch := range dispatches {
 		if dispatch.Caste != "gatekeeper" {
@@ -304,7 +304,7 @@ func TestContinueJudgementCannotDropASecurityReview(t *testing.T) {
 
 	after := queenContinueDispatchesWithJudgement(
 		phase, colony.VerificationDepthStandard,
-		[]string{"watcher"}, "looks simple", nil,
+		[]string{"watcher"}, "looks simple", nil, nil,
 		map[string]string{"watcher": "an independent check before this lands"})
 
 	if !queenContinueHasCaste(after, "watcher") {
@@ -324,7 +324,7 @@ func TestContinueWithNoProposalIsUnchanged(t *testing.T) {
 	depth := colony.VerificationDepthStandard
 
 	base := casteNames(queenContinueDispatches(phase, depth))
-	same := casteNames(queenContinueDispatchesWithJudgement(phase, depth, nil, "", nil))
+	same := casteNames(queenContinueDispatchesWithJudgement(phase, depth, nil, "", nil, nil))
 	if len(base) != len(same) {
 		t.Fatalf("no-proposal continue changed: %v vs %v", base, same)
 	}

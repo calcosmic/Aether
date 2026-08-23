@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -189,7 +190,7 @@ func TestReviewerForcedOnlyByNamedRisk(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			phase := judgementPhase(tc.phaseName, tc.description, tc.mode)
-			dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil)
+			dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil, nil)
 
 			if tc.wantCaste == "" {
 				if anyDispatchIsForced(dispatches) {
@@ -218,7 +219,7 @@ func TestTwoSignalsOneCasteCollapseToOneDispatch(t *testing.T) {
 		"Let users log in and then request a refund for a recent charge",
 		colony.PhaseModePrototype,
 	)
-	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil)
+	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil, nil)
 
 	gatekeeperCount := 0
 	var reason string
@@ -254,7 +255,7 @@ func TestEmptyPhaseForcesNoReviewer(t *testing.T) {
 		t.Fatalf("empty phase forced reviewers = %+v, want none", reviewers)
 	}
 
-	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil)
+	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil, nil)
 	if anyDispatchIsForced(dispatches) {
 		t.Fatalf("empty phase produced a signal-forced dispatch: %+v", dispatches)
 	}
@@ -288,5 +289,135 @@ func TestSignalMatchingIsWordBounded(t *testing.T) {
 	reviewers := queenForcedReviewersForPhase(genuineHit)
 	if len(reviewers) != 1 || reviewers[0].Caste != "gatekeeper" {
 		t.Fatalf("'rotate the api key' should force gatekeeper, got %+v", reviewers)
+	}
+}
+
+// TestChangedFilesCanOnlyAddAForcedReviewer is D-02's add-only proof for the
+// file-detected half of the forced-reviewer union
+// (queenRiskSignalHitsFromPaths, wired through queenForcedContinueReviewers):
+// changed files that match no signal leave the recorded set byte-identical
+// to running with no changed files at all, and a genuine hit (a migrations/
+// file) can only ADD a caste — the recorded caste and its reason survive
+// unchanged. See queen_risk_signals.go's own doc comment naming D-02; the
+// function must never remove a caste or a signal the build's own record
+// carried.
+func TestChangedFilesCanOnlyAddAForcedReviewer(t *testing.T) {
+	recorded := []codexForcedReviewerRecord{{
+		Caste:   "gatekeeper",
+		Signals: []string{"credentials/auth"},
+		Matches: []string{"password reset"},
+		Sources: []string{"plan wording"},
+		Reason:  `this touches logins and passwords (the plan mentions "password reset")`,
+	}}
+	phase := judgementPhase("Password reset", "Let users reset their password via an emailed token", colony.PhaseModePrototype)
+
+	empty := queenForcedContinueReviewers(phase, recorded, nil)
+	noMatch := queenForcedContinueReviewers(phase, recorded, []string{"src/dashboard/widget.go"})
+	if !reflect.DeepEqual(empty, noMatch) {
+		t.Fatalf("changed files matching no pattern altered the forced set:\nno changed files = %+v\nno-match changed files = %+v", empty, noMatch)
+	}
+	if len(empty) != 1 || empty[0].Caste != "gatekeeper" {
+		t.Fatalf("recorded set = %+v, want exactly the recorded gatekeeper", empty)
+	}
+
+	withMigration := queenForcedContinueReviewers(phase, recorded, []string{"migrations/0007_add_column.sql"})
+	if len(withMigration) != 2 {
+		t.Fatalf("a migrations/ changed file did not ADD a caste, want exactly two: %+v", withMigration)
+	}
+	var sawGatekeeper, sawAuditor bool
+	for _, reviewer := range withMigration {
+		switch reviewer.Caste {
+		case "gatekeeper":
+			sawGatekeeper = true
+			if !strings.Contains(reviewer.Reason, "password reset") {
+				t.Errorf("the recorded gatekeeper's reason did not survive the union: %q", reviewer.Reason)
+			}
+		case "auditor":
+			sawAuditor = true
+			if !strings.HasPrefix(reviewer.Reason, "this touches") {
+				t.Errorf("file-detected auditor reason missing the forced-reviewer sentence shape: %q", reviewer.Reason)
+			}
+			if !strings.Contains(reviewer.Reason, "migrations/") {
+				t.Errorf("file-detected auditor reason does not name the matched pattern: %q", reviewer.Reason)
+			}
+		default:
+			t.Errorf("unexpected caste in the union: %s", reviewer.Caste)
+		}
+	}
+	if !sawGatekeeper {
+		t.Fatalf("recorded gatekeeper did not survive a changed-file union: %+v", withMigration)
+	}
+	if !sawAuditor {
+		t.Fatalf("a migrations/ changed file did not add auditor: %+v", withMigration)
+	}
+}
+
+// TestBothContinueLanesForceTheSameReviewers is the two-lane parity proof
+// D-02/D-05 require: the in-process continue lane
+// (plannedContinueReviewDispatches) and the wrapper/external lane
+// (plannedExternalContinueDispatches) must force the SAME caste set for the
+// same phase, the same recorded forced-reviewer set, and the same changed
+// files — both read phaseChangedFilesFromHandoffs from the same store, so a
+// divergence here would mean the two boundaries stopped calling the shared
+// union the same way (the exact class of bug the 2026-08-21 review gate
+// found: the in-process lane half-wired while the wrapper lane worked).
+func TestBothContinueLanesForceTheSameReviewers(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Password reset",
+		Description: "Let users reset their password via an emailed token",
+		Mode:        colony.PhaseModePrototype,
+	}
+	recorded := forcedReviewerRecords(queenForcedReviewersForPhase(phase))
+	if len(recorded) != 1 || recorded[0].Caste != "gatekeeper" {
+		t.Fatalf("fixture phase did not force the expected recorded gatekeeper: %+v", recorded)
+	}
+	// A migration file the build never mentioned in wording — both lanes
+	// must add auditor from this alone (D-02).
+	writePhaseHandoffs(t, phase.ID, "migrations/0007_add_column.sql")
+
+	manifest := codexContinueManifest{Present: true, Data: codexBuildManifest{ForcedReviewers: recorded}}
+
+	inProcess := plannedContinueReviewDispatches(
+		root, phase, manifest, codexContinueVerificationReport{}, codexContinueAssessment{},
+		&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthLight, nil, "",
+	)
+	external := plannedExternalContinueDispatches(
+		root, phase, manifest, codexContinueVerificationReport{}, codexContinueAssessment{},
+		time.Minute, colony.VerificationDepthLight, true, nil, "",
+	)
+
+	inProcessCastes := map[string]bool{}
+	for _, dispatch := range inProcess {
+		inProcessCastes[dispatch.Caste] = true
+	}
+	externalCastes := map[string]bool{}
+	for _, dispatch := range external {
+		if dispatch.Stage != "review" {
+			continue
+		}
+		externalCastes[dispatch.Caste] = true
+	}
+
+	if len(inProcessCastes) != 2 || !inProcessCastes["gatekeeper"] || !inProcessCastes["auditor"] {
+		t.Fatalf("in-process lane castes = %+v, want exactly gatekeeper+auditor", inProcessCastes)
+	}
+	if len(externalCastes) != len(inProcessCastes) {
+		t.Fatalf("lanes disagree on caste count: in-process = %+v, external = %+v", inProcessCastes, externalCastes)
+	}
+	for caste := range inProcessCastes {
+		if !externalCastes[caste] {
+			t.Errorf("wrapper/external lane missing a caste the in-process lane forced: %s (in-process=%+v external=%+v)", caste, inProcessCastes, externalCastes)
+		}
+	}
+	for caste := range externalCastes {
+		if !inProcessCastes[caste] {
+			t.Errorf("in-process lane missing a caste the wrapper/external lane forced: %s (in-process=%+v external=%+v)", caste, inProcessCastes, externalCastes)
+		}
 	}
 }

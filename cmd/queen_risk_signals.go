@@ -29,9 +29,11 @@ import (
 
 // riskSignal is one named high-risk vocabulary entry. Phrases are matched at
 // a word boundary (matchesPhraseAtWordBoundary) against the phase's own
-// wording (collectPhaseText); PathPatterns is declared here but left empty —
-// plan 194-06 fills it with changed-file glob patterns that can only ADD a
-// forced reviewer, never remove one.
+// wording (collectPhaseText); PathPatterns is matched as a lowercased,
+// slash-normalised substring against the builder's own reported changed
+// files (queenRiskSignalHitsFromPaths, D-02) — a second, independent
+// detector that can only ADD a forced reviewer, never remove one. A signal
+// with no PathPatterns never fires from the file detector.
 type riskSignal struct {
 	Name         string
 	Caste        string
@@ -78,6 +80,7 @@ var queenRiskSignalTable = []riskSignal{
 			"session cookie", "access token", "api key", "api keys",
 			"secret key", "secrets", "oauth", "sso", "2fa", "mfa",
 		},
+		PathPatterns: []string{"auth/", "/login", "session", "credential", "secrets"},
 		PlainEnglish: "logins and passwords",
 	},
 	{
@@ -87,6 +90,7 @@ var queenRiskSignalTable = []riskSignal{
 			"payment", "payments", "billing", "checkout", "invoice",
 			"refund", "credit card", "subscription billing", "payout",
 		},
+		PathPatterns: []string{"payment", "billing", "checkout", "stripe"},
 		PlainEnglish: "money",
 	},
 	{
@@ -97,6 +101,9 @@ var queenRiskSignalTable = []riskSignal{
 			"signoff", "final review", "deploy to production",
 			"ship the release",
 		},
+		// No PathPatterns (D-01): no file path reliably means a release
+		// gate, and a pattern that fires on the word "release" appearing in
+		// a path would be a false alarm with no upside.
 		PlainEnglish: "signing off a release",
 	},
 	{
@@ -107,6 +114,7 @@ var queenRiskSignalTable = []riskSignal{
 			"delete stale", "data deletion", "hard delete", "purge",
 			"drop table", "erase", "wipe",
 		},
+		PathPatterns: []string{"delete", "purge"},
 		PlainEnglish: "deleting data",
 	},
 	{
@@ -117,6 +125,7 @@ var queenRiskSignalTable = []riskSignal{
 			"alter table", "add a column", "drop column",
 			"database structure", "db migration",
 		},
+		PathPatterns: []string{"migrations/", "migrate/", ".sql"},
 		PlainEnglish: "changing the database structure",
 	},
 }
@@ -167,6 +176,43 @@ func queenRiskSignalHits(text, source string) []riskSignalHit {
 		}
 		if best != "" {
 			hits = append(hits, riskSignalHit{Signal: signal, Match: best, Source: source})
+		}
+	}
+	return hits
+}
+
+// queenRiskSignalHitsFromPaths is D-02's second detector: it matches the
+// builder's OWN reported changed files (phaseChangedFilesFromHandoffs)
+// against the same five-signal table's PathPatterns, instead of the plan's
+// wording. Same "longest match wins" discipline as queenRiskSignalHits, so
+// the most specific pattern is the one quoted back. Source is always
+// "changed files" so forcedReviewerReason can state where the hit came from
+// rather than quoting wording the plan never contained. A signal with no
+// PathPatterns (release sign-off) never fires here, by construction.
+func queenRiskSignalHitsFromPaths(paths []string) []riskSignalHit {
+	var hits []riskSignalHit
+	for _, signal := range queenRiskSignalTable {
+		if len(signal.PathPatterns) == 0 {
+			continue
+		}
+		best := ""
+		for _, rawPath := range paths {
+			path := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(rawPath), "\\", "/"))
+			if path == "" {
+				continue
+			}
+			for _, pattern := range signal.PathPatterns {
+				p := strings.ToLower(strings.TrimSpace(pattern))
+				if p == "" {
+					continue
+				}
+				if strings.Contains(path, p) && len(pattern) > len(best) {
+					best = pattern
+				}
+			}
+		}
+		if best != "" {
+			hits = append(hits, riskSignalHit{Signal: signal, Match: best, Source: "changed files"})
 		}
 	}
 	return hits
@@ -223,22 +269,44 @@ func collapseToForcedReviewers(hits []riskSignalHit) []forcedReviewer {
 // forcedReviewerReason produces the one plain-English sentence the owner
 // reads: "this touches logins and passwords (the plan mentions "password
 // reset")". No caste names, no signal identifiers, no scores (D-09) — every
-// signal that fired is named, and one matched phrase per signal is quoted.
+// signal that fired is named, and one clause per matching hit states where
+// it came from (forcedReviewerReasonClause) — the plan's own wording, or a
+// changed file the file detector matched (D-02, plan 194-06).
 func forcedReviewerReason(caste string, hits []riskSignalHit) string {
-	seen := make(map[string]bool)
-	var plainEnglish, quoted []string
+	seenSignal := make(map[string]bool)
+	seenClause := make(map[string]bool)
+	var plainEnglish, clauses []string
 	for _, hit := range hits {
-		if seen[hit.Signal.Name] {
-			continue
+		if !seenSignal[hit.Signal.Name] {
+			seenSignal[hit.Signal.Name] = true
+			plainEnglish = append(plainEnglish, hit.Signal.PlainEnglish)
 		}
-		seen[hit.Signal.Name] = true
-		plainEnglish = append(plainEnglish, hit.Signal.PlainEnglish)
-		quoted = append(quoted, fmt.Sprintf("%q", hit.Match))
+		if clause := forcedReviewerReasonClause(hit); clause != "" && !seenClause[clause] {
+			seenClause[clause] = true
+			clauses = append(clauses, clause)
+		}
 	}
 	if len(plainEnglish) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("this touches %s (the plan mentions %s)", joinWithAnd(plainEnglish), joinWithAnd(quoted))
+	return fmt.Sprintf("this touches %s (%s)", joinWithAnd(plainEnglish), joinWithAnd(clauses))
+}
+
+// forcedReviewerReasonClause names WHERE one hit came from — the plan's own
+// wording quotes the matched phrase ("the plan mentions ..."); a changed
+// file names the matched path pattern ("the files changed touched ..."),
+// never a caste name or a score (D-09). This is the literal sentence-shape
+// change D-02/plan 194-06 asked for: source reads "the files changed"
+// rather than "the plan mentions" for a file-detected hit.
+func forcedReviewerReasonClause(hit riskSignalHit) string {
+	match := strings.TrimSpace(hit.Match)
+	if match == "" {
+		return ""
+	}
+	if hit.Source == "changed files" {
+		return fmt.Sprintf("the files changed touched %q", match)
+	}
+	return fmt.Sprintf("the plan mentions %q", match)
 }
 
 // joinWithAnd (cmd/codex_project_docs.go) already renders a list the way a
@@ -276,6 +344,41 @@ func forcedReviewerRecords(reviewers []forcedReviewer) []codexForcedReviewerReco
 	return records
 }
 
+// riskSignalHitsFromRecords reconstructs riskSignalHit values from a
+// build-recorded forced-reviewer set (codexForcedReviewerRecord), by
+// per-index name so queenForcedContinueReviewers can union the build's
+// recorded hits with newly-detected changed-file hits through the SAME
+// collapseToForcedReviewers merge the original build-time derivation used —
+// one merge function, not two independent ones that could disagree.
+// record.Signals[i]/Matches[i]/Sources[i] are aligned 1:1 by construction
+// (forcedReviewerRecords copies them straight off collapseToForcedReviewers'
+// own per-caste, per-signal slices).
+func riskSignalHitsFromRecords(records []codexForcedReviewerRecord) []riskSignalHit {
+	byName := make(map[string]riskSignal, len(queenRiskSignalTable))
+	for _, signal := range queenRiskSignalTable {
+		byName[signal.Name] = signal
+	}
+	var hits []riskSignalHit
+	for _, record := range records {
+		for i, name := range record.Signals {
+			signal, ok := byName[name]
+			if !ok {
+				continue
+			}
+			match := ""
+			if i < len(record.Matches) {
+				match = record.Matches[i]
+			}
+			source := "plan wording"
+			if i < len(record.Sources) {
+				source = record.Sources[i]
+			}
+			hits = append(hits, riskSignalHit{Signal: signal, Match: match, Source: source})
+		}
+	}
+	return hits
+}
+
 // queenForcedContinueReviewers is the CONTINUE-side read of the forced set
 // (D-05: one derivation, one boundary — this closes .planning/WINDOWS.md #1's
 // continue half). It starts from the build's recorded set when one exists —
@@ -284,23 +387,22 @@ func forcedReviewerRecords(reviewers []forcedReviewer) []codexForcedReviewerReco
 // wording when no manifest record is present, so a continue-only run (no
 // build this session) is still protected.
 //
-// changedFiles is accepted now and ignored: plan 194-06 fills PathPatterns
-// and wires this parameter to a second detector that can only ADD a forced
-// reviewer, never remove one (D-02).
+// changedFiles feeds queenRiskSignalHitsFromPaths (D-02, plan 194-06): its
+// hits are UNIONED with the recorded/derived plan-wording hits through
+// collapseToForcedReviewers, so the file detector can only ADD a caste (or
+// add a signal to a caste's existing reason) — it can never remove a caste
+// or a signal the build's record carried. See queenRiskSignalHitsFromPaths'
+// own doc comment for why this direction is safe and the reverse is not.
 func queenForcedContinueReviewers(phase colony.Phase, recorded []codexForcedReviewerRecord, changedFiles []string) []forcedReviewer {
-	if len(recorded) == 0 {
-		return queenForcedReviewersForPhase(phase)
+	var hits []riskSignalHit
+	if len(recorded) > 0 {
+		hits = append(hits, riskSignalHitsFromRecords(recorded)...)
+	} else {
+		hits = append(hits, queenRiskSignalHits(collectPhaseText(phase), "plan wording")...)
 	}
-	reviewers := make([]forcedReviewer, 0, len(recorded))
-	for _, record := range recorded {
-		reviewers = append(reviewers, forcedReviewer{
-			Caste:   record.Caste,
-			Signals: append([]string(nil), record.Signals...),
-			Matches: append([]string(nil), record.Matches...),
-			Sources: append([]string(nil), record.Sources...),
-			Reason:  record.Reason,
-		})
+	hits = append(hits, queenRiskSignalHitsFromPaths(changedFiles)...)
+	if len(hits) == 0 {
+		return nil
 	}
-	sort.Slice(reviewers, func(i, j int) bool { return reviewers[i].Caste < reviewers[j].Caste })
-	return reviewers
+	return collapseToForcedReviewers(hits)
 }

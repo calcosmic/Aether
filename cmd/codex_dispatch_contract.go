@@ -937,6 +937,14 @@ func buildWorkerHandoffRecord(dispatch codex.WorkerDispatch, result codex.Dispat
 }
 
 func loadWorkerHandoffRecords() ([]workerHandoffRecord, error) {
+	// A nil store (a lightweight test, or a call site reached before the
+	// store is initialized) is "no handoffs recorded yet", not a crash --
+	// phaseChangedFilesFromHandoffs is now on every continue dispatch
+	// construction path (plan 194-06, D-02), including callers that never
+	// needed a store before this.
+	if store == nil {
+		return nil, nil
+	}
 	raw, err := store.ReadFile(workerHandoffsPath)
 	if err != nil {
 		if os.IsNotExist(err) {

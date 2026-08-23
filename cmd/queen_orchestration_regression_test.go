@@ -39,7 +39,7 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 	regressionRequireBuildCaste(t, buildDispatches, "gatekeeper")
 
 	continueSpecs := queenContinueReviewSpecsWithJudgement(authPhase, colony.VerificationDepthStandard,
-		[]string{"gatekeeper"}, "", nil, map[string]string{"gatekeeper": "this phase touches auth tokens and session permissions"})
+		[]string{"gatekeeper"}, "", nil, nil, map[string]string{"gatekeeper": "this phase touches auth tokens and session permissions"})
 	regressionRequireContinueSpec(t, continueSpecs, "gatekeeper")
 
 	planningDispatches := plannedPlanningWorkersForGoal(root, "Plan secure auth token rotation and permission checks")

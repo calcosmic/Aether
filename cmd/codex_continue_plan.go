@@ -353,7 +353,12 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			MatchedSkills: append([]string{}, watcherSkillAssignment.MatchedNames...),
 		})
 	}
-	reviewSpecs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers, reasons...)
+	// changedFiles feeds the D-02 file-detected forced-reviewer union — the
+	// same call, the same input source (phaseChangedFilesFromHandoffs), as
+	// the in-process lane's plannedContinueReviewDispatches (cmd/codex_continue.go)
+	// uses, so the two lanes can never disagree for the same phase.
+	changedFiles := phaseChangedFilesFromHandoffs(phase.ID)
+	reviewSpecs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers, changedFiles, reasons...)
 	reviewWave := 2
 	if skipWatchers {
 		reviewWave = 1

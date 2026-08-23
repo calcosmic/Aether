@@ -1240,7 +1240,7 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 }
 
 func queenContinueDispatches(phase colony.Phase, reviewDepth colony.VerificationDepth) []CasteDispatch {
-	return queenContinueDispatchesWithJudgement(phase, reviewDepth, nil, "", nil)
+	return queenContinueDispatchesWithJudgement(phase, reviewDepth, nil, "", nil, nil)
 }
 
 // queenContinueDispatchesWithJudgement applies the Queen's chosen review team,
@@ -1249,8 +1249,11 @@ func queenContinueDispatches(phase colony.Phase, reviewDepth colony.Verification
 // the build-recorded D-01..D-05 forced-reviewer set (codexBuildManifest's
 // ForcedReviewers, threaded in by callers that have a manifest); nil falls
 // back to re-deriving from the phase's own wording
-// (queenForcedContinueReviewers).
-func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, reasons ...map[string]string) []CasteDispatch {
+// (queenForcedContinueReviewers). changedFiles is the builder's own reported
+// changed_files for this phase (phaseChangedFilesFromHandoffs, supplied by
+// both continue boundaries — D-02, plan 194-06): it can only ADD a forced
+// reviewer via unionForcedContinueReviewers, never remove one.
+func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, changedFiles []string, reasons ...map[string]string) []CasteDispatch {
 	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
 	var dispatches []CasteDispatch
 	if len(proposed) == 0 {
@@ -1271,7 +1274,7 @@ func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony
 			})
 		}
 	}
-	return unionForcedContinueReviewers(dispatches, phase, forced)
+	return unionForcedContinueReviewers(dispatches, phase, forced, changedFiles)
 }
 
 // casteDispatchRationale prefers the judgement's per-caste reason (D-08,
@@ -1291,9 +1294,10 @@ func casteDispatchRationale(judgement queenCasteJudgement, caste string) string 
 // derivation, one boundary" — closes .planning/WINDOWS.md #1's continue
 // side). A forced caste already present has its Rationale overwritten with
 // the forced reason, so the owner sees the real reason it is there even if
-// it was also proposed or keyword-selected.
-func unionForcedContinueReviewers(dispatches []CasteDispatch, phase colony.Phase, forced []codexForcedReviewerRecord) []CasteDispatch {
-	reviewers := queenForcedContinueReviewers(phase, forced, nil)
+// it was also proposed or keyword-selected. changedFiles carries the D-02
+// file-detected hits into the same union.
+func unionForcedContinueReviewers(dispatches []CasteDispatch, phase colony.Phase, forced []codexForcedReviewerRecord, changedFiles []string) []CasteDispatch {
+	reviewers := queenForcedContinueReviewers(phase, forced, changedFiles)
 	if len(reviewers) == 0 {
 		return dispatches
 	}
@@ -1326,13 +1330,19 @@ func queenContinueHasCaste(dispatches []CasteDispatch, caste string) bool {
 }
 
 func queenContinueReviewSpecs(phase colony.Phase, reviewDepth colony.VerificationDepth) []codexContinueReviewSpec {
-	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "", nil)
+	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "", nil, nil)
 }
 
-func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, reasons ...map[string]string) []codexContinueReviewSpec {
-	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason, forced, reasons...)
+// changedFiles is the builder's own reported changed_files for this phase
+// (phaseChangedFilesFromHandoffs), supplied identically by both continue
+// boundaries — plannedContinueReviewDispatches (this file) and
+// plannedExternalContinueDispatches (cmd/codex_continue_plan.go) — so the
+// two lanes can never derive a different forced-reviewer set for the same
+// phase and the same changed files (D-02, two-lane parity discipline).
+func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, changedFiles []string, reasons ...map[string]string) []codexContinueReviewSpec {
+	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason, forced, changedFiles, reasons...)
 	forcedReasons := make(map[string]string, len(forced))
-	for _, reviewer := range queenForcedContinueReviewers(phase, forced, nil) {
+	for _, reviewer := range queenForcedContinueReviewers(phase, forced, changedFiles) {
 		forcedReasons[reviewer.Caste] = reviewer.Reason
 	}
 	specs := make([]codexContinueReviewSpec, 0, len(queenDispatches))
@@ -1515,7 +1525,12 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 	// The Queen's --castes proposal used to be honoured only on the heavy
 	// plan-only path; the default path called the nil-proposal variant, so on
 	// the continue users actually run the keyword engine was unchallenged.
-	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers, reasons...)
+	// changedFiles feeds the D-02 file-detected forced-reviewer union
+	// (queenForcedContinueReviewers): what the builder actually touched can
+	// raise a reviewer the plan's own wording missed, on this lane exactly
+	// as on the wrapper lane (plannedExternalContinueDispatches).
+	changedFiles := phaseChangedFilesFromHandoffs(phase.ID)
+	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers, changedFiles, reasons...)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)

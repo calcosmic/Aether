@@ -173,7 +173,7 @@ func TestBuildWorkerCapHonoursVerificationDepth(t *testing.T) {
 func TestBuildDepthCapDoesNotStripRequiredSafetyCastes(t *testing.T) {
 	phase := colony.Phase{ID: 1, Name: "Password reset", Description: "Let users reset their password by email", Mode: colony.PhaseModePrototype}
 
-	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil)
+	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil, nil)
 	found := false
 	for _, dispatch := range dispatches {
 		if dispatch.Caste == "gatekeeper" {
