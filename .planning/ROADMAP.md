@@ -98,28 +98,50 @@ Plans:
 4. A sample one-task bug fix — measured today at 8 workers, versus 3-4 back in the older (v5.4.0) version of Aether — is sent one worker plus the free checks, whether the team came from the assistant's own proposal or the automatic fallback (`TestOneTaskBugFixIsOneWorkerPlusChecks`).
 5. The owner's manual controls — picking helpers by name, asking for "heavy" or "light" review, and the pre-build "here's who I'm sending, OK?" check-in card — all still work after this change.
 
-**Plans**: 5 plans
+**Plans**: 9 plans
+
+*Every plan depends on the one before it. That is deliberate, not an oversight:
+`queen_spawn_budget.go`, `caste_relevance.go`, `queen_risk_signals.go`,
+`codex_continue.go`, `codex_build.go` and `ceremony_team_checkin.go` are each
+edited by three or more plans, so running any two side by side would collide in
+the same file. Each plan names its own shared files in its objective.*
 
 Plans:
 **Wave 1**
 
-- [ ] 194-01-PLAN.md — Tracer: named risk forces one reviewer, end to end; the build floor shrinks to the worker that writes the code (wave 1)
+- [ ] 194-01-PLAN.md — Tracer: named risk forces one reviewer, recorded at build and dispatched once at the checking step (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 194-02-PLAN.md — A reason for every worker; a worker named without one is refused by name (wave 2)
+- [ ] 194-02-PLAN.md — The build floor shrinks to the worker that writes the code; every test asserting a deleted rule is reconciled or retired (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 194-03-PLAN.md — The automatic team is retuned to the same floor; the owner's three dials mean what they say (wave 3)
+- [ ] 194-03-PLAN.md — A reason for every worker; a worker named without one is refused by name (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 194-04-PLAN.md — The check-in card names the signal; only the owner can waive a forced reviewer (wave 4)
+- [ ] 194-04-PLAN.md — The card carries per-phase reasons only, names the signal, and REQUIRED stops meaning anything else (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 194-05-PLAN.md — The one-task bug fix proved at one worker; the double-dispatch window closed; every stale document corrected (wave 5)
+- [ ] 194-05-PLAN.md — The automatic team is retuned to the same floor; the owner's three dials mean what they say (wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 194-06-PLAN.md — Both checking-step lanes carry the same team: changed files can raise a reviewer, and the owner's list works on the path people run (wave 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 194-07-PLAN.md — The waiver: owner-only, one signal, one phase, recorded with a reason — plus the owner check-in on the card (wave 7)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 194-08-PLAN.md — The one-task bug fix proved at one worker; the double-dispatch window closed on a passing test (wave 8)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 194-09-PLAN.md — Every stale document corrected: CLAUDE.md, the six wrapper files, the UX contract, the folded todo (wave 9)
 
 ### Phase 195: Coherent Jobs
 
