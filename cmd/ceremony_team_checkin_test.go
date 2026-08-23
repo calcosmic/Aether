@@ -275,6 +275,46 @@ func TestRequiredMeansBuilderOrNamedSignal(t *testing.T) {
 	}
 }
 
+// TestTeamCheckinCardIsVisuallySeparated pins the 2026-08-23 owner feedback on
+// plan 194-07: the card was "just like text," a wall with no lines breaking
+// it up. Two invariants, not literal strings, so the assertion survives a
+// future rename of any one section: every two adjacent worker rows are
+// separated by a blank line, and the card's sections are broken up by rule
+// lines (the same `── Title ──` stage-marker style already used elsewhere in
+// this repo) rather than running straight into each other.
+func TestTeamCheckinCardIsVisuallySeparated(t *testing.T) {
+	manifest, dispatches := teamCheckinManifestFixture()
+	_, visual := renderCeremonyTeamCheckin("build", manifest, dispatches)
+
+	lines := strings.Split(visual, "\n")
+	workerRowIdx := []int{}
+	for i, line := range lines {
+		if strings.Contains(line, "REQUIRED") || strings.Contains(line, "OPTIONAL") {
+			workerRowIdx = append(workerRowIdx, i)
+		}
+	}
+	if len(workerRowIdx) < 2 {
+		t.Fatalf("fixture must produce at least two worker rows to assert separation; card:\n%s", visual)
+	}
+	for i := 1; i < len(workerRowIdx); i++ {
+		prev, cur := workerRowIdx[i-1], workerRowIdx[i]
+		if cur-prev < 2 || strings.TrimSpace(lines[prev+1]) != "" {
+			t.Fatalf("worker rows %d and %d are not separated by a blank line; card:\n%s", prev, cur, visual)
+		}
+	}
+
+	ruleCount := strings.Count(visual, "── ")
+	if ruleCount < 2 {
+		t.Fatalf("card must use rule lines (── Title ──) to separate sections, found %d; card:\n%s", ruleCount, visual)
+	}
+	if !strings.Contains(visual, "── Team ──") {
+		t.Fatalf("card must open its worker list with a Team rule line; card:\n%s", visual)
+	}
+	if !strings.Contains(visual, "── Summary ──") {
+		t.Fatalf("card must precede its closing line with a Summary rule line; card:\n%s", visual)
+	}
+}
+
 // TestOneWorkerTeamStillPauses pins D-14: the owner's pre-build pause never
 // disappears just because the team is small. A manifest whose only worker is
 // the implementation caste itself must still render a full check-in card,

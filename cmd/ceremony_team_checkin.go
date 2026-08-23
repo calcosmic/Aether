@@ -79,7 +79,17 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	var b strings.Builder
 	b.WriteString(renderOldStyleCeremonyHeader(commandEmoji(emptyFallback(workflow, "team-checkin")), "Team Check-In"))
 	b.WriteString("\n")
-	for _, caste := range orderedCastes {
+	// Layout separation (2026-08-23 owner feedback on plan 194-07): the card
+	// was a wall of text with no visual break between workers or sections.
+	// `renderStageMarker` is the same `── Title ──` rule already used for
+	// build/continue stage markers (cmd/codex_visuals.go); reused here rather
+	// than inventing a second separator style. No sentence below changed --
+	// this is spacing only.
+	b.WriteString(renderStageMarker("Team"))
+	for i, caste := range orderedCastes {
+		if i > 0 {
+			b.WriteString("\n")
+		}
 		b.WriteString("  ")
 		b.WriteString(casteIdentityWithModel(caste))
 		if requiredSet[caste] {
@@ -106,7 +116,9 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	liveForcedHits, waivedForcedHits := applyForcedReviewerWaivers(phaseID, allForcedHits)
 
 	if announcement := composeForcedReviewerAnnouncement(forcedReviewerRecords(collapseToForcedReviewers(liveForcedHits))); announcement != "" {
-		b.WriteString("\nNot sent with this team, but required at the check after the work is done:\n")
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Required After The Work Is Done"))
+		b.WriteString("Not sent with this team, but required at the check after the work is done:\n")
 		for _, line := range strings.Split(announcement, "\n") {
 			b.WriteString("  ")
 			b.WriteString(line)
@@ -130,7 +142,9 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 		}
 	}
 	if len(waiveCommands) > 0 || len(waived) > 0 {
-		b.WriteString("\nOnly you can decline a required reviewer, with a reason on the record:\n")
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Decline A Required Reviewer"))
+		b.WriteString("Only you can decline a required reviewer, with a reason on the record:\n")
 		liveNames := make([]string, 0, len(waiveCommands))
 		for name := range waiveCommands {
 			liveNames = append(liveNames, name)
@@ -159,7 +173,9 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 			prunedCastes = append(prunedCastes, caste)
 		}
 		sort.Strings(prunedCastes)
-		b.WriteString("\nNot sent:\n")
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Not Sent"))
+		b.WriteString("Not sent:\n")
 		for _, caste := range prunedCastes {
 			b.WriteString("  ")
 			b.WriteString(casteLabel(caste))
@@ -170,7 +186,9 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 			b.WriteString("\n")
 		}
 	}
-	b.WriteString("\nRequired workers stay — they are the safety floor. Optional workers can be trimmed.\n")
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("Summary"))
+	b.WriteString("Required workers stay — they are the safety floor. Optional workers can be trimmed.\n")
 
 	forcedRecords := forcedReviewerRecordsFromManifest(manifest)
 	forced := map[string]interface{}{}
