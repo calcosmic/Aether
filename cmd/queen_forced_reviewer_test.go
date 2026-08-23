@@ -421,3 +421,23 @@ func TestBothContinueLanesForceTheSameReviewers(t *testing.T) {
 		}
 	}
 }
+
+// TestPathPatternMatchingRequiresAWordBoundary (WR-02, 194-REVIEW.md): a
+// bare PathPattern like "session" must never fire on a plain substring
+// buried inside an unrelated word -- matchesPathPatternAtBoundary replaces
+// the old plain strings.Contains, which had no boundary check at all. The
+// concrete false positive the review named: "session" matching
+// "repossession_handler.go", a file with nothing to do with sessions.
+func TestPathPatternMatchingRequiresAWordBoundary(t *testing.T) {
+	falseAlarm := waiverFixturePhase(21, "Leasing feature", "Track leases and repossessions")
+	reviewers := queenForcedContinueReviewers(falseAlarm, nil, []string{"pkg/leasing/repossession_handler.go"})
+	if len(reviewers) != 0 {
+		t.Fatalf("repossession_handler.go should not false-positive on the bare 'session' pattern: %+v", reviewers)
+	}
+
+	genuineHit := waiverFixturePhase(22, "Session feature", "Nothing risky in the wording itself")
+	reviewers = queenForcedContinueReviewers(genuineHit, nil, []string{"internal/auth/session.go"})
+	if len(reviewers) != 1 || reviewers[0].Caste != "gatekeeper" {
+		t.Fatalf("a genuine session.go file should still force gatekeeper: %+v", reviewers)
+	}
+}

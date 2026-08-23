@@ -187,14 +187,71 @@ func queenRiskSignalHits(text, source string) []riskSignalHit {
 	return hits
 }
 
+// isPathWordByte draws PathPatterns' own boundary line (WR-02,
+// 194-REVIEW.md), deliberately narrower than isWordByte's prose boundary: a
+// path separator, underscore, hyphen, or dot must ALL count as a boundary
+// here, so a bare pattern like "session" can never fire on a plain substring
+// buried inside an unrelated word (the concrete false positive WR-02 named:
+// "session" matching "repossession_handler.go" or "possession.go"). Only
+// ASCII letters and digits count as "inside a word" for a path -- unlike
+// isWordByte, which also treats "_" as a word character for prose
+// identifiers.
+func isPathWordByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
+// matchesPathPatternAtBoundary requires a boundary on BOTH ends, the same
+// discipline matchesPhraseAtWordBoundary already applies to the plan's own
+// wording (WR-02) -- plain strings.Contains had no boundary check at all,
+// so a bare word like "session" fired on any path containing that
+// substring anywhere. path and pattern must already be lowercased/trimmed
+// by the caller (queenRiskSignalHitsFromPaths already does both).
+//
+// A pattern that already ENDS or STARTS with its own separator character
+// ("migrations/", "/login", ".sql") supplies its own boundary on that side:
+// requiring ANOTHER non-word byte immediately past a literal "/" or "."
+// that is already part of the pattern would reject a genuine match like
+// "migrations/0007_add_column.sql" (the digit "0" right after the pattern's
+// own trailing "/" is not a boundary violation -- the "/" already is one).
+// Only a side of the pattern that ends in an alphanumeric character (a bare
+// word like "session", or the "s" of ".sql") needs the adjacent path
+// character checked.
+func matchesPathPatternAtBoundary(path, pattern string) bool {
+	if pattern == "" {
+		return false
+	}
+	patternStartsWithSep := !isPathWordByte(pattern[0])
+	patternEndsWithSep := !isPathWordByte(pattern[len(pattern)-1])
+	for offset := 0; offset < len(path); {
+		idx := strings.Index(path[offset:], pattern)
+		if idx < 0 {
+			return false
+		}
+		start := offset + idx
+		end := start + len(pattern)
+		leftOK := patternStartsWithSep || start == 0 || !isPathWordByte(path[start-1])
+		rightOK := patternEndsWithSep || end == len(path) || !isPathWordByte(path[end])
+		if leftOK && rightOK {
+			return true
+		}
+		offset = start + 1
+	}
+	return false
+}
+
 // queenRiskSignalHitsFromPaths is D-02's second detector: it matches the
 // builder's OWN reported changed files (phaseChangedFilesFromHandoffs)
 // against the same five-signal table's PathPatterns, instead of the plan's
 // wording. Same "longest match wins" discipline as queenRiskSignalHits, so
-// the most specific pattern is the one quoted back. Source is always
-// "changed files" so forcedReviewerReason can state where the hit came from
-// rather than quoting wording the plan never contained. A signal with no
-// PathPatterns (release sign-off) never fires here, by construction.
+// the most specific pattern is the one quoted back -- compared and stored
+// using the SAME trimmed/lowercased value (`p`) the match test itself runs
+// against (IN-01, 194-REVIEW.md: comparing the untrimmed loop variable
+// instead was a latent inconsistency with no live bug today only because
+// every table entry already arrives pre-trimmed and lowercase). Source is
+// always "changed files" so forcedReviewerReason can state where the hit
+// came from rather than quoting wording the plan never contained. A signal
+// with no PathPatterns (release sign-off) never fires here, by
+// construction.
 func queenRiskSignalHitsFromPaths(paths []string) []riskSignalHit {
 	var hits []riskSignalHit
 	for _, signal := range queenRiskSignalTable {
@@ -212,8 +269,8 @@ func queenRiskSignalHitsFromPaths(paths []string) []riskSignalHit {
 				if p == "" {
 					continue
 				}
-				if strings.Contains(path, p) && len(pattern) > len(best) {
-					best = pattern
+				if matchesPathPatternAtBoundary(path, p) && len(p) > len(best) {
+					best = p
 				}
 			}
 		}
