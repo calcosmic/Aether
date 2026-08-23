@@ -169,7 +169,92 @@ func casteRelevanceScore(phase colony.Phase, caste string) int {
 
 // queenOrchestrate decides which castes to dispatch for a given flow.
 func queenOrchestrate(phase colony.Phase, flowType string, state colony.ColonyState) []CasteDispatch {
-	return applyQueenSpawnBudget(queenCandidateDispatches(phase, flowType, state), phase, flowType, state)
+	return applyQueenSpawnBudget(queenFallbackTeam(phase, flowType, state), phase, flowType, state)
+}
+
+// queenSelectorIsGatedForFlow reports whether the no-proposal fallback team
+// for flowType comes from the phase's own required-caste floor
+// (queenFallbackTeam) rather than the keyword/relevance selector
+// (queenCandidateDispatches). D-11 gates exactly two flows -- build and
+// continue, the two flows autopilot and an unattended wrapper actually run
+// with no proposal -- because a one-task bug fix was measured at eight
+// workers there. Plan, colonize, swarm and seal are untouched by this
+// ruling (194-CONTEXT.md D-12: "only build and continue change in this
+// phase"), so they still select through the relevance engine. One function
+// name is the gate everywhere the choice is made, rather than two copies of
+// the same switch statement drifting apart.
+func queenSelectorIsGatedForFlow(flowType string) bool {
+	switch normalizeQueenFlowType(flowType) {
+	case "build", "continue":
+		return true
+	default:
+		return false
+	}
+}
+
+// queenFallbackTeam is the no-proposal team for a phase: what dispatches when
+// nobody -- neither the chat's --castes proposal nor a human on the check-in
+// card -- said anything about who should go.
+//
+// Before this existed, that silence was answered by
+// queenCandidateDispatches: every caste in the registry scored against the
+// phase's wording, and anything clearing spawnThreshold rode along. That is
+// the mechanism a 2026-08-22 measurement caught sending eight workers to a
+// one-task bug fix (194-CONTEXT.md, the v1.27 milestone brief) -- keyword
+// arithmetic standing in for a judgement nobody was asked to make.
+//
+// D-11 answers it instead: on build and continue, the fallback team is
+// exactly what queenRequiredCastesForBudget says this phase cannot ship
+// without -- the caste that writes the code, plus (on continue) any reviewer
+// a named risk signal forces. D-12 adds one exception: a discovery-mode
+// build suppresses the implementation caste today (isCasteSuppressed), so a
+// discovery phase with nothing required at all would dispatch nobody; it
+// gets one researcher instead, because research is the deliverable there.
+//
+// Every other flow (plan, colonize, swarm, seal) is untouched: this function
+// delegates to queenCandidateDispatches for them exactly as queenOrchestrate
+// used to call it directly, so their caste sets are byte-for-byte what they
+// were before this phase (TestOtherFlowsKeepTheirRequiredSets).
+func queenFallbackTeam(phase colony.Phase, flowType string, state colony.ColonyState) []CasteDispatch {
+	flowType = normalizeQueenFlowType(flowType)
+	if !queenSelectorIsGatedForFlow(flowType) {
+		return queenCandidateDispatches(phase, flowType, state)
+	}
+
+	var forced []forcedReviewer
+	if flowType == "continue" {
+		forced = queenForcedReviewersForPhase(phase)
+	}
+
+	required := queenRequiredCastesForBudget(phase, flowType, state)
+	dispatches := make([]CasteDispatch, 0, len(required)+1)
+	for _, caste := range required {
+		rationale := queenRuntimeReasonForCaste(caste, phase, forced)
+		if rationale == "" {
+			rationale = queenAlwaysRequiredReason(caste, flowType, phase)
+		}
+		dispatches = append(dispatches, CasteDispatch{
+			Caste:     caste,
+			Score:     100,
+			Rationale: rationale,
+			FlowType:  flowType,
+		})
+	}
+
+	// D-12: discovery suppresses the implementation caste at build
+	// (isCasteSuppressed), so a discovery phase's required list above is
+	// empty. Findings are the deliverable there, so the fallback is one
+	// researcher rather than nobody.
+	if flowType == "build" && effectiveQueenPhaseMode(phase) == colony.PhaseModeDiscovery {
+		dispatches = append(dispatches, CasteDispatch{
+			Caste:     "scout",
+			Score:     100,
+			Rationale: "this is a discovery phase, so research is the deliverable",
+			FlowType:  flowType,
+		})
+	}
+
+	return dispatches
 }
 
 func queenCandidateDispatches(phase colony.Phase, flowType string, state colony.ColonyState) []CasteDispatch {
@@ -411,6 +496,21 @@ func spawnThreshold(flowType string, state colony.ColonyState) int {
 		// needs design review whether or not it repeats the word "schema".
 		// Keep this as the floor that holds when no model intervenes, and put
 		// the effort into the judgement layer instead of retuning this.
+		//
+		// As of plan 194-05 (D-11) this threshold no longer selects anything
+		// on build or continue at all: queenOrchestrate calls
+		// queenFallbackTeam for those two flows, which answers "nobody
+		// proposed a team" with the phase's required-caste floor, not a
+		// score comparison. This function and casteRelevanceScore survive
+		// only as the REFUSAL check queenApplyJudgement still consults (a
+		// proposed caste scoring 0 is refused) and as the candidate list
+		// queenCandidateDispatches still builds for a reading Queen and for
+		// every other flow (plan, colonize, swarm, seal). The number below
+		// is unchanged, and this comment's history stays because the
+		// reasoning about WHY the threshold cannot substitute for judgement
+		// still applies to those other flows -- see the measured eight-
+		// worker bug fix this ruling exists to stop
+		// (.planning/decisions/2026-08-22-queen-decides-program-checks.md).
 		return 30
 	case "plan":
 		return 40

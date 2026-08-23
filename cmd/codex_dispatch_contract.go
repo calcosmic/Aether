@@ -574,15 +574,35 @@ func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase,
 	contract.PrunedWorkers = intRef(len(prunedBudgetCastes))
 	contract.OverflowRequiredWorkers = intRef(maxInt(0, len(contract.RequiredCastes)-budget.MaxWorkers))
 	preferredReasons := firstReasonMap(reasons...)
+	// gated is true on build and continue (D-11): the selector no longer
+	// picks anyone, so queenSpawnBudgetDecisions' own Selected flag (which
+	// still runs the old score-and-budget arithmetic against the UNGATED
+	// candidate list, because that list is also the "Not sent" surface the
+	// card reads) disagrees with what actually dispatched. selectedSet --
+	// the real gated selection queenOrchestrate returned -- is the honest
+	// answer for which half a candidate belongs in.
+	gated := queenSelectorIsGatedForFlow(flowType)
+	selectedSet := stringSet(selectedBudgetCastes)
 	for _, decision := range queenSpawnBudgetDecisions(candidateBudgetDispatches, budget) {
 		rationale := strings.TrimSpace(decision.Rationale)
 		if preferred := strings.TrimSpace(preferredReasons[decision.Caste]); preferred != "" {
 			rationale = preferred
 		}
+		selected := decision.Selected
+		if gated {
+			selected = selectedSet[decision.Caste]
+			if !selected {
+				// Not a budget cut -- the gate means nobody proposed this
+				// candidate and nothing in the phase forces it. Saying "over
+				// budget" here would name a number that played no part in
+				// the decision.
+				rationale = "not sent -- nobody asked for it and nothing in this phase forces it"
+			}
+		}
 		if rationale == "" {
 			continue
 		}
-		if decision.Selected {
+		if selected {
 			if contract.SelectedReasons == nil {
 				contract.SelectedReasons = make(map[string]string)
 			}
