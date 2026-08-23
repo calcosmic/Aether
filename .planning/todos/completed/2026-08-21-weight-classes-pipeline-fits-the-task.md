@@ -1,6 +1,6 @@
 ---
 created: 2026-08-21T00:00:00Z
-title: Weight classes — the pipeline should fit the task; small work should get the small machine automatically
+title: "[CLOSED 2026-08-23] Weight classes — the pipeline should fit the task; small work should get the small machine automatically"
 area: orchestration/UX
 source: Owner feedback, 2026-08-21, after using Aether in downstream repos
 resolves_phase: 194
@@ -49,3 +49,29 @@ benchmark number. This one's hypothesis is direct: Phase 192 measures median tok
 task (gate: ≤1.5× GSD's); the showdown data will show exactly where the cost lives, and this
 feature targets that number. Related: [[2026-08-20-spec-builder-feature]] — the featherweight
 lane's front door is likely the spec-builder's "review and approve, then build" flow.
+
+## Closed (2026-08-23, Phase 194)
+
+Resolved without a separate featherweight lane. D-07 shrank the build floor to
+the Builder alone on a non-discovery phase (one Scout on discovery); D-11
+retired the keyword engine's automatic team-picking on both build and continue
+so the no-proposal (autopilot) path sends the same minimal team; D-13 made a
+named `--heavy` request the only way to buy the full review panel, with
+`--light` never able to drop a reviewer a named risk signal actually forces.
+Reviewers moved from "the phase felt risky" to "the phase names one of five
+specific things" (194-01/194-02), so a small job never draws one by default.
+
+This is the exact outcome the todo asked for — the pipeline sized itself to
+the task without the owner needing to know a flag — reached by shrinking the
+existing floor and fallback team rather than by adding a new lane, which is
+also what this todo's own text anticipated ("Partial machinery already
+exists... 187-hardened caste pruning").
+
+Closed by `TestOneTaskBugFixIsOneWorkerPlusChecks`
+(`cmd/one_task_bug_fix_test.go`, plan 194-08), which measures a one-task bug
+fix at exactly one worker (the Builder) across the whole build-and-check
+cycle — on both the judged proposal path and the no-proposal/autopilot
+fallback path — against the 2026-08-22 measured baseline of eight workers for
+the identical fixture, with a guard row proving an explicit `--heavy` request
+still produces the full review panel (four workers) so the result cannot pass
+by the pipeline having gone inert.

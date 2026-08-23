@@ -87,7 +87,9 @@ finalize.
 🐜 Every reviewer is a full agent run — roughly 100,000 tokens and several
 minutes. This is the most expensive thing the colony does.
 
-The Watcher is not yours to decide; the runtime always includes it.
+The phase's own build/test check already ran once, before continue started —
+it is not re-spawned here. Nothing is unconditional in the team you are
+picking except a reviewer forced by a named risk signal (see below).
 
 For each other reviewer, find the part of the phase that concerns its domain
 and classify what the phase actually says:
@@ -119,16 +121,21 @@ Re-fetch with your decision:
 ```
 aether continue --plan-only \
   --castes probe \
-  --caste-reason "correctness fix in the retrigger path; the phase states perf is unchanged"
+  --caste-why probe="correctness fix in the retrigger path; the phase states perf is unchanged" \
+  --caste-reason "confirm the retrigger fix didn't reintroduce a coverage gap"
 ```
 
-An empty optional team — Watcher alone — is a normal, good answer.
+An empty optional team is a normal, good answer — nothing is required unless a
+named risk signal forces it.
 
-The same floors apply as on a build. The Watcher is restored if you leave it
-out, and a phase that requires a security or quality review keeps it whatever
-you propose. Trimming reviewers is a cost decision; skipping a security review
-on credential work is not available at any cost. Relay what the runtime added
-or dropped.
+Reviewers are no longer added by default. The floor is: a reviewer is forced
+only when the phase's own wording, or its changed files, names one of five
+signals — credentials/auth, payments, release sign-off, data deletion,
+database migration — and if it does, that forced reviewer is restored
+whatever you propose, with the signal stated on the card. Trimming an unforced
+reviewer is a cost decision; skipping the review a named signal forces is not
+available at any cost except the owner's own explicit, recorded decline.
+Relay what the runtime added or dropped.
 
 **Reads:** the manifest returned by `aether host continue --dry-run`;
 `continue_manifest.context_capsule` (read once, not per-dispatch — the capsule

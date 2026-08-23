@@ -130,8 +130,9 @@ Each specialist you spawn is a full agent run: roughly 100,000 tokens and
 several minutes. Spawning one with nothing to do costs exactly as much as
 spawning one that finds a real problem.
 
-Builder and Watcher are not yours to decide — the runtime always includes them.
-Do not discuss them.
+The Builder is not yours to decide — the runtime always includes it on any
+non-discovery build (a discovery-mode phase sends one Scout instead, since
+research is the deliverable there, not code). Do not discuss it.
 
 ### Classify the evidence, then the verdict follows
 
@@ -171,7 +172,7 @@ Worked examples:
 | "the dashboard feels sluggish with lots of rows" | Measurer — inferred, no keyword present |
 | "let people stay signed in between visits" | Gatekeeper — that is session handling |
 | "swap the payment provider" | Ambassador + Gatekeeper — money and credentials |
-| "change the button copy from Submit to Save" | nobody — Builder and Watcher suffice |
+| "change the button copy from Submit to Save" | nobody — the Builder alone is enough |
 
 **An empty team is a normal, good answer.** It is not a failure to find work.
 
@@ -179,12 +180,15 @@ Worked examples:
 
 Name the specialist whose absence would most likely let something real ship
 broken, then at most two more. List them in priority order — if the phase is
-over budget the tail is dropped first.
+over budget the tail is dropped first. Every named worker needs its OWN
+reason via `--caste-why`: a worker named in `--castes` with no matching
+`--caste-why` entry is refused by name and the rest of the team still goes.
 
 ```
 aether build $ARGUMENTS --plan-only \
   --castes measurer \
-  --caste-reason "no perf vocabulary, but 'feels sluggish with lots of rows' is a latency complaint"
+  --caste-why measurer="no perf vocabulary, but 'feels sluggish with lots of rows' is a latency complaint" \
+  --caste-reason "confirm the reported slowness is real before shipping"
 ```
 
 Spawn from **that** manifest. If you have no reason to change the team, keep
@@ -195,10 +199,15 @@ what the runtime chose and move on.
 Your proposal is judgement about optional specialists. It is not permission to
 lower the floor:
 
-- Castes the phase requires are added back whether you omitted them on purpose
-  or overlooked them. A build always gets a Watcher; credential, auth, and
-  release-gate work always gets a security review.
+- The Builder is added back if you omitted it. A reviewer is added only when
+  the phase touches one of five named things — logins and passwords, payments,
+  deleting data, changing the database's structure, or signing off a release —
+  and that reviewer runs at the checking step (`continue`) afterward, not here
+  at the build; the card names exactly which of the five it was.
 - The worker budget still applies, trimming your lowest-priority picks.
+- A worker named without its own `--caste-why` reason is refused by name; the
+  rest of the team still goes. `--caste-reason` is the team summary only — it
+  never satisfies the per-worker requirement.
 - Unrecognised names are reported in `caste_decision.unknown_ignored`.
 
 Read `caste_decision.summary` after re-fetching and relay it in plain English,
@@ -242,7 +251,7 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 
 🐜 The colony shows its team; the owner has the last word before anyone moves.
 
-**Purpose:** Pause after the spawn plan renders and let the user approve, trim, or redirect the team before any worker spawns. Required workers are the safety floor and are never offered for removal — the runtime re-adds them regardless, so offering the choice would be a lie.
+**Purpose:** Pause after the spawn plan renders and let the user approve, trim, decline, or redirect the team before any worker spawns. The worker that writes the code is the one part of the team never offered for removal — the runtime re-adds it regardless, so offering that choice would be a lie. A reviewer forced by a named risk signal IS offered for removal, but only to the owner, and only by explicitly declining it with a reason that is recorded — never by a silent trim.
 
 **Reads:** the manifest file written in Dispatch Manifest, and `result.checkin_requested` from the plan-only result.
 
@@ -254,13 +263,15 @@ If `checkin_requested` is false (`--no-checkin` was passed), skip this stage ent
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file <manifest_file>
 ```
 
-2. Fetch the same card as data: `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>` and read `result.required`, `result.optional`, `result.reasons`.
+2. Fetch the same card as data: `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>` and read `result.required`, `result.optional`, `result.reasons`, `result.waived`, `result.waive_commands`.
 3. Ask the user (AskUserQuestion, single question): "The Queen picked this team. Proceed?" with options:
    - "Proceed with this team" (recommended) — spawn as planned.
    - "Trim optional workers" — follow up with ONE multi-select question listing ONLY `result.optional` entries, each labeled with its plain-English job and reason. Never list a required caste.
+   - "Decline a required reviewer" — only offer this when `result.waive_commands` is non-empty. State the consequence BEFORE naming anything: declining means the security or quality reviewer named on the card will NOT run on this phase, the reason given is written down, and it applies to that one signal on that one phase only. Relay the exact `aether decision-answer` command from `result.waive_commands` for the operator to run — the runtime already built the command and its wording; never construct the question text yourself.
    - "Redirect first" — route to `aether discuss`, then request a fresh manifest exactly as the Guided Boundary Gate does; never reuse the pre-discuss manifest.
 4. On trim: re-fetch `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only --castes <kept optional castes> --caste-reason "owner check-in trim"`, overwrite the manifest file with the new manifest, re-render the spawn ceremony for the new plan, and record the preference: `AETHER_OUTPUT_MODE=json aether memory-capture "owner trimmed <dropped castes> from the phase <n> build team"`. Relay `caste_decision.summary` in plain English — anything the runtime added back must be said out loud.
-5. Autopilot (`/ant-run`) never runs this stage — it does not run this wrapper.
+5. On decline: after the operator runs the relayed `aether decision-answer` command, re-fetch the manifest and re-render both the check-in card and the spawn ceremony so the decline is reflected before anything spawns.
+6. Autopilot (`/ant-run`) never runs this stage — it does not run this wrapper and can never decline a reviewer.
 
 **Stop conditions:** The user has been asked and their pick applied. Never spawn from a manifest the user asked to trim without re-fetching it.
 
