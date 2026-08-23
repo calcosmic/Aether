@@ -200,7 +200,7 @@ func floorSkipPathRows() []floorSkipPathRow {
 				// not this row's. At light depth the only caste isAlwaysRequired
 				// ever restores is "watcher", which queenContinueReviewSpecsWithJudgement
 				// always excludes from review specs regardless.
-				specs := queenContinueReviewSpecsWithJudgement(phase, colony.VerificationDepthLight, []string{"builder"}, "team asked for a builder only")
+				specs := queenContinueReviewSpecsWithJudgement(phase, colony.VerificationDepthLight, []string{"builder"}, "team asked for a builder only", nil)
 				if len(specs) != 0 {
 					t.Fatalf("a caste proposal naming no reviewer still produced review specs: %+v", specs)
 				}

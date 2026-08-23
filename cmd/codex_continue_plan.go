@@ -341,7 +341,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			MatchedSkills: append([]string{}, watcherSkillAssignment.MatchedNames...),
 		})
 	}
-	reviewSpecs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason)
+	reviewSpecs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers)
 	reviewWave := 2
 	if skipWatchers {
 		reviewWave = 1

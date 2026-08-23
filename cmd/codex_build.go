@@ -142,6 +142,25 @@ type codexBuildManifest struct {
 	// what actually spawns, and every override the runtime applied. A Queen
 	// that proposes badly must produce a visible correction, not a silent one.
 	CasteDecision map[string]interface{} `json:"caste_decision,omitempty"`
+	// ForcedReviewers is the D-01..D-05 named-risk-signal derivation, computed
+	// once here at build and read back by both continue lanes
+	// (queenForcedContinueReviewers) so a reviewer is forced from exactly one
+	// derivation at exactly one boundary — closing .planning/WINDOWS.md #1's
+	// "build and continue each require the same caste independently" gap.
+	// The build ANNOUNCES this record; it never dispatches the reviewer
+	// itself (D-05) — that happens at the checking step (continue).
+	ForcedReviewers []codexForcedReviewerRecord `json:"forced_reviewers,omitempty"`
+}
+
+// codexForcedReviewerRecord is the durable, JSON form of a forcedReviewer
+// (cmd/queen_risk_signals.go), written onto the build manifest so continue
+// reads the exact same derivation instead of re-deriving it independently.
+type codexForcedReviewerRecord struct {
+	Caste   string   `json:"caste"`
+	Signals []string `json:"signals"`
+	Matches []string `json:"matches"`
+	Sources []string `json:"sources"`
+	Reason  string   `json:"reason"`
 }
 
 type codexWaveExecutionPlan struct {
@@ -320,6 +339,10 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	// and what the runtime overrode.
 	manifest.CasteRoster = queenCasteRoster()
 	manifest.CasteDecision = queenCasteDecisionSummary(phase, state, reviewDepth, options.QueenCastes, options.QueenCasteReason)
+	// The forced-reviewer set is derived from the phase's own wording exactly
+	// once, here, and recorded — never dispatched at build (D-05). Continue
+	// reads this record via queenForcedContinueReviewers.
+	manifest.ForcedReviewers = forcedReviewerRecords(queenForcedReviewersForPhase(phase))
 	boundary, err := materializeOrchestratorBoundaryQuestions("build", state, phase, buildBoundaryQuestionCandidates(phase, selectedTaskIDs))
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err

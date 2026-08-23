@@ -125,8 +125,19 @@ func queenRequiredCastesForBudget(phase colony.Phase, flowType string, state col
 			required = append(required, profile.Caste)
 		}
 	}
-	sort.Strings(required)
-	return required
+	// The forced reviewer (D-01..D-05) is a CONTINUE-side requirement only —
+	// the build announces it but never dispatches it (D-05). Folding it in
+	// here, rather than only at the dispatch union in codex_continue.go, keeps
+	// queenSpawnBudgetForPhase's RequiredCastes an honest answer to "what does
+	// this phase actually require", which is what the check-in card and any
+	// caller reading the budget struct directly (not just the final dispatch
+	// list) sees.
+	if normalizeQueenFlowType(flowType) == "continue" {
+		for _, reviewer := range queenForcedReviewersForPhase(phase) {
+			required = append(required, reviewer.Caste)
+		}
+	}
+	return uniqueSortedStrings(required)
 }
 
 func queenBuildSafetyRequiredCaste(caste, flowType string, phase colony.Phase) bool {

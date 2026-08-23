@@ -298,7 +298,7 @@ func TestQueenTrimsContinueReviewersAndKeepsTheWatcher(t *testing.T) {
 	// Keyword scoring on this phase pulls in specialists the change does not
 	// need. The Queen reading it knows the question is correctness.
 	before := queenContinueDispatches(phase, depth)
-	after := queenContinueDispatchesWithJudgement(phase, depth, []string{"watcher"}, "this is a correctness fix, not a performance question")
+	after := queenContinueDispatchesWithJudgement(phase, depth, []string{"watcher"}, "this is a correctness fix, not a performance question", nil)
 
 	if len(after) > len(before) {
 		t.Errorf("judgement should not grow the review team here: before %d, after %d", len(before), len(after))
@@ -316,7 +316,7 @@ func TestContinueJudgementCannotDropASecurityReview(t *testing.T) {
 
 	after := queenContinueDispatchesWithJudgement(
 		phase, colony.VerificationDepthStandard,
-		[]string{"watcher"}, "looks simple")
+		[]string{"watcher"}, "looks simple", nil)
 
 	if !queenContinueHasCaste(after, "watcher") {
 		t.Errorf("Watcher must survive: %v", casteNames(after))
@@ -335,7 +335,7 @@ func TestContinueWithNoProposalIsUnchanged(t *testing.T) {
 	depth := colony.VerificationDepthStandard
 
 	base := casteNames(queenContinueDispatches(phase, depth))
-	same := casteNames(queenContinueDispatchesWithJudgement(phase, depth, nil, ""))
+	same := casteNames(queenContinueDispatchesWithJudgement(phase, depth, nil, "", nil))
 	if len(base) != len(same) {
 		t.Fatalf("no-proposal continue changed: %v vs %v", base, same)
 	}

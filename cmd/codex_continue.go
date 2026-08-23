@@ -1202,6 +1202,10 @@ func reconcileContinueCompletedBuildTasks(state *colony.ColonyState, phase *colo
 type codexContinueReviewSpec struct {
 	Caste string
 	Task  string
+	// Rationale is the plain-English reason a forced reviewer (D-01..D-05,
+	// cmd/queen_risk_signals.go) was sent — empty for a Queen-proposed or
+	// keyword-selected spec, which carries no per-caste reason today.
+	Rationale string
 }
 
 // codexContinueReviewSpecs' task text must never instruct a caste to run a
@@ -1230,27 +1234,64 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 }
 
 func queenContinueDispatches(phase colony.Phase, reviewDepth colony.VerificationDepth) []CasteDispatch {
-	return queenContinueDispatchesWithJudgement(phase, reviewDepth, nil, "")
+	return queenContinueDispatchesWithJudgement(phase, reviewDepth, nil, "", nil)
 }
 
 // queenContinueDispatchesWithJudgement applies the Queen's chosen review team,
 // bounded by the same floors as a build: the Watcher is restored if omitted,
-// and a phase that requires a security or quality review keeps it.
-func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string) []CasteDispatch {
+// and a phase that requires a security or quality review keeps it. forced is
+// the build-recorded D-01..D-05 forced-reviewer set (codexBuildManifest's
+// ForcedReviewers, threaded in by callers that have a manifest); nil falls
+// back to re-deriving from the phase's own wording
+// (queenForcedContinueReviewers).
+func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord) []CasteDispatch {
 	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
+	var dispatches []CasteDispatch
 	if len(proposed) == 0 {
-		return queenOrchestrate(phase, "continue", state)
+		dispatches = queenOrchestrate(phase, "continue", state)
+	} else {
+		judgement := queenApplyJudgement(proposed, reason, phase, "continue", state)
+		dispatches = make([]CasteDispatch, 0, len(judgement.Final))
+		for _, caste := range judgement.Final {
+			dispatches = append(dispatches, CasteDispatch{
+				Caste:     caste,
+				Rationale: judgement.Rationale,
+				FlowType:  "continue",
+			})
+		}
 	}
-	judgement := queenApplyJudgement(proposed, reason, phase, "continue", state)
-	dispatches := make([]CasteDispatch, 0, len(judgement.Final))
-	for _, caste := range judgement.Final {
-		dispatches = append(dispatches, CasteDispatch{
-			Caste:     caste,
-			Rationale: judgement.Rationale,
+	return unionForcedContinueReviewers(dispatches, phase, forced)
+}
+
+// unionForcedContinueReviewers adds any D-01..D-05 forced-reviewer caste
+// missing from dispatches AFTER the proposal/budget handling above, so
+// neither a Queen proposal nor a budget trim can ever drop one (D-05: "one
+// derivation, one boundary" — closes .planning/WINDOWS.md #1's continue
+// side). A forced caste already present has its Rationale overwritten with
+// the forced reason, so the owner sees the real reason it is there even if
+// it was also proposed or keyword-selected.
+func unionForcedContinueReviewers(dispatches []CasteDispatch, phase colony.Phase, forced []codexForcedReviewerRecord) []CasteDispatch {
+	reviewers := queenForcedContinueReviewers(phase, forced, nil)
+	if len(reviewers) == 0 {
+		return dispatches
+	}
+	indexByCaste := make(map[string]int, len(dispatches))
+	for i, dispatch := range dispatches {
+		indexByCaste[dispatch.Caste] = i
+	}
+	result := append([]CasteDispatch(nil), dispatches...)
+	for _, reviewer := range reviewers {
+		if idx, ok := indexByCaste[reviewer.Caste]; ok {
+			result[idx].Rationale = reviewer.Reason
+			continue
+		}
+		result = append(result, CasteDispatch{
+			Caste:     reviewer.Caste,
+			Rationale: reviewer.Reason,
 			FlowType:  "continue",
 		})
 	}
-	return dispatches
+	return result
 }
 
 func queenContinueHasCaste(dispatches []CasteDispatch, caste string) bool {
@@ -1263,11 +1304,15 @@ func queenContinueHasCaste(dispatches []CasteDispatch, caste string) bool {
 }
 
 func queenContinueReviewSpecs(phase colony.Phase, reviewDepth colony.VerificationDepth) []codexContinueReviewSpec {
-	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "")
+	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "", nil)
 }
 
-func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string) []codexContinueReviewSpec {
-	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason)
+func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord) []codexContinueReviewSpec {
+	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason, forced)
+	forcedReasons := make(map[string]string, len(forced))
+	for _, reviewer := range queenForcedContinueReviewers(phase, forced, nil) {
+		forcedReasons[reviewer.Caste] = reviewer.Reason
+	}
 	specs := make([]codexContinueReviewSpec, 0, len(queenDispatches))
 	for _, dispatch := range queenDispatches {
 		if dispatch.Caste == "watcher" {
@@ -1277,6 +1322,7 @@ func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colon
 		if !ok {
 			continue
 		}
+		spec.Rationale = forcedReasons[dispatch.Caste]
 		specs = append(specs, spec)
 	}
 	return specs
@@ -1440,7 +1486,7 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 	// The Queen's --castes proposal used to be honoured only on the heavy
 	// plan-only path; the default path called the nil-proposal variant, so on
 	// the continue users actually run the keyword engine was unchallenged.
-	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason)
+	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)
@@ -1483,6 +1529,14 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	b.WriteString("\n\n")
 	b.WriteString(spec.Task)
 	b.WriteString("\n\n")
+	if strings.TrimSpace(spec.Rationale) != "" {
+		// D-05/D-10: a forced reviewer states why it was sent, in the same
+		// plain-English sentence the owner sees on the check-in card and
+		// manifest — the worker should not have to guess why it was called.
+		b.WriteString("Why you were sent: ")
+		b.WriteString(spec.Rationale)
+		b.WriteString("\n\n")
+	}
 	if spec.Caste == "gatekeeper" || spec.Caste == "auditor" {
 		// These two castes have no Bash tool by design — never instruct them
 		// to run a CLI command. They return findings in result JSON and the
