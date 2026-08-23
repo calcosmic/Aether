@@ -538,6 +538,12 @@
         },
         "caste_decision": {
           "type": "object"
+        },
+        "forced_reviewers": {
+          "items": {
+            "$ref": "#/$defs/codexForcedReviewerRecord"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -743,6 +749,43 @@
       "required": [
         "name",
         "status"
+      ]
+    },
+    "codexForcedReviewerRecord": {
+      "properties": {
+        "caste": {
+          "type": "string"
+        },
+        "signals": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "matches": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "caste",
+        "signals",
+        "matches",
+        "sources",
+        "reason"
       ]
     },
     "codexQueenExecutionPolicy": {
