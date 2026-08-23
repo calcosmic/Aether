@@ -24,8 +24,8 @@
 - [ ] **TEAM-01**: The castes a build requires shrink to builder (non-discovery phases) — no caste is required by inferred mode or keyword alone; `TestWatcherIsAlwaysRequiredOnBuild` is retired through the test-deletion ledger citing D11, and the negative half of the Probe rule (no Probe where nothing is testable) stays
 - [x] **TEAM-02**: The program forces a reviewer only for a named high-risk signal — credentials/auth, payments, data deletion, migration, release sign-off — and attaches the signal as a visible reason on the team card (table test: CSV export → none forced; password reset → security reviewer with reason)
 - [x] **TEAM-03**: Every worker that spawns carries a one-line reason the owner can read; a proposal naming a worker without a reason is refused by name
-- [ ] **TEAM-04**: The chat's proposal (`--castes` + `--caste-reason`) is the primary team source; the keyword engine is the autopilot / no-proposal fallback and is retuned to the same floor — a 1-task bug fix yields one dispatch plus free checks on both paths
-- [ ] **TEAM-05**: The owner's overrides in both directions (`--castes`, `--heavy`, `--light`, the check-in card) keep working and stay test-locked after the floor moves
+- [x] **TEAM-04**: The chat's proposal (`--castes` + `--caste-reason`) is the primary team source; the keyword engine is the autopilot / no-proposal fallback and is retuned to the same floor — a 1-task bug fix yields one dispatch plus free checks on both paths
+- [x] **TEAM-05**: The owner's overrides in both directions (`--castes`, `--heavy`, `--light`, the check-in card) keep working and stay test-locked after the floor moves
 
 ### Coherent jobs, not one worker per task (JOBS)
 
@@ -100,8 +100,8 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | TEAM-01 | Phase 194 | Pending |
 | TEAM-02 | Phase 194 | Complete |
 | TEAM-03 | Phase 194 | Complete |
-| TEAM-04 | Phase 194 | Pending |
-| TEAM-05 | Phase 194 | Pending |
+| TEAM-04 | Phase 194 | Complete |
+| TEAM-05 | Phase 194 | Complete |
 | JOBS-01 | Phase 195 | Pending |
 | JOBS-02 | Phase 195 | Pending |
 | JOBS-03 | Phase 195 | Pending |

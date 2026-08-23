@@ -125,7 +125,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 194-05-PLAN.md — The automatic team is retuned to the same floor; the owner's three dials mean what they say (wave 5)
+- [x] 194-05-PLAN.md — The automatic team is retuned to the same floor; the owner's three dials mean what they say (wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
