@@ -219,3 +219,20 @@ phase/plan that removed it).
   `TestForcedReviewerCrossesTheBuildContinueBoundary`
   (`cmd/queen_forced_reviewer_test.go`, plan 194-01).
 - **Removed in:** Phase 194 Plan 02.
+
+### `TestTeamCheckinFallsBackToRosterProduces` (function in `cmd/ceremony_team_checkin_test.go`)
+
+- **Original path:** `cmd/ceremony_team_checkin_test.go` (single function
+  removed; file survives).
+- **What it covered:** that when the spawn budget carried no per-caste
+  rationale for a worker, the check-in card fell back to the roster's
+  generic "produces" prose so no worker line was ever reason-less.
+- **Disposition:** `recovered-by:cmd/ceremony_team_checkin_test.go
+  (TestTeamCheckinNeverShowsAGenericBlurbAsAReason)`. The retired test
+  asserted exactly the behaviour D-09 forbids: a generic caste description
+  standing in for a per-phase reason reads as a justification for sending
+  the worker and is not one. The replacement test inverts the assertion —
+  the roster description must NOT appear in the reason slot — and pins the
+  roster prose to a separately labelled `what_it_does` slot instead. A
+  renamed test whose assertion inverted is a removal, per RETIRE-04.
+- **Removed in:** Phase 194 Plan 04.

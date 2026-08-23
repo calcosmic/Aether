@@ -9,10 +9,10 @@ func teamCheckinManifestFixture() (map[string]interface{}, []ceremonyDispatch) {
 	manifest := map[string]interface{}{
 		"queen_execution_policy": map[string]interface{}{
 			"spawn_budget": map[string]interface{}{
-				"required_castes": []interface{}{"watcher"},
+				"required_castes": []interface{}{"builder"},
 				"selected_reasons": map[string]interface{}{
-					"watcher":  "watcher is always required for build flow",
-					"measurer": "Score 40 >= threshold 30 for build flow",
+					"builder":  "writes the code for 3 task(s): add the password reset flow",
+					"measurer": "Measurer — the phase mentions a slow page load to investigate",
 				},
 				"pruned_reasons": map[string]interface{}{
 					"chaos": "pruned by worker budget (max 5)",
@@ -24,7 +24,7 @@ func teamCheckinManifestFixture() (map[string]interface{}, []ceremonyDispatch) {
 		},
 	}
 	dispatches := []ceremonyDispatch{
-		{Caste: "watcher", Name: "Sharp-12", Task: "Verify the build"},
+		{Caste: "builder", Name: "Mason-12", Task: "Build the login form"},
 		{Caste: "measurer", Name: "Gauge-7", Task: "Check latency"},
 	}
 	return manifest, dispatches
@@ -43,8 +43,8 @@ func TestTeamCheckinCardShowsReasonAndRequiredMarking(t *testing.T) {
 		"T E A M   C H E C K - I N",
 		"REQUIRED",
 		"OPTIONAL",
-		"watcher is always required for build flow",
-		"Score 40 >= threshold 30 for build flow",
+		"writes the code for 3 task(s): add the password reset flow",
+		"Measurer — the phase mentions a slow page load to investigate",
 		"Not sent:",
 		"pruned by worker budget (max 5)",
 		"Required workers stay",
@@ -56,24 +56,41 @@ func TestTeamCheckinCardShowsReasonAndRequiredMarking(t *testing.T) {
 
 	required, _ := result["required"].([]string)
 	optional, _ := result["optional"].([]string)
-	if len(required) != 1 || required[0] != "watcher" {
-		t.Fatalf("required bucket = %v, want [watcher]", required)
+	if len(required) != 1 || required[0] != "builder" {
+		t.Fatalf("required bucket = %v, want [builder]", required)
 	}
 	if len(optional) != 1 || optional[0] != "measurer" {
 		t.Fatalf("optional bucket = %v, want [measurer]", optional)
 	}
 }
 
-// TestTeamCheckinFallsBackToRosterProduces: when the budget carried no
-// per-caste rationale, the roster's produces-prose stands in so no worker
-// line is ever reason-less.
-func TestTeamCheckinFallsBackToRosterProduces(t *testing.T) {
+// TestTeamCheckinNeverShowsAGenericBlurbAsAReason replaces the retired test
+// that asserted the exact fallback D-09 forbids (see
+// .aether/docs/retired-tests-ledger.md). When the budget carried no per-caste
+// rationale for a worker, the roster's generic "what it does" description
+// must never stand in for the reason it was sent — that reads as a
+// justification and is not one. The description may still appear, but only
+// in the separately labelled what_it_does slot.
+func TestTeamCheckinNeverShowsAGenericBlurbAsAReason(t *testing.T) {
 	manifest, dispatches := teamCheckinManifestFixture()
 	budget := mapValue(mapValue(manifest["queen_execution_policy"])["spawn_budget"])
 	delete(mapValue(budget["selected_reasons"]), "measurer")
 
-	_, visual := renderCeremonyTeamCheckin("build", manifest, dispatches)
-	if !strings.Contains(visual, "performance findings") {
-		t.Fatalf("card should fall back to the roster's produces prose.\ncard:\n%s", visual)
+	result, visual := renderCeremonyTeamCheckin("build", manifest, dispatches)
+
+	reasons, _ := result["reasons"].(map[string]string)
+	if reasons["measurer"] == "performance findings" {
+		t.Fatalf("roster description leaked into the reason slot: %q", reasons["measurer"])
+	}
+	if strings.TrimSpace(reasons["measurer"]) == "" {
+		t.Fatalf("a caste with no per-phase reason must render an explicit marker, got empty string")
+	}
+
+	whatItDoes, _ := result["what_it_does"].(map[string]string)
+	if whatItDoes["measurer"] != "performance findings" {
+		t.Fatalf("what_it_does should carry the roster description separately, got %q", whatItDoes["measurer"])
+	}
+	if !strings.Contains(visual, "what it does: performance findings") {
+		t.Fatalf("card should label the roster description as what it does, never as the reason.\ncard:\n%s", visual)
 	}
 }

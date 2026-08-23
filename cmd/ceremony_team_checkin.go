@@ -51,12 +51,24 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	required := []string{}
 	optional := []string{}
 	reasons := map[string]string{}
+	whatItDoes := map[string]string{}
 	for _, caste := range orderedCastes {
 		reason := strings.TrimSpace(selectedReasons[caste])
 		if reason == "" {
-			reason = casteRosterProduces(manifest, caste)
+			// D-09: the roster's generic "what this caste does" description is
+			// NOT a reason a worker was sent for THIS phase — showing it here
+			// would read as a justification and is not one. By the time plan
+			// 194-03 has landed, every dispatched caste should already carry a
+			// per-phase reason (its refusal loop and its runtime-written
+			// reasons both guarantee this) — a caste reaching the card with
+			// none is a bug upstream, so say so plainly rather than papering
+			// over it.
+			reason = "no reason was recorded for sending this worker"
 		}
 		reasons[caste] = reason
+		if produces := casteRosterProduces(manifest, caste); produces != "" {
+			whatItDoes[caste] = produces
+		}
 		if requiredSet[caste] {
 			required = append(required, caste)
 		} else {
@@ -82,6 +94,11 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 			b.WriteString("  — ")
 			b.WriteString(reason)
 		}
+		if produces := whatItDoes[caste]; produces != "" {
+			b.WriteString("  (what it does: ")
+			b.WriteString(produces)
+			b.WriteString(")")
+		}
 		b.WriteString("\n")
 	}
 	if len(prunedReasons) > 0 {
@@ -104,11 +121,12 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	b.WriteString("\nRequired workers stay — they are the safety floor. Optional workers can be trimmed.\n")
 
 	result := map[string]interface{}{
-		"workflow": workflow,
-		"required": required,
-		"optional": optional,
-		"reasons":  reasons,
-		"pruned":   prunedReasons,
+		"workflow":     workflow,
+		"required":     required,
+		"optional":     optional,
+		"reasons":      reasons,
+		"what_it_does": whatItDoes,
+		"pruned":       prunedReasons,
 	}
 	return result, b.String()
 }
