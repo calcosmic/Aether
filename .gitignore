@@ -123,6 +123,7 @@ node_modules/
 cmd/.aether/worktrees/
 
 # Planning artifacts
+.planning/milestone.lock
 
 # Go build output
 /aether

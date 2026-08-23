@@ -137,7 +137,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 194-08-PLAN.md — The one-task bug fix proved at one worker; the double-dispatch window closed on a passing test (wave 8)
+- [x] 194-08-PLAN.md — The one-task bug fix proved at one worker; the double-dispatch window closed on a passing test (wave 8)
 
 **Wave 9** *(blocked on Wave 8 completion)*
 

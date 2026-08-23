@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 194
 current_phase_name: The Queen Decides the Team
 status: executing
-stopped_at: Completed 194-07-PLAN.md
-last_updated: "2026-08-23T15:50:01.102Z"
+stopped_at: Completed 194-08-PLAN.md
+last_updated: "2026-08-23T16:12:38.147Z"
 last_activity: 2026-08-23
 last_activity_desc: Phase 194 execution started
-state_head: c4cfe68febdf9e2de0db8f91f00862ee68b152e9
+state_head: 11c8a5afff5db2567c85d8db78ee6a3c9c3aba13
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
   percent: 14
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 ## Current Position
 
 Phase: 194 (The Queen Decides the Team) — EXECUTING
-Plan: 8 of 9
+Plan: 9 of 9
 Status: Ready to execute
 Last activity: 2026-08-23 — Phase 194 execution started
 
@@ -63,6 +63,7 @@ Last activity: 2026-08-23 — Phase 194 execution started
 | Phase 194 P05 | 87min | 2 tasks | 28 files |
 | Phase 194 P06 | 55min | 2 tasks | 11 files |
 | Phase 194 P07 | 45min | 2 tasks | 5 files |
+| Phase 194 P08 | 40min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,8 @@ Last activity: 2026-08-23 — Phase 194 execution started
 - [Phase 194]: [Phase 194] Plan 6: the wrapper lane's planned-subset check needed no correction for a changed-files-forced reviewer -- the file detector fires inside plannedExternalContinueDispatches, the same call that produces the persisted planned manifest, before any worker dispatches.
 - [Phase 194]: [Phase 194] Plan 7: Q1/Q2 (card wording, re-ask scope) answered with no behaviour change -- Q1's real complaint was layout not phrasing, so the card's sentences stayed and separation was added instead; Q2 kept D-03's one-signal-one-phase scope with no re-ask.
 - [Phase 194]: [Phase 194] Plan 7: Q3 (owner asked for a one-worker build to skip the check-in pause) reverses D-14 and, per the plan's own resume-signal, was NOT applied here -- filed as a pending todo for the next /gsd-discuss-phase pass instead; TestOneWorkerTeamStillPauses continues to pin the current, unchanged pause behaviour.
+- [Phase 194]: [Phase 194] Plan 8: countWorkersAcrossBothBoundaries sums build+continue dispatches into one number and reuses total==len(union) as a second confirmation of double-dispatch emptiness -- two proofs computed by the same arithmetic, so they cannot silently disagree.
+- [Phase 194]: [Phase 194] Plan 8: WINDOWS #1 marked fixed only after TestNoCasteIsDispatchedAtBothBoundaries passed locally against real build+continue dispatch lists for a security-signal phase and a migration-signal phase -- both intersections empty.
 
 ### Pending Todos
 
@@ -198,6 +201,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-23T15:50:01.041Z
-Stopped at: Completed 194-07-PLAN.md
+Last session: 2026-08-23T16:12:38.088Z
+Stopped at: Completed 194-08-PLAN.md
 Resume file: None
