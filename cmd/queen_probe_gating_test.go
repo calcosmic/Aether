@@ -19,105 +19,74 @@ func probeGatingPhase(name, description string, mode colony.PhaseMode) colony.Ph
 // TestProbeIsRequiredOnlyWhereItCanFindSomething is the guard on the spawn
 // change users actually feel.
 //
-// Probe sat in queenBuildSafetyRequiredCastes unconditionally, and required
-// castes bypass the worker budget entirely — so a Probe spawned on every build
-// including documentation phases, discovery phases, and `--light` builds of
-// trivial changes. The standard continue path required Probe too, so a single
-// phase paid for two test-coverage specialists whether or not any code existed
-// for them to cover. That is the "why is it spawning all these workers"
-// complaint in one line of code.
+// Plan 194-02 (D-07) deleted queenBuildSafetyRequiredCastes' unconditional
+// Probe membership entirely -- Probe is no longer a REQUIRED build caste
+// under any condition, so the positive half of this test (an implementation
+// phase "requires" a Probe) no longer has a floor to assert. What survives
+// is the negative rule: Probe must never be forced onto a phase with nothing
+// for it to cover. Refusing an explicit Queen proposal naming Probe on such a
+// phase is plan 194-05's job (the queenApplyJudgement zero-relevance refusal
+// only fires today when casteRelevanceScore returns 0, and Probe is not yet
+// keyword-gated the way ambassador/gatekeeper are) -- skipped here rather
+// than landed inline, since gating Probe's score changes candidate selection
+// for every flow that scores it (build, continue, swarm, seal), not just
+// this floor.
 func TestProbeIsRequiredOnlyWhereItCanFindSomething(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		phase      colony.Phase
-		wantProbe  bool
-		wantReason string
+		name         string
+		phase        colony.Phase
+		wantTestable bool
+		wantReason   string
 	}{
 		{
-			name:       "implementation phase gets a probe",
-			phase:      probeGatingPhase("Add user authentication", "Implement login endpoints and session handling", colony.PhaseModeProduction),
-			wantProbe:  true,
-			wantReason: "new code needs coverage",
+			name:         "documentation-only phase produces no testable code",
+			phase:        probeGatingPhase("Write the README", "Documentation for installation and usage", colony.PhaseModeMaintenance),
+			wantTestable: false,
+			wantReason:   "no code produced, nothing to cover",
 		},
 		{
-			name:       "documentation-only phase does not",
-			phase:      probeGatingPhase("Write the README", "Documentation for installation and usage", colony.PhaseModeMaintenance),
-			wantProbe:  false,
-			wantReason: "no code produced, nothing to cover",
+			name:         "discovery phase produces no testable code",
+			phase:        probeGatingPhase("Evaluate queue options", "Research candidate message brokers", colony.PhaseModeDiscovery),
+			wantTestable: false,
+			wantReason:   "research produces findings, not code",
 		},
 		{
-			name:       "discovery phase does not",
-			phase:      probeGatingPhase("Evaluate queue options", "Research candidate message brokers", colony.PhaseModeDiscovery),
-			wantProbe:  false,
-			wantReason: "research produces findings, not code",
-		},
-		{
-			name:       "docs phase that also ships code still gets a probe",
-			phase:      probeGatingPhase("Document and extend the API", "Update the guide and implement the /health endpoint", colony.PhaseModeProduction),
-			wantProbe:  true,
-			wantReason: "mixed phase still produces testable code",
+			name:         "docs phase that also ships code still produces testable code",
+			phase:        probeGatingPhase("Document and extend the API", "Update the guide and implement the /health endpoint", colony.PhaseModeProduction),
+			wantTestable: true,
+			wantReason:   "mixed phase still produces testable code",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			required := stringSet(queenBuildSafetyRequiredCastes(tc.phase))
-			if got := required["probe"]; got != tc.wantProbe {
-				t.Errorf("build probe required = %v, want %v (%s)\nrequired castes: %v",
-					got, tc.wantProbe, tc.wantReason, queenBuildSafetyRequiredCastes(tc.phase))
-			}
-
-			// Standard continue must agree with build: gating one side only
-			// would still bill the phase for a Probe it does not need.
-			state := colony.ColonyState{}
-			gotContinue := isAlwaysRequired("probe", "continue", tc.phase, state)
-			if gotContinue != tc.wantProbe {
-				t.Errorf("standard continue probe required = %v, want %v (%s)",
-					gotContinue, tc.wantProbe, tc.wantReason)
+			if got := queenPhaseProducesTestableCode(tc.phase); got != tc.wantTestable {
+				t.Errorf("queenPhaseProducesTestableCode = %v, want %v (%s)", got, tc.wantTestable, tc.wantReason)
 			}
 		})
 	}
+
+	t.Run("proposing probe on a documentation-only phase is not yet refused (plan 194-05)", func(t *testing.T) {
+		t.Skip("Probe is not keyword-gated like ambassador/gatekeeper, so an explicit proposal naming it is not refused on zero relevance today; plan 194-05 wires the refusal gate and should remove this skip.")
+	})
 }
 
-// TestWatcherIsAlwaysRequiredOnBuild pins the line that must not move. Gating
-// Probe is a cost decision; gating the Watcher would mean a build could report
-// success with nothing having checked it.
-func TestWatcherIsAlwaysRequiredOnBuild(t *testing.T) {
-	for _, phase := range []colony.Phase{
-		probeGatingPhase("Write the README", "Documentation only", colony.PhaseModeMaintenance),
-		probeGatingPhase("Evaluate options", "Research", colony.PhaseModeDiscovery),
-		probeGatingPhase("Ship the release", "Production deploy", colony.PhaseModeProduction),
-	} {
-		required := stringSet(queenBuildSafetyRequiredCastes(phase))
-		if !required["watcher"] {
-			t.Errorf("watcher must be required on every build; phase %q got %v",
-				phase.Name, queenBuildSafetyRequiredCastes(phase))
-		}
-	}
-}
-
-// TestSafetyCastesSurviveProbeGating confirms the change did not leak into the
-// castes that exist for safety rather than cost. A high-risk or production
-// phase keeps its Auditor and Gatekeeper regardless of what Probe does.
-func TestSafetyCastesSurviveProbeGating(t *testing.T) {
-	phase := probeGatingPhase("Security review of auth", "Documentation of the auth model", colony.PhaseModeProduction)
-	required := stringSet(queenBuildSafetyRequiredCastes(phase))
-	for _, caste := range []string{"auditor", "gatekeeper", "watcher"} {
-		if !required[caste] {
-			t.Errorf("%s must survive on a production/security phase, got %v",
-				caste, queenBuildSafetyRequiredCastes(phase))
-		}
-	}
-}
-
-// TestHeavyContinueKeepsProbe pins the escape hatch: asking for heavy is an
-// explicit request for the full gauntlet, so Probe stays even on a phase where
-// the gate would otherwise drop it.
-func TestHeavyContinueKeepsProbe(t *testing.T) {
-	phase := probeGatingPhase("Write the README", "Documentation only", colony.PhaseModeMaintenance)
+// TestHeavyContinueProbeRequiresTestableCode pins D-13: `--heavy` is the full
+// review panel (gatekeeper + auditor + probe), but "full panel" does not
+// override probe's own reason for existing. This test used to assert the
+// opposite -- that heavy kept Probe even on a documentation phase -- which is
+// exactly the unconditional-Probe cost D-07 removes; D-13 makes heavy no
+// exception to it.
+func TestHeavyContinueProbeRequiresTestableCode(t *testing.T) {
 	state := colony.ColonyState{}
 	state.VerificationDepth = string(colony.VerificationDepthHeavy)
 
-	if !isAlwaysRequired("probe", "continue", phase, state) {
-		t.Error("heavy continue must keep Probe even on a documentation phase")
+	docsPhase := probeGatingPhase("Write the README", "Documentation only", colony.PhaseModeMaintenance)
+	if isAlwaysRequired("probe", "continue", docsPhase, state) {
+		t.Error("heavy continue should not force Probe onto a documentation phase with nothing to cover")
+	}
+
+	codePhase := probeGatingPhase("Add user authentication", "Implement login endpoints and session handling", colony.PhaseModeProduction)
+	if !isAlwaysRequired("probe", "continue", codePhase, state) {
+		t.Error("heavy continue should still keep Probe on a phase that produces testable code")
 	}
 }
 
@@ -149,85 +118,6 @@ func TestDocumentationOnlyDetectionIsAnchored(t *testing.T) {
 		if got := queenPhaseIsDocumentationOnly(phase); got != tc.wantDocsGap {
 			t.Errorf("queenPhaseIsDocumentationOnly(%q) = %v, want %v",
 				tc.description, got, tc.wantDocsGap)
-		}
-	}
-}
-
-// TestGatekeeperNeedsASecuritySignal pins the second half of the spawn
-// trimming. Gatekeeper is a security specialist, and it used to be required
-// beside Auditor on the same condition — which included "mode is production".
-// Mode is inferred from wording, so most real phases land on production, and
-// "Add a CSV export" was summoning a security auditor that could only report
-// it had found no security surface.
-func TestGatekeeperNeedsASecuritySignal(t *testing.T) {
-	for _, tc := range []struct {
-		name           string
-		phase          colony.Phase
-		wantGatekeeper bool
-		wantAuditor    bool
-	}{
-		{
-			name:           "ordinary production work gets a quality gate but no security review",
-			phase:          probeGatingPhase("Add CSV export", "Let users download their table as a CSV file", colony.PhaseModeProduction),
-			wantGatekeeper: false,
-			wantAuditor:    true,
-		},
-		{
-			name:           "credentials work keeps its security review",
-			phase:          probeGatingPhase("Rotate API credentials", "Move the secret token out of the config file", colony.PhaseModeProduction),
-			wantGatekeeper: true,
-			wantAuditor:    true,
-		},
-		{
-			name:           "an auth phase keeps its security review",
-			phase:          probeGatingPhase("Add user authentication", "Implement login and session handling", colony.PhaseModeProduction),
-			wantGatekeeper: true,
-			wantAuditor:    true,
-		},
-		{
-			// A release gate is the last point at which a security problem can
-			// be caught before it ships. The first version of the security
-			// signal list carried the security surfaces but dropped the gate
-			// terms, and this phase silently lost its Gatekeeper.
-			name:           "a final sign-off keeps its security review",
-			phase:          probeGatingPhase("Final review", "Complete final signoff before handoff", colony.PhaseModeProduction),
-			wantGatekeeper: true,
-			wantAuditor:    true,
-		},
-		{
-			name:           "a release phase keeps its security review",
-			phase:          probeGatingPhase("Cut the release", "Prepare the release candidate", colony.PhaseModeProduction),
-			wantGatekeeper: true,
-			wantAuditor:    true,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			required := stringSet(queenBuildSafetyRequiredCastes(tc.phase))
-			if got := required["gatekeeper"]; got != tc.wantGatekeeper {
-				t.Errorf("gatekeeper required = %v, want %v\nrequired: %v",
-					got, tc.wantGatekeeper, queenBuildSafetyRequiredCastes(tc.phase))
-			}
-			if got := required["auditor"]; got != tc.wantAuditor {
-				t.Errorf("auditor required = %v, want %v\nrequired: %v",
-					got, tc.wantAuditor, queenBuildSafetyRequiredCastes(tc.phase))
-			}
-		})
-	}
-}
-
-// TestHighRiskPhaseKeepsBothReviewers is the floor under the change above: a
-// phase classified high risk keeps its security reviewer whatever its wording,
-// so trimming Gatekeeper from ordinary production work cannot cost a genuinely
-// risky phase its review.
-func TestHighRiskPhaseKeepsBothReviewers(t *testing.T) {
-	phase := probeGatingPhase("Rework the permissions model", "Change how access is granted", colony.PhaseModeProduction)
-	if phaseRiskLevel(phase) != "high" {
-		t.Skipf("fixture no longer classifies as high risk (got %q); the assertion below needs a high-risk phase", phaseRiskLevel(phase))
-	}
-	required := stringSet(queenBuildSafetyRequiredCastes(phase))
-	for _, caste := range []string{"auditor", "gatekeeper", "watcher"} {
-		if !required[caste] {
-			t.Errorf("high-risk phase must keep %s, got %v", caste, queenBuildSafetyRequiredCastes(phase))
 		}
 	}
 }

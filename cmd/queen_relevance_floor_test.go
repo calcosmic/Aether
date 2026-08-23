@@ -101,6 +101,13 @@ func TestProbeNotRequiredInARepositoryWithNoCode(t *testing.T) {
 	}
 }
 
+// TestProbeStillRequiredWhenTheRepositoryHasCode used to assert this at
+// build, where Probe was unconditionally required whenever the repository
+// looked like it contained code. Plan 194-02 (D-07) removed Probe from the
+// build floor entirely -- Probe is never required at build now, on any
+// phase -- so the claim this test protects (the code-detection gate itself
+// still works; real code work is not silently starved of coverage) moved to
+// where Probe is still genuinely required: standard-depth continue.
 func TestProbeStillRequiredWhenTheRepositoryHasCode(t *testing.T) {
 	saveGlobals(t)
 	codeRepo(t)
@@ -113,15 +120,8 @@ func TestProbeStillRequiredWhenTheRepositoryHasCode(t *testing.T) {
 		Tasks:           []colony.Task{{Goal: "Implement the subcommand and its parser."}},
 	}
 
-	required := queenBuildSafetyRequiredCastes(phase)
-	found := false
-	for _, caste := range required {
-		if caste == "probe" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("real code work lost its test-coverage specialist; this is a scoping fix, not a removal. required = %v", required)
+	if !isAlwaysRequired("probe", "continue", phase, colony.ColonyState{}) {
+		t.Fatalf("real code work lost its test-coverage specialist at the standard continue step; this is a scoping fix, not a removal")
 	}
 }
 
@@ -179,6 +179,13 @@ func TestSecurityCasteSurvivesWhenThePhaseNeedsIt(t *testing.T) {
 // The relevance floor must never be able to remove a caste the phase requires.
 // Cost control and the thing that checks the work are different decisions, and
 // this is the one that must not be traded away.
+//
+// Plan 194-02 (D-07) shrank the build floor to the builder alone, so this
+// phase's precondition (non-empty required-caste set) now holds on builder
+// rather than watcher -- watcher is no longer unconditionally required at
+// build, and asserting it specifically here would just reassert the deleted
+// rule. The claim this test protects is unchanged: whatever IS required must
+// survive judgement.
 func TestRequiredCasteIsNeverRefusedForRelevance(t *testing.T) {
 	saveGlobals(t)
 	notesOnlyRepo(t)
@@ -186,7 +193,7 @@ func TestRequiredCasteIsNeverRefusedForRelevance(t *testing.T) {
 	phase := calVaultPhase()
 	required := queenBuildSafetyRequiredCastes(phase)
 	if len(required) == 0 {
-		t.Fatal("precondition: expected this phase to require at least the watcher")
+		t.Fatal("precondition: expected this phase to require at least the builder")
 	}
 
 	judgement := queenApplyJudgement([]string{"builder"}, "", phase, "build", colony.ColonyState{})
@@ -199,9 +206,6 @@ func TestRequiredCasteIsNeverRefusedForRelevance(t *testing.T) {
 		if !finalSet[caste] {
 			t.Fatalf("required caste %q was lost; final = %v", caste, judgement.Final)
 		}
-	}
-	if !finalSet["watcher"] {
-		t.Fatalf("the watcher was lost -- a build with nothing checking it reports success by assertion; final = %v", judgement.Final)
 	}
 }
 

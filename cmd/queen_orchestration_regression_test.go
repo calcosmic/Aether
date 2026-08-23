@@ -68,12 +68,14 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 	}
 	// Phase 193 (D-08): watcher drops off the build-side dispatch list too --
 	// no explicit Queen proposal named it here, so the build leaves review to
-	// `continue`.
+	// `continue`. Plan 194-02 (D-07): probe is no longer unconditionally
+	// required either, and this fixture's wording does not score it above
+	// the relevance threshold, so it is legitimately absent too.
 	routineDispatches := plannedBuildDispatchesForSelectionWithState(routinePhase, routineState, nil, colony.VerificationDepthLight)
-	if got, want := regressionBuildCastes(routineDispatches), []string{"builder", "probe"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	if got, want := regressionBuildCastes(routineDispatches), []string{"builder"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("routine UI build dispatches = %v, want lean Queen plan %v", got, want)
 	}
-	for _, caste := range []string{"gatekeeper", "oracle", "chaos", "measurer"} {
+	for _, caste := range []string{"gatekeeper", "oracle", "chaos", "measurer", "probe"} {
 		regressionRejectBuildCaste(t, routineDispatches, caste)
 	}
 

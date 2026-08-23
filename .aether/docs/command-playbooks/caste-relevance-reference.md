@@ -50,9 +50,16 @@ Source: `spawnThreshold`
 ## Always-Required Castes
 
 ### Build (`queenBuildSafetyRequiredCastes` + `isAlwaysRequired`)
-- **All builds**: `probe`, `watcher`
-- **Non-discovery builds**: + `builder`
-- **High-risk / production / review-required builds**: + `auditor`, `gatekeeper`
+- **Non-discovery builds**: `builder` — the only unconditionally required build caste.
+- **Discovery builds**: none required (discovery gets its one researcher from the no-proposal fallback, not the floor).
+- Plan 194-02 (D-07) removed watcher, probe, auditor and gatekeeper from this
+  floor entirely: none of them is ever inferred here from mode, phase
+  position, or blast-radius wording. A reviewer (`gatekeeper` or `auditor`)
+  is now forced only by a named risk signal
+  (`queenForcedReviewersForPhase`, `cmd/queen_risk_signals.go`), and only at
+  the continue step — never at build (D-05). Watcher and probe can still
+  appear at build through genuine relevance scoring (their normal keyword
+  match against threshold), just never as an unconditional requirement.
 
 ### Continue
 | Depth | Required Castes |
@@ -147,16 +154,21 @@ Source: `casteAllowedForFlow`
 
 ## Examples
 
+Plan 194-02 (D-07): every row below now reflects genuine relevance scoring
+plus the shrunken build floor (`builder` alone) — watcher, probe, auditor
+and gatekeeper no longer ride along unconditionally, so several rows lost
+castes they used to carry regardless of the phase's own wording.
+
 | Phase Name | Mode | Flow | Castes Spawned |
 |------------|------|------|---------------|
-| "Settings UI panel" | prototype | build | builder, watcher, probe |
-| "Auth token rotation" | production | build | builder, watcher, gatekeeper, probe, architect, auditor |
-| "Database migration" | production | build | builder, watcher, auditor, architect, probe |
-| "Performance optimization" | prototype | build | builder, watcher, measurer, probe |
-| "Refactor legacy parser" | maintenance | build | builder, watcher, weaver, archaeologist, probe |
-| "Discovery spike on vector DB" | discovery | build | oracle, scout, architect (builder suppressed) |
-| "Security hardening" | production | build | builder, watcher, probe, gatekeeper, auditor, architect |
-| "Release candidate packaging" | production | build | builder, watcher, probe, gatekeeper, auditor |
+| "Settings UI panel" | prototype | build | builder |
+| "Auth token rotation" | production | build | builder, architect, gatekeeper, auditor |
+| "Database migration" | production | build | builder, watcher, architect, archaeologist, auditor |
+| "Performance optimization" | prototype | build | builder, measurer |
+| "Refactor legacy parser" | maintenance | build | builder, archaeologist, weaver |
+| "Discovery spike on vector DB" | discovery | build | scout, architect, oracle (builder suppressed) |
+| "Security hardening" | production | build | builder, architect, gatekeeper, auditor |
+| "Release candidate packaging" | production | build | builder, auditor, porter |
 
 ## Key Functions
 
@@ -166,5 +178,5 @@ Source: `casteAllowedForFlow`
 - `applyQueenSpawnBudget` — enforces max-workers cap, sorts required first
 - `queenSpawnBudgetForPhase` — assembles budget from flow + phase + state
 - `queenMaxWorkersForBudget` — returns max workers and human-readable reason
-- `queenBuildSafetyRequiredCastes` — build-specific required castes based on mode and risk
-- `queenBuildSafetyReviewRequired` — triggers review for production mode or security/release keywords
+- `queenBuildSafetyRequiredCastes` — build-specific required castes: `builder` on non-discovery phases, none on discovery (Plan 194-02, D-07)
+- `queenForcedReviewersForPhase` (`cmd/queen_risk_signals.go`) — the only place a reviewer is forced from: a named risk signal in the phase's own wording, applied at the continue step (D-05)

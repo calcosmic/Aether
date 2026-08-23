@@ -30,6 +30,11 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 		want  []string
 	}{
 		{
+			// Plan 194-02 (D-07): the build floor shrank to the builder
+			// alone -- watcher, probe, auditor and gatekeeper are no longer
+			// inferred from mode, position or blast-radius wording at build.
+			// A reviewer is now forced only by a named risk signal
+			// (queen_risk_signals.go), and only at the continue step (D-05).
 			flow: "build",
 			phase: colony.Phase{
 				Name: "Security hardening",
@@ -39,7 +44,7 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 				},
 			},
 			state: colony.ColonyState{},
-			want:  []string{"builder", "watcher", "probe", "auditor", "gatekeeper"},
+			want:  []string{"builder"},
 		},
 		{
 			flow: "continue",

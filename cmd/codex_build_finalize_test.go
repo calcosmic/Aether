@@ -1486,14 +1486,13 @@ func TestMergeExternalBuildResultsReturnsAllViolations(t *testing.T) {
 
 func TestValidateCompletionPacketSemanticsReturnsAllViolations(t *testing.T) {
 	root := setupExternalBuildAttemptTest(t)
-	manifest, completion := prepareExternalBuildCompletion(t, root)
+	manifest, completion := prepareExternalBuildCompletionWithSecondWorker(t, root)
 	_ = manifest
 
-	// Phase 193 (D-08): the fixture's second worker was the build-side
-	// watcher ("Keen-6"), dispatched only because the required-caste floor
-	// forced it with no Queen proposal. That implicit dispatch is gone, so
-	// the second worker here is now the probe ("Check-80") the fixture
-	// still produces unconditionally.
+	// Plan 194-02 (D-07) shrank the build floor to the builder alone, so
+	// this fixture's phase no longer produces a second dispatch on its own
+	// -- prepareExternalBuildCompletionWithSecondWorker adds "Keen-6" (the
+	// second worker this test needs) explicitly instead.
 	for i := range completion.Dispatches {
 		switch completion.Dispatches[i].effectiveName() {
 		case "Forge-86":
@@ -1502,7 +1501,7 @@ func TestValidateCompletionPacketSemanticsReturnsAllViolations(t *testing.T) {
 			// invalid handoff (task 2's mergeExternalBuildResults).
 			completion.Dispatches[i].FilesModified = []string{"/etc/passwd"}
 			completion.Dispatches[i].Handoff.VerificationStatus = "not-a-real-status"
-		case "Check-80":
+		case "Keen-6":
 			// Two more independent violations, again spanning both layers,
 			// on a second worker: an escaping claim path and a non-terminal
 			// status.
@@ -1519,7 +1518,7 @@ func TestValidateCompletionPacketSemanticsReturnsAllViolations(t *testing.T) {
 	rules := map[string]bool{}
 	for _, v := range violations {
 		rules[v.Rule] = true
-		if v.Worker != "Forge-86" && v.Worker != "Check-80" {
+		if v.Worker != "Forge-86" && v.Worker != "Keen-6" {
 			t.Errorf("violation attributed to unexpected worker %q: %+v", v.Worker, v)
 		}
 	}
@@ -1817,7 +1816,14 @@ func TestBuildFinalizeCollectsSuggestAnalyzeResults(t *testing.T) {
 	})
 
 	t.Run("suggest-analyze is invoked exactly once per finalize, never per dispatch", func(t *testing.T) {
-		root := setupExternalBuildAttemptTest(t)
+		// Plan 194-02 (D-07) shrank the build floor to the builder alone,
+		// so the base fixture's phase no longer produces a second dispatch
+		// on its own. This test's whole point is proving per-finalize (not
+		// per-dispatch) invocation, so it needs a real second dispatch —
+		// setupExternalBuildAttemptTestWithVerifiableWork's phase wording
+		// legitimately scores a watcher via relevance, keeping the manifest
+		// consistent with the durable build-attempt hash finalize checks.
+		root := setupExternalBuildAttemptTestWithVerifiableWork(t)
 		if err := os.WriteFile(filepath.Join(root, ".env"), []byte("SECRET=abc123\n"), 0o644); err != nil {
 			t.Fatalf("write .env fixture: %v", err)
 		}

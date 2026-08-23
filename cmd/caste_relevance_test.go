@@ -25,9 +25,9 @@ func TestQueenOrchestrate_SettingsUI(t *testing.T) {
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Settings UI: expected builder")
 	}
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Settings UI: expected watcher")
-	}
+	// Plan 194-02 (D-07): watcher is no longer required at build -- Phase 193
+	// (D-08) already stopped dispatching it there, and this floor shrink
+	// removes the requirement that used to restore it regardless.
 	if HasCaste(dispatches, "gatekeeper") {
 		t.Error("Settings UI: should NOT spawn gatekeeper for UI work")
 	}
@@ -59,14 +59,11 @@ func TestQueenOrchestrate_AuthToken(t *testing.T) {
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Auth token: expected builder")
 	}
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Auth token: expected watcher")
-	}
+	// Plan 194-02 (D-07): watcher and probe are no longer required at build;
+	// gatekeeper here is a genuine relevance-score hit on this phase's own
+	// security wording, not the deleted always-required floor.
 	if !HasCaste(dispatches, "gatekeeper") {
 		t.Error("Auth token: expected gatekeeper for security work")
-	}
-	if !HasCaste(dispatches, "probe") {
-		t.Error("Auth token: expected probe for verification")
 	}
 	if !HasCaste(dispatches, "architect") {
 		t.Error("Auth token: expected architect for design boundaries")
@@ -121,14 +118,9 @@ func TestQueenOrchestrate_Performance(t *testing.T) {
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Performance: expected builder")
 	}
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Performance: expected watcher")
-	}
+	// Plan 194-02 (D-07): watcher and probe are no longer required at build.
 	if !HasCaste(dispatches, "measurer") {
 		t.Error("Performance: expected measurer")
-	}
-	if !HasCaste(dispatches, "probe") {
-		t.Error("Performance: expected probe")
 	}
 }
 
@@ -149,9 +141,7 @@ func TestQueenOrchestrate_RefactorLegacy(t *testing.T) {
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Refactor: expected builder")
 	}
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Refactor: expected watcher")
-	}
+	// Plan 194-02 (D-07): watcher is no longer required at build.
 	if !HasCaste(dispatches, "weaver") {
 		t.Error("Refactor: expected weaver for restructuring")
 	}
@@ -403,73 +393,6 @@ func TestQueenOrchestrate_SealLightSkipsReviewGates(t *testing.T) {
 	}
 }
 
-func TestQueenOrchestratePreservesSafetyCastes(t *testing.T) {
-	safetyCastes := []string{"builder", "watcher", "probe", "gatekeeper", "auditor"}
-	tests := []struct {
-		name                string
-		phase               colony.Phase
-		belowThresholdCaste string
-	}{
-		{
-			name: "security",
-			phase: colony.Phase{
-				Name:        "Security hardening",
-				Description: "Protect privileged configuration before production rollout",
-				Mode:        colony.PhaseModeProduction,
-				Tasks: []colony.Task{
-					{Goal: "Build hardened configuration checks"},
-				},
-			},
-		},
-		{
-			name: "release",
-			phase: colony.Phase{
-				Name:        "Release candidate packaging",
-				Description: "Prepare the candidate for ship readiness",
-				Mode:        colony.PhaseModeProduction,
-				Tasks: []colony.Task{
-					{Goal: "Build release candidate artifacts"},
-				},
-			},
-			belowThresholdCaste: "gatekeeper",
-		},
-		{
-			name: "final-review",
-			phase: colony.Phase{
-				Name:        "Final review",
-				Description: "Complete final signoff before handoff",
-				Mode:        colony.PhaseModeProduction,
-				Tasks: []colony.Task{
-					{Goal: "Build final review evidence and address blockers"},
-				},
-			},
-			belowThresholdCaste: "gatekeeper",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			state := colony.ColonyState{}
-			if tt.belowThresholdCaste != "" {
-				score := casteRelevanceScore(tt.phase, tt.belowThresholdCaste)
-				threshold := spawnThreshold("build", state)
-				if score >= threshold {
-					t.Fatalf("%s fixture %s score = %d, want below build threshold %d so safety is not inferred from score",
-						tt.name, tt.belowThresholdCaste, score, threshold)
-				}
-			}
-
-			dispatches := queenOrchestrate(tt.phase, "build", state)
-
-			for _, caste := range safetyCastes {
-				if !HasCaste(dispatches, caste) {
-					t.Errorf("%s: expected safety caste %s to survive Queen orchestration", tt.name, caste)
-				}
-			}
-		})
-	}
-}
-
 func TestQueenOrchestrate_EmptyFlowDefaultsToBuild(t *testing.T) {
 	phase := colony.Phase{
 		Name: "Implementation phase",
@@ -545,10 +468,12 @@ func TestQueenSpawnBudgetAcceptanceContractIsCasteLevel(t *testing.T) {
 	budget := queenSpawnBudgetForPhase(phase, "build", colony.ColonyState{})
 	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
 
-	for _, caste := range []string{"builder", "watcher", "probe"} {
-		if !HasCaste(dispatches, caste) {
-			t.Fatalf("failure contract phase should keep required build caste %s", caste)
-		}
+	// Plan 194-02 (D-07): the required-caste floor shrank to the builder
+	// alone (watcher and probe are no longer forced), so the acceptance
+	// contract this test guards -- caste-level budget enforcement, not
+	// worker-count enforcement -- is now pinned on builder alone.
+	if !HasCaste(dispatches, "builder") {
+		t.Fatalf("failure contract phase should keep required build caste builder")
 	}
 	if len(dispatches) > budget.MaxWorkers {
 		t.Fatalf("selected caste count = %d, want <= Queen budget %d: %+v", len(dispatches), budget.MaxWorkers, dispatches)
@@ -639,86 +564,6 @@ func TestQueenSpawnBudgetDecisionsKeepsRequiredOverflow(t *testing.T) {
 		if !decision.Required || !decision.Selected {
 			t.Fatalf("%s decision = %+v, want required and selected", caste, decision)
 		}
-	}
-}
-
-func TestQueenSpawnBudgetDecisionsPreservesSafetyCastesUnderPressure(t *testing.T) {
-	tests := []struct {
-		name  string
-		phase colony.Phase
-	}{
-		{
-			name: "security",
-			phase: colony.Phase{
-				Name:        "Security hardening",
-				Description: "Protect privileged configuration before rollout",
-				Mode:        colony.PhaseModePrototype,
-				Tasks: []colony.Task{
-					{Goal: "Build hardened configuration checks"},
-				},
-			},
-		},
-		{
-			name: "release",
-			phase: colony.Phase{
-				Name:        "Release candidate packaging",
-				Description: "Prepare candidate artifacts for handoff",
-				Mode:        colony.PhaseModePrototype,
-				Tasks: []colony.Task{
-					{Goal: "Build candidate artifacts"},
-				},
-			},
-		},
-		{
-			name: "final-review",
-			phase: colony.Phase{
-				Name:        "Final review",
-				Description: "Complete final signoff evidence before handoff",
-				Mode:        colony.PhaseModePrototype,
-				Tasks: []colony.Task{
-					{Goal: "Build final review evidence"},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			budget := queenSpawnBudgetForPhase(tt.phase, "build", colony.ColonyState{})
-			dispatches := budgetPressureDispatches()
-			if len(dispatches) <= budget.MaxWorkers {
-				t.Fatalf("fixture dispatch count = %d, want budget pressure beyond max workers %d", len(dispatches), budget.MaxWorkers)
-			}
-
-			decisions := queenSpawnBudgetDecisions(dispatches, budget)
-
-			for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
-				decision, ok := budgetDecisionForCaste(decisions, caste)
-				if !ok {
-					t.Fatalf("%s: missing decision for safety caste %s", tt.name, caste)
-				}
-				if !decision.Required || !decision.Selected {
-					t.Fatalf("%s: %s decision = %+v, want required and selected under budget pressure", tt.name, caste, decision)
-				}
-			}
-		})
-	}
-}
-
-func budgetPressureDispatches() []CasteDispatch {
-	return []CasteDispatch{
-		{Caste: "ambassador", Score: 95},
-		{Caste: "architect", Score: 94},
-		{Caste: "auditor", Score: 10},
-		{Caste: "builder", Score: 10},
-		{Caste: "chaos", Score: 93},
-		{Caste: "gatekeeper", Score: 10},
-		{Caste: "keeper", Score: 92},
-		{Caste: "measurer", Score: 91},
-		{Caste: "probe", Score: 10},
-		{Caste: "scout", Score: 90},
-		{Caste: "watcher", Score: 10},
-		{Caste: "weaver", Score: 89},
 	}
 }
 

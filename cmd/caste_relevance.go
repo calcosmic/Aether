@@ -322,9 +322,15 @@ func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.C
 		case colony.VerificationDepthLight:
 			return caste == "watcher"
 		case colony.VerificationDepthHeavy:
-			// Heavy is an explicit request for the full gauntlet, so Probe
-			// stays even where it has little to chew on.
-			return caste == "watcher" || caste == "gatekeeper" || caste == "auditor" || caste == "probe"
+			// Heavy is an explicit request for the full review panel
+			// (gatekeeper + auditor + probe, D-13) -- but "full panel" still
+			// means probe only where there is something for it to cover.
+			// Probe used to stay unconditionally even on a documentation
+			// phase, billing a worker run to report it found nothing; D-13
+			// keeps heavy's coverage caste subject to the same testable-code
+			// gate standard depth already applies.
+			return caste == "watcher" || caste == "gatekeeper" || caste == "auditor" ||
+				(caste == "probe" && queenPhaseProducesTestableCode(phase))
 		default:
 			// Standard gates Probe on the phase actually having produced code.
 			// Build requires a Probe under the same condition, so leaving this

@@ -21,39 +21,38 @@ func hasCasteName(names []string, want string) bool {
 	return false
 }
 
-// TestQueenCannotDropTheWatcher is the load-bearing test of the whole
-// judgement path. Letting a model choose the team is only safe if its
-// judgement is bounded: a Queen that proposes a build with nothing verifying
-// it must get a Watcher anyway. Without this, "the Queen is intelligent"
-// becomes "the Queen can decide not to be checked".
-func TestQueenCannotDropTheWatcher(t *testing.T) {
-	phase := judgementPhase("Add a hello endpoint", "Implement the /hello route", colony.PhaseModePrototype)
-
-	judgement := queenApplyJudgement([]string{"builder"}, "simple change, builder is enough", phase, "build", colony.ColonyState{})
-
-	if !hasCasteName(judgement.Final, "watcher") {
-		t.Fatalf("Watcher must be restored when omitted; final = %v", judgement.Final)
-	}
-	if !hasCasteName(judgement.Added, "watcher") {
-		t.Errorf("restoring the Watcher must be reported in Added, got %v", judgement.Added)
-	}
-	if !strings.Contains(judgement.Summary(), "required for this phase regardless") {
-		t.Errorf("summary must disclose the override, got: %s", judgement.Summary())
-	}
-}
-
 // TestQueenCannotSkipSecurityReviewOnSecurityWork pins the other floor. A
 // proposal is judgement about which optional specialists help, not permission
 // to skip a security review on work that touches credentials.
+//
+// Plan 194-02 (D-05, D-07) moved this floor: it is no longer an unconditional
+// build-side restoration (mode/production inferred auditor+gatekeeper on
+// every build) but a named-risk signal forced at the continue step only.
+// This test now proves both halves of that move: the caste is still
+// unskippable (queenApplyJudgement restores it into Final on the continue
+// flow), AND the restored dispatch states WHY (D-09) -- something the old
+// build-side restoration never had to say.
 func TestQueenCannotSkipSecurityReviewOnSecurityWork(t *testing.T) {
 	phase := judgementPhase("Password reset", "Let users reset their password via an emailed token", colony.PhaseModeProduction)
 
-	judgement := queenApplyJudgement([]string{"builder", "watcher"}, "straightforward form work", phase, "build", colony.ColonyState{})
+	judgement := queenApplyJudgement([]string{"builder"}, "straightforward form work", phase, "continue", colony.ColonyState{})
+	if !hasCasteName(judgement.Final, "gatekeeper") {
+		t.Fatalf("gatekeeper must be restored on credential work; final = %v", judgement.Final)
+	}
 
-	for _, caste := range []string{"gatekeeper", "auditor"} {
-		if !hasCasteName(judgement.Final, caste) {
-			t.Errorf("%s must be restored on credential work; final = %v", caste, judgement.Final)
+	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, []string{"builder"}, "straightforward form work", nil)
+	found := false
+	for _, dispatch := range dispatches {
+		if dispatch.Caste != "gatekeeper" {
+			continue
 		}
+		found = true
+		if !strings.Contains(dispatch.Rationale, "this touches") {
+			t.Errorf("gatekeeper dispatch should state why it was forced, got rationale %q", dispatch.Rationale)
+		}
+	}
+	if !found {
+		t.Fatalf("gatekeeper missing from continue dispatch list: %+v", dispatches)
 	}
 }
 
@@ -237,14 +236,13 @@ func TestQueenChoiceReachesTheDispatchList(t *testing.T) {
 	if !spawned["measurer"] {
 		t.Errorf("Queen asked for a Measurer and none spawned; castes = %v", casteKeys(spawned))
 	}
-	// Phase 193 (D-08): the floor no longer holds in the same list. Watcher
-	// is still restored into the required-castes floor (proven separately by
-	// TestQueenCannotDropTheWatcher against queenApplyJudgement itself), but
-	// the build's own verification-stage dispatch now fires only when the
-	// Queen's proposal explicitly named the watcher -- it did not here, so
-	// no build-side watcher spawns. Agent review for an unrequested watcher
-	// lives in `continue`, not the build boundary (ruling D11 rule 4: a
-	// phase is verified once).
+	// Phase 193 (D-08) stopped the build's own verification-stage dispatch
+	// from firing without an explicit Queen proposal naming the watcher --
+	// it did not here, so no build-side watcher spawns. Plan 194-02 (D-07)
+	// went further and removed watcher from the required-castes floor
+	// entirely, so there is no longer a restoration path to prove here
+	// either. Agent review for an unrequested watcher lives in `continue`,
+	// not the build boundary (ruling D11 rule 4: a phase is verified once).
 	if spawned["watcher"] {
 		t.Errorf("watcher must not spawn at the build boundary without an explicit Queen proposal; castes = %v", casteKeys(spawned))
 	}

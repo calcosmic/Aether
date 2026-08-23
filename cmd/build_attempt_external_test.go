@@ -298,6 +298,47 @@ func setupExternalBuildAttemptTest(t *testing.T) string {
 	return root
 }
 
+// setupExternalBuildAttemptTestWithVerifiableWork is a variant of
+// setupExternalBuildAttemptTest whose phase wording legitimately scores a
+// second caste (architect, via the "design" keyword) above the build spawn
+// threshold, so the resulting manifest carries two REAL dispatches from the
+// program's own relevance scoring. Watcher cannot be used for this: 193
+// (D-08) removed watcher from the build dispatch plans entirely (see
+// queenBuildPreWavePlans / queenBuildPostWavePlans), so a watcher can score
+// above threshold and still never appear in a real manifest. Architect DOES
+// have a build dispatch plan (queenBuildPreWavePlans, wave 2). Unlike a
+// post-hoc synthetic dispatch (prepareExternalBuildCompletionWithSecondWorker),
+// this stays consistent with the durable build-attempt hash check
+// runCodexBuildFinalize enforces, so it is the right fixture for any test
+// that runs a real finalize and needs more than one dispatch. The base
+// fixture stays single-dispatch (just the builder, after 194-02's floor
+// shrink) for every other caller.
+func setupExternalBuildAttemptTestWithVerifiableWork(t *testing.T) string {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Make external build finalization durable"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "standard",
+		CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:          1,
+			Name:        "External attempt",
+			Description: "Bind one wrapper dispatch to one lifecycle commit; design the boundary first",
+			Status:      colony.PhaseReady,
+			Tasks:       []colony.Task{{ID: &taskID, Goal: "Write durable evidence", Status: colony.TaskPending}},
+		}}},
+	})
+	return root
+}
+
 func prepareExternalBuildCompletion(t *testing.T, root string) (codexBuildManifest, codexExternalBuildCompletion) {
 	t.Helper()
 	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
@@ -333,6 +374,45 @@ func prepareExternalBuildCompletion(t *testing.T, root string) (codexBuildManife
 		results = append(results, worker)
 	}
 	return manifest, codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+}
+
+// prepareExternalBuildCompletionWithSecondWorker extends
+// prepareExternalBuildCompletion with a synthetic second worker dispatch.
+// Before plan 194-02 shrank the build floor to the builder alone
+// (194-CONTEXT.md D-07), this fixture's phase always produced at least two
+// dispatches -- builder plus the unconditionally-required watcher -- with no
+// extra setup. That floor is gone, so a test that needs two independent
+// workers to prove per-worker (not per-caste-floor) behavior now builds that
+// second worker explicitly. "Keen-6" was this fixture's watcher's actual name
+// before the floor shrank (see the finalize test's own comment); reused here
+// so the fixture reads the same to anyone who remembers it.
+func prepareExternalBuildCompletionWithSecondWorker(t *testing.T, root string) (codexBuildManifest, codexExternalBuildCompletion) {
+	t.Helper()
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+
+	base := manifest.Dispatches[0]
+	second := base
+	second.Caste = "watcher"
+	second.Name = "Keen-6"
+	manifest.Dispatches = append(manifest.Dispatches, second)
+	completion.DispatchManifest = &manifest
+
+	completion.Dispatches = append(completion.Dispatches, codexExternalBuildWorkerResult{
+		Stage:         second.Stage,
+		Wave:          second.Wave,
+		ExecutionWave: second.ExecutionWave,
+		Caste:         second.Caste,
+		Name:          second.Name,
+		TaskID:        second.TaskID,
+		Status:        "completed",
+		Summary:       second.Name + " completed externally",
+		Handoff: codex.WorkerHandoff{
+			CommandsRun:            []string{"go test ./..."},
+			VerificationStatus:     "pass",
+			NextWorkerInstructions: []string{second.Name + " work is complete"},
+		},
+	})
+	return manifest, completion
 }
 
 // TestBuildFinalizeRejectsCompletedWorkerWithoutHandoff locks in the

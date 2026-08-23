@@ -273,11 +273,15 @@ func TestGoldenBuildVisualOutput(t *testing.T) {
 	compareGolden(t, goldenPath, output)
 
 	// Verify golden content expectations (only when not updating)
+	//
+	// Plan 194-02 (D-07): "Watcher" is no longer among these -- the build
+	// floor shrank to the builder alone, and this fixture's wording does not
+	// score watcher above the relevance threshold either.
 	if !*updateGolden {
 		clean := normalizeForGolden(output)
 		for _, want := range []string{
 			"B U I L D   D I S P A T C H   1", "S P A W N   P L A N",
-			"Builder", "Watcher",
+			"Builder",
 			"── Context ──", "── Tasks ──", "── Dispatch ──",
 			"── Verification", "── Housekeeping ──",
 			"── Colony Complete ──",

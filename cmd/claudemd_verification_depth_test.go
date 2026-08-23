@@ -151,24 +151,29 @@ func TestBuildWorkerCapHonoursVerificationDepth(t *testing.T) {
 	}
 }
 
-// TestBuildDepthCapDoesNotStripRequiredSafetyCastes guards the reason the cap is
-// safe to apply. Lowering the worker budget must never remove a caste the phase
-// requires — those bypass the budget — or "run it light" would silently drop the
-// auditor and gatekeeper from a high-risk phase.
+// TestBuildDepthCapDoesNotStripRequiredSafetyCastes guards the reason the cap
+// is safe to apply. Lowering the worker budget must never remove a caste a
+// phase genuinely requires.
+//
+// Plan 194-02 (D-05, D-07) moved WHERE that requirement comes from: it used
+// to be "a production phase requires a quality and security reviewer" at
+// build (queenBuildSafetyRequiredCastes, now deleted); it is now "a phase
+// whose wording names a risk signal keeps its forced reviewer", asserted at
+// the continue step where reviewers are forced under the new rules. The
+// claim this test guards is unchanged -- a light worker budget must never
+// silently drop a reviewer the phase actually needs -- only its fixture and
+// flow moved to match where the floor now lives.
 func TestBuildDepthCapDoesNotStripRequiredSafetyCastes(t *testing.T) {
-	phase := colony.Phase{ID: 1, Name: "Security hardening", Mode: colony.PhaseModeProduction}
-	required := queenBuildSafetyRequiredCastes(phase)
+	phase := colony.Phase{ID: 1, Name: "Password reset", Description: "Let users reset their password by email", Mode: colony.PhaseModePrototype}
 
-	for _, caste := range []string{"auditor", "gatekeeper"} {
-		found := false
-		for _, r := range required {
-			if r == caste {
-				found = true
-				break
-			}
+	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil)
+	found := false
+	for _, dispatch := range dispatches {
+		if dispatch.Caste == "gatekeeper" {
+			found = true
 		}
-		if !found {
-			t.Fatalf("%s is no longer a required caste for a high-risk production phase; the light cap would now remove it", caste)
-		}
+	}
+	if !found {
+		t.Fatalf("gatekeeper is missing from a light-depth continue dispatch for a phase whose wording names a security signal; light must not strip a forced reviewer: %+v", dispatches)
 	}
 }

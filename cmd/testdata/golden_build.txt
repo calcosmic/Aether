@@ -11,14 +11,10 @@ Wave 1
   Execution: serial — single task in this wave
   🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks g-task-1, g-task-2]
 
-Post-Wave: Probe
-  Execution: serial — post-wave independent verification of builder claims
-  🧪🐜 Probe Worker-XX  Independent probe verification of builder claims
-
-Total planned dispatches: 2
+Total planned dispatches: 1
 2 dependent tasks were folded into 1 worker — every task still has a claimant, listed above.
 
-The Queen chose this team for the phase: Builder, Probe.
+The Queen chose this team for the phase: Builder.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
 Safety castes a risky phase needs are kept at every size.
 
@@ -34,17 +30,6 @@ Wave 11 starting (in-repo, serial)
 … 🔨🐜 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
 
 ✓ 🔨🐜 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
-
-── Dispatch ──
-Wave 13 starting (in-repo, serial)
-  Execution: serial — single task in this wave
-──── 🧪🐜 Spawning Worker-XX — Worker: Worker-XX ────
-
-… 🧪🐜 Probe [sonnet] Worker-XX  starting wave 13  Worker: Worker-XX
-
-… 🧪🐜 Probe Worker-XX  running wave 13  Worker: Worker-XX  [simulated worker heartbeat observed]
-
-✓ 🧪🐜 Probe Worker-XX  completed 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
 
   Step 4/5: Verify (0s)
   Step 5/5: Complete (0s)
@@ -63,8 +48,6 @@ Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"
 ── Dispatch ──
 Queen's Team
   🔨🐜 Builder — builder is always required for build flow
-  🧪🐜 Probe — probe is always required for build flow
-  👁️🐜 Watcher — watcher is always required for build flow
 
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -72,14 +55,10 @@ Wave 1
   Execution: serial — single task in this wave
   🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks g-task-1, g-task-2]  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
 
-Post-Wave: Probe
-  Execution: serial — post-wave independent verification of builder claims
-  🧪🐜 Probe Worker-XX  Independent probe verification of builder claims  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
-
-Total planned dispatches: 2
+Total planned dispatches: 1
 2 dependent tasks were folded into 1 worker — every task still has a claimant, listed above.
 
-The Queen chose this team for the phase: Builder, Probe.
+The Queen chose this team for the phase: Builder.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
 Safety castes a risky phase needs are kept at every size.
 ━━ 🗂️ A R T I F A C T S ━━

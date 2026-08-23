@@ -537,17 +537,22 @@ func TestContinueReviewDispatch_StandardMode_SpawnsProbeOnly(t *testing.T) {
 // restoring watcher no longer forces a build-time dispatch by itself. Probe
 // still dispatches at standard depth because that dispatch (queenCastes, not
 // queenAskedFor) is untouched by this change.
-func TestBuildDispatch_StandardMode_IncludesWatcherAndProbe(t *testing.T) {
+// TestBuildDispatch_StandardMode_SkipsWatcherAndProbeWithoutASignal used to
+// assert the opposite of its current name: standard mode unconditionally
+// dispatched both watcher and probe at build. Phase 193 (D-08) removed
+// watcher's build-side dispatch; plan 194-02 (D-07) shrank the required-caste
+// floor to the builder alone, so probe is no longer forced either -- it
+// spawns only where the phase's own wording genuinely scores it above the
+// relevance threshold, which "Do something" does not.
+func TestBuildDispatch_StandardMode_SkipsWatcherAndProbeWithoutASignal(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthStandard)
-	hasWatcher := false
-	hasProbe := false
 	for _, d := range dispatches {
 		if d.Caste == "watcher" {
-			hasWatcher = true
+			t.Error("standard mode should not include a build-side watcher dispatch without an explicit Queen proposal")
 		}
 		if d.Caste == "probe" {
-			hasProbe = true
+			t.Error("standard mode should not include a build-side probe dispatch without a genuine relevance signal")
 		}
 		if d.Caste == "measurer" {
 			t.Error("standard mode should skip measurer dispatch")
@@ -555,12 +560,6 @@ func TestBuildDispatch_StandardMode_IncludesWatcherAndProbe(t *testing.T) {
 		if d.Caste == "chaos" {
 			t.Error("standard mode should skip chaos dispatch")
 		}
-	}
-	if hasWatcher {
-		t.Error("standard mode should not include a build-side watcher dispatch without an explicit Queen proposal")
-	}
-	if !hasProbe {
-		t.Error("standard mode should include probe dispatch")
 	}
 }
 
@@ -1521,7 +1520,9 @@ func TestRecommendQueenExecutionPolicyMatchesContinueDepthSpawnBudget(t *testing
 	if strings.TrimSpace(budget.Reason) == "" {
 		t.Fatalf("budget metadata incomplete: %+v", budget)
 	}
-	if !containsString(budget.RequiredCastes, "builder") || !containsString(budget.RequiredCastes, "watcher") {
+	// Plan 194-02 (D-07): watcher is no longer a required build caste --
+	// builder is the only unconditional member of the build floor.
+	if !containsString(budget.RequiredCastes, "builder") {
 		t.Fatalf("required_castes missing build safety castes: %+v", budget.RequiredCastes)
 	}
 	if budget.RelevanceThreshold == nil || *budget.RelevanceThreshold != spawnThreshold("build", state) {
