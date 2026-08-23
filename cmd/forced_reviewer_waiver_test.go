@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -264,5 +265,158 @@ func TestDecisionAnswerResolvesARuntimeCreatedWaiverRow(t *testing.T) {
 	}
 	if reason != "already checked by hand" {
 		t.Fatalf("reason = %q, want the owner's recorded answer", reason)
+	}
+}
+
+// spawnLogArgsForPhase is the real `aether spawn-log` invocation the wrapper
+// triplet (.claude/commands/ant/build.md and its two mirrors) now sends
+// before every worker, with --phase added by this fix. It is what actually
+// closes the forced-reviewer decline window (closeForcedReviewerWaiverWindowForPhase,
+// cmd/forced_reviewer_waiver.go), called from spawn-log's own RunE
+// (cmd/spawn.go).
+func spawnLogArgsForPhase(phase int) []string {
+	return []string{
+		"spawn-log",
+		"--parent", "Queen",
+		"--caste", "builder",
+		"--name", "Mason-1",
+		"--task", "build the password reset flow",
+		"--depth", "1",
+		"--phase", strconv.Itoa(phase),
+	}
+}
+
+// TestForcedReviewerDeclineWindowClosesWhenDispatchBegins is the CR-01
+// residual's negative proof (194-REVIEW.md iteration 2): the check-in card
+// renders a live forced reviewer (writing the pending row), the owner does
+// NOT decline it (the default, recommended "proceed" path -- no
+// decision-answer call at all), and dispatch genuinely begins (the real
+// spawn-log CLI command, exactly as the wrapper now calls it, with
+// --phase). A decision-answer call made AFTER that point -- simulating a
+// worker's own Bash tool, a stray script, or a prompt-injected instruction
+// running the exact command the card legitimately displayed -- must be
+// refused: the reviewer the owner never declined must still be forced.
+func TestForcedReviewerDeclineWindowClosesWhenDispatchBegins(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := checkinFixturePhase(
+		"Password reset",
+		"Let users reset their password via an emailed token",
+		colony.PhaseModePrototype,
+	)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
+	if _, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches); !strings.Contains(visual, "To decline, run:") {
+		t.Fatalf("expected the card to show a live decline command; visual:\n%s", visual)
+	}
+
+	// Dispatch genuinely begins -- the owner never ran decision-answer.
+	rootCmd.SetArgs(spawnLogArgsForPhase(1))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-log returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	// A later decision-answer call with the card's exact question -- the
+	// forgery/misuse this test exists for -- must now be refused.
+	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "auto", "--phase", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("decision-answer returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	if waived, reason := forcedReviewerWaiver(1, "credentials/auth"); waived {
+		t.Fatalf("a decision-answer call issued AFTER dispatch began must never waive the reviewer; reason = %q", reason)
+	}
+	reviewers := queenForcedContinueReviewers(phase, nil, nil)
+	if len(reviewers) != 1 {
+		t.Fatalf("reviewer the owner never declined must still be forced after dispatch began; reviewers = %+v", reviewers)
+	}
+}
+
+// TestOwnerDeclineBeforeDispatchStaysHonoredOnceDispatchBegins is the
+// positive companion: the owner's REAL decline path (running
+// decision-answer at the check-in pause, before any worker is dispatched)
+// must keep working exactly as before, even after spawn-log later closes
+// the window for that phase.
+func TestOwnerDeclineBeforeDispatchStaysHonoredOnceDispatchBegins(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := checkinFixturePhase(
+		"Password reset",
+		"Let users reset their password via an emailed token",
+		colony.PhaseModePrototype,
+	)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
+	renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+
+	// The owner declines BEFORE dispatch begins -- the real path.
+	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("decision-answer returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	// Dispatch now begins.
+	rootCmd.SetArgs(spawnLogArgsForPhase(1))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-log returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	waived, reason := forcedReviewerWaiver(1, "credentials/auth")
+	if !waived {
+		t.Fatalf("the owner's genuine decline, made before dispatch began, must still be honored after dispatch begins")
+	}
+	if reason != "already checked by hand" {
+		t.Fatalf("reason = %q, want the owner's recorded answer", reason)
+	}
+	if reviewers := queenForcedContinueReviewers(phase, nil, nil); len(reviewers) != 0 {
+		t.Fatalf("owner's declined reviewer must not be forced; reviewers = %+v", reviewers)
+	}
+}
+
+// TestSpawnLogWithNoCardRenderedIsANoOpAndReviewerStaysForced covers the
+// --no-checkin / autopilot lane: no check-in card is ever rendered, so no
+// pending forced-reviewer row is ever created. spawn-log's window-closing
+// call (closeForcedReviewerWaiverWindowForPhase) must be a silent no-op in
+// that case -- no error, no stray row created -- and the forced reviewer
+// must still be live at continue time, exactly as
+// TestAutopilotNeverWaives already requires for the no-decision-answer
+// path.
+func TestSpawnLogWithNoCardRenderedIsANoOpAndReviewerStaysForced(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupBuildFlowTest(t)
+
+	phase := waiverFixturePhase(12, "Password reset", "Let users reset their password via an emailed token")
+
+	rootCmd.SetArgs(spawnLogArgsForPhase(12))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-log returned error with no card ever rendered: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	pending := loadPendingDecisionFile()
+	for _, d := range pending.Decisions {
+		if d.Source == "forced-reviewer-waiver" {
+			t.Fatalf("spawn-log with no card render must not create a forced-reviewer-waiver row; got %+v", d)
+		}
+	}
+
+	reviewers := queenForcedContinueReviewers(phase, nil, nil)
+	if len(reviewers) != 1 {
+		t.Fatalf("forced reviewer must still be live when no card was ever rendered; reviewers = %+v", reviewers)
 	}
 }

@@ -13,7 +13,7 @@ requires:
   - phase: 194-06
     provides: "the changed-files risk-signal detector — what makes 'stays waived when the files re-detect it' provable"
 provides:
-  - "cmd/forced_reviewer_waiver.go — an owner-only, one-signal-one-phase waiver read through the existing decision-answer/answeredDecisionTexts path, with no persisted state of its own"
+  - "cmd/forced_reviewer_waiver.go — an owner-only, one-signal-one-phase waiver read through the existing decision-answer/answeredDecisionTexts path, with no persisted state of its own (CORRECTED 2026-08-23, 194-REVIEW.md CR-01 fixes: this module now maintains its own persisted state — a runtime-written pending-decisions.json row per live forced reviewer, and a phase-dispatch-started.json record of when dispatch began for each phase, so a decline recorded after dispatch begins is refused. See cmd/forced_reviewer_waiver.go's own doc comment for the current design.)"
   - "applyForcedReviewerWaivers filtering inside queenForcedContinueReviewers — the single choke point both continue lanes already share"
   - "the check-in card's waived/waive_commands result keys and rendered decline block"
   - "a visually separated check-in card (blank lines between worker rows, `── Title ──` rule lines between sections) per live owner feedback on the card's readability"

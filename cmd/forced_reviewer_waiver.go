@@ -8,6 +8,114 @@ import (
 	"time"
 )
 
+// phaseDispatchWindowFileName holds, per phase, the moment worker dispatch
+// actually began -- CR-01's residual (194-REVIEW.md iteration 2). The
+// original CR-01 fix closed the forgery path (a --question with no runtime-
+// created row is refused) but left the runtime-created row open, resolvable,
+// for the ENTIRE build: the owner's default answer ("proceed") never calls
+// decision-answer at all, so the pending row sat open exactly as long after
+// the owner kept the reviewer as before they answered, and anything able to
+// invoke the aether binary during the build (a worker's own Bash tool, a
+// stray script, a prompt-injected instruction) could run the exact command
+// the card legitimately displayed and silently waive a reviewer the owner
+// never declined. This file closes that window: once dispatch has begun for
+// a phase, no later decision-answer call can resolve that phase's
+// forced-reviewer row, no matter who calls it or how correctly it is shaped.
+const phaseDispatchWindowFileName = "phase-dispatch-started.json"
+
+// phaseDispatchWindowFile is the on-disk shape of phaseDispatchWindowFileName:
+// phase number (as a string map key -- JSON object keys are always strings)
+// -> the RFC3339Nano time dispatch first began for that phase.
+type phaseDispatchWindowFile struct {
+	Phases map[string]string `json:"phases"`
+}
+
+func loadPhaseDispatchWindowFile() phaseDispatchWindowFile {
+	var file phaseDispatchWindowFile
+	if store != nil {
+		_ = store.LoadJSON(phaseDispatchWindowFileName, &file)
+	}
+	if file.Phases == nil {
+		file.Phases = map[string]string{}
+	}
+	return file
+}
+
+// phaseDispatchStartedAt reports the recorded dispatch-start time for
+// phaseID, and whether one has been recorded at all. No record means
+// dispatch has not yet begun for that phase (or this build never reached the
+// point that records one, e.g. it failed before any worker spawned).
+func phaseDispatchStartedAt(phaseID int) (time.Time, bool) {
+	if phaseID <= 0 {
+		return time.Time{}, false
+	}
+	file := loadPhaseDispatchWindowFile()
+	raw := strings.TrimSpace(file.Phases[strconv.Itoa(phaseID)])
+	if raw == "" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+// closeForcedReviewerWaiverWindowForPhase is called the moment dispatch has
+// genuinely begun for phaseID -- from spawn-log (cmd/spawn.go), on every
+// worker spawn, the runtime's own record that a worker is about to be told
+// to run. This is the earliest point in the runtime that fires AFTER the
+// owner has seen the check-in card (and answered it, or chose to proceed
+// without answering) and BEFORE any worker's own Bash tool could possibly
+// execute a command. It does two things:
+//
+//  1. Records the dispatch-start time for this phase, keeping the EARLIEST
+//     one if called more than once (one call per worker spawned in the same
+//     build) -- this is what forcedReviewerWaiver checks below.
+//  2. Removes every still-PENDING (unresolved) forced-reviewer waiver row
+//     for this phase. A later decision-answer call for that exact question
+//     text now finds no matching row and is refused by the SAME path CR-01
+//     already built for "no card was ever rendered" -- resolveForcedReviewer-
+//     WaiverPendingDecision requires a matching unresolved row and creates
+//     nothing new. A row the owner ALREADY resolved (a genuine decline made
+//     before this call ever ran) is left untouched -- the owner's real path
+//     must keep working.
+//
+// Idempotent and best-effort throughout: a second call for a phase whose
+// window is already closed touches nothing further, and any failure here
+// (an unreadable or unwritable store) must never fail the spawn that
+// triggered it -- this function returns nothing and the caller does not
+// branch on it.
+func closeForcedReviewerWaiverWindowForPhase(phaseID int, at time.Time) {
+	if store == nil || phaseID <= 0 {
+		return
+	}
+
+	windowFile := loadPhaseDispatchWindowFile()
+	key := strconv.Itoa(phaseID)
+	if strings.TrimSpace(windowFile.Phases[key]) == "" {
+		windowFile.Phases[key] = at.UTC().Format(time.RFC3339Nano)
+		_ = store.SaveJSON(phaseDispatchWindowFileName, windowFile)
+	}
+
+	pending := loadPendingDecisionFile()
+	kept := make([]PendingDecision, 0, len(pending.Decisions))
+	changed := false
+	for _, d := range pending.Decisions {
+		if !d.Resolved && d.Source == "forced-reviewer-waiver" && d.Phase != nil && *d.Phase == phaseID {
+			changed = true
+			continue
+		}
+		kept = append(kept, d)
+	}
+	if changed {
+		pending.Decisions = kept
+		_ = store.SaveJSON(pendingDecisionsFile, pending)
+	}
+}
+
 // This file holds the owner's ONLY way to decline a forced reviewer (D-03,
 // .planning/phases/194-the-queen-decides-the-team/194-CONTEXT.md). It follows
 // cmd/criterion_owner_confirmation.go line for line in structure: a stable
@@ -126,15 +234,33 @@ func forcedReviewerWaiver(phaseID int, signal string) (waived bool, reason strin
 	if target == "" {
 		return false, ""
 	}
+	// CR-01 residual (194-REVIEW.md iteration 2): defense in depth against a
+	// resolved row that reached pending-decisions.json some way other than
+	// resolveForcedReviewerWaiverPendingDecision (e.g. a direct edit of the
+	// JSON file, bypassing the CLI and its dispatch-start check entirely).
+	// Even a genuinely resolved, correctly-worded entry is only honored if
+	// it was resolved BEFORE dispatch began for this phase -- the owner's
+	// real decline, made at the check-in pause. A resolution timestamped at
+	// or after dispatch start could not have been the owner's answer at that
+	// pause (closeForcedReviewerWaiverWindowForPhase already deletes any
+	// still-pending row at that moment), so it is never honored here either.
+	dispatchedAt, dispatchStarted := phaseDispatchStartedAt(phaseID)
 	file := loadPendingDecisionFile()
 	for _, decision := range file.Decisions {
 		if !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
 			continue
 		}
 		question, _ := parseClarificationDescription(decision.Description)
-		if normalizeDecisionText(question) == target || normalizeDecisionText(decision.Description) == target {
-			return true, strings.TrimSpace(decision.Resolution)
+		if normalizeDecisionText(question) != target && normalizeDecisionText(decision.Description) != target {
+			continue
 		}
+		if dispatchStarted {
+			resolvedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(decision.ResolvedAt))
+			if err != nil || !resolvedAt.Before(dispatchedAt) {
+				continue
+			}
+		}
+		return true, strings.TrimSpace(decision.Resolution)
 	}
 	return false, ""
 }
@@ -264,6 +390,17 @@ func resolveForcedReviewerWaiverPendingDecision(question, answer string, phaseID
 	target := normalizeDecisionText(question)
 	if target == "" {
 		return PendingDecision{}, false, nil
+	}
+	// CR-01 residual (194-REVIEW.md iteration 2): once dispatch has begun for
+	// this phase, the decline window is closed -- refuse even if a matching
+	// pending row somehow still exists (closeForcedReviewerWaiverWindowForPhase
+	// deletes it the moment dispatch starts, but this is the second, explicit
+	// check that makes the refusal unconditional rather than depending on
+	// ordering between that deletion and this call).
+	if phaseID > 0 {
+		if _, started := phaseDispatchStartedAt(phaseID); started {
+			return PendingDecision{}, false, nil
+		}
 	}
 
 	var file PendingDecisionFile

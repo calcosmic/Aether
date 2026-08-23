@@ -91,6 +91,7 @@ var spawnLogCmd = &cobra.Command{
 			return nil
 		}
 		claimedDepth, _ := cmd.Flags().GetInt("depth")
+		phase, _ := cmd.Flags().GetInt("phase")
 
 		st := agent.NewSpawnTree(store, "spawn-tree.txt")
 		depth, denyReason := deriveSpawnDepth(st, parent)
@@ -120,6 +121,20 @@ var spawnLogCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to record spawn: %v", err), nil)
 			return nil
 		}
+
+		// CR-01 residual (194-REVIEW.md iteration 2): this is the earliest
+		// point in the runtime that fires after the owner has answered the
+		// check-in card (or chosen to proceed without answering) and before
+		// any worker this spawn describes could possibly run. --phase is
+		// optional so every existing caller (none of which pass it today)
+		// keeps working unchanged; when a caller does pass it, the first
+		// spawn for that phase closes that phase's forced-reviewer decline
+		// window. Best-effort: a failure here must never fail the spawn
+		// that already succeeded above.
+		if phase > 0 {
+			closeForcedReviewerWaiverWindowForPhase(phase, time.Now().UTC())
+		}
+
 		eventID := emitSpawnTreeCeremony(events.CeremonyPayload{
 			SpawnID: name,
 			Caste:   caste,
@@ -653,6 +668,7 @@ func init() {
 	spawnLogCmd.Flags().String("task", "", "Task description (required)")
 	spawnLogCmd.Flags().String("description", "", "Legacy alias for task description")
 	spawnLogCmd.Flags().Int("depth", 0, "Advisory only; the recorded depth is derived from --parent")
+	spawnLogCmd.Flags().Int("phase", 0, "Phase this worker is spawned for (optional); closes that phase's forced-reviewer decline window on first use")
 
 	spawnCompleteCmd.Flags().String("name", "", "Agent name to complete (required)")
 	spawnCompleteCmd.Flags().String("status", "", "Status: completed, failed, blocked (default: completed)")

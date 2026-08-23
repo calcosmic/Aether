@@ -7682,6 +7682,7 @@
       "id",
       "name",
       "parent",
+      "phase",
       "task"
     ],
     "parent_command": "",

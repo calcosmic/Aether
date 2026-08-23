@@ -303,7 +303,7 @@ Respect `execution_plan`: serial steps stay serial; parallel steps may spawn tog
 For each manifest wave:
 
 1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
-2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each worker.
+2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1 --phase $ARGUMENTS` before each worker -- `--phase` is what lets the runtime close the forced-reviewer decline window the moment dispatch begins (194-REVIEW.md CR-01 residual), so a later `decision-answer` call cannot silently drop a reviewer the owner never declined.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
 5. The worker's prompt = `dispatch_manifest.context_capsule` (read once, prepended verbatim) + the brief read VERBATIM from `dispatch.brief_path` — the routine channel every plan-only dispatch carries — falling back to inline `dispatch.brief` only on the rare dispatch where the runtime could not write the file + `dispatch.skill_section` when present + the newest `decision-answer` `prompt_section` when one exists (runtime-rendered owner steering). Nothing else, nothing invented.
