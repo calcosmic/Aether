@@ -109,7 +109,7 @@ the same file. Each plan names its own shared files in its objective.*
 Plans:
 **Wave 1**
 
-- [ ] 194-01-PLAN.md — Tracer: named risk forces one reviewer, recorded at build and dispatched once at the checking step (wave 1)
+- [x] 194-01-PLAN.md — Tracer: named risk forces one reviewer, recorded at build and dispatched once at the checking step (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

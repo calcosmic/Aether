@@ -4,17 +4,17 @@ milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 current_phase: 194
 current_phase_name: The Queen Decides the Team
-status: planning
-stopped_at: Phase 194 planned — 9 plans verified, ready to execute
-last_updated: "2026-08-23T01:22:36.755Z"
+status: executing
+stopped_at: Completed 194-01-PLAN.md
+last_updated: "2026-08-23T08:46:08.654Z"
 last_activity: 2026-08-23
-last_activity_desc: Phase 194 planned — 9 plans in 9 waves, plan checker passed on iteration 2
-state_head: c0bddbccf9c46a418cfc60e956ac86ebf1af7361
+last_activity_desc: Phase 194 execution started
+state_head: 4414a4a67cf751ad28188d84f168656a1c29752c
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 14
-  completed_plans: 5
+  completed_plans: 6
   percent: 14
 ---
 
@@ -25,17 +25,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 194 — The Queen Decides the Team (planned: 9 plans, ready to execute)
+**Current focus:** Phase 194 — The Queen Decides the Team
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 194 (The Queen Decides the Team) — READY TO EXECUTE
-Plan: — (9 planned, none executed)
-Status: Ready to execute (9 plans, verified by the plan checker on iteration 2)
-Last activity: 2026-08-23 — Phase 194 planned: 9 plans in 9 waves (split from 5 to fit the executor budget), verified
+Phase: 194 (The Queen Decides the Team) — EXECUTING
+Plan: 2 of 9
+Status: Ready to execute
+Last activity: 2026-08-23 — Phase 194 execution started
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Last activity: 2026-08-23 — Phase 194 planned: 9 plans in 9 waves (split from 
 | Phase 193 P03 | 23min | 2 tasks | 2 files |
 | Phase 193 P04 | 70min | 3 tasks | 12 files |
 | Phase 193 P05 | 43min | 3 tasks | 7 files |
+| Phase 194 P01 | 75min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,7 @@ Last activity: 2026-08-23 — Phase 194 planned: 9 plans in 9 waves (split from 
 - [Phase 193]: 193-04: Tasks 2 (builder evidence re-run) and 3 (owner confirmation) landed in one commit, not two -- both edit the same per-check evaluation loop in evaluatePhaseCriterionEvidence and could not be cleanly split by git hunk — Task 1 (reconciliation) was cleanly separable via git add -p and is its own commit
 - [Phase 193]: Verification tests are scoped to the Go packages a phase's changed files touched (D-07), falling back to the full run whenever that scope cannot be honestly derived or on the plan's final phase; only the tests command is ever scoped. — Narrowing a compiler or linter changes what it can see, so build/types/lint always run as configured; only the tests command has a safe scoped runner (go test ./dir/...).
 - [Phase 193]: A failing free check with no reviewer dispatched draws exactly one automatic builder fix attempt (D-02/D-03), recorded as a brand-new append-only entry in the build attempt journal; a second automatic attempt never happens and continue blocks with one exact re-run command if the re-run still fails. — The fix attempt must never overwrite the original result and must be visibly countable on the team card and cost line; a new attempt record is the same append-only discipline the out-of-band verification record already established.
+- [Phase 194]: [Phase 194] Plan 1: forced-reviewer Rationale carries a fixed "this touches ..." prefix so tests (and later the check-in card) can tell a signal-forced dispatch apart from the untouched legacy keyword/mode scoring engine sharing the same caste name -- without this, auditor's presence cannot distinguish "forced by a named signal" from "the pre-existing production-mode floor also drew it".
 
 ### Pending Todos
 
@@ -178,6 +180,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-23T00:30:21.251Z
-Stopped at: Phase 194 planned — ready to execute
-Resume file: .planning/phases/194-the-queen-decides-the-team/194-01-PLAN.md
+Last session: 2026-08-23T08:46:08.594Z
+Stopped at: Completed 194-01-PLAN.md
+Resume file: None
