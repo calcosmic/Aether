@@ -114,9 +114,17 @@ func TestLightContinueOfSecurityPhaseShowsSafetyRestorationLine(t *testing.T) {
 	}
 	taskID := "t1"
 	phase := colony.Phase{
-		ID:          1,
-		Name:        "Password reset by email",
-		Description: "Let a user reset their password with an emailed token, and store the credential hash. Harden auth token handling, refactor the legacy parser, and optimize latency.",
+		ID:   1,
+		Name: "Password reset by email",
+		// D-06 removed auditor's mode==production relevance boost (it was
+		// the same implicit "production ⇒ auditor" floor restated as a
+		// score), so this fixture's budget pressure can no longer come from
+		// that free 4th candidate. "crash" + "resilience" pulls in Chaos on
+		// its own keyword merit instead, restoring genuine pressure against
+		// light continue's 3-worker cap (watcher, gatekeeper and measurer
+		// already fill it) so a real prune -- not just Chaos's absence --
+		// is what this test now measures.
+		Description: "Let a user reset their password with an emailed token, and store the credential hash. Harden auth token handling, refactor the legacy parser, optimize latency, and add crash resilience handling.",
 		Mode:        colony.PhaseModeProduction,
 		Tasks:       []colony.Task{{ID: &taskID, Goal: "harden auth token handling, refactor legacy code, benchmark performance"}},
 	}

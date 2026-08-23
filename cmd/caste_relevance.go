@@ -13,6 +13,16 @@ type CasteRelevanceProfile struct {
 	Keywords   []string
 	Conditions []string // e.g., "mode==discovery", "risk==high"
 	BaseScore  int
+	// ReasonTemplate is D-09's answer for the fallback (no-proposal) engine:
+	// a plain-English sentence fragment with exactly one %q verb, filled with
+	// the literal keyword that matched this phase. It replaces the old
+	// "Score N >= threshold M for FLOW flow" string, which named an internal
+	// number and the flow-type identifier -- neither actionable by a reader
+	// who has never opened this repo. A caste with no entry here, and no
+	// matched keyword to fill it, is not returned as a fallback candidate at
+	// all (queenCandidateRationale): a pick the engine cannot word is not
+	// sent.
+	ReasonTemplate string
 }
 
 // CasteDispatch represents a caste the Queen has chosen to spawn.
@@ -27,21 +37,28 @@ type CasteDispatch struct {
 // Base scores are deliberately low (10-20) so castes only spawn when keywords match
 // or a flow policy marks them as required.
 var casteRelevanceRegistry = []CasteRelevanceProfile{
-	{Caste: "builder", Keywords: []string{"implement", "build", "create", "add", "write", "fix", "code", "deploy"}, BaseScore: 20},
-	{Caste: "watcher", Keywords: []string{"verify", "test", "validate", "check", "review", "quality"}, BaseScore: 20},
-	{Caste: "scout", Keywords: []string{"research", "investigate", "survey", "analyze", "document", "readme", "spec", "explore"}, BaseScore: 20},
-	{Caste: "route_setter", Keywords: []string{"plan", "route", "decompose", "structure", "organize"}, BaseScore: 15},
-	{Caste: "architect", Keywords: []string{"design", "schema", "architecture", "interface", "boundary", "structure", "evaluate"}, BaseScore: 20},
-	{Caste: "oracle", Keywords: []string{"research", "spike", "investigate", "evaluate", "unknown", "deep dive", "survey"}, Conditions: []string{"mode==discovery"}, BaseScore: 20},
-	{Caste: "chaos", Keywords: []string{"resilience", "failure", "robustness", "crash", "error handling", "stress test"}, BaseScore: 15},
-	{Caste: "archaeologist", Keywords: []string{"legacy", "migration", "modernize", "rewrite", "history", "refactor old"}, BaseScore: 20},
-	{Caste: "gatekeeper", Keywords: []string{"auth", "crypto", "security", "token", "secrets", "permissions", "compliance", "audit"}, BaseScore: 20},
-	{Caste: "auditor", Keywords: []string{"compliance", "audit", "production", "release", "quality gate", "standards"}, Conditions: []string{"mode==production"}, BaseScore: 20},
-	{Caste: "probe", Keywords: []string{"test coverage", "edge case", "validation", "verify", "missing tests", "coverage gap"}, BaseScore: 15},
-	{Caste: "measurer", Keywords: []string{"performance", "optimize", "latency", "scale", "benchmark", "memory", "cpu"}, BaseScore: 20},
-	{Caste: "ambassador", Keywords: []string{"api", "sdk", "oauth", "external service", "external integration", "integration", "webhook", "third-party", "stripe", "sendgrid", "twilio", "openai", "aws", "azure", "gcp"}, BaseScore: 20},
-	{Caste: "tracker", Keywords: []string{"bug", "fix", "regression", "investigate failure", "root cause", "issue"}, BaseScore: 20},
-	{Caste: "weaver", Keywords: []string{"refactor", "cleanup", "modernize", "extract", "simplify", "restructure"}, BaseScore: 20},
+	{Caste: "builder", Keywords: []string{"implement", "build", "create", "add", "write", "fix", "code", "deploy"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, something to implement"},
+	{Caste: "watcher", Keywords: []string{"verify", "test", "validate", "check", "review", "quality"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, something to verify"},
+	{Caste: "scout", Keywords: []string{"research", "investigate", "survey", "analyze", "document", "readme", "spec", "explore"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, something to research"},
+	{Caste: "route_setter", Keywords: []string{"plan", "route", "decompose", "structure", "organize"}, BaseScore: 15, ReasonTemplate: "the phase mentions %q, something to plan out"},
+	{Caste: "architect", Keywords: []string{"design", "schema", "architecture", "interface", "boundary", "structure", "evaluate"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, a design decision to make before code is written"},
+	{Caste: "oracle", Keywords: []string{"research", "spike", "investigate", "evaluate", "unknown", "deep dive", "survey"}, Conditions: []string{"mode==discovery"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, something worth deep research"},
+	{Caste: "chaos", Keywords: []string{"resilience", "failure", "robustness", "crash", "error handling", "stress test"}, BaseScore: 15, ReasonTemplate: "the phase mentions %q, a resilience concern"},
+	{Caste: "archaeologist", Keywords: []string{"legacy", "migration", "modernize", "rewrite", "history", "refactor old"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, history worth understanding before touching it"},
+	{Caste: "gatekeeper", Keywords: []string{"auth", "crypto", "security", "token", "secrets", "permissions", "compliance", "audit"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, a security-relevant surface"},
+	// The mode==production condition that used to sit here alongside
+	// applySpecialRules' now-deleted 100-score branch is gone too (not just
+	// the special rule): together the two implicit "production mode ⇒
+	// auditor" floors survived even after only one was removed, since base
+	// score (20) plus the condition boost (20) still cleared the spawn
+	// threshold (30) with no keyword match at all. D-06 removes this
+	// mechanism wherever it hides, not just the loudest copy of it.
+	{Caste: "auditor", Keywords: []string{"compliance", "audit", "production", "release", "quality gate", "standards"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, a quality or compliance concern"},
+	{Caste: "probe", Keywords: []string{"test coverage", "edge case", "validation", "verify", "missing tests", "coverage gap"}, BaseScore: 15, ReasonTemplate: "the phase mentions %q, a test-coverage concern"},
+	{Caste: "measurer", Keywords: []string{"performance", "optimize", "latency", "scale", "benchmark", "memory", "cpu"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, a performance question"},
+	{Caste: "ambassador", Keywords: []string{"api", "sdk", "oauth", "external service", "external integration", "integration", "webhook", "third-party", "stripe", "sendgrid", "twilio", "openai", "aws", "azure", "gcp"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, an external integration"},
+	{Caste: "tracker", Keywords: []string{"bug", "fix", "regression", "investigate failure", "root cause", "issue"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, pointing at a bug to investigate"},
+	{Caste: "weaver", Keywords: []string{"refactor", "cleanup", "modernize", "extract", "simplify", "restructure"}, BaseScore: 20, ReasonTemplate: "the phase mentions %q, a restructure without changing behaviour"},
 	// "pattern", "standard" and "document" are everyday engineering words, and
 	// at base 10 two incidental hits cleared the continue threshold — a phase
 	// that merely mentioned documenting a standard summoned a Keeper.
@@ -50,17 +67,17 @@ var casteRelevanceRegistry = []CasteRelevanceProfile{
 	// matching anchors on the LEFT boundary only, so "documentation" never
 	// matched the word "document" and the handoff the line above describes
 	// was never actually made -- the word ended up owned by nobody.
-	{Caste: "keeper", Keywords: []string{"knowledge", "convention", "preserve", "wisdom", "institutional"}, BaseScore: 10},
-	{Caste: "chronicler", Keywords: []string{"document", "docs", "guide", "readme", "changelog", "manual"}, BaseScore: 15},
-	{Caste: "includer", Keywords: []string{"accessibility", "a11y", "wcag", "screen reader", "aria", "inclusive"}, BaseScore: 15},
-	{Caste: "surveyor-provisions", Keywords: []string{"dependency", "dependencies", "provisions", "external", "integration", "stack", "package"}, BaseScore: 10},
-	{Caste: "surveyor-nest", Keywords: []string{"architecture", "structure", "layout", "map", "chamber", "directory"}, BaseScore: 10},
-	{Caste: "surveyor-disciplines", Keywords: []string{"convention", "discipline", "testing", "pattern", "practice", "standard"}, BaseScore: 10},
-	{Caste: "surveyor-pathogens", Keywords: []string{"pathogen", "debt", "fragile", "risk", "bug", "health", "failure"}, BaseScore: 10},
-	{Caste: "medic", Keywords: []string{"health", "diagnose", "repair", "heal", "fix state"}, BaseScore: 10},
-	{Caste: "fixer", Keywords: []string{"auto-fix", "repair", "patch", "remediate", "self-heal"}, BaseScore: 10},
-	{Caste: "porter", Keywords: []string{"deploy", "deliver", "ship", "publish", "release", "package"}, BaseScore: 10},
-	{Caste: "sage", Keywords: []string{"wisdom", "synthesize", "learn", "pattern", "retrospective"}, BaseScore: 10},
+	{Caste: "keeper", Keywords: []string{"knowledge", "convention", "preserve", "wisdom", "institutional"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, worth preserving as institutional knowledge"},
+	{Caste: "chronicler", Keywords: []string{"document", "docs", "guide", "readme", "changelog", "manual"}, BaseScore: 15, ReasonTemplate: "the phase mentions %q, something to document"},
+	{Caste: "includer", Keywords: []string{"accessibility", "a11y", "wcag", "screen reader", "aria", "inclusive"}, BaseScore: 15, ReasonTemplate: "the phase mentions %q, an accessibility concern"},
+	{Caste: "surveyor-provisions", Keywords: []string{"dependency", "dependencies", "provisions", "external", "integration", "stack", "package"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, a dependency worth mapping"},
+	{Caste: "surveyor-nest", Keywords: []string{"architecture", "structure", "layout", "map", "chamber", "directory"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, a structural question worth mapping"},
+	{Caste: "surveyor-disciplines", Keywords: []string{"convention", "discipline", "testing", "pattern", "practice", "standard"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, a convention worth documenting"},
+	{Caste: "surveyor-pathogens", Keywords: []string{"pathogen", "debt", "fragile", "risk", "bug", "health", "failure"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, a sign of technical debt"},
+	{Caste: "medic", Keywords: []string{"health", "diagnose", "repair", "heal", "fix state"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, a sign colony state needs repair"},
+	{Caste: "fixer", Keywords: []string{"auto-fix", "repair", "patch", "remediate", "self-heal"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, something to autonomously repair"},
+	{Caste: "porter", Keywords: []string{"deploy", "deliver", "ship", "publish", "release", "package"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, a release or delivery step"},
+	{Caste: "sage", Keywords: []string{"wisdom", "synthesize", "learn", "pattern", "retrospective"}, BaseScore: 10, ReasonTemplate: "the phase mentions %q, a lesson worth synthesising"},
 }
 
 // casteRelevanceScore returns a 0-100 score for how relevant a caste is to a phase.
@@ -173,10 +190,16 @@ func queenCandidateDispatches(phase colony.Phase, flowType string, state colony.
 		always := isAlwaysRequired(profile.Caste, flowType, phase, state)
 
 		if always || score >= threshold {
-			rationale := fmt.Sprintf("Score %d >= threshold %d for %s flow", score, threshold, flowType)
+			// D-09: no score arithmetic and no bare caste/flow-type name in a
+			// reason slot, ever -- a candidate whose selection this phase
+			// cannot word in plain English is not returned at all, rather than
+			// sent with a placeholder.
+			rationale := queenCandidateRationale(phase, profile, flowType, always)
+			if rationale == "" {
+				continue
+			}
 			if always {
 				score = 100
-				rationale = fmt.Sprintf("%s is always required for %s flow", profile.Caste, flowType)
 			}
 			if _, ok := seen[profile.Caste]; ok {
 				continue
@@ -192,6 +215,94 @@ func queenCandidateDispatches(phase colony.Phase, flowType string, state colony.
 	}
 
 	return dispatches
+}
+
+// matchedKeywordFor returns the first of profile's keywords the phase's text
+// contains, or "" if none matched -- the caste cleared the spawn threshold
+// through base score plus a Conditions boost alone (e.g. Oracle on a
+// discovery-mode phase with no keyword hit).
+func matchedKeywordFor(phase colony.Phase, profile CasteRelevanceProfile) string {
+	text := collectPhaseText(phase)
+	for _, kw := range profile.Keywords {
+		if containsKeyword(text, kw) {
+			return kw
+		}
+	}
+	return ""
+}
+
+// queenCandidateRationale is D-09's replacement for the deleted "Score N >=
+// threshold M for FLOW flow" and "CASTE is always required for FLOW flow"
+// strings: a sentence about what in THIS phase called for the caste. A caste
+// this function cannot word for is not returned as a candidate at all
+// (queenCandidateDispatches drops an empty result rather than sending a
+// placeholder).
+func queenCandidateRationale(phase colony.Phase, profile CasteRelevanceProfile, flowType string, always bool) string {
+	if always {
+		return queenAlwaysRequiredReason(profile.Caste, flowType, phase)
+	}
+	if keyword := matchedKeywordFor(phase, profile); keyword != "" && profile.ReasonTemplate != "" {
+		return fmt.Sprintf(profile.ReasonTemplate, keyword)
+	}
+	// No literal keyword matched, so the caste cleared the threshold through
+	// a phase-mode Conditions boost instead. Word the condition itself
+	// rather than leaving a scored-but-unworded pick unexplained.
+	return queenConditionRationale(phase, profile.Caste)
+}
+
+// queenAlwaysRequiredReason is D-09's plain-English answer for a caste the
+// runtime requires regardless of relevance scoring (isAlwaysRequired) --
+// never the deleted "X is always required for FLOW flow" phrasing, which
+// named the internal flow-type identifier rather than a reason a reader could
+// act on.
+func queenAlwaysRequiredReason(caste, flowType string, phase colony.Phase) string {
+	switch caste {
+	case "builder":
+		return "this phase has tasks that need code written"
+	case "watcher":
+		return "the work this phase produces needs an independent check before it advances"
+	case "probe":
+		return "this phase produces code worth testing, so a coverage gap is worth catching"
+	case "gatekeeper":
+		return "this phase's risk level calls for a security review before advancing"
+	case "auditor":
+		return "this phase's risk level calls for a quality review before advancing"
+	case "route_setter":
+		return "the goal still needs breaking down into ordered phases and tasks"
+	case "scout":
+		if effectiveQueenPhaseMode(phase) == colony.PhaseModeDiscovery {
+			return "this is a discovery phase, so research is the deliverable"
+		}
+		return "the plan needs a look at the codebase before it can be broken down"
+	case "surveyor-nest":
+		return "the colony cannot start without a map of the codebase's structure"
+	case "surveyor-provisions":
+		return "the colony cannot start without knowing what this codebase depends on"
+	case "surveyor-disciplines":
+		return "the colony needs the codebase's conventions and testing patterns captured"
+	case "surveyor-pathogens":
+		return "the colony needs the codebase's technical debt and fragile areas mapped"
+	case "tracker":
+		return "a bug investigation always needs someone finding the root cause"
+	}
+	return ""
+}
+
+// queenConditionRationale words a caste whose score cleared the threshold
+// through a phase-mode Conditions boost (conditionScore) rather than a
+// literal keyword hit.
+func queenConditionRationale(phase colony.Phase, caste string) string {
+	switch caste {
+	case "oracle":
+		if phase.Mode == colony.PhaseModeDiscovery {
+			return "this is a discovery phase and the approach is not yet known"
+		}
+	case "architect":
+		if phaseRiskLevel(phase) == "high" {
+			return "this is high-risk work, and a design boundary is worth setting before code is written"
+		}
+	}
+	return ""
 }
 
 // findProfile looks up a caste's relevance profile.
@@ -247,16 +358,16 @@ func applySpecialRules(phase colony.Phase, caste string, score int) int {
 		if phase.Mode == colony.PhaseModeDiscovery {
 			return 0
 		}
-	case "gatekeeper":
-		// Auto-include if risk is high
-		if phaseRiskLevel(phase) == "high" {
-			return 100
-		}
-	case "auditor":
-		// Auto-include for production mode or final phase
-		if phase.Mode == colony.PhaseModeProduction {
-			return 100
-		}
+	// The gatekeeper-on-high-risk and auditor-on-production 100-score
+	// branches that used to sit here are deleted (D-06): they were the
+	// implicit "high risk ⇒ security review" and "production mode ⇒ quality
+	// review" floors, restated as scores instead of as required castes --
+	// the same rule Ruling D11 already removed from
+	// queenBuildSafetyRequiredCastes, still alive here under a different
+	// name. With the selector gated (plan 194-05's probe-refusal work), what
+	// is left of these castes' scores now only decides REFUSAL (a proposed
+	// caste scoring 0 is still refused for having nothing to do), never
+	// selection -- neither caste is summoned by mode or risk alone anymore.
 	case "scout":
 		// Boost for research-heavy phases
 		if strings.Contains(text, "research") || strings.Contains(text, "investigate") {

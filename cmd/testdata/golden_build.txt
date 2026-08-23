@@ -47,7 +47,7 @@ Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"
 
 ── Dispatch ──
 Queen's Team
-  🔨🐜 Builder — builder is always required for build flow
+  🔨🐜 Builder — this phase has tasks that need code written
 
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

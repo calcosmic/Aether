@@ -1428,7 +1428,10 @@ func TestCodexBuildPlanOnlySpawnBudgetExplainsPrunedCastes(t *testing.T) {
 	}
 	for _, caste := range budget.SkippedCastes {
 		reason := budget.PrunedReasons[caste]
-		if !strings.Contains(reason, "not spawned") {
+		// D-09: plain English, not "not spawned; outside Queen spawn budget
+		// N (...)" -- the pruned reason must still say the pick was not
+		// sent, just without the internal jargon.
+		if !strings.Contains(reason, "not sent") {
 			t.Fatalf("pruned reason for %s should explain not spawned decision: %q", caste, reason)
 		}
 	}

@@ -68,8 +68,14 @@ func TestQueenOrchestrate_AuthToken(t *testing.T) {
 	if !HasCaste(dispatches, "architect") {
 		t.Error("Auth token: expected architect for design boundaries")
 	}
-	if !HasCaste(dispatches, "auditor") {
-		t.Error("Auth token: expected auditor for production mode")
+	// The "production mode ⇒ auditor" assertion that used to sit here is
+	// gone (D-06/Ruling D11): this phase's own wording names no auditor
+	// keyword (no "compliance", "audit", "release", "standards"), so an
+	// auditor appearing here would be the exact implicit floor this plan
+	// removes, restated as a test expectation. See
+	// TestQueenOrchestrate_DBMigration for the matching fix.
+	if HasCaste(dispatches, "auditor") {
+		t.Error("Auth token: auditor must not be summoned by production mode alone with no auditor-relevant wording")
 	}
 }
 
@@ -93,8 +99,11 @@ func TestQueenOrchestrate_DBMigration(t *testing.T) {
 	if !HasCaste(dispatches, "watcher") {
 		t.Error("DB migration: expected watcher")
 	}
-	if !HasCaste(dispatches, "auditor") {
-		t.Error("DB migration: expected auditor for production")
+	// Same fix as TestQueenOrchestrate_AuthToken: this phase's wording names
+	// no auditor keyword either, so "production mode ⇒ auditor" (D-06,
+	// Ruling D11) must not summon one here.
+	if HasCaste(dispatches, "auditor") {
+		t.Error("DB migration: auditor must not be summoned by production mode alone with no auditor-relevant wording")
 	}
 	if !HasCaste(dispatches, "architect") {
 		t.Error("DB migration: expected architect for schema design")
@@ -190,10 +199,15 @@ func TestCasteRelevanceScore_Thresholds(t *testing.T) {
 		Tasks:       []colony.Task{{Goal: "Audit security compliance"}},
 	}
 
-	// Gatekeeper should score high for security keywords
+	// Gatekeeper should score high for security keywords. The >= 80 floor
+	// this test used to assert came from the deleted "risk high ⇒ 100"
+	// special rule (D-06); the genuine keyword-driven score for this
+	// wording (auth, security, compliance, audit all hit) is 60, and that is
+	// now the ceiling this fixture can honestly reach without the deleted
+	// implicit floor.
 	score := casteRelevanceScore(phase, "gatekeeper")
-	if score < 80 {
-		t.Errorf("Gatekeeper score too low for security phase: got %d, want >= 80", score)
+	if score < 50 {
+		t.Errorf("Gatekeeper score too low for security phase: got %d, want >= 50", score)
 	}
 
 	// Dreamer should score low for security phase
@@ -526,10 +540,16 @@ func TestQueenSpawnBudgetDecisionsPrunesDeterministically(t *testing.T) {
 			if decision.Selected {
 				t.Fatalf("chaos decision should be pruned: %+v", decision)
 			}
-			for _, want := range []string{"not spawned", "Queen spawn budget"} {
+			// D-09: the pruned rationale is plain English -- no internal
+			// "Queen spawn budget" jargon, and it must still say the pick was
+			// not sent and name the phase's worker cap.
+			for _, want := range []string{"not sent", "capped at"} {
 				if !strings.Contains(decision.Rationale, want) {
 					t.Fatalf("pruned rationale missing %q: %q", want, decision.Rationale)
 				}
+			}
+			if strings.Contains(decision.Rationale, "Queen spawn budget") {
+				t.Fatalf("pruned rationale still names the internal 'Queen spawn budget' identifier: %q", decision.Rationale)
 			}
 		})
 	}
