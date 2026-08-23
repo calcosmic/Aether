@@ -101,11 +101,55 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 		}
 		b.WriteString("\n")
 	}
-	if announcement := composeForcedReviewerAnnouncement(forcedReviewerRecordsFromManifest(manifest)); announcement != "" {
+	phaseID := intValue(manifest["phase"])
+	allForcedHits := riskSignalHitsFromRecords(forcedReviewerRecordsFromManifest(manifest))
+	liveForcedHits, waivedForcedHits := applyForcedReviewerWaivers(phaseID, allForcedHits)
+
+	if announcement := composeForcedReviewerAnnouncement(forcedReviewerRecords(collapseToForcedReviewers(liveForcedHits))); announcement != "" {
 		b.WriteString("\nNot sent with this team, but required at the check after the work is done:\n")
 		for _, line := range strings.Split(announcement, "\n") {
 			b.WriteString("  ")
 			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+	// D-03: a live forced reviewer is shown with the exact command that
+	// would decline it -- only the owner, pasting this command through
+	// `aether decision-answer`, can waive it (T-194-11). A waived reviewer is
+	// shown as declined, with the owner's own recorded reason, never
+	// silently dropped from the card.
+	waiveCommands := map[string]string{}
+	for _, hit := range liveForcedHits {
+		waiveCommands[hit.Signal.Name] = forcedReviewerWaiverCommand(phaseID, hit.Signal.Name, hit.Signal.PlainEnglish)
+	}
+	waived := map[string]interface{}{}
+	for _, hit := range waivedForcedHits {
+		waived[hit.Signal.Name] = map[string]interface{}{
+			"plain_english": hit.Signal.PlainEnglish,
+			"reason":        hit.WaiverReason,
+		}
+	}
+	if len(waiveCommands) > 0 || len(waived) > 0 {
+		b.WriteString("\nOnly you can decline a required reviewer, with a reason on the record:\n")
+		liveNames := make([]string, 0, len(waiveCommands))
+		for name := range waiveCommands {
+			liveNames = append(liveNames, name)
+		}
+		sort.Strings(liveNames)
+		for _, name := range liveNames {
+			b.WriteString("  To decline, run: ")
+			b.WriteString(waiveCommands[name])
+			b.WriteString("\n")
+		}
+		waivedNames := make([]string, 0, len(waived))
+		for name := range waived {
+			waivedNames = append(waivedNames, name)
+		}
+		sort.Strings(waivedNames)
+		for _, name := range waivedNames {
+			entry := mapValue(waived[name])
+			b.WriteString("  Declined by owner: ")
+			b.WriteString(stringValue(entry["reason"]))
 			b.WriteString("\n")
 		}
 	}
@@ -138,13 +182,15 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	}
 
 	result := map[string]interface{}{
-		"workflow":     workflow,
-		"required":     required,
-		"optional":     optional,
-		"reasons":      reasons,
-		"what_it_does": whatItDoes,
-		"pruned":       prunedReasons,
-		"forced":       forced,
+		"workflow":       workflow,
+		"required":       required,
+		"optional":       optional,
+		"reasons":        reasons,
+		"what_it_does":   whatItDoes,
+		"pruned":         prunedReasons,
+		"forced":         forced,
+		"waived":         waived,
+		"waive_commands": waiveCommands,
 	}
 	return result, b.String()
 }

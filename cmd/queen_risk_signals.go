@@ -48,6 +48,12 @@ type riskSignalHit struct {
 	Signal riskSignal
 	Match  string
 	Source string
+	// WaiverReason is set only on a hit applyForcedReviewerWaivers
+	// (cmd/forced_reviewer_waiver.go) has filtered out of the forced set --
+	// the owner's own recorded reason for declining this signal's reviewer
+	// (D-03), carried here so the check-in card can show it without a
+	// second lookup.
+	WaiverReason string
 }
 
 // forcedReviewer is one caste forced onto the checking step by one or more
@@ -401,6 +407,15 @@ func queenForcedContinueReviewers(phase colony.Phase, recorded []codexForcedRevi
 		hits = append(hits, queenRiskSignalHits(collectPhaseText(phase), "plan wording")...)
 	}
 	hits = append(hits, queenRiskSignalHitsFromPaths(changedFiles)...)
+	// D-03: the owner's waiver is applied here, at the ONE function both
+	// continue lanes already go through, and BEFORE collapseToForcedReviewers
+	// merges signals into castes -- filtering at the signal level is what
+	// makes "one signal for one phase" true (a waived credentials signal
+	// does not waive a live payments signal on the same caste). Because the
+	// changed-file hits above are already unioned into hits by this point, a
+	// signal waived from plan wording stays waived when the same signal is
+	// re-detected from the files the builder changed.
+	hits, _ = applyForcedReviewerWaivers(phase.ID, hits)
 	if len(hits) == 0 {
 		return nil
 	}

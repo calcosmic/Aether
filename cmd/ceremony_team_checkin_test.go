@@ -275,6 +275,42 @@ func TestRequiredMeansBuilderOrNamedSignal(t *testing.T) {
 	}
 }
 
+// TestOneWorkerTeamStillPauses pins D-14: the owner's pre-build pause never
+// disappears just because the team is small. A manifest whose only worker is
+// the implementation caste itself must still render a full check-in card,
+// with that worker still marked REQUIRED -- the wrapper's decision to pause
+// and ask is driven by the existence of a card to show, not by team size, and
+// this is the regression guard against a future "skip the checkin for a
+// single-worker build" shortcut.
+func TestOneWorkerTeamStillPauses(t *testing.T) {
+	manifest := map[string]interface{}{
+		"queen_execution_policy": map[string]interface{}{
+			"spawn_budget": map[string]interface{}{
+				"required_castes": []interface{}{"builder"},
+				"selected_reasons": map[string]interface{}{
+					"builder": "writes the code for 1 task(s): fix the off-by-one error in the pager",
+				},
+			},
+		},
+	}
+	dispatches := []ceremonyDispatch{
+		{Caste: "builder", Name: "Mason-1", Task: "Fix the off-by-one error"},
+	}
+
+	result, visual := renderCeremonyTeamCheckin("build", manifest, dispatches)
+
+	if !strings.Contains(visual, "T E A M   C H E C K - I N") {
+		t.Fatalf("a one-worker team must still render the check-in card.\ncard:\n%s", visual)
+	}
+	if !strings.Contains(visual, "REQUIRED") {
+		t.Fatalf("a one-worker team's own worker must still be marked REQUIRED.\ncard:\n%s", visual)
+	}
+	required, _ := result["required"].([]string)
+	if len(required) != 1 || required[0] != "builder" {
+		t.Fatalf("one-worker team required = %v, want [builder]", required)
+	}
+}
+
 // TestTeamCheckinDoesNotMutate is re-run in this plan's own acceptance
 // criteria to prove the reason/forced-reviewer rendering work stayed
 // read-only — the check-in command is an inspection, and an inspection
