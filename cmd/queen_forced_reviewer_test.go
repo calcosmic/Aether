@@ -241,12 +241,12 @@ func TestTwoSignalsOneCasteCollapseToOneDispatch(t *testing.T) {
 	}
 }
 
-// TestEmptyPhaseForcesNoReviewer is the empty-input probe (TEAM-03): a phase
-// with no name, no description and no tasks forces nothing. Asserted on the
-// forced set itself (queenForcedReviewersForPhase) per this plan's own scope
-// note — "the 'requires exactly the one build caste' half of that probe
-// belongs to plan 194-02, where the floor actually shrinks" — and
-// cross-checked against the real continue dispatch list for good measure.
+// TestEmptyPhaseForcesNoReviewer is the empty-input probe (TEAM-01/TEAM-03): a
+// phase with no name, no description and no tasks forces no reviewer AND
+// requires exactly the one build caste. Plan 194-01 could only assert the
+// first half ("the 'requires exactly the one build caste' half of that probe
+// belongs to plan 194-02, where the floor actually shrinks"); this plan
+// completes it now that queenBuildSafetyRequiredCastes has shrunk.
 func TestEmptyPhaseForcesNoReviewer(t *testing.T) {
 	phase := colony.Phase{}
 
@@ -257,6 +257,11 @@ func TestEmptyPhaseForcesNoReviewer(t *testing.T) {
 	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, nil, "", nil)
 	if anyDispatchIsForced(dispatches) {
 		t.Fatalf("empty phase produced a signal-forced dispatch: %+v", dispatches)
+	}
+
+	required := queenBuildSafetyRequiredCastes(phase)
+	if len(required) != 1 || required[0] != "builder" {
+		t.Fatalf("empty phase required build castes = %+v, want exactly [builder]", required)
 	}
 }
 

@@ -147,93 +147,23 @@ func queenBuildSafetyRequiredCaste(caste, flowType string, phase colony.Phase) b
 	return stringSet(queenBuildSafetyRequiredCastes(phase))[caste]
 }
 
+// queenBuildSafetyRequiredCastes used to force watcher unconditionally, probe
+// wherever code was testable, and auditor/gatekeeper from inferred mode, a
+// blast-radius keyword list, and phase position — a one-task bug fix measured
+// at eight workers on 2026-08-22 because of this floor. Ruling D11
+// (.planning/decisions/2026-08-22-queen-decides-program-checks.md) replaced
+// all of that: the floor now returns only the caste that writes the code, and
+// a reviewer is forced solely by a named risk signal
+// (queenForcedReviewersForPhase, cmd/queen_risk_signals.go) at the checking
+// step, never here. Watcher is no longer required at build at all — Phase 193
+// (D-08) already stopped dispatching it there; this is the requirement
+// following the dispatch. Discovery phases require nothing: they get their
+// one researcher from the fallback path (194-CONTEXT.md D-12), not the floor.
 func queenBuildSafetyRequiredCastes(phase colony.Phase) []string {
-	// Watcher is the only unconditional member: it is the check, and a build
-	// with nothing verifying it is a build that reports success by assertion.
-	required := []string{"watcher"}
-	if effectiveQueenPhaseMode(phase) != colony.PhaseModeDiscovery {
-		required = append(required, "builder")
+	if effectiveQueenPhaseMode(phase) == colony.PhaseModeDiscovery {
+		return nil
 	}
-	// Probe used to sit alongside Watcher as unconditionally required, and
-	// required castes bypass the worker budget entirely — so every build got a
-	// test-coverage specialist no matter what the phase was. A documentation
-	// phase, a research phase, and a `--light` build of a trivial change all
-	// spawned a Probe with no code for it to cover. Combined with the standard
-	// continue path, which also required Probe, a single phase paid for two.
-	if queenPhaseProducesTestableCode(phase) {
-		required = append(required, "probe")
-	}
-
-	riskLevel := phaseRiskLevel(phase)
-	if riskLevel == "high" || queenBuildSafetyReviewRequired(phase) {
-		// Auditor is the general quality gate, so production work earns one.
-		required = append(required, "auditor")
-	}
-	// Gatekeeper is a security specialist, not a general reviewer. It used to
-	// ride in beside Auditor on the same condition, which meant every
-	// production-mode phase got one — and mode is inferred from wording, so
-	// most real phases are production. "Add a dark mode toggle" summoned a
-	// security auditor that could only report it had found no security
-	// surface. It now needs an actual security signal: high risk, or security
-	// or release wording.
-	if riskLevel == "high" || queenPhaseHasSecuritySignal(phase) {
-		required = append(required, "gatekeeper")
-	}
-
-	sort.Strings(required)
-	return required
-}
-
-// queenPhaseHasSecuritySignal reports whether a phase names something a
-// security specialist could actually review. Unlike
-// queenBuildSafetyReviewRequired it does not treat production mode alone as a
-// signal: production means "this is real work", not "this touches auth".
-//
-// The release-gate terms are here on purpose alongside the security surfaces.
-// A final review or sign-off is the last point at which a security problem can
-// be caught before it ships, which is exactly when the specialist is worth
-// paying for. An earlier version of this list carried the security surfaces but
-// dropped the gate terms, and a "Final signoff before handoff" phase silently
-// lost its Gatekeeper — caught by TestQueenOrchestratePreservesSafetyCastes.
-func queenPhaseHasSecuritySignal(phase colony.Phase) bool {
-	return matchesAnyKeyword(collectPhaseText(phase), []string{
-		// Security surfaces
-		"security",
-		"auth",
-		"crypto",
-		"secret",
-		"token",
-		"permission",
-		"credential",
-		"password",
-		"compliance",
-		"vulnerab",
-		// Release gates — the last chance to catch something before it ships
-		"release",
-		"final review",
-		"final-review",
-		"final signoff",
-		"signoff",
-		"sign-off",
-		"sign off",
-	})
-}
-
-func queenBuildSafetyReviewRequired(phase colony.Phase) bool {
-	if effectiveQueenPhaseMode(phase) == colony.PhaseModeProduction {
-		return true
-	}
-	return matchesAnyKeyword(collectPhaseText(phase), []string{
-		"security",
-		"release",
-		"production",
-		"final review",
-		"final-review",
-		"final signoff",
-		"signoff",
-		"sign-off",
-		"sign off",
-	})
+	return []string{"builder"}
 }
 
 // queenBuildBaseWorkerBudget is the phase's own answer — derived from mode and

@@ -19,12 +19,13 @@ import (
 // signal and quotes the phrase that matched, so a wrong entry is visible the
 // first time it fires (D-01's reversibility argument).
 //
-// This plan is additive: it does not touch queenBuildSafetyRequiredCastes,
-// queenBuildSafetyReviewRequired or queenPhaseHasSecuritySignal (the OLD
-// build-side floor). Those are plan 194-02's job. Until that plan lands, a
-// security-signal phase draws BOTH the old implicit build reviewer and this
-// new forced reviewer at the checking step — a known, deliberate, temporary
-// overlap (see 194-01-PLAN.md "Known interim state").
+// Plan 194-02 shrank the old build-side floor (queenBuildSafetyRequiredCastes)
+// to the builder alone and deleted queenBuildSafetyReviewRequired and
+// queenPhaseHasSecuritySignal outright — this table is now the only place a
+// build OR continue reviewer can be forced from. The temporary overlap
+// 194-01-PLAN.md's "Known interim state" described (a security-signal phase
+// drawing both the old implicit build reviewer and this table's forced
+// reviewer) is closed as of that plan; see .planning/WINDOWS.md #1.
 
 // riskSignal is one named high-risk vocabulary entry. Phrases are matched at
 // a word boundary (matchesPhraseAtWordBoundary) against the phase's own
