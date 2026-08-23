@@ -117,7 +117,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 194-03-PLAN.md — A reason for every worker; a worker named without one is refused by name (wave 3)
+- [x] 194-03-PLAN.md — A reason for every worker; a worker named without one is refused by name (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
