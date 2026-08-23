@@ -5,11 +5,11 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 194
 current_phase_name: The Queen Decides the Team
 status: planning
-stopped_at: Phase 193 complete, ready to plan Phase 194
-last_updated: "2026-08-22T17:22:49.655Z"
+stopped_at: Phase 194 context gathered
+last_updated: "2026-08-23T00:30:21.312Z"
 last_activity: 2026-08-22
 last_activity_desc: Phase 193 complete (verified 4/4, review clean), transitioned to Phase 194
-state_head: e11d0a19ba8e8b1a825abeb6b71d2f34e1dfa48b
+state_head: a902ee7d4fa95f951c0d9761ed87a3aca9aca7e0
 progress:
   total_phases: 7
   completed_phases: 1
@@ -177,6 +177,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-22T17:23:51.000Z
-Stopped at: Phase 193 complete, ready to plan Phase 194
-Resume file: None
+Last session: 2026-08-23T00:30:21.251Z
+Stopped at: Phase 194 context gathered
+Resume file: .planning/phases/194-the-queen-decides-the-team/194-CONTEXT.md
