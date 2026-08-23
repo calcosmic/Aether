@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 194
 current_phase_name: The Queen Decides the Team
 status: executing
-stopped_at: Completed 194-03-PLAN.md
-last_updated: "2026-08-23T11:15:11.640Z"
+stopped_at: Completed 194-04-PLAN.md
+last_updated: "2026-08-23T12:43:15.842Z"
 last_activity: 2026-08-23
 last_activity_desc: Phase 194 execution started
-state_head: 249f97796804788038fedebdd0c4babfa1f9ff9b
+state_head: caf459bb15a12f579c13fd4c03b7116623171729
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 14
-  completed_plans: 8
+  completed_plans: 9
   percent: 14
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 ## Current Position
 
 Phase: 194 (The Queen Decides the Team) — EXECUTING
-Plan: 4 of 9
+Plan: 5 of 9
 Status: Ready to execute
 Last activity: 2026-08-23 — Phase 194 execution started
 
@@ -59,6 +59,7 @@ Last activity: 2026-08-23 — Phase 194 execution started
 | Phase 194 P01 | 75min | 2 tasks | 9 files |
 | Phase 194 P02 | 130min | 2 tasks | 22 files |
 | Phase 194 P03 | 210min | 2 tasks | 18 files |
+| Phase 194 P04 | 55min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,8 @@ Last activity: 2026-08-23 — Phase 194 execution started
 - [Phase 194]: D-13 landed: heavy-depth continue's probe requirement is gated on queenPhaseProducesTestableCode, so --heavy no longer forces a coverage caste onto a documentation-only phase. — The plan's own action text named this test for rewrite (TestHeavyContinueKeepsProbe), which required the underlying isAlwaysRequired code change, not just a fixture edit.
 - [Phase 194]: [Phase 194] Plan 3: --caste-why (caste=reason pairs) plus queenCasteJudgement.Reasons/RefusedNoReason -- a proposed caste with no per-worker reason is refused by name, not silently sent; --caste-reason stays the team summary only and no longer satisfies the per-worker requirement.
 - [Phase 194]: [Phase 194] Plan 3: deleted the two remaining implicit floors restated as scores -- applySpecialRules' auditor-on-production and gatekeeper-on-high-risk 100-score branches, and auditor's mode==production Conditions boost (which alone still cleared the spawn threshold with no keyword match). The fallback engine's rationale is now a plain sentence per caste, never score arithmetic or a bare flow-type name.
+- [Phase 194]: [Phase 194] Plan 4: card reason slot never shows the roster's generic caste blurb — a missing per-phase reason renders an explicit 'no reason was recorded' marker; the description moved to a separately labelled what_it_does slot (D-09).
+- [Phase 194]: [Phase 194] Plan 4: codexBuildManifest.ForcedReviewerAnnouncement + the check-in card's announcement block name the exact signal and matched phrase whenever a reviewer is forced, before any worker spawns (D-05); TestRequiredMeansBuilderOrNamedSignal locks REQUIRED to mean builder or a named signal, nothing else.
 
 ### Pending Todos
 
@@ -186,6 +189,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-23T11:15:11.579Z
-Stopped at: Completed 194-03-PLAN.md
+Last session: 2026-08-23T12:43:08.488Z
+Stopped at: Completed 194-04-PLAN.md
 Resume file: None

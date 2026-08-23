@@ -121,7 +121,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 194-04-PLAN.md — The card carries per-phase reasons only, names the signal, and REQUIRED stops meaning anything else (wave 4)
+- [x] 194-04-PLAN.md — The card carries per-phase reasons only, names the signal, and REQUIRED stops meaning anything else (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
