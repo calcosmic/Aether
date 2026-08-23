@@ -157,20 +157,23 @@ should not need to remember `--verification-depth` or timeout flag combinations.
 1. Explicit `--heavy` or `--light` flag (user override)
 2. Explicit `--verification-depth <light|standard|heavy>` (user override)
 3. Keyword match in phase name (security/auth/release → heavy)
-4. Smart default based on phase mode, position, and risk
+4. Smart default based on phase mode and risk
 
 **Smart defaults:**
 - Discovery mode → light
-- Production mode → at least standard, heavy for final/high-risk phases
-- Final phase → heavy (unless user explicitly set light)
+- Production mode → at least standard, heavy for high-risk phases
 - Phase name contains "security", "auth", "release", etc. → heavy
+- Where a phase sits in the plan no longer matters: the last phase of a plan
+  gets the same automatic depth a middle phase with identical mode and risk
+  would get (owner's choice, 2026-08-23). An explicit `--heavy` flag still
+  raises depth on any phase, position included.
 
 **What each depth means:**
 
 | Flow | Light | Standard | Heavy |
 |------|-------|----------|-------|
 | **Build** | max 5 workers | the phase's own budget (4–8) | at least 8 |
-| **Continue** | Watcher only (max 3 workers) | Watcher + Probe (max 4) | + Gatekeeper + Auditor + Probe (max 6) |
+| **Continue** | max 3 workers, no reviewer required unless a named risk forces one | max 4 workers, same | + Gatekeeper + Auditor + Probe, the full review panel (max 6) — an explicit owner override |
 | **Seal** | no Gatekeeper, Auditor or Probe (max 4 workers) | max 4 | max 5 |
 
 Build depth adjusts the phase's own mode/risk budget: **light** lowers it,
@@ -178,53 +181,78 @@ Build depth adjusts the phase's own mode/risk budget: **light** lowers it,
 Queen's ordinary judgement, which mode and risk already express. A flat standard
 ceiling would weaken exactly the phases that need most help.
 
-**Castes the phase requires bypass the cap entirely** — a high-risk or
-production phase keeps its Auditor at every depth
-(`queenBuildSafetyRequiredCastes`), so choosing light removes optional
-specialists, never safety ones.
+**A reviewer is required only by a named risk signal — never because a phase
+"feels" risky.** Every other implicit floor from earlier versions of this
+section is gone: a build no longer requires a Watcher unconditionally, and
+continue's light and standard depths require nothing unconditionally either.
+What is actually required:
 
-**A required caste must be able to do something on this phase.** Because
-required castes bypass the budget, marking one unconditionally makes every
-depth flag a lie for that caste. Two were:
+| Worker | Required when |
+|--------|----------------|
+| Builder | on any non-discovery build — the worker that writes the code. A discovery-mode build sends one Scout instead, because research is the deliverable there, not code. |
+| A forced reviewer | only when the phase's own wording, or (at the checking step) its changed files, names one of exactly five signals: **credentials/auth** (passwords, logins, sessions, secrets) → security reviewer (Gatekeeper); **payments** → security reviewer; **release sign-off** → security reviewer; **data deletion** → quality reviewer (Auditor); **database migration** → quality reviewer. The check-in card and the checking step both name the exact signal that forced the reviewer, e.g. "a security reviewer will check this — this touches logins and passwords." |
 
-| Caste | Was required when | Is required when |
-|-------|-------------------|------------------|
-| Probe | always, on every build | the phase produces testable code — not documentation-only, not discovery (`queenPhaseProducesTestableCode`) |
-| Gatekeeper | risk is high, **or mode is production**, or security wording | risk is high, or the phase names a security surface (`queenPhaseHasSecuritySignal`) |
-| Watcher | always | always — unchanged, and must stay so |
-| Auditor | risk is high, or production, or security wording | unchanged |
+A build's own checks — build, vet, tests, lint — are unchanged by any of this
+and run on every phase at every depth, whether or not a reviewer is sent; a
+falling worker count is exclusively the review team shrinking, never the
+program's own verification.
 
-Probe on a documentation phase has no code to cover, and the standard continue
-path required one too, so a single phase paid for two Probes that could only
-report having found nothing. Gatekeeper is a *security* specialist, and mode is
-inferred from wording — so most real phases infer production and were summoning
-a security auditor for work like "add a CSV export".
+A one-task bug fix with none of the five signals now gets exactly one worker
+(the Builder) across the whole build-and-check cycle, on both the judged and
+the no-proposal/autopilot path — down from the eight workers (Builder,
+Watcher, Auditor, Probe, Tracker at build; Watcher, Auditor, Probe at
+continue) the same fix measurably drew before this ruling, because the old
+floor sent a Watcher, an Auditor and a Probe to every build and continue pass
+regardless of what the phase actually needed. Only the owner can decline a
+forced reviewer, with a reason that is written down (see Team Check-In
+below); the Queen and autopilot never can.
 
-Asserted by `TestProbeIsRequiredOnlyWhereItCanFindSomething`,
-`TestGatekeeperNeedsASecuritySignal`, `TestWatcherIsAlwaysRequiredOnBuild`, and
-`TestHighRiskPhaseKeepsBothReviewers`. The Watcher test exists because gating a
-caste for cost is a different decision from gating the one thing that checks
-the work: a build with no Watcher reports success by assertion.
+Asserted by `TestReviewerForcedOnlyByNamedRisk` (the five-signal table,
+evaluated on the real continue dispatch list), `TestNoWorkerWithoutStatedReason`
+(a worker named without a reason is refused by name, the rest of the team
+still goes), `TestOneTaskBugFixIsOneWorkerPlusChecks` (the one-worker
+measurement above), `TestNoCasteIsDispatchedAtBothBoundaries` (no caste is
+sent independently by both the build and the checking step for the same
+phase), and `TestQueenChoiceReachesTheDispatchList` (a Queen decision is
+asserted on the actual spawn list, never an intermediate record a later step
+could silently override).
 
-These numbers are asserted by `TestBuildWorkerCapHonoursVerificationDepth`. They
-were previously documented but not implemented: the build branch consulted only
-mode and risk, so a *light* build of a production phase returned 8 and a *heavy*
-build of a discovery phase returned 5. If this table and the code disagree
-again, that test fails.
+These numbers are asserted by `TestBuildWorkerCapHonoursVerificationDepth` and
+`TestCLAUDEMDDepthTableEvaluates`. They were previously documented but not
+implemented: the build branch consulted only mode and risk, so a *light*
+build of a production phase returned 8 and a *heavy* build of a discovery
+phase returned 5. If this table and the code disagree again, those tests fail.
 
-*For dummies: The Queen looks at what kind of work the phase is doing and decides how many workers to send. Writing a README does not need a test-coverage specialist, and adding a CSV export does not need a security auditor — so those no longer turn up. Work that touches passwords, tokens or logins still gets the security reviewer, and every build still gets a Watcher checking it. Picking "light" never switches off the safety checks a risky phase needs — it only drops the optional extras.*
+*For dummies: by default the Queen sends only the person writing the code.
+A second reviewer only turns up if the work touches one of five specific
+risky things — passwords and logins, payments, deleting data, changing the
+database's structure, or signing off a release — and joins at the check, not
+the build, with the card saying exactly which of the five it was. The
+program's own checks (does it build, do the tests pass) are unchanged by any
+of this and run on every phase at every depth — a smaller worker count never
+means less checking. Picking "light" never switches off a reviewer a risky
+phase genuinely needs; only the owner can decide not to send one, and that
+decision is written down.*
 
 ### Team Check-In and Owner Decisions (2026-08-21)
 
-**Builds pause for the owner before spawning.** After the spawn plan renders,
-the wrapper shows a check-in card (`aether ceremony team-checkin`) — one line
-per worker with the Queen's reason, `REQUIRED` or `OPTIONAL` marking, and the
-castes already pruned — then asks: proceed, trim optional workers, or
-redirect. Required castes are presented as fixed because the runtime re-adds
-them whatever is proposed; the card only offers choices the runtime will
-honor. `aether build --no-checkin` skips the pause; autopilot never sees it.
-Locked by `TestTeamCheckinCardShowsReasonAndRequiredMarking` and
-`TestTeamCheckinDoesNotMutate`.
+**Builds pause for the owner before spawning — including a one-worker team.**
+After the spawn plan renders, the wrapper shows a check-in card (`aether
+ceremony team-checkin`) — one line per worker with the Queen's reason,
+`REQUIRED` or `OPTIONAL` marking, and the castes already pruned — then asks:
+proceed, trim optional workers, or redirect. `REQUIRED` now means exactly one
+of two things: the worker writing the code, or a reviewer forced by one of
+the five named signals above, with that signal named beside the reviewer.
+Only the owner — never the Queen, never autopilot — can decline a forced
+reviewer; declining is recorded through the same mechanism as answering a
+clarification, covers that one signal on that one phase, and stays declined
+even if the same signal is re-detected later from changed files.
+`aether build --no-checkin` skips the pause; autopilot never sees it and can
+never decline a reviewer. Locked by `TestRequiredMeansBuilderOrNamedSignal`,
+`TestTeamCheckinDoesNotMutate`, `TestOnlyTheOwnerCanWaiveAForcedReviewer`,
+`TestWaiverCoversOneSignalOnOnePhase`,
+`TestWaivedSignalStaysWaivedWhenTheFilesRedetectIt`, and
+`TestAutopilotNeverWaives`.
 
 **Workers' questions route to the owner, not to more agents.** Handoff
 `open_decisions` surface via `aether handoff-decisions`; the owner's answers

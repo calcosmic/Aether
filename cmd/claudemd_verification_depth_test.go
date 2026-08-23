@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -36,9 +38,6 @@ func TestCLAUDEMDVerificationDepthClaims(t *testing.T) {
 	if !strings.Contains(content, "Production mode → at least standard") {
 		t.Error("CLAUDE.md missing production=standard rule")
 	}
-	if !strings.Contains(content, "Final phase → heavy") {
-		t.Error("CLAUDE.md missing final=heavy rule")
-	}
 	if !strings.Contains(content, "security") {
 		t.Error("CLAUDE.md missing security keyword rule")
 	}
@@ -69,11 +68,10 @@ func TestCLAUDEMDVerificationDepthClaims(t *testing.T) {
 
 	// D-06 (194-CONTEXT.md, plan 194-05): position no longer raises
 	// verification depth on its own -- a low-risk final phase gets the same
-	// depth a low-risk middle phase gets. CLAUDE.md's "Final phase → heavy"
-	// line above still describes the OLD floor; correcting that prose is
-	// plan 194-09's job, not this plan's. This assertion follows the
-	// RUNTIME, which is the half of the contract this plan actually changed
-	// and which the project's own rule says wins where the two disagree.
+	// depth a low-risk middle phase gets. CLAUDE.md no longer claims
+	// otherwise (194-09 removed the "Final phase → heavy" line entirely, so
+	// there is nothing left for this test to check the PROSE against); this
+	// assertion is now purely a runtime regression guard.
 	finalPhase := colony.Phase{ID: 5, Name: "Polish", Mode: colony.PhaseModePrototype}
 	finalDepth := resolveVerificationDepth(finalPhase, 5, false, false, "")
 	if finalDepth != colony.VerificationDepthStandard {
@@ -94,6 +92,19 @@ func TestCLAUDEMDNoOldModes(t *testing.T) {
 	}
 	if strings.Contains(content, "watcher subprocess skipped") {
 		t.Error("CLAUDE.md still contains 'watcher subprocess skipped'")
+	}
+	// D-06/D-11 (plan 194-09): no shipped instruction file may still claim a
+	// phase's position in the plan raises its verification depth, or that a
+	// build always gets a Watcher -- both floors were retired by ruling D11
+	// (2026-08-22) and plan 194-05.
+	if strings.Contains(content, "Final phase → heavy") {
+		t.Error("CLAUDE.md still claims phase position raises verification depth (D-06 retired this)")
+	}
+	if strings.Contains(content, "always, on every build") {
+		t.Error("CLAUDE.md still claims a caste is required on every build unconditionally")
+	}
+	if strings.Contains(content, "always — unchanged, and must stay so") {
+		t.Error("CLAUDE.md still claims the Watcher is unconditionally required")
 	}
 }
 
@@ -182,5 +193,118 @@ func TestBuildDepthCapDoesNotStripRequiredSafetyCastes(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("gatekeeper is missing from a light-depth continue dispatch for a phase whose wording names a security signal; light must not strip a forced reviewer: %+v", dispatches)
+	}
+}
+
+// TestCLAUDEMDDepthTableEvaluates parses the "Continue" row of CLAUDE.md's
+// "What each depth means" table and evaluates its light/standard/heavy cells
+// against the real runtime -- queenMaxWorkersForBudget for the worker caps,
+// isAlwaysRequired for which castes are unconditionally required at each
+// depth -- the same discipline TestBuildWorkerCapHonoursVerificationDepth
+// already applies to the build row, extended here to continue.
+//
+// TestCLAUDEMDVerificationDepthClaims only ever checked that words like
+// "Light"/"Standard"/"Heavy" appeared somewhere in the file. That let the
+// continue row describe a floor (Watcher-only at light, Watcher+Probe at
+// standard) that plan 194-05 deleted from the code months before this test
+// existed to catch it. Because this test reads the row's own text rather
+// than a hardcoded expectation, editing the continue row of the table to
+// name a different caste set than isAlwaysRequired actually returns makes
+// this test fail -- the documented claim and the runtime cannot drift apart
+// silently again.
+func TestCLAUDEMDDepthTableEvaluates(t *testing.T) {
+	data, err := os.ReadFile("../CLAUDE.md")
+	if err != nil {
+		t.Fatalf("read CLAUDE.md: %v", err)
+	}
+	content := string(data)
+
+	var continueLine string
+	for _, line := range strings.Split(content, "\n") {
+		if strings.Contains(line, "| **Continue**") {
+			continueLine = line
+			break
+		}
+	}
+	if continueLine == "" {
+		t.Fatalf("could not find the Continue row of the depth table in CLAUDE.md")
+	}
+
+	var cells []string
+	for _, part := range strings.Split(continueLine, "|") {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" || trimmed == "**Continue**" {
+			continue
+		}
+		cells = append(cells, trimmed)
+	}
+	if len(cells) != 3 {
+		t.Fatalf("expected exactly 3 depth cells (light, standard, heavy) in CLAUDE.md's Continue row, found %d: %v", len(cells), cells)
+	}
+	light, standard, heavy := cells[0], cells[1], cells[2]
+
+	maxPattern := regexp.MustCompile(`max (\d+)`)
+	extractMax := func(cell string) int {
+		m := maxPattern.FindStringSubmatch(cell)
+		if m == nil {
+			t.Fatalf("could not find a worker cap ('max N') in cell %q", cell)
+		}
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			t.Fatalf("could not parse worker cap %q: %v", m[1], err)
+		}
+		return n
+	}
+
+	phase := colony.Phase{ID: 1, Name: "Sample phase", Mode: colony.PhaseModePrototype}
+	lightState := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthLight)}
+	standardState := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthStandard)}
+	heavyState := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthHeavy)}
+
+	if got, _ := queenMaxWorkersForBudget(phase, "continue", lightState, "low"); got != extractMax(light) {
+		t.Errorf("CLAUDE.md's continue/light cap says %d, queenMaxWorkersForBudget returns %d", extractMax(light), got)
+	}
+	if got, _ := queenMaxWorkersForBudget(phase, "continue", standardState, "low"); got != extractMax(standard) {
+		t.Errorf("CLAUDE.md's continue/standard cap says %d, queenMaxWorkersForBudget returns %d", extractMax(standard), got)
+	}
+	if got, _ := queenMaxWorkersForBudget(phase, "continue", heavyState, "low"); got != extractMax(heavy) {
+		t.Errorf("CLAUDE.md's continue/heavy cap says %d, queenMaxWorkersForBudget returns %d", extractMax(heavy), got)
+	}
+
+	// D-13: light and standard require NOTHING unconditionally at continue.
+	// The doc's own light/standard cells must not name a reviewer caste, and
+	// isAlwaysRequired must agree that none of them is unconditionally
+	// required at these depths.
+	for _, tc := range []struct {
+		label string
+		cell  string
+		state colony.ColonyState
+	}{
+		{"light", light, lightState},
+		{"standard", standard, standardState},
+	} {
+		for _, caste := range []string{"gatekeeper", "auditor", "probe", "watcher"} {
+			namedInDoc := strings.Contains(strings.ToLower(tc.cell), caste)
+			requiredByRuntime := isAlwaysRequired(caste, "continue", phase, tc.state)
+			if namedInDoc || requiredByRuntime {
+				t.Errorf("continue/%s: doc names %s=%v, isAlwaysRequired=%v -- D-13 requires neither to be true at this depth", tc.label, caste, namedInDoc, requiredByRuntime)
+			}
+		}
+	}
+
+	// D-13: heavy requires the security and quality reviewer unconditionally
+	// (gatekeeper, auditor) -- the doc's heavy cell must name them and
+	// isAlwaysRequired must agree. (Probe is deliberately excluded here: it
+	// is conditional on testable code even at heavy, so "named in the doc"
+	// and "unconditionally required" are not the same claim for it.)
+	for _, caste := range []string{"gatekeeper", "auditor"} {
+		namedInDoc := strings.Contains(strings.ToLower(heavy), caste)
+		requiredByRuntime := isAlwaysRequired(caste, "continue", phase, heavyState)
+		if !namedInDoc {
+			t.Errorf("continue/heavy cell does not name %s, but heavy requires it unconditionally", caste)
+		}
+		if namedInDoc != requiredByRuntime {
+			t.Errorf("continue/heavy: doc names %s=%v, isAlwaysRequired=%v -- these must agree", caste, namedInDoc, requiredByRuntime)
+		}
 	}
 }
