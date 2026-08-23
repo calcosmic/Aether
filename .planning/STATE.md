@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 194
 current_phase_name: The Queen Decides the Team
 status: executing
-stopped_at: Completed 194-06-PLAN.md
-last_updated: "2026-08-23T14:58:51.935Z"
+stopped_at: Completed 194-07-PLAN.md
+last_updated: "2026-08-23T15:50:01.102Z"
 last_activity: 2026-08-23
 last_activity_desc: Phase 194 execution started
-state_head: 3adbeca872fa3aff9898f0eec35155d4afefc328
+state_head: c4cfe68febdf9e2de0db8f91f00862ee68b152e9
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 14
-  completed_plans: 11
+  completed_plans: 12
   percent: 14
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 ## Current Position
 
 Phase: 194 (The Queen Decides the Team) — EXECUTING
-Plan: 7 of 9
+Plan: 8 of 9
 Status: Ready to execute
 Last activity: 2026-08-23 — Phase 194 execution started
 
@@ -62,6 +62,7 @@ Last activity: 2026-08-23 — Phase 194 execution started
 | Phase 194 P04 | 55min | 2 tasks | 5 files |
 | Phase 194 P05 | 87min | 2 tasks | 28 files |
 | Phase 194 P06 | 55min | 2 tasks | 11 files |
+| Phase 194 P07 | 45min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,8 @@ Last activity: 2026-08-23 — Phase 194 execution started
 - [Phase 194]: Continue's watcher relay in the external/wrapper lane was decoupled from caste selection entirely -- it reports the deterministic floor's already-computed result and must be gated on skipWatchers alone, never on whether a caste-selection mechanism also wants watcher this run
 - [Phase 194]: [Phase 194] Plan 6: both detectors (plan wording, changed files) now feed the same collapseToForcedReviewers merge via riskSignalHitsFromRecords, rather than two independently-derived sets that could disagree.
 - [Phase 194]: [Phase 194] Plan 6: the wrapper lane's planned-subset check needed no correction for a changed-files-forced reviewer -- the file detector fires inside plannedExternalContinueDispatches, the same call that produces the persisted planned manifest, before any worker dispatches.
+- [Phase 194]: [Phase 194] Plan 7: Q1/Q2 (card wording, re-ask scope) answered with no behaviour change -- Q1's real complaint was layout not phrasing, so the card's sentences stayed and separation was added instead; Q2 kept D-03's one-signal-one-phase scope with no re-ask.
+- [Phase 194]: [Phase 194] Plan 7: Q3 (owner asked for a one-worker build to skip the check-in pause) reverses D-14 and, per the plan's own resume-signal, was NOT applied here -- filed as a pending todo for the next /gsd-discuss-phase pass instead; TestOneWorkerTeamStillPauses continues to pin the current, unchanged pause behaviour.
 
 ### Pending Todos
 
@@ -195,6 +198,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-23T14:58:51.878Z
-Stopped at: Completed 194-06-PLAN.md
+Last session: 2026-08-23T15:50:01.041Z
+Stopped at: Completed 194-07-PLAN.md
 Resume file: None

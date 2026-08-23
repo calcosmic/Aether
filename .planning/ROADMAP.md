@@ -133,7 +133,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 194-07-PLAN.md — The waiver: owner-only, one signal, one phase, recorded with a reason — plus the owner check-in on the card (wave 7)
+- [x] 194-07-PLAN.md — The waiver: owner-only, one signal, one phase, recorded with a reason — plus the owner check-in on the card (wave 7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
