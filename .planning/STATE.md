@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 194
 current_phase_name: The Queen Decides the Team
 status: executing
-stopped_at: Completed 194-05-PLAN.md
-last_updated: "2026-08-23T14:12:51.844Z"
+stopped_at: Completed 194-06-PLAN.md
+last_updated: "2026-08-23T14:58:51.935Z"
 last_activity: 2026-08-23
 last_activity_desc: Phase 194 execution started
-state_head: fa4482f4549811dfe7a25bea15e343455a900cd5
+state_head: 3adbeca872fa3aff9898f0eec35155d4afefc328
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 14
-  completed_plans: 10
+  completed_plans: 11
   percent: 14
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 ## Current Position
 
 Phase: 194 (The Queen Decides the Team) — EXECUTING
-Plan: 6 of 9
+Plan: 7 of 9
 Status: Ready to execute
 Last activity: 2026-08-23 — Phase 194 execution started
 
@@ -61,6 +61,7 @@ Last activity: 2026-08-23 — Phase 194 execution started
 | Phase 194 P03 | 210min | 2 tasks | 18 files |
 | Phase 194 P04 | 55min | 2 tasks | 5 files |
 | Phase 194 P05 | 87min | 2 tasks | 28 files |
+| Phase 194 P06 | 55min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,8 @@ Last activity: 2026-08-23 — Phase 194 execution started
 - [Phase 194]: [Phase 194] Plan 4: codexBuildManifest.ForcedReviewerAnnouncement + the check-in card's announcement block name the exact signal and matched phrase whenever a reviewer is forced, before any worker spawns (D-05); TestRequiredMeansBuilderOrNamedSignal locks REQUIRED to mean builder or a named signal, nothing else.
 - [Phase 194]: queenFallbackTeam is the no-proposal team for build/continue -- computed directly from the required-caste floor, not by filtering a scored candidate list (D-11)
 - [Phase 194]: Continue's watcher relay in the external/wrapper lane was decoupled from caste selection entirely -- it reports the deterministic floor's already-computed result and must be gated on skipWatchers alone, never on whether a caste-selection mechanism also wants watcher this run
+- [Phase 194]: [Phase 194] Plan 6: both detectors (plan wording, changed files) now feed the same collapseToForcedReviewers merge via riskSignalHitsFromRecords, rather than two independently-derived sets that could disagree.
+- [Phase 194]: [Phase 194] Plan 6: the wrapper lane's planned-subset check needed no correction for a changed-files-forced reviewer -- the file detector fires inside plannedExternalContinueDispatches, the same call that produces the persisted planned manifest, before any worker dispatches.
 
 ### Pending Todos
 
@@ -192,6 +195,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-23T14:12:51.776Z
-Stopped at: Completed 194-05-PLAN.md
+Last session: 2026-08-23T14:58:51.878Z
+Stopped at: Completed 194-06-PLAN.md
 Resume file: None

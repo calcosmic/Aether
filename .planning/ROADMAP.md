@@ -129,7 +129,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 194-06-PLAN.md — Both checking-step lanes carry the same team: changed files can raise a reviewer, and the owner's list works on the path people run (wave 6)
+- [x] 194-06-PLAN.md — Both checking-step lanes carry the same team: changed files can raise a reviewer, and the owner's list works on the path people run (wave 6)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
