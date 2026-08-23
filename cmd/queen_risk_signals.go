@@ -381,9 +381,21 @@ func forcedReviewerReasonClause(hit riskSignalHit) string {
 		return ""
 	}
 	if hit.Source == "changed files" {
-		return fmt.Sprintf("the files changed touched %q", match)
+		return fmt.Sprintf("the files changed touched %q", forcedReviewerReasonPathLabel(match))
 	}
 	return fmt.Sprintf("the plan mentions %q", match)
+}
+
+// forcedReviewerReasonPathLabel renders a matched PathPattern the way a
+// non-technical owner reads it (IN-03, 194-REVIEW.md): the raw internal
+// pattern can carry a trailing directory separator (e.g. "migrations/")
+// that reads as an identifier fragment, not a sentence a human would write.
+// This is a rendering-only trim -- riskSignalHit.Match itself keeps the raw
+// pattern (other callers, e.g. the check-in card's dedup, key off the exact
+// table value) -- so the owner-facing sentence never shows a raw pattern
+// with a trailing slash.
+func forcedReviewerReasonPathLabel(pattern string) string {
+	return strings.TrimSuffix(pattern, "/")
 }
 
 // joinWithAnd (cmd/codex_project_docs.go) already renders a list the way a

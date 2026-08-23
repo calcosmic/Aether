@@ -337,8 +337,12 @@ func TestChangedFilesCanOnlyAddAForcedReviewer(t *testing.T) {
 			if !strings.HasPrefix(reviewer.Reason, "this touches") {
 				t.Errorf("file-detected auditor reason missing the forced-reviewer sentence shape: %q", reviewer.Reason)
 			}
-			if !strings.Contains(reviewer.Reason, "migrations/") {
-				t.Errorf("file-detected auditor reason does not name the matched pattern: %q", reviewer.Reason)
+			// IN-03 (194-REVIEW.md): the rendered reason strips the raw
+			// pattern's trailing directory separator before it reaches the
+			// owner — "migrations" reads as a sentence, "migrations/" reads
+			// as an internal identifier fragment.
+			if !strings.Contains(reviewer.Reason, "migrations") || strings.Contains(reviewer.Reason, "migrations/") {
+				t.Errorf("file-detected auditor reason does not name the matched pattern without a trailing slash: %q", reviewer.Reason)
 			}
 		default:
 			t.Errorf("unexpected caste in the union: %s", reviewer.Caste)
@@ -473,5 +477,24 @@ func TestBareAuthPathPatternCatchesAuthNamedFiles(t *testing.T) {
 				t.Errorf("path %q: forced gatekeeper = %v, want %v (reviewers = %+v)", tc.path, got, tc.want, reviewers)
 			}
 		})
+	}
+}
+
+// TestForcedReviewerReasonNeverShowsATrailingSlash (IN-03, 194-REVIEW.md):
+// forcedReviewerReasonClause must never quote a raw PathPattern with its
+// trailing directory separator still attached -- "migrations/" reads as an
+// internal identifier fragment to a non-technical owner, not a sentence.
+func TestForcedReviewerReasonNeverShowsATrailingSlash(t *testing.T) {
+	hit := riskSignalHit{
+		Signal: queenRiskSignalTable[4], // "database migration"
+		Match:  "migrations/",
+		Source: "changed files",
+	}
+	clause := forcedReviewerReasonClause(hit)
+	if strings.Contains(clause, "migrations/") {
+		t.Fatalf("clause still carries a trailing slash: %q", clause)
+	}
+	if !strings.Contains(clause, "migrations") {
+		t.Fatalf("clause dropped the matched pattern entirely: %q", clause)
 	}
 }
