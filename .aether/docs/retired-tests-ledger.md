@@ -236,3 +236,50 @@ phase/plan that removed it).
   roster prose to a separately labelled `what_it_does` slot instead. A
   renamed test whose assertion inverted is a removal, per RETIRE-04.
 - **Removed in:** Phase 194 Plan 04.
+
+### `TestQueenTrimsContinueReviewersAndKeepsTheWatcher` (function in `cmd/queen_judgement_test.go`)
+
+- **Original path:** `cmd/queen_judgement_test.go` (single function removed;
+  file survives).
+- **What it covered:** that `queenApplyJudgement` TRIMS the deterministic
+  (no-proposal) continue team down to a smaller judgement-proposed team,
+  never grows it — proven by comparing `queenContinueDispatches` (the
+  keyword-selected "before" team) against `queenContinueDispatchesWithJudgement`
+  (the "after" team) and asserting `len(after) <= len(before)`.
+- **Disposition:** `dead-with-no-replacement`, ruling D11 / D-13
+  (194-CONTEXT.md, plan 194-05). The test's entire premise was that the
+  no-proposal continue engine over-selects via keyword scoring, and
+  judgement's job is to trim that over-selection back down. Plan 194-05
+  removed the keyword engine from continue's no-proposal path outright
+  (`queenFallbackTeam`, D-11): with no proposal, continue now sends only
+  what the phase's required-caste floor demands, which is usually nothing.
+  On this test's own fixture the "before" team is now empty (0 dispatches),
+  so `len(after) > len(before)` fires the moment a proposal adds anything at
+  all — including the very Watcher the test's own name says it exists to
+  keep. There is no smaller-than-empty team to trim to; the property this
+  test asserted no longer has a meaningful floor to hold. What survives is
+  `TestContinueJudgementCannotDropASecurityReview` (same file), which pins
+  the actual invariant that matters: an explicitly proposed, reasoned worker
+  is never dropped by judgement.
+- **Removed in:** Phase 194 Plan 05.
+
+### `TestProbeStillRequiredWhenTheRepositoryHasCode` (function in `cmd/queen_relevance_floor_test.go`)
+
+- **Original path:** `cmd/queen_relevance_floor_test.go` (single function
+  removed; file survives).
+- **What it covered:** that `isAlwaysRequired("probe", "continue", phase,
+  colony.ColonyState{})` (default/standard depth) returned true on a phase
+  whose workspace looked like it contained real code -- Probe's "always
+  required" membership at standard-depth continue.
+- **Disposition:** `recovered-by:cmd/queen_probe_gating_test.go
+  (TestProbeIsRequiredOnlyWhereItCanFindSomething's "proposing probe on a
+  phase that produces testable code is not refused" subtest) and
+  cmd/owner_dials_test.go (TestContinueRequiredSetByDepth)`. D-13
+  (194-CONTEXT.md, plan 194-05) removed standard depth's unconditional
+  membership entirely -- light and standard now require NOTHING
+  unconditionally at continue. The code-detection gate this test actually
+  protected (a real-code phase is not silently starved of coverage) survives
+  as a REFUSAL rule instead: a proposed Probe is refused on a
+  no-testable-code phase and NOT refused on a testable-code phase, asserted
+  directly on `queenApplyJudgement`'s output.
+- **Removed in:** Phase 194 Plan 05.

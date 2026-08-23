@@ -45,13 +45,20 @@ func TestContinueFastPathHonoursCasteProposal(t *testing.T) {
 // and "pattern" are everyday phase vocabulary — two incidental hits cleared
 // the continue threshold and bought a knowledge-preservation reviewer for
 // phases that had nothing to preserve.
+// TestContinueDoesNotSummonKeeperOnIncidentalWords exercises the scoring
+// registry directly (queenCandidateDispatches). Plan 194-05 (D-11) removed
+// the no-proposal keyword-scoring fallback from queenOrchestrate's continue
+// path entirely, so neither phase below would select ANY optional
+// specialist through that entry point any more -- the claim this test
+// protects (the registry can tell incidental wording apart from genuine
+// preservation intent) still lives in the scoring function itself.
 func TestContinueDoesNotSummonKeeperOnIncidentalWords(t *testing.T) {
 	incidental := probeGatingPhase("Tidy the export module", "Document the standard pattern used by the export code", colony.PhaseModeMaintenance)
-	if HasCaste(queenOrchestrate(incidental, "continue", colony.ColonyState{}), "keeper") {
+	if HasCaste(queenCandidateDispatches(incidental, "continue", colony.ColonyState{}), "keeper") {
 		t.Fatalf("incidental standard/document/pattern wording must not buy a Keeper run")
 	}
 	preservation := probeGatingPhase("Capture conventions", "Preserve knowledge and conventions for future workers", colony.PhaseModeMaintenance)
-	if !HasCaste(queenOrchestrate(preservation, "continue", colony.ColonyState{}), "keeper") {
+	if !HasCaste(queenCandidateDispatches(preservation, "continue", colony.ColonyState{}), "keeper") {
 		t.Fatalf("a genuine knowledge-preservation phase should still select the Keeper")
 	}
 }

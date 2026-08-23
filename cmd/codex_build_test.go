@@ -87,19 +87,16 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	// Phase 184: the two golden tasks form a dependent chain of single-task
 	// waves with the same caste, so they are now one worker rather than two.
 	// Phase 193 (D-08): the build's verification stage no longer dispatches a
-	// watcher without an explicit Queen proposal, so this drops from 5 to 4.
+	// watcher without an explicit Queen proposal.
 	// Plan 194-02 (D-07): the build floor shrank to the builder alone, so
-	// probe -- previously required unconditionally on any phase whose
-	// workspace looked like it contained code -- no longer rides along
-	// either, dropping this from 4 to 3 (builder, plus measurer/chaos from
-	// this fixture's heavy verification depth).
-	if got := int(result["dispatch_count"].(float64)); got != 3 {
-		// Modeless phase resolves to prototype: prose "Research" in a task no
-		// longer spawns an Oracle (typed phase mode). The keyword-gated
-		// external castes (ambassador, gatekeeper) no longer spawn either:
-		// this phase replaces internal build dispatch and has no external
-		// surface or auth boundary for them to review.
-		t.Fatalf("dispatch_count = %d, want 3", got)
+	// probe no longer rides along either.
+	// Plan 194-05 (D-11): the CLI issued no --castes proposal here, so the
+	// no-proposal fallback (queenFallbackTeam) answers with the required-
+	// caste floor alone -- the keyword engine that used to add measurer and
+	// chaos from this fixture's wording no longer runs on build at all. One
+	// worker (the builder) is the whole team.
+	if got := int(result["dispatch_count"].(float64)); got != 1 {
+		t.Fatalf("dispatch_count = %d, want 1", got)
 	}
 	// Phase 184: the two chained tasks are one worker, so one task wave.
 	if got := int(result["wave_count"].(float64)); got != 1 {
@@ -113,10 +110,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	// concurrently instead of queued.
 	// Phase 184: one fewer execution wave, because the two chained tasks are one
 	// worker rather than two waves of one.
-	// Phase 193 (D-08): no watcher wave without an explicit Queen proposal, so
-	// this drops from 3 to 2.
-	if got := int(result["execution_wave_count"].(float64)); got != 2 {
-		t.Fatalf("execution_wave_count = %d, want 2 execution waves", got)
+	// Phase 193 (D-08): no watcher wave without an explicit Queen proposal.
+	// Plan 194-05 (D-11): the no-proposal fallback is the builder alone, so
+	// there is exactly one execution wave, not two.
+	if got := int(result["execution_wave_count"].(float64)); got != 1 {
+		t.Fatalf("execution_wave_count = %d, want 1 execution wave", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
@@ -128,9 +126,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	// Was 6 while each reviewer held its own wave. Independent reviewers now
 	// share one step; see TestIndependentSpecialistsShareAWave.
 	// Phase 193 (D-08): no verification stage without an explicit Queen
-	// proposal, so this drops from 3 to 2.
-	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 2 {
-		t.Fatalf("execution_plan = %#v, want 2 execution stages", result["execution_plan"])
+	// proposal.
+	// Plan 194-05 (D-11): the no-proposal fallback is the builder alone, so
+	// there is exactly one execution stage, not two.
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 1 {
+		t.Fatalf("execution_plan = %#v, want 1 execution stage", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -154,15 +154,14 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
 	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
-	// proposal, so this drops from 5 to 4. Plan 194-02 (D-07): the build
-	// floor shrank to the builder alone, so probe no longer rides along
-	// unconditionally either, dropping this from 4 to 3.
-	if len(manifest.Dispatches) != 3 {
-		t.Fatalf("expected 3 manifest dispatches, got %d", len(manifest.Dispatches))
+	// proposal. Plan 194-02 (D-07): the build floor shrank to the builder
+	// alone. Plan 194-05 (D-11): the no-proposal fallback no longer scores
+	// optional specialists at all, so the whole team is the one builder.
+	if len(manifest.Dispatches) != 1 {
+		t.Fatalf("expected 1 manifest dispatch, got %d", len(manifest.Dispatches))
 	}
-	// Phase 184: three workers, so three briefs. The two chained tasks share one.
-	if len(manifest.WorkerBriefs) != 3 {
-		t.Fatalf("expected 3 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	if len(manifest.WorkerBriefs) != 1 {
+		t.Fatalf("expected 1 worker brief in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
@@ -652,17 +651,17 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	// Phase 184: a dependent chain of single-task waves sharing a caste is now
 	// one worker instead of several.
 	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
-	// proposal, so this drops from 6 to 5.
-	// Plan 194-02 (D-07): the build floor shrank to the builder alone, so
-	// probe no longer rides along unconditionally either, dropping this
-	// from 5 to 4 (architect via genuine relevance, builder, measurer,
-	// chaos from this fixture's heavy verification depth).
-	if got := int(result["dispatch_count"].(float64)); got != 4 {
-		t.Fatalf("dispatch_count = %d, want 4", got)
+	// proposal.
+	// Plan 194-02 (D-07): the build floor shrank to the builder alone.
+	// Plan 194-05 (D-11): the no-proposal fallback no longer scores optional
+	// specialists at all (architect/measurer/chaos used to ride in on this
+	// fixture's own wording) -- the whole team is the one builder.
+	if got := int(result["dispatch_count"].(float64)); got != 1 {
+		t.Fatalf("dispatch_count = %d, want 1", got)
 	}
 	dispatches := result["dispatches"].([]interface{})
-	if len(dispatches) != 4 {
-		t.Fatalf("dispatches = %d, want 4", len(dispatches))
+	if len(dispatches) != 1 {
+		t.Fatalf("dispatches = %d, want 1", len(dispatches))
 	}
 	for _, raw := range dispatches {
 		dispatch := raw.(map[string]interface{})
@@ -716,11 +715,14 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	// Phase 184 removed one more: the two chained task waves are now a single
 	// worker, so there is one "wave" step rather than two.
 	// Phase 193 (D-08): no trailing verification stage without an explicit
-	// Queen proposal, so this drops from 4 to 3.
-	if len(executionPlan) != 3 {
-		t.Fatalf("execution_plan = %d, want 3 steps: %#v", len(executionPlan), executionPlan)
+	// Queen proposal.
+	// Plan 194-05 (D-11): the no-proposal fallback no longer scores
+	// architect/measurer/chaos in on this fixture's wording, so there is no
+	// design step and no mixed-review step -- one worker, one wave.
+	if len(executionPlan) != 1 {
+		t.Fatalf("execution_plan = %d, want 1 step: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"design", "wave", "mixed"}
+	wantStages := []string{"wave"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})
@@ -1311,10 +1313,16 @@ func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *tes
 	goal := "Separate caste budget from worker dispatch count"
 	// Plan 194-02 (D-07) shrank the build floor to the builder alone, so
 	// probe no longer rides along on every phase to pad the worker count.
-	// A fourth independent (non-chained) task keeps builder's own worker
-	// count -- and so worker_count overall -- above max_selected_castes
-	// without depending on any caste the floor used to force.
-	taskIDs := []string{"1.1", "1.2", "1.3", "1.4"}
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback
+	// entirely -- chaos and measurer only ride along here because
+	// applyBuildDispatchPolicyCastes adds them unconditionally at heavy
+	// depth with a "full" colony depth (a separate, unaffected policy
+	// hook), not because they scored above a threshold. With optional
+	// specialists otherwise off the table, builder's own independent-task
+	// fan-out is the only lever left to push worker_count above the heavy
+	// caste ceiling (8) -- eight independent (non-chained) tasks, plus
+	// chaos and measurer, clears it.
+	taskIDs := []string{"1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"}
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
@@ -1333,6 +1341,10 @@ func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *tes
 					{ID: &taskIDs[1], Goal: "Add release hardening checks", Status: colony.TaskPending},
 					{ID: &taskIDs[2], Goal: "Verify security signoff evidence", Status: colony.TaskPending},
 					{ID: &taskIDs[3], Goal: "Package release notes for handoff", Status: colony.TaskPending},
+					{ID: &taskIDs[4], Goal: "Implement the audit log writer", Status: colony.TaskPending},
+					{ID: &taskIDs[5], Goal: "Implement the rollback script", Status: colony.TaskPending},
+					{ID: &taskIDs[6], Goal: "Implement the notification hook", Status: colony.TaskPending},
+					{ID: &taskIDs[7], Goal: "Implement the release changelog entry", Status: colony.TaskPending},
 				},
 			}},
 		},
@@ -1532,9 +1544,17 @@ func TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases(t *testing.T) {
 		},
 	})
 
-	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback at
+	// build: a phase's own wording no longer summons an optional specialist
+	// on its own, however clear the integration signal. Ambassador needs an
+	// explicit proposal now to reach the dispatch list -- exactly what the
+	// chat's --castes/--caste-why path (queenApplyJudgement) is for.
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{
+		QueenCastes:   []string{"builder", "ambassador"},
+		QueenCasteWhy: []string{"ambassador=this phase wires the OpenAI webhook, an external integration"},
+	})
 	if err != nil {
-		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
 	var ambassador *codexBuildDispatch
@@ -1588,9 +1608,18 @@ func TestBuildPlanOnlyUsesQueenSelectedSecurityCastes(t *testing.T) {
 		},
 	})
 
-	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback at
+	// build. This test's own name says "Queen-selected" -- an explicit
+	// proposal is exactly how the Queen selects a caste now.
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{
+		QueenCastes: []string{"builder", "architect", "gatekeeper"},
+		QueenCasteWhy: []string{
+			"architect=a design boundary is worth setting before touching token rotation",
+			"gatekeeper=this phase touches credentials and token handling",
+		},
+	})
 	if err != nil {
-		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
 	for _, caste := range []string{"architect", "gatekeeper"} {
@@ -1637,13 +1666,15 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
 	// Phase 193 (D-08): watcher drops off the lean plan too -- no explicit
 	// Queen proposal named it, so the build side leaves review to `continue`.
-	// Plan 194-02 (D-07): probe is no longer unconditionally required either,
-	// and this fixture's wording does not score it above the relevance
-	// threshold, so it is legitimately absent from the lean plan too.
-	if got, want := buildManifestCastes(manifest), []string{"builder", "measurer", "chaos"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	// Plan 194-02 (D-07): probe is no longer unconditionally required either.
+	// Plan 194-05 (D-11): the no-proposal keyword-scoring fallback that used
+	// to add measurer and chaos here (via unrelated depth mechanics, not
+	// genuine relevance to a settings-panel phase) is gone -- the lean plan
+	// really is just the one builder now.
+	if got, want := buildManifestCastes(manifest), []string{"builder"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("dispatch castes = %v, want lean Queen plan %v", got, want)
 	}
-	for _, caste := range []string{"archaeologist", "oracle", "architect", "gatekeeper", "watcher"} {
+	for _, caste := range []string{"archaeologist", "oracle", "architect", "gatekeeper", "watcher", "measurer", "chaos"} {
 		if buildManifestHasCaste(manifest, caste) {
 			t.Fatalf("routine UI phase should not include %s; got %v", caste, buildManifestCastes(manifest))
 		}

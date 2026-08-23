@@ -40,7 +40,7 @@ Goal: Golden workflow test colony
 Granularity: milestone (4-7 phases)
 ── Depth Selection ──
 Planning depth: deep
-Verification depth: heavy
+Verification depth: standard
 Override: --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy>
 Planning loop: target 90%, 1/6 iteration(s), stop=pending
 Plan size: 6 phases

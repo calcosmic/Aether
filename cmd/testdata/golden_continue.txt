@@ -12,18 +12,6 @@ Continue Verification 1 starting (in-repo, serial)
 ✓ 👁️🐜 Watcher Worker-XX  completed 0.0s  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
 
   Step 1/4: Verification (0s)
-── Dispatch ──
-Continue Review 1 starting (in-repo, serial)
-  Execution: serial — single task in this wave
-──── 🧪🐜 Spawning Worker-XX — Phase: 1 — Golden phase ────
-  🧪🐜 Probe [sonnet] Worker-XX  Phase: 1 — Golden phase
-
-… 🧪🐜 Probe [sonnet] Worker-XX  starting wave 1  Phase: 1 — Golden phase
-
-… 🧪🐜 Probe Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
-
-✓ 🧪🐜 Probe Worker-XX  completed 0.0s  FakeInvoker completed task continue-review-probe for worker Worker-XX (caste: probe)
-
   Step 2/4: Housekeeping (0s)
   Step 3/4: Advance (0s)
 Ceremony complete in 0s
@@ -39,7 +27,7 @@ Workers
 Continue Worker Flow
   - 🐜 Ant Deterministic verification completed — deterministic verification completed: 3 passed, 1 skipped
   - 👁️🐜 Watcher Worker-XX completed — Watcher Worker-XX completed independent verification before advancement
-  - 🧪🐜 Probe Worker-XX completed — Probe Worker-XX completed continue review before advancement
+  - 🐜 Ant Review wave skipped — review wave skipped; no standard review workers were selected
   - 🐜 Ant Signal housekeeping completed — 0 active -> 0 active
   - 🧠🐜 Librarian Phase-end consolidation completed — colony observed nothing new this phase
 Verification passed during continue

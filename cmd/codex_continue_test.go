@@ -164,6 +164,12 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 		State:          colony.StateBUILT,
 		CurrentPhase:   1,
 		BuildStartedAt: &now,
+		// Plan 194-05 (D-06) removed the implicit "single-phase plan = final
+		// phase = heavy" default this fixture used to rely on -- a low-risk
+		// phase now resolves to standard, which (D-13) requires nothing
+		// unconditionally at continue. Heavy is set explicitly so this test
+		// still exercises a real, deterministic multi-worker review panel.
+		VerificationDepth: string(colony.VerificationDepthHeavy),
 		Plan: colony.Plan{
 			Phases: []colony.Phase{{
 				ID:          1,
@@ -197,11 +203,22 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 	if result["colony_mode"].(string) != "colony" {
 		t.Fatalf("colony_mode = %q, want colony", result["colony_mode"])
 	}
+	// Plan 194-05 (D-13): heavy's caste panel is gatekeeper, auditor, and
+	// probe (probe gated on testable code) -- watcher is no longer part of
+	// the REQUIRED caste set, and the no-proposal fallback (queenFallbackTeam)
+	// answers with the required-caste floor only, without consulting
+	// relevance scoring at all. Watcher still appears as a dispatch, though:
+	// it is the external lane's relay of the ALREADY-COMPUTED deterministic
+	// verification report (build/type/lint/test), gated solely on
+	// !skipWatchers -- a structural requirement, not a caste-selection
+	// outcome (see plannedExternalContinueDispatches's own comment).
 	if got := int(result["dispatch_count"].(float64)); got != 4 {
 		t.Fatalf("dispatch_count = %d, want 4", got)
 	}
 	dispatchResults := result["dispatches"].([]interface{})
-	wantCastes := []string{"watcher", "gatekeeper", "auditor", "probe"}
+	// The watcher relay is appended first (wave 1); the review specs
+	// (queenRequiredCastesForBudget's alphabetically sorted set) follow.
+	wantCastes := []string{"watcher", "auditor", "gatekeeper", "probe"}
 	for i, want := range wantCastes {
 		dispatch := dispatchResults[i].(map[string]interface{})
 		if dispatch["caste"].(string) != want {
@@ -350,9 +367,18 @@ func TestContinuePlanOnlyStandardSecurityUsesQueenSelectedGatekeeper(t *testing.
 
 	root, _, _, _ := setupIntermediateContinueState(t, "Auth token rotation")
 
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback at
+	// continue: standard depth requires nothing unconditionally (D-13), so
+	// gatekeeper and probe need an explicit proposal to reach the dispatch
+	// list now -- consistent with this test's own name, "QueenSelected".
 	result, _, _, dispatches, err := runCodexContinuePlanOnly(root, codexContinueOptions{
 		VerificationDepth: string(colony.VerificationDepthStandard),
 		SkipWatchers:      true,
+		QueenCastes:       []string{"gatekeeper", "probe"},
+		QueenCasteWhy: []string{
+			"gatekeeper=this phase touches token rotation, a security surface",
+			"probe=cover the new token rotation code",
+		},
 	})
 	if err != nil {
 		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
@@ -384,6 +410,10 @@ func TestPlannedContinueReviewDispatchesUseQueenSelectedMeasurer(t *testing.T) {
 		Mode:        colony.PhaseModePrototype,
 	}
 
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback at
+	// continue: standard depth requires nothing unconditionally (D-13), so
+	// measurer and probe need an explicit proposal to reach the dispatch
+	// list now -- consistent with this test's own name, "QueenSelected".
 	dispatches := plannedContinueReviewDispatches(
 		root,
 		phase,
@@ -393,8 +423,12 @@ func TestPlannedContinueReviewDispatchesUseQueenSelectedMeasurer(t *testing.T) {
 		&codex.FakeInvoker{},
 		0,
 		colony.VerificationDepthStandard,
-		nil,
+		[]string{"measurer", "probe"},
 		"",
+		map[string]string{
+			"measurer": "this phase is about optimizing latency and memory usage",
+			"probe":    "cover the new optimization code",
+		},
 	)
 
 	if !continueWorkerDispatchHasCaste(dispatches, "measurer") {

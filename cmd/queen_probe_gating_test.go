@@ -24,13 +24,12 @@ func probeGatingPhase(name, description string, mode colony.PhaseMode) colony.Ph
 // under any condition, so the positive half of this test (an implementation
 // phase "requires" a Probe) no longer has a floor to assert. What survives
 // is the negative rule: Probe must never be forced onto a phase with nothing
-// for it to cover. Refusing an explicit Queen proposal naming Probe on such a
-// phase is plan 194-05's job (the queenApplyJudgement zero-relevance refusal
-// only fires today when casteRelevanceScore returns 0, and Probe is not yet
-// keyword-gated the way ambassador/gatekeeper are) -- skipped here rather
-// than landed inline, since gating Probe's score changes candidate selection
-// for every flow that scores it (build, continue, swarm, seal), not just
-// this floor.
+// for it to cover. Plan 194-05 lands the refusal gate: queenApplyJudgement
+// now refuses a proposed Probe BY NAME (into the same Refused list the
+// zero-relevance refusal already fills) when the phase produces no testable
+// code, rather than relying on casteRelevanceScore == 0 -- Probe is not
+// keyword-gated the way ambassador/gatekeeper are, so score alone never
+// caught this case.
 func TestProbeIsRequiredOnlyWhereItCanFindSomething(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
@@ -64,8 +63,34 @@ func TestProbeIsRequiredOnlyWhereItCanFindSomething(t *testing.T) {
 		})
 	}
 
-	t.Run("proposing probe on a documentation-only phase is not yet refused (plan 194-05)", func(t *testing.T) {
-		t.Skip("Probe is not keyword-gated like ambassador/gatekeeper, so an explicit proposal naming it is not refused on zero relevance today; plan 194-05 wires the refusal gate and should remove this skip.")
+	t.Run("proposing probe on a documentation-only phase is refused by name", func(t *testing.T) {
+		phase := probeGatingPhase("Write the README", "Documentation for installation and usage", colony.PhaseModeMaintenance)
+		judgement := queenApplyJudgement(
+			[]string{"builder", "probe"}, "",
+			phase, "build", colony.ColonyState{},
+			map[string]string{"probe": "check the new install script"},
+		)
+		if !hasCasteName(judgement.Refused, "probe") {
+			t.Fatalf("probe on a documentation-only phase should be refused by name; Refused = %v, Final = %v", judgement.Refused, judgement.Final)
+		}
+		if hasCasteName(judgement.Final, "probe") {
+			t.Fatalf("a refused probe must not reach Final: %v", judgement.Final)
+		}
+	})
+
+	t.Run("proposing probe on a phase that produces testable code is not refused", func(t *testing.T) {
+		phase := probeGatingPhase("Add user authentication", "Implement login endpoints and session handling", colony.PhaseModeProduction)
+		judgement := queenApplyJudgement(
+			[]string{"builder", "probe"}, "",
+			phase, "build", colony.ColonyState{},
+			map[string]string{"probe": "cover the new login endpoint"},
+		)
+		if hasCasteName(judgement.Refused, "probe") {
+			t.Fatalf("probe on a testable-code phase must not be refused: Refused = %v", judgement.Refused)
+		}
+		if !hasCasteName(judgement.Final, "probe") {
+			t.Fatalf("probe on a testable-code phase should reach Final: %v", judgement.Final)
+		}
 	})
 }
 

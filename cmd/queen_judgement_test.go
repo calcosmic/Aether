@@ -296,32 +296,6 @@ func casteKeys(set map[string]bool) []string {
 	return keys
 }
 
-// TestQueenTrimsContinueReviewersAndKeepsTheWatcher covers the expensive flow.
-// Continue fans out to a reviewer per caste, each a full agent run — a real
-// session spent roughly 350k tokens on three of them, one of which was a
-// Measurer selected because an audio phase's vocabulary contains "latency" and
-// "memory". Nobody judged that worth doing; a word matched.
-func TestQueenTrimsContinueReviewersAndKeepsTheWatcher(t *testing.T) {
-	phase := judgementPhase(
-		"Fix envelope retrigger",
-		"The envelope re-arms once and never again when the step lane sends a steady value; latency and memory behaviour is unchanged",
-		colony.PhaseModeProduction,
-	)
-	depth := colony.VerificationDepthStandard
-
-	// Keyword scoring on this phase pulls in specialists the change does not
-	// need. The Queen reading it knows the question is correctness.
-	before := queenContinueDispatches(phase, depth)
-	after := queenContinueDispatchesWithJudgement(phase, depth, []string{"watcher"}, "this is a correctness fix, not a performance question", nil)
-
-	if len(after) > len(before) {
-		t.Errorf("judgement should not grow the review team here: before %d, after %d", len(before), len(after))
-	}
-	if !queenContinueHasCaste(after, "watcher") {
-		t.Errorf("Watcher must survive: %v", casteNames(after))
-	}
-}
-
 // TestContinueJudgementCannotDropASecurityReview keeps the continue floor equal
 // to the build floor. Trimming reviewers is a cost decision; skipping a
 // security review on credential work is not available at any cost.
@@ -330,7 +304,8 @@ func TestContinueJudgementCannotDropASecurityReview(t *testing.T) {
 
 	after := queenContinueDispatchesWithJudgement(
 		phase, colony.VerificationDepthStandard,
-		[]string{"watcher"}, "looks simple", nil)
+		[]string{"watcher"}, "looks simple", nil,
+		map[string]string{"watcher": "an independent check before this lands"})
 
 	if !queenContinueHasCaste(after, "watcher") {
 		t.Errorf("Watcher must survive: %v", casteNames(after))

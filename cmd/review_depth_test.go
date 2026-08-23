@@ -415,11 +415,16 @@ func TestRenderReviewDepthLine_Light(t *testing.T) {
 
 // --- Task 1 tests: VerificationDepth 3-level dispatch ---
 
-func TestResolveVerificationDepth_FinalPhaseDefaultsHeavyButHonorsLight(t *testing.T) {
+// TestResolveVerificationDepth_FinalPhaseNoLongerEscalates pins D-06: a
+// low-risk final phase is treated exactly like any other low-risk phase --
+// position no longer raises verification depth. It was renamed from
+// "...DefaultsHeavyButHonorsLight" because the "DefaultsHeavy" half of that
+// claim is exactly what this ruling removes.
+func TestResolveVerificationDepth_FinalPhaseNoLongerEscalates(t *testing.T) {
 	phase := colony.Phase{ID: 5, Name: "Final polish"}
 	got := resolveVerificationDepth(phase, 5, false, false, "")
-	if got != colony.VerificationDepthHeavy {
-		t.Errorf("final phase no flags: got %q, want %q", got, colony.VerificationDepthHeavy)
+	if got != colony.VerificationDepthStandard {
+		t.Errorf("final phase no flags: got %q, want %q", got, colony.VerificationDepthStandard)
 	}
 	got = resolveVerificationDepth(phase, 5, true, false, "")
 	if got != colony.VerificationDepthLight {
@@ -517,15 +522,19 @@ func TestResolveVerificationDepthFlag_BoolPriority(t *testing.T) {
 
 // --- Task 2 tests: standard mode dispatch and visual ---
 
-func TestContinueReviewDispatch_StandardMode_SpawnsProbeOnly(t *testing.T) {
+// TestContinueReviewDispatch_StandardMode_SpawnsNothingWithoutASignal used to
+// assert that standard-depth continue unconditionally dispatched a Probe.
+// Plan 194-05 (D-13) removed Probe's unconditional continue membership along
+// with Watcher's: standard depth now requires nothing unless the phase's own
+// wording earns a specialist relevance score or names one of the five risk
+// signals (queenForcedReviewersForPhase) -- neither applies to this fixture's
+// plain "Do something" task.
+func TestContinueReviewDispatch_StandardMode_SpawnsNothingWithoutASignal(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
 	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthStandard, nil, "")
-	if len(dispatches) != 1 {
-		t.Errorf("standard mode review should produce 1 dispatch (probe only), got %d", len(dispatches))
-	}
-	if len(dispatches) > 0 && dispatches[0].Caste != "probe" {
-		t.Errorf("standard mode should spawn probe, got %q", dispatches[0].Caste)
+	if len(dispatches) != 0 {
+		t.Errorf("standard mode review with no proposal and no risk signal should produce no dispatches (D-13), got %d: %+v", len(dispatches), dispatches)
 	}
 }
 
@@ -788,10 +797,14 @@ func TestResolveSmartVerificationDepth(t *testing.T) {
 		total    int
 		expected colony.VerificationDepth
 	}{
-		{"final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, colony.VerificationDepthHeavy},
+		// D-06 (194-CONTEXT.md, plan 194-05): position no longer raises
+		// verification depth. A low-risk final phase is treated like any
+		// other low-risk phase, not automatically escalated to heavy.
+		{"final phase, low risk, no longer escalated (D-06)", colony.Phase{ID: 5, Name: "Final polish"}, 5, colony.VerificationDepthStandard},
 		{"early low risk", colony.Phase{ID: 1, Name: "Setup"}, 6, colony.VerificationDepthLight},
 		{"security risk", colony.Phase{ID: 2, Name: "Secrets management"}, 4, colony.VerificationDepthHeavy},
 		{"blast radius intermediate", colony.Phase{ID: 3, Name: "Dispatch optimization"}, 5, colony.VerificationDepthStandard},
+		{"final phase with high risk still gets heavy", colony.Phase{ID: 5, Name: "Secrets rotation"}, 5, colony.VerificationDepthHeavy},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1002,7 +1015,9 @@ func TestResolveVerificationDepthSmart_EmptyUsesSmartDefault(t *testing.T) {
 		expected string
 	}{
 		{"early phase gets light", colony.Phase{ID: 1, Name: "Setup"}, 6, "light"},
-		{"final phase gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, "heavy"},
+		// D-06: a low-risk final phase no longer escalates to heavy on
+		// position alone.
+		{"final phase, low risk, gets standard (D-06)", colony.Phase{ID: 5, Name: "Final polish"}, 5, "standard"},
 		{"security risk gets heavy", colony.Phase{ID: 2, Name: "Auth system"}, 4, "heavy"},
 	}
 	for _, tt := range tests {
@@ -1148,7 +1163,10 @@ func TestResolveVerificationDepth_Table(t *testing.T) {
 		{"no flags early phase gets light", colony.Phase{ID: 1, Name: "Feature work"}, 6, false, false, "", colony.VerificationDepthLight},
 		{"no flags intermediate phase gets standard", colony.Phase{ID: 3, Name: "More features"}, 6, false, false, "", colony.VerificationDepthStandard},
 		{"no flags late phase gets standard", colony.Phase{ID: 5, Name: "Polish work"}, 6, false, false, "", colony.VerificationDepthStandard},
-		{"no flags final phase gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", colony.VerificationDepthHeavy},
+		// D-06: a low-risk final phase no longer escalates to heavy on
+		// position alone -- it falls through to the same standard default
+		// an intermediate low-risk phase gets.
+		{"no flags final phase gets standard (D-06)", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", colony.VerificationDepthStandard},
 
 		// Invalid depth values: NormalizeVerificationDepth maps unknown to standard
 		{"invalid depth ultra", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "ultra", colony.VerificationDepthStandard},
@@ -1203,7 +1221,9 @@ func TestResolveEffectiveContinueDepth_Table(t *testing.T) {
 		// No CLI flags, no persisted state: falls through to smart default
 		{"no CLI no persisted uses smart default", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "", colony.VerificationDepthStandard},
 		{"no CLI no persisted early gets light", colony.Phase{ID: 1, Name: "Setup"}, 6, false, false, "", "", colony.VerificationDepthLight},
-		{"no CLI no persisted final gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", "", colony.VerificationDepthHeavy},
+		// D-06: a low-risk final phase no longer escalates to heavy on
+		// position alone.
+		{"no CLI no persisted final gets standard (D-06)", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", "", colony.VerificationDepthStandard},
 
 		// Both CLI flags: heavy wins even with persisted state
 		{"both CLI flags heavy wins over persisted", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, true, "", "light", colony.VerificationDepthHeavy},

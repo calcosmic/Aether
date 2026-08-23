@@ -530,24 +530,30 @@ func isAlwaysRequired(caste, flowType string, phase colony.Phase, state colony.C
 		return queenBuildSafetyRequiredCaste(caste, flowType, phase)
 	case "continue":
 		switch stateVerificationDepth(state) {
-		case colony.VerificationDepthLight:
-			return caste == "watcher"
 		case colony.VerificationDepthHeavy:
-			// Heavy is an explicit request for the full review panel
-			// (gatekeeper + auditor + probe, D-13) -- but "full panel" still
-			// means probe only where there is something for it to cover.
-			// Probe used to stay unconditionally even on a documentation
-			// phase, billing a worker run to report it found nothing; D-13
-			// keeps heavy's coverage caste subject to the same testable-code
-			// gate standard depth already applies.
-			return caste == "watcher" || caste == "gatekeeper" || caste == "auditor" ||
+			// Heavy is the owner's one dial that still outranks the Queen's
+			// judgement (D-13): the full review panel, gatekeeper + auditor
+			// + probe. "Full panel" still means probe only where there is
+			// something for it to cover -- probe used to stay unconditional
+			// even on a documentation phase, billing a worker run to report
+			// it found nothing. Watcher's unconditional membership here is
+			// gone: it was the last place the 2026-08-22 ruling's removed
+			// review floor survived under a different depth than light and
+			// standard.
+			return caste == "gatekeeper" || caste == "auditor" ||
 				(caste == "probe" && queenPhaseProducesTestableCode(phase))
 		default:
-			// Standard gates Probe on the phase actually having produced code.
-			// Build requires a Probe under the same condition, so leaving this
-			// unconditional billed a documentation phase for two Probes, one on
-			// each side of the same phase.
-			return caste == "watcher" || (caste == "probe" && queenPhaseProducesTestableCode(phase))
+			// Light and standard require NOTHING unconditionally (D-13).
+			// The review team at these depths is entirely the Queen's
+			// judgement plus whatever a named risk signal forces
+			// (queenForcedReviewersForPhase, folded into
+			// queenRequiredCastesForBudget's own continue branch) -- neither
+			// dial reaches this switch at all. Watcher and Probe's
+			// unconditional membership here used to be the "verify once"
+			// floor from Phase 193's own D-08; this phase (D-13) removes it
+			// as a REQUIREMENT, matching the dispatch, which Phase 193
+			// already stopped sending unconditionally.
+			return false
 		}
 	case "plan":
 		return caste == "scout" || caste == "route_setter"

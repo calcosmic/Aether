@@ -101,29 +101,14 @@ func TestProbeNotRequiredInARepositoryWithNoCode(t *testing.T) {
 	}
 }
 
-// TestProbeStillRequiredWhenTheRepositoryHasCode used to assert this at
-// build, where Probe was unconditionally required whenever the repository
-// looked like it contained code. Plan 194-02 (D-07) removed Probe from the
-// build floor entirely -- Probe is never required at build now, on any
-// phase -- so the claim this test protects (the code-detection gate itself
-// still works; real code work is not silently starved of coverage) moved to
-// where Probe is still genuinely required: standard-depth continue.
-func TestProbeStillRequiredWhenTheRepositoryHasCode(t *testing.T) {
-	saveGlobals(t)
-	codeRepo(t)
-
-	phase := colony.Phase{
-		ID:              5,
-		Name:            "Add the spend subcommand",
-		Description:     "Implement a subcommand that reads the ledger and prints totals.",
-		SuccessCriteria: []string{"The subcommand prints a total."},
-		Tasks:           []colony.Task{{Goal: "Implement the subcommand and its parser."}},
-	}
-
-	if !isAlwaysRequired("probe", "continue", phase, colony.ColonyState{}) {
-		t.Fatalf("real code work lost its test-coverage specialist at the standard continue step; this is a scoping fix, not a removal")
-	}
-}
+// TestProbeStillRequiredWhenTheRepositoryHasCode is retired -- see
+// .aether/docs/retired-tests-ledger.md. Its "always required at standard
+// continue" claim was superseded by plan 194-05 (D-13): standard depth now
+// requires nothing unconditionally, Probe included. The code-detection gate
+// it protected survives as a REFUSAL rule instead
+// (TestProbeIsRequiredOnlyWhereItCanFindSomething's "produces testable code"
+// subtest, cmd/queen_probe_gating_test.go), and the full depth table is
+// pinned by TestContinueRequiredSetByDepth (cmd/owner_dials_test.go).
 
 func TestZeroRelevanceCasteIsRefused(t *testing.T) {
 	saveGlobals(t)

@@ -268,13 +268,18 @@ func TestContinueExternalDispatchBriefsStateHandoffSchemaOnceNotOnNativePath(t *
 	verification := codexContinueVerificationReport{Phase: phase.ID, ChecksPassed: true, Passed: true}
 	assessment := codexContinueAssessment{Phase: phase.ID, Passed: true}
 
-	// skipWatchers=false and no explicit Queen caste proposal (nil) drives
-	// plannedExternalContinueDispatches through the same deterministic
-	// queenOrchestrate path runCodexContinuePlanOnly itself uses -- a real,
-	// not hand-picked, set of dispatches for a standard-depth continue run.
-	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, 0, colony.VerificationDepthStandard, false, nil, "")
+	// skipWatchers=false always includes the watcher relay (the deterministic
+	// verification report, unaffected by Queen selection -- see
+	// plannedExternalContinueDispatches's own comment). Plan 194-05 (D-11,
+	// D-13) removed the no-proposal keyword-scoring fallback and standard
+	// depth's unconditional reviewer floor, so this fixture's plain wording
+	// no longer earns a reviewer on its own -- an explicit proposal is used
+	// to prove the handoff-schema substring reaches BOTH dispatch kinds
+	// (watcher relay and reviewer), which is this test's actual subject.
+	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, 0, colony.VerificationDepthStandard, false,
+		[]string{"probe"}, "", map[string]string{"probe": "cover the intermediate work"})
 	if len(dispatches) == 0 {
-		t.Fatalf("expected at least one planned external continue dispatch (the watcher is always required)")
+		t.Fatalf("expected at least one planned external continue dispatch (the watcher relay is always included when skipWatchers=false)")
 	}
 
 	const schemaNeedle = "changed_files"

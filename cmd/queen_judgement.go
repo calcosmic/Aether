@@ -188,6 +188,17 @@ func queenApplyJudgement(proposed []string, rationale string, phase colony.Phase
 			refused = append(refused, caste)
 			continue
 		}
+		// D-07 preserves Probe's negative rule as a refusal, not just a
+		// missing requirement: a proposed coverage reviewer is refused BY
+		// NAME on a phase with no testable code, the same way a
+		// zero-relevance caste above is -- Probe is not keyword-gated like
+		// ambassador/gatekeeper, so casteRelevanceScore alone never catches
+		// this case (plan 194-02's queen_probe_gating_test.go left this gate
+		// for this plan to land).
+		if !requiredForExemption[caste] && caste == "probe" && !queenPhaseProducesTestableCode(phase) {
+			refused = append(refused, caste)
+			continue
+		}
 		// A proposal carries one reason per worker (D-08). A caste the phase
 		// requires regardless is exempt -- it is not the Queen's reason that
 		// puts it there. Everything else that arrives with an empty or

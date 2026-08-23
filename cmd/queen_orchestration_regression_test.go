@@ -26,10 +26,20 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 		VerificationDepth: string(colony.VerificationDepthStandard),
 	}
 
-	buildDispatches := plannedBuildDispatchesForSelectionWithState(authPhase, authState, nil, colony.VerificationDepthStandard)
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback
+	// from build and continue's no-proposal helpers -- this fixture's
+	// wording ("Auth token rotation" / "session permissions") does not
+	// match any of the five named risk-signal phrases either (the lone word
+	// "token" is deliberately excluded, D-02), so an explicit proposal is
+	// used to prove the WIRING (build/continue both route a proposed
+	// gatekeeper through to the dispatch list), matching how plan/swarm
+	// below are already exercised through their own real selection paths.
+	buildDispatches := plannedBuildDispatchesWithJudgement(authPhase, authState, nil, colony.VerificationDepthStandard,
+		[]string{"builder", "gatekeeper"}, "", map[string]string{"gatekeeper": "this phase touches auth tokens and session permissions"})
 	regressionRequireBuildCaste(t, buildDispatches, "gatekeeper")
 
-	continueSpecs := queenContinueReviewSpecs(authPhase, colony.VerificationDepthStandard)
+	continueSpecs := queenContinueReviewSpecsWithJudgement(authPhase, colony.VerificationDepthStandard,
+		[]string{"gatekeeper"}, "", nil, map[string]string{"gatekeeper": "this phase touches auth tokens and session permissions"})
 	regressionRequireContinueSpec(t, continueSpecs, "gatekeeper")
 
 	planningDispatches := plannedPlanningWorkersForGoal(root, "Plan secure auth token rotation and permission checks")

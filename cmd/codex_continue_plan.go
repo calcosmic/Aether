@@ -321,8 +321,19 @@ func continueExternalBriefWithHandoffSchema(rendered string) string {
 func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string, reasons ...map[string]string) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
 	dispatches := []codexContinueExternalDispatch{}
-	queenDispatches := queenContinueDispatches(phase, reviewDepth)
-	if !skipWatchers && queenContinueHasCaste(queenDispatches, "watcher") {
+	// The external/wrapper continue lane relays the ALREADY-COMPUTED
+	// deterministic verification report (build/type/lint/test) to a worker,
+	// because the wrapper itself cannot run those checks. This relay used to
+	// be gated on queenContinueHasCaste(queenDispatches, "watcher") in
+	// addition to !skipWatchers -- a redundant check while watcher was
+	// unconditionally in queenContinueDispatches, but plan 194-05 (D-13)
+	// removed that unconditional membership, which would have silently
+	// dropped the relay at light/standard depth despite the deterministic
+	// floor itself still running. A depth flag must never be able to remove
+	// a program check (CLAUDE.md); skipWatchers alone is the correct, sole
+	// gate here -- an explicit owner choice, not a caste-selection side
+	// effect.
+	if !skipWatchers {
 		watcherSkillAssignment := resolveWorkerSkillAssignmentForWorkflow("continue", "watcher", "Independent verification before advancement")
 		dispatches = append(dispatches, codexContinueExternalDispatch{
 			Stage:         "verification",

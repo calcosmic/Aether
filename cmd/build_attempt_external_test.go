@@ -345,6 +345,29 @@ func prepareExternalBuildCompletion(t *testing.T, root string) (codexBuildManife
 	if err != nil {
 		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
 	}
+	return externalBuildCompletionFromPlanOnlyResult(t, root, result)
+}
+
+// prepareExternalBuildCompletionWithProposal is prepareExternalBuildCompletion
+// for a fixture that needs a genuine SECOND worker in the real build manifest
+// (not a synthetic one appended after the fact -- appending post-hoc breaks
+// the durable build-attempt hash, since that hash is computed over the
+// manifest the finalizer actually received). Plan 194-05 (D-11) removed the
+// no-proposal keyword-scoring fallback at build, so a fixture that used to
+// get a second dispatch "for free" from its own wording now needs an
+// explicit --castes-equivalent proposal to reach the judgement path instead
+// of the required-caste-only fallback.
+func prepareExternalBuildCompletionWithProposal(t *testing.T, root string, castes []string, why []string) (codexBuildManifest, codexExternalBuildCompletion) {
+	t.Helper()
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{QueenCastes: castes, QueenCasteWhy: why})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	return externalBuildCompletionFromPlanOnlyResult(t, root, result)
+}
+
+func externalBuildCompletionFromPlanOnlyResult(t *testing.T, root string, result map[string]interface{}) (codexBuildManifest, codexExternalBuildCompletion) {
+	t.Helper()
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
 	if err := os.WriteFile(filepath.Join(root, "external-evidence.txt"), []byte("durable external work\n"), 0o644); err != nil {
 		t.Fatalf("write external evidence: %v", err)

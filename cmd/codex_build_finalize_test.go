@@ -1816,18 +1816,23 @@ func TestBuildFinalizeCollectsSuggestAnalyzeResults(t *testing.T) {
 	})
 
 	t.Run("suggest-analyze is invoked exactly once per finalize, never per dispatch", func(t *testing.T) {
-		// Plan 194-02 (D-07) shrank the build floor to the builder alone,
-		// so the base fixture's phase no longer produces a second dispatch
-		// on its own. This test's whole point is proving per-finalize (not
-		// per-dispatch) invocation, so it needs a real second dispatch —
-		// setupExternalBuildAttemptTestWithVerifiableWork's phase wording
-		// legitimately scores a watcher via relevance, keeping the manifest
-		// consistent with the durable build-attempt hash finalize checks.
+		// Plan 194-02 (D-07) shrank the build floor to the builder alone;
+		// plan 194-05 (D-11) then removed the no-proposal keyword-scoring
+		// fallback that used to score a watcher via relevance on this exact
+		// fixture's wording, so a plain no-proposal build now produces
+		// exactly one dispatch. This test's whole point is proving
+		// per-finalize (not per-dispatch) invocation, so it needs a real
+		// second dispatch in the ACTUAL build manifest --
+		// prepareExternalBuildCompletionWithProposal reaches the judgement
+		// path with an explicit proposal, unlike appending a synthetic
+		// dispatch after the fact (which breaks the durable build-attempt
+		// hash the finalizer checks against).
 		root := setupExternalBuildAttemptTestWithVerifiableWork(t)
 		if err := os.WriteFile(filepath.Join(root, ".env"), []byte("SECRET=abc123\n"), 0o644); err != nil {
 			t.Fatalf("write .env fixture: %v", err)
 		}
-		_, completion := prepareExternalBuildCompletion(t, root)
+		_, completion := prepareExternalBuildCompletionWithProposal(t, root,
+			[]string{"builder", "watcher"}, []string{"watcher=an independent check before this lands"})
 		if len(completion.Dispatches) < 2 {
 			t.Fatalf("fixture must have multiple dispatches to prove per-finalize (not per-dispatch) invocation, got %d", len(completion.Dispatches))
 		}

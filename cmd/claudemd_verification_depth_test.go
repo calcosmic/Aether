@@ -67,10 +67,17 @@ func TestCLAUDEMDVerificationDepthClaims(t *testing.T) {
 		t.Errorf("discovery phase should get light, got %s", discoveryDepth)
 	}
 
+	// D-06 (194-CONTEXT.md, plan 194-05): position no longer raises
+	// verification depth on its own -- a low-risk final phase gets the same
+	// depth a low-risk middle phase gets. CLAUDE.md's "Final phase → heavy"
+	// line above still describes the OLD floor; correcting that prose is
+	// plan 194-09's job, not this plan's. This assertion follows the
+	// RUNTIME, which is the half of the contract this plan actually changed
+	// and which the project's own rule says wins where the two disagree.
 	finalPhase := colony.Phase{ID: 5, Name: "Polish", Mode: colony.PhaseModePrototype}
 	finalDepth := resolveVerificationDepth(finalPhase, 5, false, false, "")
-	if finalDepth != colony.VerificationDepthHeavy {
-		t.Errorf("final phase should get heavy, got %s", finalDepth)
+	if finalDepth != colony.VerificationDepthStandard {
+		t.Errorf("final phase (low risk) should get standard now that position no longer raises depth (D-06), got %s", finalDepth)
 	}
 }
 

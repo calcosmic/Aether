@@ -15,6 +15,11 @@ import (
 // complement to Phase 182's suppression tests: the right specialist actually
 // shows up for the right work, observable in the composed dispatch — and an
 // unrelated specialist does not ride along.
+//
+// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback from
+// queenOrchestrate's build path entirely, so these subtests call
+// queenCandidateDispatches (the scoring engine itself, unaffected by the
+// gate on the no-proposal ENTRY POINT) rather than queenOrchestrate.
 func TestDispatchComposesForPhaseCharacter(t *testing.T) {
 	t.Run("legacy phase summons the archaeologist, not the includer", func(t *testing.T) {
 		phase := colony.Phase{
@@ -27,7 +32,7 @@ func TestDispatchComposesForPhaseCharacter(t *testing.T) {
 				{Goal: "Migrate historical records to the new schema"},
 			},
 		}
-		dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+		dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 		if !HasCaste(dispatches, "archaeologist") {
 			t.Errorf("legacy-touching phase did not summon the Archaeologist: %+v", dispatches)
 		}
@@ -46,7 +51,7 @@ func TestDispatchComposesForPhaseCharacter(t *testing.T) {
 				{Goal: "Stress test the retry path under simulated crash conditions"},
 			},
 		}
-		dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+		dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 		if !HasCaste(dispatches, "chaos") {
 			t.Errorf("hardening phase did not summon Chaos: %+v", dispatches)
 		}
@@ -62,7 +67,7 @@ func TestDispatchComposesForPhaseCharacter(t *testing.T) {
 				{Goal: "Synthesize phase learnings into wisdom patterns for the retrospective"},
 			},
 		}
-		dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+		dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 		if !HasCaste(dispatches, "sage") {
 			t.Errorf("retrospective phase did not summon the Sage: %+v", dispatches)
 		}

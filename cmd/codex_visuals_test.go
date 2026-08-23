@@ -426,10 +426,14 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	// proposal, so the spawn plan no longer has a "Post-Wave: Watcher" step.
 	// Plan 194-02 (D-07): the Queen's Team card no longer names Watcher
 	// either -- it lists the required-castes floor, which shrank to the
-	// builder alone, and probe is gone too (this fixture's wording does not
-	// score it above the relevance threshold), so the dispatch count drops
-	// to 2 (builder, scout) with no "Post-Wave" step at all.
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 2", "Execution: serial", "single task in this wave", "/ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "safe to clear your context now."} {
+	// builder alone.
+	// Plan 194-05 (D-06, D-11): this fixture is a single-phase plan, so
+	// position used to imply heavy review; that implicit escalation is gone,
+	// so review depth is standard, not heavy. D-11 also removed the
+	// no-proposal keyword-scoring fallback entirely -- Scout used to ride
+	// along here on task 2's "Document" wording, but the fallback no longer
+	// scores anything, so the dispatch count drops to 1 (builder alone).
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 1", "Execution: serial", "single task in this wave", "/ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "safe to clear your context now."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}

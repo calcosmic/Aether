@@ -38,7 +38,7 @@ Ceremony complete in 0s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [Phase 1/1] [████████████████] 100%
 Phase: Golden phase
-Review depth: heavy (final phase)
+Review depth: standard (Phase 1 of 1)
 ── Context ──
 Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
 ── Tasks ──
@@ -66,7 +66,7 @@ Safety castes a risky phase needs are kept at every size.
 .aether/data/build/phase-1/manifest.json
 .aether/data/last-build-claims.json
 .aether/data/spawn-tree.txt
-── Verification [heavy] ──
+── Verification [standard] ──
 Verification happens during `/ant-continue`.
 ── Housekeeping ──
 Signal housekeeping runs during `/ant-continue`.

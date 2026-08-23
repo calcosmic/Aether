@@ -46,6 +46,12 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 			state: colony.ColonyState{},
 			want:  []string{"builder"},
 		},
+		// Plan 194-05 (D-13): light and standard continue require NOTHING
+		// unconditionally any more -- Watcher's and Probe's unconditional
+		// membership here is gone, along with the build-side floor 194-02
+		// already removed. Heavy remains the owner's explicit ask for the
+		// full review panel; Watcher is no longer part of that panel
+		// either, so only gatekeeper/auditor/probe are asserted.
 		{
 			flow: "continue",
 			phase: colony.Phase{
@@ -53,7 +59,7 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 				Mode: colony.PhaseModePrototype,
 			},
 			state: colony.ColonyState{VerificationDepth: string(colony.VerificationDepthLight)},
-			want:  []string{"watcher"},
+			want:  []string{},
 		},
 		{
 			flow: "continue",
@@ -62,16 +68,19 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 				Mode: colony.PhaseModePrototype,
 			},
 			state: colony.ColonyState{VerificationDepth: string(colony.VerificationDepthStandard)},
-			want:  []string{"watcher", "probe"},
+			want:  []string{},
 		},
 		{
 			flow: "continue",
 			phase: colony.Phase{
 				Name: "Test phase",
 				Mode: colony.PhaseModePrototype,
+				Tasks: []colony.Task{
+					{Goal: "Implement the change"},
+				},
 			},
 			state: colony.ColonyState{VerificationDepth: string(colony.VerificationDepthHeavy)},
-			want:  []string{"watcher", "gatekeeper", "auditor", "probe"},
+			want:  []string{"gatekeeper", "auditor", "probe"},
 		},
 		{
 			flow: "plan",

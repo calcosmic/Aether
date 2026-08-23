@@ -43,6 +43,15 @@ func TestQueenOrchestrate_SettingsUI(t *testing.T) {
 }
 
 // Test 2: "Auth token rotation" -> Builder + Watcher + Gatekeeper + Probe + Architect
+//
+// Plan 194-05 (D-11): queenOrchestrate's no-proposal path on build no longer
+// goes through the relevance/keyword scoring engine at all -- it answers
+// with the required-caste floor only (queenFallbackTeam). This test's real
+// subject is the scoring registry (which caste a phase's own wording earns),
+// so it now calls queenCandidateDispatches directly -- the scoring function
+// is unchanged by this plan; only queenOrchestrate's use of it for build was
+// gated. See TestKeywordEngineNoLongerSelectsOnBuildOrContinue
+// (cmd/queen_fallback_team_test.go) for the entry-point behaviour itself.
 func TestQueenOrchestrate_AuthToken(t *testing.T) {
 	phase := colony.Phase{
 		ID:          2,
@@ -54,7 +63,7 @@ func TestQueenOrchestrate_AuthToken(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Auth token: expected builder")
@@ -80,6 +89,10 @@ func TestQueenOrchestrate_AuthToken(t *testing.T) {
 }
 
 // Test 3: "Database migration" -> Builder + Watcher + Auditor + Architect
+//
+// See TestQueenOrchestrate_AuthToken's comment: this exercises the scoring
+// registry directly (queenCandidateDispatches), since queenOrchestrate's
+// no-proposal build path no longer runs it (plan 194-05, D-11).
 func TestQueenOrchestrate_DBMigration(t *testing.T) {
 	phase := colony.Phase{
 		ID:          3,
@@ -91,7 +104,7 @@ func TestQueenOrchestrate_DBMigration(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "builder") {
 		t.Error("DB migration: expected builder")
@@ -111,6 +124,10 @@ func TestQueenOrchestrate_DBMigration(t *testing.T) {
 }
 
 // Test 4: "Performance optimization" -> Builder + Watcher + Measurer + Probe
+//
+// See TestQueenOrchestrate_AuthToken's comment: this exercises the scoring
+// registry directly (queenCandidateDispatches), since queenOrchestrate's
+// no-proposal build path no longer runs it (plan 194-05, D-11).
 func TestQueenOrchestrate_Performance(t *testing.T) {
 	phase := colony.Phase{
 		ID:          4,
@@ -122,7 +139,7 @@ func TestQueenOrchestrate_Performance(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Performance: expected builder")
@@ -134,6 +151,10 @@ func TestQueenOrchestrate_Performance(t *testing.T) {
 }
 
 // Test 5: "Refactor legacy parser" -> Weaver + Archaeologist + Builder + Watcher
+//
+// See TestQueenOrchestrate_AuthToken's comment: this exercises the scoring
+// registry directly (queenCandidateDispatches), since queenOrchestrate's
+// no-proposal build path no longer runs it (plan 194-05, D-11).
 func TestQueenOrchestrate_RefactorLegacy(t *testing.T) {
 	phase := colony.Phase{
 		ID:          5,
@@ -145,7 +166,7 @@ func TestQueenOrchestrate_RefactorLegacy(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Refactor: expected builder")
@@ -160,6 +181,13 @@ func TestQueenOrchestrate_RefactorLegacy(t *testing.T) {
 }
 
 // Test 6: "Discovery spike on vector DB" -> Oracle + Scout + Architect (no Builder, no Watcher)
+//
+// See TestQueenOrchestrate_AuthToken's comment: this exercises the scoring
+// registry directly (queenCandidateDispatches), since queenOrchestrate's
+// no-proposal build path no longer runs it (plan 194-05, D-11). The
+// no-proposal ENTRY POINT's own discovery behaviour (one scout, D-12) is
+// covered separately by TestDiscoveryFallbackSendsOneResearcher
+// (cmd/queen_fallback_team_test.go).
 func TestQueenOrchestrate_DiscoverySpike(t *testing.T) {
 	phase := colony.Phase{
 		ID:          6,
@@ -171,7 +199,7 @@ func TestQueenOrchestrate_DiscoverySpike(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "oracle") {
 		t.Error("Discovery: expected oracle")
@@ -260,6 +288,14 @@ func TestBuilder_AlwaysForImplementation(t *testing.T) {
 }
 
 // Test 11: Verify continue flow includes gatekeeper for security
+//
+// Plan 194-05 (D-13) removed Watcher's and Probe's unconditional continue
+// membership at light/standard depth -- neither is forced any more, and
+// neither's own keyword list matches this fixture's wording, so those two
+// assertions are gone. Gatekeeper still appears: "token" is one of its own
+// keywords, a genuine relevance-score hit, not the deleted floor. This test
+// calls queenCandidateDispatches directly (the scoring engine, unaffected by
+// D-11's gate on queenOrchestrate's no-proposal entry point).
 func TestQueenOrchestrate_ContinueFlow(t *testing.T) {
 	phase := colony.Phase{
 		Name:        "Auth system implementation",
@@ -268,16 +304,10 @@ func TestQueenOrchestrate_ContinueFlow(t *testing.T) {
 		Tasks:       []colony.Task{{Goal: "Implement OAuth flow"}},
 	}
 
-	dispatches := queenOrchestrate(phase, "continue", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "continue", colony.ColonyState{})
 
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Continue: expected watcher")
-	}
 	if !HasCaste(dispatches, "gatekeeper") {
 		t.Error("Continue: expected gatekeeper for auth phase")
-	}
-	if !HasCaste(dispatches, "probe") {
-		t.Error("Continue: expected probe")
 	}
 }
 
@@ -299,6 +329,12 @@ func TestQueenOrchestrate_PlanFlow(t *testing.T) {
 	}
 }
 
+// TestQueenOrchestrate_DiscoveryBuildSuppressesImplementationCastes exercises
+// the scoring registry directly (queenCandidateDispatches), since
+// queenOrchestrate's no-proposal build path no longer runs it (plan 194-05,
+// D-11). The no-proposal ENTRY POINT's own discovery behaviour (one scout)
+// is covered separately by TestDiscoveryFallbackSendsOneResearcher
+// (cmd/queen_fallback_team_test.go).
 func TestQueenOrchestrate_DiscoveryBuildSuppressesImplementationCastes(t *testing.T) {
 	phase := colony.Phase{
 		Name:        "Discovery spike on cache strategy",
@@ -309,7 +345,7 @@ func TestQueenOrchestrate_DiscoveryBuildSuppressesImplementationCastes(t *testin
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if HasCaste(dispatches, "builder") {
 		t.Error("Discovery build: should suppress builder even when implementation keywords appear")
@@ -371,6 +407,14 @@ func TestQueenOrchestrate_SwarmUsesInvestigationAndFixCastes(t *testing.T) {
 	}
 }
 
+// TestQueenOrchestrate_ContinueHeavyIncludesReviewGates exercises the
+// scoring registry directly (queenCandidateDispatches). Heavy continue's
+// required set (gatekeeper, auditor, probe-if-testable, plan 194-05 D-13) is
+// unaffected by D-11's gate -- isAlwaysRequired is consulted by
+// queenCandidateDispatches exactly as before, only queenOrchestrate's
+// no-proposal ENTRY POINT changed. Watcher is no longer part of heavy's
+// unconditional panel (194-05, D-13) and this fixture's wording does not
+// clear its own keyword threshold, so it is not asserted here.
 func TestQueenOrchestrate_ContinueHeavyIncludesReviewGates(t *testing.T) {
 	phase := colony.Phase{
 		Name: "Phase verification",
@@ -378,9 +422,9 @@ func TestQueenOrchestrate_ContinueHeavyIncludesReviewGates(t *testing.T) {
 	}
 	state := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthHeavy)}
 
-	dispatches := queenOrchestrate(phase, "continue", state)
+	dispatches := queenCandidateDispatches(phase, "continue", state)
 
-	for _, caste := range []string{"watcher", "gatekeeper", "auditor", "probe"} {
+	for _, caste := range []string{"gatekeeper", "auditor", "probe"} {
 		if !HasCaste(dispatches, caste) {
 			t.Errorf("Heavy continue: expected %s", caste)
 		}
@@ -428,6 +472,15 @@ func TestQueenOrchestrate_EmptyFlowDefaultsToBuild(t *testing.T) {
 	}
 }
 
+// TestQueenOrchestrateAppliesAdaptiveSpawnBudget tests the SCORING-PLUS-
+// BUDGET path (applyQueenSpawnBudget over queenCandidateDispatches), not the
+// no-proposal ENTRY POINT: queenOrchestrate's build path (queenFallbackTeam,
+// plan 194-05, D-11) no longer scores anything, so it cannot exercise a
+// budget-pruning claim any more -- there is nothing left to prune once the
+// only candidate is the required builder. The claim this test protects
+// (budget trims optional picks while a documentation phase still never
+// summons a Probe) still lives in the scoring-plus-budget path, called here
+// explicitly.
 func TestQueenOrchestrateAppliesAdaptiveSpawnBudget(t *testing.T) {
 	phase := colony.Phase{
 		ID:          13,
@@ -439,14 +492,14 @@ func TestQueenOrchestrateAppliesAdaptiveSpawnBudget(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := applyQueenSpawnBudget(queenCandidateDispatches(phase, "build", colony.ColonyState{}), phase, "build", colony.ColonyState{})
 
-	// Builder and Watcher survive pruning: something has to do the work, and
-	// something has to check it.
-	for _, caste := range []string{"builder", "watcher"} {
-		if !HasCaste(dispatches, caste) {
-			t.Errorf("Low-risk docs: expected required build caste %s to survive budget pruning", caste)
-		}
+	// Builder survives pruning: something has to do the work. Watcher is no
+	// longer a required build caste (194-02, D-06/D-07) -- it may or may not
+	// appear on relevance score alone; this test does not assert it either
+	// way.
+	if !HasCaste(dispatches, "builder") {
+		t.Error("Low-risk docs: expected required build caste builder to survive budget pruning")
 	}
 
 	// Probe is deliberately absent. This phase writes documentation — there is
