@@ -150,7 +150,7 @@ None — plan executed exactly as written. Both tests passed on the first implem
 
 ## Issues Encountered
 
-None. Both `go test ./cmd -count=1` full-suite runs (after task 1's commit and again after task 2's commit) passed with zero failures — no timing-flaky tests surfaced in this session, unlike several prior plans in this phase that hit the documented pre-existing flaky tests under load.
+Both `go test ./cmd -count=1` full-package runs (after task 1's commit and again after task 2's commit) passed with zero failures. The whole-repo `go test ./... -count=1 -skip 'TestPackedNPMReleaseCandidateContract'` run (this plan's own success criterion) showed one failure both times it was run: `TestAvailabilityProbeRetriesOnlyTimeouts` in `pkg/codex`, a package this plan never touches. Reran it in isolation (`go test ./pkg/codex -run TestAvailabilityProbeRetriesOnlyTimeouts -count=3`): 3/3 clean. This matches the exact pre-existing, timing-sensitive-under-load pattern documented in 194-05-SUMMARY.md and 194-06-SUMMARY.md for this same test — not a regression from this plan, which added only two new test files and a ledger edit with zero production-code changes.
 
 ## Known Stubs
 
