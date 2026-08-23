@@ -182,6 +182,42 @@ var decisionAnswerCmd = &cobra.Command{
 		phase, _ := cmd.Flags().GetInt("phase")
 		source, _ := cmd.Flags().GetString("source")
 
+		// CR-01 (194-REVIEW.md): a --question shaped like a forced-reviewer
+		// decline (forcedReviewerWaiverQuestionText) may ONLY resolve a
+		// pending row the runtime itself already created when it showed a
+		// LIVE forced reviewer on the check-in card
+		// (ensureForcedReviewerWaiverPendingDecision,
+		// cmd/ceremony_team_checkin.go) -- it can never create a brand-new
+		// resolved entry the way an ordinary clarification answer does
+		// below. This closes the forgery path 194-REVIEW.md's CR-01 named:
+		// anything able to compute the deterministic sentence (public
+		// information -- phaseID plus one of five fixed strings, readable
+		// in queen_risk_signals.go or the rendered card) could otherwise
+		// silently waive a reviewer by simply calling this command with no
+		// prior state at all. The phase used below is parsed OUT OF the
+		// question text itself, not the --phase flag, so a forger cannot
+		// dodge the check by passing a mismatched or absent --phase.
+		if waiverPhase, _, isWaiver := forcedReviewerWaiverSignalForQuestion(question); isWaiver {
+			resolved, found, err := resolveForcedReviewerWaiverPendingDecision(question, answer, waiverPhase)
+			if err != nil {
+				outputError(2, err.Error(), nil)
+				return nil
+			}
+			if !found {
+				outputErrorMessage(fmt.Sprintf(
+					"Nothing was recorded. Phase %d is not currently waiting on an answer for that reviewer -- the program only accepts a decline for a reviewer it has actually shown on the check-in card. Run `aether ceremony team-checkin` again to see the current decline command.",
+					waiverPhase,
+				))
+				return nil
+			}
+			outputOK(map[string]interface{}{
+				"id":             resolved.ID,
+				"recorded":       true,
+				"prompt_section": renderClarifiedIntentSection(),
+			})
+			return nil
+		}
+
 		decision, err := recordDecisionAnswer(question, answer, phase, source)
 		if err != nil {
 			outputError(2, err.Error(), nil)

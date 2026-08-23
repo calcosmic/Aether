@@ -9,9 +9,18 @@ import (
 )
 
 // renderCeremonyTeamCheckinFromFile renders the pre-spawn team check-in card
-// from a lifecycle manifest JSON file. Read-only: the wrapper pauses on this
-// card and asks the owner to proceed, trim optional workers, or redirect —
-// the runtime plan itself is not touched.
+// from a lifecycle manifest JSON file. The wrapper pauses on this card and
+// asks the owner to proceed, trim optional workers, or redirect — the
+// runtime plan itself (COLONY_STATE.json, the lifecycle manifest) is never
+// touched by this render, and TestTeamCheckinDoesNotMutate pins that. It is
+// no longer a pure inspection, though: CR-01 (194-REVIEW.md) added exactly
+// one side effect -- for every LIVE forced reviewer this render shows, it
+// writes a pending, unresolved decision-answer row
+// (ensureForcedReviewerWaiverPendingDecision) recording that the runtime
+// itself displayed this exact question to whoever is looking at the card.
+// That row is what lets `aether decision-answer` refuse to waive a signal
+// no card ever actually rendered. The write is idempotent (a repeat render
+// of the same live hit is a no-op) and best-effort/non-blocking.
 func renderCeremonyTeamCheckinFromFile(workflow, path string) (map[string]interface{}, string, error) {
 	raw, err := readCeremonyJSONFile(path)
 	if err != nil {
@@ -133,6 +142,14 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	waiveCommands := map[string]string{}
 	for _, hit := range liveForcedHits {
 		waiveCommands[hit.Signal.Name] = forcedReviewerWaiverCommand(phaseID, hit.Signal.Name, hit.Signal.PlainEnglish)
+		// CR-01 (194-REVIEW.md): record the runtime's OWN pending row for
+		// this exact question the moment it renders a live forced reviewer
+		// -- this is what lets decisionAnswerCmd (cmd/handoff_decisions_cmd.go)
+		// refuse to waive a signal from a forged --question with no
+		// matching row. Best-effort/non-blocking: a write failure here must
+		// never break the (otherwise read-only) card render; the owner
+		// simply cannot waive until a later render succeeds.
+		_ = ensureForcedReviewerWaiverPendingDecision(phaseID, hit.Signal.Name, hit.Signal.PlainEnglish)
 	}
 	waived := map[string]interface{}{}
 	for _, hit := range waivedForcedHits {

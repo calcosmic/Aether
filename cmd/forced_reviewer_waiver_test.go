@@ -191,3 +191,78 @@ func TestTeamCheckinDoesNotMutateWithAWaiverPresent(t *testing.T) {
 		t.Fatalf("rendering the check-in card with a waiver present mutated colony state:\nbefore: %s\nafter:  %s", beforeJSON, afterJSON)
 	}
 }
+
+// TestDecisionAnswerCannotForgeAForcedReviewerWaiver is CR-01's forgery
+// proof (194-REVIEW.md): the whole design of D-03 rests on `aether
+// decision-answer` being the owner's ONLY way to decline a forced reviewer,
+// but the deterministic waiver question is computable from public
+// information alone (phaseID + one of five fixed PlainEnglish strings).
+// Before this fix, calling the CLI COMMAND directly with a correctly-shaped
+// --question and no prior card render silently recorded a waiver anyway.
+// This test goes through the actual decisionAnswerCmd command path (not
+// just recordDecisionAnswer, which legitimate test setup elsewhere in this
+// file calls directly to simulate an already-answered decision) -- the real
+// attack surface is the CLI, not the Go function.
+func TestDecisionAnswerCannotForgeAForcedReviewerWaiver(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupBuildFlowTest(t)
+
+	question := forcedReviewerWaiverQuestionText(7, "credentials/auth", "logins and passwords")
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "auto", "--phase", "7"})
+	defer rootCmd.SetArgs([]string{})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("decision-answer returned error: %v", err)
+	}
+
+	phase := waiverFixturePhase(7, "Password reset", "Let users reset their password via an emailed token")
+	reviewers := queenForcedContinueReviewers(phase, nil, nil)
+	if len(reviewers) != 1 {
+		t.Fatalf("a forged decision-answer with no runtime-created pending row must not waive the forced reviewer; reviewers = %+v", reviewers)
+	}
+
+	if waived, _ := forcedReviewerWaiver(7, "credentials/auth"); waived {
+		t.Fatalf("forcedReviewerWaiver reports the signal waived after a forged decision-answer call")
+	}
+}
+
+// TestDecisionAnswerResolvesARuntimeCreatedWaiverRow is CR-01's positive
+// proof: the real owner path -- the check-in card renders a live forced
+// reviewer (which writes the pending row via
+// ensureForcedReviewerWaiverPendingDecision), then `aether decision-answer`
+// resolves that SAME row -- still works end to end through the actual CLI
+// command.
+func TestDecisionAnswerResolvesARuntimeCreatedWaiverRow(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := checkinFixturePhase(
+		"Password reset",
+		"Let users reset their password via an emailed token",
+		colony.PhaseModePrototype,
+	)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
+	// Rendering the card is what writes the pending, unresolved row.
+	if _, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches); !strings.Contains(visual, "To decline, run:") {
+		t.Fatalf("expected the card to show a live decline command before answering it; visual:\n%s", visual)
+	}
+
+	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1"})
+	defer rootCmd.SetArgs([]string{})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("decision-answer returned error: %v", err)
+	}
+
+	waived, reason := forcedReviewerWaiver(1, "credentials/auth")
+	if !waived {
+		t.Fatalf("expected the signal to be waived after the owner path recorded an answer")
+	}
+	if reason != "already checked by hand" {
+		t.Fatalf("reason = %q, want the owner's recorded answer", reason)
+	}
+}
