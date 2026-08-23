@@ -98,7 +98,28 @@ Plans:
 4. A sample one-task bug fix — measured today at 8 workers, versus 3-4 back in the older (v5.4.0) version of Aether — is sent one worker plus the free checks, whether the team came from the assistant's own proposal or the automatic fallback (`TestOneTaskBugFixIsOneWorkerPlusChecks`).
 5. The owner's manual controls — picking helpers by name, asking for "heavy" or "light" review, and the pre-build "here's who I'm sending, OK?" check-in card — all still work after this change.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 194-01-PLAN.md — Tracer: named risk forces one reviewer, end to end; the build floor shrinks to the worker that writes the code (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 194-02-PLAN.md — A reason for every worker; a worker named without one is refused by name (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 194-03-PLAN.md — The automatic team is retuned to the same floor; the owner's three dials mean what they say (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 194-04-PLAN.md — The check-in card names the signal; only the owner can waive a forced reviewer (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 194-05-PLAN.md — The one-task bug fix proved at one worker; the double-dispatch window closed; every stale document corrected (wave 5)
 
 ### Phase 195: Coherent Jobs
 
