@@ -211,3 +211,15 @@ None - no external service configuration required.
 ---
 *Phase: 194-the-queen-decides-the-team*
 *Completed: 2026-08-23*
+
+## Self-Check: PASSED
+
+- `cmd/forced_reviewer_waiver.go` — FOUND
+- `cmd/forced_reviewer_waiver_test.go` — FOUND
+- `.planning/todos/pending/2026-08-23-one-worker-build-skips-the-checkin-pause.md` — FOUND
+- Commit `8865488d` (Task 1) — FOUND in `git log --oneline --all`
+- Commit `2b8bc060` (Task 2) — FOUND in `git log --oneline --all`
+- Commit `c4cfe68f` (SUMMARY) — FOUND in `git log --oneline --all`
+- `go build ./...` at HEAD — PASSED
+- `go test ./cmd -count=1` — PASSED (430s)
+- `go test ./...` (all packages) — PASSED
