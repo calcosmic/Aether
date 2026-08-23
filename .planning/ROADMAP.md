@@ -141,7 +141,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 194-09-PLAN.md — Every stale document corrected: CLAUDE.md, the six wrapper files, the UX contract, the folded todo (wave 9)
+- [x] 194-09-PLAN.md — Every stale document corrected: CLAUDE.md, the six wrapper files, the UX contract, the folded todo (wave 9)
 
 ### Phase 195: Coherent Jobs
 
