@@ -113,7 +113,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 194-02-PLAN.md — The build floor shrinks to the worker that writes the code; every test asserting a deleted rule is reconciled or retired (wave 2)
+- [x] 194-02-PLAN.md — The build floor shrinks to the worker that writes the code; every test asserting a deleted rule is reconciled or retired (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

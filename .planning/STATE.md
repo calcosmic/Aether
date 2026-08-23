@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 194
 current_phase_name: The Queen Decides the Team
 status: executing
-stopped_at: Completed 194-01-PLAN.md
-last_updated: "2026-08-23T08:46:08.654Z"
+stopped_at: Completed 194-02-PLAN.md
+last_updated: "2026-08-23T10:03:51.959Z"
 last_activity: 2026-08-23
 last_activity_desc: Phase 194 execution started
-state_head: 4414a4a67cf751ad28188d84f168656a1c29752c
+state_head: 58ae46ed5c103a60b937f5e252776382a4af1310
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 14
-  completed_plans: 6
+  completed_plans: 7
   percent: 14
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 ## Current Position
 
 Phase: 194 (The Queen Decides the Team) — EXECUTING
-Plan: 2 of 9
+Plan: 3 of 9
 Status: Ready to execute
 Last activity: 2026-08-23 — Phase 194 execution started
 
@@ -57,6 +57,7 @@ Last activity: 2026-08-23 — Phase 194 execution started
 | Phase 193 P04 | 70min | 3 tasks | 12 files |
 | Phase 193 P05 | 43min | 3 tasks | 7 files |
 | Phase 194 P01 | 75min | 2 tasks | 9 files |
+| Phase 194 P02 | 130min | 2 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,8 @@ Last activity: 2026-08-23 — Phase 194 execution started
 - [Phase 193]: Verification tests are scoped to the Go packages a phase's changed files touched (D-07), falling back to the full run whenever that scope cannot be honestly derived or on the plan's final phase; only the tests command is ever scoped. — Narrowing a compiler or linter changes what it can see, so build/types/lint always run as configured; only the tests command has a safe scoped runner (go test ./dir/...).
 - [Phase 193]: A failing free check with no reviewer dispatched draws exactly one automatic builder fix attempt (D-02/D-03), recorded as a brand-new append-only entry in the build attempt journal; a second automatic attempt never happens and continue blocks with one exact re-run command if the re-run still fails. — The fix attempt must never overwrite the original result and must be visibly countable on the team card and cost line; a new attempt record is the same append-only discipline the out-of-band verification record already established.
 - [Phase 194]: [Phase 194] Plan 1: forced-reviewer Rationale carries a fixed "this touches ..." prefix so tests (and later the check-in card) can tell a signal-forced dispatch apart from the untouched legacy keyword/mode scoring engine sharing the same caste name -- without this, auditor's presence cannot distinguish "forced by a named signal" from "the pre-existing production-mode floor also drew it".
+- [Phase 194]: Build floor shrinks to queenBuildSafetyRequiredCastes returning exactly [builder] on non-discovery phases (nil on discovery); queenBuildSafetyReviewRequired and queenPhaseHasSecuritySignal deleted outright. — Ruling D11 (2026-08-22) supersedes the mode/position/keyword-inferred floor. A reviewer is now forced only by a named risk signal at the continue step, never at build.
+- [Phase 194]: D-13 landed: heavy-depth continue's probe requirement is gated on queenPhaseProducesTestableCode, so --heavy no longer forces a coverage caste onto a documentation-only phase. — The plan's own action text named this test for rewrite (TestHeavyContinueKeepsProbe), which required the underlying isAlwaysRequired code change, not just a fixture edit.
 
 ### Pending Todos
 
@@ -180,6 +183,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-23T08:46:08.594Z
-Stopped at: Completed 194-01-PLAN.md
+Last session: 2026-08-23T10:03:44.383Z
+Stopped at: Completed 194-02-PLAN.md
 Resume file: None
