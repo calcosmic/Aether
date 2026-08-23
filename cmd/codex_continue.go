@@ -163,6 +163,11 @@ type codexContinueOptions struct {
 	// question. Empty means no judgement was offered and scoring decides.
 	QueenCastes      []string
 	QueenCasteReason string
+	// QueenCasteWhy is one reason per proposed reviewer caste, as
+	// "caste=reason" (D-08, D-09). A caste named in QueenCastes with no
+	// matching entry here, and not required by the phase, is refused by name
+	// rather than sent unexplained.
+	QueenCasteWhy []string
 }
 
 // codexContinueOptionsJSON is a serializable snapshot of continue options,
@@ -853,7 +858,8 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers, options.QueenCastes, options.QueenCasteReason)
+	mergedContinueQueenCastes, continueQueenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers, mergedContinueQueenCastes, options.QueenCasteReason, continueQueenCasteWhyReasons)
 	reviewReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "review.json"))
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
@@ -1244,23 +1250,39 @@ func queenContinueDispatches(phase colony.Phase, reviewDepth colony.Verification
 // ForcedReviewers, threaded in by callers that have a manifest); nil falls
 // back to re-deriving from the phase's own wording
 // (queenForcedContinueReviewers).
-func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord) []CasteDispatch {
+func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, reasons ...map[string]string) []CasteDispatch {
 	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
 	var dispatches []CasteDispatch
 	if len(proposed) == 0 {
 		dispatches = queenOrchestrate(phase, "continue", state)
 	} else {
-		judgement := queenApplyJudgement(proposed, reason, phase, "continue", state)
+		judgement := queenApplyJudgement(proposed, reason, phase, "continue", state, reasons...)
 		dispatches = make([]CasteDispatch, 0, len(judgement.Final))
 		for _, caste := range judgement.Final {
 			dispatches = append(dispatches, CasteDispatch{
-				Caste:     caste,
-				Rationale: judgement.Rationale,
+				Caste: caste,
+				// A per-worker reason (D-08, D-10) beats the team summary
+				// when one exists for this caste -- the summary survives
+				// only as the fallback for a caste judgement.Reasons has
+				// nothing entered for (a required/added caste the runtime
+				// itself has not yet written a reason for).
+				Rationale: casteDispatchRationale(judgement, caste),
 				FlowType:  "continue",
 			})
 		}
 	}
 	return unionForcedContinueReviewers(dispatches, phase, forced)
+}
+
+// casteDispatchRationale prefers the judgement's per-caste reason (D-08,
+// D-10) over its single team-level Rationale string, so a continue dispatch
+// states why THIS worker was sent rather than reusing the whole team's
+// summary sentence for every member of it.
+func casteDispatchRationale(judgement queenCasteJudgement, caste string) string {
+	if r := strings.TrimSpace(judgement.Reasons[caste]); r != "" {
+		return r
+	}
+	return judgement.Rationale
 }
 
 // unionForcedContinueReviewers adds any D-01..D-05 forced-reviewer caste
@@ -1307,8 +1329,8 @@ func queenContinueReviewSpecs(phase colony.Phase, reviewDepth colony.Verificatio
 	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "", nil)
 }
 
-func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord) []codexContinueReviewSpec {
-	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason, forced)
+func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, reasons ...map[string]string) []codexContinueReviewSpec {
+	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason, forced, reasons...)
 	forcedReasons := make(map[string]string, len(forced))
 	for _, reviewer := range queenForcedContinueReviewers(phase, forced, nil) {
 		forcedReasons[reviewer.Caste] = reviewer.Reason
@@ -1322,7 +1344,14 @@ func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colon
 		if !ok {
 			continue
 		}
-		spec.Rationale = forcedReasons[dispatch.Caste]
+		// A forced signal's own sentence (D-01..D-05) always wins when this
+		// caste was forced; otherwise the dispatch already carries the best
+		// reason available (per-worker if the proposal gave one, the team
+		// summary otherwise) via casteDispatchRationale.
+		spec.Rationale = dispatch.Rationale
+		if forcedReason := strings.TrimSpace(forcedReasons[dispatch.Caste]); forcedReason != "" {
+			spec.Rationale = forcedReason
+		}
 		specs = append(specs, spec)
 	}
 	return specs
@@ -1374,7 +1403,7 @@ func continueReviewSpecForCaste(caste string) (codexContinueReviewSpec, bool) {
 	return codexContinueReviewSpec{}, false
 }
 
-func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string) codexContinueReviewReport {
+func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string, reasons ...map[string]string) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
@@ -1398,7 +1427,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 		return report
 	}
 
-	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth, queenCastes, queenCasteReason)
+	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth, queenCastes, queenCasteReason, reasons...)
 	if len(dispatches) == 0 {
 		report.Workers = append(report.Workers, continueReviewSkippedFlowStep(continueReviewSkippedSummary(reviewDepth)))
 		report.Passed = true
@@ -1474,7 +1503,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 	return report
 }
 
-func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, queenCastes []string, queenCasteReason string) []codex.WorkerDispatch {
+func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, queenCastes []string, queenCasteReason string, reasons ...map[string]string) []codex.WorkerDispatch {
 	capsule := resolveCodexWorkerContext()
 	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
 	// already renders "## Pheromone Signals" unconditionally whenever a signal is
@@ -1486,7 +1515,7 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 	// The Queen's --castes proposal used to be honoured only on the heavy
 	// plan-only path; the default path called the nil-proposal variant, so on
 	// the continue users actually run the keyword engine was unchallenged.
-	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers)
+	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers, reasons...)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)

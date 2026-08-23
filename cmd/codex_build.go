@@ -219,8 +219,15 @@ type codexBuildOptions struct {
 	// engine decides — the behaviour of every caller before this existed.
 	QueenCastes []string
 	// QueenCasteReason is the Queen's stated reasoning, surfaced to the
-	// operator so a team choice is never unexplained.
+	// operator so a team choice is never unexplained. This is the TEAM
+	// summary (D-08) -- it does not, by itself, satisfy the per-worker reason
+	// requirement below.
 	QueenCasteReason string
+	// QueenCasteWhy is one reason per proposed caste, as "caste=reason"
+	// (D-08, D-09). A caste named in QueenCastes with no matching entry here,
+	// and not required by the phase, is refused by name rather than sent
+	// unexplained (parseAndMergeCasteWhy, queenApplyJudgement).
+	QueenCasteWhy []string
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -293,7 +300,22 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		DispatchWorkers:   options.DispatchWorkers,
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	dispatches := plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, options.QueenCastes, options.QueenCasteReason)
+	// mergedQueenCastes/queenCasteWhyReasons (D-08): --caste-why's per-worker
+	// reasons, plus any key it could not resolve folded into the proposal
+	// itself so it reports through the same Unknown-caste channel --castes
+	// already has (parseAndMergeCasteWhy).
+	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	dispatches := plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
+	// judgementReasonsForBudget mirrors queenCasteDecisionSummary's own
+	// judgement derivation (queenApplyJudgement is pure/deterministic, so
+	// recomputing here costs nothing) so the spawn-budget contract's
+	// selected_reasons can prefer the SAME per-worker sentence the manifest's
+	// caste_decision shows, rather than a separately-derived one.
+	judgementReasonsForBudget := func() map[string]string {
+		judgementState := state
+		judgementState.VerificationDepth = string(reviewDepth)
+		return queenApplyJudgement(mergedQueenCastes, options.QueenCasteReason, phase, "build", judgementState, queenCasteWhyReasons).Reasons
+	}()
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
@@ -317,7 +339,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
+	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches, judgementReasonsForBudget)
 
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
@@ -338,7 +360,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	// instead of from memory; the decision is the audit trail for what it chose
 	// and what the runtime overrode.
 	manifest.CasteRoster = queenCasteRoster()
-	manifest.CasteDecision = queenCasteDecisionSummary(phase, state, reviewDepth, options.QueenCastes, options.QueenCasteReason)
+	manifest.CasteDecision = queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
 	// The forced-reviewer set is derived from the phase's own wording exactly
 	// once, here, and recorded — never dispatched at build (D-05). Continue
 	// reads this record via queenForcedContinueReviewers.
@@ -1138,7 +1160,7 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 	return plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, nil, "")
 }
 
-func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string) []codexBuildDispatch {
+func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string, reasons ...map[string]string) []codexBuildDispatch {
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
 	for _, taskID := range selectedTaskIDs {
@@ -1151,7 +1173,7 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 	queenState := state
 	queenState.ColonyDepth = depth
 	queenState.VerificationDepth = string(reviewDepth)
-	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState)
+	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState, reasons...)
 	queenCastes := stringSet(queenJudgement.Final)
 	// queenAskedFor is the Queen's explicit proposal, not the effective team
 	// after the required-caste floor unions itself in. D-08 (deterministic

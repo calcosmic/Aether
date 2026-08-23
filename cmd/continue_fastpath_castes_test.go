@@ -33,7 +33,9 @@ func TestContinueFastPathHonoursCasteProposal(t *testing.T) {
 		t.Fatalf("fixture broken: measurer must not be in the unproposed baseline, got %+v", base)
 	}
 
-	proposed := plannedContinueReviewDispatches(root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, &codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, []string{"measurer"}, "perf phrasing without perf keywords")
+	// D-08: a proposal needs a reason PER WORKER, not just a team-level
+	// string, or the worker is refused by name rather than sent unexplained.
+	proposed := plannedContinueReviewDispatches(root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, &codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, []string{"measurer"}, "perf phrasing without perf keywords", map[string]string{"measurer": "perf phrasing without perf keywords"})
 	if !containsDispatchCaste(proposed, "measurer") {
 		t.Fatalf("the fast continue path ignored the Queen's --castes proposal; only the heavy plan-only path honoured it. got %+v", proposed)
 	}

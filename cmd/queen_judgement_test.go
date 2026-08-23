@@ -74,7 +74,11 @@ func TestQueenCanAddASpecialistKeywordsWouldMiss(t *testing.T) {
 	judgement := queenApplyJudgement(
 		[]string{"builder", "watcher", "measurer"},
 		"the complaint is latency even though the phase never says so",
-		phase, "build", colony.ColonyState{})
+		phase, "build", colony.ColonyState{},
+		map[string]string{
+			"watcher":  "confirming the fix actually addresses the latency complaint",
+			"measurer": "the complaint is latency even though the phase never says so",
+		})
 
 	if !hasCasteName(judgement.Final, "measurer") {
 		t.Errorf("Queen's added specialist must survive; final = %v", judgement.Final)
@@ -120,7 +124,18 @@ func TestBudgetTrimsTheQueensOptionalPicksNotItsRequiredOnes(t *testing.T) {
 		"builder", "watcher", "architect", "measurer", "chaos",
 		"weaver", "archaeologist", "includer", "sage", "keeper",
 	}
-	judgement := queenApplyJudgement(greedy, "everything, just in case", phase, "build", state)
+	// Every optional pick needs its own stated reason (D-08) or it is refused
+	// before it ever reaches the budget trim this test is pinning -- give
+	// each one a reason so the thing under test (trimming, not refusal) is
+	// what actually exercises the over-sized proposal.
+	greedyReasons := map[string]string{
+		"watcher": "everything, just in case", "architect": "everything, just in case",
+		"measurer": "everything, just in case", "chaos": "everything, just in case",
+		"weaver": "everything, just in case", "archaeologist": "everything, just in case",
+		"includer": "everything, just in case", "sage": "everything, just in case",
+		"keeper": "everything, just in case",
+	}
+	judgement := queenApplyJudgement(greedy, "everything, just in case", phase, "build", state, greedyReasons)
 
 	budget := queenSpawnBudgetForPhase(phase, "build", state)
 	if len(judgement.Final) > budget.MaxWorkers && len(judgement.Final) > len(budget.RequiredCastes) {
@@ -226,6 +241,7 @@ func TestQueenChoiceReachesTheDispatchList(t *testing.T) {
 		phase, state, nil, colony.VerificationDepthStandard,
 		[]string{"builder", "measurer"},
 		"the complaint is latency even though the phase never says so",
+		map[string]string{"measurer": "the complaint is latency even though the phase never says so"},
 	)
 
 	spawned := map[string]bool{}

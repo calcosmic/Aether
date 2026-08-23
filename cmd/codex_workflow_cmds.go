@@ -135,6 +135,7 @@ var buildCmd = &cobra.Command{
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		queenCastes, _ := cmd.Flags().GetStringArray("castes")
 		queenCasteReason, _ := cmd.Flags().GetString("caste-reason")
+		queenCasteWhy, _ := cmd.Flags().GetStringArray("caste-why")
 
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			worker, _ := cmd.Flags().GetString("worker")
@@ -162,6 +163,7 @@ var buildCmd = &cobra.Command{
 				VerificationDepth: verificationDepth,
 				QueenCastes:       queenCastes,
 				QueenCasteReason:  queenCasteReason,
+				QueenCasteWhy:     queenCasteWhy,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -234,6 +236,7 @@ var continueCmd = &cobra.Command{
 		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
 		continueCastes, _ := cmd.Flags().GetStringArray("castes")
 		continueCasteReason, _ := cmd.Flags().GetString("caste-reason")
+		continueCasteWhy, _ := cmd.Flags().GetStringArray("caste-why")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		classicCeremony, _ := cmd.Flags().GetBool("classic-ceremony")
 		if classicCeremony {
@@ -255,6 +258,7 @@ var continueCmd = &cobra.Command{
 				VerificationDepth:   verificationDepth,
 				QueenCastes:         continueCastes,
 				QueenCasteReason:    continueCasteReason,
+				QueenCasteWhy:       continueCasteWhy,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -1373,7 +1377,8 @@ func init() {
 	// what every caller did before judgement existed.
 	buildCmd.Flags().Bool("no-checkin", false, "Skip the wrapper's pre-spawn team check-in pause (the runtime plan is unchanged)")
 	buildCmd.Flags().StringArray("castes", nil, "Queen's proposed worker castes for this phase (repeatable or comma-separated). Safety castes the phase requires are added back automatically; the worker budget still applies")
-	buildCmd.Flags().String("caste-reason", "", "Why the Queen chose that team, shown to the operator alongside the roster")
+	buildCmd.Flags().String("caste-reason", "", "One line summarising the whole team's choice, shown to the operator alongside the roster. This is NOT a per-worker reason -- a worker named in --castes with no matching --caste-why entry is refused by name even if --caste-reason is set. Use --caste-why for that.")
+	buildCmd.Flags().StringArray("caste-why", nil, "One reason per proposed worker, as caste=reason (repeatable; the reason may itself contain '='). A worker named in --castes with no entry here, and not required by the phase, is refused by name rather than sent unexplained")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")
@@ -1392,7 +1397,8 @@ func init() {
 	// Queen chooses the team after reading the phase; without a proposal the
 	// keyword engine decides, as before.
 	continueCmd.Flags().StringArray("castes", nil, "Queen's proposed review castes for this phase (repeatable or comma-separated). The Watcher and any review the phase requires are added back automatically")
-	continueCmd.Flags().String("caste-reason", "", "Why the Queen chose that review team")
+	continueCmd.Flags().String("caste-reason", "", "One line summarising the whole review team's choice. This is NOT a per-worker reason -- a reviewer named in --castes with no matching --caste-why entry is refused by name even if --caste-reason is set. Use --caste-why for that.")
+	continueCmd.Flags().StringArray("caste-why", nil, "One reason per proposed reviewer, as caste=reason (repeatable; the reason may itself contain '='). A reviewer named in --castes with no entry here, and not required by the phase, is refused by name rather than sent unexplained")
 	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
 	continueCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	continueCmd.Flags().Bool("classic-ceremony", false, "Emit the heavy continue review manifest for wrapper-spawned classic ceremony reviewers")

@@ -534,12 +534,18 @@ func recommendQueenExecutionPolicy(state colony.ColonyState, phase colony.Phase,
 	}
 }
 
-func enrichQueenExecutionPolicyWithSpawnBudget(policy codexQueenExecutionPolicy, state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch) codexQueenExecutionPolicy {
-	policy.SpawnBudget = buildQueenSpawnBudgetContract(state, phase, flowType, reviewDepth, dispatches)
+func enrichQueenExecutionPolicyWithSpawnBudget(policy codexQueenExecutionPolicy, state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch, reasons ...map[string]string) codexQueenExecutionPolicy {
+	policy.SpawnBudget = buildQueenSpawnBudgetContract(state, phase, flowType, reviewDepth, dispatches, reasons...)
 	return policy
 }
 
-func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch) *codexQueenSpawnBudgetContract {
+// buildQueenSpawnBudgetContract's reasons parameter, when supplied, is the
+// judgement's already-merged per-caste Reasons map (D-09, D-10) -- it is
+// preferred over decision.Rationale for any caste it names, so the card and
+// the manifest's spawn_budget both show the SAME sentence
+// queenCasteDecisionSummary shows, rather than two independently-derived
+// ones that could drift apart.
+func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch, reasons ...map[string]string) *codexQueenSpawnBudgetContract {
 	flowType = normalizeQueenFlowType(flowType)
 	budgetState := state
 	if reviewDepth != "" {
@@ -567,8 +573,12 @@ func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase,
 	// pruned_castes while budget_unit remains "caste".
 	contract.PrunedWorkers = intRef(len(prunedBudgetCastes))
 	contract.OverflowRequiredWorkers = intRef(maxInt(0, len(contract.RequiredCastes)-budget.MaxWorkers))
+	preferredReasons := firstReasonMap(reasons...)
 	for _, decision := range queenSpawnBudgetDecisions(candidateBudgetDispatches, budget) {
 		rationale := strings.TrimSpace(decision.Rationale)
+		if preferred := strings.TrimSpace(preferredReasons[decision.Caste]); preferred != "" {
+			rationale = preferred
+		}
 		if rationale == "" {
 			continue
 		}

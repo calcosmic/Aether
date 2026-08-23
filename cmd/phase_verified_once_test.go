@@ -68,6 +68,7 @@ func TestBuildStillDispatchesAWatcherTheQueenAskedFor(t *testing.T) {
 	dispatches := plannedBuildDispatchesWithJudgement(
 		phase, state, nil, colony.VerificationDepthStandard,
 		[]string{"builder", "watcher"}, "owner asked for an explicit watcher pass",
+		map[string]string{"watcher": "owner asked for an explicit watcher pass"},
 	)
 
 	count := 0
@@ -234,6 +235,7 @@ func TestPhaseVerifiedOnce(t *testing.T) {
 		phase              colony.Phase
 		proposedCastes     []string
 		casteReason        string
+		casteReasons       map[string]string
 		wantWatcherOverlap bool
 	}{
 		{
@@ -260,6 +262,7 @@ func TestPhaseVerifiedOnce(t *testing.T) {
 			phase:              production,
 			proposedCastes:     []string{"builder", "watcher"},
 			casteReason:        "owner asked for an explicit watcher pass",
+			casteReasons:       map[string]string{"watcher": "owner asked for an explicit watcher pass"},
 			wantWatcherOverlap: true,
 		},
 	} {
@@ -267,7 +270,7 @@ func TestPhaseVerifiedOnce(t *testing.T) {
 			state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{tc.phase}}}
 
 			buildDispatches := plannedBuildDispatchesWithJudgement(
-				tc.phase, state, nil, colony.VerificationDepthStandard, tc.proposedCastes, tc.casteReason,
+				tc.phase, state, nil, colony.VerificationDepthStandard, tc.proposedCastes, tc.casteReason, tc.casteReasons,
 			)
 			buildCastes := map[string]bool{}
 			for _, d := range buildDispatches {
@@ -276,7 +279,7 @@ func TestPhaseVerifiedOnce(t *testing.T) {
 
 			continueDispatches := plannedContinueReviewDispatches(
 				"/tmp", tc.phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
-				&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, tc.proposedCastes, tc.casteReason,
+				&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, tc.proposedCastes, tc.casteReason, tc.casteReasons,
 			)
 			continueCastes := map[string]bool{}
 			for _, d := range continueDispatches {

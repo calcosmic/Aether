@@ -420,8 +420,16 @@ func stringSet(values []string) map[string]bool {
 	return set
 }
 
+// appendQueenBudgetRationale and appendQueenPrunedRationale used to name an
+// internal number and the flow-type identifier directly ("Queen spawn budget
+// %d", the raw budget.Reason string) -- D-09 forbids both in a reason slot.
+// budget.Reason is itself already a plain sentence fragment
+// (queenBuildBaseWorkerBudget / queenMaxWorkersForBudget return sentences
+// like "high-risk or production build", never a bare identifier), so it is
+// safe to fold into a sentence here rather than displayed as a labelled pair.
+
 func appendQueenBudgetRationale(rationale string, budget queenSpawnBudget) string {
-	suffix := fmt.Sprintf("selected within Queen spawn budget %d (%s)", budget.MaxWorkers, budget.Reason)
+	suffix := fmt.Sprintf("there was room for it in this phase's %d-worker team (%s)", budget.MaxWorkers, budget.Reason)
 	if strings.TrimSpace(rationale) == "" {
 		return suffix
 	}
@@ -429,7 +437,7 @@ func appendQueenBudgetRationale(rationale string, budget queenSpawnBudget) strin
 }
 
 func appendQueenPrunedRationale(rationale string, budget queenSpawnBudget) string {
-	suffix := fmt.Sprintf("not spawned; outside Queen spawn budget %d (%s)", budget.MaxWorkers, budget.Reason)
+	suffix := fmt.Sprintf("not sent -- this phase's team is capped at %d workers (%s), and this pick did not make the cut", budget.MaxWorkers, budget.Reason)
 	if strings.TrimSpace(rationale) == "" {
 		return suffix
 	}

@@ -163,6 +163,10 @@ func TestSecurityCasteSurvivesWhenThePhaseNeedsIt(t *testing.T) {
 		[]string{"builder", "watcher", "gatekeeper"},
 		"this changes credentials",
 		phase, "build", colony.ColonyState{},
+		map[string]string{
+			"watcher":    "confirming the password/token change actually works",
+			"gatekeeper": "this changes credentials",
+		},
 	)
 
 	found := false
