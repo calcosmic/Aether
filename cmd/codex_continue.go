@@ -1249,10 +1249,11 @@ func queenContinueDispatches(phase colony.Phase, reviewDepth colony.Verification
 // the build-recorded D-01..D-05 forced-reviewer set (codexBuildManifest's
 // ForcedReviewers, threaded in by callers that have a manifest); nil falls
 // back to re-deriving from the phase's own wording
-// (queenForcedContinueReviewers). changedFiles is the builder's own reported
-// changed_files for this phase (phaseChangedFilesFromHandoffs, supplied by
-// both continue boundaries — D-02, plan 194-06): it can only ADD a forced
-// reviewer via unionForcedContinueReviewers, never remove one.
+// (queenForcedContinueReviewers). changedFiles is the union of the builder's
+// own reported changed_files for this phase and an independent `git diff`
+// (phaseChangedFilesForRiskSignals, WR-01, supplied by both continue
+// boundaries — D-02, plan 194-06): it can only ADD a forced reviewer via
+// unionForcedContinueReviewers, never remove one.
 func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, changedFiles []string, reasons ...map[string]string) []CasteDispatch {
 	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
 	var dispatches []CasteDispatch
@@ -1333,9 +1334,10 @@ func queenContinueReviewSpecs(phase colony.Phase, reviewDepth colony.Verificatio
 	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "", nil, nil)
 }
 
-// changedFiles is the builder's own reported changed_files for this phase
-// (phaseChangedFilesFromHandoffs), supplied identically by both continue
-// boundaries — plannedContinueReviewDispatches (this file) and
+// changedFiles is the union of the builder's own reported changed_files for
+// this phase and an independent `git diff` (phaseChangedFilesForRiskSignals,
+// WR-01), supplied identically by both continue boundaries —
+// plannedContinueReviewDispatches (this file) and
 // plannedExternalContinueDispatches (cmd/codex_continue_plan.go) — so the
 // two lanes can never derive a different forced-reviewer set for the same
 // phase and the same changed files (D-02, two-lane parity discipline).
@@ -1529,7 +1531,11 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 	// (queenForcedContinueReviewers): what the builder actually touched can
 	// raise a reviewer the plan's own wording missed, on this lane exactly
 	// as on the wrapper lane (plannedExternalContinueDispatches).
-	changedFiles := phaseChangedFilesFromHandoffs(phase.ID)
+	// phaseChangedFilesForRiskSignals (not the raw phaseChangedFilesFromHandoffs)
+	// per WR-01, 194-REVIEW.md: unions the builder's own self-report with an
+	// independent `git diff`, so an incomplete or dishonest handoff cannot
+	// defeat this detector by itself.
+	changedFiles := phaseChangedFilesForRiskSignals(phase.ID)
 	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers, changedFiles, reasons...)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {

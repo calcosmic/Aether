@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -496,5 +497,56 @@ func TestForcedReviewerReasonNeverShowsATrailingSlash(t *testing.T) {
 	}
 	if !strings.Contains(clause, "migrations") {
 		t.Fatalf("clause dropped the matched pattern entirely: %q", clause)
+	}
+}
+
+// TestGitDiffCatchesAFileTheHandoffOmitted (WR-01, 194-REVIEW.md): the
+// file-based forced-reviewer detector must not be defeated purely by an
+// incomplete or dishonest handoff -- phaseChangedFilesFromHandoffs alone is
+// only the Builder's own self-reported claim. phaseChangedFilesForRiskSignals
+// unions that self-report with an independent `git diff`, so a file that
+// lands on disk and is tracked by git, but that no handoff ever mentions,
+// still forces the reviewer.
+func TestGitDiffCatchesAFileTheHandoffOmitted(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	gitInitForTest(t, root)
+	if out, err := exec.Command("git", "-C", root, "config", "user.email", "test@example.com").CombinedOutput(); err != nil {
+		t.Skipf("git config user.email failed: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", root, "config", "user.name", "Test Runner").CombinedOutput(); err != nil {
+		t.Skipf("git config user.name failed: %v\n%s", err, out)
+	}
+	gitAddForTest(t, root)
+	if out, err := exec.Command("git", "-C", root, "commit", "-m", "init").CombinedOutput(); err != nil {
+		t.Skipf("git commit failed: %v\n%s", err, out)
+	}
+
+	// A migration file lands on disk and is staged, but no worker handoff
+	// ever mentions it -- the exact "incomplete self-report" WR-01 named.
+	writeClaimFileForTest(t, root, "migrations/0099_add_column.sql")
+	if out, err := exec.Command("git", "-C", root, "add", "migrations/0099_add_column.sql").CombinedOutput(); err != nil {
+		t.Skipf("git add failed: %v\n%s", err, out)
+	}
+
+	phase := waiverFixturePhase(31, "Small fix", "Fix an unrelated formatting bug")
+
+	if handoffsOnly := phaseChangedFilesFromHandoffs(phase.ID); len(handoffsOnly) != 0 {
+		t.Fatalf("expected no self-reported changed files, got %+v", handoffsOnly)
+	}
+
+	changedFiles := phaseChangedFilesForRiskSignals(phase.ID)
+	found := false
+	for _, f := range changedFiles {
+		if f == "migrations/0099_add_column.sql" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("phaseChangedFilesForRiskSignals did not surface the git-tracked file the handoff never reported: %+v", changedFiles)
+	}
+
+	reviewers := queenForcedContinueReviewers(phase, nil, changedFiles)
+	if len(reviewers) != 1 || reviewers[0].Caste != "auditor" {
+		t.Fatalf("an incomplete handoff should not have defeated the git-detected migration file: %+v", reviewers)
 	}
 }

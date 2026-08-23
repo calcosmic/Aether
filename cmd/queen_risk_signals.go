@@ -29,11 +29,13 @@ import (
 
 // riskSignal is one named high-risk vocabulary entry. Phrases are matched at
 // a word boundary (matchesPhraseAtWordBoundary) against the phase's own
-// wording (collectPhaseText); PathPatterns is matched as a lowercased,
-// slash-normalised substring against the builder's own reported changed
-// files (queenRiskSignalHitsFromPaths, D-02) — a second, independent
-// detector that can only ADD a forced reviewer, never remove one. A signal
-// with no PathPatterns never fires from the file detector.
+// wording (collectPhaseText); PathPatterns is matched at the same kind of
+// boundary (matchesPathPatternAtBoundary, WR-02) against a lowercased,
+// slash-normalised changed-files list that unions the builder's own
+// reported changed files with an independent `git diff`
+// (phaseChangedFilesForRiskSignals, WR-01) — a second, independent detector
+// that can only ADD a forced reviewer, never remove one. A signal with no
+// PathPatterns never fires from the file detector.
 type riskSignal struct {
 	Name         string
 	Caste        string
@@ -254,10 +256,11 @@ func matchesPathPatternAtBoundary(path, pattern string) bool {
 }
 
 // queenRiskSignalHitsFromPaths is D-02's second detector: it matches the
-// builder's OWN reported changed files (phaseChangedFilesFromHandoffs)
-// against the same five-signal table's PathPatterns, instead of the plan's
-// wording. Same "longest match wins" discipline as queenRiskSignalHits, so
-// the most specific pattern is the one quoted back -- compared and stored
+// changed-files input (phaseChangedFilesForRiskSignals, which unions the
+// builder's OWN reported changed files with an independent `git diff`,
+// WR-01) against the same five-signal table's PathPatterns, instead of the
+// plan's wording. Same "longest match wins" discipline as queenRiskSignalHits,
+// so the most specific pattern is the one quoted back -- compared and stored
 // using the SAME trimmed/lowercased value (`p`) the match test itself runs
 // against (IN-01, 194-REVIEW.md: comparing the untrimmed loop variable
 // instead was a latent inconsistency with no live bug today only because
@@ -503,4 +506,54 @@ func queenForcedContinueReviewers(phase colony.Phase, recorded []codexForcedRevi
 		return nil
 	}
 	return collapseToForcedReviewers(hits)
+}
+
+// phaseChangedFilesForRiskSignals is D-02's changed-files input, hardened
+// per WR-01 (194-REVIEW.md): phaseChangedFilesFromHandoffs alone is only the
+// BUILDER'S OWN self-reported claim (claims.FilesCreated/FilesModified/
+// TestsWritten on its handoff) -- a Builder that omits a sensitive file, by
+// mistake, an incomplete claim, or a prompt-injected instruction to
+// under-report, would otherwise silently defeat the one detector meant to
+// catch what the plan's own wording missed. This unions that self-report
+// with an independent read of the actual working tree
+// (discoverChangedFilesFromGit, cmd/codex_build_finalize.go -- the same
+// `git diff --name-only ... HEAD` this repo already uses at build-finalize
+// time to discover files when a builder's claims are empty), so an
+// incomplete or dishonest handoff can no longer defeat the safety net by
+// itself: git still sees what actually changed on disk, independent of
+// anything the worker claimed.
+//
+// Deliberately scoped to the forced-reviewer call sites
+// (cmd/codex_continue.go, cmd/codex_continue_plan.go) rather than folded
+// into phaseChangedFilesFromHandoffs itself -- that function also drives
+// commitPhaseAdvance's file selection (cmd/phase_commit.go), and widening
+// its output would silently change which files get committed at phase
+// advance, a different and unrelated concern from this detector's input.
+func phaseChangedFilesForRiskSignals(phaseID int) []string {
+	set := make(map[string]bool)
+	for _, f := range phaseChangedFilesFromHandoffs(phaseID) {
+		if f = strings.TrimSpace(f); f != "" {
+			set[f] = true
+		}
+	}
+	created, modified := discoverChangedFilesFromGit()
+	for _, f := range created {
+		if f = strings.TrimSpace(f); f != "" {
+			set[f] = true
+		}
+	}
+	for _, f := range modified {
+		if f = strings.TrimSpace(f); f != "" {
+			set[f] = true
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(set))
+	for f := range set {
+		result = append(result, f)
+	}
+	sort.Strings(result)
+	return result
 }
