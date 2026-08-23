@@ -86,7 +86,21 @@ var queenRiskSignalTable = []riskSignal{
 			"session cookie", "access token", "api key", "api keys",
 			"secret key", "secrets", "oauth", "sso", "2fa", "mfa",
 		},
-		PathPatterns: []string{"auth/", "/login", "session", "credential", "secrets"},
+		// "auth/" (directory-anchored) replaced with the bare "auth"
+		// (WR-03, 194-REVIEW.md): the old form only matched a file living
+		// literally inside a directory named auth/, missing plausible
+		// real files like auth.go, auth_service.go or auth-config.yaml at
+		// any depth. Bare "auth" behaves the same as "session"/"credential"/
+		// "secrets" below -- a boundary-matched substring
+		// (matchesPathPatternAtBoundary) rather than a directory anchor --
+		// so it is now consistent with its sibling patterns instead of the
+		// odd one out. It still requires a non-letter/digit boundary on
+		// both sides, so a name where "auth" is fused directly into a
+		// longer identifier with no separator (authHandler.go,
+		// authMiddleware.go, oauth.go) is not caught by this pattern alone
+		// -- the same word/tokenizer trade-off this table already accepts
+		// for "token" vs "tokenizer" in the phrase list above.
+		PathPatterns: []string{"auth", "/login", "session", "credential", "secrets"},
 		PlainEnglish: "logins and passwords",
 	},
 	{

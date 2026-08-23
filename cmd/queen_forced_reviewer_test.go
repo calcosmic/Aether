@@ -441,3 +441,37 @@ func TestPathPatternMatchingRequiresAWordBoundary(t *testing.T) {
 		t.Fatalf("a genuine session.go file should still force gatekeeper: %+v", reviewers)
 	}
 }
+
+// TestBareAuthPathPatternCatchesAuthNamedFiles (WR-03, 194-REVIEW.md): the
+// credentials/auth signal's PathPatterns carries a bare "auth" (not only
+// the directory-anchored "auth/" the review flagged as the odd one out), so
+// auth-named files at any depth are caught the same way session/
+// credential/secrets files already are. matchesPathPatternAtBoundary's
+// boundary discipline (WR-02) means a name where "auth" is fused directly
+// into a longer identifier with no separator (authorization.go) is still
+// outside this pattern's reach -- the same "token" vs "tokenizer"
+// trade-off the phrase table already accepts for prose, applied here to
+// paths.
+func TestBareAuthPathPatternCatchesAuthNamedFiles(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"auth.go at the root of a package", "cmd/auth.go", true},
+		{"auth_service.go with an underscore", "internal/auth_service.go", true},
+		{"auth-config.yaml with a hyphen", "config/auth-config.yaml", true},
+		{"a directory literally named auth/", "auth/handler.go", true},
+		{"authorization.go is a different word, no boundary", "pkg/authorization.go", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			phase := waiverFixturePhase(23, "Unrelated wording", "Nothing risky mentioned here")
+			reviewers := queenForcedContinueReviewers(phase, nil, []string{tc.path})
+			got := len(reviewers) == 1 && reviewers[0].Caste == "gatekeeper"
+			if got != tc.want {
+				t.Errorf("path %q: forced gatekeeper = %v, want %v (reviewers = %+v)", tc.path, got, tc.want, reviewers)
+			}
+		})
+	}
+}
