@@ -5,10 +5,10 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 194
 current_phase_name: The Queen Decides the Team
 status: planning
-stopped_at: Phase 194 context gathered
+stopped_at: Phase 194 planned — 9 plans verified, ready to execute
 last_updated: "2026-08-23T01:22:36.755Z"
-last_activity: 2026-08-22
-last_activity_desc: Phase 193 complete (verified 4/4, review clean), transitioned to Phase 194
+last_activity: 2026-08-23
+last_activity_desc: Phase 194 planned — 9 plans in 9 waves, plan checker passed on iteration 2
 state_head: c0bddbccf9c46a418cfc60e956ac86ebf1af7361
 progress:
   total_phases: 7
@@ -25,7 +25,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 194 — The Queen Decides the Team (next to discuss and plan)
+**Current focus:** Phase 194 — The Queen Decides the Team (planned: 9 plans, ready to execute)
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
@@ -33,9 +33,9 @@ See: .planning/PROJECT.md (updated 2026-08-22)
 ## Current Position
 
 Phase: 194 (The Queen Decides the Team) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to plan (no 194 context yet — run /gsd-discuss-phase 194 first)
-Last activity: 2026-08-22 — Phase 193 complete: 5/5 plans, verification 4/4, code review clean after 6 fixes; transitioned to Phase 194
+Plan: — (9 planned, none executed)
+Status: Ready to execute (9 plans, verified by the plan checker on iteration 2)
+Last activity: 2026-08-23 — Phase 194 planned: 9 plans in 9 waves (split from 5 to fit the executor budget), verified
 
 ## Performance Metrics
 
@@ -105,7 +105,8 @@ Last activity: 2026-08-22 — Phase 193 complete: 5/5 plans, verification 4/4, c
 - [x] Truth audit + hostile review + implementation programme approved — 2026-08-17
 - [~] Phase 186: rescoped 2026-08-18 — plans 01-06 shipped; plan 07 cut from twelve runs to one non-gating smoke run, to be fired when convenient
 - [x] Phase 193: Free Checks Are the Floor — executed and verified 2026-08-22 (v1.27)
-- [ ] Discuss + plan Phase 194: The Queen Decides the Team ← **next**
+- [x] Discuss + plan Phase 194: The Queen Decides the Team — planned 2026-08-23 (9 plans, 9 waves)
+- [ ] Execute Phase 194: The Queen Decides the Team ← **next**
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
@@ -178,5 +179,5 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 ## Session Continuity
 
 Last session: 2026-08-23T00:30:21.251Z
-Stopped at: Phase 194 context gathered
-Resume file: .planning/phases/194-the-queen-decides-the-team/194-CONTEXT.md
+Stopped at: Phase 194 planned — ready to execute
+Resume file: .planning/phases/194-the-queen-decides-the-team/194-01-PLAN.md
