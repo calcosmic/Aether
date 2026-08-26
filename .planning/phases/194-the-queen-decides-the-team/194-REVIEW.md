@@ -1,8 +1,8 @@
 ---
 phase: 194-the-queen-decides-the-team
-reviewed: 2026-08-23T00:00:00Z
+reviewed: 2026-08-26T19:55:08Z
 depth: standard
-files_reviewed: 58
+files_reviewed: 56
 files_reviewed_list:
   - .aether/docs/command-playbooks/caste-relevance-reference.md
   - .aether/docs/retired-tests-ledger.md
@@ -11,42 +11,40 @@ files_reviewed_list:
   - .claude/commands/ant-continue.md
   - .claude/commands/ant/build.md
   - .claude/commands/ant/continue.md
-  - .gitignore
   - .opencode/commands/ant/build.md
   - .opencode/commands/ant/continue.md
-  - CLAUDE.md
   - cmd/boundary_double_dispatch_test.go
   - cmd/build_attempt_external_test.go
+  - cmd/caste_relevance.go
   - cmd/caste_relevance_doc_test.go
   - cmd/caste_relevance_test.go
-  - cmd/caste_relevance.go
   - cmd/ceremony_cmd_test.go
-  - cmd/ceremony_team_checkin_test.go
   - cmd/ceremony_team_checkin.go
+  - cmd/ceremony_team_checkin_test.go
   - cmd/claudemd_verification_depth_test.go
+  - cmd/codex_build.go
   - cmd/codex_build_finalize_test.go
   - cmd/codex_build_test.go
-  - cmd/codex_build.go
-  - cmd/codex_continue_plan_test.go
-  - cmd/codex_continue_plan.go
-  - cmd/codex_continue_test.go
   - cmd/codex_continue.go
+  - cmd/codex_continue_plan.go
+  - cmd/codex_continue_plan_test.go
+  - cmd/codex_continue_test.go
   - cmd/codex_dispatch_contract.go
   - cmd/codex_visuals_test.go
   - cmd/codex_workflow_cmds.go
   - cmd/continue_depth_spawn_test.go
   - cmd/continue_fastpath_castes_test.go
   - cmd/floor_unskippable_test.go
-  - cmd/forced_reviewer_waiver_test.go
   - cmd/forced_reviewer_waiver.go
+  - cmd/forced_reviewer_waiver_test.go
   - cmd/golden_workflow_test.go
   - cmd/one_task_bug_fix_test.go
   - cmd/owner_dials_test.go
   - cmd/phase_verified_once_test.go
   - cmd/queen_fallback_team_test.go
   - cmd/queen_forced_reviewer_test.go
-  - cmd/queen_judgement_test.go
   - cmd/queen_judgement.go
+  - cmd/queen_judgement_test.go
   - cmd/queen_orchestration_regression_test.go
   - cmd/queen_probe_gating_test.go
   - cmd/queen_relevance_floor_test.go
@@ -55,248 +53,143 @@ files_reviewed_list:
   - cmd/queen_team_choice_test.go
   - cmd/queen_worker_reason_test.go
   - cmd/reclaim_wiring_test.go
-  - cmd/review_depth_test.go
   - cmd/review_depth.go
+  - cmd/review_depth_test.go
   - cmd/spawn_budget_test.go
   - cmd/testdata/command_catalog.json
   - cmd/testdata/golden_build.txt
   - cmd/testdata/golden_continue.txt
   - cmd/testdata/golden_plan.txt
 findings:
-  critical: 1
-  warning: 3
-  info: 3
+  critical: 5
+  warning: 2
+  info: 0
   total: 7
 status: issues_found
 ---
 
 # Phase 194: Code Review Report
 
-**Reviewed:** 2026-08-23T00:00:00Z
+**Reviewed:** 2026-08-26T19:55:08Z
 **Depth:** standard
-**Files Reviewed:** 58
+**Files Reviewed:** 56
 **Status:** issues_found
 
 ## Summary
 
-This phase moves reviewer selection from a fixed floor to Queen judgement plus
-a five-signal forced-reviewer table (`cmd/queen_risk_signals.go`), with an
-owner-only waiver path (`cmd/forced_reviewer_waiver.go`). I read the core
-logic (`queen_risk_signals.go`, `forced_reviewer_waiver.go`,
-`queen_judgement.go`, `caste_relevance.go`, `queen_spawn_budget.go`,
-`ceremony_team_checkin.go`), the two continue dispatch lanes
-(`codex_continue.go`, `codex_continue_plan.go`), and a representative sample
-of the new/changed tests, cross-checked against docs
-(`caste-relevance-reference.md`, `retired-tests-ledger.md`, `CLAUDE.md`) and
-regenerated golden fixtures.
+The retry fix in `bff1ce8a` closes the previously reported stale-window defect on the intended interactive retry path: a fresh plan-only build now clears the phase's old dispatch marker before starting the new attempt, while an already resolved phase/signal waiver remains durable. That specific Critical is closed.
 
-The engineering is careful and well-documented: the word-boundary phrase
-matcher, the two-lane parity tests
-(`TestBothContinueLanesForceTheSameReviewers`), the "assert on the real
-dispatch list, not the decision record" discipline
-(`TestReviewerForcedOnlyByNamedRisk`, `TestNoCasteIsDispatchedAtBothBoundaries`),
-and the D-04 collapse rule all held up under adversarial reading, and I found
-no tautological tests in the sample I traced. My one Critical finding is the
-one the review brief specifically asked me to check hardest: the "owner-only"
-waiver has no technical enforcement behind it — anything that can run the
-`aether` CLI can forge it. The Warnings are about the second, independent
-risk-signal detector (matched against a builder's self-reported changed
-files): it trusts unverified worker self-report, and its path-matching is
-inconsistent (plain substring in one place, word-boundary in the phrase
-matcher), producing both a concrete false positive and a concrete false
-negative.
+The current implementation is still not shippable. Five independently traceable correctness/security defects remain: a recorded waiver does not actually remove a plan-wording reviewer from the real continue team; normal CLI execution discards the Queen's explicit team flags; the wrapper's trim flow loses the reasons required to retain the selected workers; the retry reset can be driven by a worker to forge an owner-only decision; and the supposedly independent changed-file detector misses untracked sensitive files. The authoritative relevance reference and eleven Codex visual assertions are also stale.
+
+For dummies: the retry button now resets the old lock correctly, but several wires after that button are connected to the wrong places. The UI can say a reviewer was declined or a worker was kept while the runtime does the opposite, and a newly created sensitive file can still slip past the safety check.
+
+## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: The forced-reviewer waiver has no technical control restricting it to the owner
+### CR-01 [BLOCKER]: A genuine owner waiver does not remove a plan-wording reviewer from the dispatched continue team
 
-**File:** `cmd/forced_reviewer_waiver.go:80-107`, `cmd/handoff_decisions_cmd.go:165-197`
+**Files:** `cmd/queen_spawn_budget.go:121-140`; `cmd/caste_relevance.go:218-257`; `cmd/codex_continue.go:1257-1278,1300-1321`; `cmd/queen_risk_signals.go:488-508`
 
-**Issue:** The whole design of D-03 rests on the claim (stated in this file's
-own doc comments) that `aether decision-answer` is "the owner's ONLY way to
-decline a forced reviewer." `forcedReviewerWaiver` (queen_risk_signals'
-consumer) treats a phase's forced reviewer as waived purely by finding a
-resolved `pending-decisions.json` entry whose normalized text matches the
-deterministic waiver question (`forcedReviewerWaiverQuestionText`, built only
-from `phaseID` + one of exactly five fixed `PlainEnglish` strings that are
-hard-coded in `queenRiskSignalTable` and printed in the check-in card).
+**Issue:** The waiver is applied only in `queenForcedContinueReviewers`, but the no-proposal continue path has already inserted every unwaived *phase-wording* reviewer through `queenRequiredCastesForBudget -> queenForcedReviewersForPhase -> queenFallbackTeam`. `unionForcedContinueReviewers` is append/overwrite-only: when the waiver-filtered reviewer list is empty, it returns those existing dispatches unchanged. Therefore the check-in card can promise that Gatekeeper or Auditor “will NOT run,” persist a valid owner waiver, and still dispatch that caste during continue. The current waiver tests stop at the filtering helper and do not assert the final dispatch list.
 
-`decisionAnswerCmd` (`cmd/handoff_decisions_cmd.go:165-197`) has no
-authentication, no TTY check, and no requirement that the question match a
-pre-existing pending decision — `recordDecisionAnswer` (line 102) simply
-appends a new resolved entry for whatever `--question`/`--answer`/`--phase`
-text it is given. Because the waiver question text is fully deterministic and
-its only two free variables (`phaseID`, one of five fixed sentences) are both
-public knowledge available to anything reading `queen_risk_signals.go` or the
-rendered check-in card, any process capable of invoking the `aether` binary —
-a Builder's own Bash tool, a misfiring script, a prompt-injected instruction
-buried in phase content, or a future automation that shells out — can forge:
+**Fix:** Make the waiver-filtered reviewer set authoritative at the dispatch boundary. One safe shape is to remove named-risk reviewers from `queenRequiredCastesForBudget` and add them only through `unionForcedContinueReviewers`; alternatively reconcile signal-derived entries before returning rather than only unioning them. Preserve a reviewer independently required by heavy depth or explicitly proposed by the Queen.
 
-```
-aether decision-answer --question "Phase 7: a security reviewer is being added because this touches logins and passwords. Waive it?" --answer "auto" --phase 7
+```go
+// Derive once, after waivers, at the actual continue boundary.
+reviewers := queenForcedContinueReviewers(phase, forced, changedFiles)
+dispatches = reconcileForcedReviewers(dispatches, reviewers, phase, reviewDepth)
 ```
 
-and silently disable the security or quality reviewer the whole feature exists
-to guarantee, for that phase, with no proof a human ever saw it.
+Add an integration test that records a real waiver and asserts both continue lanes' final dispatches omit only that signal's reviewer, including the case where a second live signal still requires the same caste.
 
-The only control that exists is procedural, not technical: the wrapper
-markdown (`.claude/commands/ant/build.md:270-273`) instructs the orchestrating
-agent to relay the command "for the operator to run" and wait, and
-`TestAutopilotNeverWaives` (`cmd/forced_reviewer_waiver_test.go:122-136`) only
-proves `autopilot.go`'s Go source never calls the Go function
-`recordDecisionAnswer` directly — it does not, and cannot, prove nothing ever
-invokes the `aether decision-answer` CLI from outside that one code path.
-Given this repo's own Definition of Done ("a requirement is satisfied only
-when a command exists that someone can run, and that command fails when the
-requirement is unmet"), the owner-only guarantee this whole plan is built
-around is not actually enforced by any command — it can be silently
-bypassed by anything else with shell access.
+### CR-02 [BLOCKER]: Normal `build` and `continue` silently discard `--castes`, `--caste-reason`, and `--caste-why`
 
-**Fix:** Require the waiver to reference a pending-decision row that the
-runtime itself created (e.g. have the check-in-card render step or
-`aether ceremony team-checkin` write the exact pending, *unresolved*
-question into `pending-decisions.json` when it renders a live forced
-reviewer, and have `decision-answer` only resolve an existing row rather than
-create arbitrary new ones for this class of question) — or, at minimum, add a
-runtime check that rejects a `decision-answer` call for a forced-reviewer
-question unless invoked with a distinct flag/environment marker that only the
-true human-operated wrapper session can set, and add a test that proves an
-`aether decision-answer` call with no such marker cannot waive a signal (not
-just that `autopilot.go`'s source lacks a direct function call).
+**Files:** `cmd/codex_workflow_cmds.go:126-138,158-167,184-192,237-261,271-280`; `cmd/codex_continue.go:143-184,243-290`
+
+**Issue:** Both commands parse all three Queen-team flags and forward them in the `--plan-only` branch, but omit them from the options passed to the normal execution branch. This breaks the explicit owner/Queen control surface on the direct Codex lifecycle path and contradicts the Phase 194 requirement that `--castes` keep working on build and continue, including the fast path. The continue report's option snapshot and loop comparison also omit these fields, so even after forwarding is restored, a changed team proposal can be mistaken for a repeat of the previous parameters.
+
+**Fix:** Forward the parsed fields in both non-plan-only option literals, persist them in `codexContinueOptionsJSON`, and compare normalized values in `continueOptionsMatchCurrent`.
+
+```go
+QueenCastes:      queenCastes,       // or continueCastes
+QueenCasteReason: queenCasteReason,  // or continueCasteReason
+QueenCasteWhy:    queenCasteWhy,     // or continueCasteWhy
+```
+
+Add command-level tests that execute each normal Cobra path with these flags and inspect the resulting manifest/dispatches; calling `plannedContinueReviewDispatches` directly does not exercise this wiring.
+
+### CR-03 [BLOCKER]: The wrapper's “Trim optional workers” action silently refuses every kept optional worker
+
+**Files:** `.claude/commands/ant/build.md:181-210,266-273`; `.claude/commands/ant-build.md:181-210,266-273`; `.opencode/commands/ant/build.md:181-210,266-273`; `cmd/queen_judgement.go:202-213`
+
+**Issue:** The wrappers correctly state that every optional proposal needs its own `--caste-why` and that the team-level `--caste-reason` never satisfies that requirement. The trim recipe then re-fetches the manifest with only `--castes <kept optional castes>` and a team reason. Runtime judgement consequently classifies every kept optional caste as `refusedNoReason`. An owner choosing to keep selected workers gets the required floor only, the opposite of the recorded choice. All three build wrappers contain the same recipe.
+
+**Fix:** Replay each retained caste's original reason from `result.reasons` as a separate `--caste-why caste=reason` argument on trim, and preserve the same proposal/reasons when re-fetching after a reviewer decline.
+
+```text
+aether build ... --plan-only --castes <kept> \
+  --caste-why <caste1>="<result.reasons[caste1]>" \
+  --caste-why <caste2>="<result.reasons[caste2]>" \
+  --caste-reason "owner check-in trim"
+```
+
+Add wrapper contract tests that trace a multi-worker trim through `queenApplyJudgement` and assert the retained optionals remain in the new manifest.
+
+### CR-04 [BLOCKER]: A worker can reopen the decline window and manufacture the owner-only waiver state
+
+**Files:** `cmd/codex_build.go:466-474`; `cmd/forced_reviewer_waiver.go:119-177,365-390,455-488`; `cmd/ceremony_team_checkin.go:137-152`; `cmd/codex_workflow_cmds.go:126-167`
+
+**Issue:** The new reset is keyed only by phase and is reached by the public `aether build <phase> --plan-only --force` path. A running worker with Bash access can force a fresh plan-only attempt, render the public `ceremony team-checkin` command to create a pending row, and submit the deterministic waiver answer before any new `spawn-log` closes the phase marker. There is no owner capability, nonce, or attempt binding in that chain. In addition, the resolver accepts any unresolved same-phase row with matching text without checking `Source == "forced-reviewer-waiver"`, so a look-alike pending question is treated as runtime-authentic. This restores the forgery class the dispatch window was intended to prevent; it merely requires starting a forced retry first.
+
+**Fix:** Bind a decline to an immutable build-attempt ID and an unguessable, single-use capability emitted only in the owner-facing card. Validate the attempt, capability, phase, signal, and `Source` atomically when resolving it. Superseding an attempt must invalidate its capability, and unauthenticated plan-only/card-render commands must not create a live owner approval channel while worker execution is active.
+
+```go
+if d.Source != "forced-reviewer-waiver" || d.AttemptID != activeAttempt.ID ||
+   subtle.ConstantTimeCompare([]byte(d.Nonce), []byte(answerNonce)) != 1 {
+    continue
+}
+```
+
+Add an adversarial test that begins dispatch, invokes the force/replan/card-render sequence as a worker, and proves `decision-answer` cannot create a waiver without the owner capability.
+
+### CR-05 [BLOCKER]: The changed-file safety net misses brand-new untracked sensitive files
+
+**Files:** `cmd/queen_risk_signals.go:511-549`; `cmd/queen_forced_reviewer_test.go:503-540`
+
+**Issue:** `phaseChangedFilesForRiskSignals` claims its Git union prevents an incomplete or dishonest handoff from defeating the reviewer safety net, but it delegates to `discoverChangedFilesFromGit`, whose `git diff ... HEAD` queries do not report untracked files. The regression test stages its new migration with `git add` before checking it, masking the common case. A worker can create `migrations/0099.sql`, omit it from the handoff, and leave it untracked; neither input sees it, so Auditor is not forced. The same bypass applies to other named sensitive-path signals.
+
+**Fix:** Union ignored-aware untracked files into the independent detector, for example with `git ls-files --others --exclude-standard`, then normalize/deduplicate them with created and modified paths.
+
+```go
+out, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output()
+if err == nil {
+    created = append(created, parseGitNameOutput(out)...)
+}
+```
+
+Add a regression test that deliberately leaves the omitted sensitive file untracked and asserts the appropriate forced reviewer is still selected.
 
 ## Warnings
 
-### WR-01: The file-based forced-reviewer detector trusts the worker's own self-reported changed files, with no independent verification
+### WR-01 [WARNING]: The authoritative caste reference documents obsolete continue floors
 
-**File:** `cmd/queen_risk_signals.go:190-225`, `pkg/codex/worker.go:1083`, `cmd/phase_commit.go:71-94`
+**Files:** `.aether/docs/command-playbooks/caste-relevance-reference.md:50-69`; `cmd/caste_relevance.go:526-556`
 
-**Issue:** D-02's second detector (`queenRiskSignalHitsFromPaths`) is sold as
-an independent safety net that catches risk the phase's own wording missed —
-"the plan's own wording quotes the matched phrase... a changed file names the
-matched path pattern." But its only input, `phaseChangedFilesFromHandoffs`,
-is built entirely from `ChangedFiles` on the worker's own handoff record
-(`pkg/codex/worker.go:1083`: `claims.FilesCreated`/`FilesModified`/
-`TestsWritten`, all self-reported by the same Builder whose work is being
-reviewed) — never cross-checked against `git diff --name-only` or
-`git status --porcelain`. A Builder that omits a sensitive file from its
-self-reported claims (by mistake, by an incomplete claim, or by a
-prompt-injected instruction telling it to under-report) silently defeats the
-exact safety net this detector exists to provide, and nothing downstream
-notices, because the "independent" detector isn't independent of the worker
-it is meant to check.
+**Issue:** The reference still says light requires Watcher, standard requires Watcher plus Probe, and heavy requires Watcher plus the full panel. Current code requires no unconditional caste at light/standard and requires Gatekeeper, Auditor, and a conditional Probe at heavy; Watcher is not a floor. This file labels the table as sourced from `isAlwaysRequired`, so operators and future maintainers receive the inverse of the shipped policy.
 
-**Fix:** Feed `queenRiskSignalHitsFromPaths` from an actual `git diff
---name-only` against the phase's base commit (already used elsewhere in this
-codebase, e.g. `cmd/porter_cmd.go:712`), in addition to or instead of the
-worker's self-reported claims, so the detector cannot be defeated by an
-incomplete or dishonest handoff.
+**Fix:** Update the table to match the current policy and strengthen the documentation test to compare exact caste names per depth rather than checking only loose numeric fragments.
 
-### WR-02: PathPatterns matching is a plain substring, not word-boundary — a bare pattern like `"session"` false-positives inside unrelated words
+### WR-02 [WARNING]: Codex visual tests deterministically assert retired slash-command guidance
 
-**File:** `cmd/queen_risk_signals.go:89, 198-225`
+**File:** `cmd/codex_visuals_test.go:291,379,438,560,870,932,1028,1151,1219,1356,1491`
 
-**Issue:** The phrase matcher (`matchesPhraseAtWordBoundary`) deliberately
-requires a boundary on both ends specifically to avoid matching `"token"`
-inside `"tokenizer"`. The path-pattern matcher
-(`queenRiskSignalHitsFromPaths`) uses plain `strings.Contains(path, p)` with
-no boundary check at all, and several of the table's `PathPatterns` are bare
-words with no directory-separator anchor: `"session"`, `"credential"`,
-`"secrets"`, `"delete"`, `"purge"`, `"billing"`, `"checkout"`, `"payment"`,
-`"stripe"` (`queen_risk_signals.go:89,99,123`).
+**Issue:** Eleven scoped visual tests require legacy `/ant-*` strings even though the Codex runtime correctly renders native `aether ...` lifecycle commands under the repository's platform policy. The failures reproduce when these tests are isolated, so they are not suite-order contamination. As a result, `go test ./...` fails despite the corresponding production output following the supported Codex interface; this makes the regression gate unreliable and can hide a genuine visual regression among known-red assertions.
 
-Concretely: the credentials/auth signal's pattern `"session"` matches any path
-containing that substring anywhere — including `possession.go` or
-`repossession_handler.go` (a plausible file name in, say, a leasing or
-lending feature). `"possession"` contains `"session"` starting at index 3
-(`po` + `ssession`... `s-e-s-s-i-o-n`), so a completely unrelated file would
-force the security reviewer under the wrong signal name (the reason sentence
-would say "this touches logins and passwords" when the file has nothing to
-do with sessions).
-
-**Fix:** Route `PathPatterns` through the same word/segment-boundary
-discipline the phrase table already has for text — e.g. require the pattern
-to be preceded/followed by a path separator, `_`, `-`, `.`, or start/end of
-string, the way `isWordByte` already draws that line for prose.
-
-### WR-03: The `"auth/"` path pattern is directory-anchored and misses auth-named files that aren't inside an `auth/` directory
-
-**File:** `cmd/queen_risk_signals.go:89`
-
-**Issue:** Inconsistent with WR-02's bare-word patterns, `"auth/"` requires a
-literal trailing slash, so it only matches auth code living inside a
-directory literally named `auth`. A file like `internal/authHandler.go`,
-`cmd/oauth.go`, or `pkg/authMiddleware.go` does not contain `"auth/"` as a
-substring (the character after `auth` is a letter or `.`, not `/`), and none
-of these plausible file names contain `"login"`, `"session"`, `"credential"`,
-or `"secrets"` either — so a real auth-surface file can slip past the
-file-based detector entirely, with the change relying solely on the
-plan-wording detector to catch it. Given `"token"` is deliberately excluded
-from the phrase table too (the documented "token bucket" false-alarm), this
-combination widens the file-detector's blind spot for authentication code
-specifically.
-
-**Fix:** Add a bare `"auth"` pattern (subject to WR-02's boundary fix) rather
-than only the directory-anchored `"auth/"` form, so auth-named files at any
-depth are caught the same way session/credential/secrets files already are.
-
-## Info
-
-### IN-01: `queenRiskSignalHitsFromPaths`'s longest-match comparison uses the untrimmed pattern length, not the matched (`p`) length
-
-**File:** `cmd/queen_risk_signals.go:210-219`
-
-**Issue:** `best = pattern` is compared and assigned using the original
-`pattern` (loop variable), while the actual substring test runs against `p :=
-strings.ToLower(strings.TrimSpace(pattern))`. Since every entry in
-`queenRiskSignalTable.PathPatterns` is already trimmed and lowercase, `pattern
-== p` always holds today and there is no live bug — but the two variables
-diverging is exactly the kind of latent inconsistency that becomes a real bug
-the next time someone adds a pattern with incidental whitespace or mixed
-case.
-
-**Fix:** Compare and store `p` consistently (`if strings.Contains(path, p) &&
-len(p) > len(best) { best = p }`), matching what `queenRiskSignalHits`
-already does for phrases.
-
-### IN-02: The doc-numbers test's assertion is a loose numeric substring check
-
-**File:** `cmd/caste_relevance_doc_test.go:204-213`
-
-**Issue:** `TestCasteRelevanceDoc_SpawnBudgetNumbersMatch` correctly asserts
-the *code* value against `want` (a real, meaningful check), but the
-doc-consistency half — `strings.Contains(content, strconv.Itoa(got))` — only
-proves the digit sequence appears somewhere in a long markdown file, not that
-it appears as the documented spawn-budget number for that flow. For small
-values (3, 4, 5, 6, 8) that will trivially match unrelated numbers elsewhere
-in the doc (list markers, header counts, other tables), so this half of the
-test would not fail if the doc's specific claim for a given flow/depth
-drifted from the code as long as the digit appeared anywhere else on the
-page. This is a pre-existing pattern (not introduced by this phase), so it's
-noted for awareness rather than requiring action in this phase.
-
-**Fix (optional, future work):** Anchor the check to the specific table row/
-line for that flow, or drop the doc-content half in favor of the pre-existing
-`docstest`-style structured extraction other doc tests in this repo already
-use.
-
-### IN-03: The file-detector's owner-facing sentence names the raw path pattern including its trailing slash
-
-**File:** `cmd/forced_reviewer_waiver.go:62-68`, `cmd/queen_risk_signals.go:307-316`
-
-**Issue:** `forcedReviewerReasonClause` renders a file-detected hit as `the
-files changed touched "auth/"` — the literal internal `PathPatterns` string,
-trailing slash included, reaches the owner-facing sentence verbatim. This is
-a minor plain-English miss relative to this repo's own CLAUDE.md mandate
-("translate jargon... every single time"): `"auth/"` reads as an internal
-identifier fragment, not a sentence a non-technical owner would write.
-
-**Fix:** Render the matched path pattern without the trailing directory
-separator (or word it as "a file in the `auth` folder" rather than quoting
-the raw pattern), consistent with how `forcedReviewerReason` already avoids
-raw caste/signal identifiers everywhere else.
+**Fix:** Replace each legacy expectation with the native Codex command currently required by `AGENTS.md` (for example `aether build 1`, `aether continue`, and `aether seal`). If any case intentionally tests a Claude/OpenCode renderer, explicitly select that platform in its fixture instead of using the Codex visual path. Keep the expected command surface internally consistent within each test.
 
 ---
 
-_Reviewed: 2026-08-23T00:00:00Z_
-_Reviewer: Claude (gsd-code-reviewer)_
+_Reviewed: 2026-08-26T19:55:08Z_
+_Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
