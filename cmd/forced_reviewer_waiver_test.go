@@ -387,6 +387,77 @@ func TestOwnerDeclineBeforeDispatchStaysHonoredOnceDispatchBegins(t *testing.T) 
 	}
 }
 
+// TestForcedReviewerDeclineWindowReopensOnRetriedBuild is CR-01's residual
+// regression proof (194-REVIEW.md iteration 3/4): the decline window closing
+// correctly WITHIN one attempt (TestForcedReviewerDeclineWindowClosesWhenDispatchBegins)
+// had the unintended side effect of never reopening for a LATER attempt of
+// the same phase number -- and build, fail or get reviewed, rebuild the same
+// phase is this repo's own normal loop, not an edge case. This reproduces
+// exactly that: attempt 1 renders the card and genuinely dispatches (closing
+// the window), attempt 2 (the retry) renders the card again and the owner
+// declines BEFORE any attempt-2 worker is dispatched -- the real path, made
+// in the real order, through the real CLI command. Before this fix,
+// forcedReviewerWaiver(1, ...) returned false here because attempt 1's stale
+// dispatch-start record never expired.
+func TestForcedReviewerDeclineWindowReopensOnRetriedBuild(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := checkinFixturePhase(
+		"Password reset",
+		"Let users reset their password via an emailed token",
+		colony.PhaseModePrototype,
+	)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	// Attempt 1: card renders, dispatch genuinely begins (the owner never
+	// declines -- the default "proceed" path), attempt 1 fails/ends.
+	manifestMap1, dispatches1 := manifestMapFromBuild(t, root, 1)
+	if _, visual := renderCeremonyTeamCheckin("build", manifestMap1, dispatches1); !strings.Contains(visual, "To decline, run:") {
+		t.Fatalf("expected attempt 1's card to show a live decline command")
+	}
+	rootCmd.SetArgs(spawnLogArgsForPhase(1))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("attempt 1 spawn-log returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	// Attempt 2 (the retry): a brand-new `aether build --plan-only` call for
+	// the SAME phase number. The card renders again, showing a live decline
+	// command -- and the owner runs it BEFORE any attempt-2 worker has been
+	// dispatched.
+	manifestMap2, dispatches2 := manifestMapFromBuild(t, root, 1)
+	if _, visual := renderCeremonyTeamCheckin("build", manifestMap2, dispatches2); !strings.Contains(visual, "To decline, run:") {
+		t.Fatalf("expected attempt 2's (retried) card to show a live decline command")
+	}
+
+	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("decision-answer returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	waived, reason := forcedReviewerWaiver(1, "credentials/auth")
+	if !waived {
+		t.Fatalf("the owner's genuine decline on the RETRIED attempt, made before that attempt's dispatch began, must be honored -- attempt 1's stale dispatch-start record must not block it")
+	}
+	if reason != "already checked by hand" {
+		t.Fatalf("reason = %q, want the owner's recorded answer", reason)
+	}
+	if reviewers := queenForcedContinueReviewers(phase, nil, nil); len(reviewers) != 0 {
+		t.Fatalf("owner's declined reviewer must not be forced after the retry's genuine decline; reviewers = %+v", reviewers)
+	}
+
+	// The within-attempt guarantee must still hold for attempt 2 itself: had
+	// the owner NOT declined and dispatch had genuinely begun instead, a
+	// LATER decision-answer call would still be refused. Verified by the
+	// pre-existing TestForcedReviewerDeclineWindowClosesWhenDispatchBegins,
+	// which this test does not duplicate.
+}
+
 // TestSpawnLogWithNoCardRenderedIsANoOpAndReviewerStaysForced covers the
 // --no-checkin / autopilot lane: no check-in card is ever rendered, so no
 // pending forced-reviewer row is ever created. spawn-log's window-closing

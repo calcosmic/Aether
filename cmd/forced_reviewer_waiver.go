@@ -116,6 +116,66 @@ func closeForcedReviewerWaiverWindowForPhase(phaseID int, at time.Time) {
 	}
 }
 
+// clearPhaseDispatchWindow reopens phaseID's forced-reviewer decline window
+// for a brand-new build attempt -- CR-01's residual (194-REVIEW.md iteration
+// 3/4). closeForcedReviewerWaiverWindowForPhase records the FIRST-EVER
+// dispatch moment for a phase and never expired it, so once a phase had had
+// even one worker spawned in ANY prior attempt, phaseDispatchStartedAt
+// returned true forever after -- refusing the owner's genuine decline on
+// every later retry of that same phase (build, fail or get reviewed,
+// rebuild is this repo's own normal loop, not an edge case). This function
+// deletes ONLY the dispatch-start timestamp for phaseID; it never touches
+// pending-decisions.json, so a waiver the owner already resolved on an
+// earlier attempt of this exact phase and signal (D-03: "one signal, one
+// phase", not "one attempt") is left completely alone and keeps counting.
+//
+// Called from exactly one place: the top of the plan-only manifest step
+// (runCodexBuildPlanOnlyWithOptions, cmd/codex_build.go) that precedes the
+// interactive wrapper's check-in card render -- NOT from inside
+// beginBuildAttempt itself, because beginBuildAttempt has two OTHER callers
+// that must never reopen this window:
+//
+//  1. applyAutomaticCheckFixAttempt's single bounded automatic builder fix
+//     attempt (cmd/check_fix_attempt.go) runs entirely inside `aether
+//     continue`, AFTER that same continue call has already resolved its own
+//     forced-reviewer decision (runCodexContinueVerification dispatches the
+//     reviewer, THEN calls applyAutomaticCheckFixAttempt) -- and its worker
+//     dispatch never calls spawn-log, so nothing would ever re-close a
+//     window opened there. Reopening it there would leave phaseID's window
+//     open indefinitely (until the next real `aether build --plan-only`),
+//     letting anything able to invoke the `aether` binary during that
+//     stretch -- including the check-fix builder's own Bash tool -- forge a
+//     decline for a LATER continue pass with no check-in card ever having
+//     rendered for that state. That is the exact forgery CR-01's original
+//     fix (194-REVIEW.md iteration 1) closed; this reset must not reopen it
+//     by a different door.
+//  2. runCodexBuildWithOptions's non-plan-only, non-interactive dispatch
+//     path (cmd/codex_build.go, used by the direct/synthetic/compatibility
+//     build lanes -- CLAUDE.md's autopilot lane never shows the check-in
+//     card and never declines a reviewer) dispatches workers directly too,
+//     with the same no-spawn-log gap. Leaving its callers' window state
+//     untouched is the conservative default: whatever protection the window
+//     already had keeps applying, since no legitimate decline is ever
+//     needed on that lane anyway.
+//
+// TestForcedReviewerDeclineWindowReopensOnRetriedBuild
+// (cmd/forced_reviewer_waiver_test.go) proves the retry scenario this fixes;
+// TestForcedReviewerDeclineWindowClosesWhenDispatchBegins and
+// TestOwnerDeclineBeforeDispatchStaysHonoredOnceDispatchBegins (both
+// pre-existing) keep proving the within-attempt guarantee is untouched.
+func clearPhaseDispatchWindow(phaseID int) {
+	if store == nil || phaseID <= 0 {
+		return
+	}
+	windowFile := loadPhaseDispatchWindowFile()
+	key := strconv.Itoa(phaseID)
+	if _, present := windowFile.Phases[key]; !present {
+		return
+	}
+	delete(windowFile.Phases, key)
+	_ = store.SaveJSON(phaseDispatchWindowFileName, windowFile)
+}
+
 // This file holds the owner's ONLY way to decline a forced reviewer (D-03,
 // .planning/phases/194-the-queen-decides-the-team/194-CONTEXT.md). It follows
 // cmd/criterion_owner_confirmation.go line for line in structure: a stable

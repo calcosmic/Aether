@@ -464,6 +464,13 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		result["dispatch_manifest"] = manifest
 	}
 	if manifest.OrchestratorGuidance == nil || !manifest.OrchestratorGuidance.Active {
+		// CR-01 residual (194-REVIEW.md iteration 3/4): reopen phaseNum's
+		// forced-reviewer decline window for this NEW attempt, before the
+		// wrapper renders the check-in card from the manifest this call
+		// produces. See clearPhaseDispatchWindow's doc comment
+		// (cmd/forced_reviewer_waiver.go) for why this call lives here and
+		// nowhere else.
+		clearPhaseDispatchWindow(phaseNum)
 		attemptRel, err := beginBuildAttempt(state, phaseNum, phase, generatedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, manifest.ExecutionOwner, dispatches)
 		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
