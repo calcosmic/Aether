@@ -1,8 +1,8 @@
 ---
 phase: 194-the-queen-decides-the-team
-fixed_at: 2026-08-26T21:02:00Z
+fixed_at: 2026-08-26T22:15:51Z
 review_path: .planning/phases/194-the-queen-decides-the-team/194-REVIEW.md
-iteration: 5
+iteration: 6
 findings_in_scope: 7
 fixed: 7
 skipped: 0
@@ -11,170 +11,194 @@ status: all_fixed
 
 # Phase 194: Code Review Fix Report
 
-**Fixed at:** 2026-08-26T21:02:00Z
+**Fixed at:** 2026-08-26T22:15:51Z
 **Source review:** `.planning/phases/194-the-queen-decides-the-team/194-REVIEW.md`
-**Iteration:** 5
+**Iteration:** 6
 
 **Summary:**
 
-- Findings in scope: 7 (5 Critical, 2 Warning)
+- Findings in scope: 7 (6 Critical, 1 Warning)
 - Fixed: 7
 - Skipped: 0
 
-In plain English: the owner-only reviewer waiver is now enforced at the final
-dispatch boundary and cannot be forged by a worker; explicit Queen team flags
-reach normal build/continue execution; trimmed workers keep their individual
-reasons; untracked sensitive files cannot bypass reviewer selection; and the
-reference documentation/tests now describe Codex's shipped behavior.
+In plain English: protected reviewer waivers can no longer be approved through a
+generic side door, dispatch stops if it cannot durably close the waiver window,
+and every decline command already shown to the owner remains usable. Explicit
+reviewer proposals now survive normalization, wrapper options cannot corrupt the
+phase sent to spawn logging, Codex recovery text uses commands Codex supports,
+and the relevance reference matches the live policy.
 
 ## Fixed Issues
 
-### CR-01: A genuine owner waiver does not remove a plan-wording reviewer from the dispatched continue team
+### CR-01: The public generic resolver bypasses the owner waiver capability
 
-**Status:** Fixed — requires human verification (dispatch-state logic)
+**Status:** Fixed — requires human verification (security/authorization logic)
 
-**Files modified:** `cmd/codex_continue.go`, `cmd/forced_reviewer_waiver_test.go`
+**Files modified:** `cmd/pending_decision.go`,
+`cmd/forced_reviewer_waiver_test.go`
 
-**Commit:** `e68b152d`
+**Commit:** `d97d4443`
 
-**Applied fix:** Reconciled the final continue dispatch list against authentic
-waivers. The waived phase-wording reviewer is removed while another live signal,
-an explicitly proposed reviewer, or a heavy-depth requirement still preserves
-that caste.
+**Applied fix:** The generic pending-decision resolver now refuses
+`forced-reviewer-waiver` rows and directs the caller to the protected
+`decision-answer` path. Generic decision listings redact the attempt identifier
+and both scalar and plural capability digests while keeping the decision ID
+observable.
 
-**Verification:** New end-to-end regression
-`TestWaiverControlsBothFinalContinueDispatchLists` failed before the change and
-passes for both in-process and external continue lanes afterward. The focused
-waiver/continue set passed 14 tests.
+**Fail-before evidence:** New end-to-end regression
+`TestGenericPendingDecisionResolverCannotWaiveForcedReviewer` failed at
+`forced_reviewer_waiver_test.go:404`: the generic command resolved the protected
+row without the displayed capability.
 
-### CR-02: Normal build and continue silently discard Queen team flags
+**Pass-after evidence:** The same regression and the focused pending-decision /
+forced-reviewer set passed (16 tests).
 
-**Status:** Fixed — requires human verification (CLI option wiring/state logic)
+### CR-02: Dispatch proceeds when persistence fails to close the waiver window
 
-**Files modified:** `cmd/codex_workflow_cmds.go`, `cmd/codex_build.go`,
-`cmd/codex_continue.go`, `cmd/codex_build_test.go`, `cmd/codex_continue_test.go`
+**Status:** Fixed — requires human verification (security/dispatch-state logic)
 
-**Commit:** `79af962e`
+**Files modified:** `cmd/forced_reviewer_waiver.go`, `cmd/spawn.go`,
+`cmd/forced_reviewer_waiver_test.go`
 
-**Applied fix:** Forwarded `--castes`, `--caste-reason`, and every
-`--caste-why` through normal build and continue execution. Normal build now
-persists the resulting caste decision, and continue's option snapshot/comparison
-includes normalized team values so a changed proposal is not mistaken for a
-repeat.
+**Commit:** `82ea2ee2`
 
-**Verification:** `TestBuildCLINormalPathForwardsQueenTeamFlags` and
-`TestContinueCLINormalPathForwardsQueenTeamFlags` failed before the fix and pass
-afterward; the focused CLI option/state set passed 7 tests.
+**Applied fix:** Closing the dispatch window now atomically persists its earliest
+durable marker and returns persistence errors. `spawn-log` closes that marker
+before recording a worker and fails closed when persistence fails; pending-row
+cleanup remains a best-effort second layer.
 
-### CR-03: Trim optional workers silently refuses every retained worker
+**Fail-before evidence:** Fault-injection regression
+`TestSpawnLogFailsClosedWhenWaiverWindowCannotPersist` failed because
+`spawn-log` succeeded even though the durable marker path could not be written.
 
-**Status:** Fixed — requires human verification (wrapper/runtime judgment flow)
+**Pass-after evidence:** The new regression plus dispatch-window closure tests
+passed (4 tests).
+
+### CR-03: Re-rendering a check-in invalidates the decline command already shown
+
+**Status:** Fixed — requires human verification (capability lifecycle logic)
+
+**Files modified:** `cmd/forced_reviewer_waiver.go`,
+`cmd/forced_reviewer_waiver_test.go`, `cmd/pending_decision.go`
+
+**Commit:** `d053f48c`
+
+**Applied fix:** Re-rendering the same phase/attempt/signal keeps one pending
+decision and appends the new capability digest instead of replacing the old one.
+Every displayed raw capability remains valid, raw capabilities are never
+persisted, and the older scalar digest remains backward compatible.
+
+**Fail-before evidence:** New regression
+`TestRepeatedCheckinRenderKeepsFirstWaiverCapabilityLive` failed because the
+second render invalidated the first displayed command.
+
+**Pass-after evidence:** The complete focused waiver set passed (16 tests).
+
+### CR-04: Valid aliased or comma-separated reviewer proposals are removed at the final continue boundary
+
+**Status:** Fixed — requires human verification (reviewer reconciliation logic)
+
+**Files modified:** `cmd/codex_continue.go`,
+`cmd/forced_reviewer_waiver_test.go`
+
+**Commit:** `f5dcd2ca`
+
+**Applied fix:** Final reconciliation now builds its proposal-preservation set
+through the same canonical normalization used by the rest of the Queen flow, so
+aliases such as `security` and comma-packed values such as
+`gatekeeper,auditor` preserve their canonical reviewers.
+
+**Fail-before evidence:** Both subtests of
+`TestWaiverReconciliationPreservesCanonicalExplicitProposal` failed because
+Gatekeeper was removed for aliased and comma-packed proposals.
+
+**Pass-after evidence:** The new table regression and related continue-waiver
+tests passed (7 tests).
+
+### CR-05: Wrapper options can prevent the dispatch window from ever closing
+
+**Status:** Fixed
 
 **Files modified:** `.claude/commands/ant-build.md`,
 `.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`,
 `cmd/queen_judgement_test.go`
 
-**Commit:** `51a1b466`
+**Commit:** `4c18e170`
 
-**Applied fix:** All three wrapper recipes now replay one
-`--caste-why "<caste>=<reason>"` for every retained/current optional caste when
-trimming or declining a reviewer. Team-level rationale remains separate.
+**Applied fix:** All three byte-identical build wrappers pass the trusted numeric
+`<phase_id>` cross-stage value to `spawn-log --phase`; raw `$ARGUMENTS`
+never reaches that command.
 
-**Verification:** New trace test
-`TestWrapperTrimReplaysReasonsForRetainedOptionalWorkers` failed six assertions
-before the fix and passed afterward; 5 related judgment tests passed, and the
-three wrapper copies compare byte-for-byte identical.
+**Fail-before evidence:** New wrapper expansion regression
+`TestBuildWrapperSpawnLogUsesTrustedPhaseID` showed options from
+`1 --verification-depth heavy` leaking into the spawn-log command.
 
-### CR-04: A worker can reopen the decline window and manufacture an owner-only waiver
+**Pass-after evidence:** The regression and related wrapper test passed (2
+tests), and `cmp` confirmed all three wrapper copies are identical.
 
-**Status:** Fixed — requires human verification (security/attempt-state logic)
-
-**Files modified:** `cmd/pending_decision.go`,
-`cmd/forced_reviewer_waiver.go`, `cmd/ceremony_team_checkin.go`,
-`cmd/handoff_decisions_cmd.go`, `cmd/codex_build.go`,
-`cmd/forced_reviewer_waiver_test.go`, `cmd/testdata/command_catalog.json`
-
-**Commits:** `a4fffdab` (runtime and adversarial tests), `6c7639a3`
-(deterministic command-catalog refresh)
-
-**Applied fix:** Bound waiver rows to the active build attempt and a random
-owner capability whose SHA-256 digest alone is persisted. Resolution now checks
-phase, exact question, authentic source, attempt, capability (constant-time),
-and the pre-dispatch window atomically. Plan-only re-entry cannot reopen a live
-attempt's decision window; terminal retries remain available.
-
-**Verification:** Adversarial regressions
-`TestWorkerCannotForceReplanToReopenReviewerDecline` and
-`TestForcedReviewerWaiverRejectsLookalikeDecisionSource` failed before the fix
-and pass afterward. The focused security suite passed 23 tests; the broader
-plan/build-attempt/decision/waiver/check-in set passed 34. The refreshed catalog
-golden passed and contains only the new `waiver-capability` flag.
-
-### CR-05: Changed-file safety misses brand-new untracked sensitive files
-
-**Status:** Fixed — requires human verification (reviewer-selection logic)
-
-**Files modified:** `cmd/queen_risk_signals.go`,
-`cmd/queen_forced_reviewer_test.go`
-
-**Commit:** `0e0561ef`
-
-**Applied fix:** The safety-only changed-file union now includes
-`git ls-files --others --exclude-standard`. The scan remains deliberately local
-to forced-reviewer selection, so it does not widen build finalization or commit
-selection.
-
-**Verification:** The strengthened untracked migration regression failed before
-the fix and passed afterward. Five related reviewer tests passed 11 subtests.
-
-### WR-01: Caste reference documents obsolete continue floors
+### CR-06: Blocked Codex output still recommends unsupported slash commands
 
 **Status:** Fixed
 
-**Files modified:** `.aether/docs/command-playbooks/caste-relevance-reference.md`,
+**Files modified:** `cmd/codex_continue.go`,
+`cmd/codex_continue_finalize.go`, `cmd/codex_visuals.go`,
+`cmd/codex_visuals_test.go`, `cmd/critics_bring_solutions_test.go`,
+`cmd/gate.go`, `cmd/gate_test.go`
+
+**Commit:** `470e8a33`
+
+**Applied fix:** Blocked and gate recovery guidance is canonicalized as native
+`aether ...` commands. Codex keeps those commands, while the existing
+translation layer renders platform-appropriate slash commands only for Claude
+and OpenCode.
+
+**Fail-before evidence:** The real Codex blocked-output regression and the
+synthetic Codex translation regression both failed because `/ant-*` guidance
+was present.
+
+**Pass-after evidence:** The broadened blocked/gate recovery set passed (29
+tests), including negative Codex assertions and positive Claude/OpenCode
+translation assertions.
+
+### WR-01: The source-of-truth relevance reference still documents deleted policies
+
+**Status:** Fixed
+
+**Files modified:**
+`.aether/docs/command-playbooks/caste-relevance-reference.md`,
 `cmd/caste_relevance_doc_test.go`
 
-**Commit:** `d111d633`
+**Commit:** `555368b5`
 
-**Applied fix:** Documented no unconditional light/standard caste and the heavy
-Gatekeeper/Auditor floor with Probe only for testable code; Watcher is explicitly
-not a continue floor. The documentation test now compares exact code-derived
-caste sets and rows for each depth, including documentation-only heavy work.
+**Applied fix:** The reference now matches live registry keywords, special
+scoring rules, required-only fallback behavior, explicit-proposal rules, build
+versus continue timing, and current implementation functions. Deleted
+production-only, light/standard floor, and automatic optional-worker policies
+are no longer described.
 
-**Verification:** `TestCasteRelevanceDoc_ContinueFloorsMatchPolicy` failed
-against the old table and passed after the update; both caste-reference tests
-passed.
+**Fail-before evidence:** Strengthened live-policy regression
+`TestCasteRelevanceDoc_RegistryAndGatedFallbackMatchPolicy` failed the Auditor
+row, Chronicler row, and three retired gated-policy claims.
 
-### WR-02: Codex visual tests assert retired slash-command guidance
-
-**Status:** Fixed
-
-**Files modified:** `cmd/codex_visuals_test.go`
-
-**Commit:** `341cd4cb`
-
-**Applied fix:** Replaced every stale `/ant-*` expectation in the Codex visual
-tests with native `aether ...` lifecycle commands. Two negative assertions were
-also updated so they continue to reject an incorrect native build/status hint
-instead of passing vacuously.
-
-**Verification:** The 11 scoped tests failed 11/11 before the update and passed
-11/11 afterward; the expanded set including the two strengthened negative
-assertions passed 13/13. No `/ant-*` expectation remains in the file.
+**Pass-after evidence:** All four `TestCasteRelevanceDoc_*` tests passed.
 
 ## Verification Summary
 
 - Finding-specific fail-before/pass-after regressions: all 7 findings covered.
+- Combined focused Phase 194 regression command: 20 tests passed in `cmd`.
 - `go vet ./...`: pass.
 - `go build ./cmd/aether`: pass.
-- `go test ./... -count=1 -timeout 900s -p 1`: 7,183 tests passed across all
-  20 packages; no exclusions.
-- An earlier default-timeout full run hit the `cmd` package's 10-minute default
-  and reproduced the already documented unrelated
-  `TestAvailabilityProbeRetriesOnlyTimeouts` load-sensitive failure. That test
-  passed 3/3 isolated reruns (12 subtests). The final full run used the standard
-  900-second timeout documented in `.planning/codebase/TESTING.md`; `-p 1`
-  removed cross-package load contention without omitting any package or test.
+- `go test ./... -count=1 -timeout 900s -p 1` in the mandated
+  `/tmp/sv-194-reviewfix-*` isolated worktree: 7,194 passed, 1 failed, 11
+  skipped across all 20 packages. The sole failure was
+  `pkg/storage.TestResolveAetherRoot_GitFallback`: macOS resolved the worktree
+  as `/private/tmp/...` while the assertion compared it with the equivalent
+  `/tmp/...` spelling. No Phase 194 code was implicated.
+- `go test ./pkg/storage -run '^TestResolveAetherRoot_GitFallback$' -count=1`
+  from the canonical `/Users/callumcowie/repos/Aether` path: pass (1 test).
+- Canonical-path `go test ./... -count=1 -timeout 900s -p 1` rerun after the
+  seven fix commits were fast-forwarded: pass — 7,195 tests passed across all
+  20 packages, with no packages or tests omitted.
 
 ## Skipped Issues
 
@@ -182,6 +206,6 @@ None.
 
 ---
 
-_Fixed: 2026-08-26T21:02:00Z_
+_Fixed: 2026-08-26T22:15:51Z_
 _Fixer: the agent (gsd-code-fixer)_
-_Iteration: 5_
+_Iteration: 6_
