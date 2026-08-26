@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -261,6 +262,53 @@ func TestQueenChoiceReachesTheDispatchList(t *testing.T) {
 	// not the build boundary (ruling D11 rule 4: a phase is verified once).
 	if spawned["watcher"] {
 		t.Errorf("watcher must not spawn at the build boundary without an explicit Queen proposal; castes = %v", casteKeys(spawned))
+	}
+}
+
+func TestWrapperTrimReplaysReasonsForRetainedOptionalWorkers(t *testing.T) {
+	phase := judgementPhase(
+		"Slow dashboard under load",
+		"Measure latency and exercise failure handling with many rows",
+		colony.PhaseModePrototype,
+	)
+	initialReasons := map[string]string{
+		"measurer": "compare latency before and after the dashboard change",
+		"chaos":    "exercise failure handling with a large result set",
+	}
+	initial := queenApplyJudgement(
+		[]string{"measurer", "chaos"}, "inspect speed and resilience", phase, "build", colony.ColonyState{}, initialReasons,
+	)
+	if !hasCasteName(initial.Final, "measurer") || !hasCasteName(initial.Final, "chaos") {
+		t.Fatalf("fixture did not retain both optional workers: %+v", initial)
+	}
+
+	trimmed := queenApplyJudgement(
+		[]string{"measurer"}, "owner check-in trim", phase, "build", colony.ColonyState{},
+		map[string]string{"measurer": initial.Reasons["measurer"]},
+	)
+	if !hasCasteName(trimmed.Final, "measurer") {
+		t.Fatalf("replaying result.reasons must retain the selected optional worker: %+v", trimmed)
+	}
+	if hasCasteName(trimmed.Final, "chaos") {
+		t.Fatalf("trimmed optional worker unexpectedly survived: %+v", trimmed)
+	}
+
+	for _, path := range []string{
+		"../.claude/commands/ant/build.md",
+		"../.claude/commands/ant-build.md",
+		"../.opencode/commands/ant/build.md",
+	} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(raw)
+		if !strings.Contains(text, `--caste-why "<caste>=<result.reasons[caste]>"`) {
+			t.Errorf("%s trim recipe does not replay a --caste-why from result.reasons", path)
+		}
+		if !strings.Contains(text, "On decline: re-fetch with the unchanged current optional-caste proposal and replay") {
+			t.Errorf("%s decline recipe does not preserve the current proposal and reasons", path)
+		}
 	}
 }
 
