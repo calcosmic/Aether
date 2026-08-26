@@ -312,6 +312,50 @@ func TestWrapperTrimReplaysReasonsForRetainedOptionalWorkers(t *testing.T) {
 	}
 }
 
+// TestBuildWrapperSpawnLogUsesTrustedPhaseID is CR-05's wrapper contract.
+// A valid build invocation may carry options in $ARGUMENTS; spawn-log must
+// receive only the numeric phase parsed into cross-stage state.
+func TestBuildWrapperSpawnLogUsesTrustedPhaseID(t *testing.T) {
+	const arguments = "1 --verification-depth heavy"
+	const phaseID = "1"
+	for _, path := range []string{
+		"../.claude/commands/ant/build.md",
+		"../.claude/commands/ant-build.md",
+		"../.opencode/commands/ant/build.md",
+	} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		var invocation string
+		for _, line := range strings.Split(string(raw), "\n") {
+			if !strings.Contains(line, "aether spawn-log") {
+				continue
+			}
+			start := strings.Index(line, "`")
+			end := strings.Index(line[start+1:], "`")
+			if start >= 0 && end >= 0 {
+				invocation = line[start+1 : start+1+end]
+				break
+			}
+		}
+		if invocation == "" {
+			t.Fatalf("%s has no spawn-log command", path)
+		}
+		expanded := strings.ReplaceAll(invocation, "<phase_id>", phaseID)
+		expanded = strings.ReplaceAll(expanded, "$ARGUMENTS", arguments)
+		if !strings.HasSuffix(expanded, "--phase "+phaseID) {
+			t.Fatalf("%s leaked build options into spawn-log: %q", path, expanded)
+		}
+		if strings.Count(expanded, "--phase") != 1 {
+			t.Fatalf("%s spawn-log command must contain exactly one phase flag: %q", path, expanded)
+		}
+		if strings.Contains(expanded, "--verification-depth") {
+			t.Fatalf("%s forwarded non-phase build arguments into spawn-log: %q", path, expanded)
+		}
+	}
+}
+
 // TestDepthPolicyStillAppliesWithoutAQueenChoice keeps the exemption narrow.
 // Measurer and Chaos remain off by default at ordinary depth — the Queen's
 // explicit request is the only thing that overrides the policy, not the mere
