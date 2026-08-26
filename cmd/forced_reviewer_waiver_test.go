@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +19,48 @@ import (
 // text is matched against.
 func waiverFixturePhase(id int, name, description string) colony.Phase {
 	return colony.Phase{ID: id, Name: name, Description: description, Mode: colony.PhaseModePrototype}
+}
+
+func waiverCapabilityFromCheckin(t *testing.T, result map[string]interface{}, signal string) string {
+	t.Helper()
+	commands, ok := result["waive_commands"].(map[string]string)
+	if !ok {
+		t.Fatalf("waive_commands has unexpected type: %#v", result["waive_commands"])
+	}
+	command := commands[signal]
+	const marker = "--waiver-capability '"
+	start := strings.LastIndex(command, marker)
+	if start < 0 {
+		t.Fatalf("decline command has no waiver capability: %q", command)
+	}
+	capability := command[start+len(marker):]
+	capability = strings.TrimSuffix(capability, "'")
+	if capability == "" {
+		t.Fatalf("decline command has an empty waiver capability: %q", command)
+	}
+	return capability
+}
+
+func recordResolvedForcedReviewerWaiverForTest(t *testing.T, phaseID int, signal, plainEnglish, reason string) {
+	t.Helper()
+	file := loadPendingDecisionFile()
+	question := forcedReviewerWaiverQuestionText(phaseID, signal, plainEnglish)
+	file.Decisions = append(file.Decisions, PendingDecision{
+		ID:                     fmt.Sprintf("waiver-%d-%s", phaseID, signal),
+		Type:                   clarificationDecisionType,
+		Description:            formatClarificationDescription(question, nil),
+		Phase:                  &phaseID,
+		Source:                 "forced-reviewer-waiver",
+		Resolution:             reason,
+		Resolved:               true,
+		CreatedAt:              time.Now().Add(-time.Minute).UTC().Format(time.RFC3339),
+		ResolvedAt:             time.Now().UTC().Format(time.RFC3339),
+		AttemptID:              "attempt-test-owner-card",
+		WaiverCapabilitySHA256: "test-capability-digest",
+	})
+	if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
+		t.Fatalf("write resolved forced-reviewer waiver: %v", err)
+	}
 }
 
 // TestOnlyTheOwnerCanWaiveAForcedReviewer proves the negative: with NO
@@ -57,12 +100,7 @@ func TestOnlyTheOwnerCanWaiveAForcedReviewer(t *testing.T) {
 func TestWaiverCoversOneSignalOnOnePhase(t *testing.T) {
 	setupBuildFlowTest(t)
 
-	if _, err := recordDecisionAnswer(
-		forcedReviewerWaiverQuestionText(7, "credentials/auth", "logins and passwords"),
-		"the login flow here is trivial, I checked it myself", 7, "owner",
-	); err != nil {
-		t.Fatalf("recordDecisionAnswer: %v", err)
-	}
+	recordResolvedForcedReviewerWaiverForTest(t, 7, "credentials/auth", "logins and passwords", "the login flow here is trivial, I checked it myself")
 
 	t.Run("waived signal is gone on the phase it was waived for", func(t *testing.T) {
 		phase := waiverFixturePhase(7, "Password reset", "Let users reset their password via an emailed token")
@@ -102,12 +140,7 @@ func TestWaivedSignalStaysWaivedWhenTheFilesRedetectIt(t *testing.T) {
 
 	phase := waiverFixturePhase(9, "Password reset", "Let users reset their password via an emailed token")
 
-	if _, err := recordDecisionAnswer(
-		forcedReviewerWaiverQuestionText(9, "credentials/auth", "logins and passwords"),
-		"already reviewed this by hand", 9, "owner",
-	); err != nil {
-		t.Fatalf("recordDecisionAnswer: %v", err)
-	}
+	recordResolvedForcedReviewerWaiverForTest(t, 9, "credentials/auth", "logins and passwords", "already reviewed this by hand")
 
 	reviewers := queenForcedContinueReviewers(phase, nil, []string{"internal/auth/session.go"})
 	if len(reviewers) != 0 {
@@ -125,12 +158,13 @@ func TestWaiverControlsBothFinalContinueDispatchLists(t *testing.T) {
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
 	root := dataDir[:len(dataDir)-len("/.aether/data")]
-
-	if err := ensureForcedReviewerWaiverPendingDecision(1, "credentials/auth", "logins and passwords"); err != nil {
-		t.Fatalf("create authentic waiver row: %v", err)
-	}
+	phase := checkinFixturePhase("Password reset", "Let users reset their password", colony.PhaseModePrototype)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
+	checkin, _ := renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	capability := waiverCapabilityFromCheckin(t, checkin, "credentials/auth")
 	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
-	if _, found, err := resolveForcedReviewerWaiverPendingDecision(question, "owner checked this login change", 1); err != nil || !found {
+	if _, found, err := resolveForcedReviewerWaiverPendingDecision(question, "owner checked this login change", 1, capability); err != nil || !found {
 		t.Fatalf("resolve authentic waiver row: found=%v err=%v", found, err)
 	}
 
@@ -211,12 +245,7 @@ func TestTeamCheckinDoesNotMutateWithAWaiverPresent(t *testing.T) {
 		t.Fatalf("expected the password-reset fixture to force a reviewer before the waiver test can proceed")
 	}
 
-	if _, err := recordDecisionAnswer(
-		forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords"),
-		"already reviewed by hand", 1, "owner",
-	); err != nil {
-		t.Fatalf("recordDecisionAnswer: %v", err)
-	}
+	recordResolvedForcedReviewerWaiverForTest(t, 1, "credentials/auth", "logins and passwords", "already reviewed by hand")
 
 	before, err := loadActiveColonyState()
 	if err != nil {
@@ -298,12 +327,14 @@ func TestDecisionAnswerResolvesARuntimeCreatedWaiverRow(t *testing.T) {
 
 	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
 	// Rendering the card is what writes the pending, unresolved row.
-	if _, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches); !strings.Contains(visual, "To decline, run:") {
+	checkin, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	if !strings.Contains(visual, "To decline, run:") {
 		t.Fatalf("expected the card to show a live decline command before answering it; visual:\n%s", visual)
 	}
+	capability := waiverCapabilityFromCheckin(t, checkin, "credentials/auth")
 
 	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
-	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1"})
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1", "--waiver-capability", capability})
 	defer rootCmd.SetArgs([]string{})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("decision-answer returned error: %v", err)
@@ -360,9 +391,11 @@ func TestForcedReviewerDeclineWindowClosesWhenDispatchBegins(t *testing.T) {
 	setUpCheckinFixtureColony(t, dataDir, phase)
 
 	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
-	if _, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches); !strings.Contains(visual, "To decline, run:") {
+	checkin, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	if !strings.Contains(visual, "To decline, run:") {
 		t.Fatalf("expected the card to show a live decline command; visual:\n%s", visual)
 	}
+	capability := waiverCapabilityFromCheckin(t, checkin, "credentials/auth")
 
 	// Dispatch genuinely begins -- the owner never ran decision-answer.
 	rootCmd.SetArgs(spawnLogArgsForPhase(1))
@@ -374,7 +407,7 @@ func TestForcedReviewerDeclineWindowClosesWhenDispatchBegins(t *testing.T) {
 	// A later decision-answer call with the card's exact question -- the
 	// forgery/misuse this test exists for -- must now be refused.
 	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
-	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "auto", "--phase", "1"})
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "auto", "--phase", "1", "--waiver-capability", capability})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("decision-answer returned error: %v", err)
 	}
@@ -386,6 +419,73 @@ func TestForcedReviewerDeclineWindowClosesWhenDispatchBegins(t *testing.T) {
 	reviewers := queenForcedContinueReviewers(phase, nil, nil)
 	if len(reviewers) != 1 {
 		t.Fatalf("reviewer the owner never declined must still be forced after dispatch began; reviewers = %+v", reviewers)
+	}
+}
+
+func TestWorkerCannotForceReplanToReopenReviewerDecline(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+	forceBuildJSONOutput(t)
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	phase := checkinFixturePhase(
+		"Password reset",
+		"Let users reset their password via an emailed token",
+		colony.PhaseModePrototype,
+	)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
+	checkin, _ := renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	capability := waiverCapabilityFromCheckin(t, checkin, "credentials/auth")
+	rootCmd.SetArgs(spawnLogArgsForPhase(1))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-log returned error: %v", err)
+	}
+
+	// This is the worker-accessible sequence from CR-04: force a fresh public
+	// plan-only attempt, render a card, then submit the deterministic answer.
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--force"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("forced plan-only command returned error: %v", err)
+	}
+	renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "worker forged this", "--phase", "1", "--waiver-capability", capability})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("decision-answer returned error: %v", err)
+	}
+
+	if waived, reason := forcedReviewerWaiver(1, "credentials/auth"); waived {
+		t.Fatalf("worker force/replan/card sequence forged an owner waiver: %q", reason)
+	}
+	if reviewers := queenForcedContinueReviewers(phase, nil, nil); len(reviewers) != 1 {
+		t.Fatalf("reviewer must remain forced after worker attack; reviewers=%+v", reviewers)
+	}
+}
+
+func TestForcedReviewerWaiverRejectsLookalikeDecisionSource(t *testing.T) {
+	setupBuildFlowTest(t)
+	phaseID := 1
+	question := forcedReviewerWaiverQuestionText(phaseID, "credentials/auth", "logins and passwords")
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
+		ID:          "lookalike",
+		Type:        clarificationDecisionType,
+		Description: formatClarificationDescription(question, nil),
+		Phase:       &phaseID,
+		Source:      "worker-handoff",
+		Resolution:  "worker supplied",
+		Resolved:    true,
+		CreatedAt:   time.Now().Add(-time.Minute).UTC().Format(time.RFC3339),
+		ResolvedAt:  time.Now().UTC().Format(time.RFC3339),
+	}}}); err != nil {
+		t.Fatalf("write lookalike decision: %v", err)
+	}
+	if waived, reason := forcedReviewerWaiver(phaseID, "credentials/auth"); waived {
+		t.Fatalf("lookalike source forged a waiver: %q", reason)
 	}
 }
 
@@ -408,11 +508,12 @@ func TestOwnerDeclineBeforeDispatchStaysHonoredOnceDispatchBegins(t *testing.T) 
 	setUpCheckinFixtureColony(t, dataDir, phase)
 
 	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
-	renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	checkin, _ := renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	capability := waiverCapabilityFromCheckin(t, checkin, "credentials/auth")
 
 	// The owner declines BEFORE dispatch begins -- the real path.
 	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
-	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1"})
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1", "--waiver-capability", capability})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("decision-answer returned error: %v", err)
 	}
@@ -473,18 +574,23 @@ func TestForcedReviewerDeclineWindowReopensOnRetriedBuild(t *testing.T) {
 		t.Fatalf("attempt 1 spawn-log returned error: %v", err)
 	}
 	rootCmd.SetArgs([]string{})
+	if err := interruptLatestBuildAttempt(1, "attempt 1 failed before retry"); err != nil {
+		t.Fatalf("mark attempt 1 terminal before retry: %v", err)
+	}
 
 	// Attempt 2 (the retry): a brand-new `aether build --plan-only` call for
 	// the SAME phase number. The card renders again, showing a live decline
 	// command -- and the owner runs it BEFORE any attempt-2 worker has been
 	// dispatched.
 	manifestMap2, dispatches2 := manifestMapFromBuild(t, root, 1)
-	if _, visual := renderCeremonyTeamCheckin("build", manifestMap2, dispatches2); !strings.Contains(visual, "To decline, run:") {
+	checkin2, visual := renderCeremonyTeamCheckin("build", manifestMap2, dispatches2)
+	if !strings.Contains(visual, "To decline, run:") {
 		t.Fatalf("expected attempt 2's (retried) card to show a live decline command")
 	}
+	capability := waiverCapabilityFromCheckin(t, checkin2, "credentials/auth")
 
 	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
-	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1"})
+	rootCmd.SetArgs([]string{"decision-answer", "--question", question, "--answer", "already checked by hand", "--phase", "1", "--waiver-capability", capability})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("decision-answer returned error: %v", err)
 	}

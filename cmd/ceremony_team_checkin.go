@@ -140,8 +140,8 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	// shown as declined, with the owner's own recorded reason, never
 	// silently dropped from the card.
 	waiveCommands := map[string]string{}
+	attemptID := strings.TrimSpace(stringValue(manifest["attempt_id"]))
 	for _, hit := range liveForcedHits {
-		waiveCommands[hit.Signal.Name] = forcedReviewerWaiverCommand(phaseID, hit.Signal.Name, hit.Signal.PlainEnglish)
 		// CR-01 (194-REVIEW.md): record the runtime's OWN pending row for
 		// this exact question the moment it renders a live forced reviewer
 		// -- this is what lets decisionAnswerCmd (cmd/handoff_decisions_cmd.go)
@@ -149,7 +149,10 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 		// matching row. Best-effort/non-blocking: a write failure here must
 		// never break the (otherwise read-only) card render; the owner
 		// simply cannot waive until a later render succeeds.
-		_ = ensureForcedReviewerWaiverPendingDecision(phaseID, hit.Signal.Name, hit.Signal.PlainEnglish)
+		capability, err := ensureForcedReviewerWaiverPendingDecision(phaseID, hit.Signal.Name, hit.Signal.PlainEnglish, attemptID)
+		if err == nil && capability != "" {
+			waiveCommands[hit.Signal.Name] = forcedReviewerWaiverCommand(phaseID, hit.Signal.Name, hit.Signal.PlainEnglish, capability)
+		}
 	}
 	waived := map[string]interface{}{}
 	for _, hit := range waivedForcedHits {

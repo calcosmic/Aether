@@ -322,6 +322,13 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if activePriorAttempt {
+		// Once any worker has been dispatched, a public plan-only re-entry must
+		// not supersede the attempt or reopen its owner-only reviewer-decline
+		// channel. A legitimate retry first reaches a terminal attempt state;
+		// only then may the next check-in create a fresh capability.
+		if _, dispatchStarted := phaseDispatchStartedAt(phaseNum); dispatchStarted {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d already has workers in flight for build attempt %s; finalize or fail that attempt before requesting a fresh plan", phaseNum, priorAttempt.ID)
+		}
 		// A dangling plan-only attempt still awaiting external workers holds
 		// no worker output, and the wrapper needs a fresh manifest anyway. Let
 		// re-entry supersede it automatically instead of demanding --force;

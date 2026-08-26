@@ -1,6 +1,11 @@
 package cmd
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -260,11 +265,11 @@ func forcedReviewerWaiverQuestionText(phaseID int, signal string, plainEnglish s
 // placeholder the owner replaces with their own reason -- D-03 requires the
 // reason be written down, and this module never writes one on the owner's
 // behalf.
-func forcedReviewerWaiverCommand(phaseID int, signal string, plainEnglish string) string {
+func forcedReviewerWaiverCommand(phaseID int, signal string, plainEnglish string, capability string) string {
 	question := forcedReviewerWaiverQuestionText(phaseID, signal, plainEnglish)
 	return fmt.Sprintf(
-		"aether decision-answer --question %s --answer '<say why here>' --phase %d",
-		shellQuote(question), phaseID,
+		"aether decision-answer --question %s --answer '<say why here>' --phase %d --waiver-capability %s",
+		shellQuote(question), phaseID, shellQuote(capability),
 	)
 }
 
@@ -308,6 +313,10 @@ func forcedReviewerWaiver(phaseID int, signal string) (waived bool, reason strin
 	file := loadPendingDecisionFile()
 	for _, decision := range file.Decisions {
 		if !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
+			continue
+		}
+		if decision.Source != "forced-reviewer-waiver" || decision.Phase == nil || *decision.Phase != phaseID ||
+			strings.TrimSpace(decision.AttemptID) == "" || strings.TrimSpace(decision.WaiverCapabilitySHA256) == "" {
 			continue
 		}
 		question, _ := parseClarificationDescription(decision.Description)
@@ -360,39 +369,75 @@ func applyForcedReviewerWaivers(phaseID int, hits []riskSignalHit) (kept []riskS
 // OR already resolved) is a no-op: the card can render many times over a
 // session, and this must stay idempotent rather than piling up duplicate
 // rows on every render.
-func ensureForcedReviewerWaiverPendingDecision(phaseID int, signalName, plainEnglish string) error {
+func newForcedReviewerWaiverCapability() (string, string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", "", err
+	}
+	capability := base64.RawURLEncoding.EncodeToString(raw)
+	digest := sha256.Sum256([]byte(capability))
+	return capability, hex.EncodeToString(digest[:]), nil
+}
+
+func ensureForcedReviewerWaiverPendingDecision(phaseID int, signalName, plainEnglish, attemptID string) (string, error) {
 	if store == nil {
-		return nil
+		return "", nil
+	}
+	attemptID = strings.TrimSpace(attemptID)
+	_, latest, ok := loadLatestBuildAttempt(phaseID)
+	if phaseID <= 0 || attemptID == "" || !ok || latest.ID != attemptID || !buildAttemptStatusActive(latest.Status) {
+		return "", nil
+	}
+	if _, started := phaseDispatchStartedAt(phaseID); started {
+		return "", nil
 	}
 	question := forcedReviewerWaiverQuestionText(phaseID, signalName, plainEnglish)
 	target := normalizeDecisionText(question)
 	if target == "" {
-		return nil
+		return "", nil
 	}
 
 	file := loadPendingDecisionFile()
-	for _, d := range file.Decisions {
+	matching := -1
+	for i, d := range file.Decisions {
 		q, _ := parseClarificationDescription(d.Description)
 		if normalizeDecisionText(q) == target || normalizeDecisionText(d.Description) == target {
-			return nil // already exists (pending or resolved) -- nothing to do
+			if d.Resolved && d.Source == "forced-reviewer-waiver" {
+				return "", nil
+			}
+			matching = i
+			break
 		}
+	}
+	capability, capabilityHash, err := newForcedReviewerWaiverCapability()
+	if err != nil {
+		return "", err
 	}
 
 	decision := PendingDecision{
-		ID:          fmt.Sprintf("pd_%d", time.Now().UnixNano()),
-		Type:        clarificationDecisionType,
-		Description: formatClarificationDescription(question, nil),
-		Source:      "forced-reviewer-waiver",
-		Resolved:    false,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		ID:                     fmt.Sprintf("pd_%d", time.Now().UnixNano()),
+		Type:                   clarificationDecisionType,
+		Description:            formatClarificationDescription(question, nil),
+		Source:                 "forced-reviewer-waiver",
+		Resolved:               false,
+		CreatedAt:              time.Now().UTC().Format(time.RFC3339),
+		AttemptID:              attemptID,
+		WaiverCapabilitySHA256: capabilityHash,
 	}
 	if phaseID > 0 {
 		decision.Phase = &phaseID
 	}
 	stampPendingDecisionScope(&decision, loadCurrentPendingDecisionScope())
 
-	file.Decisions = append(file.Decisions, decision)
-	return store.SaveJSON(pendingDecisionsFile, file)
+	if matching >= 0 {
+		file.Decisions[matching] = decision
+	} else {
+		file.Decisions = append(file.Decisions, decision)
+	}
+	if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
+		return "", err
+	}
+	return capability, nil
 }
 
 // forcedReviewerWaiverPhasePrefix parses the phase number
@@ -443,12 +488,16 @@ func forcedReviewerWaiverSignalForQuestion(question string) (phaseID int, signal
 // if no matching unresolved row exists, the waiver did not originate from
 // something the runtime actually showed anyone, and is refused. found is
 // false in that case; no file write happens.
-func resolveForcedReviewerWaiverPendingDecision(question, answer string, phaseID int) (decision PendingDecision, found bool, err error) {
+func resolveForcedReviewerWaiverPendingDecision(question, answer string, phaseID int, capability string) (decision PendingDecision, found bool, err error) {
 	if store == nil {
 		return PendingDecision{}, false, nil
 	}
 	target := normalizeDecisionText(question)
 	if target == "" {
+		return PendingDecision{}, false, nil
+	}
+	capability = strings.TrimSpace(capability)
+	if capability == "" {
 		return PendingDecision{}, false, nil
 	}
 	// CR-01 residual (194-REVIEW.md iteration 2): once dispatch has begun for
@@ -462,30 +511,51 @@ func resolveForcedReviewerWaiverPendingDecision(question, answer string, phaseID
 			return PendingDecision{}, false, nil
 		}
 	}
-
-	var file PendingDecisionFile
-	if loadErr := store.LoadJSON(pendingDecisionsFile, &file); loadErr != nil {
+	_, activeAttempt, ok := loadLatestBuildAttempt(phaseID)
+	if !ok || !buildAttemptStatusActive(activeAttempt.Status) {
 		return PendingDecision{}, false, nil
 	}
-	for i := range file.Decisions {
-		d := &file.Decisions[i]
-		if d.Resolved {
-			continue
+	providedHash := sha256.Sum256([]byte(capability))
+	providedHashHex := hex.EncodeToString(providedHash[:])
+
+	var file PendingDecisionFile
+	var resolved PendingDecision
+	found = false
+	if err := store.UpdateJSONAtomically(pendingDecisionsFile, &file, func() error {
+		// Recheck the dispatch window inside the pending-file transaction. The
+		// capability is single use, and a concurrent spawn-log must win over a
+		// late decline rather than leaving a resolvable row behind.
+		if _, started := phaseDispatchStartedAt(phaseID); started {
+			return nil
 		}
-		if phaseID > 0 && (d.Phase == nil || *d.Phase != phaseID) {
-			continue
+		for i := range file.Decisions {
+			d := &file.Decisions[i]
+			if d.Resolved {
+				continue
+			}
+			if d.Source != "forced-reviewer-waiver" || d.AttemptID != activeAttempt.ID {
+				continue
+			}
+			if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(d.WaiverCapabilitySHA256)), []byte(providedHashHex)) != 1 {
+				continue
+			}
+			if d.Phase == nil || *d.Phase != phaseID {
+				continue
+			}
+			q, _ := parseClarificationDescription(d.Description)
+			if normalizeDecisionText(q) != target && normalizeDecisionText(d.Description) != target {
+				continue
+			}
+			d.Resolved = true
+			d.Resolution = answer
+			d.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+			resolved = *d
+			found = true
+			break
 		}
-		q, _ := parseClarificationDescription(d.Description)
-		if normalizeDecisionText(q) != target && normalizeDecisionText(d.Description) != target {
-			continue
-		}
-		d.Resolved = true
-		d.Resolution = answer
-		d.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
-		if saveErr := store.SaveJSON(pendingDecisionsFile, file); saveErr != nil {
-			return PendingDecision{}, false, saveErr
-		}
-		return *d, true, nil
+		return nil
+	}); err != nil {
+		return PendingDecision{}, false, err
 	}
-	return PendingDecision{}, false, nil
+	return resolved, found, nil
 }

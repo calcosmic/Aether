@@ -20,6 +20,11 @@ type PendingDecision struct {
 	Resolved    bool   `json:"resolved"`
 	CreatedAt   string `json:"created_at"`
 	ResolvedAt  string `json:"resolved_at,omitempty"`
+	// AttemptID and WaiverCapabilitySHA256 bind an owner-only forced-reviewer
+	// decline to the exact build attempt whose check-in card created it. The
+	// raw single-use capability is shown only on that card and is never stored.
+	AttemptID              string `json:"attempt_id,omitempty"`
+	WaiverCapabilitySHA256 string `json:"waiver_capability_sha256,omitempty"`
 	// HardConstraint marks a clarification whose answer must become a
 	// REDIRECT signal (a hard "never do this"). Typed per the
 	// prose-to-control-flow decision — the legacy ":hard" source suffix is

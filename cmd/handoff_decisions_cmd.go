@@ -181,6 +181,7 @@ var decisionAnswerCmd = &cobra.Command{
 		}
 		phase, _ := cmd.Flags().GetInt("phase")
 		source, _ := cmd.Flags().GetString("source")
+		waiverCapability, _ := cmd.Flags().GetString("waiver-capability")
 
 		// CR-01 (194-REVIEW.md): a --question shaped like a forced-reviewer
 		// decline (forcedReviewerWaiverQuestionText) may ONLY resolve a
@@ -198,7 +199,7 @@ var decisionAnswerCmd = &cobra.Command{
 		// question text itself, not the --phase flag, so a forger cannot
 		// dodge the check by passing a mismatched or absent --phase.
 		if waiverPhase, _, isWaiver := forcedReviewerWaiverSignalForQuestion(question); isWaiver {
-			resolved, found, err := resolveForcedReviewerWaiverPendingDecision(question, answer, waiverPhase)
+			resolved, found, err := resolveForcedReviewerWaiverPendingDecision(question, answer, waiverPhase, waiverCapability)
 			if err != nil {
 				outputError(2, err.Error(), nil)
 				return nil
@@ -239,6 +240,7 @@ func init() {
 	decisionAnswerCmd.Flags().String("answer", "", "The owner's answer (required)")
 	decisionAnswerCmd.Flags().Int("phase", 0, "Phase the decision belongs to")
 	decisionAnswerCmd.Flags().String("source", "worker-handoff", "Where the question came from")
+	decisionAnswerCmd.Flags().String("waiver-capability", "", "Single-use capability from the owner-facing reviewer decline card")
 
 	rootCmd.AddCommand(handoffDecisionsCmd)
 	rootCmd.AddCommand(decisionAnswerCmd)
