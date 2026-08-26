@@ -1,6 +1,6 @@
 ---
 phase: 194-the-queen-decides-the-team
-reviewed: 2026-08-26T19:55:08Z
+reviewed: 2026-08-26T21:33:08Z
 depth: standard
 files_reviewed: 56
 files_reviewed_list:
@@ -61,8 +61,8 @@ files_reviewed_list:
   - cmd/testdata/golden_continue.txt
   - cmd/testdata/golden_plan.txt
 findings:
-  critical: 5
-  warning: 2
+  critical: 6
+  warning: 1
   info: 0
   total: 7
 status: issues_found
@@ -70,126 +70,146 @@ status: issues_found
 
 # Phase 194: Code Review Report
 
-**Reviewed:** 2026-08-26T19:55:08Z
+**Reviewed:** 2026-08-26T21:33:08Z
 **Depth:** standard
 **Files Reviewed:** 56
 **Status:** issues_found
 
 ## Summary
 
-The retry fix in `bff1ce8a` closes the previously reported stale-window defect on the intended interactive retry path: a fresh plan-only build now clears the phase's old dispatch marker before starting the new attempt, while an already resolved phase/signal waiver remains durable. That specific Critical is closed.
+The post-fix implementation is not ready to ship. The normal build/continue CLI options, retained-wrapper reasons, untracked-file detector, and continue-floor table now work on their covered paths, but six blocker-level defects remain around the real dispatch and waiver boundaries and the Codex blocked-flow UI. The reference document also still describes several policies that Phase 194 deleted.
 
-The current implementation is still not shippable. Five independently traceable correctness/security defects remain: a recorded waiver does not actually remove a plan-wording reviewer from the real continue team; normal CLI execution discards the Queen's explicit team flags; the wrapper's trim flow loses the reasons required to retain the selected workers; the retry reset can be driven by a worker to forge an owner-only decision; and the supposedly independent changed-file detector misses untracked sensitive files. The authoritative relevance reference and eleven Codex visual assertions are also stale.
+For dummies: the new safety locks exist, but there are still side doors around them. A generic command can approve a protected waiver without its secret token, some valid team choices disappear at the last step, and Codex can tell a blocked user to run commands Codex does not support.
 
-For dummies: the retry button now resets the old lock correctly, but several wires after that button are connected to the wrong places. The UI can say a reviewer was declined or a worker was kept while the runtime does the opposite, and a newly created sensitive file can still slip past the safety check.
+Targeted Phase 194 tests passed (13 tests), and `go vet ./cmd` passed. The repository-wide run reached 6,533 passes with 8 skips, but the `cmd` package exceeded Go's 10-minute package timeout; this timeout is not counted as a finding because the scoped Phase 194 tests completed cleanly and performance is outside this review's scope.
 
 ## Narrative Findings (AI reviewer)
 
-## Critical Issues
+### Critical Issues
 
-### CR-01 [BLOCKER]: A genuine owner waiver does not remove a plan-wording reviewer from the dispatched continue team
+#### CR-01: The public generic resolver bypasses the owner waiver capability
 
-**Files:** `cmd/queen_spawn_budget.go:121-140`; `cmd/caste_relevance.go:218-257`; `cmd/codex_continue.go:1257-1278,1300-1321`; `cmd/queen_risk_signals.go:488-508`
+**Classification:** BLOCKER  
+**Severity:** Critical  
+**Files:** `cmd/forced_reviewer_waiver.go:481-560`; `cmd/pending_decision.go:101-152,157-214`; `cmd/testdata/command_catalog.json:4959-5010`
 
-**Issue:** The waiver is applied only in `queenForcedContinueReviewers`, but the no-proposal continue path has already inserted every unwaived *phase-wording* reviewer through `queenRequiredCastesForBudget -> queenForcedReviewersForPhase -> queenFallbackTeam`. `unionForcedContinueReviewers` is append/overwrite-only: when the waiver-filtered reviewer list is empty, it returns those existing dispatches unchanged. Therefore the check-in card can promise that Gatekeeper or Auditor “will NOT run,” persist a valid owner waiver, and still dispatch that caste during continue. The current waiver tests stop at the filtering helper and do not assert the final dispatch list.
+**Issue:** `resolveForcedReviewerWaiverPendingDecision` is documented as the only resolver for a forced-reviewer row and correctly validates the active attempt, phase, source, capability hash, and dispatch window. However, the separately registered public commands expose every active row (including its ID) through `pending-decision-list`, then let `pending-decision-resolve --id ... --resolution ...` mark that row resolved without any capability, source, attempt, or dispatch-window check. That generic resolver preserves the authentic row's source, attempt ID, phase, and capability hash, so `forcedReviewerWaiver` accepts it as an owner decline. Any process able to invoke `aether` can therefore bypass the security control before dispatch.
 
-**Fix:** Make the waiver-filtered reviewer set authoritative at the dispatch boundary. One safe shape is to remove named-risk reviewers from `queenRequiredCastesForBudget` and add them only through `unionForcedContinueReviewers`; alternatively reconcile signal-derived entries before returning rather than only unioning them. Preserve a reviewer independently required by heavy depth or explicitly proposed by the Queen.
-
-```go
-// Derive once, after waivers, at the actual continue boundary.
-reviewers := queenForcedContinueReviewers(phase, forced, changedFiles)
-dispatches = reconcileForcedReviewers(dispatches, reviewers, phase, reviewDepth)
-```
-
-Add an integration test that records a real waiver and asserts both continue lanes' final dispatches omit only that signal's reviewer, including the case where a second live signal still requires the same caste.
-
-### CR-02 [BLOCKER]: Normal `build` and `continue` silently discard `--castes`, `--caste-reason`, and `--caste-why`
-
-**Files:** `cmd/codex_workflow_cmds.go:126-138,158-167,184-192,237-261,271-280`; `cmd/codex_continue.go:143-184,243-290`
-
-**Issue:** Both commands parse all three Queen-team flags and forward them in the `--plan-only` branch, but omit them from the options passed to the normal execution branch. This breaks the explicit owner/Queen control surface on the direct Codex lifecycle path and contradicts the Phase 194 requirement that `--castes` keep working on build and continue, including the fast path. The continue report's option snapshot and loop comparison also omit these fields, so even after forwarding is restored, a changed team proposal can be mistaken for a repeat of the previous parameters.
-
-**Fix:** Forward the parsed fields in both non-plan-only option literals, persist them in `codexContinueOptionsJSON`, and compare normalized values in `continueOptionsMatchCurrent`.
+**Fix:** Make protected decision sources unresolvable through the generic command and route them through the capability-aware resolver. Ideally also redact protected implementation fields from the generic list response.
 
 ```go
-QueenCastes:      queenCastes,       // or continueCastes
-QueenCasteReason: queenCasteReason,  // or continueCasteReason
-QueenCasteWhy:    queenCasteWhy,     // or continueCasteWhy
+if d.Source == "forced-reviewer-waiver" {
+    return fmt.Errorf("forced reviewer decisions must be answered with decision-answer and the displayed capability")
+}
 ```
 
-Add command-level tests that execute each normal Cobra path with these flags and inspect the resulting manifest/dispatches; calling `plannedContinueReviewDispatches` directly does not exercise this wiring.
+Add an end-to-end test that renders a card, obtains the row ID through `pending-decision-list`, calls `pending-decision-resolve`, and proves the reviewer remains forced.
 
-### CR-03 [BLOCKER]: The wrapper's “Trim optional workers” action silently refuses every kept optional worker
+#### CR-02: Dispatch proceeds when persistence fails to close the waiver window
 
-**Files:** `.claude/commands/ant/build.md:181-210,266-273`; `.claude/commands/ant-build.md:181-210,266-273`; `.opencode/commands/ant/build.md:181-210,266-273`; `cmd/queen_judgement.go:202-213`
+**Classification:** BLOCKER  
+**Severity:** Critical  
+**Files:** `cmd/forced_reviewer_waiver.go:91-121`; `cmd/spawn.go:120-136`
 
-**Issue:** The wrappers correctly state that every optional proposal needs its own `--caste-why` and that the team-level `--caste-reason` never satisfies that requirement. The trim recipe then re-fetches the manifest with only `--castes <kept optional castes>` and a team reason. Runtime judgement consequently classifies every kept optional caste as `refusedNoReason`. An owner choosing to keep selected workers gets the required floor only, the opposite of the recorded choice. All three build wrappers contain the same recipe.
+**Issue:** The dispatch-start marker is the security boundary that prevents a worker from using a previously displayed decline command. Both writes in `closeForcedReviewerWaiverWindowForPhase` discard their errors, the function returns no status, and `spawn-log` reports success after calling it. If the window file cannot be saved, dispatch still proceeds while `phaseDispatchStartedAt` reports no start and the pending capability remains usable. This is an explicit fail-open authorization check: a transient disk/lock/permission failure restores the exact post-dispatch waiver attack the marker was added to prevent.
 
-**Fix:** Replay each retained caste's original reason from `result.reasons` as a separate `--caste-why caste=reason` argument on trim, and preserve the same proposal/reasons when re-fetching after a reviewer decline.
+**Fix:** Make the authoritative dispatch-window write return an error and make `spawn-log` fail before the wrapper spawns the worker unless that write is durable. Pending-row deletion can remain defense in depth once the durable marker is guaranteed.
+
+```go
+func closeForcedReviewerWaiverWindowForPhase(phaseID int, at time.Time) error {
+    // Atomically persist the earliest start marker; return any failure.
+}
+
+if err := closeForcedReviewerWaiverWindowForPhase(phase, time.Now().UTC()); err != nil {
+    return fmt.Errorf("cannot safely begin dispatch: %w", err)
+}
+```
+
+Add a fault-injection test whose store rejects the marker write and assert that `spawn-log` fails and no worker may be launched.
+
+#### CR-03: Re-rendering a check-in invalidates the decline command already shown
+
+**Classification:** BLOCKER  
+**Severity:** Critical  
+**Files:** `cmd/forced_reviewer_waiver.go:362-440`; `cmd/ceremony_team_checkin.go:11-23,137-155`; `.claude/commands/ant-build.md:260-270`
+
+**Issue:** The function promises that a repeated render of the same pending question is an idempotent no-op, but it generates a fresh random capability and replaces the matching unresolved row on every call. The build wrapper invokes the issuing render twice in succession—first visual, then JSON—so the second call immediately invalidates the exact decline command displayed by the first. Any later status/re-render similarly makes a saved command fail without explaining why. This breaks the owner action the check-in card presents.
+
+**Fix:** Issue one capability per attempt/phase/signal and reuse it for every representation of that same card, or introduce a single runtime call that produces both the visual card and machine data from one issuance. Do not rotate a live token merely because the view was rendered again.
+
+```go
+// Pseudocode: lookup-or-create must return the same live issuance.
+issuance, err := waiverCapabilities.GetOrCreate(activeAttempt.ID, phaseID, signalName)
+```
+
+Add a regression test that renders the same card twice and successfully resolves with the command from the first render.
+
+#### CR-04: Valid aliased or comma-separated reviewer proposals are removed at the final continue boundary
+
+**Classification:** BLOCKER  
+**Severity:** Critical  
+**File:** `cmd/codex_continue.go:1302-1323,1345-1378`
+
+**Issue:** `queenApplyJudgement` deliberately accepts aliases (`security` becomes `gatekeeper`), separator variants, and comma-packed `--castes` values. The final waiver reconciliation does not use that normalization: it lowercases each raw proposal string and compares it directly with the canonical dispatch caste. On a phase whose credentials signal was waived, an explicit proposal such as `--castes security --caste-why security=...` produces a Gatekeeper dispatch in judgement, but `unionForcedContinueReviewers` sees only the raw key `security`, classifies Gatekeeper as waived-signal-only, and deletes the explicitly requested reviewer. `--castes gatekeeper,auditor` has the same problem.
+
+**Fix:** Build the preservation set from the same canonical proposal used by judgement.
+
+```go
+normalized, _ := normalizeProposedCastes(proposed)
+proposedCastes := stringSet(normalized)
+```
+
+Add final-dispatch tests for an alias and a comma-packed proposal after waiving the phase signal.
+
+#### CR-05: Wrapper options can prevent the dispatch window from ever closing
+
+**Classification:** BLOCKER  
+**Severity:** Critical  
+**Files:** `.claude/commands/ant-build.md:30-38,303-310`; `.claude/commands/ant/build.md:303-310`; `.opencode/commands/ant/build.md:303-310`
+
+**Issue:** All three build wrappers pass raw `$ARGUMENTS` as the value of `spawn-log --phase`. `$ARGUMENTS` is also passed to `aether build`, where valid invocations may contain options such as `1 --verification-depth heavy` or `1 --force`. In the new spawn command those extra tokens are parsed as `spawn-log` options; unsupported ones make the command fail, so the phase marker is never written. If orchestration continues, the reviewer decline window remains open during worker execution. The wrapper already carries the parsed `phase_id`, but does not use it here.
+
+**Fix:** Pass only the trusted numeric phase from the manifest/cross-stage state.
 
 ```text
-aether build ... --plan-only --castes <kept> \
-  --caste-why <caste1>="<result.reasons[caste1]>" \
-  --caste-why <caste2>="<result.reasons[caste2]>" \
-  --caste-reason "owner check-in trim"
+AETHER_OUTPUT_MODE=json aether spawn-log ... --depth 1 --phase <phase_id>
 ```
 
-Add wrapper contract tests that trace a multi-worker trim through `queenApplyJudgement` and assert the retained optionals remain in the new manifest.
+Add wrapper-contract coverage using a build invocation with at least one valid additional option and assert the generated `spawn-log` command still contains exactly one numeric phase argument.
 
-### CR-04 [BLOCKER]: A worker can reopen the decline window and manufacture the owner-only waiver state
+#### CR-06: Blocked Codex output still recommends unsupported slash commands
 
-**Files:** `cmd/codex_build.go:466-474`; `cmd/forced_reviewer_waiver.go:119-177,365-390,455-488`; `cmd/ceremony_team_checkin.go:137-152`; `cmd/codex_workflow_cmds.go:126-167`
+**Classification:** BLOCKER  
+**Severity:** Critical  
+**Files:** `cmd/codex_continue.go:3405-3450,3475-3480,3533-3555`; `cmd/codex_visuals.go:435-458,569-582,2072-2102`
 
-**Issue:** The new reset is keyed only by phase and is reached by the public `aether build <phase> --plan-only --force` path. A running worker with Bash access can force a fresh plan-only attempt, render the public `ceremony team-checkin` command to create a pending row, and submit the deterministic waiver answer before any new `spawn-log` closes the phase marker. There is no owner capability, nonce, or attempt binding in that chain. In addition, the resolver accepts any unresolved same-phase row with matching text without checking `Source == "forced-reviewer-waiver"`, so a look-alike pending question is treated as runtime-authentic. This restores the forgery class the dispatch window was intended to prevent; it merely requires starting a forced retry first.
+**Issue:** The visual-test fix changed selected expectations to native `aether ...` names, but real gate recovery strings still contain `/ant-continue`, `/ant-unblock`, and `/ant-flags`. `writeVisualOutput` only translates native `aether` names into slash wrappers for Claude/OpenCode; on Codex it deliberately returns the text unchanged. Consequently the most important UI state—the way forward after a blocked continue—tells Codex users to run commands that do not exist on Codex. The current blocked visual test checks the headline and one native retry sentence but never rejects the stale slash commands also present in the output.
 
-**Fix:** Bind a decline to an immutable build-attempt ID and an unguessable, single-use capability emitted only in the owner-facing card. Validate the attempt, capability, phase, signal, and `Source` atomically when resolving it. Superseding an attempt must invalidate its capability, and unauthenticated plan-only/card-render commands must not create a live owner approval channel while worker execution is active.
+**Fix:** Store recovery guidance in canonical native CLI form (`aether continue`, `aether unblock --dispatch`, `aether flag-resolve ...`) and let the existing exit translator convert it for wrapper platforms. Change the hardcoded fallback in `renderBlockedWayForward` the same way.
 
 ```go
-if d.Source != "forced-reviewer-waiver" || d.AttemptID != activeAttempt.ID ||
-   subtle.ConstantTimeCompare([]byte(d.Nonce), []byte(answerNonce)) != 1 {
-    continue
+RecoveryOptions: []string{
+    "Fix manually and run aether continue",
+    "Run aether unblock --dispatch for guided recovery",
 }
 ```
 
-Add an adversarial test that begins dispatch, invokes the force/replan/card-render sequence as a worker, and proves `decision-answer` cannot create a waiver without the owner capability.
+Add a Codex-platform assertion that blocked visual output contains no `/ant-` substring, plus Claude/OpenCode assertions that canonical native hints still translate to their wrappers.
 
-### CR-05 [BLOCKER]: The changed-file safety net misses brand-new untracked sensitive files
+### Warnings
 
-**Files:** `cmd/queen_risk_signals.go:511-549`; `cmd/queen_forced_reviewer_test.go:503-540`
+#### WR-01: The source-of-truth relevance reference still documents deleted policies
 
-**Issue:** `phaseChangedFilesForRiskSignals` claims its Git union prevents an incomplete or dishonest handoff from defeating the reviewer safety net, but it delegates to `discoverChangedFilesFromGit`, whose `git diff ... HEAD` queries do not report untracked files. The regression test stages its new migration with `git add` before checking it, masking the common case. A worker can create `migrations/0099.sql`, omit it from the handoff, and leave it untracked; neither input sees it, so Auditor is not forced. The same bypass applies to other named sensitive-path signals.
+**Classification:** WARNING  
+**Severity:** Warning  
+**Files:** `.aether/docs/command-playbooks/caste-relevance-reference.md:17-18,25,36-43,55-62`; `cmd/caste_relevance.go:45-57,170-257,418-463`
 
-**Fix:** Union ignored-aware untracked files into the independent detector, for example with `git ls-files --others --exclude-standard`, then normalize/deduplicate them with created and modified paths.
+**Issue:** The corrected continue-floor table now matches code, but nearby authoritative text is stale in several material ways. It says Auditor is production-only even though that condition was removed; lists `documentation` instead of the actual Chronicler keyword `document`; says Gatekeeper/high-risk and Auditor/production are still auto-included even though those branches were deleted; says build/continue threshold scoring selects workers and the Queen filters later even though both flows now use the gated required-only fallback; and says Watcher/Probe can still appear at build through relevance scoring, which the build gate prevents. Maintainers following this document will implement or debug the wrong dispatch policy.
 
-```go
-out, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output()
-if err == nil {
-    created = append(created, parseGitNameOutput(out)...)
-}
-```
-
-Add a regression test that deliberately leaves the omitted sensitive file untracked and asserts the appropriate forced reviewer is still selected.
-
-## Warnings
-
-### WR-01 [WARNING]: The authoritative caste reference documents obsolete continue floors
-
-**Files:** `.aether/docs/command-playbooks/caste-relevance-reference.md:50-69`; `cmd/caste_relevance.go:526-556`
-
-**Issue:** The reference still says light requires Watcher, standard requires Watcher plus Probe, and heavy requires Watcher plus the full panel. Current code requires no unconditional caste at light/standard and requires Gatekeeper, Auditor, and a conditional Probe at heavy; Watcher is not a floor. This file labels the table as sourced from `isAlwaysRequired`, so operators and future maintainers receive the inverse of the shipped policy.
-
-**Fix:** Update the table to match the current policy and strengthen the documentation test to compare exact caste names per depth rather than checking only loose numeric fragments.
-
-### WR-02 [WARNING]: Codex visual tests deterministically assert retired slash-command guidance
-
-**File:** `cmd/codex_visuals_test.go:291,379,438,560,870,932,1028,1151,1219,1356,1491`
-
-**Issue:** Eleven scoped visual tests require legacy `/ant-*` strings even though the Codex runtime correctly renders native `aether ...` lifecycle commands under the repository's platform policy. The failures reproduce when these tests are isolated, so they are not suite-order contamination. As a result, `go test ./...` fails despite the corresponding production output following the supported Codex interface; this makes the regression gate unreliable and can hide a genuine visual regression among known-red assertions.
-
-**Fix:** Replace each legacy expectation with the native Codex command currently required by `AGENTS.md` (for example `aether build 1`, `aether continue`, and `aether seal`). If any case intentionally tests a Claude/OpenCode renderer, explicitly select that platform in its fixture instead of using the Codex visual path. Keep the expected command surface internally consistent within each test.
+**Fix:** Update the registry rows and scoring prose from the live table, explicitly state that build/continue scores are refusal diagnostics rather than no-proposal selection, and say Watcher/Probe require an explicit proposal at build. Extend the doc test beyond the floor table so it detects deleted conditions/special rules and the gated-flow semantics.
 
 ---
 
-_Reviewed: 2026-08-26T19:55:08Z_
-_Reviewer: the agent (gsd-code-reviewer)_
+_Reviewed: 2026-08-26T21:33:08Z_  
+_Reviewer: the agent (gsd-code-reviewer)_  
 _Depth: standard_
