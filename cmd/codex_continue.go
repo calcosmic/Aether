@@ -1275,7 +1275,7 @@ func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony
 			})
 		}
 	}
-	return unionForcedContinueReviewers(dispatches, phase, forced, changedFiles)
+	return unionForcedContinueReviewers(dispatches, phase, forced, changedFiles, proposed, reviewDepth)
 }
 
 // casteDispatchRationale prefers the judgement's per-caste reason (D-08,
@@ -1297,16 +1297,46 @@ func casteDispatchRationale(judgement queenCasteJudgement, caste string) string 
 // the forced reason, so the owner sees the real reason it is there even if
 // it was also proposed or keyword-selected. changedFiles carries the D-02
 // file-detected hits into the same union.
-func unionForcedContinueReviewers(dispatches []CasteDispatch, phase colony.Phase, forced []codexForcedReviewerRecord, changedFiles []string) []CasteDispatch {
+func unionForcedContinueReviewers(dispatches []CasteDispatch, phase colony.Phase, forced []codexForcedReviewerRecord, changedFiles []string, proposed []string, reviewDepth colony.VerificationDepth) []CasteDispatch {
 	reviewers := queenForcedContinueReviewers(phase, forced, changedFiles)
-	if len(reviewers) == 0 {
-		return dispatches
+	liveReviewerCastes := make(map[string]bool, len(reviewers))
+	for _, reviewer := range reviewers {
+		liveReviewerCastes[reviewer.Caste] = true
 	}
-	indexByCaste := make(map[string]int, len(dispatches))
-	for i, dispatch := range dispatches {
+
+	// queenFallbackTeam and queenApplyJudgement both consult the phase-wording
+	// requirement before the owner waiver is applied. Reconcile that earlier
+	// snapshot here, at the shared dispatch boundary, so a waived signal cannot
+	// survive merely because it was already present in dispatches. Preserve a
+	// reviewer that has an independent reason to run: another live signal for
+	// the same caste, an explicit Queen proposal, or the owner's heavy-depth
+	// review panel.
+	phaseSignalCastes := make(map[string]bool)
+	for _, reviewer := range queenForcedReviewersForPhase(phase) {
+		phaseSignalCastes[reviewer.Caste] = true
+	}
+	proposedCastes := make(map[string]bool, len(proposed))
+	for _, caste := range proposed {
+		if caste = strings.ToLower(strings.TrimSpace(caste)); caste != "" {
+			proposedCastes[caste] = true
+		}
+	}
+	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
+	result := make([]CasteDispatch, 0, len(dispatches)+len(reviewers))
+	for _, dispatch := range dispatches {
+		caste := strings.ToLower(strings.TrimSpace(dispatch.Caste))
+		waivedSignalOnly := phaseSignalCastes[caste] && !liveReviewerCastes[caste] &&
+			!proposedCastes[caste] && !isAlwaysRequired(caste, "continue", phase, state)
+		if waivedSignalOnly {
+			continue
+		}
+		result = append(result, dispatch)
+	}
+
+	indexByCaste := make(map[string]int, len(result))
+	for i, dispatch := range result {
 		indexByCaste[dispatch.Caste] = i
 	}
-	result := append([]CasteDispatch(nil), dispatches...)
 	for _, reviewer := range reviewers {
 		if idx, ok := indexByCaste[reviewer.Caste]; ok {
 			result[idx].Rationale = reviewer.Reason

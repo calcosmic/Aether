@@ -6,7 +6,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -111,6 +113,54 @@ func TestWaivedSignalStaysWaivedWhenTheFilesRedetectIt(t *testing.T) {
 	if len(reviewers) != 0 {
 		t.Fatalf("a signal waived from plan wording must stay waived when changed files re-detect it; got %+v", reviewers)
 	}
+}
+
+// TestWaiverControlsBothFinalContinueDispatchLists is the dispatch-boundary
+// proof for D-03. It is not enough for queenForcedContinueReviewers to filter
+// a waived signal: both continue lanes must omit the reviewer from the team
+// they actually dispatch. A second, still-live signal for the same caste must
+// continue to force that reviewer.
+func TestWaiverControlsBothFinalContinueDispatchLists(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	if err := ensureForcedReviewerWaiverPendingDecision(1, "credentials/auth", "logins and passwords"); err != nil {
+		t.Fatalf("create authentic waiver row: %v", err)
+	}
+	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
+	if _, found, err := resolveForcedReviewerWaiverPendingDecision(question, "owner checked this login change", 1); err != nil || !found {
+		t.Fatalf("resolve authentic waiver row: found=%v err=%v", found, err)
+	}
+
+	assertBothLanes := func(t *testing.T, phase colony.Phase, wantGatekeeper bool) {
+		t.Helper()
+		inProcess := plannedContinueReviewDispatches(
+			root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+			&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, nil, "",
+		)
+		external := plannedExternalContinueDispatches(
+			root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+			time.Minute, colony.VerificationDepthStandard, true, nil, "",
+		)
+		if got := containsDispatchCaste(inProcess, "gatekeeper"); got != wantGatekeeper {
+			t.Fatalf("in-process gatekeeper=%v, want %v; dispatches=%+v", got, wantGatekeeper, inProcess)
+		}
+		if got := ownerDialsHasReviewCaste(external, "gatekeeper"); got != wantGatekeeper {
+			t.Fatalf("external gatekeeper=%v, want %v; dispatches=%+v", got, wantGatekeeper, external)
+		}
+	}
+
+	t.Run("waived signal is absent from both final teams", func(t *testing.T) {
+		phase := waiverFixturePhase(1, "Password reset", "Let users reset their password")
+		assertBothLanes(t, phase, false)
+	})
+
+	t.Run("second live signal for same caste still forces reviewer", func(t *testing.T) {
+		phase := waiverFixturePhase(1, "Refund after login", "Let users log in and request a refund")
+		assertBothLanes(t, phase, true)
+	})
 }
 
 // TestAutopilotNeverWaives asserts the unattended path autopilot reaches
