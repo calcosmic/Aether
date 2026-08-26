@@ -2,14 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 195
-current_phase_name: Coherent Jobs
-status: ready_to_plan
-stopped_at: Phase 194 complete (9/9) — ready to discuss Phase 195
-last_updated: 2026-08-26T23:08:44.549Z
+status: planning
+stopped_at: Phase 195 context gathered
+last_updated: "2026-08-26T23:39:46.824Z"
 last_activity: 2026-08-26
-last_activity_desc: Phase 194 verified and completed; ready to discuss Phase 195
-state_head: aef0da0ead945e936ce67c7efc1ba9abb805d845
 progress:
   total_phases: 7
   completed_phases: 2
@@ -192,6 +188,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-26T23:08:44.549Z
-Stopped at: Phase 194 complete, ready to discuss Phase 195
-Resume file: None
+Last session: 2026-08-26T23:39:46.809Z
+Stopped at: Phase 195 context gathered
+Resume file: .planning/phases/195-coherent-jobs/195-CONTEXT.md
