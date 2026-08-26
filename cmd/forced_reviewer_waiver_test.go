@@ -199,6 +199,54 @@ func TestWaiverControlsBothFinalContinueDispatchLists(t *testing.T) {
 	})
 }
 
+// TestWaiverReconciliationPreservesCanonicalExplicitProposal is CR-04's
+// final-boundary regression. Judgement accepts aliases and comma-packed caste
+// flags; the later waiver reconciliation must preserve the same canonical
+// reviewer rather than comparing its raw spelling.
+func TestWaiverReconciliationPreservesCanonicalExplicitProposal(t *testing.T) {
+	setupBuildFlowTest(t)
+	recordResolvedForcedReviewerWaiverForTest(
+		t, 21, "credentials/auth", "logins and passwords", "owner waived the automatic credentials signal",
+	)
+	phase := waiverFixturePhase(21, "Password reset", "Let users reset their password")
+
+	cases := []struct {
+		name     string
+		proposed []string
+		reasons  map[string]string
+	}{
+		{
+			name:     "security alias",
+			proposed: []string{"security"},
+			reasons:  map[string]string{"gatekeeper": "independently review the login boundary"},
+		},
+		{
+			name:     "comma-packed proposal",
+			proposed: []string{"gatekeeper,auditor"},
+			reasons: map[string]string{
+				"gatekeeper": "independently review the login boundary",
+				"auditor":    "audit the reset-flow behavior",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dispatches := queenContinueDispatchesWithJudgement(
+				phase,
+				colony.VerificationDepthStandard,
+				tc.proposed,
+				"explicit owner team",
+				nil,
+				nil,
+				tc.reasons,
+			)
+			if !queenContinueHasCaste(dispatches, "gatekeeper") {
+				t.Fatalf("canonical explicit Gatekeeper was removed after waiver reconciliation: %+v", dispatches)
+			}
+		})
+	}
+}
+
 // TestAutopilotNeverWaives asserts the unattended path autopilot reaches
 // (queenContinueDispatchesWithJudgement with no proposal, the same function
 // TestOnlyTheOwnerCanWaiveAForcedReviewer's first two cases exercise) still

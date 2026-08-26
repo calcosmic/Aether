@@ -1360,12 +1360,12 @@ func unionForcedContinueReviewers(dispatches []CasteDispatch, phase colony.Phase
 	for _, reviewer := range queenForcedReviewersForPhase(phase) {
 		phaseSignalCastes[reviewer.Caste] = true
 	}
-	proposedCastes := make(map[string]bool, len(proposed))
-	for _, caste := range proposed {
-		if caste = strings.ToLower(strings.TrimSpace(caste)); caste != "" {
-			proposedCastes[caste] = true
-		}
-	}
+	// Preserve explicit reviewers using the exact same normalization as
+	// queenApplyJudgement. Comparing raw flag values here dropped accepted
+	// aliases ("security" -> gatekeeper), separator variants, and comma-packed
+	// proposals after judgement had already produced the canonical dispatch.
+	normalizedProposed, _ := normalizeProposedCastes(proposed)
+	proposedCastes := stringSet(normalizedProposed)
 	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
 	result := make([]CasteDispatch, 0, len(dispatches)+len(reviewers))
 	for _, dispatch := range dispatches {
