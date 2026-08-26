@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os/exec"
 	"sort"
 	"strings"
 
@@ -32,7 +33,7 @@ import (
 // wording (collectPhaseText); PathPatterns is matched at the same kind of
 // boundary (matchesPathPatternAtBoundary, WR-02) against a lowercased,
 // slash-normalised changed-files list that unions the builder's own
-// reported changed files with an independent `git diff`
+// reported changed files with independent Git scans
 // (phaseChangedFilesForRiskSignals, WR-01) — a second, independent detector
 // that can only ADD a forced reviewer, never remove one. A signal with no
 // PathPatterns never fires from the file detector.
@@ -515,13 +516,12 @@ func queenForcedContinueReviewers(phase colony.Phase, recorded []codexForcedRevi
 // mistake, an incomplete claim, or a prompt-injected instruction to
 // under-report, would otherwise silently defeat the one detector meant to
 // catch what the plan's own wording missed. This unions that self-report
-// with an independent read of the actual working tree
-// (discoverChangedFilesFromGit, cmd/codex_build_finalize.go -- the same
-// `git diff --name-only ... HEAD` this repo already uses at build-finalize
-// time to discover files when a builder's claims are empty), so an
-// incomplete or dishonest handoff can no longer defeat the safety net by
-// itself: git still sees what actually changed on disk, independent of
-// anything the worker claimed.
+// with independent reads of the actual working tree: tracked additions and
+// modifications come from discoverChangedFilesFromGit
+// (cmd/codex_build_finalize.go), while `git ls-files --others
+// --exclude-standard` supplies brand-new untracked files. An incomplete or
+// dishonest handoff therefore cannot defeat the safety net merely by leaving
+// a sensitive new file unstaged and unreported.
 //
 // Deliberately scoped to the forced-reviewer call sites
 // (cmd/codex_continue.go, cmd/codex_continue_plan.go) rather than folded
@@ -547,6 +547,11 @@ func phaseChangedFilesForRiskSignals(phaseID int) []string {
 			set[f] = true
 		}
 	}
+	for _, f := range discoverUntrackedFilesForRiskSignals() {
+		if f = strings.TrimSpace(f); f != "" {
+			set[f] = true
+		}
+	}
 	if len(set) == 0 {
 		return nil
 	}
@@ -556,4 +561,16 @@ func phaseChangedFilesForRiskSignals(phaseID int) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// discoverUntrackedFilesForRiskSignals deliberately stays local to the
+// forced-reviewer detector. Widening discoverChangedFilesFromGit would also
+// alter build-finalization and commit selection, which is outside this
+// safety check's responsibility.
+func discoverUntrackedFilesForRiskSignals() []string {
+	out, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output()
+	if err != nil {
+		return nil
+	}
+	return parseGitNameOutput(out)
 }

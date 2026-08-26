@@ -504,9 +504,8 @@ func TestForcedReviewerReasonNeverShowsATrailingSlash(t *testing.T) {
 // file-based forced-reviewer detector must not be defeated purely by an
 // incomplete or dishonest handoff -- phaseChangedFilesFromHandoffs alone is
 // only the Builder's own self-reported claim. phaseChangedFilesForRiskSignals
-// unions that self-report with an independent `git diff`, so a file that
-// lands on disk and is tracked by git, but that no handoff ever mentions,
-// still forces the reviewer.
+// unions that self-report with an independent Git scan, so a brand-new
+// untracked file that no handoff ever mentions still forces the reviewer.
 func TestGitDiffCatchesAFileTheHandoffOmitted(t *testing.T) {
 	root := setupExternalBuildAttemptTest(t)
 	gitInitForTest(t, root)
@@ -521,12 +520,9 @@ func TestGitDiffCatchesAFileTheHandoffOmitted(t *testing.T) {
 		t.Skipf("git commit failed: %v\n%s", err, out)
 	}
 
-	// A migration file lands on disk and is staged, but no worker handoff
-	// ever mentions it -- the exact "incomplete self-report" WR-01 named.
+	// A migration file lands on disk but remains untracked, and no worker
+	// handoff ever mentions it -- the common bypass CR-05 named.
 	writeClaimFileForTest(t, root, "migrations/0099_add_column.sql")
-	if out, err := exec.Command("git", "-C", root, "add", "migrations/0099_add_column.sql").CombinedOutput(); err != nil {
-		t.Skipf("git add failed: %v\n%s", err, out)
-	}
 
 	phase := waiverFixturePhase(31, "Small fix", "Fix an unrelated formatting bug")
 
@@ -542,7 +538,7 @@ func TestGitDiffCatchesAFileTheHandoffOmitted(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("phaseChangedFilesForRiskSignals did not surface the git-tracked file the handoff never reported: %+v", changedFiles)
+		t.Fatalf("phaseChangedFilesForRiskSignals did not surface the untracked file the handoff never reported: %+v", changedFiles)
 	}
 
 	reviewers := queenForcedContinueReviewers(phase, nil, changedFiles)
