@@ -421,6 +421,40 @@ func TestGenericPendingDecisionResolverCannotWaiveForcedReviewer(t *testing.T) {
 	}
 }
 
+// TestRepeatedCheckinRenderKeepsFirstWaiverCapabilityLive is CR-03's
+// idempotence regression. The wrapper renders the card once for the owner and
+// immediately renders it again as JSON. That second representation must not
+// invalidate the decline command the owner already saw.
+func TestRepeatedCheckinRenderKeepsFirstWaiverCapabilityLive(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := checkinFixturePhase(
+		"Password reset",
+		"Let users reset their password via an emailed token",
+		colony.PhaseModePrototype,
+	)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
+
+	first, _ := renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	firstCapability := waiverCapabilityFromCheckin(t, first, "credentials/auth")
+	second, _ := renderCeremonyTeamCheckin("build", manifestMap, dispatches)
+	_ = waiverCapabilityFromCheckin(t, second, "credentials/auth")
+
+	question := forcedReviewerWaiverQuestionText(1, "credentials/auth", "logins and passwords")
+	if _, found, err := resolveForcedReviewerWaiverPendingDecision(
+		question, "owner used the first displayed command", 1, firstCapability,
+	); err != nil || !found {
+		t.Fatalf("first displayed capability was invalidated by the second render: found=%v err=%v", found, err)
+	}
+	if waived, reason := forcedReviewerWaiver(1, "credentials/auth"); !waived || reason != "owner used the first displayed command" {
+		t.Fatalf("first displayed command did not produce the owner waiver: waived=%v reason=%q", waived, reason)
+	}
+}
+
 // spawnLogArgsForPhase is the real `aether spawn-log` invocation the wrapper
 // triplet (.claude/commands/ant/build.md and its two mirrors) now sends
 // before every worker, with --phase added by this fix. It is what actually

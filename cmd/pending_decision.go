@@ -25,6 +25,10 @@ type PendingDecision struct {
 	// raw single-use capability is shown only on that card and is never stored.
 	AttemptID              string `json:"attempt_id,omitempty"`
 	WaiverCapabilitySHA256 string `json:"waiver_capability_sha256,omitempty"`
+	// Repeated card representations may issue another raw capability without
+	// invalidating one already shown. Only the additional hashes are persisted;
+	// raw capabilities still exist solely in the rendered owner commands.
+	WaiverCapabilitySHA256s []string `json:"waiver_capability_sha256s,omitempty"`
 	// HardConstraint marks a clarification whose answer must become a
 	// REDIRECT signal (a hard "never do this"). Typed per the
 	// prose-to-control-flow decision — the legacy ":hard" source suffix is
@@ -141,6 +145,7 @@ var pendingDecisionListCmd = &cobra.Command{
 			if d.Source == "forced-reviewer-waiver" {
 				d.AttemptID = ""
 				d.WaiverCapabilitySHA256 = ""
+				d.WaiverCapabilitySHA256s = nil
 			}
 			filtered = append(filtered, d)
 		}

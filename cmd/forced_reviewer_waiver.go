@@ -330,7 +330,7 @@ func forcedReviewerWaiver(phaseID int, signal string) (waived bool, reason strin
 			continue
 		}
 		if decision.Source != "forced-reviewer-waiver" || decision.Phase == nil || *decision.Phase != phaseID ||
-			strings.TrimSpace(decision.AttemptID) == "" || strings.TrimSpace(decision.WaiverCapabilitySHA256) == "" {
+			strings.TrimSpace(decision.AttemptID) == "" || !forcedReviewerWaiverDecisionHasCapability(decision) {
 			continue
 		}
 		question, _ := parseClarificationDescription(decision.Description)
@@ -378,11 +378,10 @@ func applyForcedReviewerWaivers(phaseID int, hits []riskSignalHit) (kept []riskS
 // can later resolve -- CR-01's fix (194-REVIEW.md). Called ONLY from the
 // check-in card's render step (cmd/ceremony_team_checkin.go), once per LIVE
 // forced hit -- a hit applyForcedReviewerWaivers has already filtered out
-// (an already-waived signal) is never re-offered a fresh row here. Writing
-// a row that already exists for this exact phase+signal question (pending
-// OR already resolved) is a no-op: the card can render many times over a
-// session, and this must stay idempotent rather than piling up duplicate
-// rows on every render.
+// (an already-waived signal) is never re-offered a fresh row here. A repeat
+// render of the same live question keeps one row and adds only another
+// capability hash, so every raw command already shown stays usable while no
+// raw capability is persisted. An already-resolved row remains a no-op.
 func newForcedReviewerWaiverCapability() (string, string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -391,6 +390,37 @@ func newForcedReviewerWaiverCapability() (string, string, error) {
 	capability := base64.RawURLEncoding.EncodeToString(raw)
 	digest := sha256.Sum256([]byte(capability))
 	return capability, hex.EncodeToString(digest[:]), nil
+}
+
+func forcedReviewerWaiverDecisionHasCapability(decision PendingDecision) bool {
+	if strings.TrimSpace(decision.WaiverCapabilitySHA256) != "" {
+		return true
+	}
+	for _, hash := range decision.WaiverCapabilitySHA256s {
+		if strings.TrimSpace(hash) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func forcedReviewerWaiverCapabilityMatches(decision PendingDecision, providedHash string) bool {
+	providedHash = strings.TrimSpace(providedHash)
+	if providedHash == "" {
+		return false
+	}
+	if subtle.ConstantTimeCompare(
+		[]byte(strings.TrimSpace(decision.WaiverCapabilitySHA256)),
+		[]byte(providedHash),
+	) == 1 {
+		return true
+	}
+	for _, candidate := range decision.WaiverCapabilitySHA256s {
+		if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(candidate)), []byte(providedHash)) == 1 {
+			return true
+		}
+	}
+	return false
 }
 
 func ensureForcedReviewerWaiverPendingDecision(phaseID int, signalName, plainEnglish, attemptID string) (string, error) {
@@ -426,6 +456,24 @@ func ensureForcedReviewerWaiverPendingDecision(phaseID int, signalName, plainEng
 	capability, capabilityHash, err := newForcedReviewerWaiverCapability()
 	if err != nil {
 		return "", err
+	}
+
+	// A second render is another representation of the same live question,
+	// not a new authorization decision. Keep the existing row and every
+	// previously issued hash valid so the visual command cannot be invalidated
+	// by the wrapper's immediate JSON render. Raw capabilities are never stored.
+	if matching >= 0 {
+		existing := &file.Decisions[matching]
+		if !existing.Resolved &&
+			existing.Source == "forced-reviewer-waiver" &&
+			existing.Phase != nil && *existing.Phase == phaseID &&
+			existing.AttemptID == attemptID {
+			existing.WaiverCapabilitySHA256s = append(existing.WaiverCapabilitySHA256s, capabilityHash)
+			if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
+				return "", err
+			}
+			return capability, nil
+		}
 	}
 
 	decision := PendingDecision{
@@ -550,7 +598,7 @@ func resolveForcedReviewerWaiverPendingDecision(question, answer string, phaseID
 			if d.Source != "forced-reviewer-waiver" || d.AttemptID != activeAttempt.ID {
 				continue
 			}
-			if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(d.WaiverCapabilitySHA256)), []byte(providedHashHex)) != 1 {
+			if !forcedReviewerWaiverCapabilityMatches(*d, providedHashHex) {
 				continue
 			}
 			if d.Phase == nil || *d.Phase != phaseID {
