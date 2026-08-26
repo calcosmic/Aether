@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -490,6 +491,59 @@ func TestForcedReviewerDeclineWindowClosesWhenDispatchBegins(t *testing.T) {
 	reviewers := queenForcedContinueReviewers(phase, nil, nil)
 	if len(reviewers) != 1 {
 		t.Fatalf("reviewer the owner never declined must still be forced after dispatch began; reviewers = %+v", reviewers)
+	}
+}
+
+// TestSpawnLogFailsClosedWhenWaiverWindowCannotPersist is CR-02's durable
+// boundary proof. If the dispatch marker cannot be written, spawn-log must
+// refuse before recording the worker; otherwise the wrapper would launch a
+// worker while the displayed owner capability remained usable.
+func TestSpawnLogFailsClosedWhenWaiverWindowCannotPersist(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := checkinFixturePhase(
+		"Password reset",
+		"Let users reset their password via an emailed token",
+		colony.PhaseModePrototype,
+	)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
+	if _, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches); !strings.Contains(visual, "To decline, run:") {
+		t.Fatalf("expected a live owner capability before testing dispatch persistence; visual:\n%s", visual)
+	}
+
+	// A directory at the marker's file path forces the storage layer's atomic
+	// rename to fail without changing permissions on the whole test store.
+	markerPath := filepath.Join(dataDir, phaseDispatchWindowFileName)
+	if err := os.Mkdir(markerPath, 0o755); err != nil {
+		t.Fatalf("obstruct dispatch marker path: %v", err)
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+	rootCmd.SetArgs(spawnLogArgsForPhase(1))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("spawn-log returned a Cobra error instead of a structured refusal: %v", err)
+	}
+	if errBuf.Len() == 0 {
+		t.Fatalf("spawn-log succeeded even though the waiver-window marker was not durable: %s", outBuf.String())
+	}
+	envelope := parseEnvelope(t, errBuf.String())
+	if envelope["ok"] != false {
+		t.Fatalf("spawn-log did not fail closed: %v", envelope)
+	}
+
+	spawnData, err := os.ReadFile(filepath.Join(dataDir, "spawn-tree.txt"))
+	if err == nil && strings.Contains(string(spawnData), "Mason-1") {
+		t.Fatalf("spawn-log recorded a worker after marker persistence failed:\n%s", spawnData)
+	}
+	if _, started := phaseDispatchStartedAt(1); started {
+		t.Fatal("failed marker write unexpectedly reported a durable dispatch start")
 	}
 }
 

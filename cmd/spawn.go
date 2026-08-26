@@ -117,22 +117,23 @@ var spawnLogCmd = &cobra.Command{
 			return nil
 		}
 
-		if err := st.RecordSpawn(parent, caste, name, task, depth); err != nil {
-			outputError(2, fmt.Sprintf("failed to record spawn: %v", err), nil)
-			return nil
-		}
-
 		// CR-01 residual (194-REVIEW.md iteration 2): this is the earliest
 		// point in the runtime that fires after the owner has answered the
 		// check-in card (or chosen to proceed without answering) and before
-		// any worker this spawn describes could possibly run. --phase is
-		// optional so every existing caller (none of which pass it today)
-		// keeps working unchanged; when a caller does pass it, the first
-		// spawn for that phase closes that phase's forced-reviewer decline
-		// window. Best-effort: a failure here must never fail the spawn
-		// that already succeeded above.
+		// any worker this spawn describes could possibly run. --phase remains
+		// optional for callers outside the protected build ceremony. When it
+		// is present, the durable marker is a prerequisite: failing open here
+		// would leave the displayed owner capability usable during dispatch.
 		if phase > 0 {
-			closeForcedReviewerWaiverWindowForPhase(phase, time.Now().UTC())
+			if err := closeForcedReviewerWaiverWindowForPhase(phase, time.Now().UTC()); err != nil {
+				outputError(2, fmt.Sprintf("cannot safely begin dispatch: %v", err), nil)
+				return nil
+			}
+		}
+
+		if err := st.RecordSpawn(parent, caste, name, task, depth); err != nil {
+			outputError(2, fmt.Sprintf("failed to record spawn: %v", err), nil)
+			return nil
 		}
 
 		eventID := emitSpawnTreeCeremony(events.CeremonyPayload{

@@ -88,37 +88,51 @@ func phaseDispatchStartedAt(phaseID int) (time.Time, bool) {
 //     before this call ever ran) is left untouched -- the owner's real path
 //     must keep working.
 //
-// Idempotent and best-effort throughout: a second call for a phase whose
-// window is already closed touches nothing further, and any failure here
-// (an unreadable or unwritable store) must never fail the spawn that
-// triggered it -- this function returns nothing and the caller does not
-// branch on it.
-func closeForcedReviewerWaiverWindowForPhase(phaseID int, at time.Time) {
-	if store == nil || phaseID <= 0 {
-		return
+// The marker write is authoritative and fail-closed: spawn-log must refuse
+// the worker if this function cannot durably record the closed window. Pending
+// row deletion remains defense in depth after that marker is guaranteed.
+func closeForcedReviewerWaiverWindowForPhase(phaseID int, at time.Time) error {
+	if store == nil {
+		return fmt.Errorf("no store initialized")
+	}
+	if phaseID <= 0 {
+		return fmt.Errorf("phase must be positive")
 	}
 
-	windowFile := loadPhaseDispatchWindowFile()
 	key := strconv.Itoa(phaseID)
-	if strings.TrimSpace(windowFile.Phases[key]) == "" {
+	var windowFile phaseDispatchWindowFile
+	if err := store.UpdateJSONAtomically(phaseDispatchWindowFileName, &windowFile, func() error {
+		if windowFile.Phases == nil {
+			windowFile.Phases = map[string]string{}
+		}
+		if raw := strings.TrimSpace(windowFile.Phases[key]); raw != "" {
+			if _, err := time.Parse(time.RFC3339Nano, raw); err != nil {
+				return fmt.Errorf("phase %d has invalid dispatch-start marker %q: %w", phaseID, raw, err)
+			}
+			return nil
+		}
 		windowFile.Phases[key] = at.UTC().Format(time.RFC3339Nano)
-		_ = store.SaveJSON(phaseDispatchWindowFileName, windowFile)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("persist dispatch-start marker for phase %d: %w", phaseID, err)
 	}
 
-	pending := loadPendingDecisionFile()
-	kept := make([]PendingDecision, 0, len(pending.Decisions))
-	changed := false
-	for _, d := range pending.Decisions {
-		if !d.Resolved && d.Source == "forced-reviewer-waiver" && d.Phase != nil && *d.Phase == phaseID {
-			changed = true
-			continue
+	// The durable marker above is the authorization boundary. Removing the
+	// pending row narrows the remaining attack surface, but a failure here
+	// cannot reopen the window because every resolver also checks the marker.
+	var pending PendingDecisionFile
+	_ = store.UpdateJSONAtomically(pendingDecisionsFile, &pending, func() error {
+		kept := make([]PendingDecision, 0, len(pending.Decisions))
+		for _, d := range pending.Decisions {
+			if !d.Resolved && d.Source == "forced-reviewer-waiver" && d.Phase != nil && *d.Phase == phaseID {
+				continue
+			}
+			kept = append(kept, d)
 		}
-		kept = append(kept, d)
-	}
-	if changed {
 		pending.Decisions = kept
-		_ = store.SaveJSON(pendingDecisionsFile, pending)
-	}
+		return nil
+	})
+	return nil
 }
 
 // clearPhaseDispatchWindow reopens phaseID's forced-reviewer decline window
