@@ -2002,7 +2002,8 @@
       "answer",
       "phase",
       "question",
-      "source"
+      "source",
+      "waiver-capability"
     ],
     "parent_command": "",
     "has_subcommands": false,
