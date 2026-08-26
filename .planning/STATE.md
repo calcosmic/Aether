@@ -2,46 +2,46 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 194
-current_phase_name: The Queen Decides the Team
-status: verifying
-stopped_at: Completed 194-09-PLAN.md
-last_updated: "2026-08-23T17:02:19.968Z"
-last_activity: 2026-08-23
-last_activity_desc: Phase 194 execution started
+current_phase: 195
+current_phase_name: Coherent Jobs
+status: ready_to_plan
+stopped_at: Phase 194 complete (9/9) — ready to discuss Phase 195
+last_updated: 2026-08-26T23:08:44.549Z
+last_activity: 2026-08-26
+last_activity_desc: Phase 194 verified and completed; ready to discuss Phase 195
 state_head: aef0da0ead945e936ce67c7efc1ba9abb805d845
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 14
   completed_plans: 14
-  percent: 14
+  percent: 29
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-22)
+See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 194 — The Queen Decides the Team
+**Current focus:** Phase 195 — Coherent Jobs
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 194 (The Queen Decides the Team) — EXECUTING
-Plan: 9 of 9
-Status: Phase complete — ready for verification
-Last activity: 2026-08-23 — Phase 194 execution started
+Phase: 195 (Coherent Jobs)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-26
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 69 (v1.26, all Phase 172)
+- Total plans completed: 78 (v1.26, all Phase 172)
 - Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 
@@ -102,22 +102,11 @@ Last activity: 2026-08-23 — Phase 194 execution started
 - [Phase 193]: 193-04: Tasks 2 (builder evidence re-run) and 3 (owner confirmation) landed in one commit, not two -- both edit the same per-check evaluation loop in evaluatePhaseCriterionEvidence and could not be cleanly split by git hunk — Task 1 (reconciliation) was cleanly separable via git add -p and is its own commit
 - [Phase 193]: Verification tests are scoped to the Go packages a phase's changed files touched (D-07), falling back to the full run whenever that scope cannot be honestly derived or on the plan's final phase; only the tests command is ever scoped. — Narrowing a compiler or linter changes what it can see, so build/types/lint always run as configured; only the tests command has a safe scoped runner (go test ./dir/...).
 - [Phase 193]: A failing free check with no reviewer dispatched draws exactly one automatic builder fix attempt (D-02/D-03), recorded as a brand-new append-only entry in the build attempt journal; a second automatic attempt never happens and continue blocks with one exact re-run command if the re-run still fails. — The fix attempt must never overwrite the original result and must be visibly countable on the team card and cost line; a new attempt record is the same append-only discipline the out-of-band verification record already established.
-- [Phase 194]: [Phase 194] Plan 1: forced-reviewer Rationale carries a fixed "this touches ..." prefix so tests (and later the check-in card) can tell a signal-forced dispatch apart from the untouched legacy keyword/mode scoring engine sharing the same caste name -- without this, auditor's presence cannot distinguish "forced by a named signal" from "the pre-existing production-mode floor also drew it".
-- [Phase 194]: Build floor shrinks to queenBuildSafetyRequiredCastes returning exactly [builder] on non-discovery phases (nil on discovery); queenBuildSafetyReviewRequired and queenPhaseHasSecuritySignal deleted outright. — Ruling D11 (2026-08-22) supersedes the mode/position/keyword-inferred floor. A reviewer is now forced only by a named risk signal at the continue step, never at build.
-- [Phase 194]: D-13 landed: heavy-depth continue's probe requirement is gated on queenPhaseProducesTestableCode, so --heavy no longer forces a coverage caste onto a documentation-only phase. — The plan's own action text named this test for rewrite (TestHeavyContinueKeepsProbe), which required the underlying isAlwaysRequired code change, not just a fixture edit.
-- [Phase 194]: [Phase 194] Plan 3: --caste-why (caste=reason pairs) plus queenCasteJudgement.Reasons/RefusedNoReason -- a proposed caste with no per-worker reason is refused by name, not silently sent; --caste-reason stays the team summary only and no longer satisfies the per-worker requirement.
-- [Phase 194]: [Phase 194] Plan 3: deleted the two remaining implicit floors restated as scores -- applySpecialRules' auditor-on-production and gatekeeper-on-high-risk 100-score branches, and auditor's mode==production Conditions boost (which alone still cleared the spawn threshold with no keyword match). The fallback engine's rationale is now a plain sentence per caste, never score arithmetic or a bare flow-type name.
-- [Phase 194]: [Phase 194] Plan 4: card reason slot never shows the roster's generic caste blurb — a missing per-phase reason renders an explicit 'no reason was recorded' marker; the description moved to a separately labelled what_it_does slot (D-09).
-- [Phase 194]: [Phase 194] Plan 4: codexBuildManifest.ForcedReviewerAnnouncement + the check-in card's announcement block name the exact signal and matched phrase whenever a reviewer is forced, before any worker spawns (D-05); TestRequiredMeansBuilderOrNamedSignal locks REQUIRED to mean builder or a named signal, nothing else.
-- [Phase 194]: queenFallbackTeam is the no-proposal team for build/continue -- computed directly from the required-caste floor, not by filtering a scored candidate list (D-11)
-- [Phase 194]: Continue's watcher relay in the external/wrapper lane was decoupled from caste selection entirely -- it reports the deterministic floor's already-computed result and must be gated on skipWatchers alone, never on whether a caste-selection mechanism also wants watcher this run
-- [Phase 194]: [Phase 194] Plan 6: both detectors (plan wording, changed files) now feed the same collapseToForcedReviewers merge via riskSignalHitsFromRecords, rather than two independently-derived sets that could disagree.
-- [Phase 194]: [Phase 194] Plan 6: the wrapper lane's planned-subset check needed no correction for a changed-files-forced reviewer -- the file detector fires inside plannedExternalContinueDispatches, the same call that produces the persisted planned manifest, before any worker dispatches.
-- [Phase 194]: [Phase 194] Plan 7: Q1/Q2 (card wording, re-ask scope) answered with no behaviour change -- Q1's real complaint was layout not phrasing, so the card's sentences stayed and separation was added instead; Q2 kept D-03's one-signal-one-phase scope with no re-ask.
-- [Phase 194]: [Phase 194] Plan 7: Q3 (owner asked for a one-worker build to skip the check-in pause) reverses D-14 and, per the plan's own resume-signal, was NOT applied here -- filed as a pending todo for the next /gsd-discuss-phase pass instead; TestOneWorkerTeamStillPauses continues to pin the current, unchanged pause behaviour.
-- [Phase 194]: [Phase 194] Plan 8: countWorkersAcrossBothBoundaries sums build+continue dispatches into one number and reuses total==len(union) as a second confirmation of double-dispatch emptiness -- two proofs computed by the same arithmetic, so they cannot silently disagree.
-- [Phase 194]: [Phase 194] Plan 8: WINDOWS #1 marked fixed only after TestNoCasteIsDispatchedAtBothBoundaries passed locally against real build+continue dispatch lists for a security-signal phase and a migration-signal phase -- both intersections empty.
-- [Phase 194]: [Phase 194] Plan 9: TestCLAUDEMDDepthTableEvaluates parses CLAUDE.md's own Continue depth-table row and evaluates it against queenMaxWorkersForBudget and isAlwaysRequired, so an edit to the doc row that disagrees with the runtime now fails a test -- demonstrated by temporarily removing Gatekeeper from the heavy cell and watching the test fail, then restoring it.
+- [Phase 194]: Ordinary non-discovery work gets exactly the Builder by default; five named risks can force one explained reviewer at continue, and build never dispatches that forced reviewer.
+- [Phase 194]: Every proposed worker needs its own `--caste-why` reason; missing reasons are refused by name, while runtime-added workers get plain-English reasons rather than score arithmetic or roster blurbs.
+- [Phase 194]: Light and standard add no unconditional reviewers, heavy adds the full applicable panel, changed files can only add risk, and both continue lanes use the same forced-reviewer derivation.
+- [Phase 194]: Forced-reviewer waivers are owner-only, one signal on one phase, capability-protected, and accepted only before dispatch; the pending one-worker check-in-pause reversal moves to Phase 195 discussion.
+- [Phase 194]: `TestOneTaskBugFixIsOneWorkerPlusChecks` proves 1 worker on both paths, `TestNoCasteIsDispatchedAtBothBoundaries` closes WINDOWS #1, and the shipped documentation is test-locked to the runtime.
 
 ### Pending Todos
 
@@ -131,7 +120,8 @@ Last activity: 2026-08-23 — Phase 194 execution started
 - [~] Phase 186: rescoped 2026-08-18 — plans 01-06 shipped; plan 07 cut from twelve runs to one non-gating smoke run, to be fired when convenient
 - [x] Phase 193: Free Checks Are the Floor — executed and verified 2026-08-22 (v1.27)
 - [x] Discuss + plan Phase 194: The Queen Decides the Team — planned 2026-08-23 (9 plans, 9 waves)
-- [ ] Execute Phase 194: The Queen Decides the Team ← **next**
+- [x] Execute and verify Phase 194: The Queen Decides the Team — complete 2026-08-26 (9/9 plans, 9/9 UAT)
+- [ ] Discuss and plan Phase 195: Coherent Jobs ← **next**
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
@@ -143,8 +133,8 @@ Last activity: 2026-08-23 — Phase 194 execution started
 
 ### Blockers/Concerns
 
-- ⚠️ [Phase 193] Open in the defect ledger (`.planning/WINDOWS.md` #1): Probe/Auditor/Gatekeeper can still be sent at both the build and continue boundaries on production/security phases with no explicit Queen ask, because each flow derives "always required" independently. Phase 194 retires that rule; `/gsd-ship` blocks while the entry is open
-- ℹ️ [Phase 193] GSD tooling: `phase.complete` advanced STATE to backlog entry 172.1 (the next unchecked roadmap box) — corrected by hand to Phase 194; expect the same after each v1.27 phase while 172.1 sits in the backlog list
+- ℹ️ [Phase 194] The owner wants one-worker builds to skip the pre-build check-in pause; the current runtime still pauses, and the scope change is recorded in `.planning/todos/pending/2026-08-23-one-worker-build-skips-the-checkin-pause.md` for Phase 195 discussion.
+- ℹ️ [Phase 194 transition] `phase.complete` returned Phase 195 correctly but left the roadmap checkbox and STATE frontmatter stale; both were corrected inline during verification. Recheck this boundary after future phase transitions.
 - ~~Roadmap is unapproved~~ — resolved 2026-08-14. This line was stale: it said not to start Phase 172 until sign-off, and 172, 173 and part of 174 were then executed anyway. Recorded because a gate that gets ignored without anyone noticing is the failure mode this project keeps rediscovering.
 - **Phases 176, 177 and 178 are cut, not deferred.** If a future session finds Phase 173's delegation guards bounding a capability nobody has, that is expected and accepted — Phase 177 was the grant, and it was cut deliberately. Do not "restore" it.
 - **Phase 173 and Phase 178 carry research flags from the research phase.** Platform nested-spawn behaviour is MEDIUM confidence and both vendors broke it within the last quarter (Claude Code strips the Agent tool from some subagent types; OpenCode has an open "subagents can infinitely recurse, no max depth" defect). The skill supply-chain threat surface is actively evolving. Re-verify vendor docs and open issues at planning time for both
@@ -154,7 +144,6 @@ Last activity: 2026-08-23 — Phase 194 execution started
 - **`pkg/trace/cost.go` holds a stale model-price table that contradicts Phase 174's D-02 ("no model-price table is ever built"), and it repeats the 186x undercount shape** — `CalculateCost` multiplies only input and output tokens and ignores cache tokens entirely, against hardcoded rates for retired model names. It is called from `pkg/agent/pool.go:192`; no live caller was found under `cmd/` for any of the three dispatch platforms, so it is probably dead, but that was not proven exhaustively. **Deliberately OUT OF SCOPE for Phase 174** (surfaced by 174-RESEARCH.md Open Question 1, resolved there as owner residue). Phase 174 prevents a second instance — the new spend surface carries greps that fail if a price table or any token-to-dollar arithmetic appears — but the existing one needs an owner ruling: delete it as dead code, or fix its arithmetic. Plan 174-09's SUMMARY must restate this so it does not evaporate with the phase.
 
 - `gopkg.in/yaml.v3` is archived and author-declared unmaintained. v1.26 makes YAML the format a non-technical user hand-writes, which changes the risk profile. The migration to `go.yaml.in/yaml/v3` is a mechanical import swap and is deliberately unbundled — it gets its own plan, not a rider on the roster work
-- [Phase 193] Probe/auditor/gatekeeper double-dispatch (build AND continue independently require the same caste with no explicit Queen proposal) is unresolved -- flagged for Phase 194, tracked in .planning/WINDOWS.md (kind: unmet-truth). Not a blocker to sealing 193 (out of this plan's declared scope), but Phase 194 planning must account for it.
 
 ## Deferred Items
 
@@ -203,6 +192,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-23T17:02:19.910Z
-Stopped at: Completed 194-09-PLAN.md
+Last session: 2026-08-26T23:08:44.549Z
+Stopped at: Phase 194 complete, ready to discuss Phase 195
 Resume file: None

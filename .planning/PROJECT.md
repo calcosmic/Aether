@@ -36,9 +36,9 @@ That means:
 
 - **v1.26 Intelligent Orchestration — SHIPPED 2026-08-22** (override close: three items carried into v1.27 — the one-line cost summary, the one live benchmark run, and the full showdown)
 - **Product version: v1.0.63** (binary and hub agree; published 2026-08-21)
-- **v1.27 in progress — Phase 193 "Free Checks Are the Floor" complete 2026-08-22** (5/5 plans, verification 4/4, FLOOR-01..04 satisfied): the program's build/types/lint/tests, claimed-files-exist and per-criterion evidence checks now decide advancement on every phase, cannot be skipped by any flag or depth, and a phase with zero reviewer workers advances on them; one bounded automatic fix attempt when a check fails. Brief in `.planning/research/v1.27-milestone-brief.md`; governing rulings D11/D12 in `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`
+- **v1.27 in progress — Phases 193 and 194 complete**: the program's free checks are the unskippable safety floor, while the Queen now sends only the Builder by default and forces a reviewer only for one of five named risks. Phase 194 completed 9/9 plans and 9/9 UAT checks on 2026-08-26; TEAM-01..05 are satisfied. Brief in `.planning/research/v1.27-milestone-brief.md`; governing rulings D11/D12 in `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
-- Measured 2026-08-22 with today's Queen at standard settings: a one-task bug fix is sent 8 workers (v5.4.0 sent 3-4); a CSV-export phase guessed "production" gets 9 (v5.4.0: 5-6). Most of the gap is the same files reviewed two or three times. This is what v1.27 exists to fix
+- Phase 194's end-to-end proof reduced the measured one-task bug fix from 8 workers to exactly 1 Builder plus the program's free checks on both the proposed and automatic paths; an explicit heavy request still produces 4 workers, proving the review pipeline remains live. The broader CSV-export comparison remains for Phase 199.
 - Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
 - `v5.4.0` tag remains the Classic behaviour baseline; the 2026-08-22 display audit lists 19 Classic elements absent today and 13 thinner (recorded in `research/v1.27-milestone-brief.md`)
 
@@ -269,6 +269,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - Crash-safe worktrees, one canonical failure log, atomic phase advance, complete non-duplicated briefs, field hardening -- v1.26 (Phases 187-191.1)
 - Team check-in before spawning, owner decision routing, honest `completed_no_change` / `verified_existing` results -- v1.26 (2026-08-21)
 - Free checks are the floor: one `runDeterministicFloor` body for both continue lanes decides advancement; no flag, depth or proposal can skip a check; build-side reviewer only on an explicit Queen ask (Watcher verified once); reconciliation and program-re-run builder evidence count as proof; unprovable criteria wait for the owner; verification scoped per phase and full at the end; exactly one bounded automatic fix attempt (FLOOR-01..04) -- v1.27 (Phase 193)
+- The Queen decides the team: ordinary work gets one Builder, every worker carries a readable per-worker reason, five named risks can force one explained reviewer at continue, owner depth/team controls remain effective, and no caste is dispatched at both build and continue unless explicitly requested (TEAM-01..05) -- v1.27 (Phase 194)
 
 ### Active
 
@@ -306,7 +307,8 @@ Long-lived items not tied to a milestone:
 | Rescope v1.26 to hardening: cut 174 (plans 3-9), 176, 177, 178 (2026-08-14) | Removing things until a small job costs a small amount; shipped as 180-184 | Good |
 | Phase 192 "stop building when the benchmark passes" rule (2026-08-17) | Superseded 2026-08-21 when the owner ratified the priority spec as the backlog (D1) | — Superseded |
 | Automatic model routing approved, after the cost line, reasons always shown (D2, 2026-08-21) | Reverses the 2026-07-28 rejection | — Pending (v1.27 feature 4) |
-| Reviewer workers are the Queen's call; the floor is deterministic checks (D11, 2026-08-22) | Replaces "Watcher always required on build"; a 1-task bug fix must cost 1 worker + checks | Partial — floor shipped (Phase 193); team judgement pending (Phase 194) |
+| Reviewer workers are the Queen's call; the floor is deterministic checks (D11, 2026-08-22) | Replaces "Watcher always required on build"; a 1-task bug fix now costs 1 Builder + checks, with reviewers forced only by five named risks | Good — floor and team judgement shipped (Phases 193-194) |
+| A forced-reviewer waiver is owner-only, one signal on one phase, and must be recorded before dispatch begins | The protected `decision-answer` path is capability-checked; generic resolution and late declines fail closed, and repeated card renders preserve commands already shown | Good — Phase 194 plus review fixes |
 | The floor is computed from the build-time reviewer value; a reviewer verdict can only ever add a block, never supply a pass (193-01, 2026-08-22) | `TestDeterministicFloorIsTheOnlySourceOfAPass`; both continue lanes share one body, parity table-tested | Good |
 | Build-side reviewer dispatch gated on the Queen's explicit proposal, not the required-caste floor (193-02, 2026-08-22) | Watcher no longer reviewed twice; Probe/Auditor/Gatekeeper double-dispatch recorded in `.planning/WINDOWS.md` #1 for Phase 194 | Good — gap deferred |
 | A criterion no machine can prove becomes `needs_owner_confirmation`: the phase advances, seal waits for the answer via `aether decision-answer` (193-04, D-05) | No reviewer is ever spawned to guess at it; `--force --reason` still overrides | Good |
@@ -318,7 +320,7 @@ Long-lived items not tied to a milestone:
 Shipped v1.26 on 2026-08-22: 571 commits, 1,223 files changed, +171,000 / −39,221 lines over 15 days.
 Tech stack: Go 1.24 runtime (`cmd/`, `pkg/`), thin markdown wrappers for Claude Code and OpenCode, runtime-native Codex lane, a kept TypeScript host for autopilot dispatch. 5,000+ Go tests; full suite with race detection is the release gate.
 Owner feedback themes (2026-08-21/22): builds feel heavy for small jobs; the next step after a command is often unclear; projects get stuck with an expensive way out; the display feels thin compared with v5.4.0.
-Known debt: Phase 172.1 (CI gate environment), Phase 173's one pending human check, the TS-host probe-timeout twin, 22 acknowledged deferred items (STATE.md). Closed 2026-08-22: `continue-finalize`'s `--reconcile-task` evidence gate (Phase 193, `TestFinalizeCountsReconcileTaskAsEvidence`). Open in the defect ledger (`.planning/WINDOWS.md` #1): Probe/Auditor/Gatekeeper can still be sent at both the build and continue boundaries without an explicit ask — Phase 194's job.
+Known debt: Phase 172.1 (CI gate environment), Phase 173's one pending human check, the TS-host probe-timeout twin, and the acknowledged deferred items in STATE.md. Closed by Phase 194: `.planning/WINDOWS.md` #1 — Probe/Auditor/Gatekeeper no longer double-dispatch at build and continue — and the small-job pipeline now proves one Builder plus checks. The owner's request to let one-worker builds skip the check-in pause remains a pending Phase 195 discussion item.
 
 ## Explicit Deferrals
 
@@ -331,7 +333,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Phase 193 is complete and verified. Next: `/gsd-discuss-phase 194` (The Queen Decides the Team), then `/gsd-plan-phase 194` — it retires the always-required-Watcher rule and closes the Probe/Auditor/Gatekeeper double-dispatch gap the Phase 193 ledger records.
+Phases 193 and 194 are complete and verified. Next: `$gsd-discuss-phase 195` (Coherent Jobs), then `$gsd-plan-phase 195` — decide how related tasks become one dependency-safe job and revisit the pending one-worker check-in-pause request.
 
 ## Evolution
 
@@ -364,7 +366,7 @@ This document evolves at phase transitions and milestone boundaries.
 - Curation ant pipeline (8-ant orchestrated pipeline)
 - Consolidation pipeline (phase-end knowledge compression)
 
-*Last updated: 2026-08-22 after v1.26 milestone*
+*Last updated: 2026-08-26 after Phase 194*
 
 ### v1.12 Safe Colony (shipped)
 
