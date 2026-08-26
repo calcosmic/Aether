@@ -3407,8 +3407,8 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 			manifestCheck.Detail = fmt.Sprintf("build manifest is missing for phase %d", phase.ID)
 			manifestCheck.FixHint = "Ensure the build completed successfully and produced a manifest.json"
 			manifestCheck.RecoveryOptions = []string{
-				"Fix the build issue and run /ant-continue",
-				"Run /ant-unblock for guided recovery",
+				"Fix the build issue and run aether continue",
+				"Run aether unblock --dispatch for guided recovery",
 			}
 			blockers = append(blockers, manifestCheck.Detail)
 		}
@@ -3427,8 +3427,8 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		if !verification.ChecksPassed {
 			verifCheck.FixHint = gateRecoveryTemplate("verification_loop")
 			verifCheck.RecoveryOptions = []string{
-				"Fix manually and run /ant-continue",
-				"Run /ant-unblock for guided recovery",
+				"Fix manually and run aether continue",
+				"Run aether unblock --dispatch for guided recovery",
 			}
 			blockers = append(blockers, verification.BlockingIssues...)
 		}
@@ -3444,8 +3444,8 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 			evidenceCheck.Detail = "verification passed but no implementation evidence or reconciliation was recorded"
 			evidenceCheck.FixHint = "Ensure workers reported task completion or claims were filed"
 			evidenceCheck.RecoveryOptions = []string{
-				"Fix manually and run /ant-continue",
-				"Run /ant-unblock for guided recovery",
+				"Fix manually and run aether continue",
+				"Run aether unblock --dispatch for guided recovery",
 			}
 			blockers = append(blockers, assessment.BlockingIssues...)
 		}
@@ -3476,7 +3476,7 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		ownerCheck.RecoveryOptions = recovery
 		if isLastPhaseOfActivePlan(phase.ID) {
 			ownerCheck.Passed = false
-			ownerCheck.FixHint = "Confirm each item above with the aether decision-answer command shown, then run /ant-continue again"
+			ownerCheck.FixHint = "Confirm each item above with the aether decision-answer command shown, then run aether continue again"
 			blockers = append(blockers, ownerCheck.Detail)
 		}
 	}
@@ -3535,9 +3535,9 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 	if !flagCheck.Passed {
 		flagCheck.FixHint = "Resolve critical flags before continuing"
 		flagCheck.RecoveryOptions = []string{
-			"Fix the issue, then resolve its flag: /ant-flags --resolve <id> \"what fixed it\"",
-			"Run /ant-unblock to dispatch the Fixer against the blocking issues",
-			"Fix manually and run /ant-continue",
+			"Fix the issue, then resolve its flag: aether flag-resolve --id <id> --message \"what fixed it\"",
+			"Run aether unblock --dispatch to dispatch the Fixer against the blocking issues",
+			"Fix manually and run aether continue",
 		}
 		blockers = append(blockers, flagCheck.Detail)
 	}
@@ -3550,8 +3550,8 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 	if !blockerFlagCheck.Passed {
 		blockerFlagCheck.FixHint = "Every blocker must be resolved before the phase can advance"
 		blockerFlagCheck.RecoveryOptions = []string{
-			"Fix the issue, then resolve its flag: /ant-flags --resolve <id> \"what fixed it\"",
-			"Run /ant-unblock to dispatch the Fixer against the blocking issues",
+			"Fix the issue, then resolve its flag: aether flag-resolve --id <id> --message \"what fixed it\"",
+			"Run aether unblock --dispatch to dispatch the Fixer against the blocking issues",
 		}
 		blockers = append(blockers, blockerFlagCheck.Detail)
 	}

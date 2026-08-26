@@ -873,8 +873,60 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 	if strings.Contains(output, "Run `aether continue` to recover the blocked work") {
 		t.Fatalf("blocked continue suggested the identical no-op retry:\n%s", output)
 	}
+	if strings.Contains(output, "/ant-") {
+		t.Fatalf("Codex blocked guidance contains unsupported slash commands:\n%s", output)
+	}
 	if strings.Contains(output, "Forge-141 [builder] completed") {
 		t.Fatalf("expected blocked continue worker flow to avoid builder closure entries, got:\n%s", output)
+	}
+}
+
+func TestBlockedContinueRecoveryHintsTranslateFromCanonicalCommands(t *testing.T) {
+	result := map[string]interface{}{
+		"blocking_issues": []interface{}{"verification failed"},
+		"gates": map[string]interface{}{
+			"checks": []interface{}{
+				map[string]interface{}{
+					"name":             "verification_steps_passed",
+					"passed":           false,
+					"fix_hint":         "Fix manually and run aether continue",
+					"recovery_options": []interface{}{"Run aether unblock --dispatch for guided recovery", "Resolve the flag with aether flag-resolve --id <id> --message \"what fixed it\""},
+				},
+			},
+		},
+	}
+
+	for _, tc := range []struct {
+		platform string
+		want     []string
+		notWant  []string
+	}{
+		{platform: "codex", want: []string{"aether continue", "aether unblock --dispatch", "aether flag-resolve"}, notWant: []string{"/ant-"}},
+		{platform: "claude", want: []string{"/ant-continue", "/ant-unblock --dispatch", "aether flag-resolve"}, notWant: []string{"Fix manually and run aether continue", "Run aether unblock"}},
+		{platform: "opencode", want: []string{"/ant-continue", "/ant-unblock --dispatch", "aether flag-resolve"}, notWant: []string{"Fix manually and run aether continue", "Run aether unblock"}},
+	} {
+		t.Run(tc.platform, func(t *testing.T) {
+			t.Setenv("AETHER_OUTPUT_MODE", "visual")
+			t.Setenv("AETHER_PLATFORM", tc.platform)
+			raw := renderContinueBlockedVisual(
+				colony.ColonyState{},
+				colony.Phase{ID: 2, Name: "Blocked phase"},
+				result,
+				colony.VerificationDepthStandard,
+			)
+			var output bytes.Buffer
+			writeVisualOutput(&output, raw)
+			for _, want := range tc.want {
+				if !strings.Contains(output.String(), want) {
+					t.Errorf("%s blocked output missing %q:\n%s", tc.platform, want, output.String())
+				}
+			}
+			for _, notWant := range tc.notWant {
+				if strings.Contains(output.String(), notWant) {
+					t.Errorf("%s blocked output contains unsupported form %q:\n%s", tc.platform, notWant, output.String())
+				}
+			}
+		})
 	}
 }
 

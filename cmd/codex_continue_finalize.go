@@ -885,7 +885,7 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 // context. Best-effort: gate-results bookkeeping never blocks anything.
 func appendReviewFindingsGateResult(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time) {
 	details := []string{}
-	options := []string{"Run /ant-unblock to dispatch the Fixer against these findings"}
+	options := []string{"Run aether unblock --dispatch to dispatch the Fixer against these findings"}
 	fixHint := ""
 	for _, step := range workerFlow {
 		for _, finding := range step.Findings {
@@ -912,7 +912,7 @@ func appendReviewFindingsGateResult(phaseID int, workerFlow []codexContinueWorke
 		return
 	}
 	if fixHint == "" {
-		fixHint = "No reviewer supplied a fix — /ant-unblock dispatches the Fixer to propose one"
+		fixHint = "No reviewer supplied a fix — aether unblock --dispatch dispatches the Fixer to propose one"
 	}
 	entries, err := gateResultsReadPhase(phaseID)
 	if err != nil || entries == nil {
@@ -969,7 +969,7 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 				if suggestion := strings.TrimSpace(finding.Suggestion); suggestion != "" {
 					blockers = append(blockers, fmt.Sprintf("%s blocking finding: %s (fix: %s)", step.Name, desc, suggestion))
 				} else {
-					blockers = append(blockers, fmt.Sprintf("%s blocking finding: %s (next step: /ant-unblock — dispatch the Fixer)", step.Name, desc))
+					blockers = append(blockers, fmt.Sprintf("%s blocking finding: %s (next step: aether unblock --dispatch — dispatch the Fixer)", step.Name, desc))
 				}
 			}
 			continue

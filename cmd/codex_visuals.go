@@ -2071,7 +2071,7 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 
 // renderBlockedWayForward turns the failed gates' fix hints and recovery
 // options into the block's way forward — a critic that stops the line brings
-// its fix in the same breath, and the Fixer (/ant-unblock) is always on the
+// its fix in the same breath, and the Fixer (aether unblock) is always on the
 // list so "it doesn't work" is never a dead end.
 func renderBlockedWayForward(gates map[string]interface{}) string {
 	lines := []string{}
@@ -2098,7 +2098,7 @@ func renderBlockedWayForward(gates map[string]interface{}) string {
 			appendLine(option)
 		}
 	}
-	appendLine("Run /ant-unblock to dispatch the Fixer against the blocking issues")
+	appendLine("Run aether unblock --dispatch to dispatch the Fixer against the blocking issues")
 
 	var b strings.Builder
 	b.WriteString("🧭 Way forward\n")
