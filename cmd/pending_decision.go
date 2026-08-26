@@ -134,6 +134,14 @@ var pendingDecisionListCmd = &cobra.Command{
 			if filterType != "" && d.Type != filterType {
 				continue
 			}
+			// Forced-reviewer waivers are observable here, but their attempt
+			// and capability bindings are implementation details of the
+			// owner-only authorization path. The generic list must not expose
+			// those values to callers that cannot legitimately use them.
+			if d.Source == "forced-reviewer-waiver" {
+				d.AttemptID = ""
+				d.WaiverCapabilitySHA256 = ""
+			}
 			filtered = append(filtered, d)
 		}
 
@@ -185,6 +193,15 @@ var pendingDecisionResolveCmd = &cobra.Command{
 			if file.Decisions[i].ID == id {
 				if !pendingDecisionMatchesScope(file.Decisions[i], scope) {
 					outputError(1, fmt.Sprintf("decision %q is stale for the current goal/session", id), nil)
+					return nil
+				}
+				// This generic command has no owner capability, build-attempt
+				// binding, or dispatch-window check. Letting it resolve a
+				// protected row would preserve that row's authentic metadata and
+				// manufacture a valid waiver. The capability-aware
+				// decision-answer path is the only resolver for this source.
+				if file.Decisions[i].Source == "forced-reviewer-waiver" {
+					outputError(1, "forced reviewer decisions must be answered with decision-answer and the displayed capability", nil)
 					return nil
 				}
 				file.Decisions[i].Resolved = true

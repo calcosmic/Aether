@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -346,6 +347,76 @@ func TestDecisionAnswerResolvesARuntimeCreatedWaiverRow(t *testing.T) {
 	}
 	if reason != "already checked by hand" {
 		t.Fatalf("reason = %q, want the owner's recorded answer", reason)
+	}
+}
+
+// TestGenericPendingDecisionResolverCannotWaiveForcedReviewer is CR-01's
+// public-command regression. The generic pending-decision commands may list a
+// protected waiver row for observability, but its ID is not authorization:
+// only decision-answer with the capability printed on the check-in card may
+// resolve it.
+func TestGenericPendingDecisionResolverCannotWaiveForcedReviewer(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := checkinFixturePhase(
+		"Password reset",
+		"Let users reset their password via an emailed token",
+		colony.PhaseModePrototype,
+	)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
+	if _, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches); !strings.Contains(visual, "To decline, run:") {
+		t.Fatalf("expected the card render to create a protected waiver row; visual:\n%s", visual)
+	}
+
+	var listOut bytes.Buffer
+	stdout = &listOut
+	rootCmd.SetArgs([]string{"pending-decision-list", "--unresolved"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("pending-decision-list returned error: %v", err)
+	}
+	listEnvelope := parseEnvelope(t, listOut.String())
+	listResult := listEnvelope["result"].(map[string]interface{})
+	listed := listResult["decisions"].([]interface{})
+	if len(listed) != 1 {
+		t.Fatalf("listed decisions = %d, want the one protected waiver row", len(listed))
+	}
+	row := listed[0].(map[string]interface{})
+	id, _ := row["id"].(string)
+	if id == "" {
+		t.Fatal("protected row was not observable through pending-decision-list")
+	}
+
+	var resolveOut, resolveErr bytes.Buffer
+	stdout = &resolveOut
+	stderr = &resolveErr
+	rootCmd.SetArgs([]string{"pending-decision-resolve", "--id", id, "--resolution", "worker bypass"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("pending-decision-resolve returned command error: %v", err)
+	}
+
+	if waived, reason := forcedReviewerWaiver(1, "credentials/auth"); waived {
+		t.Fatalf("generic pending-decision-resolve bypassed the owner capability: %q", reason)
+	}
+	reviewers := queenForcedContinueReviewers(phase, nil, nil)
+	if len(reviewers) != 1 || reviewers[0].Caste != "gatekeeper" {
+		t.Fatalf("protected reviewer did not remain forced after generic resolve: %+v", reviewers)
+	}
+
+	pending := loadPendingDecisionFile()
+	if len(pending.Decisions) != 1 || pending.Decisions[0].Resolved {
+		t.Fatalf("protected waiver row was mutated by the generic resolver: %+v", pending.Decisions)
+	}
+	if _, exposed := row["waiver_capability_sha256"]; exposed {
+		t.Fatalf("generic list exposed the protected capability hash: %#v", row)
+	}
+	if _, exposed := row["attempt_id"]; exposed {
+		t.Fatalf("generic list exposed the protected build-attempt binding: %#v", row)
 	}
 }
 
