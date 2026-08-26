@@ -162,6 +162,51 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 	}
 }
 
+// TestCasteRelevanceDoc_ContinueFloorsMatchPolicy prevents the authoritative
+// playbook from drifting back to the retired Watcher/Probe floor. Unlike the
+// broad mention check above, this assertion binds each verification depth to
+// its exact required-caste set and records Probe's heavy-depth condition.
+func TestCasteRelevanceDoc_ContinueFloorsMatchPolicy(t *testing.T) {
+	docPath := "../.aether/docs/command-playbooks/caste-relevance-reference.md"
+	contentBytes, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", docPath, err)
+	}
+
+	sectionStart := strings.Index(string(contentBytes), "### Continue")
+	sectionEnd := strings.Index(string(contentBytes), "### Plan")
+	if sectionStart < 0 || sectionEnd <= sectionStart {
+		t.Fatalf("could not isolate the Continue policy table in %s", docPath)
+	}
+	continueSection := string(contentBytes)[sectionStart:sectionEnd]
+
+	testablePhase := colony.Phase{
+		Name:  "Implementation phase",
+		Mode:  colony.PhaseModePrototype,
+		Tasks: []colony.Task{{Goal: "Implement the change"}},
+	}
+	cases := []struct {
+		depth colony.VerificationDepth
+		phase colony.Phase
+		want  []string
+		row   string
+	}{
+		{colony.VerificationDepthLight, testablePhase, nil, "| light | None |"},
+		{colony.VerificationDepthStandard, testablePhase, nil, "| standard | None |"},
+		{colony.VerificationDepthHeavy, testablePhase, []string{"auditor", "gatekeeper", "probe"}, "| heavy | `gatekeeper`, `auditor`; plus `probe` only when the phase produces testable code |"},
+		{colony.VerificationDepthHeavy, colony.Phase{Name: "Documentation phase", Mode: colony.PhaseModeMaintenance}, []string{"auditor", "gatekeeper"}, "| heavy | `gatekeeper`, `auditor`; plus `probe` only when the phase produces testable code |"},
+	}
+	for _, tc := range cases {
+		got := queenRequiredCastesForBudget(tc.phase, "continue", colony.ColonyState{VerificationDepth: string(tc.depth)})
+		if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+			t.Errorf("continue %s required castes = %v, want exact set %v", tc.depth, got, tc.want)
+		}
+		if !strings.Contains(continueSection, tc.row) {
+			t.Errorf("documented continue %s row does not match shipped policy; want %q", tc.depth, tc.row)
+		}
+	}
+}
+
 // TestCasteRelevanceDoc_SpawnBudgetNumbersMatch verifies that the documented
 // spawn budget numbers match what queenMaxWorkersForBudget returns.
 func TestCasteRelevanceDoc_SpawnBudgetNumbersMatch(t *testing.T) {

@@ -63,10 +63,15 @@ Source: `spawnThreshold`
 
 ### Continue
 | Depth | Required Castes |
-|-------|----------------|
-| light | `watcher` |
-| standard | `watcher`, `probe` |
-| heavy | `watcher`, `gatekeeper`, `auditor`, `probe` |
+|-------|-----------------|
+| light | None |
+| standard | None |
+| heavy | `gatekeeper`, `auditor`; plus `probe` only when the phase produces testable code |
+
+Light and standard rely on the Queen's explicit team judgment plus reviewers
+forced by named risk signals. Heavy is the owner's explicit request for the
+full review panel, but it does not spend a Probe run on documentation-only
+work. Watcher is never an unconditional continue requirement.
 
 ### Plan
 - Always: `scout`, `route_setter`
