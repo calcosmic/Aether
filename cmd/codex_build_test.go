@@ -1872,6 +1872,65 @@ func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
 	}
 }
 
+func TestBuildCLINormalPathForwardsQueenTeamFlags(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	goal := "Measure the performance change"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:          1,
+			Name:        "Performance benchmark",
+			Description: "Measure latency before and after the change",
+			Mode:        colony.PhaseModePrototype,
+			Status:      colony.PhaseReady,
+			Tasks:       []colony.Task{{ID: &taskID, Goal: "Implement and benchmark the change", Status: colony.TaskPending}},
+		}}},
+	})
+
+	rootCmd.SetArgs([]string{
+		"build", "1", "--synthetic",
+		"--castes", "measurer",
+		"--caste-why", "measurer=compare latency before and after this change",
+		"--caste-reason", "the Queen wants measured performance evidence",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("normal build returned error: %v", err)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("load build manifest: %v", err)
+	}
+	found := false
+	for _, dispatch := range manifest.Dispatches {
+		if dispatch.Caste == "measurer" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("normal build discarded --castes/--caste-why; dispatches=%+v", manifest.Dispatches)
+	}
+	decisionJSON, err := json.Marshal(manifest.CasteDecision)
+	if err != nil {
+		t.Fatalf("marshal caste decision: %v", err)
+	}
+	if !strings.Contains(string(decisionJSON), "compare latency before and after this change") {
+		t.Fatalf("normal build discarded --caste-why; caste_decision=%s", decisionJSON)
+	}
+}
+
 func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

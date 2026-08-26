@@ -634,7 +634,9 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		DispatchWorkers:   true,
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
+	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	dispatches := plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
+	casteDecision := queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, err
@@ -739,6 +741,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, fmt.Errorf("failed to reload direct build manifest: %w", err)
 	}
+	dispatchManifest.CasteDecision = casteDecision
 	dispatchManifest.AttemptID = strings.TrimSpace(strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel)))
 	dispatchManifest.AttemptPath = displayDataPath(attemptRel)
 	if err := prepareBuildAttemptManifestBinding(attemptRel, &dispatchManifest); err != nil {
@@ -806,6 +809,18 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, err
 	} else {
 		dispatches = finalDispatches
+	}
+	var finalManifest codexBuildManifest
+	if err := store.LoadJSON(manifestRel, &finalManifest); err != nil {
+		finishAttempt(buildAttemptFailed, "failed to reload final build manifest", err)
+		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
+		return nil, fmt.Errorf("failed to reload final build manifest: %w", err)
+	}
+	finalManifest.CasteDecision = casteDecision
+	if err := store.SaveJSON(manifestRel, finalManifest); err != nil {
+		finishAttempt(buildAttemptFailed, "failed to persist final caste decision", err)
+		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
+		return nil, fmt.Errorf("failed to persist final caste decision: %w", err)
 	}
 
 	var committedState colony.ColonyState

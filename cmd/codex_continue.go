@@ -181,6 +181,9 @@ type codexContinueOptionsJSON struct {
 	LightFlag              bool     `json:"light_flag,omitempty"`
 	HeavyFlag              bool     `json:"heavy_flag,omitempty"`
 	VerificationDepth      string   `json:"verification_depth,omitempty"`
+	QueenCastes            []string `json:"queen_castes,omitempty"`
+	QueenCasteReason       string   `json:"queen_caste_reason,omitempty"`
+	QueenCasteWhy          []string `json:"queen_caste_why,omitempty"`
 }
 
 const abandonedBuildThreshold = 10 * time.Minute
@@ -235,7 +238,40 @@ func continueOptionsToJSON(opts codexContinueOptions) *codexContinueOptionsJSON 
 		LightFlag:              opts.LightFlag,
 		HeavyFlag:              opts.HeavyFlag,
 		VerificationDepth:      opts.VerificationDepth,
+		QueenCastes:            append([]string(nil), opts.QueenCastes...),
+		QueenCasteReason:       opts.QueenCasteReason,
+		QueenCasteWhy:          append([]string(nil), opts.QueenCasteWhy...),
 	}
+}
+
+func normalizedContinueOptionList(values []string, splitCommas bool) []string {
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		parts := []string{value}
+		if splitCommas {
+			parts = strings.Split(value, ",")
+		}
+		for _, part := range parts {
+			if part = strings.ToLower(strings.TrimSpace(part)); part != "" {
+				normalized = append(normalized, part)
+			}
+		}
+	}
+	return uniqueSortedStrings(normalized)
+}
+
+func normalizedContinueOptionsEqual(left, right []string, splitCommas bool) bool {
+	left = normalizedContinueOptionList(left, splitCommas)
+	right = normalizedContinueOptionList(right, splitCommas)
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // continueOptionsMatchCurrent checks whether the current continue options match
@@ -262,6 +298,15 @@ func continueOptionsMatchCurrent(current codexContinueOptions, last *codexContin
 		return false
 	}
 	if current.VerificationDepth != last.VerificationDepth {
+		return false
+	}
+	if !normalizedContinueOptionsEqual(current.QueenCastes, last.QueenCastes, true) {
+		return false
+	}
+	if strings.TrimSpace(current.QueenCasteReason) != strings.TrimSpace(last.QueenCasteReason) {
+		return false
+	}
+	if !normalizedContinueOptionsEqual(current.QueenCasteWhy, last.QueenCasteWhy, false) {
 		return false
 	}
 	// Compare reconcile task IDs (order-independent).

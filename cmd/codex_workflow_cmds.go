@@ -189,6 +189,9 @@ var buildCmd = &cobra.Command{
 			VerificationDepth:       verificationDepth,
 			CircuitBreakerThreshold: cbThreshold,
 			Verbose:                 verboseFlag,
+			QueenCastes:             queenCastes,
+			QueenCasteReason:        queenCasteReason,
+			QueenCasteWhy:           queenCasteWhy,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -277,6 +280,9 @@ var continueCmd = &cobra.Command{
 			HeavyFlag:           heavyFlag,
 			SkipWatchers:        skipWatchers,
 			VerificationDepth:   verificationDepth,
+			QueenCastes:         continueCastes,
+			QueenCasteReason:    continueCasteReason,
+			QueenCasteWhy:       continueCasteWhy,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)

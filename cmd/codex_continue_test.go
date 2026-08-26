@@ -398,6 +398,54 @@ func TestContinuePlanOnlyStandardSecurityUsesQueenSelectedGatekeeper(t *testing.
 	}
 }
 
+func TestContinueCLINormalPathForwardsQueenTeamFlags(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	setupIntermediateContinueState(t, "Performance benchmark")
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{
+		"continue",
+		"--castes", "measurer",
+		"--caste-why", "measurer=compare latency before and after this change",
+		"--caste-reason", "the Queen wants measured performance evidence",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("normal continue returned error: %v", err)
+	}
+
+	var review codexContinueReviewReport
+	if err := store.LoadJSON("build/phase-1/review.json", &review); err != nil {
+		t.Fatalf("load continue review report: %v", err)
+	}
+	found := false
+	for _, worker := range review.Workers {
+		if worker.Caste == "measurer" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("normal continue discarded --castes/--caste-why; review workers=%+v", review.Workers)
+	}
+
+	var report codexContinueReport
+	if err := store.LoadJSON("build/phase-1/continue.json", &report); err != nil {
+		t.Fatalf("load continue report: %v", err)
+	}
+	encoded, err := json.Marshal(report.LastContinueOptions)
+	if err != nil {
+		t.Fatalf("marshal option snapshot: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"queen_castes":["measurer"]`) ||
+		!strings.Contains(string(encoded), `"queen_caste_why":["measurer=compare latency before and after this change"]`) {
+		t.Fatalf("continue option snapshot lost Queen team flags: %s", encoded)
+	}
+}
+
 func TestPlannedContinueReviewDispatchesUseQueenSelectedMeasurer(t *testing.T) {
 	saveGlobals(t)
 	setupRuntimeSkillAssignmentHub(t)
@@ -6883,6 +6931,9 @@ func TestContinueOptionsMatchCurrent(t *testing.T) {
 		SkipWatchers:        false,
 		LightFlag:           false,
 		HeavyFlag:           false,
+		QueenCastes:         []string{"measurer"},
+		QueenCasteReason:    "measure this change",
+		QueenCasteWhy:       []string{"measurer=compare latency"},
 	}
 
 	// nil last -> false (no previous run)
@@ -6898,6 +6949,9 @@ func TestContinueOptionsMatchCurrent(t *testing.T) {
 		SkipWatchers:           false,
 		LightFlag:              false,
 		HeavyFlag:              false,
+		QueenCastes:            []string{"MEASURER"},
+		QueenCasteReason:       " measure this change ",
+		QueenCasteWhy:          []string{"MEASURER=COMPARE LATENCY"},
 	}
 	if !continueOptionsMatchCurrent(opts, sameLast) {
 		t.Fatal("expected true when options match")
@@ -6938,9 +6992,24 @@ func TestContinueOptionsMatchCurrent(t *testing.T) {
 		VerificationTimeoutSec: 600,
 		WorkerTimeoutSec:       300,
 		ReconcileTaskIDs:       []string{"2.1", "1.1"},
+		QueenCastes:            []string{"measurer"},
+		QueenCasteReason:       "measure this change",
+		QueenCasteWhy:          []string{"measurer=compare latency"},
 	}
 	if !continueOptionsMatchCurrent(opts, diffOrder) {
 		t.Fatal("expected true when ReconcileTaskIDs match but order differs")
+	}
+
+	diffQueenTeam := *sameLast
+	diffQueenTeam.QueenCastes = []string{"auditor"}
+	if continueOptionsMatchCurrent(opts, &diffQueenTeam) {
+		t.Fatal("expected false when the Queen's proposed team differs")
+	}
+
+	diffQueenReason := *sameLast
+	diffQueenReason.QueenCasteWhy = []string{"measurer=compare memory"}
+	if continueOptionsMatchCurrent(opts, &diffQueenReason) {
+		t.Fatal("expected false when a per-caste Queen reason differs")
 	}
 }
 
