@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 status: executing
-stopped_at: Completed 195-01-PLAN.md
-last_updated: "2026-08-27T02:27:54.002Z"
+stopped_at: Completed 195-02-PLAN.md
+last_updated: "2026-08-27T02:56:02.659Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 24
-  completed_plans: 15
+  completed_plans: 16
   percent: 29
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 ## Current Position
 
-**Progress:** [██████░░░░] 63%
+**Progress:** [███████░░░] 67%
 
 Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-08-27
 
@@ -64,6 +64,7 @@ Last activity: 2026-08-27
 | Phase 194 P08 | 40min | 2 tasks | 3 files |
 | Phase 194 P09 | 48min | 2 tasks | 9 files |
 | Phase 195 P01 | 40min | 2 tasks | 2 files |
+| Phase 195 P02 | 23min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,8 @@ Last activity: 2026-08-27
 - [Phase 195]: Automatic grouping contracts the full phase graph only when the prospective same-caste component remains dependency-safe. — This prevents a valid task DAG from becoming a cyclic job DAG.
 - [Phase 195]: Only exact declared implementation paths create automatic edges; ubiquitous documentation, manifests, and lockfiles are incidental. — Bookkeeping overlap must not collapse independent work.
 - [Phase 195]: Automatic groups split against briefTaskContentAllowanceChars, while a single oversized task or accepted Queen proposal remains intact. — Brief content, not a magic task count, governs automatic job size.
+- [Phase 195]: Keep covered_task_ids as assignment scope and task_receipts as distinct optional evidence. — Semantic receipt admission belongs to Plan 195-04.
+- [Phase 195]: Reuse one codex.TaskReceipt and WorkerHandoff vocabulary across native and external completion JSON. — One reflected Go contract prevents lane drift and excludes worker-authored criteria or authoritative hashes.
 
 ### Pending Todos
 
@@ -194,6 +197,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T02:27:28.845Z
-Stopped at: Completed 195-01-PLAN.md
+Last session: 2026-08-27T02:56:02.645Z
+Stopped at: Completed 195-02-PLAN.md
 Resume file: None
