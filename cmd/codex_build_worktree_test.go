@@ -927,3 +927,331 @@ func TestMergePhaseWorktreesEmpty(t *testing.T) {
 		t.Errorf("expected 0 failed, got %d", len(failed))
 	}
 }
+
+// --- Phase 195 / JOBS-04: coherent jobs in isolated worktree mode ---
+
+// calVaultWorktreeInvoker is the literal six-batch CalVault shape from the
+// 2026-08-14 field run, executed in worktree mode: one source list, six
+// dependent copy steps. Every invocation records the checkout it ran in so
+// the test can prove one grouped job took one worktree, not six.
+type calVaultWorktreeInvoker struct {
+	mu        sync.Mutex
+	rootsSeen []string
+	briefs    []string
+}
+
+func (i *calVaultWorktreeInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	i.mu.Lock()
+	i.rootsSeen = append(i.rootsSeen, cfg.Root)
+	i.briefs = append(i.briefs, cfg.TaskBrief)
+	i.mu.Unlock()
+
+	if cfg.Caste != "builder" {
+		return codex.WorkerResult{
+			WorkerName: cfg.WorkerName,
+			Caste:      cfg.Caste,
+			TaskID:     cfg.TaskID,
+			Status:     "completed",
+			Summary:    "read-only worker completed",
+		}, nil
+	}
+
+	created := make([]string, 0, 6)
+	for batch := 1; batch <= 6; batch++ {
+		rel := calVaultBatchPath(batch)
+		target := filepath.Join(cfg.Root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		if err := os.WriteFile(target, []byte(fmt.Sprintf("batch %d copied\n", batch)), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		created = append(created, rel)
+	}
+	return codex.WorkerResult{
+		WorkerName:   cfg.WorkerName,
+		Caste:        cfg.Caste,
+		TaskID:       cfg.TaskID,
+		Status:       "completed",
+		Summary:      "copied all six recovery-matrix batches in one pass",
+		FilesCreated: created,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "pass",
+			CommandsRun:        []string{"ls templates"},
+		},
+	}, nil
+}
+
+func (i *calVaultWorktreeInvoker) IsAvailable(context.Context) bool { return true }
+func (i *calVaultWorktreeInvoker) ValidateAgent(string) error       { return nil }
+
+func (i *calVaultWorktreeInvoker) builderRoots() []string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	out := make([]string, 0, len(i.rootsSeen))
+	for _, r := range i.rootsSeen {
+		if strings.Contains(filepath.ToSlash(r), ".aether/worktrees/") {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func calVaultBatchPath(batch int) string {
+	return fmt.Sprintf("templates/batch-%d.md", batch)
+}
+
+// calVaultSixBatchTasks reproduces the field fixture exactly: six dependent
+// copy steps over the same recovery-matrix source list, each declaring its
+// own output file.
+func calVaultSixBatchTasks() ([]colony.Task, []string) {
+	ids := make([]string, 0, 6)
+	tasks := make([]colony.Task, 0, 6)
+	prev := ""
+	for batch := 1; batch <= 6; batch++ {
+		id := fmt.Sprintf("3.%d", batch)
+		ids = append(ids, id)
+		taskID := id
+		task := colony.Task{
+			ID:     &taskID,
+			Goal:   fmt.Sprintf("Copy CalVault file batch %d and record its recovery-matrix entries", batch),
+			Status: colony.TaskPending,
+			Hints:  []string{calVaultBatchPath(batch)},
+		}
+		if prev != "" {
+			task.DependsOn = []string{prev}
+		}
+		prev = id
+		tasks = append(tasks, task)
+	}
+	return tasks, ids
+}
+
+func newCalVaultWorktreeRepo(t *testing.T) (string, string) {
+	t.Helper()
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "checkout", "-b", "main")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-calvault\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+	return dataDir, root
+}
+
+// TestCalVaultSixBatchesBecomeOneWorktreeJob is the worktree-mode counterpart
+// of TestCalVaultSixBatchesBecomeOneInRepoJob. Phase 184/H5 deliberately
+// excluded worktree mode from coalescing, which meant the exact field failure
+// this project measured -- six fresh ~100k-token agents re-reading the same
+// source list -- was only fixed for in-repo users. JOBS-04 requires the same
+// one job to take exactly one worktree, one branch, one worker session and one
+// merge-back.
+func TestCalVaultSixBatchesBecomeOneWorktreeJob(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir, root := newCalVaultWorktreeRepo(t)
+
+	goal := "Copy the identified templates into a new folder tree, keeping a log"
+	tasks, ids := calVaultSixBatchTasks()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "light",
+		CurrentPhase: 0,
+		ParallelMode: colony.ModeWorktree,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:          1,
+			Name:        "Template recovery",
+			Description: "Copy the identified templates into a new folder tree, keeping a log.",
+			Status:      colony.PhaseReady,
+			Tasks:       tasks,
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	invoker := &calVaultWorktreeInvoker{}
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	if _, err := runCodexBuild(root, 1, nil, false); err != nil {
+		t.Fatalf("CalVault worktree build returned error: %v", err)
+	}
+
+	builderRoots := invoker.builderRoots()
+	if len(builderRoots) != 1 {
+		t.Fatalf("six dependent CalVault batches ran in %d worktree checkouts, want exactly 1 coherent job: %v",
+			len(builderRoots), builderRoots)
+	}
+
+	// One grouped dispatch, carrying every covered task in order.
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("load CalVault worktree manifest: %v", err)
+	}
+	waves := buildWaveDispatches(manifest.Dispatches)
+	if len(waves) != 1 {
+		t.Fatalf("CalVault worktree build planned %d task workers, want 1: %+v", len(waves), waves)
+	}
+	if !reflect.DeepEqual(waves[0].CoveredTaskIDs, ids) {
+		t.Fatalf("grouped worktree job covers %v, want the six batches in order %v", waves[0].CoveredTaskIDs, ids)
+	}
+	if strings.TrimSpace(waves[0].JobReason) == "" {
+		t.Fatalf("grouped worktree job carries no reason: %+v", waves[0])
+	}
+
+	// Exactly one worktree, allocated once and merged once.
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	if len(state.Worktrees) != 1 {
+		t.Fatalf("CalVault worktree build allocated %d worktrees, want 1: %+v", len(state.Worktrees), state.Worktrees)
+	}
+	if state.Worktrees[0].Status != colony.WorktreeMerged {
+		t.Fatalf("CalVault worktree status = %s, want merged", state.Worktrees[0].Status)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(state.Worktrees[0].Path))); !os.IsNotExist(err) {
+		t.Fatalf("merged CalVault worktree was not cleaned up: err=%v", err)
+	}
+
+	// The merge-back brought every batch into the root checkout, and every
+	// covered task is credited.
+	for batch := 1; batch <= 6; batch++ {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(calVaultBatchPath(batch)))); err != nil {
+			t.Fatalf("batch %d never reached the root checkout: %v", batch, err)
+		}
+	}
+	for _, task := range state.Plan.Phases[0].Tasks {
+		if task.Status != colony.TaskCompleted {
+			t.Fatalf("task %s is %q after the one grouped worker finished every batch, want %q",
+				*task.ID, task.Status, colony.TaskCompleted)
+		}
+	}
+}
+
+// TestDistinctWorktreeJobsStillRejectOverlap keeps the guard that grouping is
+// not allowed to weaken. Two genuinely unrelated tasks that only share an
+// incidental bookkeeping file are deliberately NOT combined into one job
+// (D-01), so they remain two owners of one path in the same wave -- which
+// worktree mode still cannot reconcile and must refuse before any worker runs.
+func TestDistinctWorktreeJobsStillRejectOverlap(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir, root := newCalVaultWorktreeRepo(t)
+
+	goal := "Two unrelated jobs must not silently share one declared path"
+	taskOne := "1.1"
+	taskTwo := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "light",
+		ParallelMode: colony.ModeWorktree,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Unrelated overlap",
+			Status: colony.PhaseReady,
+			Tasks: []colony.Task{
+				{ID: &taskOne, Goal: "Document the import pipeline", Hints: []string{"README.md"}, Status: colony.TaskPending},
+				{ID: &taskTwo, Goal: "Document the export pipeline", Hints: []string{"README.md"}, Status: colony.TaskPending},
+			},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	invoker := &countingWorktreeInvoker{}
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	_, err := runCodexBuild(root, 1, nil, false)
+	if err == nil {
+		t.Fatal("two unrelated jobs declaring one path were accepted; want an atomic pre-dispatch refusal")
+	}
+	if !strings.Contains(err.Error(), "README.md") {
+		t.Fatalf("ownership refusal does not name the contested path: %v", err)
+	}
+	if calls := invoker.callCount(); calls != 0 {
+		t.Fatalf("ownership refusal ran %d workers; the conflict must be caught before any worker starts", calls)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "README.md")); !os.IsNotExist(statErr) {
+		t.Fatal("refused build left worker output in the root checkout")
+	}
+}
+
+// TestGroupedWorktreeOwnsUnionedPaths asserts the real dispatch list the
+// worktree adapter consumes, not an intermediate planning record: one grouped
+// job must reach codex.WorkerDispatch carrying every covered task ID in order
+// and the unique sorted union of all its tasks' declared paths, so the
+// intentional within-job overlap has exactly one owner.
+func TestGroupedWorktreeOwnsUnionedPaths(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir, root := newCalVaultWorktreeRepo(t)
+	_ = dataDir
+
+	tasks, ids := calVaultSixBatchTasks()
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Template recovery",
+		Description: "Copy the identified templates into a new folder tree, keeping a log.",
+		Status:      colony.PhaseReady,
+		Tasks:       tasks,
+	}
+
+	planned := waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+		phase, colony.ColonyState{ParallelMode: colony.ModeWorktree}, nil, colony.VerificationDepthStandard))
+	if len(planned) != 1 {
+		t.Fatalf("planner produced %d task jobs, want 1 before worktree ownership runs", len(planned))
+	}
+
+	workerDispatches, err := buildCodexWorkerDispatches(
+		root, phase, planned, time.Now().UTC(), &codex.FakeInvoker{}, "", time.Minute, nil)
+	if err != nil {
+		t.Fatalf("convert grouped dispatch for worktree execution: %v", err)
+	}
+	if len(workerDispatches) != 1 {
+		t.Fatalf("grouped job became %d worker dispatches, want 1", len(workerDispatches))
+	}
+	got := workerDispatches[0]
+	if !reflect.DeepEqual(got.CoveredTaskIDs, ids) {
+		t.Fatalf("WorkerDispatch.CoveredTaskIDs = %v, want the six batches in order %v", got.CoveredTaskIDs, ids)
+	}
+	if strings.TrimSpace(got.JobName) == "" || strings.TrimSpace(got.JobReason) == "" {
+		t.Fatalf("WorkerDispatch lost its grouped job identity: name=%q reason=%q", got.JobName, got.JobReason)
+	}
+	wantPaths := make([]string, 0, 6)
+	for batch := 1; batch <= 6; batch++ {
+		wantPaths = append(wantPaths, calVaultBatchPath(batch))
+	}
+	if !reflect.DeepEqual(got.DeclaredPaths, wantPaths) {
+		t.Fatalf("WorkerDispatch.DeclaredPaths = %v, want the unique sorted union %v", got.DeclaredPaths, wantPaths)
+	}
+
+	// One owner for the whole union: the same-wave ownership guard must not
+	// see a grouped job's intentional internal overlap as a conflict.
+	if err := validateDeclaredWorktreeOwnership(workerDispatches); err != nil {
+		t.Fatalf("grouped job's own unioned paths were refused as a conflict: %v", err)
+	}
+
+	// Two distinct jobs sharing one path still fail, and the refusal names
+	// both jobs, not just their primary task IDs.
+	rival := got
+	rival.WorkerName = "Rival-1"
+	rival.TaskID = "9.9"
+	rival.CoveredTaskIDs = []string{"9.9"}
+	rival.JobName = "rival-job"
+	conflictErr := validateDeclaredWorktreeOwnership([]codex.WorkerDispatch{got, rival})
+	if conflictErr == nil {
+		t.Fatal("two distinct jobs declaring the same path were accepted")
+	}
+	if !strings.Contains(conflictErr.Error(), "rival-job") || !strings.Contains(conflictErr.Error(), got.JobName) {
+		t.Fatalf("ownership conflict does not name both jobs: %v", conflictErr)
+	}
+}
