@@ -225,3 +225,73 @@ func TestCLAUDEMDCheckinPrecedenceMatchesRuntime(t *testing.T) {
 		})
 	}
 }
+
+// coherentJobDocSectionHeading is the CLAUDE.md heading that opens the Phase
+// 195 text. The section runs to the next top-level (`## `) heading, which is
+// what claudeMDCoherentJobSection returns.
+const coherentJobDocSectionHeading = "### Coherent Jobs and Completion Evidence"
+
+// claudeMDCoherentJobSection returns only the slice of CLAUDE.md that Phase 195
+// wrote or rewrote.
+func claudeMDCoherentJobSection(t *testing.T, content string) string {
+	t.Helper()
+	start := strings.Index(content, coherentJobDocSectionHeading)
+	if start < 0 {
+		t.Fatalf("CLAUDE.md no longer contains the heading %q", coherentJobDocSectionHeading)
+	}
+	rest := content[start:]
+	end := strings.Index(rest, "\n## ")
+	if end < 0 {
+		return rest
+	}
+	return rest[:end]
+}
+
+// TestCoherentJobDocAnchorsAreDiscriminating is the guard on the guard
+// (WR-09, 195-REVIEW.md).
+//
+// TestCLAUDEMDStatesCoherentJobContract only asks whether an anchor phrase
+// appears anywhere in CLAUDE.md. Three of its anchors -- "in-repo",
+// "worktree" and "refused by name" -- were ordinary words this document had
+// already used for years in unrelated sections, so those three assertions
+// stayed green with every sentence Phase 195 wrote deleted. Per CLAUDE.md's
+// own Definition of Done, an assertion that passes identically with the
+// feature removed is not a lock.
+//
+// This test makes every anchor genuinely able to fail: each must occur exactly
+// once in the whole document, and that one occurrence must sit inside the
+// Phase 195 section. An anchor generic enough to appear elsewhere fails the
+// count; an anchor that survives deleting the section fails the location.
+func TestCoherentJobDocAnchorsAreDiscriminating(t *testing.T) {
+	content := readCLAUDEMDForCoherentJobs(t)
+	section := claudeMDCoherentJobSection(t, content)
+
+	for _, claim := range requiredCoherentJobDocClaims {
+		occurrences := strings.Count(content, claim)
+		switch {
+		case occurrences == 0:
+			t.Errorf("CLAUDE.md is missing required Phase 195 claim %q", claim)
+		case occurrences > 1:
+			t.Errorf("required Phase 195 claim %q appears %d times in CLAUDE.md; an anchor this generic stays green with the whole section deleted, so it locks nothing -- use a phrase unique to the Phase 195 text", claim, occurrences)
+		}
+		if !strings.Contains(section, claim) {
+			t.Errorf("required Phase 195 claim %q does not appear inside the %q section, so deleting that section would not fail the lock", claim, coherentJobDocSectionHeading)
+		}
+	}
+}
+
+// TestCoherentJobDocAnchorsFailWithTheSectionRemoved proves the lock above has
+// teeth by running the same check against a CLAUDE.md with the Phase 195
+// section cut out. Every anchor must fail. If any anchor survives that
+// deletion, it was never locking Phase 195's text.
+func TestCoherentJobDocAnchorsFailWithTheSectionRemoved(t *testing.T) {
+	content := readCLAUDEMDForCoherentJobs(t)
+	section := claudeMDCoherentJobSection(t, content)
+	without := strings.Replace(content, section, "", 1)
+
+	for _, claim := range requiredCoherentJobDocClaims {
+		if strings.Contains(without, claim) {
+			t.Errorf("anchor %q still appears in CLAUDE.md after the entire Phase 195 section is deleted -- it cannot fail, so it is not a lock", claim)
+		}
+	}
+}
