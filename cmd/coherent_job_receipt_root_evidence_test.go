@@ -80,12 +80,16 @@ func TestNoChangeReceiptStillCreditsWithoutNamingFilesItself(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "thing.go"), []byte("package thing\n"), 0o644); err != nil {
 		t.Fatalf("seed root file: %v", err)
 	}
+	// WR-15 (owner decision, 2026-08-27): "honest" now also means the check
+	// this receipt names really passes when the program re-runs it, so the
+	// project has to contain a check that can actually be run.
+	seedGoCheck(t, root, "thing", true)
 
 	receipt := codex.TaskReceipt{
 		TaskID:  "1.1",
 		Status:  codex.TaskReceiptStatusCompletedNoChange,
 		Summary: "already true; verified",
-		Handoff: passingHandoff("go test ./cmd -run TestNothing"),
+		Handoff: passingHandoff("go test ./..."),
 	}
 
 	admission, violations := admitCoherentJobTaskReceipts(root, phase, dispatch, nil, []codex.TaskReceipt{receipt})

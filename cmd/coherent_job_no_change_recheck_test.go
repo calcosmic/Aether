@@ -22,21 +22,36 @@ import (
 // what the re-run did, never on whether a file was there.
 func seedRecheckableProject(t *testing.T, root string, passes bool) {
 	t.Helper()
+	writeRecheckFile(t, root, "thing.go", "package thing\n")
+	seedGoCheck(t, root, "thing", passes)
+}
+
+func writeRecheckFile(t *testing.T, root, name, body string) {
+	t.Helper()
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatalf("create project dir: %v", err)
 	}
-	write := func(name, body string) {
-		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o644); err != nil {
-			t.Fatalf("seed %s: %v", name, err)
-		}
+	if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o644); err != nil {
+		t.Fatalf("seed %s: %v", name, err)
 	}
-	write("go.mod", "module example.com/recheck\n\ngo 1.21\n")
-	write("thing.go", "package thing\n")
-	if passes {
-		write("thing_test.go", "package thing\n\nimport \"testing\"\n\nfunc TestThing(t *testing.T) {}\n")
-		return
+}
+
+// seedGoCheck makes "go test ./..." a real, deterministic check inside root by
+// writing a one-package Go module there whose own test passes or fails as
+// asked. pkg must match any Go file the caller already put in root.
+//
+// Tests that expect a "nothing needed changing" receipt to be CREDITED have to
+// call this (or seed an equivalent), because since the owner's WR-15 ruling the
+// program re-runs the check such a receipt names and refuses credit unless that
+// check really passes.
+func seedGoCheck(t *testing.T, root, pkg string, passes bool) {
+	t.Helper()
+	writeRecheckFile(t, root, "go.mod", "module example.com/recheck\n\ngo 1.21\n")
+	body := "package " + pkg + "\n\nimport \"testing\"\n\nfunc TestAlreadyTrue(t *testing.T) {}\n"
+	if !passes {
+		body = "package " + pkg + "\n\nimport \"testing\"\n\nfunc TestAlreadyTrue(t *testing.T) { t.Fatal(\"the thing was not already true\") }\n"
 	}
-	write("thing_test.go", "package thing\n\nimport \"testing\"\n\nfunc TestThing(t *testing.T) { t.Fatal(\"the thing was not already true\") }\n")
+	writeRecheckFile(t, root, "aether_recheck_test.go", body)
 }
 
 func noChangeRecheckPhase() colony.Phase {

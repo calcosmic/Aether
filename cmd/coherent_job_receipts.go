@@ -56,6 +56,12 @@ type coherentJobReceiptCandidate struct {
 	// commands_run stage 1 already forced it to carry.
 	Status string
 	Claim  codexBuildTaskClaim
+	// Commands is the receipt's own handoff.commands_run, copied verbatim.
+	// Stage 1 only COPIES it -- copying a string reads nothing and runs
+	// nothing, so stage 1's "touches no disk" contract is untouched. Stage 2
+	// is where those commands are actually re-run, for a no-change receipt,
+	// under WR-15's owner ruling.
+	Commands []string
 }
 
 // coherentJobReceiptAdmission is the entirety of stage 1's output: candidate
@@ -278,7 +284,12 @@ func admitCoherentJobTaskReceipts(root string, phase colony.Phase, dispatch code
 			}
 		}
 
-		admission.Candidates = append(admission.Candidates, coherentJobReceiptCandidate{TaskID: taskID, Status: status, Claim: claim})
+		admission.Candidates = append(admission.Candidates, coherentJobReceiptCandidate{
+			TaskID:   taskID,
+			Status:   status,
+			Claim:    claim,
+			Commands: append([]string{}, receipt.Handoff.CommandsRun...),
+		})
 		syncPaths = append(syncPaths, claimedPaths(claim)...)
 	}
 	sort.Slice(admission.Candidates, func(i, j int) bool { return admission.Candidates[i].TaskID < admission.Candidates[j].TaskID })
@@ -335,12 +346,22 @@ func rootBackedArtifactEvidence(root string, paths []string) ([]codexBuildArtifa
 // definition (ruling D6); it is credited only when its TASK names at least
 // one file and every one of those files is a readable regular file in root
 // right now, so the exemption rests on the project's own state rather than on
-// the worker's account of itself (NEW-02, 195-REVIEW.iter2.md).
+// the worker's account of itself (NEW-02, 195-REVIEW.iter2.md) -- AND, since
+// the owner's WR-15 ruling, only when the program itself re-runs the check
+// that receipt named and sees it pass (cmd/coherent_job_no_change_recheck.go).
+// Running a command is a stronger act than reading a file, so it belongs here,
+// in the only stage allowed to touch the checkout, and never in stage 1.
 func finalizeCoherentJobTaskReceiptEvidence(root string, phase colony.Phase, dispatch codexBuildDispatch, admission coherentJobReceiptAdmission) ([]codexBuildTaskClaim, []string, []contractViolation) {
 	var claims []codexBuildTaskClaim
 	var completedTaskIDs []string
 	var violations []contractViolation
 	worker := strings.TrimSpace(dispatch.Name)
+
+	// WR-15: created only when the first "nothing needed changing" receipt is
+	// actually reached, so a build without one runs no extra command and
+	// spends no extra wall-clock at all.
+	var recheck *noChangeRecheckRunner
+	defer func() { recheck.close() }()
 
 	// NEW-02 (195-REVIEW.iter2.md): phase is no longer decorative here. A
 	// no-change receipt names no file of its own, so the only thing that can
@@ -405,6 +426,30 @@ func finalizeCoherentJobTaskReceiptEvidence(root string, phase colony.Phase, dis
 					Value:   candidate.TaskID,
 					Rule:    violationRuleTaskReceiptRootEvidenceMissing,
 					Message: fmt.Sprintf("task %s reports that nothing needed changing, but the project does not have %s (or it is unreadable), so nothing confirms the task was already done; not credited", candidate.TaskID, strings.Join(missing, ", ")),
+				})
+				continue
+			}
+
+			// WR-15 (owner decision, 2026-08-27). Everything above this point
+			// is still only "the files this task names are there" -- and for a
+			// task that edits existing code, those files were there before the
+			// build started. So the last thing standing between a sentence and
+			// completion credit was the worker's own word about a check nothing
+			// ever ran. Now the program runs that check itself and believes the
+			// result. The three bounds this branch already carried are kept, not
+			// replaced: the task must still declare files, those files must
+			// still be present, and no artifact evidence is invented here that
+			// the worker did not earn.
+			if recheck == nil {
+				recheck = newNoChangeRecheckRunner(root)
+			}
+			if verdict := recheck.verdict(candidate.TaskID, candidate.Commands); !verdict.Confirmed {
+				violations = append(violations, contractViolation{
+					Worker:  worker,
+					Field:   "task_receipts.handoff.commands_run",
+					Value:   candidate.TaskID,
+					Rule:    verdict.Rule,
+					Message: verdict.Message,
 				})
 				continue
 			}

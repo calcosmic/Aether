@@ -192,7 +192,7 @@ record of what was knowingly left — the third review said outright that WR-15
 belonged in this file, and it was not added until the phase verifier caught the
 omission.
 
-### WR-15 — what a "nothing needed changing" report may claim (OWNER DECISION)
+### WR-15 — what a "nothing needed changing" report may claim (OWNER DECISION) — IMPLEMENTED 2026-08-27
 
 - **Severity:** WARNING — a residual design point, not a defect in the fix.
 - **Where:** `cmd/coherent_job_receipts.go` (the no-change branch of the two-stage
@@ -225,6 +225,43 @@ omission.
   **Scope note:** this is a scope ADDITION decided after the phase verified 4/4 on
   its own criteria. It is tracked here rather than retro-fitted into a plan's
   must_haves, so the phase's own record stays honest about what it promised.
+- **IMPLEMENTED 2026-08-27.** New file `cmd/coherent_job_no_change_recheck.go`;
+  wired into stage 2 (`finalizeCoherentJobTaskReceiptEvidence`) only — stage 1
+  merely copies the receipt's `commands_run` strings onto the candidate, which
+  reads nothing and runs nothing, so its "touches no disk" contract is intact.
+  It calls Phase 193's `commandSafeToReRun` / `reRunOneBuilderCommand` directly
+  (no extraction needed, no second runner): fixed allowlist of build/test
+  runners, no shell metacharacters, argv only, never `sh -c`. Every command a
+  receipt names is safety-checked BEFORE any of them runs, so pairing a
+  legitimate check with an illegitimate one runs neither.
+  **Credit requires** all three: every named check is a runnable shape, at
+  least one actually ran and passed, none ran and failed. Three named refusal
+  rules report through the existing owner-facing refusal path:
+  `task_receipt.no_change_command_refused` (not a runner / shell tricks — never
+  executed), `task_receipt.no_change_check_failed` (ran, failed),
+  `task_receipt.no_change_check_unavailable` (no result obtainable here).
+  A receipt naming no command at all was already refused by stage 1
+  (`task_receipt.unevidenced`); that is unchanged and is now also backstopped
+  in stage 2.
+  **Cost bound:** 2 minutes per command, 5 minutes total per finalize pass
+  however many no-change receipts there are, at most 3 commands re-run per
+  receipt, identical commands run once and their result reused. A build with no
+  no-change receipt creates no runner and spends nothing.
+  **The three earlier bounds are kept, not replaced** — phantom-build guard,
+  no artifacts from no-change credit, and the scope/status/summary/handoff
+  checks. The declared-files check still runs first, so a missing file is
+  refused before any wall-clock is spent.
+  **Locked by** `TestNoChangeReceiptCreditedWhenItsNamedCheckPassesOnReRun`,
+  `TestNoChangeReceiptRefusedWhenItsNamedCheckFailsOnReRun`,
+  `TestNoChangeReceiptCheckIsNeverHandedToAShell` (a sentinel file proves the
+  refused commands were never executed) and `TestNoChangeRefusalsAreOwnerVisible`,
+  in `cmd/coherent_job_no_change_recheck_test.go`.
+  **Two pre-existing tests changed with the bar:**
+  `TestNoChangeReceiptStillCreditsWithoutNamingFilesItself` and
+  `TestGenuineNoChangeReceiptIsStillCreditedWhenTheProjectBacksIt` each named a
+  check that cannot pass in a bare temp directory. They now seed a runnable
+  one-package Go module so their "credited" direction is earned rather than
+  assumed.
 
 ### IN-13 — the replay's existing-record branch has no assertion
 

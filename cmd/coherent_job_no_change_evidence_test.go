@@ -89,12 +89,16 @@ func TestGenuineNoChangeReceiptIsStillCreditedWhenTheProjectBacksIt(t *testing.T
 	if err := os.WriteFile(filepath.Join(root, "config", "settings.yaml"), []byte("already: true\n"), 0o644); err != nil {
 		t.Fatalf("seed config file: %v", err)
 	}
+	// WR-15 (owner decision, 2026-08-27): the file being present is no longer
+	// the whole bar -- the check this receipt names is re-run by the program
+	// and has to pass, so the project must contain a runnable check.
+	seedGoCheck(t, root, "recheck", true)
 
 	receipt := codex.TaskReceipt{
 		TaskID:  "1.1",
 		Status:  codex.TaskReceiptStatusCompletedNoChange,
 		Summary: "the setting was already correct; nothing to change",
-		Handoff: passingHandoff("go test ./cmd -run TestSettings"),
+		Handoff: passingHandoff("go test ./..."),
 	}
 
 	admission, violations := admitCoherentJobTaskReceipts(root, phase, dispatch, nil, []codex.TaskReceipt{receipt})
