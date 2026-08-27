@@ -5,15 +5,15 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 195
 current_phase_name: coherent-jobs
 status: executing
-stopped_at: Completed 195-06-PLAN.md
-last_updated: "2026-08-27T06:47:26.517Z"
+stopped_at: Completed 195-07-PLAN.md
+last_updated: "2026-08-27T07:31:56.331Z"
 last_activity: 2026-08-27
-state_head: 94ffb01c5aed8f4308f83b55e475dfc0f7fd0b9c
+state_head: 6d7e6d6bd6edecb78b6051a40831f90546d34387
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 20
+  completed_plans: 21
   percent: 14
 ---
 
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [█░░░░░░░░░] 14%
 
 Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
 Last activity: 2026-08-27
 
@@ -72,6 +72,7 @@ Last activity: 2026-08-27
 | Phase 195 P04 | 25min | 2 tasks | 8 files |
 | Phase 195 P05 | 50min | 2 tasks | 5 files |
 | Phase 195 P06 | 100min | 2 tasks | 6 files |
+| Phase 195 P07 | 70min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,7 @@ Last activity: 2026-08-27
 - [Phase 195]: External build-finalize reuses the native lane's shared receipt admission/finalization boundary unchanged -- no second, external-only validator was written.
 - [Phase 195]: BUILT-transition gating falls back to the union of every dispatch's own covered tasks when no explicit task selection is passed, so the ordinary no-filter build isn't misread as trivially fully-credited.
 - [Phase 195]: Provenance's phantom-build guard now accepts a failed worker carrying genuine, evidenced task receipts as real partial provenance; zero receipts still reject the whole packet, unchanged.
+- [Phase 195]: [Phase 195]: planCoherentJobRetry reuses the canonical planCoherentJobs grouping pass for a parent job's unfinished tasks (single all-inclusive proposal over the uncredited subset) rather than a second dependency graph; a new buildAttemptPartial attempt status (distinct from built/failed) plus ParentAttemptID/ParentJobName (begin-then-attach, same discipline as checkFixAttemptRecord) make D-10 recovery append-only on both build lanes -- retry only ever follows accepted credit, never a total failure with zero receipts.
 
 ### Pending Todos
 
@@ -215,6 +217,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T06:47:26.382Z
-Stopped at: Completed 195-06-PLAN.md
+Last session: 2026-08-27T07:31:56.126Z
+Stopped at: Completed 195-07-PLAN.md
 Resume file: None

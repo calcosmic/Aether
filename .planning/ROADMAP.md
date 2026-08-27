@@ -181,7 +181,7 @@ Plans:
 
 **Wave 5** *(blocked on both completion lanes)*
 
-- [ ] 195-07-PLAN.md — Append-only, parent-linked, unfinished-only recovery jobs (wave 5)
+- [x] 195-07-PLAN.md — Append-only, parent-linked, unfinished-only recovery jobs (wave 5)
 
 **Wave 6** *(blocked on retry and receipt truth)*
 
