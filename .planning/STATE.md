@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 status: executing
-stopped_at: Completed 195-02-PLAN.md
-last_updated: "2026-08-27T02:56:02.659Z"
+stopped_at: Completed 195-03-PLAN.md
+last_updated: "2026-08-27T04:47:53.000Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 24
-  completed_plans: 16
+  completed_plans: 17
   percent: 29
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [███████░░░] 67%
 
 Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
 Last activity: 2026-08-27
 
@@ -65,6 +65,7 @@ Last activity: 2026-08-27
 | Phase 194 P09 | 48min | 2 tasks | 9 files |
 | Phase 195 P01 | 40min | 2 tasks | 2 files |
 | Phase 195 P02 | 23min | 2 tasks | 6 files |
+| Phase 195 P03 | 95min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,10 @@ Last activity: 2026-08-27
 - [Phase 195]: Automatic groups split against briefTaskContentAllowanceChars, while a single oversized task or accepted Queen proposal remains intact. — Brief content, not a magic task count, governs automatic job size.
 - [Phase 195]: Keep covered_task_ids as assignment scope and task_receipts as distinct optional evidence. — Semantic receipt admission belongs to Plan 195-04.
 - [Phase 195]: Reuse one codex.TaskReceipt and WorkerHandoff vocabulary across native and external completion JSON. — One reflected Go contract prevents lane drift and excludes worker-authored criteria or authoritative hashes.
+- [Phase 195]: Coherent-job planning runs before task waves and before declared-worktree-ownership validation on every build lane, so same-wave declared overlap becomes one job instead of a pre-dispatch conflict error; `coalesceSequentialDispatches` keeps no live production caller.
+- [Phase 195]: Grouped briefs gain an additive `## Covered Task Contracts` section carrying only what has no legacy single-task home (evidence requirements and otherwise-unlisted declared paths), so a one-task brief stays byte-for-byte unchanged.
+- [Phase 195]: Every dispatch consumer iterates `dispatchCoveredTaskIDs` rather than the bare `TaskID` — abandoned-build recovery and continue assessment both previously lost every covered task after the first.
+- [Phase 195]: Owner-facing wording is `covered tasks`, not `dependent tasks`; automatic grouping is no longer dependency-only, so the old phrase had become false.
 
 ### Pending Todos
 
@@ -126,7 +131,7 @@ Last activity: 2026-08-27
 - [x] Phase 193: Free Checks Are the Floor — executed and verified 2026-08-22 (v1.27)
 - [x] Discuss + plan Phase 194: The Queen Decides the Team — planned 2026-08-23 (9 plans, 9 waves)
 - [x] Execute and verify Phase 194: The Queen Decides the Team — complete 2026-08-26 (9/9 plans, 9/9 UAT)
-- [ ] Discuss and plan Phase 195: Coherent Jobs ← **next**
+- [~] Phase 195: Coherent Jobs — discussed and planned (10 plans); executing, 3/10 complete 2026-08-27 ← **current**
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
@@ -197,6 +202,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T02:56:02.645Z
-Stopped at: Completed 195-02-PLAN.md
+Last session: 2026-08-27T04:47:53.000Z
+Stopped at: Completed 195-03-PLAN.md (recovered in place after an interrupted Codex executor; handoff cleared)
 Resume file: None
