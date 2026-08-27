@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -38,6 +39,139 @@ func TestCompletionPacketSchemaMatchesStructs(t *testing.T) {
 		line := firstDifferingLine(generated, committed)
 		t.Fatalf("completion-packet schema drift: %s no longer matches the Go structs (first differing line: %d); regenerate with `aether contract-schema --write`", completionPacketSchemaRel, line)
 	}
+}
+
+func TestCompletionPacketSchemaStructProjectsTaskReceipts(t *testing.T) {
+	raw := []byte(`{
+		"name":"Mason-67",
+		"status":"completed",
+		"covered_task_ids":["task-create","task-update"],
+		"task_receipts":[{
+			"task_id":"task-create",
+			"status":"completed",
+			"summary":"Created the model.",
+			"files_created":["models/new.go"],
+			"files_modified":[],
+			"tests_written":["models/new_test.go"],
+			"handoff":{"changed_files":["models/new.go","models/new_test.go"],"commands_run":["go test ./models"],"verification_status":"pass","known_failures":[],"open_decisions":[],"assumptions":[],"next_worker_instructions":[],"do_not_repeat":[],"freshness":"2026-08-27T00:00:00Z"}
+		}]
+	}`)
+
+	var result codexExternalBuildWorkerResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("unmarshal external worker result: %v", err)
+	}
+	projected, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal external worker result: %v", err)
+	}
+
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(projected, &wire); err != nil {
+		t.Fatalf("unmarshal projected worker result: %v", err)
+	}
+	if _, ok := wire["task_receipts"]; !ok {
+		t.Fatalf("external worker result dropped task_receipts during Go projection: %s", projected)
+	}
+	if _, ok := wire["covered_task_ids"]; !ok {
+		t.Fatalf("external worker result dropped covered_task_ids assignment scope: %s", projected)
+	}
+}
+
+func TestCompletionPacketSchemaProjectsTaskReceiptVocabulary(t *testing.T) {
+	resultProperties := schemaDefinitionPropertyNames(t, "codexExternalBuildWorkerResult")
+	for _, want := range []string{"covered_task_ids", "task_receipts"} {
+		if !slices.Contains(resultProperties, want) {
+			t.Fatalf("external worker result schema missing distinct %q field: %v", want, resultProperties)
+		}
+	}
+
+	receiptProperties := schemaDefinitionPropertyNames(t, "TaskReceipt")
+	wantReceiptProperties := []string{
+		"files_created", "files_modified", "handoff", "status", "summary", "task_id", "tests_written",
+	}
+	assertFieldSetsEqual(t, "TaskReceipt wire vocabulary", wantReceiptProperties, receiptProperties)
+}
+
+func TestCompletionPacketSchemaTaskReceiptValidation(t *testing.T) {
+	t.Run("valid receipt", func(t *testing.T) {
+		if violations := validateCompletionPacketStructure(completionPacketWithTaskReceipt()); len(violations) != 0 {
+			t.Fatalf("valid task receipt rejected: %+v", violations)
+		}
+	})
+
+	t.Run("legacy packet without receipts", func(t *testing.T) {
+		packet := map[string]any{
+			"dispatches": []any{map[string]any{"name": "legacy-worker", "status": "completed"}},
+		}
+		if violations := validateCompletionPacketStructure(packet); len(violations) != 0 {
+			t.Fatalf("legacy completion packet without task_receipts rejected: %+v", violations)
+		}
+	})
+
+	t.Run("unknown receipt property", func(t *testing.T) {
+		packet := completionPacketWithTaskReceipt()
+		receipt := packet["dispatches"].([]any)[0].(map[string]any)["task_receipts"].([]any)[0].(map[string]any)
+		receipt["requirements"] = []any{"worker-authored criteria must not be authoritative"}
+
+		violations := validateCompletionPacketStructure(packet)
+		if !hasContractViolationAt(violations, "/dispatches/0/task_receipts/0", "additionalProperties") {
+			t.Fatalf("unknown receipt property was not rejected at the receipt boundary: %+v", violations)
+		}
+	})
+
+	t.Run("wrong receipt field type", func(t *testing.T) {
+		packet := completionPacketWithTaskReceipt()
+		receipt := packet["dispatches"].([]any)[0].(map[string]any)["task_receipts"].([]any)[0].(map[string]any)
+		receipt["task_id"] = 42
+
+		violations := validateCompletionPacketStructure(packet)
+		if !hasContractViolationAt(violations, "/dispatches/0/task_receipts/0/task_id", "type") {
+			t.Fatalf("wrong task_id type was not rejected: %+v", violations)
+		}
+	})
+}
+
+func completionPacketWithTaskReceipt() map[string]any {
+	return map[string]any{
+		"dispatches": []any{
+			map[string]any{
+				"name":             "Mason-67",
+				"status":           "completed",
+				"covered_task_ids": []any{"task-create", "task-update"},
+				"task_receipts": []any{
+					map[string]any{
+						"task_id":        "task-create",
+						"status":         "completed",
+						"summary":        "Created the model.",
+						"files_created":  []any{"models/new.go"},
+						"files_modified": []any{},
+						"tests_written":  []any{"models/new_test.go"},
+						"handoff": map[string]any{
+							"changed_files":            []any{"models/new.go", "models/new_test.go"},
+							"commands_run":             []any{"go test ./models"},
+							"verification_status":      "pass",
+							"known_failures":           []any{},
+							"open_decisions":           []any{},
+							"assumptions":              []any{},
+							"next_worker_instructions": []any{},
+							"do_not_repeat":            []any{},
+							"freshness":                "2026-08-27T00:00:00Z",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func hasContractViolationAt(violations []contractViolation, field, rule string) bool {
+	for _, violation := range violations {
+		if violation.Field == field && violation.Rule == rule {
+			return true
+		}
+	}
+	return false
 }
 
 // TestContractDocExampleValidatesAgainstSchema proves the shipped handoff
