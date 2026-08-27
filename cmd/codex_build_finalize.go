@@ -1585,6 +1585,14 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 	dispatches := make([]codexBuildDispatch, len(manifest.Dispatches))
 	usedResults := make(map[string]bool, len(results))
 	for i, dispatch := range manifest.Dispatches {
+		// CR-03 (195-REVIEW.md): task credit and per-task claims are decided
+		// by the runtime from evidence it checked itself, never accepted from
+		// an inbound manifest. The struct tags already keep them off the wire;
+		// clearing here as well means no in-memory path -- a test fixture, a
+		// future decoder, a hand-built manifest -- can smuggle a verdict past
+		// the receipt boundary either.
+		dispatch.CompletedTaskIDs = nil
+		dispatch.TaskClaims = nil
 		dispatches[i] = dispatch
 		resultName, result, ok, err := selectExternalBuildResultForDispatch(dispatch.Name, resultByName, usedResults)
 		if err != nil {

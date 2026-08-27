@@ -626,8 +626,22 @@ func assertMergeExternalBuildResultsGrantsNoCredit(t *testing.T) {
 	if strings.Contains(body, "attachBuildArtifactEvidence") {
 		t.Fatal("mergeExternalBuildResults must not call attachBuildArtifactEvidence -- that root-evidence read belongs to finalizeCoherentJobTaskReceiptEvidence alone")
 	}
-	if strings.Contains(body, ".CompletedTaskIDs =") || strings.Contains(body, ".CompletedTaskIDs=") {
+	// CR-03 (195-REVIEW.md): the ONLY writes this function may make to the
+	// runtime-owned credit fields are the defensive clears that strip an
+	// inbound manifest's self-asserted verdict. Prove both clears are present,
+	// then prove nothing else assigns either field.
+	for _, clear := range []string{"dispatch.CompletedTaskIDs = nil", "dispatch.TaskClaims = nil"} {
+		if !strings.Contains(body, clear) {
+			t.Fatalf("mergeExternalBuildResults must defensively clear inbound task credit -- %q is missing, so a wrapper-authored manifest can carry its own verdict past the receipt boundary", clear)
+		}
+	}
+	stripped := strings.ReplaceAll(body, "dispatch.CompletedTaskIDs = nil", "")
+	stripped = strings.ReplaceAll(stripped, "dispatch.TaskClaims = nil", "")
+	if strings.Contains(stripped, ".CompletedTaskIDs =") || strings.Contains(stripped, ".CompletedTaskIDs=") {
 		t.Fatal("mergeExternalBuildResults must not assign CompletedTaskIDs -- that completion credit belongs to finalizeCoherentJobTaskReceiptEvidence alone")
+	}
+	if strings.Contains(stripped, ".TaskClaims =") || strings.Contains(stripped, ".TaskClaims=") {
+		t.Fatal("mergeExternalBuildResults must not assign TaskClaims -- per-task claims belong to finalizeCoherentJobTaskReceiptEvidence alone")
 	}
 }
 

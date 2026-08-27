@@ -66,11 +66,19 @@ type codexBuildDispatch struct {
 	// completedBuildTaskIDs is the only reader of this field for such a
 	// dispatch; nothing may synthesize it from touched files or from
 	// CoveredTaskIDs membership alone.
-	CompletedTaskIDs []string `json:"completed_task_ids,omitempty"`
+	//
+	// CR-03 (195-REVIEW.md): it is in-process runtime state, NEVER wire
+	// contract -- `json:"-"` like ReceiptsResolved. A completion packet
+	// carries the wrapper's own copy of the dispatch manifest, and on the
+	// legacy (unbound) finalize path that copy is entirely externally shaped.
+	// While this field was serialized, a manifest that simply asserted "these
+	// tasks are done" credited them with zero receipts and zero evidence.
+	CompletedTaskIDs []string `json:"-"`
 	// TaskClaims mirrors CompletedTaskIDs: one root-evidenced claim per
 	// credited task, keyed by that task's own ID rather than this dispatch's
-	// primary TaskID (Pitfall 4, 195-RESEARCH.md).
-	TaskClaims []codexBuildTaskClaim `json:"task_claims,omitempty"`
+	// primary TaskID (Pitfall 4, 195-RESEARCH.md). Runtime-owned and
+	// unserialized for the same reason (CR-03).
+	TaskClaims []codexBuildTaskClaim `json:"-"`
 	// ReceiptsResolved marks a dispatch whose receipts already passed through
 	// the shared two-stage boundary on a lane that had to insert a sync step
 	// between the stages (worktree mode). It is in-process only -- never

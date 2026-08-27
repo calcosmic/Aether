@@ -324,18 +324,6 @@
           },
           "type": "array"
         },
-        "completed_task_ids": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "task_claims": {
-          "items": {
-            "$ref": "#/$defs/codexBuildTaskClaim"
-          },
-          "type": "array"
-        },
         "depends_on": {
           "items": {
             "type": "string"
