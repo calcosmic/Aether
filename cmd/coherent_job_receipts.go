@@ -232,7 +232,15 @@ func admitCoherentJobTaskReceipts(root string, phase colony.Phase, dispatch code
 		// is nothing to bind against, and inferring ownership from prose
 		// would violate the "no ownership inferred from prose tokens"
 		// guidance (195-RESEARCH.md, What Might Have Been Missed).
-		if declared := declaredPathsForTask(task); len(declared) > 0 {
+		//
+		// NEW-02 (195-REVIEW.iter2.md): a completed_no_change receipt that
+		// claims no path at all is exempt from the binding, because by
+		// definition it changed nothing and so cannot touch its task's
+		// declared files. It does NOT get free credit for that: stage 2
+		// requires the task's own declared files to be present in root
+		// before such a receipt is credited, which is evidence the worker
+		// cannot write for itself.
+		if declared := declaredPathsForTask(task); len(declared) > 0 && !isUnchangedNoFileReceipt(status, claim) {
 			declaredSet := make(map[string]struct{}, len(declared))
 			for _, d := range declared {
 				declaredSet[d] = struct{}{}
@@ -264,6 +272,41 @@ func admitCoherentJobTaskReceipts(root string, phase colony.Phase, dispatch code
 	return admission, violations
 }
 
+// isUnchangedNoFileReceipt reports whether a receipt is the honest
+// "nothing needed changing" shape: a completed_no_change status that claims
+// no path at all. Such a receipt cannot satisfy a task's declared-file
+// binding, because it wrote nothing -- so stage 1 lets it past that check and
+// stage 2 demands the task's declared files be present in root instead
+// (NEW-02, 195-REVIEW.iter2.md).
+func isUnchangedNoFileReceipt(status string, claim codexBuildTaskClaim) bool {
+	return status == codex.TaskReceiptStatusCompletedNoChange && len(claimedPaths(claim)) == 0
+}
+
+// rootBackedArtifactEvidence snapshots every path in paths from the root
+// checkout as it stands right now, returning the evidence it could take and
+// the paths it could not. A path is "missing" when it is not a readable
+// regular file inside root -- which is the only question either stage-2
+// evidence rule asks.
+func rootBackedArtifactEvidence(root string, paths []string) ([]codexBuildArtifactEvidence, []string) {
+	evidenceInput := codexBuildClaims{FilesModified: append([]string{}, paths...)}
+	attachBuildArtifactEvidence(root, &evidenceInput)
+	evidenceByPath := make(map[string]codexBuildArtifactEvidence, len(evidenceInput.ArtifactEvidence))
+	for _, e := range evidenceInput.ArtifactEvidence {
+		evidenceByPath[e.Path] = e
+	}
+	var missing []string
+	evidence := make([]codexBuildArtifactEvidence, 0, len(paths))
+	for _, p := range paths {
+		e, ok := evidenceByPath[p]
+		if !ok {
+			missing = append(missing, p)
+			continue
+		}
+		evidence = append(evidence, e)
+	}
+	return evidence, missing
+}
+
 // finalizeCoherentJobTaskReceiptEvidence is stage 2 of the shared receipt
 // trust boundary. It consumes ONLY stage-1 candidates, confirms their files
 // are present in the root checkout right now, and is the only function in
@@ -274,14 +317,24 @@ func admitCoherentJobTaskReceipts(root string, phase colony.Phase, dispatch code
 // A candidate whose claimed paths are not readable regular files in root
 // right now is dropped without credit, and so is a `completed` candidate that
 // names no path at all -- pointing at nothing is never root-backed evidence
-// (CR-01, 195-REVIEW.md). The single exception is completed_no_change, whose
-// evidence is the commands_run stage 1 already required (ruling D6).
+// (CR-01, 195-REVIEW.md). A completed_no_change candidate names no path by
+// definition (ruling D6); it is credited only when its TASK names at least
+// one file and every one of those files is a readable regular file in root
+// right now, so the exemption rests on the project's own state rather than on
+// the worker's account of itself (NEW-02, 195-REVIEW.iter2.md).
 func finalizeCoherentJobTaskReceiptEvidence(root string, phase colony.Phase, dispatch codexBuildDispatch, admission coherentJobReceiptAdmission) ([]codexBuildTaskClaim, []string, []contractViolation) {
-	_ = phase
 	var claims []codexBuildTaskClaim
 	var completedTaskIDs []string
 	var violations []contractViolation
 	worker := strings.TrimSpace(dispatch.Name)
+
+	// NEW-02 (195-REVIEW.iter2.md): phase is no longer decorative here. A
+	// no-change receipt names no file of its own, so the only thing that can
+	// back it is the task's OWN declared files being present in root.
+	tasksByID := make(map[string]colony.Task, len(phase.Tasks))
+	for idx := range phase.Tasks {
+		tasksByID[buildTaskID(phase.Tasks[idx], idx)] = phase.Tasks[idx]
+	}
 
 	for _, candidate := range admission.Candidates {
 		claim := candidate.Claim
@@ -295,10 +348,20 @@ func finalizeCoherentJobTaskReceiptEvidence(root string, phase colony.Phase, dis
 			// not evidence of anything.
 			//
 			// The one narrow exception is completed_no_change, whose evidence
-			// is by definition not a file: stage 1 has already proven that
-			// receipt carries a passing verification_status and at least one
-			// concrete commands_run entry (ruling D6). Everything else is
-			// refused by name here rather than credited.
+			// is by definition not a file it wrote (ruling D6).
+			//
+			// NEW-02 (195-REVIEW.iter2.md): that exception used to rest
+			// entirely on things the worker wrote about itself -- the status
+			// word, the summary, and a commands_run string nothing runs or
+			// records. So the refusal above was avoidable by spelling the
+			// status differently, and a task with no declared files of its
+			// own was credited against a project directory that did not even
+			// exist. A no-change receipt is now backed by the project's own
+			// state instead: the task must name at least one file, and every
+			// file it names must really be there. That is the honest form of
+			// "it was already true" -- the thing the task is about exists and
+			// needed no change -- and it is not something a worker can assert
+			// into being.
 			if candidate.Status != codex.TaskReceiptStatusCompletedNoChange {
 				violations = append(violations, contractViolation{
 					Worker:  worker,
@@ -309,27 +372,31 @@ func finalizeCoherentJobTaskReceiptEvidence(root string, phase colony.Phase, dis
 				})
 				continue
 			}
+			declared := declaredPathsForTask(tasksByID[candidate.TaskID])
+			if len(declared) == 0 {
+				violations = append(violations, contractViolation{
+					Worker:  worker,
+					Field:   "task_receipts.status",
+					Value:   candidate.TaskID,
+					Rule:    violationRuleTaskReceiptUnevidenced,
+					Message: fmt.Sprintf("task %s reports that nothing needed changing, but the task names no file of its own, so there is nothing in the project that could confirm it; not credited", candidate.TaskID),
+				})
+				continue
+			}
+			evidence, missing := rootBackedArtifactEvidence(root, declared)
+			if len(missing) > 0 {
+				violations = append(violations, contractViolation{
+					Worker:  worker,
+					Field:   "task_receipts.root_evidence",
+					Value:   candidate.TaskID,
+					Rule:    violationRuleTaskReceiptRootEvidenceMissing,
+					Message: fmt.Sprintf("task %s reports that nothing needed changing, but the project does not have %s (or it is unreadable), so nothing confirms the task was already done; not credited", candidate.TaskID, strings.Join(missing, ", ")),
+				})
+				continue
+			}
+			claim.ArtifactEvidence = evidence
 		} else {
-			evidenceInput := codexBuildClaims{
-				FilesCreated:  claim.FilesCreated,
-				FilesModified: claim.FilesModified,
-				TestsWritten:  claim.TestsWritten,
-			}
-			attachBuildArtifactEvidence(root, &evidenceInput)
-			evidenceByPath := make(map[string]codexBuildArtifactEvidence, len(evidenceInput.ArtifactEvidence))
-			for _, e := range evidenceInput.ArtifactEvidence {
-				evidenceByPath[e.Path] = e
-			}
-			var missing []string
-			evidence := make([]codexBuildArtifactEvidence, 0, len(paths))
-			for _, p := range paths {
-				e, ok := evidenceByPath[p]
-				if !ok {
-					missing = append(missing, p)
-					continue
-				}
-				evidence = append(evidence, e)
-			}
+			evidence, missing := rootBackedArtifactEvidence(root, paths)
 			if len(missing) > 0 {
 				violations = append(violations, contractViolation{
 					Worker:  worker,

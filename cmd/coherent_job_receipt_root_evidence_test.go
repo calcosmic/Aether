@@ -58,18 +58,28 @@ func TestReceiptClaimingNoFileIsNeverCredited(t *testing.T) {
 	}
 }
 
-// TestNoChangeReceiptStillCreditsWithoutFiles proves the CR-01 fix is the
-// narrow rule and not a blanket ban: an honest completed_no_change receipt --
-// the D6 "the behaviour was already true, and here is the command that proves
-// it" case -- still credits its task without naming a file.
-func TestNoChangeReceiptStillCreditsWithoutFiles(t *testing.T) {
-	phase := colony.Phase{ID: 1, Tasks: []colony.Task{receiptTestTask("1.1", "make the thing true")}}
+// TestNoChangeReceiptStillCreditsWithoutNamingFilesItself proves the CR-01
+// fix is the narrow rule and not a blanket ban: an honest
+// completed_no_change receipt -- the D6 "the behaviour was already true"
+// case -- still credits its task without naming a file of its own.
+//
+// NEW-02 (195-REVIEW.iter2.md) narrowed what "honest" means here. This test
+// used to hand credit to a task that named no file anywhere, against an empty
+// directory, on the strength of the receipt's own status word; it therefore
+// asserted the very hole the review found. What it locks now is the same
+// intent with real backing: the task names its own file, that file is really
+// in the project, and the receipt still names nothing because nothing changed.
+func TestNoChangeReceiptStillCreditsWithoutNamingFilesItself(t *testing.T) {
+	phase := colony.Phase{ID: 1, Tasks: []colony.Task{receiptTestTask("1.1", "make the thing true", "thing.go")}}
 	dispatch := codexBuildDispatch{
 		Name:           "Mason-1",
 		Status:         "failed",
 		CoveredTaskIDs: []string{"1.1"},
 	}
 	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "thing.go"), []byte("package thing\n"), 0o644); err != nil {
+		t.Fatalf("seed root file: %v", err)
+	}
 
 	receipt := codex.TaskReceipt{
 		TaskID:  "1.1",
