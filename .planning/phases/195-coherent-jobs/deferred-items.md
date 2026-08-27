@@ -29,10 +29,12 @@
   reproduce on the plan's own base commit and none of the listed tests touch
   coherent jobs. Confirmed by re-running the same eleven under
   `AETHER_PLATFORM=codex`, where they pass.
-- **Follow-up:** Either pin the platform inside these tests (`t.Setenv`) or
-  assert via `platformCommandName`, so the suite is not silently
-  environment-dependent. See the command-naming chokepoint: `/ant-*`
-  translation lives only in the visual writer.
+- **RESOLVED 2026-08-27** before Phase 195 wave 3: a `pinRawCommandNames(t)`
+  helper in `cmd/codex_visuals_test.go` sets `AETHER_PLATFORM=codex` in each of
+  the eleven, so they assert the raw form deterministically on any runtime. Done
+  because every post-merge and regression gate for the rest of Phase 195 would
+  otherwise report eleven phantom failures. See the command-naming chokepoint:
+  `/ant-*` translation lives only in the visual writer.
 
 ## `cmd` package exceeds a 25-minute `go test` budget
 
@@ -46,4 +48,6 @@
   runtime, not any single test.
 - **Follow-up:** The `cmd` package needs either `t.Parallel()` coverage, a
   split, or a documented long-run gate. Until then every `cmd` gate must pass
-  an explicit `-timeout` well above 25m.
+  an explicit `-timeout` well above 25m. `workflow.test_gate_timeout` was raised
+  from 1500s to 3600s on 2026-08-27 so Phase 195's post-merge and regression
+  gates do not abort on a healthy suite.

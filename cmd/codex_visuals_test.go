@@ -14,6 +14,17 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+// pinRawCommandNames fixes the rendering platform for tests that assert the raw
+// `aether <verb>` next-step wording. translateHintCommandsForPlatform rewrites
+// those verbs to `/ant-<verb>` on every platform except Codex, and
+// detectPlatform falls back to "claude" when nothing in the environment says
+// otherwise — so without this pin the same test passes or fails depending on
+// which agent runtime happens to be running it.
+func pinRawCommandNames(t *testing.T) {
+	t.Helper()
+	t.Setenv("AETHER_PLATFORM", "codex")
+}
+
 func TestCommandCeremonyTaxonomyLevelsAreExplicit(t *testing.T) {
 	levels := map[commandCeremonyLevel]string{
 		commandCeremonyLevelWorkerTheatre: "worker_theatre",
@@ -241,6 +252,7 @@ func TestCeremonyCloseoutNoWorkerExistingPlanDoesNotRenderWorkerTheatre(t *testi
 }
 
 func TestCeremonyCloseoutBlockedPathRendersBlockedNotCompletion(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -353,6 +365,7 @@ func TestCeremonyCloseoutFailedFinalizerRendersFailureNotCompletion(t *testing.T
 }
 
 func TestPlanVisualOutput(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -384,6 +397,7 @@ func TestPlanVisualOutput(t *testing.T) {
 }
 
 func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -515,6 +529,7 @@ func TestRenderSpawnPlanForDispatchesShowsWaveExecutionStrategy(t *testing.T) {
 }
 
 func TestColonizeVisualOutputShowsDispatchPreview(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -798,6 +813,7 @@ func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T
 }
 
 func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -931,6 +947,7 @@ func TestBlockedContinueRecoveryHintsTranslateFromCanonicalCommands(t *testing.T
 }
 
 func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1045,6 +1062,7 @@ func TestWatchLiveRefreshRequiresTTY(t *testing.T) {
 }
 
 func TestPrintNextUpVisualOutput(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1193,6 +1211,7 @@ func TestInstallVisualOutput(t *testing.T) {
 }
 
 func TestRenderBinaryActionVisualPublishGuidanceSeparatesRepoSetupFromUpdate(t *testing.T) {
+	pinRawCommandNames(t)
 	output := renderBinaryActionVisual("Publish Complete", "Aether v1.0.24 published", "1.0.24", "/tmp/home/.aether")
 
 	for _, want := range []string{
@@ -1240,6 +1259,7 @@ func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 }
 
 func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
+	pinRawCommandNames(t)
 	output := renderUpdateVisual(
 		"/tmp/example",
 		"1.0.27",
@@ -1371,6 +1391,7 @@ func TestWorkflowSuggestionsBlockBuildAfterPlanFinalizeFailure(t *testing.T) {
 }
 
 func TestSetupVisualOutput(t *testing.T) {
+	pinRawCommandNames(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -1459,6 +1480,7 @@ func TestUpdateDryRunVisualOutput(t *testing.T) {
 }
 
 func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
