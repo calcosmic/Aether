@@ -368,12 +368,42 @@ func resolveCoherentJobDispatchReceipts(root string, phase colony.Phase, dispatc
 			continue
 		}
 		aggregateClaims := append([]string{}, resolved[i].Outputs...)
-		admission, _ := admitCoherentJobTaskReceipts(root, phase, resolved[i], aggregateClaims, resolved[i].TaskReceipts)
-		claims, completedTaskIDs, _ := finalizeCoherentJobTaskReceiptEvidence(root, phase, resolved[i], admission)
+		admission, admissionViolations := admitCoherentJobTaskReceipts(root, phase, resolved[i], aggregateClaims, resolved[i].TaskReceipts)
+		claims, completedTaskIDs, finalViolations := finalizeCoherentJobTaskReceiptEvidence(root, phase, resolved[i], admission)
 		resolved[i].TaskClaims = claims
 		resolved[i].CompletedTaskIDs = completedTaskIDs
+		// WR-01 (195-REVIEW.md): both violation slices used to be discarded
+		// here (`admission, _ :=` / `claims, completedTaskIDs, _ :=`), which
+		// made a wrapper mis-shaping every receipt it submitted look exactly
+		// like a worker that legitimately finished nothing. This file's own
+		// header promises a refusal is "never a silent drop".
+		reportCoherentJobReceiptRefusals(resolved[i].Name, append(admissionViolations, finalViolations...))
 	}
 	return resolved
+}
+
+// reportCoherentJobReceiptRefusals is the single owner-visible exit for every
+// named receipt refusal, on every lane (WR-01, 195-REVIEW.md). It prints one
+// line per refused receipt, naming the worker and the reason in the same plain
+// words the violation already carries. It is deliberately unconditional and
+// writes to stderr: a refusal is diagnostic output the owner must see even when
+// the command's own result is being consumed as JSON.
+func reportCoherentJobReceiptRefusals(worker string, violations []contractViolation) {
+	if len(violations) == 0 {
+		return
+	}
+	worker = strings.TrimSpace(worker)
+	if worker == "" {
+		worker = "a worker"
+	}
+	visualFprintf(stderr, "%s: %d task receipt(s) were not accepted as proof of finished work:\n", worker, len(violations))
+	for _, violation := range violations {
+		message := strings.TrimSpace(violation.Message)
+		if message == "" {
+			message = fmt.Sprintf("a task receipt was refused (%s)", violation.Rule)
+		}
+		visualFprintf(stderr, "  - %s\n", message)
+	}
 }
 
 const violationRuleTaskReceiptSyncFailed = "task_receipt.sync_failed"
@@ -527,6 +557,8 @@ func resolveWorktreeExternalDispatchReceipts(root string, phase colony.Phase, st
 		resolved[i].TaskClaims = outcome.Claims
 		resolved[i].CompletedTaskIDs = outcome.CompletedTaskIDs
 		resolved[i].ReceiptsResolved = true
+		// WR-01: this lane never read outcome.Violations at all.
+		reportCoherentJobReceiptRefusals(resolved[i].Name, outcome.Violations)
 	}
 	return resolved
 }

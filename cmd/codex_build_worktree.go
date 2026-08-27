@@ -638,11 +638,11 @@ func resolveWorktreePartialReceipts(root string, phase colony.Phase, outcome *wo
 			outcome.dispatch.WorkerName, len(resolved.UncreditedPaths),
 			strings.Join(resolved.UncreditedPaths, ", "), outcome.session.Branch))
 	}
-	for _, violation := range resolved.Violations {
-		if violation.Rule == violationRuleTaskReceiptSyncFailed || violation.Rule == violationRuleTaskReceiptRootEvidenceMissing {
-			emitVisualProgress(violation.Message)
-		}
-	}
+	// WR-01 (195-REVIEW.md): this used to print only two of the twelve named
+	// refusal rules, so a receipt refused for being out of scope, for
+	// laundering a path, or for claiming a file the worker's own result never
+	// reported vanished with no owner-visible trace at all.
+	reportCoherentJobReceiptRefusals(outcome.dispatch.WorkerName, resolved.Violations)
 }
 
 // detectWorktreeWaveConflicts finds every same-wave ownership violation: a
