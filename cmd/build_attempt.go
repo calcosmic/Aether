@@ -24,6 +24,13 @@ const (
 	buildAttemptBuilt       = "built"
 	buildAttemptFailed      = "failed"
 	buildAttemptInterrupted = "interrupted"
+	// buildAttemptPartial marks an attempt that ended with SOME, but not all,
+	// of its covered tasks credited (D-08/D-09 receipt evidence) and D-10
+	// append-only recovery already created a child attempt for the rest.
+	// Deliberately distinct from buildAttemptBuilt (which means "every
+	// covered task is proven done") and from buildAttemptFailed (which means
+	// "nothing of this attempt was credited") -- a partial attempt is neither.
+	buildAttemptPartial = "partial"
 )
 
 type buildAttemptTransition struct {
@@ -173,6 +180,17 @@ type buildAttemptRecord struct {
 	// ordinary phase build attempt -- see checkFixAttemptRecord's own doc
 	// comment for the append-only guarantee this field depends on.
 	CheckFix *checkFixAttemptRecord `json:"check_fix,omitempty"`
+	// ParentAttemptID is set ONLY by attachBuildAttemptParentLink, on a NEW
+	// attempt record beginChildBuildAttempt just created for D-10's
+	// unfinished-only recovery job -- never on the parent attempt whose
+	// partial credit triggered it. Optional and omitempty: existing attempt
+	// JSON written before this field existed still decodes cleanly with an
+	// empty string here (mirrors CheckFix's own precedent).
+	ParentAttemptID string `json:"parent_attempt_id,omitempty"`
+	// ParentJobName is the coherent job name (cmd/coherent_jobs.go) this
+	// attempt's retry job was derived from -- the original grouped job whose
+	// partial credit created this recovery attempt.
+	ParentJobName string `json:"parent_job_name,omitempty"`
 }
 
 type latestBuildAttemptPointer struct {
@@ -890,11 +908,54 @@ func buildAttemptStatusActive(status string) bool {
 
 func buildAttemptStatusTerminal(status string) bool {
 	switch strings.TrimSpace(status) {
-	case buildAttemptBuilt, buildAttemptFailed, buildAttemptInterrupted:
+	case buildAttemptBuilt, buildAttemptFailed, buildAttemptInterrupted, buildAttemptPartial:
 		return true
 	default:
 		return false
 	}
+}
+
+// attachBuildAttemptParentLink attaches D-10 append-only retry provenance to
+// a NEW attempt record -- the second half of "begin, then attach" that
+// mirrors attachCheckFixAttempt's narrow-setter discipline (touches nothing
+// on the record besides these two fields). Called only on the retry attempt
+// beginBuildAttempt just created, identified by its own attemptRel, NEVER on
+// the parent attempt whose partial credit triggered this retry.
+func attachBuildAttemptParentLink(attemptRel, parentAttemptID, parentJobName string) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	parentAttemptID = strings.TrimSpace(parentAttemptID)
+	parentJobName = strings.TrimSpace(parentJobName)
+	if parentAttemptID == "" {
+		return fmt.Errorf("parent attempt id is required to link a retry attempt")
+	}
+	var record buildAttemptRecord
+	return store.UpdateJSONAtomically(attemptRel, &record, func() error {
+		if record.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(record.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		record.ParentAttemptID = parentAttemptID
+		record.ParentJobName = parentJobName
+		return nil
+	})
+}
+
+// beginChildBuildAttempt creates a NEW append-only build attempt for a D-10
+// unfinished-only retry job, linked to -- but never mutating -- the parent
+// attempt that produced the partial credit that triggered it. It reuses
+// beginBuildAttempt's own SaveJSON/latest-pointer path completely unchanged,
+// then attaches parent provenance onto the brand-new record only. The parent
+// attempt's own file is never opened by this function.
+func beginChildBuildAttempt(state colony.ColonyState, phaseNum int, phase colony.Phase, startedAt time.Time, parentAttemptID, parentJobName string, retryTaskIDs []string, checkpointRel, manifestRel, claimsRel, executionOwner string, dispatches []codexBuildDispatch) (string, error) {
+	attemptRel, err := beginBuildAttempt(state, phaseNum, phase, startedAt, retryTaskIDs, checkpointRel, manifestRel, claimsRel, executionOwner, dispatches)
+	if err != nil {
+		return "", err
+	}
+	if err := attachBuildAttemptParentLink(attemptRel, parentAttemptID, parentJobName); err != nil {
+		return "", err
+	}
+	return attemptRel, nil
 }
 
 // buildAttemptCompletionSealed reports whether record's completion packet
