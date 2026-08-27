@@ -560,3 +560,203 @@ func TestCommitBuildFinalizeStateDoesNotOverwritePausedState(t *testing.T) {
 		t.Fatalf("stale build-finalize commit overwrote state to BUILT despite a concurrent pause")
 	}
 }
+
+// TestGroupedJobPartialRetryIsAppendOnlyExternal is the external/wrapper-lane
+// counterpart of TestGroupedJobPartialRetryIsAppendOnlyDirect: a real
+// `aether build-finalize` call for a four-of-six failed grouped completion
+// must, per D-10, credit exactly the four proven tasks, leave the colony
+// honestly non-BUILT, seal the parent attempt as `partial` (never `built`,
+// since it did not finish everything it was responsible for), and create a
+// brand-new, parent-linked, append-only retry attempt naming exactly the two
+// unfinished tasks -- without rewriting the parent's own dispatches,
+// receipts, or claims.
+func TestGroupedJobPartialRetryIsAppendOnlyExternal(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "External lane partial credit creates an append-only retry")
+
+	proven := ids[:4]
+	pending := ids[4:]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touchedFiles := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touchedFiles = append(touchedFiles, taskFileName(id))
+	}
+
+	results := []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: touchedFiles,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+		TaskReceipts: receipts,
+	}}
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+	parentAttemptID := manifest.AttemptID
+	result, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("build-finalize should accept a validated partial-credit failure, got error: %v", err)
+	}
+	if updatedState.State == colony.StateBUILT {
+		t.Fatalf("partial credit advanced colony to BUILT: %s", updatedState.State)
+	}
+	if recovery, _ := result["recovery_job"].(bool); !recovery {
+		t.Fatalf("result did not report a D-10 recovery job: %+v", result)
+	}
+	gotParentID, _ := result["parent_attempt_id"].(string)
+	if gotParentID != parentAttemptID {
+		t.Fatalf("result parent_attempt_id = %q, want %q", gotParentID, parentAttemptID)
+	}
+	retryAttemptID, _ := result["retry_attempt_id"].(string)
+	if retryAttemptID == "" || retryAttemptID == parentAttemptID {
+		t.Fatalf("expected a distinct non-empty retry attempt id, got %q (parent %q)", retryAttemptID, parentAttemptID)
+	}
+	unfinished, _ := result["unfinished_task_ids"].([]string)
+	if len(unfinished) != len(pending) {
+		t.Fatalf("unfinished_task_ids = %v, want the two pending tasks %v", unfinished, pending)
+	}
+
+	var parentBefore buildAttemptRecord
+	parentRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+	if err := store.LoadJSON(parentRel, &parentBefore); err != nil {
+		t.Fatalf("load parent attempt: %v", err)
+	}
+	if parentBefore.Status != buildAttemptPartial {
+		t.Fatalf("parent attempt status = %q, want %q (D-10: partial, never a misleading built)", parentBefore.Status, buildAttemptPartial)
+	}
+	if len(parentBefore.Claims.TaskClaims) == 0 {
+		t.Fatalf("parent attempt lost its own task claims: %+v", parentBefore.Claims)
+	}
+
+	var child buildAttemptRecord
+	found := false
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ParentAttemptID == parentAttemptID {
+			child = record
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no retry attempt linked to parent %s was found in the phase's attempt journal", parentAttemptID)
+	}
+	if child.ID != retryAttemptID {
+		t.Fatalf("linked child attempt id = %q, want %q", child.ID, retryAttemptID)
+	}
+	if child.ParentJobName == "" {
+		t.Fatalf("child attempt has no ParentJobName recorded: %+v", child)
+	}
+
+	// Idempotency at the full entrypoint layer: re-running reconcilePartialBuildRetry
+	// directly (the same call build-finalize makes) for the same parent must
+	// return the SAME child, never create a second one.
+	dispatches, _, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("merge completion results: %v", err)
+	}
+	dispatches = resolveCoherentJobDispatchReceipts(root, updatedState.Plan.Phases[0], dispatches)
+	secondOutcome, err := reconcilePartialBuildRetry(updatedState, 1, updatedState.Plan.Phases[0], parentAttemptID, time.Now().UTC(), dispatches)
+	if err != nil {
+		t.Fatalf("second reconcilePartialBuildRetry call: %v", err)
+	}
+	if secondOutcome == nil || secondOutcome.RetryAttemptID != retryAttemptID {
+		t.Fatalf("second reconcilePartialBuildRetry call = %+v, want the SAME retry attempt %q", secondOutcome, retryAttemptID)
+	}
+	childrenLinkedToParent := 0
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ParentAttemptID == parentAttemptID {
+			childrenLinkedToParent++
+		}
+	}
+	if childrenLinkedToParent != 1 {
+		t.Fatalf("expected exactly 1 attempt linked to parent %s, found %d (duplicate child created)", parentAttemptID, childrenLinkedToParent)
+	}
+}
+
+// TestGroupedJobPartialRetryIsIdempotent proves D-10's "repeating the same
+// completion cannot create duplicate children" contract directly against
+// reconcilePartialBuildRetry: calling it twice with the same parent and the
+// same partially-credited dispatches must return the identical retry
+// attempt, and the phase's attempt journal must end up with exactly one
+// child linked to that parent.
+func TestGroupedJobPartialRetryIsIdempotent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "reconcilePartialBuildRetry is idempotent per parent attempt"
+	tasks, ids := sixChainedTasks()
+	phase := colony.Phase{
+		ID: 1, Name: "Idempotent retry chain", Description: "One worker, six dependent steps",
+		Status: colony.PhaseReady, Tasks: tasks,
+	}
+	state := colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{phase}},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	proven := ids[:4]
+	touched := make([]string, 0, len(proven))
+	for _, id := range proven {
+		touched = append(touched, taskFileName(id))
+		if err := os.WriteFile(filepath.Join(root, taskFileName(id)), []byte("package fixture\n"), 0o644); err != nil {
+			t.Fatalf("write fixture file for task %s: %v", id, err)
+		}
+	}
+	dispatch := codexBuildDispatch{
+		Name: "Mason-1", Caste: "builder", TaskID: ids[0], CoveredTaskIDs: ids,
+		Status: "failed", CompletedTaskIDs: append([]string{}, proven...),
+	}
+
+	parentStartedAt := time.Now().UTC()
+	parentRel, err := beginBuildAttempt(state, 1, phase, parentStartedAt, ids, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", []codexBuildDispatch{dispatch})
+	if err != nil {
+		t.Fatalf("begin parent attempt: %v", err)
+	}
+	if err := transitionBuildAttempt(parentRel, buildAttemptFailed, "crashed after finishing four of six", []codexBuildDispatch{dispatch}, nil, "real", nil); err != nil {
+		t.Fatalf("transition parent to failed: %v", err)
+	}
+	var parent buildAttemptRecord
+	if err := store.LoadJSON(parentRel, &parent); err != nil {
+		t.Fatalf("load parent attempt: %v", err)
+	}
+
+	first, err := reconcilePartialBuildRetry(state, 1, phase, parent.ID, parentStartedAt.Add(time.Second), []codexBuildDispatch{dispatch})
+	if err != nil {
+		t.Fatalf("first reconcilePartialBuildRetry: %v", err)
+	}
+	if first == nil {
+		t.Fatal("expected a retry outcome for a genuine partial dispatch")
+	}
+	second, err := reconcilePartialBuildRetry(state, 1, phase, parent.ID, parentStartedAt.Add(2*time.Second), []codexBuildDispatch{dispatch})
+	if err != nil {
+		t.Fatalf("second reconcilePartialBuildRetry: %v", err)
+	}
+	if second == nil || second.RetryAttemptID != first.RetryAttemptID {
+		t.Fatalf("second call = %+v, want the identical retry attempt %q", second, first.RetryAttemptID)
+	}
+
+	linked := 0
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ParentAttemptID == parent.ID {
+			linked++
+		}
+	}
+	if linked != 1 {
+		t.Fatalf("expected exactly 1 attempt linked to parent %s after two reconcile calls, found %d", parent.ID, linked)
+	}
+
+	var parentAfter buildAttemptRecord
+	if err := store.LoadJSON(parentRel, &parentAfter); err != nil {
+		t.Fatalf("reload parent attempt: %v", err)
+	}
+	if parentAfter.Status != buildAttemptFailed {
+		t.Fatalf("parent attempt status changed across idempotent retry calls: %+v", parentAfter)
+	}
+}

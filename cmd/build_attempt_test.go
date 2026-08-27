@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -432,5 +433,214 @@ func TestCommittedAttemptRefusalNamesAWorkingPath(t *testing.T) {
 	}
 	if strings.Contains(msg, "without matching terminal evidence") {
 		t.Errorf("refusal still invites the reader to chase evidence that cannot be produced:\n  %s", msg)
+	}
+}
+
+// coherentJobPartialFailInvoker is a scripted native/direct-lane worker
+// invoker that always returns a "failed" terminal result carrying the given
+// task receipts and touched files -- the direct-lane counterpart of the
+// external-lane fixtures in merged_dispatch_task_credit_test.go
+// (receiptForTask/sixChainedTasks), used to drive a genuine four-of-six
+// partial-credit dispatch through the real runCodexBuild entrypoint.
+type coherentJobPartialFailInvoker struct {
+	receipts []codex.TaskReceipt
+	touched  []string
+}
+
+func (i *coherentJobPartialFailInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{
+		WorkerName:    config.WorkerName,
+		Caste:         config.Caste,
+		TaskID:        config.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: i.touched,
+		TaskReceipts:  i.receipts,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+	}, nil
+}
+
+func (i *coherentJobPartialFailInvoker) IsAvailable(context.Context) bool { return true }
+func (i *coherentJobPartialFailInvoker) ValidateAgent(string) error       { return nil }
+
+// TestGroupedJobPartialRetryIsAppendOnlyDirect is the direct/native-lane
+// counterpart of the external-lane fixture: a single Builder covering six
+// chained tasks crashes after finishing four (proven by real, root-backed
+// task receipts). D-10 requires this to bypass the ordinary all-or-nothing
+// rollback, credit exactly the four proven tasks, and create a brand-new,
+// parent-linked, append-only retry attempt for the other two -- never
+// rewriting the first attempt's own dispatch, receipts, or claims.
+func TestGroupedJobPartialRetryIsAppendOnlyDirect(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Direct lane partial credit creates an append-only retry"
+	tasks, ids := sixChainedTasks()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "Direct partial chain", Description: "One worker, six dependent steps",
+			Status: colony.PhaseReady, Tasks: tasks,
+		}}},
+	})
+
+	proven := ids[:4]
+	pending := ids[4:]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touched := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touched = append(touched, taskFileName(id))
+	}
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker {
+		return &coherentJobPartialFailInvoker{receipts: receipts, touched: touched}
+	}
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	result, err := runCodexBuild(root, 1, nil, false)
+	if err != nil {
+		t.Fatalf("runCodexBuild should accept a validated partial-credit failure, got error: %v", err)
+	}
+	if recovery, _ := result["recovery_job"].(bool); !recovery {
+		t.Fatalf("result did not report a D-10 recovery job: %+v", result)
+	}
+	parentAttemptID, _ := result["parent_attempt_id"].(string)
+	retryAttemptID, _ := result["retry_attempt_id"].(string)
+	if parentAttemptID == "" || retryAttemptID == "" || parentAttemptID == retryAttemptID {
+		t.Fatalf("expected distinct non-empty parent/retry attempt IDs, got parent=%q retry=%q", parentAttemptID, retryAttemptID)
+	}
+	unfinished, _ := result["unfinished_task_ids"].([]string)
+	if len(unfinished) != 2 {
+		t.Fatalf("unfinished_task_ids = %v, want exactly the two pending tasks", unfinished)
+	}
+	if cmd, _ := result["recovery_command"].(string); !strings.Contains(cmd, "aether build 1") {
+		t.Fatalf("recovery_command = %q, does not name a working redispatch for phase 1", cmd)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	if state.State == colony.StateBUILT {
+		t.Fatalf("partial credit advanced colony to BUILT: %+v", state)
+	}
+	statusByID := map[string]string{}
+	for _, task := range state.Plan.Phases[0].Tasks {
+		statusByID[*task.ID] = string(task.Status)
+	}
+	for _, id := range proven {
+		if statusByID[id] != string(colony.TaskCompleted) {
+			t.Fatalf("task %s is %q, want %q", id, statusByID[id], colony.TaskCompleted)
+		}
+	}
+	for _, id := range pending {
+		if statusByID[id] == string(colony.TaskCompleted) {
+			t.Fatalf("task %s (unfinished) is %q, want it to remain pending", id, statusByID[id])
+		}
+	}
+
+	// Parent attempt: found via listBuildAttemptsForPhase (loadLatestBuildAttempt
+	// now points at the CHILD, since beginBuildAttempt always updates the
+	// phase's "latest" pointer -- exactly what a subsequent `aether build 1
+	// --force` should redispatch against).
+	var parent, child buildAttemptRecord
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ID == parentAttemptID {
+			parent = record
+		}
+		if record.ID == retryAttemptID {
+			child = record
+		}
+	}
+	if parent.ID == "" {
+		t.Fatalf("parent attempt %s not found in the phase's attempt journal", parentAttemptID)
+	}
+	if parent.Status != buildAttemptFailed {
+		t.Fatalf("parent attempt status = %q, want %q (unchanged from its own terminal recording)", parent.Status, buildAttemptFailed)
+	}
+	if parent.ParentAttemptID != "" {
+		t.Fatalf("parent attempt unexpectedly carries its own ParentAttemptID: %+v", parent)
+	}
+	if child.ID == "" {
+		t.Fatalf("retry attempt %s not found in the phase's attempt journal", retryAttemptID)
+	}
+	if child.ParentAttemptID != parentAttemptID {
+		t.Fatalf("child ParentAttemptID = %q, want %q", child.ParentAttemptID, parentAttemptID)
+	}
+
+	latestRel, latest, ok := loadLatestBuildAttempt(1)
+	if !ok || latest.ID != retryAttemptID {
+		t.Fatalf("latest attempt pointer = %q %+v, want the retry attempt %s", latestRel, latest, retryAttemptID)
+	}
+}
+
+// TestGroupedJobRetryNeverReassignsCreditedTasks proves the negative half of
+// D-10 directly against the retry attempt's own dispatch: none of the four
+// credited task IDs may appear anywhere in the child's covered tasks -- a
+// fresh worker dispatched from the retry attempt would otherwise redo proven
+// work.
+func TestGroupedJobRetryNeverReassignsCreditedTasks(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "A retry dispatch never re-lists a credited task"
+	tasks, ids := sixChainedTasks()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "No re-credit chain", Description: "One worker, six dependent steps",
+			Status: colony.PhaseReady, Tasks: tasks,
+		}}},
+	})
+
+	proven := ids[:4]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touched := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touched = append(touched, taskFileName(id))
+	}
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker {
+		return &coherentJobPartialFailInvoker{receipts: receipts, touched: touched}
+	}
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	result, err := runCodexBuild(root, 1, nil, false)
+	if err != nil {
+		t.Fatalf("runCodexBuild: %v", err)
+	}
+	retryAttemptID, _ := result["retry_attempt_id"].(string)
+
+	var child buildAttemptRecord
+	found := false
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ID == retryAttemptID {
+			child = record
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("retry attempt %s not found", retryAttemptID)
+	}
+	credited := stringSet(proven)
+	for _, dispatch := range child.Dispatches {
+		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+			if credited[taskID] {
+				t.Fatalf("retry dispatch %+v re-lists credited task %s", dispatch, taskID)
+			}
+		}
 	}
 }
