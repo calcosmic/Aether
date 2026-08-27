@@ -92,9 +92,13 @@ var citedCoherentJobTests = []string{
 	"TestGroupedWorktreePartialReceiptsSyncBeforeCredit",
 	"TestGroupedWorktreeUncreditedEditsRemainOrphaned",
 	"TestExternalGroupedPartialPersistsExactTaskState",
-	// Recovery.
+	// Recovery. The first two assert what planCoherentJobRetry RETURNS; the
+	// third asserts what the command the owner is handed actually dispatches
+	// (CR-04, 195-REVIEW.md -- both of the first two passed while the surfaced
+	// command re-planned every credited task).
 	"TestCoherentJobRetryContainsOnlyUnfinishedTasks",
 	"TestGroupedJobRetryNeverReassignsCreditedTasks",
+	"TestPartialRetryCommandNeverRedispatchesCreditedWork",
 }
 
 func readCLAUDEMDForCoherentJobs(t *testing.T) string {

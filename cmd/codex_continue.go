@@ -2463,6 +2463,30 @@ func buildForceRedispatchCommand(phaseID int) string {
 	return fmt.Sprintf("aether build %d --force", phaseID)
 }
 
+// buildUnfinishedRetryRedispatchCommand is the D-10 recovery command: a forced
+// redispatch of the active phase RESTRICTED to the tasks that were never
+// credited. `--force` supersedes the dead attempt; the `--task` filter is what
+// makes the runtime plan only the named tasks, so no worker is ever sent to
+// redo work another worker already proved (CR-04, 195-REVIEW.md -- the plain
+// `--force` command this replaced re-planned the whole phase, credited tasks
+// included, which is the opposite of what every surface promised the owner).
+//
+// With no task IDs it degrades to the plain forced redispatch, because there
+// is nothing to narrow to.
+func buildUnfinishedRetryRedispatchCommand(phaseID int, taskIDs []string) string {
+	unique := uniqueSortedStrings(taskIDs)
+	if len(unique) == 0 {
+		return buildForceRedispatchCommand(phaseID)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "aether build %d --force", phaseID)
+	for _, taskID := range unique {
+		b.WriteString(" --task ")
+		b.WriteString(taskID)
+	}
+	return b.String()
+}
+
 func buildSkipPhaseCommand(phaseID int) string {
 	return fmt.Sprintf("aether skip-phase %d --force", phaseID)
 }

@@ -294,9 +294,14 @@ Locked by `TestCoherentJobReceiptAdmission`,
 dependency-safe job containing exactly the unfinished work, revalidates its
 order against what was already credited, and is recorded as a new attempt linked
 to the one it came from rather than overwriting it — so no fresh worker is ever
-asked to redo proven work. Locked by
-`TestCoherentJobRetryContainsOnlyUnfinishedTasks` and
-`TestGroupedJobRetryNeverReassignsCreditedTasks`.
+asked to redo proven work. The command you are handed names those unfinished
+tasks one by one, so running it starts work on only them. Locked by
+`TestCoherentJobRetryContainsOnlyUnfinishedTasks`,
+`TestGroupedJobRetryNeverReassignsCreditedTasks`, and
+`TestPartialRetryCommandNeverRedispatchesCreditedWork` — the last one takes the
+command the owner is literally handed, feeds its own arguments back through the
+real planner, and fails if any already-proven task turns up in the resulting
+list of work.
 
 *For dummies: instead of sending six helpers to do six related things — each one
 starting cold and re-reading the same files — the system now sends one helper to

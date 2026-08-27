@@ -213,7 +213,13 @@ func reconcilePartialBuildRetry(state colony.ColonyState, phaseNum int, phase co
 		return nil, nil
 	}
 
-	redispatchCommand := buildForceRedispatchCommand(phaseNum)
+	// CR-04 (195-REVIEW.md): the command handed to the owner must carry the
+	// retry job's own task IDs. A bare `aether build <N> --force` re-plans the
+	// phase from its full task list with no filter, so every task this build
+	// already proved would be dispatched again -- exactly what D-10, the three
+	// build wrapper copies, the command guide and CLAUDE.md all promise never
+	// happens.
+	redispatchCommand := buildUnfinishedRetryRedispatchCommand(phaseNum, allUnfinished)
 
 	// Idempotency: a retry attempt for this exact parent may already exist
 	// (a second finalize/dispatch pass over the same partial outcome). Never
