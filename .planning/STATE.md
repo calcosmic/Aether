@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 status: executing
-stopped_at: Completed 195-04-PLAN.md
-last_updated: "2026-08-27T05:28:06.536Z"
+stopped_at: Completed 195-05-PLAN.md
+last_updated: "2026-08-27T05:58:59.148Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 24
-  completed_plans: 17
+  completed_plans: 19
   percent: 29
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 ## Current Position
 
-**Progress:** [███████░░░] 71%
+**Progress:** [████████░░] 79%
 
 Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
 Last activity: 2026-08-27
 
@@ -67,6 +67,7 @@ Last activity: 2026-08-27
 | Phase 195 P02 | 23min | 2 tasks | 6 files |
 | Phase 195 P03 | 95min | 2 tasks | 9 files |
 | Phase 195 P04 | 25min | 2 tasks | 8 files |
+| Phase 195 P05 | 50min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,8 @@ Last activity: 2026-08-27
 - [Phase 195]: Owner-facing wording is `covered tasks`, not `dependent tasks`; automatic grouping is no longer dependency-only, so the old phrase had become false.
 - [Phase 195]: Two-stage receipt trust boundary (admitCoherentJobTaskReceipts / finalizeCoherentJobTaskReceiptEvidence) is the only path that can populate CompletedTaskIDs; completedBuildTaskIDs keeps whole-success crediting all covered tasks and reads CompletedTaskIDs for any other terminal status, never touched files or CoveredTaskIDs membership.
 - [Phase 195]: Native/in-repo lane (executeCodexBuildDispatches) resolves receipts through both stages immediately after a worker's terminal result is known, since in-repo files already live in root; the external/wrapper lane's crediting wiring is deferred to plan 195-06, which reuses the same two functions unchanged.
+- [Phase ?]: [Phase 195] decideBuildCheckin implements D-11..D-14 as a pure policy; buildHasPendingOwnerDecision reads three live sources (forced-reviewer waiver, orchestrator boundary question, worker handoff open decision) -- never dispatch count alone.
+- [Phase ?]: [Phase 195] 195-05 Tasks 1 and 2 landed in one commit (9ca561c0) -- both edit the same buildCheckinDecisionInput/buildCheckinDecision types and the same plan-only branch, could not be cleanly split by git hunk (same precedent as 193-04).
 
 ### Pending Todos
 
@@ -205,6 +208,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T05:28:06.523Z
-Stopped at: Completed 195-04-PLAN.md
+Last session: 2026-08-27T05:58:59.134Z
+Stopped at: Completed 195-05-PLAN.md
 Resume file: None

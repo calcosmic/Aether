@@ -173,7 +173,7 @@ Plans:
 **Wave 3** *(parallel runtime integrations after manifest contracts)*
 
 - [x] 195-04-PLAN.md — Shared receipt validator and exact native four-of-six task credit (wave 3)
-- [ ] 195-05-PLAN.md — Decision-aware one-worker check-in fast path, compact summary, and `--checkin` override (wave 3)
+- [x] 195-05-PLAN.md — Decision-aware one-worker check-in fast path, compact summary, and `--checkin` override (wave 3)
 
 **Wave 4** *(blocked on native receipt semantics)*
 
