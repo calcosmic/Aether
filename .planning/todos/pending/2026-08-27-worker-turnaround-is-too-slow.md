@@ -52,6 +52,24 @@ Done and the 18-of-25-milestones-were-repairs finding.
 
 **The goal is therefore to cut 3 and 4 and attack 1 — not to weaken 2.**
 
+## New: the slow suite now has a second, harder cost (2026-08-27)
+
+Phase 195 shipped the owner's ruling that a "nothing needed changing" claim is
+only credited when the runtime RE-RUNS the check the worker named and sees it
+pass. That re-run carries a 5-minute total budget per finalize pass; a check that
+overruns is reported as *unavailable* and refused, because a check with no result
+confirms nothing.
+
+**This repo's own `cmd` suite takes 10-12 minutes.** So a worker whose honest
+no-change check is `go test ./cmd` loses its credit here, on Aether itself. The
+refusal is the safe direction and the work is not lost — the task goes into the
+recovery job and is credited on a clean run — but it is a real cost that lands
+directly on this repo, and it is caused by cause (1) below, not by the ruling.
+
+Two levers, and the choice is the owner's once there is usage data: raise the
+budget (trading build wall-clock), or fix the suite (which this item already
+argues for on its own merits). Fixing the suite fixes both.
+
 ## Candidate work
 
 - **Fix (1).** `t.Parallel()` coverage, splitting `cmd`, or a documented
