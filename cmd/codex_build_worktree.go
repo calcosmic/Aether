@@ -91,24 +91,62 @@ func bareFileNameWithExtension(value string) bool {
 	return bareFileNamePattern.MatchString(value) && !strings.Contains(value, "/")
 }
 
+// worktreeOwnershipOwner is one execution owner's identity for the same-wave
+// ownership guard. A coherent job is ONE owner of the union of its tasks'
+// declared paths (JOBS-04) -- key is the dispatch's primary TaskID, which
+// stays the compatibility key, while label names the job and every task it
+// covers so a refusal is readable without opening the manifest.
+type worktreeOwnershipOwner struct {
+	key   string
+	label string
+}
+
+func worktreeOwnershipIdentity(dispatch codex.WorkerDispatch) worktreeOwnershipOwner {
+	covered := dispatch.CoveredTaskIDs
+	if len(covered) == 0 && strings.TrimSpace(dispatch.TaskID) != "" {
+		covered = []string{strings.TrimSpace(dispatch.TaskID)}
+	}
+	label := ""
+	if len(covered) > 1 {
+		label = fmt.Sprintf("tasks %s", strings.Join(covered, ", "))
+	} else if len(covered) == 1 {
+		label = fmt.Sprintf("task %s", covered[0])
+	} else {
+		label = fmt.Sprintf("worker %s", dispatch.WorkerName)
+	}
+	if job := strings.TrimSpace(dispatch.JobName); job != "" {
+		label = fmt.Sprintf("job %s (%s)", job, label)
+	}
+	return worktreeOwnershipOwner{key: strings.TrimSpace(dispatch.TaskID), label: label}
+}
+
 // validateDeclaredWorktreeOwnership rejects a worktree-mode build before any
-// worker runs when two tasks in the same wave declare the same path. Parallel
-// claims on one path cannot reconcile, so the conflict is surfaced while it is
-// still cheap. Declared overlaps across waves are allowed: waves execute
-// sequentially and later worktrees inherit the earlier waves' synced output.
+// worker runs when two same-wave execution owners declare the same path.
+// Parallel claims on one path cannot reconcile, so the conflict is surfaced
+// while it is still cheap. Declared overlaps across waves are allowed: waves
+// execute sequentially and later worktrees inherit the earlier waves' synced
+// output.
+//
+// The unit of ownership is the DISPATCH, not the task. Grouping already ran
+// (cmd/coherent_jobs.go, plan 195-03) before this guard is reached, so tasks
+// that meaningfully share an implementation file arrive as one job owning the
+// union of their paths and can never conflict with themselves. What remains
+// refusable is exactly what should be: two genuinely distinct jobs in one wave
+// claiming the same file.
 func validateDeclaredWorktreeOwnership(dispatches []codex.WorkerDispatch) error {
-	declaredByWave := map[int]map[string]string{}
+	declaredByWave := map[int]map[string]worktreeOwnershipOwner{}
 	for _, dispatch := range dispatches {
+		owner := worktreeOwnershipIdentity(dispatch)
 		for _, path := range dispatch.DeclaredPaths {
 			owners := declaredByWave[dispatch.Wave]
 			if owners == nil {
-				owners = map[string]string{}
+				owners = map[string]worktreeOwnershipOwner{}
 				declaredByWave[dispatch.Wave] = owners
 			}
-			if previous, ok := owners[path]; ok && previous != dispatch.TaskID {
-				return fmt.Errorf("worktree declared ownership conflict: wave %d tasks %s and %s both declare %s; declare disjoint paths, move the tasks into different waves, or run with --parallel-mode in-repo", dispatch.Wave, previous, dispatch.TaskID, path)
+			if previous, ok := owners[path]; ok && previous.key != owner.key {
+				return fmt.Errorf("worktree declared ownership conflict: in wave %d, %s and %s both declare %s; declare disjoint paths, move the work into different waves, or run with --parallel-mode in-repo", dispatch.Wave, previous.label, owner.label, path)
 			}
-			owners[path] = dispatch.TaskID
+			owners[path] = owner
 		}
 	}
 	return nil
@@ -536,7 +574,7 @@ func detectWorktreeWaveConflicts(outcomes []*worktreeWaveOutcome) ([]string, map
 		}
 		idx := idxs[0]
 		if owner, ok := declared[path]; ok && owner != outcomes[idx].dispatch.TaskID {
-			conflicts = append(conflicts, fmt.Sprintf("%s touched by worker %s (task %s) but declared by task %s", path, outcomes[idx].dispatch.WorkerName, outcomes[idx].dispatch.TaskID, owner))
+			conflicts = append(conflicts, fmt.Sprintf("%s touched by worker %s (%s) but declared by task %s", path, outcomes[idx].dispatch.WorkerName, worktreeOwnershipIdentity(outcomes[idx].dispatch).label, owner))
 			conflictWorkers[idx] = true
 		}
 	}

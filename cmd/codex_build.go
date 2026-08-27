@@ -1998,6 +1998,64 @@ func buildTaskID(task colony.Task, idx int) string {
 	return fmt.Sprintf("task-%d", idx+1)
 }
 
+// buildCodexWorkerDispatches converts the planned build dispatches into the
+// executable worker dispatch list every lane runs from. It is the single
+// place a planned coherent job becomes an execution owner, which is why
+// worktree ownership (validateDeclaredWorktreeOwnership) reads its output
+// rather than the pre-grouping plan: one grouped job must arrive here as ONE
+// dispatch carrying every covered task ID and the unique sorted union of its
+// tasks' declared paths, so its intentional internal overlap has exactly one
+// owner and one checkout (JOBS-04).
+func buildCodexWorkerDispatches(
+	root string,
+	phase colony.Phase,
+	dispatches []codexBuildDispatch,
+	startedAt time.Time,
+	invoker codex.WorkerInvoker,
+	capsule string,
+	workerTimeout time.Duration,
+	executionBinding *codex.ExecutionBinding,
+) ([]codex.WorkerDispatch, error) {
+	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
+	for i, dispatch := range dispatches {
+		agentName := codexAgentNameForCaste(dispatch.Caste)
+		providerRunID, err := codex.NewExecutionRunID()
+		if err != nil {
+			return nil, err
+		}
+		workerDispatches = append(workerDispatches, codex.WorkerDispatch{
+			ID:                fmt.Sprintf("phase-%d-dispatch-%d", phase.ID, i+1),
+			WorkerName:        dispatch.Name,
+			AgentName:         agentName,
+			AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
+			Caste:             dispatch.Caste,
+			TaskID:            normalizedDispatchTaskID(dispatch),
+			TaskBrief:         renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt),
+			ContextCapsule:    capsule,
+			HandoffSection:    dispatch.HandoffSection,
+			Workflow:          "build",
+			Phase:             phase.ID,
+			SkillSection:      resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
+			Root:              root,
+			TrackingRoot:      root,
+			Timeout:           workerTimeout,
+			Wave:              normalizedDispatchWave(dispatch),
+			PermissionProfile: dispatch.PermissionProfile,
+			ExecutionBinding:  executionBinding,
+			ProviderRunID:     providerRunID,
+			// The unique sorted union, resolved here and never re-derived
+			// downstream: a grouped job's tasks may legitimately declare the
+			// same path, and the same-wave ownership guard must see one owner
+			// for that union rather than N competing task-level claims.
+			DeclaredPaths:  uniqueSortedStrings(dispatch.DeclaredPaths),
+			CoveredTaskIDs: dispatchCoveredTaskIDs(dispatch),
+			JobName:        strings.TrimSpace(dispatch.JobName),
+			JobReason:      strings.TrimSpace(dispatch.JobReason),
+		})
+	}
+	return workerDispatches, nil
+}
+
 func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration, circuitBreakerThreshold int, verbose bool, executionBinding *codex.ExecutionBinding) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
@@ -2024,40 +2082,15 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	// The capsule is this path's sole steering channel now, mirroring the
 	// "one home" decision 190-03 already made for the wrapper plan-only flow.
 	// See resolvePheromoneSection's doc comment for which callers still need it.
-	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
+	workerDispatches, err := buildCodexWorkerDispatches(root, phase, dispatches, startedAt, invoker, capsule, workerTimeout, executionBinding)
+	if err != nil {
+		return nil, nil, "", err
+	}
 	indexByName := make(map[string]int, len(dispatches))
 	dispatchByName := make(map[string]codex.WorkerDispatch, len(dispatches))
 	for i, dispatch := range dispatches {
-		agentName := codexAgentNameForCaste(dispatch.Caste)
-		providerRunID, err := codex.NewExecutionRunID()
-		if err != nil {
-			return nil, nil, "", err
-		}
-		workerDispatch := codex.WorkerDispatch{
-			ID:                fmt.Sprintf("phase-%d-dispatch-%d", phase.ID, i+1),
-			WorkerName:        dispatch.Name,
-			AgentName:         agentName,
-			AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
-			Caste:             dispatch.Caste,
-			TaskID:            normalizedDispatchTaskID(dispatch),
-			TaskBrief:         renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt),
-			ContextCapsule:    capsule,
-			HandoffSection:    dispatch.HandoffSection,
-			Workflow:          "build",
-			Phase:             phase.ID,
-			SkillSection:      resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
-			Root:              root,
-			TrackingRoot:      root,
-			Timeout:           workerTimeout,
-			Wave:              normalizedDispatchWave(dispatch),
-			PermissionProfile: dispatch.PermissionProfile,
-			ExecutionBinding:  executionBinding,
-			ProviderRunID:     providerRunID,
-			DeclaredPaths:     append([]string{}, dispatch.DeclaredPaths...),
-		}
-		workerDispatches = append(workerDispatches, workerDispatch)
 		indexByName[dispatch.Name] = i
-		dispatchByName[dispatch.Name] = workerDispatch
+		dispatchByName[dispatch.Name] = workerDispatches[i]
 	}
 
 	if parallelMode == colony.ModeWorktree {

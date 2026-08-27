@@ -34,6 +34,18 @@ type WorkerDispatch struct {
 	ExecutionBinding  *ExecutionBinding // Durable build-run identity
 	ProviderRunID     string            // Unique provider invocation within the build run
 	DeclaredPaths     []string          // Repo-relative paths this dispatch declares ownership of (worktree mode)
+	// CoveredTaskIDs is every task this one dispatch is responsible for, in
+	// execution order. A single-task dispatch carries exactly its own TaskID;
+	// a coherent job (cmd/coherent_jobs.go) carries all of its grouped tasks.
+	// TaskID stays the primary compatibility key. Worktree mode reads this to
+	// give one grouped job exactly one checkout and to name every affected
+	// task in an ownership refusal (JOBS-04).
+	CoveredTaskIDs []string
+	// JobName and JobReason are the grouped job's durable identity: which job
+	// this worker owns and why those tasks belong together (D-04). Both are
+	// empty for a dispatch that was never grouped.
+	JobName   string
+	JobReason string
 }
 
 // DispatchResult captures the outcome of a single worker dispatch within a batch.
