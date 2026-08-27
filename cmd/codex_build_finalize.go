@@ -746,12 +746,35 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		}
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
-	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "external built lifecycle state committed", dispatches, &claims, "external-task", nil); err != nil {
+	// D-10: a fully-credited grouped job seals this attempt as built, exactly
+	// as before. A partially-credited one (buildFullyCredited false) is
+	// neither built nor a plain failure -- it is recorded as `partial`, and a
+	// D-10 append-only recovery job is created below for the unfinished
+	// tasks. The parent attempt's own dispatches/receipts/claims/completion
+	// digest, already durably written above, are never rewritten by this.
+	finalAttemptStatus := buildAttemptBuilt
+	finalAttemptSummary := "external built lifecycle state committed"
+	if !buildFullyCredited {
+		finalAttemptStatus = buildAttemptPartial
+		finalAttemptSummary = "external partial-terminal state committed; unfinished tasks recorded for a D-10 recovery job"
+	}
+	if err := transitionBuildAttempt(attemptRel, finalAttemptStatus, finalAttemptSummary, dispatches, &claims, "external-task", nil); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("built state committed but external build attempt journal is incomplete; rerun build-finalize with the same completion packet: %w", err)
 	}
 	attemptFinished = true
 	updatedState = committedState
 	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
+
+	var partialRetryOutcome *partialBuildRetryOutcome
+	if !buildFullyCredited {
+		parentAttemptID := strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel))
+		outcome, retryErr := reconcilePartialBuildRetry(updatedState, phaseNum, updatedPhase, parentAttemptID, time.Now().UTC(), dispatches)
+		if retryErr != nil {
+			visualFprintf(stderr, "warning: could not create a D-10 recovery job for phase %d's partial credit: %v\n", phaseNum, retryErr)
+		} else {
+			partialRetryOutcome = outcome
+		}
+	}
 
 	// Collect pheromone suggestions once the build is durably committed.
 	// Called exactly once per finalize (never inside the dispatch loop
@@ -784,6 +807,15 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	if len(recoveryInstructions) > 0 {
 		result["recovery_instructions"] = recoveryInstructions
+	}
+	if partialRetryOutcome != nil {
+		result["recovery_job"] = true
+		result["parent_attempt_id"] = partialRetryOutcome.ParentAttemptID
+		result["retry_attempt_id"] = partialRetryOutcome.RetryAttemptID
+		result["retry_attempt_path"] = partialRetryOutcome.RetryAttemptPath
+		result["unfinished_task_ids"] = partialRetryOutcome.UnfinishedTaskIDs
+		result["recovery_command"] = partialRetryOutcome.RedispatchCommand
+		result["next"] = partialRetryOutcome.RedispatchCommand
 	}
 	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
 	return result, updatedState, updatedPhase, dispatches, nil

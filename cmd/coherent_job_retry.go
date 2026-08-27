@@ -271,3 +271,29 @@ func findExistingBuildAttemptRetry(phaseNum int, parentAttemptID string) (string
 func buildAttemptPathForID(phaseNum int, attemptID string) string {
 	return filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "attempts", attemptID+".json"))
 }
+
+// commitPartialBuildCredit is the direct/native lane's D-10 partial-terminal
+// commit: it mutates ONLY the freshly-read on-disk colony state's task
+// statuses (reconcileCompletedBuildTasks), the same reader every whole-build
+// commit uses, and deliberately leaves state.State exactly as
+// applyCodexBuildState already projected it (EXECUTING, phase in_progress)
+// rather than advancing to StateBUILT -- a partial credit is, by definition,
+// not a finished build. Mirrors the concurrency guard the existing
+// EXECUTING->BUILT commit uses (validateRuntimeStateStillCurrent), so a
+// concurrent pause or force-redispatch is never silently overwritten.
+func commitPartialBuildCredit(phaseNum int, startedAt time.Time, dispatches []codexBuildDispatch) (colony.ColonyState, error) {
+	var committedState colony.ColonyState
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
+		if err := validateRuntimeStateStillCurrent(committedState, phaseNum, &startedAt, colony.StateEXECUTING); err != nil {
+			return err
+		}
+		reconcileCompletedBuildTasks(&committedState, phaseNum, dispatches)
+		committedState.Events = append(trimmedEvents(committedState.Events),
+			fmt.Sprintf("%s|build_partial_credit|build|Phase %d partial credit recorded; a D-10 recovery job covers the unfinished tasks", startedAt.Format(time.RFC3339), phaseNum),
+		)
+		return nil
+	}); err != nil {
+		return colony.ColonyState{}, fmt.Errorf("failed to save partial build credit: %w", err)
+	}
+	return committedState, nil
+}

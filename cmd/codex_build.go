@@ -837,6 +837,41 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, attemptErr
 	}
 	if err != nil {
+		// D-10: a dispatch error is not automatically all-or-nothing. Before
+		// wholesale rollback, check whether ANY dispatch carries validated
+		// partial proof (root-evidenced receipts already resolved onto
+		// dispatches by executeCodexBuildDispatches's own call to
+		// resolveCoherentJobDispatchReceipts). Only genuine partial credit
+		// bypasses rollback -- a total failure with zero receipts still takes
+		// the unchanged rollback path below (retryOutcome stays nil).
+		retryOutcome, retryErr := reconcilePartialBuildRetry(originalState, phaseNum, updatedPhase, dispatchManifest.AttemptID, time.Now().UTC(), dispatches)
+		if retryErr != nil {
+			visualFprintf(stderr, "warning: could not create a D-10 recovery job for phase %d's partial credit: %v\n", phaseNum, retryErr)
+		}
+		if retryOutcome != nil {
+			attemptFinished = true
+			partialState, commitErr := commitPartialBuildCredit(phaseNum, startedAt, dispatches)
+			if commitErr != nil {
+				rollbackCodexBuildFailure(originalState, phaseNum, startedAt, commitErr)
+				return nil, commitErr
+			}
+			emitVisualProgress(renderDecisionBlock("⚠", "Partial Credit — Recovery Job Created",
+				fmt.Sprintf("Phase %d: %d task(s) unfinished: %s", phaseNum, len(retryOutcome.UnfinishedTaskIDs), strings.Join(retryOutcome.UnfinishedTaskIDs, ", ")),
+				"The credited tasks' proof was kept; nothing proven was rolled back or redone.",
+				retryOutcome.RedispatchCommand))
+			return map[string]interface{}{
+				"phase":               phaseNum,
+				"phase_name":          updatedPhase.Name,
+				"state":               string(partialState.State),
+				"recovery_job":        true,
+				"parent_attempt_id":   retryOutcome.ParentAttemptID,
+				"retry_attempt_id":    retryOutcome.RetryAttemptID,
+				"retry_attempt_path":  retryOutcome.RetryAttemptPath,
+				"unfinished_task_ids": retryOutcome.UnfinishedTaskIDs,
+				"recovery_command":    retryOutcome.RedispatchCommand,
+				"next":                retryOutcome.RedispatchCommand,
+			}, nil
+		}
 		attemptFinished = true
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		// Classic failure theatre: a halted build is announced as a framed
