@@ -177,6 +177,30 @@ None - no external service configuration required.
 - `CLAUDE.md`'s "Team Check-In" section still states the pre-Phase-195 "every build pauses, including one worker" default — this is 195-10's scope (`files_modified: CLAUDE.md`), not this plan's; the runtime behavior documented here is authoritative per this repo's "runtime wins" rule but the doc text is stale until 195-10 lands.
 - No blockers for 195-06 through 195-10; this plan touched only the check-in policy surface named in its own `files_modified` frontmatter.
 
+## Self-Check: PASSED (orchestrator-verified)
+
+The plan's two tasks both carry `tdd="true"` but landed in a single commit with no
+separate RED commit, so the usual "these tests were seen to fail first" evidence does
+not exist in git history. The orchestrator supplied it directly instead, by mutation
+testing the shipped policy on 2026-08-27 — this repo's Definition of Done requires a
+command that FAILS when the requirement is unmet, and a test that has never been seen
+red does not yet meet it:
+
+- Disabling the pending-owner-decision guard (`if false && input.PendingOwnerDecision`)
+  failed `TestBuildCheckinDecisionMatrix` (both pending-decision rows),
+  `TestOneWorkerWithPersistedOwnerDecisionStillPauses`, and
+  `TestPendingDecisionStillRendersFullCheckinCard`.
+- Disabling the one-worker fast path (`if false && input.ImplementationDispatches == 1`),
+  which restores Phase 194's unconditional pause, failed
+  `TestBuildCheckinDecisionMatrix` and both `TestOneWorkerBuildSkipsCheckin` subtests.
+- The file was restored byte-for-byte from a pre-mutation copy and all eight named
+  tests pass green again.
+
+Both directions of the new rule are therefore falsifiable: the fast path cannot be
+silently removed, and the pause cannot be silently skipped when the owner still has
+something to decide.
+
 ---
+
 *Phase: 195-coherent-jobs*
 *Completed: 2026-08-27*
