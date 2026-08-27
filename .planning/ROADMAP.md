@@ -185,7 +185,7 @@ Plans:
 
 **Wave 6** *(blocked on retry and receipt truth)*
 
-- [ ] 195-08-PLAN.md — One grouped worktree plus receipt-scoped partial sync before credit (wave 6)
+- [x] 195-08-PLAN.md — One grouped worktree plus receipt-scoped partial sync before credit (wave 6)
 
 **Wave 7** *(blocked on final runtime behavior)*
 

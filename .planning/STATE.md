@@ -5,15 +5,15 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 195
 current_phase_name: coherent-jobs
 status: executing
-stopped_at: Completed 195-07-PLAN.md
-last_updated: "2026-08-27T07:31:56.331Z"
+stopped_at: Completed 195-08-PLAN.md
+last_updated: "2026-08-27T08:00:14.892Z"
 last_activity: 2026-08-27
-state_head: 6d7e6d6bd6edecb78b6051a40831f90546d34387
+state_head: aae13d62f1e5271d1f4f0b10b1f7ef09c1c5f550
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 21
+  completed_plans: 22
   percent: 14
 ---
 
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [█░░░░░░░░░] 14%
 
 Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 Status: Ready to execute
 Last activity: 2026-08-27
 
@@ -73,6 +73,7 @@ Last activity: 2026-08-27
 | Phase 195 P05 | 50min | 2 tasks | 5 files |
 | Phase 195 P06 | 100min | 2 tasks | 6 files |
 | Phase 195 P07 | 70min | 2 tasks | 7 files |
+| Phase 195 P08 | 55 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -217,6 +218,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T07:31:56.126Z
-Stopped at: Completed 195-07-PLAN.md
+Last session: 2026-08-27T08:00:14.773Z
+Stopped at: Completed 195-08-PLAN.md
 Resume file: None

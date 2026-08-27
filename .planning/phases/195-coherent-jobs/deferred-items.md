@@ -71,3 +71,19 @@
 - **Follow-up:** audit remaining wall-clock literals in tests. A test that fails
   because the machine was busy is indistinguishable from a real regression at
   the moment it fails, which is exactly the signal these gates exist to give.
+
+## `cmd/criterion_owner_confirmation.go` is not gofmt-clean
+
+- **Found during:** Plan 195-08 Task 2 verification
+- **Command:** `gofmt -l cmd/ pkg/`
+- **Observed:** `cmd/criterion_owner_confirmation.go` is reported unformatted. `git diff HEAD -- cmd/criterion_owner_confirmation.go` is empty, so the drift predates this plan and is not caused by it.
+- **Why deferred:** Out of scope boundary — the file is unrelated to coherent jobs or worktree receipts, and reformatting it here would put an unexplained hunk into a receipt-boundary commit.
+- **Follow-up:** Run `gofmt -w cmd/criterion_owner_confirmation.go` in a dedicated hygiene commit.
+
+## External completion packets cannot carry worktree-only file claims
+
+- **Found during:** Plan 195-08 Task 2 (external-lane worktree parity)
+- **Command:** `go test ./cmd -run TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative`
+- **Observed:** `validateCompletionPacketSemantics` -> `validateAndNormalizeClaimPathToRoot` refuses any `files_modified` claim that does not resolve inside the repository root (`claim_path.escapes_root`). A wrapper-submitted completion whose proof still lives only inside a worktree is therefore rejected before the receipt boundary is ever reached.
+- **Why deferred:** That validator is a path-laundering guard. Widening it to admit paths that are not in the repository is a trust-boundary change, not a wiring change, and this plan explicitly declined to weaken a security check to make a test pass. In practice the external/wrapper lane never allocates worktrees today (only the native dispatch path does), so no shipped flow reaches this refusal.
+- **Follow-up:** If a wrapper lane ever gains worktree allocation, decide deliberately whether `validateAndNormalizeClaimPathToRoot` should accept a path that resolves inside a colony-tracked worktree under `.aether/worktrees/` (still inside root, still not arbitrary) — a scoped widening, with its own adversarial tests.
