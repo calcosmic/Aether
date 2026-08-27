@@ -27,6 +27,20 @@ const (
 	violationRuleTaskReceiptPathOutOfClaims     = "task_receipt.path_not_in_aggregate_claims"
 	violationRuleTaskReceiptRequirementMismatch = "task_receipt.requirement_mismatch"
 	violationRuleTaskReceiptRootEvidenceMissing = "task_receipt.root_evidence_missing"
+
+	// WR-15 (owner decision, 2026-08-27; .planning/phases/195-coherent-jobs/
+	// deferred-items.md). A "nothing needed changing" receipt is now backed by
+	// the program re-running the check that receipt named and believing the
+	// RESULT. These are the three ways that re-check can withhold credit.
+	//
+	// ...Refused: the named check is not a plain build/test runner invocation,
+	// so the program declined to execute it at all (Phase 193's CR-01 rule).
+	violationRuleTaskReceiptNoChangeCommandRefused = "task_receipt.no_change_command_refused"
+	// ...Failed: the program ran the named check itself and it failed.
+	violationRuleTaskReceiptNoChangeCheckFailed = "task_receipt.no_change_check_failed"
+	// ...Unavailable: the named check could not produce a result here (the tool
+	// is not installed, or the re-check budget ran out), so nothing confirms it.
+	violationRuleTaskReceiptNoChangeCheckUnavailable = "task_receipt.no_change_check_unavailable"
 )
 
 // coherentJobReceiptCandidate is stage-1 output for exactly one task: the
