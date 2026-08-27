@@ -158,7 +158,7 @@ Plans:
 3. Given the real six-batch file-copy failure from a past project as a test fixture, the default grouping (with no explicit instruction) produces one worker instead of six, because the tasks share files and depend on each other.
 4. The same grouping behavior works when workers run in their own isolated copy of the code ("worktree" mode) — grouping is no longer switched off there.
 
-**Plans**: 9 plans
+**Plans**: 10 plans
 
 Plans:
 **Wave 1**
@@ -189,7 +189,11 @@ Plans:
 
 **Wave 7** *(blocked on final runtime behavior)*
 
-- [ ] 195-09-PLAN.md — Canonical YAML/schema/guide/skill/wrapper/doc parity and full phase gates (wave 7)
+- [ ] 195-09-PLAN.md — Atomically synchronize canonical YAML, Codex guide/skill, and all three build wrappers (wave 7)
+
+**Wave 8** *(blocked on parity-critical contract synchronization)*
+
+- [ ] 195-10-PLAN.md — Update owner docs, close the folded todo, and run all phase-wide gates (wave 8)
 
 ### Phase 196: See What It Cost
 

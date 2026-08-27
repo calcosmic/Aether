@@ -206,9 +206,13 @@ Plan tasks + optional Queen proposals + selected tasks
         worker result + optional per-task completion receipts
                     |
                     v
-       manifest/claim/verification receipt validator
+       manifest/path/verification structural admission
+        | partial -> candidate claims + sync paths, no credit
+                    |
+                    v
+       root-evidence finalization after accepted paths are in root
         | full success -> credit all covered task IDs
-        | partial      -> credit validated receipt IDs only
+        | partial      -> credit finalized CompletedTaskIDs only
         | no evidence  -> credit none
                     |
                     v
@@ -243,7 +247,7 @@ pkg/codex/
 └── completion-packet.schema.json    # regenerated, never hand-edited
 ```
 
-Keep the grouping algorithm and receipt validator in small pure files even if the serialized structs remain near existing manifest/result structs. This avoids adding more policy to the already broad `codex_build.go` and allows direct table tests. [VERIFIED: codebase grep]
+Keep the grouping algorithm and two-stage receipt boundary in small pure files even if the serialized structs remain near existing manifest/result structs. This avoids adding more policy to the already broad `codex_build.go` and allows direct table tests. [VERIFIED: codebase grep]
 
 ### Pattern 1: Validate Globally, Repair Locally
 
@@ -286,14 +290,28 @@ The wrapper should make its proposal after reading the first runtime plan, then 
 
 Add optional `task_receipts` to native and external worker results. A receipt should include `task_id`, successful status (`completed` or `completed_no_change`), summary, task-specific created/modified/test paths, and the existing handoff verification fields. The manifest remains authoritative for that task's criteria and evidence requirements; the worker does not redefine them. [VERIFIED: codebase grep]
 
-Validate each receipt once through a shared function used by both lanes:
+Use one shared two-stage contract in native, external, and worktree lanes:
 
-1. The task ID is unique and belongs to that dispatch's `dispatchCoveredTaskIDs`.
-2. Status is successful; failed, absent, or merely named tasks receive no credit.
-3. Paths normalize within the repository and are a subset of aggregate worker claims.
-4. Summary is non-empty and handoff verification reports `pass` with concrete commands/evidence, subject to the existing no-change rules.
-5. Task-specific claims are attached to the manifest task's own criteria/evidence requirements.
-6. Artifact hashes are computed from the accepted root checkout with `attachBuildArtifactEvidence`; worker-provided hashes are never authoritative.
+1. `admitCoherentJobTaskReceipts` performs structural admission only. It checks
+   that each task ID is unique and belongs to `dispatchCoveredTaskIDs`, status is
+   successful, summary is non-empty, paths normalize within the repository and
+   are a subset of aggregate worker claims, handoff verification reports `pass`
+   with concrete commands/evidence, and claims bind to the manifest task's own
+   criteria/evidence requirements. It returns candidate task claims plus the
+   normalized sync-path set. It does not read root artifacts and cannot return
+   `CompletedTaskIDs`.
+2. `finalizeCoherentJobTaskReceiptEvidence` consumes only admitted candidates
+   after their accepted paths are present in the root checkout. It computes
+   artifact evidence with `attachBuildArtifactEvidence`, drops any candidate
+   whose root evidence fails, and only then returns task-specific claims and
+   runtime-owned `CompletedTaskIDs`. Worker-provided hashes are never
+   authoritative.
+
+The native/in-repo and external lanes call the two stages back-to-back because
+their accepted files are already in root. Worktree execution calls admission in
+the worker-result boundary, syncs only its candidate paths to root, then calls
+finalization. This shared ordering avoids validating against an orphan checkout
+or crediting before root evidence exists. [VERIFIED: codebase grep]
 
 For a wholly successful grouped dispatch, absence of receipts may remain backward-compatible and credit every covered task because the manifest and whole-dispatch success already establish the existing contract. For any failed/interrupted/timeout grouped dispatch, only valid explicit receipts may populate a runtime-owned `completed_task_ids` credit set; `covered_task_ids` must continue to mean assignment, not completion. [VERIFIED: codebase grep]
 
@@ -307,7 +325,13 @@ The direct lane currently records a failed attempt and then restores the origina
 
 Full success is straightforward: remove the worktree-mode grouping exclusion, convert one grouped dispatch into one `pkg/codex.WorkerDispatch`, union its declared paths, allocate one worktree/session, and merge it once. Grouping must occur before `validateDeclaredWorktreeOwnership`, so tasks that intentionally share a file are one owner rather than a false same-wave conflict. [VERIFIED: codebase grep]
 
-For partial completion, do not credit a receipt while its files exist only in an orphaned worker checkout. Sync only the receipt-claimed and validated paths to the root checkout, reject touched paths not attributable to an accepted receipt, compute evidence from root, then commit task credit. Preserve uncredited edits in the orphan/recovery path. This ordering keeps worktree evidence equal to in-repo evidence. [VERIFIED: codebase grep]
+For partial completion, run structural admission first to obtain candidate sync
+paths without any credit. Sync only those admitted paths to the root checkout,
+reject touched paths not attributable to an admitted receipt, then run shared
+root-evidence finalization and commit only the resulting `CompletedTaskIDs`.
+Preserve uncredited edits in the orphan/recovery path. This ordering keeps
+worktree evidence equal to in-repo evidence without a circular dependency
+between validation, sync, and credit. [VERIFIED: codebase grep]
 
 ### Pattern 7: Runtime-Owned One-Worker Fast Path
 
@@ -389,7 +413,7 @@ The compact summary should reuse the deterministic worker identity, covered-task
 
 **Why it happens:** Aggregate native/external claim builders use the dispatch's primary task unless explicit task claims exist. [VERIFIED: codebase grep]
 
-**How to avoid:** Project every accepted receipt into `codexBuildClaims.TaskClaims` under its own task ID and validate it against that task's manifest requirements.
+**How to avoid:** Admit every receipt against its task's manifest requirements, then project only root-finalized candidates into `codexBuildClaims.TaskClaims` under their own task IDs.
 
 **Warning signs:** Phase status advances but `last-build-claims.json` lacks entries for covered tasks two through six.
 
@@ -399,7 +423,7 @@ The compact summary should reuse the deterministic worker identity, covered-task
 
 **Why it happens:** Failed workers are not part of the normal completed-branch merge path, so their files remain in an orphaned checkout. [VERIFIED: codebase grep]
 
-**How to avoid:** Make accepted receipt-path synchronization a prerequisite for partial credit and compute artifact evidence after sync.
+**How to avoid:** Make admitted candidate-path synchronization a prerequisite for root-evidence finalization and partial credit.
 
 **Warning signs:** A receipt test inspects only worktree files, or a retry creates the same output again in root.
 
@@ -481,7 +505,7 @@ func creditedTaskIDs(dispatch codexBuildDispatch) []string {
 	if dispatch.Status == "completed" || isNoChangeExternalBuildStatus(dispatch.Status) {
 		return dispatchCoveredTaskIDs(dispatch)
 	}
-	// CompletedTaskIDs is populated only by manifest-validated receipts.
+	// CompletedTaskIDs is populated only by post-root-evidence finalization.
 	return uniqueSortedStrings(dispatch.CompletedTaskIDs)
 }
 ```
@@ -512,7 +536,7 @@ func decideBuildCheckin(in checkinInput) checkinDecision {
 
 1. **Wave 0 — lock graph/job contracts:** Add pure whole-plan preflight, proposal types/parser/decision records, coherent component planning, incidental-path policy, soft-limit projection, and job-DAG tests. Reproduce six CalVault batches as one automatic job and keep unrelated work parallel. [VERIFIED: codebase grep]
 2. **Wave 1 — integrate manifests and briefs:** Replace post-wave-only grouping with the canonical planner in both direct and plan-only paths; add backward-compatible job fields; preserve every covered task in briefs; update deterministic names to seed grouped jobs from phase, owner, and ordered covered IDs while retaining single-task stability. [VERIFIED: codebase grep]
-3. **Wave 2 — build the receipt trust boundary:** Extend native/external result structs and generated schema, implement the shared validator, task-specific claims, exact partial credit, and append-only parent-linked retry. Cover full success, four-of-six failure, no-receipt failure, duplicate/unknown/out-of-scope/path-laundering receipts, and no-change. [VERIFIED: codebase grep]
+3. **Wave 2 — build the receipt trust boundary:** Extend native/external result structs and generated schema, implement shared structural admission plus root-evidence finalization, task-specific claims, exact partial credit, and append-only parent-linked retry. Cover full success, four-of-six failure, no-receipt failure, duplicate/unknown/out-of-scope/path-laundering receipts, and no-change. [VERIFIED: codebase grep]
 4. **Wave 3 — enable worktree jobs:** Remove the grouping exclusion, ensure preflight sees grouped ownership, union declared paths, test one worktree for six tasks, and add accepted partial-path sync before credit. Preserve unrelated overlap conflicts and orphan recovery. [VERIFIED: codebase grep]
 5. **Wave 4 — one-worker check-in policy:** Add `--checkin` and early conflict validation; derive the policy after final jobs and pending decisions; render the compact summary; invert the old one-worker pause test and keep waiver/autopilot/multi-worker counterexamples. [VERIFIED: codebase grep]
 6. **Wave 5 — surface parity and end-to-end gates:** Update command catalog, generated schema, YAML source, three byte-identical wrappers, Codex build-cycle skill, command guide, `CLAUDE.md`/relevant docs, then run focused, full, race, vet, build, contract, and wrapper-parity checks. [VERIFIED: codebase grep]
@@ -541,19 +565,32 @@ This order prevents worktree and check-in code from depending on unstable job se
 |---|-------|---------|---------------|
 | — | None. Recommendations are derived from locked context decisions and inspected runtime/tests; no package, compliance, retention, or external-service assumption is required. | — | — |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **How should partial worktree files be transferred without accepting unrelated edits?**
    - What we know: normal worktree merge-back operates on completed branches, failed worktrees are preserved, and D-08/D-09 require partial credit when trustworthy proof exists. [VERIFIED: codebase grep]
    - What's unclear: the current runtime has no receipt-scoped partial merge primitive. [VERIFIED: codebase grep]
-   - Recommendation: implement an explicit receipt-path sync that refuses any touched path not claimed by a validated receipt, then compute evidence from root and credit; keep the remainder in the orphaned checkout. Treat this as part of JOBS-04, not a later cleanup.
+   - **Resolution:** Use the shared two-stage receipt contract. Plan 195-04
+     defines structural admission (candidate task claims and normalized sync
+     paths, no credit) plus root-evidence finalization (the only stage allowed
+     to emit `CompletedTaskIDs`); Plan 195-06 reuses both stages for the external
+     lane. Plan 195-08 owns the worktree wiring and shared receipt module while
+     it runs admission, syncs only admitted paths to root, then finalizes root
+     evidence before credit. Unattributed edits remain in the orphaned checkout.
 
 2. **What counts as a pending owner decision beyond the named-risk waiver?**
    - What we know: Phase 194 already emits forced-reviewer waiver opportunities and orchestrator-boundary guidance, while D-13 deliberately includes “other owner decision.” [VERIFIED: codebase grep]
    - What's unclear: those signals currently live in more than one result/state structure rather than one `PendingOwnerDecision` field. [VERIFIED: codebase grep]
-   - Recommendation: centralize a pure predicate over active boundary questions, unanswered persisted decisions, and unwaived forced-reviewer records; test each source independently.
+   - **Resolution:** Plan 195-05 centralizes
+     `buildHasPendingOwnerDecision` as a pure predicate over live
+     phase/attempt-scoped forced-reviewer waiver records, unanswered
+     orchestrator boundary questions, and any other persisted unanswered
+     owner-decision record already consumed by the build boundary. Each source
+     gets an independent one-worker counterexample; no rendered prose is used
+     as policy input.
 
-Neither question blocks planning; both need explicit implementation tasks and tests rather than an inferred shortcut.
+Both questions are resolved by named implementation plans and executable tests;
+neither remains open for executor interpretation.
 
 ## Environment Availability
 
