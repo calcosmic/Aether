@@ -85,21 +85,53 @@ The owner chose "review them, then merge what holds up". Verdicts from
 | `worktree-agent-aa57076cd698da76f` — `cmd/wrapper_usage_opencode.go` + fixtures | **MERGE-WITH-FIXES, and only inside the plan that also wires it.** Both entry points are currently orphans with no caller, and merging unwired code is this repo's named signature failure. Must fix: delete `openCodeWorkerNamePatternCache` (an unsynchronised map read and written per worker — Go aborts the process on a concurrent map write, so this is a hard crash at the end of every build, not a silent race). Must add: a multi-message fixture, because all three existing fixtures have exactly one message and real sessions have twenty-plus, leaving the accumulation path untested. |
 | `worktree-agent-a59fd3ee68644ea21` — `cmd/wrapper_usage_claude_test.go` + fixture | **DELETE**, after harvesting the test design. It tests an implementation that has never existed in any ref, so merging it breaks the whole `cmd` package build. Reviving is strictly more expensive than rewriting because there is nothing to revive. |
 
-## D-04 — The Claude transcript must dedupe, and the fixture must prove it
+## D-04 — The Claude transcript must dedupe (CORRECTED 2026-08-27)
 
-The deleted branch's fixture would have hidden a real defect, and this is the single
-most important technical finding of the assessment. In today's Claude transcripts the
-same worker's usage block appears two or three times, once each on the `user`,
-`queue-operation` and `attachment` line types. Measured on a real transcript: naive
-line-summing gives **8,930,280** tokens against a deduplicated true **4,237,379** — a
-**2.1x overcount**.
+**The overcount is real. The mechanism first recorded here was wrong, and the
+correction changes what the parser must key on.**
 
-The parser must deduplicate by `tool_use_id` across all three line types. Its fixture
-must be a REAL captured transcript containing the duplicate blocks, so a regression to
-naive summing fails. A fixture listing each block once cannot fail, which is the same
-structural failure as the 186x undercount in this repo's history, in the same
-subsystem. Also note the colon-form `<usage>` shape the deleted branch asserted appears
-in 25 older transcripts and ZERO times in the current one — do not target it.
+Originally recorded, from the salvage assessment: "the same worker's usage block
+appears two or three times, once each on the `user`, `queue-operation` and
+`attachment` line types — dedupe by `tool_use_id`."
+
+The plan checker tested that against every one of the owner's 746 real transcripts
+under `~/.claude/projects` and it does not hold. Usage-bearing lines by top-level
+`type`:
+
+```
+assistant  48063
+user         250
+```
+
+`queue-operation` and `attachment` carry usage **zero times**. The earlier reading
+matched a nested inner `type` field on a content block, not the line type — the
+"structure, not substrings" mistake this very decision exists to prevent.
+`tool_use_id` is essentially absent from usage-bearing lines, so a parser keyed on it
+would have deduplicated NOTHING and reproduced the full overcount, while its
+fixture-integrity test could never be satisfied from a real capture.
+
+**The corrected rule.** The duplication is real and occurs WITHIN the `assistant`
+line type. The key is **`message.id`**, corroborated by `requestId`. Measured on a real
+transcript: 50 usage rows, 25 distinct `message.id`; one id appears four times, every
+occurrence `type=assistant` with identical `output_tokens=373`.
+
+So: **deduplicate by `message.id` across usage-bearing lines.** Handle both surviving
+line types, `assistant` and `user`.
+
+**The fixture must still be a REAL captured transcript that keeps its duplicates**, and
+its integrity test asserts that at least one `message.id` occurs more than once among
+usage-bearing lines, and that usage-bearing lines of both surviving types are present.
+A fixture with each block appearing once cannot fail, which is the 186x-undercount
+shape this repo already shipped, in this same subsystem.
+
+**Re-derive the naive and deduplicated totals from the actual capture.** The figures
+8,930,280 and 4,237,379 came from the superseded reading and must not be carried
+forward as literals.
+
+**Why this is recorded rather than quietly edited:** a wrong mechanism stated
+confidently is how this repo's audits describe its own failures. The assessment was
+right that there is a duplication trap and right about its size; it was wrong about
+where. Both facts belong in the record.
 
 ## D-05 — One authoritative token type (TECHNICAL RULING, not an owner call)
 
