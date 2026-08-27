@@ -35,6 +35,12 @@ const (
 // alone never grants credit.
 type coherentJobReceiptCandidate struct {
 	TaskID string
+	// Status is the receipt's own normalized terminal status (completed or
+	// completed_no_change). Stage 2 needs it because the two are evidenced
+	// differently: a `completed` receipt must name at least one file that is
+	// really in root, while a `completed_no_change` receipt's evidence IS the
+	// commands_run stage 1 already forced it to carry.
+	Status string
 	Claim  codexBuildTaskClaim
 }
 
@@ -241,7 +247,7 @@ func admitCoherentJobTaskReceipts(root string, phase colony.Phase, dispatch code
 			}
 		}
 
-		admission.Candidates = append(admission.Candidates, coherentJobReceiptCandidate{TaskID: taskID, Claim: claim})
+		admission.Candidates = append(admission.Candidates, coherentJobReceiptCandidate{TaskID: taskID, Status: status, Claim: claim})
 		syncPaths = append(syncPaths, claimedPaths(claim)...)
 	}
 	sort.Slice(admission.Candidates, func(i, j int) bool { return admission.Candidates[i].TaskID < admission.Candidates[j].TaskID })
@@ -257,7 +263,10 @@ func admitCoherentJobTaskReceipts(root string, phase colony.Phase, dispatch code
 // with admitCoherentJobTaskReceipts -- plans 195-06 and 195-08 reuse both
 // stages unchanged, the worktree lane inserting a sync step between them.
 // A candidate whose claimed paths are not readable regular files in root
-// right now is dropped without credit; every other candidate is credited.
+// right now is dropped without credit, and so is a `completed` candidate that
+// names no path at all -- pointing at nothing is never root-backed evidence
+// (CR-01, 195-REVIEW.md). The single exception is completed_no_change, whose
+// evidence is the commands_run stage 1 already required (ruling D6).
 func finalizeCoherentJobTaskReceiptEvidence(root string, phase colony.Phase, dispatch codexBuildDispatch, admission coherentJobReceiptAdmission) ([]codexBuildTaskClaim, []string, []contractViolation) {
 	_ = phase
 	var claims []codexBuildTaskClaim
@@ -268,7 +277,30 @@ func finalizeCoherentJobTaskReceiptEvidence(root string, phase colony.Phase, dis
 	for _, candidate := range admission.Candidates {
 		claim := candidate.Claim
 		paths := claimedPaths(claim)
-		if len(paths) > 0 {
+		if len(paths) == 0 {
+			// CR-01 (195-REVIEW.md): the root-evidence block below used to be
+			// guarded by `if len(paths) > 0`, which made the ENTIRE
+			// root-backed check optional -- a candidate claiming no path at
+			// all fell straight through to credit, and did so even against a
+			// root that does not exist. A receipt that points at nothing is
+			// not evidence of anything.
+			//
+			// The one narrow exception is completed_no_change, whose evidence
+			// is by definition not a file: stage 1 has already proven that
+			// receipt carries a passing verification_status and at least one
+			// concrete commands_run entry (ruling D6). Everything else is
+			// refused by name here rather than credited.
+			if candidate.Status != codex.TaskReceiptStatusCompletedNoChange {
+				violations = append(violations, contractViolation{
+					Worker:  worker,
+					Field:   "task_receipts.files_modified",
+					Value:   candidate.TaskID,
+					Rule:    violationRuleTaskReceiptUnevidenced,
+					Message: fmt.Sprintf("task %s's receipt claims completion but names no file in the project; not credited", candidate.TaskID),
+				})
+				continue
+			}
+		} else {
 			evidenceInput := codexBuildClaims{
 				FilesCreated:  claim.FilesCreated,
 				FilesModified: claim.FilesModified,
