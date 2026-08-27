@@ -116,6 +116,28 @@ See `.aether/docs/wrapper-host-contract.md` for the full field shapes this manif
 
 **Stop conditions:** If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output. Do not retry silently or fall back to a simulated dispatch.
 
+## Coherent Jobs
+
+🐜 Related tasks travel together: one worker, one job, one set-up cost.
+
+**Purpose:** Let the Queen propose which tasks belong to one worker, then show what the runtime actually accepted — so several related tasks become one job instead of one fresh worker re-reading the same files per task.
+
+**Reads:** `job_decisions` from the plan-only result, and each dispatch's `job_name`, `job_reason`, `job_source`, and `covered_task_ids`.
+
+Grouping is a proposal, not a decision. Go owns accepted groups, completion credit, retry, worktree reconciliation, and check-in policy; the wrapper proposes, renders, spawns, and submits.
+
+1. Propose a grouping only when you can name both the relationship and the benefit. A generic "these are related" is not a reason. `--job-proposal` is repeatable — one JSON object per group, carrying `name`, `task_ids`, `owner_caste`, `relationship`, `benefit`, and an optional `owner_reason`:
+
+```
+aether build --job-proposal '{"name":"templates","task_ids":["2","3","4"],"owner_caste":"builder","relationship":"these tasks edit the same templates","benefit":"one worker avoids repeated setup and write conflicts"}' $ARGUMENTS --plan-only
+```
+
+2. With no proposal at all the runtime still groups: tasks joined by a dependency chain, or by meaningful shared implementation files, become one job. Incidental overlap through a README, a changelog, or a dependency manifest never joins unrelated work.
+3. Read `job_decisions` and relay it in plain English. Each entry's `status` is `accepted` or `refused`. A refusal names `offending_task_id` and `dependency_id` — the task that would have run before something it depends on — plus `replacement_job_names`, the dependency-safe jobs the runtime substituted in its place. Every other proposal is kept untouched: the runtime repairs the one bad group, it does not fall back to one worker per task.
+4. Each dispatch then carries `job_name`, `job_reason` (the accepted relationship and benefit), `job_source` (`queen` when you proposed it, `automatic` when the runtime grouped it, `single` for one ungrouped task, `retry` for a recovery job), and `covered_task_ids` — every task that job owns, in order. Render these values; never edit them, and never re-propose a refused grouping unchanged.
+
+**Stop conditions:** The runtime reports a real dependency cycle — it blocks dispatch for the whole phase and names the cycle plus the plan repair. Surface that and stop; a cycle has no safe order to fall back to.
+
 ## Queen's Team Decision
 
 🐜 This is the step where the Queen is a Queen rather than a lookup table.
@@ -253,9 +275,21 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 
 **Purpose:** Pause after the spawn plan renders and let the user approve, trim, decline, or redirect the team before any worker spawns. The worker that writes the code is the one part of the team never offered for removal — the runtime re-adds it regardless, so offering that choice would be a lie. A reviewer forced by a named risk signal IS offered for removal, but only to the owner, and only by explicitly declining it with a reason that is recorded — never by a silent trim.
 
-**Reads:** the manifest file written in Dispatch Manifest, and `result.checkin_requested` from the plan-only result.
+**Reads:** the manifest file written in Dispatch Manifest, and `result.checkin_requested`, `result.checkin_reason`, and `result.checkin_summary` from the plan-only result.
 
-If `checkin_requested` is false (`--no-checkin` was passed), skip this stage entirely.
+`checkin_requested` is the runtime's decision and `checkin_reason` says why. Never infer either from the flags you passed:
+
+- `one_worker_fast_path` — exactly one worker, and nothing left for the owner to decide. Show `checkin_summary` (the worker, every covered task, why those tasks are one job, and why no approval is needed) as a short note, then continue without asking. The note is not optional; a build that spends nothing still shows who it sent.
+- `non_interactive` — autopilot, or the owner passed `--no-checkin`. Skip this stage entirely.
+- `explicit_checkin`, `pending_owner_decision`, or `default_pause` — `checkin_requested` is true. Run the full stage below unchanged; a forced reviewer, an unanswered planning question, or a worker's open question keeps the pause even for a one-worker build.
+
+The owner can force the pause on an otherwise decision-free one-worker build:
+
+```
+aether build --checkin $ARGUMENTS --plan-only
+```
+
+Passing `--checkin` and `--no-checkin` together is refused by name before anything is written. Do not guess which one wins.
 
 1. Render the runtime-owned check-in card:
 
@@ -297,6 +331,8 @@ For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 - Inspect and preserve each dispatch `permission_profile`. A `repository_read_only` worker must use a host-enforced no-write boundary. Reject `scoped_write` or `test_write` when the host cannot enforce it. `behavioral_restrictions` inside `workspace_write` are instructions, not a sandbox claim.
 - Require terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `blockers`, `duration`, `handoff`.
 - The `handoff` object is mandatory for completed workers and must be concrete: `{changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, freshness}` (freshness: RFC3339 timestamp of evidence collection, or `not-run`). It is what the next phase's workers receive as context — an empty handoff will be rejected by the finalizer.
+- A dispatch's `covered_task_ids` is that worker's assignment scope, not credit for it. When a worker finishes only part of its job, its terminal result must carry a `task_receipts` array: one entry per task it actually proved, each with `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, and its own `handoff`. A task with no receipt is simply unfinished. Never claim one because a related file changed or because the worker mentioned it.
+- An accepted task receipt is admission, not completion credit: only the runtime's root-backed finalization can grant `completed_task_ids`. Never author `covered_task_ids` or `completed_task_ids` by hand in a manifest or in colony state; the runtime owns both.
 
 Respect `execution_plan`: serial steps stay serial; parallel steps may spawn together.
 
@@ -338,6 +374,13 @@ Then render the user-facing closeout:
 ```
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>
 ```
+
+Read the finalizer's own answer instead of assuming a job finished whole:
+
+- Each dispatch's `completed_task_ids` is what the runtime actually credited. It is the only place credit exists.
+- `recovery_job` set to true means part of the job was proven and part was not. `unfinished_task_ids` lists exactly what remains, `parent_attempt_id` and `retry_attempt_id` link the new attempt to the original one so the first worker's proof is never overwritten, and `recovery_command` is the exact command that redispatches only the unfinished tasks. Relay `recovery_command` in plain English; never ask a new worker to redo credited work.
+
+In worktree mode one job takes one isolated copy of the project, one branch, and one merge-back. The runtime admits receipts, copies back only what it admitted, and only then credits tasks. Anything the worker touched but never proved is neither copied back nor deleted — it stays on its own preserved branch, which the runtime names. Say that plainly rather than reporting it as lost or as done.
 
 **Stop conditions:** `build-finalize` reports failure — do not render closeout as success; surface the runtime's own error instead.
 

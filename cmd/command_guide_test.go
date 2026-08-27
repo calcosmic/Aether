@@ -1036,3 +1036,108 @@ func TestBuildCommandGuideIncludesPlatformContract(t *testing.T) {
 		t.Fatalf("named caste routing support = %#v", guide.PlatformContract.NamedCasteRouting)
 	}
 }
+
+// --- Phase 195 coherent-job parity contract (shared by three guards) ---
+//
+// The build lifecycle now has ONE contract spread across five shipped
+// surfaces: .aether/commands/build.yaml (canonical YAML), cmd/command_guide.go
+// (Codex guide), the aether-colony-build-cycle Codex skill, and the three
+// byte-identical build wrappers. AGENTS.md requires them to change together.
+// These three vars are the single definition of "what the contract says", so
+// TestCommandGuideBuildCoherentJobsContract,
+// TestBuildCommandYAMLCoherentJobsParity, and
+// TestLifecycleWrappersCarryCoherentJobContract cannot drift apart by each
+// re-typing their own list.
+
+// buildCoherentJobFieldAnchors are the runtime flag and field names every
+// parity-critical build surface must name. They are the real CLI flags and
+// real JSON keys the Go runtime emits (cmd/codex_workflow_cmds.go,
+// cmd/coherent_jobs.go, cmd/codex_build.go, cmd/coherent_job_retry.go), not
+// invented vocabulary — a surface missing one is a surface that cannot
+// describe what the runtime actually does.
+var buildCoherentJobFieldAnchors = []string{
+	"--job-proposal",
+	"job_decisions",
+	"job_name",
+	"job_reason",
+	"job_source",
+	"covered_task_ids",
+	"task_receipts",
+	"completed_task_ids",
+	"recovery_job",
+	"unfinished_task_ids",
+	"recovery_command",
+	"--checkin",
+	"checkin_requested",
+	"checkin_reason",
+	"checkin_summary",
+}
+
+// buildCoherentJobAuthorityAnchors are the three verbatim sentences that fix
+// the Go-authority boundary identically on every surface. They are compared
+// byte-for-byte deliberately: a paraphrase on one platform is exactly how
+// this repo has previously shipped four surfaces that each described a
+// slightly different contract.
+var buildCoherentJobAuthorityAnchors = []string{
+	"Go owns accepted groups, completion credit, retry, worktree reconciliation, and check-in policy; the wrapper proposes, renders, spawns, and submits.",
+	"An accepted task receipt is admission, not completion credit: only the runtime's root-backed finalization can grant `completed_task_ids`.",
+	"Never author `covered_task_ids` or `completed_task_ids` by hand in a manifest or in colony state; the runtime owns both.",
+}
+
+// buildCoherentJobForbiddenAnchors are instructions no build surface may
+// carry. The first is the pre-195 claim that a false `checkin_requested`
+// means `--no-checkin` was passed — false since D-11, because the automatic
+// one-worker fast path also produces false and requires the compact summary
+// to be rendered instead of the stage being skipped silently. The rest forbid
+// teaching any platform to author task-credit fields itself.
+var buildCoherentJobForbiddenAnchors = []string{
+	"(`--no-checkin` was passed)",
+	"write `completed_task_ids`",
+	"write `covered_task_ids`",
+	"set `completed_task_ids`",
+	"set `covered_task_ids`",
+}
+
+// assertBuildCoherentJobContract runs the full field/authority/forbidden
+// contract against one surface's text.
+func assertBuildCoherentJobContract(t *testing.T, surface, text string) {
+	t.Helper()
+
+	if strings.TrimSpace(text) == "" {
+		t.Fatalf("%s: empty surface text — this guard would pass vacuously", surface)
+	}
+	for _, anchor := range buildCoherentJobFieldAnchors {
+		if !strings.Contains(text, anchor) {
+			t.Errorf("%s: missing coherent-job contract item %q", surface, anchor)
+		}
+	}
+	for _, anchor := range buildCoherentJobAuthorityAnchors {
+		if !strings.Contains(text, anchor) {
+			t.Errorf("%s: missing verbatim Go-authority statement:\n  %s", surface, anchor)
+		}
+	}
+	for _, forbidden := range buildCoherentJobForbiddenAnchors {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("%s: still carries a forbidden instruction %q", surface, forbidden)
+		}
+	}
+}
+
+// TestCommandGuideBuildCoherentJobsContract asserts the Codex build guide
+// describes the same coherent-job, receipt, recovery and check-in contract
+// the runtime implements, on every platform the guide serves.
+func TestCommandGuideBuildCoherentJobsContract(t *testing.T) {
+	for _, platform := range []string{"codex", "claude", "opencode"} {
+		platform := platform
+		t.Run(platform, func(t *testing.T) {
+			guide, err := buildCommandGuide("build", platform)
+			if err != nil {
+				t.Fatalf("buildCommandGuide(build, %s): %v", platform, err)
+			}
+			parts := append([]string{}, guide.PreSteps...)
+			parts = append(parts, guide.Intent, guide.RunCommand)
+			parts = append(parts, guide.PostSteps...)
+			assertBuildCoherentJobContract(t, "command-guide build --platform "+platform, strings.Join(parts, "\n"))
+		})
+	}
+}

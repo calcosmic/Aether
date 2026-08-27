@@ -186,6 +186,40 @@ aether build <phase> --plan-only
 4. Save the full JSON envelope to a temporary manifest file outside
    `.aether/data/`.
 5. Parse `result.dispatch_manifest`.
+5a. Coherent jobs: several related tasks become one job for one worker.
+   Grouping is a proposal, never a decision.
+   Go owns accepted groups, completion credit, retry, worktree reconciliation, and check-in policy; the wrapper proposes, renders, spawns, and submits.
+   - `--job-proposal` is repeatable: one JSON object per group with `name`,
+     `task_ids`, `owner_caste`, `relationship`, `benefit`, and optional
+     `owner_reason`. A reason must name both the relationship and the
+     benefit; "these are related" is not a reason.
+
+```bash
+aether build --job-proposal '{"name":"templates","task_ids":["2","3","4"],"owner_caste":"builder","relationship":"these tasks edit the same templates","benefit":"one worker avoids repeated setup and write conflicts"}' <phase> --plan-only
+```
+
+   - With no proposal the runtime still groups tasks joined by a dependency
+     chain or by meaningful shared implementation files. Incidental overlap
+     through a README, changelog, or dependency manifest joins nothing.
+   - Read `job_decisions` and relay it plainly. Each entry's `status` is
+     `accepted` or `refused`; a refusal names `offending_task_id`,
+     `dependency_id`, and the `replacement_job_names` the runtime
+     substituted. Only the refused group is repaired.
+   - Each dispatch carries `job_name`, `job_reason`, `job_source` (`queen`,
+     `automatic`, `single`, or `retry`) and `covered_task_ids` in order.
+     Render them; never edit them, and never re-propose a refused grouping
+     unchanged.
+   - A real dependency cycle blocks dispatch for the whole phase, names the
+     cycle, and names the plan repair. Surface it and stop.
+5b. Team check-in: `checkin_requested` is the runtime's decision and
+   `checkin_reason` says why. Never infer either from the flags passed.
+   `one_worker_fast_path` means one worker with nothing left for the owner to
+   decide -- render `checkin_summary` as a short non-blocking note and
+   continue. `non_interactive` (autopilot or `--no-checkin`) skips the stage.
+   `explicit_checkin`, `pending_owner_decision`, and `default_pause` all keep
+   the full blocking check-in, including the forced-reviewer waiver flow.
+   `--checkin` is the owner override that forces the pause on a decision-free
+   one-worker build; combining it with `--no-checkin` is refused by name.
 6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
    build workers.
 7. Render the user-facing spawn ceremony:
@@ -215,6 +249,14 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 12. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
 13. After each terminal result, render `aether ceremony worker-complete`.
+13a. Task receipts: a dispatch's `covered_task_ids` is that worker's
+   assignment scope, not credit for it. A worker that finishes only part of
+   its job submits a `task_receipts` array -- one entry per proved task with
+   `task_id`, `status`, `summary`, `files_created`, `files_modified`,
+   `tests_written`, and its own `handoff`. A task with no receipt is
+   unfinished; never infer completion because a related file changed.
+   An accepted task receipt is admission, not completion credit: only the runtime's root-backed finalization can grant `completed_task_ids`.
+   Never author `covered_task_ids` or `completed_task_ids` by hand in a manifest or in colony state; the runtime owns both.
 14. Stage the accepted completion packet in the Go-owned attempt journal:
 
 ```bash
@@ -235,6 +277,20 @@ Then render the wrapper closeout:
 ```bash
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>
 ```
+
+16. Read the finalizer's own answer instead of assuming a job finished whole.
+   Each dispatch's `completed_task_ids` is what the runtime actually
+   credited. `recovery_job` set to true means part of the job was proven and
+   part was not: `unfinished_task_ids` lists what remains,
+   `parent_attempt_id` and `retry_attempt_id` link the appended recovery
+   attempt to the original one, and `recovery_command` is the exact command
+   that redispatches only the unfinished tasks. Relay `recovery_command`;
+   never ask a new worker to redo credited work.
+17. In worktree mode one job takes one worktree, one branch, and one
+   merge-back. The runtime admits receipts, syncs only what it admitted back
+   to the project root, then credits. Anything the worker touched but never
+   proved is neither synced nor destroyed -- it stays on a preserved branch
+   the runtime names. Report that plainly rather than as lost or as done.
 
 ## Continue Flow
 

@@ -737,3 +737,63 @@ func TestLifecycleWrapperReadOnlyBlocksAreConsistent(t *testing.T) {
 		}
 	})
 }
+
+// buildWrapperTripletPaths returns the three hand-maintained build wrapper
+// copies in canonical-first order: the canonical Claude wrapper, the flat
+// installed-consumer Claude mirror, and the OpenCode copy. There is no
+// generator for these — they are byte-identical by policy, and this ordering
+// makes the canonical one the comparison base.
+func buildWrapperTripletPaths(repoRoot string) []string {
+	return []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "build.md"),
+		flatMirrorPath(repoRoot, "build"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "build.md"),
+	}
+}
+
+// TestLifecycleWrappersCarryCoherentJobContract asserts all three build
+// wrapper copies describe the Phase 195 coherent-job, task-receipt, recovery
+// and check-in contract exactly as the Go runtime implements it, and that
+// they remain byte-identical to each other while doing so.
+//
+// The forbidden-anchor half is the load-bearing part: before Phase 195 the
+// Team Check-In stage said `checkin_requested` is false because
+// `--no-checkin` was passed, which the one-worker fast path (D-11) made
+// untrue. A wrapper that skipped the stage on that stale reading would drop
+// the runtime's compact summary entirely.
+func TestLifecycleWrappersCarryCoherentJobContract(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	paths := buildWrapperTripletPaths(repoRoot)
+	bodies := make([][]byte, 0, len(paths))
+
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		bodies = append(bodies, content)
+
+		rel, relErr := filepath.Rel(repoRoot, path)
+		if relErr != nil {
+			rel = path
+		}
+		t.Run(rel, func(t *testing.T) {
+			assertBuildCoherentJobContract(t, rel, string(content))
+		})
+	}
+
+	t.Run("triplet_is_byte_identical", func(t *testing.T) {
+		for i := 1; i < len(bodies); i++ {
+			if !bytes.Equal(bodies[0], bodies[i]) {
+				t.Errorf(
+					"build wrapper copies drifted: %s (%d bytes) != %s (%d bytes) — the three copies are hand-maintained and must be byte-identical",
+					paths[0], len(bodies[0]), paths[i], len(bodies[i]),
+				)
+			}
+		}
+	})
+}
