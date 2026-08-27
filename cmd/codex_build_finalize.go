@@ -77,8 +77,8 @@ type codexExternalBuildWorkerResult struct {
 	// call the manifest still lists as separate dispatches. This is the
 	// WORKER's own claim, submitted via the completion packet -- contrast
 	// codexBuildDispatch.CoveredTaskIDs (cmd/codex_build.go), which the
-	// RUNTIME writes when it coalesces a dependent chain into one dispatch
-	// before any worker runs (coalesceSequentialDispatches). Because this
+	// RUNTIME writes when it groups a dependent chain into one dispatch
+	// before any worker runs (planCoherentJobs). Because this
 	// field is worker-supplied, the trust boundary inverts relative to that
 	// runtime-written analog: mergeExternalBuildResults validates every
 	// entry against the manifest's own dispatches before granting any
@@ -1602,8 +1602,8 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 				dispatchIndexByTaskID[taskID] = idx
 			}
 		}
-		// A manifest dispatch that is ITSELF a runtime-coalesced chain
-		// (coalesceSequentialDispatches) already covers more than its own
+		// A manifest dispatch that is ITSELF a runtime-grouped coherent job
+		// (planCoherentJobs) already covers more than its own
 		// primary TaskID; a worker's covered_task_ids claim must resolve
 		// against that full chain too, not just the chain's first step.
 		for _, covered := range d.CoveredTaskIDs {

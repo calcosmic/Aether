@@ -52,8 +52,8 @@ func TestMergedDispatchCreditsEveryCoveredTask(t *testing.T) {
 		task := colony.Task{ID: &id, Goal: "Sequential step " + id, Status: colony.TaskPending}
 		if i > 0 {
 			// Dependencies are what put each step in its own single-dispatch
-			// wave, which is the only shape coalesceSequentialDispatches
-			// merges. Independent tasks share a wave and never merge, so a
+			// wave, which is the shape planCoherentJobs groups into one
+			// job. Independent tasks share a wave and never group, so a
 			// fixture without these silently proves nothing.
 			task.DependsOn = []string{ids[i-1]}
 		}

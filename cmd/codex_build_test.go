@@ -4185,8 +4185,8 @@ func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
 // invariant proof for criterion 1: a merged (multi-task) dispatch's brief must
 // carry every covered task's constraints, hints and success criteria, not
 // just the first task folded into the chain. It builds a real 3-task merged
-// dispatch (via CoveredTaskIDs, exactly as coalesceSequentialDispatches
-// produces one) rather than a single-task dispatch with a hand-set
+// dispatch (via CoveredTaskIDs, exactly as planCoherentJobs produces one)
+// rather than a single-task dispatch with a hand-set
 // CoveredTaskIDs list, so it actually exercises the merge-aware resolution
 // path instead of asserting a single hardcoded string.
 func TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria(t *testing.T) {

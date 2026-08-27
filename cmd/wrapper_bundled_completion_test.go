@@ -16,9 +16,9 @@ import (
 
 // setupWrapperBundledManifestTest builds a real, plan-only manifest bound to
 // a durable build attempt, with one INDEPENDENT task (no DependsOn) per
-// taskID. Independent tasks share a wave and are never merged by
-// coalesceSequentialDispatches -- see TestMergedDispatchCreditsEveryCoveredTask's
-// own comment on this -- so each task becomes its own separate, uncoalesced
+// taskID. Independent tasks share a wave and are never grouped by
+// planCoherentJobs -- see TestMergedDispatchCreditsEveryCoveredTask's
+// own comment on this -- so each task becomes its own separate, ungrouped
 // dispatch with no codexBuildDispatch.CoveredTaskIDs pre-set. That is the
 // exact shape FIELD-02 is about: the WRAPPER, not the runtime, bundling
 // several manifest-listed dispatches into one worker call, which is a
@@ -525,8 +525,8 @@ func TestFinalizeSuspectsBundledWorkOnOneOfNShape(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // setupCoherentJobWrapperTest builds a real, plan-only manifest for six
-// dependent tasks the runtime coalesces into ONE merged dispatch
-// (coalesceSequentialDispatches) -- the D-08/D-09 partial-credit shape --
+// dependent tasks the runtime groups into ONE coherent job dispatch
+// (planCoherentJobs) -- the D-08/D-09 partial-credit shape --
 // and returns root, the phase (with its full Task list, needed by
 // admitCoherentJobTaskReceipts), the manifest, the merged chain dispatch,
 // and the six task IDs in order.

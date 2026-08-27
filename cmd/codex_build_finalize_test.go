@@ -1949,8 +1949,8 @@ func TestBuildFinalizeWarnsOnLegacyUnboundManifest(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // setupCoherentJobExternalFinalizeTest builds a real, plan-only manifest for
-// six dependent tasks the runtime coalesces into ONE merged dispatch
-// (coalesceSequentialDispatches), the exact shape D-08/D-09's partial-credit
+// six dependent tasks the runtime groups into ONE coherent job dispatch
+// (planCoherentJobs), the exact shape D-08/D-09's partial-credit
 // rulings are about. Returns root and the merged chain dispatch.
 func setupCoherentJobExternalFinalizeTest(t *testing.T, goal string) (string, codexBuildManifest, codexBuildDispatch, []string) {
 	t.Helper()

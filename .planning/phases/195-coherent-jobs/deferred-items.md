@@ -183,3 +183,65 @@ says an undocumented deferral becomes invisible debt.
   a cosmetic edit inside a fix round aimed at trust-boundary defects.
 - **Follow-up:** compute the credited/unfinished partition once in
   `runCodexBuildFinalize` and pass it down to all three.
+
+## Open items carried out of the third review (195-REVIEW.iter3.md)
+
+The closure review ended `status: clean` / shippable with four items it did not
+fix. Recorded here because "knowingly left" only counts when it is written in the
+record of what was knowingly left — the third review said outright that WR-15
+belonged in this file, and it was not added until the phase verifier caught the
+omission.
+
+### WR-15 — what a "nothing needed changing" report may claim (OWNER DECISION)
+
+- **Severity:** WARNING — a residual design point, not a defect in the fix.
+- **Where:** `cmd/coherent_job_receipts.go` (the no-change branch of the two-stage
+  receipt boundary).
+- **What changed and why it matters:** before the third fix pass, a
+  `completed_no_change` receipt claiming no path was refused outright whenever its
+  task declared any path, because stage 1's declared-file binding found no match.
+  It is now admitted, and credited when every file the task declares exists in the
+  checkout. Declared paths come from the task's evidence artifacts and file-shaped
+  hints — which, for a task that modifies existing code, already exist before the
+  build starts. So the credited surface moved: a hole reachable only by path-less
+  tasks was closed, and a narrower but more common one opened — "the file it names
+  is there, so I say the work was already done".
+- **Why it was judged shippable anyway,** three bounds all re-traced by the phase
+  verifier: a build made only of no-change credit still fails the phantom-build
+  guard; no-change credit carries no artifacts, so it cannot satisfy a criterion
+  that demands one; and the receipt must still pass the scope, status, summary and
+  handoff checks.
+- **The actual question for the owner:** what must a worker show before "I checked
+  and nothing needed changing" is accepted? Options are (a) leave as is, (b) require
+  the named command to be re-run by the program rather than reported, which this
+  repo already does for builder-reported evidence elsewhere (Phase 193, D-04), or
+  (c) refuse no-change credit from a FAILED worker entirely and let the retry
+  credit it through the ordinary whole-success path. This is a rule about
+  user-facing behaviour, so it is the owner's call, not a reviewer's.
+
+### IN-13 — the replay's existing-record branch has no assertion
+
+- Cosmetic. `idempotentExternalPartialFinalizeResult`'s branch for an
+  already-present recovery record is unasserted, so a future change could alter it
+  without any test noticing.
+
+### IN-14 — the ownership-key fallback collapses on two fully-anonymous dispatches
+
+- The worktree ownership key falls back through task ID then worker name; two
+  dispatches with BOTH empty would still collide. No runtime shape produces that
+  today, which is why it is Info rather than a defect.
+
+### IN-16 — worktree refusal messages went to stderr, not the owner-facing stream
+
+- Carried from the second review as IN-12 and still unaddressed. Cosmetic, still
+  visible to the owner, and no finding asked for the move in the first place.
+
+### Also closed while recording these
+
+`coalesceSequentialDispatches` and its only helper `dispatchesFormOneJob` were
+deleted (92 lines, zero callers anywhere — production or test), and the eight
+comments across `cmd/` that still cited the coalescer as the live grouping
+mechanism now name `planCoherentJobs`. The phase verifier flagged this: superseded
+machinery left in place with live-sounding comments is exactly how a later reader
+concludes the wrong function is authoritative, which is this repo's documented
+signature failure.
