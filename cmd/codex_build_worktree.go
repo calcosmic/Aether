@@ -477,7 +477,7 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 // never carries a partial wave. Terminal results are journaled only after the
 // decision, so the attempt journal always matches the reconciled outcome.
 func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes []*worktreeWaveOutcome, cb *CircuitBreaker, ledger *worktreeReceiptLedger) []codex.DispatchResult {
-	conflicts, conflictWorkers := detectWorktreeWaveConflicts(outcomes)
+	conflicts, conflictWorkers := detectWorktreeWaveConflicts(root, outcomes)
 
 	accepted := map[int]bool{}
 	if len(conflicts) == 0 {
@@ -534,8 +534,23 @@ func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes [
 			// stays exactly where it is, and the checkout is preserved below
 			// rather than deleted, so unproven work is recoverable instead of
 			// either lost or falsely credited.
+			//
+			// CR-05 (195-REVIEW.md): this runs ONLY when the wave was
+			// actually reconcilable. When the wave was rejected for
+			// ownership conflicts, every completed worker is blocked and
+			// preserved so the project never carries a partial wave -- a
+			// failed worker's receipt-scoped copy-back must be held back for
+			// exactly the same reason, or it becomes the one write that gets
+			// through, unarbitrated, and can land on top of a file another
+			// worker in the same wave already synced.
 			preserveWorktree = true
-			resolveWorktreePartialReceipts(root, phase, outcome, ledger)
+			if len(conflicts) > 0 {
+				emitVisualProgress(fmt.Sprintf(
+					"%s finished part of its work, but this round was cancelled because two workers changed the same file — nothing was copied into the project. Its work is kept on branch %s; to get it back, run: aether recover",
+					outcome.dispatch.WorkerName, session.Branch))
+			} else {
+				resolveWorktreePartialReceipts(root, phase, outcome, ledger)
+			}
 		}
 
 		if session != nil {
@@ -630,12 +645,24 @@ func resolveWorktreePartialReceipts(root string, phase colony.Phase, outcome *wo
 	}
 }
 
-// detectWorktreeWaveConflicts finds every same-wave ownership violation among
-// completed workers: a path touched by a worker whose task did not declare it
-// when another same-wave task did, or a path produced by more than one worker
-// with no declared owner to arbitrate. Returns human-readable conflict
-// descriptions and the set of outcome indexes involved.
-func detectWorktreeWaveConflicts(outcomes []*worktreeWaveOutcome) ([]string, map[int]bool) {
+// detectWorktreeWaveConflicts finds every same-wave ownership violation: a
+// path written by a worker whose task did not declare it when another same-wave
+// task did, or a path produced by more than one worker with no declared owner
+// to arbitrate. Returns human-readable conflict descriptions and the set of
+// outcome indexes involved.
+//
+// "Written" means every path this wave could actually put into the root
+// checkout. For a worker that finished cleanly that is everything it touched.
+// For a worker that failed part-way it is the paths its own task receipts
+// CLAIM -- because those, and only those, are what resolveWorktreePartialReceipts
+// would copy back. CR-05 (195-REVIEW.md): leaving them out made a failed
+// worker's writes invisible to the very check that exists to stop two workers
+// overwriting each other, so index order silently decided the winner. The
+// claimed set is deliberately a superset of what admission will finally accept:
+// refusing a wave the runtime cannot prove is safe is the conservative
+// direction, since every worker's own copy is preserved on its branch either
+// way and nothing is destroyed.
+func detectWorktreeWaveConflicts(root string, outcomes []*worktreeWaveOutcome) ([]string, map[int]bool) {
 	declared := map[string]string{}
 	for _, outcome := range outcomes {
 		if outcome == nil {
@@ -650,10 +677,16 @@ func detectWorktreeWaveConflicts(outcomes []*worktreeWaveOutcome) ([]string, map
 
 	touchedBy := map[string][]int{}
 	for i, outcome := range outcomes {
-		if outcome == nil || outcome.result.Status != "completed" || outcome.result.WorkerResult == nil || outcome.session == nil {
+		if outcome == nil || outcome.result.WorkerResult == nil || outcome.session == nil {
 			continue
 		}
-		for _, path := range outcome.touched {
+		if outcome.result.Status == "completed" {
+			for _, path := range outcome.touched {
+				touchedBy[path] = append(touchedBy[path], i)
+			}
+			continue
+		}
+		for _, path := range worktreeReceiptClaimedPaths(root, outcome) {
 			touchedBy[path] = append(touchedBy[path], i)
 		}
 	}
@@ -682,6 +715,32 @@ func detectWorktreeWaveConflicts(outcomes []*worktreeWaveOutcome) ([]string, map
 		}
 	}
 	return conflicts, conflictWorkers
+}
+
+// worktreeReceiptClaimedPaths returns the repository-relative paths a
+// non-completed worker's own task receipts claim, normalized exactly the way
+// admitCoherentJobTaskReceipts normalizes them, so conflict detection compares
+// like with like. It is the superset of what resolveWorktreePartialReceipts
+// could copy into root for that worker (admission only ever narrows it).
+func worktreeReceiptClaimedPaths(root string, outcome *worktreeWaveOutcome) []string {
+	if outcome == nil || outcome.result.WorkerResult == nil {
+		return nil
+	}
+	var paths []string
+	for _, receipt := range outcome.result.WorkerResult.TaskReceipts {
+		raws := make([]string, 0, len(receipt.FilesCreated)+len(receipt.FilesModified)+len(receipt.TestsWritten))
+		raws = append(raws, receipt.FilesCreated...)
+		raws = append(raws, receipt.FilesModified...)
+		raws = append(raws, receipt.TestsWritten...)
+		for _, raw := range raws {
+			normalized, err := lexicallyNormalizeReceiptPath(root, raw)
+			if err != nil {
+				continue
+			}
+			paths = append(paths, normalized)
+		}
+	}
+	return uniqueSortedStrings(paths)
 }
 
 func mapKeys[V any](values map[string]V) []string {

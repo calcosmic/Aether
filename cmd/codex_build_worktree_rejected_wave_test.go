@@ -119,9 +119,9 @@ func rejectedWaveFixture(t *testing.T) (root string, phase colony.Phase, outcome
 // into the project, so its writes were invisible to the very check that exists
 // to stop two workers overwriting each other.
 func TestFailedWorkerReceiptPathsAreVisibleToConflictDetection(t *testing.T) {
-	_, _, outcomes := rejectedWaveFixture(t)
+	root, _, outcomes := rejectedWaveFixture(t)
 
-	conflicts, conflictWorkers := detectWorktreeWaveConflicts(outcomes)
+	conflicts, conflictWorkers := detectWorktreeWaveConflicts(root, outcomes)
 	if len(conflicts) == 0 {
 		t.Fatal("no conflict reported when a failed worker's receipt claims a file another same-wave worker declared and wrote; index order alone would decide the winner")
 	}
