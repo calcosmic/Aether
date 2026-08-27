@@ -2,19 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 195
-current_phase_name: coherent-jobs
-status: verifying
-stopped_at: Completed 195-10-PLAN.md
-last_updated: "2026-08-27T09:01:37.703Z"
+current_phase: 172.1
+current_phase_name: gate environment integrity — not started; blocks nothing; stays in the backlog
+status: planning
+stopped_at: Phase 195 complete, ready to plan Phase 196
+last_updated: "2026-08-27T12:43:57.270Z"
 last_activity: 2026-08-27
-state_head: 62eb319202316490c26e5cabc93b9fa471ad8397
+last_activity_desc: Phase 195 complete, transitioned to Phase 172.1
+state_head: e211f271a226abbb18c8a416662c21ef6e4674ec
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 3
   total_plans: 24
   completed_plans: 24
-  percent: 14
+  percent: 29
 ---
 
 # Project State
@@ -24,7 +25,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 195 — coherent-jobs
+**Current focus:** Phase 196 — See What It Cost
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
@@ -33,10 +34,14 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Progress:** [█░░░░░░░░░] 14%
 
-Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 10 of 10
-Status: Phase complete — ready for verification
-Last activity: 2026-08-27
+Phase: 196 (See What It Cost) — READY TO PLAN
+Plan: Not started
+Status: Ready to plan
+
+*(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
+roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
+every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
+Last activity: 2026-08-27 — Phase 195 complete, transitioned to Phase 172.1
 
 ## Performance Metrics
 
@@ -222,5 +227,5 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 ## Session Continuity
 
 Last session: 2026-08-27T09:01:37.561Z
-Stopped at: Completed 195-10-PLAN.md
+Stopped at: Phase 195 complete, ready to plan Phase 172.1
 Resume file: None

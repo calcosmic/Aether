@@ -39,7 +39,7 @@
 
 - [x] **Phase 193: Free Checks Are the Floor** - The program's own checks run on every phase and can never be skipped, so work can safely finish without a human-like reviewer. (completed 2026-08-22)
 - [x] **Phase 194: The Queen Decides the Team** - Which AI helpers get sent becomes judgement, not a fixed rule — a one-task fix costs one worker, not eight. (completed 2026-08-26)
-- [ ] **Phase 195: Coherent Jobs** - Related tasks bundle into one job for one worker instead of one worker per task.
+- [x] **Phase 195: Coherent Jobs** - Related tasks bundle into one job for one worker instead of one worker per task. (completed 2026-08-27)
 - [ ] **Phase 196: See What It Cost** - Every run ends with one honest cost line, and model choices carry a reason.
 - [ ] **Phase 197: One Answer to "What Next?"** - Every command ends by saying exactly what to do next, from one shared source of truth.
 - [ ] **Phase 198: Put the Thrown-Away Data Back on Screen** - The detail the older version used to show comes back, in the chat view too.
