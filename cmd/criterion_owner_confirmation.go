@@ -42,7 +42,12 @@ func ownerConfirmationAnswered(phaseID int, taskID, criterion string) bool {
 
 // shellQuote wraps s in single quotes so it is safe to paste into a POSIX
 // shell command line, escaping any embedded single quote as the standard
-// close-quote/escaped-literal-quote/reopen-quote sequence ('\''). This is
+// close-quote/escaped-literal-quote/reopen-quote sequence: a single quote, a
+// backslash-escaped single quote, then a single quote. That sequence is not
+// written out literally here because gofmt rewrites an adjacent pair of single
+// quotes inside a comment into a Unicode right double quote, which would
+// silently corrupt it. See shellQuote's body and its tests for the exact
+// bytes. This is
 // deliberately NOT Go's %q: %q escapes for Go source syntax, not a shell --
 // it leaves $, backticks, and other shell metacharacters untouched, so a
 // criterion's own free-form text (authored by the planning LLM, possibly
