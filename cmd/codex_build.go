@@ -2090,6 +2090,11 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			dispatches[idx].Blockers = append([]string{}, result.WorkerResult.Blockers...)
 			dispatches[idx].Duration = result.WorkerResult.Duration.Seconds()
 			dispatches[idx].Outputs = buildDispatchClaimOutputs(*result.WorkerResult)
+			// Threaded through unchanged (D-08/D-09): a failed/interrupted
+			// worker's task-specific receipts are still real candidate
+			// evidence, never discarded just because the dispatch as a whole
+			// did not reach a whole-success status.
+			dispatches[idx].TaskReceipts = append([]codex.TaskReceipt{}, result.WorkerResult.TaskReceipts...)
 		}
 		// Per D-02/D-04: print raw worker output only in verbose mode
 		if result.WorkerResult != nil && result.WorkerResult.RawOutput != "" {
@@ -2100,6 +2105,13 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			dispatches[idx].Blockers = []string{codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())}
 		}
 	}
+
+	// D-08/D-09: this is the native/in-repo lane -- files a receipt claims
+	// already live in root, so admission and root-evidence finalization run
+	// back to back here, before any success/failure classification below.
+	// Whole-success dispatches pass through unchanged (they already credit
+	// every covered task via completedBuildTaskIDs' existing branch).
+	dispatches = resolveCoherentJobDispatchReceipts(root, phase, dispatches)
 
 	claims := codex.ExtractClaims(results)
 	if err := validateRuntimeNoChangeEvidence(results); err != nil {
@@ -2565,15 +2577,30 @@ func completedBuildTaskIDs(dispatches []codexBuildDispatch) map[string]struct{} 
 		// closed for coverage. interrupted stays excluded: terminal, not
 		// success.
 		status := strings.TrimSpace(dispatch.Status)
-		if status != "completed" && !isNoChangeExternalBuildStatus(status) {
+		if status == "completed" || isNoChangeExternalBuildStatus(status) {
+			// A worker that owns a merged chain finishes every step in it, so
+			// every step it covered is complete. Reading TaskID alone left
+			// the later steps marked unfinished forever: the phase could
+			// never advance, and the one worker that did the work looked
+			// like it had only done the first bit.
+			for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+				completed[taskID] = struct{}{}
+			}
 			continue
 		}
-		// A worker that owns a merged chain finishes every step in it, so every
-		// step it covered is complete. Reading TaskID alone left the later steps
-		// marked unfinished forever: the phase could never advance, and the one
-		// worker that did the work looked like it had only done the first bit.
-		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
-			completed[taskID] = struct{}{}
+		// D-08/D-09: a failed/blocked/timeout/interrupted dispatch is NEVER
+		// all-or-nothing and never inferred from touched files or from
+		// CoveredTaskIDs membership. The only thing that may credit any of
+		// its covered tasks is finalizeCoherentJobTaskReceiptEvidence's own
+		// CompletedTaskIDs output, already resolved onto the dispatch by
+		// resolveCoherentJobDispatchReceipts (cmd/coherent_job_receipts.go)
+		// before this function runs. A dispatch nobody resolved receipts for
+		// simply has an empty CompletedTaskIDs and credits nothing here,
+		// exactly like before this field existed.
+		for _, taskID := range dispatch.CompletedTaskIDs {
+			if trimmed := strings.TrimSpace(taskID); trimmed != "" {
+				completed[trimmed] = struct{}{}
+			}
 		}
 	}
 	return completed
