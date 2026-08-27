@@ -575,7 +575,13 @@ func TestCLIContinueEnforcesFreshCriterionEvidence(t *testing.T) {
 				env[key] = value
 			}
 			env["AETHER_TEST_ADAPTER_LOG"] = logPath
-			build := harness.runWithEnv(t, env, "build", "1", "--light", "--worker-timeout", "1s")
+			// 30s, not 1s: this build is expected to SUCCEED, so the timeout is
+			// only a backstop. A 1s cap made the subtest fail intermittently
+			// under full-package load, when the fake adapter needed longer than
+			// a second to be scheduled. The deliberate timeout-rejection case is
+			// covered separately by the "rejects timeout" adapter mode above,
+			// which still uses 1s.
+			build := harness.runWithEnv(t, env, "build", "1", "--light", "--worker-timeout", "30s")
 			if build.ExitCode != 0 {
 				t.Fatalf("build failed before continue: exit=%d\nstdout:\n%s\nstderr:\n%s", build.ExitCode, build.Stdout, build.Stderr)
 			}

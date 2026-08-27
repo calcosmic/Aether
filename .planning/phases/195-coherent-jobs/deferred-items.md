@@ -51,3 +51,23 @@
   an explicit `-timeout` well above 25m. `workflow.test_gate_timeout` was raised
   from 1500s to 3600s on 2026-08-27 so Phase 195's post-merge and regression
   gates do not abort on a healthy suite.
+
+## Load-sensitive test timing in `cmd` and `pkg/codex`
+
+- **Found during:** Phase 195 wave 3 and wave 4 post-merge gates
+- **Observed:** two tests fail only when the full package runs under load and
+  pass on isolated reruns —
+  `pkg/codex TestAvailabilityProbeRetriesOnlyTimeouts/a_transient_stall_is_retried_and_succeeds`
+  (passed 3/3 alone), and
+  `cmd TestCLIContinueEnforcesFreshCriterionEvidence` (passed 2/2 alone).
+- **Partially resolved 2026-08-27:** the `cmd` case was traced to a hardcoded
+  `--worker-timeout 1s` in `blackbox_harness_test.go` on a subtest whose build
+  is expected to SUCCEED — the cap was only a backstop there, so it was widened
+  to 30s. The deliberate timeout-rejection case (`"rejects timeout"` adapter
+  mode in `TestCLIBuildWorkerOutcomes`) still uses 1s and is untouched.
+- **Still open:** the `pkg/codex` probe retry test remains wall-clock sensitive.
+- **Why deferred:** neither is caused by Phase 195; both are pre-existing timing
+  assumptions that only surface when the machine is busy.
+- **Follow-up:** audit remaining wall-clock literals in tests. A test that fails
+  because the machine was busy is indistinguishable from a real regression at
+  the moment it fails, which is exactly the signal these gates exist to give.
