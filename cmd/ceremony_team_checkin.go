@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
@@ -556,11 +558,19 @@ func renderBuildFastPathSummary(phase colony.Phase, dispatch codexBuildDispatch,
 }
 
 // sentenceCase upper-cases the first character of an owner-facing sentence.
+//
+// IN-02 (195-REVIEW.md): it decodes a whole character rather than slicing the
+// first byte. Slicing splits any character that takes more than one byte to
+// store, which shows the owner rubbish instead of a word.
 func sentenceCase(s string) string {
 	if s == "" {
 		return ""
 	}
-	return strings.ToUpper(s[:1]) + s[1:]
+	first, size := utf8.DecodeRuneInString(s)
+	if first == utf8.RuneError && size <= 1 {
+		return s
+	}
+	return string(unicode.ToUpper(first)) + s[size:]
 }
 
 var ceremonyTeamCheckinCmd = &cobra.Command{

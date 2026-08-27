@@ -117,7 +117,14 @@ func worktreeOwnershipIdentity(dispatch codex.WorkerDispatch) worktreeOwnershipO
 	if job := strings.TrimSpace(dispatch.JobName); job != "" {
 		label = fmt.Sprintf("job %s (%s)", job, label)
 	}
-	return worktreeOwnershipOwner{key: strings.TrimSpace(dispatch.TaskID), label: label}
+	// IN-03 (195-REVIEW.md): fall back to the worker's name when there is no
+	// task id. Keying on an empty string made two different workers compare
+	// equal, so a real collision between them over one file was not refused.
+	key := strings.TrimSpace(dispatch.TaskID)
+	if key == "" {
+		key = "worker:" + strings.TrimSpace(dispatch.WorkerName)
+	}
+	return worktreeOwnershipOwner{key: key, label: label}
 }
 
 // validateDeclaredWorktreeOwnership rejects a worktree-mode build before any

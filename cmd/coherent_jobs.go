@@ -232,6 +232,10 @@ func normalizeCoherentJobProposal(proposal coherentJobProposal) coherentJobPropo
 	proposal.Relationship = strings.TrimSpace(proposal.Relationship)
 	proposal.Benefit = strings.TrimSpace(proposal.Benefit)
 	proposal.OwnerReason = strings.TrimSpace(proposal.OwnerReason)
+	// IN-01 (195-REVIEW.md): proposal arrives by value, but a slice header
+	// copy still shares its backing array -- trimming in place rewrote the
+	// caller's own task list, contradicting this planner's stated purity.
+	proposal.TaskIDs = append([]string(nil), proposal.TaskIDs...)
 	for idx := range proposal.TaskIDs {
 		proposal.TaskIDs[idx] = strings.TrimSpace(proposal.TaskIDs[idx])
 	}
