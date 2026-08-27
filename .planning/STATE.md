@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 status: executing
-stopped_at: Phase 195 context gathered
-last_updated: "2026-08-27T01:33:54.054Z"
-last_activity: 2026-08-27 -- Phase 195 planning complete
+stopped_at: Completed 195-01-PLAN.md
+last_updated: "2026-08-27T02:27:54.002Z"
+last_activity: 2026-08-27
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 24
-  completed_plans: 14
+  completed_plans: 15
   percent: 29
 ---
 
@@ -21,17 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 195 — Coherent Jobs
+**Current focus:** Phase 195 — coherent-jobs
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 195 (Coherent Jobs)
-Plan: Not started
+**Progress:** [██████░░░░] 63%
+
+Phase: 195 (coherent-jobs) — EXECUTING
+Plan: 2 of 10
 Status: Ready to execute
-Last activity: 2026-08-27 -- Phase 195 planning complete
+Last activity: 2026-08-27
 
 ## Performance Metrics
 
@@ -61,6 +63,7 @@ Last activity: 2026-08-27 -- Phase 195 planning complete
 | Phase 194 P07 | 45min | 2 tasks | 5 files |
 | Phase 194 P08 | 40min | 2 tasks | 3 files |
 | Phase 194 P09 | 48min | 2 tasks | 9 files |
+| Phase 195 P01 | 40min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -103,6 +106,9 @@ Last activity: 2026-08-27 -- Phase 195 planning complete
 - [Phase 194]: Light and standard add no unconditional reviewers, heavy adds the full applicable panel, changed files can only add risk, and both continue lanes use the same forced-reviewer derivation.
 - [Phase 194]: Forced-reviewer waivers are owner-only, one signal on one phase, capability-protected, and accepted only before dispatch; the pending one-worker check-in-pause reversal moves to Phase 195 discussion.
 - [Phase 194]: `TestOneTaskBugFixIsOneWorkerPlusChecks` proves 1 worker on both paths, `TestNoCasteIsDispatchedAtBothBoundaries` closes WINDOWS #1, and the shipped documentation is test-locked to the runtime.
+- [Phase 195]: Automatic grouping contracts the full phase graph only when the prospective same-caste component remains dependency-safe. — This prevents a valid task DAG from becoming a cyclic job DAG.
+- [Phase 195]: Only exact declared implementation paths create automatic edges; ubiquitous documentation, manifests, and lockfiles are incidental. — Bookkeeping overlap must not collapse independent work.
+- [Phase 195]: Automatic groups split against briefTaskContentAllowanceChars, while a single oversized task or accepted Queen proposal remains intact. — Brief content, not a magic task count, governs automatic job size.
 
 ### Pending Todos
 
@@ -188,6 +194,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-26T23:39:46.809Z
-Stopped at: Phase 195 context gathered
-Resume file: .planning/phases/195-coherent-jobs/195-CONTEXT.md
+Last session: 2026-08-27T02:27:28.845Z
+Stopped at: Completed 195-01-PLAN.md
+Resume file: None

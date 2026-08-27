@@ -163,7 +163,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 195-01-PLAN.md — Pure coherent-job contracts, dependency validation, local repair, and CalVault component planning (wave 1)
+- [x] 195-01-PLAN.md — Pure coherent-job contracts, dependency validation, local repair, and CalVault component planning (wave 1)
 - [ ] 195-02-PLAN.md — Additive task-receipt contract shared by native/external results and the generated schema (wave 1)
 
 **Wave 2** *(blocked on job-planner contracts)*

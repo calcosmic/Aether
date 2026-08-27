@@ -29,9 +29,9 @@
 
 ### Coherent jobs, not one worker per task (JOBS)
 
-- [ ] **JOBS-01**: The Queen can group tasks into one job with a reason; the runtime validates dependency order and refuses, by name, a grouping that violates `depends_on`
+- [x] **JOBS-01**: The Queen can group tasks into one job with a reason; the runtime validates dependency order and refuses, by name, a grouping that violates `depends_on`
 - [ ] **JOBS-02**: A grouped job's brief carries every covered task's criteria and its completion credits every covered task (the existing `covered_task_ids` chain, re-proven end to end)
-- [ ] **JOBS-03**: Without a proposal, tasks sharing files or a dependency chain cluster into one job beyond consecutive same-caste steps — the CalVault field failure (six file-copy batches) as a fixture yields one worker
+- [x] **JOBS-03**: Without a proposal, tasks sharing files or a dependency chain cluster into one job beyond consecutive same-caste steps — the CalVault field failure (six file-copy batches) as a fixture yields one worker
 - [ ] **JOBS-04**: Grouped jobs work in worktree mode (coalescing is no longer disabled there)
 
 ### See what it cost (COST)
@@ -102,9 +102,9 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | TEAM-03 | Phase 194 | Complete |
 | TEAM-04 | Phase 194 | Complete |
 | TEAM-05 | Phase 194 | Complete |
-| JOBS-01 | Phase 195 | Pending |
+| JOBS-01 | Phase 195 | Complete |
 | JOBS-02 | Phase 195 | Pending |
-| JOBS-03 | Phase 195 | Pending |
+| JOBS-03 | Phase 195 | Complete |
 | JOBS-04 | Phase 195 | Pending |
 | COST-01 | Phase 196 | Pending |
 | COST-02 | Phase 196 | Pending |
