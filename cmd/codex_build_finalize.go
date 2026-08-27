@@ -1178,10 +1178,18 @@ func updatedPhaseForPartialReplay(state colony.ColonyState, phaseNum int) colony
 // a committed partial from its own durable attempt record and mutates nothing:
 // no colony state write, no attempt transition, no new credit.
 //
-// The recovery command is re-derived through reconcilePartialBuildRetry, which
-// is itself idempotent -- it finds the recovery record it already created for
-// this parent rather than creating a second one -- so a replay hands the owner
-// the same command as the first call.
+// The recovery command is re-derived through planPartialBuildRetry, the pure
+// half of the D-10 recovery planner, so a replay hands the owner the same
+// command as the first call without writing anything. The recovery record
+// itself is only ever LOOKED UP (findExistingBuildAttemptRetry); when the
+// first call's record write failed, the replay reports the command and omits
+// the record's id rather than creating one.
+//
+// NEW-05 (195-REVIEW.iter2.md): this used to call reconcilePartialBuildRetry,
+// whose writing half creates the record when none is found -- so the "mutates
+// nothing" promise above held only while the first call's record survived,
+// and the one case that breaks it (that write having failed) is exactly the
+// case a replay exists for.
 func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum int, phase colony.Phase, binding buildAttemptManifestBinding, completionDigest string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	record := binding.Record
 	if record.CompletionSHA256 == "" || record.CompletionSHA256 != completionDigest {
@@ -1208,16 +1216,18 @@ func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum 
 		"idempotent":        true,
 		"next":              "aether continue",
 	}
-	if outcome, err := reconcilePartialBuildRetry(state, phaseNum, phase, record.ID, time.Now().UTC(), dispatches); err != nil {
+	if plan, err := planPartialBuildRetry(phaseNum, phase, dispatches); err != nil {
 		visualFprintf(stderr, "warning: could not restate phase %d's recovery job: %v\n", phaseNum, err)
-	} else if outcome != nil {
+	} else if plan != nil {
 		result["recovery_job"] = true
-		result["parent_attempt_id"] = outcome.ParentAttemptID
-		result["retry_attempt_id"] = outcome.RetryAttemptID
-		result["retry_attempt_path"] = outcome.RetryAttemptPath
-		result["unfinished_task_ids"] = outcome.UnfinishedTaskIDs
-		result["recovery_command"] = outcome.RedispatchCommand
-		result["next"] = outcome.RedispatchCommand
+		result["parent_attempt_id"] = record.ID
+		result["unfinished_task_ids"] = append([]string{}, plan.UnfinishedTaskIDs...)
+		result["recovery_command"] = plan.RedispatchCommand
+		result["next"] = plan.RedispatchCommand
+		if existingRel, existing, ok := findExistingBuildAttemptRetry(phaseNum, record.ID); ok {
+			result["retry_attempt_id"] = existing.ID
+			result["retry_attempt_path"] = displayDataPath(existingRel)
+		}
 	}
 	var boundaryQuestions []discussQuestion
 	if record.PlanManifest != nil {
