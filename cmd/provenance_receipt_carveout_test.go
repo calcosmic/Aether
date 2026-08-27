@@ -141,3 +141,100 @@ func TestReceiptCarveOutIsScopedToImplementationWorkers(t *testing.T) {
 		t.Fatal("a reviewer worker's receipts disarmed the phantom-build guard for a build whose implementation worker changed nothing")
 	}
 }
+
+// TestZeroFileCompletedWorkerIsRejectedEvenBesideARealPartial is the
+// permanent regression lock for NEW-01 (195-REVIEW.iter2.md).
+//
+// The first fix round scoped WHICH worker may trip the failed-worker receipt
+// carve-out, but kept the relaxation as a packet-wide `return nil` placed
+// ahead of the "completed but reported no file changes" rejection. A builder
+// that reported success while changing nothing therefore got full credit for
+// every task it covered, as long as any OTHER worker in the same packet
+// carried one genuine receipt. That is strictly worse than the behaviour
+// before this phase, where the same packet was rejected outright.
+//
+// Both directions are asserted, because either one alone proves nothing: the
+// carve-out must keep accepting a genuine partial, and must stop excusing a
+// do-nothing worker that sits beside one.
+func TestZeroFileCompletedWorkerIsRejectedEvenBesideARealPartial(t *testing.T) {
+	genuinePartial := codexExternalBuildWorkerResult{
+		Name:   "Mason-2",
+		Caste:  "builder",
+		TaskID: "1.2",
+		Status: "failed",
+		TaskReceipts: []codex.TaskReceipt{{
+			TaskID:        "1.2",
+			Status:        codex.TaskReceiptStatusCompleted,
+			Summary:       "finished this one before the run died",
+			FilesModified: []string{"cmd/real.go"},
+			Handoff:       codex.WorkerHandoff{VerificationStatus: "pass", CommandsRun: []string{"go build ./..."}},
+		}},
+	}
+
+	// Direction 1: the do-nothing worker must not be excused by its neighbour.
+	phantomBesidePartial := []codexExternalBuildWorkerResult{
+		{
+			Name:   "Mason-1",
+			Caste:  "builder",
+			TaskID: "1.1",
+			Status: "completed",
+			// Zero files created, modified or tested: nothing happened here.
+		},
+		genuinePartial,
+	}
+	if err := validateBuildProvenance(phantomBesidePartial); err == nil {
+		t.Fatal("a worker that reported success while changing no file was accepted because a DIFFERENT worker carried a real receipt; the phantom-build guard must judge the do-nothing worker on its own evidence")
+	}
+	if err := validateBuildProvenanceForManifest(buildProvenanceManifestFixture(), phantomBesidePartial); err == nil {
+		t.Fatal("the manifest-scoped guard also excused a zero-file completed worker on another worker's evidence")
+	}
+
+	// Direction 2: the genuine partial on its own is still honest provenance.
+	if err := validateBuildProvenance([]codexExternalBuildWorkerResult{genuinePartial}); err != nil {
+		t.Fatalf("a failed grouped worker with real, file-naming per-task proof must still satisfy provenance: %v", err)
+	}
+
+	// Direction 3: a real partial beside a worker that really did change
+	// something is accepted, so the tightened rule has not made a normal
+	// mixed packet unfinalizable.
+	realWorkBesidePartial := []codexExternalBuildWorkerResult{
+		{
+			Name:          "Mason-1",
+			Caste:         "builder",
+			TaskID:        "1.1",
+			Status:        "completed",
+			FilesModified: []string{"cmd/other.go"},
+		},
+		genuinePartial,
+	}
+	if err := validateBuildProvenance(realWorkBesidePartial); err != nil {
+		t.Fatalf("a packet where one worker really changed a file and another partially succeeded must be accepted: %v", err)
+	}
+}
+
+// TestReceiptCarveOutIgnoresAReviewerCarryingATaskID closes the scoping hole
+// the iteration-2 review named: the carve-out asked
+// isBuildImplementationWorker, which answers "yes" for ANY result carrying a
+// task id at all, so a reviewer worker with a task id could trip it. The
+// sibling test above only ever exercised a watcher with an EMPTY task id, so
+// it proved less than its name claimed.
+func TestReceiptCarveOutIgnoresAReviewerCarryingATaskID(t *testing.T) {
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:   "Falcon-2",
+			Caste:  "watcher",
+			TaskID: "1.1",
+			Status: "failed",
+			TaskReceipts: []codex.TaskReceipt{{
+				TaskID:        "1.1",
+				Status:        codex.TaskReceiptStatusCompleted,
+				Summary:       "reviewed it",
+				FilesModified: []string{"cmd/thing.go"},
+				Handoff:       codex.WorkerHandoff{VerificationStatus: "pass", CommandsRun: []string{"go build ./..."}},
+			}},
+		},
+	}
+	if err := validateBuildProvenance(results); err == nil {
+		t.Fatal("a reviewer worker carrying a task id tripped the failed-worker receipt carve-out; the carve-out exists for the worker that writes the code, not for whoever checks it")
+	}
+}
