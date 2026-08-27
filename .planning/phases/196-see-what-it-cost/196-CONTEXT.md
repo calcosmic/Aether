@@ -10,29 +10,55 @@ These bind planning. Where a decision came from the owner it says so; where it i
 technical ruling made on the owner's behalf it says that too, so a later reader can
 tell which are open to revisit.
 
-## D-01 — What the cost line says (OWNER, 2026-08-27)
+## D-01 — What the cost line says (OWNER, 2026-08-27, AMENDED same day)
 
-Every build and continue ends with the run total, a short per-worker breakdown, and
-an explicit mark on anything estimated rather than measured. Shape the owner chose:
+Every build and continue ends with the run total, a short per-worker breakdown, and an
+explicit mark on anything not measured.
+
+**AMENDMENT (owner, 2026-08-27, after the planner surfaced a contradiction).** The
+original choice showed an estimated figure beside an `estimated` mark. That collides
+with success criterion 3, which promises no figure is guessed from text length — and
+prompt-character-count IS the only estimate mechanism in the tree, so a marked estimate
+would have been exactly the thing criterion 3 forbids, wearing a label. There is no
+honest third source.
+
+Asked to choose, the owner ruled: **show no number at all.** A worker whose tool did
+not report usage is rendered as `—  not reported`, and the run total counts only
+measured workers and says so.
 
 ```
-Cost: 1.5M tokens across 3 workers
+Cost: 1.4M tokens across 3 workers
   Builder Mason-67    1.2M  measured
   Watcher Keen-12     220K  measured
-  Scout Roam-90        80K  estimated
-(estimated = the tool did not report usage)
+  Scout Roam-90          —  not reported
+(1 worker's tool did not report usage)
 ```
 
-Rejected: a bare total with no breakdown; a breakdown that does not distinguish
-measured from estimated. The owner's reason for the distinction is that a number he
-cannot trust is worse than no number.
+This is the same principle as the original decision, applied consistently: a number
+the owner cannot trust is worse than no number. The cost: no rough sense of an
+unreported worker's size, and a total that is incomplete rather than approximate —
+accepted deliberately.
+
+**Superseded:** the `Scout Roam-90  80K  estimated` shape in the first version of this
+decision. No estimated figure is ever rendered. Nothing may derive a token count from a
+character or prompt length, anywhere — not in the ledger, not in the renderer, not in
+`aether spend`.
 
 **No dollar figure as the headline, and no price table anywhere** — Phase 174's D-02,
-still binding. Verified 2026-08-27: no price table or token-to-dollar arithmetic
-exists anywhere in the Go source, so the old `pkg/trace/cost.go` blocker is retired
-rather than pending. The one dollar value on the salvaged ledger branch
+still binding. Verified 2026-08-27: no price table or token-to-dollar arithmetic exists
+anywhere in the Go source, so the old `pkg/trace/cost.go` blocker is retired rather
+than pending. The one dollar value on the salvaged ledger branch
 (`spendTotals.ProviderUSD`, a relay of the provider's own reported cost, not a rate
 table) is to be **deleted**: nothing asks for it and it is a standing temptation.
+
+## D-06 — Reaching the detail view (OWNER, 2026-08-27)
+
+`aether spend` is surfaced by a plain sentence in the build and continue wrapper
+output naming it as the optional detail view. The owner declined a first-class
+`/ant-spend` slash command: it would ripple into the command YAML, the help listing and
+the documented command counts for a view he expects to want rarely.
+
+This also satisfies the repo's orphan ratchet, which fails a command with no caller.
 
 ## D-02 — Model choice (OWNER, 2026-08-27)
 
