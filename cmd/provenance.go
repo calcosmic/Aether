@@ -52,7 +52,13 @@ func validateBuildProvenanceWithKnownTasks(results []codexExternalBuildWorkerRes
 			// only for a receipt that names a real file (and, when the phase's
 			// tasks are known, a real task). It never short-circuits the rest
 			// of the loop.
-			if !isSuccessfulExternalBuildStatus(status) && isBuildImplementationWorker(r) &&
+			//
+			// NEW-01 (195-REVIEW.iter2.md): the worker test is
+			// isReceiptCarveOutWorker, NOT isBuildImplementationWorker.
+			// The latter answers "yes" for any result carrying a task ID at
+			// all, so a reviewer worker that happened to be given one tripped
+			// the carve-out the code-writing worker is the only owner of.
+			if !isSuccessfulExternalBuildStatus(status) && isReceiptCarveOutWorker(r) &&
 				hasGenuineTaskReceiptEvidence(r, knownTaskIDs) {
 				receiptEvidenceCount++
 			}
@@ -71,10 +77,19 @@ func validateBuildProvenanceWithKnownTasks(results []codexExternalBuildWorkerRes
 		}
 	}
 
-	if receiptEvidenceCount > 0 {
-		return nil
-	}
+	// NEW-01 (195-REVIEW.iter2.md): the receipt carve-out may only excuse
+	// SAFE-01 ("nobody finished"), never SAFE-02 ("somebody finished and
+	// changed nothing"). Placing it ahead of both errors meant a worker that
+	// reported success while touching no file was waved through on a
+	// DIFFERENT worker's evidence, and then credited for every task it
+	// covered -- strictly weaker than the guard before this phase. A failed
+	// worker's honest partial proof says nothing whatsoever about whether the
+	// worker beside it did its own job, so it is folded into the SAFE-01
+	// branch only.
 	if completedCount == 0 {
+		if receiptEvidenceCount > 0 {
+			return nil
+		}
 		return fmt.Errorf("build provenance: no workers completed successfully -- all %d worker(s) are in a non-success state", len(results))
 	}
 	return fmt.Errorf("build provenance: %d worker(s) completed but none reported file changes (created, modified, or tests) or evidenced no-change verification -- the build produced no changes", completedCount)
@@ -227,6 +242,25 @@ func containsBuildMutationVerb(text string) bool {
 		}
 	}
 	return false
+}
+
+// isReceiptCarveOutWorker reports whether a worker result belongs to the one
+// role the failed-worker receipt carve-out exists for: the worker that writes
+// the code. It deliberately asks ONLY about the caste, never about the
+// presence of a task ID.
+//
+// NEW-01 (195-REVIEW.iter2.md): isBuildImplementationWorker treats any result
+// carrying a task ID as an implementation worker, which is right for the
+// question it was written for (which results must show file evidence) and
+// wrong for this one. A reviewer handed a task ID is still a reviewer, and a
+// reviewer's receipts are never evidence that the build produced changes.
+func isReceiptCarveOutWorker(result codexExternalBuildWorkerResult) bool {
+	switch strings.ToLower(strings.TrimSpace(result.Caste)) {
+	case "", "builder":
+		return true
+	default:
+		return false
+	}
 }
 
 func isBuildImplementationWorker(result codexExternalBuildWorkerResult) bool {
