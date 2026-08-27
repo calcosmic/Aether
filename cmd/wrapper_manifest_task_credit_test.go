@@ -102,3 +102,48 @@ func TestRuntimeResolvedTaskCreditStillReachesTheCreditedSet(t *testing.T) {
 		t.Fatalf("uncredited task 1.2 was credited: %v", credited)
 	}
 }
+
+// TestBuildResultStillReportsWhatTheRuntimeCredited closes the other half of
+// CR-03: taking the credit fields off the wire must not take them off the
+// SCREEN. Three build wrapper copies, the command guide and the build-cycle
+// skill all instruct the wrapper to read each dispatch's `completed_task_ids`
+// to find out what the runtime actually credited, so the runtime-authored
+// result must carry it. It is authored output only -- feeding it back in
+// grants nothing, which is the whole point of the fix above.
+func TestBuildResultStillReportsWhatTheRuntimeCredited(t *testing.T) {
+	dispatches := []codexBuildDispatch{{
+		Name:             "Mason-1",
+		Caste:            "builder",
+		Stage:            "wave",
+		TaskID:           "1.1",
+		CoveredTaskIDs:   []string{"1.1", "1.2"},
+		Status:           "failed",
+		CompletedTaskIDs: []string{"1.1"},
+	}}
+
+	maps := codexBuildDispatchMaps(dispatches)
+	if len(maps) != 1 {
+		t.Fatalf("expected one dispatch map, got %d", len(maps))
+	}
+	reported, ok := maps[0]["completed_task_ids"].([]string)
+	if !ok {
+		t.Fatalf("the build result does not report completed_task_ids, but every build wrapper copy, the command guide and the build-cycle skill tell the wrapper to read it: %+v", maps[0])
+	}
+	if len(reported) != 1 || reported[0] != "1.1" {
+		t.Fatalf("reported credit = %v, want exactly the runtime-credited task 1.1", reported)
+	}
+
+	// Authored output, not an inbound channel: the same JSON fed back into a
+	// dispatch grants nothing.
+	encoded, err := json.Marshal(maps[0])
+	if err != nil {
+		t.Fatalf("encode dispatch map: %v", err)
+	}
+	var roundTripped codexBuildDispatch
+	if err := json.Unmarshal(encoded, &roundTripped); err != nil {
+		t.Fatalf("decode dispatch map: %v", err)
+	}
+	if len(roundTripped.CompletedTaskIDs) != 0 {
+		t.Fatalf("the reported credit was accepted back as input: %v", roundTripped.CompletedTaskIDs)
+	}
+}
