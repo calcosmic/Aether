@@ -162,3 +162,53 @@ func TestRefusedReceiptsAreVisibleOnTheWorktreeLane(t *testing.T) {
 		t.Fatalf("the worktree lane refused task 1.2's receipt and told the owner nothing; got:\n%s", out)
 	}
 }
+
+// TestReceiptAliasesAreAcceptedOnEveryLane is the permanent regression lock for
+// the 195 review's eighth warning (WR-08).
+//
+// The runtime's own handoff validator explicitly accepts "passed" as a spelling
+// of "pass". The direct worker path normalized it before checking; the
+// wrapper/external path decoded the receipt straight off the submitted packet
+// and tested the raw text, so an identical receipt was credited on one path and
+// refused on the other. Two lanes crediting different work from identical
+// evidence is exactly what this phase set out to stop.
+func TestReceiptAliasesAreAcceptedOnEveryLane(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	if err := os.WriteFile(filepath.Join(root, "kept.go"), []byte("package fixture\n"), 0644); err != nil {
+		t.Fatalf("write fixture file: %v", err)
+	}
+
+	phase := refusalFixturePhase()
+	dispatch := codexBuildDispatch{
+		Name:           "Mason-1",
+		Caste:          "builder",
+		Stage:          "wave",
+		TaskID:         "1.1",
+		CoveredTaskIDs: []string{"1.1"},
+		JobName:        "automatic-two-step",
+		Status:         "failed",
+		Outputs:        []string{"kept.go"},
+		TaskReceipts: []codex.TaskReceipt{{
+			TaskID:        "1.1",
+			Status:        "Completed",
+			Summary:       "did the first step",
+			FilesCreated:  []string{"kept.go"},
+			FilesModified: []string{},
+			TestsWritten:  []string{},
+			Handoff: codex.WorkerHandoff{
+				// "passed" is an alias the runtime's own handoff validator
+				// accepts. So is "not run" for "not_run".
+				VerificationStatus: "passed",
+				CommandsRun:        []string{"go build ./..."},
+			},
+		}},
+	}
+
+	resolved := resolveCoherentJobDispatchReceipts(root, phase, []codexBuildDispatch{dispatch})
+	if len(resolved[0].CompletedTaskIDs) != 1 || resolved[0].CompletedTaskIDs[0] != "1.1" {
+		t.Fatalf("a receipt spelling its passing check \"passed\" instead of \"pass\" was refused on the wrapper path; credited = %v", resolved[0].CompletedTaskIDs)
+	}
+}
