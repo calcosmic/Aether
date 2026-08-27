@@ -547,10 +547,12 @@ func TestGroupedJobPartialRetryIsAppendOnlyDirect(t *testing.T) {
 		}
 	}
 
-	// Parent attempt: found via listBuildAttemptsForPhase (loadLatestBuildAttempt
-	// now points at the CHILD, since beginBuildAttempt always updates the
-	// phase's "latest" pointer -- exactly what a subsequent `aether build 1
-	// --force` should redispatch against).
+	// Parent attempt: found via listBuildAttemptsForPhase, which is the only
+	// reader the recovery record ever had. The phase's "latest attempt" marker
+	// deliberately still points at the PARENT (WR-03, 195-REVIEW.md): a
+	// recovery record dispatches nothing, and pointing "latest" at it made the
+	// runtime believe the phase still had live workers, so the very
+	// plan-only call the owner's recovery command makes was refused.
 	var parent, child buildAttemptRecord
 	for _, record := range listBuildAttemptsForPhase(1) {
 		if record.ID == parentAttemptID {
@@ -563,8 +565,12 @@ func TestGroupedJobPartialRetryIsAppendOnlyDirect(t *testing.T) {
 	if parent.ID == "" {
 		t.Fatalf("parent attempt %s not found in the phase's attempt journal", parentAttemptID)
 	}
-	if parent.Status != buildAttemptFailed {
-		t.Fatalf("parent attempt status = %q, want %q (unchanged from its own terminal recording)", parent.Status, buildAttemptFailed)
+	// WR-04 (195-REVIEW.md): the direct lane used to leave this reading
+	// `failed`, whose documented meaning is "nothing of this attempt was
+	// credited", while real task credit sat in colony state. A partially
+	// credited attempt is recorded as `partial` on BOTH lanes.
+	if parent.Status != buildAttemptPartial {
+		t.Fatalf("parent attempt status = %q, want %q (it credited four of six tasks)", parent.Status, buildAttemptPartial)
 	}
 	if parent.ParentAttemptID != "" {
 		t.Fatalf("parent attempt unexpectedly carries its own ParentAttemptID: %+v", parent)
@@ -577,8 +583,8 @@ func TestGroupedJobPartialRetryIsAppendOnlyDirect(t *testing.T) {
 	}
 
 	latestRel, latest, ok := loadLatestBuildAttempt(1)
-	if !ok || latest.ID != retryAttemptID {
-		t.Fatalf("latest attempt pointer = %q %+v, want the retry attempt %s", latestRel, latest, retryAttemptID)
+	if !ok || latest.ID != parentAttemptID {
+		t.Fatalf("latest attempt pointer = %q %+v, want the parent attempt %s -- a recovery record must never occupy the phase's live-attempt slot (WR-03)", latestRel, latest, parentAttemptID)
 	}
 }
 

@@ -149,11 +149,33 @@ type partialBuildRetryOutcome struct {
 // record whose ParentAttemptID matches) and returns that, rather than
 // creating a duplicate child or touching the existing one.
 func reconcilePartialBuildRetry(state colony.ColonyState, phaseNum int, phase colony.Phase, parentAttemptID string, retryStartedAt time.Time, dispatches []codexBuildDispatch) (*partialBuildRetryOutcome, error) {
-	parentAttemptID = strings.TrimSpace(parentAttemptID)
-	if parentAttemptID == "" {
-		return nil, fmt.Errorf("coherent job retry requires a parent attempt id")
+	plan, err := planPartialBuildRetry(phaseNum, phase, dispatches)
+	if err != nil || plan == nil {
+		return nil, err
 	}
+	return commitPartialBuildRetryPlan(state, phaseNum, phase, parentAttemptID, retryStartedAt, plan)
+}
 
+// partialBuildRetryPlan is the pure half of reconcilePartialBuildRetry: what
+// the D-10 recovery would contain, worked out without writing anything.
+//
+// It exists so a caller can decide whether partial credit is worth committing
+// BEFORE any attempt record is created (WR-10, 195-REVIEW.md). The direct lane
+// used to create the recovery record first and commit the credit second, so a
+// refused commit -- a concurrent pause, a store write error -- rolled the
+// credit back and left an orphan record describing work nothing had recorded
+// as partially done.
+type partialBuildRetryPlan struct {
+	Jobs              []coherentJob
+	Dispatches        []codexBuildDispatch
+	UnfinishedTaskIDs []string
+	RedispatchCommand string
+}
+
+// planPartialBuildRetry derives the D-10 recovery plan for dispatches without
+// writing state, creating an attempt, or touching a worktree. Returns
+// (nil, nil) when nothing needs a retry.
+func planPartialBuildRetry(phaseNum int, phase colony.Phase, dispatches []codexBuildDispatch) (*partialBuildRetryPlan, error) {
 	var retryJobs []coherentJob
 	var retryDispatches []codexBuildDispatch
 	var allUnfinished []string
@@ -213,34 +235,54 @@ func reconcilePartialBuildRetry(state colony.ColonyState, phaseNum int, phase co
 		return nil, nil
 	}
 
-	// CR-04 (195-REVIEW.md): the command handed to the owner must carry the
-	// retry job's own task IDs. A bare `aether build <N> --force` re-plans the
-	// phase from its full task list with no filter, so every task this build
-	// already proved would be dispatched again -- exactly what D-10, the three
-	// build wrapper copies, the command guide and CLAUDE.md all promise never
-	// happens.
-	redispatchCommand := buildUnfinishedRetryRedispatchCommand(phaseNum, allUnfinished)
+	return &partialBuildRetryPlan{
+		Jobs:              retryJobs,
+		Dispatches:        retryDispatches,
+		UnfinishedTaskIDs: uniqueSortedStrings(allUnfinished),
+		// CR-04 (195-REVIEW.md): the command handed to the owner must carry the
+		// retry job's own task IDs. A bare `aether build <N> --force` re-plans the
+		// phase from its full task list with no filter, so every task this build
+		// already proved would be dispatched again -- exactly what D-10, the three
+		// build wrapper copies, the command guide and CLAUDE.md all promise never
+		// happens.
+		RedispatchCommand: buildUnfinishedRetryRedispatchCommand(phaseNum, allUnfinished),
+	}, nil
+}
 
-	// Idempotency: a retry attempt for this exact parent may already exist
-	// (a second finalize/dispatch pass over the same partial outcome). Never
-	// create a second child for the same parent.
+// commitPartialBuildRetryPlan is the writing half: it appends ONE new,
+// parent-linked attempt covering every retry job in plan, never touching the
+// parent attempt's own file.
+//
+// Idempotent: a second call for the same parentAttemptID finds the retry
+// attempt it already created (by scanning this phase's attempt journal for a
+// record whose ParentAttemptID matches) and returns that, rather than
+// creating a duplicate child or touching the existing one.
+func commitPartialBuildRetryPlan(state colony.ColonyState, phaseNum int, phase colony.Phase, parentAttemptID string, retryStartedAt time.Time, plan *partialBuildRetryPlan) (*partialBuildRetryOutcome, error) {
+	parentAttemptID = strings.TrimSpace(parentAttemptID)
+	if parentAttemptID == "" {
+		return nil, fmt.Errorf("coherent job retry requires a parent attempt id")
+	}
+	if plan == nil || len(plan.Jobs) == 0 {
+		return nil, nil
+	}
+
 	if existingRel, existing, ok := findExistingBuildAttemptRetry(phaseNum, parentAttemptID); ok {
 		return &partialBuildRetryOutcome{
 			ParentAttemptID:   parentAttemptID,
 			RetryAttemptID:    existing.ID,
 			RetryAttemptPath:  displayDataPath(existingRel),
-			UnfinishedTaskIDs: uniqueSortedStrings(allUnfinished),
-			RedispatchCommand: redispatchCommand,
+			UnfinishedTaskIDs: append([]string{}, plan.UnfinishedTaskIDs...),
+			RedispatchCommand: plan.RedispatchCommand,
 		}, nil
 	}
 
 	childRel, err := beginChildBuildAttempt(
 		state, phaseNum, phase, retryStartedAt,
-		parentAttemptID, retryJobs[0].Name,
-		uniqueSortedStrings(allUnfinished),
+		parentAttemptID, plan.Jobs[0].Name,
+		append([]string{}, plan.UnfinishedTaskIDs...),
 		"", "", "",
 		buildExecutionOwner("real", false),
-		retryDispatches,
+		plan.Dispatches,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("coherent job retry: create recovery attempt: %w", err)
@@ -250,8 +292,8 @@ func reconcilePartialBuildRetry(state colony.ColonyState, phaseNum int, phase co
 		ParentAttemptID:   parentAttemptID,
 		RetryAttemptID:    childID,
 		RetryAttemptPath:  displayDataPath(childRel),
-		UnfinishedTaskIDs: uniqueSortedStrings(allUnfinished),
-		RedispatchCommand: redispatchCommand,
+		UnfinishedTaskIDs: append([]string{}, plan.UnfinishedTaskIDs...),
+		RedispatchCommand: plan.RedispatchCommand,
 	}, nil
 }
 

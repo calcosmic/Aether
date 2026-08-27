@@ -859,33 +859,58 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		// resolveCoherentJobDispatchReceipts). Only genuine partial credit
 		// bypasses rollback -- a total failure with zero receipts still takes
 		// the unchanged rollback path below (retryOutcome stays nil).
-		retryOutcome, retryErr := reconcilePartialBuildRetry(originalState, phaseNum, updatedPhase, dispatchManifest.AttemptID, time.Now().UTC(), dispatches)
+		//
+		// WR-10 (195-REVIEW.md): the recovery job is PLANNED first (a pure
+		// computation that writes nothing), then the credit is committed, and
+		// only then is the recovery attempt record created from the committed
+		// state. Creating the record first left an orphan recovery attempt
+		// behind whenever the commit was refused -- pointing at unfinished
+		// tasks whose credit had just been rolled back.
+		retryPlan, retryErr := planPartialBuildRetry(phaseNum, updatedPhase, dispatches)
 		if retryErr != nil {
-			visualFprintf(stderr, "warning: could not create a D-10 recovery job for phase %d's partial credit: %v\n", phaseNum, retryErr)
+			visualFprintf(stderr, "warning: could not plan a D-10 recovery job for phase %d's partial credit: %v\n", phaseNum, retryErr)
 		}
-		if retryOutcome != nil {
-			attemptFinished = true
+		if retryPlan != nil {
 			partialState, commitErr := commitPartialBuildCredit(phaseNum, startedAt, dispatches)
 			if commitErr != nil {
+				finishAttempt(buildAttemptFailed, "partial credit could not be committed", commitErr)
 				rollbackCodexBuildFailure(originalState, phaseNum, startedAt, commitErr)
 				return nil, commitErr
 			}
-			emitVisualProgress(renderDecisionBlock("⚠", "Partial Credit — Recovery Job Created",
-				fmt.Sprintf("Phase %d: %d task(s) unfinished: %s", phaseNum, len(retryOutcome.UnfinishedTaskIDs), strings.Join(retryOutcome.UnfinishedTaskIDs, ", ")),
-				"The credited tasks' proof was kept; nothing proven was rolled back or redone.",
-				retryOutcome.RedispatchCommand))
-			return map[string]interface{}{
+			// WR-04: record the attempt as `partial`, not `failed`. The direct
+			// lane used to leave the journal reading `failed` -- whose
+			// documented meaning is "nothing of this attempt was credited" --
+			// while real task credit sat in colony state, so the two build
+			// lanes described the same outcome differently.
+			finishAttempt(buildAttemptPartial, "partial credit committed; a D-10 recovery job covers the unfinished tasks", nil)
+			attemptFinished = true
+			partialPhase := updatedPhase
+			if phaseNum >= 1 && phaseNum <= len(partialState.Plan.Phases) {
+				partialPhase = partialState.Plan.Phases[phaseNum-1]
+			}
+			result := map[string]interface{}{
 				"phase":               phaseNum,
 				"phase_name":          updatedPhase.Name,
 				"state":               string(partialState.State),
 				"recovery_job":        true,
-				"parent_attempt_id":   retryOutcome.ParentAttemptID,
-				"retry_attempt_id":    retryOutcome.RetryAttemptID,
-				"retry_attempt_path":  retryOutcome.RetryAttemptPath,
-				"unfinished_task_ids": retryOutcome.UnfinishedTaskIDs,
-				"recovery_command":    retryOutcome.RedispatchCommand,
-				"next":                retryOutcome.RedispatchCommand,
-			}, nil
+				"unfinished_task_ids": retryPlan.UnfinishedTaskIDs,
+				"recovery_command":    retryPlan.RedispatchCommand,
+				"next":                retryPlan.RedispatchCommand,
+			}
+			retryOutcome, persistErr := commitPartialBuildRetryPlan(partialState, phaseNum, partialPhase, dispatchManifest.AttemptID, time.Now().UTC(), retryPlan)
+			if persistErr != nil {
+				visualFprintf(stderr, "warning: could not record a D-10 recovery attempt for phase %d's partial credit: %v\n", phaseNum, persistErr)
+			}
+			if retryOutcome != nil {
+				result["parent_attempt_id"] = retryOutcome.ParentAttemptID
+				result["retry_attempt_id"] = retryOutcome.RetryAttemptID
+				result["retry_attempt_path"] = retryOutcome.RetryAttemptPath
+			}
+			emitVisualProgress(renderDecisionBlock("⚠", "Partial Credit — Recovery Job Created",
+				fmt.Sprintf("Phase %d: %d task(s) unfinished: %s", phaseNum, len(retryPlan.UnfinishedTaskIDs), strings.Join(retryPlan.UnfinishedTaskIDs, ", ")),
+				"The credited tasks' proof was kept; nothing proven was rolled back or redone.",
+				retryPlan.RedispatchCommand))
+			return result, nil
 		}
 		attemptFinished = true
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
