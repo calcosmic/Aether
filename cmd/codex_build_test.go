@@ -3008,6 +3008,213 @@ func TestBuildCommandExposesWorkerTimeoutFlag(t *testing.T) {
 	}
 }
 
+func TestBuildJobProposalRoundTrip(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Wire Queen job proposals into build planning"
+	firstID := "1.1"
+	secondID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Proposal round trip",
+			Status: colony.PhaseReady,
+			Tasks: []colony.Task{
+				{ID: &firstID, Goal: "Add the proposal decoder", Status: colony.TaskPending},
+				{ID: &secondID, Goal: "Persist the proposal decision", Status: colony.TaskPending, DependsOn: []string{firstID}},
+			},
+		}}},
+	})
+
+	proposal := `{"name":"proposal-wire","task_ids":["1.1","1.2"],"owner_caste":"builder","relationship":"dependency_chain","benefit":"one implementation context"}`
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--no-checkin", "--job-proposal", proposal})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --job-proposal returned error: %v", err)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("load proposal manifest: %v", err)
+	}
+	if len(manifest.JobDecisions) != 1 || manifest.JobDecisions[0].Status != "accepted" {
+		t.Fatalf("job decisions = %+v, want one accepted proposal", manifest.JobDecisions)
+	}
+	waveDispatches := buildWaveDispatches(manifest.Dispatches)
+	if len(waveDispatches) != 1 {
+		t.Fatalf("wave dispatches = %+v, want one coherent job", waveDispatches)
+	}
+	got := waveDispatches[0]
+	if got.JobName != "proposal-wire" || got.JobSource != "queen" || got.JobReason == "" {
+		t.Fatalf("job metadata did not round-trip: %+v", got)
+	}
+	if !reflect.DeepEqual(got.CoveredTaskIDs, []string{firstID, secondID}) || got.TaskID != firstID {
+		t.Fatalf("task identity lost during round trip: primary=%q covered=%v", got.TaskID, got.CoveredTaskIDs)
+	}
+}
+
+func TestBuildRejectsInvalidJobProposalBeforeAttempt(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Reject malformed job proposals without side effects"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Invalid proposal",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Keep state untouched", Status: colony.TaskPending}},
+		}}},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--job-proposal", `{not-json`})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build command should report its contract error through the normal envelope: %v", err)
+	}
+	combined := stdout.(*bytes.Buffer).String() + stderr.(*bytes.Buffer).String()
+	if !strings.Contains(strings.ToLower(combined), "job proposal") {
+		t.Fatalf("error output = %q, want a named job proposal parse error", combined)
+	}
+	for _, rel := range []string{
+		filepath.Join(".aether", "data", "build", "phase-1", "manifest.json"),
+		filepath.Join(".aether", "data", "build", "phase-1", "latest-attempt.json"),
+	} {
+		if _, err := os.Stat(filepath.Join(root, rel)); !os.IsNotExist(err) {
+			t.Fatalf("invalid proposal created %s before rejection (stat err=%v)", rel, err)
+		}
+	}
+}
+
+func TestGroupingOccursBeforeWavesAndWorktreeOwnership(t *testing.T) {
+	firstID := "1.1"
+	secondID := "1.2"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Planner ordering",
+		Status: colony.PhaseReady,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Edit the shared runtime", Status: colony.TaskPending, Hints: []string{"cmd/runtime.go"}},
+			{ID: &secondID, Goal: "Test the shared runtime", Status: colony.TaskPending, DependsOn: []string{firstID}, Hints: []string{"cmd/runtime.go"}},
+		},
+	}
+	state := colony.ColonyState{ParallelMode: colony.ModeWorktree}
+	proposal := coherentJobProposal{
+		Name:         "shared-runtime",
+		TaskIDs:      []string{firstID, secondID},
+		OwnerCaste:   "builder",
+		Relationship: "dependency_chain",
+		Benefit:      "one owner prevents a worktree collision",
+	}
+
+	dispatches, decisions, err := plannedBuildDispatchesWithJudgement(
+		phase, state, nil, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
+	)
+	if err != nil {
+		t.Fatalf("plannedBuildDispatchesWithJudgement returned error: %v", err)
+	}
+	waveDispatches := buildWaveDispatches(dispatches)
+	if len(waveDispatches) != 1 || !reflect.DeepEqual(waveDispatches[0].CoveredTaskIDs, []string{firstID, secondID}) {
+		t.Fatalf("worktree plan was split before grouping: %+v", waveDispatches)
+	}
+	if waveDispatches[0].Wave != 1 || waveDispatches[0].ExecutionWave != 1 {
+		t.Fatalf("job DAG did not assign the first coherent job to wave 1: %+v", waveDispatches[0])
+	}
+	if len(decisions) != 1 || decisions[0].Status != "accepted" {
+		t.Fatalf("planner decisions = %+v, want accepted", decisions)
+	}
+}
+
+func TestSelectedTaskJobProposalCannotPullOtherTasks(t *testing.T) {
+	firstID := "1.1"
+	secondID := "1.2"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Selected task boundary",
+		Status: colony.PhaseReady,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Redispatch this task", Status: colony.TaskPending},
+			{ID: &secondID, Goal: "Leave this task untouched", Status: colony.TaskPending},
+		},
+	}
+	proposal := coherentJobProposal{
+		Name:         "scope-escape",
+		TaskIDs:      []string{firstID, secondID},
+		OwnerCaste:   "builder",
+		Relationship: "dependency_chain",
+		Benefit:      "attempt to widen selected scope",
+	}
+
+	dispatches, decisions, err := plannedBuildDispatchesWithJudgement(
+		phase, colony.ColonyState{}, []string{firstID}, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
+	)
+	if err != nil {
+		t.Fatalf("selected-task planning returned error: %v", err)
+	}
+	waveDispatches := buildWaveDispatches(dispatches)
+	if len(waveDispatches) != 1 || !reflect.DeepEqual(dispatchCoveredTaskIDs(waveDispatches[0]), []string{firstID}) {
+		t.Fatalf("proposal widened selected scope: %+v", waveDispatches)
+	}
+	if len(decisions) != 1 || decisions[0].Status != "refused" || decisions[0].OffendingTaskID != secondID {
+		t.Fatalf("scope refusal was not persisted visibly: %+v", decisions)
+	}
+}
+
+func TestUnsafeJobProposalIsVisiblyRepaired(t *testing.T) {
+	firstID := "1.1"
+	secondID := "1.2"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Unsafe proposal repair",
+		Status: colony.PhaseReady,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Edit the API", Status: colony.TaskPending, Hints: []string{"cmd/api.go"}},
+			{ID: &secondID, Goal: "Edit the UI", Status: colony.TaskPending, Hints: []string{"web/ui.ts"}},
+		},
+	}
+	proposal := coherentJobProposal{
+		Name:         "unsafe-bundle",
+		TaskIDs:      []string{firstID, secondID},
+		OwnerCaste:   "builder",
+		Relationship: "same_files",
+		Benefit:      "claims unrelated paths are shared",
+	}
+
+	dispatches, decisions, err := plannedBuildDispatchesWithJudgement(
+		phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
+	)
+	if err != nil {
+		t.Fatalf("unsafe proposal should be repaired, not abort planning: %v", err)
+	}
+	if len(buildWaveDispatches(dispatches)) != 2 {
+		t.Fatalf("unsafe bundle was not split into safe jobs: %+v", buildWaveDispatches(dispatches))
+	}
+	if len(decisions) != 1 || decisions[0].Status != "refused" || len(decisions[0].ReplacementJobNames) != 2 {
+		t.Fatalf("repair decision is not visible: %+v", decisions)
+	}
+}
+
+func buildWaveDispatches(dispatches []codexBuildDispatch) []codexBuildDispatch {
+	out := make([]codexBuildDispatch, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		if dispatch.Stage == "wave" {
+			out = append(out, dispatch)
+		}
+	}
+	return out
+}
+
 func TestBuildUsesWorkerTimeoutOverride(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
