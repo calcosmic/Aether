@@ -71,6 +71,15 @@ func admitCoherentJobTaskReceipts(root string, phase colony.Phase, dispatch code
 	var violations []contractViolation
 	worker := strings.TrimSpace(dispatch.Name)
 
+	// WR-08 (195-REVIEW.md): normalize ONCE, here, for every lane. The direct
+	// worker path normalized receipts on the way in; the wrapper/external path
+	// decoded them straight off the submitted packet, so a receipt spelling its
+	// passing check "passed" -- an alias the runtime's own handoff validator
+	// accepts -- was credited on one lane and silently refused on the other.
+	// This is lexical only: it never reads root, which is what keeps stage 1
+	// safe to run before a worktree's files are copied back.
+	receipts = codex.NormalizeTaskReceipts(root, receipts)
+
 	covered := make(map[string]struct{}, len(dispatch.CoveredTaskIDs)+1)
 	for _, id := range dispatchCoveredTaskIDs(dispatch) {
 		covered[id] = struct{}{}

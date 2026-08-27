@@ -23,6 +23,20 @@ type TaskReceipt struct {
 	Handoff       WorkerHandoff `json:"handoff"`
 }
 
+// NormalizeTaskReceipts is the single normalization every lane runs before a
+// receipt is judged: it lowercases the status, makes claimed paths
+// repository-relative, and runs the receipt's handoff through the same
+// normalizer the worker path uses (which maps accepted aliases such as
+// "passed" to "pass" and "not run" to "not_run").
+//
+// It is exported because the wrapper/external lane decodes receipts straight
+// off a submitted completion packet and never went through the worker path, so
+// an identical receipt was credited on one lane and refused on the other
+// (WR-08, 195-REVIEW.md).
+func NormalizeTaskReceipts(root string, receipts []TaskReceipt) []TaskReceipt {
+	return normalizeTaskReceipts(root, receipts)
+}
+
 func normalizeTaskReceipts(root string, receipts []TaskReceipt) []TaskReceipt {
 	if receipts == nil {
 		return nil
