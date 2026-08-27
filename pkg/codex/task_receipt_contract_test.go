@@ -18,8 +18,6 @@ func TestTaskReceiptContractRoundTripPreservesTaskEvidence(t *testing.T) {
 			ChangedFiles:       []string{"models/new.go", "models/existing.go", "models/existing_test.go"},
 			CommandsRun:        []string{"go test ./models"},
 			VerificationStatus: "pass",
-			KnownFailures:      []string{},
-			OpenDecisions:      []string{},
 			Assumptions:        []string{"The generated fixture is authoritative."},
 			NextWorkerInstructions: []string{
 				"Use the verified model output when wiring completion credit.",

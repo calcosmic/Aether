@@ -74,6 +74,7 @@ type WorkerResult struct {
 	FilesCreated  []string                   // Files the worker claims to have created
 	FilesModified []string                   // Files the worker claims to have modified
 	TestsWritten  []string                   // Test files the worker created
+	TaskReceipts  []TaskReceipt              `json:"task_receipts,omitempty"` // Optional task-specific completion evidence
 	Artifacts     map[string]json.RawMessage // Optional structured artifacts requested by task-specific briefs
 	ScoutReport   json.RawMessage            // Optional top-level scout_report artifact for planning Scout workers
 	ToolCount     int                        // Number of tool calls reported
@@ -103,6 +104,7 @@ type workerClaims struct {
 	FilesCreated  stringList                 `json:"files_created"`
 	FilesModified stringList                 `json:"files_modified"`
 	TestsWritten  stringList                 `json:"tests_written"`
+	TaskReceipts  []TaskReceipt              `json:"task_receipts,omitempty"`
 	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
 	ScoutReport   json.RawMessage            `json:"scout_report,omitempty"`
 	ToolCount     int                        `json:"tool_count"`
@@ -192,6 +194,7 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		FilesCreated:  []string{},
 		FilesModified: []string{},
 		TestsWritten:  []string{},
+		TaskReceipts:  nil,
 		ToolCount:     0,
 		Blockers:      nil,
 		Spawns:        nil,
@@ -217,6 +220,7 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		FilesCreated:  claims.FilesCreated,
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
+		TaskReceipts:  claims.TaskReceipts,
 		Artifacts:     claims.Artifacts,
 		ScoutReport:   claims.ScoutReport,
 		ToolCount:     claims.ToolCount,
@@ -600,6 +604,7 @@ waitLoop:
 		FilesCreated:  claims.FilesCreated,
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
+		TaskReceipts:  claims.TaskReceipts,
 		Artifacts:     claims.Artifacts,
 		ScoutReport:   claims.ScoutReport,
 		ToolCount:     claims.ToolCount,
@@ -826,6 +831,7 @@ Return ONLY a single JSON object as your final response.
 - Do not tell the user which command to run next. The orchestrator owns lifecycle decisions; advice appended after the JSON is discarded and breaks result parsing.
 - Do not wrap the JSON in markdown code fences.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
+- Include task_receipts as an array (empty when no task-specific evidence is reported). Each receipt uses task_id, status, summary, files_created, files_modified, tests_written, and handoff; it never redefines manifest requirements or supplies authoritative hashes.
 - Set status to one of: %s.
 - If the required behavior ALREADY exists and you proved it, report status completed_no_change with disposition "verified_existing", put the exact verification commands you ran in handoff commands_run, and set handoff verification_status to pass. NEVER fabricate an edit just to have changed files — an honest no-change with evidence is a first-class success; one without evidence is rejected.
 - If you are stopped by a rate limit or quota, report status interrupted (not failed): save what you completed and describe the last durable state in your handoff. The handoff is kept and handed to whoever picks the work up next; the phase itself is restarted by the operator, so leave next_worker_instructions precise enough to continue from.
@@ -877,6 +883,7 @@ func workerClaimsSchema() jsonSchema {
 			"blockers",
 			"spawns",
 			"handoff",
+			"task_receipts",
 		},
 		Properties: map[string]interface{}{
 			"ant_name": map[string]interface{}{"type": "string"},
@@ -890,6 +897,10 @@ func workerClaimsSchema() jsonSchema {
 			"files_created":  stringArray,
 			"files_modified": stringArray,
 			"tests_written":  stringArray,
+			"task_receipts": map[string]interface{}{
+				"type":  "array",
+				"items": taskReceiptClaimSchema(stringArray),
+			},
 			// artifacts carries named, typed fields a worker reports when its task
 			// brief orders a specific output — e.g. renderPhaseResearchBrief
 			// (cmd/phase_research.go:124) orders a scout to write phase research to
@@ -918,32 +929,64 @@ func workerClaimsSchema() jsonSchema {
 			},
 			"blockers": stringArray,
 			"spawns":   stringArray,
-			"handoff": map[string]interface{}{
-				"type":                 "object",
-				"additionalProperties": false,
-				"required": []string{
-					"changed_files",
-					"commands_run",
-					"verification_status",
-					"known_failures",
-					"open_decisions",
-					"assumptions",
-					"next_worker_instructions",
-					"do_not_repeat",
-					"freshness",
-				},
-				"properties": map[string]interface{}{
-					"changed_files":            stringArray,
-					"commands_run":             stringArray,
-					"verification_status":      map[string]interface{}{"type": "string", "enum": []string{"pass", "fail", "partial", "not_run", "unknown"}},
-					"known_failures":           stringArray,
-					"open_decisions":           stringArray,
-					"assumptions":              stringArray,
-					"next_worker_instructions": stringArray,
-					"do_not_repeat":            stringArray,
-					"freshness":                map[string]interface{}{"type": "string"},
-				},
+			"handoff":  workerHandoffClaimSchema(stringArray),
+		},
+	}
+}
+
+func taskReceiptClaimSchema(stringArray map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required": []string{
+			"task_id",
+			"status",
+			"summary",
+			"files_created",
+			"files_modified",
+			"tests_written",
+			"handoff",
+		},
+		"properties": map[string]interface{}{
+			"task_id": map[string]interface{}{"type": "string"},
+			"status": map[string]interface{}{
+				"type": "string",
+				"enum": []string{TaskReceiptStatusCompleted, TaskReceiptStatusCompletedNoChange},
 			},
+			"summary":        map[string]interface{}{"type": "string"},
+			"files_created":  stringArray,
+			"files_modified": stringArray,
+			"tests_written":  stringArray,
+			"handoff":        workerHandoffClaimSchema(stringArray),
+		},
+	}
+}
+
+func workerHandoffClaimSchema(stringArray map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required": []string{
+			"changed_files",
+			"commands_run",
+			"verification_status",
+			"known_failures",
+			"open_decisions",
+			"assumptions",
+			"next_worker_instructions",
+			"do_not_repeat",
+			"freshness",
+		},
+		"properties": map[string]interface{}{
+			"changed_files":            stringArray,
+			"commands_run":             stringArray,
+			"verification_status":      map[string]interface{}{"type": "string", "enum": []string{"pass", "fail", "partial", "not_run", "unknown"}},
+			"known_failures":           stringArray,
+			"open_decisions":           stringArray,
+			"assumptions":              stringArray,
+			"next_worker_instructions": stringArray,
+			"do_not_repeat":            stringArray,
+			"freshness":                map[string]interface{}{"type": "string"},
 		},
 	}
 }
@@ -1062,6 +1105,7 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 	claims.FilesCreated = normalizeClaimPaths(config.Root, claims.FilesCreated)
 	claims.FilesModified = normalizeClaimPaths(config.Root, claims.FilesModified)
 	claims.TestsWritten = normalizeClaimPaths(config.Root, claims.TestsWritten)
+	claims.TaskReceipts = normalizeTaskReceipts(config.Root, claims.TaskReceipts)
 	claims.Blockers = compactStrings(claims.Blockers)
 	claims.Spawns = compactStrings(claims.Spawns)
 	if IsEmptyWorkerHandoffIncludingFreshness(claims.Handoff) {
