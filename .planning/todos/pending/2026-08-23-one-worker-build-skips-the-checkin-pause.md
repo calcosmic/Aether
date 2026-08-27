@@ -3,7 +3,8 @@ created: 2026-08-23T00:00:00Z
 title: One-worker build should go straight through (skip the check-in pause)
 area: orchestration/UX
 source: Owner feedback, 2026-08-23, plan 194-07 checkpoint (task 2)
-resolves_phase: 194
+raised_in_phase: 194
+resolves_phase: ""  # not yet scheduled — a scope change (reverses D-14); route via /gsd-discuss-phase at the next planning pass
 ---
 
 ## The owner's observation (verbatim intent)
