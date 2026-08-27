@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -87,5 +89,88 @@ func TestPartialFinalizeCanBeReplayedWithTheSamePacket(t *testing.T) {
 		if statusByID[id] == string(colony.TaskCompleted) {
 			t.Errorf("task %s became %q on replay; a replay must credit nothing new", id, statusByID[id])
 		}
+	}
+}
+
+// TestPartialFinalizeReplayWritesNothing is the permanent regression lock for
+// NEW-05 (195-REVIEW.iter2.md).
+//
+// Re-submitting an already-finalized packet is an inspection: it re-reports
+// what was already decided. Its own documentation promised it "mutates
+// nothing: no colony state write, no attempt transition, no new credit". That
+// was only true while the recovery record from the first call still existed.
+// If writing that record had failed the first time -- a warning to the screen,
+// and the run continues -- the replay quietly created one, which is a write on
+// a path this project's rules say must never write.
+//
+// The lost record is simulated by deleting it, which is the same state the
+// runtime is left in when the first write fails.
+func TestPartialFinalizeReplayWritesNothing(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Replay writes nothing")
+
+	proven := ids[:4]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touchedFiles := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touchedFiles = append(touchedFiles, taskFileName(id))
+	}
+	results := []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: touchedFiles,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+		TaskReceipts: receipts,
+	}}
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+	firstResult, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("first finalize of a genuine partial: %v", err)
+	}
+	firstRecovery, _ := firstResult["recovery_command"].(string)
+	if strings.TrimSpace(firstRecovery) == "" {
+		t.Fatal("a partial finalize handed the owner no recovery command")
+	}
+
+	// Simulate the first call's recovery-record write having failed.
+	removed := 0
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if strings.TrimSpace(record.ParentAttemptID) == "" {
+			continue
+		}
+		path := filepath.Join(root, ".aether", "data", filepath.FromSlash(buildAttemptPathForID(1, record.ID)))
+		if err := os.Remove(path); err != nil {
+			t.Fatalf("remove recovery record: %v", err)
+		}
+		removed++
+	}
+	if removed == 0 {
+		t.Fatal("fixture produced no recovery record to remove")
+	}
+	before := len(listBuildAttemptsForPhase(1))
+
+	secondResult, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("replaying the identical partial packet: %v", err)
+	}
+
+	after := listBuildAttemptsForPhase(1)
+	if len(after) != before {
+		t.Fatalf("re-submitting an already-finalized packet created %d new attempt record(s); this path is documented as writing nothing", len(after)-before)
+	}
+	for _, record := range after {
+		if strings.TrimSpace(record.ParentAttemptID) != "" {
+			t.Fatalf("the replay wrote a new recovery record %s for parent %s", record.ID, record.ParentAttemptID)
+		}
+	}
+	secondRecovery, _ := secondResult["recovery_command"].(string)
+	if secondRecovery != firstRecovery {
+		t.Fatalf("the replay must still hand back the same recovery command; got %q, first time %q", secondRecovery, firstRecovery)
 	}
 }
