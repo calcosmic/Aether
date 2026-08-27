@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 status: executing
-stopped_at: Completed 195-03-PLAN.md
-last_updated: "2026-08-27T04:47:53.000Z"
+stopped_at: Completed 195-04-PLAN.md
+last_updated: "2026-08-27T05:28:06.536Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 7
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 ## Current Position
 
-**Progress:** [███████░░░] 67%
+**Progress:** [███████░░░] 71%
 
 Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 4 of 10
+Plan: 5 of 10
 Status: Ready to execute
 Last activity: 2026-08-27
 
@@ -66,6 +66,7 @@ Last activity: 2026-08-27
 | Phase 195 P01 | 40min | 2 tasks | 2 files |
 | Phase 195 P02 | 23min | 2 tasks | 6 files |
 | Phase 195 P03 | 95min | 2 tasks | 9 files |
+| Phase 195 P04 | 25min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,8 @@ Last activity: 2026-08-27
 - [Phase 195]: Grouped briefs gain an additive `## Covered Task Contracts` section carrying only what has no legacy single-task home (evidence requirements and otherwise-unlisted declared paths), so a one-task brief stays byte-for-byte unchanged.
 - [Phase 195]: Every dispatch consumer iterates `dispatchCoveredTaskIDs` rather than the bare `TaskID` — abandoned-build recovery and continue assessment both previously lost every covered task after the first.
 - [Phase 195]: Owner-facing wording is `covered tasks`, not `dependent tasks`; automatic grouping is no longer dependency-only, so the old phrase had become false.
+- [Phase 195]: Two-stage receipt trust boundary (admitCoherentJobTaskReceipts / finalizeCoherentJobTaskReceiptEvidence) is the only path that can populate CompletedTaskIDs; completedBuildTaskIDs keeps whole-success crediting all covered tasks and reads CompletedTaskIDs for any other terminal status, never touched files or CoveredTaskIDs membership.
+- [Phase 195]: Native/in-repo lane (executeCodexBuildDispatches) resolves receipts through both stages immediately after a worker's terminal result is known, since in-repo files already live in root; the external/wrapper lane's crediting wiring is deferred to plan 195-06, which reuses the same two functions unchanged.
 
 ### Pending Todos
 
@@ -131,7 +134,7 @@ Last activity: 2026-08-27
 - [x] Phase 193: Free Checks Are the Floor — executed and verified 2026-08-22 (v1.27)
 - [x] Discuss + plan Phase 194: The Queen Decides the Team — planned 2026-08-23 (9 plans, 9 waves)
 - [x] Execute and verify Phase 194: The Queen Decides the Team — complete 2026-08-26 (9/9 plans, 9/9 UAT)
-- [~] Phase 195: Coherent Jobs — discussed and planned (10 plans); executing, 3/10 complete 2026-08-27 ← **current**
+- [~] Phase 195: Coherent Jobs — discussed and planned (10 plans); executing, 4/10 complete 2026-08-27 ← **current**
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
@@ -202,6 +205,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T04:47:53.000Z
-Stopped at: Completed 195-03-PLAN.md (recovered in place after an interrupted Codex executor; handoff cleared)
+Last session: 2026-08-27T05:28:06.523Z
+Stopped at: Completed 195-04-PLAN.md
 Resume file: None

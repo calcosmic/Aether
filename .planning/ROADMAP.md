@@ -168,11 +168,11 @@ Plans:
 
 **Wave 2** *(blocked on job-planner contracts)*
 
-- [ ] 195-03-PLAN.md — Wire grouping before waves/worktree ownership; prove the in-repo CalVault job and grouped briefs (wave 2)
+- [x] 195-03-PLAN.md — Wire grouping before waves/worktree ownership; prove the in-repo CalVault job and grouped briefs (wave 2)
 
 **Wave 3** *(parallel runtime integrations after manifest contracts)*
 
-- [ ] 195-04-PLAN.md — Shared receipt validator and exact native four-of-six task credit (wave 3)
+- [x] 195-04-PLAN.md — Shared receipt validator and exact native four-of-six task credit (wave 3)
 - [ ] 195-05-PLAN.md — Decision-aware one-worker check-in fast path, compact summary, and `--checkin` override (wave 3)
 
 **Wave 4** *(blocked on native receipt semantics)*
