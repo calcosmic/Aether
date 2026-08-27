@@ -854,3 +854,75 @@ func TestSpawnLogWithNoCardRenderedIsANoOpAndReviewerStaysForced(t *testing.T) {
 		t.Fatalf("forced reviewer must still be live when no card was ever rendered; reviewers = %+v", reviewers)
 	}
 }
+
+// TestOneWorkerWithForcedReviewerWaiverStillPauses is Phase 195's
+// forced-reviewer counterexample in the D-11..D-14 decision matrix: a
+// phase whose wording forces a reviewer at the continue boundary must
+// still request the check-in even though build itself dispatches exactly
+// one worker (D-13) -- this build's own render is the owner's one
+// opportunity to see the Phase 194 waiver option before dispatch. Once the
+// owner genuinely waives that one signal, the same phase's pending-owner-
+// decision predicate flips false and the build is free to take the
+// one-worker fast path -- proving buildHasPendingOwnerDecision reads the
+// LIVE waiver state, not just "a forced reviewer exists somewhere."
+func TestOneWorkerWithForcedReviewerWaiverStillPauses(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	// Phase ID 25 (25%10=5, not <3) keeps chaosShouldRunInLightMode
+	// (cmd/review_depth.go) from adding a second dispatch under --light, so
+	// this build stays at exactly one worker.
+	taskID := "1.1"
+	phase := colony.Phase{
+		ID:          25,
+		Name:        "Password reset",
+		Description: "Let users reset their password via an emailed token",
+		Mode:        colony.PhaseModePrototype,
+		Status:      colony.PhaseReady,
+		Tasks:       []colony.Task{{ID: &taskID, Goal: "Do the work", Status: colony.TaskPending}},
+	}
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{LightFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
+	}
+	if len(dispatches) != 1 {
+		t.Fatalf("expected exactly one dispatch, got %d", len(dispatches))
+	}
+	manifest, ok := result["dispatch_manifest"].(codexBuildManifest)
+	if !ok {
+		t.Fatalf("dispatch_manifest is not a codexBuildManifest: %T", result["dispatch_manifest"])
+	}
+
+	pending, why := buildHasPendingOwnerDecision(manifest)
+	if !pending {
+		t.Fatalf("a live forced-reviewer signal must count as a pending owner decision")
+	}
+	decision := decideBuildCheckin(buildCheckinDecisionInput{
+		ImplementationDispatches: len(dispatches),
+		PendingOwnerDecision:     pending,
+		PendingOwnerDecisionWhy:  why,
+	})
+	if !decision.Requested {
+		t.Fatalf("one worker with a live forced reviewer must still request the check-in, got %+v", decision)
+	}
+	if decision.Reason != buildCheckinReasonPendingOwnerDecision {
+		t.Fatalf("reason = %s, want %s", decision.Reason, buildCheckinReasonPendingOwnerDecision)
+	}
+
+	// Waive the one live signal exactly the way the owner's decline command
+	// resolves it.
+	recordResolvedForcedReviewerWaiverForTest(t, manifest.Phase, "credentials/auth", "logins and passwords", "already checked by hand")
+
+	waivedPending, _ := buildHasPendingOwnerDecision(manifest)
+	if waivedPending {
+		t.Fatalf("a genuinely waived forced-reviewer signal must stop counting as pending")
+	}
+	waivedDecision := decideBuildCheckin(buildCheckinDecisionInput{ImplementationDispatches: len(dispatches), PendingOwnerDecision: waivedPending})
+	if waivedDecision.Requested || waivedDecision.Reason != buildCheckinReasonOneWorkerFastPath {
+		t.Fatalf("a waived forced reviewer must free the one-worker build to take the fast path, got %+v", waivedDecision)
+	}
+}

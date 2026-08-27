@@ -439,6 +439,76 @@ func assertBoundaryQuestionsCreated(t *testing.T, dataDir string, result map[str
 	}
 }
 
+// TestOneWorkerWithBoundaryQuestionStillPauses is Phase 195's orchestrator
+// boundary-question counterexample in the D-11..D-14 decision matrix: an
+// orchestrator-mode build materializes exactly one unanswered boundary
+// question (build-scope) even though the phase itself dispatches exactly
+// one worker. buildHasPendingOwnerDecision must read that live
+// manifest.BoundaryQuestionCount, not the dispatch count, so
+// decideBuildCheckin still requests the check-in.
+func TestOneWorkerWithBoundaryQuestionStillPauses(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupRuntimeSkillAssignmentHub(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	withTestWorkspace(t, root)
+
+	goal := "orchestrate build boundary"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		ColonyMode:   colony.ColonyModeOrchestrator,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:          1,
+			Name:        "Build boundary",
+			Description: "prove the build boundary",
+			Status:      colony.PhaseReady,
+			Tasks: []colony.Task{{
+				ID:     &taskID,
+				Goal:   "Implement the build boundary",
+				Status: colony.TaskPending,
+			}},
+		}}},
+	})
+
+	result, _, _, dispatches, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnly: %v", err)
+	}
+	if len(dispatches) != 1 {
+		t.Fatalf("expected exactly one dispatch, got %d", len(dispatches))
+	}
+	manifest, ok := result["dispatch_manifest"].(codexBuildManifest)
+	if !ok {
+		t.Fatalf("dispatch_manifest is not a codexBuildManifest: %T", result["dispatch_manifest"])
+	}
+	if manifest.BoundaryQuestionCount != 1 {
+		t.Fatalf("manifest BoundaryQuestionCount = %d, want 1", manifest.BoundaryQuestionCount)
+	}
+
+	pending, why := buildHasPendingOwnerDecision(manifest)
+	if !pending {
+		t.Fatalf("an unanswered orchestrator boundary question must count as a pending owner decision")
+	}
+	decision := decideBuildCheckin(buildCheckinDecisionInput{
+		ImplementationDispatches: len(dispatches),
+		PendingOwnerDecision:     pending,
+		PendingOwnerDecisionWhy:  why,
+	})
+	if !decision.Requested {
+		t.Fatalf("one worker with an unanswered boundary question must still request the check-in, got %+v", decision)
+	}
+	if decision.Reason != buildCheckinReasonPendingOwnerDecision {
+		t.Fatalf("reason = %s, want %s", decision.Reason, buildCheckinReasonPendingOwnerDecision)
+	}
+}
+
 func assertNoBoundaryQuestions(t *testing.T, dataDir string, result map[string]interface{}) {
 	t.Helper()
 	if got := intValue(result["boundary_question_count"]); got != 0 {

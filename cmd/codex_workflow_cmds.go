@@ -148,6 +148,18 @@ var buildCmd = &cobra.Command{
 			return nil
 		}
 
+		// D-14: --checkin (force the pause) and --no-checkin (skip it) are a
+		// named conflict, refused before ANY side effect -- no plan-only
+		// attempt opened, no manifest written, no checkpoint or colony state
+		// touched. This must run before the print-brief and plan-only
+		// branches below.
+		checkinFlag, _ := cmd.Flags().GetBool("checkin")
+		noCheckinFlag, _ := cmd.Flags().GetBool("no-checkin")
+		if checkinFlag && noCheckinFlag {
+			outputError(1, "cannot combine --checkin and --no-checkin: --checkin forces the pre-spawn team check-in pause, --no-checkin skips it -- choose one", nil)
+			return nil
+		}
+
 		selectedTasks := normalizeCLIStringList(mustGetStringArray(cmd, "task"))
 		forceBuild, _ := cmd.Flags().GetBool("force")
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
@@ -200,12 +212,36 @@ var buildCmd = &cobra.Command{
 				outputError(1, err.Error(), nil)
 				return nil
 			}
-			// The wrapper's Team Check-In stage pauses on this flag; the
-			// runtime plan itself is identical either way.
-			noCheckin, _ := cmd.Flags().GetBool("no-checkin")
-			result["checkin_requested"] = !noCheckin
+			// The wrapper's Team Check-In stage pauses on result.checkin_requested;
+			// the runtime plan itself is identical whatever this decides
+			// (D-11..D-14, cmd/ceremony_team_checkin.go: decideBuildCheckin).
+			buildManifest, _ := result["dispatch_manifest"].(codexBuildManifest)
+			pendingOwnerDecision, pendingOwnerDecisionWhy := buildHasPendingOwnerDecision(buildManifest)
+			checkinDecision := decideBuildCheckin(buildCheckinDecisionInput{
+				NoCheckin:                noCheckinFlag,
+				Checkin:                  checkinFlag,
+				PendingOwnerDecision:     pendingOwnerDecision,
+				PendingOwnerDecisionWhy:  pendingOwnerDecisionWhy,
+				ImplementationDispatches: len(dispatches),
+			})
+			result["checkin_requested"] = checkinDecision.Requested
+			result["checkin_reason"] = string(checkinDecision.Reason)
+			if checkinDecision.Why != "" {
+				result["checkin_reason_detail"] = checkinDecision.Why
+			}
 			reviewDepthPlan := reviewDepthFromResult(result)
-			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan, queenPolicyFromResult(result)))
+			planOnlyVisual := renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan, queenPolicyFromResult(result))
+			// D-12: the automatic fast path still shows a compact, non-blocking
+			// summary before dispatch -- it is never invisible, just never a
+			// question. Rendered only for the exact fast-path reason so a
+			// pending-decision or explicit --checkin pause never gets this
+			// summary appended alongside the full check-in card.
+			if !checkinDecision.Requested && checkinDecision.Reason == buildCheckinReasonOneWorkerFastPath && len(dispatches) == 1 {
+				fastPathSummary, fastPathVisual := renderBuildFastPathSummary(phase, dispatches[0], checkinDecision)
+				result["checkin_summary"] = fastPathSummary
+				planOnlyVisual = planOnlyVisual + "\n" + fastPathVisual
+			}
+			outputWorkflow(result, planOnlyVisual)
 			return nil
 		}
 
@@ -1414,6 +1450,7 @@ func init() {
 	// phase; omitted means the deterministic keyword engine decides, which is
 	// what every caller did before judgement existed.
 	buildCmd.Flags().Bool("no-checkin", false, "Skip the wrapper's pre-spawn team check-in pause (the runtime plan is unchanged)")
+	buildCmd.Flags().Bool("checkin", false, "Force the wrapper's pre-spawn team check-in pause even for a decision-free one-worker build (D-14 owner override); conflicts with --no-checkin")
 	buildCmd.Flags().StringArray("castes", nil, "Queen's proposed worker castes for this phase (repeatable or comma-separated). Safety castes the phase requires are added back automatically; the worker budget still applies")
 	buildCmd.Flags().String("caste-reason", "", "One line summarising the whole team's choice, shown to the operator alongside the roster. This is NOT a per-worker reason -- a worker named in --castes with no matching --caste-why entry is refused by name even if --caste-reason is set. Use --caste-why for that.")
 	buildCmd.Flags().StringArray("caste-why", nil, "One reason per proposed worker, as caste=reason (repeatable; the reason may itself contain '='). A worker named in --castes with no entry here, and not required by the phase, is refused by name rather than sent unexplained")

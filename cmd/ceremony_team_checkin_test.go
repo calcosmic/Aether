@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -315,14 +318,16 @@ func TestTeamCheckinCardIsVisuallySeparated(t *testing.T) {
 	}
 }
 
-// TestOneWorkerTeamStillPauses pins D-14: the owner's pre-build pause never
-// disappears just because the team is small. A manifest whose only worker is
-// the implementation caste itself must still render a full check-in card,
-// with that worker still marked REQUIRED -- the wrapper's decision to pause
-// and ask is driven by the existence of a card to show, not by team size, and
-// this is the regression guard against a future "skip the checkin for a
-// single-worker build" shortcut.
-func TestOneWorkerTeamStillPauses(t *testing.T) {
+// TestRenderCeremonyTeamCheckinStillRendersFullCardForOneWorkerWhenCalled
+// replaces the old TestOneWorkerTeamStillPauses (D-14/195-CONTEXT.md
+// reversed the "every one-worker build pauses" default). What survives from
+// that test is narrower and still true: the FULL card renderer itself is
+// completely unchanged -- calling it directly for a one-worker manifest
+// still produces a real check-in card with that worker marked REQUIRED.
+// What changed is who decides to call it: decideBuildCheckin
+// (TestBuildCheckinDecisionMatrix, TestOneWorkerBuildSkipsCheckin below),
+// not team size alone.
+func TestRenderCeremonyTeamCheckinStillRendersFullCardForOneWorkerWhenCalled(t *testing.T) {
 	manifest := map[string]interface{}{
 		"queen_execution_policy": map[string]interface{}{
 			"spawn_budget": map[string]interface{}{
@@ -340,7 +345,7 @@ func TestOneWorkerTeamStillPauses(t *testing.T) {
 	result, visual := renderCeremonyTeamCheckin("build", manifest, dispatches)
 
 	if !strings.Contains(visual, "T E A M   C H E C K - I N") {
-		t.Fatalf("a one-worker team must still render the check-in card.\ncard:\n%s", visual)
+		t.Fatalf("the full renderer must still produce a check-in card for a one-worker manifest.\ncard:\n%s", visual)
 	}
 	if !strings.Contains(visual, "REQUIRED") {
 		t.Fatalf("a one-worker team's own worker must still be marked REQUIRED.\ncard:\n%s", visual)
@@ -349,6 +354,581 @@ func TestOneWorkerTeamStillPauses(t *testing.T) {
 	if len(required) != 1 || required[0] != "builder" {
 		t.Fatalf("one-worker team required = %v, want [builder]", required)
 	}
+}
+
+// TestBuildCheckinDecisionMatrix is the pure, table-driven regression guard
+// for decideBuildCheckin's D-11..D-14 precedence: autopilot and --no-checkin
+// always stay non-interactive; --checkin always forces the pause; any
+// pending owner decision forces the pause even for one worker; exactly one
+// implementation dispatch with nothing else pending takes the fast path;
+// everything else pauses as before. The "grouped" and "one ungrouped
+// worker" rows are deliberately identical inputs at this pure layer --
+// decideBuildCheckin only ever sees a dispatch COUNT, never whether that one
+// dispatch happens to cover more than one task. The distinction (which
+// grouping produced the count) belongs to the summary renderer's own tests
+// (TestOneWorkerFastPathSummaryCarriesEveryFact), not here.
+func TestBuildCheckinDecisionMatrix(t *testing.T) {
+	cases := []struct {
+		name       string
+		input      buildCheckinDecisionInput
+		wantReq    bool
+		wantReason buildCheckinReasonCode
+	}{
+		{
+			name:       "autopilot never pauses",
+			input:      buildCheckinDecisionInput{Autopilot: true, ImplementationDispatches: 3},
+			wantReq:    false,
+			wantReason: buildCheckinReasonNonInteractive,
+		},
+		{
+			name:       "--no-checkin never pauses",
+			input:      buildCheckinDecisionInput{NoCheckin: true, ImplementationDispatches: 3},
+			wantReq:    false,
+			wantReason: buildCheckinReasonNonInteractive,
+		},
+		{
+			name:       "--checkin forces a pause on an otherwise-eligible one-worker build",
+			input:      buildCheckinDecisionInput{Checkin: true, ImplementationDispatches: 1},
+			wantReq:    true,
+			wantReason: buildCheckinReasonExplicitCheckin,
+		},
+		{
+			// The CLI refuses --checkin combined with --no-checkin before
+			// decideBuildCheckin is ever called (TestCheckinFlagConflictHasNoSideEffects);
+			// this row documents the pure function's own deterministic
+			// precedence as defense in depth, never as sanctioned input.
+			name:       "both flags together: non-interactive wins in the pure policy",
+			input:      buildCheckinDecisionInput{Checkin: true, NoCheckin: true, ImplementationDispatches: 1},
+			wantReq:    false,
+			wantReason: buildCheckinReasonNonInteractive,
+		},
+		{
+			name:       "one grouped worker takes the fast path",
+			input:      buildCheckinDecisionInput{ImplementationDispatches: 1},
+			wantReq:    false,
+			wantReason: buildCheckinReasonOneWorkerFastPath,
+		},
+		{
+			name:       "one ungrouped worker takes the fast path",
+			input:      buildCheckinDecisionInput{ImplementationDispatches: 1},
+			wantReq:    false,
+			wantReason: buildCheckinReasonOneWorkerFastPath,
+		},
+		{
+			name:       "two workers still pause",
+			input:      buildCheckinDecisionInput{ImplementationDispatches: 2},
+			wantReq:    true,
+			wantReason: buildCheckinReasonDefaultPause,
+		},
+		{
+			name: "a live forced-reviewer waiver keeps the pause even for one worker",
+			input: buildCheckinDecisionInput{
+				ImplementationDispatches: 1,
+				PendingOwnerDecision:     true,
+				PendingOwnerDecisionWhy:  "a forced reviewer is still waiting for the owner's check-in decision",
+			},
+			wantReq:    true,
+			wantReason: buildCheckinReasonPendingOwnerDecision,
+		},
+		{
+			name: "an unanswered boundary question keeps the pause even for one worker",
+			input: buildCheckinDecisionInput{
+				ImplementationDispatches: 1,
+				PendingOwnerDecision:     true,
+				PendingOwnerDecisionWhy:  "an unanswered planning question is still waiting for the owner",
+			},
+			wantReq:    true,
+			wantReason: buildCheckinReasonPendingOwnerDecision,
+		},
+		{
+			name: "another persisted unanswered owner decision keeps the pause even for one worker",
+			input: buildCheckinDecisionInput{
+				ImplementationDispatches: 1,
+				PendingOwnerDecision:     true,
+				PendingOwnerDecisionWhy:  "a worker left a question only the owner can answer",
+			},
+			wantReq:    true,
+			wantReason: buildCheckinReasonPendingOwnerDecision,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := decideBuildCheckin(tc.input)
+			if got.Requested != tc.wantReq {
+				t.Fatalf("Requested = %v, want %v (reason %s, why %q)", got.Requested, tc.wantReq, got.Reason, got.Why)
+			}
+			if got.Reason != tc.wantReason {
+				t.Fatalf("Reason = %s, want %s", got.Reason, tc.wantReason)
+			}
+			if strings.TrimSpace(got.Why) == "" {
+				t.Fatalf("Why must never be empty")
+			}
+		})
+	}
+}
+
+// TestOneWorkerBuildSkipsCheckin runs real plan-only builds through the
+// whole coherent-job planner and proves decideBuildCheckin's fast path on
+// the actual dispatch shapes it must handle: one ungrouped task, one
+// grouped job covering a dependent pair, and two genuinely independent
+// tasks that must still pause.
+func TestOneWorkerBuildSkipsCheckin(t *testing.T) {
+	t.Run("one ungrouped task", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+		phase := checkinFixturePhase("Fix the pager", "Fix the off-by-one error in the pager", colony.PhaseModePrototype)
+		setUpCheckinFixtureColony(t, dataDir, phase)
+
+		result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{})
+		if err != nil {
+			t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
+		}
+		if len(dispatches) != 1 {
+			t.Fatalf("expected exactly one dispatch, got %d", len(dispatches))
+		}
+		manifest, ok := result["dispatch_manifest"].(codexBuildManifest)
+		if !ok {
+			t.Fatalf("dispatch_manifest is not a codexBuildManifest: %T", result["dispatch_manifest"])
+		}
+		pending, why := buildHasPendingOwnerDecision(manifest)
+		if pending {
+			t.Fatalf("a plain one-task phase must not report a pending owner decision (why=%q)", why)
+		}
+		decision := decideBuildCheckin(buildCheckinDecisionInput{ImplementationDispatches: len(dispatches), PendingOwnerDecision: pending})
+		if decision.Requested {
+			t.Fatalf("one ungrouped worker must skip the check-in, got Requested=true (%s)", decision.Reason)
+		}
+		if decision.Reason != buildCheckinReasonOneWorkerFastPath {
+			t.Fatalf("reason = %s, want %s", decision.Reason, buildCheckinReasonOneWorkerFastPath)
+		}
+	})
+
+	t.Run("one grouped job covering two dependent tasks", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+		id1, id2 := "1", "2"
+		goal := "Coherent job fast path"
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version:      "3.0",
+			Goal:         &goal,
+			State:        colony.StateREADY,
+			ColonyDepth:  "full",
+			CurrentPhase: 0,
+			Plan: colony.Plan{Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Coherent job fast path",
+				Mode:   colony.PhaseModePrototype,
+				Status: colony.PhaseReady,
+				Tasks: []colony.Task{
+					{ID: &id1, Goal: "Add the shared template", Status: colony.TaskPending},
+					{ID: &id2, Goal: "Wire the shared template into the form", Status: colony.TaskPending, DependsOn: []string{id1}},
+				},
+			}}},
+		})
+
+		result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{})
+		if err != nil {
+			t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
+		}
+		if len(dispatches) != 1 {
+			t.Fatalf("expected the dependent pair to merge into one dispatch, got %d", len(dispatches))
+		}
+		if covered := dispatchCoveredTaskIDs(dispatches[0]); len(covered) != 2 {
+			t.Fatalf("expected the one dispatch to cover both tasks, covered = %v", covered)
+		}
+		manifest, _ := result["dispatch_manifest"].(codexBuildManifest)
+		pending, why := buildHasPendingOwnerDecision(manifest)
+		decision := decideBuildCheckin(buildCheckinDecisionInput{ImplementationDispatches: len(dispatches), PendingOwnerDecision: pending, PendingOwnerDecisionWhy: why})
+		if decision.Requested {
+			t.Fatalf("one grouped worker covering multiple tasks must still skip the check-in, got Requested=true (%s)", decision.Reason)
+		}
+	})
+
+	t.Run("two independent workers still pause", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+		id1, id2 := "1", "2"
+		goal := "Two independent tasks"
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version:      "3.0",
+			Goal:         &goal,
+			State:        colony.StateREADY,
+			ColonyDepth:  "full",
+			CurrentPhase: 0,
+			Plan: colony.Plan{Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Two independent tasks",
+				Mode:   colony.PhaseModePrototype,
+				Status: colony.PhaseReady,
+				Tasks: []colony.Task{
+					{ID: &id1, Goal: "Fix the pager off-by-one error", Status: colony.TaskPending},
+					{ID: &id2, Goal: "Fix an unrelated typo in the footer", Status: colony.TaskPending},
+				},
+			}}},
+		})
+
+		_, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{})
+		if err != nil {
+			t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
+		}
+		if len(dispatches) != 2 {
+			t.Fatalf("expected two independent tasks to dispatch as two workers, got %d", len(dispatches))
+		}
+		decision := decideBuildCheckin(buildCheckinDecisionInput{ImplementationDispatches: len(dispatches)})
+		if !decision.Requested {
+			t.Fatalf("two workers must still pause for the check-in")
+		}
+		if decision.Reason != buildCheckinReasonDefaultPause {
+			t.Fatalf("reason = %s, want %s", decision.Reason, buildCheckinReasonDefaultPause)
+		}
+	})
+}
+
+// TestOneWorkerWithPersistedOwnerDecisionStillPauses is the third
+// D-13 pending-owner-decision source: a worker's own unanswered
+// open_decisions handoff question (distinct from the forced-reviewer
+// waiver and the orchestrator boundary question, each covered by their own
+// dedicated test in forced_reviewer_waiver_test.go and
+// orchestrator_boundary_questions_test.go respectively).
+func TestOneWorkerWithPersistedOwnerDecisionStillPauses(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	phase := checkinFixturePhase("Fix the pager", "Fix the off-by-one error in the pager", colony.PhaseModePrototype)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+	seedHandoffOpenDecision(t, "Should the fix also cover the mobile pager?")
+
+	result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
+	}
+	if len(dispatches) != 1 {
+		t.Fatalf("expected exactly one dispatch, got %d", len(dispatches))
+	}
+	manifest, _ := result["dispatch_manifest"].(codexBuildManifest)
+	pending, why := buildHasPendingOwnerDecision(manifest)
+	if !pending {
+		t.Fatalf("a worker's unanswered open decision must count as a pending owner decision")
+	}
+	if strings.TrimSpace(why) == "" {
+		t.Fatalf("expected a plain-English reason")
+	}
+	decision := decideBuildCheckin(buildCheckinDecisionInput{
+		ImplementationDispatches: len(dispatches),
+		PendingOwnerDecision:     pending,
+		PendingOwnerDecisionWhy:  why,
+	})
+	if !decision.Requested {
+		t.Fatalf("a pending worker-raised decision must keep the check-in even for one worker")
+	}
+	if decision.Reason != buildCheckinReasonPendingOwnerDecision {
+		t.Fatalf("reason = %s, want %s", decision.Reason, buildCheckinReasonPendingOwnerDecision)
+	}
+}
+
+// TestPendingDecisionStillRendersFullCheckinCard proves the full check-in
+// card (and its Phase 194 waiver option) is completely unchanged by the
+// Phase 195 fast path: a one-worker build with a live forced-reviewer
+// signal still pauses (decideBuildCheckin), and the SAME full card, with
+// the SAME decline-a-required-reviewer flow, is what renders for it -- the
+// fast-path summary is never substituted in when a decision is pending.
+func TestPendingDecisionStillRendersFullCheckinCard(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+	// Phase ID 5 (not checkinFixturePhase's shared ID 1) sidesteps
+	// chaosShouldRunInLightMode's deterministic phaseID%10<3 sampling
+	// (cmd/review_depth.go) so LightFlag keeps this build to exactly the
+	// one builder -- the forced-reviewer signal below is a build-time
+	// ANNOUNCEMENT independent of review depth (D-05), so it stays live
+	// regardless.
+	taskID := "1.1"
+	phase := colony.Phase{
+		ID:          5,
+		Name:        "Password reset",
+		Description: "Let users reset their password via an emailed token",
+		Mode:        colony.PhaseModePrototype,
+		Status:      colony.PhaseReady,
+		Tasks:       []colony.Task{{ID: &taskID, Goal: "Do the work", Status: colony.TaskPending}},
+	}
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{LightFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
+	}
+	if len(dispatches) != 1 {
+		t.Fatalf("expected exactly one dispatch, got %d", len(dispatches))
+	}
+	manifest, ok := result["dispatch_manifest"].(codexBuildManifest)
+	if !ok {
+		t.Fatalf("dispatch_manifest is not a codexBuildManifest: %T", result["dispatch_manifest"])
+	}
+	pending, why := buildHasPendingOwnerDecision(manifest)
+	if !pending {
+		t.Fatalf("a phase naming a forced-reviewer signal must report a pending owner decision")
+	}
+	decision := decideBuildCheckin(buildCheckinDecisionInput{
+		ImplementationDispatches: len(dispatches),
+		PendingOwnerDecision:     pending,
+		PendingOwnerDecisionWhy:  why,
+	})
+	if !decision.Requested {
+		t.Fatalf("expected the check-in to still be requested, got %+v", decision)
+	}
+
+	raw, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	var manifestMap map[string]interface{}
+	if err := json.Unmarshal(raw, &manifestMap); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+	ceremonyDispatches := ceremonyDispatchesFromManifest(manifestMap)
+	_, visual := renderCeremonyTeamCheckin("build", manifestMap, ceremonyDispatches)
+	for _, want := range []string{"T E A M   C H E C K - I N", "REQUIRED", "To decline, run:"} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("full check-in card missing %q for a pending one-worker build.\ncard:\n%s", want, visual)
+		}
+	}
+}
+
+// TestOneWorkerFastPathSummaryCarriesEveryFact pins D-12: the compact
+// summary must name the worker, every covered task, the accepted
+// relationship and benefit (or the honest single-task reason), and why no
+// approval is required.
+func TestOneWorkerFastPathSummaryCarriesEveryFact(t *testing.T) {
+	fastPathDecision := buildCheckinDecision{
+		Requested: false,
+		Reason:    buildCheckinReasonOneWorkerFastPath,
+		Why:       "no owner decision is pending, so dispatch continues",
+	}
+
+	t.Run("grouped job", func(t *testing.T) {
+		phase := colony.Phase{ID: 1, Tasks: []colony.Task{
+			{ID: strPtr("1"), Goal: "Add the shared template"},
+			{ID: strPtr("2"), Goal: "Wire the shared template into the form"},
+		}}
+		dispatch := codexBuildDispatch{
+			Caste:          "builder",
+			Name:           "Mason-12",
+			TaskID:         "1",
+			CoveredTaskIDs: []string{"1", "2"},
+			JobName:        "automatic-1",
+			JobSource:      coherentJobSourceAutomatic,
+			JobReason:      "tasks 1 and 2 modify the same templates, so one builder avoids repeated setup and write conflicts",
+		}
+
+		result, visual := renderBuildFastPathSummary(phase, dispatch, fastPathDecision)
+
+		if worker, _ := result["worker"].(string); !strings.Contains(worker, "Mason-12") {
+			t.Fatalf("result worker %q must name the deterministic worker", worker)
+		}
+		coveredIDs, _ := result["covered_task_ids"].([]string)
+		if len(coveredIDs) != 2 || coveredIDs[0] != "1" || coveredIDs[1] != "2" {
+			t.Fatalf("covered_task_ids = %v, want [1 2]", coveredIDs)
+		}
+		if got, _ := result["relationship"].(string); got != "tasks 1 and 2 modify the same templates" {
+			t.Fatalf("relationship = %q", got)
+		}
+		if got, _ := result["benefit"].(string); got != "one builder avoids repeated setup and write conflicts" {
+			t.Fatalf("benefit = %q", got)
+		}
+		if why, _ := result["why_no_approval"].(string); !strings.Contains(why, "no owner decision is pending") {
+			t.Fatalf("why_no_approval = %q", why)
+		}
+		if !strings.Contains(visual, "Mason-12") {
+			t.Fatalf("visual missing worker name:\n%s", visual)
+		}
+		for _, want := range []string{"1 (Add the shared template)", "2 (Wire the shared template into the form)"} {
+			if !strings.Contains(visual, want) {
+				t.Fatalf("visual missing covered task %q:\n%s", want, visual)
+			}
+		}
+	})
+
+	t.Run("single ungrouped task", func(t *testing.T) {
+		phase := colony.Phase{ID: 1, Tasks: []colony.Task{
+			{ID: strPtr("1"), Goal: "Fix the off-by-one error in the pager"},
+		}}
+		dispatch := codexBuildDispatch{
+			Caste:     "builder",
+			Name:      "Mason-1",
+			TaskID:    "1",
+			JobSource: coherentJobSourceSingle,
+			JobReason: "task 1 is not connected to another selected task by a safe automatic grouping edge, so one builder owns its implementation without crossing a caste boundary",
+		}
+
+		result, visual := renderBuildFastPathSummary(phase, dispatch, fastPathDecision)
+
+		if single, _ := result["single_task"].(bool); !single {
+			t.Fatalf("expected single_task=true")
+		}
+		if got, _ := result["relationship"].(string); got != "one worker owns this one task" {
+			t.Fatalf("relationship = %q, want the honest single-task reason, not the raw grouping-edge sentence", got)
+		}
+		if got, _ := result["benefit"].(string); got != "no grouping was needed" {
+			t.Fatalf("benefit = %q", got)
+		}
+		if !strings.Contains(visual, "no grouping was needed") {
+			t.Fatalf("visual must state no grouping was needed:\n%s", visual)
+		}
+		if strings.Contains(visual, "not connected to another selected task") {
+			t.Fatalf("visual leaked the internal grouping-edge sentence instead of the honest single-task reason:\n%s", visual)
+		}
+	})
+}
+
+// TestFastPathSummaryIsNonBlocking pins the other half of D-12: the compact
+// renderer never asks anything -- no question, no approval choice, no
+// resume signal, and no waiver option (that stays exclusive to the full
+// card, Requested=true).
+func TestFastPathSummaryIsNonBlocking(t *testing.T) {
+	phase := colony.Phase{ID: 1, Tasks: []colony.Task{{ID: strPtr("1"), Goal: "Fix the pager"}}}
+	dispatch := codexBuildDispatch{Caste: "builder", Name: "Mason-1", TaskID: "1", JobSource: coherentJobSourceSingle}
+	decision := buildCheckinDecision{
+		Requested: false,
+		Reason:    buildCheckinReasonOneWorkerFastPath,
+		Why:       "no owner decision is pending, so dispatch continues",
+	}
+
+	result, visual := renderBuildFastPathSummary(phase, dispatch, decision)
+
+	for _, forbidden := range []string{"Approve", "Adjust", "Waive", "Proceed with this team", "Trim optional workers", "Decline a required reviewer"} {
+		if strings.Contains(visual, forbidden) {
+			t.Fatalf("fast-path summary must never contain an approval prompt or choice (%q found):\n%s", forbidden, visual)
+		}
+	}
+	if _, ok := result["waive_commands"]; ok {
+		t.Fatalf("fast-path result must never carry a waive_commands field, it never offers one")
+	}
+	if reason, _ := result["checkin_reason"].(string); reason != string(buildCheckinReasonOneWorkerFastPath) {
+		t.Fatalf("checkin_reason = %q", reason)
+	}
+}
+
+// TestCheckinFlagConflictHasNoSideEffects pins D-14's fail-closed flag
+// handling: --checkin combined with --no-checkin is refused before
+// plan-only ever opens an attempt, writes a manifest, writes a checkpoint,
+// or touches colony state.
+func TestCheckinFlagConflictHasNoSideEffects(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+
+	phase := checkinFixturePhase("Fix the pager", "Fix the off-by-one error in the pager", colony.PhaseModePrototype)
+	setUpCheckinFixtureColony(t, dataDir, phase)
+
+	before, err := loadActiveColonyState()
+	if err != nil {
+		t.Fatalf("loadActiveColonyState before: %v", err)
+	}
+	_, _, hadAttemptBefore := loadLatestBuildAttempt(1)
+	manifestPath := filepath.Join(dataDir, "build", "phase-1", "manifest.json")
+	checkpointPath := filepath.Join(dataDir, "checkpoints", "pre-build-phase-1.json")
+	beforeSnapshot := snapshotDataDirForTest(t, dataDir)
+
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--checkin", "--no-checkin"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned an unexpected Go error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	env := parseEnvelope(t, stderr.(*bytes.Buffer).String())
+	if env["ok"] != false {
+		t.Fatalf("expected an error envelope, got %#v", env)
+	}
+	errText := stringValue(env["error"])
+	if !strings.Contains(errText, "--checkin") || !strings.Contains(errText, "--no-checkin") {
+		t.Fatalf("conflict error must name both flags, got %q", errText)
+	}
+
+	after, err := loadActiveColonyState()
+	if err != nil {
+		t.Fatalf("loadActiveColonyState after: %v", err)
+	}
+	beforeJSON, _ := json.Marshal(before)
+	afterJSON, _ := json.Marshal(after)
+	if string(beforeJSON) != string(afterJSON) {
+		t.Fatalf("flag conflict mutated colony state:\nbefore: %s\nafter:  %s", beforeJSON, afterJSON)
+	}
+
+	_, _, hasAttemptAfter := loadLatestBuildAttempt(1)
+	if hadAttemptBefore || hasAttemptAfter {
+		t.Fatalf("flag conflict must never create a build attempt; before=%v after=%v", hadAttemptBefore, hasAttemptAfter)
+	}
+	if _, statErr := os.Stat(manifestPath); !os.IsNotExist(statErr) {
+		t.Fatalf("flag conflict must never write a manifest file, stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(checkpointPath); !os.IsNotExist(statErr) {
+		t.Fatalf("flag conflict must never write a checkpoint file, stat err = %v", statErr)
+	}
+
+	afterSnapshot := snapshotDataDirForTest(t, dataDir)
+	if len(beforeSnapshot) != len(afterSnapshot) {
+		t.Fatalf("flag conflict changed the number of files under the data directory: before=%d after=%d", len(beforeSnapshot), len(afterSnapshot))
+	}
+	for path, beforeContent := range beforeSnapshot {
+		afterContent, ok := afterSnapshot[path]
+		if !ok {
+			t.Fatalf("flag conflict deleted %s from the data directory", path)
+		}
+		if beforeContent != afterContent {
+			t.Fatalf("flag conflict changed the contents of %s", path)
+		}
+	}
+	for path := range afterSnapshot {
+		if _, ok := beforeSnapshot[path]; !ok {
+			t.Fatalf("flag conflict created a new file %s under the data directory", path)
+		}
+	}
+}
+
+// snapshotDataDirForTest walks dataDir and returns every regular file's
+// repository-relative path mapped to its full byte content, so a caller can
+// assert the ENTIRE data directory is byte-equivalent before and after an
+// operation that must have zero side effects -- not just the handful of
+// paths the test happens to already know about.
+func snapshotDataDirForTest(t *testing.T, dataDir string) map[string]string {
+	t.Helper()
+	snapshot := map[string]string{}
+	err := filepath.Walk(dataDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(dataDir, path)
+		if relErr != nil {
+			return relErr
+		}
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		snapshot[rel] = string(content)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshot data directory: %v", err)
+	}
+	return snapshot
 }
 
 // TestTeamCheckinDoesNotMutate is re-run in this plan's own acceptance
