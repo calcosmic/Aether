@@ -182,6 +182,18 @@ var buildFinalizeCmd = &cobra.Command{
 			}
 			return err
 		}
+		// NEW-03 (195-REVIEW.iter2.md): the same screen the direct lane
+		// already shows. WR-05's fix landed only on `aether build`, so the
+		// wrapper's own lane -- plan, spawn, then build-finalize, the one the
+		// project's guide documents as primary -- still told the owner a
+		// half-built phase was ready to be checked and never showed the
+		// command that finishes the rest.
+		if partial, _ := result["recovery_job"].(bool); partial {
+			unfinished, _ := result["unfinished_task_ids"].([]string)
+			recoveryCommand, _ := result["recovery_command"].(string)
+			outputWorkflow(result, renderBuildPartialCreditVisual(state, phase, unfinished, recoveryCommand))
+			return nil
+		}
 		outputWorkflow(result, renderBuildFinalizeVisual(state, phase, dispatches))
 		return nil
 	},
