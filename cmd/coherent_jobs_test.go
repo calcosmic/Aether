@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -57,6 +58,26 @@ func coherentJobTaskIDs(plan *coherentJobPlan) map[string]int {
 		}
 	}
 	return covered
+}
+
+func coherentJobContainingTask(t *testing.T, plan *coherentJobPlan, taskID string) coherentJob {
+	t.Helper()
+	for _, job := range plan.Jobs {
+		for _, candidateID := range job.TaskIDs {
+			if candidateID == taskID {
+				return job
+			}
+		}
+	}
+	t.Fatalf("task %q was not assigned to a coherent job: %#v", taskID, plan.Jobs)
+	return coherentJob{}
+}
+
+func coherentJobTestTaskWithGoal(id, caste, goal string, dependsOn ...string) (colony.Task, coherentJobTask) {
+	task, seed := coherentJobTestTask(id, caste, dependsOn...)
+	task.Goal = goal
+	seed.Task = task
+	return task, seed
 }
 
 func TestCoherentJobProposalAccepted(t *testing.T) {
@@ -274,4 +295,299 @@ func TestCoherentJobGraphErrorsHaveNoPlan(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCoherentJobsGroupMeaningfulPathsAndDependencies(t *testing.T) {
+	t.Run("exact meaningful path groups same-caste tasks", func(t *testing.T) {
+		taskA, seedA := coherentJobTestTask("runtime-a", "builder")
+		taskB, seedB := coherentJobTestTask("runtime-b", "builder")
+		seedA.DeclaredPaths = []string{"cmd/runtime.go"}
+		seedB.DeclaredPaths = []string{"cmd/runtime.go"}
+
+		plan, err := planCoherentJobs(
+			coherentJobTestPhase(195, taskA, taskB),
+			[]coherentJobTask{seedA, seedB},
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("meaningful-path grouping returned error: %v", err)
+		}
+		if len(plan.Jobs) != 1 {
+			t.Fatalf("same-caste tasks sharing an exact source path planned as %d jobs, want 1: %#v", len(plan.Jobs), plan.Jobs)
+		}
+		job := plan.Jobs[0]
+		if job.Source != coherentJobSourceAutomatic || job.OwnerCaste != "builder" {
+			t.Fatalf("meaningful-path component lost its automatic source or owner: %#v", job)
+		}
+		if got, want := strings.Join(job.TaskIDs, ","), "runtime-a,runtime-b"; got != want {
+			t.Fatalf("meaningful-path component order = %q, want %q", got, want)
+		}
+		for _, required := range []string{"cmd/runtime.go", "preserves", "avoids"} {
+			if !strings.Contains(job.JobReason, required) {
+				t.Fatalf("automatic job reason %q does not explain %q", job.JobReason, required)
+			}
+		}
+	})
+
+	t.Run("non-consecutive dependencies form one topological component", func(t *testing.T) {
+		// Deliberately put dependent tasks before their prerequisites in plan
+		// order. The component must use dependency order, with plan order only
+		// as the tie-breaker between simultaneously runnable tasks.
+		taskC, seedC := coherentJobTestTask("dep-c", "builder", "dep-b")
+		other, otherSeed := coherentJobTestTask("unrelated", "scout")
+		taskB, seedB := coherentJobTestTask("dep-b", "builder", "dep-a")
+		taskA, seedA := coherentJobTestTask("dep-a", "builder")
+
+		plan, err := planCoherentJobs(
+			coherentJobTestPhase(195, taskC, other, taskB, taskA),
+			[]coherentJobTask{seedC, otherSeed, seedB, seedA},
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("dependency grouping returned error: %v", err)
+		}
+		job := coherentJobContainingTask(t, plan, "dep-a")
+		if got, want := strings.Join(job.TaskIDs, ","), "dep-a,dep-b,dep-c"; got != want {
+			t.Fatalf("dependency component order = %q, want %q", got, want)
+		}
+		if !strings.Contains(job.JobReason, "declared dependenc") {
+			t.Fatalf("dependency job reason does not name its relationship: %q", job.JobReason)
+		}
+		if otherJob := coherentJobContainingTask(t, plan, "unrelated"); len(otherJob.TaskIDs) != 1 {
+			t.Fatalf("unrelated task was pulled into dependency component: %#v", otherJob)
+		}
+	})
+}
+
+func TestCoherentJobsIgnoreIncidentalPaths(t *testing.T) {
+	incidentalPaths := []string{
+		"README.md",
+		"docs/CHANGELOG.md",
+		"docs/release-notes.md",
+		"go.mod",
+		"go.sum",
+		"package.json",
+		"package-lock.json",
+		"yarn.lock",
+		"pnpm-lock.yaml",
+		"pyproject.toml",
+		"requirements-dev.txt",
+		"poetry.lock",
+		"Pipfile.lock",
+		"uv.lock",
+		"Cargo.toml",
+		"Cargo.lock",
+		"Gemfile",
+		"Gemfile.lock",
+	}
+	for _, declaredPath := range incidentalPaths {
+		declaredPath := declaredPath
+		t.Run(strings.ReplaceAll(declaredPath, "/", "_"), func(t *testing.T) {
+			if !isIncidentalGroupingPath(declaredPath) {
+				t.Fatalf("%q must be classified as incidental grouping input", declaredPath)
+			}
+			taskA, seedA := coherentJobTestTask("incidental-a", "builder")
+			taskB, seedB := coherentJobTestTask("incidental-b", "builder")
+			seedA.DeclaredPaths = []string{declaredPath}
+			seedB.DeclaredPaths = []string{declaredPath}
+			plan, err := planCoherentJobs(
+				coherentJobTestPhase(195, taskA, taskB),
+				[]coherentJobTask{seedA, seedB},
+				nil,
+			)
+			if err != nil {
+				t.Fatalf("incidental-path fixture returned error: %v", err)
+			}
+			if len(plan.Jobs) != 2 {
+				t.Fatalf("shared incidental path %q collapsed unrelated tasks into %#v", declaredPath, plan.Jobs)
+			}
+		})
+	}
+
+	if isIncidentalGroupingPath("cmd/coherent_jobs.go") {
+		t.Fatal("a source file was classified as incidental")
+	}
+}
+
+func TestCoherentJobsRespectCasteBoundaries(t *testing.T) {
+	t.Run("shared path and dependency do not cross castes", func(t *testing.T) {
+		taskA, seedA := coherentJobTestTask("build-runtime", "builder")
+		taskB, seedB := coherentJobTestTask("inspect-runtime", "scout", "build-runtime")
+		seedA.DeclaredPaths = []string{"cmd/runtime.go"}
+		seedB.DeclaredPaths = []string{"cmd/runtime.go"}
+
+		plan, err := planCoherentJobs(
+			coherentJobTestPhase(195, taskA, taskB),
+			[]coherentJobTask{seedA, seedB},
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("cross-caste automatic fixture returned error: %v", err)
+		}
+		if len(plan.Jobs) != 2 {
+			t.Fatalf("automatic grouping crossed caste boundary: %#v", plan.Jobs)
+		}
+		buildJob := coherentJobContainingTask(t, plan, "build-runtime")
+		inspectJob := coherentJobContainingTask(t, plan, "inspect-runtime")
+		if buildJob.OwnerCaste != "builder" || inspectJob.OwnerCaste != "scout" {
+			t.Fatalf("automatic jobs changed task owners: %#v", plan.Jobs)
+		}
+		if got, want := strings.Join(inspectJob.DependsOn, ","), buildJob.Name; got != want {
+			t.Fatalf("cross-caste dependency edge = %q, want %q", got, want)
+		}
+		if buildJob.Wave != 1 || inspectJob.Wave != 2 {
+			t.Fatalf("cross-caste waves = %d -> %d, want 1 -> 2", buildJob.Wave, inspectJob.Wave)
+		}
+	})
+
+	t.Run("meaningful path cannot contract around an external dependency", func(t *testing.T) {
+		taskA, seedA := coherentJobTestTask("boundary-a", "builder")
+		taskB, seedB := coherentJobTestTask("boundary-b", "scout", "boundary-a")
+		taskC, seedC := coherentJobTestTask("boundary-c", "builder", "boundary-b")
+		seedA.DeclaredPaths = []string{"cmd/shared.go"}
+		seedC.DeclaredPaths = []string{"cmd/shared.go"}
+
+		plan, err := planCoherentJobs(
+			coherentJobTestPhase(195, taskA, taskB, taskC),
+			[]coherentJobTask{seedA, seedB, seedC},
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("dependency-safe boundary fixture returned error: %v", err)
+		}
+		if len(plan.Jobs) != 3 {
+			t.Fatalf("shared-path contraction created an unsafe component: %#v", plan.Jobs)
+		}
+		if got := len(plan.Waves); got != 3 {
+			t.Fatalf("dependency-safe boundary produced %d waves, want 3: %#v", got, plan.Waves)
+		}
+	})
+}
+
+func TestCoherentJobsUseBriefAllowanceNotTaskCount(t *testing.T) {
+	t.Run("many small tasks stay together below the content allowance", func(t *testing.T) {
+		const taskCount = 64
+		tasks := make([]colony.Task, 0, taskCount)
+		seeds := make([]coherentJobTask, 0, taskCount)
+		for i := 0; i < taskCount; i++ {
+			id := fmt.Sprintf("small-%02d", i+1)
+			task, seed := coherentJobTestTaskWithGoal(id, "builder", "Apply one tiny field change")
+			seed.DeclaredPaths = []string{"cmd/small_shared.go"}
+			tasks = append(tasks, task)
+			seeds = append(seeds, seed)
+		}
+
+		plan, err := planCoherentJobs(coherentJobTestPhase(195, tasks...), seeds, nil)
+		if err != nil {
+			t.Fatalf("many-small-task fixture returned error: %v", err)
+		}
+		if len(plan.Jobs) != 1 || len(plan.Jobs[0].TaskIDs) != taskCount {
+			t.Fatalf("task-count heuristic split a brief-sized component: jobs=%d first=%#v", len(plan.Jobs), plan.Jobs[0])
+		}
+		if got := projectCoherentJobBriefChars(plan.Jobs[0].Tasks); got >= briefTaskContentAllowanceChars {
+			t.Fatalf("fixture no longer proves a below-allowance component: %d >= %d", got, briefTaskContentAllowanceChars)
+		}
+	})
+
+	t.Run("large automatic component splits at the content allowance", func(t *testing.T) {
+		taskA, seedA := coherentJobTestTaskWithGoal("large-a", "builder", strings.Repeat("a", 3500))
+		taskB, seedB := coherentJobTestTaskWithGoal("large-b", "builder", strings.Repeat("b", 3500), "large-a")
+		seedA.DeclaredPaths = []string{"cmd/large_shared.go"}
+		seedB.DeclaredPaths = []string{"cmd/large_shared.go"}
+
+		plan, err := planCoherentJobs(
+			coherentJobTestPhase(195, taskA, taskB),
+			[]coherentJobTask{seedA, seedB},
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("large automatic fixture returned error: %v", err)
+		}
+		if len(plan.Jobs) != 2 {
+			t.Fatalf("over-allowance automatic component planned as %d jobs, want 2: %#v", len(plan.Jobs), plan.Jobs)
+		}
+		first := coherentJobContainingTask(t, plan, "large-a")
+		second := coherentJobContainingTask(t, plan, "large-b")
+		if got, want := strings.Join(second.DependsOn, ","), first.Name; got != want {
+			t.Fatalf("brief split lost dependency order: %q, want %q", got, want)
+		}
+	})
+
+	t.Run("one oversized task stays one job", func(t *testing.T) {
+		task, seed := coherentJobTestTaskWithGoal("oversized-single", "builder", strings.Repeat("x", briefTaskContentAllowanceChars+1))
+		plan, err := planCoherentJobs(coherentJobTestPhase(195, task), []coherentJobTask{seed}, nil)
+		if err != nil {
+			t.Fatalf("oversized single task returned error: %v", err)
+		}
+		if len(plan.Jobs) != 1 {
+			t.Fatalf("oversized single task was dropped or fragmented: %#v", plan.Jobs)
+		}
+		if got := strings.Join(plan.Jobs[0].TaskIDs, ","); got != "oversized-single" {
+			t.Fatalf("oversized single task was dropped or fragmented: %#v", plan.Jobs)
+		}
+	})
+
+	t.Run("Queen proposal is not rewritten by the soft limit", func(t *testing.T) {
+		taskA, seedA := coherentJobTestTaskWithGoal("queen-large-a", "builder", strings.Repeat("a", 3500))
+		taskB, seedB := coherentJobTestTaskWithGoal("queen-large-b", "builder", strings.Repeat("b", 3500), "queen-large-a")
+		plan, err := planCoherentJobs(
+			coherentJobTestPhase(195, taskA, taskB),
+			[]coherentJobTask{seedA, seedB},
+			[]coherentJobProposal{{
+				Name:         "queen-large-job",
+				TaskIDs:      []string{"queen-large-a", "queen-large-b"},
+				OwnerCaste:   "builder",
+				Relationship: "the tasks implement one deliberately large contract",
+				Benefit:      "the Queen prefers one owner despite the soft brief limit",
+			}},
+		)
+		if err != nil {
+			t.Fatalf("large Queen proposal returned error: %v", err)
+		}
+		job := coherentJobByName(t, plan, "queen-large-job")
+		if job.Source != coherentJobSourceQueen || len(job.TaskIDs) != 2 {
+			t.Fatalf("soft limit rewrote an accepted Queen proposal: %#v", job)
+		}
+	})
+}
+
+func TestCalVaultSixBatchesPlanAsOneCoherentJob(t *testing.T) {
+	goals := []string{
+		"Copy CalVault file batch 1 and record its recovery-matrix entries",
+		"Copy CalVault file batch 2 and record its recovery-matrix entries",
+		"Copy CalVault file batch 3 and record its recovery-matrix entries",
+		"Copy CalVault file batch 4 and record its recovery-matrix entries",
+		"Copy CalVault file batch 5 and record its recovery-matrix entries",
+		"Copy CalVault file batch 6 and record its recovery-matrix entries",
+	}
+	tasks := make([]colony.Task, 0, len(goals))
+	seeds := make([]coherentJobTask, 0, len(goals))
+	wantIDs := make([]string, 0, len(goals))
+	for i, goal := range goals {
+		id := fmt.Sprintf("calvault-copy-batch-%d", i+1)
+		var dependencies []string
+		if i > 0 {
+			dependencies = []string{wantIDs[i-1]}
+		}
+		task, seed := coherentJobTestTaskWithGoal(id, "builder", goal, dependencies...)
+		seed.DeclaredPaths = []string{"docs/recovery-matrix.md"}
+		tasks = append(tasks, task)
+		seeds = append(seeds, seed)
+		wantIDs = append(wantIDs, id)
+	}
+
+	plan, err := planCoherentJobs(coherentJobTestPhase(195, tasks...), seeds, nil)
+	if err != nil {
+		t.Fatalf("CalVault six-batch fixture returned error: %v", err)
+	}
+	if len(plan.Jobs) != 1 {
+		t.Fatalf("six literal CalVault batches planned as %d jobs, want 1: %#v", len(plan.Jobs), plan.Jobs)
+	}
+	job := plan.Jobs[0]
+	if job.Source != coherentJobSourceAutomatic || job.OwnerCaste != "builder" {
+		t.Fatalf("CalVault component lost automatic Builder ownership: %#v", job)
+	}
+	if got, want := strings.Join(job.TaskIDs, ","), strings.Join(wantIDs, ","); got != want {
+		t.Fatalf("CalVault batch order = %q, want %q", got, want)
+	}
 }
