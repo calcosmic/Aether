@@ -201,6 +201,25 @@ type latestBuildAttemptPointer struct {
 }
 
 func beginBuildAttempt(state colony.ColonyState, phaseNum int, phase colony.Phase, startedAt time.Time, selectedTaskIDs []string, checkpointRel, manifestRel, claimsRel, executionOwner string, dispatches []codexBuildDispatch) (string, error) {
+	return beginBuildAttemptRecord(state, phaseNum, phase, startedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, executionOwner, dispatches, true)
+}
+
+// beginBuildAttemptRecord is beginBuildAttempt's implementation, plus the one
+// switch beginChildBuildAttempt needs: whether this new record becomes the
+// phase's "latest attempt" (WR-03, 195-REVIEW.md).
+//
+// Every attempt that actually dispatches workers must become the latest one --
+// that pointer is how the runtime finds the in-flight attempt. A D-10 recovery
+// record is the opposite: it describes work still to do and never dispatches
+// anything itself. Pointing "latest" at it left the phase looking like it had
+// an ACTIVE attempt while the parent build's dispatch-start marker was still
+// set, so the very next `aether build <N> --plan-only` -- the interactive
+// wrapper's only build path -- refused the owner's own recovery command with
+// "already has workers in flight", naming an attempt that had no completion
+// packet to finalize. The recovery record stays fully discoverable through the
+// phase's attempt journal (findExistingBuildAttemptRetry), which is the only
+// reader it ever had.
+func beginBuildAttemptRecord(state colony.ColonyState, phaseNum int, phase colony.Phase, startedAt time.Time, selectedTaskIDs []string, checkpointRel, manifestRel, claimsRel, executionOwner string, dispatches []codexBuildDispatch, makeLatest bool) (string, error) {
 	if store == nil {
 		return "", fmt.Errorf("no store initialized")
 	}
@@ -250,14 +269,16 @@ func beginBuildAttempt(state colony.ColonyState, phaseNum int, phase colony.Phas
 	if err := store.SaveJSON(attemptRel, record); err != nil {
 		return "", fmt.Errorf("save build attempt: %w", err)
 	}
-	pointerRel := latestBuildAttemptPointerPath(phaseNum)
-	if err := store.SaveJSON(pointerRel, latestBuildAttemptPointer{
-		SchemaVersion: buildAttemptSchemaVersion,
-		AttemptID:     attemptID,
-		Path:          displayDataPath(attemptRel),
-		UpdatedAt:     now,
-	}); err != nil {
-		return "", fmt.Errorf("save latest build attempt pointer: %w", err)
+	if makeLatest {
+		pointerRel := latestBuildAttemptPointerPath(phaseNum)
+		if err := store.SaveJSON(pointerRel, latestBuildAttemptPointer{
+			SchemaVersion: buildAttemptSchemaVersion,
+			AttemptID:     attemptID,
+			Path:          displayDataPath(attemptRel),
+			UpdatedAt:     now,
+		}); err != nil {
+			return "", fmt.Errorf("save latest build attempt pointer: %w", err)
+		}
 	}
 	return attemptRel, nil
 }
@@ -944,11 +965,16 @@ func attachBuildAttemptParentLink(attemptRel, parentAttemptID, parentJobName str
 // beginChildBuildAttempt creates a NEW append-only build attempt for a D-10
 // unfinished-only retry job, linked to -- but never mutating -- the parent
 // attempt that produced the partial credit that triggered it. It reuses
-// beginBuildAttempt's own SaveJSON/latest-pointer path completely unchanged,
-// then attaches parent provenance onto the brand-new record only. The parent
-// attempt's own file is never opened by this function.
+// beginBuildAttempt's own record-writing path, then attaches parent provenance
+// onto the brand-new record only. The parent attempt's own file is never
+// opened by this function.
+//
+// It deliberately does NOT move the phase's latest-attempt pointer (WR-03):
+// a recovery record dispatches nothing, so treating it as the phase's live
+// attempt blocked the very plan-only call the owner's recovery command makes.
+// See beginBuildAttemptRecord's doc comment.
 func beginChildBuildAttempt(state colony.ColonyState, phaseNum int, phase colony.Phase, startedAt time.Time, parentAttemptID, parentJobName string, retryTaskIDs []string, checkpointRel, manifestRel, claimsRel, executionOwner string, dispatches []codexBuildDispatch) (string, error) {
-	attemptRel, err := beginBuildAttempt(state, phaseNum, phase, startedAt, retryTaskIDs, checkpointRel, manifestRel, claimsRel, executionOwner, dispatches)
+	attemptRel, err := beginBuildAttemptRecord(state, phaseNum, phase, startedAt, retryTaskIDs, checkpointRel, manifestRel, claimsRel, executionOwner, dispatches, false)
 	if err != nil {
 		return "", err
 	}
