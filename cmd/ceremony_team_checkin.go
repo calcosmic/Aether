@@ -549,11 +549,18 @@ func renderBuildFastPathSummary(phase colony.Phase, dispatch codexBuildDispatch,
 		b.WriteString(".\n")
 	}
 	b.WriteString("  ")
-	b.WriteString(strings.ToUpper(whyNoApproval[:1]))
-	b.WriteString(whyNoApproval[1:])
+	b.WriteString(sentenceCase(whyNoApproval))
 	b.WriteString(" -- no approval is needed.\n")
 
 	return result, b.String()
+}
+
+// sentenceCase upper-cases the first character of an owner-facing sentence.
+func sentenceCase(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 var ceremonyTeamCheckinCmd = &cobra.Command{
