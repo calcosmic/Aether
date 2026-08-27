@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
+current_phase: 195
+current_phase_name: coherent-jobs
 status: executing
-stopped_at: Completed 195-05-PLAN.md
-last_updated: "2026-08-27T05:58:59.148Z"
+stopped_at: Completed 195-06-PLAN.md
+last_updated: "2026-08-27T06:47:26.517Z"
 last_activity: 2026-08-27
+state_head: 94ffb01c5aed8f4308f83b55e475dfc0f7fd0b9c
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 1
   total_plans: 24
-  completed_plans: 19
-  percent: 29
+  completed_plans: 20
+  percent: 14
 ---
 
 # Project State
@@ -28,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 ## Current Position
 
-**Progress:** [████████░░] 79%
+**Progress:** [█░░░░░░░░░] 14%
 
 Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 Status: Ready to execute
 Last activity: 2026-08-27
 
@@ -68,6 +71,7 @@ Last activity: 2026-08-27
 | Phase 195 P03 | 95min | 2 tasks | 9 files |
 | Phase 195 P04 | 25min | 2 tasks | 8 files |
 | Phase 195 P05 | 50min | 2 tasks | 5 files |
+| Phase 195 P06 | 100min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -123,6 +127,9 @@ Last activity: 2026-08-27
 - [Phase 195]: Native/in-repo lane (executeCodexBuildDispatches) resolves receipts through both stages immediately after a worker's terminal result is known, since in-repo files already live in root; the external/wrapper lane's crediting wiring is deferred to plan 195-06, which reuses the same two functions unchanged.
 - [Phase ?]: [Phase 195] decideBuildCheckin implements D-11..D-14 as a pure policy; buildHasPendingOwnerDecision reads three live sources (forced-reviewer waiver, orchestrator boundary question, worker handoff open decision) -- never dispatch count alone.
 - [Phase ?]: [Phase 195] 195-05 Tasks 1 and 2 landed in one commit (9ca561c0) -- both edit the same buildCheckinDecisionInput/buildCheckinDecision types and the same plan-only branch, could not be cleanly split by git hunk (same precedent as 193-04).
+- [Phase 195]: External build-finalize reuses the native lane's shared receipt admission/finalization boundary unchanged -- no second, external-only validator was written.
+- [Phase 195]: BUILT-transition gating falls back to the union of every dispatch's own covered tasks when no explicit task selection is passed, so the ordinary no-filter build isn't misread as trivially fully-credited.
+- [Phase 195]: Provenance's phantom-build guard now accepts a failed worker carrying genuine, evidenced task receipts as real partial provenance; zero receipts still reject the whole packet, unchanged.
 
 ### Pending Todos
 
@@ -208,6 +215,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T05:58:59.134Z
-Stopped at: Completed 195-05-PLAN.md
+Last session: 2026-08-27T06:47:26.382Z
+Stopped at: Completed 195-06-PLAN.md
 Resume file: None

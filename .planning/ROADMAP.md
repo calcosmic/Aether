@@ -177,7 +177,7 @@ Plans:
 
 **Wave 4** *(blocked on native receipt semantics)*
 
-- [ ] 195-06-PLAN.md — External/wrapper receipt parity and exact partial finalization (wave 4)
+- [x] 195-06-PLAN.md — External/wrapper receipt parity and exact partial finalization (wave 4)
 
 **Wave 5** *(blocked on both completion lanes)*
 
