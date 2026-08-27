@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,6 +195,43 @@ func TestNativePartialCreditCommitsBeforeCreatingTheRecoveryRecord(t *testing.T)
 	for _, record := range listBuildAttemptsForPhase(1) {
 		if record.ParentAttemptID != "" {
 			t.Fatalf("recovery record %s was created for parent %s even though the credit it describes was never committed", record.ID, record.ParentAttemptID)
+		}
+	}
+}
+
+// TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen is the permanent
+// regression lock for the 195 review's fifth warning (WR-05).
+//
+// After a partially credited build the CLI fell back to the ordinary build
+// screen, which unconditionally says verification happens next, names the
+// following phase, and tells the owner to run the continue command. The
+// recovery command was never shown at all. A half-built phase read as a
+// finished one on the surface the owner actually looks at.
+func TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setUpNativePartialBuild(t, "Partial builds do not look finished")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	out := stdout.(*bytes.Buffer).String()
+	for _, claim := range []string{
+		"Verification happens during",
+		"follows after continue",
+		"after the work is implemented",
+	} {
+		if strings.Contains(out, claim) {
+			t.Errorf("a partially built phase still shows the ordinary finished-build line %q:\n%s", claim, out)
+		}
+	}
+	for _, want := range []string{"1.5", "1.6", "--task 1.5"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the partial-build screen never mentions %q, so the owner is not told what is left or how to finish it:\n%s", want, out)
 		}
 	}
 }
