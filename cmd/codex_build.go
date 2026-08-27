@@ -2477,6 +2477,17 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 		if len(dispatch.CoveredTaskIDs) > 0 {
 			entry["covered_task_ids"] = append([]string{}, dispatch.CoveredTaskIDs...)
 		}
+		// CR-03 (195-REVIEW.md): this map is runtime-AUTHORED output, written
+		// after the receipt boundary has already decided the verdict, and is
+		// never decoded back into a dispatch -- so reporting the credited task
+		// list here is safe in a way carrying it on the dispatch struct's own
+		// wire format was not. Three build wrapper copies, the command guide
+		// and the build-cycle skill all tell the wrapper to read this field to
+		// learn what the runtime actually credited; without it those five
+		// surfaces describe a field the wrapper never receives.
+		if len(dispatch.CompletedTaskIDs) > 0 {
+			entry["completed_task_ids"] = append([]string{}, dispatch.CompletedTaskIDs...)
+		}
 		if dispatch.JobName != "" {
 			entry["job_name"] = dispatch.JobName
 		}
