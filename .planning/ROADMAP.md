@@ -211,7 +211,28 @@ Plans:
 4. The pre-build team card names each worker's AI model and the reason for that choice; routine roles (the documentation writer, the knowledge-keeper, the accessibility checker) no longer silently default ("inherit") to whatever model was last used, and any worker kept on the expensive model has a written reason (`TestRoutineBuilderIsSonnetNeverInherit`, `TestOpusRequiresRecordedReason`).
 5. Three abandoned branches of half-finished cost-tracking work sitting in the codebase are each reviewed and either merged in (with a written reason) or deleted (with a written reason) — none left dangling.
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+**Wave 1** *(independent foundations — no shared files)*
+
+- [ ] 196-01-PLAN.md — Salvage the spend ledger with its four assessed fixes: no currency relay, job attribution, independent aggregation invariant, one status vocabulary (wave 1)
+- [ ] 196-02-PLAN.md — One authoritative token type: give the chat-model client every billed column and lock both accounting paths to the same total (wave 1)
+- [ ] 196-03-PLAN.md — The Claude transcript reader, deduplicated by tool use identifier, proved by a real fixture that keeps its duplicates (wave 1)
+- [ ] 196-04-PLAN.md — Pin the routine roles to the cheaper model and show every expensive role's written reason on the team card (wave 1)
+
+**Wave 2** *(blocked on the ledger and the transcript reader)*
+
+- [ ] 196-05-PLAN.md — Salvage the OpenCode reader inside the plan that wires it: one resolver, and a build that writes its rows (wave 2)
+- [ ] 196-06-PLAN.md — `aether spend`: the read-only per-worker view, proved to mutate nothing and to invent nothing (wave 2)
+
+**Wave 3** *(blocked on rows being written and the token types reconciled)*
+
+- [ ] 196-07-PLAN.md — Continue-lane rows, then the one honest cost line ending every build and every continue (wave 3)
+
+**Wave 4** *(phase closeout)*
+
+- [ ] 196-08-PLAN.md — Prove the path is joined up end to end, then delete the three branches with their written reasons recorded (wave 4)
 
 ### Phase 197: One Answer to "What Next?"
 
