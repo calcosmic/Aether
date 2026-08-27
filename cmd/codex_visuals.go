@@ -1748,6 +1748,89 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	return b.String()
 }
 
+// renderBuildPartialCreditVisual is the screen a partially credited build
+// shows instead of the ordinary finished-build one (WR-05, 195-REVIEW.md).
+//
+// The ordinary screen unconditionally states that verification happens next,
+// names the following phase, and tells the owner to run the continue command --
+// all three untrue of a phase where some tasks are still unstarted. It also
+// never showed the recovery command at all, so a half-built phase read as a
+// finished one on the surface the owner actually looks at.
+//
+// Everything here is written for someone who has never opened a file: no task
+// IDs without the task's own words beside them, no repo vocabulary, and one
+// command to run next.
+func renderBuildPartialCreditVisual(state colony.ColonyState, phase colony.Phase, unfinishedTaskIDs []string, recoveryCommand string) string {
+	unfinished := make(map[string]struct{}, len(unfinishedTaskIDs))
+	for _, id := range unfinishedTaskIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			unfinished[id] = struct{}{}
+		}
+	}
+
+	var done, remaining []string
+	for idx := range phase.Tasks {
+		id := buildTaskID(phase.Tasks[idx], idx)
+		label := strings.TrimSpace(phase.Tasks[idx].Goal)
+		if label == "" {
+			label = id
+		} else {
+			label = fmt.Sprintf("%s (%s)", label, id)
+		}
+		if _, left := unfinished[id]; left {
+			remaining = append(remaining, label)
+			continue
+		}
+		if phase.Tasks[idx].Status == colony.TaskCompleted {
+			done = append(done, label)
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d — Partly Done", phase.ID)))
+	b.WriteString(visualDividerStr())
+	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
+	b.WriteString("\n")
+	b.WriteString("Phase: ")
+	b.WriteString(phase.Name)
+	b.WriteString("\n\n")
+	b.WriteString("Some of this phase is finished and saved. The rest was never started.\n")
+	b.WriteString("Nothing that was finished has been undone, and no finished work will be done twice.\n")
+
+	b.WriteString(renderStageMarker("Finished and kept"))
+	if len(done) == 0 {
+		b.WriteString("  (nothing)\n")
+	}
+	for _, label := range done {
+		b.WriteString("  [x] ")
+		b.WriteString(label)
+		b.WriteString("\n")
+	}
+
+	b.WriteString(renderStageMarker("Still to do"))
+	if len(remaining) == 0 {
+		b.WriteString("  (nothing)\n")
+	}
+	for _, label := range remaining {
+		b.WriteString("  [ ] ")
+		b.WriteString(label)
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString("This phase is NOT ready to be checked yet. Finish the remaining work first.\n")
+	recoveryCommand = strings.TrimSpace(recoveryCommand)
+	if recoveryCommand == "" {
+		b.WriteString(renderNextUp("Rerun the build for this phase to pick up the remaining work."))
+	} else {
+		b.WriteString(renderNextUp(
+			"Run `"+recoveryCommand+"` — it starts only the work listed above as still to do.",
+			"Run `aether status` if you want to see where the phase stands first.",
+		))
+	}
+	return b.String()
+}
+
 func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
 	var policy codexQueenExecutionPolicy
 	if len(policyOpt) > 0 {

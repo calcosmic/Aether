@@ -272,6 +272,18 @@ var buildCmd = &cobra.Command{
 			return nil
 		}
 
+		// WR-05 (195-REVIEW.md): a partially credited build must never fall
+		// through to the ordinary finished-build screen, which states that
+		// verification happens next, names the following phase, and points at
+		// the continue command -- none of which is true when tasks are still
+		// unstarted -- while never showing the recovery command at all.
+		if partial, _ := result["recovery_job"].(bool); partial {
+			unfinished, _ := result["unfinished_task_ids"].([]string)
+			recoveryCommand, _ := result["recovery_command"].(string)
+			outputWorkflow(result, renderBuildPartialCreditVisual(state, state.Plan.Phases[phaseNum-1], unfinished, recoveryCommand))
+			return nil
+		}
+
 		dispatches := plannedBuildDispatches(state.Plan.Phases[phaseNum-1], state.ColonyDepth)
 		if manifestPath, ok := result["manifest"].(string); ok && strings.TrimSpace(manifestPath) != "" {
 			rel := strings.TrimPrefix(manifestPath, ".aether/data/")
