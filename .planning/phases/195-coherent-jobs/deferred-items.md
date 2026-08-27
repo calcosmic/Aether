@@ -87,3 +87,19 @@
 - **Observed:** `validateCompletionPacketSemantics` -> `validateAndNormalizeClaimPathToRoot` refuses any `files_modified` claim that does not resolve inside the repository root (`claim_path.escapes_root`). A wrapper-submitted completion whose proof still lives only inside a worktree is therefore rejected before the receipt boundary is ever reached.
 - **Why deferred:** That validator is a path-laundering guard. Widening it to admit paths that are not in the repository is a trust-boundary change, not a wiring change, and this plan explicitly declined to weaken a security check to make a test pass. In practice the external/wrapper lane never allocates worktrees today (only the native dispatch path does), so no shipped flow reaches this refusal.
 - **Follow-up:** If a wrapper lane ever gains worktree allocation, decide deliberately whether `validateAndNormalizeClaimPathToRoot` should accept a path that resolves inside a colony-tracked worktree under `.aether/worktrees/` (still inside root, still not arbitrary) — a scoped widening, with its own adversarial tests.
+
+## `TestAvailabilityProbeRetriesOnlyTimeouts` fails when the whole suite runs at once
+
+- **Found during:** Plan 195-10 Task 1, `go test ./... -count=1` (the phase-wide gate)
+- **Command:** `go list ./... | grep -v '/cmd$' | xargs go test -count=1`
+- **Observed:** `pkg/codex` failed on the `a transient stall is retried and succeeds` subtest with `a probe that stalled once and then answered was reported as a failure: timed out`. Re-running the single test (`ok 4.542s`) and the whole package alone (`ok 22.658s`) both pass. The failure only appears when every package is compiled and run concurrently.
+- **Why deferred:** Out of scope boundary — this plan modified `CLAUDE.md`, one todo file, and added `cmd/claudemd_coherent_jobs_test.go`. It touches nothing in `pkg/codex`. The fixture sets `AETHER_PROBE_TIMEOUT=2s` and its own comment concedes the wall-clock fragility: "the budget has to clear /bin/sh startup on a machine running the whole suite". Under full-suite load 2s is not enough for `/bin/sh` to reach `touch`, so the second attempt times out too.
+- **Follow-up:** Same root cause as the wall-clock literals already logged above from plan 195-08. Either raise this fixture's budget, or replace the sleep-based stall with a deterministic signal (a fifo or a marker the harness controls) so the test cannot depend on machine load.
+
+## The full and race gates exhausted the machine's disk
+
+- **Found during:** Plan 195-10 Task 1, `go test ./... -race -count=1`
+- **Command:** `go list ./... | grep -v '/cmd$' | xargs go test -race -count=1 -p 2`
+- **Observed:** Six `pkg/agent/curation` tests and four packages failed with `TempDir: mkdir ...: no space left on device` / `[build failed]`. `df -h /` reported 571Mi available on a 1.8Ti volume (100% used). No test asserted anything false; the race-instrumented build had nowhere to write.
+- **Why deferred:** Environmental, not a code defect. `go clean -cache` (7.2G of regenerable build cache) restored 7.8Gi free and the identical command then passed every package, as did `go test ./cmd -race -count=1` (`ok 826.019s`).
+- **Follow-up:** None for this repo. Noted so that a future `no space left on device` in a gate log is recognised as a disk condition rather than investigated as a regression.

@@ -193,7 +193,7 @@ Plans:
 
 **Wave 8** *(blocked on parity-critical contract synchronization)*
 
-- [ ] 195-10-PLAN.md — Update owner docs, close the folded todo, and run all phase-wide gates (wave 8)
+- [x] 195-10-PLAN.md — Update owner docs, close the folded todo, and run all phase-wide gates (wave 8)
 
 ### Phase 196: See What It Cost
 
