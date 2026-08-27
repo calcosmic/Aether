@@ -301,8 +301,11 @@ func TestCoherentJobsGroupMeaningfulPathsAndDependencies(t *testing.T) {
 	t.Run("exact meaningful path groups same-caste tasks", func(t *testing.T) {
 		taskA, seedA := coherentJobTestTask("runtime-a", "builder")
 		taskB, seedB := coherentJobTestTask("runtime-b", "builder")
-		seedA.DeclaredPaths = []string{"cmd/runtime.go"}
-		seedB.DeclaredPaths = []string{"cmd/runtime.go"}
+		taskA.Hints = []string{"cmd/runtime.go"}
+		taskB.EvidenceRequirements = []colony.CriterionEvidenceRequirement{{
+			Criterion: "runtime behavior is implemented",
+			Artifacts: []string{"cmd/runtime.go"},
+		}}
 
 		plan, err := planCoherentJobs(
 			coherentJobTestPhase(195, taskA, taskB),
@@ -361,18 +364,24 @@ func TestCoherentJobsGroupMeaningfulPathsAndDependencies(t *testing.T) {
 
 func TestCoherentJobsIgnoreIncidentalPaths(t *testing.T) {
 	incidentalPaths := []string{
+		"README",
 		"README.md",
+		"docs/readme.rst",
 		"docs/CHANGELOG.md",
+		"docs/HISTORY.md",
 		"docs/release-notes.md",
+		"docs/RELEASE_NOTES.md",
 		"go.mod",
 		"go.sum",
 		"package.json",
 		"package-lock.json",
+		"npm-shrinkwrap.json",
 		"yarn.lock",
 		"pnpm-lock.yaml",
 		"pyproject.toml",
 		"requirements-dev.txt",
 		"poetry.lock",
+		"Pipfile",
 		"Pipfile.lock",
 		"uv.lock",
 		"Cargo.toml",
@@ -465,6 +474,25 @@ func TestCoherentJobsRespectCasteBoundaries(t *testing.T) {
 }
 
 func TestCoherentJobsUseBriefAllowanceNotTaskCount(t *testing.T) {
+	t.Run("projection includes every task-owned brief text class", func(t *testing.T) {
+		task, seed := coherentJobTestTaskWithGoal("projected", "builder", "goal text", "dependency")
+		task.Constraints = []string{"constraint text"}
+		task.Hints = []string{"hint text"}
+		task.SuccessCriteria = []string{"criterion text"}
+		task.EvidenceRequirements = []colony.CriterionEvidenceRequirement{{
+			Criterion: "evidence criterion",
+			Artifacts: []string{"cmd/projected.go"},
+			Checks:    []string{"go test ./cmd"},
+		}}
+		seed.Task = task
+		want := len(task.Goal) + len(task.DependsOn[0]) +
+			len(task.Constraints[0]) + len(task.Hints[0]) + len(task.SuccessCriteria[0]) +
+			len(task.EvidenceRequirements[0].Criterion) + len(task.EvidenceRequirements[0].Artifacts[0]) + len(task.EvidenceRequirements[0].Checks[0])
+		if got := projectCoherentJobBriefChars([]coherentJobTask{seed}); got != want {
+			t.Fatalf("brief projection = %d, want exact task-owned text sum %d", got, want)
+		}
+	})
+
 	t.Run("many small tasks stay together below the content allowance", func(t *testing.T) {
 		const taskCount = 64
 		tasks := make([]colony.Task, 0, taskCount)

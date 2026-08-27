@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -148,7 +149,11 @@ func planCoherentJobs(phase colony.Phase, seeds []coherentJobTask, proposals []c
 			remaining = append(remaining, seed)
 		}
 	}
-	plan.Jobs = append(plan.Jobs, planAutomaticCoherentJobs(remaining)...)
+	automaticJobs, err := planAutomaticCoherentJobs(remaining, phaseTasks, coherentJobNames(plan.Jobs))
+	if err != nil {
+		return nil, err
+	}
+	plan.Jobs = append(plan.Jobs, automaticJobs...)
 	sortCoherentJobsByPlanOrder(plan.Jobs)
 	if err := populateCoherentJobDAG(plan); err != nil {
 		return nil, err
@@ -380,24 +385,416 @@ func newCoherentJob(name string, tasks []coherentJobTask, owner, reason, source 
 	}
 }
 
-// planAutomaticCoherentJobs is deliberately conservative in Task 1: until the
-// meaningful-path and component rules land, each unclaimed task remains one
-// job. Task 2 replaces this body with dependency/path components while keeping
-// the proposal and graph contracts unchanged.
-func planAutomaticCoherentJobs(tasks []coherentJobTask) []coherentJob {
-	jobs := make([]coherentJob, 0, len(tasks))
-	for _, task := range tasks {
-		relationship := fmt.Sprintf("task %s is not part of an accepted grouped proposal", task.ID)
-		benefit := fmt.Sprintf("one %s owns its implementation without crossing a caste boundary", task.Caste)
-		jobs = append(jobs, newCoherentJob(
-			"single-"+task.ID,
-			[]coherentJobTask{task},
-			task.Caste,
-			structuredCoherentJobReason(relationship, benefit),
-			coherentJobSourceSingle,
-		))
+// planAutomaticCoherentJobs builds deterministic same-caste components from
+// declared dependencies and exact meaningful implementation paths. Every
+// tentative union is checked before contraction so an intervening external
+// job can never turn an acyclic task graph into a cyclic job graph.
+func planAutomaticCoherentJobs(
+	tasks []coherentJobTask,
+	phaseTasks map[string]colony.Task,
+	reservedNames map[string]bool,
+) ([]coherentJob, error) {
+	if len(tasks) == 0 {
+		return nil, nil
 	}
-	return jobs
+
+	components := newCoherentJobComponentSet(len(tasks))
+	indexByID := make(map[string]int, len(tasks))
+	for index, task := range tasks {
+		indexByID[task.ID] = index
+	}
+
+	// Dependency edges are considered before path edges. Both loops use plan
+	// order, which makes the result stable when several valid unions compete.
+	for left := 0; left < len(tasks); left++ {
+		for right := left + 1; right < len(tasks); right++ {
+			if tasks[left].Caste != tasks[right].Caste || !coherentJobTasksHaveDirectDependency(tasks[left], tasks[right], indexByID) {
+				continue
+			}
+			components.unionIfDependencySafe(left, right, tasks, phaseTasks)
+		}
+	}
+	for left := 0; left < len(tasks); left++ {
+		for right := left + 1; right < len(tasks); right++ {
+			if tasks[left].Caste != tasks[right].Caste || len(sharedMeaningfulCoherentJobPaths(tasks[left], tasks[right])) == 0 {
+				continue
+			}
+			components.unionIfDependencySafe(left, right, tasks, phaseTasks)
+		}
+	}
+
+	grouped := make(map[int][]coherentJobTask)
+	for index, task := range tasks {
+		root := components.find(index)
+		grouped[root] = append(grouped[root], task)
+	}
+	componentTasks := make([][]coherentJobTask, 0, len(grouped))
+	for _, members := range grouped {
+		componentTasks = append(componentTasks, members)
+	}
+	sort.SliceStable(componentTasks, func(i, j int) bool {
+		return earliestCoherentJobTaskIndex(componentTasks[i]) < earliestCoherentJobTaskIndex(componentTasks[j])
+	})
+
+	jobs := make([]coherentJob, 0, len(tasks))
+	for _, members := range componentTasks {
+		ordered, err := topologicallyOrderCoherentJobTasks(members)
+		if err != nil {
+			return nil, err
+		}
+		if len(ordered) == 1 {
+			task := ordered[0]
+			relationship := fmt.Sprintf("task %s is not connected to another selected task by a safe automatic grouping edge", task.ID)
+			benefit := fmt.Sprintf("one %s owns its implementation without crossing a caste boundary", task.Caste)
+			name := reserveCoherentJobName("single-"+task.ID, reservedNames)
+			jobs = append(jobs, newCoherentJob(
+				name,
+				ordered,
+				task.Caste,
+				structuredCoherentJobReason(relationship, benefit),
+				coherentJobSourceSingle,
+			))
+			continue
+		}
+
+		relationship := automaticCoherentJobRelationship(ordered)
+		benefit := fmt.Sprintf("one %s preserves implementation context and avoids duplicate setup or conflicting writes", ordered[0].Caste)
+		chunks := splitCoherentJobTasksByBriefAllowance(ordered)
+		baseName := "automatic-" + ordered[0].ID
+		for chunkIndex, chunk := range chunks {
+			name := baseName
+			chunkRelationship := relationship
+			chunkBenefit := benefit
+			if len(chunks) > 1 {
+				name = fmt.Sprintf("%s-part-%d", baseName, chunkIndex+1)
+				chunkRelationship = fmt.Sprintf("%s; this dependency-ordered slice stays within the brief content allowance", relationship)
+				chunkBenefit = fmt.Sprintf("one %s preserves the component handoff while keeping the worker brief bounded", ordered[0].Caste)
+			}
+			name = reserveCoherentJobName(name, reservedNames)
+			jobs = append(jobs, newCoherentJob(
+				name,
+				chunk,
+				ordered[0].Caste,
+				structuredCoherentJobReason(chunkRelationship, chunkBenefit),
+				coherentJobSourceAutomatic,
+			))
+		}
+	}
+	return jobs, nil
+}
+
+type coherentJobComponentSet struct {
+	parent []int
+}
+
+func newCoherentJobComponentSet(size int) *coherentJobComponentSet {
+	set := &coherentJobComponentSet{parent: make([]int, size)}
+	for index := range set.parent {
+		set.parent[index] = index
+	}
+	return set
+}
+
+func (set *coherentJobComponentSet) find(index int) int {
+	if set.parent[index] != index {
+		set.parent[index] = set.find(set.parent[index])
+	}
+	return set.parent[index]
+}
+
+func (set *coherentJobComponentSet) unionIfDependencySafe(
+	left int,
+	right int,
+	tasks []coherentJobTask,
+	phaseTasks map[string]colony.Task,
+) bool {
+	leftRoot := set.find(left)
+	rightRoot := set.find(right)
+	if leftRoot == rightRoot {
+		return true
+	}
+
+	members := map[string]bool{}
+	for index, task := range tasks {
+		root := set.find(index)
+		if root == leftRoot || root == rightRoot {
+			members[task.ID] = true
+		}
+	}
+	if !coherentJobMembersAreDependencySafe(members, phaseTasks) {
+		return false
+	}
+	// Keep the smaller root so component enumeration is stable in plan order.
+	if leftRoot < rightRoot {
+		set.parent[rightRoot] = leftRoot
+	} else {
+		set.parent[leftRoot] = rightRoot
+	}
+	return true
+}
+
+func coherentJobMembersAreDependencySafe(members map[string]bool, phaseTasks map[string]colony.Task) bool {
+	for memberID := range members {
+		task, ok := phaseTasks[memberID]
+		if !ok {
+			return false
+		}
+		for _, rawDependencyID := range task.DependsOn {
+			dependencyID := strings.TrimSpace(rawDependencyID)
+			if members[dependencyID] {
+				continue
+			}
+			if dependencyReachesAnyCoherentJobMember(dependencyID, members, phaseTasks, map[string]bool{}) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func coherentJobTasksHaveDirectDependency(left, right coherentJobTask, indexByID map[string]int) bool {
+	return coherentJobTaskDependsOn(left, right.ID, indexByID) || coherentJobTaskDependsOn(right, left.ID, indexByID)
+}
+
+func coherentJobTaskDependsOn(task coherentJobTask, dependencyID string, indexByID map[string]int) bool {
+	if _, selected := indexByID[dependencyID]; !selected {
+		return false
+	}
+	for _, candidate := range task.Task.DependsOn {
+		if strings.TrimSpace(candidate) == dependencyID {
+			return true
+		}
+	}
+	return false
+}
+
+func sharedMeaningfulCoherentJobPaths(left, right coherentJobTask) []string {
+	leftPaths := make(map[string]bool, len(left.DeclaredPaths))
+	for _, declaredPath := range left.DeclaredPaths {
+		if !isIncidentalGroupingPath(declaredPath) {
+			leftPaths[declaredPath] = true
+		}
+	}
+	var shared []string
+	for _, declaredPath := range right.DeclaredPaths {
+		if leftPaths[declaredPath] && !isIncidentalGroupingPath(declaredPath) {
+			shared = append(shared, declaredPath)
+		}
+	}
+	return uniqueSortedStrings(shared)
+}
+
+// isIncidentalGroupingPath keeps ubiquitous documentation and package
+// metadata from becoming accidental edges between otherwise unrelated tasks.
+func isIncidentalGroupingPath(declaredPath string) bool {
+	base := strings.ToLower(path.Base(strings.ReplaceAll(strings.TrimSpace(declaredPath), "\\", "/")))
+	if base == "readme" || strings.HasPrefix(base, "readme.") ||
+		base == "changelog" || strings.HasPrefix(base, "changelog.") ||
+		base == "history" || strings.HasPrefix(base, "history.") ||
+		strings.HasPrefix(base, "release-notes.") || strings.HasPrefix(base, "release_notes.") || strings.HasPrefix(base, "releasenotes.") {
+		return true
+	}
+	if strings.HasPrefix(base, "requirements") && strings.HasSuffix(base, ".txt") {
+		return true
+	}
+	switch base {
+	case "go.mod", "go.sum",
+		"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml",
+		"pyproject.toml", "poetry.lock", "pipfile", "pipfile.lock", "uv.lock",
+		"cargo.toml", "cargo.lock",
+		"gemfile", "gemfile.lock":
+		return true
+	default:
+		return false
+	}
+}
+
+func earliestCoherentJobTaskIndex(tasks []coherentJobTask) int {
+	first := int(^uint(0) >> 1)
+	for _, task := range tasks {
+		if task.TaskIndex < first {
+			first = task.TaskIndex
+		}
+	}
+	return first
+}
+
+func topologicallyOrderCoherentJobTasks(tasks []coherentJobTask) ([]coherentJobTask, error) {
+	byID := make(map[string]coherentJobTask, len(tasks))
+	indegree := make(map[string]int, len(tasks))
+	outgoing := make(map[string][]string, len(tasks))
+	for _, task := range tasks {
+		byID[task.ID] = task
+		indegree[task.ID] = 0
+	}
+	for _, task := range tasks {
+		for _, rawDependencyID := range task.Task.DependsOn {
+			dependencyID := strings.TrimSpace(rawDependencyID)
+			if _, internal := byID[dependencyID]; !internal {
+				continue
+			}
+			indegree[task.ID]++
+			outgoing[dependencyID] = append(outgoing[dependencyID], task.ID)
+		}
+	}
+
+	ready := make([]coherentJobTask, 0, len(tasks))
+	for _, task := range tasks {
+		if indegree[task.ID] == 0 {
+			ready = append(ready, task)
+		}
+	}
+	sortCoherentJobTasksByPlanOrder(ready)
+	ordered := make([]coherentJobTask, 0, len(tasks))
+	for len(ready) > 0 {
+		next := ready[0]
+		ready = ready[1:]
+		ordered = append(ordered, next)
+		for _, dependentID := range outgoing[next.ID] {
+			indegree[dependentID]--
+			if indegree[dependentID] == 0 {
+				ready = append(ready, byID[dependentID])
+			}
+		}
+		sortCoherentJobTasksByPlanOrder(ready)
+	}
+	if len(ordered) != len(tasks) {
+		remaining := make([]string, 0, len(tasks)-len(ordered))
+		for taskID, degree := range indegree {
+			if degree > 0 {
+				remaining = append(remaining, taskID)
+			}
+		}
+		sort.Strings(remaining)
+		return nil, fmt.Errorf("coherent job component contains a dependency cycle among %s; repair depends_on in the plan", strings.Join(remaining, ", "))
+	}
+	return ordered, nil
+}
+
+func sortCoherentJobTasksByPlanOrder(tasks []coherentJobTask) {
+	sort.SliceStable(tasks, func(i, j int) bool {
+		if tasks[i].TaskIndex != tasks[j].TaskIndex {
+			return tasks[i].TaskIndex < tasks[j].TaskIndex
+		}
+		return tasks[i].ID < tasks[j].ID
+	})
+}
+
+func automaticCoherentJobRelationship(tasks []coherentJobTask) string {
+	taskIDs := make([]string, 0, len(tasks))
+	indexByID := make(map[string]int, len(tasks))
+	for index, task := range tasks {
+		taskIDs = append(taskIDs, task.ID)
+		indexByID[task.ID] = index
+	}
+
+	hasDependency := false
+	pathSet := map[string]bool{}
+	for left := 0; left < len(tasks); left++ {
+		for right := left + 1; right < len(tasks); right++ {
+			if coherentJobTasksHaveDirectDependency(tasks[left], tasks[right], indexByID) {
+				hasDependency = true
+			}
+			for _, sharedPath := range sharedMeaningfulCoherentJobPaths(tasks[left], tasks[right]) {
+				pathSet[sharedPath] = true
+			}
+		}
+	}
+	paths := make([]string, 0, len(pathSet))
+	for sharedPath := range pathSet {
+		paths = append(paths, sharedPath)
+	}
+	sort.Strings(paths)
+
+	var relationships []string
+	if hasDependency {
+		relationships = append(relationships, fmt.Sprintf("tasks %s are connected by declared dependencies", strings.Join(taskIDs, ", ")))
+	}
+	if len(paths) > 0 {
+		relationships = append(relationships, fmt.Sprintf("tasks %s share meaningful implementation paths: %s", strings.Join(taskIDs, ", "), strings.Join(paths, ", ")))
+	}
+	if len(relationships) == 0 {
+		return fmt.Sprintf("tasks %s form one dependency-safe automatic component", strings.Join(taskIDs, ", "))
+	}
+	return strings.Join(relationships, " and ")
+}
+
+// projectCoherentJobBriefChars sums the task-owned text classes rendered into
+// a worker brief. The surrounding brief sections have their own budgets; this
+// projection deliberately compares only task content with its named allowance.
+func projectCoherentJobBriefChars(tasks []coherentJobTask) int {
+	total := 0
+	for _, seed := range tasks {
+		task := seed.Task
+		total += len(task.Goal)
+		for _, dependency := range task.DependsOn {
+			total += len(dependency)
+		}
+		for _, constraint := range task.Constraints {
+			total += len(constraint)
+		}
+		for _, hint := range task.Hints {
+			total += len(hint)
+		}
+		for _, criterion := range task.SuccessCriteria {
+			total += len(criterion)
+		}
+		for _, requirement := range task.EvidenceRequirements {
+			total += len(requirement.Criterion)
+			for _, artifact := range requirement.Artifacts {
+				total += len(artifact)
+			}
+			for _, check := range requirement.Checks {
+				total += len(check)
+			}
+		}
+	}
+	return total
+}
+
+// splitCoherentJobTasksByBriefAllowance cuts only between dependency-ordered
+// tasks. It never fragments a task, so one individually oversized task remains
+// one job and can surface honestly to later context inspection.
+func splitCoherentJobTasksByBriefAllowance(tasks []coherentJobTask) [][]coherentJobTask {
+	var chunks [][]coherentJobTask
+	var current []coherentJobTask
+	currentChars := 0
+	for _, task := range tasks {
+		taskChars := projectCoherentJobBriefChars([]coherentJobTask{task})
+		if len(current) > 0 && currentChars+taskChars > briefTaskContentAllowanceChars {
+			chunks = append(chunks, current)
+			current = nil
+			currentChars = 0
+		}
+		current = append(current, task)
+		currentChars += taskChars
+	}
+	if len(current) > 0 {
+		chunks = append(chunks, current)
+	}
+	return chunks
+}
+
+func coherentJobNames(jobs []coherentJob) map[string]bool {
+	names := make(map[string]bool, len(jobs))
+	for _, job := range jobs {
+		names[job.Name] = true
+	}
+	return names
+}
+
+func reserveCoherentJobName(base string, names map[string]bool) string {
+	if !names[base] {
+		names[base] = true
+		return base
+	}
+	for suffix := 2; ; suffix++ {
+		candidate := fmt.Sprintf("%s-%d", base, suffix)
+		if !names[candidate] {
+			names[candidate] = true
+			return candidate
+		}
+	}
 }
 
 func sortCoherentJobsByPlanOrder(jobs []coherentJob) {
