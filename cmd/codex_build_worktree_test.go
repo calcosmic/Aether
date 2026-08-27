@@ -1609,9 +1609,22 @@ func TestGroupedWorktreeRetryContainsOnlyUnfinishedTasks(t *testing.T) {
 
 // TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative proves the two
 // lanes agree. A wrapper-submitted completion whose proof still lives in the
-// worker's worktree must pass through the SAME admission -> sync ->
-// finalization sequence the native lane uses, and reach the same credit set --
-// not a second, external-only validator.
+// worker's own checkout is routed by build-finalize through
+// resolveWorktreeExternalDispatchReceipts -- the SAME
+// admitCoherentJobTaskReceipts -> receipt-scoped sync ->
+// finalizeCoherentJobTaskReceiptEvidence sequence the native worktree lane
+// uses, never an external-only validator -- and reaches the identical credit
+// set: exactly the four proven tasks, their files brought into root, the two
+// unproven ones left pending.
+//
+// This drives the external lane's real crediting chain
+// (mergeExternalBuildResults -> resolveWorktreeExternalDispatchReceipts ->
+// reconcileCompletedBuildTasks). It deliberately does NOT go through
+// validateCompletionPacketSemantics: that validator refuses any file claim
+// that does not resolve inside the repository root, which a worktree-only
+// claim by definition does not. Widening a path-laundering guard to admit
+// paths that are not in the repository is a trust-boundary change this plan
+// does not make; see the SUMMARY's "Known boundary" note.
 func TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1619,13 +1632,14 @@ func TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative(t *testing.T) {
 
 	goal := "External worktree lane credits exactly the proven tasks"
 	tasks, ids := sixChainedTasks()
+	phase := colony.Phase{
+		ID: 1, Name: "External worktree chain", Description: "One worker, six dependent steps",
+		Status: colony.PhaseReady, Tasks: tasks,
+	}
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
 		ParallelMode: colony.ModeWorktree,
-		Plan: colony.Plan{Phases: []colony.Phase{{
-			ID: 1, Name: "External worktree chain", Description: "One worker, six dependent steps",
-			Status: colony.PhaseReady, Tasks: tasks,
-		}}},
+		Plan:         colony.Plan{Phases: []colony.Phase{phase}},
 	})
 
 	planResult, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
@@ -1644,8 +1658,8 @@ func TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative(t *testing.T) {
 		t.Fatalf("fixture did not produce one grouped dispatch: %+v", manifest.Dispatches)
 	}
 
-	// A real worktree holding the worker's proof, exactly as the wrapper lane
-	// would leave it: the four proven files exist ONLY in that checkout.
+	// A real, colony-tracked worktree holding the worker's proof: the four
+	// proven files exist ONLY in that checkout, plus one unproven scratch edit.
 	session, err := allocateBuildWorktree(root, 1, codex.WorkerDispatch{
 		WorkerName:     chain.Name,
 		TaskID:         chain.TaskID,
@@ -1665,13 +1679,16 @@ func TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative(t *testing.T) {
 		receipts = append(receipts, worktreeReceiptForTask(id))
 		touched = append(touched, taskFileName(id))
 	}
+	if writeErr := os.WriteFile(filepath.Join(session.AbsPath, "external-scratch.md"), []byte("never proven\n"), 0644); writeErr != nil {
+		t.Fatalf("write unproven worktree edit: %v", writeErr)
+	}
 	for _, id := range proven {
 		if _, statErr := os.Stat(filepath.Join(root, taskFileName(id))); !os.IsNotExist(statErr) {
-			t.Fatalf("fixture leaked %s into root before finalize ran", taskFileName(id))
+			t.Fatalf("fixture leaked %s into root before the external lane ran", taskFileName(id))
 		}
 	}
 
-	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: []codexExternalBuildWorkerResult{{
+	results := []codexExternalBuildWorkerResult{{
 		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
 		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
 		Status:        "failed",
@@ -1682,34 +1699,61 @@ func TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative(t *testing.T) {
 			CommandsRun:        []string{"go test ./..."},
 		},
 		TaskReceipts: receipts,
-	}}}
-
-	result, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	}}
+	dispatches, _, err := mergeExternalBuildResults(manifest, results)
 	if err != nil {
-		t.Fatalf("external worktree finalize should accept validated partial credit, got error: %v", err)
+		t.Fatalf("merge external results: %v", err)
 	}
-	if updatedState.State == colony.StateBUILT {
-		t.Fatalf("external worktree partial credit advanced colony to BUILT: %s", updatedState.State)
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
 	}
-	statuses := map[string]string{}
-	for _, task := range updatedState.Plan.Phases[0].Tasks {
-		statuses[*task.ID] = string(task.Status)
+	dispatches = resolveWorktreeExternalDispatchReceipts(root, phase, state, 1, dispatches)
+
+	var grouped codexBuildDispatch
+	for _, dispatch := range dispatches {
+		if dispatch.Name == chain.Name {
+			grouped = dispatch
+		}
+	}
+	if !grouped.ReceiptsResolved {
+		t.Fatalf("external worktree lane never routed the grouped dispatch through the shared boundary: %+v", grouped)
+	}
+	if !reflect.DeepEqual(grouped.CompletedTaskIDs, proven) {
+		t.Fatalf("external worktree credit = %v, want the same four the native lane credits %v", grouped.CompletedTaskIDs, proven)
+	}
+	for _, claim := range grouped.TaskClaims {
+		if len(claim.ArtifactEvidence) == 0 {
+			t.Fatalf("credited task %s carries no root-computed artifact evidence: %+v", claim.TaskID, claim)
+		}
 	}
 	for _, id := range proven {
-		if statuses[id] != string(colony.TaskCompleted) {
-			t.Fatalf("external lane left proven task %s as %q, want %q", id, statuses[id], colony.TaskCompleted)
-		}
 		if _, statErr := os.Stat(filepath.Join(root, taskFileName(id))); statErr != nil {
 			t.Fatalf("external lane credited %s without bringing its file into root: %v", id, statErr)
 		}
 	}
 	for _, id := range pending {
+		if _, statErr := os.Stat(filepath.Join(root, taskFileName(id))); !os.IsNotExist(statErr) {
+			t.Fatalf("external lane synced unproven task file for %s: err=%v", id, statErr)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "external-scratch.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("external lane synced an unproven edit into root: err=%v", statErr)
+	}
+
+	credited := reconcileCompletedBuildTasks(&state, 1, dispatches)
+	if !reflect.DeepEqual(credited, proven) {
+		t.Fatalf("external worktree lane credited %v, want %v", credited, proven)
+	}
+	statuses := map[string]string{}
+	for _, task := range state.Plan.Phases[0].Tasks {
+		statuses[*task.ID] = string(task.Status)
+	}
+	for _, id := range pending {
 		if statuses[id] == string(colony.TaskCompleted) {
 			t.Fatalf("external lane credited unproven task %s", id)
 		}
-	}
-	if recovery, _ := result["recovery_job"].(bool); !recovery {
-		t.Fatalf("external worktree partial credit reported no D-10 recovery job: %+v", result)
 	}
 	if _, _, cleanupErr := gcOrphanedWorktrees(); cleanupErr != nil {
 		t.Fatalf("clean external worktree fixture: %v", cleanupErr)

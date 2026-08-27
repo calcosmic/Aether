@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -320,6 +321,13 @@ func resolveCoherentJobDispatchReceipts(root string, phase colony.Phase, dispatc
 	resolved := make([]codexBuildDispatch, len(dispatches))
 	copy(resolved, dispatches)
 	for i := range resolved {
+		// Already resolved by a lane that inserted its own sync step between
+		// the two stages (worktree mode). Re-running admission here would
+		// read a root this build itself just wrote, so the earlier, honest
+		// verdict stands.
+		if resolved[i].ReceiptsResolved {
+			continue
+		}
 		status := strings.TrimSpace(resolved[i].Status)
 		if status == "completed" || isNoChangeExternalBuildStatus(status) {
 			continue
@@ -334,6 +342,179 @@ func resolveCoherentJobDispatchReceipts(root string, phase colony.Phase, dispatc
 		resolved[i].CompletedTaskIDs = completedTaskIDs
 	}
 	return resolved
+}
+
+const violationRuleTaskReceiptSyncFailed = "task_receipt.sync_failed"
+
+// coherentJobWorktreeReceipts is the result of running the shared two-stage
+// boundary across a worktree boundary: what was brought back, what was
+// credited, and what the worker touched but never proved.
+type coherentJobWorktreeReceipts struct {
+	// Claims and CompletedTaskIDs come from
+	// finalizeCoherentJobTaskReceiptEvidence and nowhere else.
+	Claims           []codexBuildTaskClaim
+	CompletedTaskIDs []string
+	// SyncedPaths are the candidate paths actually copied into root.
+	SyncedPaths []string
+	// UncreditedPaths are paths the worker touched that no admitted receipt
+	// claimed. They are deliberately left in the worker's checkout.
+	UncreditedPaths []string
+	Violations      []contractViolation
+}
+
+// resolveCoherentJobWorktreeReceipts is the ONLY worktree-mode path from a
+// worker's task receipts to task credit, and it is the same two-stage
+// boundary both other lanes use -- never a second, worktree-only validator.
+//
+// The ordering is the whole point (D-08, D-09). Stage 1
+// (admitCoherentJobTaskReceipts) is lexical: it proves each receipt is
+// well-formed, in scope, evidenced and inside the worker's own reported
+// claims WITHOUT reading root, which is exactly what makes it safe to run
+// while the files still live only inside the worktree. Only the paths that
+// admission returned are then copied into root. Stage 2
+// (finalizeCoherentJobTaskReceiptEvidence) runs last, against root, and is
+// the only function that may produce CompletedTaskIDs -- so a file that
+// exists solely inside a worktree can never become task credit, and a
+// candidate whose copy into root failed is dropped by name instead of being
+// credited on the strength of a promise.
+//
+// touched is everything the worker changed in its checkout. Anything in it
+// that no admitted receipt claimed is returned as UncreditedPaths and is
+// deliberately NOT synced: the caller preserves that checkout instead, so
+// unproven work is recoverable rather than either lost or falsely credited.
+func resolveCoherentJobWorktreeReceipts(
+	root string,
+	workerRoot string,
+	phase colony.Phase,
+	dispatch codexBuildDispatch,
+	aggregateClaims []string,
+	touched []string,
+	receipts []codex.TaskReceipt,
+) coherentJobWorktreeReceipts {
+	var out coherentJobWorktreeReceipts
+	worker := strings.TrimSpace(dispatch.Name)
+
+	admission, violations := admitCoherentJobTaskReceipts(root, phase, dispatch, aggregateClaims, receipts)
+	out.Violations = append(out.Violations, violations...)
+
+	candidatePaths := make(map[string]struct{}, len(admission.SyncPaths))
+	for _, path := range admission.SyncPaths {
+		candidatePaths[path] = struct{}{}
+	}
+	for _, path := range uniqueSortedStrings(touched) {
+		if _, claimed := candidatePaths[filepath.ToSlash(strings.TrimSpace(path))]; claimed {
+			continue
+		}
+		out.UncreditedPaths = append(out.UncreditedPaths, path)
+	}
+
+	// Sync ONLY the admitted candidate paths, one at a time, so a single
+	// unwritable destination excludes exactly its own task rather than
+	// silently poisoning or silently crediting the rest.
+	syncFailures := map[string]error{}
+	for _, path := range admission.SyncPaths {
+		if err := syncRelativePath(workerRoot, root, path); err != nil {
+			syncFailures[path] = err
+			continue
+		}
+		out.SyncedPaths = append(out.SyncedPaths, path)
+	}
+
+	synced := coherentJobReceiptAdmission{SyncPaths: out.SyncedPaths}
+	for _, candidate := range admission.Candidates {
+		var failed []string
+		for _, path := range claimedPaths(candidate.Claim) {
+			if err, bad := syncFailures[path]; bad {
+				failed = append(failed, fmt.Sprintf("%s (%v)", path, err))
+			}
+		}
+		if len(failed) > 0 {
+			out.Violations = append(out.Violations, contractViolation{
+				Worker:  worker,
+				Field:   "task_receipts.sync",
+				Value:   candidate.TaskID,
+				Rule:    violationRuleTaskReceiptSyncFailed,
+				Message: fmt.Sprintf("task %s's proof could not be copied out of the worker's own workspace into the project: %s; not credited", candidate.TaskID, strings.Join(failed, ", ")),
+			})
+			continue
+		}
+		synced.Candidates = append(synced.Candidates, candidate)
+	}
+
+	claims, completedTaskIDs, finalViolations := finalizeCoherentJobTaskReceiptEvidence(root, phase, dispatch, synced)
+	out.Claims = claims
+	out.CompletedTaskIDs = completedTaskIDs
+	out.Violations = append(out.Violations, finalViolations...)
+	return out
+}
+
+// resolveWorktreeExternalDispatchReceipts is the external/wrapper lane's
+// worktree entry point. It is deliberately the same function the native
+// worktree lane calls (resolveCoherentJobWorktreeReceipts), applied to the
+// checkout the colony state already tracks for that worker, so both lanes
+// produce the same credit set from the same evidence. A dispatch whose
+// checkout is gone resolves nothing rather than falling back to root, because
+// crediting from a root nobody synced would credit work no one proved.
+func resolveWorktreeExternalDispatchReceipts(root string, phase colony.Phase, state colony.ColonyState, phaseNum int, dispatches []codexBuildDispatch) []codexBuildDispatch {
+	checkoutByWorker := map[string]string{}
+	for _, entry := range state.Worktrees {
+		if entry.Phase != phaseNum {
+			continue
+		}
+		agent := strings.TrimSpace(entry.Agent)
+		if agent == "" {
+			continue
+		}
+		abs := entry.Path
+		if !filepath.IsAbs(abs) {
+			abs = filepath.Join(root, filepath.FromSlash(entry.Path))
+		}
+		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+			continue
+		}
+		checkoutByWorker[agent] = abs
+	}
+
+	resolved := make([]codexBuildDispatch, len(dispatches))
+	copy(resolved, dispatches)
+	for i := range resolved {
+		status := strings.TrimSpace(resolved[i].Status)
+		if status == "completed" || isNoChangeExternalBuildStatus(status) {
+			continue
+		}
+		if len(resolved[i].TaskReceipts) == 0 {
+			continue
+		}
+		checkout, ok := checkoutByWorker[strings.TrimSpace(resolved[i].Name)]
+		if !ok {
+			continue
+		}
+		touched := worktreeTouchedPathsForExternalResult(checkout, resolved[i])
+		outcome := resolveCoherentJobWorktreeReceipts(
+			root, checkout, phase, resolved[i], append([]string{}, resolved[i].Outputs...), touched, resolved[i].TaskReceipts)
+		resolved[i].TaskClaims = outcome.Claims
+		resolved[i].CompletedTaskIDs = outcome.CompletedTaskIDs
+		resolved[i].ReceiptsResolved = true
+	}
+	return resolved
+}
+
+// worktreeTouchedPathsForExternalResult reports what the worker actually
+// changed inside its checkout, so paths it never proved can be identified and
+// deliberately left there.
+func worktreeTouchedPathsForExternalResult(checkout string, dispatch codexBuildDispatch) []string {
+	touched := append([]string{}, dispatch.Outputs...)
+	statuses, err := snapshotGitStatus(checkout)
+	if err != nil {
+		return uniqueSortedStrings(touched)
+	}
+	for rel := range statuses {
+		if rel == "" || strings.HasPrefix(rel, ".aether/") {
+			continue
+		}
+		touched = append(touched, rel)
+	}
+	return uniqueSortedStrings(touched)
 }
 
 // claimedPaths returns the union of a task claim's own files_created,

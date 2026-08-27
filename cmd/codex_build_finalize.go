@@ -564,11 +564,14 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	// admission and finalization run consecutively, exactly like the native
 	// lane's executeCodexBuildDispatches. A worktree-backed completion's
 	// files are NOT yet synced into root (mergePhaseWorktrees runs later,
-	// below) -- resolving receipts now would only ever fail root-evidence and
-	// silently discard the admission plan 195-08's sync-first adapter still
-	// needs, so that lane is skipped here and left for 195-08 to wire onto
-	// the same two stages after its own sync step.
-	if effectiveParallelMode(state) != colony.ModeWorktree {
+	// below), so that lane instead routes through the SAME two stages with a
+	// receipt-scoped sync step inserted between them
+	// (resolveWorktreeExternalDispatchReceipts, plan 195-08) -- the identical
+	// sequence the native worktree lane uses, never an external-only
+	// validator, so both lanes credit the same tasks from the same evidence.
+	if effectiveParallelMode(state) == colony.ModeWorktree {
+		dispatches = resolveWorktreeExternalDispatchReceipts(root, phase, state, phaseNum, dispatches)
+	} else {
 		dispatches = resolveCoherentJobDispatchReceipts(root, phase, dispatches)
 	}
 	startedAt := parseManifestGeneratedAt(*manifest)

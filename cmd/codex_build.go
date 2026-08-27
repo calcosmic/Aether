@@ -70,12 +70,19 @@ type codexBuildDispatch struct {
 	// TaskClaims mirrors CompletedTaskIDs: one root-evidenced claim per
 	// credited task, keyed by that task's own ID rather than this dispatch's
 	// primary TaskID (Pitfall 4, 195-RESEARCH.md).
-	TaskClaims    []codexBuildTaskClaim `json:"task_claims,omitempty"`
-	DependsOn     []string              `json:"depends_on,omitempty"`
-	DeclaredPaths []string              `json:"declared_paths,omitempty"`
-	Outputs       []string              `json:"outputs,omitempty"`
-	Blockers      []string              `json:"blockers,omitempty"`
-	Duration      float64               `json:"duration,omitempty"`
+	TaskClaims []codexBuildTaskClaim `json:"task_claims,omitempty"`
+	// ReceiptsResolved marks a dispatch whose receipts already passed through
+	// the shared two-stage boundary on a lane that had to insert a sync step
+	// between the stages (worktree mode). It is in-process only -- never
+	// serialized, never part of the completion-packet contract -- and exists
+	// so no later caller re-runs admission against a root that this build
+	// itself just populated.
+	ReceiptsResolved bool     `json:"-"`
+	DependsOn        []string `json:"depends_on,omitempty"`
+	DeclaredPaths    []string `json:"declared_paths,omitempty"`
+	Outputs          []string `json:"outputs,omitempty"`
+	Blockers         []string `json:"blockers,omitempty"`
+	Duration         float64  `json:"duration,omitempty"`
 	// Brief is the fully rendered worker prompt for wrapper-spawned workers.
 	// Build was the only workflow whose plan-only manifest carried no brief —
 	// colonize, plan, and heavy-continue all do — so everything the runtime
@@ -2104,8 +2111,13 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	setBuildVerbose(verbose)
 
 	// Per D-09/D-12: queen owns the wave loop. Build calls queen once.
+	// Worktree mode resolves a partially-successful grouped worker's receipts
+	// while that worker's checkout still exists (the files are not in root
+	// yet). The ledger carries that already-resolved credit back here, where
+	// the codexBuildDispatch list lives.
+	receiptLedger := newWorktreeReceiptLedger()
 	waveDispatchFn := func(ctx context.Context, waveDispatches []codex.WorkerDispatch, waveNum int) ([]codex.DispatchResult, error) {
-		return dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, waveDispatches, invoker, startedAt, parallelMode, cb)
+		return dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, waveDispatches, invoker, startedAt, parallelMode, cb, receiptLedger)
 	}
 	summary, results, err := queenWaveLifecycle(ctx, workerDispatches, waveDispatchFn, phase, cb, phase.ID)
 	// Persist wave summary JSON for Phase 99 consumption (D-07)
@@ -2172,6 +2184,22 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 		if result.Error != nil && len(dispatches[idx].Blockers) == 0 {
 			dispatches[idx].Blockers = []string{codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())}
 		}
+	}
+
+	// Worktree mode already ran the shared two-stage boundary with its own
+	// sync step in between, at the only moment the worker's checkout still
+	// existed (cmd/codex_build_worktree.go). Its verdict is authoritative and
+	// must not be recomputed from root here: re-running admission now would
+	// re-derive credit from files this build itself just copied in, which is
+	// exactly the circular reasoning the two-stage split exists to prevent.
+	for i := range dispatches {
+		resolved, ok := receiptLedger.lookup(dispatches[i].Name)
+		if !ok {
+			continue
+		}
+		dispatches[i].TaskClaims = resolved.Claims
+		dispatches[i].CompletedTaskIDs = resolved.CompletedTaskIDs
+		dispatches[i].ReceiptsResolved = true
 	}
 
 	// D-08/D-09: this is the native/in-repo lane -- files a receipt claims
