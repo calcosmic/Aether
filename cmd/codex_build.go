@@ -3101,6 +3101,7 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	renderDispatchTaskItemsSection(&b, "Task Constraints", relatedTasks, func(t *colony.Task) []string { return t.Constraints })
 	renderDispatchTaskItemsSection(&b, "Hints", relatedTasks, func(t *colony.Task) []string { return t.Hints })
 	renderDispatchTaskItemsSection(&b, "Task Success Criteria", relatedTasks, func(t *colony.Task) []string { return t.SuccessCriteria })
+	renderGroupedDispatchTaskContracts(&b, relatedTasks)
 	b.WriteString(renderUnresolvedDispatchTaskNotice(relatedTasks))
 
 	if len(phase.SuccessCriteria) > 0 {
@@ -3339,6 +3340,78 @@ func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []
 	b.WriteString(heading)
 	b.WriteString("\n\n")
 	b.WriteString(body.String())
+}
+
+// renderGroupedDispatchTaskContracts adds the contract details that do not
+// have a legacy single-task section: evidence requirements and any declared
+// paths not already shown under Hints. Goals, constraints, hints, and success
+// criteria remain in their existing sections, so every task-owned value is
+// rendered once and single-task briefs stay byte-for-byte unchanged.
+func renderGroupedDispatchTaskContracts(b *strings.Builder, tasks []coveredDispatchTask) {
+	if len(tasks) < 2 {
+		return
+	}
+
+	b.WriteString("\n## Covered Task Contracts\n\n")
+	for _, covered := range tasks {
+		b.WriteString(fmt.Sprintf("**Task %d (id %q):**\n", covered.Position, covered.ID))
+		if covered.Task == nil {
+			b.WriteString("- Contract unavailable because this task could not be resolved.\n")
+			continue
+		}
+
+		declaredPaths := declaredPathsForTask(*covered.Task)
+		hintedPaths := map[string]bool{}
+		for _, hint := range covered.Task.Hints {
+			hint = strings.TrimSpace(hint)
+			for _, declaredPath := range declaredPaths {
+				if hint == declaredPath {
+					hintedPaths[declaredPath] = true
+				}
+			}
+		}
+		var additionalPaths []string
+		for _, declaredPath := range declaredPaths {
+			if !hintedPaths[declaredPath] {
+				additionalPaths = append(additionalPaths, declaredPath)
+			}
+		}
+		if len(additionalPaths) > 0 {
+			b.WriteString("- Additional relevant paths:\n")
+			for _, declaredPath := range additionalPaths {
+				b.WriteString("  - ")
+				b.WriteString(declaredPath)
+				b.WriteString("\n")
+			}
+		}
+
+		if len(covered.Task.EvidenceRequirements) == 0 {
+			b.WriteString("- Evidence requirements: none declared.\n")
+			continue
+		}
+		b.WriteString("- Evidence requirements:\n")
+		for _, requirement := range covered.Task.EvidenceRequirements {
+			criterion := strings.TrimSpace(requirement.Criterion)
+			if criterion == "" {
+				criterion = "unnamed criterion"
+			}
+			b.WriteString("  - Criterion: ")
+			b.WriteString(criterion)
+			b.WriteString("\n")
+			if len(requirement.Artifacts) > 0 {
+				b.WriteString("    - Artifacts: use this task's relevant paths listed once above or under Hints.\n")
+			}
+			for _, check := range requirement.Checks {
+				check = strings.TrimSpace(check)
+				if check == "" {
+					continue
+				}
+				b.WriteString("    - Check: ")
+				b.WriteString(check)
+				b.WriteString("\n")
+			}
+		}
+	}
 }
 
 // renderUnresolvedDispatchTaskNotice returns a "## Task Resolution Notice"

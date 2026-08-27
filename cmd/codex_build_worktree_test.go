@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -346,7 +347,7 @@ func (i *countingWorktreeInvoker) callCount() int {
 	return i.calls
 }
 
-func TestBuildWorktreeModeRejectsDeclaredOverlapBeforeDispatch(t *testing.T) {
+func TestBuildWorktreeModeGroupsDeclaredOverlapBeforeDispatch(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -363,7 +364,7 @@ func TestBuildWorktreeModeRejectsDeclaredOverlapBeforeDispatch(t *testing.T) {
 	runGit(t, root, "add", ".")
 	runGit(t, root, "commit", "-m", "initial")
 
-	goal := "Reject same-wave declared overlap before workers run"
+	goal := "Group same-wave declared overlap before workers run"
 	taskOne := "1.1"
 	taskTwo := "1.2"
 	createTestColonyState(t, dataDir, colony.ColonyState{
@@ -388,12 +389,19 @@ func TestBuildWorktreeModeRejectsDeclaredOverlapBeforeDispatch(t *testing.T) {
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
 	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
 
-	_, err := runCodexBuild(root, 1, nil, false)
-	if err == nil || !strings.Contains(err.Error(), "worktree declared ownership conflict") {
-		t.Fatalf("build error = %v, want worktree declared ownership conflict", err)
+	if _, err := runCodexBuild(root, 1, nil, false); err != nil {
+		t.Fatalf("grouped worktree overlap failed: %v", err)
 	}
-	if calls := invoker.callCount(); calls != 0 {
-		t.Fatalf("declared overlap dispatched %d workers before failing; want zero", calls)
+	if calls := invoker.callCount(); calls != 1 {
+		t.Fatalf("declared overlap dispatched %d workers, want one coherent job", calls)
+	}
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("load grouped worktree manifest: %v", err)
+	}
+	waves := buildWaveDispatches(manifest.Dispatches)
+	if len(waves) != 1 || !reflect.DeepEqual(waves[0].CoveredTaskIDs, []string{taskOne, taskTwo}) {
+		t.Fatalf("worktree ownership validation ran before grouping: %+v", waves)
 	}
 }
 
@@ -406,6 +414,15 @@ func (i *sequentialSharedFileInvoker) Invoke(_ context.Context, cfg codex.Worker
 		return codex.WorkerResult{WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID, Status: "completed", Summary: "read-only worker completed"}, nil
 	}
 	sharedPath := filepath.Join(cfg.Root, "shared.txt")
+	if strings.Contains(cfg.TaskBrief, "Extend the shared artifact") {
+		if err := os.WriteFile(sharedPath, []byte("task-1.1+task-1.2\n"), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		return codex.WorkerResult{
+			WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID, Status: "completed",
+			Summary: "completed both covered tasks in one coherent job", FilesCreated: []string{"shared.txt"},
+		}, nil
+	}
 	switch cfg.TaskID {
 	case "1.1":
 		if err := os.WriteFile(sharedPath, []byte("task-1.1\n"), 0644); err != nil {
@@ -436,7 +453,7 @@ func (i *sequentialSharedFileInvoker) Invoke(_ context.Context, cfg codex.Worker
 func (i *sequentialSharedFileInvoker) IsAvailable(context.Context) bool { return true }
 func (i *sequentialSharedFileInvoker) ValidateAgent(string) error       { return nil }
 
-func TestBuildWorktreeModeAllowsDeclaredOverlapAcrossWaves(t *testing.T) {
+func TestBuildWorktreeModeGroupsDeclaredOverlapAcrossFormerWaves(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 

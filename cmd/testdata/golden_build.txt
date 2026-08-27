@@ -12,7 +12,7 @@ Wave 1
   🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks g-task-1, g-task-2]
 
 Total planned dispatches: 1
-2 dependent tasks were folded into 1 worker — every task still has a claimant, listed above.
+2 covered tasks were folded into 1 worker — every task still has a claimant, listed above.
 
 The Queen chose this team for the phase: Builder.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
@@ -56,7 +56,7 @@ Wave 1
   🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks g-task-1, g-task-2]  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
 
 Total planned dispatches: 1
-2 dependent tasks were folded into 1 worker — every task still has a claimant, listed above.
+2 covered tasks were folded into 1 worker — every task still has a claimant, listed above.
 
 The Queen chose this team for the phase: Builder.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.

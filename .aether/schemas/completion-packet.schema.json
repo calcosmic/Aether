@@ -303,6 +303,15 @@
         "task_index": {
           "type": "integer"
         },
+        "job_name": {
+          "type": "string"
+        },
+        "job_reason": {
+          "type": "string"
+        },
+        "job_source": {
+          "type": "string"
+        },
         "covered_task_ids": {
           "items": {
             "type": "string"
@@ -506,6 +515,12 @@
         "dispatches": {
           "items": {
             "$ref": "#/$defs/codexBuildDispatch"
+          },
+          "type": "array"
+        },
+        "job_decisions": {
+          "items": {
+            "$ref": "#/$defs/coherentJobDecision"
           },
           "type": "array"
         },
@@ -994,6 +1009,46 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "coherentJobDecision": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "job_name": {
+          "type": "string"
+        },
+        "job_reason": {
+          "type": "string"
+        },
+        "job_source": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "offending_task_id": {
+          "type": "string"
+        },
+        "dependency_id": {
+          "type": "string"
+        },
+        "replacement_job_names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "status"
+      ]
     },
     "discussQuestion": {
       "properties": {

@@ -370,13 +370,14 @@ func detectAbandonedBuild(manifest codexContinueManifest, state colony.ColonySta
 	return true, elapsed, fmt.Sprintf("Build was abandoned %.0f minutes ago: all %d dispatches stuck at 'spawned'", elapsed.Minutes(), len(manifest.Data.Dispatches))
 }
 
-// abandonedBuildTaskIDs extracts unique task IDs from manifest dispatches.
+// abandonedBuildTaskIDs extracts every covered task ID from manifest
+// dispatches. A grouped worker owns more than its primary compatibility ID,
+// and recovery must never leave the later covered tasks invisible.
 func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
 	seen := make(map[string]struct{})
 	var ids []string
 	for _, d := range manifest.Data.Dispatches {
-		id := strings.TrimSpace(d.TaskID)
-		if id != "" {
+		for _, id := range dispatchCoveredTaskIDs(d) {
 			if _, ok := seen[id]; !ok {
 				seen[id] = struct{}{}
 				ids = append(ids, id)
@@ -2217,8 +2218,8 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	operationalIssues := []string{}
 	for _, dispatch := range manifest.Data.Dispatches {
 		status := strings.TrimSpace(dispatch.Status)
-		if dispatch.TaskID != "" {
-			dispatchStatuses[dispatch.TaskID] = append(dispatchStatuses[dispatch.TaskID], status)
+		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+			dispatchStatuses[taskID] = append(dispatchStatuses[taskID], status)
 		}
 		if status != "" && status != "completed" {
 			operationalIssues = append(operationalIssues, fmt.Sprintf("%s (%s)", dispatch.Name, status))

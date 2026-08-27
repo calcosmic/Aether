@@ -72,6 +72,14 @@ func TestCalVaultSixBatchesBecomeOneInRepoJob(t *testing.T) {
 		t.Fatalf("six dependent copy steps became %d workers, want 1; each extra worker pays full startup cost and re-reads the same list:\n  %s",
 			len(dispatches), strings.Join(names, "\n  "))
 	}
+	if dispatches[0].Caste != "builder" {
+		t.Fatalf("the single CalVault job is owned by %q, want builder", dispatches[0].Caste)
+	}
+	wantCovered := []string{"t1", "t2", "t3", "t4", "t5", "t6"}
+	if !reflect.DeepEqual(dispatches[0].CoveredTaskIDs, wantCovered) {
+		t.Fatalf("CalVault job covers %v, want the six copy steps in order %v",
+			dispatches[0].CoveredTaskIDs, wantCovered)
+	}
 }
 
 func TestGroupedJobBriefCarriesEveryTaskContract(t *testing.T) {
@@ -249,6 +257,33 @@ func TestGroupedBuildSummaryUsesCoveredTasksLanguage(t *testing.T) {
 	}
 }
 
+func TestCoherentJobsMatchAcrossParallelModes(t *testing.T) {
+	firstID := "10.1"
+	secondID := "10.2"
+	phase := colony.Phase{
+		ID: 10,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Implement the shared runtime", Status: colony.TaskPending, Hints: []string{"cmd/runtime.go"}},
+			{ID: &secondID, Goal: "Test the shared runtime", Status: colony.TaskPending, DependsOn: []string{firstID}, Hints: []string{"cmd/runtime.go"}},
+		},
+	}
+	plan := func(mode colony.ParallelMode) []codexBuildDispatch {
+		return waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+			phase, colony.ColonyState{ParallelMode: mode}, nil, colony.VerificationDepthStandard,
+		))
+	}
+	inRepo := plan(colony.ModeInRepo)
+	worktree := plan(colony.ModeWorktree)
+	if len(inRepo) != 1 || len(worktree) != 1 {
+		t.Fatalf("parallel mode changed job count: in-repo=%+v worktree=%+v", inRepo, worktree)
+	}
+	for _, got := range []codexBuildDispatch{inRepo[0], worktree[0]} {
+		if got.JobName != inRepo[0].JobName || got.Wave != inRepo[0].Wave || !reflect.DeepEqual(got.CoveredTaskIDs, inRepo[0].CoveredTaskIDs) {
+			t.Fatalf("parallel mode changed coherent job identity or wave: in-repo=%+v got=%+v", inRepo[0], got)
+		}
+	}
+}
+
 func TestIndependentTasksStillFanOut(t *testing.T) {
 	saveGlobals(t)
 	notesOnlyRepo(t)
@@ -321,15 +356,29 @@ func TestChainAcrossDifferentCastesDoesNotMerge(t *testing.T) {
 		},
 	}
 
-	dispatches := waveDispatchesOnly(
-		plannedBuildDispatchesForSelectionWithState(phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard))
-
-	castes := map[string]bool{}
-	for _, d := range dispatches {
-		castes[d.Caste] = true
+	planned, _, err := plannedBuildDispatchesWithJobProposals(
+		phase,
+		colony.ColonyState{},
+		nil,
+		colony.VerificationDepthStandard,
+		[]string{"builder", "scout"},
+		"implementation and research need different owners",
+		map[string]string{
+			"builder": "implement the exporter",
+			"scout":   "research the downstream date contract",
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("plan cross-caste fixture: %v", err)
 	}
-	if len(castes) > 1 && len(dispatches) == 1 {
-		t.Fatalf("two different kinds of work were merged into one worker: %v", castes)
+	dispatches := waveDispatchesOnly(planned)
+
+	if len(dispatches) != 2 {
+		t.Fatalf("cross-caste dependency chain collapsed to %d jobs: %+v", len(dispatches), dispatches)
+	}
+	if dispatches[0].Caste == dispatches[1].Caste {
+		t.Fatalf("fixture no longer resolves to two castes: %+v", dispatches)
 	}
 }
 

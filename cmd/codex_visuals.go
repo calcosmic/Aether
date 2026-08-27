@@ -4805,7 +4805,7 @@ func renderCoveredTaskSummary(dispatches []codexBuildDispatch) string {
 	if folded > 1 {
 		workerWord = "workers"
 	}
-	return fmt.Sprintf("%d dependent tasks were folded into %d %s — every task still has a claimant, listed above.\n",
+	return fmt.Sprintf("%d covered tasks were folded into %d %s — every task still has a claimant, listed above.\n",
 		covered, folded, workerWord)
 }
 
