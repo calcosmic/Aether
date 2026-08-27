@@ -108,3 +108,78 @@
 - **Observed:** Six `pkg/agent/curation` tests and four packages failed with `TempDir: mkdir ...: no space left on device` / `[build failed]`. `df -h /` reported 571Mi available on a 1.8Ti volume (100% used). No test asserted anything false; the race-instrumented build had nowhere to write.
 - **Why deferred:** Environmental, not a code defect. `go clean -cache` (7.2G of regenerable build cache) restored 7.8Gi free and the identical command then passed every package, as did `go test ./cmd -race -count=1` (`ok 826.019s`).
 - **Follow-up:** None for this repo. Noted so that a future `no space left on device` in a gate log is recognised as a disk condition rather than investigated as a regression.
+
+## Code review Info findings IN-01..IN-05 (195-REVIEW.md)
+
+Recorded here because the iteration-2 re-review found no deferral record for
+any of them anywhere (IN-11, 195-REVIEW.iter2.md), and this repo's own history
+says an undocumented deferral becomes invisible debt.
+
+### IN-01 — the job planner mutated its caller's task list — RESOLVED 2026-08-27
+
+- **File:** `cmd/coherent_jobs.go`, `normalizeCoherentJobProposal`
+- **Was:** the proposal arrived by value, but a slice header copy still shares
+  its backing array, so trimming task IDs in place rewrote the caller's own
+  data — contradicting `planCoherentJobs`' documented purity.
+- **Fixed in the second fix round:** the task list is copied before trimming.
+  Locked by `TestJobPlannerDoesNotMutateItsCallersProposal`.
+
+### IN-02 — an owner-facing sentence was capitalized by byte, not character — RESOLVED 2026-08-27
+
+- **File:** `cmd/ceremony_team_checkin.go`, the team check-in summary
+- **Was:** `strings.ToUpper(s[:1]) + s[1:]` splits any character that takes more
+  than one byte to store, printing rubbish. Every current sentence is plain
+  ASCII, so nothing was visibly broken yet.
+- **Fixed in the second fix round:** extracted as `sentenceCase`, which decodes
+  a whole character. Locked by `TestSentenceCaseKeepsWholeCharacters`.
+
+### IN-03 — two workers with no task id compared equal — RESOLVED 2026-08-27
+
+- **File:** `cmd/codex_build_worktree.go`, `worktreeOwnershipIdentity`
+- **Was:** ownership was keyed on the task id alone, so two different workers
+  that both arrived without one were treated as the same owner and a genuine
+  collision between them over one file was not refused. No dispatch shape in
+  the runtime produces that pair today.
+- **Fixed in the second fix round:** the key falls back to the worker's name.
+  Locked by `TestTwoUnnamedWorkersStillConflictOverOneFile`.
+
+### IN-04 — recovery-job reuse is approximate — STILL OPEN
+
+- **File:** `cmd/coherent_job_retry.go`, `findExistingBuildAttemptRetry` and
+  `commitPartialBuildRetryPlan`
+- **Issue:** two separate approximations.
+  1. `findExistingBuildAttemptRetry` returns *any* recovery record linked to
+     the parent attempt, without comparing its `SelectedTasks` against the
+     unfinished set computed right now. If a second partial finalize for the
+     same parent produces a *different* unfinished set (tasks credited in
+     between, or a re-run that proved more), the stale record is reused and its
+     `SelectedTasks` no longer describe the work that remains. Only
+     `RedispatchCommand` — recomputed each time from the live plan — is
+     currently correct in that situation, which is why nothing user-facing has
+     broken yet.
+  2. `beginChildBuildAttempt(..., plan.Jobs[0].Name, ...)` records only the
+     FIRST of N recovery jobs as `ParentJobName`. When several dispatches
+     failed part-way, the other jobs' names are lost from the journal.
+- **Why deferred:** neither is reachable by a shipped flow today (nothing reads
+  `ParentJobName`; the only consumer of the recovery record is the id/path pair
+  reported back to the owner), and fixing (1) properly means deciding what
+  should happen to a superseded recovery record — reuse it, supersede it, or
+  refuse — which is a behaviour decision, not a wiring fix.
+- **Follow-up:** compare the existing child's `SelectedTasks` with the freshly
+  computed unfinished set before reusing it, and decide the supersede rule
+  deliberately; join all recovery job names for `ParentJobName`. Lock with a
+  test that finalizes two different partials against one parent.
+
+### IN-05 — three finalize helpers each recompute the same two sets — STILL OPEN
+
+- **File:** `cmd/codex_build_finalize.go`, `allSelectedBuildTasksCredited`,
+  `unfinishedBuildTaskIDs`, `creditedBuildTaskIDs`
+- **Issue:** all three call `buildFullBuildTaskIDSet` + `completedBuildTaskIDs`
+  independently on the same inputs, on every finalize. Correct, but the
+  partition is derived three times and could drift if one of the three is ever
+  changed alone.
+- **Why deferred:** pure tidiness with no behavioural symptom; the change
+  touches the commit path of every build finalize, which is not a place to make
+  a cosmetic edit inside a fix round aimed at trust-boundary defects.
+- **Follow-up:** compute the credited/unfinished partition once in
+  `runCodexBuildFinalize` and pass it down to all three.
