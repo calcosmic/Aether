@@ -1555,6 +1555,12 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		if outputs := uniqueSortedStrings(append(append(append([]string{}, result.Outputs...), result.FilesCreated...), append(result.FilesModified, result.TestsWritten...)...)); len(outputs) > 0 {
 			dispatch.Outputs = outputs
 		}
+		// Threaded through unchanged, regardless of status (D-08/D-09): this
+		// merge boundary is shared by native and external submissions alike,
+		// and whether any receipt earns credit is a decision for
+		// admitCoherentJobTaskReceipts/finalizeCoherentJobTaskReceiptEvidence
+		// (cmd/coherent_job_receipts.go), never this function.
+		dispatch.TaskReceipts = append([]codex.TaskReceipt{}, result.TaskReceipts...)
 		dispatches[i] = dispatch
 	}
 

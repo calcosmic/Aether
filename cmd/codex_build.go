@@ -53,11 +53,29 @@ type codexBuildDispatch struct {
 	// them so result matching and evidence keep working unchanged; this field
 	// exists so nothing downstream can believe the later steps were unassigned.
 	CoveredTaskIDs []string `json:"covered_task_ids,omitempty"`
-	DependsOn      []string `json:"depends_on,omitempty"`
-	DeclaredPaths  []string `json:"declared_paths,omitempty"`
-	Outputs        []string `json:"outputs,omitempty"`
-	Blockers       []string `json:"blockers,omitempty"`
-	Duration       float64  `json:"duration,omitempty"`
+	// TaskReceipts carries this dispatch's own worker-submitted, task-specific
+	// completion evidence, threaded through unchanged from the native/external
+	// terminal result. It is untrusted input: only
+	// admitCoherentJobTaskReceipts/finalizeCoherentJobTaskReceiptEvidence
+	// (cmd/coherent_job_receipts.go) may ever turn it into credit (D-08, D-09).
+	TaskReceipts []codex.TaskReceipt `json:"task_receipts,omitempty"`
+	// CompletedTaskIDs is populated ONLY by finalizeCoherentJobTaskReceiptEvidence,
+	// and only for a dispatch whose own Status is not itself already a
+	// whole-success status: a failed/blocked/timeout/interrupted grouped job
+	// may still have honestly finished some of the tasks it covered.
+	// completedBuildTaskIDs is the only reader of this field for such a
+	// dispatch; nothing may synthesize it from touched files or from
+	// CoveredTaskIDs membership alone.
+	CompletedTaskIDs []string `json:"completed_task_ids,omitempty"`
+	// TaskClaims mirrors CompletedTaskIDs: one root-evidenced claim per
+	// credited task, keyed by that task's own ID rather than this dispatch's
+	// primary TaskID (Pitfall 4, 195-RESEARCH.md).
+	TaskClaims    []codexBuildTaskClaim `json:"task_claims,omitempty"`
+	DependsOn     []string              `json:"depends_on,omitempty"`
+	DeclaredPaths []string              `json:"declared_paths,omitempty"`
+	Outputs       []string              `json:"outputs,omitempty"`
+	Blockers      []string              `json:"blockers,omitempty"`
+	Duration      float64               `json:"duration,omitempty"`
 	// Brief is the fully rendered worker prompt for wrapper-spawned workers.
 	// Build was the only workflow whose plan-only manifest carried no brief —
 	// colonize, plan, and heavy-continue all do — so everything the runtime
@@ -240,6 +258,11 @@ type codexBuildTaskClaim struct {
 	FilesCreated  []string `json:"files_created,omitempty"`
 	FilesModified []string `json:"files_modified,omitempty"`
 	TestsWritten  []string `json:"tests_written,omitempty"`
+	// ArtifactEvidence is root-computed evidence for exactly this task's own
+	// claimed paths. It is populated only by finalizeCoherentJobTaskReceiptEvidence
+	// (cmd/coherent_job_receipts.go); a worker-submitted receipt carries no
+	// hash concept and cannot set it.
+	ArtifactEvidence []codexBuildArtifactEvidence `json:"artifact_evidence,omitempty"`
 }
 
 type codexBuildClaims struct {

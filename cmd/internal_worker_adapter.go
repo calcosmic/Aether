@@ -45,17 +45,25 @@ type internalWorkerDispatchRequest struct {
 }
 
 type internalWorkerResult struct {
-	Name          string                     `json:"name"`
-	Caste         string                     `json:"caste"`
-	TaskID        string                     `json:"task_id,omitempty"`
-	Status        string                     `json:"status"`
-	Summary       string                     `json:"summary,omitempty"`
-	FilesCreated  []string                   `json:"files_created,omitempty"`
-	FilesModified []string                   `json:"files_modified,omitempty"`
-	TestsWritten  []string                   `json:"tests_written,omitempty"`
-	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
-	ScoutReport   json.RawMessage            `json:"scout_report,omitempty"`
-	ToolCount     int                        `json:"tool_count,omitempty"`
+	Name          string   `json:"name"`
+	Caste         string   `json:"caste"`
+	TaskID        string   `json:"task_id,omitempty"`
+	Status        string   `json:"status"`
+	Summary       string   `json:"summary,omitempty"`
+	FilesCreated  []string `json:"files_created,omitempty"`
+	FilesModified []string `json:"files_modified,omitempty"`
+	TestsWritten  []string `json:"tests_written,omitempty"`
+	// TaskReceipts carries this worker's own task-specific completion
+	// evidence, copied through by mapInternalWorkerResult REGARDLESS of the
+	// terminal status (D-08, D-09): a failed/interrupted native worker can
+	// still have honestly finished some of a merged job's tasks before it
+	// crashed, and that proof must survive to
+	// admitCoherentJobTaskReceipts/finalizeCoherentJobTaskReceiptEvidence
+	// (cmd/coherent_job_receipts.go) instead of being dropped here.
+	TaskReceipts []codex.TaskReceipt        `json:"task_receipts,omitempty"`
+	Artifacts    map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ScoutReport  json.RawMessage            `json:"scout_report,omitempty"`
+	ToolCount    int                        `json:"tool_count,omitempty"`
 	// Usage is populated only by codex.AttachWorkerUsage on the real
 	// dispatch boundary (pkg/codex/platform_dispatch.go). It was silently
 	// dropped by mapInternalWorkerResult before Phase 174 (SPEND-01) --
@@ -482,6 +490,7 @@ func mapInternalWorkerResult(result codex.WorkerResult, invokeErr error) *intern
 		FilesCreated:  append([]string(nil), result.FilesCreated...),
 		FilesModified: append([]string(nil), result.FilesModified...),
 		TestsWritten:  append([]string(nil), result.TestsWritten...),
+		TaskReceipts:  append([]codex.TaskReceipt(nil), result.TaskReceipts...),
 		Artifacts:     result.Artifacts,
 		ScoutReport:   result.ScoutReport,
 		ToolCount:     result.ToolCount,

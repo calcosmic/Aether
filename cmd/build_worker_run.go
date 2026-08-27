@@ -374,8 +374,14 @@ func buildCompletionFromWorkerRuns(record buildAttemptRecord) (codexExternalBuil
 			FilesCreated:  append([]string(nil), result.FilesCreated...),
 			FilesModified: append([]string(nil), result.FilesModified...),
 			TestsWritten:  append([]string(nil), result.TestsWritten...),
-			Blockers:      append([]string(nil), result.Blockers...),
-			Handoff:       result.Handoff,
+			// Threaded through unchanged, whatever the terminal status (D-08,
+			// D-09): a native worker run that failed or was interrupted can
+			// still carry honest task-specific receipts, and dropping them
+			// here would silently make the failed-terminal-status branch of
+			// completedBuildTaskIDs unreachable for this lane.
+			TaskReceipts: append([]codex.TaskReceipt(nil), result.TaskReceipts...),
+			Blockers:     append([]string(nil), result.Blockers...),
+			Handoff:      result.Handoff,
 		})
 	}
 	manifest := *record.PlanManifest
