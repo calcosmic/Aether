@@ -5,7 +5,7 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 172.1
 current_phase_name: gate environment integrity — not started; blocks nothing; stays in the backlog
 status: planning
-stopped_at: Phase 195 complete, ready to plan Phase 196
+stopped_at: Phase 196 planned (8 plans, 4 waves), ready to execute
 last_updated: "2026-08-27T12:43:57.270Z"
 last_activity: 2026-08-27
 last_activity_desc: Phase 195 complete, transitioned to Phase 172.1
@@ -34,9 +34,9 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Progress:** [█░░░░░░░░░] 14%
 
-Phase: 196 (See What It Cost) — READY TO PLAN
-Plan: Not started
-Status: Ready to plan
+Phase: 196 (See What It Cost) — PLANNED, READY TO EXECUTE
+Plan: 0 of 8
+Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
@@ -156,6 +156,7 @@ Last activity: 2026-08-27 — Phase 195 complete, transitioned to Phase 172.1
 - [x] Discuss + plan Phase 194: The Queen Decides the Team — planned 2026-08-23 (9 plans, 9 waves)
 - [x] Execute and verify Phase 194: The Queen Decides the Team — complete 2026-08-26 (9/9 plans, 9/9 UAT)
 - [~] Phase 195: Coherent Jobs — discussed and planned (10 plans); executing, 4/10 complete 2026-08-27 ← **current**
+- [x] Plan Phase 196: See What It Cost — planned 2026-08-27 (8 plans, 4 waves; checked twice, 2 blockers found and fixed)
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
