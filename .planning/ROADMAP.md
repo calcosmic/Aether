@@ -158,7 +158,38 @@ Plans:
 3. Given the real six-batch file-copy failure from a past project as a test fixture, the default grouping (with no explicit instruction) produces one worker instead of six, because the tasks share files and depend on each other.
 4. The same grouping behavior works when workers run in their own isolated copy of the code ("worktree" mode) — grouping is no longer switched off there.
 
-**Plans**: TBD
+**Plans**: 9 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 195-01-PLAN.md — Pure coherent-job contracts, dependency validation, local repair, and CalVault component planning (wave 1)
+- [ ] 195-02-PLAN.md — Additive task-receipt contract shared by native/external results and the generated schema (wave 1)
+
+**Wave 2** *(blocked on job-planner contracts)*
+
+- [ ] 195-03-PLAN.md — Wire grouping before waves/worktree ownership; prove the in-repo CalVault job and grouped briefs (wave 2)
+
+**Wave 3** *(parallel runtime integrations after manifest contracts)*
+
+- [ ] 195-04-PLAN.md — Shared receipt validator and exact native four-of-six task credit (wave 3)
+- [ ] 195-05-PLAN.md — Decision-aware one-worker check-in fast path, compact summary, and `--checkin` override (wave 3)
+
+**Wave 4** *(blocked on native receipt semantics)*
+
+- [ ] 195-06-PLAN.md — External/wrapper receipt parity and exact partial finalization (wave 4)
+
+**Wave 5** *(blocked on both completion lanes)*
+
+- [ ] 195-07-PLAN.md — Append-only, parent-linked, unfinished-only recovery jobs (wave 5)
+
+**Wave 6** *(blocked on retry and receipt truth)*
+
+- [ ] 195-08-PLAN.md — One grouped worktree plus receipt-scoped partial sync before credit (wave 6)
+
+**Wave 7** *(blocked on final runtime behavior)*
+
+- [ ] 195-09-PLAN.md — Canonical YAML/schema/guide/skill/wrapper/doc parity and full phase gates (wave 7)
 
 ### Phase 196: See What It Cost
 
