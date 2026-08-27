@@ -48,7 +48,7 @@ func TestBuildPlansNoReviewerWithoutAProposal(t *testing.T) {
 		phaseVerifiedOncePhase("Ship the release", "Production deploy", colony.PhaseModeProduction),
 	} {
 		state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
-		dispatches := plannedBuildDispatchesWithJudgement(phase, state, nil, colony.VerificationDepthStandard, nil, "")
+		dispatches := testPlannedBuildDispatchesWithJudgement(phase, state, nil, colony.VerificationDepthStandard, nil, "")
 		for _, d := range dispatches {
 			if d.Stage == "verification" {
 				t.Errorf("phase %q (%s): build planned a verification-stage dispatch with no Queen proposal: %+v",
@@ -65,7 +65,7 @@ func TestBuildStillDispatchesAWatcherTheQueenAskedFor(t *testing.T) {
 	phase := phaseVerifiedOncePhase("Ship the release", "Production deploy", colony.PhaseModeProduction)
 	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
 
-	dispatches := plannedBuildDispatchesWithJudgement(
+	dispatches := testPlannedBuildDispatchesWithJudgement(
 		phase, state, nil, colony.VerificationDepthStandard,
 		[]string{"builder", "watcher"}, "owner asked for an explicit watcher pass",
 		map[string]string{"watcher": "owner asked for an explicit watcher pass"},
@@ -269,7 +269,7 @@ func TestPhaseVerifiedOnce(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{tc.phase}}}
 
-			buildDispatches := plannedBuildDispatchesWithJudgement(
+			buildDispatches := testPlannedBuildDispatchesWithJudgement(
 				tc.phase, state, nil, colony.VerificationDepthStandard, tc.proposedCastes, tc.casteReason, tc.casteReasons,
 			)
 			buildCastes := map[string]bool{}

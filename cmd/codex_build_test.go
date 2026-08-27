@@ -2651,7 +2651,7 @@ func TestBuildAllocatesUniqueNamesWhenSpawnHistoryCollides(t *testing.T) {
 		Plan:    colony.Plan{Phases: []colony.Phase{phase}},
 	})
 
-	baseDispatches := plannedBuildDispatches(phase, "standard")
+	baseDispatches := testPlannedBuildDispatches(phase, "standard")
 	if len(baseDispatches) == 0 {
 		t.Fatal("expected planned dispatches")
 	}

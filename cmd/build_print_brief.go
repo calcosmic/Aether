@@ -52,7 +52,12 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
 
-	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, uniqueSortedStrings(selectedTaskIDs), reviewDepth)
+	dispatches, err := plannedBuildDispatchesForSelectionWithState(phase, state, uniqueSortedStrings(selectedTaskIDs), reviewDepth)
+	if err != nil {
+		// WR-06: a planning refusal is named, never rendered as "this phase
+		// has nothing to do".
+		return err
+	}
 	if len(dispatches) == 0 {
 		return fmt.Errorf("phase %d has no planned dispatches", phaseNum)
 	}

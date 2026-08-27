@@ -34,7 +34,7 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 	// used to prove the WIRING (build/continue both route a proposed
 	// gatekeeper through to the dispatch list), matching how plan/swarm
 	// below are already exercised through their own real selection paths.
-	buildDispatches := plannedBuildDispatchesWithJudgement(authPhase, authState, nil, colony.VerificationDepthStandard,
+	buildDispatches := testPlannedBuildDispatchesWithJudgement(authPhase, authState, nil, colony.VerificationDepthStandard,
 		[]string{"builder", "gatekeeper"}, "", map[string]string{"gatekeeper": "this phase touches auth tokens and session permissions"})
 	regressionRequireBuildCaste(t, buildDispatches, "gatekeeper")
 
@@ -81,7 +81,7 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 	// `continue`. Plan 194-02 (D-07): probe is no longer unconditionally
 	// required either, and this fixture's wording does not score it above
 	// the relevance threshold, so it is legitimately absent too.
-	routineDispatches := plannedBuildDispatchesForSelectionWithState(routinePhase, routineState, nil, colony.VerificationDepthLight)
+	routineDispatches := testPlannedBuildDispatchesForSelectionWithState(routinePhase, routineState, nil, colony.VerificationDepthLight)
 	if got, want := regressionBuildCastes(routineDispatches), []string{"builder"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("routine UI build dispatches = %v, want lean Queen plan %v", got, want)
 	}

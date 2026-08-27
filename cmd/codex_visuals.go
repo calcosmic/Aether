@@ -1602,7 +1602,30 @@ func renderReviewDepthLineWithReason(depth colony.VerificationDepth, phaseNum, t
 
 func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
 	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, "")
-	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
+	dispatches, err := plannedBuildDispatches(phase, state.ColonyDepth)
+	if err != nil {
+		return renderUnplannablePhase(phase, err)
+	}
+	return renderBuildVisualWithDispatches(state, phase, dispatches, reviewDepth)
+}
+
+// renderUnplannablePhase is what every planned-team surface shows when the
+// planner refuses a phase outright (WR-06, 195-REVIEW.md). Before this, those
+// surfaces rendered an empty team, which reads as "this phase needs no work"
+// -- the opposite of "this phase cannot be started until its plan is repaired".
+func renderUnplannablePhase(phase colony.Phase, err error) string {
+	var b strings.Builder
+	b.WriteString(renderBanner("⚠", fmt.Sprintf("Phase %d Cannot Be Started", phase.ID)))
+	b.WriteString(visualDividerStr())
+	b.WriteString("Phase: ")
+	b.WriteString(strings.TrimSpace(phase.Name))
+	b.WriteString("\n\n")
+	b.WriteString("No workers can be planned for this phase, and this is NOT because there is nothing to do.\n")
+	b.WriteString("The plan itself has to be repaired first:\n\n  ")
+	b.WriteString(strings.TrimSpace(err.Error()))
+	b.WriteString("\n")
+	b.WriteString(renderNextUp("Fix the step order in the plan, then run the build for this phase again."))
+	return b.String()
 }
 
 // renderSuggestedSteering renders the colony's unreviewed pheromone
@@ -4002,7 +4025,11 @@ func resultSignalHousekeeping(result map[string]interface{}) *signalHousekeeping
 }
 
 func renderSpawnPlan(phase colony.Phase, depth string) string {
-	return renderSpawnPlanForDispatches(plannedBuildDispatches(phase, depth), colony.ModeInRepo)
+	dispatches, err := plannedBuildDispatches(phase, depth)
+	if err != nil {
+		return renderUnplannablePhase(phase, err)
+	}
+	return renderSpawnPlanForDispatches(dispatches, colony.ModeInRepo)
 }
 
 // renderQueenTeamChoice makes the Queen's team decision readable. The

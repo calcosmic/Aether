@@ -222,7 +222,7 @@ func TestReviewDepthFlags(t *testing.T) {
 
 func TestBuildDispatch_LightMode_SkipsMeasurerAndChaos(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
+	dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
 	for _, d := range dispatches {
 		if d.Caste == "measurer" {
 			t.Error("light mode should skip measurer dispatch")
@@ -242,7 +242,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	for _, pid := range chaosPhases {
 		t.Run(fmt.Sprintf("phase_%d_includes_chaos", pid), func(t *testing.T) {
 			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
+			dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
 			found := false
 			for _, d := range dispatches {
 				if d.Caste == "chaos" {
@@ -258,7 +258,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	for _, pid := range noChaosPhases {
 		t.Run(fmt.Sprintf("phase_%d_skips_chaos", pid), func(t *testing.T) {
 			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
+			dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
 			for _, d := range dispatches {
 				if d.Caste == "chaos" {
 					t.Errorf("light mode phase %d should skip chaos", pid)
@@ -270,7 +270,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 
 func TestBuildDispatch_HeavyMode_IncludesChaosAndMeasurer(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
+	dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
 	hasMeasurer := false
 	hasChaos := false
 	for _, d := range dispatches {
@@ -294,7 +294,7 @@ func TestBuildDispatch_FinalPhase_HeavyRegardlessOfLight(t *testing.T) {
 	// This test verifies the build dispatch path, not the resolveReviewDepth logic
 	phase := colony.Phase{ID: 5, Name: "Final polish", Tasks: []colony.Task{{Goal: "Polish", Status: "pending"}}}
 	// When resolveReviewDepth returns heavy (final phase), dispatches should include both
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
+	dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
 	hasMeasurer := false
 	hasChaos := false
 	for _, d := range dispatches {
@@ -555,7 +555,7 @@ func TestContinueReviewDispatch_StandardMode_SpawnsNothingWithoutASignal(t *test
 // relevance threshold, which "Do something" does not.
 func TestBuildDispatch_StandardMode_SkipsWatcherAndProbeWithoutASignal(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthStandard)
+	dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthStandard)
 	for _, d := range dispatches {
 		if d.Caste == "watcher" {
 			t.Error("standard mode should not include a build-side watcher dispatch without an explicit Queen proposal")

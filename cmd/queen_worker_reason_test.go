@@ -47,7 +47,7 @@ func TestNoWorkerWithoutStatedReason(t *testing.T) {
 	}
 
 	// The claim that matters is on the dispatch list, not the judgement.
-	dispatches := plannedBuildDispatchesWithJudgement(
+	dispatches := testPlannedBuildDispatchesWithJudgement(
 		phase, state, nil, colony.VerificationDepthStandard,
 		[]string{"measurer", "chaos"}, "",
 		map[string]string{"measurer": "the complaint is latency even though the phase never says so"},

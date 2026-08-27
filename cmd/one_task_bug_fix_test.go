@@ -48,7 +48,7 @@ func oneTaskBugFixPhase() colony.Phase {
 // use for this exact call shape, since neither dispatch constructor
 // performs I/O beyond composing the dispatch list itself.
 func countWorkersAcrossBothBoundaries(phase colony.Phase, state colony.ColonyState, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string, reasons map[string]string) (total int, castes []string) {
-	buildDispatches := plannedBuildDispatchesWithJudgement(phase, state, nil, reviewDepth, proposedCastes, casteReason, reasons)
+	buildDispatches := testPlannedBuildDispatchesWithJudgement(phase, state, nil, reviewDepth, proposedCastes, casteReason, reasons)
 	continueDispatches := plannedContinueReviewDispatches(
 		"/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
 		&codex.FakeInvoker{}, time.Minute, reviewDepth, proposedCastes, casteReason, reasons,

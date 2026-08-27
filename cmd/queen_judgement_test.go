@@ -238,7 +238,7 @@ func TestQueenChoiceReachesTheDispatchList(t *testing.T) {
 	}
 	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
 
-	dispatches := plannedBuildDispatchesWithJudgement(
+	dispatches := testPlannedBuildDispatchesWithJudgement(
 		phase, state, nil, colony.VerificationDepthStandard,
 		[]string{"builder", "measurer"},
 		"the complaint is latency even though the phase never says so",
@@ -371,7 +371,7 @@ func TestDepthPolicyStillAppliesWithoutAQueenChoice(t *testing.T) {
 	}
 	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
 
-	dispatches := plannedBuildDispatchesWithJudgement(phase, state, nil, colony.VerificationDepthStandard, nil, "")
+	dispatches := testPlannedBuildDispatchesWithJudgement(phase, state, nil, colony.VerificationDepthStandard, nil, "")
 	for _, dispatch := range dispatches {
 		if dispatch.Caste == "measurer" {
 			t.Error("Measurer must stay off at standard depth when the Queen did not ask for it")

@@ -1205,7 +1205,7 @@ func TestGroupedWorktreeOwnsUnionedPaths(t *testing.T) {
 		Tasks:       tasks,
 	}
 
-	planned := waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+	planned := waveDispatchesOnly(testPlannedBuildDispatchesForSelectionWithState(
 		phase, colony.ColonyState{ParallelMode: colony.ModeWorktree}, nil, colony.VerificationDepthStandard))
 	if len(planned) != 1 {
 		t.Fatalf("planner produced %d task jobs, want 1 before worktree ownership runs", len(planned))

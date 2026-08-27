@@ -1187,9 +1187,17 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 	}
 
 	phase := state.Plan.Phases[phaseNum-1]
+	// This planner call only ever runs after the SAME plan already succeeded in
+	// the caller, so a refusal here is impossible in practice -- but it is
+	// reported rather than swallowed (WR-06), never rendered as a zero count
+	// with no explanation.
+	plannedForEvent, planErr := plannedBuildDispatchesForSelectionWithState(phase, *state, selectedTaskIDs, reviewDepth)
+	if planErr != nil {
+		visualFprintf(stderr, "warning: could not restate phase %d's planned team for the event log: %v\n", phaseNum, planErr)
+	}
 	state.Events = append(trimmedEvents(state.Events),
 		fmt.Sprintf("%s|phase_started|build|Phase %d: %s", startedAt.Format(time.RFC3339), phaseNum, phase.Name),
-		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelectionWithState(phase, *state, selectedTaskIDs, reviewDepth)), phaseNum),
+		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedForEvent), phaseNum),
 	)
 
 	if tracer != nil && state.RunID != nil {
@@ -1240,11 +1248,11 @@ func applyBuildTaskStatuses(phase *colony.Phase, selectedTaskIDs []string) {
 	}
 }
 
-func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispatch {
+func plannedBuildDispatches(phase colony.Phase, depth string) ([]codexBuildDispatch, error) {
 	return plannedBuildDispatchesForSelection(phase, depth, nil, colony.VerificationDepthLight)
 }
 
-func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) ([]codexBuildDispatch, error) {
 	state := colony.ColonyState{
 		ColonyDepth:       normalizedBuildDepth(depth),
 		VerificationDepth: string(reviewDepth),
@@ -1357,11 +1365,17 @@ func mergeDispatchInto(target *codexBuildDispatch, next codexBuildDispatch) {
 // plannedBuildDispatchesForSelectionWithState plans with no Queen proposal, so
 // the deterministic keyword engine decides. Callers that have the Queen's
 // judgement use the ...WithJudgement variant.
-func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) ([]codexBuildDispatch, error) {
 	return plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, nil, "")
 }
 
-func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string, reasons ...map[string]string) []codexBuildDispatch {
+// plannedBuildDispatchesWithJudgement returns the planner's refusal instead of
+// swallowing it (WR-06, 195-REVIEW.md). It used to do `if err != nil { return
+// nil }`, so a phase whose steps depend on each other in a loop -- or one whose
+// step names a step that does not exist -- rendered everywhere as a phase with
+// no work to do, instead of the named, actionable error coherentJobGraphPreflight
+// had already produced.
+func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string, reasons ...map[string]string) ([]codexBuildDispatch, error) {
 	var reasonMap map[string]string
 	if len(reasons) > 0 {
 		reasonMap = reasons[0]
@@ -1370,9 +1384,9 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 		phase, state, selectedTaskIDs, reviewDepth, proposedCastes, casteReason, reasonMap, nil,
 	)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return dispatches
+	return dispatches, nil
 }
 
 // plannedBuildDispatchesWithJobProposals is the single production bridge from

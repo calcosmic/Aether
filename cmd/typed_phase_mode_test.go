@@ -28,7 +28,7 @@ func TestResearchWordedProductionPhaseDispatchesBuilder(t *testing.T) {
 		},
 	}
 
-	dispatches := plannedBuildDispatchesForSelection(phase, "standard", nil, colony.VerificationDepthLight)
+	dispatches := testPlannedBuildDispatchesForSelection(phase, "standard", nil, colony.VerificationDepthLight)
 	if len(dispatches) == 0 {
 		t.Fatal("no dispatches planned")
 	}

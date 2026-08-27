@@ -58,7 +58,7 @@ func TestNoCasteIsDispatchedAtBothBoundaries(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			buildDispatches := plannedBuildDispatchesWithJudgement(tc.phase, state, nil, colony.VerificationDepthStandard, nil, "")
+			buildDispatches := testPlannedBuildDispatchesWithJudgement(tc.phase, state, nil, colony.VerificationDepthStandard, nil, "")
 			buildCastes := map[string]bool{}
 			for _, d := range buildDispatches {
 				buildCastes[d.Caste] = true

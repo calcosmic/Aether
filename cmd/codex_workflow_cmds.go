@@ -284,7 +284,12 @@ var buildCmd = &cobra.Command{
 			return nil
 		}
 
-		dispatches := plannedBuildDispatches(state.Plan.Phases[phaseNum-1], state.ColonyDepth)
+		dispatches, planErr := plannedBuildDispatches(state.Plan.Phases[phaseNum-1], state.ColonyDepth)
+		if planErr != nil {
+			// WR-06: never render a planning refusal as an empty team.
+			outputError(2, planErr.Error(), nil)
+			return nil
+		}
 		if manifestPath, ok := result["manifest"].(string); ok && strings.TrimSpace(manifestPath) != "" {
 			rel := strings.TrimPrefix(manifestPath, ".aether/data/")
 			var manifest codexBuildManifest

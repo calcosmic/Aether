@@ -227,7 +227,12 @@ func proofDispatchesForState(state colony.ColonyState, phase *colony.Phase) ([]c
 		return manifest.Data.Dispatches, "build_manifest", displayDataPath(manifest.Path)
 	}
 
-	return plannedBuildDispatches(*phase, state.ColonyDepth), "phase_plan", ""
+	dispatches, err := plannedBuildDispatches(*phase, state.ColonyDepth)
+	if err != nil {
+		// WR-06: say why there is no plan rather than reporting an empty one.
+		return nil, "phase_plan_unavailable", err.Error()
+	}
+	return dispatches, "phase_plan", ""
 }
 
 func convertColonyPrimeLedger(items []colonyPrimeLedgerItem) []proofContextDecision {

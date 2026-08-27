@@ -62,7 +62,7 @@ func TestCalVaultSixBatchesBecomeOneInRepoJob(t *testing.T) {
 	}
 
 	dispatches := waveDispatchesOnly(
-		plannedBuildDispatchesForSelectionWithState(phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard))
+		testPlannedBuildDispatchesForSelectionWithState(phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard))
 
 	if len(dispatches) != 1 {
 		names := []string{}
@@ -117,7 +117,7 @@ func TestGroupedJobBriefCarriesEveryTaskContract(t *testing.T) {
 			},
 		},
 	}
-	dispatches := waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+	dispatches := waveDispatchesOnly(testPlannedBuildDispatchesForSelectionWithState(
 		phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard,
 	))
 	if len(dispatches) != 1 {
@@ -220,7 +220,7 @@ func TestSingleTaskWorkerNameIsStable(t *testing.T) {
 	taskID := "8.1"
 	task := colony.Task{ID: &taskID, Goal: "Implement the stable single task", Status: colony.TaskPending}
 	phase := colony.Phase{ID: 8, Tasks: []colony.Task{task}}
-	dispatches := waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+	dispatches := waveDispatchesOnly(testPlannedBuildDispatchesForSelectionWithState(
 		phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard,
 	))
 	if len(dispatches) != 1 {
@@ -242,7 +242,7 @@ func TestSelectedTaskGroupingStaysInScope(t *testing.T) {
 			{ID: &secondID, Goal: "Redispatch only this task", Status: colony.TaskPending, DependsOn: []string{firstID}},
 		},
 	}
-	dispatches := waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+	dispatches := waveDispatchesOnly(testPlannedBuildDispatchesForSelectionWithState(
 		phase, colony.ColonyState{}, []string{secondID}, colony.VerificationDepthStandard,
 	))
 	if len(dispatches) != 1 || !reflect.DeepEqual(dispatchCoveredTaskIDs(dispatches[0]), []string{secondID}) {
@@ -268,7 +268,7 @@ func TestCoherentJobsMatchAcrossParallelModes(t *testing.T) {
 		},
 	}
 	plan := func(mode colony.ParallelMode) []codexBuildDispatch {
-		return waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+		return waveDispatchesOnly(testPlannedBuildDispatchesForSelectionWithState(
 			phase, colony.ColonyState{ParallelMode: mode}, nil, colony.VerificationDepthStandard,
 		))
 	}
@@ -301,7 +301,7 @@ func TestIndependentTasksStillFanOut(t *testing.T) {
 	}
 
 	dispatches := waveDispatchesOnly(
-		plannedBuildDispatchesForSelectionWithState(phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard))
+		testPlannedBuildDispatchesForSelectionWithState(phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard))
 
 	if len(dispatches) != 3 {
 		t.Fatalf("three independent tasks collapsed to %d workers; coalescing must not turn parallel work serial", len(dispatches))
@@ -323,7 +323,7 @@ func TestCoalescedWorkerKeepsEveryTaskVisible(t *testing.T) {
 	phase := colony.Phase{ID: 5, Name: "Template recovery", Tasks: tasks}
 
 	dispatches := waveDispatchesOnly(
-		plannedBuildDispatchesForSelectionWithState(phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard))
+		testPlannedBuildDispatchesForSelectionWithState(phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard))
 
 	if len(dispatches) != 1 {
 		t.Fatalf("expected one worker for three chained steps, got %d", len(dispatches))
