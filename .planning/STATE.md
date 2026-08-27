@@ -5,15 +5,15 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 195
 current_phase_name: coherent-jobs
 status: executing
-stopped_at: Completed 195-08-PLAN.md
-last_updated: "2026-08-27T08:00:14.892Z"
+stopped_at: Completed 195-09-PLAN.md
+last_updated: "2026-08-27T08:16:42.417Z"
 last_activity: 2026-08-27
-state_head: aae13d62f1e5271d1f4f0b10b1f7ef09c1c5f550
+state_head: a7b0074251d0a548264ce99fc09d5f02dc14ebee
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 24
-  completed_plans: 22
+  completed_plans: 23
   percent: 14
 ---
 
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [█░░░░░░░░░] 14%
 
 Phase: 195 (coherent-jobs) — EXECUTING
-Plan: 9 of 10
+Plan: 10 of 10
 Status: Ready to execute
 Last activity: 2026-08-27
 
@@ -133,6 +133,8 @@ Last activity: 2026-08-27
 - [Phase 195]: BUILT-transition gating falls back to the union of every dispatch's own covered tasks when no explicit task selection is passed, so the ordinary no-filter build isn't misread as trivially fully-credited.
 - [Phase 195]: Provenance's phantom-build guard now accepts a failed worker carrying genuine, evidenced task receipts as real partial provenance; zero receipts still reject the whole packet, unchanged.
 - [Phase 195]: [Phase 195]: planCoherentJobRetry reuses the canonical planCoherentJobs grouping pass for a parent job's unfinished tasks (single all-inclusive proposal over the uncredited subset) rather than a second dependency graph; a new buildAttemptPartial attempt status (distinct from built/failed) plus ParentAttemptID/ParentJobName (begin-then-attach, same discipline as checkFixAttemptRecord) make D-10 recovery append-only on both build lanes -- retry only ever follows accepted credit, never a total failure with zero receipts.
+- [Phase 195]: Build coherent-job contract defined once and asserted by three guards over five surfaces — Each guard re-typing its own anchor list would be a fourth surface able to go stale, reproducing the drift the guards exist to catch
+- [Phase 195]: Three Go-authority sentences are compared byte-for-byte across YAML, guide, skill and wrappers — A keyword check would accept five surfaces each paraphrasing ownership differently, which is this repo's documented failure mode
 
 ### Pending Todos
 
@@ -218,6 +220,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T08:00:14.773Z
-Stopped at: Completed 195-08-PLAN.md
+Last session: 2026-08-27T08:16:35.470Z
+Stopped at: Completed 195-09-PLAN.md
 Resume file: None

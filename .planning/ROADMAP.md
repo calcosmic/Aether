@@ -189,7 +189,7 @@ Plans:
 
 **Wave 7** *(blocked on final runtime behavior)*
 
-- [ ] 195-09-PLAN.md — Atomically synchronize canonical YAML, Codex guide/skill, and all three build wrappers (wave 7)
+- [x] 195-09-PLAN.md — Atomically synchronize canonical YAML, Codex guide/skill, and all three build wrappers (wave 7)
 
 **Wave 8** *(blocked on parity-critical contract synchronization)*
 
