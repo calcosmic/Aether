@@ -161,10 +161,20 @@ func receiptForTask(t *testing.T, root, taskID string) codex.TaskReceipt {
 		t.Fatalf("write fixture file for task %s: %v", taskID, err)
 	}
 	return codex.TaskReceipt{
-		TaskID:        taskID,
-		Status:        codex.TaskReceiptStatusCompleted,
-		Summary:       "finished " + taskID,
+		TaskID:  taskID,
+		Status:  codex.TaskReceiptStatusCompleted,
+		Summary: "finished " + taskID,
+		// FilesCreated/TestsWritten are non-omitempty on codex.TaskReceipt --
+		// the completion-packet schema requires them present as arrays, never
+		// JSON null. A nil Go slice here is fine for the native-lane callers
+		// (which never JSON-round-trip a receipt), but a full external
+		// build-finalize call does round-trip through
+		// validateCompletionPacketSemantics -> completionPacketAsRaw, so an
+		// empty (not nil) slice keeps this fixture reusable for both lanes
+		// (195-06).
+		FilesCreated:  []string{},
 		FilesModified: []string{file},
+		TestsWritten:  []string{},
 		Handoff: codex.WorkerHandoff{
 			VerificationStatus: "pass",
 			CommandsRun:        []string{"go test ./..."},
@@ -211,8 +221,8 @@ func TestFailedGroupedDispatchCreditsExactlyReceiptedTasks(t *testing.T) {
 		t.Fatalf("fixture did not produce one merged dispatch covering all six tasks; dispatches: %+v", manifest.Dispatches)
 	}
 
-	receiptedIDs := ids[:4]   // 1.1..1.4
-	pendingIDs := ids[4:]     // 1.5, 1.6
+	receiptedIDs := ids[:4] // 1.1..1.4
+	pendingIDs := ids[4:]   // 1.5, 1.6
 	receipts := make([]codex.TaskReceipt, 0, len(receiptedIDs))
 	touchedFiles := make([]string, 0, len(receiptedIDs))
 	for _, id := range receiptedIDs {

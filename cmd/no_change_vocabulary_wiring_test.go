@@ -46,7 +46,7 @@ func noChangeSuccessJudgements() []successJudgement {
 		{"renders with the success icon", func(s string) bool { return dispatchStatusIcon(s) == "✓" }},
 		{"finalization reports no anomaly", func(s string) bool {
 			report := buildExternalBuildResultCollectionReport(1, "phase", nil, nil,
-				[]codexBuildDispatch{{Name: "w", Status: s}}, parseManifestGeneratedAt(codexBuildManifest{}))
+				[]codexBuildDispatch{{Name: "w", Status: s}}, parseManifestGeneratedAt(codexBuildManifest{}), nil)
 			return len(report.Issues) == 0
 		}},
 	}
@@ -121,7 +121,7 @@ func TestInterruptedIsTerminalButNeverCountedAsSuccess(t *testing.T) {
 		t.Fatalf("verification status for interrupted = %q, want not_run: the worker stopped before verifying, which is not a failure", got)
 	}
 	report := buildExternalBuildResultCollectionReport(1, "phase", nil, nil,
-		[]codexBuildDispatch{{Name: "w", Status: "interrupted"}}, parseManifestGeneratedAt(codexBuildManifest{}))
+		[]codexBuildDispatch{{Name: "w", Status: "interrupted"}}, parseManifestGeneratedAt(codexBuildManifest{}), nil)
 	if len(report.Issues) != 1 || report.Issues[0].Kind != "worker_interrupted" {
 		t.Fatalf("finalization must name an interruption as such, got %+v", report.Issues)
 	}

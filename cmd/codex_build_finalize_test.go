@@ -3,13 +3,16 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -1931,6 +1934,332 @@ func TestBuildFinalizeWarnsOnLegacyUnboundManifest(t *testing.T) {
 		for _, evt := range updatedState.Events {
 			if strings.Contains(evt, "manifest_legacy_accepted") {
 				t.Errorf("the ordinary bound path must not append a manifest_legacy_accepted event, got: %v", updatedState.Events)
+			}
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// 195-06 Task 2: external/wrapper build-finalize reuses the SAME task-receipt
+// trust boundary (admitCoherentJobTaskReceipts / finalizeCoherentJobTaskReceiptEvidence,
+// via resolveCoherentJobDispatchReceipts, cmd/coherent_job_receipts.go) the
+// native lane wired in 195-04, so a real `aether build-finalize` call --  not
+// just the merge/resolve functions in isolation -- projects exact receipt
+// evidence into exact task state and colony state (195-CONTEXT.md D-08/D-09).
+// ---------------------------------------------------------------------------
+
+// setupCoherentJobExternalFinalizeTest builds a real, plan-only manifest for
+// six dependent tasks the runtime coalesces into ONE merged dispatch
+// (coalesceSequentialDispatches), the exact shape D-08/D-09's partial-credit
+// rulings are about. Returns root and the merged chain dispatch.
+func setupCoherentJobExternalFinalizeTest(t *testing.T, goal string) (string, codexBuildManifest, codexBuildDispatch, []string) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	tasks, ids := sixChainedTasks()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "Merged chain", Description: "One worker, six dependent steps",
+			Status: colony.PhaseReady, Tasks: tasks,
+		}}},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("plan-only build: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+
+	var chain codexBuildDispatch
+	for _, dispatch := range manifest.Dispatches {
+		if len(dispatch.CoveredTaskIDs) > 1 {
+			chain = dispatch
+			break
+		}
+	}
+	if chain.Name == "" || len(chain.CoveredTaskIDs) != len(ids) {
+		t.Fatalf("fixture did not produce one merged dispatch covering all six tasks; dispatches: %+v", manifest.Dispatches)
+	}
+	return root, manifest, chain, ids
+}
+
+// TestExternalGroupedFullSuccessCreditsAll is the regression guard for the
+// legacy path: a real build-finalize call for a whole-success grouped
+// dispatch (no receipts needed) still reaches BUILT with every covered task
+// completed, exactly as before 195-06 wired receipt resolution into this
+// entrypoint.
+func TestExternalGroupedFullSuccessCreditsAll(t *testing.T) {
+	root, manifest, chain, _ := setupCoherentJobExternalFinalizeTest(t, "Whole success still credits every covered task")
+
+	if err := os.WriteFile(filepath.Join(root, "external-evidence.txt"), []byte("durable external work\n"), 0o644); err != nil {
+		t.Fatalf("write external evidence: %v", err)
+	}
+	results := []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "completed",
+		Summary:       chain.Name + " finished its chain",
+		FilesModified: []string{"external-evidence.txt"},
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus:     "pass",
+			CommandsRun:            []string{"go test ./..."},
+			NextWorkerInstructions: []string{"chain complete"},
+		},
+	}}
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+	_, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+	if updatedState.State != colony.StateBUILT {
+		t.Fatalf("whole-success grouped job state = %s, want %s", updatedState.State, colony.StateBUILT)
+	}
+	for _, task := range updatedState.Plan.Phases[0].Tasks {
+		if task.Status != colony.TaskCompleted {
+			t.Fatalf("task %s is %q after whole-success chain completion, want %q", *task.ID, task.Status, colony.TaskCompleted)
+		}
+	}
+}
+
+// TestExternalGroupedPartialPersistsExactTaskState is the external-lane
+// counterpart of TestFailedGroupedDispatchCreditsExactlyReceiptedTasks
+// (cmd/merged_dispatch_task_credit_test.go, native lane), run through the
+// REAL `aether build-finalize` entrypoint rather than the bare merge/resolve
+// functions: a single external worker covering six chained tasks that failed
+// after finishing four, with valid per-task receipts for those four, must
+// credit exactly those four, leave the other two pending, and never report
+// the colony as BUILT.
+//
+// "An admitted candidate whose root artifact/evidence is absent is removed
+// during finalization and remains pending" (this plan's own acceptance
+// criteria) is already locked, lane-neutrally, by
+// TestCoherentJobReceiptFinalization's "a candidate whose file is missing
+// from root is not credited" subtest (cmd/coherent_job_receipts_test.go,
+// 195-04) -- finalizeCoherentJobTaskReceiptEvidence is the exact same
+// function this external lane now calls, unchanged, so that coverage already
+// applies here and is not duplicated in this file. A packet-level attempt to
+// reproduce a "vanished between admission and finalization" file at THIS
+// entrypoint cannot reach that code path at all: validateExternalWorkerResultClaimPaths
+// (part of validateCompletionPacketSemantics, which runs before merge/receipt
+// resolution) already refuses a completion packet whose own files_modified
+// names a path that does not exist in root at submission time, on any lane.
+func TestExternalGroupedPartialPersistsExactTaskState(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Partial credit persists exact task state")
+
+	proven := ids[:4]
+	pending := ids[4:]
+
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touchedFiles := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touchedFiles = append(touchedFiles, taskFileName(id))
+	}
+
+	results := []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: touchedFiles,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+		TaskReceipts: receipts,
+	}}
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+	_, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("build-finalize should accept a failed dispatch with genuine partial receipts, got error: %v", err)
+	}
+	if updatedState.State == colony.StateBUILT {
+		t.Fatalf("colony state = %s after only 4 of 6 tasks were credited, want anything but BUILT (honest partial state)", updatedState.State)
+	}
+
+	statusByID := map[string]string{}
+	for _, task := range updatedState.Plan.Phases[0].Tasks {
+		statusByID[*task.ID] = string(task.Status)
+	}
+	for _, id := range proven {
+		if statusByID[id] != string(colony.TaskCompleted) {
+			t.Fatalf("task %s is %q, want %q", id, statusByID[id], colony.TaskCompleted)
+		}
+	}
+	for _, id := range pending {
+		if statusByID[id] == string(colony.TaskCompleted) {
+			t.Fatalf("task %s (no receipt at all) is %q, want it to remain pending", id, statusByID[id])
+		}
+	}
+}
+
+// TestExternalGroupedFailureWithoutReceiptsCreditsNone is D-08's negative
+// case at the real build-finalize entrypoint: an entirely failed grouped job
+// with zero task receipts is rejected by the phantom-build provenance guard
+// (SAFE-01) -- never silently credited from touched files or a summary
+// naming every task -- so no grouped task state changes at all.
+func TestExternalGroupedFailureWithoutReceiptsCreditsNone(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "No receipts, no credit")
+
+	touchedFiles := make([]string, 0, len(ids))
+	for _, id := range ids {
+		file := taskFileName(id)
+		if err := os.WriteFile(filepath.Join(root, file), []byte("package fixture\n"), 0o644); err != nil {
+			t.Fatalf("write fixture file for task %s: %v", id, err)
+		}
+		touchedFiles = append(touchedFiles, file)
+	}
+
+	results := []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "failed",
+		Summary:       "touched every file for tasks " + fmt.Sprint(ids) + " but has no per-task receipt",
+		FilesModified: touchedFiles,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+	}}
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+	if _, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false); err == nil {
+		t.Fatal("expected build-finalize to reject an entirely failed job with no task receipts at all (phantom-build guard, SAFE-01)")
+	}
+
+	var reloaded colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &reloaded); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	for _, task := range reloaded.Plan.Phases[0].Tasks {
+		if task.Status == colony.TaskCompleted {
+			t.Fatalf("task %s is %q after a rejected completion packet, want no state change at all", *task.ID, task.Status)
+		}
+	}
+}
+
+// TestExternalPartialClaimsMatchTaskState proves two things (195-06 Task 2):
+// (1) in-repo mode, the dispatches runCodexBuildFinalize returns carry
+// CompletedTaskIDs/TaskClaims that agree exactly with the persisted task
+// state it just committed -- result diagnostics and task state can never
+// silently disagree; and (2) a worktree-backed completion's dispatches, as
+// they exist right after mergeExternalBuildResults and before any
+// resolveCoherentJobDispatchReceipts call, have NO CompletedTaskIDs at all --
+// runCodexBuildFinalize's own worktree gate skips that call entirely, since
+// root does not yet have the synced files, and plan 195-08's sync-first
+// adapter is what consumes the still-intact TaskReceipts afterward.
+func TestExternalPartialClaimsMatchTaskState(t *testing.T) {
+	t.Run("in-repo: returned dispatches agree with committed task state", func(t *testing.T) {
+		root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Claims match task state")
+
+		receiptedIDs := ids[:4]
+		receipts := make([]codex.TaskReceipt, 0, len(receiptedIDs))
+		touchedFiles := make([]string, 0, len(receiptedIDs))
+		for _, id := range receiptedIDs {
+			receipts = append(receipts, receiptForTask(t, root, id))
+			touchedFiles = append(touchedFiles, taskFileName(id))
+		}
+		results := []codexExternalBuildWorkerResult{{
+			Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+			Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+			Status:        "failed",
+			Summary:       "crashed after finishing four of six steps",
+			FilesModified: touchedFiles,
+			Handoff: codex.WorkerHandoff{
+				VerificationStatus: "fail",
+				CommandsRun:        []string{"go test ./..."},
+			},
+			TaskReceipts: receipts,
+		}}
+		completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+		_, updatedState, _, dispatches, err := runCodexBuildFinalize(root, 1, completion, false)
+		if err != nil {
+			t.Fatalf("finalize: %v", err)
+		}
+
+		statusByID := map[string]string{}
+		for _, task := range updatedState.Plan.Phases[0].Tasks {
+			statusByID[*task.ID] = string(task.Status)
+		}
+
+		var merged codexBuildDispatch
+		for _, d := range dispatches {
+			if d.Name == chain.Name {
+				merged = d
+				break
+			}
+		}
+		gotCompleted := append([]string{}, merged.CompletedTaskIDs...)
+		sort.Strings(gotCompleted)
+		if fmt.Sprint(gotCompleted) != fmt.Sprint(receiptedIDs) {
+			t.Fatalf("returned dispatch CompletedTaskIDs = %v, want %v", gotCompleted, receiptedIDs)
+		}
+		for _, id := range gotCompleted {
+			if statusByID[id] != string(colony.TaskCompleted) {
+				t.Fatalf("dispatch claims task %s complete but committed task state says %q", id, statusByID[id])
+			}
+		}
+		gotClaimIDs := make([]string, 0, len(merged.TaskClaims))
+		for _, c := range merged.TaskClaims {
+			gotClaimIDs = append(gotClaimIDs, c.TaskID)
+		}
+		sort.Strings(gotClaimIDs)
+		if fmt.Sprint(gotClaimIDs) != fmt.Sprint(receiptedIDs) {
+			t.Fatalf("returned dispatch TaskClaims cover %v, want exactly %v", gotClaimIDs, receiptedIDs)
+		}
+	})
+
+	t.Run("worktree-backed: no pre-sync CompletedTaskIDs", func(t *testing.T) {
+		root := t.TempDir()
+		ids := []string{"1.1", "1.2", "1.3", "1.4", "1.5", "1.6"}
+		chain := codexBuildDispatch{Name: "Weaver-1", Caste: "builder", TaskID: ids[0], CoveredTaskIDs: ids, Status: "failed"}
+		manifest := codexBuildManifest{Phase: 1, Dispatches: []codexBuildDispatch{chain}}
+
+		receiptedIDs := ids[:4]
+		receipts := make([]codex.TaskReceipt, 0, len(receiptedIDs))
+		touchedFiles := make([]string, 0, len(receiptedIDs))
+		for _, id := range receiptedIDs {
+			receipts = append(receipts, receiptForTask(t, root, id))
+			touchedFiles = append(touchedFiles, taskFileName(id))
+		}
+		results := []codexExternalBuildWorkerResult{{
+			Name: chain.Name, TaskID: chain.TaskID, Status: "failed",
+			Summary:       "crashed after finishing four of six steps",
+			FilesModified: touchedFiles,
+			Handoff: codex.WorkerHandoff{
+				VerificationStatus: "fail",
+				CommandsRun:        []string{"go test ./..."},
+			},
+			TaskReceipts: receipts,
+		}}
+
+		dispatches, violations, err := mergeExternalBuildResults(manifest, results)
+		if err != nil {
+			t.Fatalf("mergeExternalBuildResults: %v", err)
+		}
+		if len(violations) > 0 {
+			t.Fatalf("unexpected violations: %+v", violations)
+		}
+
+		// This IS the exact state runCodexBuildFinalize's own worktree gate
+		// leaves dispatches in -- it never calls
+		// resolveCoherentJobDispatchReceipts for a worktree-backed completion
+		// (root does not yet have the synced files); plan 195-08's
+		// sync-first adapter is what runs admission/finalization afterward.
+		for _, d := range dispatches {
+			if len(d.CompletedTaskIDs) != 0 || len(d.TaskClaims) != 0 {
+				t.Fatalf("a worktree-backed dispatch must have no pre-sync CompletedTaskIDs/TaskClaims, got %v / %+v", d.CompletedTaskIDs, d.TaskClaims)
+			}
+			if len(d.TaskReceipts) != len(receiptedIDs) {
+				t.Fatalf("worktree lane must still carry TaskReceipts through unchanged for 195-08's later admission, got %d, want %d", len(d.TaskReceipts), len(receiptedIDs))
 			}
 		}
 	})
