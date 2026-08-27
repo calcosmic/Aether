@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -39,7 +41,7 @@ func waveDispatchesOnly(dispatches []codexBuildDispatch) []codexBuildDispatch {
 	return out
 }
 
-func TestSequentialFileTasksBecomeOneWorker(t *testing.T) {
+func TestCalVaultSixBatchesBecomeOneInRepoJob(t *testing.T) {
 	saveGlobals(t)
 	notesOnlyRepo(t)
 
@@ -69,6 +71,181 @@ func TestSequentialFileTasksBecomeOneWorker(t *testing.T) {
 		}
 		t.Fatalf("six dependent copy steps became %d workers, want 1; each extra worker pays full startup cost and re-reads the same list:\n  %s",
 			len(dispatches), strings.Join(names, "\n  "))
+	}
+}
+
+func TestGroupedJobBriefCarriesEveryTaskContract(t *testing.T) {
+	saveGlobals(t)
+	codeRepo(t)
+
+	firstID := "3.1"
+	secondID := "3.2"
+	phase := colony.Phase{
+		ID:   3,
+		Name: "Grouped contract delivery",
+		Tasks: []colony.Task{
+			{
+				ID:              &firstID,
+				Goal:            "Implement the alpha behavior",
+				Status:          colony.TaskPending,
+				Constraints:     []string{"alpha-constraint"},
+				Hints:           []string{"cmd/alpha.go", "follow-alpha-pattern"},
+				SuccessCriteria: []string{"alpha-criterion"},
+				EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+					Criterion: "alpha-evidence", Artifacts: []string{"cmd/alpha.go"}, Checks: []string{"go test ./cmd -run Alpha"},
+				}},
+			},
+			{
+				ID:              &secondID,
+				Goal:            "Add the beta regression coverage",
+				Status:          colony.TaskPending,
+				DependsOn:       []string{firstID},
+				Constraints:     []string{"beta-constraint"},
+				Hints:           []string{"cmd/beta_test.go", "follow-beta-pattern"},
+				SuccessCriteria: []string{"beta-criterion"},
+				EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+					Criterion: "beta-evidence", Artifacts: []string{"cmd/beta_test.go"}, Checks: []string{"go test ./cmd -run Beta"},
+				}},
+			},
+		},
+	}
+	dispatches := waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+		phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard,
+	))
+	if len(dispatches) != 1 {
+		t.Fatalf("fixture should produce one grouped job, got %+v", dispatches)
+	}
+
+	brief := renderCodexBuildWorkerBrief(t.TempDir(), phase, dispatches[0], time.Unix(0, 0).UTC())
+	for _, want := range []string{
+		"## Covered Task Contracts",
+		"Implement the alpha behavior", "alpha-constraint", "follow-alpha-pattern", "alpha-criterion", "alpha-evidence", "go test ./cmd -run Alpha",
+		"Add the beta regression coverage", "beta-constraint", "follow-beta-pattern", "beta-criterion", "beta-evidence", "go test ./cmd -run Beta",
+	} {
+		if !strings.Contains(brief, want) {
+			t.Errorf("grouped brief missing %q:\n%s", want, brief)
+		}
+	}
+	for _, path := range []string{"cmd/alpha.go", "cmd/beta_test.go"} {
+		if count := strings.Count(brief, path); count != 1 {
+			t.Errorf("relevant path %q appears %d times, want exactly once:\n%s", path, count, brief)
+		}
+	}
+}
+
+func TestGroupedJobCreditsEveryCoveredTaskDuringContinue(t *testing.T) {
+	firstID := "3.1"
+	secondID := "3.2"
+	phase := colony.Phase{
+		ID: 3,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Implement the behavior"},
+			{ID: &secondID, Goal: "Add regression coverage"},
+		},
+	}
+	manifest := codexContinueManifest{
+		Present: true,
+		Data: codexBuildManifest{
+			DispatchMode: "real",
+			Dispatches: []codexBuildDispatch{{
+				Stage: "wave", Caste: "builder", Status: "completed", TaskID: firstID,
+				CoveredTaskIDs: []string{firstID, secondID},
+			}},
+		},
+	}
+	verification := codexContinueVerificationReport{
+		ChecksPassed: true,
+		Passed:       true,
+		Claims:       codexClaimVerification{Present: true, Passed: true},
+	}
+
+	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{}, time.Unix(0, 0).UTC())
+	if !assessment.Passed || len(assessment.Tasks) != 2 {
+		t.Fatalf("grouped task evidence did not support advancement: %+v", assessment)
+	}
+	for _, task := range assessment.Tasks {
+		if task.Outcome != "verified" || !reflect.DeepEqual(task.DispatchStatuses, []string{"completed"}) {
+			t.Fatalf("covered task %s lost grouped worker credit: %+v", task.TaskID, task)
+		}
+	}
+}
+
+func TestGroupedWorkerNameUsesOrderedCoveredIDs(t *testing.T) {
+	firstID := "7.1"
+	secondID := "7.2"
+	phase := colony.Phase{
+		ID: 7,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Implement first step", Status: colony.TaskPending},
+			{ID: &secondID, Goal: "Implement second step", Status: colony.TaskPending, DependsOn: []string{firstID}},
+		},
+	}
+	plan := func(proposalName string) codexBuildDispatch {
+		dispatches, _, err := plannedBuildDispatchesWithJobProposals(
+			phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard, nil, "", nil,
+			[]coherentJobProposal{{
+				Name: proposalName, TaskIDs: []string{firstID, secondID}, OwnerCaste: "builder",
+				Relationship: "dependency_chain", Benefit: "one implementation context",
+			}},
+		)
+		if err != nil {
+			t.Fatalf("plan proposal %q: %v", proposalName, err)
+		}
+		waves := waveDispatchesOnly(dispatches)
+		if len(waves) != 1 {
+			t.Fatalf("proposal %q produced %+v", proposalName, waves)
+		}
+		return waves[0]
+	}
+	first := plan("queen-name-one")
+	second := plan("queen-name-two")
+	if first.Name != second.Name {
+		t.Fatalf("proposal wording changed worker identity: %q != %q", first.Name, second.Name)
+	}
+	want := deterministicAntName(first.Caste, "phase:7:job:builder:7.1,7.2")
+	if first.Name != want {
+		t.Fatalf("grouped worker name = %q, want ordered covered-ID seed %q", first.Name, want)
+	}
+}
+
+func TestSingleTaskWorkerNameIsStable(t *testing.T) {
+	taskID := "8.1"
+	task := colony.Task{ID: &taskID, Goal: "Implement the stable single task", Status: colony.TaskPending}
+	phase := colony.Phase{ID: 8, Tasks: []colony.Task{task}}
+	dispatches := waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+		phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard,
+	))
+	if len(dispatches) != 1 {
+		t.Fatalf("single task produced %+v", dispatches)
+	}
+	want := deterministicAntName(dispatches[0].Caste, fmt.Sprintf("phase:%d:task:%d:%s", phase.ID, 0, task.Goal))
+	if dispatches[0].Name != want {
+		t.Fatalf("single-task worker name changed: got %q want legacy %q", dispatches[0].Name, want)
+	}
+}
+
+func TestSelectedTaskGroupingStaysInScope(t *testing.T) {
+	firstID := "9.1"
+	secondID := "9.2"
+	phase := colony.Phase{
+		ID: 9,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Leave this task outside redispatch", Status: colony.TaskPending},
+			{ID: &secondID, Goal: "Redispatch only this task", Status: colony.TaskPending, DependsOn: []string{firstID}},
+		},
+	}
+	dispatches := waveDispatchesOnly(plannedBuildDispatchesForSelectionWithState(
+		phase, colony.ColonyState{}, []string{secondID}, colony.VerificationDepthStandard,
+	))
+	if len(dispatches) != 1 || !reflect.DeepEqual(dispatchCoveredTaskIDs(dispatches[0]), []string{secondID}) {
+		t.Fatalf("selected-task grouping escaped scope: %+v", dispatches)
+	}
+}
+
+func TestGroupedBuildSummaryUsesCoveredTasksLanguage(t *testing.T) {
+	summary := renderCoveredTaskSummary([]codexBuildDispatch{{CoveredTaskIDs: []string{"1.1", "1.2"}}})
+	if !strings.Contains(summary, "covered tasks") || strings.Contains(summary, "dependent tasks") {
+		t.Fatalf("grouped summary uses stale dependency wording: %q", summary)
 	}
 }
 
