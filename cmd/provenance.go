@@ -14,11 +14,21 @@ import (
 // SAFE-01: Rejects builds where all workers are in a non-success state.
 // SAFE-02: Rejects builds where all completed workers have zero file changes.
 func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
+	return validateBuildProvenanceWithKnownTasks(results, nil)
+}
+
+// validateBuildProvenanceWithKnownTasks is validateBuildProvenance with the
+// phase's own task IDs supplied, so the failed-worker receipt carve-out below
+// can check that a receipt names a task this phase actually has. knownTaskIDs
+// may be nil when no manifest is available, in which case the task-ID check is
+// skipped and the carve-out's other requirements still apply.
+func validateBuildProvenanceWithKnownTasks(results []codexExternalBuildWorkerResult, knownTaskIDs map[string]struct{}) error {
 	if len(results) == 0 {
 		return fmt.Errorf("build provenance: no worker results provided")
 	}
 
 	completedCount := 0
+	receiptEvidenceCount := 0
 	for _, r := range results {
 		status := normalizeExternalBuildStatus(r.Status)
 		if !isSuccessfulExternalBuildStatus(status) || !isBuildImplementationWorker(r) {
@@ -32,8 +42,19 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 			// tasks that proof actually credits; this only proves SOME of
 			// the work is real, the same carve-out completed_no_change
 			// already gets via the loop below.
-			if hasGenuineTaskReceiptEvidence(r) {
-				return nil
+			//
+			// CR-02 (195-REVIEW.md): this used to `return nil`, which ended
+			// the guard for the WHOLE packet the moment any single result
+			// carried a structurally-plausible receipt -- so a reviewer's
+			// invented receipt excused a builder that had changed nothing.
+			// The relaxation is now scoped: it counts, per worker, only for
+			// an implementation worker whose own run did not succeed, and
+			// only for a receipt that names a real file (and, when the phase's
+			// tasks are known, a real task). It never short-circuits the rest
+			// of the loop.
+			if !isSuccessfulExternalBuildStatus(status) && isBuildImplementationWorker(r) &&
+				hasGenuineTaskReceiptEvidence(r, knownTaskIDs) {
+				receiptEvidenceCount++
 			}
 			continue
 		}
@@ -50,6 +71,9 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 		}
 	}
 
+	if receiptEvidenceCount > 0 {
+		return nil
+	}
 	if completedCount == 0 {
 		return fmt.Errorf("build provenance: no workers completed successfully -- all %d worker(s) are in a non-success state", len(results))
 	}
@@ -58,9 +82,10 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 
 // hasGenuineTaskReceiptEvidence reports whether a worker result -- regardless
 // of its own overall terminal status -- carries at least one task_receipts
-// entry with genuine, evidenced completion proof: a successful receipt
-// status, a non-empty summary, and a passing handoff with at least one
-// concrete commands_run entry. It mirrors the structural checks
+// entry with genuine, evidenced completion proof: a task ID this phase really
+// has (when knownTaskIDs is supplied), a successful receipt status, a
+// non-empty summary, a passing handoff with at least one concrete commands_run
+// entry, and AT LEAST ONE NAMED FILE. It mirrors the structural checks
 // admitCoherentJobTaskReceipts enforces (cmd/coherent_job_receipts.go)
 // closely enough to prove SOME of a failed grouped job's work is real,
 // without duplicating that function's manifest/phase-scoped rules --
@@ -68,10 +93,21 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 // remain the only functions that decide exactly which tasks the evidence
 // actually credits. A result with zero task_receipts, or only structurally
 // hollow ones, still falls through to the ordinary phantom-build rejection.
-func hasGenuineTaskReceiptEvidence(r codexExternalBuildWorkerResult) bool {
+//
+// CR-02 (195-REVIEW.md): the file requirement is what stops this function
+// being satisfiable by pure self-assertion. The guard it feeds asks exactly
+// one question -- "did this build change anything?" -- and a receipt naming no
+// file is not an answer to it.
+func hasGenuineTaskReceiptEvidence(r codexExternalBuildWorkerResult, knownTaskIDs map[string]struct{}) bool {
 	for _, receipt := range r.TaskReceipts {
-		if strings.TrimSpace(receipt.TaskID) == "" {
+		taskID := strings.TrimSpace(receipt.TaskID)
+		if taskID == "" {
 			continue
+		}
+		if len(knownTaskIDs) > 0 {
+			if _, known := knownTaskIDs[taskID]; !known {
+				continue
+			}
 		}
 		status := strings.ToLower(strings.TrimSpace(receipt.Status))
 		if status != codex.TaskReceiptStatusCompleted && status != codex.TaskReceiptStatusCompletedNoChange {
@@ -86,13 +122,37 @@ func hasGenuineTaskReceiptEvidence(r codexExternalBuildWorkerResult) bool {
 		if len(receipt.Handoff.CommandsRun) == 0 {
 			continue
 		}
+		if len(receipt.FilesCreated) == 0 && len(receipt.FilesModified) == 0 && len(receipt.TestsWritten) == 0 {
+			continue
+		}
 		return true
 	}
 	return false
 }
 
+// manifestKnownTaskIDs collects every task ID the manifest's phase actually
+// owns, from both its task plan and its dispatches' covered-task lists, so a
+// receipt naming a task that exists nowhere in the phase can be recognised.
+func manifestKnownTaskIDs(manifest *codexBuildManifest) map[string]struct{} {
+	if manifest == nil {
+		return nil
+	}
+	known := make(map[string]struct{}, len(manifest.Tasks)+len(manifest.Dispatches))
+	for _, task := range manifest.Tasks {
+		if id := strings.TrimSpace(task.ID); id != "" {
+			known[id] = struct{}{}
+		}
+	}
+	for _, dispatch := range manifest.Dispatches {
+		for _, id := range dispatchCoveredTaskIDs(dispatch) {
+			known[id] = struct{}{}
+		}
+	}
+	return known
+}
+
 func validateBuildProvenanceForManifest(manifest *codexBuildManifest, results []codexExternalBuildWorkerResult) error {
-	err := validateBuildProvenance(results)
+	err := validateBuildProvenanceWithKnownTasks(results, manifestKnownTaskIDs(manifest))
 	if err == nil {
 		return nil
 	}
