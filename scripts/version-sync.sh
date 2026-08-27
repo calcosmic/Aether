@@ -48,4 +48,11 @@ if [ -f .opencode/OPENCODE.md ] && ! grep -q "Updated for Aether v" .opencode/OP
   printf '\n*Updated for Aether v%s — %s*\n' "$VERSION" "$TODAY" >> .opencode/OPENCODE.md
 fi
 
+# npm/package.json is the version the packed release candidate ships, and
+# TestPackedNPMReleaseCandidateContract fails when it disagrees with
+# .aether/version.json. It was NOT synced here, so every release depended on
+# somebody remembering to edit it by hand -- and on 2026-08-27 the v1.0.64 bump
+# forgot it and the gate caught the mismatch. Derived, not remembered.
+sync_line npm/package.json 's{^(  "version": ")\d+\.\d+\.\d+(")}{${1}'"$VERSION"'${2}}'
+
 echo "Docs synced to v${VERSION}"
