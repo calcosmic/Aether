@@ -48,10 +48,16 @@ var requiredCoherentJobDocClaims = []string{
 	"counts workers, not jobs of work",
 	"`--checkin` and `--no-checkin` together is refused",
 	// Grouping is validated in Go, before ownership, in both modes (D-01..D-07).
+	// These phrases are deliberately specific to the Phase 195 text. The
+	// earlier anchors here were "in-repo", "worktree" and "refused by name" --
+	// ordinary words this document had used for years elsewhere, so all three
+	// stayed green with every Phase 195 sentence deleted (WR-09,
+	// 195-REVIEW.md). TestCoherentJobDocAnchorsAreDiscriminating now refuses
+	// any anchor that generic.
 	"grouping pass runs first",
-	"refused by name",
-	"in-repo",
-	"worktree",
+	"refused by name, showing the",
+	"Grouping happens before anyone owns a file, in both working modes",
+	"one worker, one isolated copy",
 	// The completion-evidence boundary (D-08, D-09).
 	"`covered_task_ids` is assignment scope only",
 	"grants no credit whatsoever",
