@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -112,6 +113,30 @@ var planCmd = &cobra.Command{
 	},
 }
 
+func parseCoherentJobProposals(rawValues []string) ([]coherentJobProposal, error) {
+	proposals := make([]coherentJobProposal, 0, len(rawValues))
+	for index, raw := range rawValues {
+		if strings.TrimSpace(raw) == "" {
+			return nil, fmt.Errorf("job proposal %d is empty; provide one JSON object", index+1)
+		}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		var proposal coherentJobProposal
+		if err := decoder.Decode(&proposal); err != nil {
+			return nil, fmt.Errorf("job proposal %d is invalid JSON: %w", index+1, err)
+		}
+		var trailing interface{}
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			if err == nil {
+				return nil, fmt.Errorf("job proposal %d must contain exactly one JSON object", index+1)
+			}
+			return nil, fmt.Errorf("job proposal %d has trailing JSON: %w", index+1, err)
+		}
+		proposals = append(proposals, proposal)
+	}
+	return proposals, nil
+}
+
 var buildCmd = &cobra.Command{
 	Use:   "build <phase>",
 	Short: "Dispatch a real Codex build packet with worker briefs, claims, and spawn tracking",
@@ -136,6 +161,11 @@ var buildCmd = &cobra.Command{
 		queenCastes, _ := cmd.Flags().GetStringArray("castes")
 		queenCasteReason, _ := cmd.Flags().GetString("caste-reason")
 		queenCasteWhy, _ := cmd.Flags().GetStringArray("caste-why")
+		jobProposals, err := parseCoherentJobProposals(mustGetStringArray(cmd, "job-proposal"))
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			worker, _ := cmd.Flags().GetString("worker")
@@ -164,6 +194,7 @@ var buildCmd = &cobra.Command{
 				QueenCastes:       queenCastes,
 				QueenCasteReason:  queenCasteReason,
 				QueenCasteWhy:     queenCasteWhy,
+				JobProposals:      jobProposals,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -192,6 +223,7 @@ var buildCmd = &cobra.Command{
 			QueenCastes:             queenCastes,
 			QueenCasteReason:        queenCasteReason,
 			QueenCasteWhy:           queenCasteWhy,
+			JobProposals:            jobProposals,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -1385,6 +1417,7 @@ func init() {
 	buildCmd.Flags().StringArray("castes", nil, "Queen's proposed worker castes for this phase (repeatable or comma-separated). Safety castes the phase requires are added back automatically; the worker budget still applies")
 	buildCmd.Flags().String("caste-reason", "", "One line summarising the whole team's choice, shown to the operator alongside the roster. This is NOT a per-worker reason -- a worker named in --castes with no matching --caste-why entry is refused by name even if --caste-reason is set. Use --caste-why for that.")
 	buildCmd.Flags().StringArray("caste-why", nil, "One reason per proposed worker, as caste=reason (repeatable; the reason may itself contain '='). A worker named in --castes with no entry here, and not required by the phase, is refused by name rather than sent unexplained")
+	buildCmd.Flags().StringArray("job-proposal", nil, "Queen coherent-job proposal as one JSON object (repeatable; fields: name, task_ids, owner_caste, relationship, benefit, owner_reason)")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")

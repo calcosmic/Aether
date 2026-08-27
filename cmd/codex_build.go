@@ -41,6 +41,12 @@ type codexBuildDispatch struct {
 	Disposition string `json:"disposition,omitempty"`
 	TaskID      string `json:"task_id,omitempty"`
 	TaskIndex   int    `json:"task_index,omitempty"`
+	// Job metadata is the durable explanation for why this worker owns one or
+	// more tasks. TaskID remains the primary compatibility key, while
+	// CoveredTaskIDs preserves the full ordered task-credit set.
+	JobName   string `json:"job_name,omitempty"`
+	JobReason string `json:"job_reason,omitempty"`
+	JobSource string `json:"job_source,omitempty"`
 	// CoveredTaskIDs lists every task this one worker took on. It holds more
 	// than one entry when a chain of dependent steps was merged into a single
 	// dispatch (see coalesceSequentialDispatches). TaskID stays the first of
@@ -117,6 +123,7 @@ type codexBuildManifest struct {
 	// deliver prompts.
 	ContextCapsule            string                                `json:"context_capsule,omitempty"`
 	Dispatches                []codexBuildDispatch                  `json:"dispatches"`
+	JobDecisions              []coherentJobDecision                 `json:"job_decisions,omitempty"`
 	SelectedTasks             []string                              `json:"selected_tasks,omitempty"`
 	Tasks                     []codexBuildTaskPlan                  `json:"tasks"`
 	SuccessCriteria           []string                              `json:"success_criteria"`
@@ -276,6 +283,10 @@ type codexBuildOptions struct {
 	// and not required by the phase, is refused by name rather than sent
 	// unexplained (parseAndMergeCasteWhy, queenApplyJudgement).
 	QueenCasteWhy []string
+	// JobProposals are structured Queen suggestions. The coherent-job planner
+	// validates them before any attempt, checkpoint, worktree, or lifecycle
+	// mutation is allowed to begin.
+	JobProposals []coherentJobProposal
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -321,6 +332,24 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, forceStateValidation); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		LightFlag:         options.LightFlag,
+		HeavyFlag:         options.HeavyFlag,
+		VerificationDepth: options.VerificationDepth,
+		WorkerTimeout:     options.WorkerTimeout,
+		DispatchWorkers:   options.DispatchWorkers,
+	})
+	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
+	// Decode happens in the CLI before this function is entered. The pure
+	// planner runs here, before an idle attempt can be superseded, so invalid
+	// proposals and dependency cycles have a strict zero-side-effect boundary.
+	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	dispatches, jobDecisions, err := plannedBuildDispatchesWithJobProposals(
+		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals,
+	)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	if activePriorAttempt {
 		// Once any worker has been dispatched, a public plan-only re-entry must
 		// not supersede the attempt or reopen its owner-only reviewer-decline
@@ -347,20 +376,6 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	}
 
 	generatedAt := time.Now().UTC()
-	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
-		LightFlag:         options.LightFlag,
-		HeavyFlag:         options.HeavyFlag,
-		VerificationDepth: options.VerificationDepth,
-		WorkerTimeout:     options.WorkerTimeout,
-		DispatchWorkers:   options.DispatchWorkers,
-	})
-	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	// mergedQueenCastes/queenCasteWhyReasons (D-08): --caste-why's per-worker
-	// reasons, plus any key it could not resolve folded into the proposal
-	// itself so it reports through the same Unknown-caste channel --castes
-	// already has (parseAndMergeCasteWhy).
-	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
-	dispatches := plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
 	// judgementReasonsForBudget mirrors queenCasteDecisionSummary's own
 	// judgement derivation (queenApplyJudgement is pure/deterministic, so
 	// recomputing here costs nothing) so the spawn-budget contract's
@@ -406,6 +421,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	claimsRel := "last-build-claims.json"
 	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, briefPaths, true, reviewDepth)
 	manifest.Phase = phaseNum
+	manifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
 	manifest.DispatchContract = dispatchContract
 	manifest.ProviderDiagnostics = providerDiagnostics
 	profileContract := workflowProfileContract(reviewDepth)
@@ -441,6 +457,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"currentTask":              phase.Tasks,
 		"dispatches":               codexBuildDispatchMaps(dispatches),
 		"dispatch_manifest":        manifest,
+		"job_decisions":            append([]coherentJobDecision{}, jobDecisions...),
 		"dispatch_count":           len(dispatches),
 		"wave_count":               len(waveExecution),
 		"parallel_waves":           countParallelWaveExecutionPlans(waveExecution),
@@ -602,6 +619,22 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, options.Force); err != nil {
 		return nil, err
 	}
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		LightFlag:         options.LightFlag,
+		HeavyFlag:         options.HeavyFlag,
+		VerificationDepth: options.VerificationDepth,
+		WorkerTimeout:     options.WorkerTimeout,
+		DispatchWorkers:   true,
+	})
+	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
+	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	dispatches, jobDecisions, err := plannedBuildDispatchesWithJobProposals(
+		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals,
+	)
+	if err != nil {
+		return nil, err
+	}
+	casteDecision := queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
 
 	// Detect orphaned worktrees from prior interrupted builds
 	orphans := detectOrphanedWorktrees(phaseNum)
@@ -633,17 +666,6 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
-		LightFlag:         options.LightFlag,
-		HeavyFlag:         options.HeavyFlag,
-		VerificationDepth: options.VerificationDepth,
-		WorkerTimeout:     options.WorkerTimeout,
-		DispatchWorkers:   true,
-	})
-	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
-	dispatches := plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
-	casteDecision := queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, err
@@ -731,7 +753,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		progress.Advance("Prepare")
 	}
 
-	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, plannedDispatchMode, selectedTaskIDs, reviewDepth, policy)
+	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, plannedDispatchMode, selectedTaskIDs, reviewDepth, policy, jobDecisions)
 	if err != nil {
 		finishAttempt(buildAttemptFailed, "failed to prepare worker artifacts", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
@@ -749,6 +771,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, fmt.Errorf("failed to reload direct build manifest: %w", err)
 	}
 	dispatchManifest.CasteDecision = casteDecision
+	dispatchManifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
 	dispatchManifest.AttemptID = strings.TrimSpace(strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel)))
 	dispatchManifest.AttemptPath = displayDataPath(attemptRel)
 	if err := prepareBuildAttemptManifestBinding(attemptRel, &dispatchManifest); err != nil {
@@ -810,7 +833,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, updatedState, updatedPhase, "build", reviewDepth, dispatches)
-	if _, finalDispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy); err != nil {
+	if _, finalDispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy, jobDecisions); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist final build artifacts", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -824,6 +847,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, fmt.Errorf("failed to reload final build manifest: %w", err)
 	}
 	finalManifest.CasteDecision = casteDecision
+	finalManifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
 	if err := store.SaveJSON(manifestRel, finalManifest); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist final caste decision", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
@@ -896,6 +920,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		"next":                     "aether continue",
 		"currentTask":              updatedPhase.Tasks,
 		"dispatches":               dispatchMaps,
+		"job_decisions":            append([]coherentJobDecision{}, jobDecisions...),
 		"dispatch_count":           len(dispatches),
 		"wave_count":               waveCount,
 		"parallel_waves":           parallelWaves,
@@ -1239,19 +1264,46 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 }
 
 func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string, reasons ...map[string]string) []codexBuildDispatch {
+	var reasonMap map[string]string
+	if len(reasons) > 0 {
+		reasonMap = reasons[0]
+	}
+	dispatches, _, err := plannedBuildDispatchesWithJobProposals(
+		phase, state, selectedTaskIDs, reviewDepth, proposedCastes, casteReason, reasonMap, nil,
+	)
+	if err != nil {
+		return nil
+	}
+	return dispatches
+}
+
+// plannedBuildDispatchesWithJobProposals is the single production bridge from
+// Queen judgement to the pure coherent-job planner. It resolves exactly one
+// owner seed per selected task, plans jobs before assigning dispatch waves,
+// and returns proposal decisions so callers can persist the full audit trail.
+func plannedBuildDispatchesWithJobProposals(
+	phase colony.Phase,
+	state colony.ColonyState,
+	selectedTaskIDs []string,
+	reviewDepth colony.VerificationDepth,
+	proposedCastes []string,
+	casteReason string,
+	reasons map[string]string,
+	proposals []coherentJobProposal,
+) ([]codexBuildDispatch, []coherentJobDecision, error) {
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
 	for _, taskID := range selectedTaskIDs {
 		selected[taskID] = struct{}{}
 	}
-	waves := taskWaves(phase.Tasks)
-	taskWaveBase := 10
-	lastTaskExecutionWave := taskWaveBase + max(len(waves), 1)
-	dispatches := make([]codexBuildDispatch, 0, len(phase.Tasks)+8)
 	queenState := state
 	queenState.ColonyDepth = depth
 	queenState.VerificationDepth = string(reviewDepth)
-	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState, reasons...)
+	var reasonMaps []map[string]string
+	if reasons != nil {
+		reasonMaps = append(reasonMaps, reasons)
+	}
+	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState, reasonMaps...)
 	queenCastes := stringSet(queenJudgement.Final)
 	// queenAskedFor is the Queen's explicit proposal, not the effective team
 	// after the required-caste floor unions itself in. D-08 (deterministic
@@ -1264,48 +1316,64 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 	queenAskedFor := stringSet(queenJudgement.Proposed)
 	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth, queenAskedFor)
 
+	seeds := make([]coherentJobTask, 0, len(phase.Tasks))
+	for taskIdx, task := range phase.Tasks {
+		taskID := buildTaskID(task, taskIdx)
+		if len(selected) > 0 {
+			if _, ok := selected[taskID]; !ok {
+				continue
+			}
+		}
+		seeds = append(seeds, coherentJobTask{
+			Task:          task,
+			ID:            taskID,
+			TaskIndex:     taskIdx,
+			Caste:         queenBuildTaskCaste(task, queenCastes),
+			DeclaredPaths: declaredPathsForTask(task),
+		})
+	}
+	jobPlan, err := planCoherentJobs(phase, seeds, proposals)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	taskWaveBase := 10
+	lastTaskExecutionWave := taskWaveBase + max(len(jobPlan.Waves), 1)
+	dispatches := make([]codexBuildDispatch, 0, len(jobPlan.Jobs)+8)
+
 	if len(selected) == 0 {
 		dispatches = append(dispatches, queenBuildPreWaveDispatches(phase, queenCastes)...)
 	}
 
-	for waveIdx, wave := range waves {
-		for _, taskIdx := range wave {
-			task := phase.Tasks[taskIdx]
-			taskID := buildTaskID(task, taskIdx)
-			if len(selected) > 0 {
-				if _, ok := selected[taskID]; !ok {
-					continue
-				}
-			}
-			caste := queenBuildTaskCaste(task, queenCastes)
-			dispatches = append(dispatches, codexBuildDispatch{
-				Stage:         "wave",
-				Wave:          waveIdx + 1,
-				ExecutionWave: taskWaveBase + waveIdx + 1,
-				Caste:         caste,
-				Name:          deterministicAntName(caste, fmt.Sprintf("phase:%d:task:%d:%s", phase.ID, taskIdx, task.Goal)),
-				Task:          strings.TrimSpace(task.Goal),
-				Status:        "spawned",
-				TaskID:        taskID,
-				TaskIndex:     taskIdx,
-				DependsOn:     append([]string{}, task.DependsOn...),
-				DeclaredPaths: declaredPathsForTask(task),
-			})
+	for _, job := range jobPlan.Jobs {
+		if len(job.Tasks) == 0 {
+			continue
 		}
+		primary := job.Tasks[0]
+		coveredTaskIDs := append([]string{}, job.TaskIDs...)
+		if len(coveredTaskIDs) == 1 {
+			coveredTaskIDs = nil
+		}
+		dispatches = append(dispatches, codexBuildDispatch{
+			Stage:          "wave",
+			Wave:           job.Wave,
+			ExecutionWave:  taskWaveBase + job.Wave,
+			Caste:          job.OwnerCaste,
+			Name:           coherentJobDispatchName(phase.ID, job),
+			Task:           coherentJobDispatchTask(job.Tasks),
+			Status:         "spawned",
+			TaskID:         primary.ID,
+			TaskIndex:      primary.TaskIndex,
+			JobName:        job.Name,
+			JobReason:      job.JobReason,
+			JobSource:      job.Source,
+			CoveredTaskIDs: coveredTaskIDs,
+			DependsOn:      append([]string{}, job.DependsOn...),
+			DeclaredPaths:  coherentJobDeclaredPaths(job.Tasks),
+		})
 	}
 
-	// Worktree mode is deliberately excluded. There each worker gets its own
-	// copy of the repository and its changes are reconciled back per worker,
-	// with conflict detection keyed to the paths a task declared. Folding
-	// several tasks into one worker changes what "this worker produced this
-	// file" means, and the isolation model is the thing that makes worktree mode
-	// worth having. The saving this phase exists for lands in the default
-	// in-repo mode, which is what the CalVault run used.
-	if effectiveParallelMode(state) != colony.ModeWorktree {
-		dispatches = coalesceSequentialDispatches(dispatches)
-	}
-
-	if len(waves) == 0 && len(selected) == 0 {
+	if len(jobPlan.Jobs) == 0 && len(selected) == 0 {
 		caste := "builder"
 		if !queenCastes[caste] {
 			caste = queenBuildFallbackTaskCaste(queenCastes)
@@ -1361,7 +1429,37 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 		})
 	}
 
-	return dispatches
+	return dispatches, append([]coherentJobDecision{}, jobPlan.Decisions...), nil
+}
+
+func coherentJobDispatchTask(tasks []coherentJobTask) string {
+	if len(tasks) == 0 {
+		return ""
+	}
+	if len(tasks) == 1 {
+		return strings.TrimSpace(tasks[0].Task.Goal)
+	}
+	items := make([]string, 0, len(tasks))
+	for index, task := range tasks {
+		items = append(items, fmt.Sprintf("%d. %s", index+1, strings.TrimSpace(task.Task.Goal)))
+	}
+	return strings.Join(items, "\n")
+}
+
+func coherentJobDeclaredPaths(tasks []coherentJobTask) []string {
+	var paths []string
+	for _, task := range tasks {
+		paths = append(paths, task.DeclaredPaths...)
+	}
+	return uniqueSortedStrings(paths)
+}
+
+func coherentJobDispatchName(phaseID int, job coherentJob) string {
+	if len(job.Tasks) == 1 {
+		task := job.Tasks[0]
+		return deterministicAntName(job.OwnerCaste, fmt.Sprintf("phase:%d:task:%d:%s", phaseID, task.TaskIndex, task.Task.Goal))
+	}
+	return deterministicAntName(job.OwnerCaste, fmt.Sprintf("phase:%d:job:%s:%s", phaseID, job.OwnerCaste, strings.Join(job.TaskIDs, ",")))
 }
 
 func queenBuildCasteSet(dispatches []CasteDispatch) map[string]bool {
@@ -2237,8 +2335,23 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 		if dispatch.TaskID != "" {
 			entry["task_id"] = dispatch.TaskID
 		}
+		if len(dispatch.CoveredTaskIDs) > 0 {
+			entry["covered_task_ids"] = append([]string{}, dispatch.CoveredTaskIDs...)
+		}
+		if dispatch.JobName != "" {
+			entry["job_name"] = dispatch.JobName
+		}
+		if dispatch.JobReason != "" {
+			entry["job_reason"] = dispatch.JobReason
+		}
+		if dispatch.JobSource != "" {
+			entry["job_source"] = dispatch.JobSource
+		}
 		if len(dispatch.DependsOn) > 0 {
 			entry["depends_on"] = dispatch.DependsOn
+		}
+		if len(dispatch.DeclaredPaths) > 0 {
+			entry["declared_paths"] = append([]string{}, dispatch.DeclaredPaths...)
 		}
 		if len(dispatch.Outputs) > 0 {
 			entry["outputs"] = dispatch.Outputs
@@ -2340,7 +2453,7 @@ func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel str
 	return briefPaths, dispatches, nil
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy, jobDecisions []coherentJobDecision) ([]string, []codexBuildDispatch, error) {
 	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, false)
 	if err != nil {
 		return nil, nil, err
@@ -2370,6 +2483,7 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 	}
 
 	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
+	manifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
 	manifest.QueenExecutionPolicy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	if err := store.SaveJSON(manifestRel, manifest); err != nil {

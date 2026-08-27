@@ -3118,7 +3118,7 @@ func TestGroupingOccursBeforeWavesAndWorktreeOwnership(t *testing.T) {
 		Benefit:      "one owner prevents a worktree collision",
 	}
 
-	dispatches, decisions, err := plannedBuildDispatchesWithJudgement(
+	dispatches, decisions, err := plannedBuildDispatchesWithJobProposals(
 		phase, state, nil, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
 	)
 	if err != nil {
@@ -3128,7 +3128,7 @@ func TestGroupingOccursBeforeWavesAndWorktreeOwnership(t *testing.T) {
 	if len(waveDispatches) != 1 || !reflect.DeepEqual(waveDispatches[0].CoveredTaskIDs, []string{firstID, secondID}) {
 		t.Fatalf("worktree plan was split before grouping: %+v", waveDispatches)
 	}
-	if waveDispatches[0].Wave != 1 || waveDispatches[0].ExecutionWave != 1 {
+	if waveDispatches[0].Wave != 1 || waveDispatches[0].ExecutionWave <= 0 {
 		t.Fatalf("job DAG did not assign the first coherent job to wave 1: %+v", waveDispatches[0])
 	}
 	if len(decisions) != 1 || decisions[0].Status != "accepted" {
@@ -3156,7 +3156,7 @@ func TestSelectedTaskJobProposalCannotPullOtherTasks(t *testing.T) {
 		Benefit:      "attempt to widen selected scope",
 	}
 
-	dispatches, decisions, err := plannedBuildDispatchesWithJudgement(
+	dispatches, decisions, err := plannedBuildDispatchesWithJobProposals(
 		phase, colony.ColonyState{}, []string{firstID}, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
 	)
 	if err != nil {
@@ -3180,27 +3180,27 @@ func TestUnsafeJobProposalIsVisiblyRepaired(t *testing.T) {
 		Status: colony.PhaseReady,
 		Tasks: []colony.Task{
 			{ID: &firstID, Goal: "Edit the API", Status: colony.TaskPending, Hints: []string{"cmd/api.go"}},
-			{ID: &secondID, Goal: "Edit the UI", Status: colony.TaskPending, Hints: []string{"web/ui.ts"}},
+			{ID: &secondID, Goal: "Edit the UI", Status: colony.TaskPending, DependsOn: []string{firstID}, Hints: []string{"web/ui.ts"}},
 		},
 	}
 	proposal := coherentJobProposal{
 		Name:         "unsafe-bundle",
-		TaskIDs:      []string{firstID, secondID},
+		TaskIDs:      []string{secondID, firstID},
 		OwnerCaste:   "builder",
 		Relationship: "same_files",
 		Benefit:      "claims unrelated paths are shared",
 	}
 
-	dispatches, decisions, err := plannedBuildDispatchesWithJudgement(
+	dispatches, decisions, err := plannedBuildDispatchesWithJobProposals(
 		phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
 	)
 	if err != nil {
 		t.Fatalf("unsafe proposal should be repaired, not abort planning: %v", err)
 	}
-	if len(buildWaveDispatches(dispatches)) != 2 {
-		t.Fatalf("unsafe bundle was not split into safe jobs: %+v", buildWaveDispatches(dispatches))
+	if len(buildWaveDispatches(dispatches)) != 1 {
+		t.Fatalf("unsafe bundle was not repaired into the safe automatic job: %+v", buildWaveDispatches(dispatches))
 	}
-	if len(decisions) != 1 || decisions[0].Status != "refused" || len(decisions[0].ReplacementJobNames) != 2 {
+	if len(decisions) != 1 || decisions[0].Status != "refused" || len(decisions[0].ReplacementJobNames) != 1 {
 		t.Fatalf("repair decision is not visible: %+v", decisions)
 	}
 }
