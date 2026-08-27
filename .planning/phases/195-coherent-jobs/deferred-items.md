@@ -211,13 +211,20 @@ omission.
   guard; no-change credit carries no artifacts, so it cannot satisfy a criterion
   that demands one; and the receipt must still pass the scope, status, summary and
   handoff checks.
-- **The actual question for the owner:** what must a worker show before "I checked
-  and nothing needed changing" is accepted? Options are (a) leave as is, (b) require
-  the named command to be re-run by the program rather than reported, which this
-  repo already does for builder-reported evidence elsewhere (Phase 193, D-04), or
-  (c) refuse no-change credit from a FAILED worker entirely and let the retry
-  credit it through the ordinary whole-success path. This is a rule about
-  user-facing behaviour, so it is the owner's call, not a reviewer's.
+- **OWNER DECISION, 2026-08-27 — option (b): the program re-runs the check itself.**
+  Asked what a worker must show before "I checked and nothing needed changing" is
+  accepted, the owner chose: the worker names the command it ran, and the program
+  runs that command again and believes the RESULT, not the claim. Explicitly not
+  chosen: leaving the file-exists test as the bar (a), and refusing no-change credit
+  from a failed worker outright (c).
+  **Why this one:** the repo already does exactly this for builder-reported evidence
+  — Phase 193's D-04 `reRunBuilderReportedEvidence` re-executes a builder's reported
+  commands against a fixed allowlist of build/test runners, refusing shell
+  metacharacters and running via argv, never `sh -c`. So this is reuse of an
+  established, security-reviewed pattern, not new machinery.
+  **Scope note:** this is a scope ADDITION decided after the phase verified 4/4 on
+  its own criteria. It is tracked here rather than retro-fitted into a plan's
+  must_haves, so the phase's own record stays honest about what it promised.
 
 ### IN-13 — the replay's existing-record branch has no assertion
 
