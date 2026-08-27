@@ -2,7 +2,7 @@
 phase: 195-coherent-jobs
 verified: 2026-08-27T12:18:16Z
 verified_at_commit: 18492b69
-status: human_needed
+status: passed
 score: 4/4 success criteria verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -23,11 +23,18 @@ human_verification:
   - test: "Decide what a 'no change needed' report is allowed to claim (review finding WR-15)."
     expected: "Owner rules on whether a worker may be credited for a task purely because the file that task names already exists in the project, with no edit and no test."
     why_human: "This is a user-facing behaviour rule about when work counts as done, not a wiring defect. The review closed the defect it came from and flagged this as a deliberate design point needing an owner call. cmd/coherent_job_receipts.go:349-399."
+    status: resolved
+    resolved: 2026-08-27
+    resolution: "Owner ruled: the program re-runs the check itself. A completed_no_change receipt is credited only when the runtime re-executes the command the worker named and sees it pass -- reusing Phase 193's allowlisted, argv-only, never-sh -c runner. Implemented in cmd/coherent_job_no_change_recheck.go (commits 4687f514 RED, 60c6ffbc GREEN); ruling recorded in deferred-items.md. Both directions locked: TestNoChangeReceiptCreditedWhenItsNamedCheckPassesOnReRun and TestNoChangeReceiptRefusedWhenItsNamedCheckFailsOnReRun, plus TestNoChangeReceiptCheckIsNeverHandedToAShell (sentinel-file proof no command reached a shell)."
 warnings:
   - id: WARN-1
+    status: resolved
+    resolved: "2026-08-27, commit 803ae358 -- coalesceSequentialDispatches and its only helper dispatchesFormOneJob deleted (92 lines, zero callers); all eight comments citing the coalescer now name planCoherentJobs. No stale reference remains."
     statement: "coalesceSequentialDispatches (cmd/codex_build.go:1281, 62 lines) is orphaned — defined, never called, in production or tests. Six comments across cmd/ still describe it as the live grouping mechanism."
     impact: "No runtime impact; grouping runs through planCoherentJobs. Risk is navigational — a future reader or auditor grepping for the grouping mechanism lands on dead code that says it is the answer."
   - id: WARN-2
+    status: resolved
+    resolved: "2026-08-27, commit 803ae358 -- WR-15, IN-13, IN-14 and IN-16 recorded in deferred-items.md with enough detail to act on."
     statement: "195-REVIEW.iter3.md's four residual findings (WR-15, IN-13, IN-14, IN-15) were not recorded in deferred-items.md, despite iter3 explicitly instructing that WR-15 'belongs in deferred-items.md alongside IN-04' if not taken now. deferred-items.md records only IN-01..IN-05 from the first review."
     impact: "Bookkeeping. Four knowingly-left items have no entry in the phase's own record of what was knowingly left."
 gaps: []
@@ -43,9 +50,15 @@ instruction — so, for example, six near-identical file-copy steps become one j
 instead of six.
 
 **Verified:** 2026-08-27T12:18:16Z at commit `18492b69` (branch `oracle-reinstate`)
-**Status:** human_needed — **4/4 success criteria verified.** The phase goal is
-achieved. One owner behaviour decision is outstanding; it does not block the goal
-and does not block proceeding.
+**Status:** passed — **4/4 success criteria verified.** The phase goal is achieved.
+
+*Originally filed `human_needed` on 2026-08-27 for one outstanding owner behaviour
+decision (WR-15) and two bookkeeping warnings. All three were resolved the same day
+— the owner ruled, the ruling was implemented and locked in both directions, the
+orphaned coalescer was deleted, and the four residual review items were recorded.
+Status raised to `passed` on that basis; see the resolution notes in the frontmatter
+above. No success criterion was re-scored: all four were already verified, each by
+running its command and by breaking the production code and watching it fail.*
 **Method:** goal-backward, adversarial. Every criterion was proven by running its
 command AND by breaking the production code and confirming the command fails.
 
