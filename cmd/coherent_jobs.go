@@ -461,6 +461,7 @@ func planAutomaticCoherentJobs(
 		benefit := fmt.Sprintf("one %s preserves implementation context and avoids duplicate setup or conflicting writes", ordered[0].Caste)
 		chunks := splitCoherentJobTasksByBriefAllowance(ordered)
 		baseName := "automatic-" + ordered[0].ID
+		previousChunkName := ""
 		for chunkIndex, chunk := range chunks {
 			name := baseName
 			chunkRelationship := relationship
@@ -471,13 +472,26 @@ func planAutomaticCoherentJobs(
 				chunkBenefit = fmt.Sprintf("one %s preserves the component handoff while keeping the worker brief bounded", ordered[0].Caste)
 			}
 			name = reserveCoherentJobName(name, reservedNames)
-			jobs = append(jobs, newCoherentJob(
+			job := newCoherentJob(
 				name,
 				chunk,
 				ordered[0].Caste,
 				structuredCoherentJobReason(chunkRelationship, chunkBenefit),
 				coherentJobSourceAutomatic,
-			))
+			)
+			// WR-07 (195-REVIEW.md): these parts were cut out of ONE component,
+			// which means they share a dependency chain or an implementation
+			// file -- that is why they were grouped in the first place. Without
+			// an explicit edge between them they carried no ordering at all and
+			// landed in the same round, so the runtime scheduled two workers
+			// onto the file it had just decided only one worker should own. The
+			// chain is acyclic by construction (each part waits only on the
+			// part before it) and preserves the component's original order.
+			if previousChunkName != "" {
+				job.DependsOn = []string{previousChunkName}
+			}
+			previousChunkName = name
+			jobs = append(jobs, job)
 		}
 	}
 	return jobs, nil
@@ -832,6 +846,18 @@ func populateCoherentJobDAG(plan *coherentJobPlan) error {
 	for jobIndex := range plan.Jobs {
 		seen := map[string]bool{}
 		var dependencies []string
+		// Preserve edges the planner already seeded (WR-07: brief-allowance
+		// chunks of one component are chained explicitly, because no task-level
+		// depends_on connects them). Overwriting them here is what let two parts
+		// of the same component run at once.
+		for _, existing := range plan.Jobs[jobIndex].DependsOn {
+			existing = strings.TrimSpace(existing)
+			if existing == "" || existing == plan.Jobs[jobIndex].Name || seen[existing] {
+				continue
+			}
+			seen[existing] = true
+			dependencies = append(dependencies, existing)
+		}
 		for _, task := range plan.Jobs[jobIndex].Tasks {
 			for _, dependencyID := range task.Task.DependsOn {
 				dependencyJobIndex, selected := jobByTask[strings.TrimSpace(dependencyID)]
