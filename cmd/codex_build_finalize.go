@@ -91,6 +91,11 @@ type codexExternalBuildWorkerResult struct {
 	// failed/unevidenced/unrecognized, is a distinct, named contract
 	// violation, never a silent credit or a silently dropped field.
 	CoveredTaskIDs []string `json:"covered_task_ids,omitempty"`
+	// TaskReceipts carries optional task-specific completion evidence using
+	// the same additive vocabulary as native worker results. CoveredTaskIDs
+	// remains assignment scope; later reconciliation decides whether any
+	// receipt earns task credit.
+	TaskReceipts []codex.TaskReceipt `json:"task_receipts,omitempty"`
 	// Disposition qualifies a completed_no_change status (ruling D6): the
 	// only recognized value is "verified_existing" — the worker proved the
 	// required behavior already exists rather than merely finding nothing to

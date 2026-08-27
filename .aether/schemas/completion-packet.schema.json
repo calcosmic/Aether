@@ -106,6 +106,51 @@
         "approval"
       ]
     },
+    "TaskReceipt": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "files_created": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "files_modified": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tests_written": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "handoff": {
+          "$ref": "#/$defs/WorkerHandoff"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "status",
+        "summary",
+        "files_created",
+        "files_modified",
+        "tests_written",
+        "handoff"
+      ]
+    },
     "WorkerHandoff": {
       "properties": {
         "changed_files": {
@@ -695,6 +740,12 @@
         "covered_task_ids": {
           "items": {
             "type": "string"
+          },
+          "type": "array"
+        },
+        "task_receipts": {
+          "items": {
+            "$ref": "#/$defs/TaskReceipt"
           },
           "type": "array"
         },
