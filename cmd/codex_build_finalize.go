@@ -556,6 +556,21 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := validateBuildProvenanceForManifest(manifest, completion.workerResults()); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	// D-08/D-09 (195-06): the external/wrapper lane reuses the EXACT same
+	// two-stage receipt trust boundary the native lane wired in 195-04
+	// (admitCoherentJobTaskReceipts / finalizeCoherentJobTaskReceiptEvidence,
+	// via resolveCoherentJobDispatchReceipts) -- never a second, external-only
+	// validator. In-repo files already live in root at this point, so
+	// admission and finalization run consecutively, exactly like the native
+	// lane's executeCodexBuildDispatches. A worktree-backed completion's
+	// files are NOT yet synced into root (mergePhaseWorktrees runs later,
+	// below) -- resolving receipts now would only ever fail root-evidence and
+	// silently discard the admission plan 195-08's sync-first adapter still
+	// needs, so that lane is skipped here and left for 195-08 to wire onto
+	// the same two stages after its own sync step.
+	if effectiveParallelMode(state) != colony.ModeWorktree {
+		dispatches = resolveCoherentJobDispatchReceipts(root, phase, dispatches)
+	}
 	startedAt := parseManifestGeneratedAt(*manifest)
 	completedAt := now
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
@@ -602,9 +617,18 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 
 	// Prepare the updated state in memory first (needed for downstream writes).
+	// D-08: BUILT means every selected task is actually proven done. A
+	// grouped job that only credited part of its covered tasks (via receipt
+	// finalization above) must NOT falsely report BUILT -- applyCodexBuildState
+	// already leaves state.State at EXECUTING and the phase at
+	// PhaseInProgress, which is the honest "still mid-build" signal; only a
+	// fully-credited build advances it the rest of the way.
+	buildFullyCredited := allSelectedBuildTasksCredited(selectedTaskIDs, dispatches)
 	updatedState := state
 	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
-	updatedState.State = colony.StateBUILT
+	if buildFullyCredited {
+		updatedState.State = colony.StateBUILT
+	}
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
 	updatedState.Events = append(trimmedEvents(updatedState.Events),
@@ -672,7 +696,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := persistExternalBuildHandoffs(root, phaseNum, dispatches, completion.workerResults()); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	resultCollection := buildExternalBuildResultCollectionReport(phaseNum, updatedPhase.Name, manifest.Dispatches, completion.workerResults(), dispatches, completedAt)
+	resultCollection := buildExternalBuildResultCollectionReport(phaseNum, updatedPhase.Name, manifest.Dispatches, completion.workerResults(), dispatches, completedAt, selectedTaskIDs)
 	if err := store.SaveJSON(resultCollectionRel, resultCollection); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write result collection diagnostics: %w", err)
 	}
@@ -709,6 +733,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		LegacyManifest:     binding.Legacy,
 		WorktreeMergeEvent: worktreeMergeEvent,
 		UpdatedState:       updatedState,
+		BuildFullyCredited: buildFullyCredited,
 	})
 	if err != nil {
 		finishAttempt(buildAttemptFailed, "failed to commit external built lifecycle state", err)
@@ -776,6 +801,13 @@ type buildFinalizeCommitParams struct {
 	LegacyManifest     bool
 	WorktreeMergeEvent string
 	UpdatedState       colony.ColonyState
+	// BuildFullyCredited is precomputed once in runCodexBuildFinalize from
+	// Dispatches/SelectedTaskIDs before this atomic commit re-reads a fresh
+	// on-disk state -- it does not depend on which state happened to be on
+	// disk, only on the terminal proof this build session actually produced
+	// (D-08). false means a grouped job only proved part of its covered
+	// tasks; the colony stays at EXECUTING (never a false BUILT).
+	BuildFullyCredited bool
 }
 
 // commitBuildFinalizeState is runCodexBuildFinalize's one write against
@@ -810,7 +842,9 @@ func commitBuildFinalizeState(params buildFinalizeCommitParams) (colony.ColonySt
 			return err
 		}
 		applyCodexBuildState(&committedState, params.PhaseNum, params.StartedAt, params.SelectedTaskIDs, params.ReviewDepth)
-		committedState.State = colony.StateBUILT
+		if params.BuildFullyCredited {
+			committedState.State = colony.StateBUILT
+		}
 		reconcileCompletedBuildTasks(&committedState, params.PhaseNum, params.Dispatches)
 		committedState.Events = append(trimmedEvents(committedState.Events),
 			fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", params.CompletedAt.Format(time.RFC3339), params.PhaseNum),
@@ -826,6 +860,90 @@ func commitBuildFinalizeState(params buildFinalizeCommitParams) (colony.ColonySt
 		return nil
 	})
 	return committedState, err
+}
+
+// buildFullBuildTaskIDSet resolves the full set of task IDs this build
+// session is actually responsible for: the explicit selection when the
+// caller passed one, else every task ID any dispatch in this build covers
+// (dispatchCoveredTaskIDs). An explicit selection is empty for the common
+// "no --tasks filter" build -- validateSelectedBuildTasks already treats an
+// empty selectedTaskIDs as "no filter, not zero tasks" -- so falling back to
+// the dispatches' own covered-task union is what keeps that ordinary case
+// from being misread as "nothing was selected, so everything trivially
+// counts as credited."
+func buildFullBuildTaskIDSet(selectedTaskIDs []string, dispatches []codexBuildDispatch) map[string]struct{} {
+	set := make(map[string]struct{})
+	for _, id := range selectedTaskIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			set[id] = struct{}{}
+		}
+	}
+	if len(set) > 0 {
+		return set
+	}
+	for _, d := range dispatches {
+		for _, id := range dispatchCoveredTaskIDs(d) {
+			if id = strings.TrimSpace(id); id != "" {
+				set[id] = struct{}{}
+			}
+		}
+	}
+	return set
+}
+
+// allSelectedBuildTasksCredited reports whether every task this build
+// session is responsible for (buildFullBuildTaskIDSet) has actually been
+// credited -- either by an ordinary whole-success dispatch
+// (completed/completed_no_change, crediting every task it covers) or by
+// root-evidenced per-task receipt credit
+// (finalizeCoherentJobTaskReceiptEvidence, via dispatch.CompletedTaskIDs).
+// It is what decides whether an external/wrapper build-finalize may
+// transition the colony to BUILT (D-08): a grouped job that only proved
+// part of its covered tasks must stay honestly mid-build rather than
+// reporting a false BUILT. Uses completedBuildTaskIDs -- the SAME reader
+// reconcileCompletedBuildTasks uses to mark individual tasks complete --
+// so this check and the task statuses it gates can never disagree.
+func allSelectedBuildTasksCredited(selectedTaskIDs []string, dispatches []codexBuildDispatch) bool {
+	full := buildFullBuildTaskIDSet(selectedTaskIDs, dispatches)
+	if len(full) == 0 {
+		return true
+	}
+	credited := completedBuildTaskIDs(dispatches)
+	for id := range full {
+		if _, ok := credited[id]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// unfinishedBuildTaskIDs returns the full-set task IDs allSelectedBuildTasksCredited
+// found NOT credited, sorted, for diagnostics (result-collection.json) that
+// must name both what finished and what did not (D-08/D-09).
+func unfinishedBuildTaskIDs(selectedTaskIDs []string, dispatches []codexBuildDispatch) []string {
+	full := buildFullBuildTaskIDSet(selectedTaskIDs, dispatches)
+	credited := completedBuildTaskIDs(dispatches)
+	var unfinished []string
+	for id := range full {
+		if _, ok := credited[id]; !ok {
+			unfinished = append(unfinished, id)
+		}
+	}
+	return uniqueSortedStrings(unfinished)
+}
+
+// creditedBuildTaskIDs returns the full-set task IDs allSelectedBuildTasksCredited
+// found credited, sorted, for the same diagnostics.
+func creditedBuildTaskIDs(selectedTaskIDs []string, dispatches []codexBuildDispatch) []string {
+	full := buildFullBuildTaskIDSet(selectedTaskIDs, dispatches)
+	credited := completedBuildTaskIDs(dispatches)
+	var done []string
+	for id := range full {
+		if _, ok := credited[id]; ok {
+			done = append(done, id)
+		}
+	}
+	return uniqueSortedStrings(done)
 }
 
 // validateBuildFinalizeStateStillCurrent re-checks, against a freshly-read
@@ -1923,6 +2041,33 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 		entry.FilesModified = append(entry.FilesModified, result.FilesModified...)
 		entry.TestsWritten = append(entry.TestsWritten, result.TestsWritten...)
 	}
+	// D-08/D-09: a grouped job's own Status may be non-whole-success
+	// (failed/blocked/timeout) while still carrying root-evidenced,
+	// receipt-credited task claims (dispatch.TaskClaims, populated only by
+	// finalizeCoherentJobTaskReceiptEvidence). The loop above only walks
+	// whole-success dispatches, so those receipt claims are folded in here,
+	// separately, keyed by the CREDITED task's own ID -- never the covering
+	// dispatch's primary TaskID -- so last-build-claims.json and the exact
+	// per-task credit this build actually proved never disagree.
+	for _, dispatch := range dispatches {
+		for _, tc := range dispatch.TaskClaims {
+			taskID := strings.TrimSpace(tc.TaskID)
+			if taskID == "" {
+				continue
+			}
+			entry, ok := taskClaims[taskID]
+			if !ok {
+				entry = &codexBuildTaskClaim{TaskID: taskID}
+				taskClaims[taskID] = entry
+			}
+			entry.FilesCreated = append(entry.FilesCreated, tc.FilesCreated...)
+			entry.FilesModified = append(entry.FilesModified, tc.FilesModified...)
+			entry.TestsWritten = append(entry.TestsWritten, tc.TestsWritten...)
+			claims.FilesCreated = append(claims.FilesCreated, tc.FilesCreated...)
+			claims.FilesModified = append(claims.FilesModified, tc.FilesModified...)
+			claims.TestsWritten = append(claims.TestsWritten, tc.TestsWritten...)
+		}
+	}
 	claims.FilesCreated = uniqueSortedStrings(claims.FilesCreated)
 	claims.FilesModified = uniqueSortedStrings(claims.FilesModified)
 	claims.TestsWritten = uniqueSortedStrings(claims.TestsWritten)
@@ -2014,14 +2159,21 @@ func validateExternalWorkerResultClaimPaths(root string, results []codexExternal
 }
 
 type codexResultCollectionReport struct {
-	Workflow                string                       `json:"workflow"`
-	Phase                   int                          `json:"phase,omitempty"`
-	PhaseName               string                       `json:"phase_name,omitempty"`
-	RecordedAt              string                       `json:"recorded_at"`
-	ExpectedWorkers         int                          `json:"expected_workers"`
-	ReceivedResults         int                          `json:"received_results"`
-	MatchedResults          int                          `json:"matched_results"`
-	StatusCounts            map[string]int               `json:"status_counts,omitempty"`
+	Workflow        string         `json:"workflow"`
+	Phase           int            `json:"phase,omitempty"`
+	PhaseName       string         `json:"phase_name,omitempty"`
+	RecordedAt      string         `json:"recorded_at"`
+	ExpectedWorkers int            `json:"expected_workers"`
+	ReceivedResults int            `json:"received_results"`
+	MatchedResults  int            `json:"matched_results"`
+	StatusCounts    map[string]int `json:"status_counts,omitempty"`
+	// CreditedTaskIDs and UnfinishedTaskIDs (D-08/D-09) name, separately,
+	// exactly which selected tasks this build actually proved complete
+	// (whole-success or root-evidenced receipt credit) and which did not --
+	// never inferred from touched files, a worker's summary, or
+	// covered_task_ids membership alone.
+	CreditedTaskIDs         []string                     `json:"credited_task_ids,omitempty"`
+	UnfinishedTaskIDs       []string                     `json:"unfinished_task_ids,omitempty"`
 	Issues                  []codexResultCollectionIssue `json:"issues,omitempty"`
 	Policy                  string                       `json:"policy"`
 	ApprovedTempPath        string                       `json:"approved_temp_path"`
@@ -2036,7 +2188,7 @@ type codexResultCollectionIssue struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, expected []codexBuildDispatch, results []codexExternalBuildWorkerResult, dispatches []codexBuildDispatch, recordedAt time.Time) codexResultCollectionReport {
+func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, expected []codexBuildDispatch, results []codexExternalBuildWorkerResult, dispatches []codexBuildDispatch, recordedAt time.Time, selectedTaskIDs []string) codexResultCollectionReport {
 	report := codexResultCollectionReport{
 		Workflow:                "build",
 		Phase:                   phaseNum,
@@ -2046,6 +2198,8 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 		ReceivedResults:         len(results),
 		MatchedResults:          len(dispatches),
 		StatusCounts:            map[string]int{},
+		CreditedTaskIDs:         creditedBuildTaskIDs(selectedTaskIDs, dispatches),
+		UnfinishedTaskIDs:       unfinishedBuildTaskIDs(selectedTaskIDs, dispatches),
 		Policy:                  "A structurally valid successful worker result (completed, completed_no_change, or manually-reconciled) wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected. Claims under sanctioned .aether/data subpaths (planning/, phase-research/, survey/, worker-debug/, reviews/) are tolerated and dropped from the claim set.",
 		ApprovedTempPath:        finalizerCompletionTempPattern,
 		SensitiveOutputRedacted: true,

@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"strings"
+
+	"github.com/calcosmic/Aether/pkg/codex"
 )
 
 // validateBuildProvenance checks that at least one worker completed successfully
@@ -20,6 +22,19 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 	for _, r := range results {
 		status := normalizeExternalBuildStatus(r.Status)
 		if !isSuccessfulExternalBuildStatus(status) || !isBuildImplementationWorker(r) {
+			// D-08 (195-CONTEXT.md): a failed/blocked/timeout/interrupted
+			// worker can still carry genuine, evidenced per-task completion
+			// proof (task_receipts) for part of a grouped job before it
+			// failed -- that is real provenance, not a phantom build, even
+			// though the WORKER's own overall status never reached success.
+			// The shared receipt trust boundary
+			// (cmd/coherent_job_receipts.go) still decides exactly which
+			// tasks that proof actually credits; this only proves SOME of
+			// the work is real, the same carve-out completed_no_change
+			// already gets via the loop below.
+			if hasGenuineTaskReceiptEvidence(r) {
+				return nil
+			}
 			continue
 		}
 		completedCount++
@@ -39,6 +54,41 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 		return fmt.Errorf("build provenance: no workers completed successfully -- all %d worker(s) are in a non-success state", len(results))
 	}
 	return fmt.Errorf("build provenance: %d worker(s) completed but none reported file changes (created, modified, or tests) or evidenced no-change verification -- the build produced no changes", completedCount)
+}
+
+// hasGenuineTaskReceiptEvidence reports whether a worker result -- regardless
+// of its own overall terminal status -- carries at least one task_receipts
+// entry with genuine, evidenced completion proof: a successful receipt
+// status, a non-empty summary, and a passing handoff with at least one
+// concrete commands_run entry. It mirrors the structural checks
+// admitCoherentJobTaskReceipts enforces (cmd/coherent_job_receipts.go)
+// closely enough to prove SOME of a failed grouped job's work is real,
+// without duplicating that function's manifest/phase-scoped rules --
+// admitCoherentJobTaskReceipts (and finalizeCoherentJobTaskReceiptEvidence)
+// remain the only functions that decide exactly which tasks the evidence
+// actually credits. A result with zero task_receipts, or only structurally
+// hollow ones, still falls through to the ordinary phantom-build rejection.
+func hasGenuineTaskReceiptEvidence(r codexExternalBuildWorkerResult) bool {
+	for _, receipt := range r.TaskReceipts {
+		if strings.TrimSpace(receipt.TaskID) == "" {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(receipt.Status))
+		if status != codex.TaskReceiptStatusCompleted && status != codex.TaskReceiptStatusCompletedNoChange {
+			continue
+		}
+		if strings.TrimSpace(receipt.Summary) == "" {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(receipt.Handoff.VerificationStatus)) != "pass" {
+			continue
+		}
+		if len(receipt.Handoff.CommandsRun) == 0 {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func validateBuildProvenanceForManifest(manifest *codexBuildManifest, results []codexExternalBuildWorkerResult) error {
