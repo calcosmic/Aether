@@ -117,15 +117,17 @@ func TestOneHallucinatedReceiptPathDoesNotBlockACleanWorker(t *testing.T) {
 
 	reconcileWorktreeWave(root, phase, 1, outcomes, NewCircuitBreaker(3), newWorktreeReceiptLedger())
 
-	if outcomes[0].result.Status != "completed" {
-		t.Fatalf("the worker that finished cleanly ended as %q because another worker named a file it never touched", outcomes[0].result.Status)
-	}
+	// The decisive evidence is the project itself: a cancelled round copies
+	// nothing back at all, so the file would still hold its original text.
 	after, err := os.ReadFile(filepath.Join(root, owned))
 	if err != nil {
 		t.Fatalf("read owned file after the wave: %v", err)
 	}
 	if string(after) != "package cmd // written by the declared owner\n" {
 		t.Fatalf("the clean worker's finished work never reached the project; cmd/foo.go is %q", string(after))
+	}
+	if outcomes[0].result.Status == "blocked" {
+		t.Fatalf("the worker that finished cleanly was held back because another worker named a file it never touched: %v", outcomes[0].result.Error)
 	}
 }
 

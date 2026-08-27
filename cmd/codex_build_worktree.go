@@ -654,14 +654,11 @@ func resolveWorktreePartialReceipts(root string, phase colony.Phase, outcome *wo
 // "Written" means every path this wave could actually put into the root
 // checkout. For a worker that finished cleanly that is everything it touched.
 // For a worker that failed part-way it is the paths its own task receipts
-// CLAIM -- because those, and only those, are what resolveWorktreePartialReceipts
-// would copy back. CR-05 (195-REVIEW.md): leaving them out made a failed
-// worker's writes invisible to the very check that exists to stop two workers
-// overwriting each other, so index order silently decided the winner. The
-// claimed set is deliberately a superset of what admission will finally accept:
-// refusing a wave the runtime cannot prove is safe is the conservative
-// direction, since every worker's own copy is preserved on its branch either
-// way and nothing is destroyed.
+// claim that could plausibly be admitted -- see worktreeReceiptClaimedPaths
+// for exactly which of admission's rules are applied and which are not.
+// CR-05 (195-REVIEW.md): leaving them out made a failed worker's writes
+// invisible to the very check that exists to stop two workers overwriting each
+// other, so index order silently decided the winner.
 func detectWorktreeWaveConflicts(root string, outcomes []*worktreeWaveOutcome) ([]string, map[int]bool) {
 	declared := map[string]string{}
 	for _, outcome := range outcomes {
@@ -718,16 +715,53 @@ func detectWorktreeWaveConflicts(root string, outcomes []*worktreeWaveOutcome) (
 }
 
 // worktreeReceiptClaimedPaths returns the repository-relative paths a
-// non-completed worker's own task receipts claim, normalized exactly the way
-// admitCoherentJobTaskReceipts normalizes them, so conflict detection compares
-// like with like. It is the superset of what resolveWorktreePartialReceipts
-// could copy into root for that worker (admission only ever narrows it).
+// non-completed worker's own task receipts claim AND that could plausibly be
+// admitted, normalized exactly the way admitCoherentJobTaskReceipts normalizes
+// them, so conflict detection compares like with like.
+//
+// Three of admission's own cheap, lexical rules are applied here, because a
+// path that fails any of them can never be copied into root and so can never
+// be part of a real collision: the receipt must cover a task this dispatch was
+// actually given, it must report a successful terminal status, and the path
+// must be one the worker's OWN result already reported touching.
+//
+// NEW-04 (195-REVIEW.iter2.md): without those filters a failed worker naming
+// a file it never went near -- an ordinary AI output error -- collided with
+// the file's declared owner and cancelled the entire round, blocking every
+// worker in it. The remaining set is still a deliberate superset of what
+// admission will finally accept (the per-task declared-file binding and the
+// root-backed check are not applied here): refusing a wave the runtime cannot
+// prove is safe is the conservative direction, since every worker's own copy
+// is preserved on its branch either way and nothing is destroyed.
 func worktreeReceiptClaimedPaths(root string, outcome *worktreeWaveOutcome) []string {
 	if outcome == nil || outcome.result.WorkerResult == nil {
 		return nil
 	}
+	covered := make(map[string]struct{}, len(outcome.dispatch.CoveredTaskIDs)+1)
+	for _, id := range outcome.dispatch.CoveredTaskIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			covered[id] = struct{}{}
+		}
+	}
+	if id := strings.TrimSpace(outcome.dispatch.TaskID); id != "" {
+		covered[id] = struct{}{}
+	}
+	reported := make(map[string]struct{})
+	for _, raw := range buildDispatchClaimOutputs(*outcome.result.WorkerResult) {
+		if normalized, err := lexicallyNormalizeReceiptPath(root, raw); err == nil {
+			reported[normalized] = struct{}{}
+		}
+	}
+
 	var paths []string
 	for _, receipt := range outcome.result.WorkerResult.TaskReceipts {
+		if _, inScope := covered[strings.TrimSpace(receipt.TaskID)]; !inScope {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(receipt.Status))
+		if status != codex.TaskReceiptStatusCompleted && status != codex.TaskReceiptStatusCompletedNoChange {
+			continue
+		}
 		raws := make([]string, 0, len(receipt.FilesCreated)+len(receipt.FilesModified)+len(receipt.TestsWritten))
 		raws = append(raws, receipt.FilesCreated...)
 		raws = append(raws, receipt.FilesModified...)
@@ -735,6 +769,9 @@ func worktreeReceiptClaimedPaths(root string, outcome *worktreeWaveOutcome) []st
 		for _, raw := range raws {
 			normalized, err := lexicallyNormalizeReceiptPath(root, raw)
 			if err != nil {
+				continue
+			}
+			if _, ok := reported[normalized]; !ok {
 				continue
 			}
 			paths = append(paths, normalized)
