@@ -1255,3 +1255,463 @@ func TestGroupedWorktreeOwnsUnionedPaths(t *testing.T) {
 		t.Fatalf("ownership conflict does not name both jobs: %v", conflictErr)
 	}
 }
+
+// --- Phase 195 / D-08..D-10: partial receipts in worktree mode ---
+
+// worktreeReceiptForTask is receiptForTask's worktree twin: it deliberately
+// creates NO file in the repository root. The worker creates it inside its own
+// isolated checkout instead, which is the entire point -- a file that exists
+// only inside a worktree must never be credited until the accepted change has
+// reached root.
+func worktreeReceiptForTask(taskID string) codex.TaskReceipt {
+	return codex.TaskReceipt{
+		TaskID:        taskID,
+		Status:        codex.TaskReceiptStatusCompleted,
+		Summary:       "finished " + taskID,
+		FilesCreated:  []string{},
+		FilesModified: []string{taskFileName(taskID)},
+		TestsWritten:  []string{},
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "pass",
+			CommandsRun:        []string{"go test ./..."},
+		},
+	}
+}
+
+// groupedWorktreePartialInvoker is one grouped Builder that finishes four of
+// six chained steps inside its own worktree, leaves an unrelated scratch edit
+// behind, then crashes.
+type groupedWorktreePartialInvoker struct {
+	mu           sync.Mutex
+	proven       []string
+	extras       []string
+	receipts     []codex.TaskReceipt
+	worktreeRoot string
+	calls        int
+}
+
+func (i *groupedWorktreePartialInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	if cfg.Caste != "builder" {
+		return codex.WorkerResult{
+			WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID,
+			Status: "completed", Summary: "read-only worker completed",
+		}, nil
+	}
+	i.mu.Lock()
+	i.calls++
+	i.worktreeRoot = cfg.Root
+	i.mu.Unlock()
+
+	touched := make([]string, 0, len(i.proven))
+	for _, id := range i.proven {
+		rel := taskFileName(id)
+		if err := os.WriteFile(filepath.Join(cfg.Root, rel), []byte("package fixture\n"), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		touched = append(touched, rel)
+	}
+	for _, rel := range i.extras {
+		target := filepath.Join(cfg.Root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		if err := os.WriteFile(target, []byte("scratch, never proven\n"), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+	}
+	return codex.WorkerResult{
+		WorkerName:    cfg.WorkerName,
+		Caste:         cfg.Caste,
+		TaskID:        cfg.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: touched,
+		TaskReceipts:  i.receipts,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+	}, nil
+}
+
+func (i *groupedWorktreePartialInvoker) IsAvailable(context.Context) bool { return true }
+func (i *groupedWorktreePartialInvoker) ValidateAgent(string) error       { return nil }
+func (i *groupedWorktreePartialInvoker) checkout() string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.worktreeRoot
+}
+
+// setupGroupedWorktreePartialBuild wires the shared four-of-six worktree
+// fixture: a real git repository in worktree mode, six chained tasks the
+// planner groups into one job, and a Builder that proves four of them inside
+// its own checkout only.
+func setupGroupedWorktreePartialBuild(t *testing.T, goal string, extras []string) (string, colony.Phase, []string, *groupedWorktreePartialInvoker) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir, root := newCalVaultWorktreeRepo(t)
+
+	tasks, ids := sixChainedTasks()
+	phase := colony.Phase{
+		ID: 1, Name: "Worktree partial chain", Description: "One worker, six dependent steps",
+		Status: colony.PhaseReady, Tasks: tasks,
+	}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
+		ParallelMode: colony.ModeWorktree,
+		Plan:         colony.Plan{Phases: []colony.Phase{phase}},
+	})
+
+	proven := ids[:4]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, worktreeReceiptForTask(id))
+	}
+	invoker := &groupedWorktreePartialInvoker{proven: proven, extras: extras, receipts: receipts}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	return root, phase, ids, invoker
+}
+
+func taskStatusByID(t *testing.T) map[string]string {
+	t.Helper()
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	out := map[string]string{}
+	for _, task := range state.Plan.Phases[0].Tasks {
+		out[*task.ID] = string(task.Status)
+	}
+	return out
+}
+
+// TestGroupedWorktreePartialReceiptsSyncBeforeCredit is the trap this plan
+// exists to close. Stage 1 admits four candidates from receipts whose files
+// live ONLY inside the worker's worktree; stage 2 must credit none of them
+// until those exact paths have reached the root checkout. Only after the
+// receipt-scoped sync may the four be credited -- exactly four, never six,
+// never zero.
+func TestGroupedWorktreePartialReceiptsSyncBeforeCredit(t *testing.T) {
+	root, phase, ids, invoker := setupGroupedWorktreePartialBuild(
+		t, "Worktree partial credit is root-backed", nil)
+	proven := ids[:4]
+	pending := ids[4:]
+
+	// Pre-sync: admission yields four candidates and four sync paths, and
+	// finalization against a root that does not have those files yet credits
+	// nothing. A regression that credits here would credit worktree-only work.
+	syntheticDispatch := codexBuildDispatch{
+		Name: "Anvil-1", TaskID: ids[0], CoveredTaskIDs: ids, Status: "failed",
+	}
+	aggregate := make([]string, 0, len(proven))
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	for _, id := range proven {
+		aggregate = append(aggregate, taskFileName(id))
+		receipts = append(receipts, worktreeReceiptForTask(id))
+	}
+	admission, violations := admitCoherentJobTaskReceipts(root, phase, syntheticDispatch, aggregate, receipts)
+	if len(violations) != 0 {
+		t.Fatalf("structural admission refused a well-formed worktree receipt: %+v", violations)
+	}
+	if len(admission.Candidates) != 4 {
+		t.Fatalf("admission produced %d candidates, want 4", len(admission.Candidates))
+	}
+	if len(admission.SyncPaths) != 4 {
+		t.Fatalf("admission SyncPaths = %v, want the four candidate paths", admission.SyncPaths)
+	}
+	_, preSyncCredited, _ := finalizeCoherentJobTaskReceiptEvidence(root, phase, syntheticDispatch, admission)
+	if len(preSyncCredited) != 0 {
+		t.Fatalf("finalization credited %v before any candidate path reached root -- worktree-only files became task credit", preSyncCredited)
+	}
+
+	result, err := runCodexBuild(root, 1, nil, false)
+	if err != nil {
+		t.Fatalf("worktree partial credit should be accepted, got error: %v", err)
+	}
+	if invoker.checkout() == "" || !strings.Contains(filepath.ToSlash(invoker.checkout()), ".aether/worktrees/") {
+		t.Fatalf("grouped job did not run in an isolated worktree: %q", invoker.checkout())
+	}
+
+	// After the receipt-scoped sync the four candidate files exist in root.
+	for _, id := range proven {
+		if _, statErr := os.Stat(filepath.Join(root, taskFileName(id))); statErr != nil {
+			t.Fatalf("credited task %s never reached the root checkout: %v", id, statErr)
+		}
+	}
+	for _, id := range pending {
+		if _, statErr := os.Stat(filepath.Join(root, taskFileName(id))); !os.IsNotExist(statErr) {
+			t.Fatalf("uncredited task %s appeared in root: err=%v", id, statErr)
+		}
+	}
+
+	statuses := taskStatusByID(t)
+	for _, id := range proven {
+		if statuses[id] != string(colony.TaskCompleted) {
+			t.Fatalf("task %s is %q after its receipt synced and finalized, want %q", id, statuses[id], colony.TaskCompleted)
+		}
+	}
+	for _, id := range pending {
+		if statuses[id] == string(colony.TaskCompleted) {
+			t.Fatalf("unfinished task %s was credited: %q", id, statuses[id])
+		}
+	}
+	if recovery, _ := result["recovery_job"].(bool); !recovery {
+		t.Fatalf("worktree partial credit did not report a D-10 recovery job: %+v", result)
+	}
+}
+
+// TestGroupedWorktreeUncreditedEditsRemainOrphaned proves the negative half:
+// an edit the worker made but never proved with a receipt is neither synced
+// into root nor thrown away. It stays in a preserved, tracked worktree so it
+// can be recovered by hand.
+func TestGroupedWorktreeUncreditedEditsRemainOrphaned(t *testing.T) {
+	extras := []string{"scratch/unproven-notes.md"}
+	root, _, _, invoker := setupGroupedWorktreePartialBuild(
+		t, "Uncredited worktree edits stay recoverable", extras)
+
+	if _, err := runCodexBuild(root, 1, nil, false); err != nil {
+		t.Fatalf("worktree partial credit should be accepted, got error: %v", err)
+	}
+
+	for _, rel := range extras {
+		if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); !os.IsNotExist(statErr) {
+			t.Fatalf("unproven edit %s was synced into root anyway: err=%v", rel, statErr)
+		}
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	preserved := 0
+	for _, entry := range state.Worktrees {
+		if entry.Status != colony.WorktreeOrphaned {
+			continue
+		}
+		preserved++
+		abs := filepath.Join(root, filepath.FromSlash(entry.Path))
+		if _, statErr := os.Stat(abs); statErr != nil {
+			t.Fatalf("orphaned worktree %s was destroyed with uncredited work inside: %v", entry.Path, statErr)
+		}
+		for _, rel := range extras {
+			if _, statErr := os.Stat(filepath.Join(abs, filepath.FromSlash(rel))); statErr != nil {
+				t.Fatalf("uncredited edit %s was lost from the preserved worktree: %v", rel, statErr)
+			}
+		}
+	}
+	if preserved != 1 {
+		t.Fatalf("build preserved %d orphaned worktrees, want the one holding uncredited work: %+v", preserved, state.Worktrees)
+	}
+	if invoker.checkout() == "" {
+		t.Fatal("fixture never recorded a worktree checkout")
+	}
+	if _, _, cleanupErr := gcOrphanedWorktrees(); cleanupErr != nil {
+		t.Fatalf("clean orphaned worktree fixture: %v", cleanupErr)
+	}
+}
+
+// TestGroupedWorktreeSyncFailureCreditsNone forces every candidate path to
+// fail on the way into root. A task whose proof could not be brought back is
+// not proven, so nothing may be credited and no artifact evidence may exist.
+func TestGroupedWorktreeSyncFailureCreditsNone(t *testing.T) {
+	root, _, ids, _ := setupGroupedWorktreePartialBuild(
+		t, "A sync failure credits nothing", nil)
+	proven := ids[:4]
+
+	// A directory standing where each candidate file must land: the copy into
+	// root cannot succeed, and no candidate may be credited on a guess.
+	for _, id := range proven {
+		if err := os.MkdirAll(filepath.Join(root, taskFileName(id)), 0755); err != nil {
+			t.Fatalf("stage sync obstruction for %s: %v", id, err)
+		}
+	}
+
+	_, err := runCodexBuild(root, 1, nil, false)
+	if err == nil {
+		t.Fatal("a build whose every receipt failed to sync was accepted; want the ordinary failure path")
+	}
+
+	statuses := taskStatusByID(t)
+	for _, id := range ids {
+		if statuses[id] == string(colony.TaskCompleted) {
+			t.Fatalf("task %s was credited despite its proof never reaching root", id)
+		}
+	}
+	for _, id := range proven {
+		info, statErr := os.Stat(filepath.Join(root, taskFileName(id)))
+		if statErr == nil && !info.IsDir() {
+			t.Fatalf("failed sync still wrote %s into root", taskFileName(id))
+		}
+	}
+	if _, _, cleanupErr := gcOrphanedWorktrees(); cleanupErr != nil {
+		t.Fatalf("clean sync-failure worktree fixture: %v", cleanupErr)
+	}
+}
+
+// TestGroupedWorktreeRetryContainsOnlyUnfinishedTasks closes the loop with
+// D-10: the recovery job created after worktree partial credit contains only
+// the two tasks nobody proved, and the first worker's own attempt is never
+// rewritten.
+func TestGroupedWorktreeRetryContainsOnlyUnfinishedTasks(t *testing.T) {
+	root, _, ids, _ := setupGroupedWorktreePartialBuild(
+		t, "Worktree recovery only retries unfinished work", nil)
+	proven := ids[:4]
+	pending := ids[4:]
+
+	result, err := runCodexBuild(root, 1, nil, false)
+	if err != nil {
+		t.Fatalf("worktree partial credit should be accepted, got error: %v", err)
+	}
+	unfinished, _ := result["unfinished_task_ids"].([]string)
+	if !reflect.DeepEqual(unfinished, pending) {
+		t.Fatalf("unfinished_task_ids = %v, want exactly the two unproven tasks %v", unfinished, pending)
+	}
+	parentAttemptID, _ := result["parent_attempt_id"].(string)
+	retryAttemptID, _ := result["retry_attempt_id"].(string)
+	if parentAttemptID == "" || retryAttemptID == "" || parentAttemptID == retryAttemptID {
+		t.Fatalf("expected distinct non-empty parent/retry attempts, got parent=%q retry=%q", parentAttemptID, retryAttemptID)
+	}
+
+	var parent, child buildAttemptRecord
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ID == parentAttemptID {
+			parent = record
+		}
+		if record.ID == retryAttemptID {
+			child = record
+		}
+	}
+	if parent.ID == "" || child.ID == "" {
+		t.Fatalf("attempt journal is missing parent %q or child %q", parentAttemptID, retryAttemptID)
+	}
+	if child.ParentAttemptID != parentAttemptID {
+		t.Fatalf("child ParentAttemptID = %q, want %q", child.ParentAttemptID, parentAttemptID)
+	}
+	if parent.ParentAttemptID != "" {
+		t.Fatalf("parent attempt was rewritten with its own parent link: %+v", parent)
+	}
+	credited := stringSet(proven)
+	for _, dispatch := range child.Dispatches {
+		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+			if credited[taskID] {
+				t.Fatalf("retry job re-assigns already-proven task %s: %+v", taskID, dispatch)
+			}
+		}
+	}
+	if _, _, cleanupErr := gcOrphanedWorktrees(); cleanupErr != nil {
+		t.Fatalf("clean retry worktree fixture: %v", cleanupErr)
+	}
+}
+
+// TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative proves the two
+// lanes agree. A wrapper-submitted completion whose proof still lives in the
+// worker's worktree must pass through the SAME admission -> sync ->
+// finalization sequence the native lane uses, and reach the same credit set --
+// not a second, external-only validator.
+func TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir, root := newCalVaultWorktreeRepo(t)
+
+	goal := "External worktree lane credits exactly the proven tasks"
+	tasks, ids := sixChainedTasks()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
+		ParallelMode: colony.ModeWorktree,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "External worktree chain", Description: "One worker, six dependent steps",
+			Status: colony.PhaseReady, Tasks: tasks,
+		}}},
+	})
+
+	planResult, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("plan-only build: %v", err)
+	}
+	manifest := planResult["dispatch_manifest"].(codexBuildManifest)
+	var chain codexBuildDispatch
+	for _, dispatch := range manifest.Dispatches {
+		if len(dispatch.CoveredTaskIDs) > 1 {
+			chain = dispatch
+			break
+		}
+	}
+	if chain.Name == "" {
+		t.Fatalf("fixture did not produce one grouped dispatch: %+v", manifest.Dispatches)
+	}
+
+	// A real worktree holding the worker's proof, exactly as the wrapper lane
+	// would leave it: the four proven files exist ONLY in that checkout.
+	session, err := allocateBuildWorktree(root, 1, codex.WorkerDispatch{
+		WorkerName:     chain.Name,
+		TaskID:         chain.TaskID,
+		CoveredTaskIDs: chain.CoveredTaskIDs,
+	}, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("allocate external worktree: %v", err)
+	}
+	proven := ids[:4]
+	pending := ids[4:]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touched := make([]string, 0, len(proven))
+	for _, id := range proven {
+		if writeErr := os.WriteFile(filepath.Join(session.AbsPath, taskFileName(id)), []byte("package fixture\n"), 0644); writeErr != nil {
+			t.Fatalf("write worktree proof for %s: %v", id, writeErr)
+		}
+		receipts = append(receipts, worktreeReceiptForTask(id))
+		touched = append(touched, taskFileName(id))
+	}
+	for _, id := range proven {
+		if _, statErr := os.Stat(filepath.Join(root, taskFileName(id))); !os.IsNotExist(statErr) {
+			t.Fatalf("fixture leaked %s into root before finalize ran", taskFileName(id))
+		}
+	}
+
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: touched,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+		TaskReceipts: receipts,
+	}}}
+
+	result, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("external worktree finalize should accept validated partial credit, got error: %v", err)
+	}
+	if updatedState.State == colony.StateBUILT {
+		t.Fatalf("external worktree partial credit advanced colony to BUILT: %s", updatedState.State)
+	}
+	statuses := map[string]string{}
+	for _, task := range updatedState.Plan.Phases[0].Tasks {
+		statuses[*task.ID] = string(task.Status)
+	}
+	for _, id := range proven {
+		if statuses[id] != string(colony.TaskCompleted) {
+			t.Fatalf("external lane left proven task %s as %q, want %q", id, statuses[id], colony.TaskCompleted)
+		}
+		if _, statErr := os.Stat(filepath.Join(root, taskFileName(id))); statErr != nil {
+			t.Fatalf("external lane credited %s without bringing its file into root: %v", id, statErr)
+		}
+	}
+	for _, id := range pending {
+		if statuses[id] == string(colony.TaskCompleted) {
+			t.Fatalf("external lane credited unproven task %s", id)
+		}
+	}
+	if recovery, _ := result["recovery_job"].(bool); !recovery {
+		t.Fatalf("external worktree partial credit reported no D-10 recovery job: %+v", result)
+	}
+	if _, _, cleanupErr := gcOrphanedWorktrees(); cleanupErr != nil {
+		t.Fatalf("clean external worktree fixture: %v", cleanupErr)
+	}
+}
