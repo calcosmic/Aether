@@ -234,25 +234,132 @@ means less checking. Picking "light" never switches off a reviewer a risky
 phase genuinely needs; only the owner can decide not to send one, and that
 decision is written down.*
 
-### Team Check-In and Owner Decisions (2026-08-21)
+### Coherent Jobs and Completion Evidence (2026-08-27)
 
-**Builds pause for the owner before spawning — including a one-worker team.**
-After the spawn plan renders, the wrapper shows a check-in card (`aether
-ceremony team-checkin`) — one line per worker with the Queen's reason,
-`REQUIRED` or `OPTIONAL` marking, and the castes already pruned — then asks:
-proceed, trim optional workers, or redirect. `REQUIRED` now means exactly one
-of two things: the worker writing the code, or a reviewer forced by one of
-the five named signals above, with that signal named beside the reviewer.
-Only the owner — never the Queen, never autopilot — can decline a forced
-reviewer; declining is recorded through the same mechanism as answering a
-clarification, covers that one signal on that one phase, and stays declined
-even if the same signal is re-detected later from changed files.
-`aether build --no-checkin` skips the pause; autopilot never sees it and can
-never decline a reviewer. Locked by `TestRequiredMeansBuilderOrNamedSignal`,
+**Several related tasks become one job for one worker, and the program — not
+the Queen, not the wrapper — decides whether that grouping is safe.** Tasks are
+grouped when a real dependency chain or a genuinely shared implementation file
+connects them; brushing the same bookkeeping file (a README, a changelog, a
+dependency list) never fuses unrelated work, and an unusually large cluster is
+split unless a specific reason is given for one worker keeping it end to end.
+The Queen may propose her own grouping, with a reason naming both the
+relationship and the benefit ("these tasks all rewrite the same templates, so
+one worker avoids repeating the setup and fighting over the same files"), but
+the proposal is validated in Go before anything is dispatched. A group that
+would run a task before something it depends on is refused by name, showing the
+offending task and the dependency, and dependency-safe jobs are substituted for
+that one group only — every other group survives untouched, and the phase is
+never blown back apart into one worker per task. A genuine circular dependency
+is a hard planning error: the phase stops and prints the loop plus the repair
+to make. Locked by `TestCoherentJobProposalOrderRefusedByName`,
+`TestCoherentJobRepairKeepsSafeProposals`, `TestCoherentJobGraphErrorsHaveNoPlan`,
+`TestCoherentJobsIgnoreIncidentalPaths`, and
+`TestCalVaultSixBatchesPlanAsOneCoherentJob`.
+
+**Grouping happens before anyone owns a file, in both working modes.** Whether
+workers share one checkout (`in-repo`) or each gets an isolated copy
+(`worktree`), the grouping pass runs first and the finished job — not the
+individual task — is what claims ownership of files. One job therefore owns the
+combined list of its own tasks' files and cannot collide with itself, while two
+genuinely different jobs reaching for the same file in the same round are still
+refused before any worker starts, naming the contested file and both jobs. The
+real-world case that first exposed this — six workers each re-reading the same
+source list to copy files from it — now runs as one worker, one isolated copy,
+one branch and one merge back, in `worktree` mode as well as `in-repo`. Locked by
+`TestCalVaultSixBatchesBecomeOneWorktreeJob`,
+`TestGroupedWorktreeOwnsUnionedPaths`, and
+`TestDistinctWorktreeJobsStillRejectOverlap`.
+
+**A job's task list says what a worker was asked to do. It never says what got
+done.** `covered_task_ids` is assignment scope only. Finishing credit comes from
+a two-stage boundary. The first stage checks a worker's task-by-task receipts on
+their shape alone and grants no credit whatsoever — it produces candidates, not
+completions. Only the second stage, which checks each claim against the files
+actually present in the real project, can mark a task complete. In `worktree`
+mode the admitted files are copied back in between those two stages, so a file
+that exists only inside a worker's private copy
+can never become completion credit.
+If a worker finishes four of six tasks, exactly those four are credited
+and the other two stay pending; anything the worker touched that no admitted
+receipt claimed is neither copied back nor deleted — the copy is kept and you
+are told which files and which branch.
+A partially finished job never reports the project as built.
+Locked by `TestCoherentJobReceiptAdmission`,
+`TestCoherentJobReceiptFinalization`,
+`TestGroupedWorktreePartialReceiptsSyncBeforeCredit`,
+`TestGroupedWorktreeUncreditedEditsRemainOrphaned`, and
+`TestExternalGroupedPartialPersistsExactTaskState`.
+
+**Retrying picks up only the uncredited tasks.** Recovery plans a new
+dependency-safe job containing exactly the unfinished work, revalidates its
+order against what was already credited, and is recorded as a new attempt linked
+to the one it came from rather than overwriting it — so no fresh worker is ever
+asked to redo proven work. Locked by
+`TestCoherentJobRetryContainsOnlyUnfinishedTasks` and
+`TestGroupedJobRetryNeverReassignsCreditedTasks`.
+
+*For dummies: instead of sending six helpers to do six related things — each one
+starting cold and re-reading the same files — the system now sends one helper to
+do all six as a single piece of work, after checking that bundling them cannot
+make anything run out of order. And when a helper says "I finished the first
+four", the system does not take its word for it: it goes and looks at the actual
+files in your project, and only what it can genuinely see finished gets ticked
+off. The rest stays on the list and is retried, and nothing the helper did is
+thrown away in the meantime.*
+
+### Team Check-In and Owner Decisions (2026-08-21, one-worker fast path 2026-08-27)
+
+**A build that needs one worker, with nothing left for you to decide, goes straight through.**
+The runtime decides this, not the wrapper, in one fixed
+order: autopilot and `aether build --no-checkin` stay non-interactive; an
+explicit `aether build --checkin` always pauses, because you asked for it;
+anything still waiting on your decision pauses even for a single worker;
+exactly one worker with nothing pending takes the fast path; and everything
+else pauses exactly as before. Supplying
+`--checkin` and `--no-checkin` together is refused by name
+before the build opens an attempt, writes a plan,
+writes a checkpoint, or touches any saved state — the program never guesses
+which flag you meant. "One worker" counts workers, not jobs of work: a single
+worker carrying six grouped tasks is still one worker. Locked by
+`TestBuildCheckinDecisionMatrix`, `TestOneWorkerBuildSkipsCheckin`, and
+`TestCheckinFlagConflictHasNoSideEffects`.
+
+**The fast path still shows you the plan — it just does not ask.** Before
+spawning, it prints a short summary naming the worker, every task that worker is
+taking, why those tasks belong together and what grouping them buys, and the
+plain statement that nothing needs your approval so dispatch continues. It is
+never the full check-in card and never asks a question. Locked by
+`TestOneWorkerFastPathSummaryCarriesEveryFact` and
+`TestFastPathSummaryIsNonBlocking`.
+
+**Anything still waiting on your decision keeps the pause, even for one
+worker.** Exactly three live records count as waiting on you: a safety reviewer
+forced by one of the five named risk signals that you have not yet declined, an
+unanswered question the coordinator raised before planning, and an unanswered
+question a worker handed back. None of these is ever inferred from how many
+workers were sent or from the wording of a rendered card. Locked by
+`TestOneWorkerWithForcedReviewerWaiverStillPauses`,
+`TestOneWorkerWithBoundaryQuestionStillPauses`,
+`TestOneWorkerWithPersistedOwnerDecisionStillPauses`, and
+`TestPendingDecisionStillRendersFullCheckinCard`.
+
+**When the build does pause, the card itself is unchanged.** After the spawn
+plan renders, the wrapper shows a check-in card (`aether ceremony team-checkin`)
+— one line per worker with the Queen's reason, `REQUIRED` or `OPTIONAL` marking,
+and the castes already pruned — then asks: proceed, trim optional workers, or
+redirect. `REQUIRED` means exactly one of two things: the worker writing the
+code, or a reviewer forced by one of the five named signals above, with that
+signal named beside the reviewer. Only the owner — never the Queen, never
+autopilot — can decline a forced reviewer; declining is recorded through the
+same mechanism as answering a clarification, covers that one signal on that one
+phase, and stays declined even if the same signal is re-detected later from
+changed files. Autopilot never sees the card and can never decline a reviewer.
+Locked by `TestRequiredMeansBuilderOrNamedSignal`,
 `TestTeamCheckinDoesNotMutate`, `TestOnlyTheOwnerCanWaiveAForcedReviewer`,
 `TestWaiverCoversOneSignalOnOnePhase`,
-`TestWaivedSignalStaysWaivedWhenTheFilesRedetectIt`, and
-`TestAutopilotNeverWaives`.
+`TestWaivedSignalStaysWaivedWhenTheFilesRedetectIt`,
+`TestAutopilotNeverWaives`, and
+`TestRenderCeremonyTeamCheckinStillRendersFullCardForOneWorkerWhenCalled`.
 
 **Workers' questions route to the owner, not to more agents.** Handoff
 `open_decisions` surface via `aether handoff-decisions`; the owner's answers
@@ -272,12 +379,17 @@ fast continue path honors `--castes`
 (`TestContinueFastPathHonoursCasteProposal`); light colonize sends two
 surveyors, not four (`TestColonizeLightDepthTrimsSurveyors`).
 
-*For dummies: before spending anything, the build now shows you its team and
-waits for your OK — safety checkers stay, extras are yours to drop, and the
-system remembers what you drop. When a worker hits a question only you can
-answer, it asks you at the next natural break instead of sending another
-helper to guess. And five places that used to send helpers with nothing to do
-have been shut off.*
+*For dummies: if the work needs one helper and there is nothing sitting with you
+to decide, the build tells you who it is sending and what they are doing, then
+gets on with it — no question, no waiting. If it needs more than one helper, or
+if anything is still waiting on you (a safety check you have not signed off, a
+question you were asked), it stops and shows you the full team card first, just
+as before: safety checkers stay, extras are yours to drop, and the system
+remembers what you drop. You can always force the stop by adding `--checkin`, or
+skip it with `--no-checkin`; asking for both at once is refused rather than
+guessed. When a worker hits a question only you can answer, it asks you at the
+next natural break instead of sending another helper to guess. And five places
+that used to send helpers with nothing to do have been shut off.*
 
 Wrappers should explain the Queen's choice briefly in plain English and reserve
 manual depth flags for advanced overrides. If docs and runtime disagree, runtime wins.
