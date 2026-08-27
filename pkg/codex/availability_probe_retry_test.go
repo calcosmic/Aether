@@ -46,14 +46,21 @@ func TestAvailabilityProbeRetriesOnlyTimeouts(t *testing.T) {
 		// Sleeps past the budget on the first run only, using a marker file
 		// to tell the runs apart.
 		marker := filepath.Join(t.TempDir(), "seen")
-		script := writeProbeScript(t, "if [ ! -f "+marker+" ]; then\n  touch "+marker+"\n  sleep 30\nfi\necho '"+`{"loggedIn":true}`+"'")
+		script := writeProbeScript(t, "if [ ! -f "+marker+" ]; then\n  touch "+marker+"\n  sleep 120\nfi\necho '"+`{"loggedIn":true}`+"'")
 
-		// 2s, not 200ms: the budget has to clear /bin/sh startup on a machine
-		// running the whole suite, or the script is killed before it reaches
-		// `touch` and BOTH attempts time out -- a fixture that fails for a
-		// reason the code under test has nothing to do with. The slow branch
-		// sleeps 30s, so the first attempt still times out reliably.
-		t.Setenv("AETHER_PROBE_TIMEOUT", "2s")
+		// 8s, not 2s and not 200ms. The budget is a floor on how long the
+		// SECOND attempt may take, and that attempt is /bin/sh startup plus one
+		// echo -- microseconds when idle, but seconds when the whole suite is
+		// running and every core is busy. At 200ms and again at 2s this test
+		// failed intermittently on a loaded machine and passed on every
+		// isolated rerun, which is the worst possible signal: indistinguishable
+		// from a real regression at the moment it fails. The cost of 8s is that
+		// the first attempt must burn the full budget before timing out, so the
+		// subtest takes ~8s instead of ~2s. That is the right trade -- a test
+		// whose verdict depends on machine load is not evidence of anything.
+		// The slow branch sleeps 120s, far beyond any budget, so the first
+		// attempt still times out for the reason the test intends.
+		t.Setenv("AETHER_PROBE_TIMEOUT", "8s")
 
 		output, err := runAvailabilityProbe(context.Background(), script)
 		if err != nil {

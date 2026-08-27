@@ -65,7 +65,12 @@
   is expected to SUCCEED — the cap was only a backstop there, so it was widened
   to 30s. The deliberate timeout-rejection case (`"rejects timeout"` adapter
   mode in `TestCLIBuildWorkerOutcomes`) still uses 1s and is untouched.
-- **Still open:** the `pkg/codex` probe retry test remains wall-clock sensitive.
+- **RESOLVED 2026-08-27:** the `pkg/codex` probe retry test failed a third time on
+  the phase's final full gate. Its budget is a floor on how long the SECOND probe
+  attempt may take (shell startup plus one echo), and 200ms then 2s were both too
+  tight on a loaded machine. Raised to 8s with the slow branch sleeping 120s, and
+  verified with `-count=3` while eight busy loops saturated the CPU. Costs ~6s of
+  runtime, because the first attempt must burn the full budget to time out.
 - **Why deferred:** neither is caused by Phase 195; both are pre-existing timing
   assumptions that only surface when the machine is busy.
 - **Follow-up:** audit remaining wall-clock literals in tests. A test that fails
