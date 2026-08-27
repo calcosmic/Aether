@@ -220,7 +220,12 @@ var buildCompletionStageCmd = &cobra.Command{
 			outputError(1, colonyStateLoadMessage(err), nil)
 			return err
 		}
-		binding, err := validateBuildAttemptManifestBinding(*manifest, state)
+		stageDigest, digestErr := jsonSHA256(completion)
+		if digestErr != nil {
+			outputError(1, fmt.Sprintf("hash completion packet: %v", digestErr), nil)
+			return digestErr
+		}
+		binding, err := validateBuildAttemptManifestBinding(*manifest, state, isCommittedPartialAttemptReplay(*manifest, stageDigest))
 		if err != nil || !binding.Bound {
 			if err == nil {
 				err = fmt.Errorf("completion manifest is not bound to a durable build attempt")
@@ -445,10 +450,19 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
 	}
-	if err := validateBuildManifestPlanRevision(*manifest, state); err != nil {
+	completionDigest, err := jsonSHA256(completion)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
+	}
+	// WR-02: is this the identical packet that already produced committed
+	// partial credit for this phase? Computed before the staleness guards
+	// because a committed partial legitimately changed the very state they
+	// compare against.
+	partialReplay := isCommittedPartialAttemptReplay(*manifest, completionDigest)
+	if err := validateBuildManifestPlanRevision(*manifest, state, partialReplay); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	binding, err := validateBuildAttemptManifestBinding(*manifest, state)
+	binding, err := validateBuildAttemptManifestBinding(*manifest, state, partialReplay)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -467,10 +481,6 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	// that is correct on every occurrence, not just the common one.
 	if binding.Legacy {
 		visualFprintf(stderr, "warning: phase %d's build completion did not include the newer tracking details that link it back to one specific dispatched build, so it is being accepted using the older, less strictly checked method\n", phaseNum)
-	}
-	completionDigest, err := jsonSHA256(completion)
-	if err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
 	}
 	if binding.Bound && buildAttemptCompletionSealed(binding.Record) && binding.Record.CompletionSHA256 != "" && binding.Record.CompletionSHA256 != completionDigest {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion packet does not match the result already bound to attempt %s", binding.Record.ID)
@@ -514,6 +524,13 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	if binding.Bound && binding.Record.Status == buildAttemptBuilt {
 		return idempotentExternalBuildFinalizeResult(state, phaseNum, binding, completionDigest)
+	}
+	// WR-02: replaying the identical packet for a committed partial returns the
+	// same answer -- including the same recovery command -- and commits nothing
+	// new. Without this the runtime's own "rerun build-finalize with the same
+	// completion packet" instruction had no reachable outcome for a partial.
+	if binding.Bound && binding.Record.Status == buildAttemptPartial {
+		return idempotentExternalPartialFinalizeResult(state, phaseNum, updatedPhaseForPartialReplay(state, phaseNum), binding, completionDigest)
 	}
 	if err := validateFinalizerManifestFreshness("dispatch_manifest", manifest.GeneratedAt, now); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -1032,13 +1049,22 @@ func collectPendingSuggestions(root string) (ran bool, count int) {
 	return true, count
 }
 
-func validateBuildManifestPlanRevision(manifest codexBuildManifest, state colony.ColonyState) error {
+func validateBuildManifestPlanRevision(manifest codexBuildManifest, state colony.ColonyState, partialReplay bool) error {
 	if revisionID := strings.TrimSpace(manifest.PlanRevisionID); revisionID != "" && revisionID != activePlanRevisionID(state.Plan) {
 		return fmt.Errorf("dispatch_manifest belongs to superseded plan revision %s; active revision is %s", revisionID, activePlanRevisionID(state.Plan))
 	}
 	if state.State == colony.StateBUILT && state.CurrentPhase == manifest.Phase {
 		// Exact retry safety is proved by the durable attempt and completion
 		// hashes. The lifecycle projection legitimately changed task statuses.
+		return nil
+	}
+	if partialReplay {
+		// WR-02: identical reasoning for a committed PARTIAL. Crediting some
+		// of the phase's tasks legitimately changed the plan hash, so the
+		// staleness check would refuse the very packet that produced it. The
+		// packet's own digest already matched the durable attempt
+		// (isCommittedPartialAttemptReplay), which is the same proof the
+		// BUILT branch above relies on.
 		return nil
 	}
 	if expectedHash := strings.TrimSpace(manifest.PlanStateHash); expectedHash != "" {
@@ -1085,6 +1111,101 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 		"result_collection": displayDataPath(resultCollectionRel),
 		"idempotent":        true,
 		"next":              "aether continue",
+	}
+	var boundaryQuestions []discussQuestion
+	if record.PlanManifest != nil {
+		boundaryQuestions = record.PlanManifest.BoundaryQuestions
+	}
+	addOrchestratorBoundaryGuidance(result, "build", state, "aether continue", boundaryQuestions)
+	return result, state, phase, dispatches, nil
+}
+
+// restatePartialCreditFromCommittedState rebuilds each dispatch's credited
+// task set from the committed phase, which is the durable record of what the
+// first finalize actually credited.
+//
+// A dispatch's CompletedTaskIDs are runtime-owned in-process state and are
+// deliberately never serialized (CR-03, 195-REVIEW.md -- a wrapper-authored
+// manifest must not be able to hand itself completion credit), so a record
+// reloaded from the attempt journal carries none. The phase's own task
+// statuses carry the same information and cannot be authored by a wrapper,
+// which makes them the correct source for a replay.
+func restatePartialCreditFromCommittedState(phase colony.Phase, dispatches []codexBuildDispatch) []codexBuildDispatch {
+	completed := make(map[string]struct{}, len(phase.Tasks))
+	for idx := range phase.Tasks {
+		if phase.Tasks[idx].Status == colony.TaskCompleted {
+			completed[buildTaskID(phase.Tasks[idx], idx)] = struct{}{}
+		}
+	}
+	restated := make([]codexBuildDispatch, len(dispatches))
+	copy(restated, dispatches)
+	for i := range restated {
+		var credited []string
+		for _, id := range dispatchCoveredTaskIDs(restated[i]) {
+			if _, ok := completed[id]; ok {
+				credited = append(credited, id)
+			}
+		}
+		restated[i].CompletedTaskIDs = credited
+	}
+	return restated
+}
+
+// updatedPhaseForPartialReplay returns the phase as it stands after the
+// partial credit was committed. Kept tiny and separate so the replay path
+// cannot accidentally reach for a stale copy.
+func updatedPhaseForPartialReplay(state colony.ColonyState, phaseNum int) colony.Phase {
+	if phaseNum >= 1 && phaseNum <= len(state.Plan.Phases) {
+		return state.Plan.Phases[phaseNum-1]
+	}
+	return colony.Phase{}
+}
+
+// idempotentExternalPartialFinalizeResult is the partial-credit twin of
+// idempotentExternalBuildFinalizeResult (WR-02, 195-REVIEW.md). It re-reports
+// a committed partial from its own durable attempt record and mutates nothing:
+// no colony state write, no attempt transition, no new credit.
+//
+// The recovery command is re-derived through reconcilePartialBuildRetry, which
+// is itself idempotent -- it finds the recovery record it already created for
+// this parent rather than creating a second one -- so a replay hands the owner
+// the same command as the first call.
+func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum int, phase colony.Phase, binding buildAttemptManifestBinding, completionDigest string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	record := binding.Record
+	if record.CompletionSHA256 == "" || record.CompletionSHA256 != completionDigest {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has no matching durable completion packet", record.ID)
+	}
+	dispatches := restatePartialCreditFromCommittedState(phase, record.Dispatches)
+	resultCollectionRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "result-collection.json"))
+	result := map[string]interface{}{
+		"phase":             phaseNum,
+		"phase_name":        phase.Name,
+		"state":             state.State,
+		"plan_only":         false,
+		"dispatch_mode":     "external-task",
+		"dispatches":        codexBuildDispatchMaps(dispatches),
+		"dispatch_count":    len(dispatches),
+		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(state))),
+		"parallel_mode":     string(effectiveParallelMode(state)),
+		"selected_tasks":    append([]string{}, record.SelectedTasks...),
+		"checkpoint":        record.Checkpoint,
+		"manifest":          record.Manifest,
+		"claims_path":       record.ClaimsPath,
+		"attempt":           displayDataPath(binding.Path),
+		"result_collection": displayDataPath(resultCollectionRel),
+		"idempotent":        true,
+		"next":              "aether continue",
+	}
+	if outcome, err := reconcilePartialBuildRetry(state, phaseNum, phase, record.ID, time.Now().UTC(), dispatches); err != nil {
+		visualFprintf(stderr, "warning: could not restate phase %d's recovery job: %v\n", phaseNum, err)
+	} else if outcome != nil {
+		result["recovery_job"] = true
+		result["parent_attempt_id"] = outcome.ParentAttemptID
+		result["retry_attempt_id"] = outcome.RetryAttemptID
+		result["retry_attempt_path"] = outcome.RetryAttemptPath
+		result["unfinished_task_ids"] = outcome.UnfinishedTaskIDs
+		result["recovery_command"] = outcome.RedispatchCommand
+		result["next"] = outcome.RedispatchCommand
 	}
 	var boundaryQuestions []discussQuestion
 	if record.PlanManifest != nil {

@@ -184,7 +184,7 @@ func TestBuildPlanRevisionContextRequiresTraceableResearchEvidence(t *testing.T)
 func TestValidateBuildManifestRejectsSupersededRevision(t *testing.T) {
 	taskID := "1.1"
 	state := colony.ColonyState{Plan: colony.Plan{ActiveRevisionID: "plan-r2-current", Phases: []colony.Phase{{ID: 1, Name: "Current", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &taskID, Goal: "Current", Status: colony.TaskPending}}}}}}
-	err := validateBuildManifestPlanRevision(codexBuildManifest{Phase: 1, PlanRevisionID: "plan-r1-old"}, state)
+	err := validateBuildManifestPlanRevision(codexBuildManifest{Phase: 1, PlanRevisionID: "plan-r1-old"}, state, false)
 	if err == nil || !strings.Contains(err.Error(), "superseded plan revision") {
 		t.Fatalf("expected superseded build packet rejection, got %v", err)
 	}

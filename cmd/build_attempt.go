@@ -764,7 +764,35 @@ type buildAttemptManifestBinding struct {
 	Legacy bool
 }
 
-func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colony.ColonyState) (buildAttemptManifestBinding, error) {
+// isCommittedPartialAttemptReplay reports whether phase manifest.Phase's
+// latest attempt is a committed PARTIAL whose durable completion digest is
+// exactly completionDigest -- i.e. the caller is resubmitting the identical
+// completion packet that produced the partial credit already on disk.
+//
+// This is the same proof-by-digest the BUILT path has always used ("exact
+// retry safety is proved by the durable attempt and completion hashes"). It
+// exists because a committed partial legitimately moves the colony on -- it
+// credits tasks and appends events -- so the state-drift and plan-hash guards
+// that protect a stale packet would otherwise refuse the runtime's own
+// documented instruction to "rerun build-finalize with the same completion
+// packet" (WR-02, 195-REVIEW.md). A DIFFERENT packet for the same partial
+// attempt is still refused by every one of those guards, unchanged.
+func isCommittedPartialAttemptReplay(manifest codexBuildManifest, completionDigest string) bool {
+	attemptID := strings.TrimSpace(manifest.AttemptID)
+	completionDigest = strings.TrimSpace(completionDigest)
+	if attemptID == "" || completionDigest == "" {
+		return false
+	}
+	_, latest, ok := loadLatestBuildAttempt(manifest.Phase)
+	if !ok {
+		return false
+	}
+	return latest.ID == attemptID &&
+		strings.TrimSpace(latest.Status) == buildAttemptPartial &&
+		strings.TrimSpace(latest.CompletionSHA256) == completionDigest
+}
+
+func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colony.ColonyState, partialReplay bool) (buildAttemptManifestBinding, error) {
 	attemptID := strings.TrimSpace(manifest.AttemptID)
 	attemptPath := filepath.ToSlash(strings.TrimSpace(manifest.AttemptPath))
 	if attemptID == "" && attemptPath == "" {
@@ -809,7 +837,7 @@ func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colo
 		return buildAttemptManifestBinding{}, fmt.Errorf("dispatch_manifest timestamp does not match durable build attempt %s", attemptID)
 	}
 	projectedBuiltState := latest.CompletionSHA256 != "" && state.State == colony.StateBUILT && state.CurrentPhase == manifest.Phase
-	if latest.Status != buildAttemptBuilt && !projectedBuiltState {
+	if latest.Status != buildAttemptBuilt && !projectedBuiltState && !partialReplay {
 		stateDigest, err := jsonSHA256(state)
 		if err != nil {
 			return buildAttemptManifestBinding{}, fmt.Errorf("hash current colony state: %w", err)
@@ -820,6 +848,14 @@ func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colo
 	}
 	switch latest.Status {
 	case buildAttemptAwaiting, buildAttemptDispatching, buildAttemptTerminal, buildAttemptBuilt:
+	case buildAttemptPartial:
+		// WR-02: a committed partial is a terminal outcome the runtime itself
+		// tells callers to resubmit. The identical packet replays; a different
+		// one is refused by name rather than silently replacing the credit
+		// already committed.
+		if !partialReplay {
+			return buildAttemptManifestBinding{}, fmt.Errorf("build attempt %s recorded partial credit from a different completion packet; resubmit that same packet to see its recovery command, or run its recovery command to finish the remaining tasks", attemptID)
+		}
 	case buildAttemptFailed, buildAttemptInterrupted:
 		if latest.CompletionSHA256 == "" {
 			return buildAttemptManifestBinding{}, fmt.Errorf("build attempt %s ended before terminal external results were recorded; redispatch the phase", attemptID)
