@@ -9,11 +9,16 @@ package cmd
 // failure mode is what produced the serious faults in Phases 195 and 196.
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/parser"
+	"go/printer"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -461,13 +466,24 @@ func TestNextActionAnswerFieldsAreAllSerialisable(t *testing.T) {
 // Purity is the property that makes every behaviour above testable without a
 // filesystem; asserting it in prose only would not keep it.
 func TestResolverIsFreeOfImpureReferences(t *testing.T) {
-	source, err := os.ReadFile("next_action.go")
+	// Parse and re-print so comments are dropped: a comment explaining that the
+	// resolver never touches the store must not itself trip the check.
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "next_action.go", nil, 0)
 	if err != nil {
-		t.Fatalf("read resolver source: %v", err)
+		t.Fatalf("parse resolver source: %v", err)
 	}
-	for _, forbidden := range []string{"store.", "os.Getenv", "detectPlatform", "os.ReadFile", "os.Stat"} {
-		if strings.Contains(string(source), forbidden) {
-			t.Errorf("cmd/next_action.go references %q; the resolver must be pure and read nothing", forbidden)
+	var code bytes.Buffer
+	if err := printer.Fprint(&code, fset, file); err != nil {
+		t.Fatalf("print resolver source: %v", err)
+	}
+	source := code.Bytes()
+
+	// Word-boundary matching, so ordinary prose containing "restore" is not
+	// mistaken for a reference to the package store.
+	for _, forbidden := range []string{`\bstore\b`, `os\.Getenv`, `detectPlatform`, `os\.ReadFile`, `os\.Stat`, `os\.Open`} {
+		if regexp.MustCompile(forbidden).Match(source) {
+			t.Errorf("cmd/next_action.go matches %q in its code; the resolver must be pure and read nothing", forbidden)
 		}
 	}
 }
