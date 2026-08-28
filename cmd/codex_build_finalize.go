@@ -813,12 +813,40 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	// above) so re-analysis cost scales with builds, not worker count.
 	suggestAnalyzeRan, pendingSuggestionCount := collectPendingSuggestions(root)
 
+	// File this run's per-worker token record. This call is what makes both
+	// platform usage readers reachable from a real dispatch path; without it
+	// they would be code nothing invokes, which is this repository's named
+	// signature failure.
+	//
+	// Accounting is a record OF the build, never a gate ON it: a write that
+	// fails is reported and the build still completes. A build must not be
+	// lost because its bookkeeping could not be filed.
+	spendNote := ""
+	spendOutcome, spendErr := writeSpendRowsForRun(spendWriteRequest{
+		Phase:      phaseNum,
+		PhaseName:  updatedPhase.Name,
+		Workflow:   spendWorkflowBuild,
+		RepoRoot:   root,
+		Platform:   manifest.HostPlatform,
+		StartedAt:  spendRunStartFromManifest(manifest.GeneratedAt),
+		EndedAt:    time.Now().UTC(),
+		Dispatches: dispatches,
+	})
+	if spendErr != nil {
+		spendNote = fmt.Sprintf("this build's per-worker token record could not be filed: %v", spendErr)
+		visualFprintf(stderr, "warning: %s\n", spendNote)
+	} else if len(spendOutcome.Notes) > 0 {
+		spendNote = strings.Join(spendOutcome.Notes, "; ")
+	}
+
 	result := map[string]interface{}{
 		"phase":                    phaseNum,
 		"phase_name":               updatedPhase.Name,
 		"state":                    updatedState.State,
 		"plan_only":                false,
 		"dispatch_mode":            "external-task",
+		"spend_rows_written":       spendOutcome.RowsWritten,
+		"spend_rows_measured":      spendOutcome.Reported,
 		"dispatches":               codexBuildDispatchMaps(dispatches),
 		"dispatch_count":           len(dispatches),
 		"wave_count":               len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
@@ -833,6 +861,9 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		"next":                     "aether continue",
 		"suggest_analyze_ran":      suggestAnalyzeRan,
 		"pending_suggestion_count": pendingSuggestionCount,
+	}
+	if spendNote != "" {
+		result["spend_ledger_note"] = spendNote
 	}
 	if pendingSuggestionCount > 0 {
 		result["pending_suggestions_next"] = "aether suggest-approve"

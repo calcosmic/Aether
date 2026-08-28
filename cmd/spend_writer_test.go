@@ -66,8 +66,11 @@ func spendLedgerRowByName(t *testing.T, ledger spendLedger, name string) spendRo
 // the platform recorded nothing for it.
 func newSpendWriterFixture(t *testing.T) (dataDir string, req spendWriteRequest) {
 	t.Helper()
-	s, dataDir := newTestStore(t)
+	s, tmpDir := newTestStore(t)
 	store = s
+	// newTestStore returns the repo-shaped temp root; the store itself lives
+	// one level down, which is where the ledger file must appear.
+	dataDir = filepath.Join(tmpDir, ".aether", "data")
 	_, repoRoot := setupOpenCodeFixtureHome(t)
 
 	return dataDir, spendWriteRequest{
