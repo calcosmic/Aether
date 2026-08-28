@@ -2,16 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 196
-current_phase_name: See What It Cost
-status: verifying
-stopped_at: Completed 196-08-PLAN.md
-last_updated: "2026-08-28T12:29:11.497Z"
+current_phase: 172.1
+current_phase_name: gate environment integrity — not started; blocks nothing; stays in the backlog
+status: planning
+stopped_at: Phase 196 complete, ready to plan Phase 197
+last_updated: "2026-08-28T15:42:41.620Z"
 last_activity: 2026-08-28
-state_head: 0bfef8c05dc340a435c738a4b491d335c12432d1
+last_activity_desc: Phase 196 complete, transitioned to Phase 172.1
+state_head: 776d73edd79c8c4afc66ece8c6d17bf42ac8ea26
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 32
   completed_plans: 32
   percent: 43
@@ -24,7 +25,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 196 — See What It Cost
+**Current focus:** Phase 197 — One Answer to "What Next?"
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
@@ -33,14 +34,18 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Progress:** [████░░░░░░] 43%
 
-Phase: 196 (See What It Cost) — EXECUTING
-Plan: 8 of 8
-Status: Phase complete — ready for verification
+Phase: 197 (One Answer to "What Next?") — READY TO PLAN
+Plan: Not started
+Status: Ready to plan
+
+*(`phase.complete` advanced this to backlog entry 172.1 again — the next unchecked
+roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
+every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
 
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
 every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-Last activity: 2026-08-28
+Last activity: 2026-08-28 — Phase 196 complete, transitioned to Phase 172.1
 
 ## Performance Metrics
 
@@ -187,6 +192,7 @@ Last activity: 2026-08-28
 - [x] Execute and verify Phase 194: The Queen Decides the Team — complete 2026-08-26 (9/9 plans, 9/9 UAT)
 - [~] Phase 195: Coherent Jobs — discussed and planned (10 plans); executing, 4/10 complete 2026-08-27 ← **current**
 - [x] Plan Phase 196: See What It Cost — planned 2026-08-27 (8 plans, 4 waves; checked twice, 2 blockers found and fixed)
+- [x] Plan and execute Phase 196: See What It Cost — complete 2026-08-28 (8/8 plans, 5/5 criteria, 3 review rounds + verification)
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
@@ -258,5 +264,5 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 ## Session Continuity
 
 Last session: 2026-08-28T12:29:11.339Z
-Stopped at: Completed 196-08-PLAN.md
+Stopped at: Phase 196 complete, ready to plan Phase 172.1
 Resume file: None
