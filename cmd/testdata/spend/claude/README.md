@@ -85,9 +85,9 @@ Naive is **1.757x** the truth. A reader that stops deduplicating produces
 
 Both figures were derived with `jq`/`awk` directly from this file and
 hand-checked by addition. **Neither was produced by calling the code under
-test**, and neither is one of the two figures (8,930,280 / 4,237,379) recorded
-before decision D-04 was corrected — those came from a mistaken reading of the
-line types and must never be reused.
+test**, and neither is one of the two figures recorded before decision D-04 was
+corrected — those came from a mistaken reading of the line types, are named only
+in `196-CONTEXT.md`, and must never be reused.
 
 ## Redaction rules applied
 

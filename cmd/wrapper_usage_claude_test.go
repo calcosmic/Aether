@@ -48,9 +48,10 @@ const claudeTranscriptFixturePath = "testdata/spend/claude/transcript-with-dupli
 // total helper, or any other code under test — that is the discipline this
 // repository's 186x undercount was shipped for want of.
 //
-// Neither total is one of the two figures (8,930,280 / 4,237,379) recorded
-// before D-04 was corrected. Those came from the mistaken reading above and are
-// not carried forward.
+// Neither total is one of the two figures recorded before D-04 was corrected.
+// Those came from the mistaken reading above; they are named in 196-CONTEXT.md
+// and are deliberately not reproduced anywhere in this repository's source, so
+// they cannot be copied back in by a reader who mistakes them for a reference.
 const (
 	// claudeFixtureNaiveOccurrenceSum adds up every usage-bearing occurrence,
 	// which is what a reader that does not deduplicate produces.
