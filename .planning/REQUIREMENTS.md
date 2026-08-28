@@ -36,7 +36,7 @@
 
 ### See what it cost (COST)
 
-- [x] **COST-01**: Every build and continue ends with one plain-English cost line — per worker and total tokens, measured vs estimated labelled, dollars never the headline, no price table anywhere (carries SPEND-08)
+- [x] **COST-01**: Every build and continue ends with one plain-English cost line — per worker and total tokens, no number at all for a worker whose tool reported none, the total counting only the measured workers and saying so, dollars never the headline, no price table anywhere (carries SPEND-08). *Wording corrected 2026-08-28 (plan 196-08): this line previously promised "measured vs estimated labelled", which D-01 as amended (owner, 2026-08-27) superseded — no estimated figure is ever rendered, because the only estimate available was derived from prompt length and COST-03 forbids that.*
 - [x] **COST-02**: Wrapper-path (Claude Code / OpenCode) worker results report token usage so the line is populated on the path the owner actually uses (carries SPEND-02)
 - [ ] **COST-03**: `aether spend` shows per-worker tokens for the current run, mutating nothing, and no figure derives from a character budget (carries SPEND-07; reinstates the `aether spend` detail view the 2026-08-22 brief approved, reversing the 2026-08-14 cut of SPEND-06)
 - [x] **COST-04**: The team card shows each worker's model and the reason for it; no routine role carries `inherit` (chronicler, keeper, includer today); every role left on the expensive model has a recorded reason after the owner rules on the retune proposal
