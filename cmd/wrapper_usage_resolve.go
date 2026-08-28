@@ -193,12 +193,15 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 		}
 
 	case wrapperUsagePlatformOpenCode:
-		entries, ok := openCodeSessionUsageForRunOrNone(req.RepoRoot, req.StartedAt, req.EndedAt, names)
+		entries, reasons, ok := openCodeSessionUsageForRunOrNone(req.RepoRoot, req.StartedAt, req.EndedAt, names)
 		if !ok {
 			res.Diagnostics = append(res.Diagnostics,
 				"no OpenCode session store was found on this machine, so no worker's usage could be read from it")
 			break
 		}
+		// Every reason the reader gave for declining to resolve something
+		// reaches the owner, exactly as the Claude branch's own notes do.
+		res.Diagnostics = append(res.Diagnostics, reasons...)
 		for _, entry := range entries {
 			measured[entry.WorkerName] = entry.Usage
 		}

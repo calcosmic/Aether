@@ -225,7 +225,7 @@ func TestOpenCodeSessionUsageRefusesStorageRootOutsideHome(t *testing.T) {
 	// machine.
 	freshHome := t.TempDir()
 	t.Setenv("HOME", freshHome)
-	if _, ok := openCodeSessionUsageForRunOrNone(repoRoot, openCodeFixtureWindowStart, openCodeFixtureWindowEnd, []string{"Mason-67"}); ok {
+	if _, _, ok := openCodeSessionUsageForRunOrNone(repoRoot, openCodeFixtureWindowStart, openCodeFixtureWindowEnd, []string{"Mason-67"}); ok {
 		t.Fatalf("expected ok=false when the opencode storage root is entirely absent")
 	}
 }

@@ -227,17 +227,23 @@ func openCodeSessionUsageForRun(root, repoRoot string, startedAt, endedAt time.T
 // resolves the storage root itself and reports false when it is absent or
 // unreadable -- a missing OpenCode store on a Claude-Code-only machine is the
 // normal case, not an error, so failing soft here is deliberate.
-func openCodeSessionUsageForRunOrNone(repoRoot string, startedAt, endedAt time.Time, workerNames []string) ([]openCodeSessionUsage, bool) {
+//
+// It returns the reader's diagnostics rather than dropping them (WR-01). They
+// are the only explanation an owner gets for a worker that has no figure --
+// most of all "refusing to guess" when two in-window sessions carry one
+// worker's name, which otherwise renders identically to a tool that genuinely
+// reported nothing.
+func openCodeSessionUsageForRunOrNone(repoRoot string, startedAt, endedAt time.Time, workerNames []string) ([]openCodeSessionUsage, []string, bool) {
 	root, err := openCodeStorageRoot()
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
 	info, err := os.Stat(root)
 	if err != nil || !info.IsDir() {
-		return nil, false
+		return nil, nil, false
 	}
-	entries, _ := openCodeSessionUsageForRun(root, repoRoot, startedAt, endedAt, workerNames)
-	return entries, true
+	entries, reasons := openCodeSessionUsageForRun(root, repoRoot, startedAt, endedAt, workerNames)
+	return entries, reasons, true
 }
 
 // matchingOpenCodeProjects reads every project record under
