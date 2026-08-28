@@ -60,7 +60,12 @@ const spendCostLineHeading = "What The Helpers Cost"
 // spendCostLineSessionNote states the one exclusion the total makes that has
 // nothing to do with an unreported worker. It is printed on every rendered
 // block that has rows, because it is true of every one of them.
-const spendCostLineSessionNote = "(The coordinator's own back-and-forth — the main session — is not counted here; these are the helpers it sent.)\n"
+//
+// It carries no em dash, deliberately: the em dash is spendNotReportedFigure,
+// the sentinel that means "this worker has no figure", and putting one in prose
+// directly under a column of them invites the reader to see a row that is not
+// there.
+const spendCostLineSessionNote = "(The coordinator's own back-and-forth, the main session itself, is not counted here. These figures are the helpers it sent.)\n"
 
 // spendCompactTokenFigure renders a token count at the magnitude the owner
 // wrote — 1.2M, 220K — rather than as raw digits. This is the HEADLINE; the

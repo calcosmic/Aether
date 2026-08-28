@@ -59,4 +59,4 @@ Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant
 Cost: not known. The one worker that ran had no figure reported by its tool, so there is no total to show.
   👁️🐜 Watcher Worker-XX  —  not reported
 (1 worker's tool did not report usage, so its use is not in the total.)
-(The coordinator's own back-and-forth — the main session — is not counted here; these are the helpers it sent.)
+(The coordinator's own back-and-forth, the main session itself, is not counted here. These figures are the helpers it sent.)
