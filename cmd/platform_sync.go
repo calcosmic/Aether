@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -455,6 +456,127 @@ func appendSyncResult(details *[]map[string]interface{}, totals *updateSyncResul
 	*details = append(*details, entry)
 	totals.copied += result.copied
 	totals.skipped += result.skipped
+}
+
+// declaredAliasSurfaceStatus names one platform-home destination where a
+// declared alias command's wrapper must exist for that alias to actually
+// work from that surface.
+type declaredAliasSurfaceStatus struct {
+	Alias string
+	Label string
+	Path  string
+}
+
+// aliasWrapperHomeSurfaces returns each platform-home destination path a
+// command's wrapper is synced to, paired with a plain-English label for the
+// surface. These mirror platformHomeHubSyncPairs's actual destinations.
+func aliasWrapperHomeSurfaces(homeDir, name string) []declaredAliasSurfaceStatus {
+	return []declaredAliasSurfaceStatus{
+		{Alias: name, Label: "Claude", Path: filepath.Join(homeDir, ".claude", "commands", "ant-"+name+".md")},
+		{Alias: name, Label: "OpenCode", Path: filepath.Join(homeDir, ".opencode", "command", name+".md")},
+		{Alias: name, Label: "OpenCode (project config)", Path: filepath.Join(homeDir, ".config", "opencode", "commands", "ant", name+".md")},
+	}
+}
+
+// declaredAliasSurfaces reads the alias declarations directly off the live
+// Cobra command tree -- the same field cobra.Command.Find uses to route
+// `aether pause-colony` to the `pause` handler -- rather than maintaining a
+// second, feature-specific list of alias names in Go. A future command that
+// declares an alias is picked up here automatically.
+func declaredAliasSurfaces(homeDir string) []declaredAliasSurfaceStatus {
+	var out []declaredAliasSurfaceStatus
+	seen := map[string]bool{}
+	for _, sub := range rootCmd.Commands() {
+		for _, alias := range sub.Aliases {
+			alias = strings.TrimSpace(alias)
+			if alias == "" || seen[alias] {
+				continue
+			}
+			seen[alias] = true
+			out = append(out, aliasWrapperHomeSurfaces(homeDir, alias)...)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Alias != out[j].Alias {
+			return out[i].Alias < out[j].Alias
+		}
+		return out[i].Label < out[j].Label
+	})
+	return out
+}
+
+// missingDeclaredAliasSurfaces reports which declared-alias platform
+// surfaces are absent from homeDir right now.
+func missingDeclaredAliasSurfaces(homeDir string) []declaredAliasSurfaceStatus {
+	var missing []declaredAliasSurfaceStatus
+	for _, surface := range declaredAliasSurfaces(homeDir) {
+		if _, err := os.Stat(surface.Path); err != nil {
+			missing = append(missing, surface)
+		}
+	}
+	return missing
+}
+
+// aliasWrapperRepair names one alias command and every platform surface it
+// was missing from before an update repaired it.
+type aliasWrapperRepair struct {
+	Alias  string   `json:"alias"`
+	Labels []string `json:"surfaces"`
+}
+
+// aliasWrapperRepairReport is the plain-words account of which declared
+// alias wrappers an update run restored -- distinct from the ordinary
+// copied/unchanged file counts, and distinct from the stale-publish signal:
+// this is "a command came back", not "republish the hub".
+type aliasWrapperRepairReport struct {
+	Repairs []aliasWrapperRepair
+}
+
+func (r aliasWrapperRepairReport) Empty() bool {
+	return len(r.Repairs) == 0
+}
+
+// Message renders the repair report in plain English, naming each restored
+// command and the surface(s) it was missing from. Empty when nothing was
+// repaired -- an update that reports a repair on every run is noise, and
+// noise is how a real repair gets ignored.
+func (r aliasWrapperRepairReport) Message() string {
+	if r.Empty() {
+		return ""
+	}
+	parts := make([]string, 0, len(r.Repairs))
+	for _, repair := range r.Repairs {
+		parts = append(parts, fmt.Sprintf("`%s` (missing from %s)", repair.Alias, strings.Join(repair.Labels, ", ")))
+	}
+	plural := ""
+	if len(r.Repairs) != 1 {
+		plural = "s"
+	}
+	return fmt.Sprintf("Restored missing command%s: %s.", plural, strings.Join(parts, "; "))
+}
+
+// diffAliasRepairs compares the alias surfaces that were missing before a
+// sync ran against what exists now, and reports only the ones the sync
+// actually restored. A surface that was missing before and is still missing
+// after (e.g. because the platform-home sync was skipped, or the hub itself
+// never shipped that wrapper) is not a repair -- silence, not a false claim.
+func diffAliasRepairs(missingBefore []declaredAliasSurfaceStatus) aliasWrapperRepairReport {
+	var report aliasWrapperRepairReport
+	byAlias := map[string][]string{}
+	var order []string
+	for _, surface := range missingBefore {
+		if _, err := os.Stat(surface.Path); err != nil {
+			continue // still missing -- not a repair
+		}
+		if _, seen := byAlias[surface.Alias]; !seen {
+			order = append(order, surface.Alias)
+		}
+		byAlias[surface.Alias] = append(byAlias[surface.Alias], surface.Label)
+	}
+	for _, alias := range order {
+		report.Repairs = append(report.Repairs, aliasWrapperRepair{Alias: alias, Labels: byAlias[alias]})
+	}
+	return report
 }
 
 func pruneLegacyRepoPlatformAssets(repoDir string) syncResult {
