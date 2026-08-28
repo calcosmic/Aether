@@ -859,3 +859,72 @@ func TestEveryProductionRunNamesItsAttempt(t *testing.T) {
 		t.Fatal("no production spendWriteRequest was found at all; this guard would pass over an empty set")
 	}
 }
+
+// TestOneMeasurementIsNeverCreditedToTwoWorkers is WR-02.
+//
+// The resolver deduplicates requested names, so it answers once per distinct
+// name. The row loop then walks every DISPATCH and looks that one answer up for
+// each, so two dispatches sharing a name were each credited the full
+// measurement. Reproduced as two rows of 1,000 tokens for a run that spent
+// 1,000: "Cost: 2.0K tokens across 2 workers".
+//
+// Names are unique across today's dispatch tables, so this is not reachable
+// right now. Nothing enforced that: one new caste added to two tables would
+// have reintroduced the doubling in silence.
+func TestOneMeasurementIsNeverCreditedToTwoWorkers(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	store = s
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+
+	_, err := writeSpendRowsForRun(spendWriteRequest{
+		Phase:     11,
+		PhaseName: "See what it cost",
+		Workflow:  spendWorkflowBuild,
+		RepoRoot:  tmpDir,
+		RunID:     "attempt-duplicate-name",
+		StartedAt: time.Now().Add(-time.Hour),
+		EndedAt:   time.Now(),
+		Dispatches: []codexBuildDispatch{
+			{Caste: "watcher", Name: "Vigil-12", Task: "check the reader", Status: "completed",
+				Usage: codex.WorkerUsage{InputTokens: 1000, Source: codex.UsageSourceProvider}},
+			{Caste: "watcher", Name: "Vigil-12", Task: "check the writer", Status: "completed"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("writeSpendRowsForRun: %v", err)
+	}
+
+	ledger := loadSpendLedgerFromDisk(t, dataDir, 11, spendWorkflowBuild)
+	totals := computeSpendTotals([]spendLedger{ledger})
+	if totals.MeasuredTokens != 1000 {
+		t.Errorf("the run reports %d tokens for a run that spent 1000; one measurement was credited to both dispatches sharing the name", totals.MeasuredTokens)
+	}
+	if totals.MeasuredRows != 1 {
+		t.Errorf("%d rows are counted as measured, want 1: only one of the two dispatches sharing a name has a measurement behind it", totals.MeasuredRows)
+	}
+	// Both workers keep a row. A worker that vanishes makes a run look cheaper
+	// than it was, so the answer to a name collision is never to drop one.
+	if len(ledger.Rows) != 2 {
+		t.Errorf("got %d rows, want 2 -- both dispatches stay visible: %+v", len(ledger.Rows), ledger.Rows)
+	}
+
+	t.Run("the ledger refuses to store two measured rows under one name", func(t *testing.T) {
+		measured := codex.WorkerUsage{InputTokens: 1000, Source: codex.UsageSourceProvider}
+		err := saveSpendLedger(spendLedger{
+			Phase:    12,
+			Workflow: spendWorkflowBuild,
+			Rows: []spendRow{
+				{AgentName: "Vigil-12", Caste: "watcher", Status: "completed", Usage: measured},
+				{AgentName: "Vigil-12", Caste: "watcher", Status: "completed", Usage: measured},
+			},
+		})
+		if err == nil {
+			t.Fatalf("two measured rows filed under one worker were accepted; the phase total now double-counts one measurement")
+		}
+		if !strings.Contains(err.Error(), "Vigil-12") {
+			t.Errorf("the refusal does not name the worker: %v", err)
+		}
+	})
+}
