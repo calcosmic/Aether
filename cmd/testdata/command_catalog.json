@@ -4905,7 +4905,7 @@
     "stability_score": 91
   },
   {
-    "name": "pause-colony",
+    "name": "pause",
     "short_description": "Save colony state and write a handoff for later resumption",
     "flags": [],
     "parent_command": "",

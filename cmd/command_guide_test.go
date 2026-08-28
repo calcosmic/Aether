@@ -829,25 +829,54 @@ func stringSliceContains(values []string, want string) bool {
 	return false
 }
 
+// yamlCommandNamesForGuideTest returns every command name a YAML source
+// legitimises: each file's own name, plus every alias its `aliases:` field
+// declares. A declared alias (e.g. pause-colony) has no YAML file of its
+// own -- it is declared once, in its canonical command's YAML -- but it is
+// still a legitimate wrapper/guide name, exactly like a name that does have
+// its own file. Every consumer of this list (guide parity, wrapper parity,
+// platform parity) needs that expansion, so it lives here once rather than
+// being reimplemented per caller.
 func yamlCommandNamesForGuideTest(t *testing.T) []string {
 	t.Helper()
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
-	entries, err := os.ReadDir(filepath.Join(repoRoot, ".aether", "commands"))
+	commandsDir := filepath.Join(repoRoot, ".aether", "commands")
+	entries, err := os.ReadDir(commandsDir)
 	if err != nil {
 		t.Fatalf("read .aether/commands: %v", err)
 	}
-	var names []string
+	names := map[string]bool{}
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
 			continue
 		}
-		names = append(names, strings.TrimSuffix(entry.Name(), ".yaml"))
+		name := strings.TrimSuffix(entry.Name(), ".yaml")
+		names[name] = true
+
+		data, err := os.ReadFile(filepath.Join(commandsDir, entry.Name()))
+		if err != nil {
+			t.Fatalf("read %s: %v", entry.Name(), err)
+		}
+		var spec sourceCheckCommandSpec
+		if err := yaml.Unmarshal(data, &spec); err != nil {
+			t.Fatalf("parse %s: %v", entry.Name(), err)
+		}
+		for _, alias := range spec.Aliases {
+			alias = strings.TrimSpace(alias)
+			if alias != "" {
+				names[alias] = true
+			}
+		}
 	}
-	sort.Strings(names)
-	return names
+	result := make([]string, 0, len(names))
+	for name := range names {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
 }
 
 type commandGuideYAMLMetadata struct {

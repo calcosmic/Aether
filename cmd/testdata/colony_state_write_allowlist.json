@@ -85,7 +85,7 @@
   },
   {
     "file": "cmd/session_flow_cmds.go",
-    "function": "cobra:pause-colony",
+    "function": "cobra:pause",
     "primitive": "SaveJSON",
     "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
   },
