@@ -967,3 +967,150 @@ func TestTeamCheckinDoesNotMutate(t *testing.T) {
 		t.Fatalf("rendering the check-in card mutated colony state:\nbefore: %s\nafter:  %s", beforeJSON, afterJSON)
 	}
 }
+
+// TestTeamCardNamesModelAndReasonForEveryWorker is D-02's visible half
+// (196-CONTEXT.md): the reason an expensive role is expensive is shown on
+// the pre-build team card, before anything is spawned. Every worker line
+// names the model it runs on, and a worker on the expensive model shows the
+// recorded reason beside it.
+//
+// The two facts are also fields on the returned result, not only text inside
+// the rendered card: a wrapper that narrates this must read fields, never
+// scrape prose.
+func TestTeamCardNamesModelAndReasonForEveryWorker(t *testing.T) {
+	t.Setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "")
+	t.Setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "")
+
+	manifest, dispatches := teamCheckinManifestFixture()
+	result, visual := renderCeremonyTeamCheckin("build", manifest, dispatches)
+
+	models, _ := result["models"].(map[string]string)
+	if models == nil {
+		t.Fatalf("result carries no models field — a wrapper would have to scrape the card text")
+	}
+	for _, caste := range []string{"builder", "measurer"} {
+		if strings.TrimSpace(models[caste]) == "" {
+			t.Errorf("result models[%q] is empty — every worker on the card names its model", caste)
+		}
+		if want := resolveCasteModel(caste); models[caste] != want {
+			t.Errorf("result models[%q] = %q, want the resolved model %q", caste, models[caste], want)
+		}
+		if !strings.Contains(visual, resolveCasteModel(caste)) {
+			t.Errorf("card never names %s's model %q.\ncard:\n%s", caste, resolveCasteModel(caste), visual)
+		}
+	}
+
+	modelReasons, _ := result["model_reasons"].(map[string]string)
+	if modelReasons == nil {
+		t.Fatalf("result carries no model_reasons field")
+	}
+	want := casteModelReason("measurer")
+	if want == "" {
+		t.Fatal("the fixture's expensive worker records no reason — this test would then assert nothing")
+	}
+	if modelReasons["measurer"] != want {
+		t.Errorf("result model_reasons[measurer] = %q, want the recorded reason %q", modelReasons["measurer"], want)
+	}
+	if !strings.Contains(visual, want) {
+		t.Errorf("card never shows why the expensive worker is expensive.\nwant: %s\ncard:\n%s", want, visual)
+	}
+}
+
+// TestCheapModelWorkerNeedsNoReasonOnTheCard is the other direction: a
+// worker on the cheaper model shows its model and nothing else, because
+// there is no expense to justify. A justification rendered for every worker
+// would be noise, and would make the one that matters harder to see.
+func TestCheapModelWorkerNeedsNoReasonOnTheCard(t *testing.T) {
+	t.Setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "")
+	t.Setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "")
+
+	manifest, dispatches := teamCheckinManifestFixture()
+	result, visual := renderCeremonyTeamCheckin("build", manifest, dispatches)
+
+	modelReasons, _ := result["model_reasons"].(map[string]string)
+	if got := modelReasons["builder"]; got != "" {
+		t.Errorf("the cheap-model worker carries a model reason %q — there is nothing to justify", got)
+	}
+
+	// The builder's line still names its model, and carries no "why the
+	// more expensive model" clause.
+	for _, line := range strings.Split(visual, "\n") {
+		if !strings.Contains(line, "Builder") {
+			continue
+		}
+		if !strings.Contains(line, "sonnet") {
+			t.Errorf("the cheap-model worker's line does not name its model: %q", line)
+		}
+		if strings.Contains(line, "more expensive model") {
+			t.Errorf("the cheap-model worker's line justifies an expense it does not incur: %q", line)
+		}
+	}
+}
+
+// TestFastPathSummaryCarriesModelAndReason pins the surface that never
+// pauses: a one-worker build shows the compact summary instead of the full
+// card, so if the model and its reason only lived on the card the owner
+// would never see them on exactly the builds that skip it.
+func TestFastPathSummaryCarriesModelAndReason(t *testing.T) {
+	t.Setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "")
+	t.Setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "")
+
+	decision := buildCheckinDecision{
+		Requested: false,
+		Reason:    buildCheckinReasonOneWorkerFastPath,
+		Why:       "no owner decision is pending, so dispatch continues",
+	}
+	phase := colony.Phase{ID: 1, Tasks: []colony.Task{
+		{ID: strPtr("1"), Goal: "Find why the export drops rows"},
+	}}
+
+	t.Run("expensive worker shows its reason", func(t *testing.T) {
+		dispatch := codexBuildDispatch{
+			Caste:     "tracker",
+			Name:      "Trail-3",
+			TaskID:    "1",
+			JobSource: coherentJobSourceSingle,
+		}
+		result, visual := renderBuildFastPathSummary(phase, dispatch, decision)
+
+		if got, _ := result["model"].(string); got != "opus" {
+			t.Errorf("result model = %q, want opus", got)
+		}
+		want := casteModelReason("tracker")
+		if want == "" {
+			t.Fatal("tracker records no model reason — this test would then assert nothing")
+		}
+		if got, _ := result["model_reason"].(string); got != want {
+			t.Errorf("result model_reason = %q, want %q", got, want)
+		}
+		if !strings.Contains(visual, "opus") {
+			t.Errorf("fast-path summary never names the model:\n%s", visual)
+		}
+		if !strings.Contains(visual, want) {
+			t.Errorf("fast-path summary never says why the expensive model was kept:\n%s", visual)
+		}
+	})
+
+	t.Run("cheap worker names the model and justifies nothing", func(t *testing.T) {
+		dispatch := codexBuildDispatch{
+			Caste:     "builder",
+			Name:      "Mason-1",
+			TaskID:    "1",
+			JobSource: coherentJobSourceSingle,
+		}
+		result, visual := renderBuildFastPathSummary(phase, dispatch, decision)
+
+		if got, _ := result["model"].(string); got != "sonnet" {
+			t.Errorf("result model = %q, want sonnet", got)
+		}
+		if got, _ := result["model_reason"].(string); got != "" {
+			t.Errorf("result model_reason = %q, want empty for a cheap-model worker", got)
+		}
+		if !strings.Contains(visual, "sonnet") {
+			t.Errorf("fast-path summary never names the model:\n%s", visual)
+		}
+		if strings.Contains(visual, "more expensive model") {
+			t.Errorf("fast-path summary justifies an expense the worker does not incur:\n%s", visual)
+		}
+	})
+}
