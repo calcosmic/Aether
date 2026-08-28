@@ -259,20 +259,20 @@ Plans:
 Plans:
 **Wave 1** *(the shared logic, before anything renders from it)*
 
-- [ ] 197-01-PLAN.md — The one resolver over saved state, and the gate that makes recommending a command this project does not have impossible (wave 1)
+- [x] 197-01-PLAN.md — The one resolver over saved state, and the gate that makes recommending a command this project does not have impossible (wave 1)
 
 **Wave 2** *(blocked on the resolver existing)*
 
-- [ ] 197-02-PLAN.md — Collapse the four rival next-step deciders onto the resolver, and build the one closing card every command will render (wave 2)
+- [x] 197-02-PLAN.md — Collapse the four rival next-step deciders onto the resolver, and build the one closing card every command will render (wave 2)
 
 **Wave 3** *(blocked on the card; two independent surfaces, no shared files)*
 
-- [ ] 197-03-PLAN.md — The session-start greeting the runtime owns, the removal of the five documents asking the assistant to remember, and a reachability scan that counts hooks as callers (wave 3)
-- [ ] 197-04-PLAN.md — Starting, discussing, scanning, planning, building, continuing and the shared closeout all end with the card (wave 3)
+- [x] 197-03-PLAN.md — The session-start greeting the runtime owns, the removal of the five documents asking the assistant to remember, and a reachability scan that counts hooks as callers (wave 3)
+- [x] 197-04-PLAN.md — Starting, discussing, scanning, planning, building, continuing and the shared closeout all end with the card (wave 3)
 
 **Wave 4** *(blocked on the command goldens settling)*
 
-- [ ] 197-05-PLAN.md — `/ant-pause` becomes the real command with the long name an alias declared once, and updating a project restores a missing copy out loud (wave 4)
+- [x] 197-05-PLAN.md — `/ant-pause` becomes the real command with the long name an alias declared once, and updating a project restores a missing copy out loud (wave 4)
 
 **Wave 5** *(blocked on the short pause command existing to be recommended)*
 
