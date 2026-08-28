@@ -51,7 +51,11 @@ var closeoutCmd = &cobra.Command{
 		if state.Goal != nil {
 			result["goal"] = *state.Goal
 		}
-		result["next"] = closeoutNextCommand(workflow, state)
+		// The owner-facing sentence and the machine-readable fields come from
+		// ONE answer, so the two can never name different commands.
+		answer := closeoutNextAction(workflow, state)
+		result["next"] = nextActionPrimarySuggestion(answer)
+		applyNextActionToResult(result, answer)
 
 		outputWorkflow(result, renderCloseoutVisual(result))
 		return nil
@@ -69,8 +73,14 @@ func init() {
 // used to pick a different answer. Two closeouts of the same saved state now
 // name the same next command whichever command produced them.
 func closeoutNextCommand(workflow string, state colony.ColonyState) string {
-	answer := resolveNextAction(nextActionInputForState(state, strings.TrimSpace(workflow)))
-	return nextActionPrimarySuggestion(answer)
+	return nextActionPrimarySuggestion(closeoutNextAction(workflow, state))
+}
+
+// closeoutNextAction is the resolved answer behind that sentence, so the
+// command can emit the card and the machine-readable fields from one decision
+// rather than asking twice and hoping the two agree.
+func closeoutNextAction(workflow string, state colony.ColonyState) nextAction {
+	return resolveNextAction(nextActionInputForState(state, strings.TrimSpace(workflow)))
 }
 
 func closeoutCompletionDetails(path string) map[string]interface{} {

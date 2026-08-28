@@ -178,6 +178,47 @@ func renderNextActionContextHealth(verdict nextActionContextVerdict) string {
 	return ""
 }
 
+// ---------------------------------------------------------------------------
+// The machine-readable answer beside the card
+// ---------------------------------------------------------------------------
+
+// The stable keys every command's result map carries. Naming them once is what
+// lets a wrapper read the next step out of ANY command's envelope without
+// knowing which command produced it -- today each one invents its own shape.
+const (
+	// nextActionResultKey holds the whole answer, so a wrapper that wants a
+	// field this list does not flatten can still reach it.
+	nextActionResultKey = "next_action"
+	// nextActionCommandKey is the exact command to run, in the platform-neutral
+	// runtime form. This value is EXECUTED; it is never a slash spelling (S-01).
+	nextActionCommandKey = "next_command"
+	// nextActionRecommendationKey is the plain-English reason for it.
+	nextActionRecommendationKey = "next_recommendation"
+	// nextActionAlternativesKey is the two-to-four other ways forward.
+	nextActionAlternativesKey = "next_alternatives"
+	// nextActionContextHealthKey is the verdict on closing the chat, as an
+	// enumeration plus a reason code -- the sentence belongs to the card.
+	nextActionContextHealthKey = "next_context_health"
+)
+
+// applyNextActionToResult folds the resolved answer into a command's result map
+// under the stable keys above and returns the same map.
+//
+// It ADDS; it never removes. A command's existing keys -- including a `next`
+// string something downstream is already reading -- survive untouched, because
+// migrating readers is not the same job as breaking them.
+func applyNextActionToResult(result map[string]interface{}, answer nextAction) map[string]interface{} {
+	if result == nil {
+		result = map[string]interface{}{}
+	}
+	result[nextActionResultKey] = answer
+	result[nextActionCommandKey] = answer.Command
+	result[nextActionRecommendationKey] = answer.Recommendation
+	result[nextActionAlternativesKey] = answer.Alternatives
+	result[nextActionContextHealthKey] = answer.ContextHealth
+	return result
+}
+
 // renderNextActionRecovery is the paused-or-blocked block.
 func renderNextActionRecovery(recovery nextActionRecovery) string {
 	if !recovery.Paused && !recovery.Blocked {
