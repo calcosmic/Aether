@@ -534,7 +534,7 @@ func chooseNextAction(in nextActionInput, state colony.ColonyState) nextActionCh
 				key:  candidateBuildPhase,
 				args: []interface{}{phase.ID},
 				recommendation: fmt.Sprintf(
-					"Phase %d (%s) failed. Running it again is the next step -- the helpers start from "+
+					"Phase %d (%s) failed. The next step is to retry it -- the helpers start from "+
 						"what is already there rather than from scratch.", phase.ID, phase.Name),
 				alternatives: []nextActionAlternativeChoice{
 					{key: candidateStatus},

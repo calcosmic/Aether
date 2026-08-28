@@ -680,81 +680,93 @@ func renderIndentedList(lines []string) string {
 	return b.String()
 }
 
-func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
+// ---------------------------------------------------------------------------
+// The one answer, reshaped for the callers that already existed
+// ---------------------------------------------------------------------------
+//
+// Phase 197 plan 02. Four functions used to decide the next step from the same
+// saved state and disagreed with one another; every closing message inherited
+// whichever one it happened to call. They are adapters now: they gather the
+// input, ask resolveNextAction, and reshape the answer into the return type
+// their callers already expect. TestEveryDeciderAgreesOnTheNextCommand drives
+// all four over one state and fails if they separate again.
+
+// nextActionInputForState gathers the facts the one decision needs about a
+// state the caller already holds.
+//
+// It is deliberately NOT loadNextActionInput: these callers pass an explicit
+// state -- sometimes an in-memory one that has not been saved yet -- so the
+// state must come from the argument while everything else is read from disk.
+// Only the facts the decision actually consults are gathered; the display-only
+// extras (recent signals, outstanding task goals) belong to the card and would
+// be wasted reads on a function called this often.
+func nextActionInputForState(state colony.ColonyState, lastCommand string) nextActionInput {
 	state = normalizeLegacyColonyState(state)
-	if colonyNeedsEntomb(state) {
-		return `Run ` + "`aether entomb`" + ` to archive this sealed colony into chambers.`,
-			[]string{`Run ` + "`aether init \"next goal\"`" + ` if you want to skip archiving and start fresh immediately.`}
+	in := nextActionInput{
+		State:       state,
+		LastCommand: strings.TrimSpace(lastCommand),
+		NoColony:    colonyStateIsUnstarted(state),
 	}
-	if state.Paused {
-		return `Run ` + "`aether resume`" + ` to restore the paused colony into a runnable state.`,
-			[]string{`Run ` + "`aether status`" + ` if you only want to inspect the saved colony first.`}
+	if in.NoColony {
+		return in
 	}
-	if flag, ok := activePlanFinalizeFailureFlag(store); ok {
-		description := compactActionText(flag.Description, 120)
-		if description == "" {
-			description = "plan-finalize failed"
-		}
-		return `Run ` + "`aether flags --status active`" + ` to inspect the planning blocker before building.`,
-			[]string{
-				`Run ` + "`aether plan --repair-artifact`" + ` if the blocker is only invalid phase-plan dependency references.`,
-				fmt.Sprintf("Blocker: %s", description),
-			}
+	if blocker, ok := activePlanFinalizeFailureFlag(store); ok {
+		found := blocker
+		in.PlanBlocker = &found
 	}
+	in.Recovery = loadActiveRecoveryGuidance(state)
+	in.HandoffExists = fileExists(handoffDocumentPath())
+	in.BuildLooksAbandoned = buildLooksAbandoned(state)
+	return in
+}
 
-	if len(state.Plan.Phases) == 0 {
-		return `Run ` + "`aether discuss`" + ` to capture intent clarifications before planning.`,
-			[]string{
-				`Run ` + "`aether plan`" + ` if you already know the tradeoffs and want phases now.`,
-				`Run ` + "`aether colonize`" + ` first if you want a quick repo scan.`,
-			}
+// colonyStateIsUnstarted reports a state that records neither a goal nor any
+// planning context. That is a leftover file, not a project, and the honest
+// advice for it is "start one" -- the branch nextCommandFromState used to hold.
+// A state that HAS phases or a current phase is a real project even when the
+// goal line is missing, so it keeps its lifecycle advice.
+func colonyStateIsUnstarted(state colony.ColonyState) bool {
+	if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
+		return false
 	}
+	return len(state.Plan.Phases) == 0 && state.CurrentPhase < 1
+}
 
-	// Check for failed phases -- suggest retry
-	for _, phase := range state.Plan.Phases {
-		if phase.Status == "failed" {
-			return fmt.Sprintf("Run `aether build %d` to retry failed phase %d (%s).", phase.ID, phase.ID, phase.Name), nil
-		}
-	}
-
-	// Check if all phases complete but colony not yet sealed
-	allComplete := len(state.Plan.Phases) > 0
-	for _, phase := range state.Plan.Phases {
-		if phase.Status != "completed" {
-			allComplete = false
-			break
-		}
-	}
-	if allComplete && state.State != colony.StateCOMPLETED {
-		return `Run ` + "`aether seal`" + ` to mark the colony as Crowned Anthill (all phases complete).`,
-			[]string{`Run ` + "`aether status`" + ` to review the full dashboard before sealing.`}
-	}
-
-	switch state.State {
-	case colony.StateEXECUTING, colony.StateBUILT:
-		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
-			return fmt.Sprintf("Run `%s` to restart the interrupted phase.", buildForceRedispatchCommand(state.CurrentPhase)),
-				[]string{`Run ` + "`aether status`" + ` if you want to inspect the saved colony first.`}
-		}
-		if guidance := loadActiveRecoveryGuidance(state); guidance != nil && guidance.HasTargetedRoute {
-			alternatives := []string{`Run ` + "`aether status`" + ` to inspect the colony dashboard first.`}
-			if guidance.Recovery.ReconcileCommand != "" && guidance.Recovery.ReconcileCommand != guidance.Next {
-				alternatives = append(alternatives, `Run `+"`"+guidance.Recovery.ReconcileCommand+"`"+` if the code already landed and only needs reconciliation.`)
-			}
-			return fmt.Sprintf("Run `%s` to recover the blocked phase.", guidance.Next), alternatives
-		}
-		return `Run ` + "`aether continue`" + ` to verify the phase and advance.`,
-			[]string{`Run ` + "`aether status`" + ` to inspect the colony dashboard first.`}
-	case colony.StateCOMPLETED:
-		return `Run ` + "`aether entomb`" + ` to archive this sealed colony into chambers.`, nil
+// nextActionSuggestionLine renders one runtime command with the plain-English
+// reason for it. The command stays in its platform-neutral runtime form;
+// translateHintCommandsForPlatform rewrites it on the way to the terminal.
+func nextActionSuggestionLine(command, explanation string) string {
+	command = strings.TrimSpace(command)
+	explanation = strings.TrimSpace(explanation)
+	switch {
+	case command == "":
+		return explanation
+	case explanation == "":
+		return "Run `" + command + "`"
 	default:
-		nextPhase := state.CurrentPhase
-		if nextPhase < 1 {
-			nextPhase = 1
-		}
-		return fmt.Sprintf("Run `aether build %d` to dispatch the next phase.", nextPhase),
-			[]string{`Run ` + "`aether focus \"...\"`" + ` or ` + "`aether redirect \"...\"`" + ` if you want to steer the colony first.`}
+		return "Run `" + command + "` — " + explanation
 	}
+}
+
+// nextActionPrimarySuggestion is the recommendation as one sentence.
+func nextActionPrimarySuggestion(answer nextAction) string {
+	return nextActionSuggestionLine(answer.Command, answer.Recommendation)
+}
+
+// nextActionAlternativeSuggestions is the same shape for the other ways forward.
+func nextActionAlternativeSuggestions(answer nextAction) []string {
+	suggestions := make([]string, 0, len(answer.Alternatives))
+	for _, alternative := range answer.Alternatives {
+		if line := nextActionSuggestionLine(alternative.Command, alternative.Explanation); line != "" {
+			suggestions = append(suggestions, line)
+		}
+	}
+	return suggestions
+}
+
+func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
+	answer := resolveNextAction(nextActionInputForState(state, ""))
+	return nextActionPrimarySuggestion(answer), nextActionAlternativeSuggestions(answer)
 }
 
 func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Charter, hiveSeeded int, proposals []initProposal, researchDocs ...string) string {
@@ -2842,9 +2854,13 @@ func renderPauseVisual(result map[string]interface{}) string {
 		b.WriteString(handoffPath)
 		b.WriteString("\n")
 	}
+	// Both lines used to name `aether resume`, the second one described as "the
+	// compact dashboard view instead" -- one command offered twice, and no way
+	// to reach the fuller restore that second line was written for. The full
+	// restore is resume-colony; the quick one is resume.
 	b.WriteString(renderNextUp(
-		`Run `+"`aether resume`"+` when you want to restore the paused colony.`,
-		`Run `+"`aether resume`"+` for the compact dashboard view instead.`,
+		`Run `+"`aether resume-colony`"+` when you want to pick this project back up. It reloads the full picture: the saved notes, the open questions and the task list.`,
+		`Run `+"`aether resume`"+` for the quick version -- where things stand, without the detail.`,
 	))
 	b.WriteString(renderContextClearGuidance())
 	return b.String()

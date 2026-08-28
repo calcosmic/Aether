@@ -51,7 +51,11 @@ var closeoutCmd = &cobra.Command{
 		if state.Goal != nil {
 			result["goal"] = *state.Goal
 		}
-		result["next"] = closeoutNextCommand(workflow, state)
+		// The owner-facing sentence and the machine-readable fields come from
+		// ONE answer, so the two can never name different commands.
+		answer := closeoutNextAction(workflow, state)
+		result["next"] = nextActionPrimarySuggestion(answer)
+		applyNextActionToResult(result, answer)
 
 		outputWorkflow(result, renderCloseoutVisual(result))
 		return nil
@@ -63,35 +67,20 @@ func init() {
 	rootCmd.AddCommand(closeoutCmd)
 }
 
+// closeoutNextCommand is the closing line for a lifecycle command that has just
+// finished. Phase 197 plan 02: the workflow name is real information -- which
+// command just ran -- so it is passed to the resolver as an INPUT rather than
+// used to pick a different answer. Two closeouts of the same saved state now
+// name the same next command whichever command produced them.
 func closeoutNextCommand(workflow string, state colony.ColonyState) string {
-	switch workflow {
-	case "build":
-		return `Run ` + "`aether continue`" + ` to verify worker claims and advance.`
-	case "plan":
-		if state.CurrentPhase > 0 {
-			return fmt.Sprintf("Run `aether build %d` to start the first ready phase.", state.CurrentPhase)
-		}
-		return `Run ` + "`aether build <phase>`" + ` to start implementation.`
-	case "colonize":
-		return `Run ` + "`aether plan`" + ` to convert the survey into phases.`
-	case "continue":
-		if state.State == colony.StateCOMPLETED || allPhasesCompleted(state) {
-			return `Run ` + "`aether seal`" + ` to close and archive the colony.`
-		}
-		if state.CurrentPhase > 0 {
-			return fmt.Sprintf("Run `aether build %d` to dispatch the next phase.", state.CurrentPhase)
-		}
-		return `Run ` + "`aether status`" + ` to inspect the next step.`
-	case "seal":
-		return `Run ` + "`aether porter check`" + ` if you want delivery readiness, or start a new colony.`
-	case "swarm":
-		return `Run ` + "`aether status`" + ` to inspect the colony after swarm findings.`
-	default:
-		if state.State == colony.StateBUILT {
-			return `Run ` + "`aether continue`" + ` to verify and advance.`
-		}
-		return `Run ` + "`aether status`" + ` to inspect the colony.`
-	}
+	return nextActionPrimarySuggestion(closeoutNextAction(workflow, state))
+}
+
+// closeoutNextAction is the resolved answer behind that sentence, so the
+// command can emit the card and the machine-readable fields from one decision
+// rather than asking twice and hoping the two agree.
+func closeoutNextAction(workflow string, state colony.ColonyState) nextAction {
+	return resolveNextAction(nextActionInputForState(state, strings.TrimSpace(workflow)))
 }
 
 func closeoutCompletionDetails(path string) map[string]interface{} {
