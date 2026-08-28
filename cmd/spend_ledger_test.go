@@ -6,6 +6,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -869,4 +871,243 @@ func TestSpendLedgerCarriesNoCurrencyField(t *testing.T) {
 		}
 		walkJSON(t, decoded, subject.name)
 	}
+}
+
+// TestSpendRowCarriesJobName is FIX 1-3: Phase 195 made a single worker able
+// to own a grouped chain of tasks (codexBuildDispatch.JobName /
+// CoveredTaskIDs), and a ledger keyed only by worker cannot say which grouped
+// job a worker's tokens belong to. The row records the job name, and it
+// survives the disk round trip like every other column.
+func TestSpendRowCarriesJobName(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, _ := newTestStore(t)
+	store = s
+
+	// The schema version must still be the salvaged value. JobName was added
+	// before this ledger was ever written to in production precisely so no
+	// version bump and no migration is owed for a one-line field. If this
+	// assertion ever has to change, the field was added too late.
+	if spendLedgerSchemaVersion != 1 {
+		t.Fatalf("spendLedgerSchemaVersion = %d, want 1 -- JobName was added before the first production write, so no bump is owed",
+			spendLedgerSchemaVersion)
+	}
+
+	ledger := spendLedger{
+		Phase:      70,
+		Workflow:   spendWorkflowBuild,
+		RecordedAt: "2026-08-27T00:00:00Z",
+		Rows: []spendRow{
+			{
+				AgentName:  "Mason-67",
+				Caste:      "builder",
+				ParentName: "Queen",
+				Task:       "Wire the coherent jobs into build planning",
+				JobName:    "coherent-jobs",
+				Status:     "completed",
+				Usage:      codex.WorkerUsage{TotalTokens: 1200, Source: codex.UsageSourceProvider},
+			},
+		},
+	}
+	if err := saveSpendLedger(ledger); err != nil {
+		t.Fatalf("saveSpendLedger: %v", err)
+	}
+
+	loaded, ok := loadSpendLedger(70, spendWorkflowBuild)
+	if !ok {
+		t.Fatalf("loadSpendLedger ok=false")
+	}
+	if len(loaded.Rows) != 1 {
+		t.Fatalf("Rows = %d, want 1", len(loaded.Rows))
+	}
+	if loaded.Rows[0].JobName != "coherent-jobs" {
+		t.Fatalf("JobName = %q, want %q -- a grouped job's attribution must survive the round trip",
+			loaded.Rows[0].JobName, "coherent-jobs")
+	}
+
+	// And it is really on disk under its own key, not reconstructed in RAM.
+	raw, err := os.ReadFile(filepath.Join(s.BasePath(), "spend", "phase-70-build.json"))
+	if err != nil {
+		t.Fatalf("read ledger file: %v", err)
+	}
+	var onDisk struct {
+		Rows []map[string]json.RawMessage `json:"rows"`
+	}
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatalf("unmarshal ledger file: %v", err)
+	}
+	if len(onDisk.Rows) != 1 {
+		t.Fatalf("on-disk rows = %d, want 1", len(onDisk.Rows))
+	}
+	if _, present := onDisk.Rows[0]["job_name"]; !present {
+		t.Fatalf("serialized row has no job_name key: %s", raw)
+	}
+}
+
+// TestSpendRowWithoutJobNameOmitsIt is the other half of FIX 1-3: a worker
+// that owned one ungrouped task records no job name at all rather than a
+// placeholder, and the key is absent from the serialized form entirely.
+//
+// The assertion is made on the marshalled bytes rather than on the struct
+// value, because a struct value would still read as the empty string if the
+// omitempty tag silently stopped working.
+func TestSpendRowWithoutJobNameOmitsIt(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, _ := newTestStore(t)
+	store = s
+
+	ungrouped := spendRow{
+		AgentName: "Keen-12",
+		Caste:     "watcher",
+		Task:      "Check the build",
+		Status:    "completed",
+		Usage:     codex.WorkerUsage{TotalTokens: 220, Source: codex.UsageSourceProvider},
+	}
+
+	marshalled, err := json.Marshal(ungrouped)
+	if err != nil {
+		t.Fatalf("marshal row: %v", err)
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(marshalled, &keys); err != nil {
+		t.Fatalf("unmarshal row: %v", err)
+	}
+	if _, present := keys["job_name"]; present {
+		t.Fatalf("an ungrouped row serialized a job_name key: %s", marshalled)
+	}
+
+	if err := saveSpendLedger(spendLedger{
+		Phase:      71,
+		Workflow:   spendWorkflowContinue,
+		RecordedAt: "2026-08-27T00:00:00Z",
+		Rows:       []spendRow{ungrouped},
+	}); err != nil {
+		t.Fatalf("saveSpendLedger: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(s.BasePath(), "spend", "phase-71-continue.json"))
+	if err != nil {
+		t.Fatalf("read ledger file: %v", err)
+	}
+	var onDisk struct {
+		Rows []map[string]json.RawMessage `json:"rows"`
+	}
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatalf("unmarshal ledger file: %v", err)
+	}
+	if _, present := onDisk.Rows[0]["job_name"]; present {
+		t.Fatalf("an ungrouped row wrote a job_name key to disk: %s", raw)
+	}
+}
+
+// TestSpendLedgerRefusesUnknownRowStatus is FIX 1-4: the row's status is the
+// dispatch status, drawn from the vocabulary the rest of the runtime already
+// normalizes (dispatchStatusIcon / normalizeRuntimeDispatchStatus), not a
+// second free-form one. This repository's documented failure mode is two
+// vocabularies for one idea, so an unknown word is refused by name on save
+// and nothing is written.
+func TestSpendLedgerRefusesUnknownRowStatus(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, _ := newTestStore(t)
+	store = s
+
+	t.Run("an unknown status is refused by name and writes no file", func(t *testing.T) {
+		err := saveSpendLedger(spendLedger{
+			Phase:      80,
+			Workflow:   spendWorkflowBuild,
+			RecordedAt: "2026-08-27T00:00:00Z",
+			Rows: []spendRow{
+				{AgentName: "Mason-67", Caste: "builder", Status: "completed",
+					Usage: codex.WorkerUsage{TotalTokens: 100, Source: codex.UsageSourceProvider}},
+				{AgentName: "Roam-90", Caste: "scout", Status: "mostly-finished-ish",
+					Usage: codex.WorkerUsage{TotalTokens: 200, Source: codex.UsageSourceProvider}},
+			},
+		})
+		if err == nil {
+			t.Fatalf("expected saveSpendLedger to refuse an unknown row status")
+		}
+		if !strings.Contains(err.Error(), "mostly-finished-ish") {
+			t.Fatalf("refusal does not name the offending status: %v", err)
+		}
+		if !strings.Contains(err.Error(), "Roam-90") {
+			t.Fatalf("refusal does not name the worker: %v", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(s.BasePath(), "spend", "phase-80-build.json")); !os.IsNotExist(statErr) {
+			t.Fatalf("a refused ledger was written to disk anyway (stat err = %v)", statErr)
+		}
+		if _, ok := loadSpendLedger(80, spendWorkflowBuild); ok {
+			t.Fatalf("a refused ledger loaded back")
+		}
+	})
+
+	t.Run("an empty status is refused rather than silently read as failed", func(t *testing.T) {
+		err := saveSpendLedger(spendLedger{
+			Phase:      81,
+			Workflow:   spendWorkflowBuild,
+			RecordedAt: "2026-08-27T00:00:00Z",
+			Rows: []spendRow{
+				{AgentName: "Keen-12", Caste: "watcher",
+					Usage: codex.WorkerUsage{TotalTokens: 100, Source: codex.UsageSourceProvider}},
+			},
+		})
+		if err == nil {
+			t.Fatalf("expected saveSpendLedger to refuse a row with no status")
+		}
+		if !strings.Contains(err.Error(), "Keen-12") {
+			t.Fatalf("refusal does not name the worker: %v", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(s.BasePath(), "spend", "phase-81-build.json")); !os.IsNotExist(statErr) {
+			t.Fatalf("a refused ledger was written to disk anyway (stat err = %v)", statErr)
+		}
+	})
+
+	t.Run("every accepted status stores as one canonical word", func(t *testing.T) {
+		// "success" and "passed" are the runtime's own synonyms for a finished
+		// worker. They are accepted and folded, so the file never carries two
+		// words for one idea.
+		if err := saveSpendLedger(spendLedger{
+			Phase:      82,
+			Workflow:   spendWorkflowBuild,
+			RecordedAt: "2026-08-27T00:00:00Z",
+			Rows: []spendRow{
+				{AgentName: "Mason-1", Status: "success",
+					Usage: codex.WorkerUsage{TotalTokens: 10, Source: codex.UsageSourceProvider}},
+				{AgentName: "Mason-2", Status: "PASSED",
+					Usage: codex.WorkerUsage{TotalTokens: 20, Source: codex.UsageSourceProvider}},
+				{AgentName: "Mason-3", Status: "timed_out",
+					Usage: codex.WorkerUsage{TotalTokens: 30, Source: codex.UsageSourceProvider}},
+			},
+		}); err != nil {
+			t.Fatalf("saveSpendLedger refused a known synonym: %v", err)
+		}
+		loaded, ok := loadSpendLedger(82, spendWorkflowBuild)
+		if !ok {
+			t.Fatalf("loadSpendLedger ok=false")
+		}
+		want := []string{"completed", "completed", "timeout"}
+		for i, row := range loaded.Rows {
+			if row.Status != want[i] {
+				t.Fatalf("row %d status = %q, want %q", i, row.Status, want[i])
+			}
+		}
+	})
+
+	t.Run("validating a save does not mutate the caller's rows", func(t *testing.T) {
+		rows := []spendRow{
+			{AgentName: "Mason-9", Status: "success",
+				Usage: codex.WorkerUsage{TotalTokens: 10, Source: codex.UsageSourceProvider}},
+		}
+		if err := saveSpendLedger(spendLedger{
+			Phase: 83, Workflow: spendWorkflowBuild, RecordedAt: "2026-08-27T00:00:00Z", Rows: rows,
+		}); err != nil {
+			t.Fatalf("saveSpendLedger: %v", err)
+		}
+		if rows[0].Status != "success" {
+			t.Fatalf("saveSpendLedger rewrote the caller's row status to %q", rows[0].Status)
+		}
+	})
 }
