@@ -248,6 +248,9 @@ one option per suggestion, each stating its plain-English consequence, plus a
 explicit rejection run `--dismiss <id>`. Never write a suggestion the user did
 not pick, and never re-ask about suggestions they dismissed.
 
+**If the user asks what it cost:** tell them they can run `aether spend` to see, worker by worker, how many tokens each worker's own tool reported for this run.
+That is a read-only detail view and the wrapper must never run it unprompted: the run's own figures are already on screen, and repeating them would print the same numbers twice.
+
 **Stop conditions:** the user has one clear next command, and no verification
 result was fabricated by the wrapper.
 

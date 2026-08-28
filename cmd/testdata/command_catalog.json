@@ -7820,6 +7820,16 @@
     "stability_score": 91
   },
   {
+    "name": "spend",
+    "short_description": "Show what each worker's tools reported this run cost, in tokens",
+    "flags": [
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "state-checkpoint",
     "short_description": "Save current COLONY_STATE.json as a named checkpoint",
     "flags": [

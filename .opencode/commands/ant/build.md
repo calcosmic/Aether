@@ -403,6 +403,9 @@ In worktree mode one job takes one isolated copy of the project, one branch, and
    Run nothing until the user picks. If they pick stop, stop — report nothing further.
 5. Autopilot (`/ant-run`) is exempt: its auto-advance is runtime-owned and this stage never runs inside it.
 
+**If the user asks what it cost:** tell them they can run `aether spend` to see, worker by worker, how many tokens each worker's own tool reported for this run.
+That is a read-only detail view and the wrapper must never run it unprompted: the run's own figures are already on screen, and repeating them would print the same numbers twice.
+
 **Stop conditions:** the user has been asked and their pick executed (or nothing, if they chose to stop).
 
 ## Verification Depth
