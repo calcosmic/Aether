@@ -1,10 +1,16 @@
 package cmd
 
 import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -94,22 +100,28 @@ func TestOpenCodeSessionUsageReadsDisjointTokenColumns(t *testing.T) {
 	if mason == nil {
 		t.Fatalf("Mason-67 entry not found: %+v", entries)
 	}
-	// Literal figures from the committed fixture (cmd/testdata/spend/opencode/message/ses_child_a/msg_1.json),
-	// never recomputed -- the four disjoint columns must survive intact.
-	if mason.Usage.InputTokens != 543 {
-		t.Errorf("mason InputTokens = %d, want 543", mason.Usage.InputTokens)
+	// Literal figures hand-summed from the committed fixture's two assistant
+	// messages (msg_1.json + msg_2.json under message/ses_child_a/), never
+	// recomputed -- the four disjoint columns must survive intact and apart.
+	//   input  543 +  1201 =  1744
+	//   output 123 +   806 =   929
+	//   read 19770 + 30500 = 50270
+	//   write    0 +  4096 =  4096
+	//   total 20436 + 36603 = 57039
+	if mason.Usage.InputTokens != 1744 {
+		t.Errorf("mason InputTokens = %d, want 1744", mason.Usage.InputTokens)
 	}
-	if mason.Usage.OutputTokens != 123 {
-		t.Errorf("mason OutputTokens = %d, want 123", mason.Usage.OutputTokens)
+	if mason.Usage.OutputTokens != 929 {
+		t.Errorf("mason OutputTokens = %d, want 929", mason.Usage.OutputTokens)
 	}
-	if mason.Usage.CachedInputTokens != 19770 {
-		t.Errorf("mason CachedInputTokens = %d, want 19770", mason.Usage.CachedInputTokens)
+	if mason.Usage.CachedInputTokens != 50270 {
+		t.Errorf("mason CachedInputTokens = %d, want 50270", mason.Usage.CachedInputTokens)
 	}
-	if mason.Usage.CacheCreationTokens != 0 {
-		t.Errorf("mason CacheCreationTokens = %d, want 0", mason.Usage.CacheCreationTokens)
+	if mason.Usage.CacheCreationTokens != 4096 {
+		t.Errorf("mason CacheCreationTokens = %d, want 4096", mason.Usage.CacheCreationTokens)
 	}
-	if mason.Usage.TotalTokens != 20436 {
-		t.Errorf("mason TotalTokens = %d, want 20436", mason.Usage.TotalTokens)
+	if mason.Usage.TotalTokens != 57039 {
+		t.Errorf("mason TotalTokens = %d, want 57039", mason.Usage.TotalTokens)
 	}
 	if mason.Usage.Source != codex.UsageSourceSessionTranscript {
 		t.Errorf("mason Source = %q, want %q", mason.Usage.Source, codex.UsageSourceSessionTranscript)
@@ -227,4 +239,368 @@ func TestOpenCodeSessionUsageToleratesMalformedRecords(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("got %d entries, want 2 despite the malformed sibling session file: %+v", len(entries), entries)
 	}
+}
+
+// --- Phase 196 plan 05, the salvage fixes ------------------------------------
+
+// TestOpenCodeWorkerNameMatchingIsConcurrencySafe is FIX 2-1.
+//
+// The salvaged file carried a package-level map that openCodeTitleMatchesWorker
+// both read and wrote with no synchronisation. Go's runtime aborts the whole
+// process on a concurrent map write -- it is a hard crash, not a silent race --
+// and this plan makes usage discovery run per worker, so it would have been a
+// crash at the end of every build.
+//
+// The first subtest is the direct proof and needs -race to see the read/write
+// pair. The second subtest states the same rule structurally, so it fails under
+// a plain `go test` too: a matcher that shares no package-level mutable state
+// cannot have the bug at all.
+func TestOpenCodeWorkerNameMatchingIsConcurrencySafe(t *testing.T) {
+	t.Run("matching from many goroutines agrees with the single-threaded answer", func(t *testing.T) {
+		titles := []string{
+			"🔨 Builder Mason-67: implement the parser (@general subagent)",
+			"👁️ Watcher Vigil-12: check the parser",
+			"🔨 Builder Mason-6: a decoy whose name is a prefix of another",
+			"no worker name at all",
+		}
+		names := []string{"Mason-67", "Mason-6", "Vigil-12", "Keen-90"}
+
+		// The expected table is built by hand, not by calling the matcher.
+		want := map[string]bool{
+			titles[0] + "|Mason-67": true,
+			titles[0] + "|Mason-6":  false,
+			titles[0] + "|Vigil-12": false,
+			titles[0] + "|Keen-90":  false,
+			titles[1] + "|Mason-67": false,
+			titles[1] + "|Mason-6":  false,
+			titles[1] + "|Vigil-12": true,
+			titles[1] + "|Keen-90":  false,
+			titles[2] + "|Mason-67": false,
+			titles[2] + "|Mason-6":  true,
+			titles[2] + "|Vigil-12": false,
+			titles[2] + "|Keen-90":  false,
+			titles[3] + "|Mason-67": false,
+			titles[3] + "|Mason-6":  false,
+			titles[3] + "|Vigil-12": false,
+			titles[3] + "|Keen-90":  false,
+		}
+
+		const goroutines = 32
+		const rounds = 40
+		var wg sync.WaitGroup
+		errs := make(chan string, goroutines*rounds*len(titles)*len(names))
+		for g := 0; g < goroutines; g++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for r := 0; r < rounds; r++ {
+					for _, title := range titles {
+						for _, name := range names {
+							got := openCodeTitleMatchesWorker(title, name)
+							if got != want[title+"|"+name] {
+								errs <- fmt.Sprintf("match(%q, %q) = %v, want %v", title, name, got, want[title+"|"+name])
+							}
+						}
+					}
+				}
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for msg := range errs {
+			t.Error(msg)
+			break
+		}
+	})
+
+	t.Run("the opencode reader shares no package-level mutable state", func(t *testing.T) {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "wrapper_usage_opencode.go", nil, 0)
+		if err != nil {
+			t.Fatalf("parse wrapper_usage_opencode.go: %v", err)
+		}
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				value, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, name := range value.Names {
+					t.Errorf("package-level var %s at %s is shared mutable state in the cost path; "+
+						"the unsynchronised worker-name pattern cache lived exactly here and Go aborts the "+
+						"process on a concurrent map write (FIX 2-1)", name.Name, fset.Position(name.Pos()))
+				}
+			}
+		}
+	})
+}
+
+// The two-message fixture session, summed by hand from the committed files.
+// ses_child_a/msg_1.json: input 543,  output 123, cache.read 19770, cache.write 0
+// ses_child_a/msg_2.json: input 1201, output 806, cache.read 30500, cache.write 4096
+//
+// Every figure below is written out by hand. Nothing here is produced by
+// calling the reader or by calling BilledTotalTokens().
+const (
+	openCodeFixtureMsg1Total = 20436 //   543 +   123 + 19770 +    0
+	openCodeFixtureMsg2Total = 36603 //  1201 +   806 + 30500 + 4096
+	openCodeFixtureSumInput  = 1744  //   543 +  1201
+	openCodeFixtureSumOutput = 929   //   123 +   806
+	openCodeFixtureSumRead   = 50270 // 19770 + 30500
+	openCodeFixtureSumWrite  = 4096  //     0 +  4096
+	openCodeFixtureSumTotal  = 57039 // 20436 + 36603
+)
+
+// TestOpenCodeUsageSumsEveryAssistantMessage is FIX 2-2.
+//
+// Every fixture session on the salvaged branch held exactly one message, so the
+// accumulation across messages -- the only case that occurs in reality, where a
+// real session had twenty-three -- was proven by nothing. If OpenCode ever
+// reported a running cumulative total per message instead of a per-message
+// figure, the old tests would have stayed green while the reported cost
+// multiplied by the message count.
+func TestOpenCodeUsageSumsEveryAssistantMessage(t *testing.T) {
+	storageRoot, repoRoot := setupOpenCodeFixtureHome(t)
+
+	entries, reasons := openCodeSessionUsageForRun(storageRoot, repoRoot, openCodeFixtureWindowStart, openCodeFixtureWindowEnd, []string{"Mason-67"})
+	if len(reasons) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", reasons)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1: %+v", len(entries), entries)
+	}
+	got := entries[0].Usage
+
+	if got.TotalTokens == openCodeFixtureMsg1Total {
+		t.Fatalf("TotalTokens = %d, which is the FIRST message alone -- the second assistant message in the same session was not accumulated", got.TotalTokens)
+	}
+	if got.TotalTokens == openCodeFixtureMsg2Total {
+		t.Fatalf("TotalTokens = %d, which is the LAST message alone -- later messages are overwriting earlier ones instead of adding to them", got.TotalTokens)
+	}
+	if got.TotalTokens != openCodeFixtureSumTotal {
+		t.Errorf("TotalTokens = %d, want %d (%d + %d)", got.TotalTokens, openCodeFixtureSumTotal, openCodeFixtureMsg1Total, openCodeFixtureMsg2Total)
+	}
+	if got.InputTokens != openCodeFixtureSumInput {
+		t.Errorf("InputTokens = %d, want %d", got.InputTokens, openCodeFixtureSumInput)
+	}
+	if got.OutputTokens != openCodeFixtureSumOutput {
+		t.Errorf("OutputTokens = %d, want %d", got.OutputTokens, openCodeFixtureSumOutput)
+	}
+	if got.CachedInputTokens != openCodeFixtureSumRead {
+		t.Errorf("CachedInputTokens = %d, want %d", got.CachedInputTokens, openCodeFixtureSumRead)
+	}
+	if got.CacheCreationTokens != openCodeFixtureSumWrite {
+		t.Errorf("CacheCreationTokens = %d, want %d", got.CacheCreationTokens, openCodeFixtureSumWrite)
+	}
+	if got.Source != codex.UsageSourceSessionTranscript {
+		t.Errorf("Source = %q, want %q -- a transcript row is never provider-grade", got.Source, codex.UsageSourceSessionTranscript)
+	}
+
+	t.Run("the four disjoint columns still add up to the reported total", func(t *testing.T) {
+		// Hand-written, not BilledTotalTokens(): this is the same equality
+		// that was confirmed against the owner's real 23-message session.
+		sum := got.InputTokens + got.OutputTokens + got.CachedInputTokens + got.CacheCreationTokens
+		if sum != openCodeFixtureSumTotal {
+			t.Errorf("columns sum to %d, but the store's own totals sum to %d", sum, openCodeFixtureSumTotal)
+		}
+	})
+
+	t.Run("a non-assistant message in the same session contributes nothing", func(t *testing.T) {
+		userMsg := filepath.Join(storageRoot, "message", "ses_child_a", "msg_user.json")
+		if err := os.WriteFile(userMsg, []byte(`{"role":"user","tokens":{"total":500000,"input":500000,"output":0,"cache":{"read":0,"write":0}}}`), 0o644); err != nil {
+			t.Fatalf("write user-role message: %v", err)
+		}
+		entries, _ := openCodeSessionUsageForRun(storageRoot, repoRoot, openCodeFixtureWindowStart, openCodeFixtureWindowEnd, []string{"Mason-67"})
+		if len(entries) != 1 {
+			t.Fatalf("got %d entries, want 1", len(entries))
+		}
+		if entries[0].Usage.TotalTokens != openCodeFixtureSumTotal {
+			t.Errorf("TotalTokens = %d, want %d -- a user-role record was counted as spend", entries[0].Usage.TotalTokens, openCodeFixtureSumTotal)
+		}
+	})
+}
+
+// TestSpendPathContainmentHasOneImplementation is FIX 2-5.
+//
+// Two copies of a security boundary is one copy too many: the salvaged branch
+// reimplemented the containment rule already in the session record, and added a
+// symlink-evaluation helper without refactoring the original to use it. The
+// rule below is executable rather than advisory, per CLAUDE.md's Definition of
+// Done -- it fails the moment a second copy appears.
+func TestSpendPathContainmentHasOneImplementation(t *testing.T) {
+	fset := token.NewFileSet()
+	funcs := map[string]*ast.FuncDecl{}
+	positions := map[string]string{}
+	for _, name := range []string{"spend_session_capture.go", "wrapper_usage_opencode.go", "wrapper_usage_claude.go"} {
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name == nil || fn.Body == nil {
+				continue
+			}
+			funcs[fn.Name.Name] = fn
+			positions[fn.Name.Name] = fset.Position(fn.Pos()).String()
+		}
+	}
+
+	callsSelector := func(fn *ast.FuncDecl, pkg, sel string) bool {
+		found := false
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			s, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || s.Sel == nil || s.Sel.Name != sel {
+				return true
+			}
+			if ident, ok := s.X.(*ast.Ident); ok && ident.Name == pkg {
+				found = true
+			}
+			return true
+		})
+		return found
+	}
+	callsFunc := func(fn *ast.FuncDecl, name string) bool {
+		found := false
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == name {
+				found = true
+			}
+			return true
+		})
+		return found
+	}
+	mentionsParentDir := func(fn *ast.FuncDecl) bool {
+		found := false
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			lit, ok := n.(*ast.BasicLit)
+			if ok && lit.Kind == token.STRING && lit.Value == `".."` {
+				found = true
+			}
+			return true
+		})
+		return found
+	}
+
+	var containment []string
+	var symlinkEval []string
+	for name, fn := range funcs {
+		if callsSelector(fn, "filepath", "Rel") && mentionsParentDir(fn) {
+			containment = append(containment, name)
+		}
+		if callsSelector(fn, "filepath", "EvalSymlinks") {
+			symlinkEval = append(symlinkEval, name)
+		}
+	}
+	sort.Strings(containment)
+	sort.Strings(symlinkEval)
+
+	const sharedContainment = "validateSpendContainedPath"
+	const sharedSymlinkEval = "evalSpendPathSymlinks"
+
+	if len(containment) != 1 || containment[0] != sharedContainment {
+		t.Errorf("the spend path containment rule is implemented in %d place(s) %v, want exactly one named %s; "+
+			"two copies of a security boundary is one copy too many (FIX 2-5)", len(containment), containment, sharedContainment)
+	}
+	if len(symlinkEval) != 1 || symlinkEval[0] != sharedSymlinkEval {
+		t.Errorf("symlink evaluation is implemented in %d place(s) %v, want exactly one named %s", len(symlinkEval), symlinkEval, sharedSymlinkEval)
+	}
+
+	for _, caller := range []string{"validateSpendTranscriptPath", "validateOpenCodeStoragePath"} {
+		fn, ok := funcs[caller]
+		if !ok {
+			t.Fatalf("%s not found in the parsed files", caller)
+		}
+		if !callsFunc(fn, sharedContainment) {
+			t.Errorf("%s (%s) does not call %s -- both callers must share the one containment helper",
+				caller, positions[caller], sharedContainment)
+		}
+	}
+}
+
+// TestBoundedReadOpensThenLimits is FIX 2-4.
+//
+// The salvaged read stat-ed the path and then read it, leaving a gap between
+// the size check and the read. Opening first and limiting the read is the same
+// amount of code and has no gap.
+func TestBoundedReadOpensThenLimits(t *testing.T) {
+	dir := t.TempDir()
+
+	exact := filepath.Join(dir, "exact.json")
+	if err := os.WriteFile(exact, []byte("0123456789"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	data, err := readBoundedFile(exact, 10)
+	if err != nil {
+		t.Fatalf("a file of exactly the bound must be read: %v", err)
+	}
+	if string(data) != "0123456789" {
+		t.Errorf("read %q, want the whole file", string(data))
+	}
+
+	if _, err := readBoundedFile(exact, 9); err == nil {
+		t.Errorf("a file one byte over the bound must be refused")
+	}
+	if _, err := readBoundedFile(dir, 1024); err == nil {
+		t.Errorf("a directory must be refused")
+	}
+	if _, err := readBoundedFile(filepath.Join(dir, "absent.json"), 1024); err == nil {
+		t.Errorf("an absent file must be refused")
+	}
+
+	t.Run("the bound is applied by limiting the read, not by a prior stat of the path", func(t *testing.T) {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "wrapper_usage_opencode.go", nil, 0)
+		if err != nil {
+			t.Fatalf("parse wrapper_usage_opencode.go: %v", err)
+		}
+		var fn *ast.FuncDecl
+		for _, decl := range file.Decls {
+			if d, ok := decl.(*ast.FuncDecl); ok && d.Name != nil && d.Name.Name == "readBoundedFile" {
+				fn = d
+			}
+		}
+		if fn == nil || fn.Body == nil {
+			t.Fatalf("readBoundedFile not found")
+		}
+		seen := map[string]bool{}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			s, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || s.Sel == nil {
+				return true
+			}
+			if ident, ok := s.X.(*ast.Ident); ok {
+				seen[ident.Name+"."+s.Sel.Name] = true
+			}
+			return true
+		})
+		if seen["os.Stat"] {
+			t.Errorf("readBoundedFile calls os.Stat on the path before reading it -- that is the check-then-read gap FIX 2-4 removes")
+		}
+		if seen["os.ReadFile"] {
+			t.Errorf("readBoundedFile calls os.ReadFile, which reads the whole file regardless of the bound")
+		}
+		if !seen["os.Open"] {
+			t.Errorf("readBoundedFile does not call os.Open -- the bound must be applied to an already-open file")
+		}
+		if !seen["io.LimitReader"] {
+			t.Errorf("readBoundedFile does not call io.LimitReader -- the bound must limit the read itself")
+		}
+	})
 }
