@@ -2,20 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 196
-current_phase_name: See What It Cost
 status: executing
-stopped_at: Completed 196-05-PLAN.md
-last_updated: "2026-08-28T11:16:00.000Z"
+stopped_at: Completed 196-06-PLAN.md
+last_updated: "2026-08-28T11:32:44.574Z"
 last_activity: 2026-08-28
-last_activity_desc: Phase 196 plan 05 complete — the OpenCode reader salvaged, resolved and wired; a build now writes its rows
-state_head: 0be9b7c364b5108bcba33fd9ecbf9e772a559119
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 32
-  completed_plans: 29
-  percent: 30
+  completed_plans: 30
+  percent: 43
 ---
 
 # Project State
@@ -32,16 +28,16 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 ## Current Position
 
-**Progress:** [███░░░░░░░] 29%
+**Progress:** [█████████░] 94%
 
 Phase: 196 (See What It Cost) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
 every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-Last activity: 2026-08-28 — Phase 196 plan 05 complete (OpenCode reader salvaged and wired; the build finalize path now writes per-worker ledger rows)
+Last activity: 2026-08-28
 
 ## Performance Metrics
 
@@ -85,6 +81,7 @@ Last activity: 2026-08-28 — Phase 196 plan 05 complete (OpenCode reader salvag
 | Phase 196 P02 | 13 min | 3 tasks | 14 files |
 | Phase 196 P03 | 41min | 2 tasks | 5 files |
 | Phase 196 P05 | 20min | 3 tasks | 17 files |
+| Phase 196 P06 | 41 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -161,6 +158,9 @@ Last activity: 2026-08-28 — Phase 196 plan 05 complete (OpenCode reader salvag
 - [Phase 196]: "Reported" keys on the usage source tag, never on a number — a worker that genuinely billed zero and one whose tool said nothing both present as zero, and D-01 renders those two differently
 - [Phase 196]: The orchestrating session's own turns are returned separately from the worker list, neither shown as a dispatched worker nor discarded (the choice 196-03 left open)
 - [Phase 196]: A dispatch whose status is outside the ledger vocabulary is dropped with a named note rather than sinking the whole fail-closed ledger; nothing invents a status the dispatch never stated
+- [Phase 196]: Figures print exactly as recorded, unabbreviated, because shortening is arithmetic the read-only view is forbidden to do
+- [Phase 196]: aether spend reads the current phase through loadColonyState, not loadActiveColonyState, which can persist a legacy repair and would make an inspection command a writer
+- [Phase 196]: An estimated ledger row renders the dash sentinel exactly like an empty one — D-01 as amended forbids rendering an estimate at all
 
 ### Pending Todos
 
@@ -247,6 +247,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-28T11:16:00.000Z
-Stopped at: Completed 196-05-PLAN.md
+Last session: 2026-08-28T11:32:38.830Z
+Stopped at: Completed 196-06-PLAN.md
 Resume file: None
