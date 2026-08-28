@@ -44,23 +44,46 @@ type spendSessionRecord struct {
 // which a crafted sibling directory name could defeat (e.g.
 // "/home/user/.claude/projects-evil").
 func validateSpendTranscriptPath(claimed string) (string, error) {
-	claimed = strings.TrimSpace(claimed)
-	if claimed == "" {
-		return "", fmt.Errorf("transcript path is empty")
-	}
-	if strings.ContainsRune(claimed, 0) {
-		return "", fmt.Errorf("transcript path contains a null byte")
-	}
-	if !filepath.IsAbs(claimed) {
-		return "", fmt.Errorf("transcript path %q must be absolute", claimed)
-	}
-	candidate := filepath.Clean(claimed)
-
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
 		return "", fmt.Errorf("resolve user home directory: %w", err)
 	}
 	root := filepath.Join(home, ".claude", "projects")
+
+	return validateSpendContainedPath(root, claimed, "transcript path")
+}
+
+// validateSpendContainedPath is the ONE containment boundary for every path the
+// spend subsystem opens, whichever platform's store it belongs to. Both callers
+// -- validateSpendTranscriptPath (Claude Code's projects directory) and
+// validateOpenCodeStoragePath (OpenCode's local storage tree) -- go through it.
+//
+// It was two copies until Phase 196 plan 05. Two copies of a security boundary
+// is one copy too many: the salvaged OpenCode reader restated the same rule and
+// added its own symlink helper without refactoring the original to use it, so a
+// later fix to one copy would silently have left the other wrong.
+// TestSpendPathContainmentHasOneImplementation fails if a second copy appears.
+//
+// The rule, unchanged: reject an empty path, a null byte and a relative path;
+// filepath.Clean; resolve symlinks on BOTH root and candidate; then decide
+// containment with filepath.Rel and a leading ".." rejection -- never a bare
+// lexical prefix match on the raw strings, which a crafted sibling directory
+// name such as "<root>-evil" would defeat.
+//
+// label names the thing being validated in plain English, so the diagnostic a
+// caller surfaces says what was refused rather than quoting an internal name.
+func validateSpendContainedPath(root, claimed, label string) (string, error) {
+	claimed = strings.TrimSpace(claimed)
+	if claimed == "" {
+		return "", fmt.Errorf("%s is empty", label)
+	}
+	if strings.ContainsRune(claimed, 0) {
+		return "", fmt.Errorf("%s contains a null byte", label)
+	}
+	if !filepath.IsAbs(claimed) {
+		return "", fmt.Errorf("%s %q must be absolute", label, claimed)
+	}
+	candidate := filepath.Clean(claimed)
 
 	rootEval := evalSpendPathSymlinks(root)
 	candidateEval := evalSpendPathSymlinks(candidate)
@@ -70,10 +93,10 @@ func validateSpendTranscriptPath(claimed string) (string, error) {
 	}
 	rel, err := filepath.Rel(rootEval, candidateEval)
 	if err != nil {
-		return "", fmt.Errorf("transcript path %q does not resolve under %q", claimed, root)
+		return "", fmt.Errorf("%s %q does not resolve under %q", label, claimed, root)
 	}
 	if strings.SplitN(rel, string(filepath.Separator), 2)[0] == ".." {
-		return "", fmt.Errorf("transcript path %q escapes %q", claimed, root)
+		return "", fmt.Errorf("%s %q escapes %q", label, claimed, root)
 	}
 
 	return candidate, nil

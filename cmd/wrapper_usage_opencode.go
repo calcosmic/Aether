@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,69 +49,51 @@ func openCodeStorageRoot() (string, error) {
 }
 
 // validateOpenCodeStoragePath is the T-174-01 boundary check for this
-// platform's different root. Mirrors validateSpendTranscriptPath
-// (cmd/spend_session_capture.go) structurally: reject null bytes, require
-// an absolute path, filepath.Clean, filepath.EvalSymlinks both root and
-// candidate with a fallback to the un-evaluated absolute path on failure,
-// and decide containment with filepath.Rel plus a leading ".." rejection
-// -- never a bare lexical prefix match on the raw strings, which a crafted
-// sibling directory name could defeat (e.g. "$HOME/.local/share/opencode/storage-evil").
+// platform's different root. It states the root and defers the rule itself
+// to validateSpendContainedPath (cmd/spend_session_capture.go), which is the
+// single containment boundary for every path the spend subsystem opens.
+//
+// This function used to restate that rule in full, which meant a security
+// boundary with two copies -- a later correction to one would silently have
+// left the other wrong. FIX 2-5, Phase 196 plan 05.
 func validateOpenCodeStoragePath(root, candidate string) error {
-	candidate = strings.TrimSpace(candidate)
-	if candidate == "" {
-		return fmt.Errorf("opencode storage root is empty")
-	}
-	if strings.ContainsRune(candidate, 0) {
-		return fmt.Errorf("opencode storage root contains a null byte")
-	}
-	if !filepath.IsAbs(candidate) {
-		return fmt.Errorf("opencode storage root %q must be absolute", candidate)
-	}
-	cleanCandidate := filepath.Clean(candidate)
-
-	rootEval := evalSymlinksOrSelf(root)
-	candidateEval := evalSymlinksOrSelf(cleanCandidate)
-
-	if candidateEval == rootEval {
-		return nil
-	}
-	rel, err := filepath.Rel(rootEval, candidateEval)
-	if err != nil {
-		return fmt.Errorf("opencode storage root %q does not resolve under %q", candidate, root)
-	}
-	if strings.SplitN(rel, string(filepath.Separator), 2)[0] == ".." {
-		return fmt.Errorf("opencode storage root %q escapes %q", candidate, root)
-	}
-	return nil
-}
-
-// evalSymlinksOrSelf resolves symlinks in p, falling back to the
-// unresolved, cleaned path when resolution fails (e.g. the path does not
-// exist yet) -- the same fallback validateSpendTranscriptPath uses for its
-// own root.
-func evalSymlinksOrSelf(p string) string {
-	resolved, err := filepath.EvalSymlinks(p)
-	if err != nil {
-		return filepath.Clean(p)
-	}
-	return resolved
+	_, err := validateSpendContainedPath(root, candidate, "opencode storage root")
+	return err
 }
 
 // readBoundedFile reads path, refusing anything larger than maxBytes
-// without ever opening the file into memory unbounded (T-174-02 precedent:
-// internalWorkerRequestMaxBytes).
+// (T-174-02 precedent: internalWorkerRequestMaxBytes).
+//
+// It opens the file and bounds the read itself rather than checking the size
+// on disk first and reading afterwards. The check-then-read shape it replaced
+// left a gap in which the file could change between the two operations; the
+// regular-file check below is made on the already-open descriptor, so it
+// describes the file actually being read. FIX 2-4, Phase 196 plan 05.
 func readBoundedFile(path string, maxBytes int64) ([]byte, error) {
-	info, err := os.Stat(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
 	if err != nil {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
-	if info.Size() > maxBytes {
+
+	// Read one byte past the bound so an oversized file is detectable
+	// without ever holding more than maxBytes+1 in memory.
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
 		return nil, fmt.Errorf("%s exceeds %d bytes", path, maxBytes)
 	}
-	return os.ReadFile(path)
+	return data, nil
 }
 
 // openCodeProjectRaw is the subset of an OpenCode project record this
@@ -185,7 +168,7 @@ func openCodeSessionUsageForRun(root, repoRoot string, startedAt, endedAt time.T
 	}
 	root = filepath.Clean(root)
 
-	repoRootEval := evalSymlinksOrSelf(filepath.Clean(repoRoot))
+	repoRootEval := evalSpendPathSymlinks(filepath.Clean(repoRoot))
 
 	projectIDs := matchingOpenCodeProjects(root, repoRootEval)
 	if len(projectIDs) == 0 {
@@ -223,10 +206,10 @@ func openCodeSessionUsageForRun(root, repoRoot string, startedAt, endedAt time.T
 			})
 		default:
 			// Pitfall 4: when more than one in-window session matches the
-			// same worker name, resolve NOTHING for that worker. An
-			// ambiguous match must fall through to plan 174-06's estimate
-			// rather than pick the most recent -- a plausible wrong number
-			// is worse than an honest estimate.
+			// same worker name, resolve NOTHING for that worker, and say so
+			// in plain English rather than picking the most recent. Under
+			// D-01 as amended the worker is then rendered with no figure at
+			// all -- a plausible wrong number is worse than no number.
 			reasons = append(reasons, fmt.Sprintf("worker %q matched %d in-window opencode sessions; refusing to guess", name, len(matches)))
 		}
 	}
@@ -234,11 +217,11 @@ func openCodeSessionUsageForRun(root, repoRoot string, startedAt, endedAt time.T
 	return results, reasons
 }
 
-// openCodeSessionUsageForRunOrNone is the convenience entry point plan
-// 174-06 calls. It resolves the storage root itself and reports false when
-// it is absent or unreadable -- a missing OpenCode store on a Claude-Code-
-// only machine is the normal case, not an error, so failing soft here is
-// deliberate.
+// openCodeSessionUsageForRunOrNone is the entry point the per-run usage
+// resolver calls on the OpenCode path (cmd/wrapper_usage_resolve.go). It
+// resolves the storage root itself and reports false when it is absent or
+// unreadable -- a missing OpenCode store on a Claude-Code-only machine is the
+// normal case, not an error, so failing soft here is deliberate.
 func openCodeSessionUsageForRunOrNone(repoRoot string, startedAt, endedAt time.Time, workerNames []string) ([]openCodeSessionUsage, bool) {
 	root, err := openCodeStorageRoot()
 	if err != nil {
@@ -280,7 +263,7 @@ func matchingOpenCodeProjects(root, repoRootEval string) []string {
 		if proj.ID == "" || strings.TrimSpace(proj.Worktree) == "" {
 			continue
 		}
-		if evalSymlinksOrSelf(filepath.Clean(proj.Worktree)) == repoRootEval {
+		if evalSpendPathSymlinks(filepath.Clean(proj.Worktree)) == repoRootEval {
 			ids = append(ids, proj.ID)
 		}
 	}
@@ -367,20 +350,27 @@ func timeInWindow(ts, startedAt, endedAt time.Time) bool {
 	return true
 }
 
-var openCodeWorkerNamePatternCache = map[string]*regexp.Regexp{}
-
 // openCodeTitleMatchesWorker reports whether title contains name as an
 // exact match bounded by non-word characters, so "Mason-6" never matches
 // inside "Mason-67".
+//
+// The pattern is compiled per call and NOTHING is cached. A package-level
+// map used to sit here, read and written by this function with no
+// synchronisation. Go's runtime aborts the whole process on a concurrent map
+// write -- a hard crash, not a silent race -- and this reader is called once
+// per worker while worker dispatch in this repository is parallel, so it
+// would have crashed at the end of every build. Compiling a handful of short
+// quoted names per run costs nothing, and the cache was unbounded besides.
+// FIX 2-1, Phase 196 plan 05; locked by
+// TestOpenCodeWorkerNameMatchingIsConcurrencySafe.
 func openCodeTitleMatchesWorker(title, name string) bool {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return false
 	}
-	pattern, ok := openCodeWorkerNamePatternCache[name]
-	if !ok {
-		pattern = regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `\b`)
-		openCodeWorkerNamePatternCache[name] = pattern
+	pattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
+	if err != nil {
+		return false
 	}
 	return pattern.MatchString(title)
 }
