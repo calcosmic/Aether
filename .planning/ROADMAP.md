@@ -223,7 +223,7 @@ Plans:
 
 **Wave 2** *(blocked on the ledger and the transcript reader)*
 
-- [ ] 196-05-PLAN.md — Salvage the OpenCode reader inside the plan that wires it: one resolver, and a build that writes its rows (wave 2)
+- [x] 196-05-PLAN.md — Salvage the OpenCode reader inside the plan that wires it: one resolver, and a build that writes its rows (wave 2)
 - [ ] 196-06-PLAN.md — `aether spend`: the read-only per-worker view, proved to mutate nothing and to invent nothing (wave 2)
 
 **Wave 3** *(blocked on rows being written and the token types reconciled)*

@@ -5,17 +5,17 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 196
 current_phase_name: See What It Cost
 status: executing
-stopped_at: Completed 196-04-PLAN.md
-last_updated: "2026-08-28T10:47:00.000Z"
+stopped_at: Completed 196-05-PLAN.md
+last_updated: "2026-08-28T11:16:00.000Z"
 last_activity: 2026-08-28
-last_activity_desc: Phase 196 plan 04 complete — model choice carries a reason
-state_head: 95513b94c8bd33509e8a746ce25ca1eeb43603e0
+last_activity_desc: Phase 196 plan 05 complete — the OpenCode reader salvaged, resolved and wired; a build now writes its rows
+state_head: 0be9b7c364b5108bcba33fd9ecbf9e772a559119
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 32
-  completed_plans: 28
-  percent: 29
+  completed_plans: 29
+  percent: 30
 ---
 
 # Project State
@@ -35,13 +35,13 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [███░░░░░░░] 29%
 
 Phase: 196 (See What It Cost) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
 every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-Last activity: 2026-08-28 — Phase 196 plan 04 complete (model choice carries a reason)
+Last activity: 2026-08-28 — Phase 196 plan 05 complete (OpenCode reader salvaged and wired; the build finalize path now writes per-worker ledger rows)
 
 ## Performance Metrics
 
@@ -84,6 +84,7 @@ Last activity: 2026-08-28 — Phase 196 plan 04 complete (model choice carries a
 | Phase 196 P01 | 22 min | 2 tasks | 2 files |
 | Phase 196 P02 | 13 min | 3 tasks | 14 files |
 | Phase 196 P03 | 41min | 2 tasks | 5 files |
+| Phase 196 P05 | 20min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -154,6 +155,12 @@ Last activity: 2026-08-28 — Phase 196 plan 04 complete (model choice carries a
 - [Phase 196]: The guard-file inventory floor is raised to its live count on every registration, making the inventory itself a ratchet
 - [Phase 196]: Deduplicate Claude transcript usage by message.id, corroborated by requestId; a usage-bearing line with no identifier is counted once on its own — Re-measured on this machine's whole corpus (1,726 transcripts): only two top-level line types carry usage — assistant at .message.usage and user at .toolUseResult.usage, at different positions. The user line is a subagent completion record with no message.id.
 - [Phase 196]: The spend containment helper resolves symlinks on the deepest existing ancestor of a path that does not exist yet — The old fallback compared an evaluated root against an unevaluated candidate, so on macOS containment depended on whether the file had been written. Every existing refusal case still fails closed.
+- [Phase 196]: The salvaged OpenCode reader was merged only inside the plan that wires it (D-03); its unsynchronised worker-name pattern cache is deleted outright rather than locked, because it was also unbounded and per-call compilation costs nothing
+- [Phase 196]: One containment helper, validateSpendContainedPath, serves both platform validators, and the singleness is asserted by an AST count rather than a comment
+- [Phase 196]: A worker is accounted under codexBuildDispatch.Name (the deterministic per-worker name the platform's session titles carry), never AgentName, which several workers in one build share
+- [Phase 196]: "Reported" keys on the usage source tag, never on a number — a worker that genuinely billed zero and one whose tool said nothing both present as zero, and D-01 renders those two differently
+- [Phase 196]: The orchestrating session's own turns are returned separately from the worker list, neither shown as a dispatched worker nor discarded (the choice 196-03 left open)
+- [Phase 196]: A dispatch whose status is outside the ledger vocabulary is dropped with a named note rather than sinking the whole fail-closed ledger; nothing invents a status the dispatch never stated
 
 ### Pending Todos
 
@@ -240,6 +247,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-28T10:32:13.344Z
-Stopped at: Completed 196-03-PLAN.md
+Last session: 2026-08-28T11:16:00.000Z
+Stopped at: Completed 196-05-PLAN.md
 Resume file: None
