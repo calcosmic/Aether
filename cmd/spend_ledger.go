@@ -191,6 +191,8 @@ func saveSpendLedger(entry spendLedger) error {
 
 	rows := make([]spendRow, len(entry.Rows))
 	copy(rows, entry.Rows)
+	// Keyed by run id AND worker name, never by name alone -- see the comment
+	// at the check below.
 	measuredByWorker := map[string]bool{}
 	for i := range rows {
 		worker := strings.TrimSpace(rows[i].AgentName)
@@ -200,16 +202,29 @@ func saveSpendLedger(entry spendLedger) error {
 		// Two rows may share a name -- a worker never vanishes from this
 		// ledger, so a name collision cannot be answered by dropping one. Two
 		// rows that both carry a MEASUREMENT under one name is the harm: the
-		// phase total then counts one measurement twice, which is what a run of
+		// run's total then counts one measurement twice, which is what a run of
 		// 1,000 tokens reporting 2.0K looked like (WR-02).
+		//
+		// The question is scoped to ONE ATTEMPT, and that scope is the whole
+		// correctness of it (NEW-01). deterministicAntName is a pure function of
+		// caste and phase, so re-running a phase gives the retry's workers the
+		// SAME names as the first attempt's -- and a ledger that keeps every
+		// attempt's rows (CR-02) is then holding exactly the pair an
+		// unscoped rule forbids. Refusing that pair refused the whole retry:
+		// nothing was written, and the owner was shown the first attempt's
+		// figure under a sentence claiming it counted every worker. Two measured
+		// rows under one name in one attempt is still a double count; the same
+		// two across two attempts is two runs of one worker, which is what a
+		// retry IS.
 		if !rows[i].Usage.Empty() {
-			if measuredByWorker[worker] {
+			key := strings.TrimSpace(rows[i].RunID) + "\x00" + worker
+			if measuredByWorker[key] {
 				return fmt.Errorf(
-					"save spend ledger: two rows filed under worker %s both carry a token figure — one measurement would be counted twice in this phase's total",
+					"save spend ledger: two rows filed under worker %s in the same run both carry a token figure — one measurement would be counted twice in this phase's total",
 					worker,
 				)
 			}
-			measuredByWorker[worker] = true
+			measuredByWorker[key] = true
 		}
 		normalized, ok := normalizeSpendRowStatus(rows[i].Status)
 		if !ok {
@@ -308,6 +323,56 @@ func spendRowsAcross(ledgers []spendLedger) []spendRow {
 		rows = append(rows, ledger.Rows...)
 	}
 	return rows
+}
+
+// spendAttemptKey identifies one row's (attempt, worker) pair. It is the key
+// spendAttemptLabels answers on, and the same pair saveSpendLedger scopes its
+// double-count refusal to.
+func spendAttemptKey(row spendRow) string {
+	return strings.TrimSpace(row.RunID) + "\x00" + strings.TrimSpace(row.AgentName)
+}
+
+// spendAttemptLabels works out which rows need to say which attempt they are.
+//
+// A phase can be built or checked more than once -- a blocked check hands the
+// owner `build --force`, and recovery redispatches the unfinished tasks -- and
+// every attempt's rows are kept (CR-02). The worker names do NOT change between
+// attempts: deterministicAntName is a pure function of caste and phase. So the
+// breakdown can hold two rows both reading "Builder Mason-67", which without a
+// label reads as one worker billed twice rather than one worker run twice.
+//
+// Only names that actually occur in more than one attempt get a label, so a
+// phase built once -- the ordinary case -- is unchanged. Attempts are numbered
+// in the order they appear in the rows, which is the order they happened,
+// because each run appends its own rows after the ones already recorded.
+//
+// It reads rows and returns text. It computes nothing about tokens.
+func spendAttemptLabels(rows []spendRow) map[string]string {
+	runsByWorker := map[string][]string{}
+	for _, row := range rows {
+		worker := strings.TrimSpace(row.AgentName)
+		run := strings.TrimSpace(row.RunID)
+		seen := false
+		for _, known := range runsByWorker[worker] {
+			if known == run {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			runsByWorker[worker] = append(runsByWorker[worker], run)
+		}
+	}
+	labels := map[string]string{}
+	for worker, runs := range runsByWorker {
+		if len(runs) < 2 {
+			continue
+		}
+		for i, run := range runs {
+			labels[run+"\x00"+worker] = fmt.Sprintf("attempt %d", i+1)
+		}
+	}
+	return labels
 }
 
 // computeSpendTotals classifies every row across every supplied ledger

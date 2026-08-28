@@ -135,13 +135,14 @@ func renderSpendCostLineFromLedgers(ledgers []spendLedger) string {
 	b.WriteString(spendCostLineTotalSentence(totals.MeasuredTokens, len(rows), measured, unreported))
 	b.WriteString("\n")
 
+	attempts := spendAttemptLabels(rows)
 	identityWidth, figureWidth := spendCostLineColumnWidths(rows)
 	for _, row := range rows {
 		mark := spendMarkNotReported
 		if spendRowReportedUsage(row) {
 			mark = spendMarkMeasured
 		}
-		rendered, plain := spendWorkerDescription(row)
+		rendered, plain := spendWorkerDescription(row, attempts[spendAttemptKey(row)])
 		pad := identityWidth - spendDisplayWidth(plain)
 		if pad < 0 {
 			pad = 0
@@ -237,8 +238,9 @@ func spendDisplayWidth(text string) int {
 // never an input to any token count.
 func spendCostLineColumnWidths(rows []spendRow) (identity, figure int) {
 	figure = spendDisplayWidth(spendNotReportedFigure)
+	attempts := spendAttemptLabels(rows)
 	for _, row := range rows {
-		_, plain := spendWorkerDescription(row)
+		_, plain := spendWorkerDescription(row, attempts[spendAttemptKey(row)])
 		if w := spendDisplayWidth(plain); w > identity {
 			identity = w
 		}

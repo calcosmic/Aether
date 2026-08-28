@@ -89,16 +89,26 @@ func spendRowFigure(row spendRow) string {
 // can never contain a run of two spaces, which is what keeps the rendered row
 // unambiguously three cells wide.
 //
+// attempt is the run label spendAttemptLabels worked out for this row, and is
+// empty for every worker that ran only once in this phase. It is filled in
+// only when one name occurs in more than one attempt, which the runtime makes
+// routine: a re-run of a phase gives its workers the same deterministic names,
+// so two rows reading "Builder Mason-67" would otherwise look like one worker
+// billed twice rather than one worker run twice.
+//
 // It returns the rendered cell and its plain equivalent. The plain form exists
 // only so the column can be padded: casteIdentity colours the role label with
 // ANSI escapes, and padding on the coloured string would count the escape
 // bytes as visible width and break the alignment it was meant to create.
-func spendWorkerDescription(row spendRow) (rendered, plain string) {
+func spendWorkerDescription(row spendRow, attempt string) (rendered, plain string) {
 	name := strings.TrimSpace(row.AgentName)
 	if name == "" {
 		name = "(unnamed worker)"
 	}
 	suffix := " " + name
+	if attempt = strings.TrimSpace(attempt); attempt != "" {
+		suffix += " (" + attempt + ")"
+	}
 	if job := strings.Join(strings.Fields(row.JobName), " "); job != "" {
 		suffix += " (job: " + job + ")"
 	}
@@ -115,8 +125,10 @@ func spendWorkerDescription(row spendRow) (rendered, plain string) {
 // widths over text, never an input to any token count.
 func spendColumnWidths(ledgers []spendLedger) (identity, figure int) {
 	figure = len([]rune(spendNotReportedFigure))
-	for _, row := range spendRowsAcross(ledgers) {
-		_, plain := spendWorkerDescription(row)
+	rows := spendRowsAcross(ledgers)
+	attempts := spendAttemptLabels(rows)
+	for _, row := range rows {
+		_, plain := spendWorkerDescription(row, attempts[spendAttemptKey(row)])
 		if w := len([]rune(plain)); w > identity {
 			identity = w
 		}
@@ -146,6 +158,7 @@ func renderSpendText(phase int, ledgers []spendLedger) string {
 
 	totals := computeSpendTotals(ledgers)
 	identityWidth, figureWidth := spendColumnWidths(ledgers)
+	attempts := spendAttemptLabels(rows)
 
 	b.WriteString(fmt.Sprintf("Token use for phase %d, worker by worker, as each worker's own tool reported it.\n", phase))
 
@@ -160,7 +173,7 @@ func renderSpendText(phase int, ledgers []spendLedger) string {
 			if spendRowReportedUsage(row) {
 				mark = spendMarkMeasured
 			}
-			rendered, plain := spendWorkerDescription(row)
+			rendered, plain := spendWorkerDescription(row, attempts[spendAttemptKey(row)])
 			pad := identityWidth - len([]rune(plain))
 			if pad < 0 {
 				pad = 0
