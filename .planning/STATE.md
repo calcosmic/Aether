@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 196
 current_phase_name: See What It Cost
 status: executing
-stopped_at: Completed 196-03-PLAN.md
-last_updated: "2026-08-28T10:32:33.657Z"
+stopped_at: Completed 196-04-PLAN.md
+last_updated: "2026-08-28T10:47:00.000Z"
 last_activity: 2026-08-28
-last_activity_desc: Phase 196 execution started
+last_activity_desc: Phase 196 plan 04 complete — model choice carries a reason
 state_head: 95513b94c8bd33509e8a746ce25ca1eeb43603e0
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 32
-  completed_plans: 27
+  completed_plans: 28
   percent: 29
 ---
 
@@ -35,13 +35,13 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [███░░░░░░░] 29%
 
 Phase: 196 (See What It Cost) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
 every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-Last activity: 2026-08-28 — Phase 196 execution started
+Last activity: 2026-08-28 — Phase 196 plan 04 complete (model choice carries a reason)
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Last activity: 2026-08-28 — Phase 196 execution started
 | Phase 172 P05 | 25min | 2 tasks | 4 files |
 | Phase 173 P10 | 70min | 4 tasks | 5 files |
 | Phase 193 P01 | 50min | 2 tasks | 7 files |
+| Phase 196 P04 | 20min | 2 tasks | 8 files |
 | Phase 193 P02 | 62min | 3 tasks | 13 files |
 | Phase 193 P03 | 23min | 2 tasks | 2 files |
 | Phase 193 P04 | 70min | 3 tasks | 12 files |

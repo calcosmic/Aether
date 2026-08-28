@@ -39,7 +39,7 @@
 - [ ] **COST-01**: Every build and continue ends with one plain-English cost line — per worker and total tokens, measured vs estimated labelled, dollars never the headline, no price table anywhere (carries SPEND-08)
 - [ ] **COST-02**: Wrapper-path (Claude Code / OpenCode) worker results report token usage so the line is populated on the path the owner actually uses (carries SPEND-02)
 - [ ] **COST-03**: `aether spend` shows per-worker tokens for the current run, mutating nothing, and no figure derives from a character budget (carries SPEND-07; reinstates the `aether spend` detail view the 2026-08-22 brief approved, reversing the 2026-08-14 cut of SPEND-06)
-- [ ] **COST-04**: The team card shows each worker's model and the reason for it; no routine role carries `inherit` (chronicler, keeper, includer today); every role left on the expensive model has a recorded reason after the owner rules on the retune proposal
+- [x] **COST-04**: The team card shows each worker's model and the reason for it; no routine role carries `inherit` (chronicler, keeper, includer today); every role left on the expensive model has a recorded reason after the owner rules on the retune proposal
 - [ ] **COST-05**: The three preserved spend-ledger branches (`worktree-agent-a47f…`, `…a59f…`, `…aa57…`) are reviewed and either salvaged or discarded with a written reason, then deleted
 
 ### One answer to "what next?" (NEXT)
@@ -109,7 +109,7 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | COST-01 | Phase 196 | Pending |
 | COST-02 | Phase 196 | Pending |
 | COST-03 | Phase 196 | Pending |
-| COST-04 | Phase 196 | Pending |
+| COST-04 | Phase 196 | Complete |
 | COST-05 | Phase 196 | Pending |
 | NEXT-01 | Phase 197 | Pending |
 | NEXT-02 | Phase 197 | Pending |
