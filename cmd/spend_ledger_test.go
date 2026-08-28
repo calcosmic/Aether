@@ -1,9 +1,16 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -526,5 +533,340 @@ func TestLedgerPhaseTotalAddsBuildAndContinue(t *testing.T) {
 	}
 	if rollups[0].TotalTokens != 34500 {
 		t.Fatalf("TotalTokens = %d, want 34500", rollups[0].TotalTokens)
+	}
+}
+
+// TestLedgerGrandTotalFromRawColumnsWithoutHelper is FIX 1-2 from the Phase
+// 196 salvage assessment: the aggregation invariant proved against numbers
+// this test worked out itself, not against the function the implementation
+// calls.
+//
+// TestLedgerGrandTotalEqualsSumOfRows above accumulates its "independent"
+// expectation with row.Usage.BilledTotalTokens() -- the same helper
+// computeSpendTotals uses. If that helper were ever wrong, that test would
+// pass while enshrining the error. That is the exact shape of the 186x
+// undercount this repository already shipped, in this same subsystem: an
+// arithmetic test whose expectation is produced by the arithmetic it is
+// checking cannot fail when that arithmetic is wrong.
+//
+// So every expected number below is a literal, hand-summed here from the
+// four raw disjoint columns, and nothing in this function calls
+// BilledTotalTokens(), TotalInputTokens() or billedTotal(). That absence is
+// itself enforced, structurally, by
+// TestRawColumnInvariantDoesNotCallTheBilledTotalHelper.
+func TestLedgerGrandTotalFromRawColumnsWithoutHelper(t *testing.T) {
+	// Anthropic's documented disjoint-column example. Hand-summed:
+	//   50 input + 100,000 cache read + 2,000 cache creation + 500 output
+	//   = 102,550.
+	// TotalTokens is deliberately left zero on every row so the total can
+	// only come from the four columns, never from a figure the fixture
+	// pre-computed for the implementation.
+	anthropicExample := codex.WorkerUsage{
+		InputTokens:         50,
+		CachedInputTokens:   100000,
+		CacheCreationTokens: 2000,
+		OutputTokens:        500,
+		Source:              codex.UsageSourceProvider,
+	}
+
+	t.Run("one provider row totals the four raw columns", func(t *testing.T) {
+		totals := computeSpendTotals([]spendLedger{
+			{Phase: 50, Workflow: spendWorkflowBuild, Rows: []spendRow{
+				{AgentName: "Mason-67", ParentName: "Queen", Status: "completed", Usage: anthropicExample},
+			}},
+		})
+		if totals.GrandTotalTokens != 102550 {
+			t.Fatalf("GrandTotalTokens = %d, want 102550 (50 + 100000 + 2000 + 500, summed by hand)", totals.GrandTotalTokens)
+		}
+		if totals.MeasuredTokens != 102550 {
+			t.Fatalf("MeasuredTokens = %d, want 102550", totals.MeasuredTokens)
+		}
+		if totals.EstimatedTokens != 0 {
+			t.Fatalf("EstimatedTokens = %d, want 0", totals.EstimatedTokens)
+		}
+	})
+
+	t.Run("across both workflows the phase total is the hand-summed set", func(t *testing.T) {
+		ledgers := []spendLedger{
+			{Phase: 51, Workflow: spendWorkflowBuild, Rows: []spendRow{
+				// 102,550 (above).
+				{AgentName: "Mason-67", ParentName: "Queen", Status: "completed", Usage: anthropicExample},
+				// 1,200 + 0 + 0 + 300 = 1,500.
+				{AgentName: "Keen-12", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+					InputTokens:  1200,
+					OutputTokens: 300,
+					Source:       codex.UsageSourceSessionTranscript,
+				}},
+			}},
+			{Phase: 51, Workflow: spendWorkflowContinue, Rows: []spendRow{
+				// 4,000 + 0 + 0 + 0 = 4,000, and it is an estimate, so it
+				// must land in its own subtotal and never in the measured one.
+				{AgentName: "Roam-90", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+					InputTokens: 4000,
+					Source:      codex.UsageSourceEstimate,
+				}},
+			}},
+		}
+
+		totals := computeSpendTotals(ledgers)
+
+		// 102,550 + 1,500 = 104,050, worked out here, not by the code.
+		if totals.MeasuredTokens != 104050 {
+			t.Fatalf("MeasuredTokens = %d, want 104050 (102550 + 1500)", totals.MeasuredTokens)
+		}
+		if totals.EstimatedTokens != 4000 {
+			t.Fatalf("EstimatedTokens = %d, want 4000", totals.EstimatedTokens)
+		}
+		// 104,050 + 4,000 = 108,050.
+		if totals.GrandTotalTokens != 108050 {
+			t.Fatalf("GrandTotalTokens = %d, want 108050 (104050 + 4000)", totals.GrandTotalTokens)
+		}
+		if totals.MeasuredRows != 2 {
+			t.Fatalf("MeasuredRows = %d, want 2", totals.MeasuredRows)
+		}
+		if totals.EstimatedRows != 1 {
+			t.Fatalf("EstimatedRows = %d, want 1", totals.EstimatedRows)
+		}
+
+		// The parent roll-up is the same arithmetic on a second path; it must
+		// reach the same hand-computed figure.
+		rollups := spendRollupByParent(ledgers)
+		if len(rollups) != 1 {
+			t.Fatalf("expected one Queen roll-up entry, got %d", len(rollups))
+		}
+		if rollups[0].TotalTokens != 108050 {
+			t.Fatalf("Queen roll-up TotalTokens = %d, want 108050", rollups[0].TotalTokens)
+		}
+		if rollups[0].WorkerCount != 3 {
+			t.Fatalf("Queen roll-up WorkerCount = %d, want 3", rollups[0].WorkerCount)
+		}
+	})
+}
+
+// TestRawColumnInvariantDoesNotCallTheBilledTotalHelper makes the
+// independence of the test above executable rather than aspirational.
+//
+// CLAUDE.md's Definition of Done: a requirement is satisfied only when a
+// command exists that fails when it is unmet. "The invariant test must not
+// call the helper it is checking" is a requirement, so this parses the test
+// file's syntax tree and fails if any call inside
+// TestLedgerGrandTotalFromRawColumnsWithoutHelper resolves to one of the
+// token-summing helpers. It walks the AST rather than searching text, so a
+// comment mentioning the helper (there are several above) can neither
+// satisfy nor break it.
+func TestRawColumnInvariantDoesNotCallTheBilledTotalHelper(t *testing.T) {
+	const guardedFunc = "TestLedgerGrandTotalFromRawColumnsWithoutHelper"
+	forbidden := map[string]bool{
+		"BilledTotalTokens": true,
+		"TotalInputTokens":  true,
+		"billedTotal":       true,
+	}
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "spend_ledger_test.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse spend_ledger_test.go: %v", err)
+	}
+
+	var found bool
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name == nil || fn.Name.Name != guardedFunc {
+			continue
+		}
+		found = true
+		ast.Inspect(fn, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			switch fun := call.Fun.(type) {
+			case *ast.SelectorExpr:
+				if fun.Sel != nil && forbidden[fun.Sel.Name] {
+					t.Errorf("%s calls %s() -- its expected totals must be hand-computed literals, "+
+						"never produced by the arithmetic it is checking (the 186x-undercount shape)",
+						guardedFunc, fun.Sel.Name)
+				}
+			case *ast.Ident:
+				if forbidden[fun.Name] {
+					t.Errorf("%s calls %s() -- its expected totals must be hand-computed literals",
+						guardedFunc, fun.Name)
+				}
+			}
+			return true
+		})
+	}
+	if !found {
+		t.Fatalf("%s not found in spend_ledger_test.go -- the independent aggregation invariant was removed", guardedFunc)
+	}
+}
+
+// spendCurrencyWords are the whole words that mark a field as carrying a
+// money amount. Matching whole words rather than substrings keeps
+// "RecordedAt" and "WorkerCount" from tripping a naive "cent"/"count"
+// search.
+var spendCurrencyWords = map[string]bool{
+	"usd": true, "dollar": true, "dollars": true, "currency": true,
+	"price": true, "prices": true, "pricing": true, "cost": true,
+	"costs": true, "money": true, "cent": true, "cents": true,
+	"fee": true, "fees": true, "charge": true, "charges": true,
+	"billing": true, "paid": true, "payment": true, "rate": true,
+	"rates": true,
+}
+
+// spendNameCarriesCurrency splits an identifier or JSON key into its words
+// (camelCase and snake_case both) and reports whether any word names money.
+func spendNameCarriesCurrency(name string) bool {
+	lower := strings.ToLower(name)
+	if strings.Contains(lower, "usd") || strings.Contains(lower, "dollar") || strings.Contains(name, "$") {
+		return true
+	}
+	var words []string
+	var current strings.Builder
+	for i, r := range name {
+		switch {
+		case r == '_' || r == '-' || r == '.':
+			words = append(words, current.String())
+			current.Reset()
+		case unicode.IsUpper(r) && i > 0:
+			words = append(words, current.String())
+			current.Reset()
+			current.WriteRune(unicode.ToLower(r))
+		default:
+			current.WriteRune(unicode.ToLower(r))
+		}
+	}
+	words = append(words, current.String())
+	for _, word := range words {
+		if spendCurrencyWords[word] {
+			return true
+		}
+	}
+	return false
+}
+
+// TestSpendLedgerCarriesNoCurrencyField is FIX 1-1 and decision D-01 made
+// executable: no field on the ledger or its totals may relay a money amount,
+// so no later renderer can reach one and put it on the headline line.
+//
+// The salvaged branch carried spendTotals.ProviderUSD and ProviderUSDRows.
+// Neither computed a price from a rate -- both relayed the provider's own
+// reported figure -- but nothing read them either, and an unread money field
+// sitting on the totals struct is a standing invitation to render it.
+//
+// Two assertions, deliberately: the Go types by reflection (so a field added
+// with no JSON tag is still caught) and the marshalled JSON keys (so a field
+// renamed in Go but still serialized as money is caught). Neither searches
+// the source text, so a comment can never satisfy or break this test.
+//
+// codex.WorkerUsage is explicitly out of scope and skipped by name. It is the
+// shared provider-usage type on pkg/codex, it keeps its own USDCost field for
+// callers outside this phase, and this plan is forbidden from changing it.
+// The boundary this test defends is the ledger's own types -- above all
+// spendTotals, which is what a headline renderer reads.
+func TestSpendLedgerCarriesNoCurrencyField(t *testing.T) {
+	usageType := reflect.TypeOf(codex.WorkerUsage{})
+
+	var walkType func(t *testing.T, typ reflect.Type, path string, seen map[reflect.Type]bool)
+	walkType = func(t *testing.T, typ reflect.Type, path string, seen map[reflect.Type]bool) {
+		for typ.Kind() == reflect.Ptr || typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array {
+			typ = typ.Elem()
+		}
+		if typ.Kind() != reflect.Struct || typ == usageType || seen[typ] {
+			return
+		}
+		seen[typ] = true
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			where := path + "." + field.Name
+			if spendNameCarriesCurrency(field.Name) {
+				t.Errorf("field %s names a money amount; the ledger and its totals must carry none (D-01: no currency figure may reach the cost line)", where)
+			}
+			tag := strings.Split(field.Tag.Get("json"), ",")[0]
+			if tag != "" && spendNameCarriesCurrency(tag) {
+				t.Errorf("field %s serializes as %q, which names a money amount", where, tag)
+			}
+			walkType(t, field.Type, where, seen)
+		}
+	}
+
+	walkType(t, reflect.TypeOf(spendTotals{}), "spendTotals", map[reflect.Type]bool{})
+	walkType(t, reflect.TypeOf(spendLedger{}), "spendLedger", map[reflect.Type]bool{})
+	walkType(t, reflect.TypeOf(spendRow{}), "spendRow", map[reflect.Type]bool{})
+	walkType(t, reflect.TypeOf(spendParentRollup{}), "spendParentRollup", map[reflect.Type]bool{})
+
+	// The serialized form, on a fully populated value so no omitempty tag can
+	// hide a key from this walk.
+	var walkJSON func(t *testing.T, value interface{}, path string)
+	walkJSON = func(t *testing.T, value interface{}, path string) {
+		object, ok := value.(map[string]interface{})
+		if !ok {
+			if list, isList := value.([]interface{}); isList {
+				for i, item := range list {
+					walkJSON(t, item, fmt.Sprintf("%s[%d]", path, i))
+				}
+			}
+			return
+		}
+		for key, nested := range object {
+			// The row's usage object is codex.WorkerUsage, out of scope above
+			// and out of scope here for the same reason.
+			if key == "usage" {
+				continue
+			}
+			if spendNameCarriesCurrency(key) {
+				t.Errorf("serialized key %s.%s names a money amount", path, key)
+			}
+			walkJSON(t, nested, path+"."+key)
+		}
+	}
+
+	totals := computeSpendTotals([]spendLedger{
+		{Phase: 60, Workflow: spendWorkflowBuild, Rows: []spendRow{
+			{AgentName: "Mason-67", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+				InputTokens: 1000, OutputTokens: 200, USDCost: 12.34, Source: codex.UsageSourceProvider,
+			}},
+			{AgentName: "Roam-90", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+				InputTokens: 500, Source: codex.UsageSourceEstimate,
+			}},
+			{AgentName: "Keen-12", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+				InputTokens: 700, Source: codex.UsageSourceSessionTranscript,
+			}},
+		}},
+	})
+
+	for _, subject := range []struct {
+		name  string
+		value interface{}
+	}{
+		{"spendTotals", totals},
+		{"spendLedger", spendLedger{
+			SchemaVersion: spendLedgerSchemaVersion,
+			Phase:         60,
+			PhaseName:     "see-what-it-cost",
+			Workflow:      spendWorkflowBuild,
+			RunID:         "run-1",
+			RecordedAt:    "2026-08-27T00:00:00Z",
+			Rows: []spendRow{{
+				AgentName: "Mason-67", Caste: "builder", ParentName: "Queen",
+				Task: "Land the ledger", Status: "completed", ToolCount: 4,
+				Usage: codex.WorkerUsage{InputTokens: 50, USDCost: 9.99, Source: codex.UsageSourceProvider},
+			}},
+		}},
+		{"spendParentRollup", spendRollupByParent([]spendLedger{
+			{Phase: 60, Workflow: spendWorkflowBuild, Rows: []spendRow{
+				{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 100, Source: codex.UsageSourceProvider}},
+			}},
+		})},
+	} {
+		raw, err := json.Marshal(subject.value)
+		if err != nil {
+			t.Fatalf("marshal %s: %v", subject.name, err)
+		}
+		var decoded interface{}
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			t.Fatalf("unmarshal %s: %v", subject.name, err)
+		}
+		walkJSON(t, decoded, subject.name)
 	}
 }
