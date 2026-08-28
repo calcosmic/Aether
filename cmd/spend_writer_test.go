@@ -465,3 +465,189 @@ func runBuildToCompletionPacketForSpendTest(t *testing.T, root string) string {
 	}
 	return completionPath
 }
+
+// --- Phase 196 plan 07, task 1: the continue lane files its own rows ---
+//
+// The build lane has filed rows since plan 196-05. Until this task the
+// checking pass filed nothing at all, so a phase's recorded cost was only ever
+// half of what it actually cost -- and the closeout line plan 196-07 renders
+// would have understated every phase that was checked, which is every phase.
+//
+// The keying is the mistake the salvaged branch's own comments record making
+// and correcting once already: one file per phase per workflow, each replaced
+// only by its own workflow, so a check can never erase what the build spent.
+
+// continueTerminalResultsForPlan answers every planned reviewer and watcher
+// with a terminal result the finalizer accepts: a completed status and a
+// non-empty handoff, which the continue brief promises is required.
+func continueTerminalResultsForPlan(plan codexContinuePlanManifest) []codexContinueExternalDispatch {
+	results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
+	for _, dispatch := range plan.Dispatches {
+		results = append(results, codexContinueExternalDispatch{
+			Stage:   dispatch.Stage,
+			Wave:    dispatch.Wave,
+			Caste:   dispatch.Caste,
+			Name:    dispatch.Name,
+			Task:    dispatch.Task,
+			TaskID:  dispatch.TaskID,
+			Status:  "completed",
+			Summary: dispatch.Name + " checked the work and found nothing to flag",
+			Handoff: codex.WorkerHandoff{
+				CommandsRun:            []string{"go test ./..."},
+				VerificationStatus:     "pass",
+				NextWorkerInstructions: []string{"nothing outstanding"},
+			},
+		})
+	}
+	return results
+}
+
+// planAndFinalizeContinueForSpendTest drives the real plan-only + finalize pair
+// the heavy-review wrapper drives, and returns the manifest it answered.
+func planAndFinalizeContinueForSpendTest(t *testing.T, root string, opts codexContinueOptions) codexContinuePlanManifest {
+	t.Helper()
+	planResult, _, _, _, err := runCodexContinuePlanOnly(root, opts)
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly: %v", err)
+	}
+	plan, ok := planResult["continue_manifest"].(codexContinuePlanManifest)
+	if !ok {
+		t.Fatalf("expected continue_manifest in result, got %#v", planResult["continue_manifest"])
+	}
+	if _, _, _, _, _, _, err := runCodexContinueFinalize(root, codexExternalContinueCompletion{
+		ContinueManifest: &plan,
+		Dispatches:       continueTerminalResultsForPlan(plan),
+	}, false, 0, false); err != nil {
+		t.Fatalf("runCodexContinueFinalize: %v", err)
+	}
+	return plan
+}
+
+func TestContinueFinalizeWritesItsOwnRows(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	root, dataDir, _, _ := setupIntermediateContinueState(t, "The check files its own record")
+
+	plan := planAndFinalizeContinueForSpendTest(t, root, codexContinueOptions{LightFlag: true})
+	if len(plan.Dispatches) == 0 {
+		t.Fatalf("the planned check ran no workers, so this test would prove nothing")
+	}
+
+	ledger := loadSpendLedgerFromDisk(t, dataDir, 1, spendWorkflowContinue)
+	if ledger.Workflow != spendWorkflowContinue {
+		t.Errorf("ledger keyed as %q, want %q", ledger.Workflow, spendWorkflowContinue)
+	}
+	if len(ledger.Rows) != len(plan.Dispatches) {
+		t.Fatalf("got %d rows on disk, want one per worker (%d): %+v", len(ledger.Rows), len(plan.Dispatches), ledger.Rows)
+	}
+	for _, dispatch := range plan.Dispatches {
+		row := spendLedgerRowByName(t, ledger, dispatch.Name)
+		if row.Status == "" {
+			t.Errorf("worker %s's filed row states no outcome", dispatch.Name)
+		}
+		if row.Caste != dispatch.Caste {
+			t.Errorf("worker %s filed under caste %q, want %q", dispatch.Name, row.Caste, dispatch.Caste)
+		}
+	}
+}
+
+func TestContinueDoesNotEraseBuildRowsEndToEnd(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	root, dataDir, _, _ := setupIntermediateContinueState(t, "Two records, neither erasing the other")
+
+	// The build lane's own writer, with the workflow word build-finalize uses.
+	buildOutcome, err := writeSpendRowsForRun(spendWriteRequest{
+		Phase:     1,
+		PhaseName: "Two records, neither erasing the other",
+		Workflow:  spendWorkflowBuild,
+		RepoRoot:  root,
+		Platform:  "claude",
+		StartedAt: time.Now().UTC().Add(-time.Hour),
+		EndedAt:   time.Now().UTC(),
+		Dispatches: []codexBuildDispatch{
+			{Caste: "builder", AgentName: "aether-builder", Name: "Forge-701", Task: "Complete intermediate work", Status: "completed"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("write the build lane's rows: %v", err)
+	}
+	if buildOutcome.RowsWritten != 1 {
+		t.Fatalf("build lane wrote %d rows, want 1", buildOutcome.RowsWritten)
+	}
+
+	plan := planAndFinalizeContinueForSpendTest(t, root, codexContinueOptions{LightFlag: true})
+
+	buildLedger := loadSpendLedgerFromDisk(t, dataDir, 1, spendWorkflowBuild)
+	continueLedger := loadSpendLedgerFromDisk(t, dataDir, 1, spendWorkflowContinue)
+
+	if len(buildLedger.Rows) != 1 || buildLedger.Rows[0].AgentName != "Forge-701" {
+		t.Fatalf("the check overwrote the build's rows; build ledger now holds %+v", buildLedger.Rows)
+	}
+	for _, row := range continueLedger.Rows {
+		if row.AgentName == "Forge-701" {
+			t.Errorf("the check's own file carries the build's worker %s", row.AgentName)
+		}
+	}
+	continueNames := map[string]bool{}
+	for _, row := range continueLedger.Rows {
+		continueNames[row.AgentName] = true
+	}
+	for _, dispatch := range plan.Dispatches {
+		if !continueNames[dispatch.Name] {
+			t.Errorf("worker %s ran during the check but has no row in the check's own file", dispatch.Name)
+		}
+	}
+
+	// And the phase total is both files added together, not whichever landed last.
+	ledgers, ok := loadSpendLedgersForPhase(1)
+	if !ok {
+		t.Fatalf("no ledgers loaded for phase 1")
+	}
+	if got, want := len(spendRowsAcross(ledgers)), len(buildLedger.Rows)+len(continueLedger.Rows); got != want {
+		t.Errorf("the phase spans %d rows, want %d (the build's plus the check's)", got, want)
+	}
+}
+
+func TestContinueWithNoWorkersWritesNoFile(t *testing.T) {
+	t.Run("the writer files nothing when a run had no workers", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir, req := newSpendWriterFixture(t)
+		req.Workflow = spendWorkflowContinue
+		req.Dispatches = nil
+
+		outcome, err := writeSpendRowsForRun(req)
+		if err != nil {
+			t.Fatalf("writeSpendRowsForRun: %v", err)
+		}
+		if outcome.RowsWritten != 0 {
+			t.Errorf("wrote %d rows for a run with no workers", outcome.RowsWritten)
+		}
+		path := filepath.Join(dataDir, "spend", "phase-7-continue.json")
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Errorf("a run with no workers left a file at %s; an empty file is indistinguishable from a run that cost nothing", path)
+		}
+	})
+
+	t.Run("a check that spawned nobody leaves no file", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		forceBuildJSONOutput(t)
+
+		root, dataDir, _, _ := setupIntermediateContinueState(t, "A check with nobody to send")
+
+		plan := planAndFinalizeContinueForSpendTest(t, root, codexContinueOptions{LightFlag: true, SkipWatchers: true})
+		if len(plan.Dispatches) != 0 {
+			t.Skipf("this depth still planned %d worker(s); the no-worker case cannot be reached here", len(plan.Dispatches))
+		}
+		path := filepath.Join(dataDir, "spend", "phase-1-continue.json")
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Errorf("a check that ran no workers left a file at %s", path)
+		}
+	})
+}
