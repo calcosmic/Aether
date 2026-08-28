@@ -828,6 +828,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		Workflow:   spendWorkflowBuild,
 		RepoRoot:   root,
 		Platform:   manifest.HostPlatform,
+		RunID:      spendRunIDFromAttempt(attemptRel),
 		StartedAt:  spendRunStartFromManifest(manifest.GeneratedAt),
 		EndedAt:    time.Now().UTC(),
 		Dispatches: dispatches,

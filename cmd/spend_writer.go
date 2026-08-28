@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -73,6 +74,32 @@ func spendRunStartFromManifest(generatedAt string) time.Time {
 	return parsed.UTC()
 }
 
+// spendRunIDFromAttempt is the run identity of a build lane: the durable
+// attempt id the build already owns ("attempt-20260828T090000.000000000Z-4711"),
+// derived from the attempt record's own store path.
+//
+// It is stable across a re-finalize of one attempt and different for every new
+// attempt at the same phase, which is exactly the distinction the ledger needs.
+func spendRunIDFromAttempt(attemptRel string) string {
+	base := filepath.Base(strings.TrimSpace(attemptRel))
+	if base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+// spendRunIDFromTimestamp is the run identity of a lane with no attempt record
+// of its own -- the checking pass, whose plan carries the moment it was
+// generated. The same plan finalized twice yields the same id; a second check
+// of the phase yields a different one.
+func spendRunIDFromTimestamp(prefix, timestamp string) string {
+	timestamp = strings.TrimSpace(timestamp)
+	if timestamp == "" {
+		return ""
+	}
+	return prefix + "-" + timestamp
+}
+
 // writeSpendRowsForRun turns a finished run's dispatches into ledger rows and
 // files them under this phase and this workflow.
 //
@@ -85,10 +112,21 @@ func spendRunStartFromManifest(generatedAt string) time.Time {
 // token figure and no source tag, so it cannot vanish and make the run look
 // cheaper than it was.
 //
-// Rerunning the same run's finalize REPLACES this workflow's rows rather than
-// appending to them: the ledger is saved whole, never loaded-and-extended, so
-// a second finalize of the same build cannot double its own cost. The other
-// workflow's file is never opened.
+// Replacement is keyed by RUN, not by phase-and-workflow alone.
+//
+// Rerunning the SAME run's finalize replaces that run's own rows, so a second
+// finalize of one build cannot double its own cost. A SECOND ATTEMPT at the
+// same phase -- the recovery redispatch of the unfinished tasks, or
+// `build --force` after a blocked check -- keeps every earlier attempt's rows
+// and adds its own, because a retry adds to what a phase cost; it does not
+// redefine it. Getting that wrong reported a phase that really cost 1,150,000
+// tokens as 250K, and the part that vanished was the failed first attempt.
+//
+// A run that supplies no RunID falls back to whole-workflow replacement, which
+// is what this writer did for every run before the field existed. It is
+// reported in the outcome's notes rather than passing silently.
+//
+// The other workflow's file is never opened.
 func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 	outcome := spendWriteOutcome{}
 
@@ -187,12 +225,35 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 		return outcome, nil
 	}
 
+	runID := strings.TrimSpace(req.RunID)
+	for i := range rows {
+		rows[i].RunID = runID
+	}
+
+	merged := rows
+	if runID == "" {
+		outcome.Notes = append(outcome.Notes,
+			"this run did not record which attempt it was, so it replaced everything already recorded for this phase instead of adding to it")
+	} else if existing, ok := loadSpendLedger(req.Phase, req.Workflow); ok {
+		// Rows from EARLIER attempts survive; this run's own rows are the ones
+		// being rewritten. Kept in attempt order, earliest first, so the
+		// breakdown reads down the page the way the work happened.
+		merged = make([]spendRow, 0, len(existing.Rows)+len(rows))
+		for _, row := range existing.Rows {
+			if strings.TrimSpace(row.RunID) != runID {
+				merged = append(merged, row)
+			}
+		}
+		merged = append(merged, rows...)
+	}
+
 	if err := saveSpendLedger(spendLedger{
 		Phase:      req.Phase,
 		PhaseName:  req.PhaseName,
 		Workflow:   req.Workflow,
+		RunID:      runID,
 		RecordedAt: time.Now().UTC().Format(time.RFC3339),
-		Rows:       rows,
+		Rows:       merged,
 	}); err != nil {
 		return outcome, err
 	}
@@ -257,11 +318,15 @@ func fileDirectContinueSpendRows(root string, phase colony.Phase, startedAt, end
 	// steps are the whole source. See the same reasoning in
 	// runCodexBuildWithOptions.
 	outcome, err := writeSpendRowsForRun(spendWriteRequest{
-		Phase:      phase.ID,
-		PhaseName:  phase.Name,
-		Workflow:   spendWorkflowContinue,
-		RepoRoot:   root,
-		Platform:   "",
+		Phase:     phase.ID,
+		PhaseName: phase.Name,
+		Workflow:  spendWorkflowContinue,
+		RepoRoot:  root,
+		Platform:  "",
+		// This lane has no attempt record, so the moment the check started is
+		// its run identity: a second check of the same phase adds to what the
+		// phase cost rather than erasing the first one's rows.
+		RunID:      spendRunIDFromTimestamp("continue", startedAt.UTC().Format(time.RFC3339Nano)),
 		StartedAt:  startedAt,
 		EndedAt:    endedAt,
 		Dispatches: spendDispatchesFromContinueFlow(workers, nil),

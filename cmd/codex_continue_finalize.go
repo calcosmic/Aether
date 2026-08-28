@@ -233,6 +233,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		Workflow:   spendWorkflowContinue,
 		RepoRoot:   root,
 		Platform:   buildHostPlatform(),
+		RunID:      spendRunIDFromTimestamp("continue", plan.GeneratedAt),
 		StartedAt:  spendRunStartFromManifest(plan.GeneratedAt),
 		EndedAt:    now,
 		Dispatches: spendDispatchesFromContinueFlow(workerFlow, plan.Dispatches),

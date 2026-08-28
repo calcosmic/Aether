@@ -1045,6 +1045,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		Workflow:   spendWorkflowBuild,
 		RepoRoot:   root,
 		Platform:   "",
+		RunID:      spendRunIDFromAttempt(attemptRel),
 		StartedAt:  startedAt,
 		EndedAt:    time.Now().UTC(),
 		Dispatches: dispatches,

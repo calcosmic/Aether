@@ -92,6 +92,17 @@ type spendRow struct {
 	Status    string            `json:"status"`
 	ToolCount int               `json:"tool_count,omitempty"`
 	Usage     codex.WorkerUsage `json:"usage"`
+	// RunID names the attempt at this phase that this row was filed by.
+	//
+	// A phase is routinely built more than once -- the recovery command
+	// redispatches only the unfinished tasks and finalizes the same phase
+	// again, and a blocked check hands the owner `build --force`. Without this
+	// field the writer could not tell a re-finalize of one attempt (which must
+	// replace its rows) from a second attempt at the phase (which must add to
+	// them), so it replaced in both cases and a retry erased everything the
+	// first attempt spent. Empty on rows written before this field existed;
+	// see writeSpendRowsForRun for how those are treated.
+	RunID string `json:"run_id,omitempty"`
 }
 
 // spendRowStatusVocabulary is the closed set of dispatch statuses a ledger row

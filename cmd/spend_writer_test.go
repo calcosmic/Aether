@@ -3,6 +3,9 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -802,4 +805,57 @@ func TestRetryDoesNotEraseTheFirstAttemptsSpend(t *testing.T) {
 			t.Errorf("phase total after a re-finalize = %d, want 1150000 — a doubled figure means the rerun accumulated", got)
 		}
 	})
+}
+
+// TestEveryProductionRunNamesItsAttempt is the ratchet under CR-02.
+//
+// The merge that keeps an earlier attempt's rows only works when the run says
+// which attempt it is. A call site that leaves RunID unset silently falls back
+// to replacing the whole phase, which is precisely the erasure this fix exists
+// to end — and nothing about that failure is visible until an owner reads a
+// number that is too small.
+func TestEveryProductionRunNamesItsAttempt(t *testing.T) {
+	dir := filepath.Dir(goldenTestdataDir())
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	checked := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			lit, ok := n.(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			ident, ok := lit.Type.(*ast.Ident)
+			if !ok || ident.Name != "spendWriteRequest" {
+				return true
+			}
+			checked++
+			for _, elt := range lit.Elts {
+				kv, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if key, ok := kv.Key.(*ast.Ident); ok && key.Name == "RunID" {
+					return true
+				}
+			}
+			t.Errorf("%s names no RunID, so a second attempt at that phase would erase everything the first one spent",
+				fset.Position(lit.Pos()))
+			return true
+		})
+	}
+	if checked == 0 {
+		t.Fatal("no production spendWriteRequest was found at all; this guard would pass over an empty set")
+	}
 }
