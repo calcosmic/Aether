@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 status: executing
-stopped_at: Completed 196-06-PLAN.md
-last_updated: "2026-08-28T11:32:44.574Z"
+stopped_at: Completed 196-07-PLAN.md
+last_updated: "2026-08-28T12:23:00.000Z"
 last_activity: 2026-08-28
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 32
-  completed_plans: 30
+  completed_plans: 31
   percent: 43
 ---
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [█████████░] 94%
 
 Phase: 196 (See What It Cost) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
@@ -82,6 +82,7 @@ Last activity: 2026-08-28
 | Phase 196 P03 | 41min | 2 tasks | 5 files |
 | Phase 196 P05 | 20min | 3 tasks | 17 files |
 | Phase 196 P06 | 41 min | 2 tasks | 9 files |
+| Phase 196 P07 | 78 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -154,6 +155,11 @@ Last activity: 2026-08-28
 - [Phase 196]: The spend containment helper resolves symlinks on the deepest existing ancestor of a path that does not exist yet — The old fallback compared an evaluated root against an unevaluated candidate, so on macOS containment depended on whether the file had been written. Every existing refusal case still fails closed.
 - [Phase 196]: The salvaged OpenCode reader was merged only inside the plan that wires it (D-03); its unsynchronised worker-name pattern cache is deleted outright rather than locked, because it was also unbounded and per-call compilation costs nothing
 - [Phase 196]: One containment helper, validateSpendContainedPath, serves both platform validators, and the singleness is asserted by an AST count rather than a comment
+- [Phase 196]: The closeout cost block is the LAST thing on every ending screen, on every lane, so its position is one rule rather than two that can drift apart
+- [Phase 196]: The finalizers render no cost block; the three terminal screens do — that placement is what makes exactly-one-per-lane structural rather than dependent on output mode
+- [Phase 196]: Compact magnitudes are truncated, never rounded up, so a headline can never claim a run cost more than its rows say it did
+- [Phase 196]: The check files its rows before any result envelope is assembled, so a blocked check still records what it spent
+- [Phase 196]: A run that filed no rows leaves no ledger file at all — an empty file is indistinguishable from a run that cost nothing
 - [Phase 196]: A worker is accounted under codexBuildDispatch.Name (the deterministic per-worker name the platform's session titles carry), never AgentName, which several workers in one build share
 - [Phase 196]: "Reported" keys on the usage source tag, never on a number — a worker that genuinely billed zero and one whose tool said nothing both present as zero, and D-01 renders those two differently
 - [Phase 196]: The orchestrating session's own turns are returned separately from the worker list, neither shown as a dispatched worker nor discarded (the choice 196-03 left open)

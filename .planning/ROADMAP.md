@@ -228,7 +228,7 @@ Plans:
 
 **Wave 3** *(blocked on rows being written and the token types reconciled)*
 
-- [ ] 196-07-PLAN.md — Continue-lane rows, then the one honest cost line ending every build and every continue (wave 3)
+- [x] 196-07-PLAN.md — Continue-lane rows, then the one honest cost line ending every build and every continue (wave 3)
 
 **Wave 4** *(phase closeout)*
 
