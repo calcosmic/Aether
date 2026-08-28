@@ -41,6 +41,19 @@ func setupSpendTestStore(t *testing.T) (*bytes.Buffer, string) {
 	var buf, errBuf bytes.Buffer
 	stdout = &buf
 	stderr = &errBuf
+
+	// A colony exists in every case this command is used from. Seeding it also
+	// keeps the first-run welcome banner (cmd/ux_firstrun.go) out of the way:
+	// that banner writes a .welcomed marker of its own, and it is the root
+	// command's behaviour rather than this command's, so letting it fire would
+	// make the no-mutation proof below assert something it does not own.
+	if err := s.SaveJSON("COLONY_STATE.json", map[string]interface{}{
+		"goal":          "see what it cost",
+		"current_phase": 196,
+	}); err != nil {
+		t.Fatalf("seed colony state: %v", err)
+	}
+
 	return &buf, tmpDir
 }
 
@@ -144,13 +157,6 @@ func TestSpendDoesNotMutate(t *testing.T) {
 	seedSpendLedgerForTest(t, 196, spendWorkflowContinue,
 		measuredSpendRowForTest("Keen-12", "watcher", 220000),
 	)
-	if err := store.SaveJSON("COLONY_STATE.json", map[string]interface{}{
-		"goal":          "see what it cost",
-		"current_phase": 196,
-	}); err != nil {
-		t.Fatalf("seed colony state: %v", err)
-	}
-
 	before := snapshotStoreFileHashesForTest(t, store.BasePath())
 
 	firstOutput := runSpendForTest(t, buf)
