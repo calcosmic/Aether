@@ -146,16 +146,25 @@ func loadSpendLedgersForPhase(phase int) ([]spendLedger, bool) {
 // deliberately two fields and are never summed into a field presented as a
 // measurement (SPEND-04). GrandTotalTokens exists only as the honest
 // arithmetic total of every row, measured or estimated alike.
+//
+// Every field here is a token count or a row count. None is a money amount,
+// and none may become one. Phase 174's D-02 and Phase 196's D-01 both forbid
+// a currency figure on the cost line, and this struct is what a headline
+// renderer reads. The salvaged version of this file carried ProviderUSD and
+// ProviderUSDRows, relaying the provider's own reported cost; neither
+// computed a price from a rate and nothing read either of them, which is
+// precisely why they were removed -- an unread money field on the totals
+// struct is a standing invitation to render it. They can return the day
+// something actually asks for one, with the test that keeps it off the
+// headline. TestSpendLedgerCarriesNoCurrencyField enforces this.
 type spendTotals struct {
-	MeasuredTokens   int64   `json:"measured_tokens"`
-	EstimatedTokens  int64   `json:"estimated_tokens"`
-	GrandTotalTokens int64   `json:"grand_total_tokens"`
-	MeasuredRows     int     `json:"measured_rows"`
-	EstimatedRows    int     `json:"estimated_rows"`
-	ProviderRows     int     `json:"provider_rows"`
-	SessionRows      int     `json:"session_rows"`
-	ProviderUSD      float64 `json:"provider_usd"`
-	ProviderUSDRows  int     `json:"provider_usd_rows"`
+	MeasuredTokens   int64 `json:"measured_tokens"`
+	EstimatedTokens  int64 `json:"estimated_tokens"`
+	GrandTotalTokens int64 `json:"grand_total_tokens"`
+	MeasuredRows     int   `json:"measured_rows"`
+	EstimatedRows    int   `json:"estimated_rows"`
+	ProviderRows     int   `json:"provider_rows"`
+	SessionRows      int   `json:"session_rows"`
 }
 
 // spendRowsAcross returns every row from every supplied ledger,
@@ -175,10 +184,12 @@ func spendRowsAcross(ledgers []spendLedger) []spendRow {
 // using row.Usage.Estimated(): an estimated row adds to EstimatedTokens/
 // EstimatedRows; every other non-empty row adds to MeasuredTokens/
 // MeasuredRows. ProviderRows and SessionRows are counted independently of
-// that split. ProviderUSD accumulates only rows where row.Usage.Measured()
-// is true and USDCost is greater than zero -- USD is relayed from the
-// provider, never computed here (D-02: no per-model rate table is ever
-// built in this file).
+// that split.
+//
+// It reads no money figure off any row. codex.WorkerUsage keeps its own
+// provider-reported USDCost for callers outside this phase, and this
+// function deliberately walks past it: no currency amount enters the totals,
+// so none can leave them (D-01, D-02).
 func computeSpendTotals(ledgers []spendLedger) spendTotals {
 	var totals spendTotals
 	for _, row := range spendRowsAcross(ledgers) {
@@ -193,10 +204,6 @@ func computeSpendTotals(ledgers []spendLedger) spendTotals {
 		}
 		if row.Usage.Measured() {
 			totals.ProviderRows++
-			if row.Usage.USDCost > 0 {
-				totals.ProviderUSD += row.Usage.USDCost
-				totals.ProviderUSDRows++
-			}
 		}
 		if row.Usage.Source == codex.UsageSourceSessionTranscript {
 			totals.SessionRows++
