@@ -628,6 +628,19 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 	}
 	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
 	b.WriteString(renderNextUp(next))
+	// The one cost line, last on the screen — the same position it takes on
+	// the direct lane's own ending screens, so "the cost line is the last
+	// thing you read" is one rule rather than two. Only the two workflows
+	// that actually spawn workers reach it: nothing was spent planning a
+	// phase or archiving a finished project, so a cost block on those screens
+	// would be a heading over an empty answer (cmd/spend_cost_line.go).
+	if workflow == "build" || workflow == "continue" {
+		phaseID := intValue(result["completion_phase"])
+		if phaseID == 0 {
+			phaseID = intValue(result["current_phase"])
+		}
+		return appendSpendCostLine(b.String(), phaseID)
+	}
 	return b.String()
 }
 

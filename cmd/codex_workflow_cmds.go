@@ -298,7 +298,13 @@ var buildCmd = &cobra.Command{
 			}
 		}
 		reviewDepthBuild := reviewDepthFromResult(result)
-		outputWorkflow(result, renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result)))
+		// The one cost line ends this lane's ending screen too. The
+		// plan-only path above deliberately does NOT get one: nothing has
+		// been spent yet when a team is merely being planned.
+		outputWorkflow(result, appendSpendCostLine(
+			renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result)),
+			phaseNum,
+		))
 		return nil
 	},
 }
@@ -374,13 +380,21 @@ var continueCmd = &cobra.Command{
 			return nil
 		}
 
+		// A check that blocked still spent what it spent, so its ending
+		// screen carries the cost line exactly as a passing one does.
 		if blocked, _ := result["blocked"].(bool); blocked {
-			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)))
+			outputWorkflow(result, appendSpendCostLine(
+				renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)),
+				phase.ID,
+			))
 			return nil
 		}
 
 		reviewDepthContinue := reviewDepthFromResult(result)
-		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue))
+		outputWorkflow(result, appendSpendCostLine(
+			renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue),
+			phase.ID,
+		))
 		return nil
 	},
 }
