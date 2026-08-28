@@ -213,6 +213,36 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := persistExternalContinueHandoffs(root, phase.ID, plan.Dispatches, completion.workerResults()); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	// File this check's per-worker token record, under the continue key.
+	//
+	// Placed here, immediately after every reviewer and watcher has reached a
+	// terminal status and before any result envelope is assembled, so the
+	// record exists whether this check goes on to advance the phase or to
+	// block it. A blocked check still spent what it spent.
+	//
+	// The build lane files its own rows under its own key
+	// (cmd/codex_build_finalize.go). Neither file is opened by the other, so a
+	// check can never erase what the build spent, and a later build cannot
+	// erase what the check spent.
+	//
+	// Accounting is a record OF the check, never a gate ON it: a write that
+	// fails is reported on stderr and the check still finishes.
+	continueSpendOutcome, continueSpendErr := writeSpendRowsForRun(spendWriteRequest{
+		Phase:      phase.ID,
+		PhaseName:  phase.Name,
+		Workflow:   spendWorkflowContinue,
+		RepoRoot:   root,
+		Platform:   buildHostPlatform(),
+		StartedAt:  spendRunStartFromManifest(plan.GeneratedAt),
+		EndedAt:    now,
+		Dispatches: spendDispatchesFromContinueFlow(workerFlow, plan.Dispatches),
+	})
+	if continueSpendErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: this check's per-worker token record could not be filed: %v\n", continueSpendErr)
+	}
+	for _, note := range continueSpendOutcome.Notes {
+		fmt.Fprintf(os.Stderr, "\u26a0 %s\n", note)
+	}
 	// The runtime persists review findings itself — review castes return
 	// them in result JSON and must never be briefed to run CLI commands
 	// (auditor and gatekeeper have no Bash by design). Non-fatal: ledger

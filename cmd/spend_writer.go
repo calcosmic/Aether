@@ -147,6 +147,14 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 		}
 	}
 
+	// A run that filed nothing leaves no file. An empty ledger on disk is
+	// indistinguishable from a run that genuinely cost nothing, and the
+	// closeout line reads that file: a phase whose check spawned nobody must
+	// say "nothing recorded", never show a zero that reads as a measurement.
+	if len(rows) == 0 {
+		return outcome, nil
+	}
+
 	if err := saveSpendLedger(spendLedger{
 		Phase:      req.Phase,
 		PhaseName:  req.PhaseName,
@@ -159,4 +167,40 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 
 	outcome.RowsWritten = len(rows)
 	return outcome, nil
+}
+
+// spendDispatchesFromContinueFlow turns a finished check's worker flow into the
+// dispatch shape the writer accounts. The flow step is what the finalizer has
+// after every reviewer and watcher reached a terminal status, and it already
+// carries the worker's own deterministic name, its role and that status.
+//
+// The planned manifest is consulted only for the agent DEFINITION a worker ran
+// as, which the flow step does not carry. It is never used as the accounting
+// key: several reviewers in one check share one definition, so it cannot
+// identify a row (see spendWorkerNameForDispatch).
+//
+// This is a conversion, not a second writer. Both lanes file through
+// writeSpendRowsForRun, because two writers is how two vocabularies for one
+// idea start.
+func spendDispatchesFromContinueFlow(flow []codexContinueWorkerFlowStep, planned []codexContinueExternalDispatch) []codexBuildDispatch {
+	agentNameByWorker := make(map[string]string, len(planned))
+	for _, dispatch := range planned {
+		agentNameByWorker[strings.TrimSpace(dispatch.Name)] = strings.TrimSpace(dispatch.AgentName)
+	}
+	dispatches := make([]codexBuildDispatch, 0, len(flow))
+	for _, step := range flow {
+		name := strings.TrimSpace(step.Name)
+		if name == "" {
+			continue
+		}
+		dispatches = append(dispatches, codexBuildDispatch{
+			Stage:     step.Stage,
+			Caste:     step.Caste,
+			AgentName: agentNameByWorker[name],
+			Name:      name,
+			Task:      step.Task,
+			Status:    step.Status,
+		})
+	}
+	return dispatches
 }
