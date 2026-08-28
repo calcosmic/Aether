@@ -1,6 +1,11 @@
 package cmd
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -341,5 +346,121 @@ func TestCompactTokenFigureMatchesTheOwnersShape(t *testing.T) {
 		if got := spendCompactTokenFigure(tc.in); got != tc.want {
 			t.Errorf("spendCompactTokenFigure(%d) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestNoResolvedFieldIsPopulatedThenDropped is WR-07's ratchet.
+//
+// The resolver filled SessionUsage/SessionReported with the orchestrating
+// session's own turns and documented them as "kept apart rather than folded into
+// any worker's row or silently discarded" — and then its only production
+// consumer discarded them. A field that is written and never read is a claim the
+// code does not keep.
+func TestNoResolvedFieldIsPopulatedThenDropped(t *testing.T) {
+	dir := filepath.Dir(goldenTestdataDir())
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+
+	written := map[string]string{}
+	read := map[string]bool{}
+	fields := map[string]bool{}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		// Collect the field names wrapperUsageResolution declares.
+		ast.Inspect(file, func(n ast.Node) bool {
+			spec, ok := n.(*ast.TypeSpec)
+			if !ok || spec.Name.Name != "wrapperUsageResolution" {
+				return true
+			}
+			structType, ok := spec.Type.(*ast.StructType)
+			if !ok {
+				return true
+			}
+			for _, f := range structType.Fields.List {
+				for _, ident := range f.Names {
+					fields[ident.Name] = true
+				}
+			}
+			return true
+		})
+		// Every selector on a field is a read unless it is an assignment target.
+		assigned := map[ast.Node]bool{}
+		ast.Inspect(file, func(n ast.Node) bool {
+			assign, ok := n.(*ast.AssignStmt)
+			if !ok {
+				return true
+			}
+			for _, lhs := range assign.Lhs {
+				assigned[lhs] = true
+			}
+			return true
+		})
+		ast.Inspect(file, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if assigned[ast.Node(sel)] {
+				written[sel.Sel.Name] = name
+				return true
+			}
+			read[sel.Sel.Name] = true
+			return true
+		})
+	}
+
+	if len(fields) == 0 {
+		t.Fatal("wrapperUsageResolution was not found at all; this guard would pass over an empty set")
+	}
+	for field := range fields {
+		if written[field] == "" {
+			continue
+		}
+		if !read[field] {
+			t.Errorf("wrapperUsageResolution.%s is filled in %s and read by no production code — either something must report it or it must not be gathered",
+				field, written[field])
+		}
+	}
+}
+
+// TestCostBlockSaysWhatItCounts is the owner-facing half of WR-07.
+//
+// The block was headed "What This Phase Has Cost" while its total excluded the
+// largest component of a phase's real spend — the coordinator's own
+// back-and-forth, which on this repository's own corpus is 142,581 of 142,833
+// usage-bearing lines. The heading has to say what the figures under it measure.
+func TestCostBlockSaysWhatItCounts(t *testing.T) {
+	ledger := spendLedger{
+		Phase:    5,
+		Workflow: spendWorkflowBuild,
+		Rows: []spendRow{{
+			AgentName: "Mason-67", Caste: "builder", Status: "completed",
+			Usage: codex.WorkerUsage{InputTokens: 1000, Source: codex.UsageSourceProvider},
+		}},
+	}
+	block := stripANSI(renderSpendCostLineFromLedgers([]spendLedger{ledger}))
+
+	if strings.Contains(block, "What This Phase Has Cost") {
+		t.Errorf("the block claims to say what the phase cost while counting only the workers it sent; the coordinator's own use is not in these figures:\n%s", block)
+	}
+	mentions := false
+	for _, phrase := range []string{"coordinator", "main session"} {
+		if strings.Contains(strings.ToLower(block), phrase) {
+			mentions = true
+		}
+	}
+	if !mentions {
+		t.Errorf("nothing in the block tells the owner that the coordinator's own token use is not counted in it:\n%s", block)
 	}
 }
