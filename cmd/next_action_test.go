@@ -10,6 +10,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"go/parser"
@@ -457,6 +458,184 @@ func TestNextActionAnswerFieldsAreAllSerialisable(t *testing.T) {
 		field := typ.Field(i)
 		if field.Tag.Get("json") == "" {
 			t.Errorf("nextAction.%s has no json tag, so the wrapper cannot see it", field.Name)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The loader (task 3)
+// ---------------------------------------------------------------------------
+
+// writeFixtureColonyState persists a state through the runtime's own store, so
+// the loader reads exactly what production would have written.
+func writeFixtureColonyState(t *testing.T, state colony.ColonyState) {
+	t.Helper()
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("write colony state fixture: %v", err)
+	}
+}
+
+func TestLoadNextActionInputGathersSavedState(t *testing.T) {
+	newNextActionFixtureStore(t)
+
+	state := normalizedFixtureState(t, colony.ColonyState{
+		Version:        "1.0",
+		Goal:           fixtureGoal("Ship the billing rewrite"),
+		State:          colony.StateBUILT,
+		CurrentPhase:   2,
+		BuildStartedAt: fixtureTime(t, "2026-08-01T10:00:00Z"),
+		Milestone:      "Open Chambers",
+		Plan: colony.Plan{Phases: []colony.Phase{
+			fixturePhase(1, "Foundations", colony.PhaseCompleted),
+			fixturePhase(2, "Billing engine", colony.PhaseInProgress),
+		}},
+	})
+	writeFixtureColonyState(t, state)
+
+	flags := colony.FlagsFile{Version: "1.0", Decisions: []colony.FlagEntry{
+		{ID: "flag-1", Type: "blocker", Description: "the payment provider key is missing", Source: "watcher"},
+		{ID: "flag-2", Type: "note", Description: "already dealt with", Source: "watcher", Resolved: true},
+	}}
+	if err := store.SaveJSON("pending-decisions.json", flags); err != nil {
+		t.Fatalf("write flags fixture: %v", err)
+	}
+	guidance := writeRecoveryReportFixture(t, state, "aether build 2 --force")
+
+	got := loadNextActionInput()
+
+	if got.NoColony {
+		t.Fatal("the loader reported no project in a project that has one")
+	}
+	if got.State.CurrentPhase != 2 || got.State.State != colony.StateBUILT {
+		t.Errorf("loaded state = phase %d / %s, want phase 2 / BUILT", got.State.CurrentPhase, got.State.State)
+	}
+	if len(got.Flags) != 1 || got.Flags[0].ID != "flag-1" {
+		t.Errorf("open flags = %+v, want only the unresolved one", got.Flags)
+	}
+	if got.Recovery == nil || got.Recovery.Next != guidance.Next {
+		t.Errorf("recovery guidance = %+v, want the report the runtime's own reader produced", got.Recovery)
+	}
+	if len(got.ActiveTodos) == 0 {
+		t.Error("outstanding task goals were not gathered")
+	}
+
+	// The handoff document is the one fact "safe to close the chat" rests on,
+	// so the loader must report its real presence, both ways.
+	if got.HandoffExists {
+		t.Error("the loader claims a handoff exists when none is on disk")
+	}
+	if err := writeHandoffDocument("# handoff\n"); err != nil {
+		t.Fatalf("write handoff fixture: %v", err)
+	}
+	if again := loadNextActionInput(); !again.HandoffExists {
+		t.Error("the loader does not see a handoff that is on disk")
+	}
+}
+
+func TestLoadNextActionInputDistinguishesNoColony(t *testing.T) {
+	newNextActionFixtureStore(t)
+
+	got := loadNextActionInput()
+	if !got.NoColony {
+		t.Fatal("an empty project was not reported as having no project set up")
+	}
+	// Conflating "no project" with "a project that just started" is how a fresh
+	// checkout gets told to continue a build that does not exist.
+	answer := resolveNextAction(got)
+	if strings.Contains(answer.Command, "continue") || strings.Contains(answer.Command, "build") {
+		t.Errorf("a folder with no project was told to run %q", answer.Command)
+	}
+
+	// A state file with no goal is also not a project.
+	writeFixtureColonyState(t, colony.ColonyState{Version: "1.0", State: colony.StateIDLE})
+	if again := loadNextActionInput(); !again.NoColony {
+		t.Error("a state file carrying no goal was treated as a live project")
+	}
+}
+
+// TestLoadNextActionInputDoesNotMutate is the corollary CLAUDE.md names: an
+// inspection must not write. This repository has shipped a --dry-run that
+// quietly wrote to saved state for months, so the assertion compares the
+// modification time and content of every file under the project's data
+// directory before and after.
+func TestLoadNextActionInputDoesNotMutate(t *testing.T) {
+	newNextActionFixtureStore(t)
+
+	state := normalizedFixtureState(t, colony.ColonyState{
+		Version:        "1.0",
+		Goal:           fixtureGoal("Ship the billing rewrite"),
+		State:          colony.StateEXECUTING,
+		CurrentPhase:   1,
+		BuildStartedAt: fixtureTime(t, "2026-08-01T10:00:00Z"),
+		Milestone:      "Open Chambers",
+		Plan:           colony.Plan{Phases: []colony.Phase{fixturePhase(1, "Foundations", colony.PhaseInProgress)}},
+	})
+	writeFixtureColonyState(t, state)
+	if err := store.SaveJSON("session.json", colony.SessionFile{SessionID: "s1", StartedAt: "2026-08-01T10:00:00Z"}); err != nil {
+		t.Fatalf("write session fixture: %v", err)
+	}
+
+	before := snapshotProjectDataTree(t, store.BasePath())
+	first := loadNextActionInput()
+	second := loadNextActionInput()
+	after := snapshotProjectDataTree(t, store.BasePath())
+
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("the loader changed the project's saved data.\nbefore: %v\nafter:  %v", before, after)
+	}
+	if !reflect.DeepEqual(first, second) {
+		t.Error("loading twice over an unchanged project returned different inputs")
+	}
+}
+
+type fileFingerprint struct {
+	ModTime time.Time
+	Size    int64
+	Sum     string
+}
+
+func snapshotProjectDataTree(t *testing.T, dir string) map[string]fileFingerprint {
+	t.Helper()
+	snapshot := map[string]fileFingerprint{}
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		rel, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			return relErr
+		}
+		snapshot[rel] = fileFingerprint{
+			ModTime: info.ModTime(),
+			Size:    info.Size(),
+			Sum:     fmt.Sprintf("%x", sha256.Sum256(data)),
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshot data directory: %v", err)
+	}
+	return snapshot
+}
+
+// TestLoaderContainsNoCommandDecision keeps the split honest: a branch that
+// chooses a command belongs in the pure resolver, where it can be tested
+// without a filesystem.
+func TestLoaderContainsNoCommandDecision(t *testing.T) {
+	source, err := os.ReadFile("next_action_input.go")
+	if err != nil {
+		t.Fatalf("read loader source: %v", err)
+	}
+	for _, forbidden := range []string{"candidateCommand(", "availableCommand(", "nextActionCandidates", `"aether `} {
+		if strings.Contains(string(source), forbidden) {
+			t.Errorf("cmd/next_action_input.go references %q; choosing a command is the pure resolver's job", forbidden)
 		}
 	}
 }
