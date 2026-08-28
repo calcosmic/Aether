@@ -133,6 +133,14 @@ type resolverSubagentFixture struct {
 	CacheRead    int64
 	Out          int64
 
+	// At is the moment the platform recorded this dispatch. Claude Code writes
+	// a `timestamp` on every line: measured 2026-08-28 over every transcript in
+	// ~/.claude/projects, all 252 subagent usage records carry one and all 252
+	// are RFC3339. A fixture without one is a shape the platform never emits.
+	// The zero value means "just now", which is inside any window a test opens
+	// around the present.
+	At time.Time
+
 	// OmitDescription writes the dispatching tool_use with no description at
 	// all, which is what a caller that passed none produces.
 	OmitDescription bool
@@ -147,6 +155,12 @@ type resolverSubagentFixture struct {
 // and the subagent type, then the user line whose `tool_result` names that same
 // tool_use id and whose `toolUseResult` carries the usage.
 func resolverSubagentDispatch(f resolverSubagentFixture) []string {
+	at := f.At
+	if at.IsZero() {
+		at = time.Now()
+	}
+	stamp := at.UTC().Format(time.RFC3339Nano)
+
 	var lines []string
 	if !f.OmitDispatch {
 		description := fmt.Sprintf(`"description":%q,`, f.Description)
@@ -154,13 +168,112 @@ func resolverSubagentDispatch(f resolverSubagentFixture) []string {
 			description = ""
 		}
 		lines = append(lines, fmt.Sprintf(
-			`{"type":"assistant","uuid":"u-dispatch-%s","requestId":"req-%s","message":{"id":"msg-%s","model":"claude-opus-5","content":[{"type":"tool_use","id":%q,"name":"Agent","input":{%s"subagent_type":%q,"prompt":"[redacted]"}}]}}`,
-			f.AgentID, f.AgentID, f.AgentID, f.ToolUseID, description, f.SubagentType))
+			`{"type":"assistant","uuid":"u-dispatch-%s","requestId":"req-%s","timestamp":%q,"message":{"id":"msg-%s","model":"claude-opus-5","content":[{"type":"tool_use","id":%q,"name":"Agent","input":{%s"subagent_type":%q,"prompt":"[redacted]"}}]}}`,
+			f.AgentID, f.AgentID, stamp, f.AgentID, f.ToolUseID, description, f.SubagentType))
 	}
 	lines = append(lines, fmt.Sprintf(
-		`{"type":"user","uuid":"u-%s","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":%q,"content":"[redacted]"}]},"toolUseResult":{"agentType":%q,"agentId":%q,"resolvedModel":"claude-sonnet-5","usage":{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":%d}}}`,
-		f.AgentID, f.ToolUseID, f.SubagentType, f.AgentID, f.In, f.CacheCreate, f.CacheRead, f.Out))
+		`{"type":"user","uuid":"u-%s","timestamp":%q,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":%q,"content":"[redacted]"}]},"toolUseResult":{"agentType":%q,"agentId":%q,"resolvedModel":"claude-sonnet-5","usage":{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":%d}}}`,
+		f.AgentID, stamp, f.ToolUseID, f.SubagentType, f.AgentID, f.In, f.CacheCreate, f.CacheRead, f.Out))
 	return lines
+}
+
+// TestARetryIsNotCreditedWithTheFirstAttemptsTokens is NEW-02.
+//
+// wrapperUsageRequest carries the run's own time window and the OpenCode reader
+// honours it (openCodeSessionInWindow). The Claude reader read the whole
+// transcript file and ignored it. One chat session routinely holds a build, its
+// check, and a re-run of the same phase -- and because worker names are
+// deterministic per phase and caste, BOTH attempts' dispatch descriptions name
+// the same worker. The resolver's duplicate guard then keeps the first row in
+// file order, which is the OLDEST one, so the retry's row was filed under the
+// retry's own attempt id carrying the first attempt's measurement and marked
+// "measured".
+//
+// Reproduced at 25x: attempt one's Mason-67 spent 1,000,000, the retry's spent
+// 40,000, and the retry reported 1,000,000.
+func TestARetryIsNotCreditedWithTheFirstAttemptsTokens(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	projectDir := filepath.Join(home, ".claude", "projects", "-retry")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(projectDir, "sess.jsonl")
+
+	now := time.Now()
+	// Both attempts describe the SAME worker, because a re-run of one phase
+	// gives its workers the same deterministic names.
+	description := "🔨🐜 Builder Mason-67: implement the parser"
+	var lines []string
+	lines = append(lines, resolverSubagentDispatch(resolverSubagentFixture{
+		ToolUseID:    "toolu_first",
+		Description:  description,
+		SubagentType: "aether-builder",
+		AgentID:      "1111111111111111",
+		At:           now.Add(-2 * time.Hour),
+		In:           1_000_000,
+	})...)
+	lines = append(lines, resolverSubagentDispatch(resolverSubagentFixture{
+		ToolUseID:    "toolu_retry",
+		Description:  description,
+		SubagentType: "aether-builder",
+		AgentID:      "2222222222222222",
+		At:           now.Add(-10 * time.Minute),
+		In:           40_000,
+	})...)
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	if err := store.SaveJSON(spendSessionRel, spendSessionRecord{
+		SchemaVersion:  spendSessionSchemaVersion,
+		Platform:       "claude-code",
+		SessionID:      "sess-retry",
+		TranscriptPath: path,
+		Cwd:            t.TempDir(),
+		CapturedAt:     time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("save session record: %v", err)
+	}
+
+	// The RETRY's own window: it started half an hour ago, long after the first
+	// attempt finished.
+	res := resolveWrapperWorkerUsage(wrapperUsageRequest{
+		Platform:          "claude-code",
+		RepoRoot:          t.TempDir(),
+		StartedAt:         now.Add(-30 * time.Minute),
+		EndedAt:           now,
+		WorkerNames:       []string{"Mason-67"},
+		AgentNameByWorker: map[string]string{"Mason-67": "aether-builder"},
+	})
+
+	mason := resolverWorker(t, res, "Mason-67")
+	if !mason.Reported {
+		t.Fatalf("the retry's own worker got no figure at all: %+v, diagnostics %v", mason, res.Diagnostics)
+	}
+	if got := mason.Usage.BilledTotalTokens(); got != 40_000 {
+		t.Errorf("the retry reports %d tokens for a worker that spent 40000; the earlier attempt's record is in the same transcript file and outside this run's window, and reading the whole file credits this run with it. Diagnostics: %v",
+			got, res.Diagnostics)
+	}
+
+	t.Run("a first attempt still reads its own figure", func(t *testing.T) {
+		res := resolveWrapperWorkerUsage(wrapperUsageRequest{
+			Platform:          "claude-code",
+			RepoRoot:          t.TempDir(),
+			StartedAt:         now.Add(-3 * time.Hour),
+			EndedAt:           now.Add(-90 * time.Minute),
+			WorkerNames:       []string{"Mason-67"},
+			AgentNameByWorker: map[string]string{"Mason-67": "aether-builder"},
+		})
+		mason := resolverWorker(t, res, "Mason-67")
+		if !mason.Reported || mason.Usage.BilledTotalTokens() != 1_000_000 {
+			t.Errorf("the first attempt = %+v, want 1000000: its own record is inside its own window. Diagnostics: %v", mason, res.Diagnostics)
+		}
+	})
 }
 
 func resolverWorker(t *testing.T, res wrapperUsageResolution, name string) wrapperWorkerUsage {
