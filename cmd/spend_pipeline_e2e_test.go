@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -455,15 +459,50 @@ func seedSpendPipelinePhase(t *testing.T, dataDir string) {
 // registered COMMANDS. It cannot see an internal entry point that exists, has
 // tests, and is invoked by nothing — which is precisely the shape the salvage
 // assessment refused to merge, and precisely what wrapperUsageRequest.Attached
-// was until this plan: a designed input with no producer anywhere in the
+// was until plan 196-08: a designed input with no producer anywhere in the
 // production tree, so the whole directly-spawned measurement path was dead.
+//
+// The FIRST version of this check enumerated nine symbol names by hand. It
+// passed for the whole phase while spendPerWorkerAverageTokens,
+// spendRollupByParent and spendParentRollup sat in cmd/spend_ledger.go with no
+// production caller at all: the hand-written list omitted exactly the three
+// orphans the guard existed to catch. A curated inventory is worse than no
+// guard, because it reads as a proof.
+//
+// So nothing is enumerated here any more. The file set is derived from disk by
+// name (spendPhaseProductionFileNames), every top-level symbol in those files
+// is derived from the syntax tree, every struct field in them likewise, and
+// "called" is computed as a reachability fixpoint over the whole production
+// package rather than as a text search. Add a function, a type, a const or a
+// field to any of this phase's files without a caller and this test names it
+// the day it lands, whatever it is called. The planted-orphan subtest below
+// proves that claim rather than asserting it.
 func TestNothingThisPhaseAddedIsUncalled(t *testing.T) {
 	sources := goSourceFilesForSpendReachability(t)
+	report := analyzeSpendPhaseOrphans(t, sources)
 
-	// Each entry names a symbol this phase added and the production files that
-	// must call it. Test files never count as callers: a symbol whose only
-	// caller is its own test is the definition of an orphan here.
-	for _, check := range []struct {
+	// Anti-vacuity: a guard that derives its own inventory must fail loudly if
+	// the derivation finds nothing, otherwise deleting the subsystem would make
+	// it pass. These floors are deliberately well below the real figures.
+	if len(report.PhaseFiles) < 8 {
+		t.Fatalf("derived only %d of this phase's production files (%v) — the derivation is broken or the subsystem was gutted",
+			len(report.PhaseFiles), report.PhaseFiles)
+	}
+	if len(report.Symbols) < 60 {
+		t.Fatalf("derived only %d top-level symbols from %v — the derivation is broken",
+			len(report.Symbols), report.PhaseFiles)
+	}
+	if len(report.Fields) < 40 {
+		t.Fatalf("derived only %d struct fields from %v — the derivation is broken",
+			len(report.Fields), report.PhaseFiles)
+	}
+
+	// Anti-vacuity, second half: the derivation must actually be looking at the
+	// spend subsystem. This is NOT the inventory — the inventory is derived
+	// above — it is a floor that fails if the load-bearing wiring is renamed
+	// away or deleted, which is what the hand-written list was genuinely good
+	// for. Each entry says what stops working if the symbol vanishes.
+	for _, required := range []struct {
 		symbol string
 		why    string
 	}{
@@ -477,18 +516,375 @@ func TestNothingThisPhaseAddedIsUncalled(t *testing.T) {
 		{"loadSpendLedgersForPhase", "nothing would read the rows back"},
 		{"computeSpendTotals", "no total would ever be computed from the rows"},
 	} {
-		if callers := productionCallersOf(sources, check.symbol); len(callers) == 0 {
-			t.Errorf("%s is called from no production file — %s", check.symbol, check.why)
+		if _, declared := report.Symbols[required.symbol]; !declared {
+			t.Errorf("%s is no longer declared in any of this phase's files — %s", required.symbol, required.why)
 		}
 	}
 
-	// Attached is a struct FIELD, not a function, so a caller search on a name
-	// would not find it. It is checked by name because it is the one input on
-	// the resolver that had no producer at all.
-	if callers := productionCallersOf(sources, "Attached:"); len(callers) == 0 {
-		t.Errorf("wrapperUsageRequest.Attached is populated by no production file, " +
-			"so every provider measurement taken at the dispatch boundary is discarded before it reaches the ledger")
+	for _, orphan := range report.UncalledSymbols {
+		t.Errorf("%s is declared by this phase and called from no production file — "+
+			"a symbol whose only caller is its own test is an orphan (CLAUDE.md names one as this repository's signature failure)",
+			orphan)
 	}
+	for _, field := range report.UnusedFields {
+		t.Errorf("%s is declared by this phase and no production file reads or writes it — "+
+			"a field on a record production never fills is a schema lie (this is what spendRow.ParentName and spendRow.ToolCount were)",
+			field)
+	}
+}
+
+// TestTheAntiOrphanGuardCatchesAPlantedOrphan proves the guard above does what
+// its name says instead of trusting it, in the style of the planted-violation
+// subtest inside TestNoTokenCountIsDerivedFromLength.
+//
+// It takes the real production sources, adds ONE synthetic file that obeys this
+// phase's own file-naming rule, and asserts the analysis names the uncalled
+// function and the unread field in it — and does not name the field that IS
+// read. Because the analysis is a pure function of a source map, the plant
+// never touches the working tree.
+func TestTheAntiOrphanGuardCatchesAPlantedOrphan(t *testing.T) {
+	sources := goSourceFilesForSpendReachability(t)
+
+	clean := analyzeSpendPhaseOrphans(t, sources)
+	if len(clean.UncalledSymbols) != 0 || len(clean.UnusedFields) != 0 {
+		t.Fatalf("the unplanted tree already reports orphans (%v / %v) — fix those before trusting this subtest",
+			clean.UncalledSymbols, clean.UnusedFields)
+	}
+
+	planted := map[string]string{}
+	for name, body := range sources {
+		planted[name] = body
+	}
+	planted["spend_planted_orphan.go"] = `package cmd
+
+type spendPlantedRecord struct {
+	Read   string
+	Unread string
+}
+
+func spendPlantedOrphanNobodyCalls(record spendPlantedRecord) string {
+	return record.Read
+}
+`
+
+	report := analyzeSpendPhaseOrphans(t, planted)
+	if !spendReportNames(report.UncalledSymbols, "spendPlantedOrphanNobodyCalls") {
+		t.Errorf("the guard did not name the planted uncalled function; it reported %v", report.UncalledSymbols)
+	}
+	if !spendReportNames(report.UnusedFields, "spendPlantedRecord.Unread") {
+		t.Errorf("the guard did not name the planted unread field; it reported %v", report.UnusedFields)
+	}
+	if spendReportNames(report.UnusedFields, "spendPlantedRecord.Read") {
+		t.Errorf("the guard named a field that IS read (%v) — it would fail on honest code", report.UnusedFields)
+	}
+}
+
+// spendReportNames reports whether any entry in the report starts with name.
+// Entries carry their file in parentheses, so an exact match would not do.
+func spendReportNames(entries []string, name string) bool {
+	for _, entry := range entries {
+		if entry == name || strings.HasPrefix(entry, name+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+// spendPhaseFileNamePrefixes and spendPhaseExtraFileNames define which
+// production files belong to Phase 196, BY NAME, so the set is derived from
+// disk rather than listed. A file added to this subsystem under either prefix
+// is audited from the moment it exists.
+var (
+	spendPhaseFileNamePrefixes = []string{"spend_", "wrapper_usage_"}
+	spendPhaseExtraFileNames   = []string{"caste_model_reason.go"}
+)
+
+// isSpendPhaseProductionFile reports whether a cmd/ production file name is one
+// of this phase's own.
+func isSpendPhaseProductionFile(name string) bool {
+	for _, prefix := range spendPhaseFileNamePrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	for _, extra := range spendPhaseExtraFileNames {
+		if name == extra {
+			return true
+		}
+	}
+	return false
+}
+
+// spendPhaseOrphanReport is what analyzeSpendPhaseOrphans derives.
+//
+// Symbols and Fields are the DERIVED inventory (symbol or Type.Field -> the
+// file declaring it). UncalledSymbols and UnusedFields are the subset with no
+// production user, each rendered as "name (file)".
+type spendPhaseOrphanReport struct {
+	PhaseFiles      []string
+	Symbols         map[string]string
+	Fields          map[string]string
+	UncalledSymbols []string
+	UnusedFields    []string
+}
+
+// analyzeSpendPhaseOrphans derives this phase's symbol inventory from the
+// supplied production sources and works out which of it nothing uses.
+//
+// Reachability, not mention-counting. A phase symbol is reachable when some
+// declaration OUTSIDE this phase's symbol set refers to it, or when a phase
+// symbol that is itself already reachable refers to it — computed to a
+// fixpoint. Mention-counting would call a symbol "used" merely because another
+// orphan referred to it, which is how spendParentRollup would have escaped:
+// its only reference was inside spendRollupByParent, an orphan itself.
+//
+// A field is used when a composite literal of its own struct type names it as a
+// key anywhere in production, or when any of this phase's own files refers to
+// it as a selector. The selector half is matched on field NAME within this
+// phase's files only: a package-private struct declared here is constructed and
+// read here, and scanning the whole package by bare name would let an unrelated
+// type's identically-named field vouch for a dead one — which is exactly how
+// spendRow.ToolCount would have passed (cmd/ceremony_emitter.go assigns a
+// ToolCount of its own).
+//
+// init functions are entry points the Go runtime calls, so they are roots
+// rather than inventory. Blank identifiers are skipped.
+func analyzeSpendPhaseOrphans(t *testing.T, sources map[string]string) spendPhaseOrphanReport {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	parsed := map[string]*ast.File{}
+	names := make([]string, 0, len(sources))
+	for name := range sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		file, err := parser.ParseFile(fset, name, sources[name], 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		parsed[name] = file
+	}
+
+	report := spendPhaseOrphanReport{
+		Symbols: map[string]string{},
+		Fields:  map[string]string{},
+	}
+	for _, name := range names {
+		if isSpendPhaseProductionFile(name) {
+			report.PhaseFiles = append(report.PhaseFiles, name)
+		}
+	}
+
+	// One entry per top-level declaration: what it declares, and every
+	// identifier and selector name appearing inside it.
+	type declUses struct {
+		file     string
+		declares []string
+		uses     map[string]bool
+	}
+	var decls []declUses
+
+	for _, name := range names {
+		phaseFile := isSpendPhaseProductionFile(name)
+		for _, decl := range parsed[name].Decls {
+			declared := spendDeclaredNames(decl)
+			uses := map[string]bool{}
+			ast.Inspect(decl, func(node ast.Node) bool {
+				switch typed := node.(type) {
+				case *ast.Ident:
+					uses[typed.Name] = true
+				case *ast.SelectorExpr:
+					uses[typed.Sel.Name] = true
+				}
+				return true
+			})
+			for _, own := range declared {
+				delete(uses, own)
+			}
+			decls = append(decls, declUses{file: name, declares: declared, uses: uses})
+			if !phaseFile {
+				continue
+			}
+			for _, own := range declared {
+				if own == "init" || own == "_" {
+					continue
+				}
+				report.Symbols[own] = name
+			}
+			for typeName, fields := range spendDeclaredStructFields(decl) {
+				for _, field := range fields {
+					report.Fields[typeName+"."+field] = name
+				}
+			}
+		}
+	}
+
+	reachable := map[string]bool{}
+	for changed := true; changed; {
+		changed = false
+		for _, decl := range decls {
+			ownedByPhase, ownerReachable := false, false
+			if isSpendPhaseProductionFile(decl.file) {
+				for _, own := range decl.declares {
+					if _, isPhaseSymbol := report.Symbols[own]; isPhaseSymbol {
+						ownedByPhase = true
+						if reachable[own] {
+							ownerReachable = true
+						}
+					}
+				}
+			}
+			if ownedByPhase && !ownerReachable {
+				continue
+			}
+			for used := range decl.uses {
+				if _, isPhaseSymbol := report.Symbols[used]; !isPhaseSymbol {
+					continue
+				}
+				if !reachable[used] {
+					reachable[used] = true
+					changed = true
+				}
+			}
+		}
+	}
+
+	literalKeys := map[string]bool{}
+	selectorNames := map[string]bool{}
+	for _, name := range names {
+		phaseFile := isSpendPhaseProductionFile(name)
+		ast.Inspect(parsed[name], func(node ast.Node) bool {
+			if lit, ok := node.(*ast.CompositeLit); ok {
+				spendCollectCompositeKeys(lit, "", literalKeys)
+			}
+			if phaseFile {
+				if sel, ok := node.(*ast.SelectorExpr); ok {
+					selectorNames[sel.Sel.Name] = true
+				}
+			}
+			return true
+		})
+	}
+
+	for symbol, file := range report.Symbols {
+		if !reachable[symbol] {
+			report.UncalledSymbols = append(report.UncalledSymbols, symbol+" ("+file+")")
+		}
+	}
+	for field, file := range report.Fields {
+		bare := field[strings.Index(field, ".")+1:]
+		if literalKeys[field] || selectorNames[bare] {
+			continue
+		}
+		report.UnusedFields = append(report.UnusedFields, field+" ("+file+")")
+	}
+	sort.Strings(report.UncalledSymbols)
+	sort.Strings(report.UnusedFields)
+	return report
+}
+
+// spendDeclaredNames returns every name a top-level declaration introduces:
+// the function name (methods included, keyed by method name, which is how a
+// call site refers to them), and every type, const and var name in a
+// declaration group.
+func spendDeclaredNames(decl ast.Decl) []string {
+	var names []string
+	switch typed := decl.(type) {
+	case *ast.FuncDecl:
+		if typed.Name != nil {
+			names = append(names, typed.Name.Name)
+		}
+	case *ast.GenDecl:
+		for _, spec := range typed.Specs {
+			switch spec := spec.(type) {
+			case *ast.TypeSpec:
+				names = append(names, spec.Name.Name)
+			case *ast.ValueSpec:
+				for _, ident := range spec.Names {
+					names = append(names, ident.Name)
+				}
+			}
+		}
+	}
+	return names
+}
+
+// spendDeclaredStructFields returns the named fields of every struct type a
+// declaration introduces, keyed by type name. Embedded fields carry no name of
+// their own and are skipped.
+func spendDeclaredStructFields(decl ast.Decl) map[string][]string {
+	fields := map[string][]string{}
+	gen, ok := decl.(*ast.GenDecl)
+	if !ok {
+		return fields
+	}
+	for _, spec := range gen.Specs {
+		typeSpec, ok := spec.(*ast.TypeSpec)
+		if !ok {
+			continue
+		}
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok || structType.Fields == nil {
+			continue
+		}
+		for _, field := range structType.Fields.List {
+			for _, name := range field.Names {
+				fields[typeSpec.Name.Name] = append(fields[typeSpec.Name.Name], name.Name)
+			}
+		}
+	}
+	return fields
+}
+
+// spendCollectCompositeKeys records every "Type.Field" a composite literal
+// fills in. inherited carries the element type down into the untyped inner
+// literals of []T{{...}} and map[K]T{k: {...}}, which is how the writer's rows
+// are actually written.
+func spendCollectCompositeKeys(lit *ast.CompositeLit, inherited string, into map[string]bool) {
+	typeName := inherited
+	elemName := ""
+	switch litType := lit.Type.(type) {
+	case *ast.Ident:
+		typeName = litType.Name
+	case *ast.ArrayType:
+		typeName = ""
+		elemName = spendTypeIdentName(litType.Elt)
+	case *ast.MapType:
+		typeName = ""
+		elemName = spendTypeIdentName(litType.Value)
+	case nil:
+		// Untyped inner literal: keep the type inherited from the parent.
+	default:
+		typeName = ""
+	}
+	for _, element := range lit.Elts {
+		if kv, ok := element.(*ast.KeyValueExpr); ok {
+			if ident, ok := kv.Key.(*ast.Ident); ok && typeName != "" {
+				into[typeName+"."+ident.Name] = true
+			}
+			if inner, ok := kv.Value.(*ast.CompositeLit); ok {
+				spendCollectCompositeKeys(inner, elemName, into)
+			}
+			continue
+		}
+		if inner, ok := element.(*ast.CompositeLit); ok {
+			spendCollectCompositeKeys(inner, elemName, into)
+		}
+	}
+}
+
+// spendTypeIdentName returns the bare type name of an element type expression,
+// looking through pointers, or "" when it is not a plain named type.
+func spendTypeIdentName(expr ast.Expr) string {
+	switch typed := expr.(type) {
+	case *ast.Ident:
+		return typed.Name
+	case *ast.StarExpr:
+		return spendTypeIdentName(typed.X)
+	}
+	return ""
 }
 
 // goSourceFilesForSpendReachability returns every non-test Go file under cmd/.
@@ -515,28 +911,4 @@ func goSourceFilesForSpendReachability(t *testing.T) map[string]string {
 		t.Fatalf("no production Go files found under %s", dir)
 	}
 	return sources
-}
-
-// productionCallersOf names the production files that mention symbol outside
-// of the line that declares it and outside comment lines.
-func productionCallersOf(sources map[string]string, symbol string) []string {
-	var callers []string
-	for name, body := range sources {
-		for _, line := range strings.Split(body, "\n") {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
-				continue
-			}
-			if strings.HasPrefix(trimmed, "func "+symbol) || strings.HasPrefix(trimmed, "func (") &&
-				strings.Contains(trimmed, ") "+symbol+"(") {
-				continue
-			}
-			if !strings.Contains(trimmed, symbol) {
-				continue
-			}
-			callers = append(callers, name)
-			break
-		}
-	}
-	return callers
 }
