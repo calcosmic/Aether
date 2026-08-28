@@ -120,8 +120,14 @@ func TestOpenCodeSessionUsageReadsDisjointTokenColumns(t *testing.T) {
 	if mason.Usage.CacheCreationTokens != 4096 {
 		t.Errorf("mason CacheCreationTokens = %d, want 4096", mason.Usage.CacheCreationTokens)
 	}
-	if mason.Usage.TotalTokens != 57039 {
-		t.Errorf("mason TotalTokens = %d, want 57039", mason.Usage.TotalTokens)
+	// The billed total, not TotalTokens: the reader deliberately does not
+	// accumulate the store's own per-message total (WR-03), so the
+	// authoritative figure comes from the four disjoint columns.
+	if mason.Usage.BilledTotalTokens() != 57039 {
+		t.Errorf("mason billed total = %d, want 57039", mason.Usage.BilledTotalTokens())
+	}
+	if mason.Usage.TotalTokens != 0 {
+		t.Errorf("mason TotalTokens = %d, want 0 -- the store's own total must not be accumulated alongside the columns", mason.Usage.TotalTokens)
 	}
 	if mason.Usage.Source != codex.UsageSourceSessionTranscript {
 		t.Errorf("mason Source = %q, want %q", mason.Usage.Source, codex.UsageSourceSessionTranscript)
@@ -130,8 +136,8 @@ func TestOpenCodeSessionUsageReadsDisjointTokenColumns(t *testing.T) {
 	if vigil == nil {
 		t.Fatalf("Vigil-12 entry not found: %+v", entries)
 	}
-	if vigil.Usage.TotalTokens != 8100 {
-		t.Errorf("vigil TotalTokens = %d, want 8100", vigil.Usage.TotalTokens)
+	if vigil.Usage.BilledTotalTokens() != 8100 {
+		t.Errorf("vigil billed total = %d, want 8100", vigil.Usage.BilledTotalTokens())
 	}
 	if vigil.Usage.Source != codex.UsageSourceSessionTranscript {
 		t.Errorf("vigil Source = %q, want %q", vigil.Usage.Source, codex.UsageSourceSessionTranscript)
@@ -375,14 +381,14 @@ func TestOpenCodeUsageSumsEveryAssistantMessage(t *testing.T) {
 	}
 	got := entries[0].Usage
 
-	if got.TotalTokens == openCodeFixtureMsg1Total {
-		t.Fatalf("TotalTokens = %d, which is the FIRST message alone -- the second assistant message in the same session was not accumulated", got.TotalTokens)
+	if got.BilledTotalTokens() == openCodeFixtureMsg1Total {
+		t.Fatalf("billed total = %d, which is the FIRST message alone -- the second assistant message in the same session was not accumulated", got.BilledTotalTokens())
 	}
-	if got.TotalTokens == openCodeFixtureMsg2Total {
-		t.Fatalf("TotalTokens = %d, which is the LAST message alone -- later messages are overwriting earlier ones instead of adding to them", got.TotalTokens)
+	if got.BilledTotalTokens() == openCodeFixtureMsg2Total {
+		t.Fatalf("billed total = %d, which is the LAST message alone -- later messages are overwriting earlier ones instead of adding to them", got.BilledTotalTokens())
 	}
-	if got.TotalTokens != openCodeFixtureSumTotal {
-		t.Errorf("TotalTokens = %d, want %d (%d + %d)", got.TotalTokens, openCodeFixtureSumTotal, openCodeFixtureMsg1Total, openCodeFixtureMsg2Total)
+	if got.BilledTotalTokens() != openCodeFixtureSumTotal {
+		t.Errorf("billed total = %d, want %d (%d + %d)", got.BilledTotalTokens(), openCodeFixtureSumTotal, openCodeFixtureMsg1Total, openCodeFixtureMsg2Total)
 	}
 	if got.InputTokens != openCodeFixtureSumInput {
 		t.Errorf("InputTokens = %d, want %d", got.InputTokens, openCodeFixtureSumInput)
@@ -407,6 +413,10 @@ func TestOpenCodeUsageSumsEveryAssistantMessage(t *testing.T) {
 		if sum != openCodeFixtureSumTotal {
 			t.Errorf("columns sum to %d, but the store's own totals sum to %d", sum, openCodeFixtureSumTotal)
 		}
+		// And the reader keeps NO second answer to that question of its own.
+		if got.TotalTokens != 0 {
+			t.Errorf("TotalTokens = %d, want 0: the store's own per-message total is deliberately not accumulated, because a record that omits it would silently shrink the worker's spend", got.TotalTokens)
+		}
 	})
 
 	t.Run("a non-assistant message in the same session contributes nothing", func(t *testing.T) {
@@ -418,8 +428,8 @@ func TestOpenCodeUsageSumsEveryAssistantMessage(t *testing.T) {
 		if len(entries) != 1 {
 			t.Fatalf("got %d entries, want 1", len(entries))
 		}
-		if entries[0].Usage.TotalTokens != openCodeFixtureSumTotal {
-			t.Errorf("TotalTokens = %d, want %d -- a user-role record was counted as spend", entries[0].Usage.TotalTokens, openCodeFixtureSumTotal)
+		if entries[0].Usage.BilledTotalTokens() != openCodeFixtureSumTotal {
+			t.Errorf("billed total = %d, want %d -- a user-role record was counted as spend", entries[0].Usage.BilledTotalTokens(), openCodeFixtureSumTotal)
 		}
 	})
 }

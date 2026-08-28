@@ -129,10 +129,16 @@ type openCodeSessionRecord struct {
 // WorkerUsage has no column for it, and folding it into OutputTokens would
 // invent arithmetic the provider did not report. This is a known, recorded
 // limitation (174-RESEARCH.md Pattern 2), not an oversight.
+//
+// It also has no field for `tokens.total`, deliberately. The store reports one
+// and it equals the four columns on every well-formed record -- but a record
+// that omits it while carrying its columns shrinks the worker's whole spend,
+// because BilledTotalTokens prefers a positive TotalTokens over the columns.
+// Not decoding it at all is what stops that being reintroduced by a one-line
+// change (WR-03).
 type openCodeMessageRaw struct {
 	Role   string `json:"role"`
 	Tokens struct {
-		Total json.Number `json:"total"`
 		Input json.Number `json:"input"`
 		// Output intentionally excludes reasoning -- see the struct
 		// doc comment above.
@@ -387,6 +393,11 @@ func openCodeTitleMatchesWorker(title, name string) bool {
 // total, counted among the workers whose tools reported a figure, and with the
 // footnote that would have flagged it suppressed. An absent store means not
 // reported.
+// `tokens.total` is deliberately NOT accumulated (WR-03). Reading the store's
+// own total alongside the columns is two answers to one question, and the
+// consumer silently prefers the one a single malformed record can shrink. The
+// authoritative total is BilledTotalTokens() over the four disjoint columns --
+// which is Pitfall 1, the 186x undercount, pointed the other way.
 func readOpenCodeUsage(root, sessionID string) codex.WorkerUsage {
 	var usage codex.WorkerUsage
 
@@ -422,7 +433,6 @@ func readOpenCodeUsage(root, sessionID string) codex.WorkerUsage {
 		usage.OutputTokens += jsonNumberOrZero(msg.Tokens.Output)
 		usage.CachedInputTokens += jsonNumberOrZero(msg.Tokens.Cache.Read)
 		usage.CacheCreationTokens += jsonNumberOrZero(msg.Tokens.Cache.Write)
-		usage.TotalTokens += jsonNumberOrZero(msg.Tokens.Total)
 	}
 	if read == 0 {
 		return codex.WorkerUsage{}
