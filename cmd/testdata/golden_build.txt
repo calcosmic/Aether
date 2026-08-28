@@ -79,4 +79,6 @@ Alternative: Run `/ant-status` if you want to inspect progress before advancing.
 Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant-resume` to restore.
 
 ── What This Phase Has Cost ──
-No token use was recorded for this phase, so there is no figure to show.
+Cost: not known. The one worker that ran had no figure reported by its tool, so there is no total to show.
+  🔨🐜 Builder Worker-XX (job: automatic-g-task-1)  —  not reported
+(1 worker's tool did not report usage, so its use is not in the total.)

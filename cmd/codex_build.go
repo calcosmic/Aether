@@ -79,6 +79,18 @@ type codexBuildDispatch struct {
 	// primary TaskID (Pitfall 4, 195-RESEARCH.md). Runtime-owned and
 	// unserialized for the same reason (CR-03).
 	TaskClaims []codexBuildTaskClaim `json:"-"`
+	// Usage is what this worker's own tool reported the run cost, read by the
+	// Go runtime from the worker's raw output at the dispatch boundary
+	// (codex.AttachWorkerUsage). It is the input the spend ledger accounts a
+	// directly-spawned worker from.
+	//
+	// It is runtime-owned and NEVER serialized, for the same reason as
+	// CompletedTaskIDs above (CR-03): a completion packet is externally
+	// shaped, and a serialized usage field would let an outside caller simply
+	// ASSERT what a run cost. Every figure in the ledger must be one the Go
+	// runtime read for itself; a number relayed by an orchestrating model is
+	// an assertion, not a measurement.
+	Usage codex.WorkerUsage `json:"-"`
 	// ReceiptsResolved marks a dispatch whose receipts already passed through
 	// the shared two-stage boundary on a lane that had to insert a sync step
 	// between the stages (worktree mode). It is in-process only -- never
@@ -1007,9 +1019,48 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	// never generated steering recommendations at all.
 	suggestAnalyzeRan, pendingSuggestionCount := collectPendingSuggestions(root)
 
+	// File this run's per-worker token record on the direct in-process lane.
+	//
+	// The platform-driven lane has filed rows since plan 196-05, through
+	// build-finalize. This lane -- `aether build <n>`, which runs its workers
+	// inside the runtime rather than handing a manifest to a chat wrapper --
+	// filed nothing, so the cost block at the end of it could only ever say
+	// "no token use was recorded". That was the more painful half of the gap,
+	// because this is the ONLY lane where a provider's own measurement exists:
+	// codex.ParseUsage runs at the dispatch boundary here and nowhere else.
+	//
+	// Platform is deliberately left empty. These workers were spawned as
+	// subprocesses by the runtime, not as subagents inside somebody's chat
+	// session, so there is no session transcript or session store belonging to
+	// them; naming a chat platform here would send the resolver looking for
+	// somebody else's sessions. The provider figures carried on the dispatches
+	// are the whole source.
+	//
+	// Accounting is a record OF the build, never a gate ON it: a write that
+	// fails is reported and the build still completes.
+	directSpendNote := ""
+	directSpendOutcome, directSpendErr := writeSpendRowsForRun(spendWriteRequest{
+		Phase:      phaseNum,
+		PhaseName:  updatedPhase.Name,
+		Workflow:   spendWorkflowBuild,
+		RepoRoot:   root,
+		Platform:   "",
+		StartedAt:  startedAt,
+		EndedAt:    time.Now().UTC(),
+		Dispatches: dispatches,
+	})
+	if directSpendErr != nil {
+		directSpendNote = fmt.Sprintf("this build's per-worker token record could not be filed: %v", directSpendErr)
+		visualFprintf(stderr, "warning: %s\n", directSpendNote)
+	} else if len(directSpendOutcome.Notes) > 0 {
+		directSpendNote = strings.Join(directSpendOutcome.Notes, "; ")
+	}
+
 	result := map[string]interface{}{
 		"phase":                    phaseNum,
 		"colony_mode":              string(updatedState.EffectiveColonyMode()),
+		"spend_rows_written":       directSpendOutcome.RowsWritten,
+		"spend_rows_measured":      directSpendOutcome.Reported,
 		"suggest_analyze_ran":      suggestAnalyzeRan,
 		"pending_suggestions":      pendingSuggestionCount,
 		"review_depth":             string(reviewDepth),
@@ -1038,6 +1089,9 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		"worker_briefs":            briefPaths,
 		"claims_path":              displayDataPath(claimsRel),
 		"attempt":                  displayDataPath(attemptRel),
+	}
+	if directSpendNote != "" {
+		result["spend_ledger_note"] = directSpendNote
 	}
 	runStatus = dispatchRunStatus(dispatches)
 	return result, nil
@@ -2136,6 +2190,14 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			// evidence, never discarded just because the dispatch as a whole
 			// did not reach a whole-success status.
 			dispatches[idx].TaskReceipts = append([]codex.TaskReceipt{}, result.WorkerResult.TaskReceipts...)
+			// What this worker's own tool reported it cost, carried from the
+			// one boundary every real dispatch passes through
+			// (codex.AttachWorkerUsage, which runs codex.ParseUsage over the
+			// worker's raw stdout). Before this, the direct in-process lane
+			// read the provider's own measurement and then threw it away, so
+			// the only lane where a provider figure exists at all was the one
+			// lane that filed nothing.
+			dispatches[idx].Usage = result.WorkerResult.Usage
 		}
 		// Per D-02/D-04: print raw worker output only in verbose mode
 		if result.WorkerResult != nil && result.WorkerResult.RawOutput != "" {

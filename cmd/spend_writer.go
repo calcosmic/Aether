@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // spendWriteRequest is one finished run's accounting, ready to be filed.
@@ -91,9 +94,25 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 	}
 
 	workerNames := make([]string, 0, len(req.Dispatches))
+	// Attached is what the provider itself reported at the dispatch boundary,
+	// read by the Go runtime from the worker's raw output
+	// (codex.AttachWorkerUsage -> codex.ParseUsage). It is the ONLY source on
+	// the directly-spawned lane, where there is no chat-platform session
+	// artifact to read, and it outranks a session artifact everywhere else.
+	//
+	// codexBuildDispatch.Usage is never serialized, so a dispatch that reached
+	// this writer through an externally-shaped completion packet carries the
+	// zero value here and contributes nothing: an outside caller can no more
+	// assert what a run cost than it could before.
+	attached := make(map[string]codex.WorkerUsage, len(req.Dispatches))
 	for _, dispatch := range req.Dispatches {
-		if name := spendWorkerNameForDispatch(dispatch); name != "" {
-			workerNames = append(workerNames, name)
+		name := spendWorkerNameForDispatch(dispatch)
+		if name == "" {
+			continue
+		}
+		workerNames = append(workerNames, name)
+		if wrapperUsageWasReported(dispatch.Usage) {
+			attached[name] = dispatch.Usage
 		}
 	}
 
@@ -103,6 +122,7 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 		StartedAt:   req.StartedAt,
 		EndedAt:     req.EndedAt,
 		WorkerNames: workerNames,
+		Attached:    attached,
 	})
 	outcome.Notes = append(outcome.Notes, resolution.Diagnostics...)
 
@@ -182,6 +202,67 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 // This is a conversion, not a second writer. Both lanes file through
 // writeSpendRowsForRun, because two writers is how two vocabularies for one
 // idea start.
+// spendWorkerFlowSteps keeps only the steps that represent a worker somebody
+// actually spawned.
+//
+// A check's flow also carries bookkeeping entries the runtime performs itself
+// -- the deterministic verification commands, signal housekeeping, the
+// learning pass -- which are marked with the "system" caste. Those cost no
+// worker tokens, and filing a row for one would put a name in the owner's
+// breakdown that never corresponded to anybody.
+func spendWorkerFlowSteps(flow []codexContinueWorkerFlowStep) []codexContinueWorkerFlowStep {
+	workers := make([]codexContinueWorkerFlowStep, 0, len(flow))
+	for _, step := range flow {
+		if strings.TrimSpace(step.Caste) == "" || strings.EqualFold(strings.TrimSpace(step.Caste), "system") {
+			continue
+		}
+		workers = append(workers, step)
+	}
+	return workers
+}
+
+// fileDirectContinueSpendRows files the check's per-worker token record on the
+// direct in-process lane -- `aether continue`, which runs its reviewers and its
+// watcher inside the runtime rather than handing a plan to a chat wrapper.
+//
+// The platform-driven lane files its own rows in continue-finalize
+// (cmd/codex_continue_finalize.go). Both lanes go through the same writer under
+// the same key, so a phase's recorded cost does not depend on which way its
+// check was run.
+//
+// It is called at every point this lane can end -- verification blocked, review
+// blocked, and advanced -- because a blocked check still spent what it spent.
+// Accounting is a record OF the check, never a gate ON it: a write that fails
+// is reported on stderr and the check still finishes, so this returns nothing.
+func fileDirectContinueSpendRows(root string, phase colony.Phase, startedAt, endedAt time.Time, flow []codexContinueWorkerFlowStep) {
+	workers := spendWorkerFlowSteps(flow)
+	if len(workers) == 0 {
+		return
+	}
+	// Platform is deliberately empty: these workers were spawned as
+	// subprocesses by the runtime, so there is no chat-platform session
+	// artifact belonging to them and the provider figures carried on the flow
+	// steps are the whole source. See the same reasoning in
+	// runCodexBuildWithOptions.
+	outcome, err := writeSpendRowsForRun(spendWriteRequest{
+		Phase:      phase.ID,
+		PhaseName:  phase.Name,
+		Workflow:   spendWorkflowContinue,
+		RepoRoot:   root,
+		Platform:   "",
+		StartedAt:  startedAt,
+		EndedAt:    endedAt,
+		Dispatches: spendDispatchesFromContinueFlow(workers, nil),
+	})
+	if err != nil {
+		visualFprintf(stderr, "warning: this check's per-worker token record could not be filed: %v\n", err)
+		return
+	}
+	for _, note := range outcome.Notes {
+		visualFprintf(stderr, "⚠ %s\n", note)
+	}
+}
+
 func spendDispatchesFromContinueFlow(flow []codexContinueWorkerFlowStep, planned []codexContinueExternalDispatch) []codexBuildDispatch {
 	agentNameByWorker := make(map[string]string, len(planned))
 	for _, dispatch := range planned {
@@ -200,6 +281,7 @@ func spendDispatchesFromContinueFlow(flow []codexContinueWorkerFlowStep, planned
 			Name:      name,
 			Task:      step.Task,
 			Status:    step.Status,
+			Usage:     step.Usage,
 		})
 	}
 	return dispatches

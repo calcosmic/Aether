@@ -551,6 +551,13 @@ type codexContinueWorkerFlowStep struct {
 	WeakSpots       []string             `json:"weak_spots,omitempty"`
 	EdgeCases       []string             `json:"edge_cases_discovered,omitempty"`
 	ReusableLessons []string             `json:"reusable_lessons,omitempty"`
+	// Usage is what this worker's own tool reported the run cost, read by the
+	// Go runtime from the worker's raw output at the dispatch boundary. It is
+	// runtime-owned and NEVER serialized, for the same reason as
+	// codexBuildDispatch.Usage: a figure that crossed a wire could be
+	// asserted by an outside caller rather than measured by the runtime, and
+	// this ledger's entire value is that it cannot be.
+	Usage codex.WorkerUsage `json:"-"`
 }
 
 type codexReviewFinding struct {
@@ -838,6 +845,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 		workerFlow := continueWorkerFlowForVerification(verification, nil, watcherFlow)
+		fileDirectContinueSpendRows(root, phase, now, time.Now().UTC(), workerFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForBlocked(assessment, blockers, options, phase.ID)
 		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
@@ -917,6 +925,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 		workerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
+		fileDirectContinueSpendRows(root, phase, now, time.Now().UTC(), workerFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForBlocked(assessment, review.BlockingIssues, options, phase.ID)
 		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
@@ -1042,6 +1051,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return nil, state, phase, nil, nil, false, err
 	}
 	workerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
+	fileDirectContinueSpendRows(root, phase, now, time.Now().UTC(), workerFlow)
 	workerFlow = append(workerFlow, continueHousekeepingFlowStep(housekeeping))
 	if err := recordContinueWorkerFlow(workerFlow); err != nil {
 		return nil, state, phase, nil, &housekeeping, false, err
@@ -1562,6 +1572,9 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				step.Blockers = uniqueSortedStrings(result.WorkerResult.Blockers)
 				step.Duration = result.WorkerResult.Duration.Seconds()
 				step.Report = codex.SanitizeWorkerDiagnosticOutput(result.WorkerResult.RawOutput)
+				// What this reviewer's own tool reported it cost, carried from
+				// the dispatch boundary so the direct check can file it.
+				step.Usage = result.WorkerResult.Usage
 			}
 			if step.Summary == "" && result.Error != nil {
 				step.Summary = codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())
@@ -1991,7 +2004,18 @@ func runCodexContinueWatcherVerification(ctx context.Context, root string, phase
 			Task:    "Independent verification before advancement",
 			Status:  status,
 			Summary: continueWatcherFlowSummary(workerName, status, summary),
+			Usage:   continueWatcherResultUsage(result),
 		}
+}
+
+// continueWatcherResultUsage is what the watcher's own tool reported. A
+// dispatch that produced no result at all carries nothing, which the ledger
+// records as "not reported" rather than as a zero.
+func continueWatcherResultUsage(result codex.DispatchResult) codex.WorkerUsage {
+	if result.WorkerResult == nil {
+		return codex.WorkerUsage{}
+	}
+	return result.WorkerResult.Usage
 }
 
 func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification, invoker codex.WorkerInvoker, workerTimeout time.Duration) codex.WorkerDispatch {

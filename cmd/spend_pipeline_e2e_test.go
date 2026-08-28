@@ -145,10 +145,10 @@ func handSummedBilledTotal(rows []spendRow) int64 {
 }
 
 // runSpendDetailView runs `aether spend --phase N` through the command tree,
-// as a person would, and returns its machine envelope. Running it through
+// as a person would, and returns whatever it printed. Running it through
 // rootCmd is what makes the command REGISTRATION part of the chain: cutting
 // the AddCommand call makes this fail.
-func runSpendDetailView(t *testing.T, phase int) map[string]interface{} {
+func runSpendDetailView(t *testing.T, phase int) string {
 	t.Helper()
 	buf := &bytes.Buffer{}
 	previous := stdout
@@ -160,14 +160,19 @@ func runSpendDetailView(t *testing.T, phase int) map[string]interface{} {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("aether spend returned an error: %v", err)
 	}
-
-	var envelope struct {
-		OK     bool                   `json:"ok"`
-		Result map[string]interface{} `json:"result"`
-	}
 	raw := strings.TrimSpace(buf.String())
 	if raw == "" {
 		t.Fatalf("aether spend printed nothing at all; the detail view is not reachable")
+	}
+	return raw
+}
+
+// spendDetailEnvelope decodes the machine surface of the detail view.
+func spendDetailEnvelope(t *testing.T, raw string) map[string]interface{} {
+	t.Helper()
+	var envelope struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
 		t.Fatalf("aether spend output was not the machine envelope (%v): %s", err, raw)
@@ -229,7 +234,7 @@ func TestSpendPipelineIsReachableEndToEnd(t *testing.T) {
 			t.Fatalf("a finished build left no rows on disk; the writer is not called from the build path")
 		}
 
-		detail := runSpendDetailView(t, 1)
+		detail := spendDetailEnvelope(t, runSpendDetailView(t, 1))
 		shown := spendDetailWorkerNames(t, detail)
 		for _, row := range rows {
 			if !shown[row.AgentName] {
@@ -290,17 +295,17 @@ func TestSpendPipelineIsReachableEndToEnd(t *testing.T) {
 		}
 
 		// LINK 4 — the command registration. The detail view must show the
-		// same workers and the same figures.
-		detail := runSpendDetailView(t, 1)
-		shown := spendDetailWorkerNames(t, detail)
+		// same workers and the same figures. This lane runs in the owner's
+		// own reading mode, so the assertion is on the rendered view: the
+		// exact recorded figure, unabbreviated, beside each worker's name.
+		detail := stripANSI(runSpendDetailView(t, 1))
 		for _, row := range rows {
-			if !shown[row.AgentName] {
-				t.Errorf("worker %q is on disk but missing from the detail view", row.AgentName)
+			if !strings.Contains(detail, row.AgentName) {
+				t.Errorf("worker %q is on disk but missing from the detail view:\n%s", row.AgentName, detail)
 			}
 		}
-		if got, ok := detail["measured_tokens"].(float64); !ok || int64(got) != handSummedBilledTotal(rows) {
-			t.Errorf("the detail view's measured total = %v, want the hand-summed disk total %d",
-				detail["measured_tokens"], handSummedBilledTotal(rows))
+		if want := itoaForSpendTest(int(handSummedBilledTotal(rows))); !strings.Contains(detail, want) {
+			t.Errorf("the detail view does not show the hand-summed disk total %s:\n%s", want, detail)
 		}
 
 		// LINK 3 — the renderer call. Exactly one cost block ended the
@@ -316,6 +321,63 @@ func TestSpendPipelineIsReachableEndToEnd(t *testing.T) {
 		}
 		if len(rows) == 1 && !strings.Contains(stripANSI(out), e2eProviderCompactFigure) {
 			t.Errorf("the cost line does not print the recorded total %s:\n%s", e2eProviderCompactFigure, out)
+		}
+	})
+
+	t.Run("the direct check records what its own reviewers reported", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+
+		dataDir := setupBuildFlowTest(t)
+		root := filepath.Dir(filepath.Dir(dataDir))
+		withTestWorkspace(t, root)
+		withWorkingDir(t, root)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+		t.Setenv("AETHER_PLATFORM", "claude")
+		useSpendReportingInvoker(t)
+
+		seedSpendPipelinePhase(t, dataDir)
+
+		screen := &bytes.Buffer{}
+		stdout = screen
+		rootCmd.SetArgs([]string{"build", "1"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("aether build 1 returned error: %v", err)
+		}
+
+		screen.Reset()
+		resetRootCmd(t)
+		rootCmd.SetArgs([]string{"continue", "--heavy"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("aether continue returned error: %v", err)
+		}
+
+		// Whether the check advanced or blocked, it spent what it spent. The
+		// build's rows must still be there, untouched, beside its own.
+		checkRows := spendRowsOnDisk(t, dataDir, 1, spendWorkflowContinue)
+		if len(checkRows) == 0 {
+			t.Fatalf("`aether continue` ran its reviewers in-process and filed no token record at all")
+		}
+		measured := 0
+		for _, row := range checkRows {
+			if spendRowReportedUsage(row) {
+				measured++
+				if got := row.Usage.TotalTokens; got != e2eProviderBilledTotal {
+					t.Errorf("checker %s's recorded total = %d, want the provider's own %d",
+						row.AgentName, got, e2eProviderBilledTotal)
+				}
+			}
+		}
+		if measured == 0 {
+			t.Errorf("every checker's tool reported a figure, but no row on disk records one: %+v", checkRows)
+		}
+		if len(spendRowsOnDisk(t, dataDir, 1, spendWorkflowBuild)) == 0 {
+			t.Errorf("the check erased the build's rows")
+		}
+
+		out := stripANSI(screen.String())
+		if got := countCostBlocks(out); got != 1 {
+			t.Errorf("`aether continue` ended with %d cost block(s), want exactly 1:\n%s", got, out)
 		}
 	})
 

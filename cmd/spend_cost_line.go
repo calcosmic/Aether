@@ -155,12 +155,24 @@ func renderSpendCostLineFromLedgers(ledgers []spendLedger) string {
 // stated — the sentence says the cost is not known rather than showing a zero.
 func spendCostLineTotalSentence(measuredTokens int64, workers, measured, unreported int) string {
 	if measured == 0 {
+		// The one-worker wording is separate because the general sentence
+		// reads "any of the 1 worker" at a count of one, and this block is
+		// read by someone who has never opened a file here.
+		if workers == 1 {
+			return "Cost: not known. The one worker that ran had no figure reported by its tool, so there is no total to show."
+		}
 		return fmt.Sprintf(
 			"Cost: not known. No tool reported a figure for any of the %s, so there is no total to show.",
 			spendWorkerWord(workers),
 		)
 	}
 	if unreported == 0 {
+		if workers == 1 {
+			return fmt.Sprintf(
+				"Cost: %s tokens for the one worker that ran, whose tool reported a figure.",
+				spendCompactTokenFigure(measuredTokens),
+			)
+		}
 		return fmt.Sprintf(
 			"Cost: %s tokens across %s. The total counts all %d, because every tool reported a figure.",
 			spendCompactTokenFigure(measuredTokens), spendWorkerWord(workers), workers,
