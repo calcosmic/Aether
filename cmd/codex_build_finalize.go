@@ -882,6 +882,10 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		result["next"] = partialRetryOutcome.RedispatchCommand
 	}
 	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
+	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
+	// This runs LAST because everything above it can still add the more
+	// specific command this run knows about.
+	closeLifecycleRun(result, updatedState, "build")
 	return result, updatedState, updatedPhase, dispatches, nil
 }
 
@@ -1161,6 +1165,7 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 		boundaryQuestions = record.PlanManifest.BoundaryQuestions
 	}
 	addOrchestratorBoundaryGuidance(result, "build", state, "aether continue", boundaryQuestions)
+	closeLifecycleRun(result, state, "build")
 	return result, state, phase, dispatches, nil
 }
 
@@ -1266,6 +1271,7 @@ func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum 
 		boundaryQuestions = record.PlanManifest.BoundaryQuestions
 	}
 	addOrchestratorBoundaryGuidance(result, "build", state, "aether continue", boundaryQuestions)
+	closeLifecycleRun(result, state, "build")
 	return result, state, phase, dispatches, nil
 }
 

@@ -570,6 +570,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		result["dispatch_manifest"] = manifest
 		result["attempt"] = displayDataPath(attemptRel)
 	}
+	closeLifecycleRun(result, state, "build")
 	return result, state, phase, dispatches, nil
 }
 
@@ -922,6 +923,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 				fmt.Sprintf("Phase %d: %d task(s) unfinished: %s", phaseNum, len(retryPlan.UnfinishedTaskIDs), strings.Join(retryPlan.UnfinishedTaskIDs, ", ")),
 				"The credited tasks' proof was kept; nothing proven was rolled back or redone.",
 				retryPlan.RedispatchCommand))
+			closeLifecycleRun(result, partialState, "build")
 			return result, nil
 		}
 		attemptFinished = true
@@ -1095,6 +1097,8 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		result["spend_ledger_note"] = directSpendNote
 	}
 	runStatus = dispatchRunStatus(dispatches)
+	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
+	closeLifecycleRun(result, updatedState, "build")
 	return result, nil
 }
 

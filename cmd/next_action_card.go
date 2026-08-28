@@ -219,6 +219,18 @@ func applyNextActionToResult(result map[string]interface{}, answer nextAction) m
 	return result
 }
 
+// nextActionFromResult recovers the answer a command folded into its result map
+// with applyNextActionToResult. It is how a renderer that is handed only the
+// result map still renders the SAME answer the command put in the envelope,
+// rather than resolving a second one that could differ.
+func nextActionFromResult(result map[string]interface{}) (nextAction, bool) {
+	if result == nil {
+		return nextAction{}, false
+	}
+	answer, ok := result[nextActionResultKey].(nextAction)
+	return answer, ok
+}
+
 // renderNextActionRecovery is the paused-or-blocked block.
 func renderNextActionRecovery(recovery nextActionRecovery) string {
 	if !recovery.Paused && !recovery.Blocked {

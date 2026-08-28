@@ -48,6 +48,7 @@ var colonizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		closeLifecycleCommand(result, "colonize", "", "")
 		outputWorkflow(result, renderColonizeVisual(result))
 		return nil
 	},
@@ -108,6 +109,7 @@ var planCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		closeLifecycleCommand(result, "plan", "", "")
 		outputWorkflow(result, renderPlanVisual(result))
 		return nil
 	},

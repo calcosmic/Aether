@@ -57,22 +57,48 @@ func buildableWorkLoopState(t *testing.T, dataDir string) {
 }
 
 // builtWorkLoopState is the same project with the first phase built and waiting
-// to be checked.
+// to be checked, with the build record the check reads seeded beside it. Both
+// are written the way the runtime writes them; a check run without the build
+// record behind it takes a different path entirely and would prove nothing
+// about the ordinary one.
 func builtWorkLoopState(t *testing.T, dataDir string) {
 	t.Helper()
+	goal := "Ship the billing rewrite"
 	now := time.Now().UTC()
-	writeLifecycleState(t, dataDir, colony.ColonyState{
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version:        "3.0",
-		Goal:           fixtureGoal("Ship the billing rewrite"),
+		Goal:           &goal,
 		State:          colony.StateBUILT,
 		CurrentPhase:   1,
 		BuildStartedAt: &now,
 		Milestone:      "Open Chambers",
 		Plan: colony.Plan{Phases: []colony.Phase{
-			fixturePhase(1, "Foundations", colony.PhaseInProgress),
-			fixturePhase(2, "Billing engine", colony.PhasePending),
+			{
+				ID:     1,
+				Name:   "Foundations",
+				Status: colony.PhaseInProgress,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Lay the foundations", Status: colony.TaskInProgress}},
+			},
+			{
+				ID:     2,
+				Name:   "Billing engine",
+				Status: colony.PhasePending,
+				Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Build the billing engine", Status: colony.TaskPending}},
+			},
 		}},
 	})
+	seedContinueBuildPacket(t, dataDir, 1, "Foundations", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-41", Task: "Lay the foundations", Status: "spawned", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Task: "Independent verification", Status: "spawned"},
+	})
+	if err := store.SaveJSON("instincts.json", colony.InstinctsFile{Instincts: []colony.InstinctEntry{}}); err != nil {
+		t.Fatalf("seed instincts.json: %v", err)
+	}
+	if err := store.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatalf("seed learning-observations.json: %v", err)
+	}
 }
 
 func workLoopSurfaces() []workLoopSurface {
@@ -155,7 +181,7 @@ func partlyFinishedBuildRun(t *testing.T) lifecycleRun {
 	unfinished := stringSliceValue(result["unfinished_task_ids"])
 
 	run := lifecycleRun{envelope: result}
-	run.answer = lifecycleNextActionForState(state, "build", recovery, "")
+	run.answer = lifecycleNextActionForState(state, "build", recovery, nextActionUnfinishedWorkWhy)
 	run.card = stripANSI(renderNextActionCardForPlatform(run.answer, "codex"))
 	run.visual = stripANSI(renderBuildPartialCreditVisual(state, phase, unfinished, recovery))
 	return run

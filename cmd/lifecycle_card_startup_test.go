@@ -36,6 +36,9 @@ type lifecycleSurfaceCase struct {
 	name string
 	// args is the command as the owner types it.
 	args []string
+	// command is what that command calls itself when it asks the one resolver
+	// what happens next -- part of the answer, because "what changed" names it.
+	command string
 	// prepare writes the saved state this run starts from. A nil prepare means
 	// an empty project directory -- the fresh-checkout case.
 	prepare func(t *testing.T, dataDir string)
@@ -97,7 +100,7 @@ func runLifecycleSurface(t *testing.T, c lifecycleSurfaceCase, jsonMode bool) li
 	} else {
 		run.visual = stripANSI(buf.String())
 	}
-	run.answer = resolveNextAction(loadNextActionInput())
+	run.answer = resolveNextAction(loadNextActionInputForCommand(c.command))
 	run.card = stripANSI(renderNextActionCardForPlatform(run.answer, "codex"))
 	return run
 }
@@ -139,28 +142,125 @@ func startupLifecycleSurfaces() []lifecycleSurfaceCase {
 
 	return []lifecycleSurfaceCase{
 		{
-			name: "starting a project",
-			args: []string{"init", goal},
-			keep: []string{"Queen has set the colony's intention"},
+			name:    "starting a project",
+			args:    []string{"init", goal},
+			command: "init",
+			keep:    []string{"Queen has set the colony's intention"},
 		},
 		{
 			name:    "talking the goal through",
 			args:    []string{"discuss"},
+			command: "discuss",
 			prepare: readyNoPlan,
 			keep:    []string{"Goal: " + goal},
 		},
 		{
 			name:    "scanning the existing code",
 			args:    []string{"colonize"},
+			command: "colonize",
 			prepare: readyNoPlan,
 			keep:    []string{"Root: "},
 		},
 		{
 			name:    "drawing up the plan",
 			args:    []string{"plan"},
+			command: "plan",
 			prepare: readyNoPlan,
 			keep:    []string{"Plan size: "},
 		},
+		{
+			// The replan variant: a plan already exists and is reloaded.
+			name:    "reloading a plan that already exists",
+			args:    []string{"plan"},
+			command: "plan",
+			prepare: func(t *testing.T, dataDir string) {
+				writeLifecycleState(t, dataDir, colony.ColonyState{
+					Version:      "3.0",
+					Goal:         fixtureGoal(goal),
+					State:        colony.StateREADY,
+					CurrentPhase: 1,
+					Milestone:    "Open Chambers",
+					Plan: colony.Plan{Phases: []colony.Phase{
+						fixturePhase(1, "Foundations", colony.PhaseReady),
+						fixturePhase(2, "Billing engine", colony.PhasePending),
+					}},
+				})
+			},
+			keep: []string{"Existing colony plan loaded."},
+		},
+		{
+			// The repaired-plan variant.
+			name:    "repairing a plan that points at a phase it does not contain",
+			args:    []string{"plan", "--repair-artifact"},
+			command: "plan",
+			prepare: func(t *testing.T, dataDir string) {
+				writeLifecycleState(t, dataDir, colony.ColonyState{
+					Version:      "3.0",
+					Goal:         fixtureGoal(goal),
+					State:        colony.StateREADY,
+					CurrentPhase: 1,
+					Milestone:    "Open Chambers",
+					Plan: colony.Plan{Phases: []colony.Phase{
+						fixturePhase(1, "Foundations", colony.PhaseReady),
+					}},
+				})
+				// The repair path reads the planning helpers' own artifact, so
+				// it is written here through the runtime's own writer rather
+				// than typed as raw JSON.
+				if err := store.SaveJSON("planning/phase-plan.json", codexWorkerPlanArtifact{
+					Confidence: codexPlanConfidence{Overall: 82},
+					Phases: []codexWorkerPlanPhase{
+						{Name: "Foundations", Tasks: []codexWorkerPlanTask{{Goal: "Lay the foundations"}}},
+					},
+				}); err != nil {
+					t.Fatalf("write the planning artifact the repair path reads: %v", err)
+				}
+			},
+			keep: []string{"dependency references"},
+		},
+		{
+			// The blocked variant: planning stopped on a problem that needs the
+			// owner. The blocker itself must still be named above the card.
+			name:    "planning while a planning problem is still open",
+			args:    []string{"plan"},
+			command: "plan",
+			prepare: func(t *testing.T, dataDir string) {
+				writeLifecycleState(t, dataDir, colony.ColonyState{
+					Version:   "3.0",
+					Goal:      fixtureGoal(goal),
+					State:     colony.StateREADY,
+					Milestone: "First Mound",
+				})
+				writeLifecyclePlanBlocker(t, dataDir, "the planning step could not write the phase list")
+			},
+			keep: []string{"Goal: " + goal},
+		},
+	}
+}
+
+// writeLifecyclePlanBlocker records an unresolved planning failure the way the
+// planning step itself records one, so the card is driven by a real blocker
+// rather than by a flag shape the runtime never writes.
+func writeLifecyclePlanBlocker(t *testing.T, dataDir, description string) {
+	t.Helper()
+	phase := 0
+	flags := colony.FlagsFile{
+		Version: "1.0",
+		Decisions: []colony.FlagEntry{{
+			ID:          "flag_plan_finalize_failure",
+			Type:        "blocker",
+			Description: description,
+			Phase:       &phase,
+			Source:      planFinalizeFailureSource,
+			CreatedAt:   "2026-08-28T09:00:00Z",
+		}},
+	}
+	data, err := json.MarshalIndent(flags, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal blocker: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "pending-decisions.json"), data, 0644); err != nil {
+		t.Fatalf("write blocker: %v", err)
 	}
 }
 
@@ -225,18 +325,26 @@ func assertEnvelopeMatchesCard(t *testing.T, label string, run lifecycleRun) {
 	}
 }
 
+// envelopeCarriesAlternative reads both shapes the answer arrives in: the
+// in-process map a renderer is handed, and the same map after a JSON round trip
+// out to a wrapper.
 func envelopeCarriesAlternative(envelope map[string]interface{}, command string) bool {
-	raw, ok := envelope[nextActionAlternativesKey].([]interface{})
-	if !ok {
-		return false
-	}
-	for _, entry := range raw {
-		alternative, ok := entry.(map[string]interface{})
-		if !ok {
-			continue
+	switch alternatives := envelope[nextActionAlternativesKey].(type) {
+	case []nextActionAlternative:
+		for _, alternative := range alternatives {
+			if strings.TrimSpace(alternative.Command) == command {
+				return true
+			}
 		}
-		if strings.TrimSpace(stringValue(alternative["command"])) == command {
-			return true
+	case []interface{}:
+		for _, entry := range alternatives {
+			alternative, ok := entry.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if strings.TrimSpace(stringValue(alternative["command"])) == command {
+				return true
+			}
 		}
 	}
 	return false

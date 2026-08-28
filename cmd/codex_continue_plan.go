@@ -227,6 +227,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		plan.OrchestratorGuidance = &guidance
 		result["continue_manifest"] = plan
 	}
+	closeLifecycleRun(result, state, "continue")
 	return result, state, phase, dispatches, nil
 }
 

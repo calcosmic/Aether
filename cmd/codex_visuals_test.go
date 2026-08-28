@@ -447,7 +447,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	// no-proposal keyword-scoring fallback entirely -- Scout used to ride
 	// along here on task 2's "Document" wording, but the fallback no longer
 	// scores anything, so the dispatch count drops to 1 (builder alone).
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 1", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "safe to clear your context now."} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 1", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "it is safe to close this chat"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -500,7 +500,7 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 		"── Context ──",
 		"── Tasks ──",
 		"── Dispatch ──",
-		"safe to clear your context now.",
+		"it is safe to close this chat",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
@@ -801,7 +801,7 @@ func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T
 		".aether/data/build/phase-1/review.json",
 		".aether/data/build/phase-1/continue.json",
 		".aether/data/spawn-tree.txt",
-		"safe to clear your context now.",
+		"it is safe to close this chat",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)
@@ -875,7 +875,7 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 		"Continue Worker Flow",
 		"Continue watcher rejected the phase",
 		"blocked",
-		"Fix the blocking issues, then run `aether continue` again.",
+		"W H A T   N E X T",
 		"A R T I F A C T S",
 		".aether/data/build/phase-1/verification.json",
 		".aether/data/build/phase-1/gates.json",
@@ -993,9 +993,9 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 	for _, want := range []string{
 		"Phase 1 verified and completed: Finish the final slice",
 		"── Colony Complete ──",
-		"All planned phases are complete. The colony is ready for Crowned Anthill.",
+		"Every phase in the plan is finished.",
 		"aether seal",
-		"safe to clear your context now.",
+		"it is safe to close this chat",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)
