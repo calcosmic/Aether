@@ -377,16 +377,27 @@ func openCodeTitleMatchesWorker(title, name string) bool {
 // assistant-role records' disjoint token columns into a codex.WorkerUsage.
 // Source is always UsageSourceSessionTranscript -- never UsageSourceProvider,
 // which only ParseUsage may set.
+//
+// The source tag is set ONLY once something has actually been read, and that
+// ordering is the whole point of it (CR-03). Every downstream "was this
+// reported?" decision keys on the tag rather than on a number, by design: a
+// worker that genuinely billed zero and a worker whose tool said nothing both
+// present as zero. Tagging first meant a session whose message directory was
+// missing or empty came back as a MEASUREMENT OF ZERO -- excluded from the
+// total, counted among the workers whose tools reported a figure, and with the
+// footnote that would have flagged it suppressed. An absent store means not
+// reported.
 func readOpenCodeUsage(root, sessionID string) codex.WorkerUsage {
-	usage := codex.WorkerUsage{Source: codex.UsageSourceSessionTranscript}
+	var usage codex.WorkerUsage
 
 	dir := filepath.Join(root, "message", sessionID)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return usage
+		return codex.WorkerUsage{}
 	}
 
 	count := 0
+	read := 0
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
@@ -406,12 +417,17 @@ func readOpenCodeUsage(root, sessionID string) codex.WorkerUsage {
 		if msg.Role != "assistant" {
 			continue
 		}
+		read++
 		usage.InputTokens += jsonNumberOrZero(msg.Tokens.Input)
 		usage.OutputTokens += jsonNumberOrZero(msg.Tokens.Output)
 		usage.CachedInputTokens += jsonNumberOrZero(msg.Tokens.Cache.Read)
 		usage.CacheCreationTokens += jsonNumberOrZero(msg.Tokens.Cache.Write)
 		usage.TotalTokens += jsonNumberOrZero(msg.Tokens.Total)
 	}
+	if read == 0 {
+		return codex.WorkerUsage{}
+	}
+	usage.Source = codex.UsageSourceSessionTranscript
 	return usage
 }
 
