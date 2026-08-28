@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/llm"
 	"github.com/calcosmic/Aether/pkg/trace"
@@ -56,7 +57,44 @@ func WithTracer(tr *trace.Tracer, runID string) PoolOption {
 }
 
 // TokenUsageCallback is called when an agent completes with token usage info.
-type TokenUsageCallback func(model string, inputTokens, outputTokens int64)
+//
+// It hands over the one authoritative usage value (D-05) rather than two loose
+// numbers. The previous two-number signature could not express the cache
+// columns at all, so any caller that ever adopted it would have inherited the
+// cache-blind accounting this phase closed. It had no caller anywhere in the
+// repository when it was widened.
+type TokenUsageCallback func(usage codex.WorkerUsage)
+
+// WorkerUsageFromStreamUsage converts the chat-model client's usage value into
+// codex.WorkerUsage, the one authoritative token type (D-05).
+//
+// This is the single conversion point. It fills the four disjoint billed
+// columns and sets NO total: the authoritative total is reached through
+// codex.WorkerUsage.BilledTotalTokens(), and a second summation in a second
+// package is exactly how the two accounting lanes drifted apart.
+//
+// The source tag is UsageSourceSessionTranscript, never UsageSourceProvider —
+// nothing outside codex.ParseUsage may claim provider grade — and never
+// UsageSourceEstimate, because this is a real measurement and tagging it as a
+// guess would file it under the ledger's estimated subtotal.
+//
+// A stream that reported no tokens at all converts to the zero value, which
+// downstream reads as "not reported" (D-01 as amended: an unmeasured worker
+// carries no figure, not a figure wearing a label).
+func WorkerUsageFromStreamUsage(usage llm.Usage, model string) codex.WorkerUsage {
+	if usage.InputTokens == 0 && usage.CacheReadInputTokens == 0 &&
+		usage.CacheCreationInputTokens == 0 && usage.OutputTokens == 0 {
+		return codex.WorkerUsage{}
+	}
+	return codex.WorkerUsage{
+		InputTokens:         usage.InputTokens,
+		CachedInputTokens:   usage.CacheReadInputTokens,
+		CacheCreationTokens: usage.CacheCreationInputTokens,
+		OutputTokens:        usage.OutputTokens,
+		Model:               model,
+		Source:              codex.UsageSourceSessionTranscript,
+	}
+}
 
 // Pool dispatches events from the bus to matching agents with bounded concurrency.
 // It subscribes to the event bus, matches incoming events against registered agents,
@@ -171,6 +209,9 @@ func (h *poolStreamHandler) OnToolEnd(toolName, toolID, result string) {
 }
 
 func (h *poolStreamHandler) OnComplete(result *llm.StreamResult) {
+	// One conversion, in one place, into the authoritative usage type. Every
+	// column reaches the event payload and the callback from here.
+	usage := WorkerUsageFromStreamUsage(result.Usage, result.Model)
 	payload := map[string]interface{}{
 		"agent":       h.agentName,
 		"caste":       string(h.caste),
@@ -180,13 +221,17 @@ func (h *poolStreamHandler) OnComplete(result *llm.StreamResult) {
 		"model":       result.Model,
 		"stop_reason": result.StopReason,
 		"usage": map[string]int64{
-			"input_tokens":  result.Usage.InputTokens,
-			"output_tokens": result.Usage.OutputTokens,
+			"input_tokens":          usage.InputTokens,
+			"cached_input_tokens":   usage.CachedInputTokens,
+			"cache_creation_tokens": usage.CacheCreationTokens,
+			"output_tokens":         usage.OutputTokens,
+			"total_tokens":          usage.BilledTotalTokens(),
 		},
+		"usage_source": usage.Source,
 	}
 	h.publishEvent("complete", payload)
 	if h.onTokenUsage != nil {
-		h.onTokenUsage(result.Model, result.Usage.InputTokens, result.Usage.OutputTokens)
+		h.onTokenUsage(usage)
 	}
 }
 
