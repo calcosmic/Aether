@@ -229,7 +229,14 @@ func (s *SelectedInvoker) InvokeWithProgress(ctx context.Context, config WorkerC
 // can quietly leave it, so it is populated where the paths converge. Usage
 // already present is left alone so a dispatcher that learns to report its own
 // is not overwritten.
+//
+// The config parameter is retained deliberately even though nothing reads it
+// today: it is the dispatch boundary's stable shape, and the transcript-reading
+// attachment sources added later in this phase need the worker identity it
+// carries. It is NOT a hook for reviving a length-derived figure — see D-01 as
+// amended, and the ratchet TestNoTokenCountIsDerivedFromLength that enforces it.
 func AttachWorkerUsage(result WorkerResult, config WorkerConfig) WorkerResult {
+	_ = config
 	if !result.Usage.Empty() {
 		return result
 	}
@@ -237,10 +244,11 @@ func AttachWorkerUsage(result WorkerResult, config WorkerConfig) WorkerResult {
 		result.Usage = usage
 		return result
 	}
-	// No provider figure. Record a labelled estimate rather than nothing: an
-	// absent row shrinks the measured total and makes a regression read as an
-	// improvement.
-	result.Usage = EstimateUsage(config.assembledPromptChars())
+	// No provider figure, so nothing is attached: the usage value stays empty
+	// and downstream reads it as not reported. This deliberately does NOT
+	// invent a figure from the assembled prompt's length — D-01 as amended
+	// (owner, 2026-08-27) forbids a length-derived token count anywhere, and
+	// a marked guess is exactly the thing it forbids, wearing a label.
 	return result
 }
 

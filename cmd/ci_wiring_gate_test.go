@@ -99,6 +99,12 @@ var wiringGateGuardFiles = []string{
 	"spawn_ancestor_test.go",
 	"spawn_tree_view_test.go",
 	"spawn_reap_test.go",
+	// Phase 196 plan 02: the D-01 no-length-derivation ratchet. Registered
+	// here on purpose rather than left as a standalone file -- an
+	// unregistered guard's freedom from skip paths is an unverified promise,
+	// and this inventory's own history records that omission happening
+	// before.
+	"spend_no_length_derivation_test.go",
 }
 
 // runFlagArgRe pulls the single-quoted argument that follows `-run` out of a

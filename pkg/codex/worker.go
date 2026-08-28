@@ -1444,12 +1444,3 @@ func classifyWorkerFinalMessageError(action string, err error, runningObserved b
 func runningInGoTest() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
 }
-
-// assembledPromptChars approximates the delivered prompt size from the parts
-// the dispatcher composes. It exists only to give an unmeasured run a
-// non-zero, clearly-labelled estimate; the real figure comes from the provider
-// whenever one is reported.
-func (c WorkerConfig) assembledPromptChars() int {
-	return len(c.TaskBrief) + len(c.ContextCapsule) + len(c.SkillSection) +
-		len(c.PheromoneSection) + len(c.HandoffSection)
-}

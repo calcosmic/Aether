@@ -1883,12 +1883,14 @@ func TestDeletingACallerMakesTheRatchetNameIt(t *testing.T) {
 // which meant the one guard that could be t.Skip'd with nothing noticing
 // (ci_wiring_gate_test.go) was never scanned for exactly that.
 func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
-	// wiringGateGuardFiles is declared with five entries because that is the
-	// count of guard files this phase created; a future edit that empties or
-	// trims the shared inventory must fail loudly here rather than silently
-	// narrowing this scan.
-	if len(wiringGateGuardFiles) < 5 {
-		t.Fatalf("wiringGateGuardFiles has only %d entries — expected at least 5 (the guard files phase 172 created); "+
+	// The inventory started at the five guard files phase 172 created, grew
+	// to ten across 173-10, and reached eleven when phase 196 plan 02
+	// registered the no-length-derivation ratchet. The floor is raised to the
+	// live count each time a guard is added, so this is a ratchet in its own
+	// right: a future edit that empties or trims the shared inventory must
+	// fail loudly here rather than silently narrowing this scan.
+	if len(wiringGateGuardFiles) < 11 {
+		t.Fatalf("wiringGateGuardFiles has only %d entries — expected at least 11 (the guard files phases 172, 173 and 196 registered); "+
 			"a shrunk inventory would silently narrow this escape-hatch scan", len(wiringGateGuardFiles))
 	}
 
