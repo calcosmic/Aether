@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,45 +33,79 @@ type cliBlackBoxResult struct {
 	ExitCode int
 }
 
+// sharedBlackBoxBinaries builds the CLI and the deterministic adapter ONCE for
+// the whole package and hands every black-box test the same two paths.
+//
+// Before this, newCLIBlackBox built both binaries per test into a per-test
+// GOCACHE under t.TempDir(). A fresh GOCACHE means a cold compile every time:
+// measured on this repo, a cold build of ./cmd/aether takes 16.4s against 1.1s
+// warm -- so fifteen black-box tests spent roughly four of the cmd package's
+// twelve minutes compiling the same program fifteen times. That is not a test
+// of Aether; it is a re-test of the Go toolchain.
+//
+// What is shared is ONLY the compiled artifact, which every test executes and
+// none modifies. Each test still gets its own home, repo, tmp and environment
+// from t.TempDir(), so the isolation that tests actually depend on is
+// unchanged.
+//
+// The build deliberately inherits the developer's real GOCACHE rather than
+// making its own: a warm cache is the entire point, and the build is the same
+// `go build` a developer runs by hand.
+var sharedBlackBoxBinaries struct {
+	once    sync.Once
+	dir     string
+	binary  string
+	adapter string
+	err     error
+}
+
+func blackBoxBinaries(t *testing.T, sourceRoot string) (string, string) {
+	t.Helper()
+	sharedBlackBoxBinaries.once.Do(func() {
+		dir, err := os.MkdirTemp("", "aether-blackbox-bin-")
+		if err != nil {
+			sharedBlackBoxBinaries.err = fmt.Errorf("create shared black-box bin dir: %w", err)
+			return
+		}
+		sharedBlackBoxBinaries.dir = dir
+		sharedBlackBoxBinaries.binary = filepath.Join(dir, "aether")
+		sharedBlackBoxBinaries.adapter = filepath.Join(dir, "deterministic-adapter")
+		for _, target := range []struct {
+			name        string
+			output      string
+			packagePath string
+		}{
+			{name: "aether", output: sharedBlackBoxBinaries.binary, packagePath: "./cmd/aether"},
+			{name: "deterministic adapter", output: sharedBlackBoxBinaries.adapter, packagePath: "./cmd/testdata/adapter-fixture"},
+		} {
+			build := exec.Command("go", "build", "-o", target.output, target.packagePath)
+			build.Dir = sourceRoot
+			if output, err := build.CombinedOutput(); err != nil {
+				sharedBlackBoxBinaries.err = fmt.Errorf("build black-box %s: %w\n%s", target.name, err, output)
+				return
+			}
+		}
+	})
+	if sharedBlackBoxBinaries.err != nil {
+		t.Fatalf("%v", sharedBlackBoxBinaries.err)
+	}
+	return sharedBlackBoxBinaries.binary, sharedBlackBoxBinaries.adapter
+}
+
 func newCLIBlackBox(t *testing.T) *cliBlackBox {
 	t.Helper()
 	sourceRoot := findTestModuleRoot(t)
 	fixtureRoot := t.TempDir()
 	home := filepath.Join(fixtureRoot, "home")
 	repo := filepath.Join(fixtureRoot, "repo")
-	binDir := filepath.Join(fixtureRoot, "bin")
 	tmpDir := filepath.Join(fixtureRoot, "tmp")
-	goCache := filepath.Join(fixtureRoot, "go-cache")
-	for _, dir := range []string{home, repo, binDir, tmpDir, goCache} {
+	for _, dir := range []string{home, repo, tmpDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("create black-box directory %s: %v", dir, err)
 		}
 	}
 
-	binary := filepath.Join(binDir, "aether")
-	adapter := filepath.Join(binDir, "deterministic-adapter")
-	moduleCache := goEnvValue(t, sourceRoot, "GOMODCACHE")
-	buildEnv := replaceProcessEnv(os.Environ(), map[string]string{
-		"GOCACHE":    goCache,
-		"GOMODCACHE": moduleCache,
-		"GOTMPDIR":   tmpDir,
-		"HOME":       home,
-	})
-	for _, target := range []struct {
-		name        string
-		output      string
-		packagePath string
-	}{
-		{name: "aether", output: binary, packagePath: "./cmd/aether"},
-		{name: "deterministic adapter", output: adapter, packagePath: "./cmd/testdata/adapter-fixture"},
-	} {
-		build := exec.Command("go", "build", "-o", target.output, target.packagePath)
-		build.Dir = sourceRoot
-		build.Env = buildEnv
-		if output, err := build.CombinedOutput(); err != nil {
-			t.Fatalf("build black-box %s: %v\n%s", target.name, err, output)
-		}
-	}
+	binary, adapter := blackBoxBinaries(t, sourceRoot)
 
 	harness := &cliBlackBox{
 		binary:     binary,
