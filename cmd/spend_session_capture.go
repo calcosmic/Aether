@@ -62,14 +62,8 @@ func validateSpendTranscriptPath(claimed string) (string, error) {
 	}
 	root := filepath.Join(home, ".claude", "projects")
 
-	rootEval, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		rootEval = root
-	}
-	candidateEval, err := filepath.EvalSymlinks(candidate)
-	if err != nil {
-		candidateEval = candidate
-	}
+	rootEval := evalSpendPathSymlinks(root)
+	candidateEval := evalSpendPathSymlinks(candidate)
 
 	if candidateEval == rootEval {
 		return candidate, nil
@@ -83,6 +77,41 @@ func validateSpendTranscriptPath(claimed string) (string, error) {
 	}
 
 	return candidate, nil
+}
+
+// evalSpendPathSymlinks resolves symlinks in path, and — where path does not
+// exist yet — resolves symlinks in its deepest EXISTING ancestor and rejoins
+// the remainder.
+//
+// The plain filepath.EvalSymlinks fallback this replaced returned the
+// un-evaluated path whenever the target was absent, which made containment
+// compare an evaluated root against an unevaluated candidate. On macOS, where
+// /var is a symlink to /private/var, that rejected a perfectly legitimate
+// transcript path purely because the file did not exist yet — the containment
+// answer depended on whether the file happened to have been written, which is
+// not what containment means. Found by Phase 196 plan 03, whose reader must
+// answer "no rows, no error" for a session that never wrote a transcript.
+//
+// It cannot loosen containment: every segment that exists is still resolved,
+// filepath.Clean has already collapsed any "..", and the caller still decides
+// containment with filepath.Rel rather than a lexical prefix match.
+func evalSpendPathSymlinks(path string) string {
+	if evaluated, err := filepath.EvalSymlinks(path); err == nil {
+		return evaluated
+	}
+	remainder := ""
+	current := path
+	for {
+		parent := filepath.Dir(current)
+		if parent == current {
+			return path
+		}
+		remainder = filepath.Join(filepath.Base(current), remainder)
+		if evaluated, err := filepath.EvalSymlinks(parent); err == nil {
+			return filepath.Join(evaluated, remainder)
+		}
+		current = parent
+	}
 }
 
 // recordSpendSessionFromHook is the fail-soft entry point called on every
