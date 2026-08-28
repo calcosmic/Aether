@@ -669,6 +669,14 @@ func TestContinueWithNoWorkersWritesNoFile(t *testing.T) {
 // The transcript is written in the shape Claude Code really writes (see
 // newResolverClaudeTranscript), so this test cannot pass by describing the
 // platform incorrectly.
+//
+// TWO of the three workers are builders, and that is load-bearing. With one
+// builder this test resolved through the DEFINITION rule -- one worker ran as
+// "aether-builder", so the definition identified it -- and stayed green with the
+// description join switched off entirely, which is the join its name says it
+// covers (IN-01, iteration 2; measured green under that mutation before this
+// change). Two workers sharing one definition leaves the dispatch description as
+// the only evidence there is.
 func TestClaudeBuildAttributesEveryWorkersTokens(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -687,14 +695,15 @@ func TestClaudeBuildAttributesEveryWorkersTokens(t *testing.T) {
 		EndedAt:   time.Now(),
 		Dispatches: []codexBuildDispatch{
 			{Caste: "builder", AgentName: "aether-builder", Name: "Mason-67", Task: "implement the parser", Status: "completed"},
+			{Caste: "builder", AgentName: "aether-builder", Name: "Anvil-20", Task: "write the tests", Status: "completed"},
 			{Caste: "watcher", AgentName: "aether-watcher", Name: "Vigil-12", Task: "verify the parser", Status: "completed"},
 		},
 	})
 	if err != nil {
 		t.Fatalf("writeSpendRowsForRun: %v", err)
 	}
-	if outcome.Reported != 2 {
-		t.Errorf("%d of 2 workers were credited with a figure; on Claude Code the accounting key and the identity the transcript records are different fields, and a run that credits neither reports no cost at all. Notes: %v",
+	if outcome.Reported != 3 {
+		t.Errorf("%d of 3 workers were credited with a figure; on Claude Code the accounting key and the identity the transcript records are different fields, and a run that credits neither reports no cost at all. Notes: %v",
 			outcome.Reported, outcome.Notes)
 	}
 
@@ -706,6 +715,15 @@ func TestClaudeBuildAttributesEveryWorkersTokens(t *testing.T) {
 	// 100 + 200 + 300 + 400, added by hand from the fixture lines.
 	if got := mason.Usage.BilledTotalTokens(); got != resolverClaudeMasonTotal {
 		t.Errorf("Mason-67 billed total on disk = %d, want %d", got, resolverClaudeMasonTotal)
+	}
+	// The second builder. Nothing but the dispatch description can tell it from
+	// Mason-67: they ran as the same agent definition.
+	anvil := spendLedgerRowByName(t, ledger, "Anvil-20")
+	if !spendRowReportedUsage(anvil) {
+		t.Fatalf("Anvil-20's filed row carries no measurement: %+v", anvil)
+	}
+	if got := anvil.Usage.BilledTotalTokens(); got != resolverClaudeAnvilTotal {
+		t.Errorf("Anvil-20 billed total on disk = %d, want %d — two workers ran as one agent definition, so a figure landing on the wrong one is the harm this guards", got, resolverClaudeAnvilTotal)
 	}
 
 	block := stripANSI(renderSpendCostLineFromLedgers([]spendLedger{ledger}))

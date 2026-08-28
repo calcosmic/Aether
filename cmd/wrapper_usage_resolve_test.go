@@ -21,10 +21,12 @@ import (
 // or BilledTotalTokens().
 //
 // Mason-67's subagent completion record:   input 100 + cacheCreate 200 + cacheRead 300 + output 400
+// Anvil-20's subagent completion record:   input  50 + cacheCreate  60 + cacheRead  70 + output  80
 // Vigil-12's subagent completion record:   input  11 + cacheCreate  22 + cacheRead  33 + output  44
 // the orchestrating session's own turns:   input   1 + cacheCreate   2 + cacheRead   3 + output   4
 const (
 	resolverClaudeMasonTotal   = 1000
+	resolverClaudeAnvilTotal   = 260
 	resolverClaudeVigilTotal   = 110
 	resolverClaudeSessionTotal = 10
 )
@@ -72,6 +74,18 @@ func newResolverClaudeTranscript(t *testing.T) string {
 		AgentID:      "a1b2c3d4e5f60718",
 		In:           100, CacheCreate: 200, CacheRead: 300, Out: 400,
 	})...)
+	// A SECOND builder, sharing Mason-67's agent definition. It is here so that
+	// the definition rule cannot answer for either of them: with one builder in
+	// the fixture, a test could resolve a worker with the description join
+	// switched off entirely and still pass (IN-02, iteration 2). Two builders
+	// leave the dispatch description as the only evidence there is.
+	lines = append(lines, resolverSubagentDispatch(resolverSubagentFixture{
+		ToolUseID:    "toolu_anvil",
+		Description:  "🔨🐜 Builder Anvil-20: write the tests",
+		SubagentType: "aether-builder",
+		AgentID:      "d4e5f60718293041",
+		In:           50, CacheCreate: 60, CacheRead: 70, Out: 80,
+	})...)
 	lines = append(lines, resolverSubagentDispatch(resolverSubagentFixture{
 		ToolUseID:    "toolu_vigil",
 		Description:  "👁️🐜 Watcher Vigil-12: verify the parser",
@@ -113,6 +127,8 @@ func newResolverClaudeTranscript(t *testing.T) string {
 func resolverClaudeAgentNames() map[string]string {
 	return map[string]string{
 		"Mason-67": "aether-builder",
+		// Anvil-20 shares Mason-67's definition on purpose.
+		"Anvil-20": "aether-builder",
 		"Vigil-12": "aether-watcher",
 		// Roam-90 shares Stray-99's definition on purpose.
 		"Roam-90": "aether-scout",
