@@ -73,9 +73,10 @@ func sessionVerifyFresh(s *storage.Store) sessionFreshnessResult {
 }
 
 var pauseColonyCmd = &cobra.Command{
-	Use:   "pause-colony",
-	Short: "Save colony state and write a handoff for later resumption",
-	Args:  cobra.NoArgs,
+	Use:     "pause",
+	Short:   "Save colony state and write a handoff for later resumption",
+	Aliases: []string{"pause-colony"},
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")

@@ -456,6 +456,7 @@ func commandGuideLiteralCommands() []string {
 		"migrate-state",
 		"organize",
 		"patrol",
+		"pause",
 		"pause-colony",
 		"phase",
 		"pheromones",

@@ -1166,6 +1166,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"oracle":                      true,
 	"parallel-mode":               true,
 	"patrol-check":                true,
+	"pause":                       true,
 	"pause-colony":                true,
 	"pending-decision-list":       true,
 	"phase":                       true,

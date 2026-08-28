@@ -37,9 +37,10 @@ type sourceCheckResult struct {
 }
 
 type sourceCheckCommandSpec struct {
-	Name          string `yaml:"name"`
-	Description   string `yaml:"description"`
-	SourceOfTruth string `yaml:"source_of_truth"`
+	Name          string   `yaml:"name"`
+	Description   string   `yaml:"description"`
+	SourceOfTruth string   `yaml:"source_of_truth"`
+	Aliases       []string `yaml:"aliases"`
 	Runtime       struct {
 		Command          string `yaml:"command"`
 		DefaultCommand   string `yaml:"default_command"`
@@ -295,6 +296,12 @@ func checkGeneratedCommandSurfaces(root string) (int, []sourceCheckIssue) {
 	yamlDir := filepath.Join(root, ".aether", "commands")
 	yamlNames := map[string]string{}
 	yamlSpecs := map[string]sourceCheckCommandSpec{}
+	// declaredAliases maps an alias command name (e.g. "pause-colony") to the
+	// canonical command name that declares it (e.g. "pause"). The alias is
+	// declared exactly once, in the canonical command's own YAML `aliases:`
+	// field -- this is what legitimises the alias's wrapper files instead of
+	// requiring a second YAML definition file for it.
+	declaredAliases := map[string]string{}
 	var issues []sourceCheckIssue
 	for _, rel := range sourceCheckFiles(root, ".aether/commands", func(rel string) bool {
 		return !strings.Contains(filepath.ToSlash(rel), "/") && filepath.Ext(rel) == ".yaml"
@@ -305,6 +312,45 @@ func checkGeneratedCommandSurfaces(root string) (int, []sourceCheckIssue) {
 		spec, specIssues := readSourceCheckCommandSpec(root, yamlRel, name)
 		yamlSpecs[name] = spec
 		issues = append(issues, specIssues...)
+		for _, alias := range spec.Aliases {
+			alias = strings.TrimSpace(alias)
+			if alias == "" {
+				continue
+			}
+			if existing, ok := declaredAliases[alias]; ok && existing != name {
+				issues = append(issues, sourceCheckIssue{
+					Area:    "commands",
+					Path:    yamlRel,
+					Message: fmt.Sprintf("alias %q is declared by more than one command source (%s and %s)", alias, existing, name),
+				})
+				continue
+			}
+			declaredAliases[alias] = name
+		}
+	}
+
+	// A declared alias must have a wrapper on all three hand-maintained
+	// surfaces (S-04): the nested Claude copy, the flat Claude copy, and the
+	// OpenCode copy. This is the other half of "declared once, enforced in
+	// both directions" -- a missing wrapper for a declared alias is reported
+	// here, even on the flat surface the loop below never scans.
+	for alias, canonicalName := range declaredAliases {
+		canonicalYAML := yamlNames[canonicalName]
+		for _, aliasPath := range []string{
+			filepath.ToSlash(filepath.Join(".claude", "commands", "ant", alias+".md")),
+			filepath.ToSlash(filepath.Join(".claude", "commands", "ant-"+alias+".md")),
+			filepath.ToSlash(filepath.Join(".opencode", "commands", "ant", alias+".md")),
+		} {
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(aliasPath))); err != nil {
+				issues = append(issues, sourceCheckIssue{
+					Area:     "commands",
+					Path:     aliasPath,
+					Message:  "declared alias has no wrapper at this location",
+					Expected: canonicalYAML,
+					Actual:   "missing",
+				})
+			}
+		}
 	}
 
 	wrapperDirs := []string{
@@ -367,14 +413,20 @@ func checkGeneratedCommandSurfaces(root string) (int, []sourceCheckIssue) {
 			return !strings.Contains(filepath.ToSlash(rel), "/") && filepath.Ext(rel) == ".md"
 		}) {
 			name := strings.TrimSuffix(filepath.Base(rel), ".md")
-			if _, ok := yamlNames[name]; !ok {
-				issues = append(issues, sourceCheckIssue{
-					Area:    "commands",
-					Path:    filepath.ToSlash(filepath.Join(wrapperDir, rel)),
-					Message: "generated wrapper has no matching YAML source",
-					Actual:  filepath.Join(yamlDir, name+".yaml"),
-				})
+			if _, ok := yamlNames[name]; ok {
+				continue
 			}
+			if _, ok := declaredAliases[name]; ok {
+				// Legitimised by its canonical command's alias declaration --
+				// no second YAML definition file is required for it.
+				continue
+			}
+			issues = append(issues, sourceCheckIssue{
+				Area:    "commands",
+				Path:    filepath.ToSlash(filepath.Join(wrapperDir, rel)),
+				Message: "generated wrapper has no matching YAML source",
+				Actual:  filepath.Join(yamlDir, name+".yaml"),
+			})
 		}
 	}
 

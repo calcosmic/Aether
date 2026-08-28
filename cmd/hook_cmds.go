@@ -269,7 +269,7 @@ var hookStopCmd = &cobra.Command{
 		}
 
 		return emitHookBlock(fmt.Sprintf(
-			"Aether is still in %s. Finish the lifecycle with `aether continue`, or run `aether pause-colony` before stopping.",
+			"Aether is still in %s. Finish the lifecycle with `aether continue`, or run `aether pause` before stopping.",
 			phaseLabel,
 		))
 	},

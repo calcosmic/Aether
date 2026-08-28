@@ -46,6 +46,7 @@ var wrapperCommandNames = map[string]bool{
 	"oracle":          true,
 	"organize":        true,
 	"patrol":          true,
+	"pause":           true,
 	"pause-colony":    true,
 	"phase":           true,
 	"pheromones":      true,

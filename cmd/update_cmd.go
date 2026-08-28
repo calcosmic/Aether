@@ -158,6 +158,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			})
 			return nil
 		}
+		// Read which declared alias command wrappers (e.g. pause-colony) are
+		// missing from any platform-home surface BEFORE the ordinary sync
+		// runs. The sync below is what actually restores a missing wrapper
+		// -- it already exists in the hub source -- this snapshot is only
+		// so the repair can be named afterward instead of only showing up
+		// as a larger copied-file count.
+		aliasSurfacesMissingBefore := missingDeclaredAliasSurfaces(homeDir)
+
 		platformResults, platformErrors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channel, syncPlatformHomes)
 		syncResult.details = append(syncResult.details, platformResults...)
 		for _, entry := range platformResults {
@@ -213,6 +221,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
 			message += ". " + restartNote
 		}
+		// Name each declared alias wrapper the sync above just restored --
+		// in plain words, not only as a larger copied-file count. Empty
+		// when nothing was missing.
+		aliasRepairReport := diffAliasRepairs(aliasSurfacesMissingBefore)
+		if repairMsg := aliasRepairReport.Message(); repairMsg != "" {
+			message += " " + repairMsg
+		}
 		// Stamp the repo with the hub version it just synced from, so a later
 		// `aether status` can tell the user when this repo has fallen behind.
 		// Non-fatal: a missing stamp costs a notification, not correctness.
@@ -239,8 +254,12 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"codex_restart_required":  len(restartTargets) > 0,
 			"codex_restart_targets":   restartTargets,
 			"stale_publish":           staleResultToMap(staleResult),
+			"alias_wrapper_repairs":   aliasRepairReport.Repairs,
 		}
 		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode, hubVersion == binaryVersion)
+		if !aliasRepairReport.Empty() {
+			visual += "\n" + aliasRepairReport.Message() + "\n"
+		}
 		if staleResult.Classification != staleOK {
 			visual += renderStalePublishBanner(staleResult)
 		}

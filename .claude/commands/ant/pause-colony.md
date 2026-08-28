@@ -1,4 +1,4 @@
-<!-- Aether-managed: runtime spec at .aether/commands/pause-colony.yaml. Synced by aether update. -->
+<!-- Aether-managed: runtime spec at .aether/commands/pause.yaml. Synced by aether update. -->
 ---
 name: ant-pause-colony
 description: "💾 Pause colony work through the Aether CLI runtime"
@@ -7,6 +7,7 @@ description: "💾 Pause colony work through the Aether CLI runtime"
 Use the Go `aether` CLI as the source of truth.
 
 - Execute `AETHER_OUTPUT_MODE=visual aether pause-colony` directly.
+- `pause-colony` is an alias of `pause` — both run the exact same command.
 - Do not hand-write `.aether/HANDOFF.md` or mutate `COLONY_STATE.json` yourself.
 - The runtime owns session, context, and handoff synchronization.
 - Report the CLI result directly.
