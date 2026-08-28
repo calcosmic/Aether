@@ -905,10 +905,17 @@ func TestTheUnmatchedRecordNoteDoesNotBlameAWorkerThatRan(t *testing.T) {
 // string is the ONLY place a worker's own name reaches Claude Code's
 // transcript, so it is the only thing the token ledger can join a transcript
 // row to a worker on.
+//
+// The flat mirrors are included because they are what an installed consumer
+// actually reads (`aether install` writes `.claude/commands/ant/build.md` to
+// `~/.claude/commands/ant-build.md`); a contract that held only in the
+// canonical copy would not be the one running on anybody's machine.
 var dispatchDescriptionContractSurfaces = []string{
 	".claude/commands/ant/build.md",
+	".claude/commands/ant-build.md",
 	".opencode/commands/ant/build.md",
 	".claude/commands/ant/continue.md",
+	".claude/commands/ant-continue.md",
 	".opencode/commands/ant/continue.md",
 }
 
@@ -942,8 +949,8 @@ func TestDispatchDescriptionCarriesTheAccountingKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
-	if len(dispatchDescriptionContractSurfaces) != 4 {
-		t.Fatalf("the contract lives on 4 wrapper surfaces, this list has %d", len(dispatchDescriptionContractSurfaces))
+	if len(dispatchDescriptionContractSurfaces) != 6 {
+		t.Fatalf("the contract lives on 6 wrapper surfaces, this list has %d", len(dispatchDescriptionContractSurfaces))
 	}
 
 	for _, rel := range dispatchDescriptionContractSurfaces {
