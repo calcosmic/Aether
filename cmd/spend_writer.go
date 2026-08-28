@@ -105,24 +105,32 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 	// zero value here and contributes nothing: an outside caller can no more
 	// assert what a run cost than it could before.
 	attached := make(map[string]codex.WorkerUsage, len(req.Dispatches))
+	// The agent DEFINITION each worker ran as. It is not the accounting key --
+	// several workers share one -- but it is what Claude Code records in its
+	// transcript, so the resolver cannot join a single row without it (CR-01).
+	agentNameByWorker := make(map[string]string, len(req.Dispatches))
 	for _, dispatch := range req.Dispatches {
 		name := spendWorkerNameForDispatch(dispatch)
 		if name == "" {
 			continue
 		}
 		workerNames = append(workerNames, name)
+		if definition := strings.TrimSpace(dispatch.AgentName); definition != "" {
+			agentNameByWorker[name] = definition
+		}
 		if wrapperUsageWasReported(dispatch.Usage) {
 			attached[name] = dispatch.Usage
 		}
 	}
 
 	resolution := resolveWrapperWorkerUsage(wrapperUsageRequest{
-		Platform:    req.Platform,
-		RepoRoot:    req.RepoRoot,
-		StartedAt:   req.StartedAt,
-		EndedAt:     req.EndedAt,
-		WorkerNames: workerNames,
-		Attached:    attached,
+		Platform:          req.Platform,
+		RepoRoot:          req.RepoRoot,
+		StartedAt:         req.StartedAt,
+		EndedAt:           req.EndedAt,
+		WorkerNames:       workerNames,
+		AgentNameByWorker: agentNameByWorker,
+		Attached:          attached,
 	})
 	outcome.Notes = append(outcome.Notes, resolution.Diagnostics...)
 

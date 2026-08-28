@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"strings"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 )
@@ -84,6 +85,23 @@ type claudeTranscriptUsage struct {
 	// for the session's own row.
 	AgentID string
 
+	// DispatchDescription is the description the caller passed to the Task
+	// tool when it spawned this subagent, read from the dispatching `tool_use`
+	// block that this completion record's `tool_use_id` points back at.
+	//
+	// It is the ONLY place the deterministic worker name ("Mason-67") appears
+	// on this platform: `.claude/commands/ant/build.md` requires the wrapper to
+	// use "{caste emoji} {Caste} {name}: {task}" as the visible description,
+	// and Claude Code records that string verbatim. Empty when the dispatching
+	// line carried no description or is not in this transcript.
+	DispatchDescription string
+
+	// AgentDefinition is the agent definition this subagent ran as -- the
+	// `subagent_type` the caller asked for, which the completion record echoes
+	// back as `agentType`. Several workers in one run can share one, so it
+	// identifies a row only when exactly one worker ran as it.
+	AgentDefinition string
+
 	// Usage is always tagged UsageSourceSessionTranscript and never
 	// provider-grade. Only codex.ParseUsage may set the provider tag: a
 	// transcript's accounting semantics are undocumented by the vendor, and
@@ -106,6 +124,9 @@ type claudeTranscriptLine struct {
 		ID    string                      `json:"id"`
 		Model string                      `json:"model"`
 		Usage *claudeTranscriptUsageBlock `json:"usage"`
+		// Content is decoded lazily because it is a string on some lines and
+		// an array of blocks on others.
+		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 
 	// ToolUseResult is decoded lazily because older transcripts sometimes
@@ -120,6 +141,37 @@ type claudeTranscriptToolUseResult struct {
 	AgentID       string                      `json:"agentId"`
 	ResolvedModel string                      `json:"resolvedModel"`
 	Usage         *claudeTranscriptUsageBlock `json:"usage"`
+}
+
+// claudeTranscriptContentBlock is one entry of `message.content`.
+//
+// Reading `type` HERE is not the mistake the file header forbids. That rule is
+// about deciding what KIND OF LINE this is, which is always the top-level
+// `type` and never a content block's. Once the line type is settled, the blocks
+// inside it are structured data with their own declared kinds, and reading them
+// at their declared positions is the opposite of substring matching.
+type claudeTranscriptContentBlock struct {
+	Type      string `json:"type"`
+	ID        string `json:"id"`
+	ToolUseID string `json:"tool_use_id"`
+	Input     *struct {
+		Description  string `json:"description"`
+		SubagentType string `json:"subagent_type"`
+	} `json:"input"`
+}
+
+// claudeTranscriptContentBlocks decodes `message.content` when it is an array
+// of blocks, and returns nothing when it is a plain string or absent. A decode
+// failure is never an error: the line's usage still counts.
+func claudeTranscriptContentBlocks(raw json.RawMessage) []claudeTranscriptContentBlock {
+	if len(raw) == 0 {
+		return nil
+	}
+	var blocks []claudeTranscriptContentBlock
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return nil
+	}
+	return blocks
 }
 
 // claudeTranscriptUsageBlock is the provider's four disjoint billed columns as
@@ -138,11 +190,29 @@ type claudeTranscriptUsageBlock struct {
 // progresses, and the later line restates the same cumulative figure rather
 // than reporting new spend.
 type claudeWorkerAccumulator struct {
-	workerName string
-	agentID    string
-	model      string
-	keyOrder   []string
-	blocks     map[string]claudeTranscriptUsageBlock
+	workerName      string
+	agentID         string
+	model           string
+	description     string
+	agentDefinition string
+	keyOrder        []string
+	blocks          map[string]claudeTranscriptUsageBlock
+}
+
+// claudeSubagentDispatch is what the dispatching `tool_use` block recorded
+// about one subagent, keyed by that block's own id.
+//
+// Claude Code writes the dispatch and its completion as two separate lines: the
+// assistant line carrying the `tool_use` block comes first and holds the
+// description and the requested subagent type, and the later `user` line
+// carrying `toolUseResult` holds the usage and names the same tool_use id in
+// its `tool_result` block. Measured across every transcript in
+// ~/.claude/projects on this machine (2026-08-28): 250 subagent completion
+// records, 250 of which carry that id and join back to a `tool_use` block, and
+// `toolUseResult.agentType` equalled `input.subagent_type` on all 250.
+type claudeSubagentDispatch struct {
+	description  string
+	subagentType string
 }
 
 // parseClaudeTranscriptUsage reads a Claude Code transcript and returns one
@@ -186,6 +256,11 @@ func parseClaudeTranscriptUsageWithBounds(path string, maxBytes int64) ([]claude
 
 	var order []string
 	accumulators := map[string]*claudeWorkerAccumulator{}
+	// dispatches is what each `tool_use` block recorded about the subagent it
+	// spawned, keyed by that block's id. It is filled as the file is read and
+	// consulted when the matching completion record arrives later in the same
+	// file -- the dispatch line always precedes its own result.
+	dispatches := map[string]claudeSubagentDispatch{}
 	var ordinal int
 
 	for {
@@ -193,7 +268,7 @@ func parseClaudeTranscriptUsageWithBounds(path string, maxBytes int64) ([]claude
 		ordinal++
 
 		if len(line) > 0 && !oversized {
-			absorbClaudeTranscriptLine(line, ordinal, &order, accumulators)
+			absorbClaudeTranscriptLine(line, ordinal, &order, accumulators, dispatches)
 		}
 
 		if readErr != nil {
@@ -227,9 +302,11 @@ func parseClaudeTranscriptUsageWithBounds(path string, maxBytes int64) ([]claude
 		// A second total-computing implementation in a second place is
 		// Pitfall 1, the 186x undercount.
 		rows = append(rows, claudeTranscriptUsage{
-			WorkerName: accumulator.workerName,
-			AgentID:    accumulator.agentID,
-			Usage:      usage,
+			WorkerName:          accumulator.workerName,
+			AgentID:             accumulator.agentID,
+			DispatchDescription: accumulator.description,
+			AgentDefinition:     accumulator.agentDefinition,
+			Usage:               usage,
 		})
 	}
 	return rows, nil
@@ -237,7 +314,7 @@ func parseClaudeTranscriptUsageWithBounds(path string, maxBytes int64) ([]claude
 
 // absorbClaudeTranscriptLine decodes one line and, if it is usage-bearing,
 // files its usage block under the right worker and the right deduplication key.
-func absorbClaudeTranscriptLine(raw []byte, ordinal int, order *[]string, accumulators map[string]*claudeWorkerAccumulator) {
+func absorbClaudeTranscriptLine(raw []byte, ordinal int, order *[]string, accumulators map[string]*claudeWorkerAccumulator, dispatches map[string]claudeSubagentDispatch) {
 	var line claudeTranscriptLine
 	if err := json.Unmarshal(raw, &line); err != nil {
 		// A malformed or truncated line is skipped; the rest of the file is
@@ -251,7 +328,26 @@ func absorbClaudeTranscriptLine(raw []byte, ordinal int, order *[]string, accumu
 	// at all.
 	switch line.Type {
 	case "assistant":
-		if line.Message == nil || line.Message.Usage == nil {
+		if line.Message == nil {
+			return
+		}
+		// A subagent dispatch is recorded HERE, on the line that spawned it,
+		// and nowhere else. Its description is the only place the deterministic
+		// worker name appears on this platform, so it is captured whether or not
+		// this line also carries usage.
+		for _, block := range claudeTranscriptContentBlocks(line.Message.Content) {
+			if block.Type != "tool_use" || block.Input == nil || block.ID == "" {
+				continue
+			}
+			if strings.TrimSpace(block.Input.SubagentType) == "" {
+				continue
+			}
+			dispatches[block.ID] = claudeSubagentDispatch{
+				description:  strings.TrimSpace(block.Input.Description),
+				subagentType: strings.TrimSpace(block.Input.SubagentType),
+			}
+		}
+		if line.Message.Usage == nil {
 			return
 		}
 		accumulator := claudeAccumulatorFor(claudeTranscriptMainSessionWorker, order, accumulators)
@@ -293,8 +389,28 @@ func absorbClaudeTranscriptLine(raw []byte, ordinal int, order *[]string, accumu
 		accumulator := claudeAccumulatorFor(accumulatorKey, order, accumulators)
 		accumulator.workerName = workerName
 		accumulator.agentID = result.AgentID
+		accumulator.agentDefinition = strings.TrimSpace(result.AgentType)
 		if result.ResolvedModel != "" {
 			accumulator.model = result.ResolvedModel
+		}
+		// Join back to the line that dispatched this worker. The completion
+		// record's own `tool_result` block names the `tool_use` id, which is the
+		// platform's own link between the two -- not a guess and not a
+		// heuristic.
+		if line.Message != nil {
+			for _, block := range claudeTranscriptContentBlocks(line.Message.Content) {
+				if block.Type != "tool_result" || block.ToolUseID == "" {
+					continue
+				}
+				dispatch, ok := dispatches[block.ToolUseID]
+				if !ok {
+					continue
+				}
+				accumulator.description = dispatch.description
+				if dispatch.subagentType != "" {
+					accumulator.agentDefinition = dispatch.subagentType
+				}
+			}
 		}
 		// A subagent completion record carries NO message id. It is counted
 		// once on its own — never dropped for lack of an identifier, and never

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -158,6 +159,14 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 				fmt.Sprintf("the Claude Code session transcript could not be read (%v), so no worker's usage could be read from it", err))
 			break
 		}
+		// Workers grouped by the agent definition they ran as. A definition
+		// several workers share cannot identify any one of them.
+		byDefinition := map[string][]string{}
+		for _, name := range names {
+			if definition := strings.TrimSpace(req.AgentNameByWorker[name]); definition != "" {
+				byDefinition[definition] = append(byDefinition[definition], name)
+			}
+		}
 		for _, row := range rows {
 			if row.WorkerName == claudeTranscriptMainSessionWorker {
 				// The orchestrating session's own turns are not a dispatched
@@ -167,15 +176,20 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 				res.SessionReported = true
 				continue
 			}
-			switch {
-			case seen[row.WorkerName]:
-				measured[row.WorkerName] = row.Usage
-			case seen[strings.TrimSpace(row.AgentID)]:
-				measured[strings.TrimSpace(row.AgentID)] = row.Usage
-			default:
-				res.Diagnostics = append(res.Diagnostics,
-					fmt.Sprintf("the session transcript holds usage for %q, which is not one of this run's workers, so it was left unattributed rather than guessed onto one", row.WorkerName))
+			worker, why := claudeRowWorker(row, names, seen, byDefinition)
+			if worker == "" {
+				res.Diagnostics = append(res.Diagnostics, why)
+				continue
 			}
+			if _, taken := measured[worker]; taken {
+				// Two transcript rows both claiming one worker. Overwriting
+				// would silently drop one worker's whole spend, which is the
+				// same class of loss as never attributing it at all.
+				res.Diagnostics = append(res.Diagnostics, fmt.Sprintf(
+					"two subagent records in the session transcript both resolve to worker %s, so the second was left unattributed rather than replacing the first", worker))
+				continue
+			}
+			measured[worker] = row.Usage
 		}
 
 	case wrapperUsagePlatformOpenCode:
@@ -212,4 +226,120 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 	}
 
 	return res
+}
+
+// claudeRowWorker decides which of this run's workers a subagent transcript row
+// belongs to, and returns a plain-English reason when it declines to decide.
+//
+// This is CR-01's fix and the order of the rules is the point of it. Claude Code
+// records TWO identities for a dispatched subagent and NEITHER of them is the
+// name the ledger accounts under:
+//
+//   - `agentType` / `subagent_type` -- the agent DEFINITION ("aether-builder").
+//     Several workers in one run share it, so on its own it identifies nobody.
+//   - `agentId` -- an opaque per-dispatch identifier the runtime never sees.
+//
+// The deterministic worker name ("Mason-67") appears only in the description the
+// wrapper composed when it spawned the worker, which Claude Code records on the
+// dispatching `tool_use` block. The reader carries that description here.
+//
+// So: the description is consulted first, because it names the accounting key
+// directly. A row whose description names none of this run's workers is NOT
+// then resolved by its definition -- the description is the stronger evidence
+// and it says the row belongs to somebody else; falling through would credit
+// one worker with another's tokens. Only a row with no description at all
+// reaches the definition rule, and that rule refuses a definition more than one
+// worker ran as.
+func claudeRowWorker(row claudeTranscriptUsage, names []string, requested map[string]bool, byDefinition map[string][]string) (worker string, why string) {
+	// The direct cases: the transcript already carries the accounting key.
+	if requested[row.WorkerName] {
+		return row.WorkerName, ""
+	}
+	if id := strings.TrimSpace(row.AgentID); requested[id] {
+		return id, ""
+	}
+
+	description := strings.TrimSpace(row.DispatchDescription)
+	if description != "" {
+		var named []string
+		for _, name := range names {
+			if workerNameAppearsIn(description, name) {
+				named = append(named, name)
+			}
+		}
+		switch len(named) {
+		case 1:
+			return named[0], ""
+		case 0:
+			return "", fmt.Sprintf(
+				"the session transcript holds usage for a worker this run did not dispatch (%q), so it was left unattributed rather than guessed onto one",
+				shortenForDiagnostic(description))
+		default:
+			return "", fmt.Sprintf(
+				"one dispatch in the session transcript names more than one of this run's workers (%s), so its usage was left unattributed rather than guessed onto one",
+				strings.Join(named, ", "))
+		}
+	}
+
+	definition := strings.TrimSpace(row.AgentDefinition)
+	if definition == "" {
+		definition = strings.TrimSpace(row.WorkerName)
+	}
+	candidates := byDefinition[definition]
+	switch len(candidates) {
+	case 1:
+		return candidates[0], ""
+	case 0:
+		return "", fmt.Sprintf(
+			"the session transcript holds usage for %q, which is not one of this run's workers, so it was left unattributed rather than guessed onto one",
+			claudeRowIdentity(row))
+	default:
+		return "", fmt.Sprintf(
+			"%d of this run's workers (%s) all ran as %q and the session transcript records nothing that tells them apart, so none of them was given that usage rather than guessing",
+			len(candidates), strings.Join(candidates, ", "), definition)
+	}
+}
+
+// claudeRowIdentity is the most useful identity a transcript row carries, for
+// a message the owner reads.
+func claudeRowIdentity(row claudeTranscriptUsage) string {
+	if definition := strings.TrimSpace(row.AgentDefinition); definition != "" {
+		return definition
+	}
+	if name := strings.TrimSpace(row.WorkerName); name != "" {
+		return name
+	}
+	return strings.TrimSpace(row.AgentID)
+}
+
+// workerNameAppearsIn reports whether text names worker exactly, bounded by
+// non-word characters so "Mason-6" never matches inside "Mason-67".
+//
+// It is the single implementation of that rule for the whole spend subsystem:
+// openCodeTitleMatchesWorker matches an OpenCode session title with it and the
+// Claude path matches a dispatch description with it. Two implementations of
+// one matching rule is how the two platforms start disagreeing about which
+// worker a figure belongs to.
+func workerNameAppearsIn(text, worker string) bool {
+	worker = strings.TrimSpace(worker)
+	if worker == "" || strings.TrimSpace(text) == "" {
+		return false
+	}
+	pattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(worker) + `\b`)
+	if err != nil {
+		return false
+	}
+	return pattern.MatchString(text)
+}
+
+// shortenForDiagnostic keeps a quoted fragment short enough to read in a note
+// the owner sees on screen. It measures TEXT for display and is never an input
+// to any token count.
+func shortenForDiagnostic(text string) string {
+	const limit = 80
+	runes := []rune(strings.Join(strings.Fields(text), " "))
+	if len(runes) <= limit {
+		return string(runes)
+	}
+	return string(runes[:limit]) + "…"
 }

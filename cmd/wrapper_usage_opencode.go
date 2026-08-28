@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -354,6 +353,11 @@ func timeInWindow(ts, startedAt, endedAt time.Time) bool {
 // exact match bounded by non-word characters, so "Mason-6" never matches
 // inside "Mason-67".
 //
+// The rule itself lives in workerNameAppearsIn (cmd/wrapper_usage_resolve.go),
+// which the Claude path also uses to match a dispatch description. Two
+// implementations of one matching rule is how two platforms start disagreeing
+// about which worker a figure belongs to.
+//
 // The pattern is compiled per call and NOTHING is cached. A package-level
 // map used to sit here, read and written by this function with no
 // synchronisation. Go's runtime aborts the whole process on a concurrent map
@@ -364,15 +368,7 @@ func timeInWindow(ts, startedAt, endedAt time.Time) bool {
 // FIX 2-1, Phase 196 plan 05; locked by
 // TestOpenCodeWorkerNameMatchingIsConcurrencySafe.
 func openCodeTitleMatchesWorker(title, name string) bool {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return false
-	}
-	pattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
-	if err != nil {
-		return false
-	}
-	return pattern.MatchString(title)
+	return workerNameAppearsIn(title, name)
 }
 
 // readOpenCodeUsage reads every message record under
