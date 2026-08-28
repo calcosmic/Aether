@@ -25,6 +25,10 @@ type spendWriteRequest struct {
 	StartedAt time.Time
 	EndedAt   time.Time
 
+	// RunID identifies THIS attempt at the phase, so a retry adds to what the
+	// phase cost instead of redefining it. See writeSpendRowsForRun.
+	RunID string
+
 	// Dispatches are the run's workers at their terminal status.
 	Dispatches []codexBuildDispatch
 }

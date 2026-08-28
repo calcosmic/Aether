@@ -713,3 +713,93 @@ func TestClaudeBuildAttributesEveryWorkersTokens(t *testing.T) {
 		t.Errorf("a worker is shown with no figure although the transcript carries one for it:\n%s", block)
 	}
 }
+
+// TestRetryDoesNotEraseTheFirstAttemptsSpend is CR-02.
+//
+// A second run of the SAME phase is routine here: Phase 195's recovery command
+// redispatches only the unfinished tasks and finalizes the same phase again, and
+// a blocked check hands the owner `build --force`. The ledger was saved whole
+// every time, so the second attempt replaced the first — and the failed first
+// attempt, which is exactly the spend the owner most wants to see, is the part
+// that disappeared.
+//
+// Measured before the fix: a phase that really cost 1,150,000 tokens reported
+// 250K, under a heading that claims to say what the phase has cost.
+func TestRetryDoesNotEraseTheFirstAttemptsSpend(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	store = s
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+
+	provider := func(total int64) codex.WorkerUsage {
+		return codex.WorkerUsage{InputTokens: total, Source: codex.UsageSourceProvider}
+	}
+
+	// Attempt one: three workers, 900,000 tokens. One of them failed, which is
+	// why there is a second attempt at all.
+	first := spendWriteRequest{
+		Phase:     9,
+		PhaseName: "See what it cost",
+		Workflow:  spendWorkflowBuild,
+		RepoRoot:  tmpDir,
+		RunID:     "attempt-20260828T090000.000000000Z-111",
+		StartedAt: time.Now().Add(-2 * time.Hour),
+		EndedAt:   time.Now().Add(-90 * time.Minute),
+		Dispatches: []codexBuildDispatch{
+			{Caste: "builder", Name: "Anvil-20", Task: "write the reader", Status: "completed", Usage: provider(500_000)},
+			{Caste: "builder", Name: "Mason-67", Task: "write the writer", Status: "failed", Usage: provider(300_000)},
+			{Caste: "watcher", Name: "Vigil-12", Task: "check it", Status: "completed", Usage: provider(100_000)},
+		},
+	}
+	if _, err := writeSpendRowsForRun(first); err != nil {
+		t.Fatalf("first attempt: %v", err)
+	}
+
+	// The recovery redispatch: one worker, the unfinished task, 250,000 tokens.
+	second := spendWriteRequest{
+		Phase:     9,
+		PhaseName: "See what it cost",
+		Workflow:  spendWorkflowBuild,
+		RepoRoot:  tmpDir,
+		RunID:     "attempt-20260828T110000.000000000Z-222",
+		StartedAt: time.Now().Add(-30 * time.Minute),
+		EndedAt:   time.Now(),
+		Dispatches: []codexBuildDispatch{
+			{Caste: "builder", Name: "Anvil-21", Task: "write the writer", Status: "completed", Usage: provider(250_000)},
+		},
+	}
+	if _, err := writeSpendRowsForRun(second); err != nil {
+		t.Fatalf("recovery attempt: %v", err)
+	}
+
+	ledger := loadSpendLedgerFromDisk(t, dataDir, 9, spendWorkflowBuild)
+	if len(ledger.Rows) != 4 {
+		t.Fatalf("got %d rows after two attempts of one phase, want 4 — a retry ADDS to what a phase cost, it does not redefine it: %+v",
+			len(ledger.Rows), ledger.Rows)
+	}
+	totals := computeSpendTotals([]spendLedger{ledger})
+	// 500,000 + 300,000 + 100,000 + 250,000, added by hand.
+	if totals.MeasuredTokens != 1_150_000 {
+		t.Errorf("the phase reports %d tokens, want 1150000 — the first attempt's spend was erased by the retry", totals.MeasuredTokens)
+	}
+	// The failed worker is the one the owner most needs to see.
+	failed := spendLedgerRowByName(t, ledger, "Mason-67")
+	if failed.Status != "failed" {
+		t.Errorf("Mason-67's row = %+v, want the failed first attempt preserved", failed)
+	}
+
+	t.Run("re-finalizing the same attempt still replaces only its own rows", func(t *testing.T) {
+		if _, err := writeSpendRowsForRun(second); err != nil {
+			t.Fatalf("re-finalize: %v", err)
+		}
+		ledger := loadSpendLedgerFromDisk(t, dataDir, 9, spendWorkflowBuild)
+		if len(ledger.Rows) != 4 {
+			t.Fatalf("got %d rows after re-finalizing one attempt, want 4 — a rerun of the same run must not append: %+v",
+				len(ledger.Rows), ledger.Rows)
+		}
+		if got := computeSpendTotals([]spendLedger{ledger}).MeasuredTokens; got != 1_150_000 {
+			t.Errorf("phase total after a re-finalize = %d, want 1150000 — a doubled figure means the rerun accumulated", got)
+		}
+	})
+}
