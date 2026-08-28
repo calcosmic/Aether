@@ -8,6 +8,8 @@ package cmd
 // actually see does not.
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"reflect"
 	"regexp"
@@ -387,4 +389,168 @@ func TestNextActionCardRefusesUnsafeClear(t *testing.T) {
 			}
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// The machine-readable answer beside the card
+// ---------------------------------------------------------------------------
+
+// TestNextActionEnvelopeCarriesTheSameFields.
+//
+// NEXT-02 requires the machine-readable form to carry the same information the
+// owner is shown. Both are produced from ONE answer here and compared, which is
+// the assertion plan 197-07 generalises across all eleven commands.
+func TestNextActionEnvelopeCarriesTheSameFields(t *testing.T) {
+	pinRawCommandNames(t)
+	answer := fullNextActionAnswer()
+
+	card := renderNextActionCard(answer)
+	envelope := applyNextActionToResult(map[string]interface{}{"workflow": "build"}, answer)
+
+	if got := envelope["workflow"]; got != "build" {
+		t.Errorf("the helper trampled a key the command had already set: workflow = %v", got)
+	}
+
+	command, _ := envelope[nextActionCommandKey].(string)
+	if command != answer.Command {
+		t.Fatalf("envelope command = %q, want %q", command, answer.Command)
+	}
+	if !strings.Contains(card, command) {
+		t.Errorf("the card never shows the command the envelope names (%q):\n%s", command, card)
+	}
+
+	alternatives, ok := envelope[nextActionAlternativesKey].([]nextActionAlternative)
+	if !ok {
+		t.Fatalf("envelope alternatives = %T, want []nextActionAlternative", envelope[nextActionAlternativesKey])
+	}
+	if len(alternatives) != len(answer.Alternatives) {
+		t.Fatalf("envelope offers %d alternatives, the answer had %d", len(alternatives), len(answer.Alternatives))
+	}
+	for i, alternative := range alternatives {
+		if alternative.Command != answer.Alternatives[i].Command {
+			t.Errorf("alternative %d = %q, want %q", i, alternative.Command, answer.Alternatives[i].Command)
+		}
+		if !strings.Contains(card, alternative.Command) {
+			t.Errorf("the card never offers the alternative the envelope names (%q):\n%s", alternative.Command, card)
+		}
+	}
+
+	if recommendation, _ := envelope[nextActionRecommendationKey].(string); recommendation != answer.Recommendation {
+		t.Errorf("envelope recommendation = %q, want %q", recommendation, answer.Recommendation)
+	}
+	if _, ok := envelope[nextActionResultKey].(nextAction); !ok {
+		t.Errorf("envelope %s = %T, want the whole answer", nextActionResultKey, envelope[nextActionResultKey])
+	}
+
+	// The whole thing has to survive the trip a wrapper actually makes.
+	data, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatalf("the envelope does not marshal, so no wrapper could read it: %v", err)
+	}
+	var roundTripped map[string]interface{}
+	if err := json.Unmarshal(data, &roundTripped); err != nil {
+		t.Fatalf("the envelope does not round-trip: %v", err)
+	}
+	if got := roundTripped[nextActionCommandKey]; got != answer.Command {
+		t.Errorf("after a JSON round trip the command is %v, want %q", got, answer.Command)
+	}
+	nested, ok := roundTripped[nextActionResultKey].(map[string]interface{})
+	if !ok {
+		t.Fatalf("after a JSON round trip %s is %T, want an object", nextActionResultKey, roundTripped[nextActionResultKey])
+	}
+	if got := nested["command"]; got != answer.Command {
+		t.Errorf("the nested answer's command is %v, want %q", got, answer.Command)
+	}
+}
+
+// TestNextActionEnvelopeStaysRuntimeForm is S-01 held at the machine surface.
+//
+// Wrappers and the TS host EXECUTE the value in the envelope. Handing them
+// `/ant-continue` is handing exec something that is not a program, so the
+// envelope stays in the runtime form on every platform -- including while the
+// card beside it is being rendered in the slash form.
+func TestNextActionEnvelopeStaysRuntimeForm(t *testing.T) {
+	for _, platform := range []string{"claude", "opencode", "codex"} {
+		t.Run(platform, func(t *testing.T) {
+			t.Setenv("AETHER_PLATFORM", platform)
+			answer := fullNextActionAnswer()
+
+			// Production renders the card and emits the envelope from the same
+			// answer; do both, in that order, so a renderer that mutated the
+			// answer would be caught here.
+			_ = renderNextActionCard(answer)
+			envelope := applyNextActionToResult(map[string]interface{}{}, answer)
+
+			data, err := json.Marshal(envelope)
+			if err != nil {
+				t.Fatalf("marshal envelope: %v", err)
+			}
+			if strings.Contains(string(data), "/ant-") {
+				t.Errorf("on %s the envelope carries a slash command, which nothing can execute:\n%s", platform, data)
+			}
+			if got, _ := envelope[nextActionCommandKey].(string); got != "aether continue" {
+				t.Errorf("on %s the envelope command = %q, want the runtime form", platform, got)
+			}
+		})
+	}
+}
+
+// TestCloseoutEmitsTheStructuredAnswerBesideTheOldNextKey.
+//
+// The closeout command is the first caller. The structured fields are added
+// BESIDE the existing `next` key, which anything already reading it keeps
+// working against -- removing that key is not this phase's business.
+func TestCloseoutEmitsTheStructuredAnswerBesideTheOldNextKey(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	pinRawCommandNames(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, _ := newTestStoreWithRoot(t)
+	store = s
+	goal := "Ship the billing rewrite"
+	state := colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Billing engine",
+			Status: colony.PhaseInProgress,
+		}}},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"closeout", "build"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("closeout returned error: %v", err)
+	}
+
+	envelope := parseEnvelopeCmd(t, buf.String())
+	result, ok := envelope["result"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("closeout envelope has no result object: %s", buf.String())
+	}
+
+	command, _ := result[nextActionCommandKey].(string)
+	if command == "" {
+		t.Fatalf("closeout emits no %s: %s", nextActionCommandKey, buf.String())
+	}
+	if strings.HasPrefix(command, "/ant-") {
+		t.Errorf("closeout emitted a slash command in the envelope: %q", command)
+	}
+	next, _ := result["next"].(string)
+	if next == "" {
+		t.Fatalf("closeout stopped populating the existing next key: %s", buf.String())
+	}
+	if !strings.Contains(next, command) {
+		t.Errorf("the existing next key (%q) no longer names the same command as %s (%q)", next, nextActionCommandKey, command)
+	}
+	if _, ok := result[nextActionResultKey].(map[string]interface{}); !ok {
+		t.Errorf("closeout emits no structured answer under %s: %s", nextActionResultKey, buf.String())
+	}
 }
