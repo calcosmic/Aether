@@ -182,7 +182,7 @@ For each heavy-review wave:
 1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each reviewer.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
-4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`. Keep `{name}` in it: the worker name is what this phase's token record joins a transcript row to a worker on, so a shortened label reports the whole run as costing nothing.
 5. The reviewer's prompt = `continue_manifest.context_capsule` (read once, prepended verbatim — the sole carrier of pheromone signals) + each dispatch's runtime-provided `brief` verbatim + `dispatch.skill_section` when present. Nothing else, nothing invented.
 6. After each reviewer returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <worker_file>`.
