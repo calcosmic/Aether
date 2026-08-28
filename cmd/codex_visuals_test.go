@@ -1943,7 +1943,13 @@ func TestRenderPlanVisualAgentDelegatePlanOnly(t *testing.T) {
 	for _, want := range []string{
 		"Agent-Delegate",
 		"host platform must dispatch workers directly",
-		"Host platform should dispatch the JSON `plan_manifest` Scout and Route-Setter workers.",
+		// Phase 197-04 removed the hand-written "Host platform should dispatch
+		// the JSON `plan_manifest` ..." instruction line: next-step guidance now
+		// comes from the one shared card, and the manifest itself still reaches
+		// the wrapper through result.plan_manifest in the JSON envelope, which
+		// is what .opencode/commands/ant/plan.md actually reads ("Reads:
+		// result.plan_manifest"). The line above still asserts the dispatch
+		// intent, so the guarantee this test exists for is unchanged.
 		"`aether plan-finalize --completion-file <file>`",
 	} {
 		if !strings.Contains(output, want) {
@@ -1976,13 +1982,25 @@ func TestRenderPlanVisualPlanOnlyPlannedDispatchesAreNotExecutionResults(t *test
 			t.Fatalf("plan-only visual treated planned dispatches as execution results via %q\n%s", forbidden, output)
 		}
 	}
+	// The guarantee here is that a PLANNED dispatch is never shown as work that
+	// already happened. Phase 197-04 dropped the literal `plan_manifest` token
+	// from the visual (the manifest still travels in the JSON envelope), so the
+	// pending-ness is now carried by the wording and the dispatch mode. Assert
+	// those, not the removed token -- deleting the check would give up the
+	// guarantee, and asserting the token would only prove a string survived.
 	for _, want := range []string{
-		"plan_manifest",
+		// The dispatch-mode line is the discriminating one: the forbidden list
+		// above rejects "Dispatch: Real", so asserting the exact "Dispatch:
+		// Plan-only" line closes the pair. A loose token like "prepared" does
+		// NOT close it -- verified by mutation: changing the prose word left
+		// this test green, so it was asserting a string rather than the
+		// guarantee.
+		"Dispatch: Plan-only",
 		"Seek-70",
 		"Route-70",
 	} {
 		if !strings.Contains(output, want) {
-			t.Fatalf("plan-only visual missing pending manifest cue %q\n%s", want, output)
+			t.Fatalf("plan-only visual missing pending cue %q\n%s", want, output)
 		}
 	}
 }
