@@ -207,6 +207,10 @@ func TestEveryDeciderAgreesOnTheNextCommand(t *testing.T) {
 			got := map[string]string{
 				"workflowSuggestionsForState": commandFromSuggestion(t, "workflowSuggestionsForState", primary),
 				"nextCommandFromState":        strings.TrimSpace(nextCommandFromState(fixture.state)),
+				// Phase 197 plan 03: the fifth decider. Plan 02 left it because
+				// plan 03 owns cmd/hook_cmds.go; it is included here so the
+				// invariant covers every surviving entry point, not four of five.
+				"nextCommandForHookState": strings.TrimSpace(nextCommandForHookState(fixture.state)),
 			}
 
 			suggestions := nextUpSuggestionsForState(fixture.state)
@@ -244,6 +248,9 @@ func TestNoSurvivingDeciderSpellsItsOwnCommand(t *testing.T) {
 		"nextCommandFromState":        "recovery_snapshot.go",
 		"nextUpSuggestionsForState":   "build_flow_cmds.go",
 		"closeoutNextCommand":         "closeout_cmd.go",
+		// Phase 197 plan 03: the fifth decider, collapsed onto the resolver by
+		// the plan that owns cmd/hook_cmds.go.
+		"nextCommandForHookState": "hook_cmds.go",
 	}
 
 	byFile := map[string][]string{}

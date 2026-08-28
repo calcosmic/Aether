@@ -1108,15 +1108,26 @@ All stateful commands use timestamp verification to detect stale sessions:
 
 ## Session Recovery
 
-On the first message of a new conversation, check if `.aether/data/session.json` exists. If it does:
+The runtime greets you itself. Open a chat, resume one, or carry one on after
+clearing it, and the program prints a short card: what the project is, how far
+along it is, the one thing to run next, and a couple of alternatives. A folder
+with no project set up in it gets nothing at all.
 
-1. Read the file briefly to check for `colony_goal`
-2. If a goal exists, display:
-   ```
-   Previous colony session detected: "{goal}"
-   Run /ant-resume to restore context, or continue with a new topic.
-   ```
-3. Do NOT auto-restore — wait for the user to explicitly run `/ant-resume`
+This used to be a paragraph asking the assistant to remember to look at the
+saved session file and tell you what it found — a request that ran only when it
+was noticed. It is now `aether hook-session-start`, registered in
+`.claude/settings.json` for the three moments you arrive with no context
+(opening, resuming, and continuing after a clear). The card comes from the same
+decision every other command's closing message comes from, so two surfaces can
+never name different next steps. Nothing is restored automatically; the card
+tells you what to run and you decide.
+
+Locked by `TestSessionStartCardReflectsState`,
+`TestSessionStartCardIsSilentWithoutAColony`,
+`TestSessionStartHookDoesNotMutate` (the greeting reads and never writes),
+`TestSessionStartHookIsRegistered`, and
+`TestSessionGreetingIsNotDelegatedToTheAssistant` — the last of which fails if
+the old request returns to any shipped document.
 
 ---
 

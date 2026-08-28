@@ -475,21 +475,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether hook-pre-compact",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether hook-pre-tool-use",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether hook-stop",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether host",
     "reason": "path-collision-revealed",
     "owner_phase": "RECLAIM"
@@ -681,11 +666,6 @@
   },
   {
     "name": "aether medic-auto-spawn-check",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether memory-capture",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
