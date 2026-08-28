@@ -48,7 +48,7 @@
 - [ ] **NEXT-02**: Every lifecycle command's closing card (init, discuss, plan, build, continue, pause, resume, seal, update, recover, status) renders from the resolver; quiet and JSON modes carry the same fields
 - [ ] **NEXT-03**: A ratchet asserts that hand-typed `/ant-…` command strings outside the resolver only shrink from a recorded baseline
 - [ ] **NEXT-04**: A `SessionStart` hook (`aether hook-session-start`, wired in `.claude/settings.json`) prints the "colony detected" card from the resolver on startup, resume and clear; the CLAUDE.md paragraph asking Claude to remember is removed
-- [ ] **NEXT-05**: `/ant-pause` is the canonical command and `/ant-pause-colony` an alias generated from an `aliases:` field in the command YAML on all three platforms; `aether update` reconciles and reports the repair
+- [x] **NEXT-05**: `/ant-pause` is the canonical command and `/ant-pause-colony` an alias generated from an `aliases:` field in the command YAML on all three platforms; `aether update` reconciles and reports the repair
 - [ ] **NEXT-06**: The resolver never recommends a command absent from the installed command registry
 
 ### Put the thrown-away data back on screen (SHOW)
@@ -115,7 +115,7 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | NEXT-02 | Phase 197 | Pending |
 | NEXT-03 | Phase 197 | Pending |
 | NEXT-04 | Phase 197 | Pending |
-| NEXT-05 | Phase 197 | Pending |
+| NEXT-05 | Phase 197 | Complete |
 | NEXT-06 | Phase 197 | Pending |
 | SHOW-01 | Phase 198 | Pending |
 | SHOW-02 | Phase 198 | Pending |
