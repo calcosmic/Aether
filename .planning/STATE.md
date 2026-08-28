@@ -5,7 +5,7 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 172.1
 current_phase_name: gate environment integrity — not started; blocks nothing; stays in the backlog
 status: planning
-stopped_at: Phase 196 complete, ready to plan Phase 197
+stopped_at: Phase 197 planned (7 plans, 6 waves), ready to execute
 last_updated: "2026-08-28T15:42:41.620Z"
 last_activity: 2026-08-28
 last_activity_desc: Phase 196 complete, transitioned to Phase 172.1
@@ -34,9 +34,9 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Progress:** [████░░░░░░] 43%
 
-Phase: 197 (One Answer to "What Next?") — READY TO PLAN
-Plan: Not started
-Status: Ready to plan
+Phase: 197 (One Answer to "What Next?") — PLANNED, READY TO EXECUTE
+Plan: 0 of 7
+Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 again — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
