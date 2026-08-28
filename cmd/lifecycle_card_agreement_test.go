@@ -1,0 +1,185 @@
+package cmd
+
+// Phase 197 plan 04, task 3 -- seven commands, one answer.
+//
+// Plans 197-01 and 197-02 made one piece of logic decide what happens next and
+// gave it one card to render. That is a property of the LIBRARY. This file
+// tests the property criterion 2 actually asks for, which is a property of the
+// SURFACE: that the seven commands the owner spends a project inside all print
+// the same answer, on every platform, and never name a command the program does
+// not have.
+//
+// It is written to be able to fail. Reverting any single one of the seven to
+// its old hand-written block makes it fail by name, and that has been
+// demonstrated rather than assumed (see the plan's summary).
+
+import (
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/calcosmic/Aether/pkg/colony"
+)
+
+// closingCommandRe pulls the command out of a rendered closing block. It
+// deliberately accepts BOTH spellings -- the slash form the wrapper platforms
+// show and the runtime form the command line shows -- because which one appears
+// is exactly what the platform test below is measuring.
+var closingCommandRe = regexp.MustCompile("Run `((?:/ant-|aether )[^`]+)`")
+
+// commandInClosing returns the command the closing block recommends.
+func commandInClosing(t *testing.T, label, rendered string) string {
+	t.Helper()
+	marker := strings.Index(rendered, spacedTitle("Next Up"))
+	if marker < 0 {
+		t.Fatalf("%s printed no closing block at all:\n%s", label, rendered)
+	}
+	match := closingCommandRe.FindStringSubmatch(rendered[marker:])
+	if len(match) < 2 {
+		t.Fatalf("%s printed a closing block that recommends no command:\n%s", label, rendered[marker:])
+	}
+	return strings.TrimSpace(match[1])
+}
+
+// migratedSurfaceRenderings renders all seven migrated closings over ONE saved
+// project. Every renderer keeps the signature its existing callers use; the
+// result maps are deliberately bare, because what is being measured is where
+// the advice comes from, not what each command reports about its own run.
+func migratedSurfaceRenderings(t *testing.T, state colony.ColonyState) map[string]string {
+	t.Helper()
+	phase := state.Plan.Phases[0]
+	nextPhase := state.Plan.Phases[1]
+	return map[string]string{
+		"starting a project":  renderInitVisual("Ship the billing rewrite", string(colony.ScopeProject), "session-1", ".aether/data", nil, 0, nil),
+		"talking it through":  renderDiscussVisual(map[string]interface{}{"goal": "Ship the billing rewrite"}),
+		"scanning the code":   renderColonizeVisual(map[string]interface{}{"root": "."}),
+		"drawing up the plan": renderPlanVisual(map[string]interface{}{"goal": "Ship the billing rewrite"}),
+		"building a phase":    renderBuildVisualWithDispatches(state, phase, nil, colony.VerificationDepthStandard),
+		"checking the work":   renderContinueVisual(state, phase, nil, false, &nextPhase, nil, colony.VerificationDepthStandard),
+		"the shared closeout": renderCloseoutVisual(map[string]interface{}{"workflow": "build", "state_available": true}),
+		"the wrapper's closeout": renderCeremonyCloseoutVisual(map[string]interface{}{
+			"workflow": "build", "state_available": true, "current_phase": state.CurrentPhase,
+		}),
+	}
+}
+
+// oneAgreementState is a project with a plan and nothing ambiguous about it:
+// phase 1 is ready, so every one of the seven has exactly one honest answer.
+func oneAgreementState(t *testing.T) colony.ColonyState {
+	t.Helper()
+	return normalizedFixtureState(t, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         fixtureGoal("Ship the billing rewrite"),
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Milestone:    "Open Chambers",
+		Plan: colony.Plan{Phases: []colony.Phase{
+			fixturePhase(1, "Foundations", colony.PhaseReady),
+			fixturePhase(2, "Billing engine", colony.PhasePending),
+		}},
+	})
+}
+
+// TestMigratedLifecycleSurfacesAgree is the test that would have caught a
+// missed variant: one saved project, seven closings, one command out of all of
+// them.
+func TestMigratedLifecycleSurfacesAgree(t *testing.T) {
+	newNextActionFixtureStore(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
+	state := oneAgreementState(t)
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("write the fixture project through the runtime's own store: %v", err)
+	}
+
+	want := resolveNextAction(loadNextActionInput()).Command
+	if want == "" {
+		t.Fatal("the one resolver named no command for this project at all")
+	}
+
+	for label, rendered := range migratedSurfaceRenderings(t, state) {
+		got := commandInClosing(t, label, rendered)
+		if got != want {
+			t.Errorf("%s tells the owner to run %q; the one answer for this project is %q -- the surfaces have separated",
+				label, got, want)
+		}
+	}
+}
+
+// TestMigratedLifecycleSurfacesArePlatformCorrect is S-01 stated as a test:
+// the spelling on screen follows the platform, and the value a wrapper executes
+// never does.
+func TestMigratedLifecycleSurfacesArePlatformCorrect(t *testing.T) {
+	cases := []struct {
+		platform string
+		prefix   string
+	}{
+		{"claude", "/ant-"},
+		{"opencode", "/ant-"},
+		{"codex", "aether "},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.platform, func(t *testing.T) {
+			newNextActionFixtureStore(t)
+			t.Setenv("AETHER_PLATFORM", tc.platform)
+			state := oneAgreementState(t)
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatalf("write the fixture project: %v", err)
+			}
+
+			answer := resolveNextAction(loadNextActionInput())
+			// The value a wrapper and the automation EXECUTE is the runtime
+			// form on every platform. Handing `/ant-build 1` to a shell is a
+			// broken command, which is why the answer never carries one.
+			if !strings.HasPrefix(answer.Command, "aether ") {
+				t.Errorf("on %s the machine-readable answer is %q, which is not something that can be run",
+					tc.platform, answer.Command)
+			}
+			for _, alternative := range answer.Alternatives {
+				if !strings.HasPrefix(alternative.Command, "aether ") {
+					t.Errorf("on %s an alternative is %q, which is not something that can be run",
+						tc.platform, alternative.Command)
+				}
+			}
+
+			for label, rendered := range migratedSurfaceRenderings(t, state) {
+				got := commandInClosing(t, label, rendered)
+				if !strings.HasPrefix(got, tc.prefix) {
+					t.Errorf("on %s, %s shows %q; this platform's owner types commands beginning %q",
+						tc.platform, label, got, tc.prefix)
+				}
+			}
+		})
+	}
+}
+
+// TestEveryCommandTheSevenCanRecommendResolves is criterion 6 applied to the
+// surface rather than to the resolver alone: every command any of the seven can
+// put in front of the owner must be a command this build of the program
+// actually has.
+//
+// It reuses plan 197-01's availability gate rather than reimplementing it, and
+// it walks several different projects, because which branch of the decision is
+// reached is what decides which commands can appear.
+func TestEveryCommandTheSevenCanRecommendResolves(t *testing.T) {
+	for _, fixture := range oneDeciderFixtures(t) {
+		t.Run(fixture.name, func(t *testing.T) {
+			newNextActionFixtureStore(t)
+			t.Setenv("AETHER_PLATFORM", "codex")
+			if err := store.SaveJSON("COLONY_STATE.json", fixture.state); err != nil {
+				t.Fatalf("write the fixture project: %v", err)
+			}
+			answer := resolveNextAction(loadNextActionInput())
+
+			commands := []string{answer.Command}
+			for _, alternative := range answer.Alternatives {
+				commands = append(commands, alternative.Command)
+			}
+			for _, command := range commands {
+				if _, ok := availableCommand(command); !ok {
+					t.Errorf("the closing card offers %q, which this build of the program does not have", command)
+				}
+			}
+		})
+	}
+}
