@@ -647,6 +647,26 @@ type spendPhaseOrphanReport struct {
 // spendRow.ToolCount would have passed (cmd/ceremony_emitter.go assigns a
 // ToolCount of its own).
 //
+// That narrowing has TWO failure directions and only one of them is loud, so
+// both are named here rather than just the flattering one:
+//
+//   - FALSE POSITIVE (loud, self-correcting): a field of one of these structs
+//     read exclusively from a file outside this phase's set is reported as
+//     dead. Whoever hits it sees the name and widens the set. No field is
+//     currently in that position — of the fields derived today, none is
+//     justified by an external selector alone.
+//
+//   - FALSE NEGATIVE (SILENT, and the direction that bit this phase): the
+//     selector match is on the BARE field name across this phase's files, so a
+//     dead field whose name collides with a live field on a DIFFERENT type in
+//     those same files escapes unnoticed. Measured during Phase 196
+//     verification: adding a never-written, never-read `Notes []string` to
+//     spendRow passes clean, because spendWriteOutcome.Notes is selected in
+//     spend_writer.go. This is the same species as the package-scope ToolCount
+//     hole above, narrowed from the whole cmd package to nine files — smaller,
+//     not closed. Closing it needs type-resolved selector matching (go/types),
+//     which is why it was not done here.
+//
 // init functions are entry points the Go runtime calls, so they are roots
 // rather than inventory. Blank identifiers are skipped.
 func analyzeSpendPhaseOrphans(t *testing.T, sources map[string]string) spendPhaseOrphanReport {

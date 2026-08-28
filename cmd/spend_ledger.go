@@ -76,7 +76,7 @@ func spendLedgerRelForPhaseWorkflow(phase int, workflow string) string {
 // the Phase 196 closeout, before this ledger's first production write, so no
 // schema bump and no migration was owed -- the same argument JobName was
 // added under. A field on a durable record that production never fills is a
-// schema lie, and TestEveryFieldThisPhaseAddedIsUsed now fails on one.
+// schema lie, and TestNothingThisPhaseAddedIsUncalled now fails on one.
 type spendRow struct {
 	AgentName string `json:"name"`
 	Caste     string `json:"caste"`
