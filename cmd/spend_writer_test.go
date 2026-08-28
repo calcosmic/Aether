@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -650,4 +651,65 @@ func TestContinueWithNoWorkersWritesNoFile(t *testing.T) {
 			t.Errorf("a check that ran no workers left a file at %s", path)
 		}
 	})
+}
+
+// TestClaudeBuildAttributesEveryWorkersTokens is CR-01 at the level the owner
+// actually sees: the filed ledger and the rendered cost block.
+//
+// Reproduced before the fix as exactly this, on the repository's own primary
+// platform:
+//
+//	── What This Phase Has Cost ──
+//	Cost: not known. ...
+//	  🔨🐜 Builder Mason-67  —  not reported
+//
+// The transcript is written in the shape Claude Code really writes (see
+// newResolverClaudeTranscript), so this test cannot pass by describing the
+// platform incorrectly.
+func TestClaudeBuildAttributesEveryWorkersTokens(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	store = s
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	newResolverClaudeTranscript(t)
+
+	outcome, err := writeSpendRowsForRun(spendWriteRequest{
+		Phase:     4,
+		PhaseName: "See what it cost",
+		Workflow:  spendWorkflowBuild,
+		RepoRoot:  tmpDir,
+		Platform:  "claude",
+		StartedAt: time.Now().Add(-time.Hour),
+		EndedAt:   time.Now(),
+		Dispatches: []codexBuildDispatch{
+			{Caste: "builder", AgentName: "aether-builder", Name: "Mason-67", Task: "implement the parser", Status: "completed"},
+			{Caste: "watcher", AgentName: "aether-watcher", Name: "Vigil-12", Task: "verify the parser", Status: "completed"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("writeSpendRowsForRun: %v", err)
+	}
+	if outcome.Reported != 2 {
+		t.Errorf("%d of 2 workers were credited with a figure; on Claude Code the accounting key and the identity the transcript records are different fields, and a run that credits neither reports no cost at all. Notes: %v",
+			outcome.Reported, outcome.Notes)
+	}
+
+	ledger := loadSpendLedgerFromDisk(t, dataDir, 4, spendWorkflowBuild)
+	mason := spendLedgerRowByName(t, ledger, "Mason-67")
+	if !spendRowReportedUsage(mason) {
+		t.Fatalf("Mason-67's filed row carries no measurement: %+v", mason)
+	}
+	// 100 + 200 + 300 + 400, added by hand from the fixture lines.
+	if got := mason.Usage.BilledTotalTokens(); got != resolverClaudeMasonTotal {
+		t.Errorf("Mason-67 billed total on disk = %d, want %d", got, resolverClaudeMasonTotal)
+	}
+
+	block := stripANSI(renderSpendCostLineFromLedgers([]spendLedger{ledger}))
+	if strings.Contains(block, "Cost: not known") {
+		t.Errorf("the owner's cost block says the cost is not known for a build whose transcript recorded every worker's tokens:\n%s", block)
+	}
+	if strings.Contains(block, spendNotReportedFigure) {
+		t.Errorf("a worker is shown with no figure although the transcript carries one for it:\n%s", block)
+	}
 }

@@ -30,6 +30,13 @@ type wrapperUsageRequest struct {
 	// of them comes back in the result, reported or not.
 	WorkerNames []string
 
+	// AgentNameByWorker maps each accounting key in WorkerNames -- the
+	// worker's own deterministic name, "Mason-67" -- to the agent DEFINITION
+	// that worker was spawned as, "aether-builder". They are two different
+	// identities and the platform records the second one, so a resolver
+	// holding only the first can attribute nothing.
+	AgentNameByWorker map[string]string
+
 	// Attached is the usage the provider parser already attached at the
 	// dispatch boundary, keyed by worker name. It is a genuine provider
 	// measurement read by the Go runtime, never a figure relayed through a

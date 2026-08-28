@@ -33,6 +33,19 @@ const (
 // temporary HOME and records it as this run's session, exactly as the PreToolUse
 // hook would. It returns the temp home.
 //
+// THE SHAPE HERE IS THE SHAPE CLAUDE CODE ACTUALLY WRITES, and that is the whole
+// point of this helper. Verified on 2026-08-28 against every transcript in
+// ~/.claude/projects on the owner's machine: 250 subagent completion records,
+// 250 of them carrying a tool_result whose tool_use_id joins back to the
+// dispatching tool_use block, and `toolUseResult.agentType` equal to that
+// block's `input.subagent_type` on all 250. Not one of them carried a
+// deterministic worker name in `agentType`.
+//
+// An earlier version of this helper wrote "Mason-67" into `agentType`. That is a
+// shape the platform never produces, and it made every Claude-path test pass
+// while production attributed nothing at all -- the "fixture built in a shape
+// production never emits" failure CLAUDE.md's Definition of Done names.
+//
 // The transcript deliberately repeats the orchestrating session's assistant line
 // under the SAME message.id, so the deduplication the transcript reader performs
 // is still observable through the resolver rather than only in the reader's own
@@ -48,21 +61,35 @@ func newResolverClaudeTranscript(t *testing.T) string {
 	}
 	transcriptPath := filepath.Join(projectDir, "sess-resolver.jsonl")
 
-	assistantLine := func(uuid string) string {
-		return `{"type":"assistant","uuid":"` + uuid + `","requestId":"req_1","message":{"id":"msg_1","model":"claude-opus-5","usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4}}}`
-	}
-	subagentLine := func(agentType, agentID string, in, cc, cr, out int64) string {
-		return fmt.Sprintf(`{"type":"user","uuid":"u-%s","toolUseResult":{"agentType":%q,"agentId":%q,"resolvedModel":"claude-sonnet-5","usage":{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":%d}}}`,
-			agentID, agentType, agentID, in, cc, cr, out)
-	}
-
 	lines := []string{
-		assistantLine("u-1"),
-		assistantLine("u-2"), // same message.id -- must be billed once, not twice
-		subagentLine("Mason-67", "agent-a", 100, 200, 300, 400),
-		subagentLine("Vigil-12", "agent-b", 11, 22, 33, 44),
-		subagentLine("Stray-99", "agent-c", 777777, 0, 0, 0), // never dispatched by this run
+		resolverAssistantLine("u-1"),
+		resolverAssistantLine("u-2"), // same message.id -- must be billed once, not twice
 	}
+	lines = append(lines, resolverSubagentDispatch(resolverSubagentFixture{
+		ToolUseID:    "toolu_mason",
+		Description:  "🔨🐜 Builder Mason-67: implement the parser",
+		SubagentType: "aether-builder",
+		AgentID:      "a1b2c3d4e5f60718",
+		In:           100, CacheCreate: 200, CacheRead: 300, Out: 400,
+	})...)
+	lines = append(lines, resolverSubagentDispatch(resolverSubagentFixture{
+		ToolUseID:    "toolu_vigil",
+		Description:  "👁️🐜 Watcher Vigil-12: verify the parser",
+		SubagentType: "aether-watcher",
+		AgentID:      "b2c3d4e5f6071829",
+		In:           11, CacheCreate: 22, CacheRead: 33, Out: 44,
+	})...)
+	// A worker this run never dispatched. Its agent DEFINITION is the same one
+	// Roam-90 was dispatched as, so a resolver that joined on the definition
+	// alone would credit Roam-90 with somebody else's 777,777 tokens.
+	lines = append(lines, resolverSubagentDispatch(resolverSubagentFixture{
+		ToolUseID:    "toolu_stray",
+		Description:  "🔍🐜 Scout Stray-99: research the store",
+		SubagentType: "aether-scout",
+		AgentID:      "c3d4e5f607182930",
+		In:           777777,
+	})...)
+
 	if err := os.WriteFile(transcriptPath, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
 		t.Fatalf("write transcript: %v", err)
 	}
@@ -78,6 +105,62 @@ func newResolverClaudeTranscript(t *testing.T) string {
 		t.Fatalf("save spend session record: %v", err)
 	}
 	return home
+}
+
+// resolverClaudeAgentNames is the map from the accounting key (the worker's own
+// deterministic name) to the agent DEFINITION it was spawned as -- exactly what
+// the build manifest carries and what the wrapper passes as `subagent_type`.
+func resolverClaudeAgentNames() map[string]string {
+	return map[string]string{
+		"Mason-67": "aether-builder",
+		"Vigil-12": "aether-watcher",
+		// Roam-90 shares Stray-99's definition on purpose.
+		"Roam-90": "aether-scout",
+	}
+}
+
+func resolverAssistantLine(uuid string) string {
+	return `{"type":"assistant","uuid":"` + uuid + `","requestId":"req_1","message":{"id":"msg_1","model":"claude-opus-5","content":[{"type":"text","text":"[redacted]"}],"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4}}}`
+}
+
+type resolverSubagentFixture struct {
+	ToolUseID    string
+	Description  string
+	SubagentType string
+	AgentID      string
+	In           int64
+	CacheCreate  int64
+	CacheRead    int64
+	Out          int64
+
+	// OmitDescription writes the dispatching tool_use with no description at
+	// all, which is what a caller that passed none produces.
+	OmitDescription bool
+	// OmitDispatch writes the completion record with no dispatching tool_use
+	// line before it, which is what a transcript truncated mid-session looks
+	// like.
+	OmitDispatch bool
+}
+
+// resolverSubagentDispatch writes the TWO lines one subagent dispatch really
+// produces: the assistant line whose `tool_use` block carries the description
+// and the subagent type, then the user line whose `tool_result` names that same
+// tool_use id and whose `toolUseResult` carries the usage.
+func resolverSubagentDispatch(f resolverSubagentFixture) []string {
+	var lines []string
+	if !f.OmitDispatch {
+		description := fmt.Sprintf(`"description":%q,`, f.Description)
+		if f.OmitDescription {
+			description = ""
+		}
+		lines = append(lines, fmt.Sprintf(
+			`{"type":"assistant","uuid":"u-dispatch-%s","requestId":"req-%s","message":{"id":"msg-%s","model":"claude-opus-5","content":[{"type":"tool_use","id":%q,"name":"Agent","input":{%s"subagent_type":%q,"prompt":"[redacted]"}}]}}`,
+			f.AgentID, f.AgentID, f.AgentID, f.ToolUseID, description, f.SubagentType))
+	}
+	lines = append(lines, fmt.Sprintf(
+		`{"type":"user","uuid":"u-%s","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":%q,"content":"[redacted]"}]},"toolUseResult":{"agentType":%q,"agentId":%q,"resolvedModel":"claude-sonnet-5","usage":{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":%d}}}`,
+		f.AgentID, f.ToolUseID, f.SubagentType, f.AgentID, f.In, f.CacheCreate, f.CacheRead, f.Out))
+	return lines
 }
 
 func resolverWorker(t *testing.T, res wrapperUsageResolution, name string) wrapperWorkerUsage {
@@ -113,10 +196,11 @@ func TestResolverReadsTranscriptOnTheClaudePath(t *testing.T) {
 	newResolverClaudeTranscript(t)
 
 	res := resolveWrapperWorkerUsage(wrapperUsageRequest{
-		Platform:    "claude-code",
-		RepoRoot:    t.TempDir(),
-		StartedAt:   time.Now().Add(-time.Hour),
-		WorkerNames: []string{"Mason-67", "Vigil-12", "Roam-90"},
+		Platform:          "claude-code",
+		RepoRoot:          t.TempDir(),
+		StartedAt:         time.Now().Add(-time.Hour),
+		WorkerNames:       []string{"Mason-67", "Vigil-12", "Roam-90"},
+		AgentNameByWorker: resolverClaudeAgentNames(),
 	})
 
 	mason := resolverWorker(t, res, "Mason-67")
@@ -244,11 +328,12 @@ func TestResolverUsesAttachedUsageOnTheDirectPath(t *testing.T) {
 	t.Run("a provider measurement outranks a transcript read for the same worker", func(t *testing.T) {
 		newResolverClaudeTranscript(t)
 		res := resolveWrapperWorkerUsage(wrapperUsageRequest{
-			Platform:    "claude-code",
-			RepoRoot:    t.TempDir(),
-			StartedAt:   time.Now().Add(-time.Hour),
-			WorkerNames: []string{"Mason-67"},
-			Attached:    map[string]codex.WorkerUsage{"Mason-67": attached},
+			Platform:          "claude-code",
+			RepoRoot:          t.TempDir(),
+			StartedAt:         time.Now().Add(-time.Hour),
+			WorkerNames:       []string{"Mason-67"},
+			AgentNameByWorker: resolverClaudeAgentNames(),
+			Attached:          map[string]codex.WorkerUsage{"Mason-67": attached},
 		})
 		mason := resolverWorker(t, res, "Mason-67")
 		if mason.Usage.Source != codex.UsageSourceProvider || mason.Usage.BilledTotalTokens() != 102550 {
@@ -420,10 +505,11 @@ func TestResolverIsIdempotent(t *testing.T) {
 	newResolverClaudeTranscript(t)
 
 	req := wrapperUsageRequest{
-		Platform:    "claude-code",
-		RepoRoot:    t.TempDir(),
-		StartedAt:   time.Now().Add(-time.Hour),
-		WorkerNames: []string{"Mason-67", "Vigil-12", "Roam-90"},
+		Platform:          "claude-code",
+		RepoRoot:          t.TempDir(),
+		StartedAt:         time.Now().Add(-time.Hour),
+		WorkerNames:       []string{"Mason-67", "Vigil-12", "Roam-90"},
+		AgentNameByWorker: resolverClaudeAgentNames(),
 	}
 
 	first := resolveWrapperWorkerUsage(req)
@@ -457,6 +543,166 @@ func TestResolverIsIdempotent(t *testing.T) {
 		}
 		if got := res.Workers[0].Usage.BilledTotalTokens(); got != resolverClaudeMasonTotal {
 			t.Errorf("billed total = %d, want %d", got, resolverClaudeMasonTotal)
+		}
+	})
+}
+
+// TestClaudeTranscriptJoinsOnWhatThePlatformRecords is CR-01.
+//
+// The Claude reader names a subagent row by the agent DEFINITION the wrapper
+// passed as `subagent_type` ("aether-builder"). The ledger accounts a worker
+// under its own deterministic name ("Mason-67"). Those two strings can never be
+// equal, so before this test existed NO worker's tokens were attributed on
+// Claude Code -- the repository's own primary platform -- and the owner's cost
+// block read "Cost: not known" on every build.
+//
+// The join this locks is the one the platform itself records: the tool_use block
+// that dispatched the worker carries BOTH the description the wrapper composed
+// (which contains the deterministic name, by the contract in
+// .claude/commands/ant/build.md: "Use the exact visible description:
+// {caste emoji} {Caste} {name}: {task}") AND the subagent type, and the
+// completion record's tool_use_id points straight back at it.
+func TestClaudeTranscriptJoinsOnWhatThePlatformRecords(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, _ := newTestStore(t)
+	store = s
+	newResolverClaudeTranscript(t)
+
+	res := resolveWrapperWorkerUsage(wrapperUsageRequest{
+		Platform:          "claude-code",
+		RepoRoot:          t.TempDir(),
+		StartedAt:         time.Now().Add(-time.Hour),
+		WorkerNames:       []string{"Mason-67", "Vigil-12", "Roam-90"},
+		AgentNameByWorker: resolverClaudeAgentNames(),
+	})
+
+	mason := resolverWorker(t, res, "Mason-67")
+	if !mason.Reported {
+		t.Fatalf("Mason-67 got no figure. The transcript records its dispatch as agentType %q with the deterministic name only in the dispatch description, which is what Claude Code really writes; a resolver that only compares the accounting key against agentType attributes nothing on this platform at all. Diagnostics: %v",
+			"aether-builder", res.Diagnostics)
+	}
+	if got := mason.Usage.BilledTotalTokens(); got != resolverClaudeMasonTotal {
+		t.Errorf("Mason-67 billed total = %d, want %d", got, resolverClaudeMasonTotal)
+	}
+
+	vigil := resolverWorker(t, res, "Vigil-12")
+	if !vigil.Reported || vigil.Usage.BilledTotalTokens() != resolverClaudeVigilTotal {
+		t.Errorf("Vigil-12 = %+v, want a reported billed total of %d", vigil, resolverClaudeVigilTotal)
+	}
+
+	// Roam-90 was dispatched as the same agent definition Stray-99 ran as. The
+	// transcript's own description says the row belongs to Stray-99, so Roam-90
+	// must get NOTHING -- a definition-only join would hand it 777,777 tokens it
+	// never spent.
+	roam := resolverWorker(t, res, "Roam-90")
+	if roam.Reported {
+		t.Errorf("Roam-90 was credited %d tokens from a row the transcript says belongs to Stray-99; two workers sharing one agent definition must never be resolved by that definition when the dispatch record names one of them",
+			roam.Usage.BilledTotalTokens())
+	}
+
+	stray := false
+	for _, d := range res.Diagnostics {
+		if strings.Contains(d, "Stray-99") {
+			stray = true
+		}
+	}
+	if !stray {
+		t.Errorf("a transcript row for a worker this run never dispatched was silently dropped; expected a plain-English note naming Stray-99, got %v", res.Diagnostics)
+	}
+
+	t.Run("a dispatch that carried no description still resolves by its definition when only one worker ran as it", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		projectDir := filepath.Join(home, ".claude", "projects", "-nodesc")
+		if err := os.MkdirAll(projectDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		path := filepath.Join(projectDir, "sess.jsonl")
+		lines := resolverSubagentDispatch(resolverSubagentFixture{
+			ToolUseID:       "toolu_a",
+			SubagentType:    "aether-builder",
+			AgentID:         "d4e5f60718293041",
+			OmitDescription: true,
+			In:              500,
+		})
+		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+			t.Fatalf("write transcript: %v", err)
+		}
+		if err := store.SaveJSON(spendSessionRel, spendSessionRecord{
+			SchemaVersion:  spendSessionSchemaVersion,
+			Platform:       "claude-code",
+			SessionID:      "sess-nodesc",
+			TranscriptPath: path,
+			Cwd:            t.TempDir(),
+			CapturedAt:     time.Now().UTC().Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("save session record: %v", err)
+		}
+
+		res := resolveWrapperWorkerUsage(wrapperUsageRequest{
+			Platform:          "claude-code",
+			RepoRoot:          t.TempDir(),
+			StartedAt:         time.Now().Add(-time.Hour),
+			WorkerNames:       []string{"Anvil-20"},
+			AgentNameByWorker: map[string]string{"Anvil-20": "aether-builder"},
+		})
+		anvil := resolverWorker(t, res, "Anvil-20")
+		if !anvil.Reported || anvil.Usage.BilledTotalTokens() != 500 {
+			t.Errorf("Anvil-20 = %+v, want 500 tokens: it is the only worker this run dispatched as aether-builder, so the definition identifies it unambiguously", anvil)
+		}
+	})
+
+	t.Run("two workers sharing one definition and no description resolve to neither", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		projectDir := filepath.Join(home, ".claude", "projects", "-ambiguous")
+		if err := os.MkdirAll(projectDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		path := filepath.Join(projectDir, "sess.jsonl")
+		lines := resolverSubagentDispatch(resolverSubagentFixture{
+			ToolUseID:       "toolu_x",
+			SubagentType:    "aether-builder",
+			AgentID:         "e5f6071829304152",
+			OmitDescription: true,
+			In:              900,
+		})
+		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+			t.Fatalf("write transcript: %v", err)
+		}
+		if err := store.SaveJSON(spendSessionRel, spendSessionRecord{
+			SchemaVersion:  spendSessionSchemaVersion,
+			Platform:       "claude-code",
+			SessionID:      "sess-ambiguous",
+			TranscriptPath: path,
+			Cwd:            t.TempDir(),
+			CapturedAt:     time.Now().UTC().Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("save session record: %v", err)
+		}
+
+		res := resolveWrapperWorkerUsage(wrapperUsageRequest{
+			Platform:    "claude-code",
+			RepoRoot:    t.TempDir(),
+			StartedAt:   time.Now().Add(-time.Hour),
+			WorkerNames: []string{"Anvil-20", "Mason-67"},
+			AgentNameByWorker: map[string]string{
+				"Anvil-20": "aether-builder",
+				"Mason-67": "aether-builder",
+			},
+		})
+		for _, name := range []string{"Anvil-20", "Mason-67"} {
+			assertNoFigure(t, resolverWorker(t, res, name))
+		}
+		refused := false
+		for _, d := range res.Diagnostics {
+			if strings.Contains(d, "aether-builder") && strings.Contains(d, "Anvil-20") && strings.Contains(d, "Mason-67") {
+				refused = true
+			}
+		}
+		if !refused {
+			t.Errorf("two workers ran as one agent definition with nothing to tell them apart and the resolver said nothing about it; the owner must be able to see why neither has a figure. Got: %v", res.Diagnostics)
 		}
 	})
 }
