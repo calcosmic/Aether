@@ -33,9 +33,19 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+// runningBuildStartedAt is a build that started recently enough that the
+// runtime does not consider it abandoned. Derived from abandonedBuildThreshold
+// rather than typed as a plausible-looking date, so a fixture meant to be "a
+// build that is running" cannot silently become "a build that stalled".
+func runningBuildStartedAt() *time.Time {
+	started := time.Now().UTC().Add(-abandonedBuildThreshold / 2)
+	return &started
+}
 
 // runSessionStartHook executes the real cobra command with an empty hook
 // payload on stdin and returns everything it printed.
@@ -85,7 +95,7 @@ func TestSessionStartCardReflectsState(t *testing.T) {
 				Goal:           fixtureGoal("Ship the billing rewrite"),
 				State:          colony.StateEXECUTING,
 				CurrentPhase:   2,
-				BuildStartedAt: fixtureTime(t, "2026-08-01T10:00:00Z"),
+				BuildStartedAt: runningBuildStartedAt(),
 				Milestone:      "Open Chambers",
 				Plan: colony.Plan{Phases: []colony.Phase{
 					fixturePhase(1, "Foundations", colony.PhaseCompleted),
@@ -148,7 +158,7 @@ func TestSessionStartCardReflectsState(t *testing.T) {
 			Goal:           fixtureGoal("Ship the billing rewrite"),
 			State:          colony.StateEXECUTING,
 			CurrentPhase:   2,
-			BuildStartedAt: fixtureTime(t, "2026-08-01T10:00:00Z"),
+			BuildStartedAt: runningBuildStartedAt(),
 			Milestone:      "Open Chambers",
 			Plan: colony.Plan{Phases: []colony.Phase{
 				fixturePhase(1, "Foundations", colony.PhaseCompleted),
@@ -208,7 +218,7 @@ func TestSessionStartHookDoesNotMutate(t *testing.T) {
 		Goal:           fixtureGoal("Ship the billing rewrite"),
 		State:          colony.StateEXECUTING,
 		CurrentPhase:   1,
-		BuildStartedAt: fixtureTime(t, "2026-08-01T10:00:00Z"),
+		BuildStartedAt: runningBuildStartedAt(),
 		Milestone:      "Open Chambers",
 		Plan:           colony.Plan{Phases: []colony.Phase{fixturePhase(1, "Foundations", colony.PhaseInProgress)}},
 	})

@@ -303,6 +303,60 @@ var hookPreCompactCmd = &cobra.Command{
 	},
 }
 
+// hookSessionStartCmd is Phase 197 plan 03: the greeting the program owns.
+//
+// Four shipped documents used to ASK the assistant to check the saved session
+// file on the first message of a conversation and report what it found. That is
+// a request, not a mechanism -- it ran only when it was noticed. This hook fires
+// when a session opens, when one is resumed, and when a conversation is carried
+// on after being cleared, and prints the one card every other surface renders.
+//
+// Two rules bind it, and both are asserted by tests rather than promised here:
+//
+//  1. It DECIDES nothing. It composes no advice of its own; the card and the
+//     command inside it come from resolveNextAction. A branch here would be a
+//     fifth rival decider, which is the drift this phase exists to end.
+//     (TestSessionStartHookChoosesNoCommandOfItsOwn.)
+//
+//  2. It WRITES nothing. Unlike hookPreCompactCmd in this same file -- which
+//     deliberately refreshes the session summary -- this hook is pure
+//     inspection, and it fires before the owner has typed a word. This
+//     repository has shipped two inspection surfaces that quietly wrote to
+//     saved state while documenting that they did not; this is the third such
+//     lock rather than the third such defect.
+//     (TestSessionStartHookDoesNotMutate.)
+//
+// Silence is the correct output when there is no project. Aether is installed
+// in repositories that are not running a colony, and greeting one of those is
+// noise -- so the loader's own no-colony signal is honoured rather than an
+// empty state being mistaken for a project that just started.
+var hookSessionStartCmd = &cobra.Command{
+	Use:    "hook-session-start",
+	Short:  "Claude hook: greet a new session with where things stand",
+	Hidden: true,
+	Args:   cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Drain the payload the same way the sibling hooks do. Nothing in it is
+		// needed: where things stand is read from the project, not from what
+		// the platform says about the session.
+		_, _ = readClaudeHookInput()
+
+		// Failure tolerance, matching the sibling hooks: a greeting that errors
+		// on a malformed project is worse than one that stays quiet, because it
+		// fires before the owner has typed anything. loadNextActionInput
+		// reports NoColony for a missing store, an unreadable state file and a
+		// state file carrying no goal alike, so every one of those paths is
+		// silence rather than noise.
+		in := loadNextActionInput()
+		if in.NoColony {
+			return nil
+		}
+
+		writeVisualOutput(stdout, renderNextActionCard(resolveNextAction(in)))
+		return nil
+	},
+}
+
 func allowStopAfterRecentResume() bool {
 	if store == nil {
 		return false
@@ -550,28 +604,18 @@ func emitHookBlock(reason string) error {
 	return nil
 }
 
+// nextCommandForHookState was the fifth rival decider. Phase 197 plan 02
+// collapsed the other four onto resolveNextAction and deliberately left this
+// one for plan 03, which owns this file. It is an adapter now: it gathers the
+// facts for a state the caller already holds and returns the one answer.
+//
+// It kept its own branches longer than the others, and they disagreed with
+// them -- a READY project whose phases were all finished was told to check
+// status here while three other deciders said something else. Every command it
+// can name now comes from the resolver's candidate set, so a rename fails the
+// build instead of being quietly absorbed.
 func nextCommandForHookState(state colony.ColonyState) string {
-	switch state.State {
-	case colony.StateEXECUTING, colony.StateBUILT:
-		return "aether continue"
-	case colony.StateCOMPLETED:
-		return "aether seal"
-	case colony.StateREADY:
-		if len(state.Plan.Phases) == 0 {
-			return "aether plan"
-		}
-		for _, phase := range state.Plan.Phases {
-			if phase.Status == colony.PhaseReady || phase.Status == colony.PhasePending || phase.Status == "" {
-				return fmt.Sprintf("aether build %d", phase.ID)
-			}
-		}
-		return "aether status"
-	default:
-		if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
-			return "aether init \"goal\""
-		}
-		return "aether status"
-	}
+	return resolveNextAction(nextActionInputForState(state, "")).Command
 }
 
 func summarizeHookState(state colony.ColonyState) string {
@@ -645,4 +689,5 @@ func init() {
 	rootCmd.AddCommand(hookPreToolUseCmd)
 	rootCmd.AddCommand(hookStopCmd)
 	rootCmd.AddCommand(hookPreCompactCmd)
+	rootCmd.AddCommand(hookSessionStartCmd)
 }
