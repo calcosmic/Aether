@@ -5,17 +5,14 @@
 
 ## Session Recovery
 
-On the first message of a new conversation, check if `.aether/data/session.json` exists. If it does:
+The program does this for you. Open a chat, resume one, or carry one on after
+clearing it, and Aether prints a short card saying what the project is, how far
+along it is, the one command to run next, and a couple of alternatives. A folder
+with no project set up in it is not greeted at all.
 
-1. Read the file briefly to check for `colony_goal`
-2. If a goal exists, display:
-   ```
-   Previous colony session detected: "{goal}"
-   Run /ant-resume to restore context, or continue with a new topic.
-   ```
-3. Do NOT auto-restore — wait for the user to explicitly run /ant-resume
-
-This only applies to genuinely new conversations, not after /clear.
+Nothing is restored automatically — the card tells you what to run and you
+decide. `/ant-resume` reloads the quick view, `/ant-resume-colony` the fuller
+one.
 
 ## Available Commands
 

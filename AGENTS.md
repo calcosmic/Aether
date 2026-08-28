@@ -809,15 +809,19 @@ All stateful commands use timestamp verification to detect stale sessions:
 
 ## Session Recovery
 
-On the first message of a new conversation, check if `.aether/data/session.json`
-exists. If it does, read briefly for `colony_goal` and display:
+The runtime greets the owner itself. `aether hook-session-start` is registered
+in `.claude/settings.json` for the three moments the owner arrives with no
+context -- opening a chat, resuming one, and carrying one on after clearing it
+-- and prints the shared "what next" card: the goal, how far along the work is,
+the one command to run next, and a couple of alternatives. A folder with no
+project set up in it is not greeted at all.
 
-```
-Previous colony session detected: "{goal}"
-Run `aether resume` to restore context, or continue with a new topic.
-```
+The greeting reads and never writes, and it decides nothing of its own: the card
+comes from the same resolver every command's closing message comes from.
 
-Do NOT auto-restore -- wait for the user to explicitly request it.
+Locked by `TestSessionStartCardReflectsState`,
+`TestSessionStartHookIsRegistered`, `TestSessionStartHookDoesNotMutate`, and
+`TestSessionGreetingIsNotDelegatedToTheAssistant`.
 
 ---
 
