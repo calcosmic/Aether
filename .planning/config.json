@@ -11,6 +11,6 @@
     "plan_checker": true,
     "context_window": 1000000,
     "test_gate_timeout": 3600,
-    "use_worktrees": false
+    "use_worktrees": true
   }
 }

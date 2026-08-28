@@ -61,6 +61,40 @@ This rule exists because the project's own audits caught the alternative failing
 - A documentation claim about runtime behaviour must be testable or removed. Three files described phase-end consolidation running for months while it never ran.
 - Prefer a test that asserts a **proportion or an invariant** over one that asserts a section exists. `TestBuildWorkerBriefIsMostlyTask` fails if framework scaffolding ever outweighs the task again, whatever the new scaffolding is called. A test that only checks for a named section cannot catch its replacement.
 
+### How much proof a change needs
+
+The rule above has one setting, and that is deliberate for anything that can be
+wrong invisibly. But it has been applied at full force to a comment and to a
+trust boundary alike, and mutation-testing a wording change buys nothing.
+
+**Full rigour — a failing command, and the fix proved by breaking it:**
+
+- Anything that decides work is complete, credited, verified, or advanced.
+- Anything a worker or a wrapper can influence: parsed output, submitted
+  packets, reported evidence. Treat it as untrusted input.
+- Anything touching money, tokens, deletion, or another person's data.
+- Anything with more than one lane — if the direct path and the chat path can
+  disagree, both get proved, because a guarantee that holds only on the path
+  nobody uses is worth nothing.
+- Any claim written into a shipped document about how the runtime behaves.
+
+**A passing test is enough:**
+
+- Wording, comments, help text, formatting.
+- A message no decision reads.
+- Renames and moves where the behaviour is unchanged and the compiler agrees.
+
+**The one thing that never relaxes, at either level:** a test must be able to
+fail. A fixture built in a shape the runtime cannot produce is not a weaker
+test, it is a false certificate — and it is how this project has repeatedly
+shipped a broken feature with a green suite. Derive fixture values the way the
+runtime derives them; do not type a plausible-looking literal.
+
+*For dummies: prove things hard when being wrong would be invisible — money,
+deletion, anything that says work is finished. Prove things normally when being
+wrong would be obvious the moment you looked. And never write a check that
+cannot fail, whichever side of that line you are on.*
+
 ## Communication Style
 
 - Always include a short plain-English, "for dummies" explanation alongside technical details when explaining work to the user.
