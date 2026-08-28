@@ -813,6 +813,77 @@ func TestClaudeTranscriptJoinsOnWhatThePlatformRecords(t *testing.T) {
 	})
 }
 
+// TestTheUnmatchedRecordNoteDoesNotBlameAWorkerThatRan is NEW-03.
+//
+// When a dispatch description names none of the run's workers, the note said
+// the transcript "holds usage for a worker this run did not dispatch". The code
+// cannot know that. The far likelier cause is that the wrapper paraphrased the
+// description instead of using the required "{caste emoji} {Caste} {name}:
+// {task}" form -- the description is composed by a model following a markdown
+// instruction, not by the runtime. The owner was told a stranger's spend was
+// seen, when the truth is that his own worker's spend was dropped, and the
+// message pointed away from the real cause.
+func TestTheUnmatchedRecordNoteDoesNotBlameAWorkerThatRan(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	projectDir := filepath.Join(home, ".claude", "projects", "-paraphrased")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(projectDir, "sess.jsonl")
+	// The worker WAS dispatched. Only the label the wrapper wrote is wrong.
+	lines := resolverSubagentDispatch(resolverSubagentFixture{
+		ToolUseID:    "toolu_paraphrased",
+		Description:  "Implement the parser",
+		SubagentType: "aether-builder",
+		AgentID:      "3333333333333333",
+		In:           64_000,
+	})
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+	if err := store.SaveJSON(spendSessionRel, spendSessionRecord{
+		SchemaVersion:  spendSessionSchemaVersion,
+		Platform:       "claude-code",
+		SessionID:      "sess-paraphrased",
+		TranscriptPath: path,
+		Cwd:            t.TempDir(),
+		CapturedAt:     time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("save session record: %v", err)
+	}
+
+	res := resolveWrapperWorkerUsage(wrapperUsageRequest{
+		Platform:  "claude-code",
+		RepoRoot:  t.TempDir(),
+		StartedAt: time.Now().Add(-time.Hour),
+		EndedAt:   time.Now().Add(time.Minute),
+		// Two workers share the definition, so the definition rule cannot
+		// answer and the description is the only evidence there is.
+		WorkerNames: []string{"Mason-67", "Anvil-20"},
+		AgentNameByWorker: map[string]string{
+			"Mason-67": "aether-builder",
+			"Anvil-20": "aether-builder",
+		},
+	})
+
+	note := strings.Join(res.Diagnostics, " | ")
+	if strings.Contains(note, "did not dispatch") {
+		t.Errorf("the owner is told his run did not dispatch a worker it DID dispatch; the label on the dispatch is what did not match, and a message that points at the wrong cause is worse than a vague one. Got: %s", note)
+	}
+	if !strings.Contains(note, "Implement the parser") {
+		t.Errorf("the note does not quote the label that failed to match, so the owner cannot see what to correct. Got: %s", note)
+	}
+	if !strings.Contains(note, "could not be matched") {
+		t.Errorf("the note does not say what actually happened -- a token record that could not be matched to any worker on this run. Got: %s", note)
+	}
+}
+
 // TestOpenCodeRefusalsReachTheOwner is WR-01.
 //
 // openCodeSessionUsageForRun returns diagnostics as its second value and
