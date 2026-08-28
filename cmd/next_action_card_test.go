@@ -120,22 +120,14 @@ type renderedClosingCard struct {
 	rendered string
 }
 
-// renderedClosingCards produces the closing cards this plan is responsible for,
-// each rendered exactly as the terminal would receive it.
-func renderedClosingCards(t *testing.T) []renderedClosingCard {
+// renderedNextActionCards is the card this plan owns, rendered both from a
+// constructed answer with every field filled and from an answer the runtime
+// genuinely produced off disk.
+func renderedNextActionCards(t *testing.T) []renderedClosingCard {
 	t.Helper()
 	pinRawCommandNames(t)
 
 	return []renderedClosingCard{
-		{
-			name: "the pause card",
-			rendered: renderPauseVisual(map[string]interface{}{
-				"goal":          "Ship the billing rewrite",
-				"current_phase": 2,
-				"phase_name":    "Billing engine",
-				"handoff_path":  ".aether/HANDOFF.md",
-			}),
-		},
 		{
 			name:     "the next-action card, fully populated",
 			rendered: renderNextActionCard(fullNextActionAnswer()),
@@ -145,6 +137,28 @@ func renderedClosingCards(t *testing.T) []renderedClosingCard {
 			rendered: renderNextActionCard(resolvedAnswerFromDisk(t)),
 		},
 	}
+}
+
+// renderedClosingCards is every closing card whose STRUCTURE this plan can
+// speak for: the new one, plus the pause card, whose duplicate-command defect
+// this plan fixed. The WORDING of the other ten legacy cards is plans 197-04
+// and 197-06's work, so they are not held to the plain-English check here --
+// but offering one command twice is a structural defect checkable on any card
+// today, so the duplicate check covers the pause card as well.
+func renderedClosingCards(t *testing.T) []renderedClosingCard {
+	t.Helper()
+	cards := []renderedClosingCard{
+		{
+			name: "the pause card",
+			rendered: renderPauseVisual(map[string]interface{}{
+				"goal":          "Ship the billing rewrite",
+				"current_phase": 2,
+				"phase_name":    "Billing engine",
+				"handoff_path":  ".aether/HANDOFF.md",
+			}),
+		},
+	}
+	return append(cards, renderedNextActionCards(t)...)
 }
 
 // TestNoCardOffersTheSameCommandTwice.
@@ -323,7 +337,7 @@ func untranslatedRepoWords(text string) []string {
 }
 
 func TestNextActionCardSpeaksPlainEnglish(t *testing.T) {
-	for _, card := range renderedClosingCards(t) {
+	for _, card := range renderedNextActionCards(t) {
 		t.Run(card.name, func(t *testing.T) {
 			if violations := untranslatedRepoWords(card.rendered); len(violations) > 0 {
 				t.Errorf("%s uses words this repository invented without explaining them:\n  %s\n\nfull card:\n%s",
