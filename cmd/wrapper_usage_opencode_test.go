@@ -685,3 +685,52 @@ func assertOpenCodeUsageIsAbsentNotZero(t *testing.T, usage codex.WorkerUsage) {
 		t.Errorf("usage = %+v, want the zero value carrying no figure at all", usage)
 	}
 }
+
+// The three-thousand-three-hundred session, summed by hand from the committed
+// files. Its SECOND message carries every column and no `total` at all — an
+// aborted or errored assistant turn is the obvious real candidate.
+//
+// ses_child_c/msg_1.json: total 3300, input 200, output 100, cache.read 3000, cache.write 0
+// ses_child_c/msg_2.json: total ABSENT, input 400, output 300, cache.read 5000, cache.write 1000
+//
+// Every figure below is written out by hand. Nothing here is produced by calling
+// the reader or by calling BilledTotalTokens().
+const (
+	openCodeMissingTotalColumnsSum = 10000 // 200 + 100 + 3000 + 0 + 400 + 300 + 5000 + 1000
+	openCodeMissingTotalStatedOnly = 3300  // what a reader that trusts `total` reports
+)
+
+// TestOpenCodeReaderPrefersTheDisjointColumns is WR-03.
+//
+// The reader accumulated `tokens.total` alongside the four disjoint columns, and
+// BilledTotalTokens prefers a positive TotalTokens over the columns. So one
+// message record missing `total` shrank that worker's whole reported spend —
+// silently, still labelled measured, with nothing anywhere signalling the
+// shortfall. That is the 186x undercount's own shape pointed the other way.
+func TestOpenCodeReaderPrefersTheDisjointColumns(t *testing.T) {
+	storageRoot, repoRoot := setupOpenCodeFixtureHome(t)
+
+	entries, reasons := openCodeSessionUsageForRun(storageRoot, repoRoot, openCodeFixtureWindowStart, openCodeFixtureWindowEnd, []string{"Ledge-33"})
+	if len(reasons) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", reasons)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1: %+v", len(entries), entries)
+	}
+	got := entries[0].Usage
+
+	if got.BilledTotalTokens() == openCodeMissingTotalStatedOnly {
+		t.Fatalf("the worker's billed total = %d, which is the ONE message that stated a total; the other message's columns were read and then thrown away because the store did not restate them as a total",
+			got.BilledTotalTokens())
+	}
+	if got.BilledTotalTokens() != openCodeMissingTotalColumnsSum {
+		t.Errorf("billed total = %d, want %d (the four disjoint columns, hand-summed)", got.BilledTotalTokens(), openCodeMissingTotalColumnsSum)
+	}
+	if got.TotalTokens != 0 {
+		t.Errorf("TotalTokens = %d, want 0: the store's own per-message total must not be accumulated at all, because reading it alongside the columns is two answers to one question and the consumer prefers the one a single malformed record can shrink",
+			got.TotalTokens)
+	}
+	if got.Source != codex.UsageSourceSessionTranscript {
+		t.Errorf("Source = %q, want %q", got.Source, codex.UsageSourceSessionTranscript)
+	}
+}
