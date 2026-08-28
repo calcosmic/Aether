@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 )
@@ -66,13 +67,82 @@ func spendLedgerRelForPhaseWorkflow(phase int, workflow string) string {
 // zero-value usage must still be visible as a row; a dispatch never
 // vanishes from the ledger.
 type spendRow struct {
-	AgentName  string            `json:"name"`
-	Caste      string            `json:"caste"`
-	ParentName string            `json:"parent"`
-	Task       string            `json:"task"`
-	Status     string            `json:"status"`
-	ToolCount  int               `json:"tool_count,omitempty"`
-	Usage      codex.WorkerUsage `json:"usage"`
+	AgentName  string `json:"name"`
+	Caste      string `json:"caste"`
+	ParentName string `json:"parent"`
+	Task       string `json:"task"`
+	// JobName is the grouped job this worker owned, mirroring
+	// codexBuildDispatch.JobName (cmd/codex_build.go). Phase 195 made a single
+	// worker able to own a chain of dependent tasks, so a ledger keyed only by
+	// worker cannot say which job a worker's tokens belong to. A worker that
+	// owned one ungrouped task records nothing here rather than a placeholder,
+	// so the key is absent from the serialized form entirely.
+	//
+	// It is added now, before this ledger has ever been written to in
+	// production, precisely so no schema version bump and no migration is owed
+	// for a one-line field.
+	JobName string `json:"job_name,omitempty"`
+	// Status is the DISPATCH status -- the same vocabulary
+	// normalizeRuntimeDispatchStatus and dispatchStatusIcon already use across
+	// this package -- and never the task-receipt status
+	// (codex.TaskReceiptStatusCompleted), which is task-scoped completion
+	// evidence rather than worker-scoped outcome. Two vocabularies for one idea
+	// is this repository's documented failure mode; saveSpendLedger refuses any
+	// word outside spendRowStatusVocabulary by name rather than storing it.
+	Status    string            `json:"status"`
+	ToolCount int               `json:"tool_count,omitempty"`
+	Usage     codex.WorkerUsage `json:"usage"`
+}
+
+// spendRowStatusVocabulary is the closed set of dispatch statuses a ledger row
+// may carry, in the fixed order the refusal message lists them. It is the
+// vocabulary dispatchStatusIcon (cmd/codex_visuals.go) already renders, not a
+// second one invented here.
+func spendRowStatusVocabulary() []string {
+	return []string{
+		"completed",
+		"completed_no_change",
+		"blocked",
+		"interrupted",
+		"failed",
+		"timeout",
+		"manually-reconciled",
+		"superseded",
+		"starting",
+		"spawned",
+		"active",
+		"running",
+	}
+}
+
+// normalizeSpendRowStatus folds a row status onto exactly one word from
+// spendRowStatusVocabulary, using the same synonym mappings
+// normalizeCloseoutWorkerStatus (cmd/closeout_cmd.go) and
+// normalizeRuntimeDispatchStatus (cmd/dispatch_runtime.go) already apply, and
+// reports whether the result is in the vocabulary.
+//
+// The empty string is refused rather than folded. normalizeRuntimeDispatchStatus
+// reads an unstated status as "failed", which is the right default when
+// summarizing a dispatch that never reported -- but recording a worker as
+// failed in a durable cost ledger because its writer forgot to state an
+// outcome would put a wrong fact on disk. The writer is made to say.
+func normalizeSpendRowStatus(status string) (string, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	if normalized == "" {
+		return "", false
+	}
+	switch normalized {
+	case "complete", "done", "success", "succeeded", "passed", "code_written":
+		normalized = "completed"
+	default:
+		normalized = normalizeRuntimeDispatchStatus(normalized)
+	}
+	for _, known := range spendRowStatusVocabulary() {
+		if known == normalized {
+			return normalized, true
+		}
+	}
+	return "", false
 }
 
 // spendLedger is one workflow's durable ledger for one phase.
@@ -90,6 +160,15 @@ type spendLedger struct {
 // Writing one workflow must never read, rewrite or delete the other
 // workflow's file -- store.SaveJSON at spendLedgerRelForPhaseWorkflow
 // touches only entry.Workflow's own path.
+//
+// Every row's status is validated against spendRowStatusVocabulary BEFORE
+// anything is written. A row carrying a word outside it is refused by name,
+// naming the worker too, and no file is created or replaced -- a partially
+// written ledger would be worse than a refused one, because the next read
+// would return it as fact.
+//
+// Validation folds synonyms onto the canonical word on a COPY of the rows, so
+// a caller's own slice is never rewritten underneath it.
 func saveSpendLedger(entry spendLedger) error {
 	if store == nil {
 		return fmt.Errorf("save spend ledger: store is not initialized")
@@ -98,6 +177,31 @@ func saveSpendLedger(entry spendLedger) error {
 	if rel == "" {
 		return fmt.Errorf("save spend ledger: workflow %q is not one of %v", entry.Workflow, spendLedgerWorkflows())
 	}
+
+	rows := make([]spendRow, len(entry.Rows))
+	copy(rows, entry.Rows)
+	for i := range rows {
+		worker := strings.TrimSpace(rows[i].AgentName)
+		if worker == "" {
+			worker = "(unnamed worker)"
+		}
+		normalized, ok := normalizeSpendRowStatus(rows[i].Status)
+		if !ok {
+			if strings.TrimSpace(rows[i].Status) == "" {
+				return fmt.Errorf(
+					"save spend ledger: worker %s has no status — a ledger row must state its dispatch outcome, one of %v",
+					worker, spendRowStatusVocabulary(),
+				)
+			}
+			return fmt.Errorf(
+				"save spend ledger: worker %s has status %q, which is not a dispatch status — expected one of %v",
+				worker, rows[i].Status, spendRowStatusVocabulary(),
+			)
+		}
+		rows[i].Status = normalized
+	}
+	entry.Rows = rows
+
 	entry.SchemaVersion = spendLedgerSchemaVersion
 	return store.SaveJSON(rel, entry)
 }
