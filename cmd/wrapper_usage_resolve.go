@@ -70,17 +70,15 @@ type wrapperUsageResolution struct {
 	Workers []wrapperWorkerUsage
 
 	// The orchestrating session's OWN turns are deliberately not collected
-	// here (WR-07). They are not a dispatched worker's spend, and this reader
-	// cannot honestly report them as a phase's either: the transcript is read
-	// whole, with no time window, so a session's assistant turns span every
-	// phase the owner ran in that chat session. Filing that against one phase
-	// would put a number in front of him that is wrong in the other direction.
+	// here (WR-07). They are not a dispatched worker's spend, and this block
+	// reports what the helpers cost -- see spendCostLineHeading, which says so
+	// on screen rather than leaving the reader to infer it.
 	//
-	// So the cost block says what it counts instead -- see
-	// spendCostLineHeading. Attributing the coordinator's own turns to a phase
-	// needs per-phase windowing of the session's own lines, which is a new
-	// capability rather than a correction, and a field gathered against the day
-	// it arrives is a field nothing reads.
+	// The run window added for NEW-02 bounds the DISPATCHED workers' records.
+	// Turning it on the session's own turns as well would be a new capability
+	// (what share of a turn spanning two phases belongs to each?) rather than a
+	// correction, and a field gathered against the day it arrives is a field
+	// nothing reads.
 
 	// Diagnostics are plain-English notes about anything the resolver
 	// declined to resolve. They are never errors: a partial, honestly
@@ -174,11 +172,28 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 				byDefinition[definition] = append(byDefinition[definition], name)
 			}
 		}
+		outsideWindow := 0
 		for _, row := range rows {
 			if row.WorkerName == claudeTranscriptMainSessionWorker {
 				// The orchestrating session's own turns are skipped, never
 				// folded into somebody else's row. See the note on
 				// wrapperUsageResolution for why they are not reported either.
+				continue
+			}
+			// This run's own window, the same bound the OpenCode reader applies
+			// (openCodeSessionInWindow). ONE chat session holds a build, its
+			// check and every re-run of the same phase in ONE transcript file,
+			// and a re-run's workers carry the same deterministic names as the
+			// first attempt's -- so without this the retry was credited with the
+			// earlier attempt's measurement and marked "measured" (NEW-02,
+			// reproduced at 25x). It also stops one phase's records reaching
+			// another phase's ledger.
+			//
+			// A record the platform did not date cannot be placed in this run,
+			// so it is left out rather than assumed to belong here; the platform
+			// dates all of them.
+			if !timeInWindow(row.RecordedAt, req.StartedAt, req.EndedAt) {
+				outsideWindow++
 				continue
 			}
 			worker, why := claudeRowWorker(row, names, seen, byDefinition)
@@ -195,6 +210,11 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 				continue
 			}
 			measured[worker] = row.Usage
+		}
+		if outsideWindow > 0 {
+			res.Diagnostics = append(res.Diagnostics, fmt.Sprintf(
+				"%s in the session transcript were written outside this run's own start and finish times, so they were left out of it — the same chat session records every earlier attempt at this phase and every other phase run in it",
+				spendWorkerRecordWord(outsideWindow)))
 		}
 
 	case wrapperUsagePlatformOpenCode:
@@ -234,6 +254,15 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 	}
 
 	return res
+}
+
+// spendWorkerRecordWord renders a count of transcript records with its noun, so
+// the note above reads naturally at one and at many.
+func spendWorkerRecordWord(count int) string {
+	if count == 1 {
+		return "1 helper's token record"
+	}
+	return fmt.Sprintf("%d helpers' token records", count)
 }
 
 // claudeRowWorker decides which of this run's workers a subagent transcript row

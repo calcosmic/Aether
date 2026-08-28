@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 )
@@ -102,6 +103,19 @@ type claudeTranscriptUsage struct {
 	// identifies a row only when exactly one worker ran as it.
 	AgentDefinition string
 
+	// RecordedAt is the moment the platform wrote this worker's completion
+	// record, read from the line's own `timestamp` field. It is the zero time
+	// when the line carried none.
+	//
+	// It exists so a run can tell its OWN records apart from an earlier
+	// attempt's: one chat session routinely holds a build, its check and a
+	// re-run of the same phase in one transcript file, and a re-run's workers
+	// carry the same deterministic names as the first attempt's. Without a
+	// date on the row, a retry was credited with the first attempt's spend
+	// (NEW-02). Measured over every transcript in ~/.claude/projects on
+	// 2026-08-28: all 252 subagent usage records carry an RFC3339 `timestamp`.
+	RecordedAt time.Time
+
 	// Usage is always tagged UsageSourceSessionTranscript and never
 	// provider-grade. Only codex.ParseUsage may set the provider tag: a
 	// transcript's accounting semantics are undocumented by the vendor, and
@@ -119,6 +133,10 @@ type claudeTranscriptLine struct {
 	Type      string `json:"type"`
 	UUID      string `json:"uuid"`
 	RequestID string `json:"requestId"`
+
+	// Timestamp is when the platform wrote this line, RFC3339. Read at its
+	// declared position like everything else here.
+	Timestamp string `json:"timestamp"`
 
 	Message *struct {
 		ID    string                      `json:"id"`
@@ -195,6 +213,7 @@ type claudeWorkerAccumulator struct {
 	model           string
 	description     string
 	agentDefinition string
+	recordedAt      time.Time
 	keyOrder        []string
 	blocks          map[string]claudeTranscriptUsageBlock
 }
@@ -306,6 +325,7 @@ func parseClaudeTranscriptUsageWithBounds(path string, maxBytes int64) ([]claude
 			AgentID:             accumulator.agentID,
 			DispatchDescription: accumulator.description,
 			AgentDefinition:     accumulator.agentDefinition,
+			RecordedAt:          accumulator.recordedAt,
 			Usage:               usage,
 		})
 	}
@@ -352,6 +372,9 @@ func absorbClaudeTranscriptLine(raw []byte, ordinal int, order *[]string, accumu
 		}
 		accumulator := claudeAccumulatorFor(claudeTranscriptMainSessionWorker, order, accumulators)
 		accumulator.workerName = claudeTranscriptMainSessionWorker
+		if at := parseClaudeTranscriptTime(line.Timestamp); !at.IsZero() {
+			accumulator.recordedAt = at
+		}
 		if line.Message.Model != "" {
 			accumulator.model = line.Message.Model
 		}
@@ -390,6 +413,9 @@ func absorbClaudeTranscriptLine(raw []byte, ordinal int, order *[]string, accumu
 		accumulator.workerName = workerName
 		accumulator.agentID = result.AgentID
 		accumulator.agentDefinition = strings.TrimSpace(result.AgentType)
+		if at := parseClaudeTranscriptTime(line.Timestamp); !at.IsZero() {
+			accumulator.recordedAt = at
+		}
 		if result.ResolvedModel != "" {
 			accumulator.model = result.ResolvedModel
 		}
@@ -418,6 +444,21 @@ func absorbClaudeTranscriptLine(raw []byte, ordinal int, order *[]string, accumu
 		// so an exact repeat of the same line is still counted once.
 		accumulator.record(claudeDeduplicationKey("", "", line.UUID, ordinal), *result.Usage)
 	}
+}
+
+// parseClaudeTranscriptTime reads a transcript line's own `timestamp`. An
+// absent or unparseable value is the zero time, which the window check treats
+// as "cannot be placed in this run" rather than guessing it belongs here.
+func parseClaudeTranscriptTime(raw string) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed.UTC()
 }
 
 // claudeDeduplicationKey chooses what a usage block is counted under.
