@@ -706,3 +706,50 @@ func TestClaudeTranscriptJoinsOnWhatThePlatformRecords(t *testing.T) {
 		}
 	})
 }
+
+// TestOpenCodeRefusalsReachTheOwner is WR-01.
+//
+// openCodeSessionUsageForRun returns diagnostics as its second value and
+// documents them as the point of the design — "a partial, honestly-reported
+// result is the correct outcome here". Its only caller discarded them, so all
+// three of its carefully written notes were unreachable in production. The one
+// that matters most: when two sessions share a worker's name the reader resolves
+// nothing for that worker and says "refusing to guess", and the owner was told
+// nothing at all — the row simply read "not reported", indistinguishable from a
+// tool that genuinely said nothing.
+//
+// TestOpenCodeSessionUsageRefusesAmbiguousWorkerMatch calls the inner function
+// directly, so it never saw the drop.
+func TestOpenCodeRefusalsReachTheOwner(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	storageRoot, repoRoot := setupOpenCodeFixtureHome(t)
+	// A second in-window session carrying the same worker's name.
+	duplicate := filepath.Join(storageRoot, "session", "prj_fixture", "ses_child_a_dup.json")
+	if err := os.WriteFile(duplicate, []byte(`{"id":"ses_child_a_dup","parentID":"ses_parent","title":"🔨 Builder Mason-67: implement the parser (@general subagent)","time":{"created":1786710600000,"updated":1786710600000}}`), 0o644); err != nil {
+		t.Fatalf("write duplicate session: %v", err)
+	}
+
+	res := resolveWrapperWorkerUsage(wrapperUsageRequest{
+		Platform:    "opencode",
+		RepoRoot:    repoRoot,
+		StartedAt:   openCodeFixtureWindowStart,
+		EndedAt:     openCodeFixtureWindowEnd,
+		WorkerNames: []string{"Mason-67"},
+	})
+
+	assertNoFigure(t, resolverWorker(t, res, "Mason-67"))
+
+	said := false
+	for _, d := range res.Diagnostics {
+		if strings.Contains(d, "Mason-67") && strings.Contains(d, "refusing to guess") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("Mason-67 has no figure because two sessions carry its name, and nothing said so; an owner must be able to see why a worker has no figure. Got: %v", res.Diagnostics)
+	}
+}
