@@ -1044,6 +1044,12 @@ func TestCheapModelWorkerNeedsNoReasonOnTheCard(t *testing.T) {
 		if strings.Contains(line, "more expensive model") {
 			t.Errorf("the cheap-model worker's line justifies an expense it does not incur: %q", line)
 		}
+		// "sonnet" and "opus" mean nothing to the person reading this card.
+		// Naming the model without saying which one costs more is a fact
+		// they cannot use, so the line says it in words.
+		if !strings.Contains(line, "cheaper model") {
+			t.Errorf("the cheap-model worker's line never says in plain words that this is the cheaper model: %q", line)
+		}
 	}
 }
 
@@ -1111,6 +1117,9 @@ func TestFastPathSummaryCarriesModelAndReason(t *testing.T) {
 		}
 		if strings.Contains(visual, "more expensive model") {
 			t.Errorf("fast-path summary justifies an expense the worker does not incur:\n%s", visual)
+		}
+		if !strings.Contains(visual, "cheaper model") {
+			t.Errorf("fast-path summary never says in plain words that this is the cheaper model:\n%s", visual)
 		}
 	})
 }

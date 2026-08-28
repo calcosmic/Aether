@@ -64,6 +64,14 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 	optional := []string{}
 	reasons := map[string]string{}
 	whatItDoes := map[string]string{}
+	// D-02 (Phase 196, 196-CONTEXT.md): the card names the model every
+	// worker runs on and, for a worker kept on the expensive model, the
+	// written reason for that expense. Both are read here, never chosen
+	// here -- resolveCasteModel reports what the platform's own agent
+	// definition already routes, and casteModelReason only explains it.
+	// Automatic model routing stays declined (2026-07-28).
+	models := map[string]string{}
+	modelReasons := map[string]string{}
 	for _, caste := range orderedCastes {
 		reason := strings.TrimSpace(selectedReasons[caste])
 		if reason == "" {
@@ -78,6 +86,10 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 			reason = "no reason was recorded for sending this worker"
 		}
 		reasons[caste] = reason
+		models[caste] = resolveCasteModel(caste)
+		if modelReason := casteModelReason(caste); modelReason != "" {
+			modelReasons[caste] = modelReason
+		}
 		if produces := casteRosterProduces(manifest, caste); produces != "" {
 			whatItDoes[caste] = produces
 		}
@@ -120,6 +132,21 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 			b.WriteString("  (what it does: ")
 			b.WriteString(produces)
 			b.WriteString(")")
+		}
+		// The model's NAME is already on this line: casteIdentityWithModel
+		// tags it. What the name alone cannot tell the person reading the
+		// card is which of the two costs more -- "sonnet" and "opus" mean
+		// nothing without a glossary -- so every line says that in words,
+		// and only an expensive one carries the justification. A reason
+		// printed beside every worker would bury the one worth reading.
+		if modelReason := modelReasons[caste]; modelReason != "" {
+			b.WriteString("  (kept on the more expensive model because it ")
+			b.WriteString(modelReason)
+			b.WriteString(")")
+		} else if models[caste] == "" {
+			b.WriteString("  (model: not recorded for this role)")
+		} else {
+			b.WriteString("  (the cheaper model)")
 		}
 		b.WriteString("\n")
 	}
@@ -227,6 +254,8 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 		"required":       required,
 		"optional":       optional,
 		"reasons":        reasons,
+		"models":         models,
+		"model_reasons":  modelReasons,
 		"what_it_does":   whatItDoes,
 		"pruned":         prunedReasons,
 		"forced":         forced,
@@ -516,6 +545,11 @@ func renderBuildFastPathSummary(phase colony.Phase, dispatch codexBuildDispatch,
 	}
 
 	worker := fmt.Sprintf("%s %s", casteIdentity(dispatch.Caste), emptyFallback(dispatch.Name, "worker"))
+	// D-02: this surface never pauses, so it is the ONLY place a one-worker
+	// build's owner sees which model is being paid for. Both facts travel as
+	// fields as well as text.
+	model := resolveCasteModel(dispatch.Caste)
+	modelReason := casteModelReason(dispatch.Caste)
 	whyNoApproval := strings.TrimSpace(decision.Why)
 	if whyNoApproval == "" {
 		whyNoApproval = "no owner decision is pending, so dispatch continues"
@@ -531,6 +565,8 @@ func renderBuildFastPathSummary(phase colony.Phase, dispatch codexBuildDispatch,
 		"single_task":      singleTask,
 		"checkin_reason":   string(decision.Reason),
 		"why_no_approval":  whyNoApproval,
+		"model":            model,
+		"model_reason":     modelReason,
 	}
 
 	var b strings.Builder
@@ -540,6 +576,19 @@ func renderBuildFastPathSummary(phase colony.Phase, dispatch codexBuildDispatch,
 	b.WriteString("\n")
 	b.WriteString("  Covers: ")
 	b.WriteString(strings.Join(taskLines, "; "))
+	b.WriteString("\n")
+	b.WriteString("  Model: ")
+	if model == "" {
+		b.WriteString("not recorded for this role")
+	} else {
+		b.WriteString(model)
+		if modelReason != "" {
+			b.WriteString(" -- kept on the more expensive model because it ")
+			b.WriteString(modelReason)
+		} else {
+			b.WriteString(" -- the cheaper model")
+		}
+	}
 	b.WriteString("\n")
 	if singleTask {
 		b.WriteString("  One worker owns this one task -- no grouping was needed.\n")
