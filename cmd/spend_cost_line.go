@@ -43,7 +43,13 @@ import (
 
 // spendCostLineHeading names the block on screen and is what the exactly-one
 // tests count. Plain English: nothing here is a word this repository invented.
-const spendCostLineHeading = "What This Cost"
+//
+// It says PHASE, not "this run", because the figures below span both the
+// building pass and the checking pass for the phase -- the two are recorded
+// separately and neither erases the other, so at the end of a check the block
+// honestly reports what the whole phase has cost, not just the last screen's
+// worth. A heading claiming otherwise would be the more precise-sounding lie.
+const spendCostLineHeading = "What This Phase Has Cost"
 
 // spendCompactTokenFigure renders a token count at the magnitude the owner
 // wrote — 1.2M, 220K — rather than as raw digits. This is the HEADLINE; the

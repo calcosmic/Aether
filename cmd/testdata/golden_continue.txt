@@ -55,5 +55,5 @@ Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"
 Run `/ant-build 2` to start the next phase
 Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant-resume` to restore.
 
-── What This Cost ──
+── What This Phase Has Cost ──
 No token use was recorded for this phase, so there is no figure to show.
