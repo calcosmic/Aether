@@ -208,6 +208,7 @@ Plans:
 1. Every build and continue ends with one line stating token usage per worker and in total, showing no number at all for a worker whose tool reported none and counting only the measured workers in the total — no dollar amount as the headline, no price table anywhere (`TestBuildEndsWithOneCostLine`).
 
    *Corrected 2026-08-28 (plan 196-08). This criterion previously said "clearly marking which numbers are measured versus estimated". D-01 as amended (owner, 2026-08-27, in `phases/196-see-what-it-cost/196-CONTEXT.md`) abolished the estimated figure entirely: guessing a worker's usage from the length of its prompt was the only estimate mechanism that existed, and criterion 3 below forbids exactly that, so a marked estimate would have been the forbidden thing wearing a label. The owner ruled: show no number at all. The named test and the no-dollar clause are unchanged.*
+
 2. On the Claude Code / OpenCode chat path — the one the owner actually uses day to day — worker results report their real token usage, so that cost line has real numbers instead of blanks.
 3. Running `aether spend` shows token usage per worker for the current run without changing any files on disk, and none of its numbers are guessed from text length.
 4. The pre-build team card names each worker's AI model and the reason for that choice; routine roles (the documentation writer, the knowledge-keeper, the accessibility checker) no longer silently default ("inherit") to whatever model was last used, and any worker kept on the expensive model has a written reason (`TestRoutineBuilderIsSonnetNeverInherit`, `TestOpusRequiresRecordedReason`).
@@ -234,7 +235,7 @@ Plans:
 
 **Wave 4** *(phase closeout)*
 
-- [ ] 196-08-PLAN.md — Prove the path is joined up end to end, then delete the three branches with their written reasons recorded (wave 4)
+- [x] 196-08-PLAN.md — Prove the path is joined up end to end, then delete the three branches with their written reasons recorded (wave 4)
 
 ### Phase 197: One Answer to "What Next?"
 
