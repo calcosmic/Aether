@@ -132,7 +132,11 @@ func renderSpendCostLineFromLedgers(ledgers []spendLedger) string {
 	measured := totals.MeasuredRows
 	unreported := len(rows) - measured
 
-	b.WriteString(spendCostLineTotalSentence(totals.MeasuredTokens, len(rows), measured, unreported))
+	distinct := map[string]struct{}{}
+	for _, row := range rows {
+		distinct[row.AgentName] = struct{}{}
+	}
+	b.WriteString(spendCostLineTotalSentence(totals.MeasuredTokens, len(rows), len(distinct), measured, unreported))
 	b.WriteString("\n")
 
 	attempts := spendAttemptLabels(rows)
@@ -171,7 +175,14 @@ func renderSpendCostLineFromLedgers(ledgers []spendLedger) string {
 //
 // When no tool reported anything at all there is no total to state, so none is
 // stated — the sentence says the cost is not known rather than showing a zero.
-func spendCostLineTotalSentence(measuredTokens int64, workers, measured, unreported int) string {
+// runs is the number of ROWS and distinctWorkers the number of distinct worker
+// names among them. They differ when a phase was built or checked more than
+// once: the runtime derives a worker's name from the phase and its role, so a
+// retry re-runs the SAME name. Saying "across 4 workers" when two workers each
+// ran twice overstates the team; the rows below are labelled "(attempt 1)" and
+// "(attempt 2)", so the noun is what has to carry the distinction here.
+func spendCostLineTotalSentence(measuredTokens int64, runs, distinctWorkers, measured, unreported int) string {
+	workers := runs
 	if measured == 0 {
 		// The one-worker wording is separate because the general sentence
 		// reads "any of the 1 worker" at a count of one, and this block is
@@ -181,7 +192,7 @@ func spendCostLineTotalSentence(measuredTokens int64, workers, measured, unrepor
 		}
 		return fmt.Sprintf(
 			"Cost: not known. No tool reported a figure for any of the %s, so there is no total to show.",
-			spendWorkerWord(workers),
+			spendRunWord(runs, distinctWorkers),
 		)
 	}
 	if unreported == 0 {
@@ -193,13 +204,25 @@ func spendCostLineTotalSentence(measuredTokens int64, workers, measured, unrepor
 		}
 		return fmt.Sprintf(
 			"Cost: %s tokens across %s. The total counts all %d, because every tool reported a figure.",
-			spendCompactTokenFigure(measuredTokens), spendWorkerWord(workers), workers,
+			spendCompactTokenFigure(measuredTokens), spendRunWord(runs, distinctWorkers), workers,
 		)
 	}
 	return fmt.Sprintf(
 		"Cost: %s tokens across %s. The total counts only the %d whose tools reported a figure.",
-		spendCompactTokenFigure(measuredTokens), spendWorkerWord(workers), measured,
+		spendCompactTokenFigure(measuredTokens), spendRunWord(runs, distinctWorkers), measured,
 	)
+}
+
+// spendRunWord names what the total is spread across. Ordinarily that is
+// workers. When a name recurs -- the phase was built or checked more than once,
+// and the runtime regenerates the same name for the same role -- calling them
+// workers would count one worker twice, so they are named as runs instead and
+// the number of distinct workers is stated alongside.
+func spendRunWord(runs, distinctWorkers int) string {
+	if distinctWorkers <= 0 || distinctWorkers == runs {
+		return spendWorkerWord(runs)
+	}
+	return fmt.Sprintf("%d worker runs by %s", runs, spendWorkerWord(distinctWorkers))
 }
 
 // spendCostLineFootnote counts the workers whose tools reported nothing and

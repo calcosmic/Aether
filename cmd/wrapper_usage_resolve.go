@@ -212,9 +212,17 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 			measured[worker] = row.Usage
 		}
 		if outsideWindow > 0 {
+			// The verb has to agree with the count: at one record the old
+			// wording read "1 helper's token record ... were written ... they
+			// were left out". The owner reads this line; it should not be
+			// visibly ungrammatical.
+			wasWere, itThey := "was", "it"
+			if outsideWindow != 1 {
+				wasWere, itThey = "were", "they"
+			}
 			res.Diagnostics = append(res.Diagnostics, fmt.Sprintf(
-				"%s in the session transcript were written outside this run's own start and finish times, so they were left out of it — the same chat session records every earlier attempt at this phase and every other phase run in it",
-				spendWorkerRecordWord(outsideWindow)))
+				"%s in the session transcript %s written outside this run's own start and finish times, so %s %s left out of it. The same chat session records every earlier attempt at this phase, and every other phase run in it.",
+				spendWorkerRecordWord(outsideWindow), wasWere, itThey, wasWere))
 		}
 
 	case wrapperUsagePlatformOpenCode:

@@ -464,3 +464,58 @@ func TestCostBlockSaysWhatItCounts(t *testing.T) {
 		t.Errorf("nothing in the block tells the owner that the coordinator's own token use is not counted in it:\n%s", block)
 	}
 }
+
+// TestRepeatedWorkerIsCountedAsRunsNotWorkers locks the noun in the summary
+// sentence. The runtime derives a worker's name from the phase and its role
+// (deterministicAntName), so building or checking a phase twice re-runs the
+// SAME name -- and the ledger deliberately keeps both rows, one per attempt,
+// because a retry adds to what a phase cost rather than redefining it
+// (196-REVIEW.iter2.md NEW-01).
+//
+// The summary counts ROWS. Left as "workers" it therefore reads "across 4
+// workers" for two workers that each ran twice, overstating the team to the
+// one reader who cannot check it against anything. The figures were always
+// right; only the noun was loose.
+func TestRepeatedWorkerIsCountedAsRunsNotWorkers(t *testing.T) {
+	row := func(name string, attempt string, tokens int64) spendRow {
+		return spendRow{
+			AgentName: name, Caste: "builder", Status: "completed", RunID: attempt,
+			Usage: codex.WorkerUsage{InputTokens: tokens, Source: codex.UsageSourceProvider},
+		}
+	}
+	retried := spendLedger{
+		Phase:    9,
+		Workflow: spendWorkflowBuild,
+		Rows: []spendRow{
+			row("Mason-25", "attempt-1", 600000),
+			row("Anvil-15", "attempt-1", 300000),
+			row("Mason-25", "attempt-2", 100000),
+			row("Anvil-15", "attempt-2", 90000),
+		},
+	}
+	block := stripANSI(renderSpendCostLineFromLedgers([]spendLedger{retried}))
+
+	if strings.Contains(block, "across 4 workers") {
+		t.Errorf("two workers that each ran twice are reported as four workers, which overstates the team:\n%s", block)
+	}
+	if !strings.Contains(block, "4 worker runs by 2 workers") {
+		t.Errorf("the summary does not say the four rows are four runs by two workers:\n%s", block)
+	}
+
+	// The ordinary case must be untouched: distinct names still read as workers.
+	ordinary := spendLedger{
+		Phase:    9,
+		Workflow: spendWorkflowBuild,
+		Rows: []spendRow{
+			row("Mason-25", "attempt-1", 600000),
+			row("Anvil-15", "attempt-1", 300000),
+		},
+	}
+	plain := stripANSI(renderSpendCostLineFromLedgers([]spendLedger{ordinary}))
+	if !strings.Contains(plain, "across 2 workers") {
+		t.Errorf("a phase whose workers each ran once no longer reads as workers:\n%s", plain)
+	}
+	if strings.Contains(plain, "worker runs") {
+		t.Errorf("a phase with no repeated worker should not mention runs at all:\n%s", plain)
+	}
+}
