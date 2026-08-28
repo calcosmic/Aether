@@ -728,6 +728,15 @@ func TestClaudeBuildAttributesEveryWorkersTokens(t *testing.T) {
 //
 // Measured before the fix: a phase that really cost 1,150,000 tokens reported
 // 250K, under a heading that claims to say what the phase has cost.
+//
+// EVERY WORKER NAME BELOW IS PRODUCED BY THE RUNTIME'S OWN GENERATOR, and that
+// is now the load-bearing part of this fixture. deterministicAntName is a pure
+// function of caste and seed, and the build seeds are pure functions of the
+// phase — so a re-run of one phase produces the SAME names as the first run.
+// An earlier version of this test retried under "Anvil-21", a name the runtime
+// cannot produce for a re-run of the phase that produced "Anvil-20", and that
+// one invented literal is why the ledger's refusal of two measured rows under
+// one name was never seen to collide with this merge (NEW-01, iteration 2).
 func TestRetryDoesNotEraseTheFirstAttemptsSpend(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -737,6 +746,16 @@ func TestRetryDoesNotEraseTheFirstAttemptsSpend(t *testing.T) {
 
 	provider := func(total int64) codex.WorkerUsage {
 		return codex.WorkerUsage{InputTokens: total, Source: codex.UsageSourceProvider}
+	}
+
+	// The seeds are copied from the build planner's own call sites
+	// (cmd/codex_build.go): a coherent job owner is seeded on the phase and the
+	// task, the phase watcher on the phase alone.
+	reader := deterministicAntName("builder", "phase:9:task:0:write the reader")
+	writer := deterministicAntName("builder", "phase:9:task:1:write the writer")
+	watcher := deterministicAntName("watcher", "phase:9:watcher")
+	if reader == writer || reader == watcher || writer == watcher {
+		t.Fatalf("this fixture needs three distinct workers; got %q, %q, %q", reader, writer, watcher)
 	}
 
 	// Attempt one: three workers, 900,000 tokens. One of them failed, which is
@@ -750,16 +769,17 @@ func TestRetryDoesNotEraseTheFirstAttemptsSpend(t *testing.T) {
 		StartedAt: time.Now().Add(-2 * time.Hour),
 		EndedAt:   time.Now().Add(-90 * time.Minute),
 		Dispatches: []codexBuildDispatch{
-			{Caste: "builder", Name: "Anvil-20", Task: "write the reader", Status: "completed", Usage: provider(500_000)},
-			{Caste: "builder", Name: "Mason-67", Task: "write the writer", Status: "failed", Usage: provider(300_000)},
-			{Caste: "watcher", Name: "Vigil-12", Task: "check it", Status: "completed", Usage: provider(100_000)},
+			{Caste: "builder", Name: reader, Task: "write the reader", Status: "completed", Usage: provider(500_000)},
+			{Caste: "builder", Name: writer, Task: "write the writer", Status: "failed", Usage: provider(300_000)},
+			{Caste: "watcher", Name: watcher, Task: "check it", Status: "completed", Usage: provider(100_000)},
 		},
 	}
 	if _, err := writeSpendRowsForRun(first); err != nil {
 		t.Fatalf("first attempt: %v", err)
 	}
 
-	// The recovery redispatch: one worker, the unfinished task, 250,000 tokens.
+	// The recovery redispatch: the unfinished task, run again. Same phase, same
+	// task, same caste — so the runtime hands it the SAME name it used before.
 	second := spendWriteRequest{
 		Phase:     9,
 		PhaseName: "See what it cost",
@@ -769,11 +789,11 @@ func TestRetryDoesNotEraseTheFirstAttemptsSpend(t *testing.T) {
 		StartedAt: time.Now().Add(-30 * time.Minute),
 		EndedAt:   time.Now(),
 		Dispatches: []codexBuildDispatch{
-			{Caste: "builder", Name: "Anvil-21", Task: "write the writer", Status: "completed", Usage: provider(250_000)},
+			{Caste: "builder", Name: writer, Task: "write the writer", Status: "completed", Usage: provider(250_000)},
 		},
 	}
 	if _, err := writeSpendRowsForRun(second); err != nil {
-		t.Fatalf("recovery attempt: %v", err)
+		t.Fatalf("recovery attempt: %v — a re-run of a phase reuses that phase's worker names, so a ledger that refuses two measured rows under one name refuses the retry outright and the whole second attempt goes unrecorded", err)
 	}
 
 	ledger := loadSpendLedgerFromDisk(t, dataDir, 9, spendWorkflowBuild)
@@ -786,11 +806,27 @@ func TestRetryDoesNotEraseTheFirstAttemptsSpend(t *testing.T) {
 	if totals.MeasuredTokens != 1_150_000 {
 		t.Errorf("the phase reports %d tokens, want 1150000 — the first attempt's spend was erased by the retry", totals.MeasuredTokens)
 	}
-	// The failed worker is the one the owner most needs to see.
-	failed := spendLedgerRowByName(t, ledger, "Mason-67")
-	if failed.Status != "failed" {
-		t.Errorf("Mason-67's row = %+v, want the failed first attempt preserved", failed)
+	// The failed first attempt is the one the owner most needs to see, and it
+	// shares its name with the successful retry.
+	failedKept := false
+	for _, row := range ledger.Rows {
+		if row.AgentName == writer && row.Status == "failed" {
+			failedKept = true
+		}
 	}
+	if !failedKept {
+		t.Errorf("the failed first attempt at %q is gone from the ledger: %+v", writer, ledger.Rows)
+	}
+
+	t.Run("the two attempts are told apart on the owner's screen", func(t *testing.T) {
+		block := stripANSI(renderSpendCostLineFromLedgers([]spendLedger{ledger}))
+		if strings.Count(block, writer) != 2 {
+			t.Fatalf("expected both of %q's rows in the block:\n%s", writer, block)
+		}
+		if !strings.Contains(block, "attempt 1") || !strings.Contains(block, "attempt 2") {
+			t.Errorf("two rows carry the name %q and nothing on screen says which attempt each one is, so the block reads as one worker billed twice:\n%s", writer, block)
+		}
+	})
 
 	t.Run("re-finalizing the same attempt still replaces only its own rows", func(t *testing.T) {
 		if _, err := writeSpendRowsForRun(second); err != nil {
@@ -805,6 +841,47 @@ func TestRetryDoesNotEraseTheFirstAttemptsSpend(t *testing.T) {
 			t.Errorf("phase total after a re-finalize = %d, want 1150000 — a doubled figure means the rerun accumulated", got)
 		}
 	})
+}
+
+// TestTheSecondCheckOfAPhaseIsRecordedToo is NEW-01 on the check lane, which is
+// where a repeat run is easiest to reach: a blocked phase is checked again, and
+// the continue planner seeds its watcher on the phase alone
+// (cmd/codex_continue_plan.go), so the second check dispatches a watcher with
+// the same name as the first.
+func TestTheSecondCheckOfAPhaseIsRecordedToo(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	store = s
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+
+	watcher := deterministicAntName("watcher", "phase:9:continue:watcher")
+	check := func(runID string, tokens int64) spendWriteRequest {
+		return spendWriteRequest{
+			Phase:     9,
+			PhaseName: "See what it cost",
+			Workflow:  spendWorkflowContinue,
+			RepoRoot:  tmpDir,
+			RunID:     runID,
+			StartedAt: time.Now().Add(-time.Hour),
+			EndedAt:   time.Now(),
+			Dispatches: []codexBuildDispatch{
+				{Caste: "watcher", Name: watcher, Task: "check the phase", Status: "completed",
+					Usage: codex.WorkerUsage{InputTokens: tokens, Source: codex.UsageSourceProvider}},
+			},
+		}
+	}
+	if _, err := writeSpendRowsForRun(check("continue-20260828T090000Z", 120_000)); err != nil {
+		t.Fatalf("first check: %v", err)
+	}
+	if _, err := writeSpendRowsForRun(check("continue-20260828T110000Z", 80_000)); err != nil {
+		t.Fatalf("second check: %v — the second check of a blocked phase reuses the first check's watcher name, and refusing it discards that whole check's accounting", err)
+	}
+
+	ledger := loadSpendLedgerFromDisk(t, dataDir, 9, spendWorkflowContinue)
+	if got := computeSpendTotals([]spendLedger{ledger}).MeasuredTokens; got != 200_000 {
+		t.Errorf("the phase's checks report %d tokens, want 200000 (120000 + 80000, added by hand); the second check's spend is missing", got)
+	}
 }
 
 // TestEveryProductionRunNamesItsAttempt is the ratchet under CR-02.
@@ -925,6 +1002,33 @@ func TestOneMeasurementIsNeverCreditedToTwoWorkers(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "Vigil-12") {
 			t.Errorf("the refusal does not name the worker: %v", err)
+		}
+	})
+
+	t.Run("the refusal is scoped to one run, because a retry reuses the phase's names", func(t *testing.T) {
+		measured := codex.WorkerUsage{InputTokens: 1000, Source: codex.UsageSourceProvider}
+		sameRun := saveSpendLedger(spendLedger{
+			Phase:    13,
+			Workflow: spendWorkflowBuild,
+			Rows: []spendRow{
+				{AgentName: "Vigil-12", Caste: "watcher", Status: "completed", RunID: "attempt-A", Usage: measured},
+				{AgentName: "Vigil-12", Caste: "watcher", Status: "completed", RunID: "attempt-A", Usage: measured},
+			},
+		})
+		if sameRun == nil {
+			t.Errorf("two measured rows filed under one worker WITHIN one attempt were accepted; that attempt's total now counts one measurement twice")
+		}
+
+		acrossRuns := saveSpendLedger(spendLedger{
+			Phase:    14,
+			Workflow: spendWorkflowBuild,
+			Rows: []spendRow{
+				{AgentName: "Vigil-12", Caste: "watcher", Status: "completed", RunID: "attempt-A", Usage: measured},
+				{AgentName: "Vigil-12", Caste: "watcher", Status: "completed", RunID: "attempt-B", Usage: measured},
+			},
+		})
+		if acrossRuns != nil {
+			t.Errorf("the ledger refused a worker that ran once in each of two attempts of the same phase (%v); the runtime gives a re-run the SAME worker names, so refusing this discards the retry's whole accounting", acrossRuns)
 		}
 	})
 }
