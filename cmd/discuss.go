@@ -324,7 +324,7 @@ func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interfac
 	}
 	staleNotice := pendingDecisionStaleNotice(staleClarificationCount)
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"goal":                    goal,
 		"question_count":          len(questions),
 		"created_count":           createdCount,
@@ -342,7 +342,9 @@ func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interfac
 		"survey_available":        len(survey.SurveyDocs) > 0 || len(survey.Frameworks) > 0 || len(survey.Directories) > 0,
 		"next":                    next,
 		"discussion_status":       discussionStatus(len(questions), createdCount, existingCount),
-	}, nil
+	}
+	closeLifecycleCommand(result, "discuss", "", "")
+	return result, nil
 }
 
 func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
@@ -412,11 +414,16 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	activeFile, _ := filterPendingDecisionFileForScope(file, scope)
 	remaining := countPendingClarifications(activeFile)
 	next := "Run `aether discuss` to review remaining questions before planning."
+	// override is what THIS answer unblocked -- the run whose manifest was
+	// waiting on it. Only the caller knows that, so it is fed to the one
+	// decision as an input rather than written over its answer afterwards.
+	override := ""
 	if remaining == 0 {
 		next = nextAfterClarificationResolution(file.Decisions[found])
+		override = orchestratorBoundaryAfterDiscussCommand(file.Decisions[found].Source)
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"resolved":         true,
 		"id":               id,
 		"answer":           answer,
@@ -424,7 +431,10 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 		"redirect_text":    redirectText,
 		"remaining":        remaining,
 		"next":             next,
-	}, nil
+	}
+	closeLifecycleCommand(result, "discuss", override,
+		"Your answer was the last thing this run was waiting on, so this picks it straight back up with what you decided.")
+	return result, nil
 }
 
 func materializeDiscussQuestions(goal string, survey codexSurveyContext, analyze analyzeScanData, pending PendingDecisionFile, activeSignals []string, maxQuestions int, dryRun bool, scope pendingDecisionScope) ([]discussQuestion, int, int, error) {
@@ -719,7 +729,7 @@ func renderDiscussVisual(result map[string]interface{}) string {
 			b.WriteString(stringValue(result["redirect_text"]))
 			b.WriteString("\n")
 		}
-		b.WriteString(renderNextUp(stringValue(result["next"])))
+		b.WriteString(renderLifecycleClosing(result, "discuss"))
 		return b.String()
 	}
 
@@ -758,7 +768,7 @@ func renderDiscussVisual(result map[string]interface{}) string {
 		b.WriteString("No new clarification questions are outstanding.\n\n")
 	}
 
-	b.WriteString(renderNextUp(stringValue(result["next"])))
+	b.WriteString(renderLifecycleClosing(result, "discuss"))
 	return b.String()
 }
 

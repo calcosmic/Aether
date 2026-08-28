@@ -769,6 +769,162 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	return nextActionPrimarySuggestion(answer), nextActionAlternativeSuggestions(answer)
 }
 
+// ---------------------------------------------------------------------------
+// The one closing, for the lifecycle commands (Phase 197 plan 04)
+// ---------------------------------------------------------------------------
+//
+// Seven commands used to end with their own hand-written block of advice, so a
+// wording fix had to land seven times and usually landed in one. These three
+// helpers are the whole migration: a command resolves ONE answer, renders it as
+// the card the owner reads, and folds the same answer into the machine-readable
+// result a wrapper reads. Screen and envelope cannot disagree because there is
+// only one answer to disagree about.
+
+// lifecycleNextAction resolves the closing answer from the project as it stands
+// on disk, for a command that has just finished. Read-only: it never writes to
+// saved state (that is asserted of the loader it calls, not promised here).
+func lifecycleNextAction(lastCommand string) nextAction {
+	return resolveNextAction(loadNextActionInputForCommand(lastCommand))
+}
+
+// lifecycleNextActionForState is the same for a caller that already holds the
+// state -- sometimes one it has only just written, sometimes one still in
+// memory. override, when non-empty, is the command that caller knows is right
+// for this exact run; it is fed to the decision rather than applied after it,
+// which is what stops the screen and the envelope naming different commands.
+func lifecycleNextActionForState(state colony.ColonyState, lastCommand, override, why string) nextAction {
+	in := nextActionInputForState(state, lastCommand)
+	if command := strings.TrimSpace(override); command != "" {
+		in.Override = &nextActionOverride{Command: command, Recommendation: strings.TrimSpace(why)}
+	}
+	return resolveNextAction(in)
+}
+
+// applyLifecycleNextAction resolves the closing answer for a finished command
+// and folds it into the result map the wrapper and the TS host read. It returns
+// the answer so the caller can render the very same one on screen.
+//
+// The existing `next` key is left exactly as it was: something downstream is
+// already reading it, and migrating a reader is not the same job as breaking
+// one.
+func applyLifecycleNextAction(result map[string]interface{}, state colony.ColonyState, lastCommand, override, why string) nextAction {
+	answer := lifecycleNextActionForState(state, lastCommand, override, why)
+	applyNextActionToResult(result, answer)
+	return answer
+}
+
+// closeLifecycleCommand is applyLifecycleNextAction for a command that has
+// already saved its work: the project on disk IS the state, so the answer is
+// resolved from there. Call it immediately before handing the result to the
+// output path, so the card on screen and the fields in the envelope come from
+// one resolve rather than two.
+func closeLifecycleCommand(result map[string]interface{}, lastCommand, override, why string) nextAction {
+	in := loadNextActionInputForCommand(lastCommand)
+	if command := strings.TrimSpace(override); command != "" {
+		in.Override = &nextActionOverride{Command: command, Recommendation: strings.TrimSpace(why)}
+	}
+	answer := resolveNextAction(in)
+	applyNextActionToResult(result, answer)
+	return answer
+}
+
+// The plain-English reasons behind a run's own more-specific command. They are
+// constants because the SAME sentence has to reach the card and the
+// machine-readable answer; two copies of it are two things that can drift.
+const (
+	nextActionUnfinishedWorkWhy = "Some of this phase was finished and some was never started. This starts only the " +
+		"work still listed as to do, and does not redo anything already proven."
+	nextActionBlockedCheckWhy = "The check stopped on the problems listed above. This is the exact command it named " +
+		"for clearing them, which is more targeted than a general re-check."
+	nextActionOpenQuestionWhy = "There are questions waiting on you that this run could not answer for you. " +
+		"Answering them is what unblocks it."
+)
+
+// lifecycleOverrideFromResult is the command a finished run knows is right for
+// this exact situation, when it has one. Three cases qualify, and only three:
+// the redispatch that picks up the half of a phase that was never started, the
+// exact command a blocked check named for clearing itself, and the question
+// that has to be answered before this run can usefully be repeated. None of
+// them can be worked out from the saved project alone.
+//
+// The ordinary "check it next" is NOT special knowledge and is deliberately not
+// returned here: leaving it to the one decision is what stops a paused or
+// failed project being told to carry on regardless, which is the drift this
+// phase exists to close.
+func lifecycleOverrideFromResult(result map[string]interface{}) (string, string) {
+	if result == nil {
+		return "", ""
+	}
+	if command := strings.TrimSpace(stringValue(result["recovery_command"])); command != "" {
+		return command, nextActionUnfinishedWorkWhy
+	}
+	if guidance, ok := result["orchestrator_boundary_guidance"].(orchestratorBoundaryGuidance); ok && guidance.Active {
+		if command := strings.TrimSpace(guidance.Next); command != "" {
+			return command, nextActionOpenQuestionWhy
+		}
+	}
+	if blocked, _ := result["blocked"].(bool); blocked {
+		if command := strings.TrimSpace(stringValue(result["next"])); strings.HasPrefix(command, "aether ") {
+			return command, nextActionBlockedCheckWhy
+		}
+	}
+	return "", ""
+}
+
+// lifecycleCommandInProse pulls a runnable command out of a sentence a finished
+// step wrote for itself -- "Run `aether build 1 --force` after fixing the
+// blocked worker output" and friends.
+//
+// A command carrying a fill-in-the-blank (`<file>`) is deliberately NOT
+// returned: it is not something the owner can type, and recommending one is the
+// defect plan 197-02 found and fixed in the closeout's own placeholder command.
+// Those sentences are still shown, as a report of what the step said, above the
+// card rather than in place of it.
+func lifecycleCommandInProse(text string) string {
+	match := lifecycleProseCommandRe.FindStringSubmatch(text)
+	if len(match) < 2 {
+		return ""
+	}
+	command := strings.TrimSpace(match[1])
+	if strings.ContainsAny(command, "<>") {
+		return ""
+	}
+	return command
+}
+
+var lifecycleProseCommandRe = regexp.MustCompile("`(aether [^`]+)`")
+
+// closeLifecycleRun folds the one closing answer into a finished run's result
+// map, feeding that run's own more-specific command (when it has one) to the
+// decision rather than writing it over the answer afterwards.
+func closeLifecycleRun(result map[string]interface{}, state colony.ColonyState, lastCommand string) nextAction {
+	override, why := lifecycleOverrideFromResult(result)
+	return applyLifecycleNextAction(result, state, lastCommand, override, why)
+}
+
+// renderLifecycleClosing is the closing block for a command whose result map
+// already carries the answer it resolved. A caller that has not folded one in
+// -- an older path, or a test driving the renderer directly -- gets the answer
+// resolved from the project on disk instead, so the card is never silently
+// absent.
+func renderLifecycleClosing(result map[string]interface{}, lastCommand string) string {
+	if answer, ok := nextActionFromResult(result); ok {
+		return renderNextActionCard(answer)
+	}
+	return renderNextActionCard(lifecycleNextAction(lastCommand))
+}
+
+// renderLifecycleClosingForState is renderLifecycleClosing for a renderer that
+// was also handed the project state. When the result map carries no answer --
+// an older path, or a test driving the renderer directly -- the state in hand is
+// a better source than the project on disk, which may not have been written yet.
+func renderLifecycleClosingForState(result map[string]interface{}, state colony.ColonyState, lastCommand string) string {
+	if answer, ok := nextActionFromResult(result); ok {
+		return renderNextActionCard(answer)
+	}
+	return renderNextActionCard(lifecycleNextActionForState(state, lastCommand, "", ""))
+}
+
 func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Charter, hiveSeeded int, proposals []initProposal, researchDocs ...string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
@@ -810,14 +966,12 @@ func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Ch
 	// when no proposals were computed (a proposal failure never fails init).
 	if len(proposals) > 0 {
 		b.WriteString(renderInitProposals(proposals))
-	} else {
-		b.WriteString(renderNextUp(
-			`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
-			`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,
-			`Run `+"`aether colonize`"+` first if you want a quick codebase scan before planning.`,
-		))
 	}
-	b.WriteString(renderContextClearGuidance())
+	// The closing block is the shared card (Phase 197 plan 04). It replaces
+	// three fixed alternatives that were identical for every project on earth,
+	// and it carries the "is it safe to close this chat" verdict too, so the
+	// old sentence that used to follow is gone rather than said twice.
+	b.WriteString(renderNextActionCard(lifecycleNextAction("init")))
 	return b.String()
 }
 
@@ -1028,17 +1182,20 @@ func renderColonizeVisual(result map[string]interface{}) string {
 	b.WriteString(displayDataPath("spawn-tree.txt"))
 	b.WriteString("\n")
 	if requiresFinalizer || dispatchMode == "agent-delegate" || dispatchMode == "plan-only" {
+		// This run only prepared the work; the platform running it does the
+		// dispatching. That is what happened, so it is reported here, above the
+		// card, rather than standing in for what the owner does next.
 		finalizer := strings.TrimSpace(stringValue(result["finalizer_command"]))
 		if finalizer == "" {
 			finalizer = "aether colonize-finalize --completion-file <file>"
 		}
-		b.WriteString(renderNextUp(
-			`Host platform should dispatch the surveyors above, then run `+"`"+finalizer+"`"+`.`,
-			`Do not hand-edit `+"`.aether/data/`"+`; the finalizer writes survey state.`,
-		))
-	} else {
-		b.WriteString(renderNextUp(`Run ` + "`aether plan`" + ` to turn this scan into a phase plan.`))
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("How this run is being driven"))
+		b.WriteString("The helpers listed above have not been sent yet. Whatever is running this — the chat\n")
+		b.WriteString("app or the automation — sends them, then records the result with `" + finalizer + "`.\n")
+		b.WriteString("Nothing under `.aether/data/` should be edited by hand; that step writes it.\n")
 	}
+	b.WriteString(renderLifecycleClosing(result, "colonize"))
 	return b.String()
 }
 
@@ -1250,10 +1407,7 @@ func renderPlanVisual(result map[string]interface{}) string {
 			b.WriteString(renderIndentedList(repairs))
 			b.WriteString("\n")
 		}
-		b.WriteString(renderNextUp(
-			`Run `+"`aether plan-finalize --completion-file <file>`"+` to retry finalization with the repaired artifact.`,
-			`Run `+"`aether flags --status active`"+` if a planning blocker is still open.`,
-		))
+		b.WriteString(renderLifecycleClosing(result, "plan"))
 		return b.String()
 	}
 	existing, _ := result["existing_plan"].(bool)
@@ -1401,16 +1555,12 @@ func renderPlanVisual(result map[string]interface{}) string {
 					b.WriteString(reason)
 					b.WriteString("\n\n")
 				}
-				b.WriteString(renderNextUp(
-					`Host platform should dispatch the JSON `+"`plan_manifest`"+` Scout and Route-Setter workers.`,
-					`After they finish, run `+"`aether plan-finalize --completion-file <file>`"+` to write the plan.`,
-				))
+				b.WriteString(renderPlanManifestOnlyNotice())
+				b.WriteString(renderLifecycleClosing(result, "plan"))
 				return b.String()
 			}
-			b.WriteString(renderNextUp(
-				`Use the JSON `+"`plan_manifest`"+` to spawn wrapper Scout and Route-Setter agents.`,
-				`This surface is read-only; pair it with the plan finalizer before replacing the normal `+"`aether plan`"+` flow.`,
-			))
+			b.WriteString(renderPlanManifestOnlyNotice())
+			b.WriteString(renderLifecycleClosing(result, "plan"))
 			return b.String()
 		}
 	}
@@ -1436,14 +1586,9 @@ func renderPlanVisual(result map[string]interface{}) string {
 		b.WriteString("Coordination: ")
 		b.WriteString(displayDataPath("spawn-tree.txt"))
 		b.WriteString("\n\n")
-		next := strings.TrimSpace(stringValue(result["next"]))
-		if next == "" {
-			next = "aether host plan"
-		}
-		b.WriteString(renderNextUp(
-			fmt.Sprintf("Run `%s` to request the next planning iteration manifest.", next),
-			`Do not start `+"`aether build`"+` until the planning loop reaches a real stop condition or you explicitly accept below target.`,
-		))
+		b.WriteString("The plan is not finished: another research-and-planning pass is needed before\n")
+		b.WriteString("there is anything to build.\n")
+		b.WriteString(renderLifecycleClosing(result, "plan"))
 		return b.String()
 	}
 
@@ -1510,14 +1655,20 @@ func renderPlanVisual(result map[string]interface{}) string {
 	b.WriteString(displayDataPath("spawn-tree.txt"))
 	b.WriteString("\n\n")
 
-	nextBuild := "aether build 1"
-	if nextPhase := firstBuildablePhase(phases); nextPhase > 0 {
-		nextBuild = fmt.Sprintf("aether build %d", nextPhase)
-	}
-	b.WriteString(renderNextUp(
-		fmt.Sprintf("Run `%s` to start the next planned phase.", nextBuild),
-		`Run `+"`aether focus \"...\"`"+` or `+"`aether redirect \"...\"`"+` if you want to adjust the colony before the first wave.`,
-	))
+	b.WriteString(renderLifecycleClosing(result, "plan"))
+	return b.String()
+}
+
+// renderPlanManifestOnlyNotice reports what a plan-only run actually did. It is
+// the run explaining itself, which is not the same thing as telling the owner
+// what to type next -- that is the card's job, below it.
+func renderPlanManifestOnlyNotice() string {
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("How this run is being driven"))
+	b.WriteString("No plan was written and nothing was changed. This run only prepared the work for\n")
+	b.WriteString("the research and planning helpers; whatever is running it sends them, then records\n")
+	b.WriteString("what they produced with `aether plan-finalize --completion-file <file>`.\n")
 	return b.String()
 }
 
@@ -1770,16 +1921,13 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	b.WriteString("Signal housekeeping runs during `aether continue`.\n")
 	if len(state.Plan.Phases) == phase.ID {
 		b.WriteString(renderStageMarker("Colony Complete"))
-		b.WriteString("This is the final phase. Seal the colony after continue.\n")
+		b.WriteString("This is the last phase in the plan. Once its work is checked, the project can be\n")
+		b.WriteString("signed off as finished.\n")
 	} else {
 		b.WriteString(renderStageMarker("Next Phase"))
 		b.WriteString(fmt.Sprintf("Phase %d follows after continue.\n", phase.ID+1))
 	}
-	b.WriteString(renderNextUp(
-		`Run `+"`aether continue`"+` after the work is implemented and independently verified.`,
-		`Run `+"`aether status`"+` if you want to inspect progress before advancing.`,
-	))
-	b.WriteString(renderContextClearGuidance())
+	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "build", "", "")))
 	return b.String()
 }
 
@@ -1854,15 +2002,11 @@ func renderBuildPartialCreditVisual(state colony.ColonyState, phase colony.Phase
 
 	b.WriteString("\n")
 	b.WriteString("This phase is NOT ready to be checked yet. Finish the remaining work first.\n")
-	recoveryCommand = strings.TrimSpace(recoveryCommand)
-	if recoveryCommand == "" {
-		b.WriteString(renderNextUp("Rerun the build for this phase to pick up the remaining work."))
-	} else {
-		b.WriteString(renderNextUp(
-			"Run `"+recoveryCommand+"` — it starts only the work listed above as still to do.",
-			"Run `aether status` if you want to see where the phase stands first.",
-		))
-	}
+	// The command that picks up ONLY the work listed above is knowledge this run
+	// has and the saved project does not, so it is handed to the one decision as
+	// an input rather than written over its answer afterwards.
+	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "build",
+		strings.TrimSpace(recoveryCommand), nextActionUnfinishedWorkWhy)))
 	return b.String()
 }
 
@@ -1893,10 +2037,11 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 		b.WriteString("\n")
 	}
 	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
-	b.WriteString(renderNextUp(
-		`Use the JSON `+"`dispatch_manifest`"+` to spawn wrapper agents with the Task tool.`,
-		`Run `+"`aether host build <phase>`"+` when a machine-readable manifest is needed.`,
-	))
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("How this run is being driven"))
+	b.WriteString("The helpers listed above have not been sent yet, and nothing was changed. Whatever\n")
+	b.WriteString("is running this sends them from the plan it was just handed.\n")
+	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "build", "", "")))
 	return b.String()
 }
 
@@ -1916,10 +2061,7 @@ func renderBuildFinalizeVisual(state colony.ColonyState, phase colony.Phase, dis
 		displayDataPath("last-build-claims.json"),
 		displayDataPath("spawn-tree.txt"),
 	))
-	b.WriteString(renderNextUp(
-		`Run `+"`aether continue`"+` to verify the external Task work and advance honestly.`,
-		`Run `+"`aether status`"+` if you want to inspect the recorded worker evidence first.`,
-	))
+	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "build", "", "")))
 	return b.String()
 }
 
@@ -2000,9 +2142,9 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	if final {
 		b.WriteString(renderStageMarker("Colony Complete"))
 		b.WriteString(renderProjectComplete(state, len(state.Plan.Phases)))
-		b.WriteString("\n\nAll planned phases are complete. The colony is ready for Crowned Anthill.\n")
-		b.WriteString(renderNextUpVisual(nextUpSuggestionsForState(state)))
-		b.WriteString(renderContextClearGuidance())
+		b.WriteString("\n\nEvery phase in the plan is finished. The project is ready to be signed off as\n")
+		b.WriteString("complete -- the stage this project calls Crowned Anthill.\n")
+		b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
 		return b.String()
 	}
 
@@ -2015,8 +2157,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	// you decide what to do next.
 	b.WriteString(renderStageMarker("Colony State"))
 	b.WriteString(renderPhaseEndFooter(state, phase.ID))
-	b.WriteString(renderNextUpVisual(nextUpSuggestionsForState(state)))
-	b.WriteString(renderContextClearGuidance())
+	b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
 	return b.String()
 }
 
@@ -2129,10 +2270,11 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(renderNextUp(
-		`Use the JSON `+"`continue_manifest`"+` to spawn wrapper verification/review agents.`,
-		`Run `+"`AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>`"+` after wrapper agents return terminal results.`,
-	))
+	b.WriteString(renderStageMarker("How this run is being driven"))
+	b.WriteString("The checking helpers listed above have not been sent yet, and nothing was changed.\n")
+	b.WriteString("Whatever is running this sends them, then records what they found with\n")
+	b.WriteString("`aether continue-finalize --completion-file <file>`.\n")
+	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "continue", "", "")))
 	return b.String()
 }
 
@@ -2172,18 +2314,7 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 		b.WriteString(renderIndentedList(blockers))
 		b.WriteString(renderBlockedWayForward(mapValue(result["gates"])))
 	}
-	primary := `Fix the blocking issues, then run ` + "`aether continue`" + ` again.`
-	if next := strings.TrimSpace(stringValue(result["next"])); next != "" {
-		primary = `Run ` + "`" + next + "`" + ` to recover the blocked work.`
-	}
-	recovery := mapValue(result["recovery"])
-	secondary := `Run ` + "`aether status`" + ` to inspect the active colony before retrying.`
-	if reconcile := strings.TrimSpace(stringValue(recovery["reconcile_command"])); reconcile != "" {
-		secondary = `Run ` + "`" + reconcile + "`" + ` if the code landed manually and only needs reconciliation.`
-	} else if skip := strings.TrimSpace(stringValue(recovery["skip_command"])); skip != "" {
-		secondary = `Run ` + "`" + skip + "`" + ` only if you intend to abandon this phase and move on.`
-	}
-	b.WriteString(renderNextUp(primary, secondary))
+	b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
 	return b.String()
 }
 
@@ -3798,7 +3929,7 @@ func renderCloseoutVisual(result map[string]interface{}) string {
 	if !boolValue(result["state_available"]) {
 		b.WriteString(emptyFallback(stringValue(result["message"]), "No colony state available."))
 		b.WriteString("\n")
-		b.WriteString(renderNextUp(`Run ` + "`aether status`" + ` when a colony is active.`))
+		b.WriteString(renderLifecycleClosing(result, workflow))
 		return b.String()
 	}
 	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
@@ -3835,8 +3966,7 @@ func renderCloseoutVisual(result map[string]interface{}) string {
 		}
 		b.WriteString("\nRun `/ant-porter` or `aether porter check` to validate and deliver.\n")
 	}
-	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
-	b.WriteString(renderNextUp(next))
+	b.WriteString(renderLifecycleClosing(result, stringValue(result["workflow"])))
 	return b.String()
 }
 

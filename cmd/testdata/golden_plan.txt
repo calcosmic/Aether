@@ -238,7 +238,22 @@ Phase 6 — End-to-end verification
 
 Coordination: .aether/data/spawn-tree.txt
 
+━━ 📊 W H A T   N E X T ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+── Where things stand ──
+Goal: Golden workflow test colony
+Phase 1 of 6: Contract and gap mapping. 0 phase(s) finished so far.
+
+── What changed ──
+  - The last thing you ran was plan.
+  - Scout summarized surveyed repo context
+  - Activated plan-r1-be3deeac3c65 (initial): Initial plan generated
+  - Generated 6 active phases with 76% confidence; planning loop stopped: pending
 
 ━━ 🐜 N E X T   U P ━━
-Run `/ant-build 1` to start the next planned phase.
-Alternative: Run `/ant-focus "..."` or `/ant-redirect "..."` if you want to adjust the colony before the first wave.
+Run `/ant-build 1` — Phase 1 (Contract and gap mapping) is ready to start. Helpers will write the code for it and report back before anything is accepted.
+Alternative: Run `/ant-focus "area"` — Point the helpers at one area before the next build starts.
+Alternative: Run `/ant-status` — Look at the dashboard first, without changing anything.
+Alternative: Run `/ant-pheromones` — See the standing instructions you have given the helpers -- what to focus on and what to avoid.
+
+Everything needed to pick this back up is written down, so it is safe to close this chat.

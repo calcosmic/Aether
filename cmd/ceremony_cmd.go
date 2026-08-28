@@ -247,11 +247,19 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 				result["pending_suggestions_block"] = renderPendingSuggestionsBlock(active)
 			}
 		}
+		override := ""
 		if next := strings.TrimSpace(stringValue(result["completion_next"])); next != "" {
 			result["next"] = next
+			// The step that just finished may know a command for this exact
+			// run that the saved project cannot work out. Feed it to the one
+			// decision rather than writing it over the answer afterwards.
+			override = lifecycleCommandInProse(next)
 		} else {
 			result["next"] = closeoutNextCommand(workflow, state)
 		}
+		// The card the owner reads and the fields a wrapper reads come from one
+		// resolve (Phase 197 plan 04).
+		applyLifecycleNextAction(result, state, workflow, override, "")
 	} else {
 		result["state_available"] = false
 		result["message"] = colonyStateLoadMessage(err)
@@ -260,6 +268,7 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		} else {
 			result["next"] = "Run `aether status` to inspect the colony."
 		}
+		closeLifecycleCommand(result, workflow, "", "")
 	}
 	return result, renderCeremonyCloseoutVisual(result)
 }
@@ -579,8 +588,8 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 			b.WriteString("\nFinalizer error\n")
 			b.WriteString(renderIndentedList([]string{errText}))
 		}
-		next := emptyFallback(stringValue(result["next"]), "Fix the completion file and rerun the finalizer.")
-		b.WriteString(renderNextUp(next))
+		writeCeremonyCompletionReport(&b, result)
+		b.WriteString(renderLifecycleClosing(result, stringValue(result["workflow"])))
 		return b.String()
 	}
 	writeCeremonyCloseoutNotice(&b, result)
@@ -620,14 +629,13 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Handoff"))
 		if phaseID > 0 && phaseHandoffRecordsExist(phaseID) {
-			fmt.Fprintf(&b, "📦 Worker handoffs recorded for phase %d — the next phase's workers inherit this build's context.\n", phaseID)
-			b.WriteString(renderContextClearGuidance())
+			fmt.Fprintf(&b, "📦 The notes this build's helpers left were saved for phase %d, so the next phase's helpers start from what was already learned.\n", phaseID)
 		} else {
-			b.WriteString("📦 No worker handoffs recorded for this phase — don't clear your context yet; the next workers would start blind.\n")
+			b.WriteString("📦 This phase's helpers left no notes behind, so the next ones would start blind.\n")
 		}
 	}
-	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
-	b.WriteString(renderNextUp(next))
+	writeCeremonyCompletionReport(&b, result)
+	b.WriteString(renderLifecycleClosing(result, stringValue(result["workflow"])))
 	// The one cost line, last on the screen — the same position it takes on
 	// the direct lane's own ending screens, so "the cost line is the last
 	// thing you read" is one rule rather than two. Only the two workflows
@@ -664,6 +672,23 @@ func renderPendingSuggestionsBlock(suggestions []colony.PendingSuggestion) strin
 		fmt.Fprintf(&b, "  Dismiss: aether suggest-approve --dismiss %s\n", s.ID)
 	}
 	return b.String()
+}
+
+// writeCeremonyCompletionReport shows what the step that just finished said
+// about itself, when it said anything. It is a REPORT, not advice: the step's
+// own sentence can carry a fill-in-the-blank a wrapper substitutes, so it is
+// never allowed to stand in for the card's recommendation -- it sits above it.
+func writeCeremonyCompletionReport(b *strings.Builder, result map[string]interface{}) {
+	next := strings.TrimSpace(stringValue(result["completion_next"]))
+	if next == "" {
+		return
+	}
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("What the last step reported"))
+	b.WriteString(next)
+	if !strings.HasSuffix(next, "\n") {
+		b.WriteString("\n")
+	}
 }
 
 func writeCeremonyCloseoutNotice(b *strings.Builder, result map[string]interface{}) {

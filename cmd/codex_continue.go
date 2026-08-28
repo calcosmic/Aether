@@ -640,9 +640,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	}
 	manifest := loadCodexContinueManifest(phase.ID)
 	if !manifest.Present {
-		return missingBuildPacketBlockedResult(state, phase, options), state, phase, nil, nil, false, nil
+		missing := missingBuildPacketBlockedResult(state, phase, options)
+		closeLifecycleRun(missing, state, "continue")
+		return missing, state, phase, nil, nil, false, nil
 	}
 	if result, blocked := manifestTaskSetBlockedResult(state, phase, manifest, options); blocked {
+		closeLifecycleRun(result, state, "continue")
 		return result, state, phase, nil, nil, false, nil
 	}
 	if changed, reconcileErr := reconcileContinueCompletedBuildTasks(&state, &phase, &manifest); reconcileErr != nil {
@@ -909,6 +912,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			),
 		}
 		runStatus = "blocked"
+		closeLifecycleRun(result, blockedState, "continue")
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
@@ -992,6 +996,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			),
 		}
 		runStatus = "blocked"
+		closeLifecycleRun(result, blockedState, "continue")
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
@@ -1151,6 +1156,8 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	attachConsolidationSummary(result, consolidationSummary)
 	attachPhaseCommitResult(result, phaseCommit)
 	runStatus = "completed"
+	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
+	closeLifecycleRun(result, updated, "continue")
 	return result, updated, updated.Plan.Phases[currentIdx], nextPhase, &housekeeping, final, nil
 }
 

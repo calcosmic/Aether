@@ -165,8 +165,29 @@ type nextActionInput struct {
 	// LastCommand is the command that just ran, when the caller knows it.
 	LastCommand string
 
+	// Override is a command the CALLER knows is right for this exact run and
+	// the resolver cannot work out from saved state alone -- the redispatch
+	// that picks up only the unfinished half of a part-built phase, the exact
+	// command a blocked check named, the clarification a question is waiting
+	// on. It is an INPUT to the decision, never a way around it: it is
+	// resolved against the live command tree like every other command, and
+	// when it does not resolve the ordinary answer is used and the
+	// substitution is recorded. Feeding it in here is what keeps the screen
+	// and the machine-readable answer one answer rather than two.
+	Override *nextActionOverride
+
 	// ActiveTodos are the outstanding task goals for the current phase.
 	ActiveTodos []string
+}
+
+// nextActionOverride is the caller's own knowledge of this exact run, offered
+// to the decision rather than applied after it.
+//
+// Recommendation is the plain-English reason, written for someone who has never
+// opened a file here. When it is empty a general one is used.
+type nextActionOverride struct {
+	Command        string
+	Recommendation string
 }
 
 // ---------------------------------------------------------------------------
@@ -464,6 +485,30 @@ func chooseNextAction(in nextActionInput, state colony.ColonyState) nextActionCh
 			alternatives: []nextActionAlternativeChoice{
 				{key: candidateColonize},
 				{key: candidateStatus},
+			},
+		}
+	}
+
+	// The caller's own knowledge of this exact run outranks everything the
+	// saved state can say, because the saved state cannot know it: which half
+	// of a part-built phase is still unwritten, or the exact command the last
+	// check named. It is still gated like any other command below, so an
+	// override naming something this version does not have falls back to the
+	// ordinary answer rather than telling the owner to type a command that
+	// does not exist.
+	if in.Override != nil && strings.TrimSpace(in.Override.Command) != "" {
+		recommendation := strings.TrimSpace(in.Override.Recommendation)
+		if recommendation == "" {
+			recommendation = "This run left something specific to do next, and this command does exactly that " +
+				"rather than starting the general next step."
+		}
+		return nextActionChoice{
+			literal:        strings.TrimSpace(in.Override.Command),
+			fallback:       candidateContinue,
+			recommendation: recommendation,
+			alternatives: []nextActionAlternativeChoice{
+				{key: candidateStatus},
+				{key: candidateFlags},
 			},
 		}
 	}
@@ -823,15 +868,32 @@ func changedFromInput(in nextActionInput, state colony.ColonyState) []string {
 		changed = append(changed, "The last thing you ran was "+command+".")
 	}
 	for _, event := range lastEventTexts(state.Events, 3) {
-		event = strings.TrimSpace(event)
-		if event != "" {
-			changed = append(changed, event)
+		if sentence := nextActionEventSentence(event); sentence != "" {
+			changed = append(changed, sentence)
 		}
 	}
 	if len(changed) == 0 {
 		changed = append(changed, "Nothing has changed since this project was last saved.")
 	}
 	return changed
+}
+
+// nextActionEventSentence turns one saved event into something a person can
+// read. Events are stored as `timestamp|event_type|source|message`, which is the
+// project's own record-keeping format: the timestamp and the internal code mean
+// nothing to the owner, and printing them raw is the same defect as printing a
+// word this repository invented without saying what it means. The message is
+// kept; the bookkeeping is dropped.
+//
+// It also keeps this list stable: a timestamp in an owner-facing line is a value
+// that differs on every run, which no recorded transcript can hold.
+func nextActionEventSentence(event string) string {
+	event = strings.TrimSpace(event)
+	if event == "" {
+		return ""
+	}
+	parts := strings.Split(event, "|")
+	return strings.TrimSpace(parts[len(parts)-1])
 }
 
 func openItemsFromInput(in nextActionInput) nextActionOpenItems {

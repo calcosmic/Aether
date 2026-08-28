@@ -71,12 +71,26 @@ Verification happens during `/ant-continue`.
 ── Housekeeping ──
 Signal housekeeping runs during `/ant-continue`.
 ── Colony Complete ──
-This is the final phase. Seal the colony after continue.
+This is the last phase in the plan. Once its work is checked, the project can be
+signed off as finished.
+━━ 📊 W H A T   N E X T ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+── Where things stand ──
+Goal: Golden workflow test colony
+Phase 1 of 1: Golden phase. 0 phase(s) finished so far.
+
+── What changed ──
+  - The last thing you ran was build.
+  - Phase 1: Golden phase
+  - Dispatched 1 workers for phase 1
+  - Phase 1 build packet prepared (simulated dispatch)
 
 ━━ 🐜 N E X T   U P ━━
-Run `/ant-continue` after the work is implemented and independently verified.
-Alternative: Run `/ant-status` if you want to inspect progress before advancing.
-Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant-resume` to restore.
+Run `/ant-continue` — Phase 1 has produced work that has not been checked yet. The next step runs the checks and, if they pass, moves on to the following phase.
+Alternative: Run `/ant-status` — Look at the dashboard first, without changing anything.
+Alternative: Run `/ant-resume-colony` — Reload the fuller picture: the saved notes, the open questions and the task list.
+
+This is a natural break, and everything is written down -- it is safe to close this chat, and starting a fresh one from here will work better than carrying this one on.
 
 ── What The Helpers Cost ──
 Cost: not known. The one worker that ran had no figure reported by its tool, so there is no total to show.

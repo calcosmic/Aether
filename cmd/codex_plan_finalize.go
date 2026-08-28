@@ -77,6 +77,7 @@ var planFinalizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
+		closeLifecycleCommand(result, "plan", "", "")
 		outputWorkflow(result, renderPlanVisual(result))
 		return nil
 	},

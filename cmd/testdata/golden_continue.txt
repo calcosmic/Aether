@@ -50,10 +50,25 @@ Next phase ready: 2 — Next golden phase
 Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
 📍 [Phase 1/2] [████████░░░░░░░░] 50%
    └── Tasks [████████████████] 1/1 in phase 1
+━━ 📊 W H A T   N E X T ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+── Where things stand ──
+Goal: Golden workflow test colony
+Phase 2 of 2: Next golden phase. 1 phase(s) finished so far.
+
+── What changed ──
+  - The last thing you ran was continue.
+  - Watcher Worker-XX completed independent verification before advancement
+  - review wave skipped; no standard review workers were selected
+  - Signal housekeeping completed: 0 active -> 0 active
 
 ━━ 🐜 N E X T   U P ━━
-Run `/ant-build 2` to start the next phase
-Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant-resume` to restore.
+Run `/ant-build 2` — Phase 2 (Next golden phase) is ready to start. Helpers will write the code for it and report back before anything is accepted.
+Alternative: Run `/ant-focus "area"` — Point the helpers at one area before the next build starts.
+Alternative: Run `/ant-status` — Look at the dashboard first, without changing anything.
+Alternative: Run `/ant-pheromones` — See the standing instructions you have given the helpers -- what to focus on and what to avoid.
+
+Everything needed to pick this back up is written down, so it is safe to close this chat.
 
 ── What The Helpers Cost ──
 Cost: not known. The one worker that ran had no figure reported by its tool, so there is no total to show.

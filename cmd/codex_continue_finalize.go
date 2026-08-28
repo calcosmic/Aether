@@ -1217,6 +1217,7 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 		result["recovery_instructions"] = gateRecoveryInstructions
 	}
 	addOrchestratorBoundaryGuidance(result, "continue", blockedState, nextCommand, nil)
+	closeLifecycleRun(result, blockedState, "continue")
 	return result, blockedState, nil
 }
 
@@ -1349,6 +1350,7 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 		result["next_phase_name"] = nextPhase.Name
 	}
 	addOrchestratorBoundaryGuidance(result, "continue", updated, nextCommand, nil)
+	closeLifecycleRun(result, updated, "continue")
 	return result, updated, nextPhase, &housekeeping, final, nil
 }
 

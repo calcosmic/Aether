@@ -43,6 +43,7 @@ var colonizeFinalizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
+		closeLifecycleCommand(result, "colonize", "", "")
 		outputWorkflow(result, renderColonizeVisual(result))
 		return nil
 	},

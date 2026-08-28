@@ -410,6 +410,10 @@ var initCmd = &cobra.Command{
 			result["prior_state_backup"] = priorStateBackup
 			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
 		}
+		// One closing answer: the card the owner reads and the fields a wrapper
+		// reads come from the same resolve, so they cannot name different
+		// commands (Phase 197 plan 04).
+		closeLifecycleCommand(result, "init", "", "")
 		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, hiveSeeded, proposals, researchDocs...))
 		return nil
 	},
