@@ -28,6 +28,7 @@ var visualWriterExemptions = map[string]string{
 	"hook_cmds.go:emitHookBlock":                 "JSON hook block consumed by the platform",
 	"unblock_cmd.go:init":                        "JSON branch; the visual branch uses writeVisualOutput",
 	"spawn_reap.go:writeSpawnOrphansEnvelope":    "JSON branch; the visual branch uses writeVisualOutput",
+	"spend_cmd.go:writeSpendEnvelope":            "JSON branch; the visual branch uses writeVisualOutput",
 	"medic_cmd.go:runMedic":                      "JSON branches and mode-agnostic error strings",
 	"build_print_brief.go:runPrintBrief":         "worker brief — agent-facing; workers invoke the raw CLI",
 	"build_print_brief.go:printWorkerBriefs":     "worker brief — agent-facing; workers invoke the raw CLI",

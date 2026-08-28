@@ -568,6 +568,7 @@
     "spawn-tree-active",
     "spawn-tree-depth",
     "spawn-tree-load",
+    "spend",
     "state-checkpoint",
     "state-mutate",
     "state-read",

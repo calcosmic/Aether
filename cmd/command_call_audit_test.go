@@ -1041,7 +1041,12 @@ func TestDocumentedCommandNamesResolve(t *testing.T) {
 // this list is that the gate-versus-enrichment judgement is made once, on
 // purpose, in review — not inherited silently from the enrichment default.
 var knownEnrichmentSubcommands = map[string]bool{
-	"abandon":             true,
+	"abandon": true,
+	// spend (Phase 196): a read-only per-worker token view. It renders the
+	// ledger and changes nothing (TestSpendDoesNotMutate). If it cannot run,
+	// the owner loses a cost breakdown -- no verification result, security
+	// scan or gate outcome depends on it -- so it is enrichment, not a gate.
+	"spend":               true,
 	"activity-log":        true,
 	"assumption-list":     true,
 	"assumption-validate": true,
