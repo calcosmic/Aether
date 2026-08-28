@@ -2854,9 +2854,13 @@ func renderPauseVisual(result map[string]interface{}) string {
 		b.WriteString(handoffPath)
 		b.WriteString("\n")
 	}
+	// Both lines used to name `aether resume`, the second one described as "the
+	// compact dashboard view instead" -- one command offered twice, and no way
+	// to reach the fuller restore that second line was written for. The full
+	// restore is resume-colony; the quick one is resume.
 	b.WriteString(renderNextUp(
-		`Run `+"`aether resume`"+` when you want to restore the paused colony.`,
-		`Run `+"`aether resume`"+` for the compact dashboard view instead.`,
+		`Run `+"`aether resume-colony`"+` when you want to pick this project back up. It reloads the full picture: the saved notes, the open questions and the task list.`,
+		`Run `+"`aether resume`"+` for the quick version -- where things stand, without the detail.`,
 	))
 	b.WriteString(renderContextClearGuidance())
 	return b.String()
