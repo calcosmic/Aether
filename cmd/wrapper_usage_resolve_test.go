@@ -884,6 +884,102 @@ func TestTheUnmatchedRecordNoteDoesNotBlameAWorkerThatRan(t *testing.T) {
 	}
 }
 
+// dispatchDescriptionContractSurfaces are the wrapper files that tell the
+// orchestrating model what to write in a dispatch's visible description. That
+// string is the ONLY place a worker's own name reaches Claude Code's
+// transcript, so it is the only thing the token ledger can join a transcript
+// row to a worker on.
+var dispatchDescriptionContractSurfaces = []string{
+	".claude/commands/ant/build.md",
+	".opencode/commands/ant/build.md",
+	".claude/commands/ant/continue.md",
+	".opencode/commands/ant/continue.md",
+}
+
+// dispatchDescriptionFormat is the contract itself, quoted exactly as the
+// wrappers must carry it.
+const dispatchDescriptionFormat = "{caste emoji} {Caste} {name}: {task}"
+
+// dispatchDescriptionInstruction is the spawning step that carries it. The
+// wrappers mention the format elsewhere too, so the assertion is made against
+// THIS line rather than the file, which is what makes it bite.
+const dispatchDescriptionInstruction = "Use the exact visible description:"
+
+// TestDispatchDescriptionCarriesTheAccountingKey is NEW-04.
+//
+// After CR-01's fix, whether a worker's tokens are attributed on this
+// repository's primary platform turns entirely on the dispatch description
+// containing the worker's own name. That contract lived in one line of wrapper
+// markdown that nothing read and no test asserted. Claude Code documents the
+// Task tool's description as a short label, so the pressure to shorten it is
+// real -- and shortening it to "{Caste}: {task}" would silently return the whole
+// subsystem to reporting "Cost: not known" on every build, with the full suite
+// green. That is the Definition of Done's "a documentation claim about runtime
+// behaviour must be testable or removed", applied to a claim the runtime now
+// depends on.
+//
+// The last assertion is the one that makes this more than a string check: it
+// builds a description in the documented shape from a name the RUNTIME
+// generates and puts it through the matcher the resolver really uses.
+func TestDispatchDescriptionCarriesTheAccountingKey(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	if len(dispatchDescriptionContractSurfaces) != 4 {
+		t.Fatalf("the contract lives on 4 wrapper surfaces, this list has %d", len(dispatchDescriptionContractSurfaces))
+	}
+
+	for _, rel := range dispatchDescriptionContractSurfaces {
+		body, readErr := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+		if readErr != nil {
+			t.Fatalf("read %s: %v", rel, readErr)
+		}
+		text := string(body)
+		if strings.TrimSpace(text) == "" {
+			t.Fatalf("%s is empty, so every assertion below would pass over nothing", rel)
+		}
+		// The assertion is made against the DISPATCH INSTRUCTION LINE, not the
+		// file as a whole. These wrappers mention the format more than once,
+		// so a whole-file substring check stays green while the one line the
+		// spawning step actually follows is shortened -- measured: shortening
+		// step 4 of build.md left a file-wide check passing.
+		instructions := 0
+		for _, line := range strings.Split(text, "\n") {
+			if !strings.Contains(line, dispatchDescriptionInstruction) {
+				continue
+			}
+			instructions++
+			if !strings.Contains(line, dispatchDescriptionFormat) {
+				t.Errorf("%s tells the spawning step to use a visible description that no longer carries the worker's own name:\n  %s\nThat name is the only thing the token record can join a Claude Code transcript row to a worker on, so dropping it reports every build as costing nothing while every test stays green.", rel, strings.TrimSpace(line))
+			}
+		}
+		if instructions == 0 {
+			t.Errorf("%s no longer tells the spawning step what visible description to use (%q), so nothing requires the worker's own name to reach the transcript at all", rel, dispatchDescriptionInstruction)
+		}
+		// The consequence is written beside the instruction, so the next
+		// person to shorten it can see what it costs before they do.
+		if !strings.Contains(text, "joins a transcript row to a worker") {
+			t.Errorf("%s carries the description format but does not say what depends on it; a future editor shortening that line has nothing telling them it turns off every build's cost figure.", rel)
+		}
+	}
+
+	t.Run("a description in the documented shape resolves to the worker the runtime named", func(t *testing.T) {
+		// Derived the way production derives it, not typed as a literal: this
+		// is the same generator and the same seed the build planner uses.
+		name := deterministicAntName("builder", "phase:9:builder")
+		description := strings.NewReplacer(
+			"{caste emoji}", "🔨🐜",
+			"{Caste}", "Builder",
+			"{name}", name,
+			"{task}", "implement the parser",
+		).Replace(dispatchDescriptionFormat)
+		if !workerNameAppearsIn(description, name) {
+			t.Errorf("a dispatch description written exactly as the wrappers require (%q) does not name the worker the runtime generated (%q), so nothing on this platform can be attributed", description, name)
+		}
+	})
+}
+
 // TestOpenCodeRefusalsReachTheOwner is WR-01.
 //
 // openCodeSessionUsageForRun returns diagnostics as its second value and
