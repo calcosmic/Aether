@@ -292,6 +292,17 @@ This is the most important finding on all three branches. In real Claude Code tr
 **the same worker's usage block appears two or three times**, once per line type, for a
 single dispatch. On today's transcript:
 
+> **SUPERSEDED 2026-08-28 — the figures and the mechanism below are both wrong.**
+> This assessment correctly identified that a duplication trap exists and that it is
+> large. It got the mechanism wrong: it read a NESTED `type` on a content block as the
+> line type, so it reported duplication across `user`/`queue-operation`/`attachment`
+> keyed on `tool_use_id`. Measured against all 1,726 real transcripts, usage appears
+> only on top-level `assistant` and `user` lines, and the key is `message.id`
+> (corroborated by `requestId`). The corrected rule is D-04 in `196-CONTEXT.md`; the
+> real measured figures are in `196-03-SUMMARY.md` (naive 2,764,260 vs true 1,572,834
+> on the committed fixture, 1.757x). Do not cite 8,930,280 or 4,237,379 as anything but
+> an example of a confidently-stated wrong number.
+
 ```
 distinct token values:                15
 occurrences per value:                [2,2,2,2,2,2,2,2,2,2,2,2,2,2,3]
