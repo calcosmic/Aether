@@ -63,35 +63,14 @@ func init() {
 	rootCmd.AddCommand(closeoutCmd)
 }
 
+// closeoutNextCommand is the closing line for a lifecycle command that has just
+// finished. Phase 197 plan 02: the workflow name is real information -- which
+// command just ran -- so it is passed to the resolver as an INPUT rather than
+// used to pick a different answer. Two closeouts of the same saved state now
+// name the same next command whichever command produced them.
 func closeoutNextCommand(workflow string, state colony.ColonyState) string {
-	switch workflow {
-	case "build":
-		return `Run ` + "`aether continue`" + ` to verify worker claims and advance.`
-	case "plan":
-		if state.CurrentPhase > 0 {
-			return fmt.Sprintf("Run `aether build %d` to start the first ready phase.", state.CurrentPhase)
-		}
-		return `Run ` + "`aether build <phase>`" + ` to start implementation.`
-	case "colonize":
-		return `Run ` + "`aether plan`" + ` to convert the survey into phases.`
-	case "continue":
-		if state.State == colony.StateCOMPLETED || allPhasesCompleted(state) {
-			return `Run ` + "`aether seal`" + ` to close and archive the colony.`
-		}
-		if state.CurrentPhase > 0 {
-			return fmt.Sprintf("Run `aether build %d` to dispatch the next phase.", state.CurrentPhase)
-		}
-		return `Run ` + "`aether status`" + ` to inspect the next step.`
-	case "seal":
-		return `Run ` + "`aether porter check`" + ` if you want delivery readiness, or start a new colony.`
-	case "swarm":
-		return `Run ` + "`aether status`" + ` to inspect the colony after swarm findings.`
-	default:
-		if state.State == colony.StateBUILT {
-			return `Run ` + "`aether continue`" + ` to verify and advance.`
-		}
-		return `Run ` + "`aether status`" + ` to inspect the colony.`
-	}
+	answer := resolveNextAction(nextActionInputForState(state, strings.TrimSpace(workflow)))
+	return nextActionPrimarySuggestion(answer)
 }
 
 func closeoutCompletionDetails(path string) map[string]interface{} {

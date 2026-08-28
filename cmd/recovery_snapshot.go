@@ -195,49 +195,14 @@ func syncColonyArtifacts(state colony.ColonyState, opts colonyArtifactOptions) (
 	return session, nil
 }
 
+// nextCommandFromState names the next step for a state the caller already
+// holds. Phase 197 plan 02: it decides nothing of its own -- every branch it
+// used to carry, including the interrupted-build redispatch and the
+// stalled-build-with-no-dispatch-record route, now lives in resolveNextAction
+// where one answer serves every caller.
 func nextCommandFromState(state colony.ColonyState) string {
-	state = normalizeLegacyColonyState(state)
-	if colonyNeedsEntomb(state) {
-		return "aether entomb"
-	}
-	if state.Paused {
-		return "aether resume"
-	}
-	if _, ok := activePlanFinalizeFailureFlag(store); ok {
-		return "aether flags --status active"
-	}
-	switch state.State {
-	case colony.StateEXECUTING, colony.StateBUILT:
-		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
-			return buildForceRedispatchCommand(state.CurrentPhase)
-		}
-		if state.CurrentPhase > 0 && state.BuildStartedAt != nil && time.Since(state.BuildStartedAt.UTC()) >= abandonedBuildThreshold {
-			if manifest := loadCodexContinueManifest(state.CurrentPhase); !manifest.Present {
-				return buildForceRedispatchCommand(state.CurrentPhase)
-			}
-		}
-		if guidance := loadActiveRecoveryGuidance(state); guidance != nil && strings.TrimSpace(guidance.Next) != "" {
-			return guidance.Next
-		}
-		return "aether continue"
-	case colony.StateCOMPLETED:
-		return "aether seal"
-	case colony.StateREADY:
-		if len(state.Plan.Phases) == 0 {
-			return "aether plan"
-		}
-		if phase := recoveryPhase(&state); phase != nil && phase.Status != colony.PhaseCompleted {
-			return fmt.Sprintf("aether build %d", phase.ID)
-		}
-		return "aether seal"
-	default:
-		if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
-			return "aether init \"goal\""
-		}
-		return "aether status"
-	}
+	return resolveNextAction(nextActionInputForState(state, "")).Command
 }
-
 func loadActiveRecoveryGuidance(state colony.ColonyState) *activeRecoveryGuidance {
 	state = normalizeLegacyColonyState(state)
 	if store == nil || state.CurrentPhase < 1 {
