@@ -348,6 +348,25 @@ None — no external service configuration required.
 - **197-04 / 197-06** can repoint each command's closing renderer at `renderNextActionCard`. Two things they inherit: the plain-English check exists and can fail, so bringing a legacy card under `renderedNextActionCards` is how each one gets held to S-05; and the pause card's remaining wording defect (and its banner) is already recorded in `.planning/WINDOWS.md`.
 - **197-07** can generalise `TestNextActionEnvelopeCarriesTheSameFields` across all eleven commands — the per-command work is calling `applyNextActionToResult` with the same answer the card was rendered from, which `closeout` now models.
 
+## Self-Check: PASSED
+
+**Files claimed as created — all present on disk:**
+
+| File | Present |
+|---|---|
+| `cmd/next_action_card.go` | yes |
+| `cmd/next_action_card_test.go` | yes |
+| `cmd/next_action_one_decider_test.go` | yes |
+| `.planning/phases/197-one-answer-to-what-next/197-02-SUMMARY.md` | yes |
+
+**Commits claimed — all present in `git log`:** `e1b7dc09`, `f980820d`, `f49486fa`, `b06fa625`, `0ea75bd0`, `a5653335`, `08a7e95c`, `eaa944cb`, plus this summary commit.
+
+**Nothing changed outside the declared surface.** `git diff --name-only` against the plan's base commit lists exactly: the seven `cmd/` files, this summary, and `.planning/WINDOWS.md` (the two findings recorded above).
+
+**`.planning/STATE.md` and `.planning/ROADMAP.md`:** not modified — they do not appear in that diff. The orchestrator owns them in parallel-executor mode.
+
+**Temporary demonstrations reverted:** the `nextUpSuggestionsForState` revert demonstration and a scratch card-preview test were both removed; `git status --short` is clean.
+
 ---
 *Phase: 197-one-answer-to-what-next*
 *Completed: 2026-08-28*
