@@ -16,9 +16,44 @@ removed. Each has now been reviewed, its content either taken into the tree or
 deliberately discarded, and the branch itself deleted.
 
 **Every branch's tip commit was recorded here BEFORE its branch was deleted.**
-Deleting a branch name does not delete its commits; with the commit written
-down, any of this work can still be recovered by `git show <commit>` long after
-the name is gone. That is what makes a deletion safe rather than final.
+
+**Correction, 2026-08-28 — how recoverable these commits actually are.** This
+section first said the work "can still be recovered by `git show <commit>` long
+after the name is gone. That is what makes a deletion safe rather than final."
+That was true on the day it was written and is not a durable fact, so it is
+corrected here rather than quietly softened.
+
+What is true: deleting a branch name does not delete its commits, and all three
+tips below still resolve today (`git cat-file -t <commit>` returns `commit` for
+each).
+
+What is also true: none of the three is reachable from any ref in this
+repository, and no reflog entry mentions them either — checked on 2026-08-28,
+`git for-each-ref` walked in full, zero hits in `git reflog --all`. Unreachable
+objects are what `git gc` exists to delete. With this repository's settings (the
+git defaults: unreachable loose objects pruned after two weeks,
+`gc.reflogExpireUnreachable` at 30 days), a `git gc` — which git also runs on its
+own, unprompted, during ordinary commands — will eventually remove all three.
+After that `git show` on these hashes returns "bad object" and the work is gone.
+The three hashes below are a record of what was disposed of, not a guaranteed
+restore point.
+
+**What it would take to keep them recoverable.** One command per branch, giving
+each commit a ref so it stops being garbage:
+
+```
+git tag archive/spend-ledger-salvage        be1e160b09109c2af56f5df6c8a1adee5b002a5a
+git tag archive/opencode-usage-salvage      ecd98b5cc81d0c51b82c04139df14d90e38e4619
+git tag archive/claude-usage-test-discarded 1cbf3615100203be7d59d49ffc2cf224367cedaa
+```
+
+A tag is a ref, and `git gc` never prunes what a ref reaches, so tagged commits
+survive indefinitely (and are pushed with `git push --tags` if they should
+survive this machine too). Those tags have deliberately NOT been created: the
+two salvaged branches' content is already in the tree and under test, and the
+third was reviewed and discarded on purpose. The choice on record is therefore
+"accept that these three commits will be pruned", made knowingly — not "they are
+safe forever", which is what the earlier wording implied.
 
 ## The three
 
