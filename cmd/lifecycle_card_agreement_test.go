@@ -153,6 +153,38 @@ func TestMigratedLifecycleSurfacesArePlatformCorrect(t *testing.T) {
 	}
 }
 
+// TestTheSevenClosingsSpeakPlainEnglish holds the block this plan owns -- the
+// closing block of each of the seven -- to S-05: no word this repository
+// invented appears in it without being explained in the same sentence.
+//
+// It is scoped to the closing block deliberately. The banners and section
+// headings above it ("Colony Init", "Colony Complete") are the project's own
+// house style, locked by their own tests and by recorded transcripts that
+// another plan owns in this round; what the owner is TOLD TO DO is this plan's
+// wording, and that is what is checked here.
+func TestTheSevenClosingsSpeakPlainEnglish(t *testing.T) {
+	newNextActionFixtureStore(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
+	state := oneAgreementState(t)
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("write the fixture project: %v", err)
+	}
+
+	for label, rendered := range migratedSurfaceRenderings(t, state) {
+		t.Run(label, func(t *testing.T) {
+			marker := strings.Index(rendered, spacedTitle("What Next"))
+			if marker < 0 {
+				t.Fatalf("%s printed no closing card:\n%s", label, rendered)
+			}
+			closing := rendered[marker:]
+			if violations := untranslatedRepoWords(closing); len(violations) > 0 {
+				t.Errorf("%s ends with words this repository invented and never explains:\n  %s\n\nclosing block:\n%s",
+					label, strings.Join(violations, "\n  "), closing)
+			}
+		})
+	}
+}
+
 // TestEveryCommandTheSevenCanRecommendResolves is criterion 6 applied to the
 // surface rather than to the resolver alone: every command any of the seven can
 // put in front of the owner must be a command this build of the program

@@ -137,6 +137,53 @@ func workLoopSurfaces() []workLoopSurface {
 			envelope: blockedCheckRun,
 			keep:     []string{"Blocking issues", "Way forward"},
 		},
+		{
+			// Recording work that helpers did outside the program.
+			name: "recording work done outside the program",
+			visual: rendererSurface(func(state colony.ColonyState) string {
+				return renderBuildFinalizeVisual(state, state.Plan.Phases[0], nil)
+			}, "build"),
+			keep: []string{"External Task worker results recorded."},
+		},
+		{
+			// The check prepared but not run: the manifest-only variant.
+			name: "checking the work, plan only",
+			visual: rendererSurface(func(state colony.ColonyState) string {
+				return renderContinuePlanOnlyVisual(state, state.Plan.Phases[0], nil, colony.VerificationDepthStandard)
+			}, "continue"),
+			keep: []string{"No state was changed and no review workers were spawned."},
+		},
+	}
+}
+
+// rendererSurface drives one renderer over a saved project, for the variants
+// that are a screen rather than a whole command run. The project is written
+// through the runtime's own store first, so the answer the renderer resolves is
+// the one production would resolve.
+func rendererSurface(render func(colony.ColonyState) string, command string) func(*testing.T) lifecycleRun {
+	return func(t *testing.T) lifecycleRun {
+		t.Helper()
+		newNextActionFixtureStore(t)
+		t.Setenv("AETHER_PLATFORM", "codex")
+		state := normalizedFixtureState(t, colony.ColonyState{
+			Version:      "3.0",
+			Goal:         fixtureGoal("Ship the billing rewrite"),
+			State:        colony.StateREADY,
+			CurrentPhase: 1,
+			Milestone:    "Open Chambers",
+			Plan: colony.Plan{Phases: []colony.Phase{
+				fixturePhase(1, "Foundations", colony.PhaseReady),
+				fixturePhase(2, "Billing engine", colony.PhasePending),
+			}},
+		})
+		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+			t.Fatalf("write the fixture project: %v", err)
+		}
+		run := lifecycleRun{}
+		run.answer = lifecycleNextActionForState(state, command, "", "")
+		run.card = stripANSI(renderNextActionCardForPlatform(run.answer, "codex"))
+		run.visual = stripANSI(render(state))
+		return run
 	}
 }
 
