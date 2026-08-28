@@ -1,0 +1,6 @@
+{
+  "id": "ses_child_a",
+  "parentID": "ses_parent",
+  "title": "🔨 Builder Mason-67: implement the parser (@general subagent)",
+  "time": { "created": 1786710600000, "updated": 1786710600000 }
+}

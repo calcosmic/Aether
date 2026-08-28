@@ -1,0 +1,5 @@
+{
+  "role": "assistant",
+  "cost": 0,
+  "tokens": { "total": 8100, "input": 100, "output": 200, "reasoning": 0, "cache": { "read": 7800, "write": 0 } }
+}
