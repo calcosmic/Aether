@@ -4554,11 +4554,11 @@ var casteModelSlot = map[string]string{
 	"auditor":       "opus",
 	"builder":       "sonnet",
 	"chaos":         "sonnet",
-	"chronicler":    "inherit",
+	"chronicler":    "sonnet",
 	"fixer":         "sonnet",
 	"gatekeeper":    "opus",
-	"includer":      "inherit",
-	"keeper":        "inherit",
+	"includer":      "sonnet",
+	"keeper":        "sonnet",
 	"measurer":      "opus",
 	"medic":         "sonnet",
 	"oracle":        "opus",
@@ -4577,8 +4577,13 @@ var casteModelSlot = map[string]string{
 // resolveCasteModel returns the display name of the model a caste's workers
 // actually run on: the ANTHROPIC_DEFAULT_<SLOT>_MODEL environment variable's
 // value when the user has redirected that slot (e.g. sonnet → glm-5-turbo),
-// otherwise the slot name itself. "inherit" agents run on whatever model the
-// session uses, shown as "session". Unknown castes get "" — no tag.
+// otherwise the slot name itself. Unknown castes get "" — no tag.
+//
+// The "inherit" branch below is a defensive fallback only: D-02 (Phase 196)
+// pinned every role to a real slot, and TestRoutineBuilderIsSonnetNeverInherit
+// fails by name if one is ever put back on the sentinel that means "whatever
+// model happened to run last". The branch stays so such a role renders as
+// "session" — visibly wrong — rather than silently as a real model.
 func resolveCasteModel(caste string) string {
 	slot, ok := casteModelSlot[normalizeCasteKey(caste)]
 	if !ok {

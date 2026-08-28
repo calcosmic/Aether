@@ -51,9 +51,12 @@ func TestModelTagEnvOverride(t *testing.T) {
 	if got := resolveCasteModel("queen"); got != "opus" {
 		t.Fatalf("resolveCasteModel(queen) = %q, want opus", got)
 	}
-	// inherit agents run on the session's model.
-	if got := resolveCasteModel("chronicler"); got != "session" {
-		t.Fatalf("resolveCasteModel(chronicler) = %q, want session", got)
+	// D-02 (Phase 196) pinned the routine roles to the cheaper model, so
+	// they follow the sonnet slot's override like every other sonnet role.
+	// This assertion previously expected "session" — the leftover-model
+	// behaviour D-02 abolished; see TestRoutineBuilderIsSonnetNeverInherit.
+	if got := resolveCasteModel("chronicler"); got != "glm-5-turbo" {
+		t.Fatalf("resolveCasteModel(chronicler) = %q, want the env override glm-5-turbo — it is pinned to the sonnet slot", got)
 	}
 	if got := resolveCasteModel("unknown-caste"); got != "" {
 		t.Fatalf("resolveCasteModel(unknown) = %q, want empty", got)
