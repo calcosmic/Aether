@@ -53,6 +53,8 @@ func AccumulateStream(stream *ssestream.Stream[anthropic.MessageStreamEventUnion
 			role = string(variant.Message.Role)
 			model = string(variant.Message.Model)
 			usage.InputTokens = variant.Message.Usage.InputTokens
+			usage.CacheReadInputTokens = variant.Message.Usage.CacheReadInputTokens
+			usage.CacheCreationInputTokens = variant.Message.Usage.CacheCreationInputTokens
 		case anthropic.ContentBlockDeltaEvent:
 			delta := variant.Delta
 			if delta.Type == "text_delta" {
@@ -64,6 +66,21 @@ func AccumulateStream(stream *ssestream.Stream[anthropic.MessageStreamEventUnion
 		case anthropic.MessageDeltaEvent:
 			stopReason = string(variant.Delta.StopReason)
 			usage.OutputTokens = variant.Usage.OutputTokens
+			// MessageDeltaUsage is cumulative and carries the input-side
+			// columns too, but a stream that reports them only on
+			// message_start leaves them absent (and so zero) here. Take a
+			// restated column only when the delta actually stated one, so
+			// neither shape loses a column — a column populated on one path
+			// and silently zero on the other is the divergence D-05 closes.
+			if variant.Usage.InputTokens > 0 {
+				usage.InputTokens = variant.Usage.InputTokens
+			}
+			if variant.Usage.CacheReadInputTokens > 0 {
+				usage.CacheReadInputTokens = variant.Usage.CacheReadInputTokens
+			}
+			if variant.Usage.CacheCreationInputTokens > 0 {
+				usage.CacheCreationInputTokens = variant.Usage.CacheCreationInputTokens
+			}
 		}
 	}
 
