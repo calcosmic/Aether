@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 172.1
-current_phase_name: gate environment integrity — not started; blocks nothing; stays in the backlog
-status: planning
-stopped_at: Phase 196 planned (8 plans, 4 waves), ready to execute
-last_updated: "2026-08-27T12:43:57.270Z"
-last_activity: 2026-08-27
-last_activity_desc: Phase 195 complete, transitioned to Phase 172.1
-state_head: e211f271a226abbb18c8a416662c21ef6e4674ec
+current_phase: 196
+current_phase_name: See What It Cost
+status: executing
+stopped_at: Completed 196-01-PLAN.md
+last_updated: "2026-08-28T09:53:03.410Z"
+last_activity: 2026-08-28
+last_activity_desc: Phase 196 execution started
+state_head: da2df8c7f474d422fd05670bad6ffa773534ab15
 progress:
   total_phases: 7
-  completed_phases: 3
-  total_plans: 24
-  completed_plans: 24
+  completed_phases: 2
+  total_plans: 32
+  completed_plans: 25
   percent: 29
 ---
 
@@ -32,16 +32,16 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 ## Current Position
 
-**Progress:** [█░░░░░░░░░] 14%
+**Progress:** [███░░░░░░░] 29%
 
-Phase: 196 (See What It Cost) — PLANNED, READY TO EXECUTE
-Plan: 0 of 8
+Phase: 196 (See What It Cost) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
 every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-Last activity: 2026-08-27 — Phase 195 complete, transitioned to Phase 172.1
+Last activity: 2026-08-28 — Phase 196 execution started
 
 ## Performance Metrics
 
@@ -80,6 +80,7 @@ Last activity: 2026-08-27 — Phase 195 complete, transitioned to Phase 172.1
 | Phase 195 P07 | 70min | 2 tasks | 7 files |
 | Phase 195 P08 | 55 min | 2 tasks | 6 files |
 | Phase 195 P10 | 55 min | 1 tasks | 4 files |
+| Phase 196 P01 | 22 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,10 @@ Last activity: 2026-08-27 — Phase 195 complete, transitioned to Phase 172.1
 - [Phase 195]: [Phase 195]: planCoherentJobRetry reuses the canonical planCoherentJobs grouping pass for a parent job's unfinished tasks (single all-inclusive proposal over the uncredited subset) rather than a second dependency graph; a new buildAttemptPartial attempt status (distinct from built/failed) plus ParentAttemptID/ParentJobName (begin-then-attach, same discipline as checkFixAttemptRecord) make D-10 recovery append-only on both build lanes -- retry only ever follows accepted credit, never a total failure with zero receipts.
 - [Phase 195]: Build coherent-job contract defined once and asserted by three guards over five surfaces — Each guard re-typing its own anchor list would be a fourth surface able to go stale, reproducing the drift the guards exist to catch
 - [Phase 195]: Three Go-authority sentences are compared byte-for-byte across YAML, guide, skill and wrappers — A keyword check would accept five surfaces each paraphrasing ownership differently, which is this repo's documented failure mode
+- [Phase 196]: spendTotals.ProviderUSD deleted rather than gated: nothing read it and an unread money field on the totals struct is a standing invitation to render one (D-01)
+- [Phase 196]: The currency ban is scoped to the ledger's own types; codex.WorkerUsage keeps its USDCost and is skipped by name
+- [Phase 196]: An empty ledger row status is refused rather than folded to failed, so a durable ledger never records a wrong outcome
+- [Phase 196]: FIX 1-2's independence is enforced by an AST guard, not a comment, per CLAUDE.md's Definition of Done
 
 ### Pending Todos
 
@@ -227,6 +232,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-27T09:01:37.561Z
-Stopped at: Phase 195 complete, ready to plan Phase 172.1
+Last session: 2026-08-28T09:52:55.892Z
+Stopped at: Completed 196-01-PLAN.md
 Resume file: None
