@@ -182,6 +182,7 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 	}
 
 	rows := make([]spendRow, 0, len(req.Dispatches))
+	credited := make(map[string]bool, len(req.Dispatches))
 	for _, dispatch := range req.Dispatches {
 		name := spendWorkerNameForDispatch(dispatch)
 		if name == "" {
@@ -202,6 +203,19 @@ func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
 		}
 
 		worker := usageByWorker[name]
+		// The resolver answers once per DISTINCT name, and this loop walks every
+		// dispatch -- so two dispatches sharing a name would each be credited
+		// that one answer, and the run would report twice what it spent (WR-02).
+		// Both dispatches keep a row, because a worker that vanishes makes a run
+		// look cheaper than it was; only the first carries the measurement.
+		if credited[name] && worker.Reported {
+			outcome.Notes = append(outcome.Notes, fmt.Sprintf(
+				"two workers on this run were both named %s, so the one figure recorded under that name was counted once rather than credited to both", name))
+			worker = wrapperWorkerUsage{WorkerName: name}
+		}
+		if worker.Reported {
+			credited[name] = true
+		}
 		rows = append(rows, spendRow{
 			AgentName: name,
 			Caste:     dispatch.Caste,

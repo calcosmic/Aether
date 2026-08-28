@@ -191,10 +191,25 @@ func saveSpendLedger(entry spendLedger) error {
 
 	rows := make([]spendRow, len(entry.Rows))
 	copy(rows, entry.Rows)
+	measuredByWorker := map[string]bool{}
 	for i := range rows {
 		worker := strings.TrimSpace(rows[i].AgentName)
 		if worker == "" {
 			worker = "(unnamed worker)"
+		}
+		// Two rows may share a name -- a worker never vanishes from this
+		// ledger, so a name collision cannot be answered by dropping one. Two
+		// rows that both carry a MEASUREMENT under one name is the harm: the
+		// phase total then counts one measurement twice, which is what a run of
+		// 1,000 tokens reporting 2.0K looked like (WR-02).
+		if !rows[i].Usage.Empty() {
+			if measuredByWorker[worker] {
+				return fmt.Errorf(
+					"save spend ledger: two rows filed under worker %s both carry a token figure — one measurement would be counted twice in this phase's total",
+					worker,
+				)
+			}
+			measuredByWorker[worker] = true
 		}
 		normalized, ok := normalizeSpendRowStatus(rows[i].Status)
 		if !ok {
