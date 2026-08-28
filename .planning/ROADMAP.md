@@ -218,7 +218,7 @@ Plans:
 
 - [x] 196-01-PLAN.md — Salvage the spend ledger with its four assessed fixes: no currency relay, job attribution, independent aggregation invariant, one status vocabulary (wave 1)
 - [x] 196-02-PLAN.md — One authoritative token type: every billed column on the chat-model client, both accounting paths locked to one total, the invented length-derived figure deleted at source, and a ratchet forbidding its return (wave 1)
-- [ ] 196-03-PLAN.md — The Claude transcript reader, deduplicated by tool use identifier, proved by a real fixture that keeps its duplicates (wave 1)
+- [x] 196-03-PLAN.md — The Claude transcript reader, deduplicated by tool use identifier, proved by a real fixture that keeps its duplicates (wave 1)
 - [ ] 196-04-PLAN.md — Pin the routine roles to the cheaper model and show every expensive role's written reason on the team card (wave 1)
 
 **Wave 2** *(blocked on the ledger and the transcript reader)*

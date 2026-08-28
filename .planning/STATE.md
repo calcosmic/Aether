@@ -5,16 +5,16 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 196
 current_phase_name: See What It Cost
 status: executing
-stopped_at: Completed 196-02-PLAN.md
-last_updated: "2026-08-28T10:11:00.081Z"
+stopped_at: Completed 196-03-PLAN.md
+last_updated: "2026-08-28T10:32:33.657Z"
 last_activity: 2026-08-28
 last_activity_desc: Phase 196 execution started
-state_head: ea69255790fdec977dd27aaf9d6653fa1fdbf6e6
+state_head: 95513b94c8bd33509e8a746ce25ca1eeb43603e0
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 32
-  completed_plans: 26
+  completed_plans: 27
   percent: 29
 ---
 
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [███░░░░░░░] 29%
 
 Phase: 196 (See What It Cost) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
@@ -82,6 +82,7 @@ Last activity: 2026-08-28 — Phase 196 execution started
 | Phase 195 P10 | 55 min | 1 tasks | 4 files |
 | Phase 196 P01 | 22 min | 2 tasks | 2 files |
 | Phase 196 P02 | 13 min | 3 tasks | 14 files |
+| Phase 196 P03 | 41min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -150,6 +151,8 @@ Last activity: 2026-08-28 — Phase 196 execution started
 - [Phase 196]: Pool-converted usage rows are tagged session-transcript, never provider-grade and never estimate, so a real measurement is not filed under the guessed subtotal
 - [Phase 196]: The no-length-derivation ratchet scopes by package directory, not filename — a filename-scoped scan would have excluded the one file the violation lived in
 - [Phase 196]: The guard-file inventory floor is raised to its live count on every registration, making the inventory itself a ratchet
+- [Phase 196]: Deduplicate Claude transcript usage by message.id, corroborated by requestId; a usage-bearing line with no identifier is counted once on its own — Re-measured on this machine's whole corpus (1,726 transcripts): only two top-level line types carry usage — assistant at .message.usage and user at .toolUseResult.usage, at different positions. The user line is a subagent completion record with no message.id.
+- [Phase 196]: The spend containment helper resolves symlinks on the deepest existing ancestor of a path that does not exist yet — The old fallback compared an evaluated root against an unevaluated candidate, so on macOS containment depended on whether the file had been written. Every existing refusal case still fails closed.
 
 ### Pending Todos
 
@@ -236,6 +239,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-28T10:10:59.105Z
-Stopped at: Completed 196-02-PLAN.md
+Last session: 2026-08-28T10:32:13.344Z
+Stopped at: Completed 196-03-PLAN.md
 Resume file: None
