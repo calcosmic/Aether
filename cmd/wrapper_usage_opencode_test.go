@@ -604,3 +604,84 @@ func TestBoundedReadOpensThenLimits(t *testing.T) {
 		}
 	})
 }
+
+// TestOpenCodeSessionWithNoReadableMessagesIsNotReported is CR-03.
+//
+// readOpenCodeUsage set its source tag before reading anything, so a session
+// matched by title whose message directory is missing or empty came back tagged
+// "measured" with every column zero. Every downstream decision keys on that tag
+// by design, so the worker was filed as a measurement of zero: its real spend
+// silently excluded from the total, the count of workers whose tools reported a
+// figure inflated, and the footnote that would have said something was missing
+// suppressed.
+//
+// That is the exact outcome D-01 as amended exists to prevent — a worker whose
+// tool reported nothing must show NO number, not a zero, which reads as "this
+// worker was free".
+func TestOpenCodeSessionWithNoReadableMessagesIsNotReported(t *testing.T) {
+	t.Run("the message directory does not exist", func(t *testing.T) {
+		storageRoot, _ := setupOpenCodeFixtureHome(t)
+		usage := readOpenCodeUsage(storageRoot, "ses_does_not_exist")
+		assertOpenCodeUsageIsAbsentNotZero(t, usage)
+	})
+
+	t.Run("the message directory exists but holds nothing readable", func(t *testing.T) {
+		storageRoot, _ := setupOpenCodeFixtureHome(t)
+		empty := filepath.Join(storageRoot, "message", "ses_empty")
+		if err := os.MkdirAll(empty, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		// A user-role record only: real, readable, and not a worker's spend.
+		if err := os.WriteFile(filepath.Join(empty, "msg_1.json"), []byte(`{"role":"user"}`), 0o644); err != nil {
+			t.Fatalf("write message: %v", err)
+		}
+		assertOpenCodeUsageIsAbsentNotZero(t, readOpenCodeUsage(storageRoot, "ses_empty"))
+	})
+
+	t.Run("the worker renders with no figure rather than a zero", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, _ := newTestStore(t)
+		store = s
+		storageRoot, repoRoot := setupOpenCodeFixtureHome(t)
+		// Mason-67's session is matched by title; its messages are then gone.
+		if err := os.RemoveAll(filepath.Join(storageRoot, "message", "ses_child_a")); err != nil {
+			t.Fatalf("remove message dir: %v", err)
+		}
+
+		res := resolveWrapperWorkerUsage(wrapperUsageRequest{
+			Platform:    "opencode",
+			RepoRoot:    repoRoot,
+			StartedAt:   openCodeFixtureWindowStart,
+			EndedAt:     openCodeFixtureWindowEnd,
+			WorkerNames: []string{"Mason-67"},
+		})
+		mason := resolverWorker(t, res, "Mason-67")
+		if mason.Reported {
+			t.Fatalf("Mason-67 is marked as measured with %d tokens although nothing about it could be read; a zero here reads as \"this worker was free\"",
+				mason.Usage.BilledTotalTokens())
+		}
+
+		ledger := spendLedger{Phase: 3, Workflow: spendWorkflowBuild, Rows: []spendRow{
+			{AgentName: "Mason-67", Caste: "builder", Status: "completed", Usage: mason.Usage},
+		}}
+		totals := computeSpendTotals([]spendLedger{ledger})
+		if totals.MeasuredRows != 0 {
+			t.Errorf("the phase counts %d workers whose tools reported a figure; nothing was read for this one", totals.MeasuredRows)
+		}
+		block := stripANSI(renderSpendCostLineFromLedgers([]spendLedger{ledger}))
+		if !strings.Contains(block, spendNotReportedFigure) {
+			t.Errorf("the cost block shows a number for a worker nothing was read for:\n%s", block)
+		}
+	})
+}
+
+func assertOpenCodeUsageIsAbsentNotZero(t *testing.T, usage codex.WorkerUsage) {
+	t.Helper()
+	if usage.Source != "" {
+		t.Errorf("usage is tagged %q although nothing was read; the tag is what every downstream \"was this reported?\" decision keys on", usage.Source)
+	}
+	if !usage.Empty() {
+		t.Errorf("usage = %+v, want the zero value carrying no figure at all", usage)
+	}
+}
