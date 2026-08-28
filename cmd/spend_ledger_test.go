@@ -39,12 +39,10 @@ func TestSpendLedgerPersistsAcrossProcesses(t *testing.T) {
 		RecordedAt: time.Now().UTC().Format(time.RFC3339),
 		Rows: []spendRow{
 			{
-				AgentName:  "Mason-67",
-				Caste:      "builder",
-				ParentName: "Queen",
-				Task:       "Implement the ledger",
-				Status:     "completed",
-				ToolCount:  4,
+				AgentName: "Mason-67",
+				Caste:     "builder",
+				Task:      "Implement the ledger",
+				Status:    "completed",
 				// Anthropic's documented disjoint-column example
 				// (pkg/codex/usage.go's own doc comment): 50 input,
 				// 100,000 cache read, 2,000 cache creation, 500 output.
@@ -101,12 +99,6 @@ func TestSpendLedgerPersistsAcrossProcesses(t *testing.T) {
 	}
 	if row.Caste != "builder" {
 		t.Fatalf("Caste = %q, want builder", row.Caste)
-	}
-	if row.ParentName != "Queen" {
-		t.Fatalf("ParentName = %q, want Queen", row.ParentName)
-	}
-	if row.ToolCount != 4 {
-		t.Fatalf("ToolCount = %d, want 4", row.ToolCount)
 	}
 
 	// Schema-mismatch bullet: a ledger whose schema_version is not the
@@ -323,9 +315,8 @@ func TestLedgerMeasuredEstimatedSubtotalsAreSeparate(t *testing.T) {
 // (cmd/caste_relevance_test.go): for each table entry,
 // computeSpendTotals(set).GrandTotalTokens equals an independently
 // accumulated sum of row.Usage.BilledTotalTokens() over every row in the
-// set, equals MeasuredTokens + EstimatedTokens, and the spendRollupByParent
-// totals sum to the same figure. At least two entries carry both
-// workflows.
+// set, and equals MeasuredTokens + EstimatedTokens. At least two entries
+// carry both workflows.
 func TestLedgerGrandTotalEqualsSumOfRows(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -335,8 +326,8 @@ func TestLedgerGrandTotalEqualsSumOfRows(t *testing.T) {
 			name: "single-workflow-all-provider",
 			ledgers: []spendLedger{
 				{Phase: 1, Workflow: spendWorkflowBuild, Rows: []spendRow{
-					{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 1000, Source: codex.UsageSourceProvider}},
-					{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 2000, Source: codex.UsageSourceProvider}},
+					{Usage: codex.WorkerUsage{TotalTokens: 1000, Source: codex.UsageSourceProvider}},
+					{Usage: codex.WorkerUsage{TotalTokens: 2000, Source: codex.UsageSourceProvider}},
 				}},
 			},
 		},
@@ -344,9 +335,9 @@ func TestLedgerGrandTotalEqualsSumOfRows(t *testing.T) {
 			name: "single-workflow-mixed-source",
 			ledgers: []spendLedger{
 				{Phase: 2, Workflow: spendWorkflowBuild, Rows: []spendRow{
-					{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 5000, Source: codex.UsageSourceProvider}},
-					{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 300, Source: codex.UsageSourceEstimate}},
-					{ParentName: "Scout-1", Usage: codex.WorkerUsage{TotalTokens: 800, Source: codex.UsageSourceSessionTranscript}},
+					{Usage: codex.WorkerUsage{TotalTokens: 5000, Source: codex.UsageSourceProvider}},
+					{Usage: codex.WorkerUsage{TotalTokens: 300, Source: codex.UsageSourceEstimate}},
+					{Usage: codex.WorkerUsage{TotalTokens: 800, Source: codex.UsageSourceSessionTranscript}},
 				}},
 			},
 		},
@@ -354,10 +345,10 @@ func TestLedgerGrandTotalEqualsSumOfRows(t *testing.T) {
 			name: "build-plus-continue-small",
 			ledgers: []spendLedger{
 				{Phase: 3, Workflow: spendWorkflowBuild, Rows: []spendRow{
-					{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 30500, Source: codex.UsageSourceProvider}},
+					{Usage: codex.WorkerUsage{TotalTokens: 30500, Source: codex.UsageSourceProvider}},
 				}},
 				{Phase: 3, Workflow: spendWorkflowContinue, Rows: []spendRow{
-					{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 4000, Source: codex.UsageSourceProvider}},
+					{Usage: codex.WorkerUsage{TotalTokens: 4000, Source: codex.UsageSourceProvider}},
 				}},
 			},
 		},
@@ -365,13 +356,13 @@ func TestLedgerGrandTotalEqualsSumOfRows(t *testing.T) {
 			name: "build-plus-continue-many-parents",
 			ledgers: []spendLedger{
 				{Phase: 4, Workflow: spendWorkflowBuild, Rows: []spendRow{
-					{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 1200, Source: codex.UsageSourceProvider}},
-					{ParentName: "Mason-1", Usage: codex.WorkerUsage{TotalTokens: 600, Source: codex.UsageSourceEstimate}},
-					{ParentName: "", Usage: codex.WorkerUsage{TotalTokens: 150, Source: codex.UsageSourceProvider}},
+					{Usage: codex.WorkerUsage{TotalTokens: 1200, Source: codex.UsageSourceProvider}},
+					{Usage: codex.WorkerUsage{TotalTokens: 600, Source: codex.UsageSourceEstimate}},
+					{Usage: codex.WorkerUsage{TotalTokens: 150, Source: codex.UsageSourceProvider}},
 				}},
 				{Phase: 4, Workflow: spendWorkflowContinue, Rows: []spendRow{
-					{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 900, Source: codex.UsageSourceSessionTranscript}},
-					{ParentName: "Watcher-1", Usage: codex.WorkerUsage{TotalTokens: 300, Source: codex.UsageSourceProvider}},
+					{Usage: codex.WorkerUsage{TotalTokens: 900, Source: codex.UsageSourceSessionTranscript}},
+					{Usage: codex.WorkerUsage{TotalTokens: 300, Source: codex.UsageSourceProvider}},
 				}},
 			},
 		},
@@ -394,131 +385,20 @@ func TestLedgerGrandTotalEqualsSumOfRows(t *testing.T) {
 				t.Fatalf("GrandTotalTokens (%d) != MeasuredTokens+EstimatedTokens (%d)",
 					totals.GrandTotalTokens, totals.MeasuredTokens+totals.EstimatedTokens)
 			}
-
-			var rollupSum int64
-			for _, r := range spendRollupByParent(tc.ledgers) {
-				rollupSum += r.TotalTokens
-			}
-			if rollupSum != totals.GrandTotalTokens {
-				t.Fatalf("parent roll-up sum = %d, want %d", rollupSum, totals.GrandTotalTokens)
-			}
 		})
-	}
-}
-
-// TestLedgerRefusesDerivedMetricOverEstimates covers
-// spendPerWorkerAverageTokens's refusal: a mixed set with includeEstimates
-// false returns an error naming the estimate count and --include-estimates;
-// with true it returns the grand total divided by the row count without
-// error; over an all-measured set it returns a value and no error even
-// when includeEstimates is false.
-func TestLedgerRefusesDerivedMetricOverEstimates(t *testing.T) {
-	ledgers := []spendLedger{
-		{Phase: 20, Workflow: spendWorkflowBuild, Rows: []spendRow{
-			{Usage: codex.WorkerUsage{TotalTokens: 1000, Source: codex.UsageSourceProvider}},
-			{Usage: codex.WorkerUsage{TotalTokens: 500, Source: codex.UsageSourceEstimate}},
-		}},
-	}
-
-	_, err := spendPerWorkerAverageTokens(ledgers, false)
-	if err == nil {
-		t.Fatalf("expected an error when estimates are present and includeEstimates is false")
-	}
-	if !strings.Contains(err.Error(), "1 of 2") {
-		t.Fatalf("error does not name the estimate/row counts (want \"1 of 2\"): %v", err)
-	}
-	if !strings.Contains(err.Error(), "--include-estimates") {
-		t.Fatalf("error does not name --include-estimates: %v", err)
-	}
-
-	avg, err := spendPerWorkerAverageTokens(ledgers, true)
-	if err != nil {
-		t.Fatalf("spendPerWorkerAverageTokens(true) returned error: %v", err)
-	}
-	if avg != 750 {
-		t.Fatalf("avg = %v, want 750", avg)
-	}
-
-	allMeasured := []spendLedger{
-		{Phase: 21, Workflow: spendWorkflowBuild, Rows: []spendRow{
-			{Usage: codex.WorkerUsage{TotalTokens: 1000, Source: codex.UsageSourceProvider}},
-			{Usage: codex.WorkerUsage{TotalTokens: 2000, Source: codex.UsageSourceProvider}},
-		}},
-	}
-	avg2, err := spendPerWorkerAverageTokens(allMeasured, false)
-	if err != nil {
-		t.Fatalf("spendPerWorkerAverageTokens over an all-measured set returned error: %v", err)
-	}
-	if avg2 != 1500 {
-		t.Fatalf("avg2 = %v, want 1500", avg2)
-	}
-}
-
-// TestLedgerParentRollupCountsEachWorkerOnce covers spendRollupByParent:
-// three rows sharing the parent "Queen" (arriving from both workflows)
-// return a single "Queen" entry totalling those three rows, an
-// empty-parent row groups under "(unattributed)", and the sum across all
-// parent entries equals GrandTotalTokens -- no worker counted twice, none
-// dropped for arriving from the other workflow.
-func TestLedgerParentRollupCountsEachWorkerOnce(t *testing.T) {
-	ledgers := []spendLedger{
-		{Phase: 30, Workflow: spendWorkflowBuild, Rows: []spendRow{
-			{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 1000, Source: codex.UsageSourceProvider}},
-			{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 2000, Source: codex.UsageSourceProvider}},
-		}},
-		{Phase: 30, Workflow: spendWorkflowContinue, Rows: []spendRow{
-			{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 500, Source: codex.UsageSourceProvider}},
-			{ParentName: "", Usage: codex.WorkerUsage{TotalTokens: 250, Source: codex.UsageSourceEstimate}},
-		}},
-	}
-
-	rollups := spendRollupByParent(ledgers)
-
-	var queen, unattributed *spendParentRollup
-	for i := range rollups {
-		switch rollups[i].Parent {
-		case "Queen":
-			queen = &rollups[i]
-		case "(unattributed)":
-			unattributed = &rollups[i]
-		}
-	}
-	if queen == nil {
-		t.Fatalf("expected a Queen roll-up entry")
-	}
-	if queen.WorkerCount != 3 {
-		t.Fatalf("Queen WorkerCount = %d, want 3", queen.WorkerCount)
-	}
-	if queen.TotalTokens != 3500 {
-		t.Fatalf("Queen TotalTokens = %d, want 3500", queen.TotalTokens)
-	}
-	if unattributed == nil {
-		t.Fatalf("expected an (unattributed) roll-up entry for the empty-parent row")
-	}
-	if unattributed.WorkerCount != 1 || unattributed.TotalTokens != 250 {
-		t.Fatalf("(unattributed) entry = %+v, want WorkerCount=1 TotalTokens=250", *unattributed)
-	}
-
-	var sum int64
-	for _, r := range rollups {
-		sum += r.TotalTokens
-	}
-	total := computeSpendTotals(ledgers)
-	if sum != total.GrandTotalTokens {
-		t.Fatalf("roll-up sum = %d, want %d (GrandTotalTokens)", sum, total.GrandTotalTokens)
 	}
 }
 
 // TestLedgerPhaseTotalAddsBuildAndContinue is the literal 30,500 + 4,000 =
 // 34,500 case: a phase's cost is its workflows added together, never the
-// last one written. The parent roll-up assertion proves the
-// continue-arriving worker is counted, not dropped.
+// last one written. The row-count assertion proves the continue-arriving
+// worker is counted, not dropped.
 func TestLedgerPhaseTotalAddsBuildAndContinue(t *testing.T) {
 	build := spendLedger{Phase: 40, Workflow: spendWorkflowBuild, Rows: []spendRow{
-		{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 30500, Source: codex.UsageSourceProvider}},
+		{Usage: codex.WorkerUsage{TotalTokens: 30500, Source: codex.UsageSourceProvider}},
 	}}
 	cont := spendLedger{Phase: 40, Workflow: spendWorkflowContinue, Rows: []spendRow{
-		{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 4000, Source: codex.UsageSourceProvider}},
+		{Usage: codex.WorkerUsage{TotalTokens: 4000, Source: codex.UsageSourceProvider}},
 	}}
 
 	totals := computeSpendTotals([]spendLedger{build, cont})
@@ -526,15 +406,8 @@ func TestLedgerPhaseTotalAddsBuildAndContinue(t *testing.T) {
 		t.Fatalf("GrandTotalTokens = %d, want 34500", totals.GrandTotalTokens)
 	}
 
-	rollups := spendRollupByParent([]spendLedger{build, cont})
-	if len(rollups) != 1 {
-		t.Fatalf("expected a single Queen roll-up entry, got %d", len(rollups))
-	}
-	if rollups[0].WorkerCount != 2 {
-		t.Fatalf("WorkerCount = %d, want 2 -- the continue-arriving worker must be counted, not dropped", rollups[0].WorkerCount)
-	}
-	if rollups[0].TotalTokens != 34500 {
-		t.Fatalf("TotalTokens = %d, want 34500", rollups[0].TotalTokens)
+	if totals.MeasuredRows != 2 {
+		t.Fatalf("MeasuredRows = %d, want 2 -- the continue-arriving worker must be counted, not dropped", totals.MeasuredRows)
 	}
 }
 
@@ -574,7 +447,7 @@ func TestLedgerGrandTotalFromRawColumnsWithoutHelper(t *testing.T) {
 	t.Run("one provider row totals the four raw columns", func(t *testing.T) {
 		totals := computeSpendTotals([]spendLedger{
 			{Phase: 50, Workflow: spendWorkflowBuild, Rows: []spendRow{
-				{AgentName: "Mason-67", ParentName: "Queen", Status: "completed", Usage: anthropicExample},
+				{AgentName: "Mason-67", Status: "completed", Usage: anthropicExample},
 			}},
 		})
 		if totals.GrandTotalTokens != 102550 {
@@ -592,9 +465,9 @@ func TestLedgerGrandTotalFromRawColumnsWithoutHelper(t *testing.T) {
 		ledgers := []spendLedger{
 			{Phase: 51, Workflow: spendWorkflowBuild, Rows: []spendRow{
 				// 102,550 (above).
-				{AgentName: "Mason-67", ParentName: "Queen", Status: "completed", Usage: anthropicExample},
+				{AgentName: "Mason-67", Status: "completed", Usage: anthropicExample},
 				// 1,200 + 0 + 0 + 300 = 1,500.
-				{AgentName: "Keen-12", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+				{AgentName: "Keen-12", Status: "completed", Usage: codex.WorkerUsage{
 					InputTokens:  1200,
 					OutputTokens: 300,
 					Source:       codex.UsageSourceSessionTranscript,
@@ -603,7 +476,7 @@ func TestLedgerGrandTotalFromRawColumnsWithoutHelper(t *testing.T) {
 			{Phase: 51, Workflow: spendWorkflowContinue, Rows: []spendRow{
 				// 4,000 + 0 + 0 + 0 = 4,000, and it is an estimate, so it
 				// must land in its own subtotal and never in the measured one.
-				{AgentName: "Roam-90", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+				{AgentName: "Roam-90", Status: "completed", Usage: codex.WorkerUsage{
 					InputTokens: 4000,
 					Source:      codex.UsageSourceEstimate,
 				}},
@@ -628,19 +501,6 @@ func TestLedgerGrandTotalFromRawColumnsWithoutHelper(t *testing.T) {
 		}
 		if totals.EstimatedRows != 1 {
 			t.Fatalf("EstimatedRows = %d, want 1", totals.EstimatedRows)
-		}
-
-		// The parent roll-up is the same arithmetic on a second path; it must
-		// reach the same hand-computed figure.
-		rollups := spendRollupByParent(ledgers)
-		if len(rollups) != 1 {
-			t.Fatalf("expected one Queen roll-up entry, got %d", len(rollups))
-		}
-		if rollups[0].TotalTokens != 108050 {
-			t.Fatalf("Queen roll-up TotalTokens = %d, want 108050", rollups[0].TotalTokens)
-		}
-		if rollups[0].WorkerCount != 3 {
-			t.Fatalf("Queen roll-up WorkerCount = %d, want 3", rollups[0].WorkerCount)
 		}
 	})
 }
@@ -795,7 +655,6 @@ func TestSpendLedgerCarriesNoCurrencyField(t *testing.T) {
 	walkType(t, reflect.TypeOf(spendTotals{}), "spendTotals", map[reflect.Type]bool{})
 	walkType(t, reflect.TypeOf(spendLedger{}), "spendLedger", map[reflect.Type]bool{})
 	walkType(t, reflect.TypeOf(spendRow{}), "spendRow", map[reflect.Type]bool{})
-	walkType(t, reflect.TypeOf(spendParentRollup{}), "spendParentRollup", map[reflect.Type]bool{})
 
 	// The serialized form, on a fully populated value so no omitempty tag can
 	// hide a key from this walk.
@@ -825,13 +684,13 @@ func TestSpendLedgerCarriesNoCurrencyField(t *testing.T) {
 
 	totals := computeSpendTotals([]spendLedger{
 		{Phase: 60, Workflow: spendWorkflowBuild, Rows: []spendRow{
-			{AgentName: "Mason-67", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+			{AgentName: "Mason-67", Status: "completed", Usage: codex.WorkerUsage{
 				InputTokens: 1000, OutputTokens: 200, USDCost: 12.34, Source: codex.UsageSourceProvider,
 			}},
-			{AgentName: "Roam-90", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+			{AgentName: "Roam-90", Status: "completed", Usage: codex.WorkerUsage{
 				InputTokens: 500, Source: codex.UsageSourceEstimate,
 			}},
-			{AgentName: "Keen-12", ParentName: "Queen", Status: "completed", Usage: codex.WorkerUsage{
+			{AgentName: "Keen-12", Status: "completed", Usage: codex.WorkerUsage{
 				InputTokens: 700, Source: codex.UsageSourceSessionTranscript,
 			}},
 		}},
@@ -850,16 +709,11 @@ func TestSpendLedgerCarriesNoCurrencyField(t *testing.T) {
 			RunID:         "run-1",
 			RecordedAt:    "2026-08-27T00:00:00Z",
 			Rows: []spendRow{{
-				AgentName: "Mason-67", Caste: "builder", ParentName: "Queen",
-				Task: "Land the ledger", Status: "completed", ToolCount: 4,
+				AgentName: "Mason-67", Caste: "builder",
+				Task: "Land the ledger", Status: "completed",
 				Usage: codex.WorkerUsage{InputTokens: 50, USDCost: 9.99, Source: codex.UsageSourceProvider},
 			}},
 		}},
-		{"spendParentRollup", spendRollupByParent([]spendLedger{
-			{Phase: 60, Workflow: spendWorkflowBuild, Rows: []spendRow{
-				{ParentName: "Queen", Usage: codex.WorkerUsage{TotalTokens: 100, Source: codex.UsageSourceProvider}},
-			}},
-		})},
 	} {
 		raw, err := json.Marshal(subject.value)
 		if err != nil {
@@ -900,13 +754,12 @@ func TestSpendRowCarriesJobName(t *testing.T) {
 		RecordedAt: "2026-08-27T00:00:00Z",
 		Rows: []spendRow{
 			{
-				AgentName:  "Mason-67",
-				Caste:      "builder",
-				ParentName: "Queen",
-				Task:       "Wire the coherent jobs into build planning",
-				JobName:    "coherent-jobs",
-				Status:     "completed",
-				Usage:      codex.WorkerUsage{TotalTokens: 1200, Source: codex.UsageSourceProvider},
+				AgentName: "Mason-67",
+				Caste:     "builder",
+				Task:      "Wire the coherent jobs into build planning",
+				JobName:   "coherent-jobs",
+				Status:    "completed",
+				Usage:     codex.WorkerUsage{TotalTokens: 1200, Source: codex.UsageSourceProvider},
 			},
 		},
 	}

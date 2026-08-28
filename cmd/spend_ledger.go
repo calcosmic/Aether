@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -61,16 +60,27 @@ func spendLedgerRelForPhaseWorkflow(phase int, workflow string) string {
 }
 
 // spendRow is one worker dispatch's entry in a phase's ledger. Field names
-// deliberately reuse agent.SpawnEntry's vocabulary (AgentName/Caste/
-// ParentName/Task/Status) so a row joins to a spawn-tree entry by name with
-// no translation layer. Usage is never omitempty -- a dispatch with a
-// zero-value usage must still be visible as a row; a dispatch never
-// vanishes from the ledger.
+// deliberately reuse agent.SpawnEntry's vocabulary (AgentName/Caste/Task/
+// Status) so a row joins to a spawn-tree entry by name with no translation
+// layer. Usage is never omitempty -- a dispatch with a zero-value usage must
+// still be visible as a row; a dispatch never vanishes from the ledger.
+//
+// There is deliberately NO ParentName and NO ToolCount here, and neither
+// should be re-added without a production writer landing in the same change.
+// Both existed on the salvaged version of this struct and neither was ever
+// assigned by writeSpendRowsForRun -- the only production writer. ParentName
+// carried a display-only roll-up (spendRollupByParent) whose test seeded the
+// field by hand, so it passed over a shape production cannot emit and would
+// have returned a single "(unattributed)" bucket against a real ledger;
+// ToolCount was declared, never written and never read. Both were removed in
+// the Phase 196 closeout, before this ledger's first production write, so no
+// schema bump and no migration was owed -- the same argument JobName was
+// added under. A field on a durable record that production never fills is a
+// schema lie, and TestEveryFieldThisPhaseAddedIsUsed now fails on one.
 type spendRow struct {
-	AgentName  string `json:"name"`
-	Caste      string `json:"caste"`
-	ParentName string `json:"parent"`
-	Task       string `json:"task"`
+	AgentName string `json:"name"`
+	Caste     string `json:"caste"`
+	Task      string `json:"task"`
 	// JobName is the grouped job this worker owned, mirroring
 	// codexBuildDispatch.JobName (cmd/codex_build.go). Phase 195 made a single
 	// worker able to own a chain of dependent tasks, so a ledger keyed only by
@@ -89,9 +99,8 @@ type spendRow struct {
 	// evidence rather than worker-scoped outcome. Two vocabularies for one idea
 	// is this repository's documented failure mode; saveSpendLedger refuses any
 	// word outside spendRowStatusVocabulary by name rather than storing it.
-	Status    string            `json:"status"`
-	ToolCount int               `json:"tool_count,omitempty"`
-	Usage     codex.WorkerUsage `json:"usage"`
+	Status string            `json:"status"`
+	Usage  codex.WorkerUsage `json:"usage"`
 	// RunID names the attempt at this phase that this row was filed by.
 	//
 	// A phase is routinely built more than once -- the recovery command
@@ -406,63 +415,4 @@ func computeSpendTotals(ledgers []spendLedger) spendTotals {
 	}
 	totals.GrandTotalTokens = totals.MeasuredTokens + totals.EstimatedTokens
 	return totals
-}
-
-// spendPerWorkerAverageTokens divides the phase's GrandTotalTokens -- the
-// same total every row contributes via BilledTotalTokens() -- by the total
-// row count. When includeEstimates is false and the row set contains at
-// least one estimated row, the derived metric is refused by name rather
-// than silently blending a guess into a headline number.
-func spendPerWorkerAverageTokens(ledgers []spendLedger, includeEstimates bool) (float64, error) {
-	rows := spendRowsAcross(ledgers)
-	if len(rows) == 0 {
-		return 0, fmt.Errorf("per-worker average refused: no rows to average")
-	}
-	totals := computeSpendTotals(ledgers)
-	if !includeEstimates && totals.EstimatedRows > 0 {
-		return 0, fmt.Errorf(
-			"per-worker average refused: %d of %d rows are estimates, not measurements — pass --include-estimates to compute it anyway",
-			totals.EstimatedRows, len(rows),
-		)
-	}
-	return float64(totals.GrandTotalTokens) / float64(len(rows)), nil
-}
-
-// spendParentRollup is one parent's roll-up entry in spendRollupByParent's
-// result.
-type spendParentRollup struct {
-	Parent      string `json:"parent"`
-	WorkerCount int    `json:"worker_count"`
-	TotalTokens int64  `json:"total_tokens"`
-}
-
-// spendRollupByParent returns a slice sorted by parent name, one entry per
-// distinct row.ParentName across every supplied ledger. Rows with an empty
-// parent group under the literal "(unattributed)" so they are still
-// visible and still counted. This is D-07's display-only roll-up over
-// agent.SpawnEntry.ParentName; the deliberately-deferred self/subtree
-// dual-column view belongs to Phase 177.
-func spendRollupByParent(ledgers []spendLedger) []spendParentRollup {
-	byParent := map[string]*spendParentRollup{}
-	var order []string
-	for _, row := range spendRowsAcross(ledgers) {
-		parent := row.ParentName
-		if parent == "" {
-			parent = "(unattributed)"
-		}
-		entry, ok := byParent[parent]
-		if !ok {
-			entry = &spendParentRollup{Parent: parent}
-			byParent[parent] = entry
-			order = append(order, parent)
-		}
-		entry.WorkerCount++
-		entry.TotalTokens += row.Usage.BilledTotalTokens()
-	}
-	sort.Strings(order)
-	rollups := make([]spendParentRollup, 0, len(order))
-	for _, parent := range order {
-		rollups = append(rollups, *byParent[parent])
-	}
-	return rollups
 }
