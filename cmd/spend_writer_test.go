@@ -712,8 +712,8 @@ func TestClaudeBuildAttributesEveryWorkersTokens(t *testing.T) {
 	if strings.Contains(block, "Cost: not known") {
 		t.Errorf("the owner's cost block says the cost is not known for a build whose transcript recorded every worker's tokens:\n%s", block)
 	}
-	if strings.Contains(block, spendNotReportedFigure) {
-		t.Errorf("a worker is shown with no figure although the transcript carries one for it:\n%s", block)
+	if strings.Contains(block, spendMarkNotReported) {
+		t.Errorf("a worker is marked as having no figure although the transcript carries one for it:\n%s", block)
 	}
 }
 

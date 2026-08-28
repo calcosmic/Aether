@@ -45,11 +45,22 @@ import (
 // tests count. Plain English: nothing here is a word this repository invented.
 //
 // It says PHASE, not "this run", because the figures below span both the
-// building pass and the checking pass for the phase -- the two are recorded
-// separately and neither erases the other, so at the end of a check the block
-// honestly reports what the whole phase has cost, not just the last screen's
-// worth. A heading claiming otherwise would be the more precise-sounding lie.
-const spendCostLineHeading = "What This Phase Has Cost"
+// building pass and the checking pass for the phase, and every attempt at each
+// -- all of them recorded separately, none erasing another, so at the end of a
+// check the block reports the whole phase rather than the last screen's worth.
+//
+// It says THE HELPERS, not simply "the phase", because that is the honest scope
+// of what is counted (WR-07). The coordinator's own back-and-forth is real spend
+// and is NOT in these figures: on this repository's own corpus it is 142,581 of
+// 142,833 usage-bearing lines, so a heading claiming to state the phase's cost
+// while omitting it would understate by far more than it reports. The block says
+// so in the footnote below rather than leaving the reader to infer it.
+const spendCostLineHeading = "What The Helpers Cost"
+
+// spendCostLineSessionNote states the one exclusion the total makes that has
+// nothing to do with an unreported worker. It is printed on every rendered
+// block that has rows, because it is true of every one of them.
+const spendCostLineSessionNote = "(The coordinator's own back-and-forth — the main session — is not counted here; these are the helpers it sent.)\n"
 
 // spendCompactTokenFigure renders a token count at the magnitude the owner
 // wrote — 1.2M, 220K — rather than as raw digits. This is the HEADLINE; the
@@ -143,6 +154,7 @@ func renderSpendCostLineFromLedgers(ledgers []spendLedger) string {
 	if unreported > 0 {
 		b.WriteString(spendCostLineFootnote(unreported))
 	}
+	b.WriteString(spendCostLineSessionNote)
 	return b.String()
 }
 

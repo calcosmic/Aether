@@ -225,12 +225,8 @@ func TestResolverReadsTranscriptOnTheClaudePath(t *testing.T) {
 
 	assertNoFigure(t, resolverWorker(t, res, "Roam-90"))
 
-	if !res.SessionReported {
-		t.Errorf("the orchestrating session's own turns were lost entirely")
-	}
-	if got := res.SessionUsage.BilledTotalTokens(); got != resolverClaudeSessionTotal {
-		t.Errorf("session billed total = %d, want %d (the repeated assistant line shares one message.id and must be billed once)", got, resolverClaudeSessionTotal)
-	}
+	// The orchestrating session's own turns are never a worker's row and are
+	// never reported as a phase's cost either -- see wrapperUsageResolution.
 	for _, w := range res.Workers {
 		if w.WorkerName == claudeTranscriptMainSessionWorker {
 			t.Errorf("the orchestrating session appears as a dispatched worker; it is not one")
@@ -523,9 +519,6 @@ func TestResolverIsIdempotent(t *testing.T) {
 		if a.WorkerName != b.WorkerName || a.Reported != b.Reported || a.Usage != b.Usage {
 			t.Errorf("row %d changed between calls: %+v then %+v -- nothing may accumulate across calls", i, a, b)
 		}
-	}
-	if first.SessionUsage != second.SessionUsage || first.SessionReported != second.SessionReported {
-		t.Errorf("session usage changed between calls: %+v then %+v", first.SessionUsage, second.SessionUsage)
 	}
 	if len(second.Workers) == 0 {
 		t.Fatalf("the second call returned no worker rows at all")

@@ -69,11 +69,18 @@ type wrapperUsageResolution struct {
 	// worker makes a run look cheaper than it was.
 	Workers []wrapperWorkerUsage
 
-	// SessionUsage is the orchestrating session's OWN turns, which are not a
-	// dispatched worker's spend. It is kept apart rather than folded into any
-	// worker's row or silently discarded.
-	SessionUsage    codex.WorkerUsage
-	SessionReported bool
+	// The orchestrating session's OWN turns are deliberately not collected
+	// here (WR-07). They are not a dispatched worker's spend, and this reader
+	// cannot honestly report them as a phase's either: the transcript is read
+	// whole, with no time window, so a session's assistant turns span every
+	// phase the owner ran in that chat session. Filing that against one phase
+	// would put a number in front of him that is wrong in the other direction.
+	//
+	// So the cost block says what it counts instead -- see
+	// spendCostLineHeading. Attributing the coordinator's own turns to a phase
+	// needs per-phase windowing of the session's own lines, which is a new
+	// capability rather than a correction, and a field gathered against the day
+	// it arrives is a field nothing reads.
 
 	// Diagnostics are plain-English notes about anything the resolver
 	// declined to resolve. They are never errors: a partial, honestly
@@ -169,11 +176,9 @@ func resolveWrapperWorkerUsage(req wrapperUsageRequest) wrapperUsageResolution {
 		}
 		for _, row := range rows {
 			if row.WorkerName == claudeTranscriptMainSessionWorker {
-				// The orchestrating session's own turns are not a dispatched
-				// worker's spend. Kept apart rather than folded into somebody
-				// else's row or thrown away.
-				res.SessionUsage = row.Usage
-				res.SessionReported = true
+				// The orchestrating session's own turns are skipped, never
+				// folded into somebody else's row. See the note on
+				// wrapperUsageResolution for why they are not reported either.
 				continue
 			}
 			worker, why := claudeRowWorker(row, names, seen, byDefinition)
