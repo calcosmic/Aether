@@ -308,8 +308,16 @@ func claudeRowWorker(row claudeTranscriptUsage, names []string, requested map[st
 		case 1:
 			return named[0], ""
 		case 0:
+			// It says the LABEL did not match, not that the worker was a
+			// stranger, because the code cannot tell those apart and the
+			// likelier of the two is the label (NEW-03). The description is
+			// composed by a model following a markdown instruction
+			// (.claude/commands/ant/build.md), not by the runtime, so a
+			// paraphrase is the ordinary way this happens -- and telling the
+			// owner a worker he did not run showed up sends him looking in the
+			// wrong place while his own worker's spend goes unrecorded.
 			return "", fmt.Sprintf(
-				"the session transcript holds usage for a worker this run did not dispatch (%q), so it was left unattributed rather than guessed onto one",
+				"a helper's token record could not be matched to any worker on this run — the dispatch it came from was labelled %q, which names none of them, so its use was left out rather than guessed onto somebody",
 				shortenForDiagnostic(description))
 		default:
 			return "", fmt.Sprintf(
