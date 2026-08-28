@@ -53,12 +53,23 @@ var callerWrapperCorpora = []string{
 }
 
 // hookScriptCorpora are the D-01(c) "shipped hook or script" trees.
+//
+// Phase 197 plan 03 added the third entry. The first two cover files that
+// CONTAIN hook logic; neither covers the file that REGISTERS a hook. Every
+// Aether hook is invoked by `.claude/settings.json` naming its command, and
+// because that file was outside the scan, all three shipped hook commands
+// (hook-pre-tool-use, hook-stop, hook-pre-compact) counted as having no caller
+// and sat on the tolerated-orphan list — tolerated for being unreachable while
+// the platform fired them on every session. Reading the settings file's own
+// command strings credits them, and the list shrinks by three rather than
+// growing by one when a fourth hook is added.
 var hookScriptCorpora = []struct {
 	dir string
 	ext string
 }{
 	{filepath.Join(".aether", "utils", "hooks"), ".js"},
 	{filepath.Join("scripts"), ".sh"},
+	{filepath.Join(".claude"), ".json"},
 }
 
 // buildConstraintRe matches a real Go build-constraint directive, which is
@@ -602,6 +613,14 @@ func singleFileCallerNames(t *testing.T, path string) map[string]bool {
 				credit(name, args)
 			}
 		}
+	case ".json":
+		// A hook settings file registers a command by naming it; that IS the
+		// invocation, and the platform performs it. Parsed as data rather than
+		// grepped, so a command name appearing in an unrelated string (a
+		// description, a permission rule) is never mistaken for a caller.
+		for _, argv := range hookSettingsCommandArgs(path) {
+			credit(argv[0], argv[1:])
+		}
 	case ".js", ".sh":
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -627,6 +646,60 @@ func singleFileCallerNames(t *testing.T, path string) map[string]bool {
 		}
 	}
 	return names
+}
+
+// hookSettingsCommandArgs returns the argv of every `aether …` invocation a
+// hook settings file registers, as [command, args...].
+//
+// The file is decoded into the platform's documented hook shape
+// (`hooks` → event name → entries → inner hooks → `command`), so only a string
+// the platform will actually EXECUTE is credited. A JSON file that is not a
+// hook settings file — `.claude/package.json`, for instance — decodes to an
+// empty map and credits nothing.
+//
+// The command string itself is tokenised with the same shell-like tokenizer
+// and the same command-name shape the script scan already uses, so an entry
+// like `AETHER_OUTPUT_MODE=visual aether status` resolves identically here and
+// there rather than through a second, drifting parser.
+func hookSettingsCommandArgs(path string) [][]string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil
+	}
+
+	var invocations [][]string
+	for _, entries := range settings.Hooks {
+		for _, entry := range entries {
+			for _, inner := range entry.Hooks {
+				fields := tokenizeShellLike(inner.Command)
+				for j, field := range fields {
+					if !isBinaryToken(field, nil) {
+						continue
+					}
+					if j+1 >= len(fields) {
+						continue
+					}
+					name := normalizeShellToken(fields[j+1])
+					if !subcommandNameShapeRe.MatchString(name) {
+						continue
+					}
+					invocations = append(invocations, append([]string{name}, fields[j+2:]...))
+				}
+			}
+		}
+	}
+	return invocations
 }
 
 // callerFileKey is the repo-root-relative, forward-slashed identity of a
