@@ -309,6 +309,25 @@ Plan 197-02 can render from `resolveNextAction` directly. Three things it inheri
 
 One thing 197-02 must be careful about: the five existing deciders are all still live and still called from ~200 sites. Collapsing them is 197-02's job, and it owns `codex_visuals.go` for that reason.
 
+## Self-Check: PASSED
+
+**Files claimed as created — all present on disk:**
+
+| File | Present |
+|---|---|
+| `cmd/next_action.go` | yes |
+| `cmd/next_action_input.go` | yes |
+| `cmd/next_action_test.go` | yes |
+| `cmd/next_action_availability_test.go` | yes |
+| `cmd/next_action_neutrality_test.go` | yes |
+| `.planning/phases/197-one-answer-to-what-next/197-01-SUMMARY.md` | yes |
+
+**Commits claimed — all present in `git log`:** `809da59f`, `df01d363`, `35b96819`, `76444a52`, `50c9ee57`.
+
+**Rename demonstration reverted:** `git status --short` is empty and `cmd/codex_workflow_cmds.go:313` reads `Use:   "continue",`. No diff against HEAD for that file.
+
+**STATE.md and ROADMAP.md:** not modified (parallel-executor mode; the orchestrator owns them).
+
 ---
 *Phase: 197-one-answer-to-what-next*
 *Completed: 2026-08-28*
