@@ -254,7 +254,33 @@ Plans:
 5. Typing the short command `/ant-pause` and the older long name `/ant-pause-colony` both work identically, and running the update command detects and fixes any project where the short version is missing (`TestCanonicalAliasDelegates`).
 6. The recommended next command is never one that is not actually available in the current project — recommending a command that does not exist is a failing test case.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+**Wave 1** *(the shared logic, before anything renders from it)*
+
+- [ ] 197-01-PLAN.md — The one resolver over saved state, and the gate that makes recommending a command this project does not have impossible (wave 1)
+
+**Wave 2** *(blocked on the resolver existing)*
+
+- [ ] 197-02-PLAN.md — Collapse the four rival next-step deciders onto the resolver, and build the one closing card every command will render (wave 2)
+
+**Wave 3** *(blocked on the card; two independent surfaces, no shared files)*
+
+- [ ] 197-03-PLAN.md — The session-start greeting the runtime owns, the removal of the five documents asking the assistant to remember, and a reachability scan that counts hooks as callers (wave 3)
+- [ ] 197-04-PLAN.md — Starting, discussing, scanning, planning, building, continuing and the shared closeout all end with the card (wave 3)
+
+**Wave 4** *(blocked on the command goldens settling)*
+
+- [ ] 197-05-PLAN.md — `/ant-pause` becomes the real command with the long name an alias declared once, and updating a project restores a missing copy out loud (wave 4)
+
+**Wave 5** *(blocked on the short pause command existing to be recommended)*
+
+- [ ] 197-06-PLAN.md — Pausing, resuming, sealing, updating, recovering and status end with the card, and the last private decider goes (wave 5)
+
+**Wave 6** *(phase closeout — the baseline is measured only once everything has moved)*
+
+- [ ] 197-07-PLAN.md — Criterion 2's coverage test and criterion 3's measured hardcode ratchet, both registered and running in CI (wave 6)
 
 ### Phase 198: Put the Thrown-Away Data Back on Screen
 
