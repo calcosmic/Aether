@@ -2165,7 +2165,11 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	}
 	for _, result := range results {
 		if dispatch, ok := dispatchByName[result.WorkerName]; ok {
-			_ = persistDispatchWorkerHandoff(dispatch, result)
+			// recordDispatchWorkerOutcome (cmd/memory_feed.go) is the one
+			// boundary both build lanes call: persists this handoff exactly
+			// as persistDispatchWorkerHandoff always did, then feeds the
+			// failure log and the observation log from the same facts.
+			_ = recordDispatchWorkerOutcome(dispatch, result)
 		}
 	}
 	if err != nil {
@@ -3986,6 +3990,18 @@ func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBu
 				b.WriteString(content)
 				b.WriteString("\n")
 			}
+		}
+		// Recent build failures are the other steering content this
+		// self-contained composition has no other channel for (the
+		// wrapper/plan-only lane carries them via manifest.ContextCapsule =
+		// resolveCodexWorkerContext() instead; see composeBuildManifestBrief's
+		// doc comment). cmd/memory_feed.go feeds midden.json; this reads it
+		// back, mirroring the colony-prime capsule's own "## Recent Failures"
+		// section (cmd/colony_prime_context.go).
+		if failuresSection := resolveRecentFailuresSection(); failuresSection != "" {
+			b.WriteString("\n")
+			b.WriteString(failuresSection)
+			b.WriteString("\n")
 		}
 	}
 
