@@ -1093,7 +1093,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// pkg/learn, hypothesis promotion, and auto-skill creation were unreachable
 	// in normal daily use. Gates have passed by this point; state is committed;
 	// learning failure is non-blocking inside the function.
-	captureContinueLearning(phase, workerFlow, gates, "", false, now)
+	captureContinueMemory(phase, workerFlow, gates, "", false, now)
 	// D-04: phase-end consolidation fires only now, beside the learning
 	// capture above, because this point is reached only after the atomic
 	// COLONY_STATE.json write (above) committed PhaseCompleted -- the phase

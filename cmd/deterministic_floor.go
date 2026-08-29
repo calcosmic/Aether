@@ -110,7 +110,7 @@ func runDeterministicFloor(ctx context.Context, root string, phase colony.Phase,
 		blockers = append(blockers, criteria.BlockingIssues...)
 	}
 
-	return deterministicFloorResult{
+	result := deterministicFloorResult{
 		Steps:          steps,
 		Claims:         claims,
 		Criteria:       criteria,
@@ -120,4 +120,12 @@ func runDeterministicFloor(ctx context.Context, root string, phase colony.Phase,
 		Warnings:       warnings,
 		Scope:          scope,
 	}
+	// cmd/memory_feed_continue.go (198.1-02): feed the failure log from the
+	// one shared body every continue lane calls, so lane parity is
+	// structural. Guarded on len(blockers) > 0 purely to skip a no-op call
+	// on the common (all-checks-passed) path.
+	if len(blockers) > 0 {
+		recordFailedChecksToMidden(phase, result)
+	}
+	return result
 }
