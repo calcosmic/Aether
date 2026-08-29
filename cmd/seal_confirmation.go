@@ -188,11 +188,6 @@ type sealConfirmationInput struct {
 	// this field exists so the policy itself enforces D-07 even if that
 	// ever changes, rather than relying solely on unreachability.
 	Autopilot bool
-	// Force mirrors the pre-existing --force flag. It never bypasses this
-	// gate on its own — D-06 requires a RECORDED answer, never an inferred
-	// one — but is carried through for the decision's own bookkeeping/Why
-	// text.
-	Force bool
 	// NamedProblems is the same list the state-of-play card names (D-06).
 	NamedProblems []string
 	// RecordedAnswer is nil when no matching recorded answer exists yet.
