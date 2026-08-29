@@ -43,6 +43,15 @@ type codexVerificationStep struct {
 	ErrorClass     VerificationErrorClass `json:"error_class,omitempty"`
 	Summary        string                 `json:"summary"`
 	Output         string                 `json:"output,omitempty"`
+	// Duration is the measured wall-clock time the shell-out itself took
+	// (time.Since around runShellCommandContext only), never derived from a
+	// timeout value or estimated (Phase 196 D-01). Left at zero on every
+	// return path that never ran a command -- a step whose command was empty,
+	// unresolved, or unresolvable -- so a skipped check renders as
+	// "not reported", not as a fabricated "0s". SHOW-03 D-03: this is the
+	// same figure both the live progress line (emitVerificationStepFinish)
+	// and the closing verification summary read.
+	Duration float64 `json:"duration_seconds,omitempty"`
 }
 
 type codexClaimVerification struct {
@@ -3205,10 +3214,25 @@ func applyExpectedTestFailure(steps []codexVerificationStep, phase colony.Phase)
 	return steps
 }
 
-func runVerificationStep(ctx context.Context, root, name string, required bool, command string, timeout time.Duration) codexVerificationStep {
+// runVerificationStep runs one of the four shell checks (build, types, lint,
+// tests) and reports the result. It is the single body runDeterministicFloor
+// calls four times per lane, and both continue lanes call runDeterministicFloor
+// — so hooking the live progress emit here (rather than in either lane's
+// caller) is what makes SHOW-03's start/finish lines stream identically on
+// both the ordinary fast path and the deeper review path.
+//
+// The named return plus deferred finish emit guarantees the start line
+// (emitVerificationStepStart) and the finish line (emitVerificationStepFinish)
+// stay paired on every return path, including any a future edit adds.
+func runVerificationStep(ctx context.Context, root, name string, required bool, command string, timeout time.Duration) (step codexVerificationStep) {
+	emitVerificationStepStart(name)
+	defer func() {
+		emitVerificationStepFinish(step)
+	}()
+
 	if strings.TrimSpace(command) == "" {
 		if required {
-			return codexVerificationStep{
+			step = codexVerificationStep{
 				Name:     name,
 				Skipped:  true,
 				Blocked:  true,
@@ -3216,19 +3240,23 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 				Passed:   false,
 				Summary:  fmt.Sprintf("blocked: no verification command resolved for %s; %s", name, blockedVerificationConfigGuidance()),
 			}
+			return
 		}
-		return codexVerificationStep{
+		step = codexVerificationStep{
 			Name:     name,
 			Skipped:  true,
 			Passed:   true,
 			Required: false,
 			Summary:  "no command resolved; skipped",
 		}
+		return
 	}
 
 	timeout = effectiveContinueVerificationTimeout(timeout)
+	start := time.Now()
 	output, exitCode, timedOut, err := runShellCommandContext(ctx, root, command, timeout)
-	step := codexVerificationStep{
+	measured := time.Since(start).Seconds()
+	step = codexVerificationStep{
 		Name:           name,
 		Command:        command,
 		Passed:         err == nil,
@@ -3238,6 +3266,7 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 		ExitCode:       exitCode,
 		Summary:        successSummaryForStep(name, exitCode, output, err),
 		Output:         output,
+		Duration:       measured,
 	}
 	if err != nil {
 		// A command that does not exist is not a failed verification — it is a
@@ -3250,7 +3279,7 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 		// here would directly contradict evaluateCriterionCheck's gate below.
 		if isCommandUnresolvable(output, exitCode) {
 			if required {
-				return codexVerificationStep{
+				step = codexVerificationStep{
 					Name:     name,
 					Command:  command,
 					Skipped:  true,
@@ -3260,8 +3289,9 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 					ExitCode: exitCode,
 					Summary:  fmt.Sprintf("blocked: verification command %q for %s could not run (exit %d); %s", command, name, exitCode, blockedVerificationConfigGuidance()),
 				}
+				return
 			}
-			return codexVerificationStep{
+			step = codexVerificationStep{
 				Name:     name,
 				Command:  command,
 				Skipped:  true,
@@ -3270,6 +3300,7 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 				ExitCode: exitCode,
 				Summary:  fmt.Sprintf("%s: command unavailable in this repository (%s); skipped — configure a real command in CLAUDE.md to enable this check", name, command),
 			}
+			return
 		}
 		step.Summary = failureSummaryForStep(name, exitCode, output, err, timedOut, timeout)
 		if timedOut {
@@ -3278,7 +3309,76 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 			step.ErrorClass = classifyVerificationError(output, exitCode)
 		}
 	}
-	return step
+	return
+}
+
+// verificationStepDisplayName maps a verification step's internal key
+// ("build", "types", "lint", "tests") to the plain-English label the owner
+// sees on the live progress lines (SHOW-03 D-01). The internal key never
+// reaches the owner directly.
+func verificationStepDisplayName(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "build":
+		return "Build"
+	case "types":
+		return "Types"
+	case "lint":
+		return "Lint"
+	case "tests":
+		return "Tests"
+	default:
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return "Check"
+		}
+		return strings.ToUpper(trimmed[:1]) + trimmed[1:]
+	}
+}
+
+// emitVerificationStepStart prints the "Running {check}…" line the instant a
+// verification check begins (SHOW-03 D-01) — before the shell command runs,
+// not after. Goes through emitVisualProgress, never a direct write to stdout,
+// so writeVisualOutput's command-name translation cannot be bypassed. Paired
+// with emitVerificationStepFinish.
+func emitVerificationStepStart(name string) {
+	emitVisualProgress(fmt.Sprintf("Running %s…", strings.ToLower(verificationStepDisplayName(name))))
+}
+
+// emitVerificationStepFinish prints the paired result line once a
+// verification check ends:
+//   - skipped: a skip line naming why, with no duration claimed at all —
+//     a skipped check never ran, so it has nothing measured to report.
+//   - passed: a pass mark and the measured elapsed time read straight off
+//     step.Duration, the same figure the closing verification summary
+//     renders (D-03 / Phase 196 D-01: measured, never estimated).
+//   - failed: a fail mark with the step's own one-line Summary inline on the
+//     same line (D-02) — never a second, invented summary format.
+func emitVerificationStepFinish(step codexVerificationStep) {
+	label := verificationStepDisplayName(step.Name)
+	if step.Skipped {
+		reason := strings.TrimSpace(step.Summary)
+		if reason == "" {
+			reason = "skipped"
+		}
+		emitVisualProgress(fmt.Sprintf("%s — skipped: %s", label, reason))
+		return
+	}
+
+	duration := ""
+	if step.Duration > 0 {
+		duration = fmt.Sprintf(" (%.1fs)", step.Duration)
+	}
+
+	if step.Passed {
+		emitVisualProgress(fmt.Sprintf("%s ✓%s", label, duration))
+		return
+	}
+
+	reason := strings.TrimSpace(step.Summary)
+	if reason == "" {
+		reason = "failed"
+	}
+	emitVisualProgress(fmt.Sprintf("%s ✗%s — %s", label, duration, reason))
 }
 
 // requiredVerificationChecks derives the set of shell verification checks

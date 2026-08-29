@@ -1,4 +1,20 @@
 Running deterministic verification for phase 1 before watcher/review workers (timeout 15m0s per command).
+Running build…
+
+Build ✓ (0.0s)
+
+Running types…
+
+Types ✓ (0.0s)
+
+Running lint…
+
+Lint — skipped: no command resolved; skipped
+
+Running tests…
+
+Tests ✓ (0.0s)
+
 ── Dispatch ──
 Continue Verification 1 starting (in-repo, serial)
   Execution: serial — single task in this wave
