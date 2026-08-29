@@ -46,6 +46,10 @@ func TestCanonicalAliasDelegates(t *testing.T) {
 	})
 
 	t.Run("identical_output_for_one_state", func(t *testing.T) {
+		// Running the real pause RunE points the package-level store at this
+		// subtest's temp root; without restoring it, every later test that
+		// relies on the default store inherits a path that no longer exists.
+		saveGlobals(t)
 		dataDir := setupBuildFlowTest(t)
 
 		goal := "Pause via canonical name"

@@ -6,6 +6,12 @@ task's changes).
 
 ## From 197-05
 
+- **RESOLVED 2026-08-29 (wave 5 gate).** It was not pre-existing: 197-05's new
+  `TestCanonicalAliasDelegates` ran the real `pause` command, which repointed
+  the package-level `store` at its temp root and never restored it; the
+  heartbeat test then inherited a store on a deleted folder. Reproduced
+  deterministically with just the two tests together; fixed by `saveGlobals(t)`
+  in the leaking subtest. Original note kept below for the record.
 - **`TestBuildDispatchStartsHeartbeatMonitor` (cmd/codex_build_test.go) is
   test-order-dependent, not related to this plan's changes.** It passes
   reliably in isolation and alongside its neighbors (`-count=3` all green),
