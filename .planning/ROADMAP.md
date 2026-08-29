@@ -319,8 +319,8 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 198-08-PLAN.md — Resume per-phase progress, recent decisions, drift note (wave 4)
-- [ ] 198-09-PLAN.md — Carried-field invariant with shrink-only allowlist, plus the deliberate-drops lock (wave 4)
+- [x] 198-08-PLAN.md — Resume per-phase progress, recent decisions, drift note (wave 4)
+- [x] 198-09-PLAN.md — Carried-field invariant with shrink-only allowlist, plus the deliberate-drops lock (wave 4)
 
 **UI hint**: yes
 
