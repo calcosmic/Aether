@@ -59,11 +59,46 @@
 - [x] **SHOW-04**: Seal asks for confirmation and runs the wisdom review before sealing
 - [x] **SHOW-05**: The recorded "deliberately dropped" decisions (one-terminal streaming, headed sections, verified safe-to-clear line) are respected and test-locked
 
-### Proof (PROOF)
+### Feed the memory (FEED) — added 2026-08-30 from the whole-system audit
 
-- [ ] **PROOF-05**: The one live benchmark run (former 186-07) is fired with the owner present and its result recorded, whatever it shows
-- [ ] **PROOF-06**: The full showdown (former Phase 192) runs on the improved system — Aether interactive, Aether autopilot, GSD — recording tokens, time, interventions, worker count, completion truth, recovery failures and git cleanliness (carries PROOF-01..03)
-- [ ] **PROOF-07**: Acceptance gate: a 1-task bug fix costs ≤ 1 worker + free checks; a CSV-export phase ≤ 4 workers across build and continue; median tokens per successful task ≤ 1.5× GSD; unscripted interventions ≤ GSD's; recovery failures 0 — the milestone completes only when this gate passes
+- [ ] **FEED-01**: Worker results on build and continue are recorded as learning observations automatically; a fixture run leaves helper-authored sentences in the observation log with no hand-typed memory command
+- [ ] **FEED-02**: Worker, build and verification failures on build, continue, quick and swarm write midden entries automatically, and the next build brief carries the failure's own wording
+- [ ] **FEED-03**: Continue creates instincts from verified phase learnings and promotes them into QUEEN.md through the existing consolidation; the promoted list is non-empty on a fixture with real learnings, not hand-seeded
+- [ ] **FEED-04**: Phase completion and answered decisions emit FEEDBACK pheromones, midden past threshold emits an automatic REDIRECT, and pheromone expiry promotes to eternal memory again; the CLAUDE.md claims for these are backed by tests
+- [ ] **FEED-05**: Instincts at confidence ≥ 0.8 are promoted to the hive at phase end (continue), not only at seal, honouring `AETHER_HIVE_POLICY`
+- [ ] **FEED-06**: `/ant-memory-details` shows wisdom entries and pending promotions again and `/ant-status` shows the top instincts by confidence; the bare-count JSON alias is retired
+
+### Memory reaches every helper (WIRE) — added 2026-08-30
+
+- [ ] **WIRE-01**: The Claude/OpenCode plan and colonize manifests carry the context capsule; a per-command test runs the real delegate lane and asserts a sentinel sentence from each memory source (QUEEN.md, hive, instincts, midden, pheromones, clarified intent, handoffs) in the assembled prompt — native-lane-only tests do not satisfy this
+- [ ] **WIRE-02**: The phase-research scout brief carries hive wisdom content; the instruction to write a hive section it cannot see is removed
+- [ ] **WIRE-03**: A condensed survey (colonize) digest reaches build, plan and research briefs within budget; a test asserts a surveyor-authored sentence arrives and that deleting the survey changes the prompt
+- [ ] **WIRE-04**: A completed Oracle run registers its output into the colony's research docs automatically; its findings reach the next builder without `--research <path>` or a manual promote
+- [ ] **WIRE-05**: The session-start card carries user preferences, top instincts and the last handoff, each content-locked
+- [ ] **WIRE-06**: No colony-prime capsule section is empty by construction — `PhaseLearnings` and `Decisions` gain a live writer or are removed; an invariant test asserts every section has a writer
+- [ ] **WIRE-07**: The previous phase's outcome.md, verification.json and review.json content reaches the next phase's build brief
+
+### Overnight stamina (STAM) — added 2026-08-30
+
+- [ ] **STAM-01**: Headless autopilot queues runtime-verification and visual checkpoints as pending decisions and continues; only genuine blockers halt the run
+- [ ] **STAM-02**: The named pause contract is restored — auditor score floor, critical audit finding, runtime verification needed, escalated flags — and `aether run --dry-run` lists every trigger by name
+- [ ] **STAM-03**: The replan pause reports learnings accumulated since the last plan
+- [ ] **STAM-04**: The run summary reports elapsed wall-clock time alongside the cost line
+- [ ] **STAM-05**: The pre/post-build blocker-count gate (`flag-check-blockers`) is live in run and status
+- [ ] **STAM-06**: A fixture colony of ≥ 6 phases with simulated workers completes unattended under one `aether run`; the test fails if any phase halts for a queueable reason
+
+### Prune the dead wood (PRUNE) — added 2026-08-30
+
+- [ ] **PRUNE-01**: Every runtime subcommand has a live caller or is deleted; a ratchet test holds the orphan allowlist (baseline 117) and fails if it grows
+- [ ] **PRUNE-02**: Every file written under `.aether/data` has a live reader or is no longer written; same ratchet (baseline 25)
+- [ ] **PRUNE-03**: Every CLAUDE.md / shipped-doc claim about runtime behaviour is backed by a named test or removed
+- [ ] **PRUNE-04**: The 72 dropped-since-v5.4 capabilities are triaged in a ledger (restored in a named phase, or dropped with the owner's reason); a test fails if any audit subject is absent from the ledger
+
+### Proof (PROOF) — rewritten 2026-08-30 to the owner's own bar
+
+- [ ] **PROOF-05**: One small real task in an owner project is run twice — plain Claude and Aether — with wall-clock, interventions and worker count recorded for both, whatever they show (carries former 186-07)
+- [ ] **PROOF-06**: Aether finishes that task within 1.5× plain Claude's time with one worker plus free checks, and leaves phase, learnings and handoff records updated
+- [ ] **PROOF-07**: A real overnight autopilot run on that project covers ≥ 3 phases unattended; any stops are queued-not-halted; the summary shows elapsed time and cost
 - [ ] **PROOF-08**: A task interrupted mid-session resumes in a fresh session without the owner re-explaining what was in progress (carries PROOF-04)
 
 ## Future Requirements (deferred, not abandoned — ratified order behind v1.27)
@@ -122,6 +157,29 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | SHOW-03 | Phase 198 | Complete |
 | SHOW-04 | Phase 198 | Complete |
 | SHOW-05 | Phase 198 | Complete |
+| FEED-01 | Phase 198.1 | Pending |
+| FEED-02 | Phase 198.1 | Pending |
+| FEED-03 | Phase 198.1 | Pending |
+| FEED-04 | Phase 198.1 | Pending |
+| FEED-05 | Phase 198.1 | Pending |
+| FEED-06 | Phase 198.1 | Pending |
+| WIRE-01 | Phase 198.2 | Pending |
+| WIRE-02 | Phase 198.2 | Pending |
+| WIRE-03 | Phase 198.2 | Pending |
+| WIRE-04 | Phase 198.2 | Pending |
+| WIRE-05 | Phase 198.2 | Pending |
+| WIRE-06 | Phase 198.2 | Pending |
+| WIRE-07 | Phase 198.2 | Pending |
+| STAM-01 | Phase 198.3 | Pending |
+| STAM-02 | Phase 198.3 | Pending |
+| STAM-03 | Phase 198.3 | Pending |
+| STAM-04 | Phase 198.3 | Pending |
+| STAM-05 | Phase 198.3 | Pending |
+| STAM-06 | Phase 198.3 | Pending |
+| PRUNE-01 | Phase 198.4 | Pending |
+| PRUNE-02 | Phase 198.4 | Pending |
+| PRUNE-03 | Phase 198.4 | Pending |
+| PRUNE-04 | Phase 198.4 | Pending |
 | PROOF-05 | Phase 199 | Pending |
 | PROOF-06 | Phase 199 | Pending |
 | PROOF-07 | Phase 199 | Pending |
@@ -129,10 +187,10 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 
 **Coverage:**
 
-- v1 requirements: 33 total
-- Mapped to phases: 33
+- v1 requirements: 56 total
+- Mapped to phases: 56
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-22*
-*Last updated: 2026-08-22 after roadmap creation (7 phases, 193-199, 33/33 mapped)*
+*Last updated: 2026-08-30 after the whole-system audit (11 phases, 193-199 incl. 198.1-198.4, 56/56 mapped)*

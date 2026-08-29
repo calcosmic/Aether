@@ -43,7 +43,11 @@
 - [x] **Phase 196: See What It Cost** - Every run ends with one honest cost line, and model choices carry a reason. (completed 2026-08-28)
 - [x] **Phase 197: One Answer to "What Next?"** - Every command ends by saying exactly what to do next, from one shared source of truth. (completed 2026-08-29)
 - [x] **Phase 198: Put the Thrown-Away Data Back on Screen** - The detail the older version used to show comes back, in the chat view too. (completed 2026-08-29)
-- [ ] **Phase 199: Proof** - A live run and a full comparison prove the changes actually work.
+- [ ] **Phase 198.1: Feed the Memory** - Builds and checks write down what they learned and what went wrong again, automatically, so the learning loop stops running on empty.
+- [ ] **Phase 198.2: Memory Reaches Every Helper** - Planning, colonizing, research and the welcome card get the same memory the builder gets; the codebase map is delivered as content, not filenames.
+- [ ] **Phase 198.3: Overnight Stamina** - Autopilot queues what needs your eyes instead of stopping, restores the old stop rules, and can run unattended for a night.
+- [ ] **Phase 198.4: Prune the Dead Wood** - Every command nothing calls and every file nothing reads is wired or deleted, with a ratchet so it cannot grow back.
+- [ ] **Phase 199: Proof** - A real small task timed against plain Claude, a real overnight run, and a fresh-chat resume prove it is the go-to framework.
 
 ## Phase Details
 
@@ -324,20 +328,101 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 198.1: Feed the Memory
+
+**Goal**: The learning loop already runs at the end of every phase, but nothing on a normal build or check writes anything for it to learn from — so it runs on empty. This phase reconnects the sources: worker results become observations, failures become midden entries, verified learnings become instincts and Queen-file wisdom, phase completions and decisions leave feedback notes, and strong instincts reach the hive without waiting for a seal. Everything the 2026-08-30 audit found starved at the source is fed again, automatically, on the path the owner actually uses.
+
+**Depends on**: Phase 198
+
+**Requirements**: FEED-01, FEED-02, FEED-03, FEED-04, FEED-05, FEED-06
+
+**Success Criteria** (what must be TRUE):
+
+1. After a build and a check on a fixture project whose helpers report real findings, the observation log contains sentences those helpers wrote — with no one typing a memory command by hand.
+2. A failed worker, failed build, or failed verification on build, check, quick, and swarm writes a failure record, and the very next build brief carries that failure's own wording.
+3. A check that verifies real learnings creates instincts and promotes them into the Queen file through the existing consolidation; the "promoted" list is non-empty on the fixture, not hand-seeded.
+4. A completed phase and an answered decision each leave a feedback note; a run of failures past the threshold leaves an automatic "don't do this" note; the CLAUDE.md sentences claiming these are true again.
+5. An instinct at 0.8 confidence or above reaches the hive at the end of a check, not only at seal, under the existing hive policy switch.
+6. The memory drill-down view shows wisdom entries and pending promotions again, and status shows the top instincts — the bare-number JSON is gone.
+
+**Audit findings closed** (from `.planning/audits/2026-08-30-whole-system-audit.md`): continue observation→instinct→QUEEN promotion; continue auto-emitted pheromones; build/continue midden-write; build learning capture; instinct-create on continue; hive-promote at continue; memory-details; midden-threshold auto-REDIRECT; pheromone-expire→eternal promotion.
+
+**Plans**: TBD
+
+### Phase 198.2: Memory Reaches Every Helper
+
+**Goal**: The memory Aether keeps — Queen-file rules, hive lessons, instincts, failures, focus notes, the owner's answers, the last helper's relay note, the colonize map, Oracle research — reaches every helper that should read it, as actual content, on the command lane the owner actually runs. Today the builder and reviewers get it; the planner, the surveyors, the research scout, and the welcome card get nothing or a list of filenames. The proof standard for this phase is one test per command that looks for a sentence from each memory source inside the prompt actually sent, and fails when any source is missing.
+
+**Depends on**: Phase 198.1
+
+**Requirements**: WIRE-01, WIRE-02, WIRE-03, WIRE-04, WIRE-05, WIRE-06, WIRE-07
+
+**Success Criteria** (what must be TRUE):
+
+1. `/ant-plan` and `/ant-colonize` from Claude and OpenCode deliver the full memory capsule to the planner and every surveyor; a table test runs each command's real delegate path and asserts a sentinel sentence from every memory source (Queen file, hive, instincts, failures, notes, clarified intent, handoffs). A test that exercises only the native lane does not count.
+2. The research scout is shown the hive wisdom it is asked to summarise; the instruction to invent it is gone.
+3. A condensed version of the colonize reports reaches build, plan, and research briefs within the existing budget; deleting the reports changes the prompt, and a test asserts a surveyor-authored sentence arrives.
+4. A finished Oracle run registers its output for later helpers by itself; no second or third hand-typed command is needed for its findings to reach a builder.
+5. The welcome card carries the owner's preferences, the top instincts, and the last handoff — each content-locked, not heading-locked.
+6. No capsule section is empty by construction: "Phase Learnings" and "Key Decisions" either have a live writer or are removed, locked by an invariant that every section has a writer.
+7. The previous phase's outcome, verification, and review content reaches the next phase's build brief.
+
+**Audit findings closed**: Claude-lane plan/colonize capsule gap; phase-research scout pointer-only brief; colonize survey orphaned; Oracle workspace/research orphaned; session card near-empty; dead PhaseLearnings/Decisions sections; build/phase-N outcome/verification/review unwired; SCOUT.md pointer-only; hive-read for plan priming.
+
+**Plans**: TBD
+
+### Phase 198.3: Overnight Stamina
+
+**Goal**: Autopilot can be left alone for a night again. The old version had ten named reasons to stop and queued the things that merely needed the owner's eyes; the current one has six and halts on nearly everything. This phase restores the stop contract, queues instead of halting, says why a replan is due, reports what the night cost, and proves a long unattended multi-phase run completes.
+
+**Depends on**: Phase 198.2
+
+**Requirements**: STAM-01, STAM-02, STAM-03, STAM-04, STAM-05, STAM-06
+
+**Success Criteria** (what must be TRUE):
+
+1. In headless mode, a phase needing hand-testing or a visual checkpoint is queued as a pending decision and the run continues; only genuine blockers halt it.
+2. The named stop contract is back — quality-score floor, critical audit finding, runtime verification needed, escalated flags — and `--dry-run` lists every trigger by name before the run starts.
+3. The replan pause says how many lessons were learned since the last plan, not just a phase count.
+4. The run summary shows elapsed wall-clock time and the honest cost line.
+5. The pre- and post-build blocker gate is live again in run and status.
+6. A fixture colony of at least six phases with simulated helpers completes unattended, end to end, under a single `aether run`, and the test fails if any phase stops for a reason that should have been queued.
+
+**Audit findings closed**: autopilot-* subcommands orphaned; flag-check-blockers orphaned; insert-phase guided flow dropped; swarm 3-strike escalation dropped; failure-classify / recovery-log orphaned; medic-auto-spawn-check orphaned; status escalated-flags count dropped.
+
+**Plans**: TBD
+
+### Phase 198.4: Prune the Dead Wood
+
+**Goal**: Nothing built stays disconnected. The audit found 117 runtime commands nothing calls, 25 files written and never read, and 72 capabilities from the old version that vanished silently. Each is wired in by an earlier phase, deleted, or recorded as deliberately dropped with the owner's reason — and a ratchet locks the count so it can only fall.
+
+**Depends on**: Phase 198.3
+
+**Requirements**: PRUNE-01, PRUNE-02, PRUNE-03, PRUNE-04
+
+**Success Criteria** (what must be TRUE):
+
+1. Every runtime subcommand has a live caller (wrapper, hook, host, or Go call site on a command path) or is deleted; a ratchet test carries the allowlist of remaining orphans and fails if it grows.
+2. Every file written under `.aether/data` has a live reader or is no longer written; same ratchet.
+3. Every sentence in CLAUDE.md and shipped docs that describes runtime behaviour is backed by a named test or removed — starting with "decisions become pheromones", "midden affects behavior", and the event-bus wisdom stage.
+4. The 72 dropped-since-5.4 capabilities are triaged in a ledger: restored (naming the phase), or dropped with a reason the owner gave; a test fails if any audit subject is missing from the ledger.
+
+**Plans**: TBD
+
 ### Phase 199: Proof
 
-**Goal**: Prove, with the owner watching, that the changes above actually work — on one live real-world task, then on a full head-to-head comparison against the older system and against the competing tool GSD. The milestone only counts as finished once a one-task bug fix really does cost one worker plus the free checks.
+**Goal**: Prove — with the owner watching, on a real project — that Aether is the go-to framework: as quick as plain Claude on a small task, with a memory plain Claude does not have, able to run a night unattended, and able to pick up in a fresh chat without being re-briefed. The milestone only counts as finished when the owner has felt each of these, not when a test says so.
 
-**Depends on**: Phases 193, 194, 195, 196, 197, 198 (proof requires the finished system, not a partial one)
+**Depends on**: Phases 193–198.4 (proof requires the finished, reconnected system)
 
 **Requirements**: PROOF-05, PROOF-06, PROOF-07, PROOF-08
 
 **Success Criteria** (what must be TRUE):
 
-1. With the owner watching, one real end-to-end run is fired on a real task, and its result — whatever it shows, good or bad — is written down.
-2. A full three-way comparison — Aether run by hand, Aether on autopilot, and the competing tool GSD — is run on the finished system, recording tokens spent, time taken, how often a human had to step in, how many workers were sent, whether the work was truly complete, any unrecoverable stuck moments, and whether the code was left clean and ready to commit.
-3. The milestone is only considered done once all of these hold together: a one-task bug fix costs one worker plus the free checks; a CSV-export-sized job costs four workers or fewer across the whole build-and-check cycle; the typical token cost per finished task is no more than 1.5x what GSD uses; the number of times a human had to step in is no worse than GSD's; and zero runs get stuck beyond recovery.
-4. A task that gets interrupted partway through picks back up correctly in a brand-new chat session — the owner never has to re-explain what was already in progress.
+1. One small real task in one of the owner's own projects is done twice — once with plain Claude, once through Aether — with wall-clock time, interventions, and worker count recorded for both, whatever they show.
+2. Aether finishes that task within 1.5× plain Claude's time, with one worker plus the free checks, and leaves the project record (phase, learnings, handoff) updated where plain Claude leaves nothing.
+3. A real overnight autopilot run on that project covers at least three phases unattended; its stops, if any, are all in the queued-not-halted category, and its summary shows elapsed time and cost.
+4. A task interrupted mid-session resumes in a brand-new chat with the welcome card carrying enough that the owner never re-explains what was in progress.
 
 **Plans**: TBD
 

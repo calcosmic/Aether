@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 199
-current_phase_name: Proof
+current_phase: 198.1
+current_phase_name: Feed the Memory
 status: planning
-stopped_at: Phase 198 complete, ready to plan Phase 199
+stopped_at: Whole-system audit done 2026-08-30; four reconnection phases 198.1-198.4 inserted; ready to plan Phase 198.1
 last_updated: "2026-08-29T21:03:05.607Z"
-last_activity: 2026-08-29
-last_activity_desc: Phase 198 complete, next is Phase 199
+last_activity: 2026-08-30
+last_activity_desc: Audit persisted, phases 198.1-198.4 added, next is Phase 198.1
 state_head: 7b01b976e801e829f33a9e4566694c49678233cf
 progress:
-  total_phases: 7
+  total_phases: 11
   completed_phases: 6
   total_plans: 48
   completed_plans: 48
-  percent: 86
+  percent: 55
 ---
 
 # Project State
@@ -25,16 +25,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 198 — Put the Thrown-Away Data Back on Screen
+**Current focus:** Phase 198.1 — Feed the Memory (first of four reconnection phases from the 2026-08-30 audit, `.planning/audits/`)
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-**Progress:** [████░░░░░░] 43%
+**Progress:** [█████░░░░░] 55%
 
-Phase: 199 — Proof
+Phase: 198.1 — Feed the Memory
 Plan: Not started
 Status: Ready to plan
 
