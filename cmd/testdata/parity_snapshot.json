@@ -437,6 +437,7 @@
     "medic",
     "medic-auto-spawn-check",
     "memory-capture",
+    "memory-details",
     "memory-metrics",
     "midden-acknowledge",
     "midden-collect",

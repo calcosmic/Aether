@@ -558,8 +558,8 @@ func TestStatusShowsRecentInstinctsWithConfidence(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "Recent Instincts") {
-		t.Fatalf("expected Recent Instincts section, got:\n%s", output)
+	if !strings.Contains(output, "Strongest Instincts") {
+		t.Fatalf("expected Strongest Instincts section, got:\n%s", output)
 	}
 	for _, want := range []string{"new action", "mid action", "old action", "0.92", "0.74", "0.61"} {
 		if !strings.Contains(output, want) {
@@ -1209,7 +1209,7 @@ func TestStatus_ReviewFindings_PartialData(t *testing.T) {
 	// Find the end of the Review Findings section (next section header)
 	afterRF := output[rfIdx:]
 	nextSection := len(afterRF)
-	for _, section := range []string{"Active Pheromones", "Spawn Activity", "State:", "Recent Instincts", "Recovery"} {
+	for _, section := range []string{"Active Pheromones", "Spawn Activity", "State:", "Strongest Instincts", "Recovery"} {
 		if idx := strings.Index(afterRF, "\n"+section); idx >= 0 && idx < nextSection {
 			nextSection = idx
 		}

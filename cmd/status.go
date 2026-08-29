@@ -1040,10 +1040,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	}
 
 	if totalInstincts > 0 {
-		recentInstincts := loadRecentRuntimeInstincts(s, &state, 3)
-		if len(recentInstincts) > 0 {
-			b.WriteString("\nRecent Instincts\n")
-			renderRecentInstincts(&b, recentInstincts)
+		strongestInstincts := loadStrongestRuntimeInstincts(s, &state, 3)
+		if len(strongestInstincts) > 0 {
+			b.WriteString("\nStrongest Instincts\n")
+			renderStrongestInstincts(&b, strongestInstincts)
 		}
 	}
 
@@ -1563,7 +1563,7 @@ func renderPheromoneSummary(b *strings.Builder, s *storage.Store) {
 	b.WriteString("   Strength fades over time; run `aether pheromone-display` for the full view.\n")
 }
 
-func renderRecentInstincts(b *strings.Builder, instincts []colony.Instinct) {
+func renderStrongestInstincts(b *strings.Builder, instincts []colony.Instinct) {
 	for _, inst := range instincts {
 		domain := inst.Domain
 		if domain == "" {

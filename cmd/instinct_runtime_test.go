@@ -82,7 +82,7 @@ func TestLoadRecentRuntimeInstincts_PrefersUsefulAppliedInstincts(t *testing.T) 
 		t.Fatalf("failed to save instincts.json: %v", err)
 	}
 
-	got := loadRecentRuntimeInstincts(s, &colony.ColonyState{}, 2)
+	got := loadStrongestRuntimeInstincts(s, &colony.ColonyState{}, 2)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 instincts, got %d", len(got))
 	}

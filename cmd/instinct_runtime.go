@@ -134,7 +134,17 @@ func sortedActiveInstinctEntries(file colony.InstinctsFile) []colony.InstinctEnt
 	return active
 }
 
-func loadRecentRuntimeInstincts(s *storage.Store, state *colony.ColonyState, limit int) []colony.Instinct {
+// loadStrongestRuntimeInstincts returns the standalone instincts.json
+// instincts ranked by memory.InstinctUsefulnessScore (trust/confidence,
+// freshness, applications, success rate) -- strength, not recency.
+//
+// The one exception is the branch below: when instincts.json holds nothing
+// (a colony still on the legacy in-state store), it falls back to
+// state.Memory.Instincts sorted by CreatedAt descending. That branch is
+// genuinely recency-ordered -- it is the only recency-ordered path this
+// function has -- because the legacy Instinct type carries no trust score,
+// confidence, or application history to rank on.
+func loadStrongestRuntimeInstincts(s *storage.Store, state *colony.ColonyState, limit int) []colony.Instinct {
 	if limit <= 0 {
 		return []colony.Instinct{}
 	}
@@ -152,6 +162,8 @@ func loadRecentRuntimeInstincts(s *storage.Store, state *colony.ColonyState, lim
 		return []colony.Instinct{}
 	}
 
+	// Legacy fallback -- recency-ordered, the only such path in this
+	// function (see doc comment above).
 	sorted := make([]colony.Instinct, len(state.Memory.Instincts))
 	copy(sorted, state.Memory.Instincts)
 	sort.Slice(sorted, func(i, j int) bool {
