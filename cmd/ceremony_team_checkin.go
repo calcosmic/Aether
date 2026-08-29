@@ -477,6 +477,31 @@ func buildHasPendingOwnerDecision(manifest codexBuildManifest) (bool, string) {
 	return false, ""
 }
 
+// lastContinueEndedBlocked reports whether this phase's own saved continue
+// report (build/phase-<id>/continue.json) recorded that the last check did
+// NOT advance the phase (D-09's third "waiting on you" signal). It reads the
+// structured Advanced field -- never the pipe-delimited event string
+// ("...|continue_blocked|...") appended to COLONY_STATE.json's Events, which
+// has no stable format and no test guaranteeing one (198-RESEARCH.md Q8's
+// explicit anti-pattern note). A missing or unparseable report is not a
+// signal -- mirrors loadLastContinueOptions's own missing/unparseable
+// handling (cmd/codex_continue.go), the existing precedent for reading this
+// exact file.
+func lastContinueEndedBlocked(phaseID int) (bool, string) {
+	if store == nil {
+		return false, ""
+	}
+	rel := continuePlanArtifactsPath(phaseID, "continue.json")
+	var report codexContinueReport
+	if err := store.LoadJSON(rel, &report); err != nil {
+		return false, ""
+	}
+	if report.Advanced {
+		return false, ""
+	}
+	return true, "the last time this phase's work was checked, it did not pass and stopped"
+}
+
 // splitCoherentJobReason recovers the relationship and benefit halves of a
 // job_reason string built by structuredCoherentJobReason
 // (cmd/coherent_jobs.go), which always joins them as "<relationship>, so

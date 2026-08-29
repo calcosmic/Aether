@@ -269,6 +269,24 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 
 **Stop conditions:** None — this stage only renders; the plan was already fixed in Dispatch Manifest.
 
+## Blocker Heads-Up
+
+🐜 Before anyone moves, the colony says plainly if something is stuck.
+
+**Purpose:** When something is genuinely stuck, tell the owner in plain English before any worker spawns, and ask one question -- carry on with the build, or stop and deal with it first. Never a silent warning that continues regardless, and never a refusal the owner did not ask for.
+
+**Reads:** `result.blocker_advisory` (each named signal, already in plain English) and `result.blocker_advisory_question` (present only when the run can actually ask) from the plan-only result.
+
+The runtime computes exactly three "hard stop" signals -- never an ordinary FOCUS/FEEDBACK note, never an everyday flag: a forced reviewer still waiting on the owner's check-in decision, an unanswered planning or worker question, and the last check-and-advance (`aether continue`) on this phase ending blocked.
+
+- If `result.blocker_advisory` is empty, say nothing and continue to Team Check-In.
+- If `result.blocker_advisory` names one or more signals AND `result.blocker_advisory_question` is present, show each signal in plain English, then ask the user (AskUserQuestion, single question): "Carry on with the build, or stop and deal with this first?" with options:
+  - "Carry on with the build" (recommended) -- continue to Team Check-In exactly as planned.
+  - "Stop here" -- spawn nothing; tell the owner what to run next (`aether status` names the exact next step for whatever is stuck) and end the build here.
+- If `result.blocker_advisory` names signals but `result.blocker_advisory_question` is absent (automatic mode, or the owner passed `--no-checkin`), show the same heads-up and continue without asking -- the run proceeds exactly as if the owner had said "carry on".
+
+**Stop conditions:** The owner picks "Stop here" -- spawn no worker; report the outstanding signal(s) and the next command, then end the build here.
+
 ## Team Check-In
 
 🐜 The colony shows its team; the owner has the last word before anyone moves.

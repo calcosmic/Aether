@@ -231,6 +231,21 @@ var buildCmd = &cobra.Command{
 			if checkinDecision.Why != "" {
 				result["checkin_reason_detail"] = checkinDecision.Why
 			}
+			// D-08/D-09: the build-start blocker heads-up, computed from the
+			// SAME manifest before the spawn plan renders -- so a genuinely
+			// stuck phase is named before any dispatch decision is even
+			// shown. --no-checkin is the one non-interactive signal reachable
+			// here (autopilot never calls this RunE at all; it dispatches
+			// through runCodexBuildWithOptions directly). Never a refusal,
+			// never a silent warning: the wrapper decides what happens next
+			// from these two result keys.
+			blockerAdvisory := decideBuildBlockerAdvisory(buildStartBlockerSignals(buildManifest), noCheckinFlag)
+			if len(blockerAdvisory.Signals) > 0 {
+				result["blocker_advisory"] = blockerAdvisory.Signals
+				if blockerAdvisory.Ask {
+					result["blocker_advisory_question"] = buildBlockerAdvisoryQuestion
+				}
+			}
 			reviewDepthPlan := reviewDepthFromResult(result)
 			planOnlyVisual := renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan, queenPolicyFromResult(result))
 			// D-12: the automatic fast path still shows a compact, non-blocking
@@ -242,6 +257,11 @@ var buildCmd = &cobra.Command{
 				fastPathSummary, fastPathVisual := renderBuildFastPathSummary(phase, dispatches[0], checkinDecision)
 				result["checkin_summary"] = fastPathSummary
 				planOnlyVisual = planOnlyVisual + "\n" + fastPathVisual
+			}
+			// The heads-up leads -- it decides whether the build happens at
+			// all, so it appears before the spawn plan it gates.
+			if advisoryVisual := renderBuildBlockerAdvisory(blockerAdvisory); advisoryVisual != "" {
+				planOnlyVisual = advisoryVisual + "\n\n" + planOnlyVisual
 			}
 			outputWorkflow(result, planOnlyVisual)
 			return nil
@@ -300,13 +320,31 @@ var buildCmd = &cobra.Command{
 			}
 		}
 		reviewDepthBuild := reviewDepthFromResult(result)
+		// D-08/D-09: the same build-start blocker heads-up as the plan-only
+		// lane above -- the direct dispatch path never derives a full
+		// codexBuildManifest of its own, so the forced-reviewer signal is
+		// re-derived read-only from the phase's own wording (identical
+		// derivation the plan-only manifest uses), and the unanswered-
+		// question / last-continue-blocked signals need no manifest fields
+		// beyond Phase. A guarantee that holds on only one lane is worth
+		// nothing (CLAUDE.md): both lanes call buildStartBlockerSignals and
+		// decideBuildBlockerAdvisory identically.
+		directBuildManifest := codexBuildManifest{
+			Phase:           phaseNum,
+			ForcedReviewers: forcedReviewerRecords(queenForcedReviewersForPhase(state.Plan.Phases[phaseNum-1])),
+		}
+		blockerAdvisoryDirect := decideBuildBlockerAdvisory(buildStartBlockerSignals(directBuildManifest), noCheckinFlag)
+		buildVisual := appendSpendCostLine(
+			renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result)),
+			phaseNum,
+		)
+		if advisoryVisual := renderBuildBlockerAdvisory(blockerAdvisoryDirect); advisoryVisual != "" {
+			buildVisual = advisoryVisual + "\n\n" + buildVisual
+		}
 		// The one cost line ends this lane's ending screen too. The
 		// plan-only path above deliberately does NOT get one: nothing has
 		// been spent yet when a team is merely being planned.
-		outputWorkflow(result, appendSpendCostLine(
-			renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result)),
-			phaseNum,
-		))
+		outputWorkflow(result, buildVisual)
 		return nil
 	},
 }
