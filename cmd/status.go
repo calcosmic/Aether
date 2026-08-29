@@ -34,12 +34,13 @@ var statusCmd = &cobra.Command{
 			return nil
 		}
 
+		result := buildStatusResult(state, store)
 		mode := strings.ToLower(strings.TrimSpace(os.Getenv("AETHER_OUTPUT_MODE")))
 		if mode == "json" {
-			outputOK(buildStatusResult(state, store))
+			outputOK(result)
 			return nil
 		}
-		output := renderDashboard(state, store)
+		output := renderDashboard(state, store, result)
 		writeVisualOutput(stdout, output)
 		return nil
 	},
@@ -733,11 +734,56 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		result["reconciliation"] = recon
 	}
 
+	// Status knows two things the saved project alone does not: workers are
+	// still running, and a guided action (an open flag, active Oracle
+	// research, an unacknowledged failure) needs attention before anything
+	// else. Both enter the one decision as an override input here, so the
+	// JSON envelope and the dashboard screen -- built from this same result
+	// map -- cannot answer the question differently.
+	activeWorkers := statusActiveWorkers(s, state)
+	guidedActions := loadGuidedActions(s, skillWorkspaceRoot())
+	overrideCommand, overrideWhy := statusOverrideFacts(activeWorkers, guidedActions)
+	closeLifecycleCommand(result, "status", overrideCommand, overrideWhy)
+
 	return result
 }
 
-// renderDashboard produces the full colony status dashboard string.
-func renderDashboard(state colony.ColonyState, s *storage.Store) string {
+// statusActiveWorkers is the same "are workers genuinely still running"
+// check renderDashboard makes, factored out so both the JSON envelope and
+// the screen resolve their answer from the identical fact.
+func statusActiveWorkers(s *storage.Store, state colony.ColonyState) []agent.SpawnEntry {
+	spawnSummary := loadSpawnActivitySummaryForState(s, &state)
+	liveSpawnView := state.State == colony.StateEXECUTING && !state.Paused && state.BuildStartedAt != nil
+	if !liveSpawnView {
+		return nil
+	}
+	return spawnSummary.ActiveEntries
+}
+
+// statusOverrideFacts turns what status alone knows into an override for the
+// one decision. In-flight workers outrank a guided action, matching the
+// dashboard's own priority: there is no point steering the owner toward a
+// flag or a failure while a command is still running.
+func statusOverrideFacts(activeWorkers []agent.SpawnEntry, guidedActions []guidedAction) (string, string) {
+	if len(activeWorkers) > 0 {
+		return "aether status", fmt.Sprintf(
+			"Active workers are still running (%d). Wait for the in-flight command to finish, then check again -- "+
+				"this only refreshes the dashboard, it changes nothing.", len(activeWorkers))
+	}
+	if len(guidedActions) > 0 {
+		top := guidedActions[0]
+		if command := strings.TrimSpace(top.Command); command != "" {
+			return command, fmt.Sprintf("%s needs attention: %s", top.Title, top.Summary)
+		}
+	}
+	return "", ""
+}
+
+// renderDashboard produces the full colony status dashboard string. result is
+// the same map buildStatusResult produced for the JSON envelope, carrying the
+// one resolver's already-folded answer -- so the screen and the
+// machine-readable result can never disagree about what to do next.
+func renderDashboard(state colony.ColonyState, s *storage.Store, result map[string]interface{}) string {
 	var b strings.Builder
 
 	// Banner
@@ -1019,31 +1065,16 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 	b.WriteString("\n")
 	if len(activeWorkers) > 0 {
-		b.WriteString(renderNextUp(
-			"Active workers are still running. Wait for the in-flight command to finish.",
-			`Run `+"`aether proof`"+` to inspect the active context and skill proof.`,
-			`Run `+"`aether status`"+` again to refresh the spawn view.`,
-			`Run `+"`tail -f .aether/data/spawn-tree.txt`"+` in another terminal to watch status changes.`,
-		))
-		return b.String()
+		// The "wait, and here is how to watch" tips are a report, not advice
+		// the resolver can offer as an aether command -- tailing a log file
+		// is not something the card can recommend. The card below still says
+		// to wait: statusOverrideFacts fed that fact into the one decision
+		// when this result was built.
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Still running"))
+		b.WriteString("Watch progress with `tail -f .aether/data/spawn-tree.txt` in another terminal, or run `aether proof` to inspect the active context and skill proof.\n")
 	}
-	primary, alternatives := workflowSuggestionsForState(state)
-	if len(guidedActions) > 0 {
-		workflowPrimary := primary
-		workflowAlternatives := append([]string{}, alternatives...)
-		primary = guidedActionNextUpPrimary(guidedActions[0])
-		alternatives = []string{}
-		if strings.TrimSpace(guidedActions[0].AlternativeCommand) != "" {
-			alternatives = append(alternatives, fmt.Sprintf("Run `%s` to investigate with the swarm.", guidedActions[0].AlternativeCommand))
-		}
-		if len(guidedActions) > 1 {
-			alternatives = append(alternatives, guidedActionNextUpAlternatives(guidedActions[1:])...)
-		}
-		alternatives = append(alternatives, workflowPrimary)
-		alternatives = append(alternatives, workflowAlternatives...)
-	}
-	alternatives = append(alternatives, `Run `+"`aether proof`"+` to inspect the current context and skill proof.`)
-	b.WriteString(renderNextUp(primary, alternatives...))
+	b.WriteString(renderLifecycleClosing(result, "status"))
 
 	return b.String()
 }

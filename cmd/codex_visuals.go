@@ -2592,7 +2592,7 @@ const crownedAnthillArt = `        .     .
      | ANTHILL  |
      |__________|`
 
-func renderSealVisual(state colony.ColonyState, summaryPath string) string {
+func renderSealVisual(result map[string]interface{}, state colony.ColonyState, summaryPath string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("seal"), "Seal"))
 	b.WriteString(visualDividerStr())
@@ -2618,11 +2618,11 @@ func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	b.WriteString("The colony stands crowned and sealed.\n")
 	b.WriteString("Its wisdom lives on in QUEEN.md.\n")
 	b.WriteString("The anthill has reached its final form.\n")
-	b.WriteString(renderNextUp(
-		`Run `+"`aether entomb`"+` to archive this completed colony into chambers.`,
-		`Run `+"`aether init \"next goal\"`"+` if you want to start the next colony immediately.`,
-	))
-	b.WriteString(renderContextClearGuidance())
+	// The card below is the one resolver's answer for a just-sealed project:
+	// it explains, in plain words, what finishing means and what archiving it
+	// would do (S-05) -- state was saved with the final milestone before this
+	// renders, so the resolver's own colonyNeedsEntomb branch applies.
+	b.WriteString(renderLifecycleClosing(result, "seal"))
 	return b.String()
 }
 

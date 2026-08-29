@@ -335,6 +335,13 @@ func runSealPlanOnly(root string, force bool, forceReason string) (map[string]in
 		result["seal_manifest"] = manifest
 		result["dispatch_manifest"] = manifest
 	}
+	// Resolve and fold the one closing answer once, here, before the result
+	// is handed to the renderer -- lifecycleOverrideFromResult picks up the
+	// orchestrator_boundary_guidance field addOrchestratorBoundaryGuidance
+	// just set when a boundary question is pending. "seal" is a word this
+	// repo invented (S-05); the plain phrase avoids needing it explained a
+	// second time right next to itself in "what changed".
+	closeLifecycleRun(result, state, "getting ready to sign the project off as finished")
 	return result, nil
 }
 
@@ -1227,9 +1234,14 @@ func renderSealPlanOnlyVisual(result map[string]interface{}) string {
 	if finalizer == "" {
 		finalizer = "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>"
 	}
-	b.WriteString(renderNextUp(
-		"Dispatch the final review workers through the host platform.",
-		"Then run `"+finalizer+"`.",
-	))
+	// This is an instruction to the PLATFORM doing the dispatch, not advice to
+	// the owner, and the finalizer command carries a fill-in-the-blank
+	// placeholder that is never something to recommend (197-04's rule). It
+	// stays a report, above the card, which runSealPlanOnly already resolved
+	// and folded into result -- picking up the boundary-question override
+	// when one is pending, exactly like the other plan-only screens.
+	b.WriteString(renderStageMarker("How this run is being driven"))
+	b.WriteString("Dispatch the final review workers through the host platform, then run `" + finalizer + "`.\n")
+	b.WriteString(renderLifecycleClosing(result, "seal"))
 	return b.String()
 }

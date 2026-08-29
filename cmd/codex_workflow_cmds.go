@@ -777,7 +777,11 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride) error 
 		result["overridden_blockers"] = override.OverriddenBlockers + override.OverriddenReviewBlocks
 	}
 	addOrchestratorBoundaryGuidance(result, "seal", state, "aether entomb", nil)
-	outputWorkflow(result, renderSealVisual(state, summaryPath))
+	// "seal" is one of the words this repo invented (S-05); the plain phrase
+	// below is what "what changed" actually reports, so the sentence never
+	// needs the jargon word explained a second time right next to itself.
+	closeLifecycleRun(result, state, "signing the project off as finished")
+	outputWorkflow(result, renderSealVisual(result, state, summaryPath))
 
 	if shouldRenderVisualOutput(stdout) {
 		writeVisualOutput(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))

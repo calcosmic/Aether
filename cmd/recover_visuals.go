@@ -42,7 +42,8 @@ func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repa
 		if shouldUseANSIColors() {
 			b.WriteString("\x1b[0m")
 		}
-		b.WriteString("\n")
+		b.WriteString("\n\n")
+		b.WriteString(renderNextActionCard(recoverNextAction(issues, state)))
 		return b.String()
 	}
 
@@ -103,8 +104,9 @@ func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repa
 	}
 	b.WriteString("\n")
 
-	// Next-step suggestion based on most severe category.
-	b.WriteString(renderNextUp(recoverNextStep(issues)))
+	// The one resolver's answer, fed this scan's own top finding as an
+	// override -- recover.go's private next-step decider is retired.
+	b.WriteString(renderNextActionCard(recoverNextAction(issues, state)))
 
 	return b.String()
 }
@@ -141,27 +143,40 @@ func recoverFixHint(category string) string {
 	}
 }
 
-// recoverNextStep returns a next-step suggestion based on the most severe issue.
-func recoverNextStep(issues []HealthIssue) string {
-	// Find the highest-severity issue category.
+// recoverOverrideFromIssues turns this scan's own findings into a command and
+// a plain-English reason for the one decision -- what recover found is
+// something the saved project alone cannot tell the resolver, so it is fed in
+// as an override rather than deciding on its own, second, private path. This
+// is the sixth and last hand-rolled next-step function in the runtime; the
+// others were retired in plans 197-02 and 197-04.
+//
+// A category with no command (the two "review the ... above" defaults) is
+// deliberately not a command at all: the findings are already listed above
+// the card, and there is nothing more specific to run than the ordinary
+// answer the resolver already gives.
+func recoverOverrideFromIssues(issues []HealthIssue, state colony.ColonyState) (string, string) {
 	for _, issue := range issues {
 		if issue.Severity != "critical" {
 			continue
 		}
 		switch issue.Category {
 		case "missing_build_packet":
-			return "Run `aether build <phase>` to re-dispatch the build."
+			return fmt.Sprintf("aether build %d", state.CurrentPhase),
+				"A build record is missing for the current phase. Re-dispatching it starts that phase again."
 		case "partial_phase":
-			return "Run `aether continue` to advance the colony."
+			return "aether continue",
+				"This phase only partly finished. Checking it moves the colony on if the work holds up."
 		case "stale_spawned":
-			return "Run `aether recover --apply` to reset stale spawn state."
+			return "aether recover --apply",
+				"Old worker-tracking data is stuck. Applying the fix clears it."
 		case "bad_manifest":
-			return "Run `aether recover --apply --force` to repair the manifest."
+			return "aether recover --apply --force",
+				"The saved build record is broken. This repairs it, bypassing the usual confirmation."
 		case "dirty_worktree":
-			return "Run `aether recover --apply --force` to auto-fix with confirmation bypassed."
-		default:
-			return "Review the critical issues above."
+			return "aether recover --apply --force",
+				"A worker's isolated copy of the code was left in an unfinished state. This fixes it and skips the confirmation prompt."
 		}
+		return "", ""
 	}
 
 	// Check warnings next.
@@ -171,19 +186,32 @@ func recoverNextStep(issues []HealthIssue) string {
 		}
 		switch issue.Category {
 		case "missing_agents":
-			return "Run `aether recover --apply` to restore missing global agent files from the hub."
+			return "aether recover --apply",
+				"Some shared helper files are missing. Applying the fix restores them from the shared install."
 		case "broken_survey":
-			return "Run `aether colonize` to regenerate survey data."
+			return "aether colonize",
+				"The saved scan of the existing code is broken. Re-scanning rebuilds it."
 		case "partial_phase":
-			return "Run `aether continue` to advance the colony."
+			return "aether continue",
+				"This phase only partly finished. Checking it moves the colony on if the work holds up."
 		case "unreconciled_worker_changes":
-			return "Run `aether build-reconcile` to record changes."
-		default:
-			return "Review the warnings above."
+			return "aether build-reconcile",
+				"A helper made changes that were never recorded. This records them."
 		}
+		return "", ""
 	}
 
-	return "Run `aether recover --apply` to fix auto-fixable issues."
+	if len(issues) > 0 {
+		return "aether recover --apply", "Fixing the issues found automatically."
+	}
+	return "", ""
+}
+
+// recoverNextAction resolves the one closing answer for a recover run,
+// feeding this scan's own top finding in as an override.
+func recoverNextAction(issues []HealthIssue, state colony.ColonyState) nextAction {
+	command, why := recoverOverrideFromIssues(issues, state)
+	return lifecycleNextActionForState(state, "recover", command, why)
 }
 
 // recoverJSONOutput is the structured output for JSON rendering.
@@ -261,6 +289,10 @@ func renderRecoverJSON(issues []HealthIssue, state colony.ColonyState, duration 
 			"details":   repairResult.Repairs,
 		}
 	}
+	// The same closing answer the text report renders, carrying the stable
+	// keys every migrated command's envelope carries -- a wrapper reading
+	// this JSON and an owner reading the text report are told the same thing.
+	applyNextActionToResult(outputMap, recoverNextAction(issues, state))
 	data, err := json.MarshalIndent(outputMap, "", "  ")
 	if err != nil {
 		return fmt.Sprintf(`{"error": "failed to marshal report: %v"}`, err)

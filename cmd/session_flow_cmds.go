@@ -334,8 +334,10 @@ var resumeColonyCmd = &cobra.Command{
 		// under "resume-dashboard"; re-fold under this command's own name so
 		// the "what changed" line names the command the owner actually ran,
 		// carrying forward the same override fact (if any) rather than
-		// dropping it on a second, unrelated resolve.
-		closeLifecycleCommand(result, "resume-colony",
+		// dropping it on a second, unrelated resolve. "colony" is a word
+		// this repo invented (S-05); the plain phrase avoids needing it
+		// explained a second time right next to itself in "what changed".
+		closeLifecycleCommand(result, "picking the project back up",
 			stringValue(result["resume_override_command"]), stringValue(result["resume_override_why"]))
 		outputWorkflow(result, renderResumeVisual(result, handoffText, true))
 		return nil
