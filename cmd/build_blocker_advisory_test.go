@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -8,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // TestBlockedLastTimeIsReadFromTheStructuredReport pins lastContinueEndedBlocked
@@ -205,4 +208,192 @@ func TestOnlyTheThreeNamedSignalsRaiseTheHeadsUp(t *testing.T) {
 			t.Fatalf("signal name = %q, want %q", got[0].Name, "last-continue-blocked")
 		}
 	})
+}
+
+// TestBuildStartBlockerAdvisory is the pure, table-driven regression guard for
+// decideBuildBlockerAdvisory/renderBuildBlockerAdvisory (D-08/D-09): with no
+// signals nothing is printed and no question is added; with signals present,
+// printing is unconditional and only the question is gated by interactivity.
+func TestBuildStartBlockerAdvisory(t *testing.T) {
+	sig := buildBlockerSignal{
+		Name:   "last-continue-blocked",
+		Reason: "the last time this phase's work was checked, it did not pass and stopped",
+	}
+
+	t.Run("no signals: nothing printed, no question added", func(t *testing.T) {
+		advisory := decideBuildBlockerAdvisory(nil, false)
+		if len(advisory.Signals) != 0 || advisory.Ask {
+			t.Fatalf("expected an empty advisory with nothing to ask, got %+v", advisory)
+		}
+		if got := renderBuildBlockerAdvisory(advisory); got != "" {
+			t.Fatalf("expected no rendered output for an empty advisory, got %q", got)
+		}
+	})
+
+	t.Run("signals present, interactive: names each signal and asks the one question", func(t *testing.T) {
+		advisory := decideBuildBlockerAdvisory([]buildBlockerSignal{sig}, false)
+		if !advisory.Ask {
+			t.Fatalf("expected Ask=true for an interactive run with a signal present")
+		}
+		rendered := renderBuildBlockerAdvisory(advisory)
+		if !strings.Contains(rendered, sig.Reason) {
+			t.Fatalf("rendered advisory missing the signal's reason:\n%s", rendered)
+		}
+		if !strings.Contains(rendered, buildBlockerAdvisoryQuestion) {
+			t.Fatalf("rendered advisory missing the carry-on-or-stop question:\n%s", rendered)
+		}
+	})
+
+	t.Run("signals present, non-interactive: still prints, never asks", func(t *testing.T) {
+		advisory := decideBuildBlockerAdvisory([]buildBlockerSignal{sig}, true)
+		if advisory.Ask {
+			t.Fatalf("expected Ask=false for a non-interactive run")
+		}
+		rendered := renderBuildBlockerAdvisory(advisory)
+		if !strings.Contains(rendered, sig.Reason) {
+			t.Fatalf("rendered advisory missing the signal's reason even though printing is unconditional:\n%s", rendered)
+		}
+		if strings.Contains(rendered, buildBlockerAdvisoryQuestion) {
+			t.Fatalf("a non-interactive run must never add the question:\n%s", rendered)
+		}
+	})
+
+	t.Run("decideBuildBlockerAdvisory's parameter list contains no store and no rendered string", func(t *testing.T) {
+		data, err := os.ReadFile("build_blocker_advisory.go")
+		if err != nil {
+			t.Fatalf("ReadFile: %v", err)
+		}
+		src := string(data)
+		idx := strings.Index(src, "func decideBuildBlockerAdvisory(")
+		if idx == -1 {
+			t.Fatalf("decideBuildBlockerAdvisory not found in cmd/build_blocker_advisory.go")
+		}
+		closeIdx := strings.Index(src[idx:], ")")
+		if closeIdx == -1 {
+			t.Fatalf("could not find the end of decideBuildBlockerAdvisory's parameter list")
+		}
+		signature := src[idx : idx+closeIdx+1]
+		if strings.Contains(strings.ToLower(signature), "store") {
+			t.Fatalf("decideBuildBlockerAdvisory's signature must not take a store: %s", signature)
+		}
+		if !strings.Contains(signature, "signals []buildBlockerSignal") || !strings.Contains(signature, "nonInteractive bool") {
+			t.Fatalf("unexpected decideBuildBlockerAdvisory signature: %s", signature)
+		}
+	})
+}
+
+// TestBlockerHeadsUpDispatchesNoWorkers pins that the whole blocker-advisory
+// path -- signal computation, the pure decision, and the render -- spawns no
+// additional helper. A static source scan for dispatch/spawn call names in
+// cmd/build_blocker_advisory.go, not an intermediate record: if a future
+// change wires a dispatch call into this file, this test fails.
+func TestBlockerHeadsUpDispatchesNoWorkers(t *testing.T) {
+	data, err := os.ReadFile("build_blocker_advisory.go")
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	src := strings.ToLower(string(data))
+	for _, forbidden := range []string{"dispatch(", "spawn(", "workerinvoker", "newcodexworkerinvoker", "agent("} {
+		if strings.Contains(src, forbidden) {
+			t.Fatalf("cmd/build_blocker_advisory.go must never dispatch or spawn a worker; found %q", forbidden)
+		}
+	}
+}
+
+// blockerAdvisoryFixturePhase mirrors checkinFixturePhase's wording pattern
+// (TestCardNamesTheSignalForEveryForcedReviewer) that reliably names the
+// credentials/auth risk signal, giving both build lanes a real, non-waived
+// forced-reviewer blocker signal to render.
+func blockerAdvisoryFixturePhase() colony.Phase {
+	taskID := "1.1"
+	return colony.Phase{
+		ID:          1,
+		Name:        "Password reset",
+		Description: "Let users reset their password via an emailed token",
+		Mode:        colony.PhaseModePrototype,
+		Status:      colony.PhaseReady,
+		Tasks:       []colony.Task{{ID: &taskID, Goal: "Do the work", Status: colony.TaskPending}},
+	}
+}
+
+// TestBothBuildLanesEmitTheHeadsUp asserts the rendered bytes on the
+// plan-only lane and on the direct build lane -- not an intermediate record
+// -- both carry the D-08 heads-up for the same live forced-reviewer signal.
+// A guarantee that holds only on one lane is worth nothing (CLAUDE.md).
+func TestBothBuildLanesEmitTheHeadsUp(t *testing.T) {
+	t.Run("plan-only lane", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		setUpCheckinFixtureColony(t, dataDir, blockerAdvisoryFixturePhase())
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+		var buf bytes.Buffer
+		stdout = &buf
+		rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--light"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build --plan-only returned error: %v", err)
+		}
+		rootCmd.SetArgs([]string{})
+
+		out := buf.String()
+		if !strings.Contains(out, "a forced reviewer is still waiting for the owner's check-in decision") {
+			t.Fatalf("plan-only lane missing the blocker heads-up:\n%s", out)
+		}
+		if !strings.Contains(out, buildBlockerAdvisoryQuestion) {
+			t.Fatalf("plan-only lane missing the carry-on-or-stop question:\n%s", out)
+		}
+	})
+
+	t.Run("direct build lane", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		setUpCheckinFixtureColony(t, dataDir, blockerAdvisoryFixturePhase())
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+		var buf bytes.Buffer
+		stdout = &buf
+		rootCmd.SetArgs([]string{"build", "1", "--synthetic", "--light"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build --synthetic returned error: %v", err)
+		}
+		rootCmd.SetArgs([]string{})
+
+		out := buf.String()
+		if !strings.Contains(out, "a forced reviewer is still waiting for the owner's check-in decision") {
+			t.Fatalf("direct build lane missing the blocker heads-up:\n%s", out)
+		}
+		if !strings.Contains(out, buildBlockerAdvisoryQuestion) {
+			t.Fatalf("direct build lane missing the carry-on-or-stop question:\n%s", out)
+		}
+	})
+}
+
+// TestNonInteractiveRunsStillPrintTheHeadsUp proves D-09's non-interactive
+// distinction end-to-end: --no-checkin still prints the heads-up naming the
+// live signal, but never adds the question -- printing is unconditional,
+// only asking is gated.
+func TestNonInteractiveRunsStillPrintTheHeadsUp(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	setUpCheckinFixtureColony(t, dataDir, blockerAdvisoryFixturePhase())
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	var buf bytes.Buffer
+	stdout = &buf
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--light", "--no-checkin"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --plan-only --no-checkin returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{})
+
+	out := buf.String()
+	if !strings.Contains(out, "a forced reviewer is still waiting for the owner's check-in decision") {
+		t.Fatalf("--no-checkin must still print the blocker heads-up:\n%s", out)
+	}
+	if strings.Contains(out, buildBlockerAdvisoryQuestion) {
+		t.Fatalf("--no-checkin must never add the carry-on-or-stop question:\n%s", out)
+	}
 }
