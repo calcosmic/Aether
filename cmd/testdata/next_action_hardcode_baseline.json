@@ -1,0 +1,582 @@
+[
+  {
+    "file": "cmd/abandon_cmd.go",
+    "function": "renderAbandonNothingToDoVisual",
+    "literal": "Run `aether init \"your goal\"` to start one."
+  },
+  {
+    "file": "cmd/abandon_cmd.go",
+    "function": "renderAbandonNothingToDoVisual",
+    "literal": "Run `aether status` to check what this repo currently has."
+  },
+  {
+    "file": "cmd/abandon_cmd.go",
+    "function": "renderAbandonPreviewVisual",
+    "literal": "Run `aether abandon --confirm` to discard it and start fresh."
+  },
+  {
+    "file": "cmd/abandon_cmd.go",
+    "function": "renderAbandonPreviewVisual",
+    "literal": "Run `aether status` to look at the colony again before deciding."
+  },
+  {
+    "file": "cmd/abandon_cmd.go",
+    "function": "renderAbandonedVisual",
+    "literal": "Run `aether init \"your new goal\"` to start a fresh colony."
+  },
+  {
+    "file": "cmd/abandon_cmd.go",
+    "function": "renderAbandonedVisual",
+    "literal": "Run `aether status` to confirm the repo is clear."
+  },
+  {
+    "file": "cmd/assumptions.go",
+    "function": "runAssumptionList",
+    "literal": "Run `aether assumption-validate --id \u003cid\u003e --note \"...\"` to confirm one, or rerun `aether assumptions-analyze` after the plan changes."
+  },
+  {
+    "file": "cmd/assumptions.go",
+    "function": "runAssumptionValidate",
+    "literal": "Run `aether assumption-list --unvalidated` to review what still needs confirmation."
+  },
+  {
+    "file": "cmd/assumptions.go",
+    "function": "runAssumptionsAnalyze",
+    "literal": "Run `aether assumption-list` to review them, then `aether assumption-validate --id \u003cid\u003e --note \"...\"` as you confirm or override them."
+  },
+  {
+    "file": "cmd/ceremony_cmd.go",
+    "function": "renderCeremonyCloseout",
+    "literal": "Run `aether status` to inspect the colony."
+  },
+  {
+    "file": "cmd/codex_build.go",
+    "function": "runCodexBuildQueenLed",
+    "literal": "Queen/main agent executes dispatch_manifest, then runs aether build-finalize"
+  },
+  {
+    "file": "cmd/codex_build.go",
+    "function": "runCodexBuildWithOptions",
+    "literal": "aether continue"
+  },
+  {
+    "file": "cmd/codex_build_finalize.go",
+    "function": "idempotentExternalBuildFinalizeResult",
+    "literal": "aether continue"
+  },
+  {
+    "file": "cmd/codex_build_finalize.go",
+    "function": "idempotentExternalPartialFinalizeResult",
+    "literal": "aether continue"
+  },
+  {
+    "file": "cmd/codex_build_finalize.go",
+    "function": "runCodexBuildFinalize",
+    "literal": "aether continue"
+  },
+  {
+    "file": "cmd/codex_colonize.go",
+    "function": "runCodexColonizeWithOptions",
+    "literal": "aether init"
+  },
+  {
+    "file": "cmd/codex_colonize.go",
+    "function": "runCodexColonizeWithOptions",
+    "literal": "aether plan"
+  },
+  {
+    "file": "cmd/codex_colonize_finalize.go",
+    "function": "runCodexColonizeFinalize",
+    "literal": "aether init"
+  },
+  {
+    "file": "cmd/codex_colonize_finalize.go",
+    "function": "runCodexColonizeFinalize",
+    "literal": "aether plan"
+  },
+  {
+    "file": "cmd/codex_plan.go",
+    "function": "runCodexPlanAgentDelegate",
+    "literal": "dispatch host planning agents, then run `aether plan-finalize --completion-file \u003cfile\u003e`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderBinaryActionNextUp",
+    "literal": "`aether lay-eggs`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderBinaryActionNextUp",
+    "literal": "`aether update --force`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderExportSignalsVisual",
+    "literal": "`aether import-signals --file \u003cpath\u003e`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderFlagActionVisual",
+    "literal": "`aether flags`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderFlagsVisual",
+    "literal": "`aether flag \"...\"`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderFlagsVisual",
+    "literal": "`aether flag-resolve --id \u003cid\u003e`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderHistoryVisual",
+    "literal": "`aether phase`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderHistoryVisual",
+    "literal": "`aether status`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderImportSignalsVisual",
+    "literal": "`aether pheromones`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderInstallVisual",
+    "literal": "`aether lay-eggs`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderInstallVisual",
+    "literal": "`aether update --force`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderPatrolVisual",
+    "literal": "`aether memory-details`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderPatrolVisual",
+    "literal": "`aether pheromones`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderPatrolVisual",
+    "literal": "`aether status`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderQueenActionVisual",
+    "literal": "`aether queen-read`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderQueenActionVisual",
+    "literal": "`aether status`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderReferenceIndexVisual",
+    "literal": "`aether reference-list`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderReferenceIndexVisual",
+    "literal": "`aether reference-match --task \"...\"`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderReferenceListVisual",
+    "literal": "`aether reference-match --task \"...\"`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderReferenceMatchVisual",
+    "literal": "`aether reference-list`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderShelfActionVisual",
+    "literal": "`aether shelf-list`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderShelfListVisual",
+    "literal": "`aether shelf-add --text \"...\"`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderShelfListVisual",
+    "literal": "`aether shelf-promote --id \u003cid\u003e --to \u003ctarget\u003e`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderSignalVisual",
+    "literal": "`aether pheromones`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderSignalVisual",
+    "literal": "`aether status`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderTunnelsCompareVisual",
+    "literal": "`aether tunnels \u003cchamber\u003e`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderTunnelsCompareVisual",
+    "literal": "`aether tunnels`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderTunnelsImportVisual",
+    "literal": "`aether pheromones`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderTunnelsImportVisual",
+    "literal": "`aether tunnels`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderTunnelsListVisual",
+    "literal": "`aether entomb`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderTunnelsListVisual",
+    "literal": "`aether tunnels \u003cchamber\u003e`"
+  },
+  {
+    "file": "cmd/codex_visuals.go",
+    "function": "renderTunnelsListVisual",
+    "literal": "`aether tunnels \u003cchamber_a\u003e \u003cchamber_b\u003e`"
+  },
+  {
+    "file": "cmd/codex_workflow_cmds.go",
+    "function": "completeSealRuntime",
+    "literal": "aether entomb"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "renderMaturityVisual",
+    "literal": "aether status"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "renderMigrateStateVisual",
+    "literal": "aether medic --deep"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "renderVerifyCastesVisual",
+    "literal": "aether medic --deep"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "runBumpVersion",
+    "literal": "go test ./... \u0026\u0026 aether publish"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "runMigrateState",
+    "literal": "aether medic --deep"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "runMigrateStateRollback",
+    "literal": "aether medic --deep"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "runQuickScout",
+    "literal": "aether status"
+  },
+  {
+    "file": "cmd/command_truth.go",
+    "function": "verifyCasteSurfaces",
+    "literal": "aether medic --deep"
+  },
+  {
+    "file": "cmd/compatibility_cmds.go",
+    "function": "buildRunDryRunResult",
+    "literal": "aether continue"
+  },
+  {
+    "file": "cmd/compatibility_cmds.go",
+    "function": "buildRunDryRunResult",
+    "literal": "aether plan"
+  },
+  {
+    "file": "cmd/compatibility_cmds.go",
+    "function": "buildRunDryRunResult",
+    "literal": "aether seal"
+  },
+  {
+    "file": "cmd/context.go",
+    "function": "computeNextAction",
+    "literal": "aether build %d"
+  },
+  {
+    "file": "cmd/context.go",
+    "function": "computeNextAction",
+    "literal": "aether build 1"
+  },
+  {
+    "file": "cmd/context.go",
+    "function": "computeNextAction",
+    "literal": "aether continue"
+  },
+  {
+    "file": "cmd/context.go",
+    "function": "computeNextAction",
+    "literal": "aether init \"goal\""
+  },
+  {
+    "file": "cmd/context.go",
+    "function": "computeNextAction",
+    "literal": "aether plan"
+  },
+  {
+    "file": "cmd/context.go",
+    "function": "computeNextAction",
+    "literal": "aether seal"
+  },
+  {
+    "file": "cmd/context.go",
+    "function": "computeNextAction",
+    "literal": "aether status"
+  },
+  {
+    "file": "cmd/discuss.go",
+    "function": "addComposedDiscussQuestion",
+    "literal": "Resolve with `aether discuss --resolve %s --answer \"...\"` after the user picks."
+  },
+  {
+    "file": "cmd/entomb_cmd.go",
+    "function": "\u003cpackage level\u003e",
+    "literal": "aether init \"next goal\""
+  },
+  {
+    "file": "cmd/entomb_cmd.go",
+    "function": "cobra:entomb",
+    "literal": "aether init \"next goal\""
+  },
+  {
+    "file": "cmd/entomb_cmd.go",
+    "function": "renderEntombVisual",
+    "literal": "`aether init \"next goal\"`"
+  },
+  {
+    "file": "cmd/entomb_cmd.go",
+    "function": "renderEntombVisual",
+    "literal": "`aether tunnels`"
+  },
+  {
+    "file": "cmd/medic_cmd.go",
+    "function": "renderNoColonyMedicVisual",
+    "literal": "`aether init \"goal\"`"
+  },
+  {
+    "file": "cmd/medic_cmd.go",
+    "function": "renderNoColonyMedicVisual",
+    "literal": "`aether lay-eggs`"
+  },
+  {
+    "file": "cmd/oracle_brief.go",
+    "function": "runOracleBriefApprove",
+    "literal": "aether oracle --from-brief --background --follow"
+  },
+  {
+    "file": "cmd/oracle_brief.go",
+    "function": "runOraclePropose",
+    "literal": "aether oracle brief --core-question \"...\" --depth \u003cdepth\u003e --confidence \u003cpercent\u003e"
+  },
+  {
+    "file": "cmd/oracle_loop.go",
+    "function": "finalizeOracleLoop",
+    "literal": "aether init --research %s \"\u003cgoal\u003e\""
+  },
+  {
+    "file": "cmd/oracle_loop.go",
+    "function": "startOracleCompatibility",
+    "literal": "aether oracle status"
+  },
+  {
+    "file": "cmd/oracle_loop.go",
+    "function": "stopOracleCompatibility",
+    "literal": "aether oracle status"
+  },
+  {
+    "file": "cmd/oracle_promote.go",
+    "function": "runOraclePromote",
+    "literal": "aether pheromone-display"
+  },
+  {
+    "file": "cmd/oracle_research_doc.go",
+    "function": "runOracleSave",
+    "literal": "aether init --research %s \"\u003cgoal\u003e\""
+  },
+  {
+    "file": "cmd/oracle_research_doc.go",
+    "function": "runResearchList",
+    "literal": "aether init --research \u003cpath\u003e \"\u003cgoal\u003e\""
+  },
+  {
+    "file": "cmd/oracle_selftest.go",
+    "function": "oracleRecoverStaleRun",
+    "literal": "aether oracle --from-brief"
+  },
+  {
+    "file": "cmd/pheromone_mgmt.go",
+    "function": "renderPheromoneDisplayVisual",
+    "literal": "Run `aether build \u003cphase\u003e` — these signals are injected into every worker prompt."
+  },
+  {
+    "file": "cmd/pheromone_mgmt.go",
+    "function": "renderPheromoneDisplayVisual",
+    "literal": "Run `aether feedback \"\u003cnote\u003e\"` to adjust behaviour without adding a hard constraint."
+  },
+  {
+    "file": "cmd/pheromone_mgmt.go",
+    "function": "renderPheromoneDisplayVisual",
+    "literal": "Run `aether focus \"\u003carea\u003e\"` to point the colony at something specific."
+  },
+  {
+    "file": "cmd/pheromone_mgmt.go",
+    "function": "renderPheromoneDisplayVisual",
+    "literal": "Run `aether redirect \"\u003cpattern\u003e\"` if something here needs to become a hard constraint."
+  },
+  {
+    "file": "cmd/pheromone_mgmt.go",
+    "function": "renderPheromoneDisplayVisual",
+    "literal": "Run `aether redirect \"\u003cpattern\u003e\"` to set a hard constraint workers must not break."
+  },
+  {
+    "file": "cmd/pheromone_mgmt.go",
+    "function": "renderPheromoneDisplayVisual",
+    "literal": "Run `aether status` to see where the colony is before steering it."
+  },
+  {
+    "file": "cmd/plan_revision.go",
+    "function": "planRevisionRecommendation",
+    "literal": "aether plan "
+  },
+  {
+    "file": "cmd/profile.go",
+    "function": "renderBehaviorObserveVisual",
+    "literal": "Run `aether profile-update` to consolidate the latest observations into the hub profile."
+  },
+  {
+    "file": "cmd/profile.go",
+    "function": "renderProfileReadVisual",
+    "literal": "Run `aether profile-update` after new observations if you want to refresh the hub profile."
+  },
+  {
+    "file": "cmd/profile.go",
+    "function": "runProfileUpdate",
+    "literal": "Run `aether behavior-observe --dimension ... --signal ... --strength ... --evidence \"...\"` before updating the profile."
+  },
+  {
+    "file": "cmd/profile.go",
+    "function": "runProfileUpdate",
+    "literal": "Run `aether profile-read` to inspect the hub profile and `[profiled]` preferences now flowing through QUEEN.md."
+  },
+  {
+    "file": "cmd/recipes.go",
+    "function": "cobra:recipes [id]",
+    "literal": "aether recipes start-existing-repo"
+  },
+  {
+    "file": "cmd/recipes.go",
+    "function": "renderRecipesVisual",
+    "literal": "`AETHER_OUTPUT_MODE=json aether recipes`"
+  },
+  {
+    "file": "cmd/recipes.go",
+    "function": "renderRecipesVisual",
+    "literal": "`aether recipes start-existing-repo`"
+  },
+  {
+    "file": "cmd/recover.go",
+    "function": "renderNoColonyRecoverVisual",
+    "literal": "`aether init \"goal\"`"
+  },
+  {
+    "file": "cmd/recover.go",
+    "function": "renderNoColonyRecoverVisual",
+    "literal": "`aether lay-eggs`"
+  },
+  {
+    "file": "cmd/run_visuals.go",
+    "function": "autopilotPauseNextCommand",
+    "literal": "aether continue"
+  },
+  {
+    "file": "cmd/run_visuals.go",
+    "function": "autopilotPauseNextCommand",
+    "literal": "aether flags"
+  },
+  {
+    "file": "cmd/run_visuals.go",
+    "function": "autopilotPauseNextCommand",
+    "literal": "aether status"
+  },
+  {
+    "file": "cmd/run_visuals.go",
+    "function": "autopilotPauseNextCommand",
+    "literal": "aether unblock"
+  },
+  {
+    "file": "cmd/seal_final_review.go",
+    "function": "runSealPlanOnly",
+    "literal": "spawn seal review workers, then run `aether seal-finalize --completion-file \u003cfile\u003e`"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "\u003cpackage level\u003e",
+    "literal": "aether resume"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "cobra:pause",
+    "literal": "aether resume"
+  },
+  {
+    "file": "cmd/status.go",
+    "function": "renderNoColonyStatusVisual",
+    "literal": "`aether init \"goal\"`"
+  },
+  {
+    "file": "cmd/status.go",
+    "function": "renderNoColonyStatusVisual",
+    "literal": "`aether lay-eggs`"
+  },
+  {
+    "file": "cmd/swarm_cmd.go",
+    "function": "renderSwarmCompatibilityVisual",
+    "literal": "Run `aether swarm --watch` to inspect any remaining live worker activity."
+  },
+  {
+    "file": "cmd/swarm_cmd.go",
+    "function": "renderSwarmCompatibilityVisual",
+    "literal": "`aether swarm \"describe the problem\"`"
+  },
+  {
+    "file": "cmd/swarm_cmd.go",
+    "function": "runSwarmPlanOnly",
+    "literal": "dispatch host swarm workers, then run `aether swarm-finalize --completion-file \u003cfile\u003e`"
+  },
+  {
+    "file": "cmd/swarm_cmd.go",
+    "function": "swarmNextCommand",
+    "literal": "aether status"
+  }
+]

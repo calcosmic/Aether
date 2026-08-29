@@ -92,10 +92,12 @@ func TestSealCardExplainsFinishingAndArchiving(t *testing.T) {
 	}
 }
 
-func TestSealEnvelopeMatchesCard(t *testing.T) {
-	run := sealCardRun(t)
-	assertEnvelopeMatchesCard(t, "sealing", run)
-}
+// TestSealEnvelopeMatchesCard (assertEnvelopeMatchesCard(t, "sealing",
+// sealCardRun(t))) is now a full subset of
+// TestEveryLifecycleCommandEndsWithNextAction's "sealing/finishing" subtest
+// (cmd/lifecycle_next_action_coverage_test.go), which drives the identical
+// sealCardRun fixture and compares the same screen-command-vs-envelope-command
+// pair -- deleted here rather than kept as a duplicate (Phase 197 plan 07).
 
 // ---------------------------------------------------------------------------
 // Recovering
@@ -239,33 +241,14 @@ func statusReadyState(t *testing.T) colony.ColonyState {
 	})
 }
 
-func TestStatusEndsWithTheCard(t *testing.T) {
-	newNextActionFixtureStore(t)
-	if err := store.SaveJSON("COLONY_STATE.json", statusReadyState(t)); err != nil {
-		t.Fatalf("write the fixture project: %v", err)
-	}
-
-	visual, _ := runStatusCommand(t, false)
-	if marker := spacedTitle("What Next"); !strings.Contains(visual, marker) {
-		t.Fatalf("status does not end with the shared card:\n%s", visual)
-	}
-}
-
-func TestStatusEnvelopeCarriesTheCardsFields(t *testing.T) {
-	newNextActionFixtureStore(t)
-	if err := store.SaveJSON("COLONY_STATE.json", statusReadyState(t)); err != nil {
-		t.Fatalf("write the fixture project: %v", err)
-	}
-
-	_, envelope := runStatusCommand(t, true)
-	command, ok := envelope[nextActionCommandKey].(string)
-	if !ok || strings.TrimSpace(command) == "" {
-		t.Fatalf("status emits no %q in its machine-readable answer", nextActionCommandKey)
-	}
-	if !strings.HasPrefix(command, "aether ") {
-		t.Errorf("status's machine-readable command is %q, which is not something that can be run", command)
-	}
-}
+// TestStatusEndsWithTheCard (marker-presence over statusReadyState) and
+// TestStatusEnvelopeCarriesTheCardsFields (command/prefix presence over the
+// same fixture) are now a full subset of
+// TestEveryLifecycleCommandEndsWithNextAction's "checking status" subtest
+// (cmd/lifecycle_next_action_coverage_test.go), which drives the identical
+// statusReadyState fixture and checks the same marker, command presence,
+// "aether " prefix and resolution against the live command tree -- deleted
+// here rather than kept as a duplicate (Phase 197 plan 07).
 
 // TestStatusOverridesReachBothTheCardAndTheEnvelope proves the in-flight-
 // workers case and the guided-actions case each reach BOTH the screen and the
