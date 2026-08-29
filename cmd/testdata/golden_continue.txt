@@ -21,6 +21,8 @@ Review depth: standard (Phase 1 of 2)
 ── Verification ──
 Verification pass complete.
 Phase 1 verified and completed: Golden phase
+Verification: 3 passed, 1 skipped
+Claims: builder claims verified
 Workers
   - Worker-XX
   - Worker-XX
@@ -38,6 +40,7 @@ Verification passed during continue
 .aether/data/build/phase-1/review.json
 .aether/data/build/phase-1/continue.json
 .aether/data/spawn-tree.txt
+Gates: 10/10 passed
 Workers closed: 2
 ── Housekeeping ──
 Signals: 0 active -> 0 active after housekeeping

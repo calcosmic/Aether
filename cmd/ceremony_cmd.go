@@ -227,7 +227,8 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 	if workflow == "seal" {
 		result["porter_readiness"] = buildPorterReadinessSummary()
 	}
-	if state, err := loadActiveColonyState(); err == nil {
+	state, stateErr := loadActiveColonyState()
+	if stateErr == nil {
 		result["state_available"] = true
 		result["state"] = string(state.State)
 		result["current_phase"] = state.CurrentPhase
@@ -262,13 +263,34 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		applyLifecycleNextAction(result, state, workflow, override, "")
 	} else {
 		result["state_available"] = false
-		result["message"] = colonyStateLoadMessage(err)
+		result["message"] = colonyStateLoadMessage(stateErr)
 		if next := strings.TrimSpace(stringValue(result["completion_next"])); next != "" {
 			result["next"] = next
 		} else {
 			result["next"] = "Run `aether status` to inspect the colony."
 		}
 		closeLifecycleCommand(result, workflow, "", "")
+	}
+	if stateErr == nil {
+		// D-12: the chat path and the direct path render one screen from one
+		// renderer. closeoutDirectVisual handles the workflows it has been
+		// wired for (continue in this plan; plan/seal follow in 198-04) and
+		// reports handled=false for everything else, which falls through to
+		// the generic renderer below exactly as before.
+		if visual, handled := closeoutDirectVisual(workflow, result, state); handled {
+			// The one cost line, applied once around whichever body was
+			// produced -- never inside closeoutDirectVisual itself, so a
+			// build/continue closeout still ends with exactly one block
+			// whichever renderer produced the body above it (Phase 196).
+			if workflow == "build" || workflow == "continue" {
+				phaseID := intValue(result["completion_phase"])
+				if phaseID == 0 {
+					phaseID = intValue(result["current_phase"])
+				}
+				visual = appendSpendCostLine(visual, phaseID)
+			}
+			return result, visual
+		}
 	}
 	return result, renderCeremonyCloseoutVisual(result)
 }
