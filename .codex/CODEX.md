@@ -265,7 +265,7 @@ aether swarm --watch    # Live worker activity
 aether flags            # Active flags
 aether flag --title "Investigate auth bug"
 aether history          # Colony events
-aether memory-details   # Drill-down memory view
+aether memory-details   # What the colony has learned: wisdom, lessons waiting to be promoted, lessons put aside, and recent failures
 aether patrol           # System health check
 ```
 
