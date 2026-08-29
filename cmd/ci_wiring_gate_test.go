@@ -105,6 +105,20 @@ var wiringGateGuardFiles = []string{
 	// and this inventory's own history records that omission happening
 	// before.
 	"spend_no_length_derivation_test.go",
+	// Phase 197 plan 07: criterion 2's named coverage test and criterion 3's
+	// hardcode ratchet. Registered in the SAME plan that wrote them, per this
+	// inventory's own recorded history of what happens when that step is
+	// skipped.
+	"lifecycle_next_action_coverage_test.go",
+	"next_action_hardcode_ratchet_test.go",
+	// Also Phase 197 plan 07: cmd/colony_state_atomicity_ratchet_test.go
+	// (Phase 188's COLONY_STATE.json atomicity ratchet) is a shrink-only
+	// baseline ratchet of the exact same class as the two lines above --
+	// TestEveryGuardFileIsInTheWiringInventory's own derived-shape scan names
+	// it -- but had never been registered here. Registered rather than
+	// recorded as a deliberate omission, per this plan's own instruction not
+	// to narrow the derivation until it stops naming an inconvenient file.
+	"colony_state_atomicity_ratchet_test.go",
 }
 
 // runFlagArgRe pulls the single-quoted argument that follows `-run` out of a
@@ -176,15 +190,23 @@ func TestWiringGateStepRunsEveryWiringTest(t *testing.T) {
 	}
 
 	// Anti-vacuity floor (mirrors the convention cli_flag_audit_test.go:225
-	// and command_call_audit_test.go:1329 already use): measured 34 top-level
-	// Test functions across the five guard files as of plan 172-13 (172-13
-	// added TestPathMigrationRejectsASameLeafNewcomer and
-	// TestPreMigrationSnapshotIsFrozen to the 32 measured as of 172-12); 20
-	// is set well under that so ordinary churn does not trip it while a
-	// silent AST walk, or two-thirds of the guard tests being deleted,
-	// still does.
-	if len(testNames) < 20 {
-		t.Fatalf("AST enumeration over %d guard file(s) found only %d top-level Test function(s) — expected at least 20 (measured 34); "+
+	// and command_call_audit_test.go:1329 already use). Re-measured for Phase
+	// 197 plan 07's additions: lifecycle_next_action_coverage_test.go and
+	// next_action_hardcode_ratchet_test.go (this plan's own two new guard
+	// files, including this file's own new TestEveryGuardFileIsInTheWiringInventory),
+	// and colony_state_atomicity_ratchet_test.go (a pre-existing ratchet
+	// TestEveryGuardFileIsInTheWiringInventory's derived shape found
+	// unregistered and this plan registered rather than omitted) -- 85
+	// top-level Test functions across the now-fourteen guard files (up from
+	// 76 across eleven before this plan; the prior comment's "34 across five
+	// files" pin was itself already stale by the time this plan found it,
+	// having never been re-measured across the six files phases 173 and 196
+	// added in between -- exactly the kind of drift raising this floor on
+	// every registration is meant to stop happening again). 50 is set well
+	// under 85 so ordinary churn does not trip it, while a silent AST walk,
+	// or roughly half the guard tests being deleted, still does.
+	if len(testNames) < 50 {
+		t.Fatalf("AST enumeration over %d guard file(s) found only %d top-level Test function(s) — expected at least 50 (measured 85); "+
 			"a walk that silently finds nothing would pass forever, so this is treated as a fatal enumeration failure",
 			len(wiringGateGuardFiles), len(testNames))
 	}
@@ -1999,5 +2021,120 @@ func TestNoDelegationGuardContractStubSurvives(t *testing.T) {
 		if strings.Contains(string(data), marker) {
 			t.Fatalf("cmd/%s still contains %q — a contract stub marker surviving in code OR a comment means the real check may never have replaced the always-allow stub", f, marker)
 		}
+	}
+}
+
+// Phase 197 plan 07, task 3: the last hole in the wiring inventory.
+//
+// Once a file IS in wiringGateGuardFiles, TestWiringGateStepRunsEveryWiringTest
+// and TestWiringGuardsHaveNoRuntimeEscapeHatch both hold it to account -- a
+// guard test that stops running under the named CI step, or that grows an
+// escape hatch, is caught. But a guard file that is never ADDED to
+// wiringGateGuardFiles in the first place is invisible to every one of those
+// checks. This plan's own two new files were nearly exactly that kind of
+// omission -- caught only because a human remembered to add them here in the
+// same commit. TestEveryGuardFileIsInTheWiringInventory removes the "a human
+// remembered" step: it derives which files OUGHT to be registered from a
+// stated file shape and fails, by name, on any that is missing.
+
+// wiringGuardFileUpdateFlagRe matches a Go source line declaring a
+// regeneration flag whose name begins "update-" -- the same shape
+// exemptedRegenerationFlagIdentifiers (above) exists to tolerate, found here
+// structurally rather than by re-listing the same three identifiers a second
+// time in a second place.
+var wiringGuardFileUpdateFlagRe = regexp.MustCompile(`flag\.Bool\("update-`)
+
+// wiringGuardFileShape is the narrow, stated shape a cmd/*_test.go file must
+// have to count as a shrink-only baseline ratchet, deliberately data rather
+// than prose: (1) it declares a flag.Bool regeneration switch named
+// "update-something", (2) it reads or writes a path under testdata/, and (3)
+// the word "baseline" appears somewhere in its own source. All three parts
+// are required together — an ordinary golden-file test
+// (cmd/audit_catalog_test.go's -update-golden flag, which rewrites
+// testdata/command_catalog.json for an exact-match comparison, never a
+// shrink-only diff against a separately-frozen file) satisfies the first two
+// parts alone but never mentions "baseline" anywhere, and is correctly left
+// out. Do not narrow this shape to dodge a file it names — see this
+// function's own callers for what happened the one time this plan's
+// authoring found a real, inconvenient match.
+func wiringGuardFileShape(source string) bool {
+	if !wiringGuardFileUpdateFlagRe.MatchString(source) {
+		return false
+	}
+	if !strings.Contains(source, "testdata/") {
+		return false
+	}
+	return strings.Contains(strings.ToLower(source), "baseline")
+}
+
+// derivedWiringGuardFiles walks every cmd/*_test.go file and returns the
+// sorted list of base filenames matching wiringGuardFileShape.
+func derivedWiringGuardFiles(t *testing.T, cmdDir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(cmdDir)
+	if err != nil {
+		t.Fatalf("read %s: %v", cmdDir, err)
+	}
+	var derived []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(cmdDir, name))
+		if readErr != nil {
+			t.Fatalf("read %s: %v", name, readErr)
+		}
+		if wiringGuardFileShape(string(data)) {
+			derived = append(derived, name)
+		}
+	}
+	sort.Strings(derived)
+	return derived
+}
+
+// TestEveryGuardFileIsInTheWiringInventory derives which cmd/*_test.go files
+// ought to be in wiringGateGuardFiles from wiringGuardFileShape, rather than
+// trusting anyone to remember, and fails by name on any that is missing.
+//
+// Its own first run against the pre-197-07 tree (recorded in this plan's
+// summary) named colony_state_atomicity_ratchet_test.go as a real,
+// pre-existing, unregistered match -- Phase 188's COLONY_STATE.json
+// atomicity ratchet, never added to this inventory. It was registered
+// (wiringGateGuardFiles, above) rather than recorded as a deliberate
+// omission, per this plan's own instruction not to narrow the shape rule
+// until it stops naming an inconvenient file.
+func TestEveryGuardFileIsInTheWiringInventory(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	cmdDir := filepath.Join(repoRoot, "cmd")
+
+	derived := derivedWiringGuardFiles(t, cmdDir)
+
+	// Anti-vacuity floor: a derivation that silently matches nothing would
+	// pass forever without ever having checked anything -- the exact failure
+	// mode every sibling ratchet in this file guards against with its own
+	// version of this same floor.
+	if len(derived) == 0 {
+		t.Fatal("wiringGuardFileShape matched zero files under cmd/ -- the shape rule is broken (or has been narrowed into uselessness), not that every shrink-only baseline ratchet vanished from the repository")
+	}
+
+	registered := map[string]bool{}
+	for _, f := range wiringGateGuardFiles {
+		registered[f] = true
+	}
+
+	var missing []string
+	for _, name := range derived {
+		if !registered[name] {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("%d file(s) match the shrink-only baseline ratchet shape (a reviewed flag.Bool(\"update-...\") regeneration switch, a reference to testdata/, and the word \"baseline\" in their own source) but are not in wiringGateGuardFiles:\n  %s\n"+
+			"Register them in wiringGateGuardFiles and the named CI step's -run filter, or record a deliberate, reasoned omission in wiringGateGuardFiles' own comments -- never narrow wiringGuardFileShape to stop naming an inconvenient file.",
+			len(missing), strings.Join(missing, "\n  "))
 	}
 }

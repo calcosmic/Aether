@@ -17,9 +17,10 @@ package cmd
 // example of the same shape (a shrink-only allowlist keyed on file+function,
 // never on a line number), and cmd/cli_flag_audit_test.go is the third.
 //
-// This file parses cmd/*.go with go/ast, the same structural discipline all
-// three siblings use, rather than grepping source text: a grep-ratchet is
-// exactly the kind of check a rename or a reformat defeats silently.
+// This file parses every .go file directly under cmd/ with go/ast, the same
+// structural discipline all three siblings use, rather than grepping source
+// text: a grep-ratchet is exactly the kind of check a rename or a reformat
+// defeats silently.
 //
 // The scope rule (what counts as "next-step advice") is held as DATA in the
 // three variables below -- nextActionAdviceFunnelFunctions,
@@ -132,7 +133,7 @@ func nextActionExemptFile(baseName string) bool {
 }
 
 // nextActionHardcodeSite is one hand-typed command-advice literal, found
-// structurally by parsing cmd/*.go with go/ast.
+// structurally by parsing the cmd package's .go files with go/ast.
 type nextActionHardcodeSite struct {
 	File     string // repo-relative, e.g. "cmd/codex_visuals.go"
 	Function string // enclosing function name, or "cobra:<Use>" / "<package level>"
@@ -460,9 +461,9 @@ func writeNextActionHardcodeAllowlist(t *testing.T, sites []nextActionHardcodeSi
 }
 
 // TestNextActionNeverHardcoded is criterion 3's own named ratchet. Every
-// hand-typed command-advice literal the scanner finds in cmd/*.go (outside
-// the resolver and test files) must already be recorded in the checked-in
-// baseline testdata/next_action_hardcode_baseline.json, and every baseline
+// hand-typed command-advice literal the scanner finds in the cmd package
+// (outside the resolver and test files) must already be recorded in the
+// checked-in baseline testdata/next_action_hardcode_baseline.json, and every baseline
 // entry must still correspond to a real site in source -- a stale entry
 // (naming a site that was fixed or removed) fails too, exactly like
 // TestOrphanAllowlistOnlyShrinks and TestColonyStateWriteAllowlistOnlyShrinks.
@@ -486,7 +487,7 @@ func TestNextActionNeverHardcoded(t *testing.T) {
 	// which is real, present, out-of-scope-for-migration advice this
 	// scanner must find on every run.
 	if len(sites) == 0 {
-		t.Fatal("scanNextActionHardcodeSource found zero hand-typed command-advice sites across cmd/*.go -- the AST walker likely broke (wrong funnel/result-key/suffix data, wrong literal regex), not that every hand-typed site was migrated overnight.")
+		t.Fatal("scanNextActionHardcodeSource found zero hand-typed command-advice sites across the cmd package -- the AST walker likely broke (wrong funnel/result-key/suffix data, wrong literal regex), not that every hand-typed site was migrated overnight.")
 	}
 
 	if *updateNextActionHardcodeBaseline {

@@ -1957,13 +1957,17 @@ func TestDeletingACallerMakesTheRatchetNameIt(t *testing.T) {
 // (ci_wiring_gate_test.go) was never scanned for exactly that.
 func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
 	// The inventory started at the five guard files phase 172 created, grew
-	// to ten across 173-10, and reached eleven when phase 196 plan 02
-	// registered the no-length-derivation ratchet. The floor is raised to the
-	// live count each time a guard is added, so this is a ratchet in its own
+	// to ten across 173-10, reached eleven when phase 196 plan 02 registered
+	// the no-length-derivation ratchet, and reached fourteen when Phase 197
+	// plan 07 registered its coverage test and hardcode ratchet plus a third
+	// file, colony_state_atomicity_ratchet_test.go -- a pre-existing ratchet
+	// of the same class that TestEveryGuardFileIsInTheWiringInventory's
+	// derived shape found unregistered. The floor is raised to the live
+	// count each time a guard is added, so this is a ratchet in its own
 	// right: a future edit that empties or trims the shared inventory must
 	// fail loudly here rather than silently narrowing this scan.
-	if len(wiringGateGuardFiles) < 11 {
-		t.Fatalf("wiringGateGuardFiles has only %d entries — expected at least 11 (the guard files phases 172, 173 and 196 registered); "+
+	if len(wiringGateGuardFiles) < 14 {
+		t.Fatalf("wiringGateGuardFiles has only %d entries — expected at least 14 (the guard files phases 172, 173, 196 and 197 registered); "+
 			"a shrunk inventory would silently narrow this escape-hatch scan", len(wiringGateGuardFiles))
 	}
 
@@ -1979,13 +1983,36 @@ func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
 	// pattern when the scan below reaches this file.
 	forbiddenRe := regexp.MustCompile(`os\.Getenv|os\.LookupEnv|os\.Environ|syscall\.Getenv|t\.Skip|t\.SkipNow|testing\.Short|flag\.Bool|flag\.String|flag\.Int`)
 
+	// exemptedRegenerationFlagIdentifiers is the stated, reviewed set of
+	// regeneration switches this scan tolerates -- each is a Go identifier
+	// (never a bare word that could match unrelated prose) naming exactly
+	// one flag.Bool declaration, in exactly one guard file, that can rewrite
+	// its own file's LIVE data only and never its own frozen baseline.
+	// updateColonyStateWriteAllowlist has no separate baseline file at all
+	// (testdata/colony_state_write_allowlist.json is simultaneously its live
+	// and its canonical copy), so the "cannot write the baseline" property
+	// holds for it trivially. Widening this list is a reviewed action
+	// exactly like widening the orphan allowlist itself; it is not a place
+	// to hide an unreviewed skip path.
+	exemptedRegenerationFlagIdentifiers := []string{
+		"updateOrphanAllowlist",
+		"updateNextActionHardcodeBaseline",
+		"updateColonyStateWriteAllowlist",
+	}
+
 	// exemptedFlagLineCount counts, across every scanned guard file, how many
-	// lines were skipped by the single reviewed exemption below. WR-01's
-	// -update-orphan-allowlist flag is the one, deliberately reviewed
-	// regeneration switch this phase keeps (documented in
-	// .aether/docs/orphan-allowlist-policy.md); asserting the count is
-	// exactly 1 after the loop means a second flag can neither hide behind
-	// the exemption nor silently retire it without this test noticing.
+	// lines were skipped by the reviewed exemptions in
+	// exemptedRegenerationFlagIdentifiers below. WR-01's -update-orphan-allowlist
+	// flag is the original, deliberately reviewed regeneration switch this
+	// phase keeps (documented in .aether/docs/orphan-allowlist-policy.md);
+	// Phase 197 plan 07 registered a second, -update-next-action-hardcode,
+	// following the exact same shape (rewrites its own live file only, per
+	// TestNextActionHardcodeBaselineMatchesLive and the fact that
+	// writeNextActionHardcodeAllowlist's only os.WriteFile call names
+	// testdata/next_action_hardcode.json). Asserting the count equals
+	// len(exemptedRegenerationFlagIdentifiers) exactly means a THIRD flag can
+	// neither hide behind an exemption meant for one of the first two, nor can
+	// either of the first two silently retire without this test noticing.
 	exemptedFlagLineCount := 0
 
 	for _, f := range wiringGateGuardFiles {
@@ -2014,27 +2041,38 @@ func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
 			if !forbiddenRe.MatchString(line) {
 				continue
 			}
-			// The single reviewed exemption: the line declaring the
-			// updateOrphanAllowlist flag itself. See
-			// .aether/docs/orphan-allowlist-policy.md for why this one
-			// regeneration flag is tolerated — it can rewrite the live
-			// allowlist but (per the baselineWriteRe assertion below) can
-			// never write the baseline, so it cannot silently widen
+			// The reviewed exemptions: the line declaring one of
+			// exemptedRegenerationFlagIdentifiers itself. See
+			// .aether/docs/orphan-allowlist-policy.md for why the original of
+			// these regeneration flags is tolerated — each can rewrite its
+			// own live file but (per the baselineWriteRe assertion below, for
+			// updateOrphanAllowlist, and TestNextActionHardcodeBaselineMatchesLive
+			// plus writeNextActionHardcodeAllowlist's single, hardcoded
+			// live-file-only os.WriteFile call, for updateNextActionHardcodeBaseline)
+			// can never write its own baseline, so neither can silently widen
 			// tolerance. Scoped to lines that already match forbiddenRe (not
 			// every line mentioning the identifier) so this file's own later
 			// prose about the exemption — including this test's own error
 			// message — cannot inflate the count.
-			if strings.Contains(line, "updateOrphanAllowlist") {
-				exemptedFlagLineCount++
+			exempted := false
+			for _, name := range exemptedRegenerationFlagIdentifiers {
+				if strings.Contains(line, name) {
+					exemptedFlagLineCount++
+					exempted = true
+					break
+				}
+			}
+			if exempted {
 				continue
 			}
 			t.Errorf("%s:%d contains a runtime escape hatch (an environment-variable read, a test-skip call, or a flag declaration): %s", f, i+1, strings.TrimSpace(line))
 		}
 	}
 
-	if exemptedFlagLineCount != 1 {
-		t.Errorf("expected exactly 1 line exempted as the single reviewed regeneration flag's own declaration, found %d — "+
-			"either a second flag is hiding behind the exemption, or the exempted one was deleted without updating this guard", exemptedFlagLineCount)
+	if exemptedFlagLineCount != len(exemptedRegenerationFlagIdentifiers) {
+		t.Errorf("expected exactly %d line(s) exempted as the reviewed regeneration flags' own declarations, found %d — "+
+			"either an unreviewed flag is hiding behind an exemption, or one of the reviewed ones was deleted without updating this guard",
+			len(exemptedRegenerationFlagIdentifiers), exemptedFlagLineCount)
 	}
 
 	// The -update-orphan-allowlist flag must never be able to write the
