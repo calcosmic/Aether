@@ -303,9 +303,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 198-01-PLAN.md — Tracer: the chat path renders the direct continue screen from one renderer (wave 1)
-- [ ] 198-02-PLAN.md — Live start/finish lines for every check, on both continue lanes (wave 1)
-- [ ] 198-03-PLAN.md — Seal state-of-play card, wisdom review before the question, recorded finish-anyway, autopilot never seals (wave 1)
+- [x] 198-01-PLAN.md — Tracer: the chat path renders the direct continue screen from one renderer (wave 1)
+- [x] 198-02-PLAN.md — Live start/finish lines for every check, on both continue lanes (wave 1)
+- [x] 198-03-PLAN.md — Seal state-of-play card, wisdom review before the question, recorded finish-anyway, autopilot never seals (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
