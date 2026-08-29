@@ -160,7 +160,7 @@ func TestSealRendersCrownedAnthill(t *testing.T) {
 		Plan:          colony.Plan{Phases: []colony.Phase{{ID: 1}, {ID: 2}}},
 	}
 
-	output := renderSealVisual(state, ".aether/data/CROWNED-ANTHILL.md")
+	output := renderSealVisual(map[string]interface{}{}, state, ".aether/data/CROWNED-ANTHILL.md")
 	for _, want := range []string{
 		"|  CROWNED |",
 		"| ANTHILL  |",

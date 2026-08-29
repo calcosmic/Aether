@@ -832,7 +832,7 @@ func TestRecoverNextStep_CriticalMissingBuildPacket(t *testing.T) {
 	issues := []HealthIssue{
 		{Severity: "critical", Category: "missing_build_packet", Message: "No packet"},
 	}
-	next := recoverNextStep(issues)
+	next, _ := recoverOverrideFromIssues(issues, colony.ColonyState{})
 	if !strings.Contains(next, "build") {
 		t.Errorf("next step for missing_build_packet should mention build, got: %s", next)
 	}
@@ -842,7 +842,7 @@ func TestRecoverNextStep_CriticalPartialPhase(t *testing.T) {
 	issues := []HealthIssue{
 		{Severity: "critical", Category: "partial_phase", Message: "Partial"},
 	}
-	next := recoverNextStep(issues)
+	next, _ := recoverOverrideFromIssues(issues, colony.ColonyState{})
 	if !strings.Contains(next, "continue") {
 		t.Errorf("next step for partial_phase should mention continue, got: %s", next)
 	}
@@ -852,7 +852,7 @@ func TestRecoverNextStep_WarningMissingAgents(t *testing.T) {
 	issues := []HealthIssue{
 		{Severity: "warning", Category: "missing_agents", Message: "Few agents"},
 	}
-	next := recoverNextStep(issues)
+	next, _ := recoverOverrideFromIssues(issues, colony.ColonyState{})
 	if !strings.Contains(next, "recover --apply") {
 		t.Errorf("next step for missing_agents should mention recover --apply, got: %s", next)
 	}
@@ -1775,7 +1775,7 @@ func TestRecoverNextStep_DirtyWorktree(t *testing.T) {
 	issues := []HealthIssue{
 		{Severity: "critical", Category: "dirty_worktree", Message: "Worktree mismatch"},
 	}
-	next := recoverNextStep(issues)
+	next, _ := recoverOverrideFromIssues(issues, colony.ColonyState{})
 	if !strings.Contains(next, "--force") {
 		t.Errorf("next step for dirty_worktree should mention --force, got: %s", next)
 	}
@@ -1785,7 +1785,7 @@ func TestRecoverNextStep_BadManifest(t *testing.T) {
 	issues := []HealthIssue{
 		{Severity: "critical", Category: "bad_manifest", Message: "Corrupt manifest"},
 	}
-	next := recoverNextStep(issues)
+	next, _ := recoverOverrideFromIssues(issues, colony.ColonyState{})
 	if !strings.Contains(next, "--force") {
 		t.Errorf("next step for bad_manifest should mention --force, got: %s", next)
 	}
