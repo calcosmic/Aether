@@ -1245,16 +1245,18 @@ func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 		nil,
 		"unchanged",
 		true,
+		map[string]interface{}{},
 	)
 
-	if !strings.Contains(output, "No follow-up is required.") {
-		t.Fatalf("expected no-follow-up guidance, got:\n%s", output)
-	}
 	if !strings.Contains(output, "Binary: already at the current hub version") {
 		t.Fatalf("expected binary-already-current message in update visual, got:\n%s", output)
 	}
-	if strings.Contains(output, "Run `aether status` to inspect the colony after the refresh.") {
-		t.Fatalf("expected generic next-step guidance to be suppressed, got:\n%s", output)
+	// The closing block used to hand-write a "No follow-up is required"
+	// sentence for this exact case; that recommendation is the one resolver's
+	// job now (Phase 197 plan 06), so this only asserts the shared card is
+	// present rather than a specific hand-typed sentence.
+	if !strings.Contains(output, spacedTitle("What Next")) {
+		t.Fatalf("expected update to end with the shared closing card, got:\n%s", output)
 	}
 }
 
@@ -1276,6 +1278,7 @@ func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
 		nil,
 		"unchanged",
 		true,
+		map[string]interface{}{},
 	)
 
 	if !strings.Contains(output, "Assets: 0 copied, 0 unchanged, 10 removed") {
@@ -1287,8 +1290,11 @@ func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
 	if strings.Contains(output, "No follow-up is required.") {
 		t.Fatalf("removed files should not be reported as a no-change update:\n%s", output)
 	}
-	if !strings.Contains(output, "Run `aether status` to inspect the colony after the refresh.") {
-		t.Fatalf("expected post-removal status guidance, got:\n%s", output)
+	// The specific "Run `aether status`..." sentence was a hand-typed
+	// constant; what to do next is the one resolver's job now (Phase 197
+	// plan 06), so this only asserts the shared card is present.
+	if !strings.Contains(output, spacedTitle("What Next")) {
+		t.Fatalf("expected update to end with the shared closing card, got:\n%s", output)
 	}
 }
 
