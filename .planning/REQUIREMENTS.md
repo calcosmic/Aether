@@ -56,7 +56,7 @@
 - [ ] **SHOW-01**: The chat path renders the same ceremony as the direct path for plan, continue and seal — the JSON-mode finalizer / `ceremony closeout` split is closed (closeout output equals the direct visual, asserted)
 - [ ] **SHOW-02**: Data already carried is rendered — per-check verification report, success-criteria evidence lines, worker durations and tool counts, plan confidence and iterations, resume per-phase progress, recent decisions, drift note, specialist finding blocks, build-start blocker advisory — asserted as an invariant over the result map, not a named-section check
 - [x] **SHOW-03**: `continue` shows live verification progress lines as each check runs
-- [ ] **SHOW-04**: Seal asks for confirmation and runs the wisdom review before sealing
+- [x] **SHOW-04**: Seal asks for confirmation and runs the wisdom review before sealing
 - [ ] **SHOW-05**: The recorded "deliberately dropped" decisions (one-terminal streaming, headed sections, verified safe-to-clear line) are respected and test-locked
 
 ### Proof (PROOF)
@@ -120,7 +120,7 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | SHOW-01 | Phase 198 | Pending |
 | SHOW-02 | Phase 198 | Pending |
 | SHOW-03 | Phase 198 | Complete |
-| SHOW-04 | Phase 198 | Pending |
+| SHOW-04 | Phase 198 | Complete |
 | SHOW-05 | Phase 198 | Pending |
 | PROOF-05 | Phase 199 | Pending |
 | PROOF-06 | Phase 199 | Pending |

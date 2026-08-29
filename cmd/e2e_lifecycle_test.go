@@ -304,6 +304,10 @@ func TestFullLifecycleInDownstreamRepo(t *testing.T) {
 		t.Fatalf("save pre-seal state: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	rootCmd.SetArgs([]string{"seal", "--force"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal failed: %v", err)

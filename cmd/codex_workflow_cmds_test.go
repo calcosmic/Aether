@@ -65,6 +65,10 @@ func TestSeal_ArchivesReviews(t *testing.T) {
 		t.Fatalf("write ledger: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal returned error: %v", err)
@@ -158,6 +162,10 @@ func TestSeal_HighSeverityWarning(t *testing.T) {
 		t.Fatalf("write ledger: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal returned error: %v", err)
@@ -210,6 +218,10 @@ func TestSeal_NoReviewsNoWarnings(t *testing.T) {
 	}
 
 	// No review data created -- reviews directory does not exist
+
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
 
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
@@ -379,6 +391,13 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 	if err := os.WriteFile(completionPath, payload, 0644); err != nil {
 		t.Fatalf("write completion: %v", err)
 	}
+
+	// D-04's confirmation gate (198-03) now also guards the host-mediated
+	// seal-finalize path (198-RESEARCH.md Pitfall 5: seal's default flow is
+	// host-mediated, unlike build/continue) -- pre-record the answer, the
+	// same way an owner running seal-finalize twice (ask, then confirm)
+	// would.
+	autoRecordSealConfirmationForTest(t, store)
 
 	stdout.(*bytes.Buffer).Reset()
 	rootCmd.SetArgs([]string{"seal-finalize", "--completion-file", completionPath})

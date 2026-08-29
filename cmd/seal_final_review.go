@@ -495,7 +495,26 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if manifest.Force && !report.Passed {
 		override.OverriddenReviewBlocks = len(report.BlockingIssues)
 	}
-	return completeSealRuntime(state, override)
+
+	// D-04..D-07: this is seal's DEFAULT flow (unlike build/continue, seal's
+	// interactive wrapper is host-mediated -- 198-RESEARCH.md Pitfall 5), so
+	// the same confirmation gate the direct `aether seal` command uses must
+	// run here too, or the owner is never actually asked on the path most
+	// seals take. Fold the review's own blocking findings in as named
+	// problems alongside checkSealBlockers's blockers/issues, so the card
+	// and question name everything currently outstanding.
+	flagBlockers, flagIssues := checkSealBlockers(store, state)
+	var reviewFailingChecks []string
+	if !report.Passed {
+		reviewFailingChecks = report.BlockingIssues
+	}
+	proceed, review, pending := runSealConfirmationGate(state, flagBlockers, flagIssues, reviewFailingChecks...)
+	if !proceed {
+		outputOK(pending)
+		return nil
+	}
+
+	return completeSealRuntime(state, override, review)
 }
 
 func mergeExternalSealReviewResults(manifest sealPlanManifest, results []codexContinueExternalDispatch) ([]codexContinueWorkerFlowStep, error) {
