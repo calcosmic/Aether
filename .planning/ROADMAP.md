@@ -276,7 +276,7 @@ Plans:
 
 **Wave 5** *(blocked on the short pause command existing to be recommended)*
 
-- [ ] 197-06-PLAN.md — Pausing, resuming, sealing, updating, recovering and status end with the card, and the last private decider goes (wave 5)
+- [x] 197-06-PLAN.md — Pausing, resuming, sealing, updating, recovering and status end with the card, and the last private decider goes (wave 5)
 
 **Wave 6** *(phase closeout — the baseline is measured only once everything has moved)*
 
