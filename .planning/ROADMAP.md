@@ -280,7 +280,7 @@ Plans:
 
 **Wave 6** *(phase closeout — the baseline is measured only once everything has moved)*
 
-- [ ] 197-07-PLAN.md — Criterion 2's coverage test and criterion 3's measured hardcode ratchet, both registered and running in CI (wave 6)
+- [x] 197-07-PLAN.md — Criterion 2's coverage test and criterion 3's measured hardcode ratchet, both registered and running in CI (wave 6)
 
 ### Phase 198: Put the Thrown-Away Data Back on Screen
 
