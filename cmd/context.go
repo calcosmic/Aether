@@ -165,6 +165,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 				"available": false,
 				"files":     []string{},
 			},
+			"phase_progress": []resumePhaseProgressEntry{},
 		}
 		if sessionFound {
 			result["session"] = map[string]interface{}{
@@ -285,9 +286,10 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"items": signals,
 			"count": len(signals),
 		},
-		"blockers":      blockers,
-		"survey":        survey,
-		"plan_revision": planRevisionSummary(state.Plan),
+		"blockers":       blockers,
+		"survey":         survey,
+		"plan_revision":  planRevisionSummary(state.Plan),
+		"phase_progress": buildResumePhaseProgress(state.Plan.Phases),
 		"recovery": map[string]interface{}{
 			"context_path":   contextDocumentPath(),
 			"handoff_path":   handoffDocumentPath(),
@@ -1245,6 +1247,32 @@ func trimSection(prompt, sectionHeader string) string {
 	before := prompt[:idx]
 	after := strings.Join(lines[endIdx:], "\n")
 	return before + after
+}
+
+// resumePhaseProgressEntry is one phase's status in the resume dashboard's
+// per-phase progress list (SHOW-02): the phase's own recorded status is
+// carried through unchanged, never recomputed from CurrentPhase or anything
+// else.
+type resumePhaseProgressEntry struct {
+	Phase  int    `json:"phase"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+// buildResumePhaseProgress converts the plan's own phases into the resume
+// dashboard's phase-by-phase progress list. Status comes straight from the
+// phase's own recorded status field (colony.PhasePending/PhaseInProgress/
+// PhaseCompleted) -- never recomputed from anything else.
+func buildResumePhaseProgress(phases []colony.Phase) []resumePhaseProgressEntry {
+	entries := make([]resumePhaseProgressEntry, 0, len(phases))
+	for _, phase := range phases {
+		entries = append(entries, resumePhaseProgressEntry{
+			Phase:  phase.ID,
+			Name:   phase.Name,
+			Status: phase.Status,
+		})
+	}
+	return entries
 }
 
 // extractRecentDecisions returns the last N decisions (reversed) from the decisions slice.

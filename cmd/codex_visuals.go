@@ -3718,6 +3718,8 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		}
 	}
 
+	renderResumePhaseProgress(&b, result["phase_progress"])
+
 	if session, ok := result["session"].(map[string]interface{}); ok {
 		if summary := strings.TrimSpace(stringValue(session["summary"])); summary != "" {
 			b.WriteString("\nSession Summary\n")
@@ -3853,6 +3855,76 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 	// still running) that only this dashboard knows.
 	b.WriteString(renderLifecycleClosing(result, "resume-dashboard"))
 	return b.String()
+}
+
+// resumePhaseProgressCap is the per-category nested-detail cap for the resume
+// dashboard's phase-by-phase progress list (D-10): beneath this many named
+// lines, an honest "(+N more)" line reports the real arithmetic remainder
+// rather than silently truncating.
+const resumePhaseProgressCap = 8
+
+// resumePhaseStatusDisplay translates a phase's own recorded status value
+// into the plain-English word the owner sees. A status this repo has not
+// named falls back to the raw value rather than fabricated wording.
+func resumePhaseStatusDisplay(status string) string {
+	switch status {
+	case colony.PhaseCompleted:
+		return "finished"
+	case colony.PhaseInProgress:
+		return "in progress"
+	case colony.PhasePending, "":
+		return "not started"
+	default:
+		return status
+	}
+}
+
+// renderResumePhaseProgress renders one line per phase naming it and its
+// plain-English status (SHOW-02), beneath the resume dashboard's existing
+// overall fraction. A colony with no plan renders nothing. Dual-type: raw is
+// result["phase_progress"], either the in-process []resumePhaseProgressEntry
+// or the JSON-round-tripped []interface{} a completion file would produce
+// (renderContinueWorkerFlowValue precedent, 198-PATTERNS.md).
+func renderResumePhaseProgress(b *strings.Builder, raw interface{}) {
+	var entries []resumePhaseProgressEntry
+	switch v := raw.(type) {
+	case []resumePhaseProgressEntry:
+		entries = v
+	case []interface{}:
+		for _, item := range v {
+			entry, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			entries = append(entries, resumePhaseProgressEntry{
+				Phase:  intValue(entry["phase"]),
+				Name:   stringValue(entry["name"]),
+				Status: stringValue(entry["status"]),
+			})
+		}
+	}
+	if len(entries) == 0 {
+		return
+	}
+	shown := entries
+	overflow := 0
+	if len(shown) > resumePhaseProgressCap {
+		overflow = len(shown) - resumePhaseProgressCap
+		shown = shown[:resumePhaseProgressCap]
+	}
+	b.WriteString("\nPhase Progress\n")
+	for _, entry := range shown {
+		line := fmt.Sprintf("  - Phase %d", entry.Phase)
+		if name := strings.TrimSpace(entry.Name); name != "" {
+			line += " — " + name
+		}
+		line += ": " + resumePhaseStatusDisplay(entry.Status)
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	if overflow > 0 {
+		b.WriteString(fmt.Sprintf("  (+%d more)\n", overflow))
+	}
 }
 
 func renderPatrolVisual(result map[string]interface{}) string {
