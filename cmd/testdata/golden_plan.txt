@@ -42,6 +42,7 @@ Granularity: milestone (4-7 phases)
 Planning depth: deep
 Verification depth: standard
 Override: --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy>
+Confidence: 76% overall
 Planning loop: target 90%, 1/6 iteration(s), stop=pending
 Plan size: 6 phases
 

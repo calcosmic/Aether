@@ -1,0 +1,146 @@
+package cmd
+
+import (
+	"strings"
+	"testing"
+)
+
+// Phase 198 plan 06 (SHOW-02/D-11) -- the closing summary currently says
+// "Verification: 3 passed, 1 skipped" and "Gates: 5/6 passed" and stops. This
+// file proves the named checks, named gates, their fix hints, and the
+// evidence behind every claimed requirement all reach the screen -- on the
+// typed in-process shape AND the JSON-round-tripped completion-file shape,
+// following the dual-type rendering precedent renderContinueWorkerFlowValue
+// already established (198-PATTERNS.md).
+
+// ---- Task 1: named checks and named gates ----
+
+// TestVerificationDetailNamesEveryCheck proves four checks in produces four
+// named lines out, with the skipped and failed rows asserted separately, on
+// both the typed and JSON-round-tripped shapes.
+func TestVerificationDetailNamesEveryCheck(t *testing.T) {
+	report := codexContinueVerificationReport{
+		Steps: []codexVerificationStep{
+			{Name: "build", Passed: true, Duration: 1.2},
+			{Name: "types", Passed: true, Duration: 0.8},
+			{Name: "lint", Skipped: true, Summary: "no lint command configured for this project"},
+			{Name: "tests", Passed: false, Summary: "2 of 12 tests failed", Command: "npm test", Duration: 4.3},
+		},
+	}
+
+	var typedBuilder strings.Builder
+	renderContinueVerificationDetail(&typedBuilder, report)
+	typedOutput := typedBuilder.String()
+
+	for _, want := range []string{
+		"Build ✓ (1.2s)",
+		"Types ✓ (0.8s)",
+		"Lint — skipped: no lint command configured for this project",
+		"Tests ✗ (4.3s) — 2 of 12 tests failed",
+		"└── npm test",
+	} {
+		if !strings.Contains(typedOutput, want) {
+			t.Errorf("typed render missing %q, got:\n%s", want, typedOutput)
+		}
+	}
+	// A passed check never carries the failed check's nested command line.
+	if strings.Contains(typedOutput, "Build ✓ (1.2s)\n      └──") {
+		t.Errorf("a passed check must not render a nested command line, got:\n%s", typedOutput)
+	}
+
+	asMap := roundTripToMap(t, map[string]interface{}{"verification": report})
+	var mapBuilder strings.Builder
+	renderContinueVerificationDetail(&mapBuilder, asMap["verification"])
+	mapOutput := mapBuilder.String()
+
+	if typedOutput != mapOutput {
+		t.Fatalf("round-tripped render diverged from typed render:\n%s", firstDiffLine(typedOutput, mapOutput))
+	}
+}
+
+// TestGateDetailNamesEveryGateAndItsFixHint proves each gate renders its
+// plain-English name and outcome, and a failing gate's fix hint appears on
+// the nested detail line, on both shapes.
+func TestGateDetailNamesEveryGateAndItsFixHint(t *testing.T) {
+	report := codexContinueGateReport{
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "verification_steps_passed", Passed: false, FixHint: "fix the failing build/test check and run aether continue"},
+		},
+	}
+
+	var typedBuilder strings.Builder
+	renderContinueGateDetail(&typedBuilder, report)
+	typedOutput := typedBuilder.String()
+
+	for _, want := range []string{
+		"✓ the build's own plan file is on disk",
+		"✗ the build/test checks passed",
+		"└── fix the failing build/test check and run aether continue",
+	} {
+		if !strings.Contains(typedOutput, want) {
+			t.Errorf("typed render missing %q, got:\n%s", want, typedOutput)
+		}
+	}
+	if strings.Contains(typedOutput, "manifest_present") || strings.Contains(typedOutput, "verification_steps_passed") {
+		t.Errorf("internal gate keys leaked into the rendered output:\n%s", typedOutput)
+	}
+
+	asMap := roundTripToMap(t, map[string]interface{}{"gates": report})
+	var mapBuilder strings.Builder
+	renderContinueGateDetail(&mapBuilder, asMap["gates"])
+	mapOutput := mapBuilder.String()
+
+	if typedOutput != mapOutput {
+		t.Fatalf("round-tripped render diverged from typed render:\n%s", firstDiffLine(typedOutput, mapOutput))
+	}
+}
+
+// TestNestedDetailCapReportsWhatItOmitted proves an over-cap input reports
+// an omitted count equal to the arithmetic remainder computed independently
+// here, for both verification checks and gates.
+func TestNestedDetailCapReportsWhatItOmitted(t *testing.T) {
+	t.Run("verification checks", func(t *testing.T) {
+		total := continueDetailCap + 4
+		steps := make([]codexVerificationStep, 0, total)
+		for i := 0; i < total; i++ {
+			steps = append(steps, codexVerificationStep{Name: "tests", Passed: true})
+		}
+		report := codexContinueVerificationReport{Steps: steps}
+
+		var b strings.Builder
+		renderContinueVerificationDetail(&b, report)
+		output := b.String()
+
+		wantOmitted := total - continueDetailCap
+		want := "(+4 more checks)"
+		if wantOmitted != 4 {
+			t.Fatalf("test setup error: expected omitted count 4, computed %d", wantOmitted)
+		}
+		if !strings.Contains(output, want) {
+			t.Errorf("expected honest omitted count %q, got:\n%s", want, output)
+		}
+	})
+
+	t.Run("gates", func(t *testing.T) {
+		total := continueDetailCap + 3
+		checks := make([]gateCheck, 0, total)
+		for i := 0; i < total; i++ {
+			checks = append(checks, gateCheck{Name: "manifest_present", Passed: true})
+		}
+		report := codexContinueGateReport{Checks: checks}
+
+		var b strings.Builder
+		renderContinueGateDetail(&b, report)
+		output := b.String()
+
+		wantOmitted := total - continueDetailCap
+		want := "(+3 more gates)"
+		if wantOmitted != 3 {
+			t.Fatalf("test setup error: expected omitted count 3, computed %d", wantOmitted)
+		}
+		if !strings.Contains(output, want) {
+			t.Errorf("expected honest omitted count %q, got:\n%s", want, output)
+		}
+	})
+}

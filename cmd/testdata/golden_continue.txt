@@ -39,6 +39,10 @@ Verification pass complete.
 Phase 1 verified and completed: Golden phase
 Verification: 3 passed, 1 skipped
 Claims: builder claims verified
+  Build ✓ (0.1s)
+  Types ✓ (0.1s)
+  Lint — skipped: no command resolved; skipped
+  Tests ✓ (0.5s)
 Workers
   - Worker-XX
   - Worker-XX
@@ -57,6 +61,15 @@ Verification passed during continue
 .aether/data/build/phase-1/continue.json
 .aether/data/spawn-tree.txt
 Gates: 10/10 passed
+  ✓ the build's own plan file is on disk
+  ✓ the build/test checks passed
+  ✓ there's evidence the work was actually done
+  ✓ nothing is waiting on your confirmation
+  ✓ no critical flags
+  ✓ no unresolved blockers
+  ✓ no risky code patterns were found
+  ✓ anti pattern executed
+  └── (+2 more gates)
 Workers closed: 2
 ── Housekeeping ──
 Signals: 0 active -> 0 active after housekeeping
