@@ -116,6 +116,14 @@ func capsuleForDispatch(dispatch codex.WorkerDispatch) string {
 	if strings.TrimSpace(dispatch.ContextCapsule) != "" {
 		return dispatch.ContextCapsule
 	}
+	// loadCodexContinueManifest calls store.LoadJSON directly with no nil
+	// guard of its own -- some existing dispatch-path tests (e.g.
+	// TestBuildDispatchStartsHeartbeatMonitor) legitimately run with a nil
+	// store, and this fallback must degrade to "no capsule available"
+	// rather than panic (found while proving 198.1-03's full-suite run).
+	if store == nil {
+		return ""
+	}
 	manifest := loadCodexContinueManifest(dispatch.Phase)
 	if !manifest.Present {
 		return ""
