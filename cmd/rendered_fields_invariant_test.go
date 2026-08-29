@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -360,5 +361,47 @@ func TestRenderedVisualsShowEveryCarriedField(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+// renderedFieldAllowlistEntryID is the shrink-only ratchet's comparability
+// key: (finalizer, key) together, not "key" alone -- the same key name
+// legitimately recurs across different finalizers with different reasons
+// (e.g. "next" is allow-listed separately for "plan completed" and
+// "continue advanced"), and a key moving to a NEW finalizer it was not
+// previously exempted for is exactly the kind of addition this ratchet
+// exists to catch.
+func renderedFieldAllowlistEntryID(e renderedFieldAllowlistEntry) string {
+	return e.Finalizer + "|" + e.Key
+}
+
+// TestRenderedFieldAllowlistOnlyShrinks is 198-09's shrink-only ratchet
+// (Task 2), mirroring TestOrphanAllowlistOnlyShrinks's structure and failure
+// messages (cmd/subcommand_reachability_ratchet_test.go) so the pattern is
+// recognisable: a pure set-membership diff against the committed baseline.
+// Entries may be removed from the live list freely as they get rendered;
+// adding one requires editing the baseline too, the explicit reviewed act
+// this ratchet exists to force.
+func TestRenderedFieldAllowlistOnlyShrinks(t *testing.T) {
+	live := loadRenderedFieldAllowlist(t, "testdata/rendered_field_allowlist.json")
+	baseline := loadRenderedFieldAllowlist(t, "testdata/rendered_field_allowlist_baseline.json")
+
+	baselineIDs := map[string]bool{}
+	for _, e := range baseline {
+		baselineIDs[renderedFieldAllowlistEntryID(e)] = true
+	}
+
+	var added []string
+	for _, e := range live {
+		if !baselineIDs[renderedFieldAllowlistEntryID(e)] {
+			added = append(added, fmt.Sprintf("%s (key %q)", e.Finalizer, e.Key))
+		}
+	}
+
+	if len(added) > 0 {
+		sort.Strings(added)
+		t.Errorf("%d entr(y/ies) were added to the tolerated unrendered-field list without being added to the committed baseline: %s\n"+
+			"The allowlist may only shrink. Render the field, or add the same entry to testdata/rendered_field_allowlist_baseline.json -- do not edit the baseline to make this pass without a reviewed reason.",
+			len(added), strings.Join(added, ", "))
 	}
 }
