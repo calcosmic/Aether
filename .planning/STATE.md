@@ -4,16 +4,16 @@ milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 current_phase: 198.1
 current_phase_name: Feed the Memory
-status: planning
+status: executing
 stopped_at: Phase 198.1 planned 2026-08-30 (6 plans, 3 waves); ready to execute
-last_updated: "2026-08-29T21:03:05.607Z"
+last_updated: "2026-08-29T22:50:16.948Z"
 last_activity: 2026-08-30
-last_activity_desc: Audit persisted, phases 198.1-198.4 added, next is Phase 198.1
-state_head: 7b01b976e801e829f33a9e4566694c49678233cf
+last_activity_desc: Phase 198.1 execution started
+state_head: b3aee918715841cc5e63f96717c8a5e854dec84a
 progress:
   total_phases: 11
   completed_phases: 6
-  total_plans: 48
+  total_plans: 54
   completed_plans: 48
   percent: 55
 ---
@@ -25,7 +25,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 198.1 — Feed the Memory (first of four reconnection phases from the 2026-08-30 audit, `.planning/audits/`)
+**Current focus:** Phase 198.1 — Feed the Memory
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
@@ -34,9 +34,9 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Progress:** [█████░░░░░] 55%
 
-Phase: 198.1 — Feed the Memory
-Plan: 6 plans across 3 waves (wave 1: 01 | wave 2: 02, 03, 06 | wave 3: 04, 05)
-Status: Planned — ready to execute
+Phase: 198.1 (Feed the Memory) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 198.1
 
 *(`phase.complete` advanced this to backlog entry 172.1 again — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
@@ -45,7 +45,7 @@ every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
 *(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
 every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-Last activity: 2026-08-29 — Phase 198 complete, next is Phase 199
+Last activity: 2026-08-30 — Phase 198.1 execution started
 
 ## Performance Metrics
 

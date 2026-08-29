@@ -350,7 +350,8 @@ Plans:
 **Plans**: 6 plans across 3 waves
 
 Plans:
-- [ ] 198.1-01-PLAN.md — wave 1: a failed build worker's own words reach the failure log and the next build brief; worker lessons become observations; one feed boundary for both build lanes
+
+- [x] 198.1-01-PLAN.md — wave 1: a failed build worker's own words reach the failure log and the next build brief; worker lessons become observations; one feed boundary for both build lanes
 - [ ] 198.1-02-PLAN.md — wave 2: reviewer lessons and failures become memory on both check lanes; a failing free check leaves a record; quick and swarm failures too
 - [ ] 198.1-03-PLAN.md — wave 2: record which instincts a worker was actually given, count a use when the phase passes, and let the existing consolidation carry a lesson into the Queen file
 - [ ] 198.1-06-PLAN.md — wave 2: the memory drill-down shows real sentences again, reports when the Queen file changed, and the status instinct list is labelled by strength
