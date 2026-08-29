@@ -315,7 +315,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 198-06-PLAN.md — Per-check report, per-gate names, evidence lines, specialist findings (wave 3)
+- [x] 198-06-PLAN.md — Per-check report, per-gate names, evidence lines, specialist findings (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
