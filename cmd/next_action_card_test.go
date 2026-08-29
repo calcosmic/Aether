@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/spf13/cobra"
 )
 
 // readSourceFile reads a file from the cmd package directory.
@@ -151,16 +152,60 @@ func renderedClosingCards(t *testing.T) []renderedClosingCard {
 	t.Helper()
 	cards := []renderedClosingCard{
 		{
-			name: "the pause card",
-			rendered: renderPauseVisual(map[string]interface{}{
-				"goal":          "Ship the billing rewrite",
-				"current_phase": 2,
-				"phase_name":    "Billing engine",
-				"handoff_path":  ".aether/HANDOFF.md",
-			}),
+			name:     "the pause card",
+			rendered: pauseCardFixture(t),
 		},
 	}
 	return append(cards, renderedNextActionCards(t)...)
+}
+
+// pauseCardFixture renders the pause card the way the runtime genuinely
+// produces it: over a saved, paused project. A bare, storeless result map
+// cannot reproduce the real resume-vs-resume-colony situation, because the
+// card's advice is resolved from the project on disk, not from the map alone.
+func pauseCardFixture(t *testing.T) string {
+	t.Helper()
+	newNextActionFixtureStore(t)
+	pinRawCommandNames(t)
+	state := normalizedFixtureState(t, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         fixtureGoal("Ship the billing rewrite"),
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		Paused:       true,
+		Milestone:    "Open Chambers",
+	})
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("write the fixture project through the runtime's own store: %v", err)
+	}
+	return renderPauseVisual(map[string]interface{}{
+		"goal":          "Ship the billing rewrite",
+		"current_phase": 2,
+		"phase_name":    "Billing engine",
+		"handoff_path":  ".aether/HANDOFF.md",
+	})
+}
+
+// closingCommandCobraTarget resolves a command exactly as it would appear on a
+// card -- either spelling -- against the live Cobra command tree. Two
+// differently spelled commands that resolve to the same *cobra.Command are
+// the exact same command; a string comparison cannot see that, which is how
+// "aether resume" and "aether resume-colony" (a declared alias pair) shipped
+// as if they were two choices.
+func closingCommandCobraTarget(command string) (*cobra.Command, bool) {
+	command = strings.TrimSpace(command)
+	if runtimeForm, ok := strings.CutPrefix(command, "/ant-"); ok {
+		command = "aether " + runtimeForm
+	}
+	fields := strings.Fields(command)
+	if len(fields) < 2 || fields[0] != "aether" {
+		return nil, false
+	}
+	target, _, err := rootCmd.Find(fields[1:])
+	if err != nil || target == nil || target == rootCmd {
+		return nil, false
+	}
+	return target, true
 }
 
 // TestNoCardOffersTheSameCommandTwice.
@@ -175,14 +220,29 @@ func renderedClosingCards(t *testing.T) []renderedClosingCard {
 func TestNoCardOffersTheSameCommandTwice(t *testing.T) {
 	for _, card := range renderedClosingCards(t) {
 		t.Run(card.name, func(t *testing.T) {
-			seen := map[string]bool{}
+			seenText := map[string]bool{}
+			seenCommand := map[*cobra.Command]string{}
 			for _, command := range commandsOfferedBy(card.rendered) {
-				if seen[command] {
+				if seenText[command] {
 					t.Errorf("%s offers %q more than once -- the owner is being shown a choice that is not a choice:\n%s",
 						card.name, command, card.rendered)
 					continue
 				}
-				seen[command] = true
+				seenText[command] = true
+
+				// A string dedup alone cannot see two different SPELLINGS of
+				// the exact same command -- resolve each one against the live
+				// command tree and dedup on the *cobra.Command it names.
+				target, ok := closingCommandCobraTarget(command)
+				if !ok {
+					continue
+				}
+				if earlier, dup := seenCommand[target]; dup {
+					t.Errorf("%s offers %q and %q -- both resolve to the exact same command (%s) on the live command tree, described as if they were different choices:\n%s",
+						card.name, earlier, command, target.Name(), card.rendered)
+					continue
+				}
+				seenCommand[target] = command
 			}
 		})
 	}

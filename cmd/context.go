@@ -182,6 +182,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"handoff_exists": handoffExists,
 			"source":         recoverySource,
 		}
+		closeLifecycleRun(result, colony.ColonyState{}, "resume-dashboard")
 		return result
 	}
 	state = normalizeLegacyColonyState(state)
@@ -342,6 +343,12 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"context_cleared": session.ContextCleared,
 		}
 	}
+	// The two branches below are facts this dashboard alone knows -- a saved,
+	// durable worker result waiting to be finalized, or a build process that
+	// is genuinely still running -- neither of which the saved project state
+	// alone tells the resolver. Recorded as resume_override_command/_why so
+	// the one decision can absorb them as an input rather than have its
+	// answer overwritten afterward.
 	if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && strings.TrimSpace(attempt.CompletionPath) != "" && strings.TrimSpace(attempt.CompletionSHA256) != "" {
 		next := buildFinalizeRecoveryCommand(attempt.Phase, attempt.CompletionPath)
 		summary := "External workers finished and their accepted completion packet is durable. Finalize this exact packet; do not redispatch workers."
@@ -353,12 +360,17 @@ func buildResumeDashboardResult() map[string]interface{} {
 			sessionBlock["summary"] = summary
 			sessionBlock["suggested_next"] = next
 		}
+		result["resume_override_command"] = next
+		result["resume_override_why"] = "A helper finished and its result was saved but not yet applied. " +
+			"Finalizing this exact result is safer than starting a new run, which could duplicate work."
 	} else if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && state.State == colony.StateEXECUTING {
 		next := buildForceRedispatchCommand(attempt.Phase)
 		summary := "The previous build ended before durable lifecycle finalization. Partial output remains inspectable."
+		why := "The previous run of this phase stopped before it finished being recorded. Restarting it replaces the incomplete attempt."
 		if buildAttemptProcessAlive(attempt) {
 			next = "aether watch"
 			summary = "The recorded build process is still running. Do not redispatch the phase while its workers are active."
+			why = "Helpers are still working on this phase. Watching their progress is safer than starting a new run, which would run alongside them."
 		}
 		recoveryBlock := result["recovery"].(map[string]interface{})
 		recoveryBlock["summary"] = summary
@@ -367,7 +379,10 @@ func buildResumeDashboardResult() map[string]interface{} {
 			sessionBlock["summary"] = summary
 			sessionBlock["suggested_next"] = next
 		}
+		result["resume_override_command"] = next
+		result["resume_override_why"] = why
 	}
+	closeLifecycleRun(result, state, "resume-dashboard")
 	return result
 }
 
