@@ -148,6 +148,11 @@ When `plan-finalize` returns a completed plan, render the user-facing closeout:
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <completion_file>
 ```
 
+This closing screen is now the exact same screen a direct `aether plan-finalize` run at the
+terminal would print — including how confident the plan is and how many rounds of
+research-and-routing it took to reach that confidence — not a separate, thinner summary built
+just for the chat.
+
 **Stop conditions:** The runtime enforces four ways one `aether host plan` iteration cycle can end: the loop exits when the selected target confidence is reached; stall detection ends a loop whose confidence has stopped improving across iterations; a max iteration cap bounds how many passes the loop may take; and an escape hatch — `--accept` — lets the user accept the current best plan below target rather than continuing. The wrapper names these concepts; it does not compute or enforce the thresholds behind them. `requires_next_iteration: true` means none of the four conditions have been met yet — never treat it as a completed plan.
 
 ## After Planning

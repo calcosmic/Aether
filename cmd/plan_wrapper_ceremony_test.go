@@ -43,6 +43,7 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"Do not set `run_in_background`",
 		"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file",
+		"the exact same screen a direct `aether plan-finalize` run at the",
 		"## After Planning",
 		"/ant-build 1",
 		"Do NOT run direct `aether plan` from this wrapper for manifest generation; use `aether host plan`.",

@@ -166,6 +166,123 @@ func wrapperParityBlockedResult() map[string]interface{} {
 	}
 }
 
+// wrapperParityPlanFinalizeResult builds the typed result runCodexPlanFinalize
+// (and runCodexPlanWithOptions) produce for a completed plan
+// (cmd/codex_plan_finalize.go:444-478) -- confidence and plan_revision are
+// the real Go structs both construction paths actually store there, never
+// hand-typed nested maps.
+func wrapperParityPlanFinalizeResult() map[string]interface{} {
+	phases := []colony.Phase{
+		{ID: 1, Name: "Ship the thing", SuccessCriteria: []string{"it ships"}},
+	}
+	confidence := codexPlanConfidence{Knowledge: 90, Requirements: 85, Risks: 80, Dependencies: 82, Effort: 88, Overall: 85}
+	planningLoop := codexPlanningLoop{TargetConfidence: 80, MaxIterations: 3, Iterations: 1, StopReason: "target confidence reached", FinalConfidence: 85}
+	return map[string]interface{}{
+		"planned":                   true,
+		"existing_plan":             false,
+		"refreshed":                 false,
+		"goal":                      "Ship the thing",
+		"phases":                    phases,
+		"count":                     len(phases),
+		"depth":                     "standard",
+		"granularity":               "standard",
+		"granularity_min":           3,
+		"granularity_max":           7,
+		"confidence":                confidence,
+		"planning_loop":             planningLoop,
+		"planning_run_id":           "run-1",
+		"iteration":                 1,
+		"evidence_hash":             "abc123",
+		"planning_dir":              ".aether/data/planning/run-1",
+		"planning_files":            []string{"scout.json", "route-setter.json"},
+		"plan_artifact":             "phase-plan.json",
+		"research_failed_phases":    []string{},
+		"research_warning":          "",
+		"dispatches":                []map[string]interface{}{},
+		"dispatch_mode":             "host",
+		"artifact_source":           "wrapper",
+		"plan_source":               "route-setter",
+		"gaps":                      []string{},
+		"survey_docs":               []string{},
+		"unresolved_clarifications": 0,
+		"planning_warning":          "",
+		"next":                      "aether build 1",
+	}
+}
+
+// wrapperParityPlanIterationResult mirrors the "requires_next_iteration"
+// mid-loop result persistIntermediatePlanningIteration produces
+// (cmd/codex_plan_finalize.go:863-886) -- a partial/iterating plan run that
+// also carries confidence and planning_loop, so the same normalisation must
+// hold here too.
+func wrapperParityPlanIterationResult() map[string]interface{} {
+	confidence := codexPlanConfidence{Knowledge: 70, Requirements: 65, Risks: 60, Dependencies: 62, Effort: 68, Overall: 65}
+	planningLoop := codexPlanningLoop{TargetConfidence: 80, MaxIterations: 3, Iterations: 1, StopReason: "", FinalConfidence: 65}
+	return map[string]interface{}{
+		"planned":                 false,
+		"iteration_completed":     true,
+		"requires_next_iteration": true,
+		"planning_run_id":         "run-1",
+		"iteration":               1,
+		"goal":                    "Ship the thing",
+		"depth":                   "standard",
+		"planning_depth":          "balanced",
+		"confidence":              confidence,
+		"planning_loop":           planningLoop,
+		"dispatches":              []map[string]interface{}{},
+		"dispatch_mode":           "host",
+		"artifact_source":         "planning-iteration",
+		"plan_source":             "route-setter",
+		"gaps":                    []string{"gather more evidence"},
+		"selected_gaps":           []string{"gather more evidence"},
+		"evidence_hash":           "def456",
+		"planning_dir":            ".aether/data/planning/run-1",
+		"iteration_state":         ".aether/data/planning/run-1/iteration-state.json",
+		"planning_warning":        "Planning iteration validated, but confidence target has not been reached; final colony plan was not written.",
+		"next":                    "aether host plan --depth standard --planning-depth balanced --target 80 --max-iterations 3",
+	}
+}
+
+// wrapperParitySealResult mirrors completeSealRuntime's own result map
+// (cmd/codex_workflow_cmds.go:808-819) for a plain, unforced seal.
+func wrapperParitySealResult() map[string]interface{} {
+	return map[string]interface{}{
+		"sealed":    true,
+		"milestone": "Crowned Anthill",
+		"summary":   "CROWNED-ANTHILL.md",
+		"next":      "aether entomb",
+	}
+}
+
+// wrapperParityForceSealedResult mirrors completeSealRuntime's result map
+// when override.overrodeAnything() is true (cmd/codex_workflow_cmds.go:814-818).
+func wrapperParityForceSealedResult() map[string]interface{} {
+	return map[string]interface{}{
+		"sealed":              true,
+		"milestone":           "Crowned Anthill",
+		"summary":             "CROWNED-ANTHILL.md",
+		"next":                "aether entomb",
+		"force_sealed":        true,
+		"force_reason":        "work finished outside the colony",
+		"unverified_phases":   []string{"3"},
+		"overridden_blockers": 1,
+	}
+}
+
+// wrapperParitySealConfirmationPendingResult mirrors
+// runSealConfirmationGate's own "not proceeding" result
+// (cmd/seal_confirmation.go:323-329) -- seal never actually sealed, so there
+// is nothing renderSealVisual could honestly show.
+func wrapperParitySealConfirmationPendingResult() map[string]interface{} {
+	return map[string]interface{}{
+		"sealed":                      false,
+		"awaiting_owner_confirmation": true,
+		"named_problems":              []string{"2 checks failing"},
+		"question":                    "Finish anyway with 2 check(s) failing: 2 checks failing?",
+		"next":                        `aether decision-answer --question "..." --answer "yes" --source seal-force-confirmation`,
+	}
+}
+
 // roundTripToMap is the CLAUDE.md-mandated fixture step: marshal the typed
 // result the finalizer builds, then unmarshal it into map[string]interface{}
 // -- the shape a completion file actually is.
@@ -256,15 +373,129 @@ func TestWrapperPathRendersSameCeremonyAsDirectPath(t *testing.T) {
 		}
 	})
 
-	t.Run("a workflow this bridge does not yet wire is not handled", func(t *testing.T) {
+	t.Run("a continue-shaped result is not handled by another workflow's branch", func(t *testing.T) {
+		// "plan" and "seal" ARE wired (this plan); "build" is not (a later
+		// plan's scope). A continue result carries neither "goal" nor
+		// "sealed", so all three branches must correctly report not-handled
+		// rather than rendering a half-screen from a foreign shape.
 		typed := wrapperParityAdvanceResult()
 		asMap := roundTripToMap(t, typed)
 
 		for _, workflow := range []string{"plan", "seal", "build"} {
 			_, handled := closeoutDirectVisual(workflow, map[string]interface{}{"completion_raw": asMap}, state)
 			if handled {
-				t.Fatalf("closeoutDirectVisual reported handled for workflow %q, which this plan does not wire", workflow)
+				t.Fatalf("closeoutDirectVisual reported handled for workflow %q on a continue-shaped result", workflow)
 			}
+		}
+	})
+
+	t.Run("plan completed", func(t *testing.T) {
+		typed := wrapperParityPlanFinalizeResult()
+
+		directOutput := renderPlanVisual(typed)
+
+		asMap := roundTripToMap(t, typed)
+		closeoutOutput, handled := closeoutDirectVisual("plan", map[string]interface{}{"completion_raw": asMap}, state)
+		if !handled {
+			t.Fatalf("closeoutDirectVisual reported not-handled for a resolvable completed plan result")
+		}
+		if directOutput != closeoutOutput {
+			t.Fatalf("chat-path closeout diverged from the direct plan render:\n%s", firstDiffLine(directOutput, closeoutOutput))
+		}
+	})
+
+	t.Run("plan mid-loop iteration", func(t *testing.T) {
+		typed := wrapperParityPlanIterationResult()
+
+		directOutput := renderPlanVisual(typed)
+
+		asMap := roundTripToMap(t, typed)
+		closeoutOutput, handled := closeoutDirectVisual("plan", map[string]interface{}{"completion_raw": asMap}, state)
+		if !handled {
+			t.Fatalf("closeoutDirectVisual reported not-handled for a resolvable mid-loop plan result")
+		}
+		if directOutput != closeoutOutput {
+			t.Fatalf("chat-path closeout diverged from the direct mid-loop plan render:\n%s", firstDiffLine(directOutput, closeoutOutput))
+		}
+	})
+
+	t.Run("seal completed", func(t *testing.T) {
+		typed := wrapperParitySealResult()
+
+		directOutput := renderSealVisual(typed, state, stringValue(typed["summary"]))
+
+		asMap := roundTripToMap(t, typed)
+		closeoutOutput, handled := closeoutDirectVisual("seal", map[string]interface{}{"completion_raw": asMap}, state)
+		if !handled {
+			t.Fatalf("closeoutDirectVisual reported not-handled for a resolvable completed seal result")
+		}
+		if directOutput != closeoutOutput {
+			t.Fatalf("chat-path closeout diverged from the direct seal render:\n%s", firstDiffLine(directOutput, closeoutOutput))
+		}
+	})
+
+	t.Run("seal force-sealed with overrides", func(t *testing.T) {
+		typed := wrapperParityForceSealedResult()
+
+		directOutput := renderSealVisual(typed, state, stringValue(typed["summary"]))
+
+		asMap := roundTripToMap(t, typed)
+		closeoutOutput, handled := closeoutDirectVisual("seal", map[string]interface{}{"completion_raw": asMap}, state)
+		if !handled {
+			t.Fatalf("closeoutDirectVisual reported not-handled for a resolvable force-sealed result")
+		}
+		if directOutput != closeoutOutput {
+			t.Fatalf("chat-path closeout diverged from the direct force-sealed render:\n%s", firstDiffLine(directOutput, closeoutOutput))
+		}
+	})
+
+	t.Run("seal awaiting owner confirmation is not rendered as sealed on either path", func(t *testing.T) {
+		typed := wrapperParitySealConfirmationPendingResult()
+		asMap := roundTripToMap(t, typed)
+
+		_, handled := closeoutDirectVisual("seal", map[string]interface{}{"completion_raw": asMap}, state)
+		if handled {
+			t.Fatalf("closeoutDirectVisual reported handled for a seal result still awaiting the owner's confirmation")
+		}
+	})
+}
+
+// TestCloseoutRefusesToHalfRenderAnIncompletePayload proves that a completion
+// map missing the key a branch needs to safely render (plan's "goal", seal's
+// "sealed") reports not-handled -- so the caller falls back to the generic
+// renderer -- rather than rendering a partial or misleading screen (e.g. a
+// "Colony sealed" screen for something that never sealed).
+func TestCloseoutRefusesToHalfRenderAnIncompletePayload(t *testing.T) {
+	state := wrapperParityColonyState()
+
+	t.Run("plan missing goal", func(t *testing.T) {
+		incomplete := map[string]interface{}{"phases": []interface{}{}, "count": 0}
+		_, handled := closeoutDirectVisual("plan", map[string]interface{}{"completion_raw": incomplete}, state)
+		if handled {
+			t.Fatalf("closeoutDirectVisual reported handled for a plan payload missing \"goal\"")
+		}
+	})
+
+	t.Run("plan empty payload", func(t *testing.T) {
+		_, handled := closeoutDirectVisual("plan", map[string]interface{}{"completion_raw": map[string]interface{}{}}, state)
+		if handled {
+			t.Fatalf("closeoutDirectVisual reported handled for an empty plan payload")
+		}
+	})
+
+	t.Run("seal missing sealed flag", func(t *testing.T) {
+		incomplete := map[string]interface{}{"milestone": "Crowned Anthill", "next": "aether entomb"}
+		_, handled := closeoutDirectVisual("seal", map[string]interface{}{"completion_raw": incomplete}, state)
+		if handled {
+			t.Fatalf("closeoutDirectVisual reported handled for a seal payload missing \"sealed\"")
+		}
+	})
+
+	t.Run("seal sealed is false", func(t *testing.T) {
+		incomplete := map[string]interface{}{"sealed": false, "next": "aether continue"}
+		_, handled := closeoutDirectVisual("seal", map[string]interface{}{"completion_raw": incomplete}, state)
+		if handled {
+			t.Fatalf("closeoutDirectVisual reported handled for a seal payload with sealed=false")
 		}
 	})
 }
