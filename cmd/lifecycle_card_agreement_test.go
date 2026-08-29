@@ -41,10 +41,16 @@ func commandInClosing(t *testing.T, label, rendered string) string {
 	return strings.TrimSpace(match[1])
 }
 
-// migratedSurfaceRenderings renders all seven migrated closings over ONE saved
-// project. Every renderer keeps the signature its existing callers use; the
-// result maps are deliberately bare, because what is being measured is where
-// the advice comes from, not what each command reports about its own run.
+// migratedSurfaceRenderings renders all thirteen migrated closings over ONE
+// saved project. Every renderer keeps the signature its existing callers use;
+// the result maps are deliberately bare, because what is being measured is
+// where the advice comes from, not what each command reports about its own
+// run.
+//
+// Resuming is not in this map. Its real content depends on session.json,
+// learning-observations.json and several other files this shared fixture does
+// not seed, and it already has full, dedicated coverage (screen and envelope,
+// both forms) in lifecycle_card_session_test.go over its own fixture.
 func migratedSurfaceRenderings(t *testing.T, state colony.ColonyState) map[string]string {
 	t.Helper()
 	phase := state.Plan.Phases[0]
@@ -60,7 +66,24 @@ func migratedSurfaceRenderings(t *testing.T, state colony.ColonyState) map[strin
 		"the wrapper's closeout": renderCeremonyCloseoutVisual(map[string]interface{}{
 			"workflow": "build", "state_available": true, "current_phase": state.CurrentPhase,
 		}),
+		"pausing the project": renderPauseVisual(map[string]interface{}{
+			"goal": "Ship the billing rewrite", "current_phase": state.CurrentPhase,
+		}),
+		"updating the project": renderUpdateVisual("/tmp/example", "1.0.0", "1.0.0", "", false, false,
+			nil, 0, 0, nil, "unchanged", true, map[string]interface{}{}),
+		"sealing the project":  renderSealVisual(sealCardFixtureResult(state), state, "/tmp/CROWNED-ANTHILL.md"),
+		"recovering a project": renderRecoverDiagnosis(nil, state, nil),
+		"checking the status":  renderDashboard(state, store, buildStatusResult(state, store)),
 	}
+}
+
+// sealCardFixtureResult folds the answer the way runSeal itself does before
+// calling renderSealVisual -- the plain phrase, not the literal jargon word
+// "seal", so the "what changed" sentence never needs it explained twice.
+func sealCardFixtureResult(state colony.ColonyState) map[string]interface{} {
+	result := map[string]interface{}{}
+	closeLifecycleRun(result, state, "signing the project off as finished")
+	return result
 }
 
 // oneAgreementState is a project with a plan and nothing ambiguous about it:
@@ -210,6 +233,30 @@ func TestEveryCommandTheSevenCanRecommendResolves(t *testing.T) {
 			for _, command := range commands {
 				if _, ok := availableCommand(command); !ok {
 					t.Errorf("the closing card offers %q, which this build of the program does not have", command)
+				}
+			}
+		})
+	}
+}
+
+// TestEveryCommandTheMigratedSurfacesRenderResolves is criterion 6 walked over
+// the actual rendered output of every migrated surface -- not the resolver's
+// fixtures alone -- so a surface that somehow rendered a command the resolver
+// never produced (a hand-typed leftover, a stale literal) would still be
+// caught here.
+func TestEveryCommandTheMigratedSurfacesRenderResolves(t *testing.T) {
+	newNextActionFixtureStore(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
+	state := oneAgreementState(t)
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("write the fixture project: %v", err)
+	}
+
+	for label, rendered := range migratedSurfaceRenderings(t, state) {
+		t.Run(label, func(t *testing.T) {
+			for _, command := range allCommandsInCard(rendered) {
+				if _, ok := availableCommand(command); !ok {
+					t.Errorf("%s offers %q, which this build of the program does not have", label, command)
 				}
 			}
 		})
