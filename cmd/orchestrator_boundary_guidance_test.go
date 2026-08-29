@@ -408,6 +408,31 @@ func TestPlanFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	if !guidance.Active || guidance.Workflow != "plan" || guidance.PendingCount != 1 {
 		t.Fatalf("guidance = %#v, want active plan guidance with one pending question", guidance)
 	}
+
+	// WR-01/WINDOWS.md entry 7 (198-REVIEW.md): result["next"] alone being
+	// correct is not enough -- the rendered closing card reads back the
+	// FOLDED next-action envelope (nextActionFromResult), never this raw
+	// field directly. Before runCodexPlanFinalize called closeLifecycleRun
+	// itself, this envelope was left unset here, and the plan-finalize
+	// command's own closeLifecycleCommand(result, "plan", "", "") call
+	// independently re-resolved a next step from live colony state instead
+	// (typically "aether build 1", since a plan had just been written),
+	// silently overriding the pending discuss guidance -- so the owner would
+	// never have been told about their own unanswered boundary question.
+	answer, ok := nextActionFromResult(result)
+	if !ok {
+		t.Fatalf("expected runCodexPlanFinalize to fold its own guidance into the next-action envelope via closeLifecycleRun")
+	}
+	if answer.Command != "aether discuss" {
+		t.Fatalf("next-action envelope command = %q, want %q (the pending boundary question's own command)", answer.Command, "aether discuss")
+	}
+	// The rendered card translates "aether discuss" into its platform
+	// wrapper spelling (e.g. "/ant-discuss" for Claude/OpenCode) -- match on
+	// the command's own distinguishing word rather than the untranslated
+	// "aether " prefix.
+	if rendered := renderPlanVisual(result); !strings.Contains(rendered, "discuss") {
+		t.Fatalf("rendered closing card missing the folded next command:\n%s", rendered)
+	}
 }
 
 func TestContinueFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {

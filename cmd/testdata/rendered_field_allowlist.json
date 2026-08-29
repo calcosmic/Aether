@@ -15,19 +15,9 @@
     "reason": "Internal audit hash for evidence-tracking tooling; not owner-facing content."
   },
   {
-    "key": "gaps",
-    "finalizer": "plan completed",
-    "reason": "Discovered-and-deferred: a completed plan's own unresolved gaps are never surfaced on this screen (distinct from the mid-loop path, where the narrower selected_gaps subset IS rendered). Fixing this means editing renderPlanVisual in cmd/codex_visuals.go, which this plan's frontmatter does not list and a same-wave sibling plan (198-08) owns this cycle. Recorded in .planning/WINDOWS.md rather than fixed here."
-  },
-  {
     "key": "iteration",
     "finalizer": "plan completed",
     "reason": "Duplicates the already-rendered planning_loop.Iterations count; kept as a flat top-level field for API consumers, not narrated separately."
-  },
-  {
-    "key": "next",
-    "finalizer": "plan completed",
-    "reason": "Discovered-and-deferred: runCodexPlanFinalize never calls closeLifecycleRun (unlike continue/seal), so this field never folds into the unified next-action envelope the closing card reads; the card instead independently resolves a next step from live colony state, which usually matches but is not guaranteed to. Fixing this touches cmd/codex_plan_finalize.go, outside this plan's declared files. Recorded in .planning/WINDOWS.md rather than fixed here."
   },
   {
     "key": "plan_artifact",
@@ -58,16 +48,6 @@
     "key": "refreshed",
     "finalizer": "plan completed",
     "reason": "Records whether --refresh was passed; the screen's own narrative already distinguishes an existing plan from a freshly-built one, which is the fact the owner cares about."
-  },
-  {
-    "key": "research_failed_phases",
-    "finalizer": "plan completed",
-    "reason": "Discovered-and-deferred: the phase IDs whose research worker failed are carried but never listed on screen (feeds research_warning, itself also unrendered -- see that entry). Fixing this touches cmd/codex_visuals.go, owned this wave by a same-wave sibling plan (198-08). Recorded in .planning/WINDOWS.md rather than fixed here."
-  },
-  {
-    "key": "research_warning",
-    "finalizer": "plan completed",
-    "reason": "Discovered-and-deferred: renderResearchFailedWarning's own doc comment states this warning exists 'so the omission is durable and visible' when a phase was planned without its research, but renderPlanVisual never reads result[\"research_warning\"] -- it is computed and carried, then silently dropped. Fixing this touches cmd/codex_visuals.go, owned this wave by a same-wave sibling plan (198-08). Recorded in .planning/WINDOWS.md rather than fixed here."
   },
   {
     "key": "survey_docs",
@@ -109,11 +89,6 @@
     "key": "iteration_state",
     "finalizer": "plan mid-loop",
     "reason": "Reference filename for the persisted iteration-state JSON; not narrated to the owner."
-  },
-  {
-    "key": "next",
-    "finalizer": "plan mid-loop",
-    "reason": "Discovered-and-deferred: the same runCodexPlanFinalize path never calls closeLifecycleRun -- see the identical entry for finalizer \"plan completed\". Recorded in .planning/WINDOWS.md rather than fixed here."
   },
   {
     "key": "plan_source",

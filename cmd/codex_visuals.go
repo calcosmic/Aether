@@ -1532,6 +1532,24 @@ func renderPlanVisual(result map[string]interface{}) string {
 		b.WriteString(warning)
 		b.WriteString("\n\n")
 	}
+	// WINDOWS.md entry 6 (198-REVIEW.md WR scope): renderResearchFailedWarning's
+	// own doc comment says this warning exists "so the omission is durable
+	// and visible" when a phase was planned without its research, but it was
+	// computed and carried, then silently dropped. research_failed_phases is
+	// the phase-ID list that fed this warning's own text -- named again here,
+	// structurally, rather than only as prose inside the warning string.
+	if warning := strings.TrimSpace(stringValue(result["research_warning"])); warning != "" {
+		b.WriteString("Research Warning\n")
+		b.WriteString("  - ")
+		b.WriteString(warning)
+		b.WriteString("\n")
+		if failedPhases := intSliceValue(result["research_failed_phases"]); len(failedPhases) > 0 {
+			b.WriteString("  - Affected phase(s): ")
+			b.WriteString(joinInts(failedPhases))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
 	if dispatches, ok := result["dispatches"].([]interface{}); ok && len(dispatches) > 0 {
 		parsed := parsePlanningDispatchMaps(dispatches)
 		hasRealData := hasRealPlanningExecutionData(parsed)
@@ -1667,6 +1685,15 @@ func renderPlanVisual(result map[string]interface{}) string {
 				b.WriteString("\n")
 			}
 		}
+		b.WriteString("\n")
+	}
+	// WINDOWS.md entry 6 (198-REVIEW.md WR scope): a completed plan's own
+	// unresolved gaps were carried but never surfaced here -- distinct from
+	// the mid-loop path above, where the narrower selected_gaps subset chosen
+	// for the next iteration IS rendered ("Next Iteration Gaps").
+	if gaps := stringSliceValue(result["gaps"]); len(gaps) > 0 {
+		b.WriteString("Unresolved Gaps\n")
+		b.WriteString(renderIndentedList(gaps))
 		b.WriteString("\n")
 	}
 	b.WriteString("Coordination: ")
@@ -5620,6 +5647,25 @@ func stringSliceValue(value interface{}) []string {
 			if s != "" {
 				out = append(out, s)
 			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+// intSliceValue is stringSliceValue's sibling for a slice of ints -- the
+// in-process typed value is []int, but a JSON-round-tripped completion file
+// produces []interface{} of float64, exactly like every other numeric slice
+// this codebase reduces before rendering.
+func intSliceValue(value interface{}) []int {
+	switch v := value.(type) {
+	case []int:
+		return append([]int{}, v...)
+	case []interface{}:
+		out := make([]int, 0, len(v))
+		for _, item := range v {
+			out = append(out, intValue(item))
 		}
 		return out
 	default:

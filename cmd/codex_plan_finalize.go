@@ -77,7 +77,14 @@ var planFinalizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
-		closeLifecycleCommand(result, "plan", "", "")
+		// WINDOWS.md entry 7 (198-REVIEW.md WR scope): runCodexPlanFinalize
+		// now calls closeLifecycleRun itself (mirroring
+		// runCodexContinueFinalize/completeSealRuntime), which already folds
+		// its own suggested "next" command into the envelope. A second,
+		// override-less closeLifecycleCommand call here would unconditionally
+		// overwrite that with an independently-resolved answer
+		// (applyNextActionToResult has no "already set" guard), silently
+		// undoing the fold-in this exact entry was about.
 		outputWorkflow(result, renderPlanVisual(result))
 		return nil
 	},
@@ -329,6 +336,14 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		if err != nil {
 			return nil, err
 		}
+		// WINDOWS.md entry 7 (198-REVIEW.md WR scope): unlike
+		// continue-finalize/completeSealRuntime, this finalizer never called
+		// closeLifecycleRun, so its own suggested "next" command never folded
+		// into the unified next-action envelope renderLifecycleClosing reads
+		// back -- the closing card instead independently resolved a next step
+		// from live colony state, which usually matched but was not
+		// guaranteed to.
+		closeLifecycleRun(result, state, "plan")
 		return result, nil
 	}
 	if err := validateNewPlanEvidenceContract(phases); err != nil {
@@ -491,6 +506,9 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		}
 	}
 	addOrchestratorBoundaryGuidance(result, "plan", updatedState, nextCommand, manifest.BoundaryQuestions)
+	// WINDOWS.md entry 7 (198-REVIEW.md WR scope): see the identical comment
+	// on the mid-loop branch above.
+	closeLifecycleRun(result, updatedState, "plan")
 	return result, nil
 }
 

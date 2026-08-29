@@ -237,6 +237,11 @@ Phase 6 — End-to-end verification
     - The live colony loop is credible
     - The remaining parity gap is narrow and testable
 
+Unresolved Gaps
+  - Dependency manifests did not provide many anchors, so integration boundaries may still need confirmation during build.
+  - Known repo risks remain active: No obvious technical debt markers detected..
+  - No territory survey artifacts were present, so the plan relies on direct filesystem inspection only.
+
 Coordination: .aether/data/spawn-tree.txt
 
 ━━ 📊 W H A T   N E X T ━━

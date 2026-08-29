@@ -103,6 +103,15 @@ func renderedFieldFinalizers() []renderedFieldFinalizer {
 			Entries: []renderedFieldEntryPoint{
 				{Func: "renderPlanVisual", MapParam: "result"},
 				{Func: "closeoutPlanDirectVisual", MapParam: "raw"},
+				// WINDOWS.md entry 7 (198-REVIEW.md WR scope, closed):
+				// runCodexPlanFinalize's own last call before this result is
+				// ever handed to a renderer, mirroring
+				// advanceExternalContinue/completeSealRuntime's identical
+				// pattern below -- folds the map's own "next" into the
+				// unified next-action envelope renderLifecycleClosing reads
+				// back. Seeded here to trace the real pipeline instead of
+				// allow-listing around it.
+				{Func: "closeLifecycleRun", MapParam: "result"},
 			},
 		},
 		{
@@ -111,6 +120,7 @@ func renderedFieldFinalizers() []renderedFieldFinalizer {
 			Entries: []renderedFieldEntryPoint{
 				{Func: "renderPlanVisual", MapParam: "result"},
 				{Func: "closeoutPlanDirectVisual", MapParam: "raw"},
+				{Func: "closeLifecycleRun", MapParam: "result"},
 			},
 		},
 		{
