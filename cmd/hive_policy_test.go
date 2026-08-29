@@ -96,7 +96,7 @@ func TestSealLeavesEligibleInstinctsLocalWhenHivePolicyIsOff(t *testing.T) {
 	if err := store.SaveJSON("instincts.json", instincts); err != nil {
 		t.Fatalf("save instincts: %v", err)
 	}
-	if err := completeSealRuntime(state, sealOverride{}); err != nil {
+	if err := completeSealRuntime(state, sealOverride{}, runSealWisdomReview(state)); err != nil {
 		t.Fatalf("complete seal: %v", err)
 	}
 	if !strings.Contains(stdout.(*bytes.Buffer).String(), "Hive auto-promotion is disabled") {

@@ -535,7 +535,11 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
-		return completeSealRuntime(state, override)
+		// D-05: the wisdom review runs exactly once, here, before anything
+		// else -- including before Task 2's confirmation question -- so its
+		// lessons are recorded even if the owner later declines to finish.
+		review := runSealWisdomReview(state)
+		return completeSealRuntime(state, override, review)
 	},
 }
 
@@ -555,7 +559,28 @@ func (o sealOverride) overrodeAnything() bool {
 	return o.Forced && (len(o.IncompletePhases) > 0 || o.OverriddenBlockers > 0 || o.OverriddenReviewBlocks > 0)
 }
 
-func completeSealRuntime(state colony.ColonyState, override sealOverride) error {
+// sealWisdomReview is the result of running the "what did we learn" pass
+// exactly once, before the seal confirmation question exists at all (D-05),
+// so its lessons are recorded even if the owner ultimately declines to
+// finish. It carries the promoted entries, the consolidation summary, and
+// the already-rendered beats text so a later caller can reuse them without
+// recomputing (or re-running) the review.
+type sealWisdomReview struct {
+	Consolidation         sealConsolidationSummary
+	PromotedInstinctNames []string
+	HiveEligibleCount     int
+	HivePromotedCount     int
+	HivePromotionFailures int
+	Beats                 string
+}
+
+// runSealWisdomReview runs the eight-ant curation pass plus the local/hive
+// instinct promotion loop exactly once, printing the same beats and hive
+// report lines completeSealRuntime always has, so behavior for a seal that
+// proceeds is byte-identical to before this function existed. state is
+// accepted for symmetry with the rest of the seal call chain and future
+// callers that need it; today's review reads only the package-level store.
+func runSealWisdomReview(state colony.ColonyState) sealWisdomReview {
 	// Snapshot the instinct entries eligible for THIS seal's own local/hive
 	// promotion loop (D-08) before consolidation below decays trust scores
 	// and archives stale instincts. Consolidation's archival floor operates
@@ -668,7 +693,8 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride) error 
 	// ceremony reads consolidation -> promotion -> hive: printed here, after
 	// the promotion loop above has run, and before the hive reporting lines
 	// below.
-	visualFprint(stdout, renderSealConsolidationBeats(sealConsolidation))
+	beats := renderSealConsolidationBeats(sealConsolidation)
+	visualFprint(stdout, beats)
 	emitSealConsolidationCeremony(sealConsolidation)
 
 	// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
@@ -682,6 +708,17 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride) error 
 		visualFprintln(stdout, fmt.Sprintf("Hive auto-promotion is disabled; %d eligible instinct(s) remain project-local", hiveEligibleCount))
 	}
 
+	return sealWisdomReview{
+		Consolidation:         sealConsolidation,
+		PromotedInstinctNames: promotedInstinctNames,
+		HiveEligibleCount:     hiveEligibleCount,
+		HivePromotedCount:     hivePromotedCount,
+		HivePromotionFailures: hivePromotionFailures,
+		Beats:                 beats,
+	}
+}
+
+func completeSealRuntime(state colony.ColonyState, override sealOverride, review sealWisdomReview) error {
 	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
 	expiredFOCUSCount := expireSignalsByType(store, "FOCUS")
 
@@ -724,16 +761,16 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride) error 
 	// Build enrichment data for CROWNED-ANTHILL.md
 	enrichment := sealEnrichment{
 		LearningsCount:        len(state.Memory.PhaseLearnings),
-		InstinctsPromoted:     promotedInstinctNames,
-		HiveEligible:          hiveEligibleCount,
-		HivePromoted:          hivePromotedCount,
-		HivePromotionFailures: hivePromotionFailures,
+		InstinctsPromoted:     review.PromotedInstinctNames,
+		HiveEligible:          review.HiveEligibleCount,
+		HivePromoted:          review.HivePromotedCount,
+		HivePromotionFailures: review.HivePromotionFailures,
 		SignalsExpired:        expiredFOCUSCount,
 		FlagsResolved:         countResolvedFlags(store),
 		ShelfCandidates:       candidates,
 		FinalReview:           finalReview,
 		ReviewBacklog:         reviewBacklog,
-		ConsolidationReport:   sealConsolidation.ReportPath,
+		ConsolidationReport:   review.Consolidation.ReportPath,
 		Override:              override,
 	}
 

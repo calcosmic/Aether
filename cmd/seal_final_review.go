@@ -495,7 +495,12 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if manifest.Force && !report.Passed {
 		override.OverriddenReviewBlocks = len(report.BlockingIssues)
 	}
-	return completeSealRuntime(state, override)
+	// D-05: the wisdom review runs exactly once, before anything else, on
+	// this (host-mediated) seal path too -- see runSealWisdomReview's doc
+	// comment. Task 1 is a behavior-preserving extraction; this call site
+	// keeps runSealFinalize's existing behavior byte-identical.
+	review := runSealWisdomReview(state)
+	return completeSealRuntime(state, override, review)
 }
 
 func mergeExternalSealReviewResults(manifest sealPlanManifest, results []codexContinueExternalDispatch) ([]codexContinueWorkerFlowStep, error) {
