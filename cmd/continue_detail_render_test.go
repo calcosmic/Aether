@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // Phase 198 plan 06 (SHOW-02/D-11) -- the closing summary currently says
@@ -276,5 +279,138 @@ func TestSpecialistFindingsGetTheirOwnBlock(t *testing.T) {
 
 	if typedOutput != mapOutput {
 		t.Fatalf("round-tripped render diverged from typed render:\n%s", firstDiffLine(typedOutput, mapOutput))
+	}
+}
+
+// ---- Task 3: chat-path end-to-end and plain-English guard ----
+
+// TestChatPathShowsChecksGatesAndEvidence builds a continue result carrying
+// checks, gates, and criterion evidence, round-trips it into completion-file
+// shape, renders it through the chat path (closeoutDirectVisual), and
+// asserts each named check, named gate, and requirement's proof text is
+// present -- on the rendered bytes, not an intermediate map.
+func TestChatPathShowsChecksGatesAndEvidence(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	state := colony.ColonyState{
+		Version:      "3.0",
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Ship the thing"}}},
+	}
+	phase := colony.Phase{ID: 1, Name: "Ship the thing"}
+
+	verification := codexContinueVerificationReport{
+		Steps: []codexVerificationStep{
+			{Name: "build", Passed: true, Duration: 1.0},
+			{Name: "tests", Passed: false, Summary: "2 of 12 tests failed", Command: "npm test"},
+		},
+		Criteria: []codexCriterionVerification{
+			{Criterion: "Login works", Evidence: []string{"3 tests passed", "auth.go present"}, Passed: true},
+		},
+		ChecksPassed: false,
+	}
+	gates := codexContinueGateReport{
+		Checks: []gateCheck{
+			{Name: "verification_steps_passed", Passed: false, FixHint: "fix the failing build/test check and run aether continue"},
+		},
+	}
+	workerFlow := []codexContinueWorkerFlowStep{
+		{
+			Stage: "review", Caste: "watcher", Name: "Keen-12", Status: "completed",
+			Findings: []codexReviewFinding{{Severity: "high", Title: "race condition in dispatch loop"}},
+		},
+	}
+
+	typed := map[string]interface{}{
+		"advanced":             false,
+		"blocked":              true,
+		"current_phase":        1,
+		"continued_phase":      1,
+		"continued_phase_name": "Ship the thing",
+		"state":                colony.StateBUILT,
+		"next":                 "aether unblock --dispatch",
+		"review_depth":         "standard",
+		"verification":         verification,
+		"gates":                gates,
+		"worker_flow":          workerFlow,
+		"blocking_issues":      []string{"2 of 12 tests failed"},
+	}
+
+	asMap := roundTripToMap(t, typed)
+	output, handled := closeoutDirectVisual("continue", map[string]interface{}{"completion_raw": asMap}, state)
+	if !handled {
+		t.Fatalf("closeoutDirectVisual reported not-handled for a resolvable continue blocked result")
+	}
+
+	for _, want := range []string{
+		"Build ✓ (1.0s)",
+		"Tests ✗ — 2 of 12 tests failed",
+		"└── npm test",
+		"✗ the build/test checks passed",
+		"└── fix the failing build/test check and run aether continue",
+		"✓ Login works — proved by: 3 tests passed, auth.go present",
+		"🔍 Specialist Findings",
+		"found: high: race condition in dispatch loop",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("chat-path output missing %q, got:\n%s", want, output)
+		}
+	}
+
+	// Prove the direct path renders the identical detail from the identical
+	// typed value (parity, not merely "the chat path also shows something").
+	var direct strings.Builder
+	direct.WriteString(renderContinueBlockedVisual(state, phase, typed, colony.VerificationDepthStandard))
+	if direct.String() != output {
+		t.Fatalf("chat-path output diverged from the direct continue-blocked render:\n%s", firstDiffLine(direct.String(), output))
+	}
+}
+
+// TestRestoredDetailIsPlainEnglish asserts the rendered gate detail contains
+// none of the internal snake_case gate keys verbatim -- the owner sees
+// "the build's own plan file is on disk", never "manifest_present". The
+// internal-name list is derived from continueGateCheckNames (itself derived
+// from gateCheckDisplayNames, the actual runtime translation table) rather
+// than a second literal typed into this test, so a newly added gate name
+// cannot silently skip the check. Verification check keys ("build", "types",
+// "lint", "tests") are deliberately excluded from this verbatim scan: they
+// are ordinary English words that legitimately appear inside plain-English
+// gate prose (e.g. "the build's own plan file is on disk"), so a substring
+// check against them would produce false positives rather than catching a
+// real leak.
+func TestRestoredDetailIsPlainEnglish(t *testing.T) {
+	if len(continueGateCheckNames) == 0 {
+		t.Fatal("continueGateCheckNames is empty -- test setup or the runtime table is broken")
+	}
+
+	// Shrink-only allowlist, following cmd/display_house_style_test.go's
+	// pattern: an internal name with no plain-English form yet would be
+	// listed here with a written reason. Empty today -- every gate name has
+	// a translation in gateCheckDisplayNames.
+	allowed := map[string]string{}
+
+	checks := make([]gateCheck, 0, len(continueGateCheckNames))
+	for _, name := range continueGateCheckNames {
+		checks = append(checks, gateCheck{Name: name, Passed: false, FixHint: "see the recovery guidance for this check"})
+	}
+	report := codexContinueGateReport{Checks: checks}
+
+	var b strings.Builder
+	renderContinueGateDetail(&b, report)
+	output := b.String()
+
+	for _, name := range continueGateCheckNames {
+		if reason, ok := allowed[name]; ok {
+			t.Logf("skipping allowlisted internal name %q: %s", name, reason)
+			continue
+		}
+		if strings.Contains(output, name) {
+			t.Errorf("internal gate key %q leaked verbatim into plain-English output:\n%s", name, output)
+		}
 	}
 }
