@@ -2406,6 +2406,55 @@ func renderContinueVerificationSummaryMap(b *strings.Builder, verification map[s
 	}
 }
 
+// workerMeasurementFigures is the single formatter turning a worker's
+// measured duration and tool-call count into display text -- used
+// identically by the live finishing line (emitCodexDispatchWorkerFinished,
+// cmd/codex_build_progress.go) and the continue worker-flow summary render
+// below, so the two surfaces can never disagree about the same worker's
+// figures (D-03). An unmeasured figure renders with the same "not reported"
+// wording the cost line already uses (spendMarkNotReported,
+// cmd/spend_cmd.go) rather than a fabricated zero (Phase 196 D-01) -- a
+// worker that genuinely made zero tool calls still renders "0 tool calls".
+func workerMeasurementFigures(durationSeconds float64, durationReported bool, toolCount int, toolCountReported bool) string {
+	var durationPart, toolPart string
+	if durationReported {
+		durationPart = formatWorkerMeasuredDuration(durationSeconds)
+	}
+	if toolCountReported {
+		toolPart = fmt.Sprintf("%d tool call", toolCount)
+		if toolCount != 1 {
+			toolPart += "s"
+		}
+	}
+
+	switch {
+	case durationReported && toolCountReported:
+		return fmt.Sprintf("%s, %s", durationPart, toolPart)
+	case durationReported:
+		return fmt.Sprintf("%s, tool calls %s", durationPart, spendMarkNotReported)
+	case toolCountReported:
+		return fmt.Sprintf("duration %s, %s", spendMarkNotReported, toolPart)
+	default:
+		return spendMarkNotReported
+	}
+}
+
+// formatWorkerMeasuredDuration renders a measured duration (in seconds) as
+// plain English -- "3m 10s" once it crosses a minute, "%.1fs" below that --
+// used only by workerMeasurementFigures above.
+func formatWorkerMeasuredDuration(seconds float64) string {
+	if seconds < 0 {
+		seconds = 0
+	}
+	if seconds < 60 {
+		return fmt.Sprintf("%.1fs", seconds)
+	}
+	total := int(seconds + 0.5)
+	minutes := total / 60
+	secs := total % 60
+	return fmt.Sprintf("%dm %ds", minutes, secs)
+}
+
 func renderContinueWorkerFlowValue(b *strings.Builder, raw interface{}) {
 	switch flow := raw.(type) {
 	case []codexContinueWorkerFlowStep:
@@ -2428,7 +2477,11 @@ func renderContinueWorkerFlowValue(b *strings.Builder, raw interface{}) {
 					findings = append(findings, label)
 				}
 			}
-			renderContinueWorkerFlowDetail(b, findings, step.Recommendations, step.WeakSpots, step.EdgeCases, step.Blockers)
+			measured := ""
+			if step.Stage == "review" && step.Caste != "system" {
+				measured = workerMeasurementFigures(step.Duration, step.DurationReported, step.ToolCount, step.ToolCountReported)
+			}
+			renderContinueWorkerFlowDetail(b, findings, step.Recommendations, step.WeakSpots, step.EdgeCases, step.Blockers, measured)
 		}
 	case []interface{}:
 		renderContinueWorkerFlowMap(b, flow)
@@ -2463,11 +2516,19 @@ func renderContinueWorkerFlowMap(b *strings.Builder, flow []interface{}) {
 				}
 			}
 		}
+		measured := ""
+		if stringValue(step["stage"]) == "review" && stringValue(step["caste"]) != "system" {
+			measured = workerMeasurementFigures(
+				floatValue(step["duration"]), boolValue(step["duration_reported"]),
+				intValue(step["tool_count"]), boolValue(step["tool_count_reported"]),
+			)
+		}
 		renderContinueWorkerFlowDetail(b, findings,
 			stringSliceValue(step["recommendations"]),
 			stringSliceValue(step["weak_spots"]),
 			stringSliceValue(step["edge_cases_discovered"]),
-			stringSliceValue(step["blockers"]))
+			stringSliceValue(step["blockers"]),
+			measured)
 	}
 }
 
@@ -2490,7 +2551,11 @@ func renderContinueWorkerFlowLine(b *strings.Builder, name, caste, status, summa
 // renderContinueWorkerFlowDetail is the progressive-disclosure layer beneath
 // each worker line: what the worker actually found, capped per category with
 // an honest overflow count — the data was always carried, never shown.
-func renderContinueWorkerFlowDetail(b *strings.Builder, findings, recommendations, weakSpots, edgeCases, blockers []string) {
+// measured is the already-formatted workerMeasurementFigures output for a
+// review-stage worker (empty string for non-review flow steps, which never
+// went through a dispatch this plan measures) -- D-03: the same figures the
+// live finishing line showed.
+func renderContinueWorkerFlowDetail(b *strings.Builder, findings, recommendations, weakSpots, edgeCases, blockers []string, measured string) {
 	const perCategoryCap = 2
 	writeCategory := func(label string, items []string) {
 		for i, item := range items {
@@ -2504,6 +2569,9 @@ func renderContinueWorkerFlowDetail(b *strings.Builder, findings, recommendation
 			}
 			b.WriteString(fmt.Sprintf("      └── %s: %s\n", label, item))
 		}
+	}
+	if measured = strings.TrimSpace(measured); measured != "" {
+		b.WriteString(fmt.Sprintf("      └── measured: %s\n", measured))
 	}
 	writeCategory("found", findings)
 	writeCategory("recommends", recommendations)

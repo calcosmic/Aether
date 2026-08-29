@@ -19,7 +19,7 @@ Planning Wave 1 starting (in-repo, serial)
 
 … 🔍🐜 Scout Worker-XX  running wave 1  Planning task: Survey the repo and distill planning findings from available territory reports  [simulated worker heartbeat observed]
 
-✓ 🔍🐜 Scout Worker-XX  completed 0.0s  FakeInvoker completed task plan-0 for worker Worker-XX (caste: scout)
+✓ 🔍🐜 Scout Worker-XX  completed (0.0s, 0 tool calls)  FakeInvoker completed task plan-0 for worker Worker-XX (caste: scout)
 
 ── Dispatch ──
 Planning Wave 2 starting (in-repo, serial)
@@ -31,7 +31,7 @@ Planning Wave 2 starting (in-repo, serial)
 
 … 📋🐜 Route-Setter Worker-XX  running wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan  [simulated worker heartbeat observed]
 
-✓ 📋🐜 Route-Setter Worker-XX  completed 0.0s  FakeInvoker completed task plan-1 for worker Worker-XX (caste: route_setter)
+✓ 📋🐜 Route-Setter Worker-XX  completed (0.0s, 0 tool calls)  FakeInvoker completed task plan-1 for worker Worker-XX (caste: route_setter)
 
 ━━ 📋 P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

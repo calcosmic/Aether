@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"reflect"
 	"strings"
 	"testing"
@@ -113,4 +116,124 @@ func TestWorkerUsageStaysUnserialized(t *testing.T) {
 			t.Fatalf("marshalled JSON contains a usage-related key %q: %s", key, data)
 		}
 	}
+}
+
+// TestUnmeasuredWorkerFiguresRenderAsNotReported tables over the four
+// reported/unreported combinations plus the genuine-zero row (Phase 196
+// D-01: a figure that was never measured is never shown as zero and never a
+// guess).
+func TestUnmeasuredWorkerFiguresRenderAsNotReported(t *testing.T) {
+	cases := []struct {
+		name              string
+		durationSeconds   float64
+		durationReported  bool
+		toolCount         int
+		toolCountReported bool
+		want              string
+	}{
+		{
+			name: "both reported", durationSeconds: 190, durationReported: true,
+			toolCount: 14, toolCountReported: true,
+			want: "3m 10s, 14 tool calls",
+		},
+		{
+			name: "duration reported, tool count not", durationSeconds: 5, durationReported: true,
+			toolCount: 0, toolCountReported: false,
+			want: "5.0s, tool calls " + spendMarkNotReported,
+		},
+		{
+			name: "tool count reported, duration not", durationSeconds: 0, durationReported: false,
+			toolCount: 3, toolCountReported: true,
+			want: "duration " + spendMarkNotReported + ", 3 tool calls",
+		},
+		{
+			name: "neither reported", durationSeconds: 0, durationReported: false,
+			toolCount: 0, toolCountReported: false,
+			want: spendMarkNotReported,
+		},
+		{
+			name: "genuine zero tool calls renders 0, not not-reported", durationSeconds: 12, durationReported: true,
+			toolCount: 0, toolCountReported: true,
+			want: "12.0s, 0 tool calls",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := workerMeasurementFigures(tc.durationSeconds, tc.durationReported, tc.toolCount, tc.toolCountReported)
+			if got != tc.want {
+				t.Errorf("workerMeasurementFigures(...) = %q, want %q", got, tc.want)
+			}
+			if !tc.toolCountReported {
+				if strings.Contains(got, "0 tool call") {
+					t.Errorf("unreported tool count rendered as a zero: %q", got)
+				}
+			}
+		})
+	}
+}
+
+// TestLiveAndSummaryWorkerFiguresShareOneSource renders the live finishing
+// line (emitCodexDispatchWorkerFinished) and the continue worker-flow summary
+// line for the same worker and asserts both contain the identical fragment
+// produced by workerMeasurementFigures. An AST check additionally proves
+// neither call site formats a duration or a tool count itself -- the string
+// "tool call" appears nowhere in cmd/codex_visuals.go or
+// cmd/codex_build_progress.go outside workerMeasurementFigures's own body.
+func TestLiveAndSummaryWorkerFiguresShareOneSource(t *testing.T) {
+	saveGlobals(t)
+	setVisualOutputMode(t, "visual")
+
+	dispatch := codex.WorkerDispatch{WorkerName: "Keen-12", Caste: "watcher"}
+	result := codex.DispatchResult{
+		WorkerName: "Keen-12", Status: "completed",
+		WorkerResult: &codex.WorkerResult{Duration: 190 * 1e9 /* ns */, ToolCount: 14},
+	}
+
+	var liveBuf strings.Builder
+	origStdout := stdout
+	stdout = &liveBuf
+	emitCodexDispatchWorkerFinished(dispatch, result)
+	stdout = origStdout
+
+	step := codexContinueWorkerFlowStep{
+		Stage: "review", Caste: "watcher", Name: "Keen-12", Status: "completed",
+		Duration: 190, DurationReported: true, ToolCount: 14, ToolCountReported: true,
+	}
+	var summaryBuf strings.Builder
+	renderContinueWorkerFlowValue(&summaryBuf, []codexContinueWorkerFlowStep{step})
+
+	wantFragment := workerMeasurementFigures(190, true, 14, true)
+	if !strings.Contains(liveBuf.String(), wantFragment) {
+		t.Errorf("live finishing line missing figures fragment %q:\n%s", wantFragment, liveBuf.String())
+	}
+	if !strings.Contains(summaryBuf.String(), wantFragment) {
+		t.Errorf("summary line missing figures fragment %q:\n%s", wantFragment, summaryBuf.String())
+	}
+
+	t.Run("no other call site formats the figures itself", func(t *testing.T) {
+		for _, file := range []string{"codex_visuals.go", "codex_build_progress.go"} {
+			fset := token.NewFileSet()
+			parsed, err := parser.ParseFile(fset, file, nil, 0)
+			if err != nil {
+				t.Fatalf("parse %s: %v", file, err)
+			}
+			for _, decl := range parsed.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Body == nil || fn.Name.Name == "workerMeasurementFigures" {
+					continue
+				}
+				ast.Inspect(fn.Body, func(n ast.Node) bool {
+					lit, ok := n.(*ast.BasicLit)
+					if !ok || lit.Kind != token.STRING {
+						return true
+					}
+					if strings.Contains(strings.ToLower(lit.Value), "tool call") {
+						t.Errorf("%s in %s formats \"tool call(s)\" text itself instead of calling workerMeasurementFigures: %s", fn.Name.Name, file, lit.Value)
+					}
+					return true
+				})
+			}
+		}
+	})
 }

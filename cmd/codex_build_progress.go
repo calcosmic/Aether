@@ -167,8 +167,19 @@ func emitCodexDispatchWorkerFinished(dispatch codex.WorkerDispatch, result codex
 	b.WriteString("  ")
 	b.WriteString(status)
 
-	if result.WorkerResult != nil && result.WorkerResult.Duration > 0 {
-		b.WriteString(fmt.Sprintf(" %.1fs", result.WorkerResult.Duration.Seconds()))
+	// D-03: the finish line names both the measured time and the tool-call
+	// count, from the same workerMeasurementFigures formatter the continue
+	// worker-flow summary below uses, so the two surfaces can never disagree.
+	var durationSeconds float64
+	var toolCount int
+	durationReported := result.WorkerResult != nil && result.WorkerResult.Duration > 0
+	toolCountReported := result.WorkerResult != nil
+	if result.WorkerResult != nil {
+		durationSeconds = result.WorkerResult.Duration.Seconds()
+		toolCount = result.WorkerResult.ToolCount
+	}
+	if durationReported || toolCountReported {
+		b.WriteString(fmt.Sprintf(" (%s)", workerMeasurementFigures(durationSeconds, durationReported, toolCount, toolCountReported)))
 	}
 
 	if summary := strings.TrimSpace(dispatchResultSummary(dispatch, result)); summary != "" {
