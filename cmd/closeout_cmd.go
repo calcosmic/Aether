@@ -116,6 +116,12 @@ func closeoutCompletionDetails(path string) map[string]interface{} {
 	}
 
 	details["completion_loaded"] = true
+	// completion_raw carries the whole unmodified completion payload -- the
+	// same raw map already unwrapped from a {"result": {...}} envelope above
+	// -- so closeoutDirectVisual can render every key the finalizer wrote
+	// instead of the hand-picked subset the rest of this function derives
+	// below (D-12).
+	details["completion_raw"] = raw
 	if _, ok := raw["ok"]; ok {
 		completionOK := boolValue(raw["ok"])
 		details["completion_ok"] = completionOK

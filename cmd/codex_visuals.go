@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -2108,7 +2109,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 		b.WriteString("Verification pass complete.\n")
 	}
 	b.WriteString(fmt.Sprintf("Phase %d verified and completed: %s\n", phase.ID, phase.Name))
-	renderContinueVerificationSummaryMap(&b, mapValue(result["verification"]))
+	renderContinueVerificationSummaryMap(&b, continueTypedResultMapValue(result["verification"]))
 	if issues := stringSliceValue(result["operational_issues"]); len(issues) > 0 {
 		b.WriteString("Operational evidence\n")
 		b.WriteString(renderIndentedList(issues))
@@ -2133,7 +2134,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 		displayDataPath("spawn-tree.txt"),
 	)
 	b.WriteString(renderArtifactsSection(artifacts...))
-	renderContinueGateSummaryMap(&b, mapValue(result["gates"]))
+	renderContinueGateSummaryMap(&b, continueTypedResultMapValue(result["gates"]))
 	if closed := stringSliceValue(result["closed_workers"]); len(closed) > 0 {
 		b.WriteString(fmt.Sprintf("Workers closed: %d\n", len(closed)))
 	}
@@ -2295,8 +2296,8 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Phase %d remains active: %s\n", phase.ID, phase.Name))
-	renderContinueVerificationSummaryMap(&b, mapValue(result["verification"]))
-	renderContinueGateSummaryMap(&b, mapValue(result["gates"]))
+	renderContinueVerificationSummaryMap(&b, continueTypedResultMapValue(result["verification"]))
+	renderContinueGateSummaryMap(&b, continueTypedResultMapValue(result["gates"]))
 	renderContinueWorkerFlowValue(&b, result["worker_flow"])
 	artifacts := []string{}
 	if verificationReport := strings.TrimSpace(stringValue(result["verification_report"])); verificationReport != "" {
@@ -2322,7 +2323,7 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 	if blockers := stringSliceValue(result["blocking_issues"]); len(blockers) > 0 {
 		b.WriteString("Blocking issues\n")
 		b.WriteString(renderIndentedList(blockers))
-		b.WriteString(renderBlockedWayForward(mapValue(result["gates"])))
+		b.WriteString(renderBlockedWayForward(continueTypedResultMapValue(result["gates"])))
 	}
 	b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
 	return b.String()
@@ -2532,6 +2533,33 @@ func renderContinueGateSummaryMap(b *strings.Builder, gates map[string]interface
 func mapValue(raw interface{}) map[string]interface{} {
 	value, _ := raw.(map[string]interface{})
 	return value
+}
+
+// continueTypedResultMapValue converts a continue result field's value into
+// map[string]interface{} regardless of whether it arrived as the in-process
+// typed struct (codexContinueVerificationReport, codexContinueGateReport)
+// or as the JSON-round-tripped map a completion file produces. mapValue alone
+// only handles the already-map case; a raw typed struct silently resolves to
+// len==0 there and the whole section renders as if empty -- the dual-type
+// rendering precedent renderContinueWorkerFlowValue already established
+// (198-PATTERNS.md) applied here so the direct path and the closeout path
+// show identical detail from the identical underlying value.
+func continueTypedResultMapValue(raw interface{}) map[string]interface{} {
+	if m, ok := raw.(map[string]interface{}); ok {
+		return m
+	}
+	if raw == nil {
+		return nil
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return nil
+	}
+	return decoded
 }
 
 // renderDecisionBlock (SEE-06) is the one visually distinct frame for moments
