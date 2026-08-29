@@ -3719,6 +3719,10 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 	}
 
 	renderResumePhaseProgress(&b, result["phase_progress"])
+	renderResumeDriftNote(&b, result["plan_revision"])
+	if recent, ok := result["recent"].(map[string]interface{}); ok {
+		renderResumeRecentDecisions(&b, recent["decisions"])
+	}
 
 	if session, ok := result["session"].(map[string]interface{}); ok {
 		if summary := strings.TrimSpace(stringValue(session["summary"])); summary != "" {
@@ -3925,6 +3929,84 @@ func renderResumePhaseProgress(b *strings.Builder, raw interface{}) {
 	if overflow > 0 {
 		b.WriteString(fmt.Sprintf("  (+%d more)\n", overflow))
 	}
+}
+
+// renderResumeRecentDecisions renders up to five recent decisions (SHOW-02),
+// most recent first, each naming what was decided with the reason on the
+// nested "└──" detail line. extractRecentDecisions already caps at five and
+// orders most-recent-first; this renderer neither re-slices nor re-orders.
+// A colony with no recorded decisions renders nothing.
+func renderResumeRecentDecisions(b *strings.Builder, raw interface{}) {
+	items, ok := raw.([]interface{})
+	if !ok || len(items) == 0 {
+		return
+	}
+	b.WriteString("\nRecent Decisions\n")
+	for _, item := range items {
+		dec, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		claim := strings.TrimSpace(stringValue(dec["claim"]))
+		if claim == "" {
+			continue
+		}
+		b.WriteString("  - ")
+		b.WriteString(claim)
+		b.WriteString("\n")
+		if rationale := strings.TrimSpace(stringValue(dec["rationale"])); rationale != "" {
+			b.WriteString("      └── ")
+			b.WriteString(rationale)
+			b.WriteString("\n")
+		}
+	}
+}
+
+// intSliceLen reports the length of an int slice regardless of whether it
+// arrives as the in-process []int or the JSON-round-tripped []interface{}.
+func intSliceLen(value interface{}) int {
+	switch v := value.(type) {
+	case []int:
+		return len(v)
+	case []interface{}:
+		return len(v)
+	default:
+		return 0
+	}
+}
+
+// renderResumeDriftNote renders one plain-English sentence saying whether the
+// plan has been revised since it was written (SHOW-02, Claude's Discretion).
+// It reads only result["plan_revision"] -- planRevisionSummary's own output
+// -- and computes no time-since or count-of-changes figure of its own
+// (Phase 196 D-01 applied here: a signal the runtime cannot stand behind is
+// never fabricated). With no recorded revision it says so plainly, and a
+// colony with no plan at all never gets a fabricated one.
+func renderResumeDriftNote(b *strings.Builder, raw interface{}) {
+	revision, ok := raw.(map[string]interface{})
+	b.WriteString("\nPlan Revision\n")
+	if !ok || len(revision) == 0 {
+		b.WriteString("  No plan revision has been recorded.\n")
+		return
+	}
+	reasonType := stringValue(revision["reason_type"])
+	if reasonType == string(colony.PlanRevisionLegacyImport) {
+		b.WriteString("  The plan has not been revised since it was written.\n")
+		return
+	}
+	line := "  The plan has been revised"
+	if reason := strings.TrimSpace(stringValue(revision["reason"])); reason != "" {
+		line += ": " + reason
+	}
+	if superseded := intSliceLen(revision["superseded_phase_ids"]); superseded > 0 {
+		unit := "phase"
+		if superseded != 1 {
+			unit = "phases"
+		}
+		line += fmt.Sprintf(" (replaced %d %s)", superseded, unit)
+	}
+	line += ".\n"
+	b.WriteString(line)
 }
 
 func renderPatrolVisual(result map[string]interface{}) string {
