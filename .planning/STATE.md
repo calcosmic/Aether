@@ -5,7 +5,7 @@ milestone_name: The Queen Decides, the Program Checks
 current_phase: 198.1
 current_phase_name: Feed the Memory
 status: planning
-stopped_at: Whole-system audit done 2026-08-30; four reconnection phases 198.1-198.4 inserted; ready to plan Phase 198.1
+stopped_at: Phase 198.1 planned 2026-08-30 (6 plans, 3 waves); ready to execute
 last_updated: "2026-08-29T21:03:05.607Z"
 last_activity: 2026-08-30
 last_activity_desc: Audit persisted, phases 198.1-198.4 added, next is Phase 198.1
@@ -35,8 +35,8 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 **Progress:** [█████░░░░░] 55%
 
 Phase: 198.1 — Feed the Memory
-Plan: Not started
-Status: Ready to plan
+Plan: 6 plans across 3 waves (wave 1: 01 | wave 2: 02, 03, 06 | wave 3: 04, 05)
+Status: Planned — ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 again — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after

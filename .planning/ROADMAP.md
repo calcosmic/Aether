@@ -347,7 +347,15 @@ Plans:
 
 **Audit findings closed** (from `.planning/audits/2026-08-30-whole-system-audit.md`): continue observation→instinct→QUEEN promotion; continue auto-emitted pheromones; build/continue midden-write; build learning capture; instinct-create on continue; hive-promote at continue; memory-details; midden-threshold auto-REDIRECT; pheromone-expire→eternal promotion.
 
-**Plans**: TBD
+**Plans**: 6 plans across 3 waves
+
+Plans:
+- [ ] 198.1-01-PLAN.md — wave 1: a failed build worker's own words reach the failure log and the next build brief; worker lessons become observations; one feed boundary for both build lanes
+- [ ] 198.1-02-PLAN.md — wave 2: reviewer lessons and failures become memory on both check lanes; a failing free check leaves a record; quick and swarm failures too
+- [ ] 198.1-03-PLAN.md — wave 2: record which instincts a worker was actually given, count a use when the phase passes, and let the existing consolidation carry a lesson into the Queen file
+- [ ] 198.1-06-PLAN.md — wave 2: the memory drill-down shows real sentences again, reports when the Queen file changed, and the status instinct list is labelled by strength
+- [ ] 198.1-04-PLAN.md — wave 3: a finished phase and an answered question each leave a note, three failures of one kind leave an automatic don't-do-this note, and a valuable expiring note is kept in long-term memory
+- [ ] 198.1-05-PLAN.md — wave 3: strong lessons reach the shared cross-project store at every check under the existing switch, and every learning claim in CLAUDE.md names a test
 
 ### Phase 198.2: Memory Reaches Every Helper
 
