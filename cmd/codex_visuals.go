@@ -2807,7 +2807,7 @@ var gateCheckDisplayNames = map[string]string{
 	"spawn_gate":         "every helper that was needed was actually sent",
 	// advisory gates (cmd/gate.go gateClassifications)
 	"medic":   "the health check found nothing needing attention",
-	"runtime": "no runtime problems were reported",
+	"runtime": "nothing went wrong while it was running",
 }
 
 // continueStructuralGateNames lists the four gate keys used by the continue
