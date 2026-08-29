@@ -33,6 +33,31 @@ func materializeOrchestratorBoundaryQuestions(workflow string, state colony.Colo
 	return orchestratorBoundaryQuestionsResult{Questions: questions, Created: created, Existing: existing}, nil
 }
 
+// checkOrchestratorBoundaryQuestions is materializeOrchestratorBoundaryQuestions's
+// read-only sibling: it reports whether an unresolved boundary question
+// exists (already pending, or one the same candidates would raise) without
+// ever creating a new pending decision. Used by the direct build lane
+// (`aether build <phase>`, no `--plan-only`), which has already dispatched
+// real work by the time its advisory heads-up runs -- persisting a brand-new
+// question at that point would be too late to act on and would duplicate
+// whatever the plan-only lane already recorded for the same phase. It still
+// reads state so both lanes agree on BoundaryQuestionCount for the same
+// phase (CLAUDE.md: "if the direct path and the chat path can disagree,
+// both get proved").
+func checkOrchestratorBoundaryQuestions(workflow string, state colony.ColonyState, phase colony.Phase, candidates []discussQuestion) (orchestratorBoundaryQuestionsResult, error) {
+	if state.EffectiveColonyMode() != colony.ColonyModeOrchestrator {
+		return emptyOrchestratorBoundaryQuestionsResult(), nil
+	}
+	questions, created, existing, err := materializeOrchestratorBoundaryClarifications(workflow, phase.ID, loadPendingDecisionFile(), candidates, orchestratorBoundaryQuestionLimit, true)
+	if err != nil {
+		return emptyOrchestratorBoundaryQuestionsResult(), err
+	}
+	if questions == nil {
+		questions = []discussQuestion{}
+	}
+	return orchestratorBoundaryQuestionsResult{Questions: questions, Created: created, Existing: existing}, nil
+}
+
 func addBoundaryQuestionResultFields(result map[string]interface{}, boundary orchestratorBoundaryQuestionsResult) {
 	result["boundary_questions"] = boundary.Questions
 	result["boundary_question_count"] = len(boundary.Questions)

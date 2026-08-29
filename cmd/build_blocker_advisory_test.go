@@ -370,6 +370,96 @@ func TestBothBuildLanesEmitTheHeadsUp(t *testing.T) {
 	})
 }
 
+// boundaryQuestionFixturePhase mirrors blockerAdvisoryFixturePhase's pattern
+// but with ordinary wording that names none of the five forced-reviewer
+// risk signals, so it isolates the unanswered-question signal on both
+// build lanes (WR-01, 198-REVIEW.md).
+func boundaryQuestionFixturePhase() colony.Phase {
+	taskID := "1.1"
+	return colony.Phase{
+		ID:          1,
+		Name:        "Settings page",
+		Description: "Add a settings page to the dashboard",
+		Mode:        colony.PhaseModePrototype,
+		Status:      colony.PhaseReady,
+		Tasks:       []colony.Task{{ID: &taskID, Goal: "Do the work", Status: colony.TaskPending}},
+	}
+}
+
+// setUpOrchestratorFixtureColony is setUpCheckinFixtureColony's sibling for
+// an orchestrator-mode colony -- the only mode
+// materializeOrchestratorBoundaryQuestions (and its read-only sibling
+// checkOrchestratorBoundaryQuestions) ever raises a boundary question for
+// (colony.ColonyState.EffectiveColonyMode).
+func setUpOrchestratorFixtureColony(t *testing.T, dataDir string, phase colony.Phase) {
+	t.Helper()
+	goal := phase.Name
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		ColonyMode:   colony.ColonyModeOrchestrator,
+		CurrentPhase: 0,
+		Plan:         colony.Plan{Phases: []colony.Phase{phase}},
+	})
+}
+
+// TestBothBuildLanesAgreeOnBoundaryQuestionSignal is
+// TestBothBuildLanesEmitTheHeadsUp's sibling for the unanswered-question
+// signal specifically (WR-01, 198-REVIEW.md): before the fix, the direct
+// build lane built its own throwaway codexBuildManifest that never
+// populated BoundaryQuestionCount, so this signal was silently dead on
+// that lane even though the surrounding comment claimed "both lanes call
+// buildStartBlockerSignals ... identically." Both lanes are exercised
+// end-to-end here, on the same orchestrator-mode phase, and both must
+// render the same unanswered-question reason.
+func TestBothBuildLanesAgreeOnBoundaryQuestionSignal(t *testing.T) {
+	const wantReason = "an unanswered planning question is still waiting for the owner"
+
+	t.Run("plan-only lane", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		setUpOrchestratorFixtureColony(t, dataDir, boundaryQuestionFixturePhase())
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+		var buf bytes.Buffer
+		stdout = &buf
+		rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--light"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build --plan-only returned error: %v", err)
+		}
+		rootCmd.SetArgs([]string{})
+
+		out := buf.String()
+		if !strings.Contains(out, wantReason) {
+			t.Fatalf("plan-only lane missing the unanswered-question signal:\n%s", out)
+		}
+	})
+
+	t.Run("direct build lane", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		setUpOrchestratorFixtureColony(t, dataDir, boundaryQuestionFixturePhase())
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+		var buf bytes.Buffer
+		stdout = &buf
+		rootCmd.SetArgs([]string{"build", "1", "--synthetic", "--light"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build --synthetic returned error: %v", err)
+		}
+		rootCmd.SetArgs([]string{})
+
+		out := buf.String()
+		if !strings.Contains(out, wantReason) {
+			t.Fatalf("direct build lane missing the unanswered-question signal -- WR-01 regression (198-REVIEW.md):\n%s", out)
+		}
+	})
+}
+
 // TestNonInteractiveRunsStillPrintTheHeadsUp proves D-09's non-interactive
 // distinction end-to-end: --no-checkin still prints the heads-up naming the
 // live signal, but never adds the question -- printing is unconditional,

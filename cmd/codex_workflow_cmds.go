@@ -324,14 +324,23 @@ var buildCmd = &cobra.Command{
 		// lane above -- the direct dispatch path never derives a full
 		// codexBuildManifest of its own, so the forced-reviewer signal is
 		// re-derived read-only from the phase's own wording (identical
-		// derivation the plan-only manifest uses), and the unanswered-
-		// question / last-continue-blocked signals need no manifest fields
-		// beyond Phase. A guarantee that holds on only one lane is worth
-		// nothing (CLAUDE.md): both lanes call buildStartBlockerSignals and
-		// decideBuildBlockerAdvisory identically.
+		// derivation the plan-only manifest uses), and the
+		// last-continue-blocked signal needs no manifest field beyond Phase.
+		// The unanswered-question signal DOES need BoundaryQuestionCount
+		// (WR-01, 198-REVIEW.md): populate it with the same candidates the
+		// plan-only lane uses, via checkOrchestratorBoundaryQuestions's
+		// read-only check -- never the materializing call, since this lane
+		// has already dispatched real work by the time this advisory runs.
+		directBuildPhase := state.Plan.Phases[phaseNum-1]
+		directBoundary, boundaryErr := checkOrchestratorBoundaryQuestions("build", state, directBuildPhase, buildBoundaryQuestionCandidates(directBuildPhase, selectedTasks))
+		if boundaryErr != nil {
+			outputError(2, fmt.Sprintf("failed to check boundary questions: %v", boundaryErr), nil)
+			return nil
+		}
 		directBuildManifest := codexBuildManifest{
-			Phase:           phaseNum,
-			ForcedReviewers: forcedReviewerRecords(queenForcedReviewersForPhase(state.Plan.Phases[phaseNum-1])),
+			Phase:                 phaseNum,
+			ForcedReviewers:       forcedReviewerRecords(queenForcedReviewersForPhase(directBuildPhase)),
+			BoundaryQuestionCount: len(directBoundary.Questions),
 		}
 		blockerAdvisoryDirect := decideBuildBlockerAdvisory(buildStartBlockerSignals(directBuildManifest), noCheckinFlag)
 		buildVisual := appendSpendCostLine(
