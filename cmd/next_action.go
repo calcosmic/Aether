@@ -208,8 +208,9 @@ const (
 	candidateContinue     nextActionCandidateKey = "continue"
 	candidateSeal         nextActionCandidateKey = "seal"
 	candidateEntomb       nextActionCandidateKey = "entomb"
-	candidateResume       nextActionCandidateKey = "resume"
-	candidateResumeColony nextActionCandidateKey = "resume_colony"
+	candidateResume          nextActionCandidateKey = "resume"
+	candidateResumeColony    nextActionCandidateKey = "resume_colony"
+	candidateResumeDashboard nextActionCandidateKey = "resume_dashboard"
 	candidateStatus       nextActionCandidateKey = "status"
 	candidateFlags        nextActionCandidateKey = "flags"
 	candidateHistory      nextActionCandidateKey = "history"
@@ -299,6 +300,18 @@ var nextActionCandidates = []nextActionCandidate{
 		Key:      candidateResumeColony,
 		Template: "aether resume-colony",
 		Why:      "Reload the fuller picture: the saved notes, the open questions and the task list.",
+	},
+	{
+		// A read-only, non-mutating look at where things stand. Genuinely
+		// distinct from candidateResume: "aether resume" and "aether
+		// resume-colony" are two names for the exact same command (resume is
+		// a declared Cobra alias of resume-colony), so offering both as if
+		// they were different choices recommends one thing twice. This is the
+		// quick view the pause card's "without the detail" alternative always
+		// meant.
+		Key:      candidateResumeDashboard,
+		Template: "aether resume-dashboard",
+		Why:      "Look at a quick view of where things stand, without restoring anything.",
 	},
 	{
 		Key:      candidateStatus,
@@ -533,9 +546,14 @@ func chooseNextAction(in nextActionInput, state colony.ColonyState) nextActionCh
 			key: candidateResume,
 			recommendation: "You paused this project. Picking it back up reloads everything that was " +
 				"in progress and makes it runnable again.",
+			// candidateResumeColony is NOT offered here: "aether resume" and
+			// "aether resume-colony" are two names for the same command (a
+			// declared Cobra alias), so pairing them recommends one thing
+			// twice while calling it a different view. candidateResumeDashboard
+			// is genuinely different -- a read-only look, not the same resume.
 			alternatives: []nextActionAlternativeChoice{
 				{key: candidateStatus},
-				{key: candidateResumeColony},
+				{key: candidateResumeDashboard},
 			},
 		}
 	}

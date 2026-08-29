@@ -125,6 +125,10 @@ var pauseColonyCmd = &cobra.Command{
 			"handoff_path":  handoffDocumentPath(),
 			"next":          "aether resume",
 		}
+		// The state was already saved above with Paused: true, so resolving
+		// the one closing answer from disk here picks up the paused-project
+		// branch automatically -- no override needed for pause specifically.
+		closeLifecycleCommand(result, "pause", "", "")
 		outputWorkflow(result, renderPauseVisual(result))
 		return nil
 	},
@@ -326,6 +330,13 @@ var resumeColonyCmd = &cobra.Command{
 			result["handoff_removed"] = false
 		}
 
+		// buildResumeDashboardResult already resolved and folded an answer
+		// under "resume-dashboard"; re-fold under this command's own name so
+		// the "what changed" line names the command the owner actually ran,
+		// carrying forward the same override fact (if any) rather than
+		// dropping it on a second, unrelated resolve.
+		closeLifecycleCommand(result, "resume-colony",
+			stringValue(result["resume_override_command"]), stringValue(result["resume_override_why"]))
 		outputWorkflow(result, renderResumeVisual(result, handoffText, true))
 		return nil
 	},

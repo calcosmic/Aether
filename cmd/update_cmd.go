@@ -121,7 +121,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			{"label": "Prune shipped repo skills", "copied": 0, "skipped": 0},
 			{"label": "Settings (claude)", "copied": 0, "skipped": 0},
 			{"label": "Rules (claude)", "copied": 0, "skipped": 0},
-		}, 0, 0, nil, binaryMode, hubVersion == binaryVersion)
+		}, 0, 0, nil, binaryMode, hubVersion == binaryVersion, result)
 		if staleResult.Classification != staleOK {
 			visual += renderStalePublishBanner(staleResult)
 		}
@@ -256,10 +256,12 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"stale_publish":           staleResultToMap(staleResult),
 			"alias_wrapper_repairs":   aliasRepairReport.Repairs,
 		}
-		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode, hubVersion == binaryVersion)
-		if !aliasRepairReport.Empty() {
-			visual += "\n" + aliasRepairReport.Message() + "\n"
-		}
+		// The run's own outcome -- whether it repaired a missing command copy
+		// or found nothing to do -- is a fact about what just happened, so it
+		// enters the one resolver's input as the "changed" report rather than
+		// being appended after the card as a second, separate line.
+		closeLifecycleCommand(result, updateLastCommandFact(aliasRepairReport.Message()), "", "")
+		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode, hubVersion == binaryVersion, result)
 		if staleResult.Classification != staleOK {
 			visual += renderStalePublishBanner(staleResult)
 		}
@@ -306,6 +308,17 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// updateLastCommandFact is what update reports it did, fed to the one
+// resolver as the "what changed" fact. Someone whose project was just
+// repaired should be told something different from someone whose project
+// was already fine -- repairMsg is empty in the second case.
+func updateLastCommandFact(repairMsg string) string {
+	if strings.TrimSpace(repairMsg) == "" {
+		return "update"
+	}
+	return "update (" + repairMsg + ")"
 }
 
 func updateBinaryRefreshMode(downloadBinary, dryRun bool) string {

@@ -858,6 +858,16 @@ func lifecycleOverrideFromResult(result map[string]interface{}) (string, string)
 	if command := strings.TrimSpace(stringValue(result["recovery_command"])); command != "" {
 		return command, nextActionUnfinishedWorkWhy
 	}
+	// The resume dashboard's own two special cases: a durable worker result
+	// waiting to be finalized, or a build process it has verified is still
+	// running. Neither can be worked out from the saved project alone.
+	if command := strings.TrimSpace(stringValue(result["resume_override_command"])); command != "" {
+		why := strings.TrimSpace(stringValue(result["resume_override_why"]))
+		if why == "" {
+			why = nextActionUnfinishedWorkWhy
+		}
+		return command, why
+	}
 	if guidance, ok := result["orchestrator_boundary_guidance"].(orchestratorBoundaryGuidance); ok && guidance.Active {
 		if command := strings.TrimSpace(guidance.Next); command != "" {
 			return command, nextActionOpenQuestionWhy
@@ -2715,7 +2725,7 @@ func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCo
 	return b.String()
 }
 
-func renderUpdateVisual(repoDir, hubVersion, localVersion, repoTransition string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string, versionsMatch bool) string {
+func renderUpdateVisual(repoDir, hubVersion, localVersion, repoTransition string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string, versionsMatch bool, result map[string]interface{}) string {
 	var b strings.Builder
 	totalRemoved := syncDetailsRemoved(details)
 	b.WriteString(renderBanner(commandEmoji("update"), "Update"))
@@ -2786,26 +2796,12 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion, repoTransition string
 		b.WriteString(restartNote)
 		b.WriteString("\n")
 	}
-	if totalCopied == 0 && totalRemoved == 0 && len(restartTargets) == 0 {
-		b.WriteString(renderNextUp(
-			`No follow-up is required. Run `+"`aether status`"+` only if you want to inspect the colony.`,
-			`Run `+"`aether init \"next goal\"`"+` only if this repo does not have an active colony yet.`,
-			`Run `+"`aether update --download-binary`"+` only if you explicitly need a published runtime refresh as well.`,
-		))
-		return b.String()
-	}
-	primaryNext := `Run ` + "`aether status`" + ` to inspect the colony after the refresh.`
-	secondaryNext := `Run ` + "`aether init \"next goal\"`" + ` if this repo does not have an active colony yet.`
-	runtimeNext := `Run ` + "`aether update --download-binary`" + ` if you also need a published runtime update.`
-	if len(restartTargets) > 0 {
-		primaryNext = `Restart your session in this repo (Codex or OpenCode), then run ` + "`aether status`" + `.`
-		secondaryNext = `After restarting, run ` + "`aether init \"next goal\"`" + ` if this repo does not have an active colony yet.`
-	}
-	b.WriteString(renderNextUp(
-		primaryNext,
-		secondaryNext,
-		runtimeNext,
-	))
+	// Both branches below used to hand-write their own recommendation. The
+	// one resolver's answer is about the PROJECT, not about update's own
+	// flags, so it replaces them here; the restart note above (when present)
+	// and the repair report folded into "changed" below cover what update
+	// itself did.
+	b.WriteString(renderLifecycleClosing(result, "update"))
 	return b.String()
 }
 
@@ -2964,7 +2960,7 @@ func renderPauseVisual(result map[string]interface{}) string {
 	b.WriteString(renderBanner(commandEmoji("pause"), "Pause Colony"))
 	b.WriteString(visualDividerStr())
 	b.WriteString(renderStageMarker("Handoff"))
-	b.WriteString("Colony handoff saved for later resumption.\n")
+	b.WriteString("A save file for this project was written, so you can pick it back up later.\n")
 	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
 		b.WriteString("Goal: ")
 		b.WriteString(goal)
@@ -2985,15 +2981,14 @@ func renderPauseVisual(result map[string]interface{}) string {
 		b.WriteString(handoffPath)
 		b.WriteString("\n")
 	}
-	// Both lines used to name `aether resume`, the second one described as "the
-	// compact dashboard view instead" -- one command offered twice, and no way
-	// to reach the fuller restore that second line was written for. The full
-	// restore is resume-colony; the quick one is resume.
-	b.WriteString(renderNextUp(
-		`Run `+"`aether resume-colony`"+` when you want to pick this project back up. It reloads the full picture: the saved notes, the open questions and the task list.`,
-		`Run `+"`aether resume`"+` for the quick version -- where things stand, without the detail.`,
-	))
-	b.WriteString(renderContextClearGuidance())
+	// The closing used to hand-write two alternatives, "aether resume-colony"
+	// and "aether resume" -- but resume is a declared Cobra ALIAS of
+	// resume-colony, so the two lines named the exact same command twice, one
+	// of them wrongly described as "the compact dashboard view instead". The
+	// card below is the one resolver's answer: it names the short command
+	// (resume, gated against the live command tree) as the primary and offers
+	// the genuinely different read-only quick view as an alternative.
+	b.WriteString(renderLifecycleClosing(result, "pause"))
 	return b.String()
 }
 
@@ -3100,7 +3095,6 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		}
 	}
 
-	var suggestedNext string
 	if session, ok := result["session"].(map[string]interface{}); ok {
 		if summary := strings.TrimSpace(stringValue(session["summary"])); summary != "" {
 			b.WriteString("\nSession Summary\n")
@@ -3116,7 +3110,6 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 				b.WriteString("\n")
 			}
 		}
-		suggestedNext = strings.TrimSpace(stringValue(session["suggested_next"]))
 	}
 
 	if signals, ok := result["signals"].(map[string]interface{}); ok {
@@ -3228,22 +3221,14 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		}
 	}
 
-	nextCommand := suggestedNext
-	if nextCommand == "" && state != "" {
-		nextCommand = computeNextAction(state, phase, totalPhases)
-	}
-	if nextCommand == "" {
-		nextCommand = "aether status"
-	}
-	alt := "`aether memory-details`"
-	if full {
-		alt = "`aether resume`"
-	}
-	b.WriteString(renderNextUp(
-		fmt.Sprintf("Run `%s` to continue from the restored colony state.", nextCommand),
-		fmt.Sprintf("Run %s for additional inspection.", alt),
-	))
-	b.WriteString(renderContextClearGuidance())
+	// The closing used to compute its own recommendation (suggestedNext,
+	// falling back to computeNextAction) and a hand-typed "additional
+	// inspection" alternative. Both are the one resolver's job now:
+	// buildResumeDashboardResult already resolved and folded the answer for
+	// this exact project into the result, including the two override facts
+	// (a durable worker result waiting to finalize, or a build genuinely
+	// still running) that only this dashboard knows.
+	b.WriteString(renderLifecycleClosing(result, "resume-dashboard"))
 	return b.String()
 }
 
