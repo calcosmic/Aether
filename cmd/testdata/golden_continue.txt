@@ -65,10 +65,10 @@ Gates: 10/10 passed
   ✓ the build/test checks passed
   ✓ there's evidence the work was actually done
   ✓ nothing is waiting on your confirmation
-  ✓ no critical flags
+  ✓ no critical problems were flagged
   ✓ no unresolved blockers
   ✓ no risky code patterns were found
-  ✓ anti pattern executed
+  ✓ the risky-code scan actually ran
   └── (+2 more gates)
 Workers closed: 2
 ── Housekeeping ──

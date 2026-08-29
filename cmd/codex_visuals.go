@@ -2747,30 +2747,68 @@ func renderVerificationStepDetailLines(b *strings.Builder, views []verificationS
 
 // gateCheckDisplayNames is the runtime's own translation table from a
 // gate's internal snake_case key to the plain-English sentence the owner
-// sees. It is the single source both gateCheckDisplayName's lookup and
-// continueGateCheckNames (derived below) read from -- so
-// TestRestoredDetailIsPlainEnglish checks against the actual translation
-// table rather than a second, driftable literal typed into the test file
-// (198-06-PLAN.md Task 3). The internal key never reaches the owner
-// directly (CLAUDE.md "translate every repo word inline").
+// sees. gateCheckDisplayName's lookup reads from this table. The internal
+// key never reaches the owner directly (CLAUDE.md "translate every repo
+// word inline"). This covers every key in gateClassifications (cmd/gate.go
+// -- the classified security/quality gates) plus the four structural keys
+// below that come from the continue flow's own checks rather than
+// gate.go -- see continueGateCheckNames, which is derived from those two
+// real sources rather than from this map, so a gate name added to
+// gateClassifications without a translation here fails
+// TestRestoredDetailIsPlainEnglish instead of silently passing.
 var gateCheckDisplayNames = map[string]string{
+	// Structural keys (continue flow's own checks, not in gateClassifications)
 	"manifest_present":           "the build's own plan file is on disk",
 	"verification_steps_passed":  "the build/test checks passed",
 	"implementation_evidence":    "there's evidence the work was actually done",
 	"owner_confirmation_pending": "nothing is waiting on your confirmation",
-	"anti_pattern":               "no risky code patterns were found",
-	"charter_compliance":         "the project's own rules were followed",
+	// hard_block gates (cmd/gate.go gateClassifications)
+	"gatekeeper":                  "the security check found nothing concerning",
+	"watcher_veto":                "the quality reviewer didn't block the work",
+	"flags":                       "nothing was flagged that needs your attention",
+	"tests_pass":                  "the tests passed",
+	"no_critical_flags":           "no critical problems were flagged",
+	"anti_pattern_executed":       "the risky-code scan actually ran",
+	"charter_compliance_executed": "the project's own rules check actually ran",
+	// soft_block gates (cmd/gate.go gateClassifications)
+	"auditor":            "the quality reviewer's checks passed",
+	"complexity":         "the code wasn't too complex to maintain",
+	"tdd_evidence":       "there's evidence tests were written before the code",
+	"anti_pattern":       "no risky code patterns were found",
+	"charter_compliance": "the project's own rules were followed",
+	"verification_loop":  "the verification steps completed",
+	"spawn_gate":         "every helper that was needed was actually sent",
+	// advisory gates (cmd/gate.go gateClassifications)
+	"medic":   "the health check found nothing needing attention",
+	"runtime": "no runtime problems were reported",
 }
 
-// continueGateCheckNames is derived from gateCheckDisplayNames -- the
-// runtime's own record of every internal gate key this translator
-// recognises -- rather than a hand-typed list, so a newly added gate name
-// automatically joins the plain-English check without a second edit.
+// continueStructuralGateNames lists the four gate keys used by the continue
+// flow's own structural checks -- they are not part of gate.go's
+// gateClassifications table (that table only covers the classified
+// security/quality gates), but they still need a plain-English translation
+// on this screen.
+var continueStructuralGateNames = []string{
+	"manifest_present",
+	"verification_steps_passed",
+	"implementation_evidence",
+	"owner_confirmation_pending",
+}
+
+// continueGateCheckNames is derived from the runtime's real universe of gate
+// keys -- gateClassifications (cmd/gate.go, every classified security/quality
+// gate) unioned with continueStructuralGateNames (the continue flow's own
+// structural checks) -- rather than from gateCheckDisplayNames itself. That
+// way, a gate name that is added to the runtime but never given a
+// plain-English translation actually fails TestRestoredDetailIsPlainEnglish,
+// instead of the test tautologically passing because the untranslated name
+// was never in its own input list.
 var continueGateCheckNames = func() []string {
-	names := make([]string, 0, len(gateCheckDisplayNames))
-	for name := range gateCheckDisplayNames {
+	names := make([]string, 0, len(gateClassifications)+len(continueStructuralGateNames))
+	for name := range gateClassifications {
 		names = append(names, name)
 	}
+	names = append(names, continueStructuralGateNames...)
 	return names
 }()
 
