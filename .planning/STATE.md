@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 172.1
+current_phase: 199
 current_phase_name: gate environment integrity — not started; blocks nothing; stays in the backlog
 status: planning
 stopped_at: Phase 198 complete, ready to plan Phase 199
@@ -264,5 +264,5 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 ## Session Continuity
 
 Last session: 2026-08-29T15:32:24.318Z
-Stopped at: Phase 198 complete, ready to plan Phase 172.1
+Stopped at: Phase 198 complete, ready to plan Phase 199
 Resume file: .planning/phases/198-put-the-thrown-away-data-back-on-screen/198-CONTEXT.md
