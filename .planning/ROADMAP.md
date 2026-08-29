@@ -298,7 +298,19 @@ Plans:
 4. Sealing (marking a project finished) always asks the owner to confirm first and always runs the "what did we learn" review before finishing.
 5. Three things the team deliberately chose to leave out — one shared terminal window, boxed section borders, and the old "clear the chat now?" prompt — stay out, and a test locks that choice so they do not quietly come back.
 
-**Plans**: TBD
+**Plans**: 9 plans
+
+Plans:
+- [ ] 198-01-PLAN.md — Tracer: the chat path renders the direct continue screen from one renderer (wave 1)
+- [ ] 198-02-PLAN.md — Live start/finish lines for every check, on both continue lanes (wave 1)
+- [ ] 198-03-PLAN.md — Seal state-of-play card, wisdom review before the question, recorded finish-anyway, autopilot never seals (wave 1)
+- [ ] 198-04-PLAN.md — Parity expanded to planning and finishing; criterion 1 closed (wave 2)
+- [ ] 198-05-PLAN.md — Worker duration and tool-call count, measured, live and in the summary (wave 2)
+- [ ] 198-06-PLAN.md — Per-check report, per-gate names, evidence lines, specialist findings (wave 3)
+- [ ] 198-07-PLAN.md — Build-start blocker heads-up and its one question (wave 2)
+- [ ] 198-08-PLAN.md — Resume per-phase progress, recent decisions, drift note (wave 4)
+- [ ] 198-09-PLAN.md — Carried-field invariant with shrink-only allowlist, plus the deliberate-drops lock (wave 4)
+
 **UI hint**: yes
 
 ### Phase 199: Proof
