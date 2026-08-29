@@ -1486,7 +1486,14 @@ func renderPlanVisual(result map[string]interface{}) string {
 			b.WriteString("Override: --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy>\n")
 		}
 	}
-	if confidence, ok := result["confidence"].(map[string]interface{}); ok {
+	// Dual-type: both runCodexPlanWithOptions and runCodexPlanFinalize always
+	// store confidence as a codexPlanConfidence struct, never as a map -- the
+	// map-only branch below never matched on either the direct or chat path
+	// (WINDOWS.md entry 5, found by 198-04). Mirrors planning_loop's existing
+	// struct/map switch immediately below.
+	if confidence, ok := result["confidence"].(codexPlanConfidence); ok {
+		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", int(confidence.Overall)))
+	} else if confidence, ok := result["confidence"].(map[string]interface{}); ok {
 		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", intValue(confidence["overall"])))
 	}
 	if planningLoop, ok := result["planning_loop"].(codexPlanningLoop); ok && planningLoop.TargetConfidence > 0 {
@@ -2110,10 +2117,12 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	}
 	b.WriteString(fmt.Sprintf("Phase %d verified and completed: %s\n", phase.ID, phase.Name))
 	renderContinueVerificationSummaryMap(&b, continueTypedResultMapValue(result["verification"]))
+	renderContinueVerificationDetail(&b, result["verification"])
 	if issues := stringSliceValue(result["operational_issues"]); len(issues) > 0 {
 		b.WriteString("Operational evidence\n")
 		b.WriteString(renderIndentedList(issues))
 	}
+	renderCriterionEvidenceLines(&b, result["verification"])
 	b.WriteString("Workers\n")
 	if closed := stringSliceValue(result["closed_workers"]); len(closed) > 0 {
 		b.WriteString(renderIndentedList(closed))
@@ -2121,6 +2130,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 		b.WriteString("  - No workers required closing\n")
 	}
 	renderContinueWorkerFlowValue(&b, result["worker_flow"])
+	renderSpecialistFindingBlocks(&b, result["worker_flow"])
 	b.WriteString("Verification passed during continue\n")
 	artifacts := []string{
 		displayDataPath(fmt.Sprintf("build/phase-%d/verification.json", phase.ID)),
@@ -2135,6 +2145,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	)
 	b.WriteString(renderArtifactsSection(artifacts...))
 	renderContinueGateSummaryMap(&b, continueTypedResultMapValue(result["gates"]))
+	renderContinueGateDetail(&b, result["gates"])
 	if closed := stringSliceValue(result["closed_workers"]); len(closed) > 0 {
 		b.WriteString(fmt.Sprintf("Workers closed: %d\n", len(closed)))
 	}
@@ -2297,8 +2308,11 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Phase %d remains active: %s\n", phase.ID, phase.Name))
 	renderContinueVerificationSummaryMap(&b, continueTypedResultMapValue(result["verification"]))
+	renderContinueVerificationDetail(&b, result["verification"])
 	renderContinueGateSummaryMap(&b, continueTypedResultMapValue(result["gates"]))
+	renderContinueGateDetail(&b, result["gates"])
 	renderContinueWorkerFlowValue(&b, result["worker_flow"])
+	renderSpecialistFindingBlocks(&b, result["worker_flow"])
 	artifacts := []string{}
 	if verificationReport := strings.TrimSpace(stringValue(result["verification_report"])); verificationReport != "" {
 		artifacts = append(artifacts, verificationReport)
@@ -2320,6 +2334,7 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 		b.WriteString("Operational issues\n")
 		b.WriteString(renderIndentedList(issues))
 	}
+	renderCriterionEvidenceLines(&b, result["verification"])
 	if blockers := stringSliceValue(result["blocking_issues"]); len(blockers) > 0 {
 		b.WriteString("Blocking issues\n")
 		b.WriteString(renderIndentedList(blockers))
@@ -2596,6 +2611,518 @@ func renderContinueGateSummaryMap(b *strings.Builder, gates map[string]interface
 		}
 	}
 	b.WriteString(fmt.Sprintf("Gates: %d/%d passed\n", passed, len(checks)))
+}
+
+// continueDetailCap is the per-category nested-detail cap shared by
+// renderContinueVerificationDetail and renderContinueGateDetail (D-10):
+// beneath this many named lines, an honest "(+N more)" line reports the
+// real arithmetic remainder rather than silently truncating. Set above the
+// largest count either category produces today (4 verification checks, 6
+// continue gates) so ordinary output is never capped; it exists to keep a
+// pathological input from producing an unbounded screen.
+const continueDetailCap = 8
+
+// verificationStepDetailView is the shape both the in-process typed
+// codexVerificationStep and the JSON-round-tripped map entry are reduced to
+// before rendering, so renderVerificationStepDetailLines has exactly one
+// formatting implementation for both (the dual-type rendering pattern
+// renderContinueWorkerFlowValue already established, 198-PATTERNS.md).
+type verificationStepDetailView struct {
+	Name     string
+	Skipped  bool
+	Passed   bool
+	Summary  string
+	Duration float64
+	Command  string
+}
+
+// formatVerificationStepResultLine is the single formatter for a
+// verification check's outcome text -- shared by the live progress line
+// (emitVerificationStepFinish) and the closing verification detail
+// (renderVerificationStepDetailLines) so the two surfaces can never disagree
+// about the same check's result (D-01/D-03's "one source" rule applied to
+// verification checks). A skipped check names its reason and claims no
+// elapsed time; a passed check shows its measured duration when one was
+// recorded; a failed check carries its own Summary inline.
+func formatVerificationStepResultLine(label string, skipped, passed bool, summary string, duration float64) string {
+	if skipped {
+		reason := strings.TrimSpace(summary)
+		if reason == "" {
+			reason = "skipped"
+		}
+		return fmt.Sprintf("%s — skipped: %s", label, reason)
+	}
+	durationText := ""
+	if duration > 0 {
+		durationText = fmt.Sprintf(" (%.1fs)", duration)
+	}
+	if passed {
+		return fmt.Sprintf("%s ✓%s", label, durationText)
+	}
+	reason := strings.TrimSpace(summary)
+	if reason == "" {
+		reason = "failed"
+	}
+	return fmt.Sprintf("%s ✗%s — %s", label, durationText, reason)
+}
+
+// renderContinueVerificationDetail names every check the verification tally
+// line summarised (SHOW-02): the plain-English check name, its pass/fail/
+// skip mark, and its measured elapsed time -- never the internal key. A
+// failed check's command goes on the nested "└──" detail line beneath it.
+// Dual-type: raw is result["verification"], which is either the in-process
+// typed codexContinueVerificationReport struct or the JSON-round-tripped
+// map[string]interface{} a completion file produces.
+func renderContinueVerificationDetail(b *strings.Builder, raw interface{}) {
+	switch v := raw.(type) {
+	case codexContinueVerificationReport:
+		renderVerificationStepDetailLines(b, verificationStepDetailViewsFromTyped(v.Steps))
+	case map[string]interface{}:
+		steps, _ := v["steps"].([]interface{})
+		renderVerificationStepDetailLines(b, verificationStepDetailViewsFromMap(steps))
+	}
+}
+
+func verificationStepDetailViewsFromTyped(steps []codexVerificationStep) []verificationStepDetailView {
+	views := make([]verificationStepDetailView, 0, len(steps))
+	for _, step := range steps {
+		views = append(views, verificationStepDetailView{
+			Name:     step.Name,
+			Skipped:  step.Skipped,
+			Passed:   step.Passed,
+			Summary:  step.Summary,
+			Duration: step.Duration,
+			Command:  step.Command,
+		})
+	}
+	return views
+}
+
+func verificationStepDetailViewsFromMap(steps []interface{}) []verificationStepDetailView {
+	views := make([]verificationStepDetailView, 0, len(steps))
+	for _, raw := range steps {
+		entry, _ := raw.(map[string]interface{})
+		if entry == nil {
+			continue
+		}
+		views = append(views, verificationStepDetailView{
+			Name:     stringValue(entry["name"]),
+			Skipped:  boolValue(entry["skipped"]),
+			Passed:   boolValue(entry["passed"]),
+			Summary:  stringValue(entry["summary"]),
+			Duration: floatValue(entry["duration_seconds"]),
+			Command:  stringValue(entry["command"]),
+		})
+	}
+	return views
+}
+
+func renderVerificationStepDetailLines(b *strings.Builder, views []verificationStepDetailView) {
+	if len(views) == 0 {
+		return
+	}
+	shown := views
+	overflow := 0
+	if len(shown) > continueDetailCap {
+		overflow = len(shown) - continueDetailCap
+		shown = shown[:continueDetailCap]
+	}
+	for _, v := range shown {
+		label := verificationStepDisplayName(v.Name)
+		b.WriteString("  ")
+		b.WriteString(formatVerificationStepResultLine(label, v.Skipped, v.Passed, v.Summary, v.Duration))
+		b.WriteString("\n")
+		if !v.Skipped && !v.Passed {
+			if cmd := strings.TrimSpace(v.Command); cmd != "" {
+				b.WriteString("      └── ")
+				b.WriteString(cmd)
+				b.WriteString("\n")
+			}
+		}
+	}
+	if overflow > 0 {
+		b.WriteString(fmt.Sprintf("  └── (+%d more checks)\n", overflow))
+	}
+}
+
+// gateCheckDisplayNames is the runtime's own translation table from a
+// gate's internal snake_case key to the plain-English sentence the owner
+// sees. It is the single source both gateCheckDisplayName's lookup and
+// continueGateCheckNames (derived below) read from -- so
+// TestRestoredDetailIsPlainEnglish checks against the actual translation
+// table rather than a second, driftable literal typed into the test file
+// (198-06-PLAN.md Task 3). The internal key never reaches the owner
+// directly (CLAUDE.md "translate every repo word inline").
+var gateCheckDisplayNames = map[string]string{
+	"manifest_present":           "the build's own plan file is on disk",
+	"verification_steps_passed":  "the build/test checks passed",
+	"implementation_evidence":    "there's evidence the work was actually done",
+	"owner_confirmation_pending": "nothing is waiting on your confirmation",
+	"anti_pattern":               "no risky code patterns were found",
+	"charter_compliance":         "the project's own rules were followed",
+}
+
+// continueGateCheckNames is derived from gateCheckDisplayNames -- the
+// runtime's own record of every internal gate key this translator
+// recognises -- rather than a hand-typed list, so a newly added gate name
+// automatically joins the plain-English check without a second edit.
+var continueGateCheckNames = func() []string {
+	names := make([]string, 0, len(gateCheckDisplayNames))
+	for name := range gateCheckDisplayNames {
+		names = append(names, name)
+	}
+	return names
+}()
+
+// gateCheckDisplayName translates a gate's internal key into the
+// plain-English sentence the owner sees, via gateCheckDisplayNames above.
+func gateCheckDisplayName(name string) string {
+	key := strings.ToLower(strings.TrimSpace(name))
+	if display, ok := gateCheckDisplayNames[key]; ok {
+		return display
+	}
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "check"
+	}
+	return strings.ReplaceAll(trimmed, "_", " ")
+}
+
+// gateCheckDetailView is the shape both the in-process typed gateCheck and
+// the JSON-round-tripped map entry are reduced to before rendering (same
+// dual-type pattern as verificationStepDetailView).
+type gateCheckDetailView struct {
+	Name    string
+	Passed  bool
+	FixHint string
+}
+
+// renderContinueGateDetail names every gate the "Gates: N/M passed" tally
+// line summarised (SHOW-02): the gate translated into plain English and its
+// outcome, with a failing gate's fix hint on the nested "└──" detail line.
+// Dual-type: raw is result["gates"], either the in-process typed
+// codexContinueGateReport struct or the JSON-round-tripped map a completion
+// file produces.
+func renderContinueGateDetail(b *strings.Builder, raw interface{}) {
+	switch v := raw.(type) {
+	case codexContinueGateReport:
+		views := make([]gateCheckDetailView, 0, len(v.Checks))
+		for _, c := range v.Checks {
+			views = append(views, gateCheckDetailView{Name: c.Name, Passed: c.Passed, FixHint: c.FixHint})
+		}
+		renderGateCheckDetailLines(b, views)
+	case map[string]interface{}:
+		checks, _ := v["checks"].([]interface{})
+		views := make([]gateCheckDetailView, 0, len(checks))
+		for _, raw := range checks {
+			entry, _ := raw.(map[string]interface{})
+			if entry == nil {
+				continue
+			}
+			views = append(views, gateCheckDetailView{
+				Name:    stringValue(entry["name"]),
+				Passed:  boolValue(entry["passed"]),
+				FixHint: stringValue(entry["fix_hint"]),
+			})
+		}
+		renderGateCheckDetailLines(b, views)
+	}
+}
+
+func renderGateCheckDetailLines(b *strings.Builder, views []gateCheckDetailView) {
+	if len(views) == 0 {
+		return
+	}
+	shown := views
+	overflow := 0
+	if len(shown) > continueDetailCap {
+		overflow = len(shown) - continueDetailCap
+		shown = shown[:continueDetailCap]
+	}
+	for _, v := range shown {
+		mark := "✓"
+		if !v.Passed {
+			mark = "✗"
+		}
+		b.WriteString(fmt.Sprintf("  %s %s", mark, gateCheckDisplayName(v.Name)))
+		b.WriteString("\n")
+		if !v.Passed {
+			if hint := strings.TrimSpace(v.FixHint); hint != "" {
+				b.WriteString("      └── ")
+				b.WriteString(hint)
+				b.WriteString("\n")
+			}
+		}
+	}
+	if overflow > 0 {
+		b.WriteString(fmt.Sprintf("  └── (+%d more gates)\n", overflow))
+	}
+}
+
+// criterionEvidenceView is the shape both the in-process typed
+// codexCriterionVerification and the JSON-round-tripped map entry are
+// reduced to before rendering (D-11).
+type criterionEvidenceView struct {
+	Criterion      string
+	Evidence       []string
+	Summary        string
+	State          string
+	Passed         bool
+	BlockingIssues []string
+}
+
+// criterionEvidenceDisplayState computes, from the criterion's own fields
+// and nothing else, which of the four D-11 display states a requirement is
+// in -- "satisfied", "awaiting_owner", "blocked", or "unproven". Both the
+// mark (✓/⏳/✗/?) and the words used ("proved by"/"awaiting your
+// confirmation"/etc.) are derived from this single function's return value,
+// so a rendering change can never make an unproven requirement look
+// satisfied (198-06-PLAN.md Task 2 behavior: "the mark and the state must
+// come from the same field").
+func criterionEvidenceDisplayState(v criterionEvidenceView) string {
+	if strings.EqualFold(strings.TrimSpace(v.State), criterionStateNeedsOwnerConfirmation) {
+		return "awaiting_owner"
+	}
+	if !v.Passed || len(v.BlockingIssues) > 0 {
+		return "blocked"
+	}
+	if len(v.Evidence) == 0 {
+		return "unproven"
+	}
+	return "satisfied"
+}
+
+// renderCriterionEvidenceLines renders D-11's requirement-plus-proof shape
+// for every criterion the verification report carries: "✓ Login works —
+// proved by: 3 tests passed, auth.go present". A requirement is never shown
+// with a satisfied mark unless it is genuinely proven (see
+// criterionEvidenceDisplayState); an unproven, blocked, or
+// awaiting-owner-confirmation requirement names its own state in plain
+// English instead. Dual-type: raw is result["verification"], either the
+// in-process typed codexContinueVerificationReport struct or the JSON-
+// round-tripped map a completion file produces.
+func renderCriterionEvidenceLines(b *strings.Builder, raw interface{}) {
+	switch v := raw.(type) {
+	case codexContinueVerificationReport:
+		renderCriterionEvidenceViewLines(b, criterionEvidenceViewsFromTyped(v.Criteria))
+	case map[string]interface{}:
+		criteria, _ := v["criteria"].([]interface{})
+		renderCriterionEvidenceViewLines(b, criterionEvidenceViewsFromMap(criteria))
+	}
+}
+
+func criterionEvidenceViewsFromTyped(criteria []codexCriterionVerification) []criterionEvidenceView {
+	views := make([]criterionEvidenceView, 0, len(criteria))
+	for _, c := range criteria {
+		views = append(views, criterionEvidenceView{
+			Criterion:      c.Criterion,
+			Evidence:       c.Evidence,
+			Summary:        c.Summary,
+			State:          c.State,
+			Passed:         c.Passed,
+			BlockingIssues: c.BlockingIssues,
+		})
+	}
+	return views
+}
+
+func criterionEvidenceViewsFromMap(criteria []interface{}) []criterionEvidenceView {
+	views := make([]criterionEvidenceView, 0, len(criteria))
+	for _, raw := range criteria {
+		entry, _ := raw.(map[string]interface{})
+		if entry == nil {
+			continue
+		}
+		views = append(views, criterionEvidenceView{
+			Criterion:      stringValue(entry["criterion"]),
+			Evidence:       stringSliceValue(entry["evidence"]),
+			Summary:        stringValue(entry["summary"]),
+			State:          stringValue(entry["state"]),
+			Passed:         boolValue(entry["passed"]),
+			BlockingIssues: stringSliceValue(entry["blocking_issues"]),
+		})
+	}
+	return views
+}
+
+func renderCriterionEvidenceViewLines(b *strings.Builder, views []criterionEvidenceView) {
+	if len(views) == 0 {
+		return
+	}
+	b.WriteString("📋 Requirement Evidence\n")
+	shown := views
+	overflow := 0
+	if len(shown) > continueDetailCap {
+		overflow = len(shown) - continueDetailCap
+		shown = shown[:continueDetailCap]
+	}
+	for _, v := range shown {
+		label := strings.TrimSpace(v.Criterion)
+		if label == "" {
+			label = "(unnamed requirement)"
+		}
+		switch criterionEvidenceDisplayState(v) {
+		case "satisfied":
+			b.WriteString(fmt.Sprintf("  ✓ %s — proved by: %s\n", label, strings.Join(v.Evidence, ", ")))
+		case "awaiting_owner":
+			b.WriteString(fmt.Sprintf("  ⏳ %s — awaiting your confirmation\n", label))
+		case "blocked":
+			reason := strings.TrimSpace(v.Summary)
+			if reason == "" && len(v.BlockingIssues) > 0 {
+				reason = strings.Join(v.BlockingIssues, "; ")
+			}
+			if reason == "" {
+				reason = "blocked"
+			}
+			b.WriteString(fmt.Sprintf("  ✗ %s — %s\n", label, reason))
+		default: // unproven
+			b.WriteString(fmt.Sprintf("  ? %s — unproven: no evidence recorded\n", label))
+		}
+	}
+	if overflow > 0 {
+		b.WriteString(fmt.Sprintf("  └── (+%d more requirements)\n", overflow))
+	}
+}
+
+// specialistFindingView is the shape both the in-process typed
+// codexContinueWorkerFlowStep and the JSON-round-tripped map entry are
+// reduced to before rendering the specialist-findings block (Task 2, plan
+// 198-06): the data was always carried on worker_flow, previously visible
+// only by reading every worker's own nested detail line-by-line.
+type specialistFindingView struct {
+	Name            string
+	Caste           string
+	Findings        []string
+	Recommendations []string
+	WeakSpots       []string
+	EdgeCases       []string
+	Blockers        []string
+}
+
+func specialistFindingViewIsEmpty(v specialistFindingView) bool {
+	return len(v.Findings) == 0 && len(v.Recommendations) == 0 && len(v.WeakSpots) == 0 && len(v.EdgeCases) == 0 && len(v.Blockers) == 0
+}
+
+// renderSpecialistFindingBlocks renders every reviewer's findings,
+// recommendations, weak spots, edge cases, and blockers as their own headed
+// block -- visible without reading every worker's per-line nested detail
+// (198-06-PLAN.md Task 2, item 4). Dual-type: raw is result["worker_flow"],
+// either the in-process typed []codexContinueWorkerFlowStep slice or the
+// JSON-round-tripped []interface{} a completion file produces.
+func renderSpecialistFindingBlocks(b *strings.Builder, raw interface{}) {
+	var views []specialistFindingView
+	switch flow := raw.(type) {
+	case []codexContinueWorkerFlowStep:
+		views = specialistFindingViewsFromTyped(flow)
+	case []interface{}:
+		views = specialistFindingViewsFromMap(flow)
+	}
+	if len(views) == 0 {
+		return
+	}
+	b.WriteString("🔍 Specialist Findings\n")
+	const perWorkerCategoryCap = 3
+	for _, v := range views {
+		line := "  - "
+		if v.Caste != "" {
+			line += casteIdentity(v.Caste) + " "
+		}
+		line += strings.TrimSpace(v.Name)
+		b.WriteString(line)
+		b.WriteString("\n")
+		writeSpecialistFindingCategory(b, "found", v.Findings, perWorkerCategoryCap)
+		writeSpecialistFindingCategory(b, "recommends", v.Recommendations, perWorkerCategoryCap)
+		writeSpecialistFindingCategory(b, "weak spot", v.WeakSpots, perWorkerCategoryCap)
+		writeSpecialistFindingCategory(b, "edge case", v.EdgeCases, perWorkerCategoryCap)
+		writeSpecialistFindingCategory(b, "blocker", v.Blockers, perWorkerCategoryCap)
+	}
+}
+
+func writeSpecialistFindingCategory(b *strings.Builder, label string, items []string, cap int) {
+	for i, item := range items {
+		if i >= cap {
+			b.WriteString(fmt.Sprintf("      └── %s: (+%d more)\n", label, len(items)-cap))
+			return
+		}
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("      └── %s: %s\n", label, item))
+	}
+}
+
+func specialistFindingViewsFromTyped(flow []codexContinueWorkerFlowStep) []specialistFindingView {
+	views := make([]specialistFindingView, 0, len(flow))
+	for _, step := range flow {
+		findings := make([]string, 0, len(step.Findings))
+		for _, finding := range step.Findings {
+			label := strings.TrimSpace(finding.Title)
+			if label == "" {
+				label = strings.TrimSpace(finding.Description)
+			}
+			if severity := strings.TrimSpace(finding.Severity); severity != "" && label != "" {
+				label = severity + ": " + label
+			}
+			if label != "" {
+				findings = append(findings, label)
+			}
+		}
+		v := specialistFindingView{
+			Name:            step.Name,
+			Caste:           step.Caste,
+			Findings:        findings,
+			Recommendations: step.Recommendations,
+			WeakSpots:       step.WeakSpots,
+			EdgeCases:       step.EdgeCases,
+			Blockers:        step.Blockers,
+		}
+		if specialistFindingViewIsEmpty(v) {
+			continue
+		}
+		views = append(views, v)
+	}
+	return views
+}
+
+func specialistFindingViewsFromMap(flow []interface{}) []specialistFindingView {
+	views := make([]specialistFindingView, 0, len(flow))
+	for _, raw := range flow {
+		step, _ := raw.(map[string]interface{})
+		if step == nil {
+			continue
+		}
+		findings := []string{}
+		if rawFindings, ok := step["findings"].([]interface{}); ok {
+			for _, rawFinding := range rawFindings {
+				finding, _ := rawFinding.(map[string]interface{})
+				label := strings.TrimSpace(stringValue(finding["title"]))
+				if label == "" {
+					label = strings.TrimSpace(stringValue(finding["description"]))
+				}
+				if severity := strings.TrimSpace(stringValue(finding["severity"])); severity != "" && label != "" {
+					label = severity + ": " + label
+				}
+				if label != "" {
+					findings = append(findings, label)
+				}
+			}
+		}
+		v := specialistFindingView{
+			Name:            stringValue(step["name"]),
+			Caste:           stringValue(step["caste"]),
+			Findings:        findings,
+			Recommendations: stringSliceValue(step["recommendations"]),
+			WeakSpots:       stringSliceValue(step["weak_spots"]),
+			EdgeCases:       stringSliceValue(step["edge_cases_discovered"]),
+			Blockers:        stringSliceValue(step["blockers"]),
+		}
+		if specialistFindingViewIsEmpty(v) {
+			continue
+		}
+		views = append(views, v)
+	}
+	return views
 }
 
 func mapValue(raw interface{}) map[string]interface{} {
