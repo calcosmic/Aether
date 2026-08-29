@@ -229,24 +229,11 @@ func TestUpdateEndsWithTheCard(t *testing.T) {
 	}
 }
 
-// TestUpdateEnvelopeCarriesTheCardsFields is the machine-readable half:
-// updating emits the same stable keys every migrated command's envelope
-// carries.
-func TestUpdateEnvelopeCarriesTheCardsFields(t *testing.T) {
-	homeDir, repoDir := setUpAliasReconcileProject(t)
-	_, envelope := runSessionUpdate(t, homeDir, repoDir, true)
-
-	command, ok := envelope[nextActionCommandKey].(string)
-	if !ok || strings.TrimSpace(command) == "" {
-		t.Fatalf("update emits no %q in its machine-readable answer; a wrapper cannot read the next step out of it", nextActionCommandKey)
-	}
-	if !strings.HasPrefix(command, "aether ") {
-		t.Errorf("update's machine-readable command is %q, which is not something that can be run", command)
-	}
-	if _, ok := envelope[nextActionRecommendationKey]; !ok {
-		t.Errorf("update carries no plain-English reason (%q) beside its command", nextActionRecommendationKey)
-	}
-	if _, ok := envelope[nextActionAlternativesKey]; !ok {
-		t.Errorf("update carries no %q field", nextActionAlternativesKey)
-	}
-}
+// TestUpdateEnvelopeCarriesTheCardsFields (the machine-readable half for
+// update's no-op outcome: emits the same stable keys every migrated
+// command's envelope carries) is now a full subset of
+// TestEveryLifecycleCommandEndsWithNextAction's "updating" subtest
+// (cmd/lifecycle_next_action_coverage_test.go), which drives the identical
+// no-damage fixture and checks command presence, the "aether " prefix,
+// resolution against the live command tree, and the recommendation field --
+// deleted here rather than kept as a duplicate (Phase 197 plan 07).
