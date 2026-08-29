@@ -461,7 +461,7 @@ Not applicable — this is not a rename/refactor/migration phase (no strings are
 
 **All other findings in this document are `[VERIFIED]` — confirmed by reading the named file:line this session** (the specific quotes/field lists given beside each citation are what makes the tag checkable). No package-legitimacy or external-documentation claims apply, since no external packages or APIs are used by this phase.
 
-## Open Questions
+## Open Questions (RESOLVED — see plans 03 and 08)
 
 1. **Exact wording/data source for the "drift note" (Claude's Discretion)**
    - What we know: no existing computation of any resume-time "drift" signal exists anywhere in the codebase (confirmed zero-match grep).

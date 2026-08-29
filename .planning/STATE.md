@@ -4,16 +4,16 @@ milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
 current_phase: 198
 current_phase_name: Put the Thrown-Away Data Back on Screen
-status: planning
-stopped_at: Phase 198 context gathered
-last_updated: "2026-08-29T15:32:24.572Z"
+status: executing
+stopped_at: Phase 198 planned (9 plans, 4 waves) — ready to execute
+last_updated: "2026-08-29T16:17:03.021Z"
 last_activity: 2026-08-29
-last_activity_desc: Phase 197 complete, transitioned to Phase 172.1
-state_head: b82b30780560320069ec0ffce5e2294b0dbd8279
+last_activity_desc: Phase 198 planned — 9 plans in 4 waves, checker passed
+state_head: 4a742caf6fc5f70bc5c11dcdcbc4b70e2d9cddb0
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 39
+  total_plans: 48
   completed_plans: 39
   percent: 71
 ---
@@ -34,9 +34,9 @@ See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Progress:** [████░░░░░░] 43%
 
-Phase: 198 (Put the Thrown-Away Data Back on Screen) — READY TO PLAN
-Plan: Not started
-Status: Ready to plan
+Phase: 198 (Put the Thrown-Away Data Back on Screen) — READY TO EXECUTE
+Plan: 0/9 — not started
+Status: Ready to execute
 
 *(`phase.complete` advanced this to backlog entry 172.1 again — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
