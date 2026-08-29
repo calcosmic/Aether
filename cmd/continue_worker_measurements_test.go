@@ -5,11 +5,13 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // TestWorkerFlowStepCarriesToolCount is the RED/GREEN proof for Task 1: a
@@ -236,4 +238,72 @@ func TestLiveAndSummaryWorkerFiguresShareOneSource(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestChatPathShowsWorkerMeasurements is the end-to-end proof (Task 3): a
+// continue-finalize result whose worker flow carries measured durations and
+// tool counts is round-tripped through JSON into a completion-file shape,
+// rendered through the chat path (closeoutDirectVisual), and every worker's
+// measurement line is present with the same figures the direct path shows.
+// A field added to a struct and a formatter added to a renderer both being
+// present proves nothing on their own (this repo's own history) -- this test
+// asserts on the rendered bytes of the chat path, not the intermediate map.
+func TestChatPathShowsWorkerMeasurements(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	state := wrapperParityColonyState()
+	typed := wrapperParityAdvanceResult()
+	typed["worker_flow"] = []codexContinueWorkerFlowStep{
+		{
+			Stage: "review", Caste: "watcher", Name: "Keen-12", Status: "completed",
+			Summary:          "verified the phase",
+			Duration:         190,
+			DurationReported: true, ToolCount: 14, ToolCountReported: true,
+		},
+		{
+			Stage: "review", Caste: "auditor", Name: "Roam-90", Status: "completed",
+			Summary:           "checked quality",
+			Duration:          0,
+			DurationReported:  false,
+			ToolCount:         0,
+			ToolCountReported: false,
+		},
+	}
+	phase := colony.Phase{ID: 1, Name: "Ship the thing"}
+	nextPhase := colony.Phase{ID: 2, Name: "Ship the next thing"}
+	housekeeping := typed["signal_housekeeping"].(signalHousekeepingResult)
+
+	directOutput := renderContinueVisual(state, phase, &housekeeping, false, &nextPhase, typed, colony.VerificationDepthStandard)
+
+	asMap := roundTripToMap(t, typed)
+	chatOutput, handled := closeoutDirectVisual("continue", map[string]interface{}{"completion_raw": asMap}, state)
+	if !handled {
+		t.Fatalf("closeoutDirectVisual reported not-handled for a resolvable continue advance result")
+	}
+
+	if directOutput != chatOutput {
+		t.Fatalf("chat-path closeout diverged from the direct continue render:\n%s", firstDiffLine(directOutput, chatOutput))
+	}
+
+	measuredFigure := workerMeasurementFigures(190, true, 14, true)
+	unreportedFigure := workerMeasurementFigures(0, false, 0, false)
+	for _, want := range []string{measuredFigure, unreportedFigure} {
+		if !strings.Contains(chatOutput, want) {
+			t.Errorf("chat-path output missing measurement fragment %q:\n%s", want, chatOutput)
+		}
+	}
+
+	// The old generic-renderer aggregate ("Tools: N calls across workers",
+	// cmd/ceremony_cmd.go writeCeremonyWorkerSummary) is superseded for
+	// continue: closeoutDirectVisual routes continue through
+	// renderContinueVisual, which never calls writeCeremonyWorkerSummary, so
+	// the aggregate line must NOT appear -- only the per-worker measured
+	// lines this plan adds.
+	if strings.Contains(chatOutput, "calls across workers") {
+		t.Errorf("chat-path continue output still carries the superseded aggregate tools line:\n%s", chatOutput)
+	}
 }
