@@ -537,3 +537,54 @@ func TestSealConfirmationDispatchesNoWorkers(t *testing.T) {
 		}
 	}
 }
+
+// --- Task 3: autopilot provably cannot reach the seal path ---
+
+// TestAutopilotNeverReachesTheSealPath is D-07's reachability ratchet: a
+// call-graph walk over the cmd package, starting at runCompatibilityAutopilot,
+// asserting completeSealRuntime is not reachable through any chain of
+// package-level function calls. This is the same discipline as this repo's
+// existing reachability ratchets (cmd/verify_out_of_band_reachability_test.go,
+// cmd/worktree_destruction_reachability_test.go): it walks the real call
+// graph rather than searching for a literal name, so it fails if a future
+// change wires autopilot into finishing -- exactly D-07's requirement that
+// this test can fail.
+//
+// The fact holds today because runCompatibilityAutopilot ends by returning
+// the finishing command ("aether seal") as the owner's next step rather than
+// running it (cmd/compatibility_cmds.go's buildRunExecutionResult) -- it
+// never calls sealCmd's RunE or completeSealRuntime directly.
+func TestAutopilotNeverReachesTheSealPath(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	g, err := buildCmdFuncGraph(filepath.Join(repoRoot, "cmd"))
+	if err != nil {
+		t.Fatalf("build call graph: %v", err)
+	}
+
+	if g.filesScanned == 0 {
+		t.Fatalf("scanned zero .go files -- this guard cannot assert anything about an empty graph")
+	}
+	if g.funcsIndexed == 0 {
+		t.Fatalf("found zero top-level functions while scanning %d files -- a guard that finds no functions to check would pass vacuously forever", g.filesScanned)
+	}
+
+	const startFunc = "runCompatibilityAutopilot"
+	const sealFunc = "completeSealRuntime"
+
+	if _, ok := g.calls[startFunc]; !ok {
+		t.Fatalf("expected %s to be an indexed top-level function in cmd/, but it was missing -- this guard cannot assert an isolation property against a function it cannot locate (renamed? moved?)", startFunc)
+	}
+	if _, ok := g.calls[sealFunc]; !ok {
+		t.Fatalf("expected %s to be an indexed top-level function in cmd/, but it was missing -- this guard cannot assert an isolation property against a function it cannot locate (renamed? moved?)", sealFunc)
+	}
+
+	reachable := reachableFrom(g, []string{startFunc})
+
+	if reachable[sealFunc] {
+		t.Errorf("%s is reachable from %s -- autopilot must never reach the code that finishes (seals) a project; it should stop at the last phase and hand the owner the finish command instead (D-07)", sealFunc, startFunc)
+	}
+}

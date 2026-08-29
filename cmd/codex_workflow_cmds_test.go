@@ -392,6 +392,13 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 		t.Fatalf("write completion: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03) now also guards the host-mediated
+	// seal-finalize path (198-RESEARCH.md Pitfall 5: seal's default flow is
+	// host-mediated, unlike build/continue) -- pre-record the answer, the
+	// same way an owner running seal-finalize twice (ask, then confirm)
+	// would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	stdout.(*bytes.Buffer).Reset()
 	rootCmd.SetArgs([]string{"seal-finalize", "--completion-file", completionPath})
 	if err := rootCmd.Execute(); err != nil {

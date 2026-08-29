@@ -282,3 +282,49 @@ func renderSealConfirmationQuestionVisual(question, nextCommand string) string {
 func sealConfirmationAnswerCommand(question, source string) string {
 	return fmt.Sprintf("aether decision-answer --question %q --answer \"yes\" --source %s", question, source)
 }
+
+// runSealConfirmationGate is the one D-04..D-07 stop-and-ask point every
+// path to completeSealRuntime goes through — the interactive `aether seal`
+// command's own RunE and the host-mediated `aether seal-finalize` path
+// (runSealFinalize) alike (198-RESEARCH.md Pitfall 5: seal's default flow,
+// unlike build/continue, IS host-mediated, so both entry points must share
+// this gate rather than only the direct one). It prints the state-of-play
+// card, runs the wisdom review (D-05, exactly once, before the question),
+// and evaluates decideSealConfirmation. extraFailingChecks lets a caller
+// (runSealFinalize) fold in problems it discovered beyond
+// checkSealBlockers's own blockers/issues (its review workers' own
+// blocking findings) into the same card and the same question.
+//
+// Returns the already-run review so a proceeding caller never re-runs it,
+// and — when not proceeding — the exact result map the caller should
+// output instead of sealing.
+func runSealConfirmationGate(state colony.ColonyState, blockers, issues []colony.FlagEntry, extraFailingChecks ...string) (proceed bool, review sealWisdomReview, notProceedingResult map[string]interface{}) {
+	card := buildSealStateOfPlay(state, blockers, issues)
+	card.FailingChecks = append(card.FailingChecks, extraFailingChecks...)
+	namedProblems := card.namedProblems()
+	visualFprint(stdout, renderSealStateOfPlayCard(card))
+
+	review = runSealWisdomReview(state)
+
+	question := sealConfirmationQuestionText(namedProblems)
+	recordedAnswer := loadSealConfirmationRecordedAnswer(store, question)
+	decision := decideSealConfirmation(sealConfirmationInput{
+		NamedProblems:  namedProblems,
+		RecordedAnswer: recordedAnswer,
+	})
+
+	if decision.Proceed {
+		return true, review, nil
+	}
+
+	answerSource := sealConfirmationAnswerSource(namedProblems)
+	nextCommand := sealConfirmationAnswerCommand(question, answerSource)
+	visualFprint(stdout, renderSealConfirmationQuestionVisual(question, nextCommand))
+	return false, review, map[string]interface{}{
+		"sealed":                      false,
+		"awaiting_owner_confirmation": true,
+		"named_problems":              namedProblems,
+		"question":                    question,
+		"next":                        nextCommand,
+	}
+}
