@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -299,6 +301,154 @@ func TestDriftNoteIsDerivedNotInvented(t *testing.T) {
 			return true
 		})
 	})
+}
+
+// ---- Task 3: the resume view still writes nothing and still reads as plain English ----
+
+// TestResumeViewDoesNotMutate proves the resume dashboard -- the read-only
+// "Show session recovery information without restoring handoff state"
+// command -- is genuinely read-only. This repo shipped two inspection
+// commands (consolidation-phase-end --dry-run, consolidation-seal --dry-run)
+// that wrote to instincts.json for months despite saying they would not
+// (CLAUDE.md's "an inspection or --dry-run command must not mutate state"
+// corollary); a new read-only view gets the same proof, run twice to also
+// catch a mutation that only shows up on a second pass.
+func TestResumeViewDoesNotMutate(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "test goal"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			ActiveRevisionID: "rev-1",
+			Revisions: []colony.PlanRevision{
+				{ID: "rev-1", Number: 1, ReasonType: colony.PlanRevisionInitial, Reason: "initial plan"},
+			},
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Foundation", Status: "completed"},
+				{ID: 2, Name: "Core Features", Status: "in_progress"},
+			},
+		},
+		Memory: colony.Memory{
+			Decisions: []colony.Decision{
+				{ID: "d1", Phase: 1, Claim: "Use cobra for CLI", Rationale: "Standard pattern", Timestamp: "2026-04-01T10:00:00Z"},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	before := snapshotProjectDataTree(t, store.BasePath())
+
+	rootCmd.SetArgs([]string{"resume-dashboard"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-dashboard returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{"resume-dashboard"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-dashboard (second run) returned error: %v", err)
+	}
+
+	after := snapshotProjectDataTree(t, store.BasePath())
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("resume-dashboard changed the project's saved data.\nbefore: %v\nafter:  %v", before, after)
+	}
+	if buf.Len() == 0 {
+		t.Fatal("resume-dashboard produced no output at all, so this test would pass vacuously")
+	}
+}
+
+// resumeDetailInternalCodeNames derives the internal snake_case status and
+// revision-reason values the resume detail blocks translate into plain
+// English, so this check cannot go stale as new constants are added.
+// Single-word constants ("completed", "manual", "research", "initial") are
+// exempt because they are also ordinary English words that legitimately
+// appear inside plain-English prose (the same scoping 198-06's
+// TestRestoredDetailIsPlainEnglish applied to gate keys vs. check keys) --
+// multi-word snake_case values (containing "_") never legitimately do.
+func resumeDetailInternalCodeNames() []string {
+	candidates := []string{
+		colony.PhasePending,
+		colony.PhaseInProgress,
+		colony.PhaseCompleted,
+		string(colony.PlanRevisionInitial),
+		string(colony.PlanRevisionLegacyImport),
+		string(colony.PlanRevisionManual),
+		string(colony.PlanRevisionUserFeedback),
+		string(colony.PlanRevisionResearch),
+		string(colony.PlanRevisionVerificationFailure),
+		string(colony.PlanRevisionScopeChange),
+	}
+	var names []string
+	for _, c := range candidates {
+		if strings.Contains(c, "_") {
+			names = append(names, c)
+		}
+	}
+	return names
+}
+
+// TestResumeDetailIsPlainEnglish asserts the three new blocks (phase
+// progress, recent decisions, drift note) name no internal status constant
+// or revision-reason code verbatim where the owner expects words.
+func TestResumeDetailIsPlainEnglish(t *testing.T) {
+	internalNames := resumeDetailInternalCodeNames()
+	if len(internalNames) == 0 {
+		t.Fatal("no internal status/reason names found to check against -- this test would pass vacuously")
+	}
+
+	var progress strings.Builder
+	renderResumePhaseProgress(&progress, []resumePhaseProgressEntry{
+		{Phase: 1, Name: "Foundation", Status: colony.PhaseCompleted},
+		{Phase: 2, Name: "Core Features", Status: colony.PhaseInProgress},
+		{Phase: 3, Name: "Polish", Status: colony.PhasePending},
+	})
+
+	var decisions strings.Builder
+	renderResumeRecentDecisions(&decisions, extractRecentDecisions([]colony.Decision{
+		{ID: "d1", Phase: 1, Claim: "Use cobra for CLI", Rationale: "Standard pattern", Timestamp: "2026-04-01T10:00:00Z"},
+	}, 5))
+
+	var drift strings.Builder
+	for _, reasonType := range []colony.PlanRevisionReason{
+		colony.PlanRevisionInitial,
+		colony.PlanRevisionLegacyImport,
+		colony.PlanRevisionManual,
+		colony.PlanRevisionUserFeedback,
+		colony.PlanRevisionResearch,
+		colony.PlanRevisionVerificationFailure,
+		colony.PlanRevisionScopeChange,
+	} {
+		plan := colony.Plan{
+			ActiveRevisionID: "rev-1",
+			Revisions: []colony.PlanRevision{
+				{ID: "rev-1", Number: 1, ReasonType: reasonType, Reason: "a stated reason", SupersededPhaseIDs: []int{1}},
+			},
+			Phases: []colony.Phase{{ID: 1, Name: "Foundation", Status: "completed"}},
+		}
+		renderResumeDriftNote(&drift, planRevisionSummary(plan))
+	}
+
+	combined := progress.String() + decisions.String() + drift.String()
+	for _, name := range internalNames {
+		if strings.Contains(combined, name) {
+			t.Errorf("rendered resume detail leaks internal name %q verbatim -- the owner expects words, not code:\n%s", name, combined)
+		}
+	}
 }
 
 func resumeDetailRepoRoot(t *testing.T) string {
