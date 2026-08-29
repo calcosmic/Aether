@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -65,6 +66,16 @@ type phaseEndConsolidationSummary struct {
 	QueenEligible       int
 	ReviewCandidates    int
 	RereadCandidates    int
+	// QueenPromoted carries the actual instinct IDs pkg/memory's
+	// RunConsolidation promoted into QUEEN.md this phase -- not just a count
+	// (198.1-03/FEED-03). Sourced from the pipeline's own QueenPromoted
+	// (writes that succeeded), never from QueenEligible: an eligible instinct
+	// whose write failed must not be reported as reaching the Queen file.
+	QueenPromoted []string
+	// InstinctApplicationsRecorded is recordInstinctApplicationsForPhase's own
+	// return value for this phase -- how many instincts gained a fresh,
+	// honest use this phase because a worker was genuinely given them.
+	InstinctApplicationsRecorded int
 }
 
 // LearningBeatLine renders the single-line, caste-agnostic message body used
@@ -79,7 +90,11 @@ func (s phaseEndConsolidationSummary) LearningBeatLine() string {
 	if s.ZeroState() {
 		return "colony observed nothing new this phase"
 	}
-	return fmt.Sprintf("%d promotion candidate(s) -> %d queen-eligible instinct(s)", s.PromotionCandidates, s.QueenEligible)
+	line := fmt.Sprintf("%d promotion candidate(s) -> %d queen-eligible instinct(s)", s.PromotionCandidates, s.QueenEligible)
+	if len(s.QueenPromoted) > 0 {
+		line += fmt.Sprintf(", %d promoted to the Queen file", len(s.QueenPromoted))
+	}
+	return line
 }
 
 // ZeroState reports whether this consolidation ran but found nothing worth
@@ -109,11 +124,16 @@ func (s phaseEndConsolidationSummary) ZeroState() bool {
 // into an abort -- it warns unmissably to stderr (D-05) and returns a
 // summary with Ran: false. Learning is enrichment, not a gate.
 func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
-	_ = phaseID // reserved for future phase-scoped consolidation reporting
-
 	if store == nil {
 		return phaseEndConsolidationSummary{Ran: false, Reason: "no store initialized"}
 	}
+
+	// Record which instincts this phase actually delivered and applied
+	// BEFORE the pipeline runs, so the decay/confidence step below (STEP 1 of
+	// pkg/memory.ConsolidationService.Run) reads the freshly-recorded
+	// application history for this phase, and a repeated phase-end pass for
+	// the same phase adds no further entries (198.1-03/FEED-03).
+	applicationsRecorded := recordInstinctApplicationsForPhase(phaseID)
 
 	bus := events.NewBus(store, events.DefaultConfig())
 	pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
@@ -149,9 +169,19 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 	// failures (e.g. a corrupt instincts.json) into result.Errors instead of
 	// returning a top-level error -- the pipeline is deliberately
 	// non-blocking internally too. Treat a non-empty result.Errors the same
-	// as a top-level err: both mean "consolidation did not run cleanly."
+	// as a top-level err: both mean "consolidation did not run cleanly" --
+	// EXCEPT a bare "file does not exist" for instincts.json or
+	// learning-observations.json, which is a fresh colony's normal starting
+	// state, not corruption. Every step inside ConsolidationService.Run
+	// already treats a missing file as "start empty"; without this filter
+	// runPhaseEndConsolidation would report "WITHOUT consolidation" on every
+	// colony's very first phase even though nothing is actually wrong
+	// (found while proving 198.1-03's end-to-end test against a colony that
+	// starts with neither file).
 	if err == nil && result != nil && len(result.Errors) > 0 {
-		err = errors.Join(result.Errors...)
+		if real := realConsolidationErrors(result.Errors); len(real) > 0 {
+			err = errors.Join(real...)
+		}
 	}
 
 	if err != nil {
@@ -167,15 +197,36 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 	}
 
 	return phaseEndConsolidationSummary{
-		Ran:                 true,
-		InstinctsDecayed:    result.InstinctsDecayed,
-		InstinctsArchived:   result.InstinctsArchived,
-		ObservationsDecayed: result.ObservationsDecayed,
-		PromotionCandidates: len(result.PromotionCandidates),
-		QueenEligible:       len(result.QueenEligible),
-		ReviewCandidates:    len(result.ReviewCandidates),
-		RereadCandidates:    len(result.RereadCandidates),
+		Ran:                          true,
+		InstinctsDecayed:             result.InstinctsDecayed,
+		InstinctsArchived:            result.InstinctsArchived,
+		ObservationsDecayed:          result.ObservationsDecayed,
+		PromotionCandidates:          len(result.PromotionCandidates),
+		QueenEligible:                len(result.QueenEligible),
+		ReviewCandidates:             len(result.ReviewCandidates),
+		RereadCandidates:             len(result.RereadCandidates),
+		QueenPromoted:                append([]string{}, result.QueenPromoted...),
+		InstinctApplicationsRecorded: applicationsRecorded,
 	}
+}
+
+// realConsolidationErrors filters out "file does not exist" load failures
+// (e.g. a fresh colony's first phase, before instincts.json or
+// learning-observations.json has ever been written) from a consolidation
+// step's per-step error list. That condition is normal starting state, not
+// corruption -- pkg/memory.ConsolidationService.Run's own steps already
+// treat a missing file as "start empty" for every mutation that follows.
+// Any other error (corrupt JSON, permission failure, a genuine I/O fault)
+// still fails loudly and is returned unfiltered.
+func realConsolidationErrors(errs []error) []error {
+	real := make([]error, 0, len(errs))
+	for _, e := range errs {
+		if errors.Is(e, fs.ErrNotExist) {
+			continue
+		}
+		real = append(real, e)
+	}
+	return real
 }
 
 // attachConsolidationSummary stores s under result["consolidation"] using the

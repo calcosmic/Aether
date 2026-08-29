@@ -76,6 +76,13 @@ func recordDispatchWorkerOutcome(dispatch codex.WorkerDispatch, result codex.Dis
 	facts.Failed = isTerminalExternalBuildStatus(facts.Status) && !isSuccessfulExternalBuildStatus(facts.Status)
 	facts.Succeeded = isSuccessfulExternalBuildStatus(facts.Status)
 
+	// Record which instincts this worker was actually given -- the input the
+	// QUEEN.md promotion gate has always been missing (198.1-03, FEED-03).
+	// Placed here, after the handoff persist and before the memory feed, so
+	// Plan 01's one-boundary AST guard (TestEveryBuildLaneFeedsMemoryThroughOneBoundary)
+	// stays the guarantee that both build lanes record deliveries.
+	recordInstinctDeliveries(dispatch.Phase, dispatch.Workflow, capsuleForDispatch(dispatch))
+
 	feedMemoryFromWorkerOutcome(facts)
 
 	return err
