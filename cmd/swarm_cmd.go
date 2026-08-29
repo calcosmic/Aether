@@ -789,6 +789,13 @@ func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExec
 		execution.Files = swarmCompactStrings(execution.Files)
 		execution.Tests = swarmCompactStrings(execution.Tests)
 		execution.Blockers = swarmCompactStrings(execution.Blockers)
+		// 198.1-02: record from the MERGED (runtime-validated) status computed
+		// above, never a raw submitted status -- a wrapper-spawned worker
+		// cannot suppress or forge a failure record by claiming a different
+		// status than what normalizeRuntimeDispatchStatus resolved.
+		if execution.Status == "failed" || execution.Status == "timeout" {
+			recordSwarmWorkerFailureToMidden(manifest.SwarmID, manifest.Target, execution)
+		}
 		merged = append(merged, execution)
 	}
 	return merged, nil
@@ -998,14 +1005,22 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		}
 		execution.Files = swarmCompactStrings(execution.Files)
 		execution.Tests = swarmCompactStrings(execution.Tests)
-		if execution.Status == "" {
-			execution.Status = "failed"
-		}
+		// The execErr blockers append is placed BEFORE both status-transition
+		// checks below (198.1-02) so that whichever point actually sets
+		// Status = "failed" already has the invoker's own error text
+		// available in execution.Blockers when it calls
+		// recordSwarmWorkerFailureToMidden -- the worker's own words, not a
+		// generic fallback, reach the failure log.
 		if execErr != nil {
 			execution.Blockers = append(execution.Blockers, execErr.Error())
-			if execution.Status == "completed" {
-				execution.Status = "failed"
-			}
+		}
+		if execution.Status == "" {
+			execution.Status = "failed"
+			recordSwarmWorkerFailureToMidden(swarmID, target, execution)
+		}
+		if execErr != nil && execution.Status == "completed" {
+			execution.Status = "failed"
+			recordSwarmWorkerFailureToMidden(swarmID, target, execution)
 		}
 
 		summary := execution.Summary

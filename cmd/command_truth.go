@@ -267,6 +267,7 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 		PheromoneSection: resolvePheromoneSection(),
 	})
 	if err != nil {
+		recordQuickFailureToMidden(question, err)
 		return nil, err
 	}
 	return map[string]interface{}{

@@ -584,7 +584,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if runHandle != nil {
 		runID = runHandle.Run.ID
 	}
-	captureContinueLearning(phase, workerFlow, gates, runID, noLearn, now)
+	captureContinueMemory(phase, workerFlow, gates, runID, noLearn, now)
 
 	result, updated, nextPhase, housekeeping, final, err := advanceExternalContinue(root, state, phase, manifest, verification, assessment, gates, review, reviewReportRel, watcherFlow, workerFlow, now, verificationReportRel, gateReportRel, finalizeReviewDepth)
 	if err != nil {
