@@ -25,7 +25,7 @@ Continue Verification 1 starting (in-repo, serial)
 
 … 👁️🐜 Watcher Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
 
-✓ 👁️🐜 Watcher Worker-XX  completed 0.0s  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
+✓ 👁️🐜 Watcher Worker-XX  completed (0.0s, 0 tool calls)  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
 
   Step 1/4: Verification (0s)
   Step 2/4: Housekeeping (0s)

@@ -29,7 +29,7 @@ Wave 11 starting (in-repo, serial)
 
 … 🔨🐜 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
 
-✓ 🔨🐜 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+✓ 🔨🐜 Builder Worker-XX  completed (0.0s, 0 tool calls)  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
 
   Step 4/5: Verify (0s)
   Step 5/5: Complete (0s)

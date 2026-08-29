@@ -546,20 +546,34 @@ type codexContinueClosedWorker struct {
 }
 
 type codexContinueWorkerFlowStep struct {
-	Stage           string               `json:"stage,omitempty"`
-	Caste           string               `json:"caste,omitempty"`
-	Name            string               `json:"name"`
-	Task            string               `json:"task,omitempty"`
-	Status          string               `json:"status"`
-	Summary         string               `json:"summary,omitempty"`
-	Blockers        []string             `json:"blockers,omitempty"`
-	Duration        float64              `json:"duration,omitempty"`
-	Report          string               `json:"report,omitempty"`
-	Findings        []codexReviewFinding `json:"findings,omitempty"`
-	Recommendations []string             `json:"recommendations,omitempty"`
-	WeakSpots       []string             `json:"weak_spots,omitempty"`
-	EdgeCases       []string             `json:"edge_cases_discovered,omitempty"`
-	ReusableLessons []string             `json:"reusable_lessons,omitempty"`
+	Stage    string   `json:"stage,omitempty"`
+	Caste    string   `json:"caste,omitempty"`
+	Name     string   `json:"name"`
+	Task     string   `json:"task,omitempty"`
+	Status   string   `json:"status"`
+	Summary  string   `json:"summary,omitempty"`
+	Blockers []string `json:"blockers,omitempty"`
+	Duration float64  `json:"duration,omitempty"`
+	// DurationReported records whether Duration was actually measured (a real
+	// WorkerResult existed), so a worker whose duration was never reported
+	// serializes as absent rather than as an indistinguishable zero.
+	DurationReported bool                 `json:"duration_reported,omitempty"`
+	Report           string               `json:"report,omitempty"`
+	Findings         []codexReviewFinding `json:"findings,omitempty"`
+	Recommendations  []string             `json:"recommendations,omitempty"`
+	WeakSpots        []string             `json:"weak_spots,omitempty"`
+	EdgeCases        []string             `json:"edge_cases_discovered,omitempty"`
+	ReusableLessons  []string             `json:"reusable_lessons,omitempty"`
+	// ToolCount is a plain integer sourced from the same trusted in-process
+	// WorkerResult the Duration above already comes from, so -- unlike Usage
+	// below -- it does not carry the outside-caller-assertion risk that keeps
+	// Usage unserialized (cmd/codex_build_finalize.go's codexExternalBuildWorkerResult
+	// carries the same field-for-field pair).
+	ToolCount int `json:"tool_count,omitempty"`
+	// ToolCountReported mirrors DurationReported for ToolCount: a worker whose
+	// tool-call count was never reported (no WorkerResult) is distinguishable
+	// from a worker that genuinely made zero tool calls.
+	ToolCountReported bool `json:"tool_count_reported,omitempty"`
 	// Usage is what this worker's own tool reported the run cost, read by the
 	// Go runtime from the worker's raw output at the dispatch boundary. It is
 	// runtime-owned and NEVER serialized, for the same reason as
@@ -1587,7 +1601,13 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				}
 				step.Blockers = uniqueSortedStrings(result.WorkerResult.Blockers)
 				step.Duration = result.WorkerResult.Duration.Seconds()
+				step.DurationReported = true
 				step.Report = codex.SanitizeWorkerDiagnosticOutput(result.WorkerResult.RawOutput)
+				// The tool-call count the runtime already measures, carried the
+				// same way Duration above is -- from the trusted in-process
+				// WorkerResult, not from anything an outside caller submitted.
+				step.ToolCount = result.WorkerResult.ToolCount
+				step.ToolCountReported = true
 				// What this reviewer's own tool reported it cost, carried from
 				// the dispatch boundary so the direct check can file it.
 				step.Usage = result.WorkerResult.Usage
