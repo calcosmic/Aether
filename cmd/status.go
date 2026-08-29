@@ -1072,7 +1072,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		// when this result was built.
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Still running"))
-		b.WriteString("Watch progress with `tail -f .aether/data/spawn-tree.txt` in another terminal, or run `aether proof` to inspect the active context and skill proof.\n")
+		b.WriteString("Watch progress with `tail -f .aether/data/spawn-tree.txt`, or run `aether proof` to inspect the active context and skill proof.\n")
 	}
 	b.WriteString(renderLifecycleClosing(result, "status"))
 
