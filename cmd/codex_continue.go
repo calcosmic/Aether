@@ -3351,7 +3351,11 @@ func verificationStepDisplayName(name string) string {
 		if trimmed == "" {
 			return "Check"
 		}
-		return strings.ToUpper(trimmed[:1]) + trimmed[1:]
+		// WR-03 (198-REVIEW.md): sentenceCase decodes a whole rune rather
+		// than slicing the first byte, so a check name whose first
+		// character takes more than one byte to store degrades to a
+		// capitalized label instead of panicking.
+		return sentenceCase(trimmed)
 	}
 }
 

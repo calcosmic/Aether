@@ -365,3 +365,35 @@ func TestLiveCheckLinesUseTheVisualWriter(t *testing.T) {
 		t.Fatalf("expected no progress output when AETHER_OUTPUT_MODE=json, got %q", buf.String())
 	}
 }
+
+// TestVerificationStepDisplayNameIsRuneSafe pins WR-03 (198-REVIEW.md):
+// verificationStepDisplayName's fallback branch labels an arbitrary,
+// CLAUDE.md-configured check name. Slicing the first BYTE
+// (trimmed[:1] + trimmed[1:]) panics on a check name whose first character
+// takes more than one byte to store. Taking the first RUNE degrades
+// gracefully instead. The four known keys today ("build", "types", "lint",
+// "tests") are all ASCII, so this was latent rather than currently
+// triggered -- this test exercises the previously-panicking case directly.
+func TestVerificationStepDisplayNameIsRuneSafe(t *testing.T) {
+	cases := []struct {
+		name string
+		want string
+	}{
+		{name: "école", want: "École"},
+		{name: "日本語", want: "日本語"},
+		{name: "custom_check", want: "Custom_check"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("verificationStepDisplayName(%q) panicked: %v", tc.name, r)
+				}
+			}()
+			got := verificationStepDisplayName(tc.name)
+			if got != tc.want {
+				t.Fatalf("verificationStepDisplayName(%q) = %q, want %q", tc.name, got, tc.want)
+			}
+		})
+	}
+}
