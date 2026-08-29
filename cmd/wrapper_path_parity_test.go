@@ -268,3 +268,83 @@ func TestWrapperPathRendersSameCeremonyAsDirectPath(t *testing.T) {
 		}
 	})
 }
+
+// TestCloseoutUnhandledWorkflowsKeepTheGenericRenderer proves the tracer did
+// not change anything it was not meant to change: build, colonize, swarm and
+// status must all still fall through to the pre-existing generic
+// renderCeremonyCloseoutVisual, because closeoutDirectVisual has not been
+// wired for them.
+func TestCloseoutUnhandledWorkflowsKeepTheGenericRenderer(t *testing.T) {
+	state := wrapperParityColonyState()
+
+	representative := map[string]map[string]interface{}{
+		"build": {
+			"completion_raw": map[string]interface{}{
+				"advanced": true, "current_phase": 1, "dispatches": []interface{}{
+					map[string]interface{}{"name": "Mason-67", "caste": "builder", "status": "completed"},
+				},
+			},
+		},
+		"colonize": {
+			"completion_raw": map[string]interface{}{
+				"phases_generated": 3, "surveyors": []interface{}{"surveyor-nest"},
+			},
+		},
+		"swarm": {
+			"completion_raw": map[string]interface{}{
+				"bug": "login fails", "workers": []interface{}{
+					map[string]interface{}{"name": "Roam-90", "caste": "scout", "status": "completed"},
+				},
+			},
+		},
+		"status": {
+			"completion_raw": map[string]interface{}{
+				"state": "executing", "current_phase": 1,
+			},
+		},
+	}
+
+	for workflow, result := range representative {
+		t.Run(workflow, func(t *testing.T) {
+			_, handled := closeoutDirectVisual(workflow, result, state)
+			if handled {
+				t.Fatalf("closeoutDirectVisual reported handled=true for workflow %q, which must still use the generic renderer", workflow)
+			}
+		})
+	}
+}
+
+// TestCloseoutContinueCostLineStaysLastAndSingle drives the full wrapper
+// closeout path (renderCeremonyCloseout, exactly what
+// `aether ceremony closeout --workflow continue` runs) with a real spend
+// ledger present, and asserts the cost block appears exactly once and is the
+// last thing on the screen -- the Phase 196 ruling still holds once the
+// closeout body comes from closeoutDirectVisual instead of the generic
+// renderer.
+func TestCloseoutContinueCostLineStaysLastAndSingle(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	seedCostLineColonyForTest(t)
+
+	typed := wrapperParityAdvanceResult()
+	// Match the phase seedCostLineColonyForTest recorded a ledger for.
+	typed["continued_phase"] = 1
+	typed["next_phase"] = 2
+	envelope := map[string]interface{}{"ok": true, "result": typed}
+	completionFile := writeCeremonyTestJSON(t, envelope)
+
+	_, visual := renderCeremonyCloseout("continue", completionFile)
+	clean := stripANSI(visual)
+
+	if got := countCostLineBlocks(visual); got != 1 {
+		t.Fatalf("the continue closeout carries %d cost line block(s), want exactly 1:\n%s", got, visual)
+	}
+
+	block := stripANSI(renderSpendCostLine(1))
+	if block == "" {
+		t.Fatalf("test setup produced no cost block to compare against -- seedCostLineColonyForTest may have changed shape")
+	}
+	if !strings.HasSuffix(strings.TrimRight(clean, "\n"), strings.TrimRight(block, "\n")) {
+		t.Fatalf("the cost line block is not the last thing on the continue closeout screen:\n%s", visual)
+	}
+}
