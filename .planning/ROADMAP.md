@@ -42,7 +42,7 @@
 - [x] **Phase 195: Coherent Jobs** - Related tasks bundle into one job for one worker instead of one worker per task. (completed 2026-08-27)
 - [x] **Phase 196: See What It Cost** - Every run ends with one honest cost line, and model choices carry a reason. (completed 2026-08-28)
 - [x] **Phase 197: One Answer to "What Next?"** - Every command ends by saying exactly what to do next, from one shared source of truth. (completed 2026-08-29)
-- [ ] **Phase 198: Put the Thrown-Away Data Back on Screen** - The detail the older version used to show comes back, in the chat view too.
+- [x] **Phase 198: Put the Thrown-Away Data Back on Screen** - The detail the older version used to show comes back, in the chat view too. (completed 2026-08-29)
 - [ ] **Phase 199: Proof** - A live run and a full comparison prove the changes actually work.
 
 ## Phase Details
