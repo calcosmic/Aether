@@ -5,6 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +15,28 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
+
+// autoRecordSealConfirmationForTest pre-records the exact "yes" answer
+// sealCmd's D-04 confirmation gate will ask for given s's CURRENT fixture
+// state and pending-decisions.json -- the same recorded answer an owner
+// running `aether seal` twice (ask, then confirm) would produce. Shared by
+// every pre-existing seal test helper that predates the gate and is not
+// itself testing confirmation behavior.
+func autoRecordSealConfirmationForTest(t *testing.T, s *storage.Store) {
+	t.Helper()
+	var state colony.ColonyState
+	_ = s.LoadJSON("COLONY_STATE.json", &state)
+	blockers, issues := checkSealBlockers(s, state)
+	card := buildSealStateOfPlay(state, blockers, issues)
+	namedProblems := card.namedProblems()
+	question := sealConfirmationQuestionText(namedProblems)
+	source := sealConfirmationAnswerSource(namedProblems)
+	if _, err := recordSealConfirmationAnswer(question, "yes", source); err != nil {
+		t.Fatalf("auto-record seal confirmation answer: %v", err)
+	}
+}
 
 // --- Task 1: the wisdom review runs exactly once, before anything changes ---
 
@@ -112,6 +136,11 @@ func TestSealWisdomReviewPrecedesStateChange(t *testing.T) {
 	if err := s.SaveJSON("COLONY_STATE.json", sealTestState("Wisdom review precedes state change")); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
+
+	// D-04's confirmation gate (Task 2) now asks before completing; this
+	// test is about ordering WITHIN a seal that actually completes, so
+	// pre-record the answer exactly as an owner running seal twice would.
+	autoRecordSealConfirmationForTest(t, s)
 
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
@@ -245,4 +274,266 @@ func TestSealPlanOnlyDoesNotMutate(t *testing.T) {
 
 func stringPtrForSealConfirmationTest(s string) *string {
 	return &s
+}
+
+// --- Task 2: the state-of-play card, the question, and the recorded answer ---
+
+// newSealConfirmationTestStore builds a fresh fixture store with one
+// completed phase and nothing blocking -- the common starting point for
+// every Task 2 confirmation-gate test.
+func newSealConfirmationTestStore(t *testing.T, goal string) (*storage.Store, string) {
+	t.Helper()
+	s, tmpDir := newTestStore(t)
+	if err := s.SaveJSON("COLONY_STATE.json", sealTestState(goal)); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+	return s, tmpDir
+}
+
+// seedSealConfirmationIssue writes a single unresolved issue-severity flag
+// (never a blocker, so checkSealBlockers still lets seal reach the
+// confirmation gate) whose Description becomes one of D-06's named
+// problems.
+func seedSealConfirmationIssue(t *testing.T, s *storage.Store, description string) {
+	t.Helper()
+	flags := colony.FlagsFile{Version: "1", Decisions: []colony.FlagEntry{
+		{ID: "issue-1", Type: "issue", Description: description, Resolved: false, CreatedAt: "2026-08-29", Source: "test"},
+	}}
+	if err := s.SaveJSON("pending-decisions.json", flags); err != nil {
+		t.Fatalf("seed issue flag: %v", err)
+	}
+}
+
+// beginSealConfirmationTest wires the package globals to s and resets
+// rootCmd, BEFORE any pre-recording (recordSealConfirmationAnswer reads and
+// writes through the package-level store, so it must already point at s).
+func beginSealConfirmationTest(t *testing.T, s *storage.Store) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	store = s
+	stdout = &bytes.Buffer{}
+}
+
+// executeSealForConfirmationTest runs the real `aether seal` command and
+// returns everything written to stdout (prose and the final JSON envelope
+// together) -- the real seal path's own effect, never an intermediate
+// record. Call beginSealConfirmationTest first.
+func executeSealForConfirmationTest(t *testing.T) string {
+	t.Helper()
+	var buf bytes.Buffer
+	stdout = &buf
+	rootCmd.SetArgs([]string{"seal"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("seal returned error: %v", err)
+	}
+	return buf.String()
+}
+
+// runSealForConfirmationTest is the common case: no pre-recorded answer, no
+// seeded issues -- just wire globals and run seal once.
+func runSealForConfirmationTest(t *testing.T, s *storage.Store) string {
+	t.Helper()
+	beginSealConfirmationTest(t, s)
+	return executeSealForConfirmationTest(t)
+}
+
+func assertSealCompleted(t *testing.T, s *storage.Store) {
+	t.Helper()
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.State != colony.StateCOMPLETED {
+		t.Fatalf("expected seal to complete, state = %s", state.State)
+	}
+}
+
+func assertSealNotCompleted(t *testing.T, s *storage.Store) {
+	t.Helper()
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.State == colony.StateCOMPLETED {
+		t.Fatal("expected seal NOT to complete without a covering recorded answer, but state = COMPLETED")
+	}
+}
+
+// lastJSONLine extracts the final JSON object written to output -- the
+// {"ok":true,"result":{...}} envelope outputOK writes as the very last
+// thing, after any prose emitted earlier in the same run.
+func lastJSONLine(t *testing.T, output string) map[string]interface{} {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var m map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &m); err == nil {
+			return m
+		}
+	}
+	t.Fatalf("no JSON envelope found in output:\n%s", output)
+	return nil
+}
+
+// TestSealAlwaysAsksBeforeFinishing tables the <behavior> rows from
+// 198-03-PLAN.md's Task 2, asserting on the real seal path's effect on the
+// fixture store (COLONY_STATE.json's State), never on an intermediate
+// decision record.
+func TestSealAlwaysAsksBeforeFinishing(t *testing.T) {
+	t.Run("nothing failing, no recorded answer: asks, does not seal", func(t *testing.T) {
+		s, _ := newSealConfirmationTestStore(t, "Nothing failing")
+		out := runSealForConfirmationTest(t, s)
+		assertSealNotCompleted(t, s)
+		if !strings.Contains(out, "Finish this project?") {
+			t.Fatalf("expected the plain confirmation question, got:\n%s", out)
+		}
+	})
+
+	t.Run("something failing, no recorded answer: names it, asks the second question", func(t *testing.T) {
+		s, _ := newSealConfirmationTestStore(t, "Something failing")
+		seedSealConfirmationIssue(t, s, "the deploy script is untested")
+		out := runSealForConfirmationTest(t, s)
+		assertSealNotCompleted(t, s)
+		if !strings.Contains(out, "Finish anyway with 1 check(s) failing") {
+			t.Fatalf("expected the second, explicit question naming the count, got:\n%s", out)
+		}
+	})
+
+	t.Run("recorded yes, no named problems: proceeds", func(t *testing.T) {
+		s, _ := newSealConfirmationTestStore(t, "Clean finish")
+		beginSealConfirmationTest(t, s)
+		if _, err := recordSealConfirmationAnswer(sealConfirmationQuestionText(nil), "yes", "seal-confirmation"); err != nil {
+			t.Fatalf("record answer: %v", err)
+		}
+		executeSealForConfirmationTest(t)
+		assertSealCompleted(t, s)
+	})
+
+	t.Run("named problems, recorded plain yes that does not cover them: still does not proceed", func(t *testing.T) {
+		s, _ := newSealConfirmationTestStore(t, "Stale plain yes")
+		seedSealConfirmationIssue(t, s, "the deploy script is untested")
+		beginSealConfirmationTest(t, s)
+		if _, err := recordSealConfirmationAnswer(sealConfirmationQuestionText(nil), "yes", "seal-confirmation"); err != nil {
+			t.Fatalf("record answer: %v", err)
+		}
+		executeSealForConfirmationTest(t)
+		assertSealNotCompleted(t, s)
+	})
+
+	t.Run("named problems, recorded finish-anyway naming them: proceeds", func(t *testing.T) {
+		s, _ := newSealConfirmationTestStore(t, "Finish anyway")
+		seedSealConfirmationIssue(t, s, "the deploy script is untested")
+		beginSealConfirmationTest(t, s)
+		question := sealConfirmationQuestionText([]string{"the deploy script is untested"})
+		if _, err := recordSealConfirmationAnswer(question, "yes", "seal-force-confirmation"); err != nil {
+			t.Fatalf("record answer: %v", err)
+		}
+		executeSealForConfirmationTest(t)
+		assertSealCompleted(t, s)
+	})
+}
+
+// TestSealFinishAnywayIsRecordedNotInferred pins D-06: a card whose text
+// happens to contain an affirmative phrase must never be mistaken for a
+// recorded answer, and decideSealConfirmation's own signature proves it
+// cannot even see such text -- it takes a plain struct of already-resolved
+// facts, never a store handle or a rendered-card string.
+func TestSealFinishAnywayIsRecordedNotInferred(t *testing.T) {
+	t.Run("an affirmative-looking card never proceeds without a recorded answer", func(t *testing.T) {
+		s, _ := newSealConfirmationTestStore(t, "Affirmative-looking card")
+		seedSealConfirmationIssue(t, s, "yes, everything here looks fine and ready to ship")
+		runSealForConfirmationTest(t, s)
+		assertSealNotCompleted(t, s)
+	})
+
+	t.Run("decideSealConfirmation takes no store handle or rendered-card string", func(t *testing.T) {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "seal_confirmation.go", nil, 0)
+		if err != nil {
+			t.Fatalf("parse seal_confirmation.go: %v", err)
+		}
+		var fn *ast.FuncDecl
+		for _, decl := range file.Decls {
+			if fd, ok := decl.(*ast.FuncDecl); ok && fd.Name.Name == "decideSealConfirmation" {
+				fn = fd
+				break
+			}
+		}
+		if fn == nil {
+			t.Fatal("decideSealConfirmation not found in seal_confirmation.go -- a rename would silently blind this guard")
+		}
+		if fn.Type.Params == nil || len(fn.Type.Params.List) != 1 {
+			got := 0
+			if fn.Type.Params != nil {
+				got = len(fn.Type.Params.List)
+			}
+			t.Fatalf("decideSealConfirmation should take exactly one parameter, got %d", got)
+		}
+		ident, ok := fn.Type.Params.List[0].Type.(*ast.Ident)
+		if !ok || ident.Name != "sealConfirmationInput" {
+			t.Fatalf("decideSealConfirmation's parameter type is not the plain sealConfirmationInput struct -- it must never take a *storage.Store, colony.ColonyState, or a rendered-card string")
+		}
+	})
+}
+
+// TestSealNoAnswerKeepsTheLessons pins D-05: a recorded "no" leaves the
+// project unfinished, but the wisdom review's lessons -- already run before
+// the question was ever asked -- are still present in the store afterward.
+func TestSealNoAnswerKeepsTheLessons(t *testing.T) {
+	s, tmpDir := newSealConfirmationTestStore(t, "Recorded no")
+
+	instincts := colony.InstinctsFile{Version: "1.0", Instincts: []colony.InstinctEntry{{
+		ID:         "no-answer-lesson",
+		Trigger:    "seal confirmation no-answer fixture",
+		Action:     "Keep this lesson even when the owner says no",
+		Domain:     "testing",
+		Confidence: 0.9,
+	}}}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatalf("seed instincts: %v", err)
+	}
+
+	beginSealConfirmationTest(t, s)
+	if _, err := recordSealConfirmationAnswer(sealConfirmationQuestionText(nil), "no", "seal-confirmation"); err != nil {
+		t.Fatalf("record answer: %v", err)
+	}
+
+	executeSealForConfirmationTest(t)
+	assertSealNotCompleted(t, s)
+
+	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(queenPath)
+	if err != nil {
+		t.Fatalf("expected the review's lessons on local QUEEN.md even after a recorded no: %v", err)
+	}
+	if !strings.Contains(string(data), "Keep this lesson even when the owner says no") {
+		t.Fatalf("QUEEN.md missing the review's promoted lesson after a recorded no:\n%s", data)
+	}
+}
+
+// TestSealConfirmationDispatchesNoWorkers pins that the whole confirmation
+// path -- card, review, question -- spawns no additional helper: the JSON
+// result it returns carries no dispatch list of any kind.
+func TestSealConfirmationDispatchesNoWorkers(t *testing.T) {
+	s, _ := newSealConfirmationTestStore(t, "No workers for confirmation")
+	out := runSealForConfirmationTest(t, s)
+
+	env := lastJSONLine(t, out)
+	result, ok := env["result"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected a result envelope, got: %v", env)
+	}
+	if result["awaiting_owner_confirmation"] != true {
+		t.Fatalf("expected awaiting_owner_confirmation:true, got: %+v", result)
+	}
+	for _, dispatchKey := range []string{"dispatches", "seal_manifest", "dispatch_count"} {
+		if _, present := result[dispatchKey]; present {
+			t.Fatalf("the confirmation path dispatched something (%q present) -- it must spawn no additional helper", dispatchKey)
+		}
+	}
 }

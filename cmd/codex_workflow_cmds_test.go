@@ -65,6 +65,10 @@ func TestSeal_ArchivesReviews(t *testing.T) {
 		t.Fatalf("write ledger: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal returned error: %v", err)
@@ -158,6 +162,10 @@ func TestSeal_HighSeverityWarning(t *testing.T) {
 		t.Fatalf("write ledger: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal returned error: %v", err)
@@ -210,6 +218,10 @@ func TestSeal_NoReviewsNoWarnings(t *testing.T) {
 	}
 
 	// No review data created -- reviews directory does not exist
+
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
 
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {

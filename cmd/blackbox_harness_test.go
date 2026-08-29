@@ -1139,6 +1139,13 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	if !strings.Contains(resumed.Stdout, "Crowned Anthill") && !strings.Contains(resumed.Stdout, "aether seal") {
 		t.Fatalf("resume did not recover the completed colony's next action:\n%s", resumed.Stdout)
 	}
+	// D-04's confirmation gate (198-03): the CLI itself asks before finishing.
+	// Answer it the same way an owner would -- run seal once to see it stop,
+	// record the exact recorded-answer, then rerun.
+	firstSealAttempt := harness.runWithEnv(t, providerEnv, "seal")
+	assertBlackBoxSuccess(t, "seal (awaiting confirmation)", firstSealAttempt)
+	confirm := harness.run(t, "decision-answer", "--question", sealConfirmationQuestionText(nil), "--answer", "yes", "--source", "seal-confirmation")
+	assertBlackBoxSuccess(t, "decision-answer (seal confirmation)", confirm)
 	seal := harness.runWithEnv(t, providerEnv, "seal")
 	assertBlackBoxSuccess(t, "seal", seal)
 	state = harness.loadColonyState(t)

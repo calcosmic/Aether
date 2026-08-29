@@ -535,10 +535,40 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
-		// D-05: the wisdom review runs exactly once, here, before anything
-		// else -- including before Task 2's confirmation question -- so its
-		// lessons are recorded even if the owner later declines to finish.
+		// D-04: show the state-of-play card before anything else -- including
+		// before the wisdom review -- so the owner sees where the project
+		// stands the moment finishing is even considered.
+		card := buildSealStateOfPlay(state, blockers, issues)
+		namedProblems := card.namedProblems()
+		visualFprint(stdout, renderSealStateOfPlayCard(card))
+
+		// D-05: the wisdom review runs exactly once, here, before the
+		// confirmation question, so its lessons are recorded even if the
+		// owner later declines to finish.
 		review := runSealWisdomReview(state)
+
+		question := sealConfirmationQuestionText(namedProblems)
+		recordedAnswer := loadSealConfirmationRecordedAnswer(store, question)
+		decision := decideSealConfirmation(sealConfirmationInput{
+			Force:          forceFlag,
+			NamedProblems:  namedProblems,
+			RecordedAnswer: recordedAnswer,
+		})
+
+		if !decision.Proceed {
+			answerSource := sealConfirmationAnswerSource(namedProblems)
+			nextCommand := sealConfirmationAnswerCommand(question, answerSource)
+			visualFprint(stdout, renderSealConfirmationQuestionVisual(question, nextCommand))
+			outputOK(map[string]interface{}{
+				"sealed":                      false,
+				"awaiting_owner_confirmation": true,
+				"named_problems":              namedProblems,
+				"question":                    question,
+				"next":                        nextCommand,
+			})
+			return nil
+		}
+
 		return completeSealRuntime(state, override, review)
 	},
 }
