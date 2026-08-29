@@ -51,6 +51,12 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"<read_only>",
 		"You DIRECTLY spawn multiple workers",
 		"Why this matters",
+		"## Blocker Heads-Up",
+		"result.blocker_advisory",
+		"result.blocker_advisory_question",
+		"Carry on with the build, or stop and deal with this first?",
+		"a forced reviewer still waiting on the owner's check-in decision",
+		"the last check-and-advance (`aether continue`) on this phase ending blocked",
 	}
 
 	inOrder := []string{
@@ -61,6 +67,8 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"## Dispatch Manifest",
 		"aether build $ARGUMENTS --plan-only",
 		"## Runtime Spawn Ceremony",
+		"## Blocker Heads-Up",
+		"## Team Check-In",
 		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file",
 		"## After the Build",
