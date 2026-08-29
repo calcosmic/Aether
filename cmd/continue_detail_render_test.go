@@ -144,3 +144,137 @@ func TestNestedDetailCapReportsWhatItOmitted(t *testing.T) {
 		}
 	})
 }
+
+// ---- Task 2: evidence lines and specialist findings ----
+
+// TestEvidenceLineNeverAppearsWithoutItsProof proves no satisfied mark (✓)
+// appears on any row lacking evidence, and every satisfied row's line
+// contains its own evidence text -- across satisfied, unproven, blocked, and
+// awaiting-owner rows.
+func TestEvidenceLineNeverAppearsWithoutItsProof(t *testing.T) {
+	tests := []struct {
+		name      string
+		criterion codexCriterionVerification
+		wantTick  bool
+		wantText  []string
+	}{
+		{
+			name: "satisfied",
+			criterion: codexCriterionVerification{
+				Criterion: "Login works",
+				Evidence:  []string{"3 tests passed", "auth.go present"},
+				Passed:    true,
+			},
+			wantTick: true,
+			wantText: []string{"✓ Login works — proved by: 3 tests passed, auth.go present"},
+		},
+		{
+			name: "unproven",
+			criterion: codexCriterionVerification{
+				Criterion: "Export works",
+				Passed:    true,
+			},
+			wantTick: false,
+			wantText: []string{"Export works", "unproven"},
+		},
+		{
+			name: "blocked",
+			criterion: codexCriterionVerification{
+				Criterion:      "Payment succeeds",
+				Passed:         false,
+				BlockingIssues: []string{"payment API returned 500"},
+			},
+			wantTick: false,
+			wantText: []string{"Payment succeeds", "payment API returned 500"},
+		},
+		{
+			name: "awaiting owner",
+			criterion: codexCriterionVerification{
+				Criterion: "Accessibility reviewed",
+				Passed:    true,
+				State:     criterionStateNeedsOwnerConfirmation,
+			},
+			wantTick: false,
+			wantText: []string{"Accessibility reviewed", "awaiting your confirmation"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report := codexContinueVerificationReport{Criteria: []codexCriterionVerification{tt.criterion}}
+
+			var b strings.Builder
+			renderCriterionEvidenceLines(&b, report)
+			output := b.String()
+
+			tickLine := "✓ " + tt.criterion.Criterion
+			if strings.Contains(output, tickLine) != tt.wantTick {
+				t.Errorf("satisfied-mark presence mismatch: wantTick=%v, output:\n%s", tt.wantTick, output)
+			}
+			for _, want := range tt.wantText {
+				if !strings.Contains(output, want) {
+					t.Errorf("missing %q in output:\n%s", want, output)
+				}
+			}
+
+			// Dual-type: the JSON-round-tripped shape renders identically.
+			asMap := roundTripToMap(t, map[string]interface{}{"verification": report})
+			var mapBuilder strings.Builder
+			renderCriterionEvidenceLines(&mapBuilder, asMap["verification"])
+			if mapBuilder.String() != output {
+				t.Fatalf("round-tripped render diverged from typed render:\n%s", firstDiffLine(output, mapBuilder.String()))
+			}
+		})
+	}
+}
+
+// TestSpecialistFindingsGetTheirOwnBlock proves reviewer findings,
+// recommendations, weak spots, edge cases, and blockers render as their own
+// headed block, visible without reading each worker's nested detail line --
+// and a worker with nothing to report is silently excluded.
+func TestSpecialistFindingsGetTheirOwnBlock(t *testing.T) {
+	flow := []codexContinueWorkerFlowStep{
+		{
+			Stage: "review", Caste: "watcher", Name: "Keen-12", Status: "completed",
+			Findings:        []codexReviewFinding{{Severity: "high", Title: "race condition in dispatch loop"}},
+			Recommendations: []string{"add a regression test for the race"},
+			WeakSpots:       []string{"no timeout on the retry loop"},
+			EdgeCases:       []string{"concurrent dispatch from two waves"},
+			Blockers:        []string{"circuit breaker not reset between attempts"},
+		},
+		{
+			Stage: "review", Caste: "auditor", Name: "Ledger-3", Status: "completed",
+			// No findings at all -- must not appear in the block.
+		},
+	}
+
+	var typedBuilder strings.Builder
+	renderSpecialistFindingBlocks(&typedBuilder, flow)
+	typedOutput := typedBuilder.String()
+
+	for _, want := range []string{
+		"🔍 Specialist Findings",
+		"Keen-12",
+		"found: high: race condition in dispatch loop",
+		"recommends: add a regression test for the race",
+		"weak spot: no timeout on the retry loop",
+		"edge case: concurrent dispatch from two waves",
+		"blocker: circuit breaker not reset between attempts",
+	} {
+		if !strings.Contains(typedOutput, want) {
+			t.Errorf("missing %q in output:\n%s", want, typedOutput)
+		}
+	}
+	if strings.Contains(typedOutput, "Ledger-3") {
+		t.Errorf("a worker with nothing to report must not appear in the specialist findings block, got:\n%s", typedOutput)
+	}
+
+	asMap := roundTripToMap(t, map[string]interface{}{"worker_flow": flow})
+	var mapBuilder strings.Builder
+	renderSpecialistFindingBlocks(&mapBuilder, asMap["worker_flow"])
+	mapOutput := mapBuilder.String()
+
+	if typedOutput != mapOutput {
+		t.Fatalf("round-tripped render diverged from typed render:\n%s", firstDiffLine(typedOutput, mapOutput))
+	}
+}
