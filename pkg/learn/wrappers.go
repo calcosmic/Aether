@@ -39,6 +39,15 @@ func CheckPromotion(obs colony.Observation) (bool, string) {
 	return memory.CheckPromotion(obs)
 }
 
+// IsAdmissibleInstinctContent reports whether a piece of worker-authored
+// text is concrete enough to become durable, injectable memory (must name a
+// file, a command, or an error). Delegates to
+// memory.IsAdmissibleInstinctContent -- cmd/ reaches the memory package only
+// through this wrapper, never by importing pkg/memory directly.
+func IsAdmissibleInstinctContent(content string) (bool, string) {
+	return memory.IsAdmissibleInstinctContent(content)
+}
+
 // PromoteService wraps pkg/memory.PromoteService for cmd/ consumers.
 type PromoteService struct {
 	inner *memory.PromoteService

@@ -2019,7 +2019,12 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 			continue
 		}
 		usedResults[resultName] = true
-		status := normalizeExternalBuildStatus(result.Status)
+		// status is read from the MERGED dispatch (dispatch.Status), not
+		// recomputed from the raw submitted result -- mergeExternalBuildResults
+		// already normalized and validated it, and that merge path is the
+		// trust boundary a memory-feed decision (recordDispatchWorkerOutcome,
+		// below) must be made against (T-198.1-03).
+		status := dispatch.Status
 		// A completed worker must relay something to the next phase. Empty
 		// handoffs were previously accepted and persisted, which filled the
 		// handoff store with content-free records — the chain was "written but
@@ -2052,7 +2057,12 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 			Blockers:      result.Blockers,
 			Handoff:       codex.NormalizeWorkerHandoff(root, result.Handoff),
 		}
-		if err := persistDispatchWorkerHandoff(codex.WorkerDispatch{
+		// recordDispatchWorkerOutcome is the one boundary both build lanes
+		// call: it persists this handoff exactly as persistDispatchWorkerHandoff
+		// always did, then feeds the failure log (midden.json) and the
+		// observation log (learning-observations.json) from the same
+		// merged-status facts. See cmd/memory_feed.go.
+		if err := recordDispatchWorkerOutcome(codex.WorkerDispatch{
 			WorkerName: dispatch.Name,
 			Caste:      dispatch.Caste,
 			TaskID:     dispatch.TaskID,
