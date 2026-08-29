@@ -419,6 +419,13 @@ func TestCLIExternalAdapterBuildContract(t *testing.T) {
 	for _, tc := range modes {
 		t.Run(tc.name, func(t *testing.T) {
 			logPath := harness.prepareBuildFixture(t)
+			// Only the timeout case wants a deadline the adapter will miss (it
+			// sleeps 10s). Every other case must finish, and 1s is too tight
+			// for a real subprocess under a fully loaded parallel test run.
+			workerTimeout := "5s"
+			if tc.mode == "timeout" {
+				workerTimeout = "1s"
+			}
 			result := harness.runWithEnv(t, map[string]string{
 				"AETHER_ACTIVE_PLATFORM":     "codex",
 				"AETHER_CODEX_PATH":          harness.adapter,
@@ -426,7 +433,7 @@ func TestCLIExternalAdapterBuildContract(t *testing.T) {
 				"AETHER_TEST_ADAPTER_LOG":    logPath,
 				"AETHER_TEST_ADAPTER_MODE":   tc.mode,
 				"AETHER_WORKER_PLATFORM":     "codex",
-			}, "build", "1", "--light", "--worker-timeout", "1s")
+			}, "build", "1", "--light", "--worker-timeout", workerTimeout)
 
 			state := harness.loadColonyState(t)
 			attempt := harness.loadBuildAttempt(t, 1)
