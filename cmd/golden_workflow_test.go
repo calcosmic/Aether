@@ -59,7 +59,7 @@ var ceremonyElapsedRe = regexp.MustCompile(`(?m)(Ceremony complete in )\d+s$`)
 // liveCheckLineDurationRe matches SHOW-03's live verification finish lines
 // ("Build ✓ (0.3s)", "Tests ✗ (0.0s)") -- the measured duration varies with
 // host load even when every other byte of the check's outcome is identical.
-var liveCheckLineDurationRe = regexp.MustCompile(`(?m)^(Build|Types|Lint|Tests) (✓|✗) \(\d+\.\d+s\)`)
+var liveCheckLineDurationRe = regexp.MustCompile(`(?m)^(\s*)(Build|Types|Lint|Tests) (✓|✗) \(\d+\.\d+s\)`)
 
 // normalizeWorkerNames replaces all worker name patterns (CapitalWord-Number)
 // with a fixed placeholder so golden files are stable across test runs.
@@ -78,7 +78,7 @@ func normalizeForGolden(s string) string {
 	clean = normalizeWorkerNames(clean)
 	clean = stepElapsedRe.ReplaceAllString(clean, "$1 (0s)")
 	clean = ceremonyElapsedRe.ReplaceAllString(clean, "${1}0s")
-	clean = liveCheckLineDurationRe.ReplaceAllString(clean, "$1 $2 (0.0s)")
+	clean = liveCheckLineDurationRe.ReplaceAllString(clean, "$1$2 $3 (0.0s)")
 
 	var filtered strings.Builder
 	for _, line := range strings.Split(clean, "\n") {

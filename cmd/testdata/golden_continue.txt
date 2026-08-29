@@ -39,8 +39,8 @@ Verification pass complete.
 Phase 1 verified and completed: Golden phase
 Verification: 3 passed, 1 skipped
 Claims: builder claims verified
-  Build ✓ (0.1s)
-  Types ✓ (0.1s)
+  Build ✓ (0.0s)
+  Types ✓ (0.0s)
   Lint — skipped: no command resolved; skipped
   Tests ✓ (0.5s)
 Workers
