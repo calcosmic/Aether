@@ -4398,6 +4398,16 @@
     "stability_score": 91
   },
   {
+    "name": "memory-details",
+    "short_description": "Show what the colony has learned: wisdom, pending lessons, and recent failures",
+    "flags": [
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
     "name": "memory-metrics",
     "short_description": "Show memory health metrics",
     "flags": [],
