@@ -157,9 +157,37 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-
 Branch strictly on `seal-finalize` output:
 
 - If blocked, report the runtime blocker text and stop.
+- If `result.awaiting_owner_confirmation` is `true`, the project is NOT finished yet — see "Before Finishing" below.
 - If sealed, use the visual closeout's next-step line as the source of truth.
 - Summarize the workers and the runtime seal result.
 - Follow the runtime's Porter readiness output in visual mode.
+
+## Before Finishing: The Owner Is Always Asked
+
+Both the raw-bypass `aether seal` command and `aether seal-finalize` stop and ask before
+the project is actually marked finished. "Finishing" a project means writing a summary
+document, filing the project away, and pooling its lessons into the shared store other
+projects read — never assume the user already understands that word.
+
+1. The runtime first prints a short state-of-play card: how many phases are done out of
+   the total, anything still failing, any open warnings, and what finishing will actually
+   do.
+2. It then runs the "what did we learn" review and shows what it found — this runs, and
+   its lessons are kept, even if the user goes on to say no.
+3. It asks one question: `Finish this project?` — or, when something is still failing or
+   unresolved, a second, more specific question naming exactly what: `Finish anyway with
+   N check(s) failing: <problem>, <problem>?`.
+
+If the JSON result carries `"awaiting_owner_confirmation": true`, the project is NOT
+finished. Ask the user the exact question in `result.question` (the AskUserQuestion
+tool). Relay their answer with the exact command in `result.next` — never type that
+command on your own initiative, and never infer a "yes" from anything else the user said.
+Only after that command reports the answer as recorded should you rerun `aether seal` (or
+`aether seal-finalize` with the same completion file) to actually finish.
+
+**Automatic mode (autopilot) never finishes a project.** It runs up to the last phase and
+then stops, handing the user the finishing command as their next step — it never answers
+the question itself and never treats silence as a yes.
 
 ## Post-Seal Delivery
 
@@ -180,6 +208,7 @@ Run selected delivery actions sequentially and stop on first failure.
 - Do NOT run Porter delivery commands unless the user explicitly chooses them after `seal-finalize`.
 - Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table.
 - Do NOT drop structured reviewer findings; `seal-finalize` persists them to final-review.json, review ledgers, the post-seal backlog, and QUEEN.md lessons when supplied.
+- Do NOT type the `aether decision-answer` finishing command on your own initiative, and NEVER infer a "yes" from anything other than the user explicitly answering the printed question.
 - Runtime output wins if this wrapper and the runtime disagree.
 
 ## Cross-Platform Drift Guard
