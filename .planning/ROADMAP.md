@@ -309,9 +309,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 198-04-PLAN.md — Parity expanded to planning and finishing; criterion 1 closed (wave 2)
-- [ ] 198-05-PLAN.md — Worker duration and tool-call count, measured, live and in the summary (wave 2)
-- [ ] 198-07-PLAN.md — Build-start blocker heads-up and its one question (wave 2)
+- [x] 198-04-PLAN.md — Parity expanded to planning and finishing; criterion 1 closed (wave 2)
+- [x] 198-05-PLAN.md — Worker duration and tool-call count, measured, live and in the summary (wave 2)
+- [x] 198-07-PLAN.md — Build-start blocker heads-up and its one question (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
