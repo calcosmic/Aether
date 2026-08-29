@@ -15,13 +15,28 @@ import (
 )
 
 // setVisualOutputMode is a small test helper that sets AETHER_OUTPUT_MODE for
-// the duration of the test and restores whatever value was there before.
+// the duration of the test and restores whatever value was there before. It
+// also resets currentStreamingCommand to "" (always-allowed, per
+// streamingAllowedForCurrentCommand's own early return) and restores it on
+// cleanup: currentStreamingCommand is a package-level var saveGlobals does
+// not cover, and a prior test in the same binary that ran a real cobra
+// command through rootCmd.Execute() (root.go sets it on every invocation)
+// can leave it pointing at a quiet-classified command name -- silently
+// swallowing every emitVisualProgress call in a test that never touches
+// rootCmd at all, exactly like TestCeremonyLevelGatesStreaming
+// (display_house_style_test.go) already has to guard against.
 func setVisualOutputMode(t *testing.T, mode string) {
 	t.Helper()
 	orig := os.Getenv("AETHER_OUTPUT_MODE")
 	os.Setenv("AETHER_OUTPUT_MODE", mode)
 	t.Cleanup(func() {
 		os.Setenv("AETHER_OUTPUT_MODE", orig)
+	})
+
+	origStreamingCommand := currentStreamingCommand
+	currentStreamingCommand = ""
+	t.Cleanup(func() {
+		currentStreamingCommand = origStreamingCommand
 	})
 }
 
