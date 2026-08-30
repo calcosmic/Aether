@@ -20,6 +20,8 @@ wrapper_additions:
     Approve the batch with `aether plan-research-approve --approve-all`, or flip specific phases with `aether plan-research-approve --flip <ids>`. Request a fresh manifest afterward so the gated `phase_research` dispatches appear, and surface `result.research_warning` whenever `result.research_awaiting_approval` is true.
     On a fast run the Queen recommends skip for every phase, the batch still appears, and a flipped-on phase researches at the fast preset's 80% / 4-iteration budget.
     Under `/ant-run`, answer the research batch with `aether plan-research-approve --auto` and print the returned `log_line` in the run log. Autopilot never pauses for either decision moment.
+  context_capsule_delivery: |
+    Read `plan_manifest.context_capsule` ONCE from the manifest — it is not per-dispatch data, reuse the same value for every worker this run spawns — and prepend it VERBATIM ahead of each dispatch's `brief`. It is the SOLE source of the owner's steering notes and the previous helper's relay note, so neither is written a second time.
   iterative_planning_ceremony: |
     Restore the classic planning-loop controls while leaving state writes to Go:
     - `--target <70-99>` sets the confidence target. Presets default to fast=80, balanced=90, deep=95, exhaustive=99. These bounds also govern per-phase research iteration under the confidence loop.

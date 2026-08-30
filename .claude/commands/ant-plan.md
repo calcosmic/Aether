@@ -108,7 +108,7 @@ This output is display-only; do not parse it as state.
 Use manifest names, castes, task IDs, briefs, `permission_profile`, and `agent_name` as `subagent_type`. Scout's `permission_profile` must be passed through verbatim from the manifest, never substituted or broadened; Scout's canonical profile is `workspace_write`, scoped behaviorally to writing only under `.aether/data/phase-research`. Preserve caste-labelled descriptions: `{caste emoji} {Caste} {name}: {task}`. Research Scouts iterate under a confidence loop; their per-iteration confidence lines are runtime-emitted, not composed by the wrapper.
 
 - Issue parallel workers as visible Task/subagent calls. Do not set `run_in_background`.
-- Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading.
+- Read `plan_manifest.context_capsule` ONCE from the manifest — it is not per-dispatch data, reuse the same value for every worker this run spawns — and prepend it VERBATIM ahead of the brief; it is the SOLE source of the owner's steering notes and the previous helper's relay note, so neither is written a second time. Then pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading.
 - Spawn all wave-1 workers (base Scout + research Scouts) in the same message so they run concurrently. Announce the research wave in one line: `🔍 Researching {N} phases before routing`.
 - For Route-Setter, include the Scout terminal result in the prompt and note that fresh per-phase research now exists at `.aether/data/phase-research/`.
 - If the manifest includes `selected_gaps` or `previous_plan_draft`, keep them in the brief and require fresh evidence or resolved gaps before allowing confidence to rise. Surface `selected_gaps` to the user between iterations: `Unresolved gaps this iteration:` followed by the list, so they can see what the next pass is chasing.
@@ -119,7 +119,7 @@ For each manifest wave:
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each worker.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading.
+5. Prepend `plan_manifest.context_capsule` (read once, not per-dispatch) VERBATIM ahead of each dispatch's `brief`, then pass the brief verbatim under a `Runtime Worker Brief` heading.
 6. For Route-Setter, include the Scout terminal result in the prompt.
 7. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 8. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <worker_file>`.
