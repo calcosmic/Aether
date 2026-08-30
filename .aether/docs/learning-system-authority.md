@@ -155,10 +155,57 @@ widen cross-repo data flow, so it fails closed rather than falling through to
 fail-safe branch. Tested by `TestHiveRuntimePolicyDefault` and
 `TestHiveRuntimePolicyUnrecognizedWarns` (`cmd/hive_policy_test.go`).
 
+**Phase-end hive promotion, beside the seal-time one (198.1-05, FEED-05).**
+A project that is never formally sealed used to contribute nothing to the
+shared store. `promotePhaseEndInstinctsToHive` (`cmd/phase_end_hive.go`) now
+runs at the end of every `/ant-continue`, on both check lanes, immediately
+after phase-end consolidation, and calls the exact same gate
+(`automaticHivePromotionEnabled()`) and the exact same writer
+(`promoteToHiveWithReference`) the seal-time loop above calls — the table
+above governs both call sites identically, not just the seal one. A hub
+write failure is logged and never blocks the check, mirroring the seal
+loop's own non-blocking contract. Tested by
+`TestStrongInstinctReachesTheSharedStoreAtCheck` (the promotion itself, on
+both lanes), `TestHivePromotionAtCheckHonoursThePolicySwitch` (the same
+table, all six values), and `TestHiveFailureNeverBlocksThePhase`
+(`cmd/phase_end_hive_test.go`).
+
 **Scope boundary (D-03):** this is a default change and a documentation
 correction — nothing more. Hive *trust redesign* (how confidence is computed,
 contradiction handling, revocation mechanics) remains explicitly shelved per
 `REQUIREMENTS.md`'s Non-Goals and is out of scope for this decision.
+
+## Decision 5 — Every feed link now has a named live caller and a named test (198.1)
+
+Phase 198.1 ("Feed the Memory") closed the gap this document's Decision 1-4
+never addressed: the pipeline above was authoritative and correctly wired,
+but nothing on a normal build or check fed it. Five links were starved at
+the source; each now has exactly one live caller and one test that fails if
+that caller is removed.
+
+| Link | Live caller | Named test |
+|---|---|---|
+| Observation log (`learning-observations.json`) | `captureWorkerObservation` (build lane, `cmd/memory_feed.go`) and `captureContinueMemory` (check lane, `cmd/memory_feed_continue.go`) | `TestBuildWorkerLessonsBecomeObservations`, `TestCheckWorkerLessonsBecomeObservationsOnBothLanes` |
+| Failure log (`midden.json`) | `recordWorkerFailureToMidden` (build), `recordFailedChecksToMidden` (the shared check floor), `recordQuickFailureToMidden`, `recordSwarmWorkerFailureToMidden` (`cmd/memory_feed.go`, `cmd/memory_feed_continue.go`) | `TestFailedBuildWorkerReachesTheNextBriefOnTheDelegateLane`, `TestFailedCheckWritesOneFailureRecordOnBothLanes`, `TestQuickFailureReachesTheFailureLog`, `TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes` |
+| Instinct delivery + application (`instinct-deliveries.json`, `ApplicationHistory`) | `recordInstinctDeliveries`, `recordInstinctApplicationsForPhase` (`cmd/instinct_application.go`), called from `recordDispatchWorkerOutcome` and `runPhaseEndConsolidation` | `TestInstinctDeliveryIsRecordedOnlyWhenTheTextWasActuallyDelivered`, `TestDeliveredInstinctGainsOneApplicationPerPhase`, `TestWorkerLessonBecomesQueenFileWisdom`, `TestQueenPromotionNeverHappensWithoutRecordedUse` |
+| Signal store (`pheromones.json`) | `emitPhaseCompletionFeedback`, `emitDecisionFeedback`, `emitMiddenThresholdRedirect` (`cmd/phase_end_signals.go`) | `TestFinishedPhaseLeavesANoteNamingWhatItProduced`, `TestAnsweredQuestionLeavesANoteCarryingTheAnswer`, `TestThreeFailuresOfOneKindProduceOneRedirect` |
+| Shared cross-project store (`~/.aether/hive/wisdom.json`) | `promotePhaseEndInstinctsToHive` (`cmd/phase_end_hive.go`), beside the pre-existing seal-time loop (`runSealWisdomReview`) | `TestStrongInstinctReachesTheSharedStoreAtCheck`, `TestHivePromotionAtCheckHonoursThePolicySwitch` |
+
+The phase's own end-to-end proof, `TestOneRunFeedsEveryStore`
+(`cmd/phase_end_hive_test.go`), drives one build (one worker succeeding, one
+failing) followed by one check to a durable advance and asserts all four
+JSON stores — observations, failures, instincts, signals — are non-empty,
+each with a failure message naming which store broke.
+
+**A future change that removes any one of these callers must delete the
+corresponding claim from this table (and from `CLAUDE.md`'s Wisdom
+Pipeline table and Core Insight list) rather than leave it standing.**
+`TestEveryLearningClaimInCLAUDEMDNamesALiveTest` (`cmd/phase_end_hive_test.go`)
+enforces this for `CLAUDE.md` by parsing every cited test name out of the
+learning-loop sections and failing by name if one no longer exists; this
+document has no equivalent automated guard and relies on the same discipline
+this phase re-established: no claim without a test, and no test without a
+claim.
 
 ## Consequences
 
@@ -175,6 +222,7 @@ What is now true at runtime, and the named test that fails if it stops being tru
 | Seal's two QUEEN.md instinct writers cannot double-promote the same instinct, and the subordinate writer still promotes instincts without application history | `TestSealDoesNotDoublePromoteInstincts`, `TestSealStillPromotesInstinctsWithoutApplicationHistory` (`cmd/seal_ceremony_test.go`) |
 | Seal renders all eight named curation ants and the report path in its output | `TestSealRendersEightNamedAnts`, `TestSealRendersReportPath` (`cmd/seal_ceremony_test.go`) |
 | A `--dry-run` on either consolidation subcommand never mutates state, including the relocated QUEEN.md target | `TestConsolidationPhaseEndDryRunDoesNotMutate`, `TestConsolidationSealDryRunDoesNotMutate` (`cmd/consolidation_dryrun_test.go`) |
+| A strong instinct (confidence >= 0.8) reaches the shared cross-project store at the end of every check, on both lanes, gated by `AETHER_HIVE_POLICY` exactly as seal is, and never blocks the phase | `TestStrongInstinctReachesTheSharedStoreAtCheck`, `TestHivePromotionAtCheckHonoursThePolicySwitch`, `TestWeakInstinctIsNotPromotedAtCheck`, `TestRepeatedPhaseEndPromotionDoesNotDuplicate`, `TestHiveFailureNeverBlocksThePhase` (`cmd/phase_end_hive_test.go`) |
 
 No claim about runtime behaviour appears above without a named test — per
 `CLAUDE.md`'s Definition of Done, an uncheckable claim about this pipeline is

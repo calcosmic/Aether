@@ -610,7 +610,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// the stricter-correct placement (RESEARCH.md assumption A1). Do not
 	// "fix" this back to symmetry with the default continue path.
 	consolidationSummary := runPhaseEndConsolidation(phase.ID)
+	// 198.1-05/FEED-05: strong lessons (confidence >= 0.8) reach the shared
+	// cross-project store at every check, not only at project close --
+	// under the same AETHER_HIVE_POLICY switch seal already honours. Placed
+	// immediately after consolidation and before attachConsolidationSummary,
+	// mirroring the default continue lane above.
+	hiveEligible, hivePromoted := promotePhaseEndInstinctsToHive(phase.ID)
 	attachConsolidationSummary(result, consolidationSummary)
+	attachHivePromotionSummary(result, hiveEligible, hivePromoted)
 	if reviewFindingsPersisted > 0 && result != nil {
 		result["review_findings_persisted"] = reviewFindingsPersisted
 	}
