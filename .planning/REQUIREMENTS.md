@@ -64,8 +64,8 @@
 - [x] **FEED-01**: Worker results on build and continue are recorded as learning observations automatically; a fixture run leaves helper-authored sentences in the observation log with no hand-typed memory command
 - [x] **FEED-02**: Worker, build and verification failures on build, continue, quick and swarm write midden entries automatically, and the next build brief carries the failure's own wording
 - [ ] **FEED-03**: Continue creates instincts from verified phase learnings and promotes them into QUEEN.md through the existing consolidation; the promoted list is non-empty on a fixture with real learnings, not hand-seeded
-- [ ] **FEED-04**: Phase completion and answered decisions emit FEEDBACK pheromones, midden past threshold emits an automatic REDIRECT, and pheromone expiry promotes to eternal memory again; the CLAUDE.md claims for these are backed by tests
-- [ ] **FEED-05**: Instincts at confidence ≥ 0.8 are promoted to the hive at phase end (continue), not only at seal, honouring `AETHER_HIVE_POLICY`
+- [x] **FEED-04**: Phase completion and answered decisions emit FEEDBACK pheromones, midden past threshold emits an automatic REDIRECT, and pheromone expiry promotes to eternal memory again; the CLAUDE.md claims for these are backed by tests
+- [x] **FEED-05**: Instincts at confidence ≥ 0.8 are promoted to the hive at phase end (continue), not only at seal, honouring `AETHER_HIVE_POLICY`
 - [x] **FEED-06**: `/ant-memory-details` shows wisdom entries and pending promotions again and `/ant-status` shows the top instincts by confidence; the bare-count JSON alias is retired
 
 ### Memory reaches every helper (WIRE) — added 2026-08-30
@@ -160,8 +160,8 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | FEED-01 | Phase 198.1 | Complete |
 | FEED-02 | Phase 198.1 | Complete |
 | FEED-03 | Phase 198.1 | Pending |
-| FEED-04 | Phase 198.1 | Pending |
-| FEED-05 | Phase 198.1 | Pending |
+| FEED-04 | Phase 198.1 | Complete |
+| FEED-05 | Phase 198.1 | Complete |
 | FEED-06 | Phase 198.1 | Complete |
 | WIRE-01 | Phase 198.2 | Pending |
 | WIRE-02 | Phase 198.2 | Pending |
