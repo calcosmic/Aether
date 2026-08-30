@@ -395,7 +395,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 198.2-08-PLAN.md — wave 3: the research helper is shown the shared cross-project lessons it was being asked to invent (WIRE-02)
+- [x] 198.2-08-PLAN.md — wave 3: the research helper is shown the shared cross-project lessons it was being asked to invent (WIRE-02)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
