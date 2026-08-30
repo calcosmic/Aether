@@ -150,6 +150,19 @@ func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidat
 		b.WriteString(colonyResearch)
 		b.WriteString("\n")
 	}
+	// Shared cross-project lessons (WIRE-02, D-04): the same top-5 selection
+	// every other worker gets, from the one existing selection rule (see
+	// resolveResearchSharedLessonsSection's own doc comment below for the
+	// exact call it reuses, cmd/colony_prime_context.go:693-719). No second
+	// selection rule, no research-specific limit, no research-specific
+	// domain source. Honours AETHER_HIVE_POLICY exactly as that call does;
+	// omitted entirely when there is nothing to show (D-16) rather than
+	// rendered with a stand-in sentence.
+	if sharedLessons := resolveResearchSharedLessonsSection(root); sharedLessons != "" {
+		b.WriteString("\n")
+		b.WriteString(sharedLessons)
+		b.WriteString("\n")
+	}
 	b.WriteString("\n## Research Areas\n")
 	b.WriteString("1. Key patterns in the existing codebase relevant to this phase\n")
 	b.WriteString("2. External library/API documentation if the phase involves external tools\n")
@@ -172,6 +185,44 @@ func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidat
 	b.WriteString("## Recommended Approach\n{one synthesis paragraph}\n\n")
 	b.WriteString("## Files to Study\n{bullet list of file paths}\n```\n")
 	return b.String()
+}
+
+// resolveResearchSharedLessonsSection reads the same top-5 cross-project
+// hive-wisdom entries every other worker gets (WIRE-02, D-04) by calling the
+// one existing selection rule already used by the memory pack (limit 5,
+// plus buildHiveWisdomLines, cmd/colony_prime_context.go:693-719) below --
+// and renders them for the research brief. There is no second selection
+// rule here: same function, same literal limit, same domain source. root is
+// the colony's repository root, resolved into domain tags via the hub
+// registry exactly as the memory pack resolves them from store.BasePath().
+// Honours AETHER_HIVE_POLICY exactly as every other hive read does -- that
+// call checks automaticHiveReadEnabled() internally, so policy=off yields
+// no entries here just as it does for the memory pack. Returns "" when
+// there is nothing to show -- empty hub store, unmatched domain, or the
+// switch off -- so the caller omits the whole section (D-16, no empty
+// sections) instead of rendering a heading with nothing under it.
+func resolveResearchSharedLessonsSection(root string) string {
+	hubDir := resolveHubPath()
+	var fallbacks []string
+	entries := readHiveWisdomEntriesForDomains(hubDir, 5, readRegistryDomainsForRepo(hubDir, root), &fallbacks)
+	// Surface withheld-wisdom reasons on stderr rather than swallowing them,
+	// mirroring how the memory pack surfaces the identical fallbacks via
+	// result.Warnings (cmd/colony_prime_context.go:701) -- this function has
+	// no result struct of its own to append into, so stderr is the
+	// equivalent "don't discard silently" channel available here.
+	for _, fallback := range fallbacks {
+		fmt.Fprintln(os.Stderr, fallback)
+	}
+	lines := buildHiveWisdomLines(entries)
+	if len(lines) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("## Shared Lessons (Cross-Colony Patterns)\n\n")
+	for _, line := range lines {
+		sb.WriteString(fmt.Sprintf("- %s\n", line))
+	}
+	return sb.String()
 }
 
 // renderPhaseResearchSurveySection mirrors the survey-injection shape
