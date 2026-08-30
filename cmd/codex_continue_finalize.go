@@ -634,6 +634,16 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// only stdout (D-06/D-07).
 	emitContinueCeremonyFlowSequence("aether-continue-finalize", phase, []codexContinueWorkerFlowStep{continueLearningFlowStep(consolidationSummary)})
 	runStatus = "completed"
+	// Written here, after every mutation above (consolidation, hive
+	// promotion, phase commit), not inside advanceExternalContinue: those
+	// attach* calls mutate this SAME result map after advanceExternalContinue
+	// already returned it, and renderContinueVisual's Learning beat
+	// (renderLearningBeat(result["consolidation"])) reads what they add. The
+	// screen the owner actually sees is rendered from this fully-mutated
+	// map; persisting any earlier snapshot would silently diverge from it.
+	if err := writePhaseOutcomeDocument(phase.ID, result, updated); err != nil {
+		fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+	}
 	return result, updated, phase, nextPhase, housekeeping, final, nil
 }
 
@@ -1227,6 +1237,9 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 	}
 	addOrchestratorBoundaryGuidance(result, "continue", blockedState, nextCommand, nil)
 	closeLifecycleRun(result, blockedState, "continue")
+	if err := writePhaseOutcomeDocument(phase.ID, result, blockedState); err != nil {
+		fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+	}
 	return result, blockedState, nil
 }
 
