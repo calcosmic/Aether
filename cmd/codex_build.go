@@ -3357,6 +3357,19 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 		b.WriteString("\n")
 	}
 
+	// The previous phase's carry-forward (WIRE-07, D-09..D-11): what failed
+	// or was flagged last time, and the closing summary the owner read.
+	// Placed before the phase-research section deliberately -- what went
+	// wrong last time frames how the current research should be read.
+	// Guarded by its own empty-string check so a colony on its first phase,
+	// or whose preceding phase left no persisted records, produces a
+	// byte-identical build brief to before this section existed.
+	if carryForward := resolvePreviousPhaseCarryForward(phase.ID); carryForward != "" {
+		b.WriteString("\n")
+		b.WriteString(carryForward)
+		b.WriteString("\n")
+	}
+
 	if researchSection := resolvePhaseResearchSection(root, phase.ID); researchSection != "" {
 		b.WriteString("\n")
 		b.WriteString(researchSection)

@@ -483,9 +483,21 @@ manual depth flags for advanced overrides. If docs and runtime disagree, runtime
 ```
 
 Colony-prime assembles worker context from: QUEEN.md wisdom, eternal memory,
-pheromone signals, phase learnings, key decisions, blocker flags, user preferences,
-clarified intent, parallel mode, and context capsule — all within a token budget
-(see Token Budget below).
+pheromone signals, blocker flags, user preferences, clarified intent, parallel
+mode, and context capsule — all within a token budget (see Token Budget
+below). Phase learnings and key decisions were removed from this list: neither
+had a runtime writer, so the sections could never carry content
+(`buildColonyPrimeOutput`, `TestEveryMemoryPackPartHasALiveWriter`).
+
+Build, planning and research briefs also carry two further bounded slots,
+each outside the colony-prime budget above: a condensed codebase-map digest
+(`resolveSurveyDigestSection`, `TestSurveyorSentenceReachesAllThreeBriefs`)
+and, on every phase but the first, a previous-phase carry-forward naming
+what failed or was flagged in the phase immediately before it plus the
+closing summary the owner read (`resolvePreviousPhaseCarryForward`,
+`TestPreviousPhaseFailureReachesTheNextBuildersBrief`). Neither slot ever
+draws from the colony-prime budget or the other's budget
+(`TestBriefGrowthIsCappedAtTheTwoNewSlots`).
 
 ### Worker Handoff Context Transfer
 
@@ -1187,7 +1199,7 @@ observations that flow through the system and become reusable wisdom.
 | 4. QUEEN.md | phase-end consolidation, gated on genuine use | Writes to QUEEN.md's Instincts section only once the lesson has actually been handed to a helper and used (`TestWorkerLessonBecomesQueenFileWisdom`, `TestQueenPromotionNeverHappensWithoutRecordedUse`) |
 | 5. Inject | `colony-prime` prompt_section | QUEEN.md wisdom + instincts injected into worker context (`TestColonyPrimeWithInstincts`) |
 | 6. Hive store | phase-end promotion, and seal promotion | A strong lesson (confidence >= 0.8) reaches the shared cross-project store at the end of every check, not only at project close, under the same on/off switch (`TestStrongInstinctReachesTheSharedStoreAtCheck`, `TestHivePromotionAtCheckHonoursThePolicySwitch`) |
-| 7. Hive read | `hive-read` | Retrieves cross-colony wisdom scoped by domain (`TestColonyPrimeWithHiveWisdom`) |
+| 7. Hive read | `hive-read` | Retrieves cross-colony wisdom scoped by domain, injected into every build/continue worker via colony-prime (`TestColonyPrimeWithHiveWisdom`) and, since 198.2, shown to the research helper too — the same top-5 selection, no research-specific limit (`TestResearchHelperIsShownTheSharedLessons`, `TestResearchHelperSeesTheSameSelectionAsEveryoneElse`) |
 
 **See `.aether/docs/structural-learning-stack.md` for the full Structural Learning Stack documentation.**
 
