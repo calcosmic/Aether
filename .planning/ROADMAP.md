@@ -355,7 +355,7 @@ Plans:
 - [x] 198.1-02-PLAN.md — wave 2: reviewer lessons and failures become memory on both check lanes; a failing free check leaves a record; quick and swarm failures too
 - [x] 198.1-03-PLAN.md — wave 2: record which instincts a worker was actually given, count a use when the phase passes, and let the existing consolidation carry a lesson into the Queen file
 - [x] 198.1-06-PLAN.md — wave 2: the memory drill-down shows real sentences again, reports when the Queen file changed, and the status instinct list is labelled by strength
-- [ ] 198.1-04-PLAN.md — wave 3: a finished phase and an answered question each leave a note, three failures of one kind leave an automatic don't-do-this note, and a valuable expiring note is kept in long-term memory
+- [x] 198.1-04-PLAN.md — wave 3: a finished phase and an answered question each leave a note, three failures of one kind leave an automatic don't-do-this note, and a valuable expiring note is kept in long-term memory
 - [ ] 198.1-05-PLAN.md — wave 3: strong lessons reach the shared cross-project store at every check under the existing switch, and every learning claim in CLAUDE.md names a test
 
 ### Phase 198.2: Memory Reaches Every Helper
