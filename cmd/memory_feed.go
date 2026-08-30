@@ -178,6 +178,15 @@ func recordWorkerFailureToMidden(category, source, message string, tags []string
 // not appended a second time. This is what makes recordDispatchWorkerOutcome
 // safe to call from an idempotent re-finalize or a repeated completion
 // packet without growing midden.json unbounded (T-198.1-02).
+//
+// WR-02 (198.1-REVIEW.md): the dedup key is the exact (category, message)
+// pair -- there is no separate identity field. This means EVERY caller's
+// message string must carry enough attribution (phase ID, worker name,
+// status, target, etc.) that two genuinely distinct failures can never
+// render into byte-identical text, while a genuine repeat of the same
+// failure keeps rendering identically so it collapses as intended. A future
+// caller that builds a leaner message risks silently suppressing a real,
+// distinct failure as if it were a duplicate of an earlier one.
 func appendMiddenEntryOnce(s *storage.Store, category, source, message string, tags []string) (bool, error) {
 	if mf, err := loadMiddenFile(s); err == nil {
 		for _, entry := range mf.Entries {

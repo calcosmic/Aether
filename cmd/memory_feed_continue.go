@@ -35,6 +35,16 @@ const middenCategorySwarmWorkerFailed = "swarm_worker_failed"
 // eligible to run. A check that blocked still records what it learned and
 // what broke.
 //
+// WR-01 (198.1-REVIEW.md): noLearn (the user-facing --no-learn flag) is
+// forwarded ONLY to captureContinueLearning above -- it gates the legacy
+// learn.Entry capture and nothing else. feedContinueWorkerMemory, called
+// unconditionally on the next line, still writes observations
+// (learning-observations.json) and failure records (midden.json) even when
+// noLearn is true. A user who passes --no-learn will still have this run's
+// lessons and failures written to those stores and surfaced in later
+// worker prompts -- this is deliberate (see the comment above), not a bug,
+// but it means --no-learn does not mean "zero writes to any memory store."
+//
 // TestOnlyOneContinueMemoryEntryPoint (cmd/memory_feed_continue_test.go)
 // asserts captureContinueLearning is called ONLY from inside this function --
 // a future caller that bypasses it fails that guard by name.
