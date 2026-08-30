@@ -416,15 +416,24 @@ func TestOwnerAnswersStillReachAHelperUnderClarifiedIntent(t *testing.T) {
 
 	output := buildColonyPrimeOutput(false)
 
-	if count := strings.Count(output.Context, sentinelAnswer); count != 1 {
-		t.Fatalf("expected the owner's answer to arrive exactly once, found %d occurrence(s):\n%s", count, output.Context)
+	// recordDecisionAnswer also emits a FEEDBACK pheromone signal carrying
+	// the same answer text (see emitDecisionFeedback) -- a second, distinct
+	// sentence in its own section, not a duplicate of Clarified Intent's
+	// content. The exact-once assertion below therefore checks the
+	// distinctively-formatted "{question} => {answer}" line Clarified
+	// Intent renders (see clarifiedIntentPromptRenderResult /
+	// TestColonyPrime_IncludesResolvedClarifiedIntent), which only that
+	// section produces.
+	clarifiedLine := question + " => " + sentinelAnswer
+	if count := strings.Count(output.Context, clarifiedLine); count != 1 {
+		t.Fatalf("expected the owner's answer to arrive exactly once under Clarified Intent, found %d occurrence(s) of %q:\n%s", count, clarifiedLine, output.Context)
 	}
 	if strings.Contains(output.Context, "## Key Decisions") || strings.Contains(output.Context, "## Phase Learnings") {
 		t.Fatalf("removed heading resurfaced in output:\n%s", output.Context)
 	}
 
 	start, end := sectionBoundsInContext(t, output.Context, "## CLARIFIED INTENT")
-	sentinelIdx := strings.Index(output.Context, sentinelAnswer)
+	sentinelIdx := strings.Index(output.Context, clarifiedLine)
 	if sentinelIdx < start || sentinelIdx >= end {
 		t.Fatalf("sentinel landed outside the Clarified Intent block (block=[%d,%d), sentinel=%d):\n%s", start, end, sentinelIdx, output.Context)
 	}

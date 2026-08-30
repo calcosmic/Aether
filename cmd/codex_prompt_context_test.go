@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
 )
 
 func TestResolveCodexWorkerContextUsesColonyPrimeSections(t *testing.T) {
@@ -104,8 +105,6 @@ func TestResolveCodexWorkerContextUsesColonyPrimeSections(t *testing.T) {
 	for _, want := range []string{
 		"## HIVE WISDOM",
 		"## USER PREFERENCES",
-		"## Key Decisions",
-		"## Phase Learnings",
 		"## Active Blockers",
 		"Do not regress release parity",
 		"Prefer table-driven tests in Go",
@@ -306,35 +305,40 @@ func TestResolveCodexWorkerContextPrefersFreshRuntimeContextOverStaleHiveWisdom(
 
 	now := time.Now().UTC()
 	goal := fixture.CodexGoal
-	var decisions []colony.Decision
-	for i := 0; i < fixture.FreshDecisionCount; i++ {
-		decisions = append(decisions, colony.Decision{
-			ID:        "d" + string(rune('a'+i)),
-			Phase:     1,
-			Claim:     fixture.CodexDecisionPrefix + " " + strings.Repeat(fixture.CodexDecisionPhrase+" ", 24),
-			Rationale: "current colony work",
-			Timestamp: now.Format(time.RFC3339),
-		})
-	}
 	state := colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 1,
 		Plan:         colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Weighted", Status: colony.PhaseInProgress}}},
-		Memory: colony.Memory{
-			Decisions: decisions,
-			PhaseLearnings: []colony.PhaseLearning{{
-				ID:        "l1",
-				Phase:     1,
-				PhaseName: "Weighted",
-				Timestamp: now.Format(time.RFC3339),
-				Learnings: []colony.Learning{{Claim: strings.Repeat(fixture.CodexLearningPhrase+" ", 80), Status: "confirmed", Tested: true}},
-			}},
-		},
 	}
 	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save state: %v", err)
+	}
+
+	// "Fresh current decision" content used to be Decisions filler (removed
+	// in 198.2-04 -- state.Memory.Decisions has no writer). learned_memory
+	// is the surviving, real-writer home for exactly this content shape,
+	// fed through the same learn.NewColonyStore(store).Add path
+	// continue-finalize uses. The PhaseLearnings filler this fixture also
+	// used to seed is gone without replacement -- the stale hive entry
+	// above (0.55 confidence at 240 days, decaying below the 0.3 dormancy
+	// floor) is already excluded before ranking even runs, so no extra
+	// budget pressure is needed to prove it loses.
+	learnStore := learn.NewColonyStore(s)
+	for i := 0; i < fixture.FreshDecisionCount; i++ {
+		content := fixture.CodexDecisionPrefix + " " + strings.Repeat(fixture.CodexDecisionPhrase+" ", 24)
+		entry := learn.Entry{
+			Content:        content,
+			Evidence:       learn.Evidence{Timestamp: now.Format(time.RFC3339), Confidence: 0.9},
+			Classification: learn.ClassNeedsApproval,
+			Phase:          1,
+			Confidence:     0.9,
+			Status:         learn.StatusHypothesis,
+		}
+		if err := learnStore.Add(entry); err != nil {
+			t.Fatalf("seed learned_memory entry %d: %v", i, err)
+		}
 	}
 
 	context := resolveCodexWorkerContext()

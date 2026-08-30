@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -68,8 +70,6 @@ func TestProofCommandShowsContextAndSkillProofFromManifest(t *testing.T) {
 	now := time.Now().UTC()
 	goal := "Ship a proof-bearing Tailwind workflow"
 	taskID := "1.1"
-	longDecision := strings.Repeat("Keep proof output explicit and deterministic. ", 80)
-	longLearning := strings.Repeat("Tailwind evidence should stay visible in proof output. ", 90)
 	state := colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
@@ -89,23 +89,44 @@ func TestProofCommandShowsContextAndSkillProofFromManifest(t *testing.T) {
 				},
 			},
 		},
-		Memory: colony.Memory{
-			Decisions: []colony.Decision{
-				{ID: "d1", Phase: 1, Claim: longDecision, Rationale: "force compact ranking pressure", Timestamp: now.Format(time.RFC3339)},
-			},
-			PhaseLearnings: []colony.PhaseLearning{
-				{
-					ID:        "l1",
-					Phase:     1,
-					PhaseName: "Proof phase",
-					Timestamp: now.Format(time.RFC3339),
-					Learnings: []colony.Learning{{Claim: longLearning, Status: "validated", Tested: true, Evidence: "fixture"}},
-				},
-			},
-		},
 	}
 	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save state: %v", err)
+	}
+
+	// This fixture's compact-ranking-pressure filler used to be Decisions +
+	// PhaseLearnings (both removed in 198.2-04 -- dead capsule slots,
+	// neither field has a writer). learned_memory (many even-sized fresh
+	// entries, real writer, priority 5) supplies the same pressure, and a
+	// decayed hive_wisdom entry (real writer, priority 4, lower confidence
+	// so ranked below the fresh entries) is left with too little remaining
+	// budget for its required two non-empty lines and is dropped outright
+	// -- proving "trimmed" is genuinely non-empty rather than vacuously so.
+	learnStore := learn.NewColonyStore(s)
+	for i := 0; i < 20; i++ {
+		content := fmt.Sprintf("Learned %d: %s", i, strings.Repeat("Keep proof output explicit and deterministic. ", 8))
+		entry := learn.Entry{
+			Content:        content,
+			Evidence:       learn.Evidence{Timestamp: now.Format(time.RFC3339), Confidence: 0.9},
+			Classification: learn.ClassNeedsApproval,
+			Phase:          1,
+			Confidence:     0.9,
+			Status:         learn.StatusHypothesis,
+		}
+		if err := learnStore.Add(entry); err != nil {
+			t.Fatalf("seed learned_memory entry %d: %v", i, err)
+		}
+	}
+	stale := now.Add(-120 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	var hiveEntries []string
+	for i := 0; i < 5; i++ {
+		hiveEntries = append(hiveEntries, fmt.Sprintf(
+			`{"id":"w_%d","text":"Tailwind evidence guidance %d: %s","domain":"go","source_repo":"test","confidence":0.6,"created_at":"%s","accessed_at":"%s","access_count":1}`,
+			i, i, strings.Repeat("stale guidance ", 20), stale, stale))
+	}
+	wisdomData := `{"entries":[` + strings.Join(hiveEntries, ",") + `]}`
+	if err := os.WriteFile(filepath.Join(hubDir, "hive", "wisdom.json"), []byte(wisdomData), 0644); err != nil {
+		t.Fatal(err)
 	}
 	flags := colony.FlagsFile{
 		Decisions: []colony.FlagEntry{{ID: "f1", Type: "blocker", Description: "Proof must stay runtime-owned", CreatedAt: now.Format(time.RFC3339)}},

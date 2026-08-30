@@ -653,44 +653,23 @@ func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
 	}
 	result.InstinctCount = len(instincts)
 
-	if state.Memory.Decisions != nil && len(state.Memory.Decisions) > 0 {
-		var decSB strings.Builder
-		writeSectionHeader(&decSB, "decisions", "## Key Decisions\n\n")
-		for _, d := range state.Memory.Decisions {
-			decSB.WriteString(fmtOrFallback("decisions", func(t *sectionTemplate) string { return t.DecisionFormat }, "- Phase %d: %s — %s\n", d.Phase, d.Claim, d.Rationale))
-		}
-		sections = append(sections, colonyPrimeSection{
-			name:              "decisions",
-			title:             "Key Decisions",
-			source:            statePath,
-			content:           decSB.String(),
-			priority:          3,
-			freshnessScore:    latestDecisionFreshness(now, state.Memory.Decisions),
-			confirmationScore: confidenceScoreFromDecisions(state.Memory.Decisions, state.CurrentPhase),
-			relevanceScore:    phaseScopedRelevance(sectionRelevanceScore("decisions"), state.CurrentPhase, decisionPhases(state.Memory.Decisions)...),
-		})
-	}
-
-	if state.Memory.PhaseLearnings != nil && len(state.Memory.PhaseLearnings) > 0 {
-		var learnSB strings.Builder
-		writeSectionHeader(&learnSB, "learnings", "## Phase Learnings\n\n")
-		for _, pl := range state.Memory.PhaseLearnings {
-			learnSB.WriteString(fmtOrFallback("learnings", func(t *sectionTemplate) string { return t.PhaseHeaderFormat }, "### Phase %d: %s\n", pl.Phase, pl.PhaseName))
-			for _, l := range pl.Learnings {
-				learnSB.WriteString(fmtOrFallback("learnings", func(t *sectionTemplate) string { return t.LearningFormat }, "  - %s [%s]\n", l.Claim, l.Status))
-			}
-		}
-		sections = append(sections, colonyPrimeSection{
-			name:              "learnings",
-			title:             "Phase Learnings",
-			source:            statePath,
-			content:           learnSB.String(),
-			priority:          2,
-			freshnessScore:    latestPhaseLearningFreshness(now, state.Memory.PhaseLearnings),
-			confirmationScore: phaseLearningConfidenceScore(state.Memory.PhaseLearnings),
-			relevanceScore:    phaseScopedRelevance(sectionRelevanceScore("learnings"), state.CurrentPhase, phaseLearningPhases(state.Memory.PhaseLearnings)...),
-		})
-	}
+	// 198.2-04 (D-15, WIRE-06): the "Key Decisions" and "Phase Learnings"
+	// section builders that used to live here were removed. Neither
+	// state.Memory.Decisions nor state.Memory.PhaseLearnings has a writer
+	// anywhere in the running program -- aether init empties them
+	// (cmd/init_cmd.go:284) and entomb clears them (cmd/entomb_cmd.go:669),
+	// and nothing else ever assigns to them -- so both headings were
+	// permanently empty by construction. Nothing they would have carried
+	// stopped arriving: owner answers already arrive under Clarified Intent
+	// (below, fed by decision-answer/recordDecisionAnswer) and verified
+	// phase lessons already arrive under Learned Memory (above, fed by the
+	// learn store continue-finalize writes on every check). Keeping both
+	// would have made the pack say the same thing twice. Proven by
+	// TestPhaseLessonsStillReachAHelperUnderLearnedMemory and
+	// TestOwnerAnswersStillReachAHelperUnderClarifiedIntent
+	// (cmd/capsule_writer_invariant_198_2_test.go), and locked against a
+	// future writerless part by TestEveryMemoryPackPartHasALiveWriter in
+	// the same file.
 
 	if handoffSection := renderWorkerHandoffSection("build", state.CurrentPhase, ""); strings.TrimSpace(handoffSection) != "" {
 		sections = append(sections, colonyPrimeSection{

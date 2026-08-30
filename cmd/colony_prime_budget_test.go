@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
 )
 
 // --- TDD Cycle 1: --compact flag sets budget to 4000 and reports it ---
@@ -793,22 +794,42 @@ func TestColonyPrimeLargePheromonesTrimLowerPriority(t *testing.T) {
 	goal := "large pheromones budget test"
 	now := time.Now().Format(time.RFC3339)
 
-	// Large learnings (priority 2) and decisions (priority 3) to compete for budget
-	var learnings []colony.Learning
-	for i := 0; i < 30; i++ {
-		learnings = append(learnings, colony.Learning{
-			Claim:  fmt.Sprintf("Learning %d: %s", i, strings.Repeat("abc ", 40)),
-			Status: "confirmed",
+	// This used to be PhaseLearnings + Decisions filler; both were removed
+	// in 198.2-04 (dead capsule slots -- neither field has a writer).
+	// instincts.json (many short lines, real writer, unprotected) and a
+	// decayed hive_wisdom entry (real writer, unprotected) are the
+	// replacement: instincts consumes remaining budget line-by-line, and
+	// hive_wisdom -- processed after it with too little room left for its
+	// required two non-empty lines -- lands wholly in "trimmed" rather than
+	// silently rendering nothing.
+	var instinctEntries []colony.InstinctEntry
+	for i := 0; i < 200; i++ {
+		instinctEntries = append(instinctEntries, colony.InstinctEntry{
+			ID: fmt.Sprintf("i%d", i), Trigger: fmt.Sprintf("t%d", i),
+			Action:     fmt.Sprintf("fill budget %d", i),
+			Confidence: 0.9, TrustScore: 0.9,
+			Provenance: colony.InstinctProvenance{CreatedAt: now},
 		})
 	}
-	var decisions []colony.Decision
-	for i := 0; i < 30; i++ {
-		decisions = append(decisions, colony.Decision{
-			ID: fmt.Sprintf("d%d", i), Phase: 1,
-			Claim:     fmt.Sprintf("Decision %d: %s", i, strings.Repeat("def ", 40)),
-			Rationale: "rationale",
-			Timestamp: now,
-		})
+	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Instincts: instinctEntries}); err != nil {
+		t.Fatal(err)
+	}
+
+	hubDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(hubDir, "hive"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+	stale := time.Now().Add(-120 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	var hiveEntries []string
+	for i := 0; i < 5; i++ {
+		hiveEntries = append(hiveEntries, fmt.Sprintf(
+			`{"id":"w_%d","text":"Wisdom %d: %s","domain":"go","source_repo":"test","confidence":0.6,"created_at":"%s","accessed_at":"%s","access_count":1}`,
+			i, i, strings.Repeat("text to fill budget ", 20), stale, stale))
+	}
+	wisdomData := `{"entries":[` + strings.Join(hiveEntries, ",") + `]}`
+	if err := os.WriteFile(filepath.Join(hubDir, "hive", "wisdom.json"), []byte(wisdomData), 0644); err != nil {
+		t.Fatal(err)
 	}
 
 	state := colony.ColonyState{
@@ -820,10 +841,6 @@ func TestColonyPrimeLargePheromonesTrimLowerPriority(t *testing.T) {
 			Phases: []colony.Phase{
 				{ID: 1, Name: "Phase One", Status: "in_progress"},
 			},
-		},
-		Memory: colony.Memory{
-			Decisions:      decisions,
-			PhaseLearnings: []colony.PhaseLearning{{Phase: 1, PhaseName: "Phase One", Learnings: learnings}},
 		},
 	}
 	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -870,10 +887,10 @@ func TestColonyPrimeLargePheromonesTrimLowerPriority(t *testing.T) {
 	}
 
 	// At least one low-relevance section should be trimmed to make room for pheromones
-	// (review_depth or learnings, depending on section composition)
-	trimmedLow := trimmedSet["learnings"] || trimmedSet["review_depth"]
+	// (review_depth, instincts, or hive_wisdom, depending on section composition)
+	trimmedLow := trimmedSet["instincts"] || trimmedSet["review_depth"] || trimmedSet["hive_wisdom"]
 	if !trimmedLow {
-		t.Error("expected at least one low-relevance section (learnings or review_depth) to be trimmed when large pheromones need budget space")
+		t.Error("expected at least one low-relevance section (instincts, review_depth, or hive_wisdom) to be trimmed when large pheromones need budget space")
 	}
 
 	// Pheromones (priority 9) must be present in the output
@@ -1067,26 +1084,6 @@ func TestColonyPrimeFreshDecisionsBeatStaleHiveWisdom(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	goal := fixture.Goal
 
-	var decisions []colony.Decision
-	for i := 0; i < fixture.FreshDecisionCount; i++ {
-		decisions = append(decisions, colony.Decision{
-			ID:        fmt.Sprintf("d%d", i),
-			Phase:     1,
-			Claim:     fmt.Sprintf("Fresh decision %d: %s", i, strings.Repeat(fixture.FreshDecisionPhrase+" ", 24)),
-			Rationale: fixture.FreshDecisionRationale,
-			Timestamp: now,
-		})
-	}
-
-	var learnings []colony.Learning
-	for i := 0; i < fixture.LearningCount; i++ {
-		learnings = append(learnings, colony.Learning{
-			Claim:  fmt.Sprintf("Background learning %d: %s", i, strings.Repeat(fixture.LearningPhrase+" ", 24)),
-			Status: "confirmed",
-			Tested: true,
-		})
-	}
-
 	state := colony.ColonyState{
 		Version:      "1.0",
 		Goal:         &goal,
@@ -1097,14 +1094,52 @@ func TestColonyPrimeFreshDecisionsBeatStaleHiveWisdom(t *testing.T) {
 				{ID: 1, Name: "Phase One", Status: "in_progress"},
 			},
 		},
-		Memory: colony.Memory{
-			Decisions:      decisions,
-			PhaseLearnings: []colony.PhaseLearning{{Phase: 1, PhaseName: "Phase One", Timestamp: now, Learnings: learnings}},
-		},
 	}
 	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatal(err)
 	}
+
+	// "Fresh decision" content used to be Decisions filler (removed in
+	// 198.2-04 -- state.Memory.Decisions has no writer). learned_memory is
+	// the surviving, real-writer home for exactly this content shape: fresh
+	// evidence-timestamped entries with their own freshness scoring, fed
+	// through the same learn.NewColonyStore(store).Add path
+	// continue-finalize uses.
+	//
+	// learned_memory both proves freshness survives AND supplies the budget
+	// pressure itself: 20 entries (the learn-store read cap
+	// buildColonyPrimeOutput applies) of moderate, even size. Fine, even
+	// granularity matters the same way it did for
+	// TestColonyPrimeCharterSurvivesTrimming -- the ranker fills a
+	// truncated section line-by-line and discards the leftover space from
+	// whichever line would have overflowed, so many even-sized lines
+	// consume the remaining budget closely enough that hive_wisdom (same
+	// 0.25 baseline relevance, but stale and lower-confidence, so it is
+	// ranked below these fresh entries) is left with too little room for
+	// its required two non-empty lines and is dropped outright rather than
+	// truncated-and-kept with a visible fragment.
+	learnStore := learn.NewColonyStore(s)
+	const freshEntryCount = 20
+	for i := 0; i < freshEntryCount; i++ {
+		content := fmt.Sprintf("Fresh decision %d: %s", i, strings.Repeat(fixture.FreshDecisionPhrase+" ", 8))
+		entry := learn.Entry{
+			Content:        content,
+			Evidence:       learn.Evidence{Timestamp: now, Confidence: 0.9},
+			Classification: learn.ClassNeedsApproval,
+			Phase:          1,
+			Confidence:     0.9,
+			Status:         learn.StatusHypothesis,
+		}
+		if err := learnStore.Add(entry); err != nil {
+			t.Fatalf("seed learned_memory entry %d: %v", i, err)
+		}
+	}
+
+	// The PhaseLearnings background filler this fixture used to also seed
+	// (removed in 198.2-04 -- state.Memory.PhaseLearnings has no writer) is
+	// gone without a direct replacement: it added bulk but was never part
+	// of the fresh-vs-stale comparison, and the fresh learned_memory
+	// entries above already supply the budget pressure this fixture needs.
 
 	rootCmd.SetArgs([]string{"colony-prime", "--compact"})
 	defer rootCmd.SetArgs([]string{})
@@ -1250,8 +1285,14 @@ func TestColonyPrimeNormalModeWithin8000Budget(t *testing.T) {
 	}
 }
 
-// TestColonyPrimeInstinctsSurviveOverDecisions verifies that instincts (priority 6)
-// are preferred over decisions (priority 3) during trimming.
+// TestColonyPrimeInstinctsSurviveOverDecisions verifies that instincts
+// (priority 6) are preferred over learned_memory (priority 5) during
+// trimming. This used to compare instincts against Decisions/PhaseLearnings
+// filler (priority 3/2); both were removed in 198.2-04 (dead capsule slots
+// -- neither field has a writer). learned_memory is the lower-priority,
+// real-writer stand-in that preserves the same ordering intent: a
+// lower-priority, real section should be trimmed before a higher-priority
+// one is touched.
 func TestColonyPrimeInstinctsSurviveOverDecisions(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
@@ -1267,24 +1308,22 @@ func TestColonyPrimeInstinctsSurviveOverDecisions(t *testing.T) {
 	goal := "instincts vs decisions test"
 	now := time.Now().Format(time.RFC3339)
 
-	// Large decisions (priority 3)
-	var decisions []colony.Decision
-	for i := 0; i < 40; i++ {
-		decisions = append(decisions, colony.Decision{
-			ID: fmt.Sprintf("d%d", i), Phase: 1,
-			Claim:     fmt.Sprintf("Decision %d: %s", i, strings.Repeat("dec ", 50)),
-			Rationale: "rationale",
-			Timestamp: now,
-		})
-	}
-
-	// Large learnings (priority 2) to ensure aggressive trimming
-	var learnings []colony.Learning
-	for i := 0; i < 30; i++ {
-		learnings = append(learnings, colony.Learning{
-			Claim:  fmt.Sprintf("Learning %d: %s", i, strings.Repeat("lrn ", 50)),
-			Status: "confirmed",
-		})
+	// Large learned_memory (priority 5) to ensure aggressive trimming --
+	// the learn-store read caps at 20 entries, so size comes from large
+	// per-entry content rather than entry count.
+	learnStore := learn.NewColonyStore(s)
+	for i := 0; i < 20; i++ {
+		entry := learn.Entry{
+			Content:        fmt.Sprintf("Learned %d: %s", i, strings.Repeat("dec ", 50)),
+			Evidence:       learn.Evidence{Timestamp: now, Confidence: 0.7},
+			Classification: learn.ClassNeedsApproval,
+			Phase:          1,
+			Confidence:     0.7,
+			Status:         learn.StatusHypothesis,
+		}
+		if err := learnStore.Add(entry); err != nil {
+			t.Fatalf("seed learned_memory entry %d: %v", i, err)
+		}
 	}
 
 	state := colony.ColonyState{
@@ -1296,10 +1335,6 @@ func TestColonyPrimeInstinctsSurviveOverDecisions(t *testing.T) {
 			Phases: []colony.Phase{
 				{ID: 1, Name: "Phase One", Status: "in_progress"},
 			},
-		},
-		Memory: colony.Memory{
-			Decisions:      decisions,
-			PhaseLearnings: []colony.PhaseLearning{{Phase: 1, PhaseName: "Phase One", Learnings: learnings}},
 		},
 	}
 	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -1333,14 +1368,14 @@ func TestColonyPrimeInstinctsSurviveOverDecisions(t *testing.T) {
 		trimmedSet[name.(string)] = true
 	}
 
-	// Decisions (priority 3) should be trimmed before instincts (priority 6)
-	if trimmedSet["instincts"] && !trimmedSet["decisions"] {
-		t.Error("instincts (priority 6) should not be trimmed when decisions (priority 3) could be trimmed first")
+	// learned_memory (priority 5) should be trimmed before instincts (priority 6)
+	if trimmedSet["instincts"] && !trimmedSet["learned_memory"] {
+		t.Error("instincts (priority 6) should not be trimmed when learned_memory (priority 5) could be trimmed first")
 	}
 
-	// If decisions are trimmed, instincts should survive
-	if trimmedSet["decisions"] && trimmedSet["instincts"] {
-		t.Error("decisions (priority 3) trimmed but instincts (priority 6) also trimmed -- instincts should survive over decisions")
+	// If learned_memory is trimmed, instincts should survive
+	if trimmedSet["learned_memory"] && trimmedSet["instincts"] {
+		t.Error("learned_memory (priority 5) trimmed but instincts (priority 6) also trimmed -- instincts should survive over learned_memory")
 	}
 
 	// Instincts content should be in output if not trimmed
