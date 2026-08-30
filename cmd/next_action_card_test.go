@@ -88,6 +88,11 @@ func fullNextActionAnswer() nextAction {
 			Explanation: "The last check on this phase did not pass, and the report saying why is saved.",
 		},
 		Notes: []string{"A saved report named a command this version does not have, so a general next step is offered instead."},
+		Memory: nextActionMemory{
+			Preferences: "4 preferences set -- e.g. plain English replies",
+			Habits:      []string{"Run the full test suite before claiming a fix works."},
+			RelayNote:   "The last helper (Mason-67) left a note for the next one: the payment provider is still undecided.",
+		},
 	}
 }
 
@@ -278,6 +283,9 @@ func TestNextActionCardRendersEveryField(t *testing.T) {
 		"The last check on this phase did not pass",
 		".aether/data/build/phase-2/continue.json",
 		"A saved report named a command this version does not have",
+		"4 preferences set -- e.g. plain English replies",
+		"Run the full test suite before claiming a fix works.",
+		"The last helper (Mason-67) left a note for the next one: the payment provider is still undecided.",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Errorf("the card never shows %q:\n%s", want, rendered)
@@ -292,7 +300,7 @@ func TestNextActionCardRendersEveryField(t *testing.T) {
 			ContextHealth:  nextActionContextVerdict{Health: contextHealthKeep, Reason: contextReasonHandoffMissing},
 		}
 		rendered := renderNextActionCard(bare)
-		for _, unwanted := range []string{"What changed", "Waiting on you", "Paused or blocked"} {
+		for _, unwanted := range []string{"What changed", "Waiting on you", "Paused or blocked", "What I remember about you"} {
 			if strings.Contains(rendered, unwanted) {
 				t.Errorf("the card prints an empty %q section:\n%s", unwanted, rendered)
 			}

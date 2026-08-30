@@ -66,12 +66,16 @@ func runSessionStartHook(t *testing.T) string {
 
 // newSessionStartProject sets up a temp project with a live store, pins the
 // platform so the card's command spelling is the runtime form on every machine,
+// isolates the hub directory (198.2 plan 03: the greeting now reads the hub's
+// QUEEN.md for the preferences line, so every session-start test must run
+// against an empty, machine-independent hub rather than the real ~/.aether),
 // and resets the command tree afterwards.
 func newSessionStartProject(t *testing.T) {
 	t.Helper()
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
 	t.Setenv("AETHER_PLATFORM", "codex")
+	t.Setenv("AETHER_HUB_DIR", t.TempDir())
 	s, tmpDir := newTestStoreCmd(t)
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 	store = s
