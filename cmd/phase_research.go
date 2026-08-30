@@ -119,7 +119,7 @@ func hasWorkerAuthoredResearch(path string) bool {
 
 // renderPhaseResearchBrief is the v5 Phase Domain Research mission, rebuilt on
 // the modern engine: the Scout investigates one phase's domain and writes a
-// six-section RESEARCH.md the planner and build briefs both consume.
+// five-section RESEARCH.md the planner and build briefs both consume.
 func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidate, survey codexSurveyContext) string {
 	var b strings.Builder
 	b.WriteString("You are a Scout performing Phase Domain Research.\n\n")
@@ -173,12 +173,11 @@ func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidat
 	b.WriteString("- Total output under 3000 words; prioritize actionable guidance over exhaustive documentation\n")
 	b.WriteString("- Cite a file path or URL for every pattern and gotcha\n")
 	b.WriteString("\n## Output\n")
-	b.WriteString(fmt.Sprintf("Write your findings to `.aether/data/phase-research/phase-%d-research.md` with exactly these six sections:\n\n", candidate.ID))
+	b.WriteString(fmt.Sprintf("Write your findings to `.aether/data/phase-research/phase-%d-research.md` with exactly these five sections:\n\n", candidate.ID))
 	b.WriteString(fmt.Sprintf("```markdown\n# Phase %d Research: %s\n\n", candidate.ID, firstNonEmpty(candidate.Name, "unnamed phase")))
 	b.WriteString("**Generated:** {ISO-8601 timestamp}\n")
 	b.WriteString(fmt.Sprintf("**Phase:** %d - %s\n", candidate.ID, firstNonEmpty(candidate.Name, "unnamed phase")))
 	b.WriteString("**Research scope:** {one line on what was investigated}\n\n")
-	b.WriteString("## Hive Wisdom (Pre-existing Knowledge)\n{relevant prior wisdom, or \"No relevant hive wisdom found\"}\n\n")
 	b.WriteString("## Key Patterns\n{**pattern:** relevance (Source: path or URL)}\n\n")
 	b.WriteString("## External Context\n{**topic:** finding (Source: URL), or \"No external research needed for this phase\"}\n\n")
 	b.WriteString("## Gotchas\n{**issue:** prevention (Source: evidence)}\n\n")

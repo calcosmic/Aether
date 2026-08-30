@@ -76,10 +76,15 @@ func TestPlanFinalizePreservesWorkerPhaseResearch(t *testing.T) {
 	}
 }
 
-// The fallback template (used when no research worker ran for a phase) must
-// carry the six-section RESEARCH.md contract, including Recommended Approach —
-// the section build briefs surface to workers.
-func TestPhaseResearchTemplateCarriesSixSections(t *testing.T) {
+// TestPhaseResearchTemplateCarriesFiveSections was
+// TestPhaseResearchTemplateCarriesSixSections before WIRE-02 (198.2-08):
+// the fallback template (used when no research worker ran for a phase) no
+// longer carries a hardcoded "## Hive Wisdom (Pre-existing Knowledge)"
+// stand-in heading -- there is no shared-lessons content to summarise when
+// no worker ran, and the fallback template never invents one (D-16). The
+// rest of the RESEARCH.md contract, including Recommended Approach -- the
+// section build briefs surface to workers -- is unchanged.
+func TestPhaseResearchTemplateCarriesFiveSections(t *testing.T) {
 	dir := t.TempDir()
 	root := t.TempDir() // no pre-existing artifacts, so nothing preserves
 	phases := []colony.Phase{{
@@ -105,7 +110,6 @@ func TestPhaseResearchTemplateCarriesSixSections(t *testing.T) {
 	}
 	content := string(data)
 	for _, section := range []string{
-		"## Hive Wisdom (Pre-existing Knowledge)",
 		"## Key Patterns",
 		"## External Context",
 		"## Gotchas",
