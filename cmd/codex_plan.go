@@ -3402,7 +3402,7 @@ func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, re
 			preserved++
 			continue
 		}
-		// Fallback template in the six-section RESEARCH.md format (the v5
+		// Fallback template in the five-section RESEARCH.md format (the v5
 		// Phase Domain Research contract). Real Scout research written by a
 		// phase_research worker replaces this and is preserved above.
 		var b strings.Builder
@@ -3418,10 +3418,11 @@ func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, re
 			b.WriteString(fmt.Sprintf("**Research status:** phase %d planned WITHOUT its research — worker failed\n", phase.ID))
 			failed = append(failed, phase.ID)
 		}
+		// No hive-wisdom stand-in here (WIRE-02): no research worker ran for
+		// this phase, so there is no shared-lessons content to summarise --
+		// the fallback template never invents one (D-16, no empty sections).
 		b.WriteString("\n")
-		b.WriteString("## Hive Wisdom (Pre-existing Knowledge)\n")
-		b.WriteString("No relevant hive wisdom found\n")
-		b.WriteString("\n## Key Patterns\n")
+		b.WriteString("## Key Patterns\n")
 		patterns := []string{}
 		for _, finding := range report.Findings {
 			patterns = append(patterns, fmt.Sprintf("**%s:** %s (Source: %s)", finding.Area, finding.Discovery, firstNonEmpty(finding.Source, "scout survey")))

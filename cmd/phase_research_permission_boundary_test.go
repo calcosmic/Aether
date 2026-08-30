@@ -118,12 +118,18 @@ func TestScoutReadOnlyProfileIsRejectedAtWorkerBoundary(t *testing.T) {
 	}
 }
 
-func TestPlanResearchDispatchCarriesSixSectionMission(t *testing.T) {
+// TestPlanResearchDispatchCarriesFiveSectionMission was
+// TestPlanResearchDispatchCarriesSixSectionMission before WIRE-02
+// (198.2-08): the "## Hive Wisdom (Pre-existing Knowledge)" heading was
+// removed from the output-template instruction because the Scout now
+// receives that content directly (a "## Shared Lessons (Cross-Colony
+// Patterns)" input section, when the shared store has entries) rather than
+// being told to invent or fake a summary of nothing.
+func TestPlanResearchDispatchCarriesFiveSectionMission(t *testing.T) {
 	dispatch := realPhaseResearchDispatch(t)
 
 	for _, heading := range []string{
 		"## Output",
-		"## Hive Wisdom (Pre-existing Knowledge)",
 		"## Key Patterns",
 		"## External Context",
 		"## Gotchas",
@@ -151,7 +157,6 @@ func TestPlanResearchDispatchCarriesSixSectionMission(t *testing.T) {
 	}
 	for _, heading := range []string{
 		"## Output",
-		"## Hive Wisdom (Pre-existing Knowledge)",
 		"## Key Patterns",
 		"## External Context",
 		"## Gotchas",
