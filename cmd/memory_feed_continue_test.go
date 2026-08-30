@@ -471,3 +471,83 @@ func TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes(t *testing.T) {
 		}
 	})
 }
+
+// selfReportingWorkerInvoker returns a normal (err == nil) WorkerResult
+// carrying whatever Status/Summary the test configures -- this is how a
+// worker reports its own failure without any Go-level plumbing error, the
+// exact gap CR-01 found: failingWorkerInvoker (above) can only exercise the
+// execErr != nil branch, never this one.
+type selfReportingWorkerInvoker struct {
+	status  string
+	summary string
+}
+
+func (i *selfReportingWorkerInvoker) IsAvailable(ctx context.Context) bool { return true }
+func (i *selfReportingWorkerInvoker) ValidateAgent(path string) error      { return nil }
+func (i *selfReportingWorkerInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{Status: i.status, Summary: i.summary}, nil
+}
+
+// TestNativeSwarmLaneRecordsSelfReportedWorkerFailure proves CR-01: a swarm
+// worker that itself reports "failed" or "timeout" (no Go-level invoker
+// error) must still reach the failure log on the native lane, exactly as it
+// already does on the wrapper lane (mergeExternalSwarmResults, asserted by
+// TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes's "wrapper lane"
+// subtest). A worker that reports "completed" must write nothing.
+func TestNativeSwarmLaneRecordsSelfReportedWorkerFailure(t *testing.T) {
+	cases := []struct {
+		name       string
+		status     string
+		wantEntry  bool
+		wantStatus string
+	}{
+		{name: "self-reported failed", status: "failed", wantEntry: true, wantStatus: "failed"},
+		{name: "self-reported timeout", status: "timeout", wantEntry: true, wantStatus: "timeout"},
+		{name: "self-reported completed writes nothing", status: "completed", wantEntry: false, wantStatus: "completed"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobals(t)
+			s, root := newTestStore(t)
+			store = s
+
+			swarmID := "swarm-self-report-test"
+			if err := initializeSwarmRun(swarmID); err != nil {
+				t.Fatalf("initialize swarm run: %v", err)
+			}
+			const summary = "the worker's own account of what happened, without any invoker error"
+			plan := swarmWorkerPlan{
+				Name: "Scout-1", Caste: "scout", Role: "scout",
+				Task: "investigate the reported bug", AgentName: "aether-scout",
+				Wave: 1, Timeout: 5 * time.Second,
+			}
+
+			invoker := &selfReportingWorkerInvoker{status: tc.status, summary: summary}
+			runs, err := executeSwarmWave(context.Background(), root, swarmID, "reported bug", []swarmWorkerPlan{plan}, "", invoker)
+			if err != nil {
+				t.Fatalf("executeSwarmWave: %v", err)
+			}
+			if len(runs) != 1 || runs[0].Status != tc.wantStatus {
+				t.Fatalf("expected exactly 1 execution with status %q, got %+v", tc.wantStatus, runs)
+			}
+
+			mf, loadErr := loadMiddenFile(store)
+			if tc.wantEntry {
+				if loadErr != nil {
+					t.Fatalf("load midden: %v", loadErr)
+				}
+				if len(mf.Entries) != 1 {
+					t.Fatalf("expected exactly 1 midden entry, got %d: %+v", len(mf.Entries), mf.Entries)
+				}
+				if !strings.HasPrefix(mf.Entries[0].Message, summary) {
+					t.Fatalf("midden entry message = %q, want prefix %q", mf.Entries[0].Message, summary)
+				}
+			} else {
+				if loadErr == nil && len(mf.Entries) != 0 {
+					t.Fatalf("a completed self-report should write no midden entry, got %+v", mf.Entries)
+				}
+			}
+		})
+	}
+}

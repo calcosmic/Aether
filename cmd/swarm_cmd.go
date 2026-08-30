@@ -1016,10 +1016,17 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		}
 		if execution.Status == "" {
 			execution.Status = "failed"
-			recordSwarmWorkerFailureToMidden(swarmID, target, execution)
 		}
 		if execErr != nil && execution.Status == "completed" {
 			execution.Status = "failed"
+		}
+		// 198.1-fix (CR-01): check the FINAL status once, after both
+		// transitions above, rather than gating on how the status got
+		// there -- mirrors mergeExternalSwarmResults' wrapper-lane check
+		// (cmd/swarm_cmd.go, ~line 792) so a worker that itself returns
+		// Status: "failed" or "timeout" with no Go-level invoker error is
+		// no longer silently dropped from the failure log.
+		if execution.Status == "failed" || execution.Status == "timeout" {
 			recordSwarmWorkerFailureToMidden(swarmID, target, execution)
 		}
 
