@@ -76,7 +76,7 @@
 - [x] **WIRE-04**: A completed Oracle run registers its output into the colony's research docs automatically; its findings reach the next builder without `--research <path>` or a manual promote
 - [x] **WIRE-05**: The session-start card carries user preferences, top instincts and the last handoff, each content-locked
 - [x] **WIRE-06**: No colony-prime capsule section is empty by construction — `PhaseLearnings` and `Decisions` gain a live writer or are removed; an invariant test asserts every section has a writer
-- [ ] **WIRE-07**: The previous phase's outcome.md, verification.json and review.json content reaches the next phase's build brief
+- [x] **WIRE-07**: The previous phase's outcome.md, verification.json and review.json content reaches the next phase's build brief
 
 ### Overnight stamina (STAM) — added 2026-08-30
 
@@ -169,7 +169,7 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | WIRE-04 | Phase 198.2 | Complete |
 | WIRE-05 | Phase 198.2 | Complete |
 | WIRE-06 | Phase 198.2 | Complete |
-| WIRE-07 | Phase 198.2 | Pending |
+| WIRE-07 | Phase 198.2 | Complete |
 | STAM-01 | Phase 198.3 | Pending |
 | STAM-02 | Phase 198.3 | Pending |
 | STAM-03 | Phase 198.3 | Pending |
