@@ -615,7 +615,7 @@ func TestExpireSignalsByType(t *testing.T) {
 	_ = s.SaveJSON("pheromones.json", pf)
 
 	// Expire FOCUS signals
-	count := expireSignalsByType(s, "FOCUS")
+	count, _ := expireSignalsByType(s, "FOCUS")
 	if count != 2 {
 		t.Errorf("expected 2 FOCUS signals expired, got %d", count)
 	}
@@ -630,7 +630,7 @@ func TestExpireSignalsByType(t *testing.T) {
 	}
 
 	// Expiring again should return 0
-	count2 := expireSignalsByType(s, "FOCUS")
+	count2, _ := expireSignalsByType(s, "FOCUS")
 	if count2 != 0 {
 		t.Errorf("expected 0 on second expire, got %d", count2)
 	}
