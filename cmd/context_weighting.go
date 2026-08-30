@@ -200,8 +200,6 @@ func sectionRelevanceScore(name string) float64 {
 		return 0.25
 	case "global_queen_md":
 		return 0.75
-	case "learnings":
-		return 0.25
 	case "recent_narrative":
 		return 0.10
 	case "prior_reviews":
@@ -256,30 +254,6 @@ func protectedSectionPolicy(name string) (bool, string) {
 	default:
 		return false, ""
 	}
-}
-
-func confidenceScoreFromLearnings(learnings []colony.Learning) float64 {
-	if len(learnings) == 0 {
-		return 0.4
-	}
-	total := 0.0
-	for _, learning := range learnings {
-		score := 0.20
-		switch strings.ToLower(strings.TrimSpace(learning.Status)) {
-		case "validated", "confirmed":
-			score += 0.30
-		case "active", "candidate":
-			score += 0.15
-		}
-		if learning.Tested {
-			score += 0.20
-		}
-		if strings.TrimSpace(learning.Evidence) != "" {
-			score += 0.10
-		}
-		total += clampScoreUnit(score)
-	}
-	return clampScoreUnit(total / float64(len(learnings)))
 }
 
 func confidenceScoreFromDecisions(decisions []colony.Decision, currentPhase int) float64 {
@@ -417,33 +391,6 @@ func decisionPhases(decisions []colony.Decision) []int {
 		phases = append(phases, decision.Phase)
 	}
 	return phases
-}
-
-func latestPhaseLearningFreshness(now time.Time, phaseLearnings []colony.PhaseLearning) float64 {
-	timestamps := make([]string, 0, len(phaseLearnings))
-	for _, phaseLearning := range phaseLearnings {
-		timestamps = append(timestamps, phaseLearning.Timestamp)
-	}
-	return latestFreshnessScore(now, 0.70, timestamps...)
-}
-
-func phaseLearningPhases(phaseLearnings []colony.PhaseLearning) []int {
-	phases := make([]int, 0, len(phaseLearnings))
-	for _, phaseLearning := range phaseLearnings {
-		phases = append(phases, phaseLearning.Phase)
-	}
-	return phases
-}
-
-func phaseLearningConfidenceScore(phaseLearnings []colony.PhaseLearning) float64 {
-	if len(phaseLearnings) == 0 {
-		return 0.4
-	}
-	total := 0.0
-	for _, phaseLearning := range phaseLearnings {
-		total += confidenceScoreFromLearnings(phaseLearning.Learnings)
-	}
-	return clampScoreUnit(total / float64(len(phaseLearnings)))
 }
 
 func hiveFreshnessScore(now time.Time, entries []hiveWisdomEntry) float64 {

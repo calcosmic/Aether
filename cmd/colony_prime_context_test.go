@@ -103,13 +103,6 @@ section_templates:
   instincts:
     header: "## CUSTOM INSTINCTS\n\n"
     instinct_format: "CUSTOM - [%s] %s (confidence: %.2f)\n"
-  decisions:
-    header: "## CUSTOM DECISIONS\n\n"
-    decision_format: "CUSTOM - Phase %d: %s — %s\n"
-  learnings:
-    header: "## CUSTOM LEARNINGS\n\n"
-    phase_header_format: "CUSTOM ### Phase %d: %s\n"
-    learning_format: "CUSTOM   - %s [%s]\n"
   worker_handoffs:
     header: "## CUSTOM HANDOFFS\n\n"
     worker_header_format: "CUSTOM ### %s\n"
@@ -305,8 +298,6 @@ section_templates:
 		{"review depth header", "## CUSTOM REVIEW DEPTH"},
 		{"review depth heavy", "CUSTOM HEAVY"},
 		{"instincts header", "## CUSTOM INSTINCTS"},
-		{"decisions header", "## CUSTOM DECISIONS"},
-		{"learnings header", "## CUSTOM LEARNINGS"},
 		{"hive wisdom header", "## CUSTOM HIVE"},
 		{"learned memory header", "## CUSTOM MEMORY"},
 		{"global queen header", "## CUSTOM GLOBAL QUEEN"},
@@ -915,7 +906,7 @@ section_templates:
 
 // buildRichColonyPrimeFixture populates a store with data that exercises
 // every section colony-prime.md's section_templates defines (state,
-// review_depth, pheromones, instincts, decisions, learnings, worker_handoffs,
+// review_depth, pheromones, instincts, worker_handoffs,
 // hive_wisdom, learned_memory, global_queen_md, user_preferences,
 // local_queen_wisdom, clarified_intent, blockers, medic_health) so a
 // before/after render comparison actually exercises every template field
@@ -1123,9 +1114,13 @@ func TestColonyPrimeMdDeletionProducesByteIdenticalOutput(t *testing.T) {
 	// A sanity check that this fixture reaches sections beyond just "state"
 	// -- otherwise the byte-identical assertion above would be trivially
 	// true for the wrong reason (nothing substantive was compared).
+	// "## Key Decisions" and "## Phase Learnings" were removed in 198.2-04
+	// (dead capsule slots) -- their content already lives under
+	// "## LEARNED MEMORY" and "## CLARIFIED INTENT", both still asserted
+	// below.
 	mustContain := []string{
 		"## Colony State", "## Review Depth", "## Pheromone Signals",
-		"## Active Instincts", "## Key Decisions", "## Phase Learnings",
+		"## Active Instincts",
 		"## Previous Worker Handoffs", "## HIVE WISDOM", "## LEARNED MEMORY",
 		"## GLOBAL QUEEN WISDOM", "## USER PREFERENCES", "## LOCAL QUEEN WISDOM",
 		"## CLARIFIED INTENT", "## Active Blockers", "## Colony Health Issues",

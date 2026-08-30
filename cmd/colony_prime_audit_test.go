@@ -262,7 +262,7 @@ func TestColonyPrimeAAC005Audit(t *testing.T) {
 	}
 }
 
-// TestColonyPrimeSectionsPresent verifies all 16 colony-prime sections appear
+// TestColonyPrimeSectionsPresent verifies all 14 colony-prime sections appear
 // when their data sources are populated.
 func TestColonyPrimeSectionsPresent(t *testing.T) {
 	saveGlobalsCmd(t)
@@ -420,14 +420,16 @@ func TestColonyPrimeSectionsPresent(t *testing.T) {
 	// Execute: get the output
 	output := buildColonyPrimeOutput(false)
 
-	// Verify all 16 expected sections are present in the ledger
+	// Verify all 14 expected sections are present in the ledger. "decisions"
+	// and "learnings" were removed in 198.2-04 (dead capsule slots -- neither
+	// state.Memory.Decisions nor state.Memory.PhaseLearnings ever had a
+	// writer); their content already arrives under "learned_memory" and
+	// "clarified_intent" below.
 	expectedSections := []string{
 		"state",
 		"review_depth",
 		"pheromones",
 		"instincts",
-		"decisions",
-		"learnings",
 		"hive_wisdom",
 		"learned_memory",
 		"global_queen_md",
