@@ -1416,6 +1416,9 @@ func extractRiskEntries(maxRisks int) []colony.FlagEntry {
 
 // extractSignalTexts loads pheromones.json, computes effective strengths, sorts, and returns formatted signals.
 func extractSignalTexts(maxSignals int) []string {
+	if store == nil {
+		return nil
+	}
 	var pf colony.PheromoneFile
 	if err := store.LoadJSON("pheromones.json", &pf); err != nil {
 		return nil
