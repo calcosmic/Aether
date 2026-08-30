@@ -913,13 +913,22 @@ Colony-prime retrieves hive wisdom scoped to the current project's domain:
 3. Injects domain-relevant wisdom into worker prompts as `HIVE WISDOM (Cross-Colony Patterns)`
 4. **Fallback chain:** hive -> eternal -> empty (graceful degradation if no wisdom exists)
 
-### Seal Promotion Hook
+### Promotion to the Hive: at every check, and at seal
 
-During `/ant-seal` (Step 3.7), high-confidence instincts are promoted to the hive:
+A lesson confident enough to share across projects (confidence >= 0.8) used to
+wait for `/ant-seal` — a project that is never formally sealed, which is most
+of them, contributed nothing. It now also leaves at the end of every check
+(`/ant-continue`), on both check lanes, immediately after phase-end
+consolidation (`TestStrongInstinctReachesTheSharedStoreAtCheck`).
 
-1. Extracts instincts with confidence >= 0.8 from `COLONY_STATE.json`
-2. Promotes each via `hive-promote` with `--text` and `--source-repo`
-3. **NON-BLOCKING** — promotion failures are logged but never stop the seal
+Both the check-time path and the seal path (Step 3.7) call the exact same
+gate and the exact same writer:
+
+1. Extracts instincts with confidence >= 0.8 from `instincts.json`
+2. Promotes each via the shared hive writer, honouring `AETHER_HIVE_POLICY`
+   identically at both points (`TestHivePromotionAtCheckHonoursThePolicySwitch`)
+3. **NON-BLOCKING** — promotion failures are logged but never stop the check
+   or the seal (`TestHiveFailureNeverBlocksThePhase`)
 
 ### Multi-Repo Confidence Boosting
 
@@ -1009,9 +1018,17 @@ The midden tracks failures for colony learning:
 - `midden-review` — Review unacknowledged midden entries grouped by category
 - `midden-acknowledge` — Mark midden entries as addressed by id or category
 
-Failures are logged during:
-- Build failures (build.md)
-- Approach changes (tracked for wisdom)
+Failures are logged automatically, on every path that can produce one:
+- A helper fails to finish its job, on either the direct build path or the
+  chat-driven build path (`TestFailedBuildWorkerReachesTheNextBriefOnTheDelegateLane`)
+- The program's own build/type/formatting/test check fails, on either check
+  lane (`TestFailedCheckWritesOneFailureRecordOnBothLanes`)
+- A one-off question (`/ant-quick`) fails to get an answer
+  (`TestQuickFailureReachesTheFailureLog`)
+- A bug-investigation helper fails or times out, on either lane
+  (`TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes`)
+- Autopilot gives up retrying a step and records why
+  (`TestAutopilotRetryExhaustionCallSiteIsWired`)
 
 **Data Maintenance:**
 - `/ant-data-clean` — Remove test artifacts from colony data files (pheromones, constraints, midden)
@@ -1138,17 +1155,17 @@ observations that flow through the system and become reusable wisdom.
 
 ### Pipeline Stages
 
-| Stage | Subcommand | Output |
+| Stage | Subcommand | What actually calls it now (proof) |
 |-------|-----------|--------|
-| 1. Observe | `memory-capture "learning"` | Records observation to learning-observations.json |
-| 1a. Trust score | `trust-score-compute` | Assigns weighted trust score to observation (40/35/25, 7 tiers) |
-| 1b. Event bus | `event-bus-publish` | Publishes scored event to JSONL event bus with TTL |
-| 2. Auto-promote | (internal: `learning-promote-auto`) | Triggers after threshold (2 observations for patterns) |
-| 3. Instinct | `instinct-create` | Stores in COLONY_STATE.json with provenance |
-| 4. QUEEN.md | `queen-promote` | Writes to QUEEN.md Patterns/Philosophies section |
-| 5. Inject | `colony-prime` prompt_section | QUEEN.md wisdom + instincts injected into worker context |
-| 6. Hive store | `hive-promote` | Abstracts instinct, stores in hive wisdom.json (confidence >= 0.8) |
-| 7. Hive read | `hive-read` | Retrieves cross-colony wisdom scoped by domain |
+| 1. Observe | `memory-capture "learning"` | A build worker's own sentence, and a check's reviewer lessons/weak spots, are captured automatically on every build and check lane (`TestBuildWorkerLessonsBecomeObservations`, `TestCheckWorkerLessonsBecomeObservationsOnBothLanes`) |
+| 1a. Trust score | `trust-score-compute` | Assigns weighted trust score to observation (40/35/25, 7 tiers) (`TestTrustScoreCompute`) |
+| 1b. Event bus | `event-bus-publish` | Publishes scored event to JSONL event bus with TTL (`TestEventBusPublishCreatesEvent`) |
+| 2. Auto-promote | phase-end consolidation (`runPhaseEndConsolidation`) | Runs automatically at the end of every check, after two observations of the same pattern (`TestWorkerLessonBecomesQueenFileWisdom`) |
+| 3. Instinct | phase-end consolidation | The same automatic pass stores the promoted lesson with its provenance (`TestWorkerLessonBecomesQueenFileWisdom`) |
+| 4. QUEEN.md | phase-end consolidation, gated on genuine use | Writes to QUEEN.md's Instincts section only once the lesson has actually been handed to a helper and used (`TestWorkerLessonBecomesQueenFileWisdom`, `TestQueenPromotionNeverHappensWithoutRecordedUse`) |
+| 5. Inject | `colony-prime` prompt_section | QUEEN.md wisdom + instincts injected into worker context (`TestColonyPrimeWithInstincts`) |
+| 6. Hive store | phase-end promotion, and seal promotion | A strong lesson (confidence >= 0.8) reaches the shared cross-project store at the end of every check, not only at project close, under the same on/off switch (`TestStrongInstinctReachesTheSharedStoreAtCheck`, `TestHivePromotionAtCheckHonoursThePolicySwitch`) |
+| 7. Hive read | `hive-read` | Retrieves cross-colony wisdom scoped by domain (`TestColonyPrimeWithHiveWisdom`) |
 
 **See `.aether/docs/structural-learning-stack.md` for the full Structural Learning Stack documentation.**
 
@@ -1229,11 +1246,27 @@ Aether supports two parallel execution strategies, selected at colony init:
 
 The system's pieces are now **connected**:
 - Pheromones update context (colony-prime injects signals into worker prompts)
-- Decisions become pheromones (auto-emit during builds)
-- Learnings become instincts (observation to promotion pipeline -- see Wisdom Pipeline above)
-- Midden affects behavior (threshold auto-REDIRECT)
+- A finished check and an answered worker question each leave a note the next
+  helpers read -- written at the end of a check (`aether continue`) and the
+  moment the owner answers a worker's question, never during a build
+  (`TestFinishedPhaseLeavesANoteNamingWhatItProduced`,
+  `TestAnsweredQuestionLeavesANoteCarryingTheAnswer`)
+- A worker's own lesson becomes a habit the whole project reuses: from the
+  worker's own sentence, through one lesson learned, to a reusable instinct,
+  to the shared instruction file every helper reads
+  (`TestWorkerLessonBecomesQueenFileWisdom`) -- and it never reaches that
+  file without being genuinely handed to a helper and used first
+  (`TestQueenPromotionNeverHappensWithoutRecordedUse`)
+- The failure log steers the colony automatically: three unacknowledged
+  failures of the same kind produce one "don't do this" note; two produce
+  none (`TestThreeFailuresOfOneKindProduceOneRedirect`,
+  `TestTwoFailuresProduceNoRedirect`)
 - Hive Brain crosses colony boundaries (domain-scoped wisdom -> colony-prime)
-- Instincts promote to hive at seal (confidence >= 0.8 -> hive-promote)
+- A strong-enough lesson reaches every other project on the machine at the
+  end of every check, not only when a project is formally finished, under
+  the same on/off switch either way
+  (`TestStrongInstinctReachesTheSharedStoreAtCheck`,
+  `TestHivePromotionAtCheckHonoursThePolicySwitch`)
 - Multi-repo confirmation boosts confidence (2 repos = 0.7, 4+ = 0.95)
 - User preferences shape worker behavior (QUEEN.md -> colony-prime)
 - Autopilot chains build-verify-advance with smart pausing (/ant-run)
