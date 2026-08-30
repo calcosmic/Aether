@@ -3,8 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -268,5 +270,141 @@ func TestOnlyTheImmediatelyPrecedingPhaseIsCarried(t *testing.T) {
 	}
 	if strings.Contains(section, "OLDPHASETEXT-should-not-appear") {
 		t.Errorf("carry-forward section leaked a phase older than the immediately preceding one, got:\n%s", section)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 2: wiring into the build brief, and proof the previous phase's
+// records survive the current phase's build-attempt cleanup.
+// ---------------------------------------------------------------------------
+
+// setupCarryForwardFailingBuildFixture198_2 seeds a two-phase colony whose
+// phase 1 has a genuinely failing "tests" check (AGENTS.md's verification
+// command for tests is `false`), drives phase 1's check through the real
+// continue pipeline so verification.json/gates.json are written the way the
+// runtime actually writes them, and leaves phase 2 as the next phase whose
+// build brief plan 07's carry-forward section must reach.
+func setupCarryForwardFailingBuildFixture198_2(t *testing.T, name string) string {
+	t.Helper()
+	s, root := newTestStore(t)
+	store = s
+	writeAgentsVerificationCommands(t, root,
+		"- build: true", "- types: true", "- lint: true", "- tests: false")
+
+	goal := name
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, s.BasePath(), colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: name, Status: colony.PhaseInProgress, Tasks: []colony.Task{{ID: &taskID, Goal: "Ship it", Status: colony.TaskInProgress}}},
+				{ID: 2, Name: "Next phase", Status: colony.PhasePending, Tasks: []colony.Task{{ID: &nextTaskID, Goal: "Continue forward", Status: colony.TaskPending}}},
+			},
+		},
+	})
+
+	if err := store.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
+		t.Fatalf("seed observations fixture: %v", err)
+	}
+
+	seedContinueBuildPacket(t, s.BasePath(), 1, name, goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-cf-1", Task: "Ship it", Status: "completed", TaskID: taskID},
+	})
+
+	return root
+}
+
+// TestPreviousPhaseFailureReachesTheNextBuildersBrief seeds a real failing
+// check on the preceding phase, assembles the next phase's build brief on
+// both the direct lane (renderCodexBuildWorkerBrief) and the delegate lane
+// (composeBuildManifestBrief, the wrapper-facing composer every manifest
+// brief is built from), and asserts the failure's own wording arrives in
+// each -- both lanes, per the standing two-lane rule.
+func TestPreviousPhaseFailureReachesTheNextBuildersBrief(t *testing.T) {
+	saveGlobals(t)
+	root := setupCarryForwardFailingBuildFixture198_2(t, "Previous phase failure reaches the brief")
+
+	result, _, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{})
+	if err != nil {
+		t.Fatalf("runCodexContinue: %v", err)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("fixture must produce a blocked (failing) check, got advanced:true, result=%+v", result)
+	}
+
+	phase2 := colony.Phase{ID: 2, Name: "Next phase"}
+	dispatch := codexBuildDispatch{Name: "Hammer-cf-2", Caste: "builder", Task: "Continue forward"}
+	startedAt := time.Now()
+
+	const wantFailureWording = `Check "tests" failed`
+
+	t.Run("direct lane", func(t *testing.T) {
+		brief := renderCodexBuildWorkerBrief(root, phase2, dispatch, startedAt)
+		if !strings.Contains(brief, wantFailureWording) {
+			t.Errorf("direct-lane build brief for phase 2 is missing the previous phase's failure (%q), got:\n%s", wantFailureWording, brief)
+		}
+	})
+
+	t.Run("delegate lane", func(t *testing.T) {
+		brief := composeBuildManifestBrief(root, phase2, dispatch, startedAt, false)
+		if !strings.Contains(brief, wantFailureWording) {
+			t.Errorf("delegate-lane build brief for phase 2 is missing the previous phase's failure (%q), got:\n%s", wantFailureWording, brief)
+		}
+	})
+}
+
+// TestBuildCleanupLeavesThePreviousPhasesRecords seeds all four artifacts
+// cleanupStaleBuildAttemptArtifacts removes (verification.json, gates.json,
+// continue.json, review.json) for the PRECEDING phase, runs the cleanup path
+// for the CURRENT phase, and asserts all four of the preceding phase's files
+// still exist and the carry-forward section still renders -- proof by test,
+// not by inspection, that the current phase's own build-attempt cleanup
+// never reaches the previous phase's directory.
+func TestBuildCleanupLeavesThePreviousPhasesRecords(t *testing.T) {
+	saveGlobalsCmd(t)
+	seedCarryForwardState198_2(t, 40, 41, "Cleanup must not reach me")
+
+	verification := codexContinueVerificationReport{
+		Phase: 40,
+		Steps: []codexVerificationStep{{Name: "tests", Passed: false, Summary: "cleanup-survives-sentinel"}},
+	}
+	gates := codexContinueGateReport{Checks: []gateCheck{{Name: "verification_steps_passed", Passed: false}}}
+	review := codexContinueReviewReport{Phase: 40, Passed: false, BlockingIssues: []string{"reviewer blocking issue"}}
+	continueReport := codexContinueReport{Phase: 40, Summary: "blocked"}
+
+	for _, seed := range []struct {
+		name string
+		data interface{}
+	}{
+		{"verification.json", verification},
+		{"gates.json", gates},
+		{"review.json", review},
+		{"continue.json", continueReport},
+	} {
+		if err := store.SaveJSON(continuePlanArtifactsPath(40, seed.name), seed.data); err != nil {
+			t.Fatalf("seed %s: %v", seed.name, err)
+		}
+	}
+
+	// Run the CURRENT phase's own build-attempt cleanup -- the code path
+	// under test.
+	cleanupStaleBuildAttemptArtifacts(41)
+
+	for _, name := range []string{"verification.json", "gates.json", "continue.json", "review.json"} {
+		path := filepath.Join(store.BasePath(), filepath.FromSlash(continuePlanArtifactsPath(40, name)))
+		if _, statErr := os.Stat(path); statErr != nil {
+			t.Errorf("preceding phase's %s was removed by the current phase's cleanup: %v", name, statErr)
+		}
+	}
+
+	section := resolvePreviousPhaseCarryForward(41)
+	if !strings.Contains(section, "cleanup-survives-sentinel") {
+		t.Errorf("carry-forward section no longer renders after cleanup, got:\n%s", section)
 	}
 }
