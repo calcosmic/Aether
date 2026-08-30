@@ -408,3 +408,133 @@ func TestBuildCleanupLeavesThePreviousPhasesRecords(t *testing.T) {
 		t.Errorf("carry-forward section no longer renders after cleanup, got:\n%s", section)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Task 3: cap the growth, and prove this phase added no dispatch/check-in.
+// ---------------------------------------------------------------------------
+
+// briefGrowthCapHeadingAllowanceChars is the small fixed allowance for the
+// two new section headings/labels themselves (the digest's "### Codebase
+// Map Digest" line and the carry-forward's "## What Happened Last Phase"
+// line, plus their short guidance sentences) -- named here rather than left
+// as a magic number in the assertion below, per the plan's own acceptance
+// criterion.
+const briefGrowthCapHeadingAllowanceChars = 300
+
+// buildBriefForGrowthCap198_2 assembles a real build brief for phase 2 in an
+// isolated store, optionally populating the two new memory slots' sources
+// (a survey report for the digest, and phase 1's verification.json for the
+// carry-forward) before rendering.
+func buildBriefForGrowthCap198_2(t *testing.T, populate bool) string {
+	t.Helper()
+	s, tmpDir := newTestStoreCmd(t)
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	store = s
+	goal := "brief growth cap fixture"
+	state := colony.ColonyState{
+		Version: "3.0", Goal: &goal, CurrentPhase: 2,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Previous phase", Status: colony.PhaseCompleted},
+			{ID: 2, Name: "Current phase", Status: colony.PhaseInProgress},
+		}},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("seed colony state: %v", err)
+	}
+
+	if populate {
+		surveyDir := filepath.Join(s.BasePath(), "survey")
+		if err := os.MkdirAll(surveyDir, 0755); err != nil {
+			t.Fatalf("mkdir survey dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(surveyDir, "nest.md"), []byte(strings.Repeat("A survey finding about the codebase layout. ", 30)), 0644); err != nil {
+			t.Fatalf("write survey report: %v", err)
+		}
+		verification := codexContinueVerificationReport{
+			Phase: 1,
+			Steps: []codexVerificationStep{{Name: "tests", Passed: false, Summary: strings.Repeat("failure detail ", 30)}},
+		}
+		if err := s.SaveJSON(continuePlanArtifactsPath(1, "verification.json"), verification); err != nil {
+			t.Fatalf("seed verification.json: %v", err)
+		}
+	}
+
+	phase := colony.Phase{ID: 2, Name: "Current phase"}
+	dispatch := codexBuildDispatch{Name: "Hammer-cap", Caste: "builder", Task: "Do the work"}
+	return renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, time.Now())
+}
+
+// TestBriefGrowthIsCappedAtTheTwoNewSlots proves total brief growth across
+// this whole phase is capped at exactly the two new named slots
+// (surveyDigestBudgetChars from plan 06, phaseCarryForwardBudgetChars from
+// this plan) plus a small fixed heading allowance -- the folded
+// worker-turnaround todo's own constraint. Both budgets are read from the
+// source constants, not restated as literals, so raising either without
+// revisiting this cap is caught.
+func TestBriefGrowthIsCappedAtTheTwoNewSlots(t *testing.T) {
+	saveGlobalsCmd(t)
+
+	populated := buildBriefForGrowthCap198_2(t, true)
+	empty := buildBriefForGrowthCap198_2(t, false)
+
+	diff := len(populated) - len(empty)
+	if diff < 0 {
+		diff = -diff
+	}
+	cap := surveyDigestBudgetChars + phaseCarryForwardBudgetChars + briefGrowthCapHeadingAllowanceChars
+	if diff > cap {
+		t.Errorf("brief growth from the two new memory slots is %d chars, exceeding the cap of %d (surveyDigestBudgetChars=%d + phaseCarryForwardBudgetChars=%d + %d heading allowance)",
+			diff, cap, surveyDigestBudgetChars, phaseCarryForwardBudgetChars, briefGrowthCapHeadingAllowanceChars)
+	}
+}
+
+// TestThisPhaseAddedNoDispatchOrCheckin reuses the existing one-worker
+// (countWorkersAcrossBothBoundaries + oneTaskBugFixPhase) and check-in
+// (checkinFixturePhase + setUpCheckinFixtureColony + decideBuildCheckin)
+// fixtures rather than inventing a parallel harness, and asserts both counts
+// are unchanged: this phase added memory content to the build brief, never a
+// new dispatch or a new owner check-in pause.
+func TestThisPhaseAddedNoDispatchOrCheckin(t *testing.T) {
+	t.Run("dispatch count unchanged", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		phase := oneTaskBugFixPhase()
+		state := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthStandard)}
+		total, castes := countWorkersAcrossBothBoundaries(phase, state, colony.VerificationDepthStandard, nil, "", nil)
+		if total != 1 {
+			t.Fatalf("expected exactly 1 dispatch across both boundaries (unchanged from the established one-worker baseline), got %d (%v)", total, castes)
+		}
+	})
+
+	t.Run("check-in decision unchanged", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		root := dataDir[:len(dataDir)-len("/.aether/data")]
+
+		phase := checkinFixturePhase("Fix the pager", "Fix the off-by-one error in the pager", colony.PhaseModePrototype)
+		setUpCheckinFixtureColony(t, dataDir, phase)
+
+		result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{})
+		if err != nil {
+			t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
+		}
+		if len(dispatches) != 1 {
+			t.Fatalf("expected exactly one dispatch, got %d", len(dispatches))
+		}
+		manifest, ok := result["dispatch_manifest"].(codexBuildManifest)
+		if !ok {
+			t.Fatalf("dispatch_manifest is not a codexBuildManifest: %T", result["dispatch_manifest"])
+		}
+		pending, why := buildHasPendingOwnerDecision(manifest)
+		if pending {
+			t.Fatalf("a plain one-task phase must not report a pending owner decision (why=%q)", why)
+		}
+		decision := decideBuildCheckin(buildCheckinDecisionInput{ImplementationDispatches: len(dispatches), PendingOwnerDecision: pending})
+		if decision.Requested {
+			t.Fatalf("this phase must not have added an owner check-in pause, got Requested=true (%s)", decision.Reason)
+		}
+		if decision.Reason != buildCheckinReasonOneWorkerFastPath {
+			t.Fatalf("reason = %s, want %s (unchanged from before this phase)", decision.Reason, buildCheckinReasonOneWorkerFastPath)
+		}
+	})
+}
