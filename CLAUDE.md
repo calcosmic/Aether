@@ -1146,6 +1146,28 @@ Locked by `TestSessionStartCardReflectsState`,
 `TestSessionGreetingIsNotDelegatedToTheAssistant` — the last of which fails if
 the old request returns to any shipped document.
 
+The card also names what the colony remembers about you: how many
+preferences you have set, with one example; the three strongest habits it has
+learned, each in the habit's own words rather than under a heading; and one
+line naming the last helper and what it left for the next one. Each of the
+three is content, never a heading with nothing under it — a project with none
+of them yet shows none of the three lines, no "nothing learned yet" filler.
+"Strongest" means highest confidence, not most recent, and the card and the
+project dashboard read that ranking from the one shared function, so the two
+can never disagree about which habits are strongest. Every other closing
+message this program prints — including the one `aether continue` shows — is
+byte-identical to before this was added.
+
+Locked by `TestGreetingCarriesPreferencesHabitsAndTheLastNote`,
+`TestGreetingOmitsWhatTheProjectDoesNotHaveYet`,
+`TestGreetingStaysSilentWithoutAProject`,
+`TestClosingCardsAreUnchangedByTheGreetingBlock` (every other closing card is
+untouched), `TestGreetingWithMemoryStillDoesNotMutate` (the two new readers
+that now also look at the hub still write nothing), and
+`TestStrongestHabitsHaveOneRankingRule` (one ranking rule, shared with the
+project dashboard, and nothing can add a second one without this test
+catching it by name).
+
 ---
 
 ## Wisdom Pipeline

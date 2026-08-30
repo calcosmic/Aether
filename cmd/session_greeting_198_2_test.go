@@ -509,3 +509,57 @@ func TestClosingCardsAreUnchangedByTheGreetingBlock(t *testing.T) {
 		t.Fatalf("the envelope's own answer carries a non-zero memory block: %+v", folded.Memory)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Task 3 -- plain English and the no-write lock, with the memory block wired
+// in.
+// ---------------------------------------------------------------------------
+
+// TestGreetingWithMemoryStillDoesNotMutate extends
+// TestSessionStartHookDoesNotMutate's proof to the two new hub-touching
+// readers this plan adds. The pre-existing test only snapshots the project's
+// own data directory; this one also snapshots the hub, because
+// buildNextActionMemory (cmd/next_action_input.go) now reads the hub's
+// QUEEN.md for the preferences line.
+func TestGreetingWithMemoryStillDoesNotMutate(t *testing.T) {
+	newSessionStartProject(t)
+	hubDir := strings.TrimSpace(os.Getenv("AETHER_HUB_DIR"))
+	if hubDir == "" {
+		t.Fatal("AETHER_HUB_DIR is not set -- newSessionStartProject must isolate it")
+	}
+	writeHubPreferences(t, "Plain English replies, no jargon.")
+
+	state := greetingFixtureState(t)
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("write fixture state: %v", err)
+	}
+	if err := store.SaveJSON("session.json", colony.SessionFile{SessionID: "s1", StartedAt: "2026-08-01T10:00:00Z"}); err != nil {
+		t.Fatalf("write session fixture: %v", err)
+	}
+
+	promoteRealInstinctVaried(t, store, "Run `go test ./cmd/...` before claiming a fix works.", "user_feedback", "test_verified", 5)
+	writeWorkerHandoffRecords(t, workerHandoffRecord{
+		ID: "h1", Workflow: "build", Phase: 1, WorkerName: "Mason-12",
+		Summary: "wired the memory digest into the plan brief", Freshness: time.Now().UTC().Format(time.RFC3339),
+	})
+
+	beforeData := snapshotProjectDataTree(t, store.BasePath())
+	beforeHub := snapshotProjectDataTree(t, hubDir)
+	first := runSessionStartHook(t)
+	second := runSessionStartHook(t)
+	afterData := snapshotProjectDataTree(t, store.BasePath())
+	afterHub := snapshotProjectDataTree(t, hubDir)
+
+	if !reflect.DeepEqual(beforeData, afterData) {
+		t.Errorf("the greeting changed the project's saved data.\nbefore: %v\nafter:  %v", beforeData, afterData)
+	}
+	if !reflect.DeepEqual(beforeHub, afterHub) {
+		t.Errorf("the greeting changed the hub's saved data.\nbefore: %v\nafter:  %v", beforeHub, afterHub)
+	}
+	if first != second {
+		t.Errorf("two greetings over an unchanged project differed.\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+	if !strings.Contains(first, "Learned habit:") || !strings.Contains(first, "1 preference set") {
+		t.Fatalf("the fixture produced a card with no memory content, so this test would not exercise the new hub-touching readers:\n%s", first)
+	}
+}
