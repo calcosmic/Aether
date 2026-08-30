@@ -180,21 +180,22 @@ func loadStrongestRuntimeInstincts(s *storage.Store, state *colony.ColonyState, 
 	return sorted[:limit]
 }
 
-func recentInstinctEntries(file colony.InstinctsFile, limit int) []colony.InstinctEntry {
-	active := sortedActiveInstinctEntries(file)
-	if len(active) == 0 {
-		return []colony.InstinctEntry{}
-	}
-	if limit > len(active) {
-		limit = len(active)
-	}
-	recent := make([]colony.InstinctEntry, 0, limit)
-	for i := len(active) - 1; i >= 0 && len(recent) < limit; i-- {
-		recent = append(recent, active[i])
-	}
-	return recent
-}
-
+// rankedInstinctEntries ranks active instinct entries by
+// memory.InstinctUsefulnessScore, highest first. This is the ONE ranking
+// rule display code may use to pick a top-N instinct list (198.2 plan 03,
+// TestStrongestHabitsHaveOneRankingRule) -- loadStrongestRuntimeInstincts is
+// the only caller. Ties (equal score, which happens whenever two entries
+// share confidence, trust and freshness) fall through to a strict, fully
+// deterministic order: most-recently-referenced first, then instinct ID
+// ascending as the final tiebreaker. Because IDs are unique, this comparator
+// is a total order, so two calls over unchanged data always return the same
+// sequence -- there is nothing left for a run of the process to vary.
+//
+// A prior version of this file also carried recentInstinctEntries, a
+// recency-ordered second selector never wired to any renderer. Dead code
+// that already had the shape of "select a top-N instinct list" was itself
+// the landmine this test guards against, so it was removed rather than kept
+// unused (198.2 plan 03).
 func rankedInstinctEntries(file colony.InstinctsFile, now time.Time, limit int) []colony.InstinctEntry {
 	active := make([]colony.InstinctEntry, 0, len(file.Instincts))
 	for _, inst := range file.Instincts {
