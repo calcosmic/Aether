@@ -65,7 +65,9 @@ var oracleCmd = &cobra.Command{
 		if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "promote") {
 			minConfidence, _ := cmd.Flags().GetInt("min-confidence")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
-			result, err := runOraclePromote(skillWorkspaceRoot(), minConfidence, dryRun)
+			promoteRoot := skillWorkspaceRoot()
+			promoteState, _ := loadOracleStateFile(oracleWorkspacePaths(promoteRoot).StatePath)
+			result, err := runOraclePromote(promoteRoot, minConfidence, dryRun, oracleResearchProvenanceLabel(promoteState))
 			if err != nil {
 				outputError(1, err.Error(), nil)
 				return renderedErrorExit(1)

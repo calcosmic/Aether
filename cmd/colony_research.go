@@ -160,6 +160,103 @@ func mergeColonyResearchDocs(root string, existing, added []string) ([]string, b
 	return merged, !stringSlicesEqual(existing, merged), nil
 }
 
+// registerColonyResearchDoc folds a freshly saved research document into the
+// colony's --research pointer list, so the very next build, plan, or
+// research brief finds it with no hand-typed `aether init --research <path>`.
+//
+// It goes through the same mergeColonyResearchDocs -> validateColonyResearchDocs
+// path the hand-typed flag uses, so a bad or unreadable path still fails
+// closed rather than being silently dropped, and researching the same topic
+// again still keeps both write-ups (D-08) -- mergeColonyResearchDocs already
+// unions rather than replaces.
+//
+// Ordering: the merged list is written back with the new document first.
+// resolveColonyResearchSection spends its per-document budget in list order,
+// so this registration-time ordering is what makes "helpers are shown the
+// newest research first" (D-08) true rather than aspirational -- pinned by
+// TestResearchOnTheSameTopicKeepsBothWriteUps, not left implicit.
+//
+// Deliberately NOT alphabetical: saveOracleResearchDocument disambiguates two
+// same-day saves on the same topic with a "-2" filename suffix, and "-2"
+// sorts BEFORE the unsuffixed name lexicographically (the hyphen orders
+// before the dot before ".md") -- an alphabetical-reverse ordering would put
+// the older, unsuffixed document first on exactly the same-topic-same-day
+// case D-08 exists for. Registration order carries no such trap: each call
+// prepends the just-registered document, so recency is encoded in the write,
+// not re-derived from the filename afterward.
+//
+// The state file is read and rewritten as a generic map rather than the
+// typed colony.ColonyState, so a field this package does not model is never
+// silently dropped by the round trip.
+//
+// Returns an error rather than panicking when the state file is missing or
+// unreadable. Every caller treats registration failure as non-fatal: a run
+// that filed its write-up successfully must never be reported as failed
+// only because the colony could not also be pointed at it.
+func registerColonyResearchDoc(root string, doc string) error {
+	doc = strings.TrimSpace(doc)
+	if doc == "" {
+		return nil
+	}
+
+	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		return fmt.Errorf("read colony state: %w", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parse colony state: %w", err)
+	}
+
+	var existing []string
+	if rawDocs, ok := raw["research_docs"].([]interface{}); ok {
+		for _, v := range rawDocs {
+			if s, ok := v.(string); ok {
+				existing = append(existing, s)
+			}
+		}
+	}
+
+	// mergeColonyResearchDocs is still the source of truth for validity: it
+	// fails closed if `doc`, or any previously-recorded entry, does not
+	// resolve to a real file inside the repo. Its own alphabetically-sorted
+	// return value is used only to confirm membership -- the newest-first
+	// order written back below comes from registration order, not from that
+	// sort.
+	merged, changed, mergeErr := mergeColonyResearchDocs(root, existing, []string{doc})
+	if mergeErr != nil {
+		return mergeErr
+	}
+	if !changed {
+		return nil
+	}
+	inMerged := make(map[string]bool, len(merged))
+	for _, d := range merged {
+		inMerged[d] = true
+	}
+
+	reordered := make([]string, 0, len(merged))
+	reordered = append(reordered, doc)
+	for _, d := range existing {
+		if d != doc && inMerged[d] {
+			reordered = append(reordered, d)
+		}
+	}
+	raw["research_docs"] = reordered
+
+	encoded, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal colony state: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	if err := os.WriteFile(statePath, encoded, 0644); err != nil {
+		return fmt.Errorf("write colony state: %w", err)
+	}
+	return nil
+}
+
 // loadColonyResearchDocs reads the research pointers recorded on colony state.
 // Brief renderers call this rather than threading the paths through every
 // dispatch struct, so one edit covers both the in-process and host-manifest

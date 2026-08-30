@@ -118,9 +118,34 @@ func renderOracleResearchDocument(state oracleStateFile, plan oraclePlanFile, bo
 		fmt.Fprintf(&b, "source_workspace: %s\n", sourceWorkspace)
 	}
 	b.WriteString("---\n\n")
+	// The partial label lives in the body, not only in the front matter's
+	// status field, because the body is what a worker actually reads --
+	// stripResearchFrontMatter removes the header before the document ever
+	// reaches a prompt. It is the first line so a partial answer is never
+	// mistaken for a finished one (D-07).
+	if label := oracleResearchPartialLabel(state); label != "" {
+		b.WriteString(label)
+		b.WriteString("\n\n")
+	}
 	b.WriteString(strings.TrimSpace(body))
 	b.WriteString("\n")
 	return b.String()
+}
+
+// oracleResearchPartialLabel names a plain-English partial-run warning for
+// anything short of a clean completion -- an owner stop, a worker time-out,
+// or the iteration cap -- so the document itself says what a status field
+// buried in the front matter would not. Empty for a clean completion.
+func oracleResearchPartialLabel(state oracleStateFile) string {
+	if strings.TrimSpace(state.Status) == "complete" {
+		return ""
+	}
+	rounds := state.Iteration
+	roundWord := "round"
+	if rounds != 1 {
+		roundWord = "rounds"
+	}
+	return fmt.Sprintf("partial — stopped after %d %s", rounds, roundWord)
 }
 
 // oracleYAMLScalar quotes a value so a topic containing a colon cannot produce

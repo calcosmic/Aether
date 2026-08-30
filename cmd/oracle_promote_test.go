@@ -53,7 +53,7 @@ func TestOraclePromoteWritesAdmissibleFindings(t *testing.T) {
 	dataDir = s.BasePath()
 	seedOraclePlan(t, root)
 
-	result, err := runOraclePromote(root, 80, false)
+	result, err := runOraclePromote(root, 80, false, "")
 	if err != nil {
 		t.Fatalf("promote: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestOraclePromoteDryRunDoesNotWrite(t *testing.T) {
 	dataDir := s.BasePath()
 	seedOraclePlan(t, root)
 
-	result, err := runOraclePromote(root, 80, true)
+	result, err := runOraclePromote(root, 80, true, "")
 	if err != nil {
 		t.Fatalf("promote dry-run: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestOraclePromoteDryRunDoesNotWrite(t *testing.T) {
 
 // Without an oracle workspace the command fails with guidance, not a panic.
 func TestOraclePromoteWithoutResearchFails(t *testing.T) {
-	if _, err := runOraclePromote(t.TempDir(), 80, false); err == nil {
+	if _, err := runOraclePromote(t.TempDir(), 80, false, ""); err == nil {
 		t.Fatal("expected error when no oracle plan exists")
 	}
 }
