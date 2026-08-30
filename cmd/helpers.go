@@ -338,12 +338,35 @@ func resolveSurveyDigestSection() string {
 		if budget > remaining {
 			budget = remaining
 		}
+		// contributed tracks the report's own body length toward `used` --
+		// never the truncation notice suffix below, which is bookkeeping
+		// text, not report content (WR-03: counting it against the digest
+		// budget understated how much budget later reports actually had
+		// left).
+		contributed := len(content)
 		if len(content) > budget {
-			cut := content[:budget]
-			if idx := strings.LastIndex(cut, "\n\n"); idx > budget/2 {
+			notice := fmt.Sprintf("\n\n_(truncated — full report: .aether/data/survey/%s)_", name)
+			// Reserve the notice's own length from budget before slicing
+			// content, so the truncated body plus its notice never exceeds
+			// `budget` (WR-02: without this, a per-report cut that
+			// correctly fit surveyDigestPerReportChars could still land
+			// over colony.SanitizeSignalContent's unrelated 500-char
+			// ceiling once the notice was appended, and get rejected
+			// outright instead of truncated).
+			cutBudget := budget - len(notice)
+			if cutBudget <= 0 {
+				// Not even the notice fits inside this report's remaining
+				// budget -- name it as an omission rather than emit a
+				// truncated fragment with no notice, or a negative slice.
+				omitted = append(omitted, name)
+				continue
+			}
+			cut := content[:cutBudget]
+			if idx := strings.LastIndex(cut, "\n\n"); idx > cutBudget/2 {
 				cut = cut[:idx]
 			}
-			content = cut + fmt.Sprintf("\n\n_(truncated — full report: .aether/data/survey/%s)_", name)
+			contributed = len(cut)
+			content = cut + notice
 		}
 		sanitized, sanErr := colony.SanitizeSignalContent(content)
 		if sanErr != nil {
@@ -351,7 +374,7 @@ func resolveSurveyDigestSection() string {
 			continue
 		}
 		fmt.Fprintf(&body, "### %s\n\n%s\n\n", name, sanitized)
-		used += len(content)
+		used += contributed
 	}
 
 	if body.Len() == 0 && len(omitted) == 0 {

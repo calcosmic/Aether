@@ -191,6 +191,44 @@ func TestMapDigestStaysInsideItsOwnBudgetAndNamesOmissions(t *testing.T) {
 	}
 }
 
+// TestLongFilenameTruncationNoticeStaysInsideTheSanitizerBoundary is a
+// boundary-case regression test for WR-02/WR-03: a survey report whose
+// filename is long enough that surveyDigestPerReportChars (400) plus the
+// truncation notice's own length exceeds colony.SanitizeSignalContent's
+// 500-char rejection ceiling. Before the fix, the per-report cut sliced
+// content to the full 400-char budget and only then appended the notice,
+// so the combined string overshot 500 chars and the sanitizer rejected it
+// outright -- a report correctly truncated to fit its own per-report
+// budget was instead omitted as "content rejected", not truncated. This
+// test fails against that code (the report never appears in the digest
+// body, and is named a "content rejected" omission instead) and passes
+// once the notice's own length is reserved from the per-report budget
+// before slicing.
+func TestLongFilenameTruncationNoticeStaysInsideTheSanitizerBoundary(t *testing.T) {
+	saveGlobalsCmd(t)
+	_, root := setupSurveyStalenessTest(t)
+	surveyDir := filepath.Join(root, ".aether", "data", "survey")
+
+	// A realistic-length surveyor filename -- well past today's
+	// surveyor-nest/-disciplines templates (BLUEPRINT.md, CHAMBERS.md) --
+	// but a survey report's filename is worker-authored, not fixed by
+	// this codebase, so the digest must not silently drop a report just
+	// because its own name happens to be long.
+	longName := "SURVEYOR-DISCIPLINES-DETAILED-NAMING-AND-ERROR-HANDLING-CONVENTIONS-REPORT.md"
+	writeSurveyReportFile(t, surveyDir, longName, longSurveyBody("Conventions"))
+
+	digest := resolveSurveyDigestSection()
+	if digest == "" {
+		t.Fatal("expected a non-empty digest")
+	}
+	if strings.Contains(digest, "content rejected") {
+		t.Fatalf("the long-filename report was rejected by the sanitizer instead of being truncated to fit -- the truncation notice pushed the per-report cut over the 500-char sanitizer ceiling:\n%s", digest)
+	}
+	if !strings.Contains(digest, "### "+longName) {
+		t.Fatalf("expected the long-filename report to be included in the digest (truncated, not omitted), got:\n%s", digest)
+	}
+}
+
 func TestOldMapIsStillSentWithItsAgeLine(t *testing.T) {
 	saveGlobalsCmd(t)
 	_, root := setupSurveyStalenessTest(t)
