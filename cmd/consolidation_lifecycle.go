@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent/curation"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/learn"
 )
@@ -76,6 +77,18 @@ type phaseEndConsolidationSummary struct {
 	// return value for this phase -- how many instincts gained a fresh,
 	// honest use this phase because a worker was genuinely given them.
 	InstinctApplicationsRecorded int
+	// FailuresRecorded is the count of unacknowledged midden.json entries as
+	// of this phase-end call -- the "failures recorded" figure folded into
+	// this phase's completion note (198.1-04/FEED-04), sourced from the
+	// failure log rather than the promotion pipeline. Exposed here so a test
+	// can assert the note's content against the runtime's own reported
+	// number instead of typing a literal.
+	FailuresRecorded int
+	// AutoRedirectsEmitted is emitMiddenThresholdRedirect's own return value
+	// for this call -- how many midden.json failure categories crossed the
+	// auto-REDIRECT threshold and got (or reinforced) a steering signal
+	// (198.1-04/FEED-04).
+	AutoRedirectsEmitted int
 }
 
 // LearningBeatLine renders the single-line, caste-agnostic message body used
@@ -196,7 +209,7 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 		return phaseEndConsolidationSummary{Ran: false, Reason: reason}
 	}
 
-	return phaseEndConsolidationSummary{
+	summary := phaseEndConsolidationSummary{
 		Ran:                          true,
 		InstinctsDecayed:             result.InstinctsDecayed,
 		InstinctsArchived:            result.InstinctsArchived,
@@ -207,7 +220,24 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 		RereadCandidates:             len(result.RereadCandidates),
 		QueenPromoted:                append([]string{}, result.QueenPromoted...),
 		InstinctApplicationsRecorded: applicationsRecorded,
+		FailuresRecorded:             countUnacknowledgedMiddenEntries(store),
 	}
+
+	// Feed the memory (198.1-04, FEED-04): a finished phase leaves a note
+	// naming what it produced, and a run of the same failure leaves an
+	// automatic don't-do-this note -- both AFTER the summary above is fully
+	// assembled, so their counts are the ones this summary reports. Neither
+	// emission can fail this phase advance; both warn to stderr and continue.
+	var cs colony.ColonyState
+	_ = store.LoadJSON("COLONY_STATE.json", &cs)
+	phase, found := colonyPhaseByID(cs, phaseID)
+	if !found {
+		phase = colony.Phase{ID: phaseID}
+	}
+	emitPhaseCompletionFeedback(phase, summary, summary.PromotionCandidates, summary.FailuresRecorded)
+	summary.AutoRedirectsEmitted = emitMiddenThresholdRedirect()
+
+	return summary
 }
 
 // realConsolidationErrors filters out "file does not exist" load failures

@@ -134,6 +134,114 @@ var entropyScoreCmd = &cobra.Command{
 
 // --- eternal-store ---
 
+// eternalEntry is one record in the hub's long-term ("eternal") memory file.
+// Lifted from eternalStoreCmd's RunE to package scope (198.1-04, FEED-04) so
+// appendEternalMemoryEntry -- the extracted writer both the CLI and the
+// pheromone-expiry promotion path use -- can share the exact shape without
+// re-declaring it.
+type eternalEntry struct {
+	ID         string  `json:"id"`
+	Content    string  `json:"content"`
+	Category   string  `json:"category"`
+	Confidence float64 `json:"confidence"`
+	CreatedAt  string  `json:"created_at"`
+	AccessedAt string  `json:"accessed_at"`
+}
+
+// eternalData is the top-level shape of the hub's eternal/memory.json file.
+type eternalData struct {
+	Entries []eternalEntry `json:"entries"`
+}
+
+// eternalMemoryPath returns the hub-relative path to the long-term memory
+// file, resolved the same way every other hub-scoped write in this package
+// resolves it.
+func eternalMemoryPath() string {
+	return filepath.Join(resolveHubPath(), "eternal", "memory.json")
+}
+
+// loadEternalData reads the hub's eternal/memory.json, returning an empty
+// value when the file does not yet exist or fails to parse -- the same
+// best-effort fallback eternalStoreCmd's RunE always used.
+func loadEternalData() eternalData {
+	var ed eternalData
+	if raw, err := os.ReadFile(eternalMemoryPath()); err == nil {
+		json.Unmarshal(raw, &ed)
+	}
+	return ed
+}
+
+// appendEternalMemoryEntry is the extracted body of eternalStoreCmd's RunE
+// (198.1-04, FEED-04): every existing JSON field name and default
+// (confidence 0.9, category "general") is unchanged, and the 200-entry
+// LRU-eviction cap is preserved exactly. It additionally refuses to append a
+// second copy of an entry already present with identical content and
+// category -- the dedup guard neither the original CLI writer nor any other
+// caller had before, and what makes "the same signal expiring twice" (this
+// plan's own promotion path) leave one entry, not two. reason is accepted
+// for call-site clarity (mirrors pheromone-write's own --reason flag) but is
+// deliberately NOT persisted -- the eternalEntry JSON shape must stay
+// byte-identical to what eternal-store already writes.
+//
+// Returns whether a new entry was appended, and any error resolving the hub
+// or writing the file. A duplicate is not an error: (false, nil).
+func appendEternalMemoryEntry(content, category string, confidence float64, reason string) (bool, error) {
+	if category == "" {
+		category = "general"
+	}
+	if confidence <= 0 {
+		confidence = 0.9
+	}
+
+	hub := resolveHubPath()
+	eternalDir := filepath.Join(hub, "eternal")
+
+	if err := os.MkdirAll(eternalDir, 0755); err != nil {
+		return false, fmt.Errorf("failed to create eternal dir: %w", err)
+	}
+
+	ed := loadEternalData()
+
+	for _, e := range ed.Entries {
+		if e.Content == content && e.Category == category {
+			return false, nil
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	entry := eternalEntry{
+		ID:         fmt.Sprintf("eternal_%d", time.Now().Unix()),
+		Content:    content,
+		Category:   category,
+		Confidence: confidence,
+		CreatedAt:  now,
+		AccessedAt: now,
+	}
+
+	ed.Entries = append(ed.Entries, entry)
+
+	// Cap at 200 entries with LRU eviction
+	if len(ed.Entries) > 200 {
+		oldestIdx := 0
+		for i, e := range ed.Entries {
+			if e.AccessedAt < ed.Entries[oldestIdx].AccessedAt {
+				oldestIdx = i
+			}
+		}
+		ed.Entries = append(ed.Entries[:oldestIdx], ed.Entries[oldestIdx+1:]...)
+	}
+
+	encoded, err := json.MarshalIndent(ed, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("failed to encode eternal memory: %w", err)
+	}
+	if err := os.WriteFile(eternalMemoryPath(), append(encoded, '\n'), 0644); err != nil {
+		return false, fmt.Errorf("failed to write memory.json: %w", err)
+	}
+
+	return true, nil
+}
+
 var eternalStoreCmd = &cobra.Command{
 	Use:   "eternal-store",
 	Short: "Store a high-value signal in eternal memory",
@@ -144,75 +252,27 @@ var eternalStoreCmd = &cobra.Command{
 			return nil
 		}
 		category, _ := cmd.Flags().GetString("category")
-		if category == "" {
-			category = "general"
-		}
 		confidence, _ := cmd.Flags().GetFloat64("confidence")
-		if confidence <= 0 {
-			confidence = 0.9
-		}
 
-		hub := resolveHubPath()
-		eternalDir := filepath.Join(hub, "eternal")
-
-		if err := os.MkdirAll(eternalDir, 0755); err != nil {
-			outputError(2, fmt.Sprintf("failed to create eternal dir: %v", err), nil)
+		appended, err := appendEternalMemoryEntry(content, category, confidence, "cli")
+		if err != nil {
+			outputError(2, err.Error(), nil)
 			return nil
 		}
 
-		memoryPath := filepath.Join(eternalDir, "memory.json")
-
-		type eternalEntry struct {
-			ID         string  `json:"id"`
-			Content    string  `json:"content"`
-			Category   string  `json:"category"`
-			Confidence float64 `json:"confidence"`
-			CreatedAt  string  `json:"created_at"`
-			AccessedAt string  `json:"accessed_at"`
-		}
-
-		type eternalData struct {
-			Entries []eternalEntry `json:"entries"`
-		}
-
-		var ed eternalData
-		if raw, err := os.ReadFile(memoryPath); err == nil {
-			json.Unmarshal(raw, &ed)
-		}
-
-		now := time.Now().UTC().Format(time.RFC3339)
-		entry := eternalEntry{
-			ID:         fmt.Sprintf("eternal_%d", time.Now().Unix()),
-			Content:    content,
-			Category:   category,
-			Confidence: confidence,
-			CreatedAt:  now,
-			AccessedAt: now,
-		}
-
-		ed.Entries = append(ed.Entries, entry)
-
-		// Cap at 200 entries with LRU eviction
-		if len(ed.Entries) > 200 {
-			oldestIdx := 0
-			for i, e := range ed.Entries {
-				if e.AccessedAt < ed.Entries[oldestIdx].AccessedAt {
-					oldestIdx = i
-				}
+		ed := loadEternalData()
+		id := ""
+		for _, e := range ed.Entries {
+			if e.Content == content {
+				id = e.ID
 			}
-			ed.Entries = append(ed.Entries[:oldestIdx], ed.Entries[oldestIdx+1:]...)
-		}
-
-		encoded, _ := json.MarshalIndent(ed, "", "  ")
-		if err := os.WriteFile(memoryPath, append(encoded, '\n'), 0644); err != nil {
-			outputError(2, fmt.Sprintf("failed to write memory.json: %v", err), nil)
-			return nil
 		}
 
 		outputOK(map[string]interface{}{
-			"stored": true,
-			"id":     entry.ID,
-			"total":  len(ed.Entries),
+			"stored":   true,
+			"id":       id,
+			"total":    len(ed.Entries),
+			"appended": appended,
 		})
 		return nil
 	},

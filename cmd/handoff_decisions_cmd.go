@@ -123,6 +123,21 @@ func recordDecisionAnswer(question, answer string, phase int, source string) (Pe
 	if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
 		return PendingDecision{}, fmt.Errorf("failed to save decision answer: %w", err)
 	}
+
+	// Leave a note carrying the owner's own answer to a WORKER'S open
+	// question, AFTER the decision is durably stored, so a failed store
+	// never produces a note for an answer that was not recorded (198.1-04,
+	// FEED-04). recordDecisionAnswer also backs the seal ceremony's own
+	// "finish anyway?" confirmation gate (recordSealConfirmationAnswer,
+	// source "seal-confirmation"/"seal-force-confirmation") -- that is an
+	// internal system gate, not a worker's question, so it is deliberately
+	// excluded here to keep the FEEDBACK stream scoped to genuine
+	// clarifications. Best-effort: a signal-write failure never fails the
+	// decision answer itself.
+	if !strings.HasPrefix(source, "seal-") {
+		emitDecisionFeedback(question, answer, phase)
+	}
+
 	return decision, nil
 }
 

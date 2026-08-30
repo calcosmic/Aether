@@ -698,9 +698,14 @@ func renderIndentedList(lines []string) string {
 // It is deliberately NOT loadNextActionInput: these callers pass an explicit
 // state -- sometimes an in-memory one that has not been saved yet -- so the
 // state must come from the argument while everything else is read from disk.
-// Only the facts the decision actually consults are gathered; the display-only
-// extras (recent signals, outstanding task goals) belong to the card and would
-// be wasted reads on a function called this often.
+// Most facts the decision does not itself consult (e.g. outstanding task
+// goals) are still left out here as display-only extras that belong to a
+// different card. Signals is the one exception (198.1-04): every caller of
+// this function is the CLOSING card a finished command prints, and a signal
+// written moments earlier in that same run (a phase-completion note, an
+// auto-REDIRECT) must show up in it -- TestWorkLoopCardsComeFromTheResolver
+// fails the moment this card and a freshly-resolved one disagree on what is
+// active.
 func nextActionInputForState(state colony.ColonyState, lastCommand string) nextActionInput {
 	state = normalizeLegacyColonyState(state)
 	in := nextActionInput{
@@ -718,6 +723,17 @@ func nextActionInputForState(state colony.ColonyState, lastCommand string) nextA
 	in.Recovery = loadActiveRecoveryGuidance(state)
 	in.HandoffExists = fileExists(handoffDocumentPath())
 	in.BuildLooksAbandoned = buildLooksAbandoned(state)
+	// Signals WAS display-only and intentionally omitted here (198.1-04 found
+	// this was stale: an active pheromone signal -- e.g. the phase-completion
+	// note runPhaseEndConsolidation now emits -- never reached the shared
+	// closing card's own "Your standing instructions" section for ANY caller
+	// of this function, only a freshly-resolved re-read of disk would show
+	// it. TestWorkLoopCardsComeFromTheResolver exists precisely to catch a
+	// printed card disagreeing with what the resolver would say right now;
+	// one JSON read is not the "wasted reads" this file's doc comment
+	// originally guarded against, since every caller here runs once per
+	// finished command, not in a hot loop.
+	in.Signals = extractSignalTexts(8)
 	return in
 }
 

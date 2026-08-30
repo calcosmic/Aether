@@ -42,7 +42,7 @@ Claims: builder claims verified
   Build ✓ (0.0s)
   Types ✓ (0.0s)
   Lint — skipped: no command resolved; skipped
-  Tests ✓ (0.5s)
+  Tests ✓ (0.0s)
 Workers
   - Worker-XX
   - Worker-XX
@@ -79,7 +79,8 @@ Signals: 0 active -> 0 active after housekeeping
 Next phase ready: 2 — Next golden phase
 ── Colony State ──
 🚩 Flags: none open
-Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
+Steering signals: 1 active — injected into every worker prompt
+  💬 [100%] "Phase 1 (Golden phase) finished: 0 lesson(s) captured, 1 failure(s)..."
 📍 [Phase 1/2] [████████░░░░░░░░] 50%
    └── Tasks [████████████████] 1/1 in phase 1
 ━━ 📊 W H A T   N E X T ━━
@@ -93,6 +94,9 @@ Phase 2 of 2: Next golden phase. 1 phase(s) finished so far.
   - Watcher Worker-XX completed independent verification before advancement
   - review wave skipped; no standard review workers were selected
   - Signal housekeeping completed: 0 active -> 0 active
+
+── Your standing instructions ──
+  - FEEDBACK: Phase 1 (Golden phase) finished: 0 lesson(s) captured, 1 failure(s) recorded, 0 instinct(s) promoted to the Queen file.
 
 ━━ 🐜 N E X T   U P ━━
 Run `/ant-build 2` — Phase 2 (Next golden phase) is ready to start. Helpers will write the code for it and report back before anything is accepted.

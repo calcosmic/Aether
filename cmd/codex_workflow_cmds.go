@@ -770,8 +770,11 @@ func runSealWisdomReview(state colony.ColonyState) sealWisdomReview {
 }
 
 func completeSealRuntime(state colony.ColonyState, override sealOverride, review sealWisdomReview) error {
-	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
-	expiredFOCUSCount := expireSignalsByType(store, "FOCUS")
+	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03).
+	// Any expired FOCUS signal that was ever reinforced is preserved in
+	// long-term memory by expireSignalsByType itself (198.1-04, FEED-04); the
+	// promotion count isn't surfaced in the seal beat, so it's discarded here.
+	expiredFOCUSCount, _ := expireSignalsByType(store, "FOCUS")
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	state.State = colony.StateCOMPLETED

@@ -17,6 +17,205 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// pheromoneWriteError carries the exact CLI exit code pheromoneWriteCmd's RunE
+// used to report a given failure, so the thin RunE wrapper around
+// writePheromoneSignal can reproduce byte-identical outputError(code, ...)
+// calls without writePheromoneSignal itself depending on CLI rendering
+// (writePheromoneSignal is also called directly by cmd/phase_end_signals.go's
+// non-CLI emitters, which must never call outputError).
+type pheromoneWriteError struct {
+	code int
+	msg  string
+}
+
+func (e *pheromoneWriteError) Error() string { return e.msg }
+
+// writePheromoneSignal is the extracted body of pheromoneWriteCmd's RunE
+// (198.1-04, FEED-04): id generation, content hashing before sanitization,
+// colony.SanitizeSignalContent, the {"text": "..."} content envelope,
+// default priorities per type, SourcePhase population, and the type-based
+// expiry defaults are all unchanged from the original CLI command -- this
+// extraction moves nothing else and changes no defaulting rule. It returns
+// the stored signal, whether it reinforced an existing one, and any error;
+// it never calls outputError/outputOK itself so non-CLI callers (the
+// phase-completion, decision-answer, and midden-threshold emitters) can
+// write a signal without producing CLI output.
+func writePheromoneSignal(sigType, content, priority, source, reason, ttl string, strength float64, tags []string) (colony.PheromoneSignal, bool, error) {
+	if store == nil {
+		return colony.PheromoneSignal{}, false, fmt.Errorf("no store initialized")
+	}
+
+	if sigType == "" || content == "" {
+		return colony.PheromoneSignal{}, false, &pheromoneWriteError{code: 1, msg: "flags --type and --content are required"}
+	}
+
+	sigType = strings.ToUpper(sigType)
+	switch sigType {
+	case "FOCUS", "REDIRECT", "FEEDBACK":
+	default:
+		return colony.PheromoneSignal{}, false, &pheromoneWriteError{code: 1, msg: fmt.Sprintf("invalid type %q: must be FOCUS, REDIRECT, or FEEDBACK", sigType)}
+	}
+
+	if priority == "" {
+		switch sigType {
+		case "FOCUS":
+			priority = "normal"
+		case "REDIRECT":
+			priority = "high"
+		case "FEEDBACK":
+			priority = "low"
+		}
+	}
+
+	if strength == 0 {
+		strength = 1.0
+	}
+
+	// Parse --ttl flag if provided
+	var ttlDuration time.Duration
+	if ttl != "" {
+		d, err := parseTTL(ttl)
+		if err != nil {
+			return colony.PheromoneSignal{}, false, &pheromoneWriteError{code: 1, msg: fmt.Sprintf("invalid --ttl format %q: %s", ttl, err.Error())}
+		}
+		ttlDuration = d
+	}
+
+	// Generate ID: sig_<timestamp>_<random>
+	rnd := make([]byte, 4)
+	rand.Read(rnd)
+	id := fmt.Sprintf("sig_%d_%s", time.Now().Unix(), hex.EncodeToString(rnd))
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Compute content hash: SHA-256 of raw content (before sanitization)
+	// so deduplication compares against raw input.
+	h := sha256Sum(content)
+	contentHash := "sha256:" + h
+
+	// Sanitize content after hashing but before storage.
+	sanitized, err := colony.SanitizeSignalContent(content)
+	if err != nil {
+		return colony.PheromoneSignal{}, false, &pheromoneWriteError{code: 1, msg: fmt.Sprintf("invalid signal content: %v", err)}
+	}
+
+	// Build content as JSON object matching shell format: {"text": "..."}
+	contentJSON, _ := json.Marshal(map[string]string{"text": sanitized})
+
+	signal := colony.PheromoneSignal{
+		ID:          id,
+		Type:        sigType,
+		Content:     json.RawMessage(contentJSON),
+		Priority:    priority,
+		Source:      source,
+		CreatedAt:   now,
+		Active:      true,
+		Strength:    &strength,
+		ContentHash: &contentHash,
+		Tags:        make([]colony.PheromoneTag, 0, len(tags)),
+	}
+
+	// Populate source_phase from current colony state
+	var cs colony.ColonyState
+	if loadErr := store.LoadJSON("COLONY_STATE.json", &cs); loadErr == nil && cs.CurrentPhase > 0 {
+		signal.SourcePhase = &cs.CurrentPhase
+	}
+
+	if reason != "" {
+		signal.Reason = &reason
+	}
+
+	if len(tags) > 0 {
+		for _, t := range tags {
+			signal.Tags = append(signal.Tags, colony.PheromoneTag{
+				Value:    t,
+				Category: "custom",
+			})
+		}
+	}
+
+	// Compute expiry: --ttl overrides type-based defaults
+	if ttl != "" {
+		expires := time.Now().UTC().Add(ttlDuration).Format(time.RFC3339)
+		signal.ExpiresAt = &expires
+	} else {
+		switch sigType {
+		case "REDIRECT":
+			expires := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+			signal.ExpiresAt = &expires
+		case "FEEDBACK":
+			expires := time.Now().UTC().Add(7 * 24 * time.Hour).Format(time.RFC3339)
+			signal.ExpiresAt = &expires
+			// FOCUS: no ExpiresAt (expires at phase end)
+		}
+	}
+
+	// Load existing pheromones file
+	var pf colony.PheromoneFile
+	if err := store.LoadJSON("pheromones.json", &pf); err != nil {
+		pf = colony.PheromoneFile{Signals: []colony.PheromoneSignal{}}
+	}
+	if pf.Signals == nil {
+		pf.Signals = []colony.PheromoneSignal{}
+	}
+
+	// Dedup: check for existing active signal with same type + content_hash
+	replaced := false
+	for i := range pf.Signals {
+		sig := &pf.Signals[i]
+		if !sig.Active {
+			continue
+		}
+		if sig.Type == sigType && sig.ContentHash != nil && *sig.ContentHash == contentHash {
+			// Reinforce existing signal instead of appending
+			sig.CreatedAt = now
+			if sig.ReinforcementCount == nil {
+				rc := 0
+				sig.ReinforcementCount = &rc
+			}
+			*sig.ReinforcementCount++
+			maxStr := 1.0
+			sig.Strength = &maxStr
+			// Update source_phase on reinforcement
+			var rcs colony.ColonyState
+			if loadErr := store.LoadJSON("COLONY_STATE.json", &rcs); loadErr == nil && rcs.CurrentPhase > 0 {
+				sig.SourcePhase = &rcs.CurrentPhase
+			}
+			signal = *sig
+			replaced = true
+			break
+		}
+	}
+
+	if !replaced {
+		pf.Signals = append(pf.Signals, signal)
+	}
+
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		return colony.PheromoneSignal{}, false, &pheromoneWriteError{code: 2, msg: fmt.Sprintf("failed to save pheromones: %v", err)}
+	}
+
+	// Trace pheromone write if colony state has a run_id
+	if tracer != nil {
+		var state colony.ColonyState
+		if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
+			_ = tracer.LogPheromone(*state.RunID, sigType, "pheromone-write")
+		}
+	}
+	status := "created"
+	if replaced {
+		status = "reinforced"
+	}
+	emitLifecycleCeremony(events.CeremonyTopicPheromoneEmit, events.CeremonyPayload{
+		PheromoneType: sigType,
+		Strength:      strength,
+		Status:        status,
+		Message:       extractText(signal.Content),
+	}, "aether-pheromone")
+
+	return signal, replaced, nil
+}
+
 var pheromoneWriteCmd = &cobra.Command{
 	Use:   "pheromone-write",
 	Short: "Create a new pheromone signal",
@@ -41,177 +240,26 @@ var pheromoneWriteCmd = &cobra.Command{
 			return nil
 		}
 
-		sigType = strings.ToUpper(sigType)
-		switch sigType {
-		case "FOCUS", "REDIRECT", "FEEDBACK":
-		default:
-			outputError(1, fmt.Sprintf("invalid type %q: must be FOCUS, REDIRECT, or FEEDBACK", sigType), nil)
-			return nil
-		}
-
-		if priority == "" {
-			switch sigType {
-			case "FOCUS":
-				priority = "normal"
-			case "REDIRECT":
-				priority = "high"
-			case "FEEDBACK":
-				priority = "low"
-			}
-		}
-
-		if strength == 0 {
-			strength = 1.0
-		}
-
-		// Parse --ttl flag if provided
-		var ttlDuration time.Duration
-		if ttlFlag != "" {
-			d, err := parseTTL(ttlFlag)
-			if err != nil {
-				outputError(1, fmt.Sprintf("invalid --ttl format %q: %s", ttlFlag, err.Error()), nil)
-				return nil
-			}
-			ttlDuration = d
-		}
-
-		// Generate ID: sig_<timestamp>_<random>
-		rnd := make([]byte, 4)
-		rand.Read(rnd)
-		id := fmt.Sprintf("sig_%d_%s", time.Now().Unix(), hex.EncodeToString(rnd))
-
-		now := time.Now().UTC().Format(time.RFC3339)
-
-		// Compute content hash: SHA-256 of raw content (before sanitization)
-		// so deduplication compares against raw input.
-		h := sha256Sum(content)
-		contentHash := "sha256:" + h
-
-		// Sanitize content after hashing but before storage.
-		sanitized, err := colony.SanitizeSignalContent(content)
+		signal, replaced, err := writePheromoneSignal(sigType, content, priority, sourceFlag, reasonFlag, ttlFlag, strength, tags)
 		if err != nil {
-			outputError(1, fmt.Sprintf("invalid signal content: %v", err), nil)
+			if pwErr, ok := err.(*pheromoneWriteError); ok {
+				outputError(pwErr.code, pwErr.msg, nil)
+			} else {
+				outputError(1, err.Error(), nil)
+			}
 			return nil
 		}
 
-		// Build content as JSON object matching shell format: {"text": "..."}
-		contentJSON, _ := json.Marshal(map[string]string{"text": sanitized})
-
-		signal := colony.PheromoneSignal{
-			ID:          id,
-			Type:        sigType,
-			Content:     json.RawMessage(contentJSON),
-			Priority:    priority,
-			Source:      sourceFlag,
-			CreatedAt:   now,
-			Active:      true,
-			Strength:    &strength,
-			ContentHash: &contentHash,
-			Tags:        make([]colony.PheromoneTag, 0, len(tags)),
-		}
-
-		// Populate source_phase from current colony state
-		var cs colony.ColonyState
-		if loadErr := store.LoadJSON("COLONY_STATE.json", &cs); loadErr == nil && cs.CurrentPhase > 0 {
-			signal.SourcePhase = &cs.CurrentPhase
-		}
-
-		if reasonFlag != "" {
-			signal.Reason = &reasonFlag
-		}
-
-		if len(tags) > 0 {
-			for _, t := range tags {
-				signal.Tags = append(signal.Tags, colony.PheromoneTag{
-					Value:    t,
-					Category: "custom",
-				})
-			}
-		}
-
-		// Compute expiry: --ttl overrides type-based defaults
-		if ttlFlag != "" {
-			expires := time.Now().UTC().Add(ttlDuration).Format(time.RFC3339)
-			signal.ExpiresAt = &expires
-		} else {
-			switch sigType {
-			case "REDIRECT":
-				expires := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
-				signal.ExpiresAt = &expires
-			case "FEEDBACK":
-				expires := time.Now().UTC().Add(7 * 24 * time.Hour).Format(time.RFC3339)
-				signal.ExpiresAt = &expires
-				// FOCUS: no ExpiresAt (expires at phase end)
-			}
-		}
-
-		// Load existing pheromones file
 		var pf colony.PheromoneFile
-		if err := store.LoadJSON("pheromones.json", &pf); err != nil {
-			pf = colony.PheromoneFile{Signals: []colony.PheromoneSignal{}}
+		total := 0
+		if loadErr := store.LoadJSON("pheromones.json", &pf); loadErr == nil {
+			total = len(pf.Signals)
 		}
-		if pf.Signals == nil {
-			pf.Signals = []colony.PheromoneSignal{}
-		}
-
-		// Dedup: check for existing active signal with same type + content_hash
-		replaced := false
-		for i := range pf.Signals {
-			sig := &pf.Signals[i]
-			if !sig.Active {
-				continue
-			}
-			if sig.Type == sigType && sig.ContentHash != nil && *sig.ContentHash == contentHash {
-				// Reinforce existing signal instead of appending
-				sig.CreatedAt = now
-				if sig.ReinforcementCount == nil {
-					rc := 0
-					sig.ReinforcementCount = &rc
-				}
-				*sig.ReinforcementCount++
-				maxStr := 1.0
-				sig.Strength = &maxStr
-				// Update source_phase on reinforcement
-				var rcs colony.ColonyState
-				if loadErr := store.LoadJSON("COLONY_STATE.json", &rcs); loadErr == nil && rcs.CurrentPhase > 0 {
-					sig.SourcePhase = &rcs.CurrentPhase
-				}
-				replaced = true
-				break
-			}
-		}
-
-		if !replaced {
-			pf.Signals = append(pf.Signals, signal)
-		}
-
-		if err := store.SaveJSON("pheromones.json", pf); err != nil {
-			outputError(2, fmt.Sprintf("failed to save pheromones: %v", err), nil)
-			return nil
-		}
-
-		// Trace pheromone write if colony state has a run_id
-		if tracer != nil {
-			var state colony.ColonyState
-			if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
-				_ = tracer.LogPheromone(*state.RunID, sigType, "pheromone-write")
-			}
-		}
-		status := "created"
-		if replaced {
-			status = "reinforced"
-		}
-		emitLifecycleCeremony(events.CeremonyTopicPheromoneEmit, events.CeremonyPayload{
-			PheromoneType: sigType,
-			Strength:      strength,
-			Status:        status,
-			Message:       extractText(signal.Content),
-		}, "aether-pheromone")
 
 		outputOK(map[string]interface{}{
 			"created":  true,
 			"signal":   signal,
-			"total":    len(pf.Signals),
+			"total":    total,
 			"replaced": replaced,
 		})
 		return nil
@@ -241,10 +289,12 @@ var pheromoneExpireCmd = &cobra.Command{
 
 		found := false
 		now := time.Now().UTC().Format(time.RFC3339)
+		var expiredSignal colony.PheromoneSignal
 		for i := range pf.Signals {
 			if pf.Signals[i].ID == sigID {
 				pf.Signals[i].Active = false
 				pf.Signals[i].ExpiresAt = &now
+				expiredSignal = pf.Signals[i]
 				found = true
 				break
 			}
@@ -260,9 +310,15 @@ var pheromoneExpireCmd = &cobra.Command{
 			return nil
 		}
 
+		// A high-value signal (REDIRECT, or ever reinforced) is preserved in
+		// long-term memory before it is gone for good (198.1-04, FEED-04).
+		// Best-effort: a hub write failure never fails the expiry itself.
+		promoted := promoteExpiredSignalToEternal(expiredSignal)
+
 		outputOK(map[string]interface{}{
-			"expired": true,
-			"id":      sigID,
+			"expired":  true,
+			"id":       sigID,
+			"promoted": promoted,
 		})
 		return nil
 	},
@@ -281,26 +337,32 @@ var pheromoneValidateXMLCmd = &cobra.Command{
 }
 
 // expireSignalsByType deactivates all active signals of the given type.
-// Returns the count of signals expired. Uses deactivateSignal for consistency.
-// This is an internal helper, not a CLI command.
-func expireSignalsByType(s *storage.Store, sigType string) int {
+// Returns the count of signals expired and the count promoted into
+// long-term (eternal) memory before they were deactivated (198.1-04,
+// FEED-04: a REDIRECT, or a signal ever reinforced, is preserved rather than
+// lost when it expires). Uses deactivateSignal for consistency. This is an
+// internal helper, not a CLI command.
+func expireSignalsByType(s *storage.Store, sigType string) (expired int, promoted int) {
 	var pf colony.PheromoneFile
 	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
-		return 0
+		return 0, 0
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	count := 0
 	for i := range pf.Signals {
 		sig := &pf.Signals[i]
 		if sig.Active && sig.Type == sigType {
+			toPromote := *sig
 			deactivateSignal(sig, now)
-			count++
+			expired++
+			if promoteExpiredSignalToEternal(toPromote) {
+				promoted++
+			}
 		}
 	}
-	if count > 0 {
+	if expired > 0 {
 		_ = s.SaveJSON("pheromones.json", pf)
 	}
-	return count
+	return expired, promoted
 }
 
 func init() {
