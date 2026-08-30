@@ -1101,6 +1101,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// consolidation failure is reported via the summary, never propagated
 	// as an error (D-05).
 	consolidationSummary := runPhaseEndConsolidation(phase.ID)
+	// 198.1-05/FEED-05: strong lessons (confidence >= 0.8) reach the shared
+	// cross-project store at every check, not only at project close --
+	// under the same AETHER_HIVE_POLICY switch seal already honours. Placed
+	// right after consolidation, before attachConsolidationSummary below, so
+	// an instinct this phase's consolidation pass just promoted is also
+	// considered for the shared store this same phase.
+	hiveEligible, hivePromoted := promotePhaseEndInstinctsToHive(phase.ID)
 	workerFlow = append(workerFlow, continueLearningFlowStep(consolidationSummary))
 	// The phase save-point: one git commit of exactly the files this phase's
 	// workers reported changing, so repo history mirrors colony history.
@@ -1177,6 +1184,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		result["next_phase_name"] = nextPhase.Name
 	}
 	attachConsolidationSummary(result, consolidationSummary)
+	attachHivePromotionSummary(result, hiveEligible, hivePromoted)
 	attachPhaseCommitResult(result, phaseCommit)
 	runStatus = "completed"
 	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
