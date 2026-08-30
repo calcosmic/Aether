@@ -270,6 +270,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - Team check-in before spawning, owner decision routing, honest `completed_no_change` / `verified_existing` results -- v1.26 (2026-08-21)
 - Free checks are the floor: one `runDeterministicFloor` body for both continue lanes decides advancement; no flag, depth or proposal can skip a check; build-side reviewer only on an explicit Queen ask (Watcher verified once); reconciliation and program-re-run builder evidence count as proof; unprovable criteria wait for the owner; verification scoped per phase and full at the end; exactly one bounded automatic fix attempt (FLOOR-01..04) -- v1.27 (Phase 193)
 - The Queen decides the team: ordinary work gets one Builder, every worker carries a readable per-worker reason, five named risks can force one explained reviewer at continue, owner depth/team controls remain effective, and no caste is dispatched at both build and continue unless explicitly requested (TEAM-01..05) -- v1.27 (Phase 194)
+- The learning loop is fed at the source: build and check worker outcomes become failure records and observations through one guarded boundary on both lanes (quick and swarm too); instinct use is a recorded fact so QUEEN.md promotion can actually happen; finished checks, answered questions and failure streaks leave notes; expiring notes reach eternal memory; strong instincts reach the hive at every check under the existing switch; the memory drill-down shows real content; every CLAUDE.md learning claim names a test (FEED-01..06) -- v1.27 (Phase 198.1)
 
 ### Active
 
@@ -314,6 +315,10 @@ Long-lived items not tied to a milestone:
 | A criterion no machine can prove becomes `needs_owner_confirmation`: the phase advances, seal waits for the answer via `aether decision-answer` (193-04, D-05) | No reviewer is ever spawned to guess at it; `--force --reason` still overrides | Good |
 | Exactly one automatic builder fix attempt when a free check fails with no reviewer sent; append-only journal entry, then stop with one command (193-05, D-02/D-03) | Distinct from the declined 2026-08-21 recovery retry — one bounded repair, never a loop, never a reviewer first | Good |
 | v1.27 order amendment: team judgement, single verification, cost line, next-action card, Classic display restoration first (D12, 2026-08-22) | Owner criterion: stop burning tokens on pointless spawning | — Pending |
+| One memory-feed boundary for both build lanes, guarded by AST; feeding memory can never fail a build or check (198.1-01, 2026-08-30) | `TestEveryBuildLaneFeedsMemoryThroughOneBoundary`, `TestFeedingMemoryNeverFailsABuild` | Good |
+| Worker-authored text is sanitised before every memory store because midden entries are replayed into later briefs; two writers missed it and were fixed at review (198.1, CR-02, 2026-08-30) | `TestCheckAndQuickFailureTextIsSanitisedBeforeMemory` | Good |
+| Instinct use is counted only when the text was genuinely in a worker's capsule on a passing phase; QUEEN.md promotion gated on recorded use (198.1-03, 2026-08-30) | `TestWorkerLessonBecomesQueenFileWisdom`, `TestQueenPromotionNeverHappensWithoutRecordedUse` | Good |
+| Hive promotion at every check, same policy switch and confidence gate as seal; `--no-learn` scope documented as legacy capture only (198.1-05, 2026-08-30) | `TestStrongInstinctReachesTheSharedStoreAtCheck`, `TestHivePromotionAtCheckHonoursThePolicySwitch` | Good |
 
 ## Context
 
@@ -407,4 +412,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-08-04 — Phase 162 (switch on learning) complete: verification 7/7, LEARN-01..05 done*
+*Last updated: 2026-08-30 — Phase 198.1 (feed the memory) complete: verification 6/6, FEED-01..06 done, review CR-01/CR-02 fixed*

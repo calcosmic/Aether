@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 198.1
-current_phase_name: Feed the Memory
-status: executing
-stopped_at: Phase 198.1 planned 2026-08-30 (6 plans, 3 waves); ready to execute
-last_updated: "2026-08-29T22:50:16.948Z"
+current_phase: 198.2
+current_phase_name: Memory Reaches Every Helper
+status: planning
+stopped_at: Phase 198.1 complete, ready to plan Phase 198.2
+last_updated: "2026-08-30T12:44:25.136Z"
 last_activity: 2026-08-30
-last_activity_desc: Phase 198.1 execution started
-state_head: b3aee918715841cc5e63f96717c8a5e854dec84a
+last_activity_desc: Phase 198.1 complete, transitioned to Phase 198.2
+state_head: 3e0a2741d57e92232744642d8f2ad9ffd37162d8
 progress:
   total_phases: 11
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 54
-  completed_plans: 48
-  percent: 55
+  completed_plans: 54
+  percent: 64
 ---
 
 # Project State
@@ -25,27 +25,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-26)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 198.1 — Feed the Memory
+**Current focus:** Phase 198.2 — Memory Reaches Every Helper
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-**Progress:** [█████░░░░░] 55%
+**Progress:** [██████░░░░] 64%
 
-Phase: 198.1 (Feed the Memory) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 198.1
+Phase: 198.2 — Memory Reaches Every Helper
+Plan: Not started
+Status: Ready to plan
 
 *(`phase.complete` advanced this to backlog entry 172.1 again — the next unchecked
 roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
 every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-
-*(`phase.complete` advanced this to backlog entry 172.1 — the next unchecked
-roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
-every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-Last activity: 2026-08-30 — Phase 198.1 execution started
+Last activity: 2026-08-30 — Phase 198.1 complete (6/6 plans, verified 6/6, review CR-01/CR-02 fixed), transitioned to Phase 198.2
 
 ## Performance Metrics
 
@@ -153,6 +149,12 @@ Last activity: 2026-08-30 — Phase 198.1 execution started
 - [Phase 195]: [Phase 195]: planCoherentJobRetry reuses the canonical planCoherentJobs grouping pass for a parent job's unfinished tasks (single all-inclusive proposal over the uncredited subset) rather than a second dependency graph; a new buildAttemptPartial attempt status (distinct from built/failed) plus ParentAttemptID/ParentJobName (begin-then-attach, same discipline as checkFixAttemptRecord) make D-10 recovery append-only on both build lanes -- retry only ever follows accepted credit, never a total failure with zero receipts.
 - [Phase 195]: Build coherent-job contract defined once and asserted by three guards over five surfaces — Each guard re-typing its own anchor list would be a fourth surface able to go stale, reproducing the drift the guards exist to catch
 - [Phase 195]: Three Go-authority sentences are compared byte-for-byte across YAML, guide, skill and wrappers — A keyword check would accept five surfaces each paraphrasing ownership differently, which is this repo's documented failure mode
+- [Phase 198.1]: One memory-feed boundary (`recordDispatchWorkerOutcome`, cmd/memory_feed.go) is the only place a build worker's terminal result becomes a failure record or an observation; both build lanes call it and an AST guard (`TestEveryBuildLaneFeedsMemoryThroughOneBoundary`) refuses a third path. Feeding memory never fails a build or a check (`TestFeedingMemoryNeverFailsABuild`, `TestHiveFailureNeverBlocksThePhase`).
+- [Phase 198.1]: Worker-authored text is untrusted on every store: all four midden writers and the observation path run `colony.SanitizeSignalContent` before storing, because midden entries are replayed verbatim into later worker briefs (review CR-02, fixed cc48873a). Dedup is exact (category, message) among unacknowledged entries, so a caller's message must carry phase/worker/status attribution (documented on `appendMiddenEntryOnce`).
+- [Phase 198.1]: An instinct's "use" is a recorded fact — counted once per passing phase only when its text genuinely appeared in the capsule a worker received (`TestQueenPromotionNeverHappensWithoutRecordedUse`); the three-use gate to QUEEN.md is therefore satisfiable for the first time.
+- [Phase 198.1]: Notes (pheromones) are written by the program at exactly three moments — a finished check, an answered worker question (never the seal's own "finish anyway?" confirmation), and three unacknowledged failures of one kind — and a valuable expiring note is copied to eternal memory first. Nothing is emitted during a build.
+- [Phase 198.1]: Hive promotion runs at the end of every check under the same `AETHER_HIVE_POLICY` switch and ≥0.8 gate as seal; `--no-learn` skips only the legacy learning-entry capture — observations and failure records are still written so a blocked check leaves a trail (documented on the flag; review WR-01).
+- [Phase 198.1]: Every learning-loop sentence in CLAUDE.md now names its test, and an AST guard fails if a cited test name stops existing (plan 05).
 - [Phase 196]: spendTotals.ProviderUSD deleted rather than gated: nothing read it and an unread money field on the totals struct is a standing invitation to render one (D-01)
 - [Phase 196]: The currency ban is scoped to the ledger's own types; codex.WorkerUsage keeps its USDCost and is skipped by name
 - [Phase 196]: An empty ledger row status is refused rather than folded to failed, so a durable ledger never records a wrong outcome
@@ -263,6 +265,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-29T15:32:24.318Z
-Stopped at: Phase 198 complete, ready to plan Phase 199
-Resume file: .planning/phases/198-put-the-thrown-away-data-back-on-screen/198-CONTEXT.md
+Last session: 2026-08-30T12:50:00Z
+Stopped at: Phase 198.1 complete, ready to plan Phase 198.2
+Resume file: None

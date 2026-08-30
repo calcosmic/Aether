@@ -43,7 +43,7 @@
 - [x] **Phase 196: See What It Cost** - Every run ends with one honest cost line, and model choices carry a reason. (completed 2026-08-28)
 - [x] **Phase 197: One Answer to "What Next?"** - Every command ends by saying exactly what to do next, from one shared source of truth. (completed 2026-08-29)
 - [x] **Phase 198: Put the Thrown-Away Data Back on Screen** - The detail the older version used to show comes back, in the chat view too. (completed 2026-08-29)
-- [ ] **Phase 198.1: Feed the Memory** - Builds and checks write down what they learned and what went wrong again, automatically, so the learning loop stops running on empty.
+- [x] **Phase 198.1: Feed the Memory** - Builds and checks write down what they learned and what went wrong again, automatically, so the learning loop stops running on empty. (completed 2026-08-30)
 - [ ] **Phase 198.2: Memory Reaches Every Helper** - Planning, colonizing, research and the welcome card get the same memory the builder gets; the codebase map is delivered as content, not filenames.
 - [ ] **Phase 198.3: Overnight Stamina** - Autopilot queues what needs your eyes instead of stopping, restores the old stop rules, and can run unattended for a night.
 - [ ] **Phase 198.4: Prune the Dead Wood** - Every command nothing calls and every file nothing reads is wired or deleted, with a ratchet so it cannot grow back.
