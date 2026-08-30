@@ -665,10 +665,16 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if !manifest.Present {
 		missing := missingBuildPacketBlockedResult(state, phase, options)
 		closeLifecycleRun(missing, state, "continue")
+		if err := writePhaseOutcomeDocument(phase.ID, missing, state); err != nil {
+			fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+		}
 		return missing, state, phase, nil, nil, false, nil
 	}
 	if result, blocked := manifestTaskSetBlockedResult(state, phase, manifest, options); blocked {
 		closeLifecycleRun(result, state, "continue")
+		if err := writePhaseOutcomeDocument(phase.ID, result, state); err != nil {
+			fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+		}
 		return result, state, phase, nil, nil, false, nil
 	}
 	if changed, reconcileErr := reconcileContinueCompletedBuildTasks(&state, &phase, &manifest); reconcileErr != nil {
@@ -936,6 +942,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		runStatus = "blocked"
 		closeLifecycleRun(result, blockedState, "continue")
+		if err := writePhaseOutcomeDocument(phase.ID, result, blockedState); err != nil {
+			fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+		}
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
@@ -1020,6 +1029,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		runStatus = "blocked"
 		closeLifecycleRun(result, blockedState, "continue")
+		if err := writePhaseOutcomeDocument(phase.ID, result, blockedState); err != nil {
+			fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+		}
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
@@ -1189,6 +1201,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	runStatus = "completed"
 	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
 	closeLifecycleRun(result, updated, "continue")
+	if err := writePhaseOutcomeDocument(phase.ID, result, updated); err != nil {
+		fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+	}
 	return result, updated, updated.Plan.Phases[currentIdx], nextPhase, &housekeeping, final, nil
 }
 
@@ -1911,7 +1926,12 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 // its own outcome is evaluated afterward.
 func continueWatcherDecision(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, buildWatcher codexWatcherVerification, skipWatchers bool) (bool, codexWatcherVerification) {
 	if skipWatchers {
-		return false, codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
+		// Matches the identical --skip-watchers summary text on the other two
+		// continue lanes (cmd/codex_continue_plan.go, cmd/codex_continue_finalize.go)
+		// -- discovered diverging during 198.2-05's dual-lane outcome text
+		// parity test (TestBothCheckLanesLeaveTheSameOutcomeText); the wording
+		// mismatch was a pre-existing bug, not a deliberate difference.
+		return false, codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on runtime-owned verification commands"}
 	}
 	if isEnvironmentBlockedWatcher(buildWatcher) {
 		return false, buildWatcher
