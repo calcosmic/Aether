@@ -130,7 +130,16 @@ func recordFailedChecksToMidden(phase colony.Phase, result deterministicFloorRes
 		if trimmed == "" {
 			continue
 		}
-		message := fmt.Sprintf("%s — check on phase %d", trimmed, phase.ID)
+		// CR-02 (198.1-REVIEW.md): trimmed is raw build/type/lint/test tool
+		// output -- untrusted input that resolveRecentFailuresSection reads
+		// back verbatim into a future worker's prompt. Sanitise the same way
+		// middenMessageForFailedWorker and recordSwarmWorkerFailureToMidden
+		// already do before it is ever stored.
+		sanitized, err := colony.SanitizeSignalContent(trimmed)
+		if err != nil {
+			sanitized = "a check failure could not be safely recorded"
+		}
+		message := fmt.Sprintf("%s — check on phase %d", sanitized, phase.ID)
 		if err := recordWorkerFailureToMidden(middenCategoryCheckFailed, "aether continue", message, []string{"check"}); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not record failed check to memory: %v\n", err)
 		}
@@ -147,7 +156,14 @@ func recordQuickFailureToMidden(question string, err error) {
 		return
 	}
 	errText := strings.TrimSpace(err.Error())
-	message := fmt.Sprintf("%s — quick query %q failed", errText, strings.TrimSpace(question))
+	// CR-02 (198.1-REVIEW.md): errText can carry an adversarial or
+	// copy-pasted question reflected back through err.Error() -- sanitise
+	// before storing, same as recordFailedChecksToMidden above.
+	sanitized, sanitizeErr := colony.SanitizeSignalContent(errText)
+	if sanitizeErr != nil {
+		sanitized = "a quick query failure could not be safely recorded"
+	}
+	message := fmt.Sprintf("%s — quick query %q failed", sanitized, strings.TrimSpace(question))
 	if middenErr := recordWorkerFailureToMidden(middenCategoryQuickFailed, "aether quick", message, []string{"quick"}); middenErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not record quick failure to memory: %v\n", middenErr)
 	}
