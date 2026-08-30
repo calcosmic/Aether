@@ -260,6 +260,18 @@ type codexPlanManifest struct {
 	ResearchWarning           string                           `json:"research_warning,omitempty"`
 	DepthProposal             depthProposal                    `json:"depth_proposal,omitempty"`
 	DepthProposalCard         string                           `json:"depth_proposal_card,omitempty"`
+	// ContextCapsule is the colony-prime grounding payload (state, decisions,
+	// phase learnings, instincts, hive wisdom, prior reviews, blockers, user
+	// preferences) for wrapper-spawned planning workers (the Route-Setter and
+	// planning Scout). It is computed once per plan-only manifest, carried
+	// here at the top level rather than copied into every dispatch brief, and
+	// the wrapper reads it once and prepends it, verbatim, to each spawned
+	// worker's prompt. Only populated on this plan-only manifest path — the
+	// in-process/native lane (dispatchRealPlanningWorkersWithIterationContext)
+	// already computes and shares its own capsule via
+	// codex.WorkerDispatch.ContextCapsule, and that lane never builds this
+	// struct.
+	ContextCapsule string `json:"context_capsule,omitempty"`
 }
 
 type codexPlanIterationState struct {
@@ -1109,6 +1121,18 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
 	)
 	dispatchContract := planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
+
+	// Compute the colony-prime capsule once, for this plan-only wrapper
+	// manifest only — this function (runCodexPlanPlanOnly) is reached
+	// exclusively via the explicit --plan-only flag or the agent-delegate
+	// route (runCodexPlanAgentDelegate), both of which hand this manifest to
+	// a platform wrapper rather than dispatching workers directly. The
+	// in-process/native lane (dispatchRealPlanningWorkersWithIterationContext)
+	// never calls this function and computes its own capsule per dispatch.
+	// This is the single call site for this field on the plan-only lane; it
+	// must never be computed inside a per-dispatch loop.
+	contextCapsule := resolveCodexWorkerContext()
+
 	manifest := codexPlanManifest{
 		Goal:                     *state.Goal,
 		Root:                     root,
@@ -1151,6 +1175,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		ResearchWarning:          researchResult.Warning,
 		DepthProposal:            proposal,
 		DepthProposalCard:        proposalCard,
+		ContextCapsule:           contextCapsule,
 	}
 
 	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
