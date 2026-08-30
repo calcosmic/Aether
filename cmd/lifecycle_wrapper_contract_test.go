@@ -523,15 +523,19 @@ var specialistCommandSurfaceHashes = map[string]string{
 	// swarm-findings-read / swarm-cleanup as the inspection and housekeeping
 	// affordances for the runtime-recorded swarm state (RECLAIM-07). Content
 	// addition only; the swarm flow itself is unchanged.
-	".claude/commands/ant/swarm.md":         "a8f81e0474550915399d66a05effe03a41b5ed073e189242bc070770ae5f8529",
-	".claude/commands/ant/colonize.md":      "316767bf23b35618eaeebf34965cc8ca494ba7adcc35e2504a1dd35e7ff9cf99",
+	".claude/commands/ant/swarm.md": "a8f81e0474550915399d66a05effe03a41b5ed073e189242bc070770ae5f8529",
+	// Phase 198.2 plan 01 (WIRE-01): colonize wrappers now prepend the colony
+	// memory capsule from the manifest, on all three hand-maintained copies.
+	// Behaviour, tools and flow are otherwise unchanged; the capsule block is
+	// the only edit, and the two copies below stay byte-identical.
+	".claude/commands/ant/colonize.md":      "f512474c4d81037d2c047b70d3a2aa9fb4dfc5d36cd55ab247f15d57ee35dd4e",
 	".claude/commands/ant/council.md":       "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
 	".opencode/commands/ant/chaos.md":       "16f24da7ea50ec125ca5e754ea7f7c0c8a06aed3a8d2e7f8d4f128a1b71115a0",
 	".opencode/commands/ant/archaeology.md": "fada154f485134084ec39eccdf129f0bc2d4b0750e5d055e22620f060c3bc2ba",
 	".opencode/commands/ant/dream.md":       "06158585eeafe94748086c871b02f7a9c2aa8165a8cd0409dcc98663fc94609e",
 	".opencode/commands/ant/oracle.md":      "bdd9c4cbaae5bf81360d50f671dfef334b179f58b8e4ba19e9552353553e597f",
 	".opencode/commands/ant/swarm.md":       "a8f81e0474550915399d66a05effe03a41b5ed073e189242bc070770ae5f8529",
-	".opencode/commands/ant/colonize.md":    "316767bf23b35618eaeebf34965cc8ca494ba7adcc35e2504a1dd35e7ff9cf99",
+	".opencode/commands/ant/colonize.md":    "f512474c4d81037d2c047b70d3a2aa9fb4dfc5d36cd55ab247f15d57ee35dd4e",
 	".opencode/commands/ant/council.md":     "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
 	// aether-sage hashes updated 2026-08-21 (no-change vocabulary round): the
 	// worker response contract gained completed_no_change as a first-class
