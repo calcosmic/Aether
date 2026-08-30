@@ -94,6 +94,9 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 			nowCopy := nowStr
 			existing.Provenance.LastApplied = &nowCopy
 			existing.Provenance.ApplicationCount++
+			if obs.OriginLabel != "" {
+				existing.Provenance.OriginLabel = obs.OriginLabel
+			}
 
 			if err := s.store.SaveJSON("instincts.json", file); err != nil {
 				return nil, fmt.Errorf("save instincts: %w", err)
@@ -151,6 +154,7 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 			CreatedAt:        nowStr,
 			LastApplied:      nil,
 			ApplicationCount: 0,
+			OriginLabel:      obs.OriginLabel,
 		},
 		ApplicationHistory: []interface{}{},
 		RelatedInstincts:   []interface{}{},

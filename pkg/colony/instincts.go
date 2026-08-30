@@ -8,6 +8,10 @@ type InstinctProvenance struct {
 	CreatedAt        string  `json:"created_at"`
 	LastApplied      *string `json:"last_applied"`
 	ApplicationCount int     `json:"application_count"`
+	// OriginLabel is a human-readable origin ("from research: <topic>,
+	// <date>") for an instinct auto-promoted from an Oracle run (D-06). Empty
+	// for instincts promoted any other way.
+	OriginLabel string `json:"origin_label,omitempty"`
 }
 
 // InstinctEntry represents a single instinct in the standalone instincts.json file.

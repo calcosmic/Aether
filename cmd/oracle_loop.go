@@ -588,8 +588,15 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	researchDocument := ""
 	if plan, err := loadOraclePlanFile(paths.PlanPath); err == nil {
 		_ = writeOracleDerivedReports(paths, state, plan)
+		// The controller process this just killed may never reach its own
+		// finalizeOracleLoop terminal branch -- this command owns filing,
+		// registering, and promoting for a run stopped from outside its own
+		// process (D-05, D-06, D-07). Same body finalizeOracleLoop uses; see
+		// finalizeOracleResearchArtifacts's doc comment.
+		researchDocument = finalizeOracleResearchArtifacts(paths, state, plan)
 	}
 
 	result, err := oracleStatusResult(root)
@@ -601,6 +608,9 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	result["stop_path"] = paths.StopPath
 	result["killed_pids"] = killedPIDs
 	result["next"] = "aether oracle status"
+	if researchDocument != "" {
+		result["research_document"] = researchDocument
+	}
 	if killErr != nil {
 		result["kill_warning"] = killErr.Error()
 	}
@@ -1325,6 +1335,67 @@ func collectEvidence(plan oraclePlanFile, state oracleStateFile) []oracleEvidenc
 	return entries
 }
 
+// oracleResearchProvenanceLabel builds the plain-English "from research:
+// <topic>, <date>" line a promoted finding carries (D-06), so every habit
+// created this way can be traced back to the research it came from and
+// removed if it turns out wrong. Falls back to the run's raw topic when no
+// core question was recorded; empty when neither is set.
+func oracleResearchProvenanceLabel(state oracleStateFile) string {
+	topic := strings.TrimSpace(emptyFallback(strings.TrimSpace(state.CoreQuestion), state.Topic))
+	if topic == "" {
+		return ""
+	}
+	return fmt.Sprintf("from research: %s, %s", topic, time.Now().UTC().Format("2006-01-02"))
+}
+
+// finalizeOracleResearchArtifacts is the single body behind two entry
+// points: finalizeOracleLoop's own terminal branch (the loop process
+// finishing, stopping, or hitting its iteration cap in-process) and the
+// `aether oracle stop` path (cmd/oracle_loop.go, stopOracleCompatibility),
+// which can terminate the loop's process tree before the loop ever reaches
+// its own terminal branch. Both must file, register, and promote exactly
+// the same way, so this is called from both rather than duplicated into the
+// stop path (D-05, D-06, D-07).
+//
+// A run with nothing gathered yet (an owner stop before any finding landed)
+// files nothing and registers nothing -- that is the expected shape, not a
+// failure, so nothing is said about it. Every other step here is non-fatal:
+// a save, registration, or promotion failure is reported as one plain
+// sentence and never turns a finished or interrupted research run into a
+// failed command.
+//
+// Returns the repo-relative path of the saved document, or "" when nothing
+// was filed.
+func finalizeOracleResearchArtifacts(paths oraclePaths, state oracleStateFile, plan oraclePlanFile) string {
+	if !isCanonicalOracleWorkspace(paths) {
+		return ""
+	}
+
+	body, readErr := os.ReadFile(paths.SynthesisPath)
+	if readErr != nil || strings.TrimSpace(string(body)) == "" {
+		return ""
+	}
+
+	saved, saveErr := saveOracleResearchDocument(paths, state, plan, "")
+	if saveErr != nil {
+		// Worth saying out loud: the run produced something but its write-up
+		// is still only in the workspace, where the next run will sweep it.
+		emitVisualLine(fmt.Sprintf("⚠ research completed but could not be saved durably (%v) — run `aether oracle save` before starting another run", saveErr))
+		return ""
+	}
+
+	if regErr := registerColonyResearchDoc(paths.Root, saved); regErr != nil {
+		// The write-up is safe on disk; only the automatic pointer failed.
+		emitVisualLine(fmt.Sprintf("⚠ research was filed at %s but the colony was not pointed at it (%v) — run `aether init --research %s \"<goal>\"` to fix it", saved, regErr, saved))
+	}
+
+	if _, promErr := runOraclePromote(paths.Root, 0, false, oracleResearchProvenanceLabel(state)); promErr != nil {
+		emitVisualLine(fmt.Sprintf("⚠ research was filed but strong findings could not be promoted into learned habits (%v)", promErr))
+	}
+
+	return saved
+}
+
 func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, iterationsRun int, status, stopReason, next string) (map[string]interface{}, error) {
 	state.Status = status
 	state.Platform = oracleDetectedPlatform()
@@ -1350,19 +1421,15 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 	// is the one place that can promise a terminal line for anyone following.
 	emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventRunEnd, state))
 
-	// A run that reached a conclusion gets its write-up saved somewhere the
-	// next run cannot destroy. Blocked and manually stopped runs do not --
-	// `aether oracle save` keeps those on request.
+	// A run that reached a conclusion, hit its iteration cap, or was stopped
+	// (by the owner, or by a signal) gets its write-up saved somewhere the
+	// next run cannot destroy, registered on the colony, and its strong
+	// findings promoted into labelled habits -- with no hand-typed command
+	// (D-05, D-06, D-07). A blocked run (worker error/timeout, no progress)
+	// still does not; `aether oracle save` keeps those on request.
 	researchDocument := ""
-	if (status == "complete" || stopReason == "max_iterations_reached") && isCanonicalOracleWorkspace(paths) {
-		saved, saveErr := saveOracleResearchDocument(paths, state, plan, "")
-		if saveErr != nil {
-			// Worth saying out loud: the run succeeded but its write-up is
-			// still only in the workspace, where the next run will sweep it.
-			emitVisualLine(fmt.Sprintf("⚠ research completed but could not be saved durably (%v) — run `aether oracle save` before starting another run", saveErr))
-		} else {
-			researchDocument = saved
-		}
+	if status == "complete" || stopReason == "max_iterations_reached" || status == "stopped" {
+		researchDocument = finalizeOracleResearchArtifacts(paths, state, plan)
 	}
 
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
