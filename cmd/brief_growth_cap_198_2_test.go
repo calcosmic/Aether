@@ -229,6 +229,56 @@ func TestCarryForwardStaysInsideItsBudgetAndNamesOmissions(t *testing.T) {
 	}
 }
 
+// TestCarryForwardSurfacesNeedsOwnerConfirmationCriteria proves CR-01's
+// fix: a criterion that passed (Passed: true, the phase still advances) but
+// carries criterionStateNeedsOwnerConfirmation -- the exact shape
+// cmd/criterion_evidence.go's own writer produces at line 579
+// (`result.State = criterionStateNeedsOwnerConfirmation`) -- must still
+// reach the next phase's carry-forward section, per the function's own doc
+// comment ("unmet or unconfirmed criteria are selected"). Before the fix,
+// the unconditional `if c.Passed { continue }` swallowed this criterion
+// silently; this test fails on that code and passes once the State check
+// is restored.
+func TestCarryForwardSurfacesNeedsOwnerConfirmationCriteria(t *testing.T) {
+	saveGlobalsCmd(t)
+	seedCarryForwardState198_2(t, 50, 51, "Owner confirmation pending phase")
+
+	verification := codexContinueVerificationReport{
+		Phase: 50,
+		Criteria: []codexCriterionVerification{
+			{
+				Criterion: "Payment webhook is idempotent",
+				Passed:    true,
+				State:     criterionStateNeedsOwnerConfirmation,
+				Summary:   "no deterministic source could confirm this; no reviewer was dispatched",
+			},
+			{
+				Criterion: "Dashboard renders exporter output",
+				Passed:    true,
+				State:     "",
+				Summary:   "ordinary-passed-sentinel-should-not-appear",
+			},
+		},
+	}
+	if err := store.SaveJSON(continuePlanArtifactsPath(50, "verification.json"), verification); err != nil {
+		t.Fatalf("seed verification.json: %v", err)
+	}
+
+	section := resolvePreviousPhaseCarryForward(51)
+	if section == "" {
+		t.Fatal("expected a non-empty carry-forward section")
+	}
+	if !strings.Contains(section, "Payment webhook is idempotent") {
+		t.Errorf("carry-forward section is missing the needs_owner_confirmation criterion, got:\n%s", section)
+	}
+	if !strings.Contains(section, "still needs the owner's confirmation") {
+		t.Errorf("carry-forward section does not label the criterion as needing owner confirmation, got:\n%s", section)
+	}
+	if strings.Contains(section, "ordinary-passed-sentinel-should-not-appear") {
+		t.Errorf("carry-forward section leaked an ordinary passed criterion's own text, got:\n%s", section)
+	}
+}
+
 // TestOnlyTheImmediatelyPrecedingPhaseIsCarried seeds records for two
 // earlier phases and fails if the older one's text appears (D-10).
 func TestOnlyTheImmediatelyPrecedingPhaseIsCarried(t *testing.T) {

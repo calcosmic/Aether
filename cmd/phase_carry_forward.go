@@ -103,14 +103,21 @@ func resolvePreviousPhaseCarryForward(currentPhaseID int) string {
 		}
 		for _, c := range verification.Criteria {
 			if c.Passed && c.State == "" {
+				continue // ordinary passed criterion -- nothing to say
+			}
+			if !c.Passed {
+				items = append(items, flaggedItem{
+					label:    c.Criterion,
+					sentence: fmt.Sprintf("Criterion %q was not met: %s", c.Criterion, firstNonEmpty(c.Summary, "not met")),
+				})
 				continue
 			}
-			if c.Passed {
-				continue
-			}
+			// c.Passed && c.State != "" -- e.g. needs_owner_confirmation: the
+			// phase still advanced, but the next phase's builder must still
+			// be told this criterion was never actually confirmed (CR-01).
 			items = append(items, flaggedItem{
 				label:    c.Criterion,
-				sentence: fmt.Sprintf("Criterion %q was not met: %s", c.Criterion, firstNonEmpty(c.Summary, "not met")),
+				sentence: fmt.Sprintf("Criterion %q still needs the owner's confirmation: %s", c.Criterion, firstNonEmpty(c.Summary, "no summary recorded")),
 			})
 		}
 	}
