@@ -245,3 +245,162 @@ func TestNoSurveyMeansNoDigest(t *testing.T) {
 		t.Fatalf("expected an empty digest with no survey reports on disk, got:\n%s", got)
 	}
 }
+
+// --- Task 2: the digest reaches all three briefs, from one call site each ---
+
+// blueprintFixtureContentWithSentinel mirrors blueprintFixtureContent but
+// substitutes a caller-supplied sentence for the fixed sentinel bullet, so
+// TestSurveyorSentenceReachesAllThreeBriefs can prove each brief carries its
+// OWN seeded sentence rather than all three coincidentally matching one
+// shared constant.
+func blueprintFixtureContentWithSentinel(sentinel string) string {
+	return "# Blueprint\n\n" +
+		"**Survey Date:** 2026-08-30\n\n" +
+		"## Pattern Overview\n\n" +
+		"**Overall:** Layered MVC pattern with a thin HTTP layer over domain services.\n\n" +
+		"**Key Characteristics:**\n" +
+		"- " + sentinel + "\n" +
+		"- Handlers stay stateless and delegate all business logic to services under pkg/service.\n\n" +
+		"## Layers\n\n" +
+		"HTTP Layer -- purpose: parses requests and renders responses.\n"
+}
+
+// runBuildBriefCase198_2_06 renders a real build worker brief the same way
+// renderCodexBuildWorkerBrief's own proportion test does (TestBuildWorkerBriefIsMostlyTask),
+// so this table exercises the exact function composeBuildManifestBrief calls.
+func runBuildBriefCase198_2_06(t *testing.T, root string) string {
+	t.Helper()
+	phase := colony.Phase{
+		ID:              1,
+		Name:            "Wire the exporter",
+		Description:     "Connect the vault exporter to the dashboard command",
+		SuccessCriteria: []string{"Dashboard renders exporter output"},
+	}
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-1",
+		Caste: "builder",
+		Task:  "Add the exporter call and pass its result to the dashboard view",
+	}
+	return renderCodexBuildWorkerBrief(root, phase, dispatch, time.Now())
+}
+
+// runPlanBriefCase198_2_06 renders a real planning worker brief the same way
+// dispatchRealPlanningWorkersWithIterationContext does.
+func runPlanBriefCase198_2_06(t *testing.T, root string) string {
+	t.Helper()
+	survey := codexSurveyContext{}
+	spec := planningWorkerSpec{
+		Caste:     "route_setter",
+		AgentFile: "aether-route-setter.toml",
+		Task:      "Draft the phase plan",
+		Outputs:   []string{"phase-plan.json"},
+	}
+	return renderPlanningWorkerBrief(root, survey, spec)
+}
+
+// runResearchBriefCase198_2_06 renders a real phase-research Scout brief the
+// same way phaseResearchDispatches does.
+func runResearchBriefCase198_2_06(t *testing.T, root string) string {
+	t.Helper()
+	survey := codexSurveyContext{}
+	candidate := phaseResearchCandidate{ID: 1, Name: "Wire the exporter"}
+	return renderPhaseResearchBrief(root, "Ship the exporter feature", candidate, survey)
+}
+
+func briefCases198_2_06() []struct {
+	Name string
+	Run  func(t *testing.T, root string) string
+} {
+	return []struct {
+		Name string
+		Run  func(t *testing.T, root string) string
+	}{
+		{"build", runBuildBriefCase198_2_06},
+		{"plan", runPlanBriefCase198_2_06},
+		{"research", runResearchBriefCase198_2_06},
+	}
+}
+
+// TestSurveyorSentenceReachesAllThreeBriefs is the WIRE-03 proof standard:
+// one subtest per brief, each seeding a real survey report with its own
+// sentence and asserting that exact sentence arrives in the assembled
+// prompt -- not just the report's filename.
+func TestSurveyorSentenceReachesAllThreeBriefs(t *testing.T) {
+	for _, tc := range briefCases198_2_06() {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			_, root := setupSurveyStalenessTest(t)
+			sentinel := "SENTINEL-198-2-06-" + strings.ToUpper(tc.Name) + ": the dispatch layer never touches persistence directly."
+			surveyDir := filepath.Join(root, ".aether", "data", "survey")
+			writeSurveyReportFile(t, surveyDir, "BLUEPRINT.md", blueprintFixtureContentWithSentinel(sentinel))
+
+			brief := tc.Run(t, root)
+			if !strings.Contains(brief, sentinel) {
+				t.Fatalf("%s brief does not carry the survey helper's own sentence (len=%d)", tc.Name, len(brief))
+			}
+		})
+	}
+}
+
+// TestTheAgeLineAppearsOncePerBrief locks the exactly-once rendering
+// invariant (D-02 / D-190-05-A style guard): the digest is the age line's
+// home, so a brief that also renders resolveSurveySection's own copy (the
+// build brief) must not carry the notice twice.
+func TestTheAgeLineAppearsOncePerBrief(t *testing.T) {
+	const ageMarker = "Territory has never been surveyed"
+
+	for _, tc := range briefCases198_2_06() {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			_, root := setupSurveyStalenessTest(t)
+			if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{}); err != nil {
+				t.Fatalf("save state: %v", err)
+			}
+			surveyDir := filepath.Join(root, ".aether", "data", "survey")
+			writeSurveyReportFile(t, surveyDir, "BLUEPRINT.md", blueprintFixtureContent())
+
+			brief := tc.Run(t, root)
+			count := strings.Count(brief, ageMarker)
+			if count > 1 {
+				t.Fatalf("%s brief renders the age line %d times, expected at most once", tc.Name, count)
+			}
+			if count == 0 {
+				t.Errorf("%s brief does not render the age line at all -- expected exactly once, since the territory has never been surveyed", tc.Name)
+			}
+		})
+	}
+}
+
+// TestBriefsAreUnchangedWithoutASurvey proves a colony with no survey
+// reports gets a byte-identical brief to before this digest existed: the
+// digest injection is guarded by resolveSurveyDigestSection() returning "",
+// under the exact same on-disk condition (an empty or absent survey
+// directory) resolveSurveySection already no-ops under, so no bytes from
+// the new digest block are ever written.
+func TestBriefsAreUnchangedWithoutASurvey(t *testing.T) {
+	const digestMarker = "Codebase Map Digest"
+
+	for _, tc := range briefCases198_2_06() {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			_, root := setupSurveyStalenessTest(t)
+			// No survey directory written -- this is the "never colonized" state.
+
+			if got := resolveSurveyDigestSection(); got != "" {
+				t.Fatalf("fixture broken: expected an empty digest with no survey reports, got:\n%s", got)
+			}
+
+			first := tc.Run(t, root)
+			second := tc.Run(t, root)
+			if first != second {
+				t.Fatalf("%s brief is not stable across repeated renders with no survey present", tc.Name)
+			}
+			if strings.Contains(first, digestMarker) {
+				t.Errorf("%s brief contains the digest heading with no survey reports on disk -- the digest injection is not byte-identical to before it existed:\n%s", tc.Name, first)
+			}
+		})
+	}
+}

@@ -2187,6 +2187,18 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 	} else {
 		b.WriteString("- Survey docs to read first: none detected; inspect repo files only when the survey is missing or ambiguous.\n")
 	}
+	// The condensed map digest (WIRE-03): the same content the build and
+	// research briefs get, from the one shared resolveSurveyDigestSection
+	// call site per brief. No age-line dedup needed here -- nothing else in
+	// this brief renders surveyStalenessNotice(), so the digest is its only
+	// source. Guarded by its own empty-string check so a colony with no
+	// survey reports produces a byte-identical planning brief to before this
+	// digest existed (TestBriefsAreUnchangedWithoutASurvey).
+	if digestSection := resolveSurveyDigestSection(); digestSection != "" {
+		b.WriteString("\n")
+		b.WriteString(digestSection)
+		b.WriteString("\n")
+	}
 	if spec.Caste == "route_setter" {
 		b.WriteString("- Read scout output before drafting phases if it exists: ")
 		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "SCOUT.md")))
