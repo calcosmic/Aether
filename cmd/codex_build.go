@@ -3333,8 +3333,27 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	// command-playbook docs remain as reference material only.
 
 	if surveySection := resolveSurveySection(); surveySection != "" {
+		// The age line now lives with the digest immediately below (its
+		// home per D-02) -- strip it from the filename list here so a
+		// build brief never carries it twice
+		// (TestTheAgeLineAppearsOncePerBrief).
+		if notice := surveyStalenessNotice(); notice != "" {
+			surveySection = strings.Replace(surveySection, notice, "", 1)
+		}
 		b.WriteString("\n")
 		b.WriteString(surveySection)
+		b.WriteString("\n")
+	}
+
+	// The condensed map digest (WIRE-03): the same content the planning and
+	// research briefs get, from the one shared resolveSurveyDigestSection
+	// call site per brief (cmd/helpers.go). Guarded by its own empty-string
+	// check so a colony with no survey reports produces a byte-identical
+	// build brief to before this digest existed
+	// (TestBriefsAreUnchangedWithoutASurvey).
+	if digestSection := resolveSurveyDigestSection(); digestSection != "" {
+		b.WriteString("\n")
+		b.WriteString(digestSection)
 		b.WriteString("\n")
 	}
 

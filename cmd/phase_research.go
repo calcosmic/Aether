@@ -131,6 +131,18 @@ func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidat
 	}
 	b.WriteString("\n## Territory Survey\n")
 	b.WriteString(renderPhaseResearchSurveySection(survey))
+	// The condensed map digest (WIRE-03): the same content the build and
+	// planning briefs get, from the one shared resolveSurveyDigestSection
+	// call site per brief. No age-line dedup needed here --
+	// renderPhaseResearchSurveySection never renders surveyStalenessNotice(),
+	// so the digest is its only source. Guarded by its own empty-string check
+	// so a colony with no survey reports produces a byte-identical research
+	// brief to before this digest existed (TestBriefsAreUnchangedWithoutASurvey).
+	if digestSection := resolveSurveyDigestSection(); digestSection != "" {
+		b.WriteString("\n")
+		b.WriteString(digestSection)
+		b.WriteString("\n")
+	}
 	// Research the operator already had done. Findings it already covers add
 	// no value if rediscovered here — extend it instead.
 	if colonyResearch := resolveColonyResearchSection(root, loadColonyResearchDocs(root)); colonyResearch != "" {

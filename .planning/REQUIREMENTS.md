@@ -72,7 +72,7 @@
 
 - [ ] **WIRE-01**: The Claude/OpenCode plan and colonize manifests carry the context capsule; a per-command test runs the real delegate lane and asserts a sentinel sentence from each memory source (QUEEN.md, hive, instincts, midden, pheromones, clarified intent, handoffs) in the assembled prompt — native-lane-only tests do not satisfy this
 - [ ] **WIRE-02**: The phase-research scout brief carries hive wisdom content; the instruction to write a hive section it cannot see is removed
-- [ ] **WIRE-03**: A condensed survey (colonize) digest reaches build, plan and research briefs within budget; a test asserts a surveyor-authored sentence arrives and that deleting the survey changes the prompt
+- [x] **WIRE-03**: A condensed survey (colonize) digest reaches build, plan and research briefs within budget; a test asserts a surveyor-authored sentence arrives and that deleting the survey changes the prompt
 - [x] **WIRE-04**: A completed Oracle run registers its output into the colony's research docs automatically; its findings reach the next builder without `--research <path>` or a manual promote
 - [x] **WIRE-05**: The session-start card carries user preferences, top instincts and the last handoff, each content-locked
 - [x] **WIRE-06**: No colony-prime capsule section is empty by construction — `PhaseLearnings` and `Decisions` gain a live writer or are removed; an invariant test asserts every section has a writer
@@ -165,7 +165,7 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | FEED-06 | Phase 198.1 | Complete |
 | WIRE-01 | Phase 198.2 | Pending |
 | WIRE-02 | Phase 198.2 | Pending |
-| WIRE-03 | Phase 198.2 | Pending |
+| WIRE-03 | Phase 198.2 | Complete |
 | WIRE-04 | Phase 198.2 | Complete |
 | WIRE-05 | Phase 198.2 | Complete |
 | WIRE-06 | Phase 198.2 | Complete |
