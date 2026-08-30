@@ -399,7 +399,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 198.2-07-PLAN.md — wave 4: the previous phase's failures and closing summary reach the next build brief, under a proven growth cap (WIRE-07)
+- [x] 198.2-07-PLAN.md — wave 4: the previous phase's failures and closing summary reach the next build brief, under a proven growth cap (WIRE-07)
 
 ### Phase 198.3: Overnight Stamina
 
