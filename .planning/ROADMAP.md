@@ -391,7 +391,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 198.2-06-PLAN.md — wave 2: the codebase-map digest reaches the build, planning and research briefs as content (WIRE-03)
+- [x] 198.2-06-PLAN.md — wave 2: the codebase-map digest reaches the build, planning and research briefs as content (WIRE-03)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
