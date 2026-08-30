@@ -85,6 +85,18 @@ type codexColonizeManifest struct {
 	Snapshots            map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
 	FinalizerCommand     string                           `json:"finalizer_command"`
 	Stats                map[string]interface{}           `json:"stats,omitempty"`
+	// ContextCapsule is the colony-prime grounding payload (state, decisions,
+	// phase learnings, instincts, hive wisdom, prior reviews, blockers, user
+	// preferences) for wrapper-spawned surveyor workers. It is computed once
+	// by this manifest's sole caller (runCodexColonizePlanOnly) and passed
+	// into buildCodexColonizeManifest as a parameter — the builder itself
+	// stays a pure assembler and never resolves the capsule itself, so
+	// there is exactly one call site on this lane. The wrapper reads it once
+	// and prepends it, verbatim, to each spawned surveyor's prompt. The
+	// in-process/native surveyor dispatch (dispatchRealSurveyorsWithTimeout)
+	// already computes and shares its own capsule via
+	// codex.WorkerDispatch.ContextCapsule and never builds this struct.
+	ContextCapsule string `json:"context_capsule,omitempty"`
 }
 
 // logActivity appends an entry to the activity log. It is a no-op if the
@@ -344,7 +356,18 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 		status = "agent-delegate"
 	}
 
-	manifest := buildCodexColonizeManifest(root, facts, opts, dispatchMode, existingSurvey, snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))))
+	// Compute the colony-prime capsule once, for this plan-only/agent-delegate
+	// wrapper manifest only — runCodexColonizePlanOnly is the sole caller of
+	// buildCodexColonizeManifest, reached via the explicit --plan-only flag
+	// or the agent-delegate route, both of which hand this manifest to a
+	// platform wrapper rather than dispatching surveyors directly. The
+	// in-process/native lane (dispatchRealSurveyorsWithTimeout) never calls
+	// this function and computes its own capsule per dispatch. This is the
+	// single call site for this field on the colonize plan-only lane; it
+	// must never be computed inside buildCodexColonizeManifest itself or a
+	// per-dispatch loop.
+	contextCapsule := resolveCodexWorkerContext()
+	manifest := buildCodexColonizeManifest(root, facts, opts, dispatchMode, existingSurvey, snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))), contextCapsule)
 	dispatchMaps := surveyorDispatchMaps(manifest.Dispatches)
 	result := map[string]interface{}{
 		"status":                status,
@@ -373,7 +396,7 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 	return result, nil
 }
 
-func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts codexColonizeOptions, dispatchMode string, existingSurvey bool, snapshots map[string]codexArtifactSnapshot) codexColonizeManifest {
+func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts codexColonizeOptions, dispatchMode string, existingSurvey bool, snapshots map[string]codexArtifactSnapshot, contextCapsule string) codexColonizeManifest {
 	workerTimeout := effectiveSurveyorDispatchTimeout(opts.WorkerTimeout)
 	dispatches := plannedSurveyors(root)
 	for i := range dispatches {
@@ -417,6 +440,7 @@ func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts cod
 			"files":       facts.FileCount,
 			"directories": facts.DirectoryCount,
 		},
+		ContextCapsule: contextCapsule,
 	}
 }
 

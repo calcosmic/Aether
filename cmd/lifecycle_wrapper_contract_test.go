@@ -751,6 +751,29 @@ func buildWrapperTripletPaths(repoRoot string) []string {
 	}
 }
 
+// planWrapperTripletPaths returns the three hand-maintained plan wrapper
+// copies in the same canonical-first order buildWrapperTripletPaths uses
+// (198.2-01): the canonical Claude wrapper, the flat installed-consumer
+// Claude mirror (the file an installed Claude Code session actually runs),
+// and the OpenCode copy.
+func planWrapperTripletPaths(repoRoot string) []string {
+	return []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "plan.md"),
+		flatMirrorPath(repoRoot, "plan"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "plan.md"),
+	}
+}
+
+// colonizeWrapperTripletPaths returns the three hand-maintained colonize
+// wrapper copies in the same canonical-first order (198.2-01).
+func colonizeWrapperTripletPaths(repoRoot string) []string {
+	return []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "colonize.md"),
+		flatMirrorPath(repoRoot, "colonize"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "colonize.md"),
+	}
+}
+
 // TestLifecycleWrappersCarryCoherentJobContract asserts all three build
 // wrapper copies describe the Phase 195 coherent-job, task-receipt, recovery
 // and check-in contract exactly as the Go runtime implements it, and that
