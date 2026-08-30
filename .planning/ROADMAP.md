@@ -381,13 +381,24 @@ Plans:
 **Plans**: 8 plans (4 waves)
 
 Plans:
+**Wave 1**
+
 - [ ] 198.2-01-PLAN.md — wave 1: the memory pack reaches the planner and the surveyors on the Claude/OpenCode lane (WIRE-01)
 - [ ] 198.2-02-PLAN.md — wave 1: a finished or stopped deep-research run files, registers and promotes itself (WIRE-04)
 - [ ] 198.2-03-PLAN.md — wave 1: the session greeting carries preferences, the strongest habits and the last relay note (WIRE-05)
 - [ ] 198.2-04-PLAN.md — wave 1: dead memory-pack parts removed, every remaining part has a live writer (WIRE-06)
 - [ ] 198.2-05-PLAN.md — wave 1: both check lanes persist the phase's closing summary word-for-word (WIRE-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 198.2-06-PLAN.md — wave 2: the codebase-map digest reaches the build, planning and research briefs as content (WIRE-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 198.2-08-PLAN.md — wave 3: the research helper is shown the shared cross-project lessons it was being asked to invent (WIRE-02)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 198.2-07-PLAN.md — wave 4: the previous phase's failures and closing summary reach the next build brief, under a proven growth cap (WIRE-07)
 
 ### Phase 198.3: Overnight Stamina
