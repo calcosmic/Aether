@@ -74,7 +74,7 @@
 - [ ] **WIRE-02**: The phase-research scout brief carries hive wisdom content; the instruction to write a hive section it cannot see is removed
 - [ ] **WIRE-03**: A condensed survey (colonize) digest reaches build, plan and research briefs within budget; a test asserts a surveyor-authored sentence arrives and that deleting the survey changes the prompt
 - [x] **WIRE-04**: A completed Oracle run registers its output into the colony's research docs automatically; its findings reach the next builder without `--research <path>` or a manual promote
-- [ ] **WIRE-05**: The session-start card carries user preferences, top instincts and the last handoff, each content-locked
+- [x] **WIRE-05**: The session-start card carries user preferences, top instincts and the last handoff, each content-locked
 - [x] **WIRE-06**: No colony-prime capsule section is empty by construction — `PhaseLearnings` and `Decisions` gain a live writer or are removed; an invariant test asserts every section has a writer
 - [ ] **WIRE-07**: The previous phase's outcome.md, verification.json and review.json content reaches the next phase's build brief
 
@@ -167,7 +167,7 @@ Filled by the roadmapper. Each requirement maps to exactly one phase.
 | WIRE-02 | Phase 198.2 | Pending |
 | WIRE-03 | Phase 198.2 | Pending |
 | WIRE-04 | Phase 198.2 | Complete |
-| WIRE-05 | Phase 198.2 | Pending |
+| WIRE-05 | Phase 198.2 | Complete |
 | WIRE-06 | Phase 198.2 | Complete |
 | WIRE-07 | Phase 198.2 | Pending |
 | STAM-01 | Phase 198.3 | Pending |

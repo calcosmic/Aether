@@ -72,6 +72,19 @@ func renderNextActionCardForPlatform(answer nextAction, platform string) string 
 		b.WriteString(cardText(list, platform))
 	}
 
+	// 3.5. What the colony remembers about the owner -- preferences, the
+	// strongest learned habits, the last helper's note (198.2 plan 03, D-12).
+	// This is populated ONLY by loadNextActionInputForGreeting, so it renders
+	// only on the session-start greeting; every other closing card leaves
+	// answer.Memory zero and this block disappears entirely -- the same
+	// if-non-empty pattern every other part on this card already uses, so an
+	// empty part is never a heading with nothing under it (D-14).
+	if section := renderNextActionMemory(answer.Memory); section != "" {
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("What I remember about you"))
+		b.WriteString(cardText(section, platform))
+	}
+
 	// 4-6. The recommendation, the exact command, and the alternatives. This is
 	// the single Next Up funnel, which is where platform translation happens.
 	b.WriteString(renderNextUp(
@@ -134,6 +147,35 @@ func renderNextActionStanding(standing nextActionStanding) string {
 		// The milestone is this project's own name for how far along it is, so
 		// it is labelled rather than dropped in bare.
 		b.WriteString(fmt.Sprintf("Stage reached: %s.\n", milestone))
+	}
+	return b.String()
+}
+
+// renderNextActionMemory renders the memory block: what the colony remembers
+// about the owner. Each of the three parts is content, not a heading -- a
+// part with nothing to say (mem.Preferences == "", no habits, no relay note)
+// is simply absent, never a "nothing learned yet" filler line (D-14). Every
+// sentence is written for someone who has never opened a file here: "learned
+// habit" and "the last helper left a note" stand in for this repo's own
+// words for those things.
+func renderNextActionMemory(mem nextActionMemory) string {
+	var b strings.Builder
+	if pref := strings.TrimSpace(mem.Preferences); pref != "" {
+		b.WriteString(pref)
+		b.WriteString("\n")
+	}
+	for _, habit := range mem.Habits {
+		habit = strings.TrimSpace(habit)
+		if habit == "" {
+			continue
+		}
+		b.WriteString("Learned habit: ")
+		b.WriteString(habit)
+		b.WriteString("\n")
+	}
+	if note := strings.TrimSpace(mem.RelayNote); note != "" {
+		b.WriteString(note)
+		b.WriteString("\n")
 	}
 	return b.String()
 }

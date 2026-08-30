@@ -116,6 +116,13 @@ type nextActionRecovery struct {
 // Notes is diagnostic rather than one of the eight: it records any time the
 // availability gate substituted a command, so the owner is never silently
 // redirected to something other than what the decision chose.
+//
+// Memory is likewise not one of the eight (198.2 plan 03). It carries what
+// the colony remembers about the owner -- preferences, the strongest learned
+// habits, and the last helper's relay note -- for the session-start greeting
+// only. It is a straight passthrough of nextActionInput.Memory: the resolver
+// composes no memory content of its own, matching the "decides nothing" rule
+// this file's header already binds every other field to.
 type nextAction struct {
 	Standing       nextActionStanding       `json:"standing"`
 	Changed        []string                 `json:"changed"`
@@ -126,6 +133,25 @@ type nextAction struct {
 	ContextHealth  nextActionContextVerdict `json:"context_health"`
 	Recovery       nextActionRecovery       `json:"recovery"`
 	Notes          []string                 `json:"notes,omitempty"`
+	Memory         nextActionMemory         `json:"memory"`
+}
+
+// nextActionMemory is what the colony remembers about the owner, shown only
+// on the session-start greeting (D-12). Every part is optional and omitted
+// on its own when empty (D-14) -- there is no "nothing learned yet" filler.
+type nextActionMemory struct {
+	// Preferences is one line naming how many preferences are saved plus one
+	// example, e.g. "4 preferences set -- e.g. plain English replies". Empty
+	// when the owner has set none.
+	Preferences string
+	// Habits is up to three sentences, the strongest learned habits in their
+	// own words (loadStrongestRuntimeInstincts, the one ranking rule locked
+	// by TestStrongestHabitsHaveOneRankingRule). Empty when the colony has
+	// learned nothing yet.
+	Habits []string
+	// RelayNote is one sentence naming the last helper and what it left for
+	// the next one. Empty when no handoff has been recorded.
+	RelayNote string
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +204,15 @@ type nextActionInput struct {
 
 	// ActiveTodos are the outstanding task goals for the current phase.
 	ActiveTodos []string
+
+	// Memory is what the colony remembers about the owner -- preferences,
+	// learned habits, the last helper's relay note -- for the session-start
+	// greeting only (198.2 plan 03). Populated ONLY by
+	// loadNextActionInputForGreeting; loadNextActionInput and
+	// loadNextActionInputForCommand leave it zero, which is what keeps every
+	// other closing card byte-identical to before this field existed
+	// (TestClosingCardsAreUnchangedByTheGreetingBlock).
+	Memory nextActionMemory
 }
 
 // nextActionOverride is the caller's own knowledge of this exact run, offered
@@ -474,6 +509,10 @@ func resolveNextAction(in nextActionInput) nextAction {
 		Open:          openItemsFromInput(in),
 		Recovery:      recoveryFromInput(in, state),
 		ContextHealth: contextHealthFromInput(in, state),
+		// Straight passthrough -- see the doc comment on nextAction.Memory.
+		// loadNextActionInput / loadNextActionInputForCommand leave in.Memory
+		// zero, so every closing card but the greeting is unchanged.
+		Memory: in.Memory,
 	}
 
 	choice := chooseNextAction(in, state)

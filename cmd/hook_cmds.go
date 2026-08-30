@@ -343,11 +343,15 @@ var hookSessionStartCmd = &cobra.Command{
 
 		// Failure tolerance, matching the sibling hooks: a greeting that errors
 		// on a malformed project is worse than one that stays quiet, because it
-		// fires before the owner has typed anything. loadNextActionInput
+		// fires before the owner has typed anything. loadNextActionInputForGreeting
 		// reports NoColony for a missing store, an unreadable state file and a
 		// state file carrying no goal alike, so every one of those paths is
-		// silence rather than noise.
-		in := loadNextActionInput()
+		// silence rather than noise. This is the ONE caller of
+		// loadNextActionInputForGreeting (198.2 plan 03) -- the memory block
+		// it adds (preferences, learned habits, the last helper's note)
+		// appears on this greeting only; every other closing card still
+		// calls loadNextActionInput and is unchanged.
+		in := loadNextActionInputForGreeting()
 		if in.NoColony {
 			return nil
 		}

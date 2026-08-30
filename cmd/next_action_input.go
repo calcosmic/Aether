@@ -17,6 +17,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -65,6 +67,99 @@ func loadNextActionInputForCommand(lastCommand string) nextActionInput {
 	in.BuildLooksAbandoned = buildLooksAbandoned(state)
 
 	return in
+}
+
+// loadNextActionInputForGreeting is loadNextActionInputForCommand plus the
+// memory block (198.2 plan 03): the owner's own preferences, the strongest
+// learned habits, and the last helper's relay note. It is the ONLY caller
+// that populates nextActionInput.Memory -- hookSessionStartCmd is the ONLY
+// caller of this function -- so every other closing card, built through
+// loadNextActionInput or loadNextActionInputForCommand, stays byte-identical
+// to before this field existed.
+//
+// Every read here is read-only, the same rule the rest of this file is held
+// to: readUserPreferences and loadStrongestRuntimeInstincts read files
+// directly, and loadWorkerHandoffRecords reads the handoff log. None of the
+// three writes, and none of the three re-derives a ranking or a selection
+// rule of its own -- preferences and habits reuse the exact readers named in
+// the plan (readUserPreferences pair, loadStrongestRuntimeInstincts), so a
+// second implementation of either can never quietly drift from the one this
+// file shares with the rest of the runtime.
+func loadNextActionInputForGreeting() nextActionInput {
+	in := loadNextActionInputForCommand("")
+	if in.NoColony {
+		return in
+	}
+	in.Memory = buildNextActionMemory(in.State)
+	return in
+}
+
+// buildNextActionMemory reads the three memory parts and returns them
+// exactly as read -- no ranking, no filtering beyond what each reader already
+// does. A part with nothing to say is left as its zero value; the card
+// (renderNextActionMemory, cmd/next_action_card.go) is what omits it (D-14).
+func buildNextActionMemory(state colony.ColonyState) nextActionMemory {
+	var mem nextActionMemory
+
+	hubDir := resolveHubPath()
+	aetherRoot := resolveAetherRootPath()
+	var prefs []string
+	prefs = append(prefs, readUserPreferences(filepath.Join(hubDir, "QUEEN.md"))...)
+	prefs = append(prefs, readUserPreferences(filepath.Join(aetherRoot, ".aether", "QUEEN.md"))...)
+	if len(prefs) > 0 {
+		plural := "s"
+		if len(prefs) == 1 {
+			plural = ""
+		}
+		mem.Preferences = fmt.Sprintf("%d preference%s set -- e.g. %s", len(prefs), plural, prefs[0])
+	}
+
+	for _, inst := range loadStrongestRuntimeInstincts(store, &state, 3) {
+		if action := strings.TrimSpace(inst.Action); action != "" {
+			mem.Habits = append(mem.Habits, action)
+		}
+	}
+
+	mem.RelayNote = latestHandoffSentence()
+
+	return mem
+}
+
+// latestHandoffSentence names the last helper and what it left for the next
+// one, from the same handoff log the capsule reads
+// (renderWorkerHandoffSection / renderHandoffSectionNamed,
+// cmd/codex_dispatch_contract.go) -- reduced to one sentence rather than the
+// capsule's full markdown section. Empty when no handoff has been recorded.
+func latestHandoffSentence() string {
+	records, err := loadWorkerHandoffRecords()
+	if err != nil || len(records) == 0 {
+		return ""
+	}
+
+	latest := records[0]
+	for _, record := range records[1:] {
+		if handoffFreshnessTime(record.Freshness).After(handoffFreshnessTime(latest.Freshness)) {
+			latest = record
+		}
+	}
+
+	worker := strings.TrimSpace(latest.WorkerName)
+	if worker == "" {
+		worker = "a helper"
+	}
+
+	left := strings.TrimSpace(latest.Summary)
+	if left == "" && len(latest.NextWorkerInstructions) > 0 {
+		left = strings.TrimSpace(latest.NextWorkerInstructions[0])
+	}
+	if left == "" && len(latest.DoNotRepeat) > 0 {
+		left = strings.TrimSpace(latest.DoNotRepeat[0])
+	}
+	if left == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("The last helper (%s) left a note for the next one: %s", worker, left)
 }
 
 // readColonyStateWithoutWriting reads and normalises the saved colony state.
