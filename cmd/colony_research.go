@@ -193,66 +193,86 @@ func mergeColonyResearchDocs(root string, existing, added []string) ([]string, b
 // unreadable. Every caller treats registration failure as non-fatal: a run
 // that filed its write-up successfully must never be reported as failed
 // only because the colony could not also be pointed at it.
+//
+// This phase made registration automatic on every completed or stopped
+// Oracle run (previously a manual, occasional `aether init --research`
+// step), so the read-modify-write below is routed through the package
+// store's UpdateFile -- the same FileLocker-backed locked path every other
+// in-process writer of COLONY_STATE.json goes through (WR-01) -- rather
+// than two unsynchronized raw os.ReadFile/os.WriteFile calls racing a
+// concurrent build's parallel workers or another terminal's `/ant-continue`.
 func registerColonyResearchDoc(root string, doc string) error {
 	doc = strings.TrimSpace(doc)
 	if doc == "" {
 		return nil
 	}
-
-	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
-	data, err := os.ReadFile(statePath)
-	if err != nil {
-		return fmt.Errorf("read colony state: %w", err)
+	if store == nil {
+		return fmt.Errorf("register colony research doc: no active colony store")
+	}
+	if store.BasePath() != filepath.Join(root, ".aether", "data") {
+		return fmt.Errorf("register colony research doc: active store is not bound to %q", root)
 	}
 
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parse colony state: %w", err)
-	}
+	updateErr := store.UpdateFile("COLONY_STATE.json", func(existing []byte) ([]byte, error) {
+		if len(existing) == 0 {
+			return nil, fmt.Errorf("read colony state: state file is missing or empty")
+		}
 
-	var existing []string
-	if rawDocs, ok := raw["research_docs"].([]interface{}); ok {
-		for _, v := range rawDocs {
-			if s, ok := v.(string); ok {
-				existing = append(existing, s)
+		var raw map[string]interface{}
+		if err := json.Unmarshal(existing, &raw); err != nil {
+			return nil, fmt.Errorf("parse colony state: %w", err)
+		}
+
+		var existingDocs []string
+		if rawDocs, ok := raw["research_docs"].([]interface{}); ok {
+			for _, v := range rawDocs {
+				if s, ok := v.(string); ok {
+					existingDocs = append(existingDocs, s)
+				}
 			}
 		}
-	}
 
-	// mergeColonyResearchDocs is still the source of truth for validity: it
-	// fails closed if `doc`, or any previously-recorded entry, does not
-	// resolve to a real file inside the repo. Its own alphabetically-sorted
-	// return value is used only to confirm membership -- the newest-first
-	// order written back below comes from registration order, not from that
-	// sort.
-	merged, changed, mergeErr := mergeColonyResearchDocs(root, existing, []string{doc})
-	if mergeErr != nil {
-		return mergeErr
-	}
-	if !changed {
-		return nil
-	}
-	inMerged := make(map[string]bool, len(merged))
-	for _, d := range merged {
-		inMerged[d] = true
-	}
-
-	reordered := make([]string, 0, len(merged))
-	reordered = append(reordered, doc)
-	for _, d := range existing {
-		if d != doc && inMerged[d] {
-			reordered = append(reordered, d)
+		// mergeColonyResearchDocs is still the source of truth for
+		// validity: it fails closed if `doc`, or any previously-recorded
+		// entry, does not resolve to a real file inside the repo. Its own
+		// alphabetically-sorted return value is used only to confirm
+		// membership -- the newest-first order written back below comes
+		// from registration order, not from that sort.
+		merged, changed, mergeErr := mergeColonyResearchDocs(root, existingDocs, []string{doc})
+		if mergeErr != nil {
+			return nil, mergeErr
 		}
-	}
-	raw["research_docs"] = reordered
+		if !changed {
+			// No-op: write the same bytes back rather than skipping the
+			// write entirely, so the lock is still held across the whole
+			// read-decide cycle -- a caller racing this one can never
+			// observe a state where the read happened but the decision
+			// not to write raced an interleaved write from elsewhere.
+			return existing, nil
+		}
+		inMerged := make(map[string]bool, len(merged))
+		for _, d := range merged {
+			inMerged[d] = true
+		}
 
-	encoded, err := json.MarshalIndent(raw, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal colony state: %w", err)
-	}
-	encoded = append(encoded, '\n')
-	if err := os.WriteFile(statePath, encoded, 0644); err != nil {
-		return fmt.Errorf("write colony state: %w", err)
+		reordered := make([]string, 0, len(merged))
+		reordered = append(reordered, doc)
+		for _, d := range existingDocs {
+			if d != doc && inMerged[d] {
+				reordered = append(reordered, d)
+			}
+		}
+		raw["research_docs"] = reordered
+
+		encoded, err := json.MarshalIndent(raw, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("marshal colony state: %w", err)
+		}
+		encoded = append(encoded, '\n')
+		return encoded, nil
+	})
+	if updateErr != nil {
+		return updateErr
 	}
 	return nil
 }
