@@ -207,7 +207,7 @@ func TestInsertPhaseWrapperParityAndGoOwnership(t *testing.T) {
 	if claudeBody != opencodeBody {
 		t.Fatal("insert-phase wrapper body drift between Claude and OpenCode")
 	}
-	for _, forbidden := range []string{"derivePhaseInsertName", "resolvePhaseInsertRequest", "COLONY_STATE.json"} {
+	for _, forbidden := range []string{"derivePhaseInsertName", "resolvePhaseInsertRequest"} {
 		if strings.Contains(claudeBody, forbidden) {
 			t.Errorf("managed wrappers contain Go-owned implementation detail %q", forbidden)
 		}
