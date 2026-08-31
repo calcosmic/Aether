@@ -210,7 +210,7 @@ func TestAutoResolveRequiresBuildPass(t *testing.T) {
 	}
 }
 
-func TestStructuredBlockingFindingBlocksContinue(t *testing.T) {
+func TestStructuredCriticalFindingBlocksContinue(t *testing.T) {
 	now := time.Now().UTC()
 	steps := []codexContinueWorkerFlowStep{
 		{
@@ -219,14 +219,14 @@ func TestStructuredBlockingFindingBlocksContinue(t *testing.T) {
 			Name:   "Sentinel-2",
 			Status: "completed",
 			Findings: []codexReviewFinding{
-				{Domain: "testing", Severity: "HIGH", Blocking: true, Description: "the CSV export writes headers twice", Suggestion: "guard the header write with the firstRow flag in export.go:88"},
+				{Domain: "testing", Severity: "CRITICAL", Description: "the CSV export writes headers twice", Suggestion: "guard the header write with the firstRow flag in export.go:88"},
 			},
 		},
 	}
 	planned := []codexContinueExternalDispatch{{Stage: "review", Caste: "watcher", Name: "Sentinel-2"}}
 	report := externalContinueReviewReport(4, steps, now, false, colony.VerificationDepthStandard, planned)
 	if report.Passed {
-		t.Fatalf("a completed review with a typed blocking finding passed — structured findings are still decorative")
+		t.Fatalf("a completed review with a Critical finding passed — structured findings are still decorative")
 	}
 	found := false
 	for _, blocker := range report.BlockingIssues {

@@ -767,7 +767,7 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 		if summary == "" && len(blockers) > 0 {
 			summary = strings.Join(blockers, "; ")
 		}
-		flow = append(flow, codexContinueWorkerFlowStep{
+		step := codexContinueWorkerFlowStep{
 			Stage:           dispatch.Stage,
 			Caste:           dispatch.Caste,
 			Name:            dispatch.Name,
@@ -782,9 +782,126 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 			WeakSpots:       uniqueSortedStrings(result.WeakSpots),
 			EdgeCases:       uniqueSortedStrings(result.EdgeCases),
 			ReusableLessons: uniqueSortedStrings(result.ReusableLessons),
-		})
+		}
+		// artifacts.review is authoritative when present. Legacy top-level
+		// findings remain compatible only for older workers that did not emit
+		// the artifact at all.
+		step = normalizeContinueReviewEvidence(step, result.Artifacts)
+		flow = append(flow, step)
 	}
 	return flow, nil
+}
+
+type codexContinueReviewArtifact struct {
+	OverallScore *int                 `json:"overall_score,omitempty"`
+	Findings     []codexReviewFinding `json:"findings,omitempty"`
+	Issues       []codexReviewFinding `json:"issues,omitempty"`
+}
+
+// normalizeContinueReviewEvidence applies the same artifact contract to an
+// in-process WorkerResult and a wrapper completion. An explicit review
+// artifact is authoritative: prose and legacy top-level fields cannot
+// override it, and malformed values become evidence errors rather than a
+// fabricated zero score.
+func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts map[string]json.RawMessage) codexContinueWorkerFlowStep {
+	raw, explicit := artifacts["review"]
+	if !explicit {
+		return step
+	}
+
+	step.Findings = nil
+	step.OverallScore = nil
+	step.EvidenceErrors = nil
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" || !strings.HasPrefix(trimmed, "{") {
+		step.EvidenceErrors = []string{fmt.Sprintf("%s artifacts.review must be a JSON object", step.Name)}
+		return step
+	}
+
+	var artifact codexContinueReviewArtifact
+	if err := json.Unmarshal(raw, &artifact); err != nil {
+		step.EvidenceErrors = []string{fmt.Sprintf("%s artifacts.review is malformed: %v", step.Name, err)}
+		return step
+	}
+
+	if artifact.OverallScore != nil {
+		if *artifact.OverallScore < 0 || *artifact.OverallScore > 100 {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review overall_score must be between 0 and 100", step.Name))
+		} else if strings.EqualFold(strings.TrimSpace(step.Caste), "auditor") && continueWorkerFlowStatus(step.Status) == buildWorkerCompleted {
+			score := *artifact.OverallScore
+			step.OverallScore = &score
+		}
+	}
+
+	validFindings := make([]codexReviewFinding, 0, len(artifact.Findings)+len(artifact.Issues))
+	for index, finding := range append(append([]codexReviewFinding{}, artifact.Findings...), artifact.Issues...) {
+		severity := strings.ToUpper(strings.TrimSpace(finding.Severity))
+		if !validReviewArtifactSeverity(severity) {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review findings[%d].severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO", step.Name, index))
+			continue
+		}
+		finding.Severity = severity
+		validFindings = append(validFindings, finding)
+	}
+	step.Findings = mergeCodexReviewFindings(validFindings)
+	step.EvidenceErrors = uniqueSortedStrings(step.EvidenceErrors)
+	return step
+}
+
+func validReviewArtifactSeverity(severity string) bool {
+	switch severity {
+	case "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO":
+		return true
+	default:
+		return false
+	}
+}
+
+func continueReviewAutopilotSignals(workerFlow []codexContinueWorkerFlowStep) codexContinueAutopilotSignals {
+	signals := codexContinueAutopilotSignals{
+		Evaluations: []autopilotTriggerEvaluation{
+			continueAutopilotTriggerEvaluation(autopilotTriggerAuditorScoreBelowFloor, false, nil),
+			continueAutopilotTriggerEvaluation(autopilotTriggerCriticalReviewFinding, false, nil),
+		},
+	}
+	var scoreWorker string
+	criticalFindings := []codexReviewFinding{}
+	for _, step := range workerFlow {
+		signals.Findings = append(signals.Findings, step.Findings...)
+		signals.EvidenceErrors = append(signals.EvidenceErrors, step.EvidenceErrors...)
+		if step.OverallScore != nil && (signals.AuditorScore == nil || *step.OverallScore < *signals.AuditorScore) {
+			score := *step.OverallScore
+			signals.AuditorScore = &score
+			scoreWorker = step.Name
+		}
+		for _, finding := range step.Findings {
+			if strings.EqualFold(strings.TrimSpace(finding.Severity), "CRITICAL") {
+				criticalFindings = append(criticalFindings, finding)
+			}
+		}
+	}
+	signals.Findings = mergeCodexReviewFindings(signals.Findings)
+	signals.EvidenceErrors = uniqueSortedStrings(signals.EvidenceErrors)
+	if signals.AuditorScore != nil {
+		signals.Evaluations[0] = continueAutopilotTriggerEvaluation(
+			autopilotTriggerAuditorScoreBelowFloor,
+			*signals.AuditorScore < 60,
+			map[string]interface{}{"worker": scoreWorker, "overall_score": *signals.AuditorScore, "floor": 60},
+		)
+	}
+	if len(criticalFindings) > 0 {
+		signals.Evaluations[1] = continueAutopilotTriggerEvaluation(
+			autopilotTriggerCriticalReviewFinding,
+			true,
+			map[string]interface{}{"count": len(criticalFindings), "findings": criticalFindings},
+		)
+	}
+	return signals
+}
+
+func continueAutopilotTriggerEvaluation(code autopilotTriggerCode, active bool, evidence map[string]interface{}) autopilotTriggerEvaluation {
+	spec, _ := autopilotTriggerSpecByCode(code)
+	return autopilotTriggerEvaluation{Spec: spec, Active: active, Evidence: evidence}
 }
 
 func mergeCodexReviewFindings(groups ...[]codexReviewFinding) []codexReviewFinding {
@@ -937,7 +1054,7 @@ func appendReviewFindingsGateResult(phaseID int, workerFlow []codexContinueWorke
 	fixHint := ""
 	for _, step := range workerFlow {
 		for _, finding := range step.Findings {
-			if !finding.Blocking && !strings.EqualFold(finding.Severity, "CRITICAL") {
+			if !strings.EqualFold(finding.Severity, "CRITICAL") {
 				continue
 			}
 			desc := strings.TrimSpace(finding.Description)
@@ -996,14 +1113,11 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 		}
 		report.Workers = append(report.Workers, step)
 		if isSuccessfulExternalBuildStatus(status) {
-			// Typed blocking: a completed review whose STRUCTURED findings
-			// carry blocking (or CRITICAL severity, treated as implicitly
-			// blocking) still stops the line — previously only raw blocker
-			// strings fed this decision and structured findings were
-			// decorative. Every typed block carries its way forward in the
-			// same breath: the reviewer's fix, or the Fixer.
+			// Severity is authoritative. Only CRITICAL structured findings
+			// stop the line; the legacy worker-supplied blocking bit remains
+			// reportable metadata and cannot promote High or lower evidence.
 			for _, finding := range step.Findings {
-				if !finding.Blocking && !strings.EqualFold(finding.Severity, "CRITICAL") {
+				if !strings.EqualFold(finding.Severity, "CRITICAL") {
 					continue
 				}
 				desc := strings.TrimSpace(finding.Description)
@@ -1217,6 +1331,7 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 		"gate_report":          displayDataPath(gateReportRel),
 		"continue_report":      displayDataPath(continueReportRel),
 		"worker_flow":          workerFlow,
+		"autopilot_signals":    continueReviewAutopilotSignals(workerFlow),
 		"operational_issues":   assessment.OperationalIssues,
 		"recovery":             assessment.Recovery,
 		"reconciled_tasks":     assessment.ReconciledTasks,
@@ -1364,6 +1479,7 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 		"continue_report":      displayDataPath(continueReportRel),
 		"closed_workers":       closedWorkers,
 		"worker_flow":          fullWorkerFlow,
+		"autopilot_signals":    continueReviewAutopilotSignals(fullWorkerFlow),
 		"operational_issues":   assessment.OperationalIssues,
 		"recovery":             assessment.Recovery,
 		"reconciled_tasks":     assessment.ReconciledTasks,

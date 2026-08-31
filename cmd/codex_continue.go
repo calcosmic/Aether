@@ -560,6 +560,8 @@ type codexContinueWorkerFlowStep struct {
 	DurationReported bool                 `json:"duration_reported,omitempty"`
 	Report           string               `json:"report,omitempty"`
 	Findings         []codexReviewFinding `json:"findings,omitempty"`
+	OverallScore     *int                 `json:"overall_score,omitempty"`
+	EvidenceErrors   []string             `json:"evidence_errors,omitempty"`
 	Recommendations  []string             `json:"recommendations,omitempty"`
 	WeakSpots        []string             `json:"weak_spots,omitempty"`
 	EdgeCases        []string             `json:"edge_cases_discovered,omitempty"`
@@ -601,6 +603,16 @@ type codexContinueReviewReport struct {
 	Workers        []codexContinueWorkerFlowStep `json:"workers"`
 	Passed         bool                          `json:"passed"`
 	BlockingIssues []string                      `json:"blocking_issues,omitempty"`
+}
+
+// codexContinueAutopilotSignals is the current-result projection consumed by
+// overnight orchestration. It carries typed evidence; callers never recreate
+// a pause by scraping reviewer prose.
+type codexContinueAutopilotSignals struct {
+	Evaluations    []autopilotTriggerEvaluation `json:"evaluations"`
+	AuditorScore   *int                         `json:"auditor_score,omitempty"`
+	Findings       []codexReviewFinding         `json:"findings,omitempty"`
+	EvidenceErrors []string                     `json:"evidence_errors,omitempty"`
 }
 
 var continueContextUpdater = updateCodexContinueContext
@@ -929,6 +941,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"gate_report":         displayDataPath(gateReportRel),
 			"continue_report":     displayDataPath(continueReportRel),
 			"worker_flow":         workerFlow,
+			"autopilot_signals":   continueReviewAutopilotSignals(workerFlow),
 			"operational_issues":  assessment.OperationalIssues,
 			"recovery":            assessment.Recovery,
 			"reconciled_tasks":    assessment.ReconciledTasks,
@@ -955,6 +968,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
 	if !review.Passed {
+		// Critical findings retain the established Critics Bring Solutions
+		// bridge on the in-process lane as well as continue-finalize.
+		appendReviewFindingsGateResult(phase.ID, review.Workers, now)
 		summary := "Continue blocked because the review wave did not clear"
 		if len(review.BlockingIssues) > 0 {
 			summary = review.BlockingIssues[0]
@@ -1015,6 +1031,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"review_report":       displayDataPath(reviewReportRel),
 			"continue_report":     displayDataPath(continueReportRel),
 			"worker_flow":         workerFlow,
+			"autopilot_signals":   continueReviewAutopilotSignals(workerFlow),
 			"operational_issues":  append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
 			"recovery":            assessment.Recovery,
 			"reconciled_tasks":    assessment.ReconciledTasks,
@@ -1185,6 +1202,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		"continue_report":     displayDataPath(continueReportRel),
 		"closed_workers":      closedWorkers,
 		"worker_flow":         workerFlow,
+		"autopilot_signals":   continueReviewAutopilotSignals(workerFlow),
 		"operational_issues":  assessment.OperationalIssues,
 		"recovery":            assessment.Recovery,
 		"reconciled_tasks":    assessment.ReconciledTasks,
@@ -1634,6 +1652,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				// What this reviewer's own tool reported it cost, carried from
 				// the dispatch boundary so the direct check can file it.
 				step.Usage = result.WorkerResult.Usage
+				step = normalizeContinueReviewEvidence(step, result.WorkerResult.Artifacts)
 			}
 			if step.Summary == "" && result.Error != nil {
 				step.Summary = codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())
@@ -1655,6 +1674,24 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 			}
 		}
 		flow = append(flow, step)
+	}
+	for _, step := range flow {
+		for _, finding := range step.Findings {
+			if !strings.EqualFold(strings.TrimSpace(finding.Severity), "CRITICAL") {
+				continue
+			}
+			description := strings.TrimSpace(finding.Description)
+			if description == "" {
+				description = strings.TrimSpace(finding.Title)
+			}
+			if description != "" {
+				if suggestion := strings.TrimSpace(finding.Suggestion); suggestion != "" {
+					blockers = append(blockers, fmt.Sprintf("%s critical finding: %s (fix: %s)", step.Name, description, suggestion))
+				} else {
+					blockers = append(blockers, fmt.Sprintf("%s critical finding: %s (next step: aether unblock --dispatch — dispatch the Fixer)", step.Name, description))
+				}
+			}
+		}
 	}
 
 	report.Workers = flow
@@ -1739,7 +1776,7 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 		// These two castes have no Bash tool by design — never instruct them
 		// to run a CLI command. They return findings in result JSON and the
 		// runtime persists to the ledger (persistReviewFindingsToLedgers).
-		b.WriteString("This is a review task. Return your findings in this result's findings array — the runtime records them in the domain review ledger for you. Do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
+		b.WriteString("This is a review task. Return structured evidence in `artifacts.review` as a JSON object with a findings array; each finding severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO. Auditors must also return integer `overall_score` from 0 through 100. The artifact is authoritative over prose and legacy top-level findings. The runtime records findings in the domain review ledger for you. Do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
 	} else {
 		b.WriteString("This is a read-only review. Do not modify repo files. Return status `blocked` if advancement is unsafe.\n\n")
 	}
