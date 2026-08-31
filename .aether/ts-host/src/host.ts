@@ -507,6 +507,7 @@ function emitSkillSummary(dispatches: CeremonyDispatchLike[]): void {
 async function preflightHostWorkerDispatch(
   bridge: GoBridgeOptions,
   context: string,
+  phase = 0,
   fallbackDiagnostic?: string
 ): Promise<void> {
   // D-06: a skipped preflight must never be silent, on either the
@@ -550,7 +551,7 @@ async function preflightHostWorkerDispatch(
     }
     return;
   }
-  await preflightGoWorkerProvider(bridge, context);
+  await preflightGoWorkerProvider(bridge, context, phase);
 }
 
 // ---------------------------------------------------------------------------
@@ -1089,6 +1090,7 @@ async function runDispatchedBuildCommand(
     await preflightHostWorkerDispatch(
       bridge,
       `Build phase ${phase}`,
+      buildManifest.phase,
       diagnostic ? `No platform workers available. ${diagnostic}` : undefined
     );
   }
@@ -1266,7 +1268,7 @@ async function runDispatchedPlanCommand(
 
   // Step 2: Ask Go to select and preflight the provider (unless simulating)
   if (!parsed.simulate) {
-    await preflightHostWorkerDispatch(bridge, "Plan");
+    await preflightHostWorkerDispatch(bridge, "Plan", 0);
   }
 
   // Step 3: Render spawn-plan and wave-start ceremony
@@ -1373,7 +1375,7 @@ async function runDispatchedContinueCommand(
 
   // Step 2: Ask Go to select and preflight the provider (unless simulating)
   if (!parsed.simulate) {
-    await preflightHostWorkerDispatch(bridge, "Continue");
+    await preflightHostWorkerDispatch(bridge, "Continue", continueManifest.phase);
   }
 
   // Step 3: Render spawn-plan and wave-start ceremony

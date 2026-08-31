@@ -502,12 +502,13 @@ export function resolvePreflightAdapterBudgetMs(): number {
 /** Ask the Go-owned adapter layer to select and preflight the worker provider. */
 export async function preflightGoWorkerProvider(
   opts: GoBridgeOptions,
-  context: string
+  context: string,
+  phase = 0
 ): Promise<GoWorkerAdapterResponse> {
   try {
     const response = await callGoJSONAsync<GoWorkerAdapterResponse>(
       opts,
-      ["internal-worker-adapter", "--preflight"],
+      ["internal-worker-adapter", "--preflight", "--phase", String(phase)],
       resolvePreflightAdapterBudgetMs()
     );
     if (response.preflight?.notice && response.preflight.notice.trim()) {
