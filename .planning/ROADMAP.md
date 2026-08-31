@@ -444,7 +444,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 198.3-08-PLAN.md — remove the superseded autopilot command surface and shrink generated command fixtures
+- [x] 198.3-08-PLAN.md — remove the superseded autopilot command surface and shrink generated command fixtures
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
