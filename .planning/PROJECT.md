@@ -36,7 +36,7 @@ That means:
 
 - **v1.26 Intelligent Orchestration — SHIPPED 2026-08-22** (override close: three items carried into v1.27 — the one-line cost summary, the one live benchmark run, and the full showdown)
 - **Product version: v1.0.63** (binary and hub agree; published 2026-08-21)
-- **v1.27 in progress — Phases 193 and 194 complete**: the program's free checks are the unskippable safety floor, while the Queen now sends only the Builder by default and forces a reviewer only for one of five named risks. Phase 194 completed 9/9 plans and 9/9 UAT checks on 2026-08-26; TEAM-01..05 are satisfied. Brief in `.planning/research/v1.27-milestone-brief.md`; governing rulings D11/D12 in `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`
+- **v1.27 in progress — Phases 193 through 198.2 complete**: the program's free checks are the safety floor, the Queen sends only the workers the job needs, related tasks become coherent jobs, costs and next actions are visible, and the learning system now both records memory and delivers it to every relevant helper. Phase 198.2 completed 8/8 plans with all 7 criteria backed by passing automated tests; one real-world WIRE-06 UAT remains acknowledged verification debt. Brief in `.planning/research/v1.27-milestone-brief.md`; governing rulings D11/D12 in `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
 - Phase 194's end-to-end proof reduced the measured one-task bug fix from 8 workers to exactly 1 Builder plus the program's free checks on both the proposed and automatic paths; an explicit heavy request still produces 4 workers, proving the review pipeline remains live. The broader CSV-export comparison remains for Phase 199.
 - Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
@@ -271,6 +271,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - Free checks are the floor: one `runDeterministicFloor` body for both continue lanes decides advancement; no flag, depth or proposal can skip a check; build-side reviewer only on an explicit Queen ask (Watcher verified once); reconciliation and program-re-run builder evidence count as proof; unprovable criteria wait for the owner; verification scoped per phase and full at the end; exactly one bounded automatic fix attempt (FLOOR-01..04) -- v1.27 (Phase 193)
 - The Queen decides the team: ordinary work gets one Builder, every worker carries a readable per-worker reason, five named risks can force one explained reviewer at continue, owner depth/team controls remain effective, and no caste is dispatched at both build and continue unless explicitly requested (TEAM-01..05) -- v1.27 (Phase 194)
 - The learning loop is fed at the source: build and check worker outcomes become failure records and observations through one guarded boundary on both lanes (quick and swarm too); instinct use is a recorded fact so QUEEN.md promotion can actually happen; finished checks, answered questions and failure streaks leave notes; expiring notes reach eternal memory; strong instincts reach the hive at every check under the existing switch; the memory drill-down shows real content; every CLAUDE.md learning claim names a test (FEED-01..06) -- v1.27 (Phase 198.1)
+- Memory reaches every relevant helper: plan and colonize delegate manifests carry the runtime-built memory capsule; Oracle research files and registers itself; the greeting shows preferences, strongest habits and the last helper note; dead capsule sections are removed under a writer invariant; survey content and the previous phase's outcome reach later briefs within named budgets (WIRE-01..07) -- v1.27 (Phase 198.2; one real-world UAT carried as acknowledged debt)
 
 ### Active
 
@@ -319,13 +320,18 @@ Long-lived items not tied to a milestone:
 | Worker-authored text is sanitised before every memory store because midden entries are replayed into later briefs; two writers missed it and were fixed at review (198.1, CR-02, 2026-08-30) | `TestCheckAndQuickFailureTextIsSanitisedBeforeMemory` | Good |
 | Instinct use is counted only when the text was genuinely in a worker's capsule on a passing phase; QUEEN.md promotion gated on recorded use (198.1-03, 2026-08-30) | `TestWorkerLessonBecomesQueenFileWisdom`, `TestQueenPromotionNeverHappensWithoutRecordedUse` | Good |
 | Hive promotion at every check, same policy switch and confidence gate as seal; `--no-learn` scope documented as legacy capture only (198.1-05, 2026-08-30) | `TestStrongInstinctReachesTheSharedStoreAtCheck`, `TestHivePromotionAtCheckHonoursThePolicySwitch` | Good |
+| The runtime assembles one memory capsule; delegate wrappers only pass it through, and plan/colonize wrapper triplets remain byte-identical (198.2-01, 2026-08-30) | Prevents the real Claude/OpenCode lane from silently receiving less context than the in-process lane | Good |
+| Oracle research uses one shared finish path to file, register and promote findings with origin labels, including useful partial runs (198.2-02, 2026-08-30) | Paid-for research reaches later helpers without follow-up commands while empty runs write nothing | Good |
+| Memory-pack parts without live writers are removed; an AST-driven writer invariant and zero-floor exception ratchet prevent new empty sections (198.2-04, 2026-08-30) | Prevents decorative headings that can never carry content | Good |
+| Survey-map content and previous-phase outcomes use two separate named brief budgets; neither adds a worker or owner check-in (198.2-06/07, 2026-08-30) | More grounding reaches helpers without crowding out the task or making small jobs heavier | Good |
+| Owner chose to advance from Phase 198.2 while its real-world WIRE-06 confirmation remains untested (2026-08-31) | Carry as verification debt; do not treat it as passed or as a known defect; revisit with `$gsd-verify-work 198.2` | Pending evidence |
 
 ## Context
 
 Shipped v1.26 on 2026-08-22: 571 commits, 1,223 files changed, +171,000 / −39,221 lines over 15 days.
 Tech stack: Go 1.24 runtime (`cmd/`, `pkg/`), thin markdown wrappers for Claude Code and OpenCode, runtime-native Codex lane, a kept TypeScript host for autopilot dispatch. 5,000+ Go tests; full suite with race detection is the release gate.
 Owner feedback themes (2026-08-21/22): builds feel heavy for small jobs; the next step after a command is often unclear; projects get stuck with an expensive way out; the display feels thin compared with v5.4.0.
-Known debt: Phase 172.1 (CI gate environment), Phase 173's one pending human check, the TS-host probe-timeout twin, and the acknowledged deferred items in STATE.md. Closed by Phase 194: `.planning/WINDOWS.md` #1 — Probe/Auditor/Gatekeeper no longer double-dispatch at build and continue — and the small-job pipeline now proves one Builder plus checks. The owner's request to let one-worker builds skip the check-in pause remains a pending Phase 195 discussion item.
+Known debt: Phase 172.1 (CI gate environment), Phase 173's one pending human check, the TS-host probe-timeout twin, Phase 198.2's carried real-world memory-pack UAT, and the acknowledged deferred items in STATE.md. Closed by Phase 194: `.planning/WINDOWS.md` #1 — Probe/Auditor/Gatekeeper no longer double-dispatch at build and continue — and the small-job pipeline now proves one Builder plus checks. Closed by Phase 195: a decision-free one-worker build now takes the visible fast path while genuine owner decisions and explicit `--checkin` still pause.
 
 ## Explicit Deferrals
 
@@ -338,7 +344,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Phases 193 and 194 are complete and verified. Next: `$gsd-discuss-phase 195` (Coherent Jobs), then `$gsd-plan-phase 195` — decide how related tasks become one dependency-safe job and revisit the pending one-worker check-in-pause request.
+Phase 198.2 is complete with one acknowledged real-world UAT carried forward. Next: `$gsd-discuss-phase 198.3` (Overnight Stamina), then `$gsd-plan-phase 198.3` — decide exactly which unattended-run conditions queue for later review and which genuinely stop the run.
 
 ## Evolution
 
@@ -412,4 +418,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-08-30 — Phase 198.1 (feed the memory) complete: verification 6/6, FEED-01..06 done, review CR-01/CR-02 fixed*
+*Last updated: 2026-08-31 after Phase 198.2 — 8/8 plans complete, WIRE-01..07 automated verification passed, one real-world UAT carried as acknowledged debt*

@@ -2,52 +2,51 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-current_phase: 198.2
-current_phase_name: Memory Reaches Every Helper
-status: verifying
-stopped_at: Phase 198.2 owner UAT paused pending real-world Aether use
-last_updated: "2026-08-31T11:37:27Z"
+current_phase: 198.3
+current_phase_name: Overnight Stamina
+status: ready_to_plan
+stopped_at: Phase 198.2 complete (8/8) — ready to discuss Phase 198.3
+last_updated: 2026-08-31T11:43:46.272Z
 last_activity: 2026-08-31
-last_activity_desc: Phase 198.2 owner UAT recorded as blocked until the owner can test Aether in real use
+last_activity_desc: Phase 198.2 completed (8/8); one real-world UAT carried as debt; Phase 198.3 ready to discuss
 state_head: 5cbfd31c5c306389a362789441f67879cb20533d
 progress:
   total_phases: 11
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 62
-  completed_plans: 54
-  percent: 64
+  completed_plans: 62
+  percent: 73
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-26)
+See: .planning/PROJECT.md (updated 2026-08-31)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 198.2 — Memory Reaches Every Helper
+**Current focus:** Phase 198.3 — overnight stamina
 **Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-**Progress:** [██████░░░░] 64%
+**Progress:** [███████░░░] 73%
 
-Phase: 198.2 (Memory Reaches Every Helper) — AWAITING HUMAN VERIFICATION
-Plan: 8 of 8 complete
-Status: All 8 plans executed, review fixed, verifier 7/7 — one item awaits owner UAT (/gsd-verify-work 198.2)
+Phase: 198.3 (Overnight Stamina)
+Plan: Not started
+Status: Ready to discuss, then plan
 
-*(`phase.complete` advanced this to backlog entry 172.1 again — the next unchecked
-roadmap box — rather than the real next v1.27 phase. Corrected by hand, as after
-every v1.27 phase transition. 172.1 stays in the backlog and blocks nothing.)*
-Last activity: 2026-08-30 — Phase 198.2 executed (8/8 plans, 4 waves), code review CR-01+WR-01..03 fixed, verification 7/7 with one human item pending
+Phase 198.2's real-world WIRE-06 UAT remains acknowledged verification debt and
+can be revisited with `$gsd-verify-work 198.2`; it does not block Phase 198.3.
+Last activity: 2026-08-31 — Phase 198.2 completed (8/8 plans); automated verification 7/7; owner chose to carry one real-world UAT item
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 78 (v1.26, all Phase 172)
+- Total plans completed: 86 (v1.26, all Phase 172)
 - Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 
@@ -178,6 +177,11 @@ Last activity: 2026-08-30 — Phase 198.2 executed (8/8 plans, 4 waves), code re
 - [Phase 196]: Figures print exactly as recorded, unabbreviated, because shortening is arithmetic the read-only view is forbidden to do
 - [Phase 196]: aether spend reads the current phase through loadColonyState, not loadActiveColonyState, which can persist a legacy repair and would make an inspection command a writer
 - [Phase 196]: An estimated ledger row renders the dash sentinel exactly like an empty one — D-01 as amended forbids rendering an estimate at all
+- [Phase 198.2]: Plan and colonize delegate manifests carry one runtime-assembled memory capsule; wrappers only pass it through, and triplet parity prevents the installed Claude/OpenCode lane from silently receiving less context.
+- [Phase 198.2]: Oracle finish and stop paths share one file/register/promote body; useful partial research is labelled, strong findings carry origin labels, and empty runs write nothing.
+- [Phase 198.2]: `decisions` and `learnings` were removed from the memory pack because nothing wrote them; an AST-discovered writer invariant with a zero-floor exception ratchet prevents another permanently empty part.
+- [Phase 198.2]: The survey digest and previous-phase carry-forward use two separate named brief budgets, sanitise helper-authored text, and add no worker dispatch or owner check-in.
+- [Phase 198.2]: The owner chose to advance while the WIRE-06 real-world check remains untested; this is verification debt, not a pass and not evidence of a defect.
 
 ### Pending Todos
 
@@ -192,9 +196,14 @@ Last activity: 2026-08-30 — Phase 198.2 executed (8/8 plans, 4 waves), code re
 - [x] Phase 193: Free Checks Are the Floor — executed and verified 2026-08-22 (v1.27)
 - [x] Discuss + plan Phase 194: The Queen Decides the Team — planned 2026-08-23 (9 plans, 9 waves)
 - [x] Execute and verify Phase 194: The Queen Decides the Team — complete 2026-08-26 (9/9 plans, 9/9 UAT)
-- [~] Phase 195: Coherent Jobs — discussed and planned (10 plans); executing, 4/10 complete 2026-08-27 ← **current**
+- [x] Phase 195: Coherent Jobs — complete 2026-08-27 (10/10 plans; decision-free one-worker fast path shipped)
 - [x] Plan Phase 196: See What It Cost — planned 2026-08-27 (8 plans, 4 waves; checked twice, 2 blockers found and fixed)
 - [x] Plan and execute Phase 196: See What It Cost — complete 2026-08-28 (8/8 plans, 5/5 criteria, 3 review rounds + verification)
+- [x] Phase 197: One Answer to "What Next?" — complete 2026-08-29 (7/7 plans)
+- [x] Phase 198: Put the Thrown-Away Data Back on Screen — complete 2026-08-29 (9/9 plans)
+- [x] Phase 198.1: Feed the Memory — complete 2026-08-30 (6/6 plans)
+- [x] Phase 198.2: Memory Reaches Every Helper — complete 2026-08-31 (8/8 plans; one real-world UAT carried as debt)
+- [ ] Discuss and plan Phase 198.3: Overnight Stamina ← **current**
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
@@ -206,8 +215,9 @@ Last activity: 2026-08-30 — Phase 198.2 executed (8/8 plans, 4 waves), code re
 
 ### Blockers/Concerns
 
-- ℹ️ [Phase 194] The owner wants one-worker builds to skip the pre-build check-in pause; the current runtime still pauses, and the scope change is recorded in `.planning/todos/pending/2026-08-23-one-worker-build-skips-the-checkin-pause.md` for Phase 195 discussion.
-- ℹ️ [Phase 194 transition] `phase.complete` returned Phase 195 correctly but left the roadmap checkbox and STATE frontmatter stale; both were corrected inline during verification. Recheck this boundary after future phase transitions.
+- ℹ️ [Phase 198.2 verification] One real-world memory-pack UAT remains untested because the owner has not yet used the finished behavior on another project. It is acknowledged debt; review with `$gsd-audit-uat` and rerun with `$gsd-verify-work 198.2` after field use.
+- ℹ️ [Phase 198.2 transition] `phase.complete` returned Phase 198.3 correctly but again left the roadmap checkbox and STATE `current_phase` frontmatter stale; both were corrected inline. The transition mutation still needs a later runtime fix.
+- ℹ️ [Phase 198.2 side finding] This repo's local wisdom file contains backticks rejected by the current safety filter, so that local wisdom is withheld from helper prompts. This predates Phase 198.2 and was not changed here.
 - ~~Roadmap is unapproved~~ — resolved 2026-08-14. This line was stale: it said not to start Phase 172 until sign-off, and 172, 173 and part of 174 were then executed anyway. Recorded because a gate that gets ignored without anyone noticing is the failure mode this project keeps rediscovering.
 - **Phases 176, 177 and 178 are cut, not deferred.** If a future session finds Phase 173's delegation guards bounding a capability nobody has, that is expected and accepted — Phase 177 was the grant, and it was cut deliberately. Do not "restore" it.
 - **Phase 173 and Phase 178 carry research flags from the research phase.** Platform nested-spawn behaviour is MEDIUM confidence and both vendors broke it within the last quarter (Claude Code strips the Agent tool from some subagent types; OpenCode has an open "subagents can infinitely recurse, no max depth" defect). The skill supply-chain threat surface is actively evolving. Re-verify vendor docs and open issues at planning time for both
@@ -265,6 +275,6 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 ## Session Continuity
 
-Last session: 2026-08-31T11:37:27Z
-Stopped at: Phase 198.2 owner UAT paused; owner cannot personally verify until testing Aether in real use
-Resume file: .planning/phases/198.2-memory-reaches-every-helper/198.2-UAT.md
+Last session: 2026-08-31T11:43:46Z
+Stopped at: Phase 198.2 complete with one acknowledged UAT debt; ready to discuss Phase 198.3
+Resume file: None
