@@ -2113,6 +2113,9 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	if err != nil {
 		return nil, nil, "", err
 	}
+	if err := preflightWorkerProvider(ctx, invoker, workerDispatches); err != nil {
+		return nil, nil, "", err
+	}
 	indexByName := make(map[string]int, len(dispatches))
 	dispatchByName := make(map[string]codex.WorkerDispatch, len(dispatches))
 	for i, dispatch := range dispatches {

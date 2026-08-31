@@ -769,8 +769,9 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			}
 
 			continueResult, updatedState, phase, _, _, final, err := runAutopilotContinue(root, codexContinueOptions{
-				WorkerTimeout: opts.WorkerTimeout,
-				ParentContext: ctx,
+				WorkerTimeout:            opts.WorkerTimeout,
+				ParentContext:            ctx,
+				AutopilotBlockerBaseline: &baseline,
 			})
 			if err != nil {
 				decision := autopilotRunDecisionForCode(classifyAutopilotRunError(ctx, err), opts.Headless, map[string]interface{}{"phase": state.CurrentPhase, "stage": "continue"})
@@ -823,7 +824,9 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			evidenceReplanDue := lessonAwareReplanDue(phasesCompleted, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan)
 			legacyReplanDue := legacyInteractiveReplanDue(state.Plan, phasesCompleted, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
 			if evidenceReplanDue || legacyReplanDue {
-				if opts.Headless {
+				runDecision := autopilotRunDecisionForCode(autopilotTriggerReplanDue, opts.Headless, map[string]interface{}{"phase": phase.ID, "lesson_count": len(lessons)})
+				switch runDecision.Disposition {
+				case autopilotDispositionQueueAndContinue:
 					decision, err := upsertAutopilotReplanDecision(state, phase.ID, lessons, autopilotNow())
 					if err != nil {
 						failed := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_persistence"})
@@ -839,9 +842,8 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 						"plan_revision_id": decision.PlanRevisionID,
 					})
 					emitVisualProgress(renderRunReplanQueued(decision))
-				} else {
+				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
 					emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval, len(lessons)))
-					runDecision := autopilotRunDecisionForCode(autopilotTriggerReplanDue, false, map[string]interface{}{"phase": phase.ID, "lesson_count": len(lessons)})
 					result := finish(state, runDecision, nil)
 					result["confirmed_lessons"] = lessons
 					result["lesson_count"] = len(lessons)

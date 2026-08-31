@@ -180,7 +180,9 @@ aether init "Build X"
 aether discuss
 aether plan
 aether assumptions-analyze
+aether run --dry-run
 aether run --max-phases 2
+aether status
 aether watch
 aether build 1
 aether continue
@@ -229,7 +231,7 @@ primary platforms.
 | **Signals** | Pheromone System | FOCUS, REDIRECT, FEEDBACK — guide colony attention |
 | **Memory** | Colony Wisdom | Learnings and instincts persist via QUEEN.md |
 | **Hive Brain** | Cross-colony | Domain-scoped wisdom sharing |
-| **Autopilot** | `/ant-run` | Build-verify-advance loop with smart pause on Claude Code and OpenCode |
+| **Autopilot** | `aether run` / `/ant-run` | Build-verify-advance loop with typed stops, morning queues, and normal endings |
 | **Skills** | 86 Skills | 55 colony + 31 domain knowledge modules for workers |
 | **Research** | Oracle + Scouts | Deep autonomous research before task decomposition |
 | **Quality Gates** | 6-phase verification before advancing |
@@ -473,27 +475,60 @@ aether context-capsule
 aether resume
 ```
 
-## 🚀 Autopilot Mode (Claude Code / OpenCode)
+## 🚀 Autopilot Mode
 
-`/ant-run` chains the build-verify-advance loop across multiple phases with intelligent pause conditions. Instead of running each command by hand, you engage autopilot and it handles the cycle automatically.
+`aether run` chains build, verification, and phase advancement. Claude Code and
+OpenCode expose the same flow as `/ant-run`.
 
-It streams its progress in your terminal as it works — an engage banner, live worker lines during each build, a phase-advancement block with a momentum ticker between phases, and a celebration when everything is done.
+For beginners: things only you can judge are put on a morning list; broken or
+unsafe work still stops. A normal boundary, such as your `--max-phases` limit
+or completing the colony, also ends the invocation without pretending that
+anything failed.
 
-It pauses — not crashes — when something needs attention: failed verification, unresolved blocker decisions, test-failure signals, failed quality/security gates, critical resilience findings, an uncommitted-changes marker, or the replan checkpoint (every 2 phases by default; `--continue` skips it). The pause prints its reason and the suggested next command. Fix the issue, run `/ant-run` again, and it resumes. (`aether run --dry-run` previews the plan and lists every pause trigger.)
+| Kind of event | Headless run | Interactive run |
+|---|---|---|
+| Owner judgement: visual check, hands-on runtime verification, or a lesson-backed replan suggestion | Saves one durable decision and continues | Pauses for the owner |
+| Genuine problem: deterministic checks still fail, Auditor score is below 60, a Critical finding appears, blocker count grows or gains escalation, state is not runnable, or the provider is unavailable | Stops | Stops |
+| Normal boundary: cancellation, worker timeout, `--max-phases`, or colony completion | Ends normally | Ends normally |
+
+Auditor score 60 passes. High findings stay visible in the morning report but
+do not stop by severity alone; Critical findings do. An ordinary blocker that
+already existed at a run stage boundary remains visible and unresolved, but it
+stops the run only if the count grows or new escalation evidence appears.
+Direct `aether continue` remains stricter and will not advance with any open
+blocker. Replan cadence is also not enough by itself: headless replanning needs
+at least one confirmed lesson created after the active plan revision.
 
 ```bash
-# Run all remaining phases automatically
-/ant-run
+# Preview phases and the exact trigger/disposition table without changing state
+aether run --dry-run
 
-# Run at most 2 phases then stop
-/ant-run --max-phases 2
+# Run all remaining phases without interactive prompts
+aether run --headless
 
-# Preview the plan without executing
-/ant-run --dry-run
-
-# Run without interactive prompts
-/ant-run --headless
+# Or put an explicit limit on this invocation
+aether run --headless --max-phases 2
 ```
+
+### Morning handoff
+
+`aether run` never seals automatically. When it finishes, review the frozen run
+report and the live decision list, answer each visual/runtime question using
+its exact question and phase, review any replan note, then seal:
+
+```bash
+aether status
+aether pending-decision-list --unresolved
+aether decision-answer --question '<exact question from the decision list>' --answer 'confirmed' --phase <phase>
+aether plan        # only when the morning list contains a replan suggestion
+aether seal
+```
+
+The answer command resolves that exact checkpoint in place. `aether seal`
+still refuses unresolved owner checkpoints or blockers, so queued morning work
+is never mistaken for approval. Status reads the stored last-run report rather
+than recalculating its elapsed time, measured/unreported token usage, findings,
+or blocker movement from newer data.
 
 <div align="center">
   <img src="assets/logo/logo.jpg" alt="✦" width="80" />
@@ -542,7 +577,7 @@ These commands set up, initialize, and drive the core colony workflow from first
 | `/ant-assumptions` | Surface current plan assumptions, write `assumptions.json`, and auto-emit `FOCUS` / `FEEDBACK` pheromones from the analysis. |
 | `/ant-build <phase>` | Execute a phase with parallel workers. Loads and runs 5 build playbooks sequentially (prep, context, wave, verify, complete). Self-organizing emergence. |
 | `/ant-continue` | Verify completed build, reconcile state, and advance to the next phase. Runs 4 continue playbooks (verify, gates, advance, finalize). Enforces quality gates. |
-| `/ant-run` | Autopilot mode -- chains build and continue across multiple phases automatically. Pauses on failures, blockers, or replan triggers. Flags: `--max-phases N`, `--replan-interval N`, `--continue`, `--dry-run`, `--headless`, `--verbose`. |
+| `/ant-run` | Autopilot mode -- chains build and continue. Headless visual/runtime/lesson-backed-replan work queues for morning review; genuine failures stop; limits and completion end normally. Flags: `--max-phases N`, `--replan-interval N`, `--continue`, `--dry-run`, `--headless`, `--verbose`. |
 | `/ant-profile` | Read or refresh the behavioral profile. `profile-update` consolidates observations and promotes top `[profiled]` directives into `QUEEN.md`. |
 
 ---
@@ -927,8 +962,15 @@ aether continue
 Or hand the next stretch to the native Codex autopilot:
 
 ```bash
+aether run --dry-run
 aether run --max-phases 2
+aether status
 ```
+
+In headless mode, visual or hands-on checks are saved for the owner instead of
+stopping healthy work. Use the exact morning `decision-answer` flow documented
+in [Autopilot Mode](#-autopilot-mode), then run `aether seal` yourself when the
+colony is complete and the queued work is resolved.
 
 <details><summary>Phase progression output (click to expand)</summary>
 
@@ -1054,9 +1096,10 @@ aether lay-eggs
 /ant-run
 ```
 
-Autopilot runs every remaining phase, pausing only when something needs your
-attention -- a test failure, a security concern, a blocker it cannot resolve.
-Fix the issue, run `/ant-run` again, and it resumes.
+Autopilot runs every remaining phase. In headless mode it queues visual,
+hands-on runtime, and lesson-backed replan work for morning review; failed
+verification, unsafe review evidence, a newly worse blocker state, or an
+unavailable provider still stops immediately. It never seals for you.
 
 Codex now supports both the explicit `aether build` -> `aether continue`
 loop and a native `aether run` autopilot path, plus `aether watch` for live
