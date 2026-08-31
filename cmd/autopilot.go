@@ -20,18 +20,23 @@ type autopilotPhaseStatus struct {
 }
 
 type autopilotState struct {
-	InitializedAt  string                 `json:"initialized_at"`
-	TotalPhases    int                    `json:"total_phases"`
-	CurrentPhase   int                    `json:"current_phase"`
-	Status         string                 `json:"status"` // running, paused, stopped, completed
-	Reason         string                 `json:"reason"`
-	Headless       bool                   `json:"headless"`
-	ReplanInterval int                    `json:"replan_interval"`
-	Phases         []autopilotPhaseStatus `json:"phases"`
-	LastUpdated    string                 `json:"last_updated"`
+	SchemaVersion  int                        `json:"schema_version,omitempty"`
+	InitializedAt  string                     `json:"initialized_at"`
+	TotalPhases    int                        `json:"total_phases"`
+	CurrentPhase   int                        `json:"current_phase"`
+	Status         string                     `json:"status"` // running, paused, stopped, completed
+	Reason         string                     `json:"reason"`
+	Headless       bool                       `json:"headless"`
+	ReplanInterval int                        `json:"replan_interval"`
+	Phases         []autopilotPhaseStatus     `json:"phases"`
+	LastUpdated    string                     `json:"last_updated"`
+	LastReport     *autopilotInvocationReport `json:"last_report,omitempty"`
 }
 
-const autopilotStatePath = "autopilot/state.json"
+const (
+	autopilotStatePath          = "autopilot/state.json"
+	autopilotStateSchemaVersion = 2
+)
 
 func normalizeAutopilotPhaseStatus(status string) string {
 	status = strings.ToLower(strings.TrimSpace(status))
@@ -118,6 +123,7 @@ var autopilotInitCmd = &cobra.Command{
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		state := autopilotState{
+			SchemaVersion:  autopilotStateSchemaVersion,
 			InitializedAt:  now,
 			TotalPhases:    phases,
 			CurrentPhase:   0,
@@ -257,6 +263,9 @@ var autopilotStatusCmd = &cobra.Command{
 		}
 		if state.Reason != "" {
 			result["reason"] = state.Reason
+		}
+		if state.LastReport != nil {
+			result["last_report"] = state.LastReport
 		}
 		outputOK(result)
 		return nil

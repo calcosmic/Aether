@@ -732,6 +732,9 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
 		result["build_attempt"] = buildAttemptSummary(attempt)
 	}
+	if report := loadAutopilotLastReport(s); report != nil {
+		result["last_report"] = report
+	}
 
 	// Reconciliation section (JSON mode)
 	recon := detectUnreconciledChanges(s, &state)
@@ -919,6 +922,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	notes := intValue(result["notes"])
 	fmt.Fprintf(&b, "Flags: %d blockers | %d issues | %d notes\n", blockers, issues, notes)
 	fmt.Fprintf(&b, "Existing blocker work: %d active (%d escalated)\n", blockers, escalatedBlockers)
+	if report := renderAutopilotReportFromResult(result); report != "" {
+		b.WriteString("\n")
+		b.WriteString(report)
+		b.WriteString("\n")
+	}
 
 	// Scope
 	fmt.Fprintf(&b, "Scope: %s\n", state.EffectiveScope())
