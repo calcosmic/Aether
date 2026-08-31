@@ -50,6 +50,9 @@ func TestSwarmTargetFingerprint(t *testing.T) {
 	if got := swarmTargetFingerprint(" ... !!! "); got != "" {
 		t.Fatalf("punctuation-only target fingerprint = %q, want empty", got)
 	}
+	if swarmTargetFingerprint("C++ crash") == swarmTargetFingerprint("C crash") {
+		t.Fatal("material language punctuation was stripped from C++ target")
+	}
 }
 
 func TestSwarmStrikeHistory(t *testing.T) {

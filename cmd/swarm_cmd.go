@@ -160,6 +160,13 @@ func runSwarmCompatibility(root, target string, watch, planOnly bool) (map[strin
 		}
 		return buildSwarmWatchResult(target, watch, false), nil
 	}
+	history, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		return nil, err
+	}
+	if history.StrikeCount >= 3 {
+		return swarmArchitecturalConcernResult(target, history), nil
+	}
 	if planOnly || codex.ShouldUseAgentDelegatePath() {
 		return runSwarmPlanOnly(root, target)
 	}
@@ -273,7 +280,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	swarmID := fmt.Sprintf("swarm-%d", startedAt.Unix())
+	swarmID := newSwarmRunID(startedAt)
 	if err := initializeSwarmRun(swarmID); err != nil {
 		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
 	}
@@ -321,7 +328,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	filesTouched, testsWritten := collectSwarmTouchedFiles(allRuns)
 	next := swarmNextCommand(state, status)
 
-	if err := saveSwarmResultRecord(store, swarmResultRecord{
+	if _, err := persistSwarmResultOutcome(store, swarmResultRecord{
 		SwarmID:        swarmID,
 		Target:         target,
 		Status:         status,
@@ -334,7 +341,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		Blockers:       blockers,
 		CompletedAt:    time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
-		return nil, fmt.Errorf("write swarm result: %w", err)
+		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
 	}
 
 	return map[string]interface{}{
@@ -399,7 +406,7 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 }
 
 func buildSwarmManifest(root, target, dispatchMode string, now time.Time) swarmManifest {
-	swarmID := fmt.Sprintf("swarm-%d", now.Unix())
+	swarmID := newSwarmRunID(now)
 	dispatches := allSwarmPlans(root, target)
 	for i := range dispatches {
 		dispatches[i] = enrichSwarmPlanForManifest(root, target, swarmID, dispatches[i])
@@ -661,7 +668,7 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 
 	swarmID := strings.TrimSpace(manifest.SwarmID)
 	if swarmID == "" {
-		swarmID = fmt.Sprintf("swarm-%d", startedAt.Unix())
+		swarmID = newSwarmRunID(startedAt)
 	}
 	if err := initializeSwarmRun(swarmID); err != nil {
 		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
@@ -680,7 +687,7 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	filesTouched, testsWritten := collectSwarmTouchedFiles(runs)
 	next := swarmNextCommand(state, status)
 
-	if err := saveSwarmResultRecord(store, swarmResultRecord{
+	if _, err := persistSwarmResultOutcome(store, swarmResultRecord{
 		SwarmID:        swarmID,
 		Target:         manifest.Target,
 		Status:         status,
@@ -694,7 +701,7 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 		CompletedAt:    time.Now().UTC().Format(time.RFC3339),
 		DispatchMode:   "external-task",
 	}); err != nil {
-		return nil, fmt.Errorf("write swarm result: %w", err)
+		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
 	}
 
 	return map[string]interface{}{
@@ -1491,6 +1498,31 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 	}
 
 	dispatchMode := strings.TrimSpace(stringValue(result["dispatch_mode"]))
+	if strings.TrimSpace(stringValue(result["status"])) == "architectural_concern" || dispatchMode == "refused" {
+		b.WriteString("Swarm dispatch refused after repeated failure.\n")
+		if target != "" {
+			b.WriteString("Target: " + target + "\n")
+		}
+		b.WriteString(fmt.Sprintf("Consecutive failed or blocked attempts: %d\n", intValue(result["strike_count"])))
+		if evidenceIDs := stringSliceValue(result["evidence_ids"]); len(evidenceIDs) > 0 {
+			b.WriteString("Evidence\n")
+			for _, id := range evidenceIDs {
+				b.WriteString("  - " + id + "\n")
+			}
+		}
+		if recommendation := strings.TrimSpace(stringValue(result["recommendation"])); recommendation != "" {
+			b.WriteString("Recommendation: " + recommendation + "\n")
+		}
+		next := strings.TrimSpace(stringValue(result["next"]))
+		if next == "" {
+			next = swarmInsertPhaseCommand(target)
+		}
+		b.WriteString(renderNextUp(
+			fmt.Sprintf("Run `%s` before retrying this swarm target.", next),
+			"The three prior swarm result records remain the durable evidence for this refusal.",
+		))
+		return b.String()
+	}
 	requiresFinalizer, _ := result["requires_finalizer"].(bool)
 	if requiresFinalizer || dispatchMode == "plan-only" || dispatchMode == "agent-delegate" {
 		b.WriteString("Swarm dispatch manifest ready.\n")
