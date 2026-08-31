@@ -448,7 +448,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 198.3-09-PLAN.md — remove orphan recovery and Medic adapters and complete the eleven-command shrink
+- [x] 198.3-09-PLAN.md — remove orphan recovery and Medic adapters and complete the eleven-command shrink
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
