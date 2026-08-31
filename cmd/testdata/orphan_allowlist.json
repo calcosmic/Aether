@@ -310,11 +310,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether failure-classify",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether flag-auto-resolve",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
@@ -630,11 +625,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether medic-auto-spawn-check",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether midden-acknowledge",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
@@ -826,16 +816,6 @@
   },
   {
     "name": "aether reconcile",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether recovery-log-read",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether recovery-log-write",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },

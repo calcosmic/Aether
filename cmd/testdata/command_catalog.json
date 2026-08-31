@@ -2297,32 +2297,6 @@
     "stability_score": 91
   },
   {
-    "name": "failure-classify",
-    "short_description": "Show failure classification rules and rationale",
-    "flags": [
-      "json"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "json+visual",
-    "classification": "public_utility",
-    "since_version": "v1.14",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 55
-  },
-  {
     "name": "feedback",
     "short_description": "Add gentle corrective feedback",
     "flags": [],
@@ -4169,30 +4143,6 @@
     "stability_score": 91
   },
   {
-    "name": "medic-auto-spawn-check",
-    "short_description": "Check whether Medic should auto-spawn",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "memory-capture",
     "short_description": "Capture a memory observation (simplified learning-observe)",
     "flags": [
@@ -5920,64 +5870,6 @@
       "v5.4.0": false
     },
     "stability_score": 91
-  },
-  {
-    "name": "recovery-log-read",
-    "short_description": "Read the recovery log for a phase",
-    "flags": [
-      "phase"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.14",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 55
-  },
-  {
-    "name": "recovery-log-write",
-    "short_description": "Write a recovery log entry for a phase",
-    "flags": [
-      "action",
-      "attempt",
-      "error",
-      "outcome",
-      "phase",
-      "status",
-      "worker"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.14",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 55
   },
   {
     "name": "redirect",

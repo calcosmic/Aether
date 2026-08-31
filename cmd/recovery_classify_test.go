@@ -1,8 +1,10 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -459,93 +461,94 @@ func TestRecoveryLog_ReadNonexistent(t *testing.T) {
 	}
 }
 
-// --- CLI command tests ---
+func TestRecoveryHelpersAreInternalOnly(t *testing.T) {
+	retiredCommands := []string{"failure-classify", "recovery-log-read", "recovery-log-write"}
+	for _, entry := range buildAuditCatalog(rootCmd) {
+		for _, name := range retiredCommands {
+			if entry.Name == name {
+				t.Errorf("retired recovery command %q is still registered", name)
+			}
+		}
+	}
 
-// failureClassifyJSONEntry is a local type for deserializing failure-classify --json
-// output (the failureClassificationEntry is unexported but accessible in same package).
-type failureClassifyJSONEntry struct {
-	Classification string `json:"Classification"`
-	FailureType    string `json:"FailureType"`
-	Rationale      string `json:"Rationale"`
+	retiredSymbols := map[string]struct{}{
+		"failureClassifyCmd":         {},
+		"recoveryLogReadCmd":         {},
+		"recoveryLogWriteCmd":        {},
+		"renderFailureClassifyTable": {},
+	}
+	productionFiles, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("list command sources: %v", err)
+	}
+	for _, path := range productionFiles {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			identifier, ok := node.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if _, retired := retiredSymbols[identifier.Name]; retired {
+				t.Errorf("retired recovery adapter symbol %q remains in %s", identifier.Name, path)
+			}
+			return true
+		})
+	}
+
+	directCallers := map[string][]string{
+		"classifyWorkerFailure": {
+			"autopilot_report.go",
+			"recovery_orchestrator.go",
+		},
+		"recoveryLogReadPhase": {
+			"codex_build_finalize.go",
+			"codex_continue_finalize.go",
+			"queen_audit.go",
+			"queen_phase_summary.go",
+			"queen_wave_lifecycle.go",
+		},
+		"recoveryLogWritePhase": {
+			"codex_continue_finalize.go",
+			"queen_wave_lifecycle.go",
+		},
+		"upsertRecoveryLogEntryPhase": {
+			"autopilot_report.go",
+		},
+	}
+	for function, paths := range directCallers {
+		for _, path := range paths {
+			if !sourceCallsFunction(t, path, function) {
+				t.Errorf("%s must call retained helper %s directly", path, function)
+			}
+		}
+	}
 }
 
-// TestFailureClassifyCmd_JSONOutput verifies failure-classify --json outputs valid JSON
-// with classification data.
-func TestFailureClassifyCmd_JSONOutput(t *testing.T) {
-	gateCmdTestSetup(t)
-
-	var buf bytes.Buffer
-	rootCmd.SetArgs([]string{"failure-classify", "--json"})
-	stdout = &buf
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("command failed: %v", err)
+func sourceCallsFunction(t *testing.T, path string, function string) bool {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
 	}
-
-	output := buf.String()
-	// outputOK wraps in {"ok":true,"result":...}
-	var wrapper struct {
-		OK     bool                                `json:"ok"`
-		Result map[string]failureClassifyJSONEntry `json:"result"`
-	}
-	if err := json.Unmarshal([]byte(output), &wrapper); err != nil {
-		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
-	}
-	if !wrapper.OK {
-		t.Error("expected ok:true in output")
-	}
-	if _, ok := wrapper.Result["timeout"]; !ok {
-		t.Error("expected JSON to contain 'timeout' key")
-	}
-	if wrapper.Result["timeout"].Classification != string(Recoverable) {
-		t.Errorf("timeout Classification mismatch: got %q", wrapper.Result["timeout"].Classification)
-	}
-}
-
-// TestFailureClassifyCmd_TableOutput verifies failure-classify (default) outputs a
-// headed classification lines with nested rationale.
-func TestFailureClassifyCmd_TableOutput(t *testing.T) {
-	gateCmdTestSetup(t)
-
-	var buf bytes.Buffer
-	rootCmd.SetArgs([]string{"failure-classify"})
-	stdout = &buf
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("command failed: %v", err)
-	}
-
-	output := buf.String()
-	// Classic headed style: pattern line with nested rationale, no machine table.
-	if !strings.Contains(output, "🔧 timeout → recoverable (transient)") {
-		t.Errorf("expected headed classification line for timeout, got:\n%s", output)
-	}
-	if !strings.Contains(output, "└── Worker timed out") {
-		t.Errorf("expected nested rationale under the timeout line, got:\n%s", output)
-	}
-}
-
-// TestRecoveryLogReadCmd verifies recovery-log-read CLI command works for a phase
-// without an existing log file (returns empty entries).
-func TestRecoveryLogReadCmd(t *testing.T) {
-	gateCmdTestSetup(t)
-	s, _ := newTestStore(t)
-	saveStore := store
-	store = s
-	t.Cleanup(func() { store = saveStore })
-
-	var buf bytes.Buffer
-	rootCmd.SetArgs([]string{"recovery-log-read", "--phase", "999"})
-	stdout = &buf
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("command failed: %v", err)
-	}
-
-	output := buf.String()
-	if !strings.Contains(output, `"entries"`) {
-		t.Errorf("expected output to contain 'entries', got: %s", output)
-	}
-	if !strings.Contains(output, `"total":0`) {
-		t.Errorf("expected output to contain 'total:0', got: %s", output)
-	}
+	called := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		identifier, ok := call.Fun.(*ast.Ident)
+		if ok && identifier.Name == function {
+			called = true
+		}
+		return true
+	})
+	return called
 }
 
 // TestRecoveryClassifyUnreconciledChanges verifies the new stuck-state class

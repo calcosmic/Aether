@@ -2,8 +2,12 @@ package cmd
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -195,15 +199,65 @@ func TestHasCriticalHealthIssue_WarningsOnly(t *testing.T) {
 	}
 }
 
-func TestRenderMedicAutoSpawnVisual(t *testing.T) {
-	output := renderMedicAutoSpawnVisual("stale session", "Doc-42")
-	if output == "" {
-		t.Error("expected non-empty visual output")
+func TestMedicAutoSpawnEligibilityIsInternalOnly(t *testing.T) {
+	for _, entry := range buildAuditCatalog(rootCmd) {
+		if entry.Name == "medic-auto-spawn-check" {
+			t.Error("retired Medic eligibility command is still registered")
+		}
 	}
-	if !contains(output, "stale session") {
-		t.Error("expected reason in output")
+
+	file, err := parser.ParseFile(token.NewFileSet(), "medic_auto_spawn.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse medic_auto_spawn.go: %v", err)
 	}
-	if !contains(output, "Doc-42") {
-		t.Error("expected name in output")
+	retiredSymbols := map[string]struct{}{
+		"medicAutoSpawnCheckCmd":     {},
+		"renderMedicAutoSpawnVisual": {},
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		identifier, ok := node.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if _, retired := retiredSymbols[identifier.Name]; retired {
+			t.Errorf("retired Medic adapter symbol %q remains", identifier.Name)
+		}
+		return true
+	})
+
+	if !sourceCallsFunction(t, "autopilot_report.go", "shouldAutoSpawnMedic") {
+		t.Error("autopilot recovery must call retained Medic eligibility directly")
+	}
+
+	playbookPath := filepath.Join("..", ".aether", "docs", "command-playbooks", "continue-gates.md")
+	playbook, err := os.ReadFile(playbookPath)
+	if err != nil {
+		t.Fatalf("read continue gates playbook: %v", err)
+	}
+	sectionMarker := "### Step 1.14:"
+	sectionStart := strings.Index(string(playbook), sectionMarker)
+	if sectionStart == -1 {
+		t.Fatalf("continue gates playbook is missing %q", sectionMarker)
+	}
+	medicSection := string(playbook)[sectionStart:]
+	for _, forbidden := range []string{
+		"medic-auto-spawn-check",
+		`subagent_type="aether-medic"`,
+		"aether spawn-log",
+		"aether spawn-complete",
+		"Colony is healthy",
+	} {
+		if strings.Contains(medicSection, forbidden) {
+			t.Errorf("Medic advice section must not contain automatic dispatch/health claim %q", forbidden)
+		}
+	}
+	for _, required := range []string{
+		"aether medic --deep",
+		"no automatic Medic scan or worker dispatch",
+		`aether gate-results-write --name "medic" --passed=true`,
+	} {
+		if !strings.Contains(medicSection, required) {
+			t.Errorf("Medic advice section must contain %q", required)
+		}
 	}
 }
