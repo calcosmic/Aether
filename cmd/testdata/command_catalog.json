@@ -8136,7 +8136,7 @@
   },
   {
     "name": "swarm-cleanup",
-    "short_description": "Remove swarm data files",
+    "short_description": "Remove disposable swarm data while preserving result history",
     "flags": [
       "id"
     ],
