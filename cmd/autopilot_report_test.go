@@ -1,0 +1,382 @@
+package cmd
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
+)
+
+func reportTestState(status colony.State, current int) colony.ColonyState {
+	phases := []colony.Phase{
+		{ID: 1, Name: "First", Status: colony.PhasePending},
+		{ID: 2, Name: "Second", Status: colony.PhasePending},
+		{ID: 3, Name: "Third", Status: colony.PhasePending},
+	}
+	for i := range phases {
+		switch {
+		case status == colony.StateCOMPLETED || phases[i].ID < current:
+			phases[i].Status = colony.PhaseCompleted
+		case phases[i].ID == current && (status == colony.StateBUILT || status == colony.StateEXECUTING):
+			phases[i].Status = colony.PhaseInProgress
+		case phases[i].ID == current:
+			phases[i].Status = colony.PhaseReady
+		}
+	}
+	return colony.ColonyState{State: status, CurrentPhase: current, Plan: colony.Plan{Phases: phases}}
+}
+
+func TestAutopilotReportElapsedUsesInvocationWallClock(t *testing.T) {
+	saveGlobals(t)
+	store = nil
+	started := time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)
+	finished := started.Add(12 * time.Minute)
+	invocation := autopilotInvocation{
+		ID:        "run-wallclock",
+		StartedAt: started,
+		Phases: []autopilotPhaseReport{{
+			Phase: 1, PhaseName: "First", Outcome: "completed",
+		}},
+	}
+	report := buildAutopilotInvocationReport(
+		invocation,
+		reportTestState(colony.StateREADY, 2),
+		autopilotRunDecisionForCode(autopilotTriggerMaxPhasesReached, false, nil),
+		finished,
+		blockerSnapshot{},
+	)
+	if report.ElapsedSeconds != 12*60 {
+		t.Fatalf("elapsed = %d seconds, want 720 wall-clock seconds", report.ElapsedSeconds)
+	}
+	workerDurationSum := 4 * time.Minute
+	if time.Duration(report.ElapsedSeconds)*time.Second == workerDurationSum {
+		t.Fatal("report elapsed time was derived from the deliberately different worker-duration sum")
+	}
+	if report.StartedAt != started.Format(time.RFC3339Nano) || report.FinishedAt != finished.Format(time.RFC3339Nano) {
+		t.Fatalf("report timestamps = %q -> %q", report.StartedAt, report.FinishedAt)
+	}
+
+	// A later process starts a fresh invocation at its own start time. Time
+	// spent offline between commands must never leak into the new report.
+	restarted := finished.Add(8 * time.Hour)
+	second := buildAutopilotInvocationReport(
+		autopilotInvocation{ID: "run-after-offline-gap", StartedAt: restarted},
+		reportTestState(colony.StateREADY, 2),
+		autopilotRunDecisionForCode(autopilotTriggerCancelled, false, nil),
+		restarted,
+		blockerSnapshot{},
+	)
+	if second.ElapsedSeconds != 0 {
+		t.Fatalf("new invocation elapsed = %d, want 0", second.ElapsedSeconds)
+	}
+}
+
+func TestAutopilotReportRetainsHighFindingsQueuedDecisionsAndBlockers(t *testing.T) {
+	saveGlobals(t)
+	store = nil
+	started := time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)
+	queued := autopilotQueuedDecisionReport{ID: "decision-7", Type: autopilotCheckpointTypeRuntimeVerification, Phase: 2}
+	high := codexReviewFinding{Severity: "HIGH", Domain: "quality", Title: "Keep the evidence", File: "cmd/run.go", Line: 42}
+	before := blockerSnapshot{Count: 1, IDs: []string{"old"}}
+	after := blockerSnapshot{Count: 2, IDs: []string{"old", "urgent"}, EscalatedCount: 1, EscalatedIDs: []string{"urgent"}}
+
+	report := buildAutopilotInvocationReport(
+		autopilotInvocation{
+			ID:             "run-evidence",
+			StartedAt:      started,
+			BlockersBefore: before,
+			Phases: []autopilotPhaseReport{{
+				Phase: 2, PhaseName: "Second", Outcome: "stopped",
+				HighFindings:    []codexReviewFinding{high},
+				QueuedDecisions: []autopilotQueuedDecisionReport{queued},
+			}},
+		},
+		reportTestState(colony.StateBUILT, 2),
+		autopilotRunDecisionForCode(autopilotTriggerBlockerEscalated, false, nil),
+		started.Add(time.Minute),
+		after,
+	)
+
+	if !reflect.DeepEqual(report.BlockersBefore, before) || !reflect.DeepEqual(report.BlockersAfter, after) {
+		t.Fatalf("blocker movement was not retained: before=%+v after=%+v", report.BlockersBefore, report.BlockersAfter)
+	}
+	if len(report.QueuedDecisions) != 1 || report.QueuedDecisions[0] != queued {
+		t.Fatalf("queued decisions = %+v", report.QueuedDecisions)
+	}
+	if len(report.Phases) != 1 || !reflect.DeepEqual(report.Phases[0].HighFindings, []codexReviewFinding{high}) {
+		t.Fatalf("HIGH findings = %+v", report.Phases)
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	var roundTripped autopilotInvocationReport
+	if err := json.Unmarshal(encoded, &roundTripped); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	if !reflect.DeepEqual(roundTripped.QueuedDecisions, report.QueuedDecisions) || !reflect.DeepEqual(roundTripped.Phases[0].HighFindings, report.Phases[0].HighFindings) {
+		t.Fatalf("typed evidence changed across JSON round trip: %+v", roundTripped)
+	}
+}
+
+func TestRunReportTerminalCategoriesPersistVersionedRecord(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    colony.ColonyState
+		decision autopilotRunDecision
+		outcome  string
+	}{
+		{name: "successful completion", state: reportTestState(colony.StateCOMPLETED, 3), decision: autopilotRunDecisionForCode(autopilotTriggerColonyComplete, false, nil), outcome: "completed"},
+		{name: "genuine stop", state: reportTestState(colony.StateBUILT, 2), decision: autopilotRunDecisionForCode(autopilotTriggerDeterministicVerificationFailed, false, nil), outcome: "genuine_stop"},
+		{name: "normal stop", state: reportTestState(colony.StateREADY, 2), decision: autopilotRunDecisionForCode(autopilotTriggerCancelled, false, nil), outcome: "normal_stop"},
+		{name: "interactive pause", state: reportTestState(colony.StateBUILT, 2), decision: autopilotRunDecisionForCode(autopilotTriggerRuntimeVerificationNeeded, false, nil), outcome: "paused"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setupSpendTestStore(t)
+			started := time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)
+			originalNow := autopilotNow
+			autopilotNow = func() time.Time { return started.Add(time.Minute) }
+			t.Cleanup(func() { autopilotNow = originalNow })
+			invocation := autopilotInvocation{ID: "run-terminal", StartedAt: started, Phases: []autopilotPhaseReport{}}
+			result := finishAutopilotInvocation(&invocation, tc.state, runCompatibilityOptions{}, nil, 0, tc.decision, nil)
+
+			var persisted autopilotState
+			if err := store.LoadJSON(autopilotStatePath, &persisted); err != nil {
+				t.Fatalf("load persisted report: %v", err)
+			}
+			if persisted.SchemaVersion != autopilotStateSchemaVersion || persisted.LastReport == nil {
+				t.Fatalf("missing versioned last_report: %+v", persisted)
+			}
+			if persisted.LastReport.Outcome != tc.outcome || persisted.LastReport.SchemaVersion != autopilotReportSchemaVersion {
+				t.Fatalf("persisted outcome = %+v, want %q", persisted.LastReport, tc.outcome)
+			}
+			resultJSON, _ := json.Marshal(result["last_report"])
+			storedJSON, _ := json.Marshal(persisted.LastReport)
+			if string(resultJSON) != string(storedJSON) {
+				t.Fatalf("run result and stored report differ: result=%s stored=%s", resultJSON, storedJSON)
+			}
+		})
+	}
+}
+
+func TestRunReportStartsFreshInvocationIdentity(t *testing.T) {
+	saveGlobals(t)
+	store = nil
+	fixed := time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)
+	originalNow := autopilotNow
+	autopilotNow = func() time.Time { return fixed }
+	t.Cleanup(func() { autopilotNow = originalNow })
+
+	first := beginAutopilotInvocation(reportTestState(colony.StateREADY, 1))
+	second := beginAutopilotInvocation(reportTestState(colony.StateREADY, 1))
+	if first.ID == second.ID {
+		t.Fatalf("two real invocations reused ID %q", first.ID)
+	}
+	if !first.StartedAt.Equal(fixed) || !second.StartedAt.Equal(fixed) {
+		t.Fatalf("fresh starts = %s and %s, want %s", first.StartedAt, second.StartedAt, fixed)
+	}
+}
+
+func TestRunReportAllPostStartTerminalBranchesUseOneFinalizer(t *testing.T) {
+	source, err := os.ReadFile("compatibility_cmds.go")
+	if err != nil {
+		t.Fatalf("read compatibility source: %v", err)
+	}
+	body := string(source)
+	start := strings.Index(body, "func runCompatibilityAutopilot(")
+	end := strings.Index(body[start:], "\nfunc loadCompatibilityColonyState(")
+	if start < 0 || end < 0 {
+		t.Fatal("locate runCompatibilityAutopilot source body")
+	}
+	runBody := body[start : start+end]
+	postStart := runBody[strings.Index(runBody, "invocation := beginAutopilotInvocation"):]
+	if strings.Contains(postStart, "finishAutopilotRunDecision") {
+		t.Fatal("post-start terminal branch bypasses finishAutopilotInvocation")
+	}
+	if strings.Contains(postStart, "return nil, err") {
+		t.Fatal("post-start error return bypasses the report finalizer")
+	}
+	if strings.Count(postStart, "finishAutopilotInvocation(") != 1 {
+		t.Fatalf("run body has %d direct finalizer calls, want the one closure funnel", strings.Count(postStart, "finishAutopilotInvocation("))
+	}
+}
+
+func TestAutopilotReportNextMatchesSharedResolver(t *testing.T) {
+	tests := []struct {
+		name     string
+		state    colony.ColonyState
+		decision autopilotRunDecision
+	}{
+		{name: "completion", state: reportTestState(colony.StateCOMPLETED, 3), decision: autopilotRunDecisionForCode(autopilotTriggerColonyComplete, false, nil)},
+		{name: "genuine stop", state: reportTestState(colony.StateBUILT, 2), decision: autopilotRunDecisionForCode(autopilotTriggerDeterministicVerificationFailed, false, nil)},
+		{name: "interactive pause", state: reportTestState(colony.StateREADY, 2), decision: autopilotRunDecisionForCode(autopilotTriggerReplanDue, false, nil)},
+		{name: "exact phase resume", state: reportTestState(colony.StateREADY, 3), decision: autopilotRunDecision{}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			want := lifecycleNextActionForState(tc.state, "run", tc.decision.Next, "The autopilot stop named this exact recovery step.").Command
+			if got := resolveAutopilotReportNext(tc.state, tc.decision); got != want {
+				t.Fatalf("report next = %q, shared resolver = %q", got, want)
+			}
+		})
+	}
+}
+
+func TestAutopilotReportSpendUsesMeasuredLedgerOnly(t *testing.T) {
+	setupSpendTestStore(t)
+	seedSpendLedgerForTest(t, 1, spendWorkflowBuild,
+		measuredSpendRowForTest("Mason-1", "builder", 1_250),
+		spendRow{AgentName: "Keen-1", Caste: "watcher", Task: "check", Status: "completed"},
+		spendRow{AgentName: "Roam-1", Caste: "scout", Task: "look", Status: "completed", Usage: codex.WorkerUsage{TotalTokens: 900_000, Source: codex.UsageSourceEstimate}},
+	)
+
+	spend := snapshotAutopilotSpend([]autopilotPhaseReport{
+		{Phase: 1, PhaseName: "First"},
+		{Phase: 2, PhaseName: "Second"},
+	})
+	if spend.MeasuredTokens == nil || *spend.MeasuredTokens != 1_250 {
+		t.Fatalf("measured total = %v, want 1250", spend.MeasuredTokens)
+	}
+	if spend.MeasuredRows != 1 || spend.UnreportedRows != 2 {
+		t.Fatalf("row counts = measured %d, unreported %d", spend.MeasuredRows, spend.UnreportedRows)
+	}
+	if len(spend.Phases) != 2 || spend.Phases[1].MeasuredTokens != nil || spend.Phases[1].LedgerPresent {
+		t.Fatalf("missing phase must stay unreported: %+v", spend.Phases)
+	}
+
+	report := autopilotInvocationReport{SchemaVersion: autopilotReportSchemaVersion, Outcome: "normal_stop", StopReason: "max_phases_reached", Spend: spend, Next: "aether build 2"}
+	rendered := renderAutopilotInvocationReport(report)
+	if !strings.Contains(rendered, "—  not reported") {
+		t.Fatalf("rendered report does not expose unreported rows:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "900K") || strings.Contains(rendered, "900000") {
+		t.Fatalf("estimated usage leaked into measured report:\n%s", rendered)
+	}
+}
+
+func TestAutopilotReportRendererUsesRequiredOrderAndExactNext(t *testing.T) {
+	report := autopilotInvocationReport{
+		SchemaVersion: autopilotReportSchemaVersion,
+		InvocationID:  "run-order",
+		Outcome:       "genuine_stop",
+		StopReason:    "critical_review_finding",
+		QueuedDecisions: []autopilotQueuedDecisionReport{{
+			ID: "decision-1", Type: autopilotCheckpointTypeRuntimeVerification, Phase: 1,
+		}},
+		BlockersBefore: blockerSnapshot{Count: 1},
+		BlockersAfter:  blockerSnapshot{Count: 2, EscalatedCount: 1},
+		ElapsedSeconds: 720,
+		Spend:          autopilotSpendReport{UnreportedRows: 1},
+		Next:           "aether build 2",
+		Phases:         []autopilotPhaseReport{{Phase: 1, PhaseName: "First", Outcome: "stopped"}},
+	}
+	rendered := renderAutopilotInvocationReport(report)
+	wants := []string{"Outcome:", "Stop reason:", "Queued decisions", "Blocker movement", "Elapsed:", "What The Helpers Cost", "Next: aether build 2", "Phase outcomes"}
+	last := -1
+	for _, want := range wants {
+		at := strings.Index(rendered, want)
+		if at < 0 {
+			t.Fatalf("rendered report missing %q:\n%s", want, rendered)
+		}
+		if at <= last {
+			t.Fatalf("%q appeared out of order:\n%s", want, rendered)
+		}
+		last = at
+	}
+}
+
+func TestStatusLastReportRemainsStoredAfterClockAndLedgerMutation(t *testing.T) {
+	saveGlobals(t)
+	_, _ = seedRunFixture(t, 1)
+	finished := time.Date(2026, 8, 31, 10, 12, 0, 0, time.UTC)
+	measured := int64(1_250)
+	stored := autopilotInvocationReport{
+		SchemaVersion:  autopilotReportSchemaVersion,
+		InvocationID:   "run-stored",
+		StartedAt:      finished.Add(-12 * time.Minute).Format(time.RFC3339Nano),
+		FinishedAt:     finished.Format(time.RFC3339Nano),
+		ElapsedSeconds: 720,
+		Outcome:        "normal_stop",
+		StopReason:     string(autopilotTriggerMaxPhasesReached),
+		Spend:          autopilotSpendReport{MeasuredTokens: &measured, MeasuredRows: 1},
+		Next:           "aether build 1",
+	}
+	if err := store.SaveJSON(autopilotStatePath, autopilotState{LastReport: &stored}); err != nil {
+		t.Fatalf("seed report: %v", err)
+	}
+
+	state, err := loadCompatibilityColonyState()
+	if err != nil {
+		t.Fatalf("load colony: %v", err)
+	}
+	first := buildStatusResult(state, store)
+
+	// Mutate both inputs a recomputing status implementation would observe.
+	seedSpendLedgerForTest(t, 1, spendWorkflowBuild, measuredSpendRowForTest("Mason-1", "builder", 999_999))
+	originalNow := autopilotNow
+	autopilotNow = func() time.Time { return finished.Add(48 * time.Hour) }
+	t.Cleanup(func() { autopilotNow = originalNow })
+	second := buildStatusResult(state, store)
+
+	if !reflect.DeepEqual(first["last_report"], second["last_report"]) || !reflect.DeepEqual(second["last_report"], &stored) {
+		t.Fatalf("status recomputed persisted report:\nfirst=%+v\nsecond=%+v", first["last_report"], second["last_report"])
+	}
+	if got := renderAutopilotReportFromResult(second); got != renderAutopilotInvocationReport(stored) {
+		t.Fatalf("status did not use shared stored renderer:\n%s", got)
+	}
+}
+
+func TestRunDryRunPreservesLastReport(t *testing.T) {
+	saveGlobals(t)
+	_, root := seedRunFixture(t, 1)
+	stored := autopilotInvocationReport{SchemaVersion: autopilotReportSchemaVersion, InvocationID: "keep-me", Outcome: "completed", Next: "aether seal"}
+	if err := store.SaveJSON(autopilotStatePath, autopilotState{LastReport: &stored}); err != nil {
+		t.Fatalf("seed report: %v", err)
+	}
+	if _, err := runCompatibilityAutopilot(root, runCompatibilityOptions{DryRun: true, Context: context.Background()}); err != nil {
+		t.Fatalf("dry run: %v", err)
+	}
+	var after autopilotState
+	if err := store.LoadJSON(autopilotStatePath, &after); err != nil {
+		t.Fatalf("load report after dry run: %v", err)
+	}
+	if after.LastReport == nil || !reflect.DeepEqual(*after.LastReport, stored) {
+		t.Fatalf("dry run changed last report: %+v", after.LastReport)
+	}
+}
+
+func TestAutopilotStateWithoutLastReportStillLoads(t *testing.T) {
+	saveGlobals(t)
+	_, _ = seedRunFixture(t, 1)
+	legacy := map[string]interface{}{
+		"initialized_at": "2026-08-01T00:00:00Z",
+		"total_phases":   1,
+		"current_phase":  1,
+		"status":         "running",
+	}
+	if err := store.SaveJSON(autopilotStatePath, legacy); err != nil {
+		t.Fatalf("seed legacy state: %v", err)
+	}
+	var decoded autopilotState
+	if err := store.LoadJSON(autopilotStatePath, &decoded); err != nil {
+		t.Fatalf("load legacy state: %v", err)
+	}
+	if decoded.LastReport != nil {
+		t.Fatalf("legacy state manufactured report: %+v", decoded.LastReport)
+	}
+	state, err := loadCompatibilityColonyState()
+	if err != nil {
+		t.Fatalf("load legacy colony for status: %v", err)
+	}
+	if result := buildStatusResult(state, store); result["last_report"] != nil {
+		t.Fatalf("legacy status manufactured report: %+v", result["last_report"])
+	}
+}

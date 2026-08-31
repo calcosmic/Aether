@@ -602,7 +602,7 @@ func legacyRunStoppedReason(code autopilotTriggerCode) string {
 	return string(code)
 }
 
-func finishAutopilotRunDecision(state colony.ColonyState, opts runCompatibilityOptions, steps []map[string]interface{}, phasesCompleted int, decision autopilotRunDecision, cause error) map[string]interface{} {
+func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.ColonyState, opts runCompatibilityOptions, steps []map[string]interface{}, phasesCompleted int, decision autopilotRunDecision, cause error) map[string]interface{} {
 	status := "paused"
 	switch decision.Disposition {
 	case autopilotDispositionNormalStop:
@@ -613,10 +613,17 @@ func finishAutopilotRunDecision(state colony.ColonyState, opts runCompatibilityO
 	case autopilotDispositionQueueAndContinue:
 		status = "running"
 	}
-	_ = syncRunAutopilotState(state, opts, status, string(decision.Code))
-	result := buildRunExecutionResult(state, opts, steps, phasesCompleted, legacyRunStoppedReason(decision.Code), decision.Next)
+	invocation.recordRunDecision(state, decision)
+	report := buildAutopilotInvocationReport(*invocation, state, decision, autopilotNow(), readBlockerSnapshot(store))
+	recordAutopilotRecovery(&report, decision, cause)
+	persistErr := syncRunAutopilotStateWithReport(state, opts, status, string(decision.Code), &report)
+	result := buildRunExecutionResult(state, opts, steps, phasesCompleted, legacyRunStoppedReason(decision.Code), report.Next)
 	result["trigger_code"] = decision.Code
 	result["disposition"] = decision.Disposition
+	result["last_report"] = &report
+	if persistErr != nil {
+		result["report_persist_error"] = persistErr.Error()
+	}
 	if len(decision.Evidence) > 0 {
 		result["trigger_evidence"] = decision.Evidence
 	}
@@ -653,47 +660,53 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 		return buildRunDryRunResult(state, opts), nil
 	}
 
+	invocation := beginAutopilotInvocation(state)
 	steps := make([]map[string]interface{}, 0, len(state.Plan.Phases)*2)
 	phasesCompleted := 0
+	finish := func(current colony.ColonyState, decision autopilotRunDecision, cause error) map[string]interface{} {
+		return finishAutopilotInvocation(&invocation, current, opts, steps, phasesCompleted, decision, cause)
+	}
 
 	emitVisualProgress(renderRunEngageLine(state, opts))
 
 	for {
 		if err := ctx.Err(); err != nil {
 			decision := autopilotRunDecisionForCode(classifyAutopilotRunError(ctx, err), opts.Headless, nil)
-			result := finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, err)
+			result := finish(state, decision, err)
 			if opts.RunTimeout > 0 {
 				result["run_timeout_sec"] = int(opts.RunTimeout / time.Second)
 			}
 			return result, nil
 		}
 		if err := syncRunAutopilotState(state, opts, "running", ""); err != nil {
-			return nil, err
+			decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": state.CurrentPhase, "stage": "autopilot_state_sync"})
+			return finish(state, decision, err), nil
 		}
 
 		switch state.State {
 		case colony.StateCOMPLETED:
 			decision := autopilotRunDecisionForCode(autopilotTriggerColonyComplete, opts.Headless, nil)
-			return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+			return finish(state, decision, nil), nil
 
 		case colony.StateREADY:
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
 				decision := autopilotRunDecisionForCode(autopilotTriggerMaxPhasesReached, opts.Headless, map[string]interface{}{"phases_completed": phasesCompleted, "max_phases": opts.MaxPhases})
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+				return finish(state, decision, nil), nil
 			}
 
 			phase := recoveryPhase(&state)
 			if phase == nil {
 				decision := autopilotRunDecisionForCode(autopilotTriggerColonyComplete, opts.Headless, nil)
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+				return finish(state, decision, nil), nil
 			}
+			invocation.phase(*phase, "building")
 
 			baseline := readBlockerSnapshot(store)
 			if baseline.Count > 0 {
 				emitVisualProgress(renderRunBlockerBaseline(baseline))
 			}
 			if decision, active := evaluateAutopilotRunStage(nil, baseline, baseline, opts.Headless); active {
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+				return finish(state, decision, nil), nil
 			}
 			emitVisualProgress(renderRunPhaseHeader(phase, len(state.Plan.Phases)))
 
@@ -703,8 +716,9 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			})
 			if err != nil {
 				decision := autopilotRunDecisionForCode(classifyAutopilotRunError(ctx, err), opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "build"})
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, err), nil
+				return finish(state, decision, err), nil
 			}
+			invocation.phase(*phase, "built")
 			steps = append(steps, map[string]interface{}{
 				"command":       fmt.Sprintf("aether build %d", phase.ID),
 				"phase":         phase.ID,
@@ -718,37 +732,40 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			visualCheckpoints, checkpointErr := runAutopilotMaterializeVisual(root, phase.ID, buildResult)
 			if checkpointErr != nil {
 				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "visual_checkpoint_persistence"})
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, checkpointErr), nil
+				return finish(state, decision, checkpointErr), nil
 			}
 			state, err = loadCompatibilityColonyState()
 			if err != nil {
 				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "reload_after_build"})
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, err), nil
+				return finish(state, decision, err), nil
 			}
 			buildStageResult := map[string]interface{}{
 				"autopilot_signals": continueReviewAutopilotSignals(nil, visualCheckpoints),
 			}
+			invocation.recordSignals(*phase, autopilotSignalsFromRunResult(buildStageResult))
 			afterBuild := readBlockerSnapshot(store)
 			if decision, active := evaluateAutopilotRunStage(buildStageResult, baseline, afterBuild, opts.Headless); active {
 				switch decision.Disposition {
 				case autopilotDispositionQueueAndContinue:
 					if queueErr := unresolvedQueuedCheckpointError(decision.Checkpoints); queueErr != nil {
 						failed := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "visual_checkpoint_persistence"})
-						return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, failed, queueErr), nil
+						return finish(state, failed, queueErr), nil
 					}
+					invocation.recordRunDecision(state, decision)
 					steps = appendAutopilotQueuedCheckpointSteps(steps, decision)
 				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
-					return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+					return finish(state, decision, nil), nil
 				}
 			}
 
 		case colony.StateEXECUTING, colony.StateBUILT:
+			invocation.phase(phaseForAutopilotReport(state, state.CurrentPhase), "checking")
 			baseline := readBlockerSnapshot(store)
 			if baseline.Count > 0 {
 				emitVisualProgress(renderRunBlockerBaseline(baseline))
 			}
 			if decision, active := evaluateAutopilotRunStage(nil, baseline, baseline, opts.Headless); active {
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+				return finish(state, decision, nil), nil
 			}
 
 			continueResult, updatedState, phase, _, _, final, err := runAutopilotContinue(root, codexContinueOptions{
@@ -757,7 +774,7 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			})
 			if err != nil {
 				decision := autopilotRunDecisionForCode(classifyAutopilotRunError(ctx, err), opts.Headless, map[string]interface{}{"phase": state.CurrentPhase, "stage": "continue"})
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, err), nil
+				return finish(state, decision, err), nil
 			}
 
 			steps = append(steps, map[string]interface{}{
@@ -770,6 +787,7 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				"next":       continueResult["next"],
 			})
 			state = updatedState
+			invocation.recordSignals(phase, autopilotSignalsFromRunResult(continueResult))
 
 			afterContinue := readBlockerSnapshot(store)
 			if decision, active := evaluateAutopilotRunStage(continueResult, baseline, afterContinue, opts.Headless); active {
@@ -777,38 +795,41 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				case autopilotDispositionQueueAndContinue:
 					if queueErr := unresolvedQueuedCheckpointError(decision.Checkpoints); queueErr != nil {
 						failed := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "runtime_checkpoint_persistence"})
-						return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, failed, queueErr), nil
+						return finish(state, failed, queueErr), nil
 					}
+					invocation.recordRunDecision(state, decision)
 					steps = appendAutopilotQueuedCheckpointSteps(steps, decision)
 				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
-					return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+					return finish(state, decision, nil), nil
 				}
 			}
 
 			if !boolValue(continueResult["advanced"]) {
 				decision := autopilotRunDecisionForCode(autopilotTriggerDeterministicVerificationFailed, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "continue", "advanced": false})
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+				return finish(state, decision, nil), nil
 			}
 			phasesCompleted++
+			invocation.phase(phase, "completed")
 			if final {
 				decision := autopilotRunDecisionForCode(autopilotTriggerColonyComplete, opts.Headless, nil)
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+				return finish(state, decision, nil), nil
 			}
 			emitVisualProgress(renderRunPhaseAdvancement(phase, continueResult, phasesCompleted, len(state.Plan.Phases)))
 			lessons, lessonErr := runAutopilotLoadLessons(state.Plan)
 			if lessonErr != nil {
 				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_evidence"})
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, lessonErr), nil
+				return finish(state, decision, lessonErr), nil
 			}
 			evidenceReplanDue := lessonAwareReplanDue(phasesCompleted, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan)
 			legacyReplanDue := legacyInteractiveReplanDue(state.Plan, phasesCompleted, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
 			if evidenceReplanDue || legacyReplanDue {
 				if opts.Headless {
-					decision, err := upsertAutopilotReplanDecision(state, phase.ID, lessons, time.Now().UTC())
+					decision, err := upsertAutopilotReplanDecision(state, phase.ID, lessons, autopilotNow())
 					if err != nil {
 						failed := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_persistence"})
-						return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, failed, err), nil
+						return finish(state, failed, err), nil
 					}
+					invocation.recordPendingDecision(decision, phase.ID)
 					steps = append(steps, map[string]interface{}{
 						"event":            "decision_queued",
 						"trigger_code":     autopilotTriggerReplanDue,
@@ -821,7 +842,7 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				} else {
 					emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval, len(lessons)))
 					runDecision := autopilotRunDecisionForCode(autopilotTriggerReplanDue, false, map[string]interface{}{"phase": phase.ID, "lesson_count": len(lessons)})
-					result := finishAutopilotRunDecision(state, opts, steps, phasesCompleted, runDecision, nil)
+					result := finish(state, runDecision, nil)
 					result["confirmed_lessons"] = lessons
 					result["lesson_count"] = len(lessons)
 					return result, nil
@@ -829,13 +850,13 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			}
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
 				decision := autopilotRunDecisionForCode(autopilotTriggerMaxPhasesReached, opts.Headless, map[string]interface{}{"phases_completed": phasesCompleted, "max_phases": opts.MaxPhases})
-				return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, nil), nil
+				return finish(state, decision, nil), nil
 			}
 
 		default:
 			err := fmt.Errorf("Colony state %q is not runnable. Run `%s` first.", state.State, nextCommandFromState(state))
 			decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"state": state.State, "phase": state.CurrentPhase})
-			return finishAutopilotRunDecision(state, opts, steps, phasesCompleted, decision, err), nil
+			return finish(state, decision, err), nil
 		}
 	}
 }
@@ -932,11 +953,16 @@ func buildRunExecutionResult(state colony.ColonyState, opts runCompatibilityOpti
 }
 
 func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOptions, status, reason string) error {
+	return syncRunAutopilotStateWithReport(state, opts, status, reason, nil)
+}
+
+func syncRunAutopilotStateWithReport(state colony.ColonyState, opts runCompatibilityOptions, status, reason string, report *autopilotInvocationReport) error {
 	if store == nil {
 		return nil
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := autopilotNow().UTC().Format(time.RFC3339)
 	apState := autopilotState{
+		SchemaVersion:  autopilotStateSchemaVersion,
 		InitializedAt:  now,
 		TotalPhases:    len(state.Plan.Phases),
 		CurrentPhase:   state.CurrentPhase,
@@ -962,9 +988,15 @@ func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOption
 
 	if existingData, err := os.ReadFile(filepath.Join(store.BasePath(), autopilotStatePath)); err == nil {
 		var existing autopilotState
-		if json.Unmarshal(existingData, &existing) == nil && strings.TrimSpace(existing.InitializedAt) != "" {
-			apState.InitializedAt = existing.InitializedAt
+		if json.Unmarshal(existingData, &existing) == nil {
+			if strings.TrimSpace(existing.InitializedAt) != "" {
+				apState.InitializedAt = existing.InitializedAt
+			}
+			apState.LastReport = existing.LastReport
 		}
+	}
+	if report != nil {
+		apState.LastReport = report
 	}
 
 	return store.SaveJSON(autopilotStatePath, apState)
@@ -974,6 +1006,13 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("run"), "Run"))
 	b.WriteString(visualDividerStr())
+
+	if dryRun, _ := result["dry_run"].(bool); !dryRun {
+		if report := renderAutopilotReportFromResult(result); report != "" {
+			b.WriteString(report)
+			return b.String()
+		}
+	}
 
 	if dryRun, _ := result["dry_run"].(bool); dryRun {
 		b.WriteString("Autopilot preview only.\n")
