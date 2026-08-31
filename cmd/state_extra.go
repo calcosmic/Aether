@@ -378,60 +378,71 @@ var phaseInsertCmd = &cobra.Command{
 			input.PromptConstraints = promptInput.PromptConstraints
 		}
 
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			outputError(1, "COLONY_STATE.json not found", nil)
-			return nil
-		}
-		request, err := resolvePhaseInsertRequest(input, state.CurrentPhase)
-		if err != nil {
-			outputError(1, err.Error(), nil)
-			return nil
-		}
-
-		// Validate after index
-		if request.After < 0 || request.After > len(state.Plan.Phases) {
-			outputError(1, fmt.Sprintf("invalid after index %d (plan has %d phases)", request.After, len(state.Plan.Phases)), nil)
-			return nil
-		}
-
-		newPhase := colony.Phase{
-			Name:        request.Name,
-			Description: request.Description,
-			Status:      colony.PhasePending,
-			Tasks:       []colony.Task{},
-		}
-
-		previousPhaseCount := len(state.Plan.Phases)
-
-		// Insert after the specified index (0-based)
-		insertAt := request.After
-		state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
-
-		// Renumber so phase.ID == index+1 holds after every insert. Production
-		// call sites index phases by ordinal (phaseNum-1); a mid-slice insert
-		// carrying max+1 would leave orders like [1,3,2] and misroute build
-		// and continue for every phase after the insertion point.
-		oldToNew := make(map[int]int, previousPhaseCount)
-		for i := range state.Plan.Phases {
-			if state.Plan.Phases[i].ID > 0 {
-				oldToNew[state.Plan.Phases[i].ID] = i + 1
+		var (
+			state       *colony.ColonyState
+			request     resolvedPhaseInsertRequest
+			insertedID  int
+			mutationErr error
+		)
+		if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
+			// A pointer target distinguishes a missing file (no bytes were
+			// decoded) from a legitimate, zero-valued state. More importantly,
+			// every default, validation, and mutation below uses the fresh value
+			// read while UpdateJSONAtomically holds the state-file lock.
+			if state == nil {
+				mutationErr = fmt.Errorf("COLONY_STATE.json not found")
+				return mutationErr
 			}
-			state.Plan.Phases[i].ID = i + 1
-		}
-		insertedID := insertAt + 1
-		if mapped, ok := oldToNew[state.CurrentPhase]; ok && state.CurrentPhase > 0 {
-			state.CurrentPhase = mapped
-		}
 
-		if shouldReopenInsertedPhase(state, insertAt, previousPhaseCount) {
-			state.State = colony.StateREADY
-			state.CurrentPhase = insertedID
-			state.Plan.Phases[insertAt].Status = colony.PhaseReady
-		}
+			request, mutationErr = resolvePhaseInsertRequest(input, state.CurrentPhase)
+			if mutationErr != nil {
+				return mutationErr
+			}
+			if request.After < 0 || request.After > len(state.Plan.Phases) {
+				mutationErr = fmt.Errorf("invalid after index %d (plan has %d phases)", request.After, len(state.Plan.Phases))
+				return mutationErr
+			}
 
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
+			newPhase := colony.Phase{
+				Name:        request.Name,
+				Description: request.Description,
+				Status:      colony.PhasePending,
+				Tasks:       []colony.Task{},
+			}
+			previousPhaseCount := len(state.Plan.Phases)
+
+			// Insert after the specified index (0-based).
+			insertAt := request.After
+			state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
+
+			// Renumber so phase.ID == index+1 holds after every insert.
+			// Production call sites index phases by ordinal (phaseNum-1); a
+			// mid-slice insert carrying max+1 would leave orders like [1,3,2]
+			// and misroute build and continue after the insertion point.
+			oldToNew := make(map[int]int, previousPhaseCount)
+			for i := range state.Plan.Phases {
+				if state.Plan.Phases[i].ID > 0 {
+					oldToNew[state.Plan.Phases[i].ID] = i + 1
+				}
+				state.Plan.Phases[i].ID = i + 1
+			}
+			insertedID = insertAt + 1
+			if mapped, ok := oldToNew[state.CurrentPhase]; ok && state.CurrentPhase > 0 {
+				state.CurrentPhase = mapped
+			}
+
+			if shouldReopenInsertedPhase(*state, insertAt, previousPhaseCount) {
+				state.State = colony.StateREADY
+				state.CurrentPhase = insertedID
+				state.Plan.Phases[insertAt].Status = colony.PhaseReady
+			}
+			return nil
+		}); err != nil {
+			if mutationErr != nil {
+				outputError(1, mutationErr.Error(), nil)
+			} else {
+				outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
+			}
 			return nil
 		}
 

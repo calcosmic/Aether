@@ -121,12 +121,6 @@
   },
   {
     "file": "cmd/state_extra.go",
-    "function": "cobra:phase-insert",
-    "primitive": "SaveJSON",
-    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
-  },
-  {
-    "file": "cmd/state_extra.go",
     "function": "cobra:state-write [json-blob]",
     "primitive": "AtomicWrite",
     "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
