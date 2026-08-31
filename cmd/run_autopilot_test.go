@@ -222,25 +222,28 @@ func TestRunAutopilotReplanDue(t *testing.T) {
 	}
 }
 
-// TestGoldenAutopilotPauseConditions is the parity anchor named by
-// .aether/docs/PARITY_CLASSIC_VS_GO.md — table-driven proof that each seeded
-// pause condition stops the REAL run loop with a paused:<condition> reason.
-func TestGoldenAutopilotPauseConditions(t *testing.T) {
+// TestGoldenAutopilotLegacyPauseInputsAreIgnored is the Phase 198.3 parity
+// anchor: historical pending-decision, midden, and marker artifacts cannot
+// recreate a current stop after typed stage evaluation replaces the broad
+// scanner in the live run loop.
+func TestGoldenAutopilotLegacyPauseInputsAreIgnored(t *testing.T) {
 	cases := []struct {
-		name       string
-		seed       func(t *testing.T, dataDir string)
-		wantReason string
+		name string
+		seed func(t *testing.T, dataDir string)
 	}{
 		{
-			name: "active_blockers",
+			name: "stale_gate_and_signal",
 			seed: func(t *testing.T, dataDir string) {
-				if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
-					ID: "pd_test", Type: "blocker", Description: "unresolved blocker", Resolved: false, CreatedAt: "2026-08-16T00:00:00Z",
-				}}}); err != nil {
-					t.Fatalf("seed pending decisions: %v", err)
+				var state colony.ColonyState
+				if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+					t.Fatalf("load fixture state: %v", err)
+				}
+				state.GateResults = []colony.GateResultEntry{{Name: "stale", Passed: false, Timestamp: "2026-08-16T00:00:00Z"}}
+				state.Signals = []colony.Signal{{ID: "old", Type: "test-failure", Active: true, CreatedAt: "2026-08-16T00:00:00Z"}}
+				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+					t.Fatalf("seed stale gate and signal: %v", err)
 				}
 			},
-			wantReason: "paused:active_blockers:1",
 		},
 		{
 			name: "critical_chaos_findings",
@@ -250,7 +253,6 @@ func TestGoldenAutopilotPauseConditions(t *testing.T) {
 					t.Fatalf("seed midden: %v", err)
 				}
 			},
-			wantReason: "paused:critical_chaos_findings",
 		},
 		{
 			name: "uncommitted_changes",
@@ -259,7 +261,6 @@ func TestGoldenAutopilotPauseConditions(t *testing.T) {
 					t.Fatalf("seed marker: %v", err)
 				}
 			},
-			wantReason: "paused:uncommitted_changes",
 		},
 	}
 
@@ -269,6 +270,7 @@ func TestGoldenAutopilotPauseConditions(t *testing.T) {
 			saveGlobals(t)
 			resetRootCmd(t)
 			dataDir, _ := seedRunFixture(t, 2)
+			withCompletingInvoker(t)
 			tc.seed(t, dataDir)
 
 			rootCmd.SetArgs([]string{"run", "--continue"})
@@ -279,22 +281,22 @@ func TestGoldenAutopilotPauseConditions(t *testing.T) {
 			env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 			result := env["result"].(map[string]interface{})
 			reason := stringValue(result["stopped_reason"])
-			if reason != tc.wantReason {
-				t.Fatalf("stopped_reason = %q, want %q", reason, tc.wantReason)
+			if reason != "completed" {
+				t.Fatalf("stopped_reason = %q, want completed; stale fixture affected live policy", reason)
 			}
-			if stringValue(result["pause_reason"]) == "" {
-				t.Fatalf("pause_reason missing from result: %v", result)
+			if stringValue(result["pause_reason"]) != "" {
+				t.Fatalf("stale fixture manufactured a pause reason: %v", result)
 			}
 
 			var ap autopilotState
 			if err := store.LoadJSON(autopilotStatePath, &ap); err != nil {
 				t.Fatalf("load autopilot state: %v", err)
 			}
-			if ap.Status != "paused" {
-				t.Fatalf("autopilot status = %q, want paused", ap.Status)
+			if ap.Status != "completed" {
+				t.Fatalf("autopilot status = %q, want completed", ap.Status)
 			}
-			if ap.Reason == "" {
-				t.Fatalf("autopilot state reason empty, want the pause condition recorded")
+			if ap.Reason != string(autopilotTriggerColonyComplete) {
+				t.Fatalf("autopilot reason = %q, want canonical completion code", ap.Reason)
 			}
 		})
 	}
@@ -353,10 +355,10 @@ func TestRunDryRunListsPhasesAndPauseTriggers(t *testing.T) {
 	}
 }
 
-// TestRunHeadlessQueuesPendingDecisionOnPause: under --headless, a pause is
-// recorded on the pending-decision queue for later review — the classic
-// headless contract.
-func TestRunHeadlessQueuesPendingDecisionOnPause(t *testing.T) {
+// TestRunHeadlessIgnoresLegacyPauseMarker proves the old broad-scanner marker
+// no longer manufactures owner work or halts unattended execution. Current
+// typed build/continue evidence is the only live policy input.
+func TestRunHeadlessIgnoresLegacyPauseMarker(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -372,13 +374,9 @@ func TestRunHeadlessQueuesPendingDecisionOnPause(t *testing.T) {
 	}
 
 	file := loadPendingDecisionFile()
-	found := false
 	for _, decision := range file.Decisions {
 		if decision.Type == "autopilot_pause" && !decision.Resolved {
-			found = true
+			t.Fatalf("legacy marker created an autopilot_pause decision: %+v", decision)
 		}
-	}
-	if !found {
-		t.Fatalf("expected an unresolved autopilot_pause pending decision, got %+v", file.Decisions)
 	}
 }

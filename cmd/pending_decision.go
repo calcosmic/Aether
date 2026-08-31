@@ -47,6 +47,15 @@ type PendingDecision struct {
 	TaskID        string   `json:"task_id,omitempty"`
 	Evidence      []string `json:"evidence,omitempty"`
 	SourcePaths   []string `json:"source_paths,omitempty"`
+	// Replan metadata binds an accumulated overnight planning note to the
+	// exact accepted plan revision that its evidence follows. These fields are
+	// optional so pre-198.3 decision files continue to decode unchanged.
+	PlanRevisionID        string   `json:"plan_revision_id,omitempty"`
+	PlanRevisionAt        string   `json:"plan_revision_at,omitempty"`
+	LessonCount           int      `json:"lesson_count,omitempty"`
+	FirstCheckpointPhase  int      `json:"first_checkpoint_phase,omitempty"`
+	LatestCheckpointPhase int      `json:"latest_checkpoint_phase,omitempty"`
+	LessonReferences      []string `json:"lesson_references,omitempty"`
 }
 
 // PendingDecisionFile is the JSON structure for pending-decisions.json.

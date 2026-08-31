@@ -1728,11 +1728,11 @@ func TestRunCompatibilityExecutesSinglePhase(t *testing.T) {
 	if result["completed"] != false {
 		t.Fatalf("expected completed:false when run stops on a simulated build, got %v", result)
 	}
-	if result["stopped_reason"] != "blocked" {
-		t.Fatalf("stopped_reason = %v, want blocked", result["stopped_reason"])
+	if result["stopped_reason"] != string(autopilotTriggerDeterministicVerificationFailed) {
+		t.Fatalf("stopped_reason = %v, want %s", result["stopped_reason"], autopilotTriggerDeterministicVerificationFailed)
 	}
-	if result["next"] != "aether build 1 --task 1.1" {
-		t.Fatalf("next = %v, want task-scoped redispatch", result["next"])
+	if result["next"] != "aether continue" {
+		t.Fatalf("next = %v, want same-phase verification recovery", result["next"])
 	}
 	if result["phases_completed"] != float64(0) {
 		t.Fatalf("phases_completed = %v, want 0", result["phases_completed"])
