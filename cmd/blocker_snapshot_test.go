@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -161,6 +162,33 @@ func TestBlockerSnapshotComparison(t *testing.T) {
 				t.Fatalf("compareBlockerSnapshots() = %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBlockerSnapshotObservesSwarmEscalation(t *testing.T) {
+	s, _ := newTestStore(t)
+	base := time.Date(2026, time.August, 31, 15, 0, 0, 0, time.UTC)
+	for i := 0; i < 3; i++ {
+		if _, err := persistSwarmResultOutcome(s, swarmResultRecord{
+			SwarmID:     []string{"swarm-1", "swarm-2", "swarm-3"}[i],
+			Target:      "auth panic",
+			Status:      "failed",
+			CompletedAt: base.Add(time.Duration(i) * time.Minute).Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("persist strike %d: %v", i+1, err)
+		}
+	}
+
+	flags := activeSwarmEscalationFlags(s)
+	if len(flags) != 1 {
+		t.Fatalf("active escalation flags = %d, want 1: %+v", len(flags), flags)
+	}
+	snapshot := readBlockerSnapshot(s)
+	if snapshot.Count != 1 || snapshot.EscalatedCount != 1 {
+		t.Fatalf("snapshot = %+v, want one escalated blocker", snapshot)
+	}
+	if !reflect.DeepEqual(snapshot.IDs, []string{flags[0].ID}) || !reflect.DeepEqual(snapshot.EscalatedIDs, []string{flags[0].ID}) {
+		t.Fatalf("snapshot IDs = %+v, want escalation %q", snapshot, flags[0].ID)
 	}
 }
 

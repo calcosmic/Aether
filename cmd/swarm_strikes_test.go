@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -281,6 +282,74 @@ func TestSwarmStrikeHistoryDoesNotCreateCounterArtifacts(t *testing.T) {
 	}
 }
 
+func TestSwarmStrikeDirectExternalParity(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, time.August, 31, 13, 0, 0, 0, time.UTC)
+	type normalizedOutcome struct {
+		History swarmStrikeHistory
+		Flags   []colony.FlagEntry
+	}
+	run := func(dispatchMode string) normalizedOutcome {
+		s, _ := newTestStore(t)
+		for i, status := range []string{"failed", "blocked", "failed"} {
+			record := swarmResultRecord{
+				SwarmID:      []string{"swarm-1", "swarm-2", "swarm-3"}[i],
+				Target:       "auth panic",
+				Status:       status,
+				CompletedAt:  base.Add(time.Duration(i) * time.Minute).Format(time.RFC3339),
+				DispatchMode: dispatchMode,
+			}
+			if _, err := persistSwarmResultOutcome(s, record); err != nil {
+				t.Fatalf("persist %s result %d: %v", dispatchMode, i+1, err)
+			}
+		}
+		history, err := evaluateSwarmStrikeHistory(s, "auth panic")
+		if err != nil {
+			t.Fatalf("evaluate %s history: %v", dispatchMode, err)
+		}
+		return normalizedOutcome{History: history, Flags: activeSwarmEscalationFlags(s)}
+	}
+
+	direct := run("")
+	external := run("external-task")
+	if !reflect.DeepEqual(direct, external) {
+		t.Fatalf("direct/external escalation drift:\ndirect:   %+v\nexternal: %+v", direct, external)
+	}
+}
+
+func TestSwarmThreeStrikeReplayKeepsOneEscalation(t *testing.T) {
+	t.Parallel()
+
+	s, _ := newTestStore(t)
+	base := time.Date(2026, time.August, 31, 14, 0, 0, 0, time.UTC)
+	for i := 0; i < 2; i++ {
+		if _, err := persistSwarmResultOutcome(s, swarmResultRecord{
+			SwarmID:     []string{"swarm-1", "swarm-2"}[i],
+			Target:      "auth panic",
+			Status:      "failed",
+			CompletedAt: base.Add(time.Duration(i) * time.Minute).Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("persist prior strike %d: %v", i+1, err)
+		}
+	}
+	third := swarmResultRecord{
+		SwarmID:      "swarm-3",
+		Target:       "auth panic",
+		Status:       "blocked",
+		CompletedAt:  base.Add(2 * time.Minute).Format(time.RFC3339),
+		DispatchMode: "external-task",
+	}
+	for replay := 1; replay <= 2; replay++ {
+		if _, err := persistSwarmResultOutcome(s, third); err != nil {
+			t.Fatalf("persist third strike replay %d: %v", replay, err)
+		}
+		if flags := activeSwarmEscalationFlags(s); len(flags) != 1 {
+			t.Fatalf("replay %d active escalation flags = %d, want 1: %+v", replay, len(flags), flags)
+		}
+	}
+}
+
 type swarmStrikeFixture struct {
 	id     string
 	target string
@@ -379,4 +448,19 @@ func regularFilesUnder(t *testing.T, root string) []string {
 	}
 	sort.Strings(files)
 	return files
+}
+
+func activeSwarmEscalationFlags(s *storage.Store) []colony.FlagEntry {
+	flags, ok := loadFlagsFile(s)
+	if !ok {
+		return nil
+	}
+	active := make([]colony.FlagEntry, 0, len(flags.Decisions))
+	for _, flag := range flags.Decisions {
+		if flag.Type == "blocker" && flag.Source == "escalation" && !flag.Resolved {
+			active = append(active, flag)
+		}
+	}
+	sort.Slice(active, func(i, j int) bool { return active[i].ID < active[j].ID })
+	return active
 }

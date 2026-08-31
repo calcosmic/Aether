@@ -396,6 +396,123 @@ func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
 	}
 }
 
+func TestSwarmThreeStrikeEscalatesOnceAndFourthAttemptRefuses(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Stop retrying an architectural auth failure"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	invoker := &swarmTestInvoker{blockedCaste: "watcher"}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	target := "Auth panic when session is missing"
+	configsPerAttempt := 0
+	for attempt := 1; attempt <= 3; attempt++ {
+		result, err := runSwarmCompatibility(root, target, false, false)
+		if err != nil {
+			t.Fatalf("attempt %d: %v", attempt, err)
+		}
+		if got := result["status"]; got != "blocked" {
+			t.Fatalf("attempt %d status = %v, want blocked", attempt, got)
+		}
+		if attempt == 1 {
+			configsPerAttempt = len(invoker.configs)
+			if configsPerAttempt == 0 {
+				t.Fatal("first swarm attempt did not dispatch workers")
+			}
+		}
+		if got, want := len(invoker.configs), attempt*configsPerAttempt; got != want {
+			t.Fatalf("attempt %d dispatched %d total workers, want %d", attempt, got, want)
+		}
+		flags := activeSwarmEscalationFlags(store)
+		wantFlags := 0
+		if attempt == 3 {
+			wantFlags = 1
+		}
+		if len(flags) != wantFlags {
+			t.Fatalf("attempt %d active escalation flags = %d, want %d: %+v", attempt, len(flags), wantFlags, flags)
+		}
+	}
+
+	history, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		t.Fatalf("evaluate third-attempt history: %v", err)
+	}
+	if history.StrikeCount != 3 {
+		t.Fatalf("strike count after three attempts = %d, want 3", history.StrikeCount)
+	}
+	evidenceIDs := swarmStrikeEvidenceIDs(history.Evidence)
+	flags := activeSwarmEscalationFlags(store)
+	for _, id := range evidenceIDs {
+		if !strings.Contains(flags[0].Description, id) {
+			t.Errorf("escalation description missing evidence id %q: %s", id, flags[0].Description)
+		}
+	}
+
+	beforeFourth := len(invoker.configs)
+	refusal, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("fourth attempt: %v", err)
+	}
+	if got := len(invoker.configs); got != beforeFourth {
+		t.Fatalf("fourth attempt dispatched workers: configs %d -> %d", beforeFourth, got)
+	}
+	if got := refusal["status"]; got != "architectural_concern" {
+		t.Fatalf("fourth status = %v, want architectural_concern", got)
+	}
+	wantNext := `aether insert-phase "Auth panic when session is missing"`
+	if got := refusal["next"]; got != wantNext {
+		t.Fatalf("fourth next = %q, want %q", got, wantNext)
+	}
+	for _, id := range evidenceIDs {
+		if !strings.Contains(renderSwarmCompatibilityVisual(refusal), id) {
+			t.Errorf("refusal visual missing evidence id %q", id)
+		}
+	}
+
+	if _, err := runSwarmCompatibility(root, "Database panic after migration", false, false); err != nil {
+		t.Fatalf("different target attempt: %v", err)
+	}
+	if got := len(invoker.configs); got != beforeFourth+configsPerAttempt {
+		t.Fatalf("different target did not dispatch normally: configs = %d, want %d", got, beforeFourth+configsPerAttempt)
+	}
+
+	if err := saveSwarmResultRecord(store, swarmResultRecord{
+		SwarmID:     "swarm-reset-success",
+		Target:      target,
+		Status:      "completed",
+		CompletedAt: time.Now().UTC().Add(time.Second).Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("seed reset result: %v", err)
+	}
+	beforeResetAttempt := len(invoker.configs)
+	if _, err := runSwarmCompatibility(root, target, false, false); err != nil {
+		t.Fatalf("post-success attempt: %v", err)
+	}
+	if got := len(invoker.configs); got != beforeResetAttempt+configsPerAttempt {
+		t.Fatalf("completed result did not reset dispatch guard: configs = %d, want %d", got, beforeResetAttempt+configsPerAttempt)
+	}
+}
+
+func TestSwarmFourthAttemptShellQuotesTarget(t *testing.T) {
+	target := "Fix $SESSION and `refresh` for \"admin\""
+	command := swarmInsertPhaseCommand(target)
+	want := "aether insert-phase \"Fix \\$SESSION and \\`refresh\\` for \\\"admin\\\"\""
+	if command != want {
+		t.Fatalf("insert command = %q, want %q", command, want)
+	}
+}
+
 func swarmPlansHaveCaste(plans []swarmWorkerPlan, caste string) bool {
 	for _, plan := range plans {
 		if plan.Caste == caste {
