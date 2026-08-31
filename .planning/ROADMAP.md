@@ -440,7 +440,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 198.3-05-PLAN.md — persist the morning report and route genuine stops through existing recovery policy
+- [x] 198.3-05-PLAN.md — persist the morning report and route genuine stops through existing recovery policy
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
