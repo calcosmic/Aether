@@ -15,6 +15,7 @@ package cmd
 // record (D-01 through D-15) this file implements.
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -1183,6 +1184,16 @@ func TestBuildOrphanAllowlistEntriesPreservesReviewedLiveMetadata(t *testing.T) 
 		if got[i] != want[i] {
 			t.Errorf("entry %d = %+v, want %+v", i, got[i], want[i])
 		}
+	}
+
+	encoded, err := marshalOrphanAllowlist([]orphanAllowlistEntry{{
+		Name: "aether keep-reviewed", Reason: "reviewed — disposition", OwnerPhase: "191.1",
+	}})
+	if err != nil {
+		t.Fatalf("marshal allowlist: %v", err)
+	}
+	if !bytes.Contains(encoded, []byte(`reviewed \u2014 disposition`)) || bytes.Contains(encoded, []byte("—")) {
+		t.Fatalf("non-ASCII metadata encoding drifted: %s", encoded)
 	}
 }
 
