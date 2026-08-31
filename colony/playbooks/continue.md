@@ -6,6 +6,12 @@
 
 The Queen reconciles completed build work, runs verification loops and gates, and advances to the next phase.
 
+This playbook owns `continue`, not the outer autopilot decision. `aether run`
+consumes continue's typed evidence using the canonical trigger catalogue:
+headless visual/runtime owner work queues for morning review, genuine problems
+stop, and normal boundaries end normally. Rendered prose is never parsed back
+into control data, and neither continue nor run invokes `aether seal`.
+
 ## Stage 1: Verify
 
 ### Step 1: Read State
@@ -94,7 +100,9 @@ If `package.json` exists, spawn Gatekeeper to audit dependencies for CVEs and li
 
 ### Step 1.9: Auditor Quality Gate (Mandatory)
 
-Spawn Auditor for multi-lens quality audit. Critical findings or score < 60 block advancement.
+Spawn Auditor for multi-lens quality audit. A valid score below 60 or a
+canonical Critical finding blocks. Score 60 passes. High findings remain in
+the phase/final report but do not block by severity alone.
 
 ### Step 1.10: TDD Evidence Gate (Mandatory)
 
@@ -102,11 +110,26 @@ If Prime Worker claimed tests but no test files found: HARD REJECTION for fabric
 
 ### Step 1.11: Runtime Verification Gate (Mandatory)
 
-Ask user to confirm the app actually runs. If not tested, do not proceed.
+Never pretend a program check or reviewer performed an owner-only judgement.
+Persist hands-on runtime criteria as `runtime-verification` decisions and
+trusted UI claims as visual checkpoint decisions, each with the exact
+`aether decision-answer --question ... --answer ... --phase ...` recovery
+command. Interactive autopilot pauses; headless autopilot queues and continues.
+The decision remains unresolved until the owner answers it, and unresolved
+owner checkpoints block seal.
 
 ### Step 1.12: Flags Gate (Mandatory)
 
-Auto-resolve eligible flags. If blockers remain, display them and halt.
+Auto-resolve only flags already eligible under the runtime's established
+verification rules. A direct `aether continue` remains strict: display any
+unresolved blocker and halt advancement.
+
+The only exception is an explicit in-process `aether run` capability carrying
+that stage's live blocker baseline. It may pass this gate when the canonical
+snapshot comparison reports neither a larger blocker count nor new escalation.
+Existing blockers remain unresolved and visible; the runtime does not delete,
+resolve, acknowledge, hide, or rewrite them. A new blocker or escalation still
+stops the run, and seal remains blocked until live blockers are resolved.
 
 ### Step 1.13: Watcher Veto Gate (Mandatory)
 
@@ -183,7 +206,9 @@ Log activity and update phase in `.aether/CONTEXT.md`.
 
 ### Step 2.7: Project Completion
 
-If all phases complete, display completion report with learnings and wisdom summary.
+If all phases complete, display the completion report with learnings and wisdom
+summary. Return the owner boundary `aether seal`; never invoke it automatically.
+Queued owner checkpoints and live blockers remain for seal to enforce.
 
 ### Step 3: Display Result
 

@@ -1,7 +1,7 @@
 # Classic Parity Checklist: Classic v5.4.0 vs Current Go Runtime
 
 > **Version:** v1.24
-> **Last Updated:** 2026-05-24
+> **Last Updated:** 2026-09-01 (Phase 198.3 autopilot contract)
 > **Classic Baseline:** v5.4.0
 > **Applies to:** Phases 152-159
 
@@ -79,21 +79,30 @@ To determine whether the parity checklist meets the "at least 50% verifiable" th
 
 ## Verification Methods
 
-### Automated: Golden / Snapshot Tests
+### Automated: Golden, Snapshot, and Integration Tests
 
-The 9 flagship workflows have golden tests that prove behaviour matches the v5.4 baseline:
+The 9 flagship workflows have automated anchors that prove or characterize
+their relationship to the v5.4 baseline:
 
 1. **build** — `TestGoldenBuildCeremony`
 2. **continue** — `TestGoldenContinueCeremony`
 3. **plan** — `TestGoldenPlanManifest`
 4. **colonize** — `TestGoldenColonizeSurvey`
-5. **autopilot** — `TestGoldenAutopilotPauseConditions`
+5. **autopilot** — joined-up proof: `TestOvernightRunCompletesSixPhases`; typed policy anchors: `TestAutopilotTriggerCatalogue`, `TestAutopilotDispositionMatrix`, and `TestRunDryRunUsesCanonicalTriggerCatalogue`
 6. **seal** — `TestGoldenSealCeremony`
 7. **entomb** — `TestGoldenEntombArchive`
 8. **swarm** — `TestGoldenSwarmDashboard`
 9. **oracle** — `TestGoldenOracleConfidenceLoop`
 
 Reference: `v1.18-ROADMAP.md` PAR-01 through PAR-07 for the baseline verification that already passed.
+
+The Phase 198.3 autopilot anchor supersedes the former broad pause golden test.
+It proves one real six-phase `run` loop, durable visual/runtime/replan morning
+work, genuine and normal stop boundaries, phase-scoped provider readiness,
+unchanged blocker evidence, honest reporting, and the owner-only seal boundary.
+The exact active dispositions are recorded in
+`.planning/decisions/autopilot-pause-conditions.md`; historical marker-scanner
+behavior is not current parity authority.
 
 ### Manual: Checklist Steps
 

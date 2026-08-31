@@ -1,7 +1,8 @@
 # Test Coverage Matrix
 
 Generated from actual test files in `cmd/*_test.go`. This matrix documents
-coverage for the critical data-persistence paths targeted by Phase 147.
+coverage for the critical data-persistence paths targeted by Phase 147, plus
+the joined-up overnight lifecycle contract completed in Phase 198.3.
 
 ## Core Data-Persistence (Wave 1)
 
@@ -18,7 +19,7 @@ coverage for the critical data-persistence paths targeted by Phase 147.
 
 | Source File | Test File | Commands Tested | Coverage |
 |-------------|-----------|-----------------|----------|
-| `cmd/autopilot.go` | `cmd/autopilot_test.go` | autopilot-init, autopilot-update, autopilot-status, autopilot-stop (autopilot-check-replan retired 2026-08-16 — the run loop owns replan arithmetic, covered by TestRunAutopilotReplanDue) | FULL |
+| `cmd/autopilot_policy.go`, `cmd/compatibility_cmds.go`, `cmd/autopilot_report.go` | `cmd/autopilot_policy_test.go`, `cmd/run_autopilot_198_3_test.go`, `cmd/run_overnight_198_3_test.go` | `aether run --dry-run`, live/headless run policy, durable status/morning handoff | FULL — six-phase integration + typed catalogue |
 | `cmd/council.go` | `cmd/council_test.go` | council-deliberate, council-advocate, council-challenger, council-sage, council-history, council-budget-check | FULL |
 
 ## Flags & Shelf (Wave 3 — Extended)
@@ -40,6 +41,7 @@ with extensive coverage (no additional smoke tests needed):
 |---------|-------------|---------------|
 | `build` | `cmd/codex_build_test.go` | integration |
 | `continue` | `cmd/codex_continue_test.go` | integration |
+| `run` | `cmd/run_overnight_198_3_test.go` plus `cmd/autopilot_policy_test.go` | six real build/continue phases + typed trigger catalogue |
 | `plan` | `cmd/codex_plan_test.go`, `cmd/codex_plan_finalize_test.go` | integration |
 | `seal` | `cmd/codex_seal_test.go` | integration |
 | `status` | `cmd/status.go` (setupTestStore tests) | unit + integration |
@@ -56,7 +58,9 @@ Commands with **no dedicated smoke test** but covered indirectly:
   are broken. Note `cmd/oracle_iterate_cmd_test.go` covers the *orphaned*
   `aether oracle-iterate` path against `.aether/data/oracle/`, not the live
   loop, which uses `.aether/oracle/`.
-- `swarm` — no dedicated test (parallel bug investigation, tested via builder/watcher paths)
+- `swarm` — focused strike/escalation coverage lives in the `SwarmThreeStrike`
+  and `SwarmFourthAttempt` tests; the complete six-phase overnight proof does
+  not dispatch a swarm.
 
 ## Test Count Summary
 
@@ -72,4 +76,16 @@ Run verification:
 go test ./cmd/... -count=1
 ```
 
-Last updated: 2026-05-21
+Phase 198.3 autopilot anchors:
+
+- `TestOvernightRunCompletesSixPhases` — one public headless run completes six
+  durable phases while visual, runtime-verification, and lesson-backed replan
+  work queues for morning review.
+- `TestAutopilotTriggerCatalogue`, `TestAutopilotDispositionMatrix`, and
+  `TestRunDryRunUsesCanonicalTriggerCatalogue` — exact trigger codes,
+  headless/interactive dispositions, and dry-run projection.
+- `TestOvernightRunBlockerBaselineExceptionIsNarrow` — unchanged baseline
+  blockers remain visible only in the internal run lane; new count/escalation
+  and direct `continue` remain strict.
+
+Last updated: 2026-09-01
