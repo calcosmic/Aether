@@ -420,7 +420,39 @@ Plans:
 
 **Audit findings closed**: autopilot-* subcommands orphaned; flag-check-blockers orphaned; insert-phase guided flow dropped; swarm 3-strike escalation dropped; failure-classify / recovery-log orphaned; medic-auto-spawn-check orphaned; status escalated-flags count dropped.
 
-**Plans**: TBD
+**Plans**: 10 plans (7 waves)
+
+Plans:
+**Wave 1**
+
+- [ ] 198.3-01-PLAN.md — define the canonical overnight trigger catalogue and live blocker snapshot
+- [ ] 198.3-03-PLAN.md — make provider preflight phase-scoped, bounded, and consistent across direct and hosted dispatch
+- [ ] 198.3-06-PLAN.md — restore the guided insert-phase recovery flow across all platform wrappers
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 198.3-02-PLAN.md — preserve reviewer evidence and owner-checkpoint artifacts across both continue lanes
+- [ ] 198.3-07-PLAN.md — restore swarm's three-strike escalation through the shared blocker system
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 198.3-04-PLAN.md — apply the trigger policy in the real run loop and make replanning lesson-aware
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 198.3-05-PLAN.md — persist the morning report and route genuine stops through existing recovery policy
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 198.3-08-PLAN.md — remove the superseded autopilot command surface and shrink generated command fixtures
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 198.3-09-PLAN.md — remove orphan recovery and Medic adapters and complete the eleven-command shrink
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 198.3-10-PLAN.md — prove a six-phase unattended run and close documentation and repository gates
 
 ### Phase 198.4: Prune the Dead Wood
 
