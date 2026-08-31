@@ -1181,7 +1181,7 @@ func writeOrphanAllowlist(t *testing.T, orphans []string) {
 	}
 }
 
-func TestBuildOrphanAllowlistEntriesPreservesReviewedLiveMetadata(t *testing.T) {
+func assertOrphanGeneratorPreservesReviewedLiveMetadata(t *testing.T) {
 	current := []orphanAllowlistEntry{
 		{Name: "aether keep-reviewed", Reason: "reviewed disposition", OwnerPhase: "191.1"},
 		{Name: "aether removed-command", Reason: "old", OwnerPhase: "RECLAIM"},
@@ -1265,6 +1265,8 @@ func stripGoComments(src string) string {
 // no caller among the three permitted kinds and is not in the committed
 // allowlist.
 func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
+	t.Run("generator_preserves_reviewed_live_metadata", assertOrphanGeneratorPreservesReviewedLiveMetadata)
+
 	root, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -1651,9 +1653,10 @@ func TestOrphanAllowlistIsPathKeyed(t *testing.T) {
 	t.Run("baseline", func(t *testing.T) {
 		check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json", false)
 	})
+	t.Run("historical_deleted_paths", assertHistoricalOrphanPathsNeedNoLiveResolution)
 }
 
-func TestOrphanAllowlistPathValidationAllowsHistoricalDeletedBaselineEntries(t *testing.T) {
+func assertHistoricalOrphanPathsNeedNoLiveResolution(t *testing.T) {
 	historical := []orphanAllowlistEntry{{Name: "aether command-deleted-after-baseline"}}
 	if problems := orphanAllowlistPathProblems(historical, false); len(problems) != 0 {
 		t.Fatalf("historical baseline entry was rejected: %v", problems)
