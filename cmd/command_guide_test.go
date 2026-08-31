@@ -529,6 +529,31 @@ func TestCommandGuideLiteralCommandsArePassthrough(t *testing.T) {
 	}
 }
 
+func TestInsertPhaseCommandGuideDocumentsGuidedAndExplicitForms(t *testing.T) {
+	guide, err := buildCommandGuide("insert-phase", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(insert-phase): %v", err)
+	}
+	if !guide.Literal || guide.Category != commandGuideCategoryLiteral {
+		t.Fatalf("insert-phase guide must remain literal passthrough: %#v", guide)
+	}
+	if guide.RunCommand != "AETHER_OUTPUT_MODE=visual aether insert-phase $ARGUMENTS" {
+		t.Fatalf("insert-phase run command = %q, want direct visual runtime delegation", guide.RunCommand)
+	}
+
+	text := strings.Join(append(append([]string{guide.Intent, guide.RunCommand}, guide.PreSteps...), guide.DriftGuards...), "\n")
+	for _, want := range []string{
+		"one issue sentence",
+		`aether insert-phase "problem to stabilise"`,
+		"non-interactive automation",
+		`aether insert-phase --after 2 --name "Stabilize login retries" --description "login retries lose state" --constraints "do not change the provider"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("insert-phase command-guide missing %q", want)
+		}
+	}
+}
+
 func TestCommandGuideAdaptsNonCodexPlatform(t *testing.T) {
 	guide, err := buildCommandGuide("init", "claude")
 	if err != nil {
