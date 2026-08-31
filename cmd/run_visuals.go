@@ -179,25 +179,77 @@ func queueAutopilotPauseDecision(reason string, phase int) {
 	_ = store.SaveJSON(pendingDecisionsFile, file)
 }
 
-// autopilotPauseTrigger describes one condition the autopilot stops for. The
-// catalog is the single source for the dry-run preview, the pause tests, and
-// the disposition record in .planning/decisions/autopilot-pause-conditions.md.
+// renderRunDryRunTriggerCatalogue renders the structured policy rows carried
+// by the dry-run result. It explains typed control data; no caller parses this
+// prose to decide what the run does.
+func renderRunDryRunTriggerCatalogue(value interface{}) string {
+	specs := autopilotTriggerSpecsFromDryRunValue(value)
+	var b strings.Builder
+	b.WriteString("\nPause Triggers and Normal Stops (canonical overnight contract)\n")
+	for _, spec := range specs {
+		b.WriteString(fmt.Sprintf("  %s — %s\n", spec.Code, spec.Label))
+		b.WriteString(fmt.Sprintf("    Detects: %s\n", spec.Detection))
+		b.WriteString(fmt.Sprintf("    Headless: %s | Interactive: %s\n", spec.HeadlessDisposition, spec.InteractiveDisposition))
+		b.WriteString(fmt.Sprintf("    Next: `%s`\n", spec.NextActionTemplate))
+	}
+	return b.String()
+}
+
+func autopilotTriggerSpecsFromDryRunValue(value interface{}) []autopilotTriggerSpec {
+	switch rows := value.(type) {
+	case []autopilotTriggerSpec:
+		return rows
+	case []map[string]interface{}:
+		return autopilotTriggerSpecsFromMaps(rows)
+	case []interface{}:
+		maps := make([]map[string]interface{}, 0, len(rows))
+		for _, raw := range rows {
+			row, ok := raw.(map[string]interface{})
+			if !ok {
+				return nil
+			}
+			maps = append(maps, row)
+		}
+		return autopilotTriggerSpecsFromMaps(maps)
+	default:
+		return nil
+	}
+}
+
+func autopilotTriggerSpecsFromMaps(rows []map[string]interface{}) []autopilotTriggerSpec {
+	specs := make([]autopilotTriggerSpec, 0, len(rows))
+	for _, row := range rows {
+		specs = append(specs, autopilotTriggerSpec{
+			Code:                   autopilotTriggerCode(stringValue(row["code"])),
+			Label:                  stringValue(row["label"]),
+			Detection:              stringValue(row["detection"]),
+			NextActionTemplate:     stringValue(row["next_action_template"]),
+			HeadlessDisposition:    autopilotDisposition(stringValue(row["headless_disposition"])),
+			InteractiveDisposition: autopilotDisposition(stringValue(row["interactive_disposition"])),
+		})
+	}
+	if err := validateAutopilotTriggerSpecs(specs); err != nil {
+		return nil
+	}
+	return specs
+}
+
+// autopilotPauseTrigger is a compatibility projection for older focused tests.
+// It contains no independent policy list: every row is derived from the typed
+// canonical catalogue above.
 type autopilotPauseTrigger struct {
 	Condition string
 	Meaning   string
 }
 
 func autopilotPauseTriggerCatalog() []autopilotPauseTrigger {
-	return []autopilotPauseTrigger{
-		{"blocked", "verification could not confirm the phase's work; the run stops with a task-scoped redispatch"},
-		{"active_blockers", "unresolved blocker decisions are waiting on you"},
-		{"test_failures", "a test-failure signal was raised during verification"},
-		{"gate_failure", "a quality or security gate reported failure"},
-		{"critical_chaos_findings", "resilience testing logged a critical finding"},
-		{"uncommitted_changes", "an uncommitted-changes marker was set mid-run"},
-		{"replan_due", "the replan checkpoint interval was reached (default: every 2 phases)"},
-		{"max_phases_reached", "the --max-phases budget was spent"},
-		{"not_runnable", "the colony is not in a runnable state"},
-		{"completed", "every phase is done — the run celebrates and hands off to seal"},
+	specs := autopilotTriggerSpecs()
+	triggers := make([]autopilotPauseTrigger, 0, len(specs))
+	for _, spec := range specs {
+		triggers = append(triggers, autopilotPauseTrigger{
+			Condition: string(spec.Code),
+			Meaning:   spec.Detection,
+		})
 	}
+	return triggers
 }

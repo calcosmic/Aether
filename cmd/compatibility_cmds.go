@@ -570,22 +570,26 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 	steps := []map[string]interface{}{}
 	phasesPlanned := 0
 	working := state
+	finish := func(reason, next string) map[string]interface{} {
+		return map[string]interface{}{
+			"mode":              "dry-run",
+			"dry_run":           true,
+			"headless":          opts.Headless,
+			"steps":             steps,
+			"phases_planned":    phasesPlanned,
+			"stopped_reason":    reason,
+			"next":              next,
+			"current_state":     working.State,
+			"continue_armed":    opts.ContinueWithoutReplan,
+			"replan_interval":   opts.ReplanInterval,
+			"trigger_catalogue": autopilotTriggerSpecs(),
+		}
+	}
 
 	for {
 		switch working.State {
 		case colony.StateCOMPLETED:
-			return map[string]interface{}{
-				"mode":            "dry-run",
-				"dry_run":         true,
-				"headless":        opts.Headless,
-				"steps":           steps,
-				"phases_planned":  phasesPlanned,
-				"stopped_reason":  "completed",
-				"next":            "aether seal",
-				"current_state":   working.State,
-				"continue_armed":  opts.ContinueWithoutReplan,
-				"replan_interval": opts.ReplanInterval,
-			}
+			return finish("completed", "aether seal")
 
 		case colony.StateEXECUTING, colony.StateBUILT:
 			steps = append(steps, map[string]interface{}{
@@ -594,49 +598,16 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 				"state":   working.State,
 			})
 			phasesPlanned++
-			return map[string]interface{}{
-				"mode":            "dry-run",
-				"dry_run":         true,
-				"headless":        opts.Headless,
-				"steps":           steps,
-				"phases_planned":  phasesPlanned,
-				"stopped_reason":  "continue_required",
-				"next":            "aether continue",
-				"current_state":   working.State,
-				"continue_armed":  opts.ContinueWithoutReplan,
-				"replan_interval": opts.ReplanInterval,
-			}
+			return finish("continue_required", "aether continue")
 
 		case colony.StateREADY:
 			if opts.MaxPhases > 0 && phasesPlanned >= opts.MaxPhases {
-				return map[string]interface{}{
-					"mode":            "dry-run",
-					"dry_run":         true,
-					"headless":        opts.Headless,
-					"steps":           steps,
-					"phases_planned":  phasesPlanned,
-					"stopped_reason":  "max_phases_reached",
-					"next":            nextCommandFromState(working),
-					"current_state":   working.State,
-					"continue_armed":  opts.ContinueWithoutReplan,
-					"replan_interval": opts.ReplanInterval,
-				}
+				return finish("max_phases_reached", nextCommandFromState(working))
 			}
 
 			phase := recoveryPhase(&working)
 			if phase == nil {
-				return map[string]interface{}{
-					"mode":            "dry-run",
-					"dry_run":         true,
-					"headless":        opts.Headless,
-					"steps":           steps,
-					"phases_planned":  phasesPlanned,
-					"stopped_reason":  "completed",
-					"next":            "aether seal",
-					"current_state":   working.State,
-					"continue_armed":  opts.ContinueWithoutReplan,
-					"replan_interval": opts.ReplanInterval,
-				}
+				return finish("completed", "aether seal")
 			}
 
 			steps = append(steps,
@@ -645,33 +616,11 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 			)
 			phasesPlanned++
 			if opts.ReplanInterval > 0 && phasesPlanned > 0 && phasesPlanned%opts.ReplanInterval == 0 && !opts.ContinueWithoutReplan {
-				return map[string]interface{}{
-					"mode":            "dry-run",
-					"dry_run":         true,
-					"headless":        opts.Headless,
-					"steps":           steps,
-					"phases_planned":  phasesPlanned,
-					"stopped_reason":  "replan_due",
-					"next":            "aether plan",
-					"current_state":   working.State,
-					"continue_armed":  opts.ContinueWithoutReplan,
-					"replan_interval": opts.ReplanInterval,
-				}
+				return finish("replan_due", "aether plan")
 			}
 
 			if phase.ID >= len(working.Plan.Phases) {
-				return map[string]interface{}{
-					"mode":            "dry-run",
-					"dry_run":         true,
-					"headless":        opts.Headless,
-					"steps":           steps,
-					"phases_planned":  phasesPlanned,
-					"stopped_reason":  "completed",
-					"next":            "aether seal",
-					"current_state":   working.State,
-					"continue_armed":  opts.ContinueWithoutReplan,
-					"replan_interval": opts.ReplanInterval,
-				}
+				return finish("completed", "aether seal")
 			}
 
 			working.Plan.Phases[phase.ID-1].Status = colony.PhaseCompleted
@@ -679,18 +628,7 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 			working.State = colony.StateREADY
 
 		default:
-			return map[string]interface{}{
-				"mode":            "dry-run",
-				"dry_run":         true,
-				"headless":        opts.Headless,
-				"steps":           steps,
-				"phases_planned":  phasesPlanned,
-				"stopped_reason":  "not_runnable",
-				"next":            nextCommandFromState(working),
-				"current_state":   working.State,
-				"continue_armed":  opts.ContinueWithoutReplan,
-				"replan_interval": opts.ReplanInterval,
-			}
+			return finish("not_runnable", nextCommandFromState(working))
 		}
 	}
 }
@@ -811,10 +749,7 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 	}
 
 	if dryRun, _ := result["dry_run"].(bool); dryRun {
-		b.WriteString("\nPause Triggers (the run stops on purpose when one fires)\n")
-		for _, trigger := range autopilotPauseTriggerCatalog() {
-			b.WriteString(fmt.Sprintf("  %s — %s\n", trigger.Condition, trigger.Meaning))
-		}
+		b.WriteString(renderRunDryRunTriggerCatalogue(result["trigger_catalogue"]))
 	}
 
 	next := strings.TrimSpace(stringValue(result["next"]))

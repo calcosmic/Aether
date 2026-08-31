@@ -305,21 +305,6 @@
     "literal": "aether medic --deep"
   },
   {
-    "file": "cmd/compatibility_cmds.go",
-    "function": "buildRunDryRunResult",
-    "literal": "aether continue"
-  },
-  {
-    "file": "cmd/compatibility_cmds.go",
-    "function": "buildRunDryRunResult",
-    "literal": "aether plan"
-  },
-  {
-    "file": "cmd/compatibility_cmds.go",
-    "function": "buildRunDryRunResult",
-    "literal": "aether seal"
-  },
-  {
     "file": "cmd/context.go",
     "function": "computeNextAction",
     "literal": "aether build %d"
