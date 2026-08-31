@@ -60,7 +60,7 @@ func TestAvailabilityProbeRetriesOnlyTimeouts(t *testing.T) {
 		// whose verdict depends on machine load is not evidence of anything.
 		// The slow branch sleeps 120s, far beyond any budget, so the first
 		// attempt still times out for the reason the test intends.
-		t.Setenv("AETHER_PROBE_TIMEOUT", "8s")
+		t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "8s")
 
 		output, err := runAvailabilityProbe(context.Background(), script)
 		if err != nil {
@@ -81,7 +81,7 @@ func TestAvailabilityProbeRetriesOnlyTimeouts(t *testing.T) {
 echo 'not logged in' >&2
 exit 1`)
 
-		t.Setenv("AETHER_PROBE_TIMEOUT", "5s")
+		t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "5s")
 
 		if _, err := runAvailabilityProbe(context.Background(), script); err == nil {
 			t.Fatal("expected a failing probe to report failure")
@@ -97,7 +97,7 @@ exit 1`)
 
 	t.Run("a persistent stall still fails, as a timeout", func(t *testing.T) {
 		script := writeProbeScript(t, "sleep 30")
-		t.Setenv("AETHER_PROBE_TIMEOUT", "1s")
+		t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "1s")
 
 		_, err := runAvailabilityProbe(context.Background(), script)
 		if err == nil {
@@ -115,7 +115,7 @@ exit 1`)
 // had no fix short of a rebuild.
 func TestAvailabilityProbeTimeoutIsOverridable(t *testing.T) {
 	t.Run("honours a valid duration", func(t *testing.T) {
-		t.Setenv("AETHER_PROBE_TIMEOUT", "90s")
+		t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "90s")
 		if got := resolvedAvailabilityProbeTimeout(); got != 90*time.Second {
 			t.Fatalf("resolvedAvailabilityProbeTimeout() = %v, want 90s", got)
 		}
@@ -123,9 +123,9 @@ func TestAvailabilityProbeTimeoutIsOverridable(t *testing.T) {
 
 	for _, bad := range []string{"", "not-a-duration", "0s", "-5s"} {
 		t.Run("falls back on "+strings.ReplaceAll(bad, "-", "minus"), func(t *testing.T) {
-			t.Setenv("AETHER_PROBE_TIMEOUT", bad)
-			if got := resolvedAvailabilityProbeTimeout(); got != defaultProbeTimout {
-				t.Fatalf("a mistyped override (%q) produced %v instead of the compiled default %v — a typo must never brick dispatch", bad, got, defaultProbeTimout)
+			t.Setenv("AETHER_PREFLIGHT_TIMEOUT", bad)
+			if got := resolvedAvailabilityProbeTimeout(); got != hostedPreflightTimeout {
+				t.Fatalf("a mistyped override (%q) produced %v instead of the compiled default %v — a typo must never brick dispatch", bad, got, hostedPreflightTimeout)
 			}
 		})
 	}
@@ -140,8 +140,8 @@ func TestAvailabilityProbeTimeoutIsOverridable(t *testing.T) {
 // than "looks like enough".
 func TestAvailabilityProbeBudgetCoversObservedLatency(t *testing.T) {
 	const observedLoadedLatency = 700 * time.Millisecond
-	if defaultProbeTimout < 10*observedLoadedLatency {
-		t.Fatalf("auth probe budget is %v, under 10x the measured loaded latency (%v). 3s was ~4x and still lost workers in the field; a stall this cannot absorb stops a worker starting on a machine that is correctly logged in.", defaultProbeTimout, observedLoadedLatency)
+	if hostedPreflightTimeout < 10*observedLoadedLatency {
+		t.Fatalf("auth probe budget is %v, under 10x the measured loaded latency (%v). 3s was ~4x and still lost workers in the field; a stall this cannot absorb stops a worker starting on a machine that is correctly logged in.", hostedPreflightTimeout, observedLoadedLatency)
 	}
 }
 
@@ -165,7 +165,7 @@ func TestAvailabilityProbeBudgetCoversObservedLatency(t *testing.T) {
 // budget holds.
 func TestAvailabilityProbeBudgetBoundsWallClock(t *testing.T) {
 	script := writeProbeScript(t, "sleep 60 &\nsleep 60")
-	t.Setenv("AETHER_PROBE_TIMEOUT", "1s")
+	t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "1s")
 
 	start := time.Now()
 	_, err := runAvailabilityProbe(context.Background(), script)

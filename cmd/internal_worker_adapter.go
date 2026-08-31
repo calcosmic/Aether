@@ -100,8 +100,9 @@ var internalWorkerAdapterCmd = &cobra.Command{
 		preflight, _ := cmd.Flags().GetBool("preflight")
 		simulate, _ := cmd.Flags().GetBool("simulate")
 		requestPath, _ := cmd.Flags().GetString("request-file")
+		phase, _ := cmd.Flags().GetInt("phase")
 
-		response, err := runInternalWorkerAdapter(cmd.Context(), requestPath, preflight, simulate)
+		response, err := runInternalWorkerAdapterForPhase(cmd.Context(), requestPath, preflight, simulate, phase)
 		if err != nil {
 			outputError(1, sanitizeInternalWorkerAdapterError(err.Error()), nil)
 			return renderedErrorExit(1)
@@ -114,11 +115,20 @@ var internalWorkerAdapterCmd = &cobra.Command{
 func init() {
 	internalWorkerAdapterCmd.Flags().String("request-file", "", "Approved temporary JSON worker request")
 	internalWorkerAdapterCmd.Flags().Bool("preflight", false, "Validate the selected provider without dispatching a worker")
+	internalWorkerAdapterCmd.Flags().Int("phase", 0, "Phase scope for provider readiness (0 is unscoped)")
 	internalWorkerAdapterCmd.Flags().Bool("simulate", false, "Use the deterministic test-only adapter")
 	rootCmd.AddCommand(internalWorkerAdapterCmd)
 }
 
 func runInternalWorkerAdapter(ctx context.Context, requestPath string, preflight, simulate bool) (internalWorkerAdapterResponse, error) {
+	return runInternalWorkerAdapterForPhase(ctx, requestPath, preflight, simulate, 0)
+}
+
+func runInternalWorkerAdapterForPhase(ctx context.Context, requestPath string, preflight, simulate bool, phase int) (internalWorkerAdapterResponse, error) {
+	if phase < 0 {
+		return internalWorkerAdapterResponse{}, fmt.Errorf("preflight phase must be non-negative")
+	}
+
 	root, err := os.Getwd()
 	if err != nil {
 		return internalWorkerAdapterResponse{}, fmt.Errorf("resolve worker root: %w", err)
@@ -155,7 +165,7 @@ func runInternalWorkerAdapter(ctx context.Context, requestPath string, preflight
 		status := availability
 		if provider, ok := invoker.(codex.WorkerProviderPreflighter); ok {
 			var outcome preflightOutcome
-			status, outcome = gatedProviderPreflight(ctx, provider, platform, root, time.Now())
+			status, outcome = gatedProviderPreflightForPhase(ctx, provider, platform, phase, root, time.Now())
 			if outcome.Source != "" && outcome.Notice != "" {
 				response.Preflight = &outcome
 			}
