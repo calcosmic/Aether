@@ -1128,6 +1128,35 @@ func writeOrphanAllowlist(t *testing.T, orphans []string) {
 	}
 }
 
+func TestBuildOrphanAllowlistEntriesPreservesReviewedLiveMetadata(t *testing.T) {
+	current := []orphanAllowlistEntry{
+		{Name: "aether keep-reviewed", Reason: "reviewed disposition", OwnerPhase: "191.1"},
+		{Name: "aether removed-command", Reason: "old", OwnerPhase: "RECLAIM"},
+	}
+	preByLeaf := map[string]orphanAllowlistEntry{
+		"keep-reviewed": {Name: "keep-reviewed", Reason: "frozen fallback", OwnerPhase: "RECLAIM"},
+		"new-orphan":    {Name: "new-orphan", Reason: "pre-existing fallback", OwnerPhase: "RECLAIM"},
+	}
+
+	got := buildOrphanAllowlistEntries(
+		[]string{"aether keep-reviewed", "aether new-orphan"},
+		current,
+		preByLeaf,
+	)
+	want := []orphanAllowlistEntry{
+		{Name: "aether keep-reviewed", Reason: "reviewed disposition", OwnerPhase: "191.1"},
+		{Name: "aether new-orphan", Reason: "pre-existing fallback", OwnerPhase: "RECLAIM"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("entries = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("entry %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
 // stripGoComments removes /* */ block comment contents and blanks any line
 // whose trimmed content starts with "//", so a comment merely EXPLAINING a
 // forbidden pattern (e.g. "// never call os.Getenv here") does not itself
@@ -1550,6 +1579,21 @@ func TestOrphanAllowlistIsPathKeyed(t *testing.T) {
 	t.Run("baseline", func(t *testing.T) {
 		check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json")
 	})
+}
+
+func TestOrphanAllowlistPathValidationAllowsHistoricalDeletedBaselineEntries(t *testing.T) {
+	historical := []orphanAllowlistEntry{{Name: "aether command-deleted-after-baseline"}}
+	if problems := orphanAllowlistPathProblems(historical, false); len(problems) != 0 {
+		t.Fatalf("historical baseline entry was rejected: %v", problems)
+	}
+	if problems := orphanAllowlistPathProblems(historical, true); len(problems) == 0 {
+		t.Fatal("the same stale path was not rejected when live resolution was required")
+	}
+
+	malformed := []orphanAllowlistEntry{{Name: "bare-leaf"}}
+	if problems := orphanAllowlistPathProblems(malformed, false); len(problems) == 0 {
+		t.Fatal("historical validation accepted a non-path key")
+	}
 }
 
 // pathMigrationExpansion is the FROZEN, one-time record of what each of the
