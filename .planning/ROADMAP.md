@@ -431,8 +431,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 198.3-02-PLAN.md — preserve reviewer evidence and owner-checkpoint artifacts across both continue lanes
-- [ ] 198.3-07-PLAN.md — restore swarm's three-strike escalation through the shared blocker system
+- [x] 198.3-02-PLAN.md — preserve reviewer evidence and owner-checkpoint artifacts across both continue lanes
+- [x] 198.3-07-PLAN.md — restore swarm's three-strike escalation through the shared blocker system
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
