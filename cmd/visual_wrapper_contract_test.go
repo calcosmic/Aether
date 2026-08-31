@@ -172,6 +172,48 @@ func TestRuntimeOwnedWrappersDelegateVisually(t *testing.T) {
 	}
 }
 
+func TestInsertPhaseWrapperParityAndGoOwnership(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	paths := []string{
+		filepath.Join(repoRoot, ".aether", "commands", "insert-phase.yaml"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "insert-phase.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "insert-phase.md"),
+	}
+	contents := make([]string, 0, len(paths))
+	for _, path := range paths {
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read %s: %v", path, readErr)
+		}
+		text := string(content)
+		contents = append(contents, text)
+		for _, want := range []string{
+			"AETHER_OUTPUT_MODE=visual aether insert-phase $ARGUMENTS",
+			`aether insert-phase "problem to stabilise"`,
+			`aether insert-phase --after 2 --name "Stabilize login retries" --description "login retries lose state" --constraints "do not change the provider"`,
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing insert-phase contract %q", path, want)
+			}
+		}
+	}
+
+	claudeBody := normalizeCommandWrapper(contents[1])
+	opencodeBody := normalizeCommandWrapper(contents[2])
+	if claudeBody != opencodeBody {
+		t.Fatal("insert-phase wrapper body drift between Claude and OpenCode")
+	}
+	for _, forbidden := range []string{"derivePhaseInsertName", "resolvePhaseInsertRequest"} {
+		if strings.Contains(claudeBody, forbidden) {
+			t.Errorf("managed wrappers contain Go-owned implementation detail %q", forbidden)
+		}
+	}
+}
+
 func TestBumpVersionWrapperPreservesReleaseFollowUp(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {

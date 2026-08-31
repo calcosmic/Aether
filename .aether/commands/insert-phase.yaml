@@ -1,8 +1,15 @@
 name: ant-insert-phase
 description: "➕ Insert a corrective phase into the active plan"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
+usage:
+  shorthand: 'aether insert-phase "problem to stabilise"'
+  explicit: 'aether insert-phase --after 2 --name "Stabilize login retries" --description "login retries lose state" --constraints "do not change the provider"'
+guidance:
+  - "Pass one issue sentence for the simplest guided recovery flow."
+  - "Use the explicit form for non-interactive automation that must control every inserted phase field."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether insert-phase $ARGUMENTS"
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not derive the phase position, name, or description in a wrapper; the Go command owns input resolution."
   - "If docs and runtime disagree, runtime wins."

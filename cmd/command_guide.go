@@ -146,6 +146,19 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			},
 		}
 	}
+	catalog["insert-phase"] = commandGuideDefinition{
+		Category: commandGuideCategoryLiteral,
+		Intent: "Insert a corrective phase through the Go-owned resolver. Pass one issue sentence with " +
+			"`aether insert-phase \"problem to stabilise\"`. For non-interactive automation, use " +
+			"`aether insert-phase --after 2 --name \"Stabilize login retries\" --description \"login retries lose state\" --constraints \"do not change the provider\"`.",
+		Literal:    true,
+		RunCommand: "AETHER_OUTPUT_MODE=visual aether insert-phase $ARGUMENTS",
+		RawBypass:  "Literal passthrough is the default; Go resolves shorthand, prompts, and explicit flags.",
+		DriftGuards: []string{
+			"Keep phase position, name, and description resolution in the Go command; wrappers only pass through $ARGUMENTS.",
+			"Keep the shorthand and non-interactive automation examples aligned across command-guide, canonical YAML, and both managed wrappers.",
+		},
+	}
 
 	catalog["init"] = commandGuideDefinition{
 		Category:       commandGuideCategoryFullOrchestration,
