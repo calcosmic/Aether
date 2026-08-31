@@ -286,7 +286,7 @@ func TestRunHeadlessQueuesVisualRuntimeAndReplanThenCompletes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("headless run: %v", err)
 	}
-	if result["stopped_reason"] != string(autopilotTriggerColonyComplete) || intValue(result["phases_completed"]) != 2 {
+	if result["stopped_reason"] != "completed" || result["trigger_code"] != autopilotTriggerColonyComplete || intValue(result["phases_completed"]) != 2 {
 		t.Fatalf("headless run did not complete both phases: %+v", result)
 	}
 	if buildCalls != 2 || continueCalls != 2 {

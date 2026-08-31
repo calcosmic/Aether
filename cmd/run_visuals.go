@@ -87,6 +87,38 @@ func renderRunReplanQueued(decision PendingDecision) string {
 	)
 }
 
+func renderRunCheckpointQueued(code autopilotTriggerCode, checkpoint autopilotCheckpointReference) string {
+	return fmt.Sprintf(
+		"📝 %s checkpoint %s queued for phase %d. Autopilot continues; owner recovery: `%s`",
+		strings.ReplaceAll(string(code), "_", " "),
+		checkpoint.ID,
+		checkpoint.Phase,
+		emptyFallback(checkpoint.RecoveryCommand, "aether decision-list"),
+	)
+}
+
+func renderRunBlockerBaseline(snapshot blockerSnapshot) string {
+	if snapshot.Count == 1 {
+		return "ℹ️ 1 existing blocker recorded at this stage boundary; autopilot will continue unless the count grows or an escalation exists."
+	}
+	return fmt.Sprintf("ℹ️ %d existing blockers recorded at this stage boundary; autopilot will continue unless the count grows or an escalation exists.", snapshot.Count)
+}
+
+func renderRunTypedDecision(decision autopilotRunDecision) string {
+	title := "Autopilot Stopped"
+	icon := "⛔"
+	guidance := fmt.Sprintf("Next step: `%s`", emptyFallback(decision.Next, "aether status"))
+	switch decision.Disposition {
+	case autopilotDispositionPause:
+		title = "Autopilot Paused"
+		icon = "⏸"
+	case autopilotDispositionNormalStop:
+		title = "Autopilot Finished This Run"
+		icon = "⏹"
+	}
+	return renderDecisionBlock(icon, title, humanizeAutopilotPauseReason(string(decision.Code)), guidance)
+}
+
 func renderAutopilotComplete(phasesCompleted int) string {
 	var b strings.Builder
 	b.WriteString("━━━ ✅ " + spacedTitle("Autopilot Complete") + " ━━━\n")
@@ -112,6 +144,34 @@ func renderRunPauseBlock(reason, next string) string {
 // reason code into a sentence a person can act on without reading source.
 func humanizeAutopilotPauseReason(reason string) string {
 	switch {
+	case reason == string(autopilotTriggerDeterministicVerificationFailed):
+		return "The current phase did not clear deterministic verification, so continuing would be unsafe."
+	case reason == string(autopilotTriggerAuditorScoreBelowFloor):
+		return "The Auditor scored the current result below the overnight safety floor of 60."
+	case reason == string(autopilotTriggerCriticalReviewFinding):
+		return "The current review produced a Critical finding."
+	case reason == string(autopilotTriggerBlockerCountIncreased):
+		return "The live blocker count increased during this stage."
+	case reason == string(autopilotTriggerBlockerEscalated):
+		return "A blocker escalation is unresolved at this stage boundary."
+	case reason == string(autopilotTriggerColonyNotRunnable):
+		return "The colony cannot safely enter its next build or verification step."
+	case reason == string(autopilotTriggerProviderUnavailable):
+		return "The required worker provider is unavailable; the current phase remains ready to resume."
+	case reason == string(autopilotTriggerRuntimeVerificationNeeded):
+		return "The current phase needs hands-on owner verification."
+	case reason == string(autopilotTriggerVisualCheckpointNeeded):
+		return "The current phase needs an owner to inspect its user-interface changes."
+	case reason == string(autopilotTriggerReplanDue):
+		return "The interval was reached with confirmed lessons that may change the remaining plan."
+	case reason == string(autopilotTriggerCancelled):
+		return "The run was cancelled after preserving its current phase state."
+	case reason == string(autopilotTriggerWorkerTimeout):
+		return "A bounded worker timeout ended this run; the unfinished phase is ready to resume."
+	case reason == string(autopilotTriggerMaxPhasesReached):
+		return "This invocation reached its requested phase limit."
+	case reason == string(autopilotTriggerColonyComplete):
+		return "Every planned phase is complete; sealing remains an explicit owner action."
 	case reason == "blocked":
 		return "Verification could not confirm this phase's work."
 	case strings.HasPrefix(reason, "active_blockers:"):

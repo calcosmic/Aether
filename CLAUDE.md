@@ -1039,8 +1039,8 @@ Failures are logged automatically, on every path that can produce one:
   (`TestQuickFailureReachesTheFailureLog`)
 - A bug-investigation helper fails or times out, on either lane
   (`TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes`)
-- Autopilot gives up retrying a step and records why
-  (`TestAutopilotRetryExhaustionCallSiteIsWired`)
+- Autopilot never retries a whole build; provider readiness owns bounded retries
+  (`TestAutopilotWholeBuildRetryIsNotWired`)
 
 **Data Maintenance:**
 - `/ant-data-clean` — Remove test artifacts from colony data files (pheromones, constraints, midden)

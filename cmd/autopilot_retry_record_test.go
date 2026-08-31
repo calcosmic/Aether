@@ -2,9 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -136,93 +133,26 @@ func TestRecordAutopilotRetryExhaustion(t *testing.T) {
 // branch this guard checks against lives in.
 const autopilotRetryCompatibilitySourceFile = "compatibility_cmds.go"
 
-// TestAutopilotRetryExhaustionCallSiteIsWired is 188-05's Tier 2 test
-// (D-14): a structural regression guard, not a full forced-double-build-
-// failure harness -- no reliable way to force runCodexBuildWithOptions to
-// fail deterministically twice exists in this codebase today (confirmed by
-// grep across cmd/*_test.go; see 188-CONTEXT.md D-14). It parses
-// compatibility_cmds.go with go/parser, locates runCompatibilityAutopilot's
-// own function body by byte range (not a whole-file grep, which would also
-// match this function's own definition were it colocated in this file), and
-// confirms recordAutopilotRetryExhaustion( is called strictly between the
-// retry's own runCodexBuildWithOptions( call and the "paused" sync call and
-// "return nil, err" that follow it -- proving the record write actually
-// sits inside the second-failure branch, not merely somewhere earlier in
-// the function that would also satisfy a looser "appears before the
-// return" check.
-func TestAutopilotRetryExhaustionCallSiteIsWired(t *testing.T) {
+// TestAutopilotWholeBuildRetryIsNotWired supersedes 188-05's old outer-retry
+// guard. Provider readiness owns its bounded timeout retry now; the run loop
+// invokes the whole build exactly once and cannot write a misleading
+// "two attempts exhausted" record for a retry it no longer performs.
+func TestAutopilotWholeBuildRetryIsNotWired(t *testing.T) {
 	src, err := os.ReadFile(autopilotRetryCompatibilitySourceFile)
 	if err != nil {
 		t.Fatalf("read %s: %v", autopilotRetryCompatibilitySourceFile, err)
 	}
-
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, autopilotRetryCompatibilitySourceFile, src, 0)
-	if err != nil {
-		t.Fatalf("parse %s: %v", autopilotRetryCompatibilitySourceFile, err)
+	body := string(src)
+	start := strings.Index(body, "func runCompatibilityAutopilot(")
+	end := strings.Index(body[start:], "\nfunc loadCompatibilityColonyState(")
+	if start < 0 || end < 0 {
+		t.Fatal("locate runCompatibilityAutopilot source body")
 	}
-
-	var fn *ast.FuncDecl
-	for _, decl := range file.Decls {
-		fd, ok := decl.(*ast.FuncDecl)
-		if ok && fd.Name.Name == "runCompatibilityAutopilot" {
-			fn = fd
-			break
-		}
+	runBody := body[start : start+end]
+	if got := strings.Count(runBody, "runAutopilotBuild("); got != 1 {
+		t.Fatalf("whole-build invocation sites = %d, want exactly 1", got)
 	}
-	if fn == nil {
-		t.Fatalf("runCompatibilityAutopilot not found in %s -- a rename would silently blind this guard", autopilotRetryCompatibilitySourceFile)
-	}
-	if fn.Body == nil {
-		t.Fatal("runCompatibilityAutopilot has no body")
-	}
-
-	startOffset := fset.Position(fn.Body.Pos()).Offset
-	endOffset := fset.Position(fn.Body.End()).Offset
-	if startOffset < 0 || endOffset > len(src) || startOffset >= endOffset {
-		t.Fatalf("invalid function body byte range [%d, %d) for a %d-byte file", startOffset, endOffset, len(src))
-	}
-	body := string(src[startOffset:endOffset])
-
-	const buildCall = "runCodexBuildWithOptions("
-	firstBuildIdx := strings.Index(body, buildCall)
-	if firstBuildIdx == -1 {
-		t.Fatalf("runCompatibilityAutopilot does not call %s at all -- this guard's anchor point is gone; update it to match the new retry structure", buildCall)
-	}
-	afterFirst := body[firstBuildIdx+len(buildCall):]
-	secondBuildRel := strings.Index(afterFirst, buildCall)
-	if secondBuildRel == -1 {
-		t.Fatalf("runCompatibilityAutopilot calls %s only once -- expected a second call (the single retry); this guard's anchor point assumes exactly one retry and needs updating if that changed", buildCall)
-	}
-	secondBuildIdx := firstBuildIdx + len(buildCall) + secondBuildRel
-	if strings.Contains(body[secondBuildIdx+len(buildCall):], buildCall) {
-		t.Fatalf("runCompatibilityAutopilot calls %s a third time -- this guard assumes exactly one retry (two total calls) and needs updating if the retry count changed", buildCall)
-	}
-
-	tail := body[secondBuildIdx:]
-
-	const recordCall = "recordAutopilotRetryExhaustion("
-	recordRel := strings.Index(tail, recordCall)
-	if recordRel == -1 {
-		t.Fatal("recordAutopilotRetryExhaustion( does not appear after the retry's runCodexBuildWithOptions( call inside runCompatibilityAutopilot -- the retry-exhaustion record is not wired into the second-failure branch")
-	}
-
-	const pauseSyncCall = `syncRunAutopilotState(state, opts, "paused", "")`
-	pauseRel := strings.Index(tail, pauseSyncCall)
-	if pauseRel == -1 {
-		t.Fatalf("%s not found after the retry's build call inside runCompatibilityAutopilot -- the second-failure pause call this guard anchors on may have changed; update this test to match", pauseSyncCall)
-	}
-
-	const returnStmt = "return nil, err"
-	returnRel := strings.Index(tail, returnStmt)
-	if returnRel == -1 {
-		t.Fatal("\"return nil, err\" not found after the retry's build call inside runCompatibilityAutopilot -- the second-failure return this guard checks against may have changed; update this test to match")
-	}
-
-	if recordRel > pauseRel {
-		t.Fatalf("recordAutopilotRetryExhaustion( appears AFTER the \"paused\" sync call (byte offset %d vs %d, relative to the retry's build call) -- it must run before the pause so the record is written on a best-effort basis, not after autopilot has already started pausing", recordRel, pauseRel)
-	}
-	if recordRel > returnRel {
-		t.Fatalf("recordAutopilotRetryExhaustion( appears AFTER \"return nil, err\" (byte offset %d vs %d, relative to the retry's build call) -- dead code that never runs before the function returns", recordRel, returnRel)
+	if strings.Contains(runBody, "recordAutopilotRetryExhaustion(") {
+		t.Fatal("run loop still records exhaustion for the removed whole-build retry")
 	}
 }
