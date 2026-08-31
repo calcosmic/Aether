@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -188,5 +189,41 @@ func TestRunDryRunUsesCanonicalTriggerCatalogue(t *testing.T) {
 	}
 	if !reflect.DeepEqual(dryRunSpecs, wantSpecs) {
 		t.Fatal("dry-run contract must project the canonical trigger specs without hand-written substitutions")
+	}
+}
+
+func TestAutopilotTriggerCatalogueRendersBothModeDispositions(t *testing.T) {
+	state := colony.ColonyState{
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Rendered catalogue fixture", Status: colony.PhasePending},
+		}},
+	}
+	result := buildRunDryRunResult(state, runCompatibilityOptions{})
+
+	// Exercise the JSON-round-tripped shape used by hosted callers as well as
+	// the direct typed result used by the CLI.
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal dry-run result: %v", err)
+	}
+	var roundTripped map[string]interface{}
+	if err := json.Unmarshal(encoded, &roundTripped); err != nil {
+		t.Fatalf("unmarshal dry-run result: %v", err)
+	}
+	rendered := renderRunCompatibilityVisual(roundTripped)
+
+	for _, spec := range autopilotTriggerSpecs() {
+		for _, want := range []string{
+			string(spec.Code),
+			spec.Label,
+			"Headless: " + string(spec.HeadlessDisposition),
+			"Interactive: " + string(spec.InteractiveDisposition),
+		} {
+			if !strings.Contains(rendered, want) {
+				t.Errorf("rendered dry-run catalogue missing %q", want)
+			}
+		}
 	}
 }
