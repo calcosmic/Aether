@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -19,7 +20,7 @@ import (
 // via the store's path resolution).
 const preflightCachePathRel = "preflight-cache.json"
 
-const preflightCacheSchemaVersion = 1
+const preflightCacheSchemaVersion = 2
 
 // preflightCacheDefaultTTL is a var (not a const) so tests can shrink it with
 // the shrinkPreflightTimeout cleanup idiom from
@@ -37,19 +38,29 @@ const (
 // probe.
 type preflightCacheEntry struct {
 	Platform  string `json:"platform"`
+	Phase     int    `json:"phase,omitempty"`
 	Binary    string `json:"binary,omitempty"`
 	Available bool   `json:"available"`
 	Category  string `json:"category,omitempty"`
 	CheckedAt string `json:"checked_at"`
 }
 
-// preflightCacheFile is the on-disk shape of the cache. Entries are keyed by
-// platform so switching AETHER_WORKER_PLATFORM back and forth never destroys
-// another platform's trust window, and a lookup for platform X never sees
-// platform Y's entry (D-03 "keyed per platform").
+// preflightCacheFile is the on-disk shape of the cache. Scoped entries are
+// keyed by platform and phase, while phase 0 retains the legacy unscoped key.
+// Switching AETHER_WORKER_PLATFORM back and forth never destroys another
+// platform's trust window, and entering a new phase always misses even when
+// the prior phase's entry remains inside its TTL.
 type preflightCacheFile struct {
 	SchemaVersion int                            `json:"schema_version"`
 	Entries       map[string]preflightCacheEntry `json:"entries"`
+}
+
+func preflightCacheKey(platform codex.Platform, phase int) string {
+	platformKey := string(platform)
+	if phase <= 0 {
+		return platformKey
+	}
+	return fmt.Sprintf("%s#phase=%d", platformKey, phase)
 }
 
 // resolvedPreflightCacheTTL returns the trust window duration, honoring the
@@ -110,7 +121,7 @@ func preflightCacheEntryIsFresh(entry preflightCacheEntry, now time.Time, ttl ti
 // missing entry, or a stale entry are all treated as a miss (never a
 // failure). On a hit it also returns the remaining trust window (ttl minus
 // elapsed, floored at zero).
-func loadFreshPreflightCache(platform codex.Platform, now time.Time) (preflightCacheEntry, time.Duration, bool) {
+func loadFreshPreflightCacheForPhase(platform codex.Platform, phase int, now time.Time) (preflightCacheEntry, time.Duration, bool) {
 	if store == nil {
 		return preflightCacheEntry{}, 0, false
 	}
@@ -124,11 +135,11 @@ func loadFreshPreflightCache(platform codex.Platform, now time.Time) (preflightC
 	}
 
 	platformKey := string(platform)
-	entry, ok := file.Entries[platformKey]
+	entry, ok := file.Entries[preflightCacheKey(platform, phase)]
 	if !ok {
 		return preflightCacheEntry{}, 0, false
 	}
-	if entry.Platform != platformKey {
+	if entry.Platform != platformKey || entry.Phase != phase {
 		return preflightCacheEntry{}, 0, false
 	}
 
@@ -148,12 +159,19 @@ func loadFreshPreflightCache(platform codex.Platform, now time.Time) (preflightC
 	return entry, remaining, true
 }
 
+// loadFreshPreflightCache preserves the phase-0 API used by non-phase
+// workflows and older callers. Phase-scoped build and continue dispatch use
+// loadFreshPreflightCacheForPhase directly through gatedProviderPreflightForPhase.
+func loadFreshPreflightCache(platform codex.Platform, now time.Time) (preflightCacheEntry, time.Duration, bool) {
+	return loadFreshPreflightCacheForPhase(platform, 0, now)
+}
+
 // errPreflightCacheFutureSchema aborts a cache write when the on-disk file
 // was written by a newer binary (schema_version above ours). Mixed binary
 // versions against one repo are a real situation (aether vs aether-dev
 // channels): an older binary must treat the newer file as a cache miss and
-// leave it untouched, never stamp schema_version 1 over half-decoded future
-// entries (WR-05). Returned from the UpdateJSONAtomically mutation, which
+// leave it untouched, never stamp its schema over half-decoded future entries
+// (WR-05). Returned from the UpdateJSONAtomically mutation, which
 // guarantees no write occurs.
 var errPreflightCacheFutureSchema = errors.New("preflight cache: file has an unknown future schema_version; refusing to rewrite it")
 
@@ -178,20 +196,21 @@ func preflightCacheUnmarshalError(err error) bool {
 // replaced wholesale with a fresh single-entry cache — a cache is
 // disposable, and overwriting a corrupt one is always safe. A loud one-line
 // notice is printed so the self-heal is never silent.
-func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) error {
+func recordPreflightSuccessForPhase(status codex.AvailabilityStatus, phase int, now time.Time) error {
 	if store == nil {
 		return nil
 	}
 	if !status.Available {
 		return nil
 	}
-	if status.Platform == "" || status.Platform == codex.PlatformUnknown {
+	if status.Platform == "" || status.Platform == codex.PlatformUnknown || phase < 0 {
 		return nil
 	}
 
 	platformKey := string(status.Platform)
 	entry := preflightCacheEntry{
 		Platform:  platformKey,
+		Phase:     phase,
 		Binary:    status.Binary,
 		Available: true,
 		Category:  string(status.Category),
@@ -200,14 +219,20 @@ func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) erro
 
 	var file preflightCacheFile
 	err := store.UpdateJSONAtomically(preflightCachePathRel, &file, func() error {
-		if file.SchemaVersion != 0 && file.SchemaVersion != preflightCacheSchemaVersion {
+		if file.SchemaVersion > preflightCacheSchemaVersion {
 			return errPreflightCacheFutureSchema
+		}
+		// A legacy platform-only success cannot safely authorize every phase.
+		// Cache data is disposable, so discard all older/unspecified schemas
+		// instead of attempting to promote their entries into phase scope.
+		if file.SchemaVersion != preflightCacheSchemaVersion {
+			file.Entries = nil
 		}
 		if file.Entries == nil {
 			file.Entries = map[string]preflightCacheEntry{}
 		}
 		file.SchemaVersion = preflightCacheSchemaVersion
-		file.Entries[platformKey] = entry
+		file.Entries[preflightCacheKey(status.Platform, phase)] = entry
 		return nil
 	})
 	if err == nil {
@@ -226,9 +251,14 @@ func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) erro
 	visualFprintf(stderr, "preflight: cache file %s was corrupt — rewriting it fresh\n", preflightCachePathRel)
 	fresh := preflightCacheFile{
 		SchemaVersion: preflightCacheSchemaVersion,
-		Entries:       map[string]preflightCacheEntry{platformKey: entry},
+		Entries:       map[string]preflightCacheEntry{preflightCacheKey(status.Platform, phase): entry},
 	}
 	return store.SaveJSON(preflightCachePathRel, &fresh)
+}
+
+// recordPreflightSuccess preserves the phase-0 API used by unscoped callers.
+func recordPreflightSuccess(status codex.AvailabilityStatus, now time.Time) error {
+	return recordPreflightSuccessForPhase(status, 0, now)
 }
 
 // clearPreflightCache removes platform's cached entry so the next command
@@ -245,13 +275,22 @@ func clearPreflightCache(platform codex.Platform) error {
 	platformKey := string(platform)
 	var file preflightCacheFile
 	err := store.UpdateJSONAtomically(preflightCachePathRel, &file, func() error {
-		if file.SchemaVersion != 0 && file.SchemaVersion != preflightCacheSchemaVersion {
+		if file.SchemaVersion > preflightCacheSchemaVersion {
 			return errPreflightCacheFutureSchema
+		}
+		if file.SchemaVersion != preflightCacheSchemaVersion {
+			file.SchemaVersion = preflightCacheSchemaVersion
+			file.Entries = map[string]preflightCacheEntry{}
+			return nil
 		}
 		if file.Entries == nil {
 			return nil
 		}
-		delete(file.Entries, platformKey)
+		for key, entry := range file.Entries {
+			if entry.Platform == platformKey || key == platformKey || strings.HasPrefix(key, platformKey+"#phase=") {
+				delete(file.Entries, key)
+			}
+		}
 		return nil
 	})
 	if errors.Is(err, errPreflightCacheFutureSchema) {
@@ -311,6 +350,18 @@ const (
 	preflightSourceSkipped = "skipped"
 )
 
+// preflightProbeLocks supplies in-process singleflight for one platform and
+// phase. The cache check, real probe, and success record happen under the same
+// key lock so simultaneous consumers cannot all observe a miss and pay for
+// duplicate readiness probes.
+var preflightProbeLocks sync.Map
+
+func preflightProbeLock(platform codex.Platform, phase int) *sync.Mutex {
+	key := preflightCacheKey(platform, phase)
+	lock, _ := preflightProbeLocks.LoadOrStore(key, &sync.Mutex{})
+	return lock.(*sync.Mutex)
+}
+
 // gatedProviderPreflight is the single skip/cache/probe/record decision both
 // dispatch chokepoints (cmd/dispatch_runtime.go preflightWorkerProvider and
 // cmd/internal_worker_adapter.go's --preflight branch) call, so a direct-Go
@@ -328,6 +379,13 @@ const (
 //     cache write failure must not fail dispatch). A failure is never
 //     cached and never clears an existing entry here.
 func gatedProviderPreflight(ctx context.Context, preflighter codex.WorkerProviderPreflighter, platform codex.Platform, root string, now time.Time) (codex.AvailabilityStatus, preflightOutcome) {
+	return gatedProviderPreflightForPhase(ctx, preflighter, platform, 0, root, now)
+}
+
+// gatedProviderPreflightForPhase applies the shared skip/cache/probe decision
+// for one explicit phase. Phase 0 is the intentional unscoped compatibility
+// lane. Negative phases are never cached.
+func gatedProviderPreflightForPhase(ctx context.Context, preflighter codex.WorkerProviderPreflighter, platform codex.Platform, phase int, root string, now time.Time) (codex.AvailabilityStatus, preflightOutcome) {
 	if preflightSkipRequested() {
 		status := codex.AvailabilityStatus{
 			Platform:  platform,
@@ -338,9 +396,13 @@ func gatedProviderPreflight(ctx context.Context, preflighter codex.WorkerProvide
 		return status, preflightOutcome{Source: preflightSourceSkipped, Notice: preflightSkipNoticeLine()}
 	}
 
-	keyable := platform != "" && platform != codex.PlatformUnknown
+	keyable := platform != "" && platform != codex.PlatformUnknown && phase >= 0
 	if keyable {
-		if entry, remaining, hit := loadFreshPreflightCache(platform, now); hit {
+		lock := preflightProbeLock(platform, phase)
+		lock.Lock()
+		defer lock.Unlock()
+
+		if entry, remaining, hit := loadFreshPreflightCacheForPhase(platform, phase, now); hit {
 			status := codex.AvailabilityStatus{
 				Platform:  platform,
 				Binary:    entry.Binary,
@@ -357,7 +419,7 @@ func gatedProviderPreflight(ctx context.Context, preflighter codex.WorkerProvide
 
 	status := preflighter.Preflight(ctx, root)
 	if status.Available {
-		_ = recordPreflightSuccess(status, now)
+		_ = recordPreflightSuccessForPhase(status, phase, now)
 	}
 	return status, preflightOutcome{Source: preflightSourceProbe}
 }

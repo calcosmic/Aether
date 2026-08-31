@@ -25,28 +25,6 @@ const (
 	envOpenCodePath     = "AETHER_OPENCODE_PATH"
 	envOpenCodePrimary  = "AETHER_OPENCODE_PRIMARY_AGENT"
 	envOpenCodeAgentURL = "AETHER_OPENCODE_AGENT_URL"
-	// defaultProbeTimout is the budget for the CHEAP auth probe (`claude auth
-	// status --json`, `codex login status`) -- not the model round-trip
-	// preflight below, which has its own, much larger budget.
-	//
-	// It was 3s with no retry and no override. Idle, these probes answer in
-	// 0.05-0.3s, so 3s looks generous; but they occasionally stall well past
-	// it (a token refresh reaching the network is the likeliest cause), and a
-	// stall was fatal -- the worker never started, on a machine where the CLI
-	// was installed and logged in the whole time.
-	//
-	// Observed on 2026-08-21 in two unrelated places on the same day: a
-	// Formica build lost two of four workers to `claude auth status failed:
-	// timed out` while the OTHER TWO STARTED FINE on the same credentials
-	// (proof the auth was healthy and the probe was not), and this repo's own
-	// suite lost TestCodexReadOnlyProfileSelectsReadOnlySandbox to `codex
-	// login status failed: timed out`, passing on a rerun.
-	//
-	// This is the same lesson hostedPreflightTimeout already learned and
-	// wrote down (20s -> 45s plus one retry, after a run died 22s in while a
-	// hand-run probe answered in 5). The cheap probe never got the same
-	// treatment, so it kept failing the same way for the same reason.
-	defaultProbeTimout = 10 * time.Second
 )
 
 const defaultOpenCodePrimaryAgent = "aether-worker-router"
@@ -1700,22 +1678,11 @@ func reorderDispatchers(dispatchers []PlatformDispatcher, preferred ...Platform)
 	return out
 }
 
-// resolvedAvailabilityProbeTimeout returns the auth-probe budget, honoring
-// AETHER_PROBE_TIMEOUT (Go duration syntax, e.g. "30s") so a slow host can
-// widen it without a rebuild -- the same escape hatch AETHER_PREFLIGHT_TIMEOUT
-// gives the model round-trip probe, which this one lacked entirely. An invalid
-// or non-positive value falls back to the compiled default: a mistyped env var
-// must not brick dispatch.
+// resolvedAvailabilityProbeTimeout returns the same readiness budget used by
+// the model round-trip probe. One setting and one 45-second default govern
+// every live provider readiness subprocess.
 func resolvedAvailabilityProbeTimeout() time.Duration {
-	envValue := strings.TrimSpace(os.Getenv("AETHER_PROBE_TIMEOUT"))
-	if envValue == "" {
-		return defaultProbeTimout
-	}
-	timeout, err := time.ParseDuration(envValue)
-	if err != nil || timeout <= 0 {
-		return defaultProbeTimout
-	}
-	return timeout
+	return resolvedPreflightTimeout()
 }
 
 // availabilityProbeAttempts mirrors hostedPreflightAttempts: one retry, and

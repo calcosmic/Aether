@@ -144,7 +144,11 @@ func preflightWorkerProvider(ctx context.Context, invoker codex.WorkerInvoker, d
 		}
 	}
 	platform := codex.PlatformFromInvoker(invoker)
-	status, outcome := gatedProviderPreflight(ctx, preflighter, platform, root, time.Now())
+	phase, err := preflightPhaseForDispatches(dispatches)
+	if err != nil {
+		return err
+	}
+	status, outcome := gatedProviderPreflightForPhase(ctx, preflighter, platform, phase, root, time.Now())
 	if outcome.Notice != "" {
 		visualFprintf(stderr, "%s\n", outcome.Notice)
 	}
@@ -152,6 +156,26 @@ func preflightWorkerProvider(ctx context.Context, invoker codex.WorkerInvoker, d
 		return nil
 	}
 	return &workerProviderPreflightError{status: status}
+}
+
+func preflightPhaseForDispatches(dispatches []codex.WorkerDispatch) (int, error) {
+	phase := 0
+	for _, dispatch := range dispatches {
+		if dispatch.Phase < 0 {
+			return 0, fmt.Errorf("worker dispatch %q has invalid negative phase %d", dispatch.WorkerName, dispatch.Phase)
+		}
+		if dispatch.Phase == 0 {
+			continue
+		}
+		if phase == 0 {
+			phase = dispatch.Phase
+			continue
+		}
+		if dispatch.Phase != phase {
+			return 0, fmt.Errorf("worker provider preflight cannot span phases %d and %d", phase, dispatch.Phase)
+		}
+	}
+	return phase, nil
 }
 
 func isWorkerProviderPreflightError(err error) bool {
