@@ -425,9 +425,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 198.3-01-PLAN.md — define the canonical overnight trigger catalogue and live blocker snapshot
-- [ ] 198.3-03-PLAN.md — make provider preflight phase-scoped, bounded, and consistent across direct and hosted dispatch
-- [ ] 198.3-06-PLAN.md — restore the guided insert-phase recovery flow across all platform wrappers
+- [x] 198.3-01-PLAN.md — define the canonical overnight trigger catalogue and live blocker snapshot
+- [x] 198.3-03-PLAN.md — make provider preflight phase-scoped, bounded, and consistent across direct and hosted dispatch
+- [x] 198.3-06-PLAN.md — restore the guided insert-phase recovery flow across all platform wrappers
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
