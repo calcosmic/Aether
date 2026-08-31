@@ -717,6 +717,11 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		"agent_delegate_session": codex.IsAgentDelegateSession(),
 		"plan_revision":          planRevisionSummary(state.Plan),
 	}
+	blockers := readBlockerSnapshot(s)
+	issues, notes := countStatusNonBlockerFlags(s)
+	addBlockerSnapshotFields(result, blockers)
+	result["issues"] = issues
+	result["notes"] = notes
 
 	if s != nil {
 		warnings := computeWarnings(state, s)
@@ -906,9 +911,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	}
 	fmt.Fprintf(&b, "Instincts: %d learned (%d strong)\n", totalInstincts, highConf)
 
-	// Flags
-	blockers, issues, notes := countFlags(s)
+	// Flags. These values were captured once when buildStatusResult assembled
+	// the JSON result, so visual and machine-readable status cannot disagree.
+	blockers := intValue(result["blockers"])
+	escalatedBlockers := intValue(result["escalated_blockers"])
+	issues := intValue(result["issues"])
+	notes := intValue(result["notes"])
 	fmt.Fprintf(&b, "Flags: %d blockers | %d issues | %d notes\n", blockers, issues, notes)
+	fmt.Fprintf(&b, "Existing blocker work: %d active (%d escalated)\n", blockers, escalatedBlockers)
 
 	// Scope
 	fmt.Fprintf(&b, "Scope: %s\n", state.EffectiveScope())
@@ -1363,11 +1373,18 @@ func countConstraints(s *storage.Store) (focus, avoid int) {
 	return 0, 0
 }
 
-// countFlags loads flags.json and counts by type.
+// countFlags preserves the existing status counting surface while delegating
+// blocker truth to the shared snapshot reader.
 func countFlags(s *storage.Store) (blockers, issues, notes int) {
+	snapshot := readBlockerSnapshot(s)
+	issues, notes = countStatusNonBlockerFlags(s)
+	return snapshot.Count, issues, notes
+}
+
+func countStatusNonBlockerFlags(s *storage.Store) (issues, notes int) {
 	flags, ok := loadFlagsFile(s)
 	if !ok {
-		return 0, 0, 0
+		return 0, 0
 	}
 	for _, f := range flags.Decisions {
 		if f.Resolved {
@@ -1375,14 +1392,14 @@ func countFlags(s *storage.Store) (blockers, issues, notes int) {
 		}
 		switch f.Type {
 		case "blocker":
-			blockers++
+			continue
 		case "issue":
 			issues++
 		default:
 			notes++
 		}
 	}
-	return
+	return issues, notes
 }
 
 func loadFlagsFile(s *storage.Store) (colony.FlagsFile, bool) {

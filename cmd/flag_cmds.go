@@ -226,44 +226,32 @@ var flagCheckBlockersCmd = &cobra.Command{
 			return nil
 		}
 
-		var ff colony.FlagsFile
-		if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
-			if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
-				outputOK(map[string]interface{}{
-					"blockers":     0,
-					"issues":       0,
-					"notes":        0,
-					"has_blockers": false,
-				})
-				return nil
-			}
-		}
-
-		blockers := 0
+		snapshot := readBlockerSnapshot(store)
 		issues := 0
 		notes := 0
-		for _, f := range ff.Decisions {
-			if f.Resolved {
-				continue
-			}
-			switch f.Type {
-			case "blocker":
-				blockers++
-			case "issue":
-				issues++
-			case "note":
-				notes++
-			default:
-				issues++
+		if ff, ok := loadFlagsFile(store); ok {
+			for _, f := range ff.Decisions {
+				if f.Resolved || f.Type == "blocker" {
+					continue
+				}
+				switch f.Type {
+				case "note":
+					notes++
+				default:
+					// Preserve the diagnostic command's compatibility rule:
+					// unknown non-blocker records are issues, not notes.
+					issues++
+				}
 			}
 		}
 
-		outputOK(map[string]interface{}{
-			"blockers":     blockers,
+		result := map[string]interface{}{
 			"issues":       issues,
 			"notes":        notes,
-			"has_blockers": blockers > 0,
-		})
+			"has_blockers": snapshot.Count > 0,
+		}
+		addBlockerSnapshotFields(result, snapshot)
+		outputOK(result)
 		return nil
 	},
 }

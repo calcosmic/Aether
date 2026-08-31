@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 )
 
 func TestBlockerSnapshot(t *testing.T) {
+	saveGlobals(t)
 	tests := []struct {
 		name  string
 		write bool
@@ -168,6 +170,7 @@ func TestFlagCheckBlockersAndStatusShareSnapshot(t *testing.T) {
 	forceJSONOutputModeForTest(t)
 
 	s, root := setupTestStore(t)
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	t.Cleanup(func() { store = nil })
 	t.Setenv("AETHER_ROOT", root)
 	store = s
@@ -196,13 +199,18 @@ func TestFlagCheckBlockersAndStatusShareSnapshot(t *testing.T) {
 	if diagnostic["blockers"] != float64(2) || diagnostic["escalated_blockers"] != float64(1) {
 		t.Fatalf("diagnostic snapshot = %#v, want 2 blockers and 1 escalation", diagnostic)
 	}
-	if diagnostic["issues"] != float64(1) || diagnostic["notes"] != float64(0) || diagnostic["has_blockers"] != true {
+	// The legacy diagnostic counts unknown non-blocker rows (including the
+	// owner-checkpoint-shaped fixture) as issues. That compatibility behavior
+	// remains separate from blocker-snapshot membership.
+	if diagnostic["issues"] != float64(2) || diagnostic["notes"] != float64(0) || diagnostic["has_blockers"] != true {
 		t.Fatalf("compatibility fields changed: %#v", diagnostic)
 	}
 }
 
 func TestStatusEscalatedBlockersVisual(t *testing.T) {
-	s, _ := setupTestStore(t)
+	saveGlobals(t)
+	s, root := setupTestStore(t)
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	store = s
 	writeTestFlags(t, blockerStatusFixture()...)
 
