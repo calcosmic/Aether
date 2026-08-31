@@ -39,6 +39,14 @@ type PendingDecision struct {
 	// wrapper-composed questions — a question that cannot cite its basis is
 	// the canned-question problem wearing a new coat.
 	Grounding string `json:"grounding,omitempty"`
+	// CheckpointKey and the fields below carry durable owner-only work. They
+	// are optional so older pending-decision records remain wire-compatible.
+	// Type distinguishes queueable visual/runtime checks from blocker flags.
+	CheckpointKey string   `json:"checkpoint_key,omitempty"`
+	Criterion     string   `json:"criterion,omitempty"`
+	TaskID        string   `json:"task_id,omitempty"`
+	Evidence      []string `json:"evidence,omitempty"`
+	SourcePaths   []string `json:"source_paths,omitempty"`
 }
 
 // PendingDecisionFile is the JSON structure for pending-decisions.json.

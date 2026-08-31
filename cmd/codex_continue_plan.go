@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -31,13 +32,17 @@ type codexContinueExternalDispatch struct {
 	WeakSpots       []string             `json:"weak_spots,omitempty"`
 	EdgeCases       []string             `json:"edge_cases_discovered,omitempty"`
 	ReusableLessons []string             `json:"reusable_lessons,omitempty"`
-	Brief           string               `json:"brief,omitempty"`
-	SkillSection    string               `json:"skill_section,omitempty"`
-	SkillCount      int                  `json:"skill_count,omitempty"`
-	ColonySkills    int                  `json:"colony_skill_count,omitempty"`
-	DomainSkills    int                  `json:"domain_skill_count,omitempty"`
-	MatchedSkills   []string             `json:"matched_skills,omitempty"`
-	Handoff         codex.WorkerHandoff  `json:"handoff,omitempty"`
+	// Artifacts carries the reviewer's structured evidence across wrapper
+	// dispatches. In-process dispatches already expose the same map on
+	// codex.WorkerResult, so artifacts.review is one contract on both lanes.
+	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
+	Brief         string                     `json:"brief,omitempty"`
+	SkillSection  string                     `json:"skill_section,omitempty"`
+	SkillCount    int                        `json:"skill_count,omitempty"`
+	ColonySkills  int                        `json:"colony_skill_count,omitempty"`
+	DomainSkills  int                        `json:"domain_skill_count,omitempty"`
+	MatchedSkills []string                   `json:"matched_skills,omitempty"`
+	Handoff       codex.WorkerHandoff        `json:"handoff,omitempty"`
 }
 
 type codexContinuePlanManifest struct {
