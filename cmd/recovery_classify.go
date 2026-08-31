@@ -185,6 +185,33 @@ func recoveryLogReadPhase(phaseNum int) (RecoveryLogFile, error) {
 	return file, nil
 }
 
+// upsertRecoveryLogEntryPhase records one deterministic entry without
+// duplicating it when a terminal finalizer is replayed. It reads the existing
+// phase log and writes the same RecoveryLogFile contract, including any budget,
+// so build, continue, Queen, and run keep one durable schema.
+func upsertRecoveryLogEntryPhase(phaseNum int, entry RecoveryLogEntry) (RecoveryLogEntry, bool, error) {
+	rel := fmt.Sprintf("recovery-log-%d.json", phaseNum)
+	file := RecoveryLogFile{}
+	stored := entry
+	created := false
+	err := store.UpdateJSONAtomically(rel, &file, func() error {
+		for _, existing := range file.Entries {
+			if existing.ID == entry.ID {
+				stored = existing
+				return nil
+			}
+		}
+		file.Phase = phaseNum
+		file.Entries = append(file.Entries, entry)
+		created = true
+		return nil
+	})
+	if err != nil {
+		return entry, false, err
+	}
+	return stored, created, nil
+}
+
 // --- Cobra CLI subcommands for failure classification and recovery logs ---
 
 var failureClassifyCmd = &cobra.Command{

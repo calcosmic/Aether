@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -58,6 +59,19 @@ type autopilotSpendReport struct {
 	Phases         []autopilotPhaseSpendReport `json:"phases"`
 }
 
+// autopilotRecoveryReport is the bounded recovery handoff for a genuine stop.
+// MedicAdvice is an owner command only: this integration never constructs or
+// dispatches a worker.
+type autopilotRecoveryReport struct {
+	EntryID        string                `json:"entry_id"`
+	Classification FailureClassification `json:"classification"`
+	FailureType    FailureType           `json:"failure_type"`
+	Rationale      string                `json:"rationale"`
+	MedicAdvice    string                `json:"medic_advice,omitempty"`
+	MedicReason    string                `json:"medic_reason,omitempty"`
+	LogError       string                `json:"log_error,omitempty"`
+}
+
 // autopilotInvocationReport is the one versioned record written at every real
 // run ending. Status reads this value; it never reconstructs elapsed time,
 // spend, findings, decisions, blockers, or the next command from newer data.
@@ -75,6 +89,7 @@ type autopilotInvocationReport struct {
 	BlockersBefore  blockerSnapshot                 `json:"blockers_before"`
 	BlockersAfter   blockerSnapshot                 `json:"blockers_after"`
 	Spend           autopilotSpendReport            `json:"spend"`
+	Recovery        *autopilotRecoveryReport        `json:"recovery,omitempty"`
 	Next            string                          `json:"next"`
 	Phases          []autopilotPhaseReport          `json:"phases"`
 }
@@ -327,6 +342,95 @@ func resolveAutopilotReportNext(state colony.ColonyState, decision autopilotRunD
 	return lifecycleNextActionForState(state, "run", decision.Next, "The autopilot stop named this exact recovery step.").Command
 }
 
+func recordAutopilotRecovery(report *autopilotInvocationReport, decision autopilotRunDecision, cause error) {
+	if report == nil || decision.Disposition != autopilotDispositionStop {
+		return
+	}
+	phase := report.CurrentPhase
+	message := autopilotRecoveryMessage(decision, cause)
+	status := autopilotRecoveryStatus(decision.Code)
+	classification, failureType, rationale := classifyWorkerFailure(status, message)
+	entryID := autopilotRecoveryEntryID(report.InvocationID, phase, decision.Code)
+	entry := RecoveryLogEntry{
+		ID: entryID,
+		Failure: FailureRecord{
+			WorkerName:     "Autopilot",
+			Phase:          phase,
+			Status:         status,
+			Classification: classification,
+			FailureType:    failureType,
+			ErrorMessage:   message,
+			Timestamp:      report.FinishedAt,
+		},
+		ActionTaken:   "recorded genuine autopilot stop",
+		Outcome:       "awaiting bounded recovery or owner action",
+		AttemptNumber: 0,
+		Timestamp:     report.FinishedAt,
+		Detail:        rationale,
+	}
+	recovery := &autopilotRecoveryReport{
+		EntryID:        entryID,
+		Classification: classification,
+		FailureType:    failureType,
+		Rationale:      rationale,
+	}
+	if phase <= 0 {
+		recovery.LogError = "recovery log unavailable: current phase is not known"
+		report.Recovery = recovery
+		return
+	}
+	if store == nil {
+		recovery.LogError = "recovery log unavailable: store is not initialized"
+		report.Recovery = recovery
+		return
+	}
+	if existing, _, err := upsertRecoveryLogEntryPhase(phase, entry); err != nil {
+		recovery.LogError = err.Error()
+	} else {
+		recovery.EntryID = existing.ID
+		recovery.Classification = existing.Failure.Classification
+		recovery.FailureType = existing.Failure.FailureType
+		recovery.Rationale = existing.Detail
+	}
+
+	eligibility := shouldAutoSpawnMedic(store.BasePath())
+	budget := budgetFromRecoveryLog(phase, 1)
+	if eligibility.ShouldSpawn && budget != nil && budget.remaining() > 0 {
+		recovery.MedicAdvice = "aether medic --deep"
+		recovery.MedicReason = eligibility.Reason
+	}
+	report.Recovery = recovery
+}
+
+func autopilotRecoveryStatus(code autopilotTriggerCode) string {
+	switch code {
+	case autopilotTriggerCriticalReviewFinding,
+		autopilotTriggerBlockerCountIncreased,
+		autopilotTriggerBlockerEscalated:
+		return "blocked"
+	default:
+		return "failed"
+	}
+}
+
+func autopilotRecoveryMessage(decision autopilotRunDecision, cause error) string {
+	parts := []string{"autopilot trigger " + string(decision.Code)}
+	if len(decision.Evidence) > 0 {
+		if evidence, err := json.Marshal(decision.Evidence); err == nil {
+			parts = append(parts, "evidence="+string(evidence))
+		}
+	}
+	if cause != nil && strings.TrimSpace(cause.Error()) != "" {
+		parts = append(parts, "error="+cause.Error())
+	}
+	return strings.Join(parts, "; ")
+}
+
+func autopilotRecoveryEntryID(invocationID string, phase int, code autopilotTriggerCode) string {
+	digest := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d\x00%s", invocationID, phase, code)))
+	return fmt.Sprintf("rl-autopilot-%x", digest[:10])
+}
+
 func snapshotAutopilotSpend(phases []autopilotPhaseReport) autopilotSpendReport {
 	report := autopilotSpendReport{Phases: make([]autopilotPhaseSpendReport, 0, len(phases))}
 	var measuredTotal int64
@@ -429,6 +533,15 @@ func renderAutopilotInvocationReport(report autopilotInvocationReport) string {
 	fmt.Fprintf(&b, "Blocker movement: %d -> %d active; %d -> %d escalated\n",
 		report.BlockersBefore.Count, report.BlockersAfter.Count,
 		report.BlockersBefore.EscalatedCount, report.BlockersAfter.EscalatedCount)
+	if report.Recovery != nil {
+		fmt.Fprintf(&b, "Recovery: %s (%s)\n", report.Recovery.Classification, report.Recovery.FailureType)
+		if strings.TrimSpace(report.Recovery.LogError) != "" {
+			fmt.Fprintf(&b, "Recovery log error: %s\n", report.Recovery.LogError)
+		}
+		if strings.TrimSpace(report.Recovery.MedicAdvice) != "" {
+			fmt.Fprintf(&b, "Medic advice: %s\n", report.Recovery.MedicAdvice)
+		}
+	}
 	fmt.Fprintf(&b, "Elapsed: %s\n", renderAutopilotElapsed(report.ElapsedSeconds))
 
 	b.WriteString(renderAutopilotSpendReport(report.Spend))

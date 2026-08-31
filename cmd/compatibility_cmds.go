@@ -617,6 +617,7 @@ func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.Col
 	}
 	invocation.recordRunDecision(state, decision)
 	report := buildAutopilotInvocationReport(*invocation, state, decision, autopilotNow(), readBlockerSnapshot(store))
+	recordAutopilotRecovery(&report, decision, cause)
 	persistErr := syncRunAutopilotStateWithReport(state, opts, status, string(decision.Code), &report)
 	result := buildRunExecutionResult(state, opts, steps, phasesCompleted, legacyRunStoppedReason(decision.Code), report.Next)
 	result["trigger_code"] = decision.Code
