@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/spf13/cobra"
 )
@@ -1132,6 +1133,28 @@ func buildOrphanAllowlistEntries(orphans []string, current []orphanAllowlistEntr
 	return entries
 }
 
+func marshalOrphanAllowlist(entries []orphanAllowlistEntry) ([]byte, error) {
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	var ascii strings.Builder
+	ascii.Grow(len(data))
+	for _, r := range string(data) {
+		switch {
+		case r <= 0x7f:
+			ascii.WriteRune(r)
+		case r <= 0xffff:
+			fmt.Fprintf(&ascii, `\u%04x`, r)
+		default:
+			high, low := utf16.EncodeRune(r)
+			fmt.Fprintf(&ascii, `\u%04x\u%04x`, high, low)
+		}
+	}
+	return []byte(ascii.String()), nil
+}
+
 // writeOrphanAllowlist writes the scanner's real, honest output (D-07) to
 // testdata/orphan_allowlist.json only, preserving reviewed metadata on paths
 // that survive the scan and never writing either baseline (D-11).
@@ -1148,7 +1171,7 @@ func writeOrphanAllowlist(t *testing.T, orphans []string) {
 
 	preByLeaf := loadPreMigrationReasonByLeaf(t)
 	entries := buildOrphanAllowlistEntries(orphans, current, preByLeaf)
-	data, err := json.MarshalIndent(entries, "", "  ")
+	data, err := marshalOrphanAllowlist(entries)
 	if err != nil {
 		t.Fatalf("marshal orphan allowlist: %v", err)
 	}
