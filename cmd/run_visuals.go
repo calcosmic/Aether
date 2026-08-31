@@ -68,12 +68,23 @@ func renderRunPhaseAdvancement(phase colony.Phase, continueResult map[string]int
 	return b.String()
 }
 
-func renderRunReplanBanner(phasesCompleted, interval int) string {
+func renderRunReplanBanner(phasesCompleted, interval, lessonCount int) string {
 	var b strings.Builder
 	b.WriteString("━━━ 🔄 " + spacedTitle("Replan Suggested") + " ━━━\n")
-	b.WriteString(fmt.Sprintf("%d phase(s) completed since the last checkpoint (interval: every %d).\n", phasesCompleted, interval))
+	b.WriteString(fmt.Sprintf("%d phase(s) completed since the last checkpoint (interval: every %d), with %d unique evidence-confirmed lesson(s) since the active plan revision.\n", phasesCompleted, interval, lessonCount))
 	b.WriteString("Review the plan with `aether plan`, or run `aether run --continue` to keep going.")
 	return b.String()
+}
+
+func renderRunReplanQueued(decision PendingDecision) string {
+	return fmt.Sprintf(
+		"📝 Replan note %s queued for plan revision %s (%d confirmed lesson(s), checkpoints %d-%d). Autopilot continues.",
+		decision.ID,
+		decision.PlanRevisionID,
+		decision.LessonCount,
+		decision.FirstCheckpointPhase,
+		decision.LatestCheckpointPhase,
+	)
 }
 
 func renderAutopilotComplete(phasesCompleted int) string {

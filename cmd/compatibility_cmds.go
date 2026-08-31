@@ -541,10 +541,38 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			if reason := checkAutopilotPauseConditions(); reason != "" {
 				return pauseAutopilotRun(state, opts, steps, phasesCompleted, reason), nil
 			}
-			if opts.ReplanInterval > 0 && phasesCompleted > 0 && phasesCompleted%opts.ReplanInterval == 0 && !opts.ContinueWithoutReplan {
-				_ = syncRunAutopilotState(state, opts, "paused", "replan_due")
-				emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval))
-				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "replan_due", "aether plan"), nil
+			lessons, lessonErr := loadConfirmedAutopilotLessonsSincePlan(state.Plan)
+			if lessonErr != nil {
+				_ = syncRunAutopilotState(state, opts, "paused", string(autopilotTriggerColonyNotRunnable))
+				return nil, lessonErr
+			}
+			evidenceReplanDue := lessonAwareReplanDue(phasesCompleted, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan)
+			legacyReplanDue := legacyInteractiveReplanDue(state.Plan, phasesCompleted, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
+			if evidenceReplanDue || legacyReplanDue {
+				if opts.Headless {
+					decision, err := upsertAutopilotReplanDecision(state, phase.ID, lessons, time.Now().UTC())
+					if err != nil {
+						_ = syncRunAutopilotState(state, opts, "paused", string(autopilotTriggerColonyNotRunnable))
+						return nil, err
+					}
+					steps = append(steps, map[string]interface{}{
+						"event":            "decision_queued",
+						"trigger_code":     autopilotTriggerReplanDue,
+						"decision_id":      decision.ID,
+						"phase":            phase.ID,
+						"lesson_count":     decision.LessonCount,
+						"plan_revision_id": decision.PlanRevisionID,
+					})
+					emitVisualProgress(renderRunReplanQueued(decision))
+				} else {
+					_ = syncRunAutopilotState(state, opts, "paused", string(autopilotTriggerReplanDue))
+					emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval, len(lessons)))
+					result := buildRunExecutionResult(state, opts, steps, phasesCompleted, string(autopilotTriggerReplanDue), "aether plan")
+					result["trigger_code"] = autopilotTriggerReplanDue
+					result["confirmed_lessons"] = lessons
+					result["lesson_count"] = len(lessons)
+					return result, nil
+				}
 			}
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
 				_ = syncRunAutopilotState(state, opts, "paused", "max_phases_reached")
