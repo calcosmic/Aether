@@ -452,7 +452,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 198.3-10-PLAN.md — prove a six-phase unattended run and close documentation and repository gates
+- [x] 198.3-10-PLAN.md — prove a six-phase unattended run and close documentation and repository gates
 
 ### Phase 198.4: Prune the Dead Wood
 
