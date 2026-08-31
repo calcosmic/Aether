@@ -1089,13 +1089,23 @@ func loadOrphanAllowlist(t *testing.T, path string) []orphanAllowlistEntry {
 	return entries
 }
 
-// writeOrphanAllowlist writes the scanner's real, honest output (D-07) to
-// testdata/orphan_allowlist.json ONLY — never the baseline (D-11).
-func writeOrphanAllowlist(t *testing.T, orphans []string) {
-	t.Helper()
-	preByLeaf := loadPreMigrationReasonByLeaf(t)
+// buildOrphanAllowlistEntries combines the scanner's real, honest output
+// with the reviewed metadata already attached to surviving exact paths. The
+// frozen pre-migration metadata is only a fallback for paths absent from the
+// live list, so regeneration cannot erase a later disposition or owner.
+func buildOrphanAllowlistEntries(orphans []string, current []orphanAllowlistEntry, preByLeaf map[string]orphanAllowlistEntry) []orphanAllowlistEntry {
+	currentByPath := make(map[string]orphanAllowlistEntry, len(current))
+	for _, entry := range current {
+		currentByPath[entry.Name] = entry
+	}
+
 	entries := make([]orphanAllowlistEntry, 0, len(orphans))
 	for _, name := range orphans {
+		if existing, ok := currentByPath[name]; ok {
+			entries = append(entries, existing)
+			continue
+		}
+
 		reason, owner := "unreviewed-pre-existing", "RECLAIM"
 		switch {
 		// The skill-lifecycle / 178 case was removed in Phase 191: that
@@ -1118,6 +1128,25 @@ func writeOrphanAllowlist(t *testing.T, orphans []string) {
 		}
 		entries = append(entries, orphanAllowlistEntry{Name: name, Reason: reason, OwnerPhase: owner})
 	}
+	return entries
+}
+
+// writeOrphanAllowlist writes the scanner's real, honest output (D-07) to
+// testdata/orphan_allowlist.json only, preserving reviewed metadata on paths
+// that survive the scan and never writing either baseline (D-11).
+func writeOrphanAllowlist(t *testing.T, orphans []string) {
+	t.Helper()
+	var current []orphanAllowlistEntry
+	if data, err := os.ReadFile("testdata/orphan_allowlist.json"); err == nil {
+		if err := json.Unmarshal(data, &current); err != nil {
+			t.Fatalf("parse testdata/orphan_allowlist.json before regeneration: %v", err)
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("read testdata/orphan_allowlist.json before regeneration: %v", err)
+	}
+
+	preByLeaf := loadPreMigrationReasonByLeaf(t)
+	entries := buildOrphanAllowlistEntries(orphans, current, preByLeaf)
 	data, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal orphan allowlist: %v", err)
@@ -1547,37 +1576,46 @@ func TestOrphanAllowlistOnlyShrinks(t *testing.T) {
 }
 
 // TestOrphanAllowlistIsPathKeyed is 172-09's guard against a silent revert to
-// leaf-name keys (or a stale entry for a command that no longer exists):
-// every entry name in BOTH the live list and the baseline must contain a
-// space, carry the "aether " prefix, and resolve through rootCmd.Find to a
-// command whose CommandPath() equals the entry name exactly.
+// leaf-name keys. Every entry in both files must remain a full "aether " path.
+// Live entries must also resolve through rootCmd.Find; the immutable baseline
+// is intentionally a historical superset and may retain paths deleted later.
+func orphanAllowlistPathProblems(entries []orphanAllowlistEntry, requireRuntimeResolution bool) []string {
+	var bad []string
+	for _, e := range entries {
+		if !strings.Contains(e.Name, " ") || !strings.HasPrefix(e.Name, "aether ") {
+			bad = append(bad, fmt.Sprintf("%q (not a space-containing \"aether \"-prefixed path)", e.Name))
+			continue
+		}
+		if !requireRuntimeResolution {
+			continue
+		}
+		target, _, err := rootCmd.Find(strings.Fields(strings.TrimPrefix(e.Name, "aether ")))
+		if err != nil || target == nil || target == rootCmd {
+			bad = append(bad, fmt.Sprintf("%q (does not resolve via rootCmd.Find)", e.Name))
+			continue
+		}
+		if got := target.CommandPath(); got != e.Name {
+			bad = append(bad, fmt.Sprintf("%q (resolves to %q instead)", e.Name, got))
+		}
+	}
+	sort.Strings(bad)
+	return bad
+}
+
 func TestOrphanAllowlistIsPathKeyed(t *testing.T) {
-	check := func(t *testing.T, path, listPath string) {
+	check := func(t *testing.T, path, listPath string, requireRuntimeResolution bool) {
 		t.Helper()
 		entries := loadOrphanAllowlist(t, listPath)
-		var bad []string
-		for _, e := range entries {
-			if !strings.Contains(e.Name, " ") || !strings.HasPrefix(e.Name, "aether ") {
-				bad = append(bad, fmt.Sprintf("%q (not a space-containing \"aether \"-prefixed path)", e.Name))
-				continue
-			}
-			target, _, err := rootCmd.Find(strings.Fields(strings.TrimPrefix(e.Name, "aether ")))
-			if err != nil || target == nil || target == rootCmd {
-				bad = append(bad, fmt.Sprintf("%q (does not resolve via rootCmd.Find)", e.Name))
-				continue
-			}
-			if got := target.CommandPath(); got != e.Name {
-				bad = append(bad, fmt.Sprintf("%q (resolves to %q instead)", e.Name, got))
-			}
-		}
+		bad := orphanAllowlistPathProblems(entries, requireRuntimeResolution)
 		if len(bad) > 0 {
-			sort.Strings(bad)
 			t.Errorf("%s has %d entry name(s) that are not real, path-keyed command paths: %s", path, len(bad), strings.Join(bad, ", "))
 		}
 	}
-	t.Run("live", func(t *testing.T) { check(t, "testdata/orphan_allowlist.json", "testdata/orphan_allowlist.json") })
+	t.Run("live", func(t *testing.T) {
+		check(t, "testdata/orphan_allowlist.json", "testdata/orphan_allowlist.json", true)
+	})
 	t.Run("baseline", func(t *testing.T) {
-		check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json")
+		check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json", false)
 	})
 }
 
