@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -392,6 +393,208 @@ func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
 	for _, caste := range []string{"tracker", "builder", "watcher"} {
 		if !strings.Contains(string(spawnTreeData), "|Swarm|"+caste+"|") {
 			t.Fatalf("spawn tree missing %s entry:\n%s", caste, string(spawnTreeData))
+		}
+	}
+}
+
+func TestSwarmThreeStrikeEscalatesOnceAndFourthAttemptRefuses(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Stop retrying an architectural auth failure"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	invoker := &swarmTestInvoker{blockedCaste: "watcher"}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	target := "Auth panic when session is missing"
+	configsPerAttempt := 0
+	for attempt := 1; attempt <= 3; attempt++ {
+		result, err := runSwarmCompatibility(root, target, false, false)
+		if err != nil {
+			t.Fatalf("attempt %d: %v", attempt, err)
+		}
+		if got := result["status"]; got != "blocked" {
+			t.Fatalf("attempt %d status = %v, want blocked", attempt, got)
+		}
+		if attempt == 1 {
+			configsPerAttempt = len(invoker.configs)
+			if configsPerAttempt == 0 {
+				t.Fatal("first swarm attempt did not dispatch workers")
+			}
+		}
+		if got, want := len(invoker.configs), attempt*configsPerAttempt; got != want {
+			t.Fatalf("attempt %d dispatched %d total workers, want %d", attempt, got, want)
+		}
+		flags := activeSwarmEscalationFlags(store)
+		wantFlags := 0
+		if attempt == 3 {
+			wantFlags = 1
+		}
+		if len(flags) != wantFlags {
+			t.Fatalf("attempt %d active escalation flags = %d, want %d: %+v", attempt, len(flags), wantFlags, flags)
+		}
+	}
+
+	history, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		t.Fatalf("evaluate third-attempt history: %v", err)
+	}
+	if history.StrikeCount != 3 {
+		t.Fatalf("strike count after three attempts = %d, want 3", history.StrikeCount)
+	}
+	evidenceIDs := swarmStrikeEvidenceIDs(history.Evidence)
+	flags := activeSwarmEscalationFlags(store)
+	for _, id := range evidenceIDs {
+		if !strings.Contains(flags[0].Description, id) {
+			t.Errorf("escalation description missing evidence id %q: %s", id, flags[0].Description)
+		}
+	}
+
+	beforeFourth := len(invoker.configs)
+	planRefusal, err := runSwarmCompatibility(root, target, false, true)
+	if err != nil {
+		t.Fatalf("fourth plan-only attempt: %v", err)
+	}
+	if got := planRefusal["status"]; got != "architectural_concern" {
+		t.Fatalf("fourth plan-only status = %v, want architectural_concern", got)
+	}
+	if got := len(invoker.configs); got != beforeFourth {
+		t.Fatalf("fourth plan-only attempt dispatched workers: configs %d -> %d", beforeFourth, got)
+	}
+
+	refusal, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("fourth attempt: %v", err)
+	}
+	if got := len(invoker.configs); got != beforeFourth {
+		t.Fatalf("fourth attempt dispatched workers: configs %d -> %d", beforeFourth, got)
+	}
+	if got := refusal["status"]; got != "architectural_concern" {
+		t.Fatalf("fourth status = %v, want architectural_concern", got)
+	}
+	wantNext := `aether insert-phase "Auth panic when session is missing"`
+	if got := refusal["next"]; got != wantNext {
+		t.Fatalf("fourth next = %q, want %q", got, wantNext)
+	}
+	for _, id := range evidenceIDs {
+		if !strings.Contains(renderSwarmCompatibilityVisual(refusal), id) {
+			t.Errorf("refusal visual missing evidence id %q", id)
+		}
+	}
+
+	differentTargetResult, err := runSwarmCompatibility(root, "Database panic after migration", false, false)
+	if err != nil {
+		t.Fatalf("different target attempt: %v", err)
+	}
+	wantAfterDifferentTarget := beforeFourth + intValue(differentTargetResult["worker_count"])
+	if got := len(invoker.configs); got != wantAfterDifferentTarget {
+		t.Fatalf("different target did not dispatch normally: configs = %d, want %d", got, wantAfterDifferentTarget)
+	}
+
+	if err := saveSwarmResultRecord(store, swarmResultRecord{
+		SwarmID:     "swarm-reset-success",
+		Target:      target,
+		Status:      "completed",
+		CompletedAt: time.Now().UTC().Add(time.Second).Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("seed reset result: %v", err)
+	}
+	beforeResetAttempt := len(invoker.configs)
+	if _, err := runSwarmCompatibility(root, target, false, false); err != nil {
+		t.Fatalf("post-success attempt: %v", err)
+	}
+	if got := len(invoker.configs); got != beforeResetAttempt+configsPerAttempt {
+		t.Fatalf("completed result did not reset dispatch guard: configs = %d, want %d", got, beforeResetAttempt+configsPerAttempt)
+	}
+}
+
+func TestSwarmFourthAttemptShellQuotesTarget(t *testing.T) {
+	target := "Fix $SESSION and `refresh` for \"admin\""
+	command := swarmInsertPhaseCommand(target)
+	want := "aether insert-phase \"Fix \\$SESSION and \\`refresh\\` for \\\"admin\\\"\""
+	if command != want {
+		t.Fatalf("insert command = %q, want %q", command, want)
+	}
+	quotedTarget := strings.TrimPrefix(command, "aether insert-phase ")
+	out, err := exec.Command("/bin/sh", "-c", `set -- `+quotedTarget+`; printf '%s\n%s' "$#" "$1"`).CombinedOutput()
+	if err != nil {
+		t.Fatalf("shell parse guided command: %v: %s", err, out)
+	}
+	if got, want := string(out), "1\n"+target; got != want {
+		t.Fatalf("guided command did not preserve one literal argument: got %q want %q", got, want)
+	}
+}
+
+func TestSwarmThreeStrikeExternalFinalizeReplayKeepsOneEscalation(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Finalize an externally dispatched failing swarm"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	target := "Auth panic when session is missing"
+	base := time.Now().UTC().Add(-2 * time.Minute)
+	for i := 0; i < 2; i++ {
+		if _, err := persistSwarmResultOutcome(store, swarmResultRecord{
+			SwarmID:     []string{"swarm-prior-1", "swarm-prior-2"}[i],
+			Target:      target,
+			Status:      "failed",
+			CompletedAt: base.Add(time.Duration(i) * time.Minute).Format(time.RFC3339Nano),
+		}); err != nil {
+			t.Fatalf("seed prior external strike %d: %v", i+1, err)
+		}
+	}
+
+	manifest := buildSwarmManifest(root, target, "plan-only", time.Now().UTC())
+	dispatches := make([]swarmWorkerExecution, 0, len(manifest.Dispatches))
+	for _, plan := range manifest.Dispatches {
+		status := "completed"
+		blockers := []string(nil)
+		if plan.Role == "watcher" {
+			status = "blocked"
+			blockers = []string{"verification fixture unavailable"}
+		}
+		dispatches = append(dispatches, swarmWorkerExecution{
+			Name:     plan.Name,
+			Caste:    plan.Caste,
+			Role:     plan.Role,
+			Task:     plan.Task,
+			Status:   status,
+			Summary:  plan.Role + " completed externally",
+			Blockers: blockers,
+			Response: swarmWorkerResponse{
+				Role:    plan.Role,
+				Status:  status,
+				Summary: plan.Role + " completed externally",
+			},
+		})
+	}
+	completion := externalSwarmCompletion{SwarmManifest: &manifest, Dispatches: dispatches}
+	for replay := 1; replay <= 2; replay++ {
+		result, err := runSwarmFinalize(root, completion)
+		if err != nil {
+			t.Fatalf("external finalize replay %d: %v", replay, err)
+		}
+		if got := result["status"]; got != "blocked" {
+			t.Fatalf("external finalize replay %d status = %v, want blocked", replay, got)
+		}
+		if flags := activeSwarmEscalationFlags(store); len(flags) != 1 {
+			t.Fatalf("external finalize replay %d flags = %d, want 1: %+v", replay, len(flags), flags)
 		}
 	}
 }
