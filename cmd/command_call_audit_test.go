@@ -1153,7 +1153,6 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"learning-promote-auto":       true,
 	"load-state":                  true,
 	"maturity":                    true,
-	"medic-auto-spawn-check":      true,
 	"medic":                       true,
 	"memory-capture":              true,
 	"memory-details":              true,
