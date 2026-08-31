@@ -610,8 +610,6 @@ func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.Col
 		if decision.Code == autopilotTriggerColonyComplete {
 			status = "completed"
 		}
-	case autopilotDispositionStop:
-		status = "stopped"
 	case autopilotDispositionQueueAndContinue:
 		status = "running"
 	}
