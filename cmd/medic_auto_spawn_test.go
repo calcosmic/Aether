@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"testing"
@@ -195,15 +198,33 @@ func TestHasCriticalHealthIssue_WarningsOnly(t *testing.T) {
 	}
 }
 
-func TestRenderMedicAutoSpawnVisual(t *testing.T) {
-	output := renderMedicAutoSpawnVisual("stale session", "Doc-42")
-	if output == "" {
-		t.Error("expected non-empty visual output")
+func TestMedicAutoSpawnEligibilityIsInternalOnly(t *testing.T) {
+	for _, entry := range buildAuditCatalog(rootCmd) {
+		if entry.Name == "medic-auto-spawn-check" {
+			t.Error("retired Medic eligibility command is still registered")
+		}
 	}
-	if !contains(output, "stale session") {
-		t.Error("expected reason in output")
+
+	file, err := parser.ParseFile(token.NewFileSet(), "medic_auto_spawn.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse medic_auto_spawn.go: %v", err)
 	}
-	if !contains(output, "Doc-42") {
-		t.Error("expected name in output")
+	retiredSymbols := map[string]struct{}{
+		"medicAutoSpawnCheckCmd":     {},
+		"renderMedicAutoSpawnVisual": {},
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		identifier, ok := node.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if _, retired := retiredSymbols[identifier.Name]; retired {
+			t.Errorf("retired Medic adapter symbol %q remains", identifier.Name)
+		}
+		return true
+	})
+
+	if !sourceCallsFunction(t, "autopilot_report.go", "shouldAutoSpawnMedic") {
+		t.Error("autopilot recovery must call retained Medic eligibility directly")
 	}
 }
