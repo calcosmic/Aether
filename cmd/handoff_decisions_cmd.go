@@ -100,27 +100,63 @@ func pendingHandoffDecisions(phaseFilter int) []handoffDecision {
 // which the colony-prime capsule already renders into every subsequent
 // worker prompt as CLARIFIED INTENT — no new injection path.
 func recordDecisionAnswer(question, answer string, phase int, source string) (PendingDecision, error) {
-	decision := PendingDecision{
-		ID:          fmt.Sprintf("pd_%d", time.Now().UnixNano()),
-		Type:        clarificationDecisionType,
-		Description: formatClarificationDescription(question, nil),
-		Source:      source,
-		Resolved:    true,
-		Resolution:  answer,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
-		ResolvedAt:  time.Now().UTC().Format(time.RFC3339),
+	if store == nil {
+		return PendingDecision{}, fmt.Errorf("no store initialized")
 	}
-	if phase > 0 {
-		decision.Phase = &phase
-	}
-	stampPendingDecisionScope(&decision, loadCurrentPendingDecisionScope())
-
+	now := time.Now().UTC().Format(time.RFC3339)
+	scope := loadCurrentPendingDecisionScope()
+	target := normalizeDecisionText(question)
 	var file PendingDecisionFile
-	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
-		file = PendingDecisionFile{Decisions: []PendingDecision{}}
-	}
-	file.Decisions = append(file.Decisions, decision)
-	if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
+	var decision PendingDecision
+	feedbackNeeded := false
+	if err := store.UpdateJSONAtomically(pendingDecisionsFile, &file, func() error {
+		if file.Decisions == nil {
+			file.Decisions = []PendingDecision{}
+		}
+		// Checkpoints are already durable open rows. Resolve the exact row in
+		// place so its stable ID and evidence survive as the audit record;
+		// never append a second resolved clarification and leave the work open.
+		for i := range file.Decisions {
+			existing := &file.Decisions[i]
+			if !isAutopilotCheckpointType(existing.Type) || !pendingDecisionMatchesScope(*existing, scope) {
+				continue
+			}
+			if phase > 0 && (existing.Phase == nil || *existing.Phase != phase) {
+				continue
+			}
+			if normalizeDecisionText(checkpointDecisionQuestion(*existing)) != target {
+				continue
+			}
+			if !existing.Resolved {
+				existing.Resolved = true
+				existing.Resolution = answer
+				existing.ResolvedAt = now
+				stampPendingDecisionScope(existing, scope)
+				feedbackNeeded = true
+			}
+			decision = *existing
+			return nil
+		}
+
+		decision = PendingDecision{
+			ID:          fmt.Sprintf("pd_%d", time.Now().UnixNano()),
+			Type:        clarificationDecisionType,
+			Description: formatClarificationDescription(question, nil),
+			Source:      source,
+			Resolved:    true,
+			Resolution:  answer,
+			CreatedAt:   now,
+			ResolvedAt:  now,
+		}
+		if phase > 0 {
+			phaseID := phase
+			decision.Phase = &phaseID
+		}
+		stampPendingDecisionScope(&decision, scope)
+		file.Decisions = append(file.Decisions, decision)
+		feedbackNeeded = true
+		return nil
+	}); err != nil {
 		return PendingDecision{}, fmt.Errorf("failed to save decision answer: %w", err)
 	}
 
@@ -134,7 +170,7 @@ func recordDecisionAnswer(question, answer string, phase int, source string) (Pe
 	// excluded here to keep the FEEDBACK stream scoped to genuine
 	// clarifications. Best-effort: a signal-write failure never fails the
 	// decision answer itself.
-	if !strings.HasPrefix(source, "seal-") {
+	if feedbackNeeded && !strings.HasPrefix(source, "seal-") {
 		emitDecisionFeedback(question, answer, phase)
 	}
 

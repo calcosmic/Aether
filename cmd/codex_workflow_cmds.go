@@ -1268,11 +1268,10 @@ func collectOpenReviewBacklog(s *storage.Store, limit int) []colony.ReviewLedger
 
 // checkSealBlockers loads flags from pending-decisions.json (fallback flags.json),
 // splits unresolved entries into blockers and issues, and appends any
-// outstanding needs_owner_confirmation criteria (D-05, 193-CONTEXT.md) as
-// synthetic blocker-shaped entries -- computed live from each phase's
-// persisted continue verification report, not from a second file on disk,
-// so there is nothing extra to keep in sync when an owner answers one via
-// `aether decision-answer`.
+// durable visual/runtime owner checkpoints as blocker-shaped entries at the
+// seal boundary. Historical needs_owner_confirmation reports still receive
+// their live compatibility blocker when no matching durable checkpoint was
+// materialized by the newer continue runtime.
 func checkSealBlockers(s *storage.Store, state colony.ColonyState) (blockers []colony.FlagEntry, issues []colony.FlagEntry) {
 	var ff colony.FlagsFile
 	if err := s.LoadJSON("pending-decisions.json", &ff); err == nil {
@@ -1300,7 +1299,18 @@ func checkSealBlockers(s *storage.Store, state colony.ColonyState) (blockers []c
 			}
 		}
 	}
-	blockers = append(blockers, ownerConfirmationSealBlockers(state)...)
+	checkpointBlockers := autopilotCheckpointSealBlockers(state)
+	blockers = append(blockers, checkpointBlockers...)
+	checkpointCommands := map[string]bool{}
+	for _, blocker := range checkpointBlockers {
+		checkpointCommands[blocker.RecoveryCommand] = true
+	}
+	for _, blocker := range ownerConfirmationSealBlockers(state) {
+		if checkpointCommands[blocker.RecoveryCommand] {
+			continue
+		}
+		blockers = append(blockers, blocker)
+	}
 	return blockers, issues
 }
 

@@ -262,6 +262,10 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	} else {
 		verification, watcherFlow = attachExternalContinueWatcher(verification, workerFlow)
 	}
+	runtimeCheckpoints, err := materializeRuntimeVerificationCheckpoints(phase.ID, verification.Criteria)
+	if err != nil {
+		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to preserve owner verification work: %w", err)
+	}
 	// ReadOnlyArtifacts is threaded into these reconstructed options for
 	// structural parity with the direct path and fail-fast validation
 	// consistency only. It is NOT how read-only evidence reaches assessment
@@ -540,6 +544,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			if err != nil {
 				return nil, state, phase, nil, nil, false, err
 			}
+			result["autopilot_signals"] = continueReviewAutopilotSignals(blockedWorkerFlow, runtimeCheckpoints)
 			if superseded, _ := result["superseded"].(bool); superseded {
 				// finalizeBlockedExternalContinue found the runtime state no
 				// longer matches what this call was asked to record (T-188-CR-01)
@@ -570,6 +575,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		if err != nil {
 			return nil, state, phase, nil, nil, false, err
 		}
+		result["autopilot_signals"] = continueReviewAutopilotSignals(blockedWorkerFlow, runtimeCheckpoints)
 		if superseded, _ := result["superseded"].(bool); superseded {
 			runStatus = "superseded"
 			return result, blockedState, phase, nil, nil, false, nil
@@ -590,6 +596,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err != nil {
 		return nil, state, phase, nil, housekeeping, final, err
 	}
+	result["autopilot_signals"] = continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints)
 	if superseded, _ := result["superseded"].(bool); superseded {
 		// advanceExternalContinue found the runtime state no longer matches
 		// what this call was asked to advance (188-CONTEXT.md D-04/D-05) and
@@ -857,11 +864,13 @@ func validReviewArtifactSeverity(severity string) bool {
 	}
 }
 
-func continueReviewAutopilotSignals(workerFlow []codexContinueWorkerFlowStep) codexContinueAutopilotSignals {
+func continueReviewAutopilotSignals(workerFlow []codexContinueWorkerFlowStep, checkpointGroups ...[]autopilotCheckpointReference) codexContinueAutopilotSignals {
 	signals := codexContinueAutopilotSignals{
 		Evaluations: []autopilotTriggerEvaluation{
 			continueAutopilotTriggerEvaluation(autopilotTriggerAuditorScoreBelowFloor, false, nil),
 			continueAutopilotTriggerEvaluation(autopilotTriggerCriticalReviewFinding, false, nil),
+			continueAutopilotTriggerEvaluation(autopilotTriggerRuntimeVerificationNeeded, false, nil),
+			continueAutopilotTriggerEvaluation(autopilotTriggerVisualCheckpointNeeded, false, nil),
 		},
 	}
 	var scoreWorker string
@@ -895,6 +904,35 @@ func continueReviewAutopilotSignals(workerFlow []codexContinueWorkerFlowStep) co
 			true,
 			map[string]interface{}{"count": len(criticalFindings), "findings": criticalFindings},
 		)
+	}
+	seenCheckpoints := map[string]bool{}
+	for _, group := range checkpointGroups {
+		for _, checkpoint := range group {
+			if strings.TrimSpace(checkpoint.ID) == "" || seenCheckpoints[checkpoint.ID] {
+				continue
+			}
+			seenCheckpoints[checkpoint.ID] = true
+			signals.Checkpoints = append(signals.Checkpoints, checkpoint)
+		}
+	}
+	for index, checkpointType := range []string{autopilotCheckpointTypeRuntimeVerification, autopilotCheckpointTypeVisual} {
+		matching := []autopilotCheckpointReference{}
+		for _, checkpoint := range signals.Checkpoints {
+			if checkpoint.Type == checkpointType {
+				matching = append(matching, checkpoint)
+			}
+		}
+		if len(matching) == 0 {
+			continue
+		}
+		code := autopilotTriggerRuntimeVerificationNeeded
+		if checkpointType == autopilotCheckpointTypeVisual {
+			code = autopilotTriggerVisualCheckpointNeeded
+		}
+		signals.Evaluations[index+2] = continueAutopilotTriggerEvaluation(code, true, map[string]interface{}{
+			"count":       len(matching),
+			"checkpoints": matching,
+		})
 	}
 	return signals
 }

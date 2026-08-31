@@ -609,10 +609,11 @@ type codexContinueReviewReport struct {
 // overnight orchestration. It carries typed evidence; callers never recreate
 // a pause by scraping reviewer prose.
 type codexContinueAutopilotSignals struct {
-	Evaluations    []autopilotTriggerEvaluation `json:"evaluations"`
-	AuditorScore   *int                         `json:"auditor_score,omitempty"`
-	Findings       []codexReviewFinding         `json:"findings,omitempty"`
-	EvidenceErrors []string                     `json:"evidence_errors,omitempty"`
+	Evaluations    []autopilotTriggerEvaluation   `json:"evaluations"`
+	AuditorScore   *int                           `json:"auditor_score,omitempty"`
+	Findings       []codexReviewFinding           `json:"findings,omitempty"`
+	EvidenceErrors []string                       `json:"evidence_errors,omitempty"`
+	Checkpoints    []autopilotCheckpointReference `json:"checkpoints,omitempty"`
 }
 
 var continueContextUpdater = updateCodexContinueContext
@@ -800,6 +801,10 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	verification, watcherFlow := runCodexContinueVerification(ctx, root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
+	runtimeCheckpoints, err := materializeRuntimeVerificationCheckpoints(phase.ID, verification.Criteria)
+	if err != nil {
+		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to preserve owner verification work: %w", err)
+	}
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)
 	if priorGateResults == nil {
 		priorGateResults = []GateCheckResult{}
@@ -941,7 +946,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"gate_report":         displayDataPath(gateReportRel),
 			"continue_report":     displayDataPath(continueReportRel),
 			"worker_flow":         workerFlow,
-			"autopilot_signals":   continueReviewAutopilotSignals(workerFlow),
+			"autopilot_signals":   continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
 			"operational_issues":  assessment.OperationalIssues,
 			"recovery":            assessment.Recovery,
 			"reconciled_tasks":    assessment.ReconciledTasks,
@@ -1031,7 +1036,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"review_report":       displayDataPath(reviewReportRel),
 			"continue_report":     displayDataPath(continueReportRel),
 			"worker_flow":         workerFlow,
-			"autopilot_signals":   continueReviewAutopilotSignals(workerFlow),
+			"autopilot_signals":   continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
 			"operational_issues":  append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
 			"recovery":            assessment.Recovery,
 			"reconciled_tasks":    assessment.ReconciledTasks,
@@ -1202,7 +1207,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		"continue_report":     displayDataPath(continueReportRel),
 		"closed_workers":      closedWorkers,
 		"worker_flow":         workerFlow,
-		"autopilot_signals":   continueReviewAutopilotSignals(workerFlow),
+		"autopilot_signals":   continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
 		"operational_issues":  assessment.OperationalIssues,
 		"recovery":            assessment.Recovery,
 		"reconciled_tasks":    assessment.ReconciledTasks,
@@ -3699,15 +3704,10 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 
 	// owner_confirmation_pending gate (D-05, 193-CONTEXT.md): surfaces every
 	// outstanding needs_owner_confirmation criterion without blocking
-	// continue -- the phase still advances (D-05: "the phase advances;
-	// aether seal blocks until the owner has confirmed it"). No worker is
-	// dispatched because of this gate. The ONE exception: when this phase is
-	// the plan's LAST phase, advancing here and sealing are the same act (an
-	// unconfirmed criterion could otherwise ride straight through to a
-	// completed colony with nobody ever asked), so the gate MUST fail here.
-	// A gate that can never fail on the one boundary where it matters is
-	// worse than none (the operational_evidence precedent immediately
-	// below).
+	// continue -- every phase, including the final phase, still advances.
+	// The durable runtime-verification decision carries the owner work across
+	// that boundary and `aether seal` is the one place that refuses until it
+	// is answered. No reviewer is dispatched because of this gate.
 	ownerPending := outstandingOwnerConfirmations(phase.ID, verification.Criteria)
 	ownerCheck := gateCheck{Name: "owner_confirmation_pending", Passed: true, Detail: "nothing is waiting on your confirmation"}
 	if len(ownerPending) > 0 {
@@ -3719,11 +3719,6 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		}
 		ownerCheck.Detail = fmt.Sprintf("%d requirement(s) could not be checked automatically or by a reviewer and need your confirmation: %s", len(ownerPending), strings.Join(details, "; "))
 		ownerCheck.RecoveryOptions = recovery
-		if isLastPhaseOfActivePlan(phase.ID) {
-			ownerCheck.Passed = false
-			ownerCheck.FixHint = "Confirm each item above with the aether decision-answer command shown, then run aether continue again"
-			blockers = append(blockers, ownerCheck.Detail)
-		}
 	}
 	checks = append(checks, ownerCheck)
 

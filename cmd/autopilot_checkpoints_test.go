@@ -158,6 +158,19 @@ func TestRuntimeVerificationDecisionIsIdempotent(t *testing.T) {
 	if got := len(unresolvedCheckpoints(loadCheckpointDecisions(t))); got != 2 {
 		t.Fatalf("runtime replay created %d unresolved decisions, want 2", got)
 	}
+	signals := continueReviewAutopilotSignals(nil, first)
+	if !reflect.DeepEqual(signals.Checkpoints, first) {
+		t.Fatalf("continue autopilot signals omitted decision IDs/types: got %#v want %#v", signals.Checkpoints, first)
+	}
+	runtimeActive := false
+	for _, evaluation := range signals.Evaluations {
+		if evaluation.Spec.Code == autopilotTriggerRuntimeVerificationNeeded {
+			runtimeActive = evaluation.Active
+		}
+	}
+	if !runtimeActive {
+		t.Fatal("runtime-verification decisions did not activate the typed autopilot signal")
+	}
 }
 
 func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
