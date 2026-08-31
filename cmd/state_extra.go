@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
@@ -116,10 +120,237 @@ var stateWriteCmd = &cobra.Command{
 	},
 }
 
+const phaseInsertInputExample = `aether insert-phase "problem to stabilise"`
+
+type phaseInsertPromptSession interface {
+	Interactive() bool
+	Ask(question string) (string, error)
+}
+
+type cobraPhaseInsertPromptSession struct {
+	interactive bool
+	reader      *bufio.Reader
+	writer      io.Writer
+}
+
+func (p *cobraPhaseInsertPromptSession) Interactive() bool {
+	return p.interactive
+}
+
+func (p *cobraPhaseInsertPromptSession) Ask(question string) (string, error) {
+	if _, err := fmt.Fprintf(p.writer, "%s\n> ", question); err != nil {
+		return "", err
+	}
+	answer, err := p.reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	return strings.TrimSpace(answer), nil
+}
+
+// phaseInsertPromptSessionFactory is injectable so command tests never depend
+// on the test process's terminal. Production input still goes through Cobra's
+// inherited input stream rather than reading os.Stdin directly. TTY detection
+// reuses the visual runtime's existing terminal-file check.
+var phaseInsertPromptSessionFactory = func(cmd *cobra.Command) phaseInsertPromptSession {
+	input := cmd.InOrStdin()
+	file, _ := input.(*os.File)
+	return &cobraPhaseInsertPromptSession{
+		interactive: file != nil && isTerminalWriter(file),
+		reader:      bufio.NewReader(input),
+		writer:      stderr,
+	}
+}
+
+type phaseInsertResolveInput struct {
+	PositionalIssue     string
+	PromptIssue         string
+	PromptOutcome       string
+	PromptConstraints   string
+	ExplicitName        string
+	ExplicitDescription string
+	ExplicitConstraints string
+	ExplicitAfter       int
+	AfterWasExplicit    bool
+}
+
+type resolvedPhaseInsertRequest struct {
+	After       int
+	Name        string
+	Description string
+	Constraints string
+}
+
+// resolvePhaseInsertRequest is the single pure merge boundary for explicit,
+// shorthand, and prompted input. The mutation below it only ever receives one
+// validated request. Explicit flags win; otherwise one issue sentence supplies
+// safe defaults, and prompt answers use that same derivation path.
+func resolvePhaseInsertRequest(input phaseInsertResolveInput, currentPhase int) (resolvedPhaseInsertRequest, error) {
+	issue := strings.TrimSpace(firstNonEmpty(input.PositionalIssue, input.PromptIssue))
+	name := strings.TrimSpace(input.ExplicitName)
+	description := strings.TrimSpace(input.ExplicitDescription)
+	constraints := strings.TrimSpace(firstNonEmpty(input.ExplicitConstraints, input.PromptConstraints))
+	if strings.EqualFold(constraints, "none") {
+		constraints = ""
+	}
+
+	if name == "" && issue != "" {
+		name = derivePhaseInsertName(issue)
+	}
+	if name == "" {
+		return resolvedPhaseInsertRequest{}, fmt.Errorf("flag --name is required")
+	}
+
+	if description == "" {
+		switch {
+		case strings.TrimSpace(input.PositionalIssue) != "":
+			description = strings.TrimSpace(input.PositionalIssue)
+		case issue != "":
+			description = issue
+			if outcome := strings.TrimSpace(input.PromptOutcome); outcome != "" && outcome != issue {
+				description += "\n\nDesired outcome: " + outcome
+			}
+		}
+	}
+	if description == "" {
+		return resolvedPhaseInsertRequest{}, fmt.Errorf("flag --description is required")
+	}
+	if constraints != "" {
+		description += "\n\nConstraints: " + constraints
+	}
+
+	after := input.ExplicitAfter
+	if !input.AfterWasExplicit {
+		if currentPhase <= 0 {
+			return resolvedPhaseInsertRequest{}, fmt.Errorf("current phase is unavailable; pass --after explicitly")
+		}
+		after = currentPhase
+	}
+
+	return resolvedPhaseInsertRequest{
+		After:       after,
+		Name:        name,
+		Description: description,
+		Constraints: constraints,
+	}, nil
+}
+
+func derivePhaseInsertName(issue string) string {
+	allWords := strings.FieldsFunc(strings.TrimSpace(issue), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	if len(allWords) == 0 {
+		return ""
+	}
+
+	stopWords := map[string]struct{}{
+		"a": {}, "an": {}, "and": {}, "are": {}, "be": {}, "for": {},
+		"in": {}, "is": {}, "of": {}, "on": {}, "or": {}, "the": {},
+		"this": {}, "to": {}, "with": {},
+	}
+	useful := make([]string, 0, 6)
+	for _, word := range allWords {
+		if _, stop := stopWords[strings.ToLower(word)]; stop {
+			continue
+		}
+		useful = append(useful, word)
+		if len(useful) == 6 {
+			break
+		}
+	}
+	if len(useful) == 0 {
+		useful = allWords
+		if len(useful) > 6 {
+			useful = useful[:6]
+		}
+	}
+
+	name := "Stabilize " + strings.Join(useful, " ")
+	for len(name) > 80 && len(useful) > 1 {
+		useful = useful[:len(useful)-1]
+		name = "Stabilize " + strings.Join(useful, " ")
+	}
+	if len(name) <= 80 {
+		return name
+	}
+
+	// A single unusually long token is truncated on a rune boundary. This is
+	// only for the derived label; explicit automation keeps its old contract.
+	const prefix = "Stabilize "
+	remaining := 80 - len(prefix)
+	var b strings.Builder
+	for _, r := range useful[0] {
+		if b.Len()+len(string(r)) > remaining {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return prefix + b.String()
+}
+
+func phaseInsertHasAnyInput(cmd *cobra.Command, args []string) bool {
+	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+		return true
+	}
+	for _, flag := range []string{"after", "name", "description", "constraints"} {
+		if cmd.Flags().Changed(flag) {
+			return true
+		}
+	}
+	return false
+}
+
+func collectPhaseInsertPromptAnswers(session phaseInsertPromptSession) (phaseInsertResolveInput, bool) {
+	if !session.Interactive() {
+		return phaseInsertResolveInput{}, false
+	}
+
+	questions := []string{
+		"What is not working and needs a corrective phase?",
+		"What should the inserted phase accomplish?",
+		"Any hard constraints to enforce while fixing this? (or say \"none\")",
+	}
+	answers := make([]string, 0, len(questions))
+	for i, question := range questions {
+		answer, err := session.Ask(question)
+		if err != nil || (i < 2 && strings.TrimSpace(answer) == "") {
+			return phaseInsertResolveInput{}, false
+		}
+		answers = append(answers, strings.TrimSpace(answer))
+	}
+	return phaseInsertResolveInput{
+		PromptIssue:       answers[0],
+		PromptOutcome:     answers[1],
+		PromptConstraints: answers[2],
+	}, true
+}
+
+func outputPhaseInsertInputRequired() {
+	result := map[string]interface{}{
+		"status":  "input_required",
+		"example": phaseInsertInputExample,
+		"message": "Describe the problem in one sentence, or pass --after, --name, and --description for automation.",
+	}
+	visual := fmt.Sprintf("Input required. Describe the problem in one sentence.\n\nRun exactly:\n  %s\n", phaseInsertInputExample)
+	outputWorkflow(result, visual)
+}
+
+func renderPhaseInsertVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("insert-phase"), "Corrective Phase Inserted"))
+	b.WriteString(visualDividerStr())
+	fmt.Fprintf(&b, "Inserted Phase %d — %s\n", intValue(result["phase_id"]), stringValue(result["name"]))
+	fmt.Fprintf(&b, "   └── after Phase %d\n", intValue(result["after"]))
+	if constraints := stringValue(result["constraints"]); constraints != "" {
+		fmt.Fprintf(&b, "   └── constraints: %s\n", constraints)
+	}
+	return b.String()
+}
+
 var phaseInsertCmd = &cobra.Command{
-	Use:     "phase-insert",
+	Use:     "phase-insert [issue]",
 	Short:   "Insert a corrective phase into the active plan",
-	Args:    cobra.NoArgs,
+	Args:    cobra.MaximumNArgs(1),
 	Aliases: []string{"insert-phase"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
@@ -127,17 +358,24 @@ var phaseInsertCmd = &cobra.Command{
 			return nil
 		}
 
-		after := mustGetInt(cmd, "after")
-		// mustGetString already emits an ok:false envelope and sets a non-zero
-		// exit code for an empty required flag; these guards only stop the
-		// command from continuing, they are not a silent return.
-		name := mustGetString(cmd, "name")
-		if name == "" {
-			return nil
+		input := phaseInsertResolveInput{
+			PositionalIssue:     optionalArg(args, 0),
+			ExplicitName:        mustGetStringCompatOptional(cmd, "name"),
+			ExplicitDescription: mustGetStringCompatOptional(cmd, "description"),
+			ExplicitConstraints: mustGetStringCompatOptional(cmd, "constraints"),
+			ExplicitAfter:       mustGetInt(cmd, "after"),
+			AfterWasExplicit:    cmd.Flags().Changed("after"),
 		}
-		description := mustGetString(cmd, "description")
-		if description == "" {
-			return nil
+
+		if !phaseInsertHasAnyInput(cmd, args) {
+			promptInput, ok := collectPhaseInsertPromptAnswers(phaseInsertPromptSessionFactory(cmd))
+			if !ok {
+				outputPhaseInsertInputRequired()
+				return nil
+			}
+			input.PromptIssue = promptInput.PromptIssue
+			input.PromptOutcome = promptInput.PromptOutcome
+			input.PromptConstraints = promptInput.PromptConstraints
 		}
 
 		var state colony.ColonyState
@@ -145,16 +383,21 @@ var phaseInsertCmd = &cobra.Command{
 			outputError(1, "COLONY_STATE.json not found", nil)
 			return nil
 		}
+		request, err := resolvePhaseInsertRequest(input, state.CurrentPhase)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 
 		// Validate after index
-		if after < 0 || after > len(state.Plan.Phases) {
-			outputError(1, fmt.Sprintf("invalid after index %d (plan has %d phases)", after, len(state.Plan.Phases)), nil)
+		if request.After < 0 || request.After > len(state.Plan.Phases) {
+			outputError(1, fmt.Sprintf("invalid after index %d (plan has %d phases)", request.After, len(state.Plan.Phases)), nil)
 			return nil
 		}
 
 		newPhase := colony.Phase{
-			Name:        name,
-			Description: description,
+			Name:        request.Name,
+			Description: request.Description,
 			Status:      colony.PhasePending,
 			Tasks:       []colony.Task{},
 		}
@@ -162,7 +405,7 @@ var phaseInsertCmd = &cobra.Command{
 		previousPhaseCount := len(state.Plan.Phases)
 
 		// Insert after the specified index (0-based)
-		insertAt := after
+		insertAt := request.After
 		state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
 
 		// Renumber so phase.ID == index+1 holds after every insert. Production
@@ -192,11 +435,15 @@ var phaseInsertCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
-			"inserted": true,
-			"phase_id": insertedID,
-			"after":    after,
-		})
+		result := map[string]interface{}{
+			"inserted":    true,
+			"phase_id":    insertedID,
+			"after":       request.After,
+			"name":        request.Name,
+			"description": request.Description,
+			"constraints": request.Constraints,
+		}
+		outputWorkflow(result, renderPhaseInsertVisual(result))
 		return nil
 	},
 }
@@ -271,9 +518,10 @@ func init() {
 	stateWriteCmd.Flags().String("field", "", "Field to set (required)")
 	stateWriteCmd.Flags().String("value", "", "Value to set (required)")
 
-	phaseInsertCmd.Flags().Int("after", 0, "Insert after this phase index (0-based, required)")
-	phaseInsertCmd.Flags().String("name", "", "Phase name (required)")
-	phaseInsertCmd.Flags().String("description", "", "Phase description (required)")
+	phaseInsertCmd.Flags().Int("after", 0, "Insert after this phase index (defaults to the current phase)")
+	phaseInsertCmd.Flags().String("name", "", "Phase name (derived from the issue when omitted)")
+	phaseInsertCmd.Flags().String("description", "", "Phase description (defaults to the issue)")
+	phaseInsertCmd.Flags().String("constraints", "", "Hard constraints retained in the phase description")
 
 	rootCmd.AddCommand(stateCheckpointCmd)
 	rootCmd.AddCommand(stateWriteCmd)
