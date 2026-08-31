@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -135,5 +136,69 @@ func TestPreflightOldSchemaCannotWarmEveryPhase(t *testing.T) {
 	}
 	if upgraded.SchemaVersion != 2 {
 		t.Fatalf("cache schema_version = %d, want 2", upgraded.SchemaVersion)
+	}
+}
+
+func TestInternalWorkerAdapterPreflightCLIUsesPhaseScope(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s := withTestPreflightStore(t)
+	forceJSONOutputModeForTest(t)
+
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+	rootCmd.SetArgs([]string{"internal-worker-adapter", "--preflight", "--simulate", "--phase", "7"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("internal-worker-adapter --preflight --phase 7 = %v; stderr=%s", err, errBuf.String())
+	}
+
+	var cache preflightCacheFile
+	if err := s.LoadJSON(preflightCachePathRel, &cache); err != nil {
+		t.Fatalf("load phase-scoped adapter cache: %v", err)
+	}
+	key := preflightCacheKey(codex.PlatformFake, 7)
+	entry, ok := cache.Entries[key]
+	if !ok {
+		t.Fatalf("adapter cache keys = %v, want %q", cache.Entries, key)
+	}
+	if entry.Phase != 7 || !entry.Available {
+		t.Fatalf("adapter phase entry = %+v, want successful phase 7 readiness", entry)
+	}
+	if _, ok := cache.Entries[preflightCacheKey(codex.PlatformFake, 0)]; ok {
+		t.Fatal("--phase 7 warmed the unscoped phase-0 cache")
+	}
+}
+
+func TestInternalWorkerAdapterPreflightCLIRejectsInvalidPhaseBeforeProbe(t *testing.T) {
+	for _, phase := range []string{"-1", "not-a-number"} {
+		t.Run(phase, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			s := withTestPreflightStore(t)
+			forceJSONOutputModeForTest(t)
+			if err := s.SaveJSON(preflightCachePathRel, &preflightCacheFile{
+				SchemaVersion: preflightCacheSchemaVersion,
+				Entries:       map[string]preflightCacheEntry{},
+			}); err != nil {
+				t.Fatalf("seed empty preflight cache: %v", err)
+			}
+
+			var outBuf, errBuf bytes.Buffer
+			stdout = &outBuf
+			stderr = &errBuf
+			rootCmd.SetArgs([]string{"internal-worker-adapter", "--preflight", "--simulate", "--phase", phase})
+			if err := rootCmd.Execute(); err == nil {
+				t.Fatalf("--phase %q succeeded, want validation error", phase)
+			}
+
+			var cache preflightCacheFile
+			if err := s.LoadJSON(preflightCachePathRel, &cache); err != nil {
+				t.Fatalf("load cache after invalid phase: %v", err)
+			}
+			if len(cache.Entries) != 0 {
+				t.Fatalf("--phase %q probed before validation; cache=%+v", phase, cache.Entries)
+			}
+		})
 	}
 }
