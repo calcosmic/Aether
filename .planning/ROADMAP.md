@@ -436,7 +436,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 198.3-04-PLAN.md — apply the trigger policy in the real run loop and make replanning lesson-aware
+- [x] 198.3-04-PLAN.md — apply the trigger policy in the real run loop and make replanning lesson-aware
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
