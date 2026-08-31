@@ -117,7 +117,7 @@ If Watcher quality score < 7 or critical issues found, present choices:
 
 ### Step 1.14: Medic Health Gate (Conditional)
 
-If `aether medic-auto-spawn-check` indicates issues, spawn Medic. Critical health issues block advancement.
+When the runtime-owned genuine-stop report recommends recovery, advise the operator to run `aether medic --deep`; do not scan, spawn Medic, or dispatch a recovery worker automatically from continue.
 
 ## Stage 3: Advance
 
