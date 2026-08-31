@@ -337,6 +337,9 @@ func mustJSONFixture(t *testing.T, value interface{}) []byte {
 }
 
 func swarmStrikeEvidenceIDs(evidence []swarmStrikeEvidence) []string {
+	if len(evidence) == 0 {
+		return nil
+	}
 	ids := make([]string, 0, len(evidence))
 	for _, item := range evidence {
 		ids = append(ids, item.SwarmID)
@@ -345,6 +348,9 @@ func swarmStrikeEvidenceIDs(evidence []swarmStrikeEvidence) []string {
 }
 
 func swarmStrikeEvidenceStatuses(evidence []swarmStrikeEvidence) []string {
+	if len(evidence) == 0 {
+		return nil
+	}
 	statuses := make([]string, 0, len(evidence))
 	for _, item := range evidence {
 		statuses = append(statuses, item.Status)

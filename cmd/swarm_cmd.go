@@ -321,19 +321,21 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	filesTouched, testsWritten := collectSwarmTouchedFiles(allRuns)
 	next := swarmNextCommand(state, status)
 
-	_ = store.SaveJSON(filepath.ToSlash(filepath.Join("swarms", swarmID, "result.json")), map[string]interface{}{
-		"swarm_id":       swarmID,
-		"target":         target,
-		"status":         status,
-		"root_cause":     rootCause,
-		"solution":       solution,
-		"recommendation": recommendation,
-		"workers":        allRuns,
-		"files":          filesTouched,
-		"tests":          testsWritten,
-		"blockers":       blockers,
-		"completed_at":   time.Now().UTC().Format(time.RFC3339),
-	})
+	if err := saveSwarmResultRecord(store, swarmResultRecord{
+		SwarmID:        swarmID,
+		Target:         target,
+		Status:         status,
+		RootCause:      rootCause,
+		Solution:       solution,
+		Recommendation: recommendation,
+		Workers:        allRuns,
+		Files:          filesTouched,
+		Tests:          testsWritten,
+		Blockers:       blockers,
+		CompletedAt:    time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		return nil, fmt.Errorf("write swarm result: %w", err)
+	}
 
 	return map[string]interface{}{
 		"mode":                "destroy",
@@ -678,19 +680,19 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	filesTouched, testsWritten := collectSwarmTouchedFiles(runs)
 	next := swarmNextCommand(state, status)
 
-	if err := store.SaveJSON(filepath.ToSlash(filepath.Join("swarms", swarmID, "result.json")), map[string]interface{}{
-		"swarm_id":       swarmID,
-		"target":         manifest.Target,
-		"status":         status,
-		"root_cause":     rootCause,
-		"solution":       solution,
-		"recommendation": recommendation,
-		"workers":        runs,
-		"files":          filesTouched,
-		"tests":          testsWritten,
-		"blockers":       blockers,
-		"completed_at":   time.Now().UTC().Format(time.RFC3339),
-		"dispatch_mode":  "external-task",
+	if err := saveSwarmResultRecord(store, swarmResultRecord{
+		SwarmID:        swarmID,
+		Target:         manifest.Target,
+		Status:         status,
+		RootCause:      rootCause,
+		Solution:       solution,
+		Recommendation: recommendation,
+		Workers:        runs,
+		Files:          filesTouched,
+		Tests:          testsWritten,
+		Blockers:       blockers,
+		CompletedAt:    time.Now().UTC().Format(time.RFC3339),
+		DispatchMode:   "external-task",
 	}); err != nil {
 		return nil, fmt.Errorf("write swarm result: %w", err)
 	}
