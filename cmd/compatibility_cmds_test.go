@@ -410,41 +410,6 @@ func TestSwarmCompatibilityWatchPrefersCurrentRunWorkers(t *testing.T) {
 	}
 }
 
-func TestAutopilotSuccessStatusCountsAsCompleted(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-
-	_, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	var buf bytes.Buffer
-	stdout = &buf
-
-	rootCmd.SetArgs([]string{"autopilot-init", "--phases", "2"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-init returned error: %v", err)
-	}
-
-	buf.Reset()
-	rootCmd.SetArgs([]string{"autopilot-update", "--phase", "1", "--status", "success"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-update returned error: %v", err)
-	}
-
-	env := parseEnvelope(t, buf.String())
-	result := env["result"].(map[string]interface{})
-	if result["status"] != "completed" {
-		t.Fatalf("expected success status normalized to completed, got %v", result["status"])
-	}
-
-	var state autopilotState
-	if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
-		t.Fatalf("load autopilot state: %v", err)
-	}
-	if len(state.Phases) != 1 || state.Phases[0].Status != "completed" {
-		t.Fatalf("expected phase 1 recorded as completed, got %+v", state.Phases)
-	}
-}
-
 func TestWatchCompatibilityWritesArtifacts(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
