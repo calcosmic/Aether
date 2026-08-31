@@ -142,6 +142,11 @@ func seedOvernightRunFixture(t *testing.T) (dataDir, root string) {
 		Criterion: criterion,
 		Checks:    []string{"watcher"},
 	}}
+	// This phase deliberately has no dispatched reviewer. Removing its
+	// current-build claims immediately before the real continue call below
+	// leaves no deterministic source that can pretend to judge the owner-only
+	// criterion, which is exactly the runtime-verification queue condition.
+	state.Plan.Phases[3].WatcherFailureCount = defaultWatcherFailureThreshold
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save overnight fixture: %v", err)
 	}
@@ -186,6 +191,31 @@ func installOvernightClock(t *testing.T) {
 	t.Cleanup(func() { autopilotNow = original })
 }
 
+func installOvernightOwnerCriterionGap(t *testing.T, phaseID int) {
+	t.Helper()
+	original := runAutopilotContinue
+	runAutopilotContinue = func(root string, options codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+		state, err := loadCompatibilityColonyState()
+		if err == nil && state.CurrentPhase == phaseID {
+			// Reconciliation is the runtime's supported evidence path for work
+			// completed without a readable builder-claims packet. It keeps task
+			// evidence positive while correctly leaving the owner-only watcher
+			// criterion without a machine proof.
+			options.ReconcileTaskIDs = []string{fmt.Sprintf("%d.1", phaseID)}
+			manifest := loadCodexContinueManifest(phaseID)
+			claimsRel := strings.TrimPrefix(strings.TrimSpace(manifest.Data.ClaimsPath), ".aether/data/")
+			if claimsRel == "" {
+				claimsRel = "last-build-claims.json"
+			}
+			if removeErr := os.Remove(filepath.Join(store.BasePath(), filepath.FromSlash(claimsRel))); removeErr != nil && !os.IsNotExist(removeErr) {
+				return nil, state, colony.Phase{}, nil, nil, false, removeErr
+			}
+		}
+		return original(root, options)
+	}
+	t.Cleanup(func() { runAutopilotContinue = original })
+}
+
 func TestOvernightRunCompletesSixPhases(t *testing.T) {
 	saveGlobalsCmd(t)
 	saveGlobals(t)
@@ -195,6 +225,7 @@ func TestOvernightRunCompletesSixPhases(t *testing.T) {
 	recorder := newOvernightRunRecorder()
 	installOvernightInvoker(t, recorder)
 	installOvernightClock(t)
+	installOvernightOwnerCriterionGap(t, 4)
 	seedOrdinaryOvernightBlocker(t)
 
 	rootCmd.SetArgs([]string{"run", "--headless", "--replan-interval", "2"})
@@ -275,6 +306,46 @@ func TestOvernightRunCompletesSixPhases(t *testing.T) {
 			t.Errorf("phase %d preflight count = %d, want 1", phase, preflights[phase])
 		}
 	}
+	gateResults, err := gateResultsReadPhase(6)
+	if err != nil {
+		t.Fatalf("load final phase gates: %v", err)
+	}
+	baselineGateSeen := false
+	for _, gate := range gateResults {
+		if gate.Name != "no_unresolved_blockers" {
+			continue
+		}
+		baselineGateSeen = true
+		if gate.Status != "passed" || !strings.Contains(gate.Detail, "remain unresolved") {
+			t.Errorf("autopilot blocker-baseline gate = %+v, want truthful pass with unresolved follow-up", gate)
+		}
+	}
+	if !baselineGateSeen {
+		t.Error("final phase omitted the no_unresolved_blockers gate")
+	}
+
+	// Omitting the internal run-only baseline is the direct-continue path.
+	// It must keep the classic strict Iron Law against the same live flag.
+	directGates := runCodexContinueGates(
+		state.Plan.Phases[5],
+		codexContinueManifest{Present: true},
+		codexContinueVerificationReport{ChecksPassed: true},
+		codexContinueAssessment{PositiveEvidence: true},
+		time.Now().UTC(),
+		nil,
+	)
+	directBlockerSeen := false
+	for _, gate := range directGates.Checks {
+		if gate.Name == "no_unresolved_blockers" {
+			directBlockerSeen = true
+			if gate.Passed {
+				t.Errorf("direct continue blocker gate unexpectedly passed: %+v", gate)
+			}
+		}
+	}
+	if !directBlockerSeen {
+		t.Error("direct continue gate set omitted no_unresolved_blockers")
+	}
 	joinedLog := strings.ToLower(strings.Join(workerLog, "\n"))
 	for _, forbidden := range []string{"seal", "provider switch", "skip-phase", "phase=7"} {
 		if strings.Contains(joinedLog, forbidden) {
@@ -289,9 +360,107 @@ func TestOvernightRunCompletesSixPhases(t *testing.T) {
 	}
 	statusResult := parseEnvelope(t, stdout.(*bytes.Buffer).String())["result"].(map[string]interface{})
 	statusJSON, _ := json.Marshal(statusResult["last_report"])
-	reportJSON, _ := json.Marshal(report)
-	if string(statusJSON) != string(reportJSON) {
+	var statusReport autopilotInvocationReport
+	if err := json.Unmarshal(statusJSON, &statusReport); err != nil {
+		t.Fatalf("decode status report: %v", err)
+	}
+	if !reflect.DeepEqual(statusReport, *report) {
+		reportJSON, _ := json.Marshal(report)
 		t.Fatalf("status changed the stored overnight report:\nstatus=%s\nstored=%s", statusJSON, reportJSON)
+	}
+}
+
+func TestOvernightRunBlockerBaselineExceptionIsNarrow(t *testing.T) {
+	saveGlobalsCmd(t)
+	saveGlobals(t)
+
+	tests := []struct {
+		name           string
+		before         []colony.FlagEntry
+		after          []colony.FlagEntry
+		supplyBaseline bool
+		wantPassed     bool
+	}{
+		{
+			name:           "unchanged autopilot baseline",
+			before:         []colony.FlagEntry{{ID: "known", Type: "blocker"}},
+			after:          []colony.FlagEntry{{ID: "known", Type: "blocker"}},
+			supplyBaseline: true,
+			wantPassed:     true,
+		},
+		{
+			name:           "new blocker count",
+			before:         []colony.FlagEntry{{ID: "known", Type: "blocker"}},
+			after:          []colony.FlagEntry{{ID: "known", Type: "blocker"}, {ID: "new", Type: "blocker"}},
+			supplyBaseline: true,
+			wantPassed:     false,
+		},
+		{
+			name:           "new escalation evidence",
+			before:         []colony.FlagEntry{{ID: "known", Type: "blocker"}},
+			after:          []colony.FlagEntry{{ID: "known", Type: "blocker", Source: "escalation"}},
+			supplyBaseline: true,
+			wantPassed:     false,
+		},
+		{
+			name:       "direct continue remains strict",
+			before:     []colony.FlagEntry{{ID: "known", Type: "blocker"}},
+			after:      []colony.FlagEntry{{ID: "known", Type: "blocker"}},
+			wantPassed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newTestStore(t)
+			store = s
+			writeTestFlags(t, tt.before...)
+			baseline := readBlockerSnapshot(store)
+			writeTestFlags(t, tt.after...)
+			flagsBeforeGate := append([]colony.FlagEntry{}, readTestFlags(t)...)
+
+			var report codexContinueGateReport
+			if tt.supplyBaseline {
+				report = runCodexContinueGatesWithAutopilotBaseline(
+					colony.Phase{ID: 1, Name: "overnight blocker contract"},
+					codexContinueManifest{Present: true},
+					codexContinueVerificationReport{ChecksPassed: true},
+					codexContinueAssessment{PositiveEvidence: true},
+					time.Now().UTC(),
+					nil,
+					&baseline,
+				)
+			} else {
+				report = runCodexContinueGates(
+					colony.Phase{ID: 1, Name: "direct continue blocker contract"},
+					codexContinueManifest{Present: true},
+					codexContinueVerificationReport{ChecksPassed: true},
+					codexContinueAssessment{PositiveEvidence: true},
+					time.Now().UTC(),
+					nil,
+				)
+			}
+
+			seen := false
+			for _, gate := range report.Checks {
+				if gate.Name != "no_unresolved_blockers" {
+					continue
+				}
+				seen = true
+				if gate.Passed != tt.wantPassed {
+					t.Errorf("blocker gate passed = %v, want %v: %+v", gate.Passed, tt.wantPassed, gate)
+				}
+				if tt.wantPassed && !strings.Contains(gate.Detail, "remain unresolved") {
+					t.Errorf("stable baseline detail hides unresolved work: %q", gate.Detail)
+				}
+			}
+			if !seen {
+				t.Fatal("continue gates omitted no_unresolved_blockers")
+			}
+			if got := readTestFlags(t); !reflect.DeepEqual(got, flagsBeforeGate) {
+				t.Errorf("blocker gate rewrote live flags:\nbefore=%+v\nafter=%+v", flagsBeforeGate, got)
+			}
+		})
 	}
 }
 

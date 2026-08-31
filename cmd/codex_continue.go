@@ -160,10 +160,15 @@ type codexContinueOptions struct {
 	WorkerTimeout       time.Duration
 	VerificationTimeout time.Duration
 	ParentContext       context.Context
-	LightFlag           bool
-	HeavyFlag           bool
-	SkipWatchers        bool
-	VerificationDepth   string
+	// AutopilotBlockerBaseline is an in-process run-loop capability, not a
+	// public continue option and not persisted in codexContinueOptionsJSON.
+	// A nil value keeps direct `aether continue` on the strict Iron Law. Only
+	// runCompatibilityAutopilot supplies the live pre-stage snapshot.
+	AutopilotBlockerBaseline *blockerSnapshot
+	LightFlag                bool
+	HeavyFlag                bool
+	SkipWatchers             bool
+	VerificationDepth        string
 	// QueenCastes is the review team the Queen chose after reading the phase.
 	// Continue is the expensive flow — each reviewer is a full agent run — and
 	// until this existed the team came only from keyword scoring, so a phase
@@ -815,7 +820,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// would otherwise deadlock on its own stale flags. Chaos-raised and
 	// user-raised blockers never auto-clear.
 	autoResolveVerificationBlockers(verification.ChecksPassed, phase.ID)
-	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	gates := runCodexContinueGatesWithAutopilotBaseline(phase, manifest, verification, assessment, now, priorGateResults, options.AutopilotBlockerBaseline)
 	if progress != nil {
 		progress.Advance("Verification")
 	}
@@ -2153,9 +2158,11 @@ func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest co
 		// home each.
 		HandoffSection: renderRelatedWorkflowHandoffSection("continue", phase.ID,
 			deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID))),
-		Root:    root,
-		Timeout: effectiveContinueReviewTimeout(workerTimeout),
-		Wave:    1,
+		Workflow: "continue",
+		Phase:    phase.ID,
+		Root:     root,
+		Timeout:  effectiveContinueReviewTimeout(workerTimeout),
+		Wave:     1,
 	}
 }
 
@@ -3628,6 +3635,10 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 }
 
 func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []GateCheckResult) codexContinueGateReport {
+	return runCodexContinueGatesWithAutopilotBaseline(phase, manifest, verification, assessment, now, priorGateResults, nil)
+}
+
+func runCodexContinueGatesWithAutopilotBaseline(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []GateCheckResult, autopilotBlockerBaseline *blockerSnapshot) codexContinueGateReport {
 	checks := []gateCheck{}
 	blockers := []string{}
 	warnings := []string{}
@@ -3785,8 +3796,24 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 
 	// The Iron Law gate (classic Flags Gate): no phase advancement with
 	// unresolved blockers. Advancement-scoped only — build is allowed with
-	// an open blocker; passing this line is not.
+	// an open blocker; passing this line is not. The one narrow exception is
+	// an in-process autopilot run whose explicit before-stage snapshot proves
+	// the unresolved blocker set neither grew nor gained escalation evidence.
+	// Direct continue and every wrapper lane omit that capability and remain
+	// strict. No flag is resolved, hidden, or rewritten here.
 	blockerFlagCheck := checkUnresolvedBlockerFlags()
+	if !blockerFlagCheck.Passed && autopilotBlockerBaseline != nil {
+		baseline := *autopilotBlockerBaseline
+		current := readBlockerSnapshot(store)
+		movement := compareBlockerSnapshots(baseline, current)
+		if !movement.CountIncreased && !movement.EscalationAdded {
+			blockerFlagCheck.Passed = true
+			blockerFlagCheck.Detail = fmt.Sprintf(
+				"existing blocker baseline did not increase or escalate; %d blocker(s) remain unresolved and visible for follow-up",
+				current.Count,
+			)
+		}
+	}
 	if !blockerFlagCheck.Passed {
 		blockerFlagCheck.FixHint = "Every blocker must be resolved before the phase can advance"
 		blockerFlagCheck.RecoveryOptions = []string{
