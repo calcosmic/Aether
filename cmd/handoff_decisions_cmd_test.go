@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 func seedHandoffOpenDecision(t *testing.T, question string) {
@@ -148,5 +149,109 @@ func TestDecisionAnswerRendersIntoClarifiedIntent(t *testing.T) {
 	}
 	if !strings.Contains(section, answer) {
 		t.Fatalf("prompt section missing the answer, got %q", section)
+	}
+}
+
+func TestDecisionAnswerRejectsCheckpointAuthorizationFailures(t *testing.T) {
+	tests := []struct {
+		name              string
+		phase             string
+		capability        func(t *testing.T, refs []autopilotCheckpointReference) string
+		includeCapability bool
+	}{
+		{name: "missing capability", phase: "8"},
+		{name: "wrong capability", phase: "8", includeCapability: true, capability: func(t *testing.T, refs []autopilotCheckpointReference) string {
+			return "not-the-displayed-capability"
+		}},
+		{name: "cross-row capability", phase: "8", includeCapability: true, capability: func(t *testing.T, refs []autopilotCheckpointReference) string {
+			return checkpointCapabilityFromReference(t, refs[1])
+		}},
+		{name: "wrong phase", phase: "9", includeCapability: true, capability: func(t *testing.T, refs []autopilotCheckpointReference) string {
+			return checkpointCapabilityFromReference(t, refs[0])
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			resetRootCmd(t)
+			forceJSONOutputModeForTest(t)
+			s, tmpDir := newTestStoreCmd(t)
+			t.Cleanup(func() { os.RemoveAll(tmpDir) })
+			store = s
+			phase := colony.Phase{ID: 8, Name: "Capability boundary", Status: colony.PhaseInProgress}
+			checkpointTestState(t, phase, colony.StateBUILT)
+			criteria := []codexCriterionVerification{
+				{TaskID: "8.1", Criterion: "The primary flow feels right", State: criterionStateNeedsOwnerConfirmation},
+				{TaskID: "8.2", Criterion: "The fallback flow feels right", State: criterionStateNeedsOwnerConfirmation},
+			}
+			refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria)
+			if err != nil || len(refs) != 2 {
+				t.Fatalf("materialize checkpoints: refs=%#v err=%v", refs, err)
+			}
+			before := pendingDecisionBytes(t)
+
+			args := []string{
+				"decision-answer",
+				"--question", refs[0].Question,
+				"--answer", "confirmed",
+				"--phase", tt.phase,
+			}
+			if tt.includeCapability {
+				args = append(args, "--checkpoint-capability", tt.capability(t, refs))
+			}
+			var outBuf, errBuf bytes.Buffer
+			stdout = &outBuf
+			stderr = &errBuf
+			rootCmd.SetArgs(args)
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("decision-answer returned Cobra error: %v", err)
+			}
+			if errBuf.Len() == 0 {
+				t.Fatalf("authorization failure was accepted: %s", outBuf.String())
+			}
+			if envelope := parseEnvelope(t, errBuf.String()); envelope["ok"] != false {
+				t.Fatalf("authorization failure did not return an error envelope: %#v", envelope)
+			}
+			if after := pendingDecisionBytes(t); !bytes.Equal(before, after) {
+				t.Fatalf("authorization failure mutated pending decisions:\nbefore=%s\nafter=%s", before, after)
+			}
+		})
+	}
+}
+
+func TestRecordDecisionAnswerDoesNotResolveCheckpoint(t *testing.T) {
+	saveGlobalsCmd(t)
+	s, tmpDir := newTestStoreCmd(t)
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	store = s
+	phase := colony.Phase{ID: 10, Name: "Generic helper boundary", Status: colony.PhaseInProgress}
+	checkpointTestState(t, phase, colony.StateBUILT)
+	checkpoint, _, err := upsertAutopilotCheckpoint(PendingDecision{
+		Type:        autopilotCheckpointTypeVisual,
+		Description: formatClarificationDescription("Phase 10: inspect the owner-facing layout", nil),
+		Source:      "generic-helper-test",
+	}, phase.ID, "visual-boundary")
+	if err != nil {
+		t.Fatalf("seed checkpoint: %v", err)
+	}
+	question := checkpointDecisionQuestion(checkpoint)
+
+	recorded, err := recordDecisionAnswer(question, "worker attempted bypass", phase.ID, "worker-handoff")
+	if err != nil {
+		t.Fatalf("record generic answer: %v", err)
+	}
+	if recorded.ID == checkpoint.ID {
+		t.Fatalf("generic helper resolved protected checkpoint %s", checkpoint.ID)
+	}
+	decisions := loadCheckpointDecisions(t)
+	if len(decisions) != 2 {
+		t.Fatalf("generic helper should append an ordinary clarification without mutating the checkpoint: %#v", decisions)
+	}
+	if decisions[0].ID != checkpoint.ID || decisions[0].Resolved {
+		t.Fatalf("generic helper changed protected checkpoint: %#v", decisions[0])
+	}
+	if decisions[1].Type != clarificationDecisionType || !decisions[1].Resolved {
+		t.Fatalf("generic helper did not preserve ordinary clarification behavior: %#v", decisions[1])
 	}
 }

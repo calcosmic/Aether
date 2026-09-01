@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -45,6 +48,42 @@ func unresolvedCheckpoints(decisions []PendingDecision) []PendingDecision {
 		}
 	}
 	return result
+}
+
+func checkpointCapabilityFromReference(t *testing.T, ref autopilotCheckpointReference) string {
+	t.Helper()
+	const marker = "--checkpoint-capability '"
+	start := strings.LastIndex(ref.RecoveryCommand, marker)
+	if start < 0 {
+		t.Fatalf("checkpoint recovery command has no capability: %q", ref.RecoveryCommand)
+	}
+	capability := strings.TrimSuffix(ref.RecoveryCommand[start+len(marker):], "'")
+	if strings.TrimSpace(capability) == "" {
+		t.Fatalf("checkpoint recovery command has an empty capability: %q", ref.RecoveryCommand)
+	}
+	return capability
+}
+
+func persistedCheckpointCapabilityHashes(decision PendingDecision) []string {
+	hashes := []string{}
+	if hash := strings.TrimSpace(decision.CheckpointCapabilitySHA256); hash != "" {
+		hashes = append(hashes, hash)
+	}
+	for _, hash := range decision.CheckpointCapabilitySHA256s {
+		if hash = strings.TrimSpace(hash); hash != "" {
+			hashes = append(hashes, hash)
+		}
+	}
+	return hashes
+}
+
+func pendingDecisionBytes(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(store.BasePath(), pendingDecisionsFile))
+	if err != nil {
+		t.Fatalf("read pending decisions: %v", err)
+	}
+	return data
 }
 
 func TestVisualCheckpointPathClassifier(t *testing.T) {
@@ -152,8 +191,16 @@ func TestRuntimeVerificationDecisionIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("replay runtime checkpoints: %v", err)
 	}
-	if len(first) != 2 || !reflect.DeepEqual(first, second) {
+	if len(first) != 2 || len(second) != 2 {
 		t.Fatalf("runtime checkpoint replay drifted: first=%#v second=%#v", first, second)
+	}
+	for i := range first {
+		if first[i].ID != second[i].ID || first[i].Type != second[i].Type || first[i].Question != second[i].Question {
+			t.Fatalf("runtime checkpoint replay changed stable identity: first=%#v second=%#v", first[i], second[i])
+		}
+		if firstCapability, secondCapability := checkpointCapabilityFromReference(t, first[i]), checkpointCapabilityFromReference(t, second[i]); firstCapability == secondCapability {
+			t.Fatalf("runtime checkpoint replay reused a capability for %s", first[i].ID)
+		}
 	}
 	if got := len(unresolvedCheckpoints(loadCheckpointDecisions(t))); got != 2 {
 		t.Fatalf("runtime replay created %d unresolved decisions, want 2", got)
@@ -173,8 +220,143 @@ func TestRuntimeVerificationDecisionIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestCheckpointCapabilityRotatesWithoutChangingIdentityOrPersistingRawTokens(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	phase := colony.Phase{ID: 4, Name: "Capability rotation", Status: colony.PhaseInProgress}
+	checkpointTestState(t, phase, colony.StateBUILT)
+	criterion := codexCriterionVerification{
+		TaskID: "4.1", Criterion: "The interaction feels deliberate", State: criterionStateNeedsOwnerConfirmation,
+	}
+
+	first, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{criterion})
+	if err != nil || len(first) != 1 {
+		t.Fatalf("materialize first checkpoint: refs=%#v err=%v", first, err)
+	}
+	firstCapability := checkpointCapabilityFromReference(t, first[0])
+	firstDecision := loadCheckpointDecisions(t)[0]
+	firstKey := firstDecision.CheckpointKey
+	if firstDecision.ID == "" || firstKey == "" {
+		t.Fatalf("checkpoint has no stable identity: %#v", firstDecision)
+	}
+	if firstDecision.CheckpointCapability != "" {
+		t.Fatalf("raw capability survived a persistence round trip: %q", firstDecision.CheckpointCapability)
+	}
+	if hashes := persistedCheckpointCapabilityHashes(firstDecision); len(hashes) != 1 {
+		t.Fatalf("first checkpoint persisted %d capability hashes, want 1: %#v", len(hashes), hashes)
+	}
+	raw := pendingDecisionBytes(t)
+	if bytes.Contains(raw, []byte(firstCapability)) {
+		t.Fatalf("pending-decisions.json persisted the raw checkpoint capability: %s", raw)
+	}
+	if !bytes.Contains(raw, []byte("checkpoint_capability_sha256")) {
+		t.Fatalf("pending-decisions.json did not persist a checkpoint capability hash: %s", raw)
+	}
+	field, ok := reflect.TypeOf(PendingDecision{}).FieldByName("CheckpointCapability")
+	if !ok || field.Tag.Get("json") != "-" {
+		t.Fatalf("CheckpointCapability must be transient with json:\"-\"; field=%#v", field)
+	}
+
+	second, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{criterion})
+	if err != nil || len(second) != 1 {
+		t.Fatalf("rotate checkpoint capability: refs=%#v err=%v", second, err)
+	}
+	secondCapability := checkpointCapabilityFromReference(t, second[0])
+	if secondCapability == firstCapability {
+		t.Fatal("capability rotation reused the raw token")
+	}
+	secondDecision := loadCheckpointDecisions(t)[0]
+	if secondDecision.ID != firstDecision.ID || secondDecision.CheckpointKey != firstKey {
+		t.Fatalf("capability rotation changed checkpoint identity: first=%#v second=%#v", firstDecision, secondDecision)
+	}
+	hashes := persistedCheckpointCapabilityHashes(secondDecision)
+	if len(hashes) != 2 || hashes[0] == hashes[1] {
+		t.Fatalf("capability rotation hashes = %#v, want two distinct durable hashes", hashes)
+	}
+	raw = pendingDecisionBytes(t)
+	if bytes.Contains(raw, []byte(firstCapability)) || bytes.Contains(raw, []byte(secondCapability)) {
+		t.Fatalf("pending-decisions.json persisted a raw capability after rotation: %s", raw)
+	}
+	if resolved, found, err := resolveAutopilotCheckpointPendingDecision(
+		second[0].Question, "owner used the first displayed command", phase.ID, firstCapability,
+	); err != nil || !found || resolved.ID != firstDecision.ID {
+		t.Fatalf("rotation invalidated the first displayed capability: resolved=%#v found=%v err=%v", resolved, found, err)
+	}
+}
+
+func TestCheckpointCapabilityIsScopedSingleUseAndCannotCrossRows(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	phase := colony.Phase{ID: 5, Name: "Capability scope", Status: colony.PhaseInProgress}
+	state := checkpointTestState(t, phase, colony.StateBUILT)
+	criteria := []codexCriterionVerification{
+		{TaskID: "5.1", Criterion: "The desktop flow feels right", State: criterionStateNeedsOwnerConfirmation},
+		{TaskID: "5.2", Criterion: "The mobile flow feels right", State: criterionStateNeedsOwnerConfirmation},
+	}
+	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria)
+	if err != nil || len(refs) != 2 {
+		t.Fatalf("materialize checkpoints: refs=%#v err=%v", refs, err)
+	}
+	firstCapability := checkpointCapabilityFromReference(t, refs[0])
+	secondCapability := checkpointCapabilityFromReference(t, refs[1])
+	firstQuestion := refs[0].Question
+
+	assertRejectedWithoutMutation := func(t *testing.T, question, capability string, answerPhase int) {
+		t.Helper()
+		before := pendingDecisionBytes(t)
+		if _, found, err := resolveAutopilotCheckpointPendingDecision(question, "confirmed", answerPhase, capability); err != nil {
+			t.Fatalf("rejected checkpoint answer returned error: %v", err)
+		} else if found {
+			t.Fatalf("checkpoint answer unexpectedly resolved for phase=%d capability=%q", answerPhase, capability)
+		}
+		after := pendingDecisionBytes(t)
+		if !bytes.Equal(before, after) {
+			t.Fatalf("rejected checkpoint answer mutated pending decisions:\nbefore=%s\nafter=%s", before, after)
+		}
+	}
+
+	assertRejectedWithoutMutation(t, firstQuestion, "", phase.ID)
+	assertRejectedWithoutMutation(t, firstQuestion, "not-the-capability", phase.ID)
+	assertRejectedWithoutMutation(t, firstQuestion, secondCapability, phase.ID)
+	assertRejectedWithoutMutation(t, firstQuestion, firstCapability, phase.ID+1)
+
+	staleSession := "checkpoint-stale-session"
+	state.SessionID = &staleSession
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save stale checkpoint scope: %v", err)
+	}
+	assertRejectedWithoutMutation(t, firstQuestion, firstCapability, phase.ID)
+	state = checkpointTestState(t, phase, colony.StateBUILT)
+
+	resolved, found, err := resolveAutopilotCheckpointPendingDecision(firstQuestion, "confirmed by owner", phase.ID, firstCapability)
+	if err != nil || !found {
+		t.Fatalf("correct checkpoint capability was refused: found=%v err=%v", found, err)
+	}
+	if resolved.ID != refs[0].ID || !resolved.Resolved || resolved.Resolution != "confirmed by owner" {
+		t.Fatalf("resolved checkpoint = %#v, want the exact first row", resolved)
+	}
+	decisions := loadCheckpointDecisions(t)
+	if len(decisions) != 2 || !decisions[0].Resolved || decisions[1].Resolved {
+		t.Fatalf("correct capability did not resolve exactly one row: %#v", decisions)
+	}
+
+	replayBaseline := pendingDecisionBytes(t)
+	if _, found, err := resolveAutopilotCheckpointPendingDecision(firstQuestion, "replayed", phase.ID, firstCapability); err != nil {
+		t.Fatalf("replay returned error: %v", err)
+	} else if found {
+		t.Fatal("single-use checkpoint capability was replayed")
+	}
+	if after := pendingDecisionBytes(t); !bytes.Equal(replayBaseline, after) {
+		t.Fatalf("replayed capability mutated the resolved row:\nbefore=%s\nafter=%s", replayBaseline, after)
+	}
+}
+
 func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	s, _ := newTestStore(t)
 	store = s
 	phase := colony.Phase{ID: 1, Name: "Resolve checkpoint", Status: colony.PhaseInProgress}
@@ -187,13 +369,27 @@ func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 	if err != nil || len(refs) != 2 {
 		t.Fatalf("materialize checkpoints: refs=%#v err=%v", refs, err)
 	}
-	targetQuestion := ownerConfirmationQuestionText(phase.ID, criteria[0].TaskID, criteria[0].Criterion)
-	resolved, err := recordDecisionAnswer(targetQuestion, "confirmed", phase.ID, "owner")
-	if err != nil {
-		t.Fatalf("record checkpoint answer: %v", err)
+	capability := checkpointCapabilityFromReference(t, refs[0])
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+	answerArgs := []string{
+		"decision-answer",
+		"--question", refs[0].Question,
+		"--answer", "confirmed",
+		"--phase", "1",
+		"--checkpoint-capability", capability,
 	}
-	if resolved.ID != refs[0].ID {
-		t.Fatalf("answer appended/replaced the row instead of resolving its stable ID: got %s want %s", resolved.ID, refs[0].ID)
+	rootCmd.SetArgs(answerArgs)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("decision-answer returned Cobra error: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Fatalf("decision-answer rejected the displayed checkpoint command: %s", errBuf.String())
+	}
+	result := parseEnvelope(t, outBuf.String())["result"].(map[string]interface{})
+	if result["id"] != refs[0].ID {
+		t.Fatalf("answer appended/replaced the row instead of resolving its stable ID: got %v want %s", result["id"], refs[0].ID)
 	}
 	decisions := loadCheckpointDecisions(t)
 	if len(decisions) != 2 {
@@ -213,10 +409,31 @@ func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 	if len(replayed) != 1 || replayed[0].ID != refs[1].ID {
 		t.Fatalf("resolved checkpoint reopened or remained in signals: %#v", replayed)
 	}
+
+	// A consumed capability must remain reserved for the checkpoint path. It
+	// may not fall through to an ordinary clarification and append a new row.
+	replayBaseline := pendingDecisionBytes(t)
+	outBuf.Reset()
+	errBuf.Reset()
+	rootCmd.SetArgs(answerArgs)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("replayed decision-answer returned Cobra error: %v", err)
+	}
+	if errBuf.Len() == 0 {
+		t.Fatalf("replayed checkpoint capability was accepted: %s", outBuf.String())
+	}
+	if envelope := parseEnvelope(t, errBuf.String()); envelope["ok"] != false {
+		t.Fatalf("replay did not return an error envelope: %#v", envelope)
+	}
+	if after := pendingDecisionBytes(t); !bytes.Equal(replayBaseline, after) {
+		t.Fatalf("replayed checkpoint command mutated pending decisions:\nbefore=%s\nafter=%s", replayBaseline, after)
+	}
 }
 
 func TestFinalPhaseAdvancesWithOwnerCheckpointAndSealBlocks(t *testing.T) {
 	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	s, _ := newTestStore(t)
 	store = s
 	phase := colony.Phase{ID: 1, Name: "Final owner boundary", Status: colony.PhaseInProgress}
@@ -270,9 +487,21 @@ func TestFinalPhaseAdvancesWithOwnerCheckpointAndSealBlocks(t *testing.T) {
 		t.Fatalf("seal refusal omitted stable ID or exact answer command: %v", err)
 	}
 
-	question, _ := parseClarificationDescription(loadCheckpointDecisions(t)[0].Description)
-	if _, err := recordDecisionAnswer(question, "confirmed", phase.ID, "owner"); err != nil {
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+	rootCmd.SetArgs([]string{
+		"decision-answer",
+		"--question", refs[0].Question,
+		"--answer", "confirmed",
+		"--phase", "1",
+		"--checkpoint-capability", checkpointCapabilityFromReference(t, refs[0]),
+	})
+	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resolve final checkpoint: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Fatalf("public checkpoint answer failed: %s", errBuf.String())
 	}
 	if _, _, err := validateSealReady(false); err != nil {
 		t.Fatalf("seal remained blocked after exact answer: %v", err)

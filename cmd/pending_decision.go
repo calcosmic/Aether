@@ -42,11 +42,16 @@ type PendingDecision struct {
 	// CheckpointKey and the fields below carry durable owner-only work. They
 	// are optional so older pending-decision records remain wire-compatible.
 	// Type distinguishes queueable visual/runtime checks from blocker flags.
-	CheckpointKey string   `json:"checkpoint_key,omitempty"`
-	Criterion     string   `json:"criterion,omitempty"`
-	TaskID        string   `json:"task_id,omitempty"`
-	Evidence      []string `json:"evidence,omitempty"`
-	SourcePaths   []string `json:"source_paths,omitempty"`
+	CheckpointKey string `json:"checkpoint_key,omitempty"`
+	// CheckpointCapability is returned only to the immediate owner-facing
+	// renderer. Only SHA-256 hashes survive a JSON round trip.
+	CheckpointCapability        string   `json:"-"`
+	CheckpointCapabilitySHA256  string   `json:"checkpoint_capability_sha256,omitempty"`
+	CheckpointCapabilitySHA256s []string `json:"checkpoint_capability_sha256s,omitempty"`
+	Criterion                   string   `json:"criterion,omitempty"`
+	TaskID                      string   `json:"task_id,omitempty"`
+	Evidence                    []string `json:"evidence,omitempty"`
+	SourcePaths                 []string `json:"source_paths,omitempty"`
 	// Replan metadata binds an accumulated overnight planning note to the
 	// exact accepted plan revision that its evidence follows. These fields are
 	// optional so pre-198.3 decision files continue to decode unchanged.
@@ -164,6 +169,14 @@ var pendingDecisionListCmd = &cobra.Command{
 				d.WaiverCapabilitySHA256 = ""
 				d.WaiverCapabilitySHA256s = nil
 			}
+			// Checkpoint identity and evidence remain observable, but capability
+			// hashes are verifier material, not generic-list output. Raw
+			// capabilities are already transient (json:"-").
+			if isAutopilotCheckpointType(d.Type) {
+				d.CheckpointCapability = ""
+				d.CheckpointCapabilitySHA256 = ""
+				d.CheckpointCapabilitySHA256s = nil
+			}
 			filtered = append(filtered, d)
 		}
 
@@ -224,6 +237,10 @@ var pendingDecisionResolveCmd = &cobra.Command{
 				// decision-answer path is the only resolver for this source.
 				if file.Decisions[i].Source == "forced-reviewer-waiver" {
 					outputError(1, "forced reviewer decisions must be answered with decision-answer and the displayed capability", nil)
+					return nil
+				}
+				if isAutopilotCheckpointType(file.Decisions[i].Type) {
+					outputError(1, "owner checkpoints must be answered with decision-answer and the displayed checkpoint capability", nil)
 					return nil
 				}
 				file.Decisions[i].Resolved = true

@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -347,5 +348,104 @@ func TestPendingDecisionAddMissingDescription(t *testing.T) {
 	env := parseEnvelope(t, errOutput)
 	if env["ok"] != false {
 		t.Errorf("expected ok:false for missing description, got: %v", env["ok"])
+	}
+}
+
+func TestPendingDecisionResolveRejectsProtectedCheckpoint(t *testing.T) {
+	for _, checkpointType := range []string{
+		autopilotCheckpointTypeVisual,
+		autopilotCheckpointTypeRuntimeVerification,
+	} {
+		t.Run(checkpointType, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			forceJSONOutputModeForTest(t)
+			s, _ := newTestStore(t)
+			store = s
+			phase := colony.Phase{ID: 3, Name: "Protected checkpoint", Status: colony.PhaseInProgress}
+			checkpointTestState(t, phase, colony.StateBUILT)
+			decision, _, err := upsertAutopilotCheckpoint(PendingDecision{
+				Type:        checkpointType,
+				Description: formatClarificationDescription("Phase 3: owner confirmation required", nil),
+				Source:      "checkpoint-resolver-test",
+			}, phase.ID, checkpointType)
+			if err != nil {
+				t.Fatalf("seed %s: %v", checkpointType, err)
+			}
+			before := pendingDecisionBytes(t)
+
+			var outBuf, errBuf bytes.Buffer
+			stdout = &outBuf
+			stderr = &errBuf
+			rootCmd.SetArgs([]string{"pending-decision-resolve", "--id", decision.ID, "--resolution", "worker bypass"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("pending-decision-resolve returned Cobra error: %v", err)
+			}
+			if errBuf.Len() == 0 {
+				t.Fatalf("generic resolver accepted protected %s: %s", checkpointType, outBuf.String())
+			}
+			envelope := parseEnvelope(t, errBuf.String())
+			if envelope["ok"] != false {
+				t.Fatalf("generic resolver did not return a non-zero error envelope: %v", envelope)
+			}
+			after := pendingDecisionBytes(t)
+			if !bytes.Equal(before, after) {
+				t.Fatalf("generic resolver mutated protected %s:\nbefore=%s\nafter=%s", checkpointType, before, after)
+			}
+		})
+	}
+}
+
+func TestPendingDecisionListRedactsCheckpointCapabilities(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	s, _ := newTestStore(t)
+	store = s
+	phase := colony.Phase{ID: 6, Name: "Redacted checkpoint", Status: colony.PhaseInProgress}
+	checkpointTestState(t, phase, colony.StateBUILT)
+	decision, _, err := upsertAutopilotCheckpoint(PendingDecision{
+		Type:        autopilotCheckpointTypeVisual,
+		Description: formatClarificationDescription("Phase 6: inspect the final screen", nil),
+		Source:      "checkpoint-list-test",
+		Evidence:    []string{"trusted UI claim"},
+	}, phase.ID, "redaction")
+	if err != nil {
+		t.Fatalf("seed checkpoint: %v", err)
+	}
+	hashes := persistedCheckpointCapabilityHashes(loadCheckpointDecisions(t)[0])
+	if len(hashes) == 0 {
+		t.Fatal("seeded checkpoint has no persisted hash to test redaction")
+	}
+
+	var outBuf bytes.Buffer
+	stdout = &outBuf
+	rootCmd.SetArgs([]string{"pending-decision-list", "--unresolved"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("pending-decision-list returned error: %v", err)
+	}
+	envelope := parseEnvelope(t, outBuf.String())
+	rows := envelope["result"].(map[string]interface{})["decisions"].([]interface{})
+	if len(rows) != 1 {
+		t.Fatalf("listed decisions = %d, want one checkpoint", len(rows))
+	}
+	row := rows[0].(map[string]interface{})
+	for _, key := range []string{"checkpoint_capability_sha256", "checkpoint_capability_sha256s"} {
+		if _, exposed := row[key]; exposed {
+			t.Fatalf("pending-decision-list exposed %s: %#v", key, row)
+		}
+	}
+	rendered := outBuf.String()
+	if strings.Contains(rendered, decision.CheckpointCapability) {
+		t.Fatalf("pending-decision-list exposed the raw capability: %s", rendered)
+	}
+	for _, hash := range hashes {
+		if strings.Contains(rendered, hash) {
+			t.Fatalf("pending-decision-list exposed checkpoint capability hash %q: %s", hash, rendered)
+		}
+	}
+	checkpointKey, _ := row["checkpoint_key"].(string)
+	if checkpointKey == "" || row["evidence"] == nil {
+		t.Fatalf("redaction removed observable checkpoint identity or evidence: %#v", row)
 	}
 }
