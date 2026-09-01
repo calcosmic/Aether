@@ -298,6 +298,16 @@ var runCompatibilityCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		if persistErr := strings.TrimSpace(stringValue(result["report_persist_error"])); persistErr != "" {
+			message := "Autopilot terminal report persistence failed; the retained outcome exists only in memory."
+			if shouldRenderVisualOutput(stderr) {
+				markRenderedCommandError(1)
+				writeVisualOutput(stderr, renderRunReportPersistenceFailure(result))
+			} else {
+				outputError(1, message, result)
+			}
+			return nil
+		}
 		outputWorkflow(result, renderRunCompatibilityVisual(result))
 		return nil
 	},
@@ -633,11 +643,17 @@ func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.Col
 	if cause != nil {
 		result["error"] = cause.Error()
 	}
-	if decision.Code == autopilotTriggerColonyComplete {
-		emitVisualProgress(renderAutopilotComplete(phasesCompleted))
-		emitVisualProgress(renderProjectComplete(state, phasesCompleted))
-	} else {
-		emitVisualProgress(renderRunTypedDecision(decision))
+	// The terminal write is the durability boundary. Once it fails, no success,
+	// completion, or ordinary terminal-decision presentation may get ahead of
+	// RunE's error-first response. The fully built report remains on result as
+	// explicitly unsaved evidence, but it is not presented as a durable outcome.
+	if persistErr == nil {
+		if decision.Code == autopilotTriggerColonyComplete {
+			emitVisualProgress(renderAutopilotComplete(phasesCompleted))
+			emitVisualProgress(renderProjectComplete(state, phasesCompleted))
+		} else {
+			emitVisualProgress(renderRunTypedDecision(decision))
+		}
 	}
 	return result
 }
@@ -1005,6 +1021,10 @@ func syncRunAutopilotStateWithReport(state colony.ColonyState, opts runCompatibi
 }
 
 func renderRunCompatibilityVisual(result map[string]interface{}) string {
+	if strings.TrimSpace(stringValue(result["report_persist_error"])) != "" {
+		return renderRunReportPersistenceFailure(result)
+	}
+
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("run"), "Run"))
 	b.WriteString(visualDividerStr())
@@ -1083,6 +1103,80 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 		fmt.Sprintf("Run `%s` for the next lifecycle step.", next),
 		fmt.Sprintf("Stop reason: %s", emptyFallback(stringValue(result["stopped_reason"]), "none")),
 	))
+	return b.String()
+}
+
+// renderRunReportPersistenceFailure is deliberately separate from the normal
+// morning-report renderer. A failed terminal write means the outcome is useful
+// recovery evidence, but it is not a saved completion record and must never be
+// wrapped in the ordinary Run / Last Autopilot Run success presentation.
+func renderRunReportPersistenceFailure(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString("━━━ ❌ REPORT DURABILITY FAILURE ━━━\n")
+	b.WriteString(visualDividerStr())
+	b.WriteString("The autopilot terminal report could not be persisted. The record below is retained only in this process and is not durable.\n")
+	if persistErr := strings.TrimSpace(stringValue(result["report_persist_error"])); persistErr != "" {
+		fmt.Fprintf(&b, "Persistence error: %s\n", persistErr)
+	}
+	b.WriteString("Do not treat the projected next action as safe until report storage is repaired.\n\n")
+	b.WriteString("━━━ UNSAVED IN-MEMORY EVIDENCE ━━━\n")
+
+	report, ok := autopilotReportFromValue(result["last_report"])
+	if !ok {
+		b.WriteString("Outcome: unavailable (the retained report could not be decoded)\n")
+		fmt.Fprintf(&b, "Stop reason: %s\n", emptyFallback(stringValue(result["stopped_reason"]), "unknown"))
+		fmt.Fprintf(&b, "Next: %s (projection only; persistence must be repaired first)\n", emptyFallback(stringValue(result["next"]), "aether status"))
+		return b.String()
+	}
+
+	fmt.Fprintf(&b, "Outcome: %s (retained only; not durably recorded)\n", emptyFallback(report.Outcome, "unknown"))
+	fmt.Fprintf(&b, "Stop reason: %s\n", emptyFallback(report.StopReason, "none"))
+	b.WriteString("Queued decisions\n")
+	if len(report.QueuedDecisions) == 0 {
+		b.WriteString("  none\n")
+	} else {
+		for _, queued := range report.QueuedDecisions {
+			fmt.Fprintf(&b, "  - %s [%s]", emptyFallback(queued.ID, "unknown"), emptyFallback(queued.Type, "unknown"))
+			if queued.Phase > 0 {
+				fmt.Fprintf(&b, " phase %d", queued.Phase)
+			}
+			b.WriteString("\n")
+		}
+	}
+	fmt.Fprintf(&b, "Blocker movement: %d -> %d active; %d -> %d escalated\n",
+		report.BlockersBefore.Count, report.BlockersAfter.Count,
+		report.BlockersBefore.EscalatedCount, report.BlockersAfter.EscalatedCount)
+	if report.Recovery != nil {
+		fmt.Fprintf(&b, "Recovery: %s (%s)\n", report.Recovery.Classification, report.Recovery.FailureType)
+		if strings.TrimSpace(report.Recovery.LogError) != "" {
+			fmt.Fprintf(&b, "Recovery log error: %s\n", report.Recovery.LogError)
+		}
+		if strings.TrimSpace(report.Recovery.MedicAdvice) != "" {
+			fmt.Fprintf(&b, "Medic advice: %s\n", report.Recovery.MedicAdvice)
+		}
+	}
+	fmt.Fprintf(&b, "Elapsed: %s\n", renderAutopilotElapsed(report.ElapsedSeconds))
+	b.WriteString(renderAutopilotSpendReport(report.Spend))
+	fmt.Fprintf(&b, "Next: %s (projection only; persistence must be repaired first)\n", emptyFallback(report.Next, "aether status"))
+	b.WriteString("Phase evidence\n")
+	if len(report.Phases) == 0 {
+		b.WriteString("  none in this invocation\n")
+	} else {
+		for _, phase := range report.Phases {
+			fmt.Fprintf(&b, "  - Phase %d", phase.Phase)
+			if strings.TrimSpace(phase.PhaseName) != "" {
+				fmt.Fprintf(&b, ": %s", phase.PhaseName)
+			}
+			fmt.Fprintf(&b, " — %s", emptyFallback(phase.Outcome, "observed"))
+			if len(phase.HighFindings) > 0 {
+				fmt.Fprintf(&b, "; %d HIGH finding(s)", len(phase.HighFindings))
+			}
+			if len(phase.QueuedDecisions) > 0 {
+				fmt.Fprintf(&b, "; %d decision(s) queued", len(phase.QueuedDecisions))
+			}
+			b.WriteString("\n")
+		}
+	}
 	return b.String()
 }
 
