@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -350,6 +351,339 @@ func TestSwarmThreeStrikeReplayKeepsOneEscalation(t *testing.T) {
 		if flags := activeSwarmEscalationFlags(s); len(flags) != 1 {
 			t.Fatalf("replay %d active escalation flags = %d, want 1: %+v", replay, len(flags), flags)
 		}
+	}
+}
+
+func TestSwarmRecoveryEpoch(t *testing.T) {
+	t.Parallel()
+
+	s, _ := newTestStore(t)
+	target := "auth panic"
+	base := time.Date(2026, time.September, 1, 8, 0, 0, 0, time.UTC)
+	history := seedSwarmRecoveryStrikes(t, s, target, base)
+	before, after, inserted := swarmRecoveryPlans()
+	saveSwarmRecoveryPlan(t, s, before)
+
+	record, err := buildSwarmRecoveryRecord(
+		target,
+		history,
+		colony.FlagEntry{
+			ID:        swarmEscalationFlagID(history.TargetFingerprint),
+			Type:      "blocker",
+			Source:    "escalation",
+			Resolved:  false,
+			CreatedAt: history.Evidence[len(history.Evidence)-1].CompletedAt,
+		},
+		before,
+		after,
+		inserted,
+		base.Add(3*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("buildSwarmRecoveryRecord: %v", err)
+	}
+	if err := saveSwarmResultRecord(s, record); err != nil {
+		t.Fatalf("save recovery result: %v", err)
+	}
+
+	uncommitted, err := evaluateSwarmStrikeHistory(s, "  AUTH PANIC!!! ")
+	if err != nil {
+		t.Fatalf("evaluate uncommitted recovery: %v", err)
+	}
+	if uncommitted.StrikeCount != 3 || uncommitted.LatestRecovery != nil {
+		t.Fatalf("recovery staged before state commit became active: %+v", uncommitted)
+	}
+
+	saveSwarmRecoveryPlan(t, s, after)
+	recovered, err := evaluateSwarmStrikeHistory(s, "  AUTH PANIC!!! ")
+	if err != nil {
+		t.Fatalf("evaluate committed recovery: %v", err)
+	}
+	if recovered.StrikeCount != 0 || recovered.NextAttempt != 1 {
+		t.Fatalf("committed recovery did not open a new epoch: %+v", recovered)
+	}
+	if recovered.LatestRecovery == nil {
+		t.Fatal("verified recovery evidence was not returned")
+	}
+	if recovered.LatestRecovery.SwarmID != record.SwarmID ||
+		recovered.LatestRecovery.InsertedPhaseID != inserted.ID ||
+		recovered.LatestRecovery.TargetFingerprint != history.TargetFingerprint {
+		t.Fatalf("latest recovery = %+v, want event/phase/target identity", recovered.LatestRecovery)
+	}
+
+	if err := saveSwarmResultRecord(s, swarmResultRecord{
+		SwarmID:     "swarm-after-recovery-1",
+		Target:      target,
+		Status:      "failed",
+		CompletedAt: base.Add(4 * time.Minute).Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("save post-recovery failure: %v", err)
+	}
+	nextEpoch, err := evaluateSwarmStrikeHistory(s, target)
+	if err != nil {
+		t.Fatalf("evaluate post-recovery failure: %v", err)
+	}
+	if nextEpoch.StrikeCount != 1 || nextEpoch.NextAttempt != 2 ||
+		!reflect.DeepEqual(swarmStrikeEvidenceIDs(nextEpoch.Evidence), []string{"swarm-after-recovery-1"}) {
+		t.Fatalf("post-recovery failures did not count from zero: %+v", nextEpoch)
+	}
+
+	data, err := os.ReadFile(filepath.Join(s.BasePath(), "swarms", record.SwarmID, "result.json"))
+	if err != nil {
+		t.Fatalf("read recovery result: %v", err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("decode recovery result: %v", err)
+	}
+	for _, forbidden := range []string{"workers", "files", "tests", "blockers", "root_cause", "solution", "recommendation"} {
+		if _, exists := raw[forbidden]; exists {
+			t.Errorf("recovery event contains swarm outcome field %q: %s", forbidden, data)
+		}
+	}
+	if raw["status"] != "recovered" {
+		t.Fatalf("recovery status = %v, want recovered", raw["status"])
+	}
+}
+
+func TestSwarmRecoveryEpochRejectsMalformedSpoofedAndCrossTargetRecords(t *testing.T) {
+	t.Parallel()
+
+	target := "auth panic"
+	base := time.Date(2026, time.September, 1, 9, 0, 0, 0, time.UTC)
+	before, after, inserted := swarmRecoveryPlans()
+
+	tests := []struct {
+		name        string
+		mutate      func(map[string]interface{})
+		livePlan    colony.Plan
+		rawJSON     []byte
+		queryTarget string
+	}{
+		{
+			name:    "malformed json",
+			rawJSON: []byte("{\"swarm_id\":"),
+		},
+		{
+			name: "wrong authorization source",
+			mutate: func(raw map[string]interface{}) {
+				raw["recovery"].(map[string]interface{})["authorization_source"] = "manual-reset"
+			},
+		},
+		{
+			name: "mismatched metadata target fingerprint",
+			mutate: func(raw map[string]interface{}) {
+				raw["recovery"].(map[string]interface{})["target_fingerprint"] = swarmTargetFingerprint("database panic")
+			},
+		},
+		{
+			name: "cross-target row",
+			mutate: func(raw map[string]interface{}) {
+				raw["target"] = "database panic"
+				raw["target_fingerprint"] = swarmTargetFingerprint("database panic")
+			},
+		},
+		{
+			name: "identical before and after definitions",
+			mutate: func(raw map[string]interface{}) {
+				recovery := raw["recovery"].(map[string]interface{})
+				recovery["before_plan_definition_hash"] = recovery["after_plan_definition_hash"]
+			},
+		},
+		{
+			name: "missing corrective phase fingerprint",
+			mutate: func(raw map[string]interface{}) {
+				delete(raw["recovery"].(map[string]interface{}), "inserted_phase_definition_fingerprint")
+			},
+		},
+		{
+			name:     "absent corrective phase",
+			livePlan: before,
+		},
+		{
+			name: "mismatched committed plan definition",
+			mutate: func(raw map[string]interface{}) {
+				raw["recovery"].(map[string]interface{})["after_plan_definition_hash"] = strings.Repeat("a", 64)
+			},
+		},
+		{
+			name: "recovery carries fabricated worker evidence",
+			mutate: func(raw map[string]interface{}) {
+				raw["workers"] = []interface{}{map[string]interface{}{"name": "fake"}}
+			},
+		},
+		{
+			name:        "different queried target remains isolated",
+			queryTarget: "database panic",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newTestStore(t)
+			history := seedSwarmRecoveryStrikes(t, s, target, base)
+			livePlan := tt.livePlan
+			if len(livePlan.Phases) == 0 {
+				livePlan = after
+			}
+			saveSwarmRecoveryPlan(t, s, livePlan)
+
+			record, err := buildSwarmRecoveryRecord(
+				target,
+				history,
+				colony.FlagEntry{
+					ID:        swarmEscalationFlagID(history.TargetFingerprint),
+					Type:      "blocker",
+					Source:    "escalation",
+					CreatedAt: history.Evidence[len(history.Evidence)-1].CompletedAt,
+				},
+				before,
+				after,
+				inserted,
+				base.Add(3*time.Minute),
+			)
+			if err != nil {
+				t.Fatalf("build valid recovery fixture: %v", err)
+			}
+
+			data := tt.rawJSON
+			if data == nil {
+				var raw map[string]interface{}
+				encoded, err := json.Marshal(record)
+				if err != nil {
+					t.Fatalf("marshal valid recovery fixture: %v", err)
+				}
+				if err := json.Unmarshal(encoded, &raw); err != nil {
+					t.Fatalf("decode valid recovery fixture: %v", err)
+				}
+				if tt.mutate != nil {
+					tt.mutate(raw)
+				}
+				data = mustJSONFixture(t, raw)
+			}
+			writeRawSwarmResult(t, s, record.SwarmID, data)
+
+			queryTarget := tt.queryTarget
+			if queryTarget == "" {
+				queryTarget = target
+			}
+			got, err := evaluateSwarmStrikeHistory(s, queryTarget)
+			if err != nil {
+				t.Fatalf("evaluate history: %v", err)
+			}
+			if queryTarget == target {
+				if got.StrikeCount != 3 || got.LatestRecovery != nil {
+					t.Fatalf("invalid recovery changed original epoch: %+v", got)
+				}
+			} else if got.StrikeCount != 0 || got.LatestRecovery != nil {
+				t.Fatalf("cross-target recovery affected %q: %+v", queryTarget, got)
+			}
+		})
+	}
+}
+
+func TestSwarmRecoveryEpochRequiresCompleteTypedMetadata(t *testing.T) {
+	t.Parallel()
+
+	s, _ := newTestStore(t)
+	target := "auth panic"
+	base := time.Date(2026, time.September, 1, 10, 0, 0, 0, time.UTC)
+	history := seedSwarmRecoveryStrikes(t, s, target, base)
+	before, after, inserted := swarmRecoveryPlans()
+	record, err := buildSwarmRecoveryRecord(
+		target,
+		history,
+		colony.FlagEntry{
+			ID:        swarmEscalationFlagID(history.TargetFingerprint),
+			Type:      "blocker",
+			Source:    "escalation",
+			CreatedAt: history.Evidence[len(history.Evidence)-1].CompletedAt,
+		},
+		before,
+		after,
+		inserted,
+		base.Add(3*time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("build valid recovery fixture: %v", err)
+	}
+
+	missing := record
+	missing.Recovery = nil
+	if err := saveSwarmResultRecord(s, missing); err == nil {
+		t.Fatal("recovered status without metadata was accepted")
+	}
+
+	withOutcome := record
+	withOutcome.SwarmID = "swarm-recovery-with-outcome"
+	withOutcome.Workers = []swarmWorkerExecution{{Name: "fabricated"}}
+	if err := saveSwarmResultRecord(s, withOutcome); err == nil {
+		t.Fatal("recovery event carrying worker evidence was accepted")
+	}
+
+	wrongStatus := record
+	wrongStatus.SwarmID = "swarm-recovery-wrong-status"
+	wrongStatus.Status = "failed"
+	if err := saveSwarmResultRecord(s, wrongStatus); err == nil {
+		t.Fatal("non-recovery status carrying recovery metadata was accepted")
+	}
+
+	if err := saveSwarmResultRecord(s, record); err != nil {
+		t.Fatalf("complete typed recovery was rejected: %v", err)
+	}
+}
+
+func seedSwarmRecoveryStrikes(t *testing.T, s *storage.Store, target string, base time.Time) swarmStrikeHistory {
+	t.Helper()
+	for i, status := range []string{"failed", "blocked", "failed"} {
+		if _, err := persistSwarmResultOutcome(s, swarmResultRecord{
+			SwarmID:     fmt.Sprintf("swarm-recovery-seed-%d", i+1),
+			Target:      target,
+			Status:      status,
+			CompletedAt: base.Add(time.Duration(i) * time.Minute).Format(time.RFC3339Nano),
+		}); err != nil {
+			t.Fatalf("persist recovery seed %d: %v", i+1, err)
+		}
+	}
+	history, err := evaluateSwarmStrikeHistory(s, target)
+	if err != nil {
+		t.Fatalf("evaluate recovery seed: %v", err)
+	}
+	return history
+}
+
+func swarmRecoveryPlans() (colony.Plan, colony.Plan, colony.Phase) {
+	beforePhase := colony.Phase{
+		ID:          1,
+		Name:        "Build authentication",
+		Description: "Implement the authentication flow",
+		Status:      colony.PhaseReady,
+		Tasks: []colony.Task{{
+			Goal:   "Implement authentication",
+			Status: colony.TaskPending,
+		}},
+		SuccessCriteria: []string{"Authentication works"},
+	}
+	inserted := colony.Phase{
+		ID:          2,
+		Name:        "Stabilize auth panic",
+		Description: "Correct the repeated swarm failure",
+		Status:      colony.PhasePending,
+		Tasks: []colony.Task{{
+			Goal:   "Diagnose the repeated failure",
+			Status: colony.TaskPending,
+		}},
+		SuccessCriteria: []string{"The original target can be retried"},
+	}
+	before := colony.Plan{Phases: []colony.Phase{beforePhase}}
+	after := colony.Plan{Phases: []colony.Phase{beforePhase, inserted}}
+	return before, after, inserted
+}
+
+func saveSwarmRecoveryPlan(t *testing.T, s *storage.Store, plan colony.Plan) {
+	t.Helper()
+	if err := s.SaveJSON("COLONY_STATE.json", colony.ColonyState{Plan: plan}); err != nil {
+		t.Fatalf("save recovery plan state: %v", err)
 	}
 }
 
