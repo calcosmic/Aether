@@ -463,6 +463,41 @@ func TestAutopilotReportRendererUsesRequiredOrderAndExactNext(t *testing.T) {
 	}
 }
 
+func TestAutopilotReportUnavailableBlockerTruthIsNeverZero(t *testing.T) {
+	report := autopilotInvocationReport{
+		SchemaVersion: autopilotReportSchemaVersion,
+		Outcome:       "genuine_stop",
+		StopReason:    string(autopilotTriggerColonyNotRunnable),
+		BlockersBefore: autopilotBlockerSnapshotReport{
+			Available: false,
+			Snapshot:  nil,
+			Error:     "blocker truth pending-decisions.json: unavailable",
+		},
+		BlockersAfter: availableAutopilotBlockerSnapshot(blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}}),
+		Spend:         autopilotSpendReport{Phases: []autopilotPhaseSpendReport{}},
+		Next:          "aether status",
+		Phases:        []autopilotPhaseReport{},
+	}
+	for name, rendered := range map[string]string{
+		"normal":              renderAutopilotInvocationReport(report),
+		"persistence failure": renderRunReportPersistenceFailure(map[string]interface{}{"last_report": &report, "stopped_reason": report.StopReason}),
+	} {
+		if !strings.Contains(rendered, "Blocker movement: unavailable") {
+			t.Errorf("%s renderer hid unavailable blocker truth:\n%s", name, rendered)
+		}
+		if strings.Contains(rendered, "Blocker movement: 0") {
+			t.Errorf("%s renderer converted unavailable truth to zero:\n%s", name, rendered)
+		}
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal unavailable report: %v", err)
+	}
+	if !bytes.Contains(encoded, []byte(`"available":false`)) || !bytes.Contains(encoded, []byte(`"snapshot":null`)) {
+		t.Fatalf("JSON lost explicit unavailable evidence: %s", encoded)
+	}
+}
+
 func TestStatusLastReportRemainsStoredAfterClockAndLedgerMutation(t *testing.T) {
 	saveGlobals(t)
 	_, _ = seedRunFixture(t, 1)
