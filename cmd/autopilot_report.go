@@ -339,7 +339,30 @@ func autopilotReportCompletedPhases(phases []autopilotPhaseReport, state colony.
 }
 
 func resolveAutopilotReportNext(state colony.ColonyState, decision autopilotRunDecision) string {
-	return lifecycleNextActionForState(state, "run", decision.Next, "The autopilot stop named this exact recovery step.").Command
+	if autopilotReportStateIsSealReady(state) {
+		return "aether seal"
+	}
+	override := strings.TrimSpace(decision.Next)
+	// Checkpoint commands contain a raw, single-use authorization capability.
+	// They belong in the immediate run/seal response only. A frozen report
+	// keeps the queued IDs/questions and points the owner back through the
+	// lifecycle so a later invocation issues fresh authorization.
+	if len(decision.Checkpoints) > 0 || strings.Contains(strings.ToLower(override), "--checkpoint-capability") {
+		override = ""
+	}
+	return lifecycleNextActionForState(state, "run", override, "The autopilot stop named this exact recovery step.").Command
+}
+
+func autopilotReportStateIsSealReady(state colony.ColonyState) bool {
+	if len(state.Plan.Phases) == 0 {
+		return false
+	}
+	for _, phase := range state.Plan.Phases {
+		if phase.Status != colony.PhaseCompleted {
+			return false
+		}
+	}
+	return true
 }
 
 func recordAutopilotRecovery(report *autopilotInvocationReport, decision autopilotRunDecision, cause error) {

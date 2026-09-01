@@ -513,22 +513,25 @@ aether run --headless --max-phases 2
 ### Morning handoff
 
 `aether run` never seals automatically. When it finishes, review the frozen run
-report and the live decision list, answer each visual/runtime question using
-its exact question and phase, review any replan note, then seal:
+report and the live decision list. The list is an identity-and-evidence view:
+it deliberately does not expose reusable authorization. Review any replan
+note, then ask seal to issue fresh owner commands:
 
 ```bash
 aether status
 aether pending-decision-list --unresolved
-aether decision-answer --question '<exact question from the decision list>' --answer 'confirmed' --phase <phase>
 aether plan        # only when the morning list contains a replan suggestion
 aether seal
 ```
 
-The answer command resolves that exact checkpoint in place. `aether seal`
-still refuses unresolved owner checkpoints or blockers, so queued morning work
-is never mistaken for approval. Status reads the stored last-run report rather
-than recalculating its elapsed time, measured/unreported token usage, findings,
-or blocker movement from newer data.
+When owner checkpoints remain, `aether seal` refuses and emits one exact,
+capability-bearing `decision-answer` command for each checkpoint. Copy each
+emitted command verbatim, run it, then rerun `aether seal`. Do not construct an
+answer command from the redacted decision list: the fresh capability in seal's
+immediate output is what authorizes the exact checkpoint. Queued morning work
+is therefore never mistaken for approval. Status reads the stored last-run
+report rather than recalculating its elapsed time, measured/unreported token
+usage, findings, or blocker movement from newer data.
 
 <div align="center">
   <img src="assets/logo/logo.jpg" alt="✦" width="80" />
