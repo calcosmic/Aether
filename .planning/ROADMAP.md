@@ -468,18 +468,18 @@ Plans:
 
 **Gap Closure Wave 3**
 
-- [ ] 198.3-17-PLAN.md — bind owner approvals to immutable build and verification generations
-- [ ] 198.3-20-PLAN.md — reconstruct replan cadence durably across bounded and interrupted runs
+- [ ] 198.3-17-PLAN.md — bind owner approvals to generation-specific authorization rows while preserving seal compatibility identity
 - [ ] 198.3-21-PLAN.md — require exact terminal swarm evidence and repair partial third-strike escalation writes
 
 **Gap Closure Wave 4** *(blocked on 198.3-17)*
 
 - [ ] 198.3-18-PLAN.md — scope legacy answered-question compatibility to the active session and goal
 - [ ] 198.3-19-PLAN.md — reject suggestion-only Critical evidence before direct or external phase advancement
+- [ ] 198.3-20-PLAN.md — reconstruct replan cadence durably across bounded and interrupted runs
 
 **Gap Closure Wave 5** *(blocked on Gap Closure Waves 3-4)*
 
-- [ ] 198.3-22-PLAN.md — fail run/status closed on unavailable blocker truth and re-prove the overnight contract
+- [ ] 198.3-22-PLAN.md — fail run, continue advancement, status, and persisted reports closed on unavailable blocker truth
 
 ### Phase 198.4: Prune the Dead Wood
 
