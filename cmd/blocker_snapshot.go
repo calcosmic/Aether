@@ -37,17 +37,26 @@ type blockerSnapshotComparison struct {
 // Type=blocker records. A missing current file may use the legacy flags file;
 // every other storage failure is unavailable truth, never an empty snapshot.
 func readBlockerSnapshot(s *storage.Store) (blockerSnapshot, error) {
+	snapshot, _, err := readBlockerSnapshotEvidence(s)
+	return snapshot, err
+}
+
+// readBlockerSnapshotEvidence lets the continue gate retain human-readable
+// blocker descriptions without performing a second storage read around the
+// authorization decision.
+func readBlockerSnapshotEvidence(s *storage.Store) (blockerSnapshot, []string, error) {
 	snapshot := blockerSnapshot{
 		IDs:          []string{},
 		EscalatedIDs: []string{},
 	}
 	flags, _, err := readCanonicalBlockerFlags(s)
 	if err != nil {
-		return snapshot, err
+		return snapshot, nil, err
 	}
 
 	ids := make(map[string]struct{})
 	escalatedIDs := make(map[string]struct{})
+	descriptions := []string{}
 	for _, flag := range flags.Decisions {
 		if flag.Resolved || flag.Type != "blocker" {
 			continue
@@ -56,6 +65,13 @@ func readBlockerSnapshot(s *storage.Store) (blockerSnapshot, error) {
 		id := strings.TrimSpace(flag.ID)
 		if id != "" {
 			ids[id] = struct{}{}
+		}
+		description := strings.TrimSpace(flag.Description)
+		if description == "" {
+			description = id
+		}
+		if description != "" {
+			descriptions = append(descriptions, description)
 		}
 		if flag.Source != "escalation" {
 			continue
@@ -68,7 +84,7 @@ func readBlockerSnapshot(s *storage.Store) (blockerSnapshot, error) {
 
 	snapshot.IDs = sortedStringSet(ids)
 	snapshot.EscalatedIDs = sortedStringSet(escalatedIDs)
-	return snapshot, nil
+	return snapshot, descriptions, nil
 }
 
 func readCanonicalBlockerFlags(s *storage.Store) (colony.FlagsFile, bool, error) {

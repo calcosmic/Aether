@@ -616,7 +616,17 @@ func renderAutopilotInvocationReport(report autopilotInvocationReport) string {
 
 func renderAutopilotBlockerMovement(before, after autopilotBlockerSnapshotReport) string {
 	if !before.Available || before.Snapshot == nil || !after.Available || after.Snapshot == nil {
-		return "Blocker movement: unavailable\n"
+		var details []string
+		if !before.Available && strings.TrimSpace(before.Error) != "" {
+			details = append(details, "before: "+compactActionText(before.Error, 180))
+		}
+		if !after.Available && strings.TrimSpace(after.Error) != "" {
+			details = append(details, "after: "+compactActionText(after.Error, 180))
+		}
+		if len(details) == 0 {
+			return "Blocker movement: unavailable\n"
+		}
+		return "Blocker movement: unavailable\nBlocker truth diagnostic: " + strings.Join(details, "; ") + "\n"
 	}
 	return fmt.Sprintf("Blocker movement: %d -> %d active; %d -> %d escalated\n",
 		before.Snapshot.Count, after.Snapshot.Count,
