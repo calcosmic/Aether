@@ -47,6 +47,12 @@ type autopilotRunDecision struct {
 	Checkpoints []autopilotCheckpointReference `json:"checkpoints,omitempty"`
 }
 
+type autopilotReplanEvaluation struct {
+	Decision       autopilotRunDecision
+	Lessons        []confirmedAutopilotLesson
+	PlanRevisionID string
+}
+
 var watchCmd = &cobra.Command{
 	Use:   "watch",
 	Short: "Compatibility alias for live worker activity",
@@ -298,6 +304,16 @@ var runCompatibilityCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		if persistErr := strings.TrimSpace(stringValue(result["report_persist_error"])); persistErr != "" {
+			message := "Autopilot terminal report persistence failed; the retained outcome exists only in memory."
+			if shouldRenderVisualOutput(stderr) {
+				markRenderedCommandError(1)
+				writeVisualOutput(stderr, renderRunReportPersistenceFailure(result))
+			} else {
+				outputError(1, message, result)
+			}
+			return nil
+		}
 		outputWorkflow(result, renderRunCompatibilityVisual(result))
 		return nil
 	},
@@ -419,6 +435,31 @@ func autopilotRunDecisionForCode(code autopilotTriggerCode, headless bool, evide
 		Next:        spec.NextActionTemplate,
 		Evidence:    evidence,
 	}
+}
+
+// evaluateAutopilotReplan is the one live/preview policy decision for a replan
+// boundary. It is pure: eligibility and mode disposition are computed here,
+// while the live caller alone may persist a pending decision afterwards.
+func evaluateAutopilotReplan(plan colony.Plan, checkpointPhase, phasesCompleted int, opts runCompatibilityOptions, lessons []confirmedAutopilotLesson) (autopilotReplanEvaluation, bool, error) {
+	due := lessonAwareReplanDue(phasesCompleted, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan) ||
+		legacyInteractiveReplanDue(plan, phasesCompleted, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
+	if !due {
+		return autopilotReplanEvaluation{}, false, nil
+	}
+	revisionID, _, err := activePlanLessonBoundary(plan)
+	if err != nil {
+		return autopilotReplanEvaluation{}, false, err
+	}
+	evidence := map[string]interface{}{
+		"phase":            checkpointPhase,
+		"lesson_count":     len(lessons),
+		"plan_revision_id": revisionID,
+	}
+	return autopilotReplanEvaluation{
+		Decision:       autopilotRunDecisionForCode(autopilotTriggerReplanDue, opts.Headless, evidence),
+		Lessons:        lessons,
+		PlanRevisionID: revisionID,
+	}, true, nil
 }
 
 func autopilotSignalsFromRunResult(result map[string]interface{}) codexContinueAutopilotSignals {
@@ -633,11 +674,17 @@ func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.Col
 	if cause != nil {
 		result["error"] = cause.Error()
 	}
-	if decision.Code == autopilotTriggerColonyComplete {
-		emitVisualProgress(renderAutopilotComplete(phasesCompleted))
-		emitVisualProgress(renderProjectComplete(state, phasesCompleted))
-	} else {
-		emitVisualProgress(renderRunTypedDecision(decision))
+	// The terminal write is the durability boundary. Once it fails, no success,
+	// completion, or ordinary terminal-decision presentation may get ahead of
+	// RunE's error-first response. The fully built report remains on result as
+	// explicitly unsaved evidence, but it is not presented as a durable outcome.
+	if persistErr == nil {
+		if decision.Code == autopilotTriggerColonyComplete {
+			emitVisualProgress(renderAutopilotComplete(phasesCompleted))
+			emitVisualProgress(renderProjectComplete(state, phasesCompleted))
+		} else {
+			emitVisualProgress(renderRunTypedDecision(decision))
+		}
 	}
 	return result
 }
@@ -657,7 +704,7 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 	}
 
 	if opts.DryRun {
-		return buildRunDryRunResult(state, opts), nil
+		return buildRunDryRunResult(state, opts)
 	}
 
 	invocation := beginAutopilotInvocation(state)
@@ -821,13 +868,16 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_evidence"})
 				return finish(state, decision, lessonErr), nil
 			}
-			evidenceReplanDue := lessonAwareReplanDue(phasesCompleted, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan)
-			legacyReplanDue := legacyInteractiveReplanDue(state.Plan, phasesCompleted, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
-			if evidenceReplanDue || legacyReplanDue {
-				runDecision := autopilotRunDecisionForCode(autopilotTriggerReplanDue, opts.Headless, map[string]interface{}{"phase": phase.ID, "lesson_count": len(lessons)})
+			replan, due, replanErr := evaluateAutopilotReplan(state.Plan, phase.ID, phasesCompleted, opts, lessons)
+			if replanErr != nil {
+				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_evidence"})
+				return finish(state, decision, replanErr), nil
+			}
+			if due {
+				runDecision := replan.Decision
 				switch runDecision.Disposition {
 				case autopilotDispositionQueueAndContinue:
-					decision, err := upsertAutopilotReplanDecision(state, phase.ID, lessons, autopilotNow())
+					decision, err := upsertAutopilotReplanDecision(state, phase.ID, replan.Lessons, autopilotNow())
 					if err != nil {
 						failed := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_persistence"})
 						return finish(state, failed, err), nil
@@ -843,10 +893,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 					})
 					emitVisualProgress(renderRunReplanQueued(decision))
 				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
-					emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval, len(lessons)))
+					emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval, len(replan.Lessons)))
 					result := finish(state, runDecision, nil)
-					result["confirmed_lessons"] = lessons
-					result["lesson_count"] = len(lessons)
+					result["confirmed_lessons"] = replan.Lessons
+					result["lesson_count"] = len(replan.Lessons)
+					result["plan_revision_id"] = replan.PlanRevisionID
 					return result, nil
 				}
 			}
@@ -871,10 +922,14 @@ func loadCompatibilityColonyState() (colony.ColonyState, error) {
 	return state, nil
 }
 
-func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions) map[string]interface{} {
+func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions) (map[string]interface{}, error) {
 	steps := []map[string]interface{}{}
 	phasesPlanned := 0
 	working := state
+	lessons, err := runAutopilotLoadLessons(working.Plan)
+	if err != nil {
+		return nil, fmt.Errorf("preview replan evidence: %w", err)
+	}
 	finish := func(reason, next string) map[string]interface{} {
 		return map[string]interface{}{
 			"mode":              "dry-run",
@@ -894,7 +949,7 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 	for {
 		switch working.State {
 		case colony.StateCOMPLETED:
-			return finish("completed", "aether seal")
+			return finish("completed", "aether seal"), nil
 
 		case colony.StateEXECUTING, colony.StateBUILT:
 			steps = append(steps, map[string]interface{}{
@@ -903,16 +958,16 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 				"state":   working.State,
 			})
 			phasesPlanned++
-			return finish("continue_required", "aether continue")
+			return finish("continue_required", "aether continue"), nil
 
 		case colony.StateREADY:
 			if opts.MaxPhases > 0 && phasesPlanned >= opts.MaxPhases {
-				return finish("max_phases_reached", nextCommandFromState(working))
+				return finish("max_phases_reached", nextCommandFromState(working)), nil
 			}
 
 			phase := recoveryPhase(&working)
 			if phase == nil {
-				return finish("completed", "aether seal")
+				return finish("completed", "aether seal"), nil
 			}
 
 			steps = append(steps,
@@ -920,12 +975,36 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 				map[string]interface{}{"command": "aether continue", "phase": phase.ID, "phase_name": phase.Name},
 			)
 			phasesPlanned++
-			if opts.ReplanInterval > 0 && phasesPlanned > 0 && phasesPlanned%opts.ReplanInterval == 0 && !opts.ContinueWithoutReplan {
-				return finish("replan_due", "aether plan")
+			replan, due, replanErr := evaluateAutopilotReplan(working.Plan, phase.ID, phasesPlanned, opts, lessons)
+			if replanErr != nil {
+				return nil, fmt.Errorf("preview replan decision: %w", replanErr)
+			}
+			if due {
+				switch replan.Decision.Disposition {
+				case autopilotDispositionQueueAndContinue:
+					steps = append(steps, map[string]interface{}{
+						"event":            "preview_decision_queue",
+						"preview_only":     true,
+						"trigger_code":     replan.Decision.Code,
+						"disposition":      replan.Decision.Disposition,
+						"phase":            phase.ID,
+						"lesson_count":     len(replan.Lessons),
+						"plan_revision_id": replan.PlanRevisionID,
+						"next":             replan.Decision.Next,
+					})
+				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
+					result := finish(string(replan.Decision.Code), replan.Decision.Next)
+					result["trigger_code"] = replan.Decision.Code
+					result["disposition"] = replan.Decision.Disposition
+					result["confirmed_lessons"] = replan.Lessons
+					result["lesson_count"] = len(replan.Lessons)
+					result["plan_revision_id"] = replan.PlanRevisionID
+					return result, nil
+				}
 			}
 
 			if phase.ID >= len(working.Plan.Phases) {
-				return finish("completed", "aether seal")
+				return finish("completed", "aether seal"), nil
 			}
 
 			working.Plan.Phases[phase.ID-1].Status = colony.PhaseCompleted
@@ -933,7 +1012,7 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 			working.State = colony.StateREADY
 
 		default:
-			return finish("not_runnable", nextCommandFromState(working))
+			return finish("not_runnable", nextCommandFromState(working)), nil
 		}
 	}
 }
@@ -1005,6 +1084,10 @@ func syncRunAutopilotStateWithReport(state colony.ColonyState, opts runCompatibi
 }
 
 func renderRunCompatibilityVisual(result map[string]interface{}) string {
+	if strings.TrimSpace(stringValue(result["report_persist_error"])) != "" {
+		return renderRunReportPersistenceFailure(result)
+	}
+
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("run"), "Run"))
 	b.WriteString(visualDividerStr())
@@ -1083,6 +1166,80 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 		fmt.Sprintf("Run `%s` for the next lifecycle step.", next),
 		fmt.Sprintf("Stop reason: %s", emptyFallback(stringValue(result["stopped_reason"]), "none")),
 	))
+	return b.String()
+}
+
+// renderRunReportPersistenceFailure is deliberately separate from the normal
+// morning-report renderer. A failed terminal write means the outcome is useful
+// recovery evidence, but it is not a saved completion record and must never be
+// wrapped in the ordinary Run / Last Autopilot Run success presentation.
+func renderRunReportPersistenceFailure(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString("━━━ ❌ REPORT DURABILITY FAILURE ━━━\n")
+	b.WriteString(visualDividerStr())
+	b.WriteString("The autopilot terminal report could not be persisted. The record below is retained only in this process and is not durable.\n")
+	if persistErr := strings.TrimSpace(stringValue(result["report_persist_error"])); persistErr != "" {
+		fmt.Fprintf(&b, "Persistence error: %s\n", persistErr)
+	}
+	b.WriteString("Do not treat the projected next action as safe until report storage is repaired.\n\n")
+	b.WriteString("━━━ UNSAVED IN-MEMORY EVIDENCE ━━━\n")
+
+	report, ok := autopilotReportFromValue(result["last_report"])
+	if !ok {
+		b.WriteString("Outcome: unavailable (the retained report could not be decoded)\n")
+		fmt.Fprintf(&b, "Stop reason: %s\n", emptyFallback(stringValue(result["stopped_reason"]), "unknown"))
+		fmt.Fprintf(&b, "Next: %s (projection only; persistence must be repaired first)\n", emptyFallback(stringValue(result["next"]), "aether status"))
+		return b.String()
+	}
+
+	fmt.Fprintf(&b, "Outcome: %s (retained only; not durably recorded)\n", emptyFallback(report.Outcome, "unknown"))
+	fmt.Fprintf(&b, "Stop reason: %s\n", emptyFallback(report.StopReason, "none"))
+	b.WriteString("Queued decisions\n")
+	if len(report.QueuedDecisions) == 0 {
+		b.WriteString("  none\n")
+	} else {
+		for _, queued := range report.QueuedDecisions {
+			fmt.Fprintf(&b, "  - %s [%s]", emptyFallback(queued.ID, "unknown"), emptyFallback(queued.Type, "unknown"))
+			if queued.Phase > 0 {
+				fmt.Fprintf(&b, " phase %d", queued.Phase)
+			}
+			b.WriteString("\n")
+		}
+	}
+	fmt.Fprintf(&b, "Blocker movement: %d -> %d active; %d -> %d escalated\n",
+		report.BlockersBefore.Count, report.BlockersAfter.Count,
+		report.BlockersBefore.EscalatedCount, report.BlockersAfter.EscalatedCount)
+	if report.Recovery != nil {
+		fmt.Fprintf(&b, "Recovery: %s (%s)\n", report.Recovery.Classification, report.Recovery.FailureType)
+		if strings.TrimSpace(report.Recovery.LogError) != "" {
+			fmt.Fprintf(&b, "Recovery log error: %s\n", report.Recovery.LogError)
+		}
+		if strings.TrimSpace(report.Recovery.MedicAdvice) != "" {
+			fmt.Fprintf(&b, "Medic advice: %s\n", report.Recovery.MedicAdvice)
+		}
+	}
+	fmt.Fprintf(&b, "Elapsed: %s\n", renderAutopilotElapsed(report.ElapsedSeconds))
+	b.WriteString(renderAutopilotSpendReport(report.Spend))
+	fmt.Fprintf(&b, "Next: %s (projection only; persistence must be repaired first)\n", emptyFallback(report.Next, "aether status"))
+	b.WriteString("Phase evidence\n")
+	if len(report.Phases) == 0 {
+		b.WriteString("  none in this invocation\n")
+	} else {
+		for _, phase := range report.Phases {
+			fmt.Fprintf(&b, "  - Phase %d", phase.Phase)
+			if strings.TrimSpace(phase.PhaseName) != "" {
+				fmt.Fprintf(&b, ": %s", phase.PhaseName)
+			}
+			fmt.Fprintf(&b, " — %s", emptyFallback(phase.Outcome, "observed"))
+			if len(phase.HighFindings) > 0 {
+				fmt.Fprintf(&b, "; %d HIGH finding(s)", len(phase.HighFindings))
+			}
+			if len(phase.QueuedDecisions) > 0 {
+				fmt.Fprintf(&b, "; %d decision(s) queued", len(phase.QueuedDecisions))
+			}
+			b.WriteString("\n")
+		}
+	}
 	return b.String()
 }
 

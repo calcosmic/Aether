@@ -2,12 +2,190 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+func seedRunDryRunReplanFixture(t *testing.T) string {
+	t.Helper()
+	_, root := seedRunFixture(t, 3)
+	boundary := time.Date(2026, time.September, 1, 8, 0, 0, 0, time.UTC)
+	mutateRunFixtureState(t, func(state *colony.ColonyState) {
+		state.State = colony.StateREADY
+		state.CurrentPhase = 1
+		state.Plan = autopilotLessonPlan(boundary, "revision-dry-run")
+		state.Plan.Phases = []colony.Phase{
+			{ID: 1, Name: "First", Status: colony.PhaseReady},
+			{ID: 2, Name: "Second", Status: colony.PhasePending},
+			{ID: 3, Name: "Third", Status: colony.PhasePending},
+		}
+	})
+	return root
+}
+
+func snapshotDryRunDurableFiles(t *testing.T) map[string][]byte {
+	t.Helper()
+	snapshot := map[string][]byte{}
+	err := filepath.Walk(store.BasePath(), func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(store.BasePath(), path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		snapshot[filepath.ToSlash(rel)] = data
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshot durable files: %v", err)
+	}
+	return snapshot
+}
+
+func dryRunReplanPreviewStep(result map[string]interface{}) map[string]interface{} {
+	steps, _ := result["steps"].([]map[string]interface{})
+	for _, step := range steps {
+		if stringValue(step["trigger_code"]) == string(autopilotTriggerReplanDue) {
+			return step
+		}
+	}
+	return nil
+}
+
+func TestRunDryRunLessonAwareReplanNeedsConfirmedLessons(t *testing.T) {
+	saveGlobals(t)
+	root := seedRunDryRunReplanFixture(t)
+	installAutopilotRunTestDeps(t)
+	loadCalls := 0
+	runAutopilotLoadLessons = func(colony.Plan) ([]confirmedAutopilotLesson, error) {
+		loadCalls++
+		return nil, nil
+	}
+
+	before := snapshotDryRunDurableFiles(t)
+	result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{DryRun: true, ReplanInterval: 2})
+	if err != nil {
+		t.Fatalf("dry-run without lessons: %v", err)
+	}
+	after := snapshotDryRunDurableFiles(t)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("dry-run without lessons mutated durable files:\nbefore=%v\nafter=%v", before, after)
+	}
+	if loadCalls == 0 {
+		t.Fatal("dry-run never read the live confirmed-lesson selector")
+	}
+	if stringValue(result["stopped_reason"]) != "completed" || intValue(result["phases_planned"]) != 3 {
+		t.Fatalf("cadence without lessons fabricated a stop: %+v", result)
+	}
+	if preview := dryRunReplanPreviewStep(result); preview != nil {
+		t.Fatalf("cadence without lessons fabricated replan_due: %+v", preview)
+	}
+	if _, err := os.Stat(filepath.Join(store.BasePath(), pendingDecisionsFile)); !os.IsNotExist(err) {
+		t.Fatalf("dry-run created pending decisions: %v", err)
+	}
+}
+
+func TestRunDryRunReplanModeParityAndContinueBypass(t *testing.T) {
+	tests := []struct {
+		name       string
+		headless   bool
+		bypass     bool
+		wantReason string
+		wantTop    autopilotDisposition
+		wantQueued bool
+	}{
+		{name: "interactive pauses", wantReason: "replan_due", wantTop: autopilotDispositionPause},
+		{name: "headless queues and continues", headless: true, wantReason: "completed", wantQueued: true},
+		{name: "continue bypasses due event", headless: true, bypass: true, wantReason: "completed"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobals(t)
+			root := seedRunDryRunReplanFixture(t)
+			installAutopilotRunTestDeps(t)
+			runAutopilotLoadLessons = func(colony.Plan) ([]confirmedAutopilotLesson, error) {
+				return []confirmedAutopilotLesson{{
+					EntryID: "lesson-dry-run", Content: "Keep the live and preview policy together.",
+					Phase: 1, PlanRevisionID: "revision-dry-run",
+				}}, nil
+			}
+
+			before := snapshotDryRunDurableFiles(t)
+			result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{
+				DryRun: true, ReplanInterval: 2, Headless: tc.headless, ContinueWithoutReplan: tc.bypass,
+			})
+			if err != nil {
+				t.Fatalf("dry-run replan preview: %v", err)
+			}
+			after := snapshotDryRunDurableFiles(t)
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("dry-run replan preview mutated durable files:\nbefore=%v\nafter=%v", before, after)
+			}
+			if got := stringValue(result["stopped_reason"]); got != tc.wantReason {
+				t.Fatalf("stopped_reason = %q, want %q: %+v", got, tc.wantReason, result)
+			}
+
+			preview := dryRunReplanPreviewStep(result)
+			if tc.wantQueued {
+				if preview == nil || !boolValue(preview["preview_only"]) ||
+					stringValue(preview["disposition"]) != string(autopilotDispositionQueueAndContinue) ||
+					intValue(preview["lesson_count"]) != 1 ||
+					stringValue(preview["plan_revision_id"]) != "revision-dry-run" {
+					t.Fatalf("headless preview did not queue canonical evidence: %+v", preview)
+				}
+			} else if preview != nil {
+				t.Fatalf("unexpected replan preview step: %+v", preview)
+			}
+			if tc.wantTop != "" {
+				if stringValue(result["trigger_code"]) != string(autopilotTriggerReplanDue) ||
+					stringValue(result["disposition"]) != string(tc.wantTop) ||
+					intValue(result["lesson_count"]) != 1 ||
+					stringValue(result["plan_revision_id"]) != "revision-dry-run" {
+					t.Fatalf("interactive preview lost canonical decision evidence: %+v", result)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(store.BasePath(), pendingDecisionsFile)); !os.IsNotExist(err) {
+				t.Fatalf("dry-run created pending decisions: %v", err)
+			}
+		})
+	}
+}
+
+func TestRunDryRunLessonLoadCorruptionIsReadOnly(t *testing.T) {
+	saveGlobals(t)
+	root := seedRunDryRunReplanFixture(t)
+	installAutopilotRunTestDeps(t)
+	runAutopilotLoadLessons = func(colony.Plan) ([]confirmedAutopilotLesson, error) {
+		return nil, errors.New("corrupt typed lesson catalogue")
+	}
+	before := snapshotDryRunDurableFiles(t)
+	result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{DryRun: true, ReplanInterval: 2, Headless: true})
+	after := snapshotDryRunDurableFiles(t)
+	if err == nil || !strings.Contains(err.Error(), "corrupt typed lesson catalogue") {
+		t.Fatalf("lesson corruption result=%+v err=%v, want read-only preview failure", result, err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("failed dry-run lesson read mutated durable files:\nbefore=%v\nafter=%v", before, after)
+	}
+	if _, statErr := os.Stat(filepath.Join(store.BasePath(), pendingDecisionsFile)); !os.IsNotExist(statErr) {
+		t.Fatalf("failed dry-run created pending decisions: %v", statErr)
+	}
+}
 
 func expectedAutopilotTriggerCodes() []autopilotTriggerCode {
 	return []autopilotTriggerCode{
@@ -169,7 +347,13 @@ func TestRunDryRunUsesCanonicalTriggerCatalogue(t *testing.T) {
 		}},
 	}
 
-	result := buildRunDryRunResult(state, runCompatibilityOptions{})
+	originalLessons := runAutopilotLoadLessons
+	runAutopilotLoadLessons = func(colony.Plan) ([]confirmedAutopilotLesson, error) { return nil, nil }
+	t.Cleanup(func() { runAutopilotLoadLessons = originalLessons })
+	result, err := buildRunDryRunResult(state, runCompatibilityOptions{})
+	if err != nil {
+		t.Fatalf("build dry-run result: %v", err)
+	}
 	dryRunSpecs, ok := result["trigger_catalogue"].([]autopilotTriggerSpec)
 	if !ok {
 		t.Fatalf("dry-run trigger_catalogue type = %T, want []autopilotTriggerSpec", result["trigger_catalogue"])
@@ -200,7 +384,13 @@ func TestAutopilotTriggerCatalogueRendersBothModeDispositions(t *testing.T) {
 			{ID: 1, Name: "Rendered catalogue fixture", Status: colony.PhasePending},
 		}},
 	}
-	result := buildRunDryRunResult(state, runCompatibilityOptions{})
+	originalLessons := runAutopilotLoadLessons
+	runAutopilotLoadLessons = func(colony.Plan) ([]confirmedAutopilotLesson, error) { return nil, nil }
+	t.Cleanup(func() { runAutopilotLoadLessons = originalLessons })
+	result, err := buildRunDryRunResult(state, runCompatibilityOptions{})
+	if err != nil {
+		t.Fatalf("build dry-run result: %v", err)
+	}
 
 	// Exercise the JSON-round-tripped shape used by hosted callers as well as
 	// the direct typed result used by the CLI.
