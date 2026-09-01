@@ -456,11 +456,11 @@ Plans:
 
 **Gap Closure Wave 1**
 
-- [ ] 198.3-11-PLAN.md — bind owner checkpoints to single-use capabilities and close generic resolver bypasses
-- [ ] 198.3-13-PLAN.md — fail completed Auditor work closed when structured evidence is absent or malformed
-- [ ] 198.3-14-PLAN.md — make terminal report durability honest and align dry-run replan behavior with the live loop
-- [ ] 198.3-15-PLAN.md — move direct-build provider preflight ahead of every repair, mutation, and cleanup
-- [ ] 198.3-16-PLAN.md — add a verified swarm recovery epoch that unlocks exact-target retry
+- [x] 198.3-11-PLAN.md — bind owner checkpoints to single-use capabilities and close generic resolver bypasses
+- [x] 198.3-13-PLAN.md — fail completed Auditor work closed when structured evidence is absent or malformed
+- [x] 198.3-14-PLAN.md — make terminal report durability honest and align dry-run replan behavior with the live loop
+- [x] 198.3-15-PLAN.md — move direct-build provider preflight ahead of every repair, mutation, and cleanup
+- [x] 198.3-16-PLAN.md — add a verified swarm recovery epoch that unlocks exact-target retry
 
 **Gap Closure Wave 2** *(blocked on Gap Closure Wave 1 completion)*
 
