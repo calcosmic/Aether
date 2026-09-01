@@ -101,10 +101,62 @@
 
 ---
 
+## Milestone: v1.27 — The Queen Decides, the Program Checks
+
+**Shipped:** 2026-09-02
+**Phases:** 9 | **Plans:** 84 | **Requirements:** 48/48
+
+### What Was Built
+
+- An unskippable deterministic check floor shared by both continue lanes
+- Queen-sized teams with one explained Builder for ordinary work and named-risk reviewers only
+- Coherent jobs with exact task receipts, partial credit, recovery, and worktree support
+- Provider-reported token ledgers, one cost closeout, and one canonical next-action resolver
+- Direct/wrapper ceremony parity with visible checks, evidence, findings, decisions, and resume detail
+- A live learning pipeline whose observations, failures, instincts, Hive wisdom, Oracle output, and prior outcomes reach later helpers
+- Fail-closed overnight autopilot with durable replans/reports, protected owner checkpoints, issuance-bound swarm evidence, and a six-phase unattended fixture
+
+### What Worked
+
+- The measured field failure stayed central: the one-task fixture fell from eight workers to one Builder plus checks, and remained a runnable regression.
+- Ratchets and adversarial tests exposed silent failures that prose or snapshots had missed: empty memory parts, unrendered fields, replayable swarm evidence, and unavailable blocker truth.
+- Late milestone requirements (FEED, WIRE, STAM) were added only after whole-system audits found real missing links, then mapped and verified like original scope.
+- Re-verifying Phase 198.3 after the trust-boundary review closed six genuine safety gaps instead of accepting a happy-path overnight demo.
+
+### What Was Inefficient
+
+- Eighty-four plans and 724 commits over eleven days is too much coordination overhead for the owner-felt outcome; the high-priority worker-turnaround todo remains open.
+- Phase 198.3 reached 22 formal plans plus six final repairs because aggregate normal/race gates and trust-boundary review came late.
+- The milestone-completion SDK expanded every plan one-liner into MILESTONES.md; closeout had to condense 84 generated bullets back to six outcome-level accomplishments.
+- A proposed Phase 198.4 repeated discovery already captured in a 35,921-word report, briefly turning the next milestone into 69 unnecessary owner questions before the owner corrected the sequence.
+
+### Patterns Established
+
+- One runtime-owned boundary per truth: deterministic floor, task receipts, next action, memory feed, blocker snapshot, and swarm issuance.
+- Owner-eye work queues; corrupted or unavailable safety truth stops.
+- Historical behavior is evidence for restoration, while the modern Go runtime remains state authority.
+- A milestone audit may return `tech_debt` without returning `gaps_found`; carried observation debt must stay explicit rather than being promoted to a false pass.
+
+### Key Lessons
+
+- Restore the experience only after identifying the modern safety kernel that must survive; copying old shell behavior would recreate split authority.
+- Run trust-boundary and full aggregate gates earlier in long phases, not after the happy path is complete.
+- A comprehensive owner report is an authoritative brief, not raw material for another interview.
+- Keep closeout artifacts concise: detailed plan history belongs in the archive; current roadmap and milestone summary should remain outcome-level.
+
+### Cost Observations
+
+- Model mix: not reliably aggregatable from historical sessions; v1.27 now records provider-reported per-worker token use for future measurements.
+- Timeline: 2026-08-22 to 2026-09-02; 724 commits across the milestone range.
+- Notable: the next milestone should measure useful restoration outcomes per owner intervention, not reward worker or plan count.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Duration | Key Theme |
 |-----------|--------|-------|----------|------------|
+| v1.27 | 9 | 84 | 11 days | Proportionate teams, runtime truth, memory, overnight stamina |
 | v1.26 | 15/19 | 66 | 15 days | Hardening: remove until a small job costs a small amount |
 | v1.11 | 10 | 18 | 75 days | Unification and intelligence |
 | v1.10 | 14 | 34 | ~10 days | Colony polish |

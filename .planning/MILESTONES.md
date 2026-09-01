@@ -1,5 +1,34 @@
 # Aether Milestones
 
+## v1.27 The Queen Decides, the Program Checks (Shipped: 2026-09-02)
+
+**Delivered:** Aether now uses the program's own checks as its unskippable safety floor, lets the Queen choose a proportionate explained team, carries honest runtime evidence and memory through every lane, and completes a fail-closed six-phase unattended run.
+
+**Phases completed:** 193–198.3 (9 phases, 84 plans, 195 recorded tasks)
+
+**Requirements and audit:** 48/48 requirements satisfied; 8/8 cross-phase seams and 4/4 end-to-end flows verified. Audit status: `tech_debt` with no blocking gaps.
+
+**Key accomplishments:**
+
+- Reduced the measured one-task bug fix from eight workers to one Builder plus deterministic checks; five named risks can add one explained reviewer.
+- Added dependency-safe coherent jobs, exact per-task receipts and partial credit, append-only retry, and one worktree per grouped job on both execution lanes.
+- Added provider-reported token ledgers, a single honest cost closeout, read-only `aether spend`, and one canonical next-action resolver for every lifecycle command.
+- Restored direct/wrapper ceremony parity and visible check evidence, confidence, duration, tool use, findings, decisions, resume progress, and owner-controlled seal.
+- Reconnected observations, failures, instincts, pheromones, Hive promotion, Oracle output, survey context, and previous-phase outcomes to the helpers that need them.
+- Restored overnight stamina with queueable owner work, durable replans/reports, fail-closed blocker truth, issuance-bound swarm results, and a six-phase unattended proof.
+
+**Known deferred items at close:** 5 — three pending todos plus the same Phase 198.2 real-project WIRE-06 observation represented by its UAT and verification artifacts. See STATE.md Deferred Items and the milestone audit.
+
+**Stats:** 724 commits; 664 files changed; +139,965 / −7,450 lines; 2026-08-22 → 2026-09-02.
+
+**Git range:** `ae1e4812` → `c8f00ed0`
+
+**Archives:** [Roadmap](milestones/v1.27-ROADMAP.md) · [Requirements](milestones/v1.27-REQUIREMENTS.md) · [Audit](milestones/v1.27-MILESTONE-AUDIT.md) · [Phase history](milestones/v1.27-phases/)
+
+**What's next:** v1.28 Classic Colony Restoration, using the 35,921-word Golden Era report as the authoritative brief and the 72-row capability ledger as traceability.
+
+---
+
 ## v1.26 Intelligent Orchestration (Shipped: 2026-08-22)
 
 **Closeout type:** override_closeout — closed by owner decision on 2026-08-22 so the
@@ -20,23 +49,30 @@ honest no-change results, the review-gate fixes). Product versions v1.0.47 → v
 - **A wiring ratchet that cannot be argued past** — any program feature with no caller
   fails CI, seeded honestly at 278 existing orphans and allowed only to shrink; the
   release gate is proven by execution, not by reading its text (Phase 172).
+
 - **Delegation guards that fail closed** — depth derived from the parent, a whole-run
   ceiling of 20 helpers, cycle detection, tamper-refusing ledgers (Phase 173).
+
 - **Token measurement with stated arithmetic** — the 186× undercount found and fixed,
   cache tokens counted, estimates separated from measurements (Phase 174, plans 1–2).
+
 - **Removing things until a small job costs a small amount** — Aether's own internals
   no longer leak into other projects' workers, skills are chosen by the task, castes
   with nothing to do are refused, the worker cap actually caps (Phases 180–184).
+
 - **Crash-safe worktrees and one truth for failures** — no destruction path without a
   safety gate, one canonical failure log, atomic phase advance, pause cannot be
   clobbered (Phases 187, 188).
+
 - **Workers get the whole brief and nothing twice** — merged dispatches carry every
   covered task; pheromones and handoffs reach a worker exactly once; 39 zero-reader
   config files and 8 dead commands deleted with reappearance ratchets (Phases 189–191).
+
 - **Field hardening from three downstream repos in one day** — bundled workers can
   file honestly, the embedded checker reports real verdicts, out-of-band work has an
   honest re-entry (`aether verify-out-of-band`) that can never fabricate receipts
   (Phase 191.1).
+
 - **The owner in the loop** — builds pause on a team card before spawning; workers
   route judgement calls to the owner instead of guessing; "nothing needed changing" is
   an honest result with evidence (2026-08-21, v1.0.62–63).
@@ -45,8 +81,10 @@ honest no-change results, the review-gate fixes). Product versions v1.0.47 → v
 
 - Carried into v1.27: SPEND-02, SPEND-07, SPEND-08 (the one-line cost summary —
   v1.27 feature 4); PROOF-01..04 (the benchmark — v1.27 feature 7).
+
 - Dropped by recorded owner ruling 2026-08-14: SPEND-05, SPEND-06, SPAWN-09..11
   (worker delegation grant cut — "we are trying to reduce worker count").
+
 - Deferred off the golden path 2026-08-17: SKILL-03, SKILL-04.
 
 ### Carried forward
@@ -54,6 +92,7 @@ honest no-change results, the review-gate fixes). Product versions v1.0.47 → v
 - Phase 185 (one honest cost line) → v1.27 feature 4.
 - Phase 186-07 (one live benchmark run, owner present) and Phase 192 (full showdown)
   → v1.27 feature 7, run on the improved system as the ratified order intended.
+
 - Phase 172.1 (CI gate environment integrity) — blocks nothing; stays in the backlog.
 - Phase 173 has one pending human check: a delegation refusal seen in a real run.
 

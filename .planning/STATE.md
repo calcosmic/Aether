@@ -2,47 +2,42 @@
 gsd_state_version: 1.0
 milestone: v1.27
 milestone_name: The Queen Decides, the Program Checks
-status: executing
-stopped_at: Phase 198.3 context gathered
-last_updated: "2026-09-01T17:20:47.759Z"
-last_activity: 2026-09-01 -- Phase 198.3 planning complete
+status: Awaiting next milestone
+stopped_at: v1.27 archived with audited debt; initializing v1.28 Classic Colony Restoration
+last_updated: "2026-09-01T23:18:06.886Z"
+last_activity: 2026-09-02 — Milestone v1.27 completed and archived with five acknowledged artifacts
 progress:
-  total_phases: 11
-  completed_phases: 8
+  total_phases: 9
+  completed_phases: 9
   total_plans: 84
-  completed_plans: 78
-  percent: 73
+  completed_plans: 84
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-31)
+See: .planning/PROJECT.md (updated 2026-09-02)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 198.3 — overnight-stamina
-**Previous milestone:** v1.26 Intelligent Orchestration — SHIPPED 2026-08-22 (override close; 185, 186-07 and 192 carried into v1.27)
+**Current focus:** Initialize v1.28 Classic Colony Restoration from the comprehensive Golden Era report
+**Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-**Progress:** [███████░░░] 73%
-
-Phase: 198.3 (overnight-stamina) — EXECUTING
-Plan: 1 of 16
-Status: Ready to execute
-
-Phase 198.2's real-world WIRE-06 UAT remains acknowledged verification debt and
-can be revisited with `$gsd-verify-work 198.2`; it does not block Phase 198.3.
-Last activity: 2026-09-01 -- Phase 198.3 planning complete
+Phase: Milestone v1.27 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-09-02 — Milestone v1.27 completed and archived
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 86 (v1.26, all Phase 172)
+- Active v1.27 plans completed: 84 of 84 across nine phases
 - Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 
@@ -178,6 +173,13 @@ Last activity: 2026-09-01 -- Phase 198.3 planning complete
 - [Phase 198.2]: `decisions` and `learnings` were removed from the memory pack because nothing wrote them; an AST-discovered writer invariant with a zero-floor exception ratchet prevents another permanently empty part.
 - [Phase 198.2]: The survey digest and previous-phase carry-forward use two separate named brief budgets, sanitise helper-authored text, and add no worker dispatch or owner check-in.
 - [Phase 198.2]: The owner chose to advance while the WIRE-06 real-world check remains untested; this is verification debt, not a pass and not evidence of a defect.
+- [Phase 198.3]: External swarm finalization now validates durable IDs before mutation, accepts only runtime-issued manifest digests, makes exact replay read-only, and rejects changed replay before rewriting strike truth.
+- [Phase 198.3]: Seal and reviewer compatibility paths use the same fail-closed storage/severity rules as current schemas; malformed legacy evidence cannot become an empty safe set.
+- [Phase 198.3]: Visual checkpoint paths and generations derive only after persisted claims match the exact built attempt's terminal claims; replan cadence filters active session/goal before revision projection.
+- [Phase 198.3]: Complete verification is no longer inconclusive: 8,566 normal and 8,566 race-instrumented Go tests passed across 20 packages; Phase 198.3 scored 94/94 truths and 6/6 STAM requirements.
+- [Milestone sequencing]: The owner rejected a standalone Phase 198.4 planning gate. v1.27 ends at verified Phase 198.3; the 35,921-word Dreams report is v1.28's authoritative brief, and the 72-row ledger is traceability rather than a 69-question owner gate.
+- [Milestone sequencing]: Classic functional/experience restoration belongs inside v1.28. Owner-watched proof follows the restored product; Codex lifecycle skills remain a separate later milestone.
+- [Milestone audit]: v1.27 scored 48/48 requirements, 9/9 delivered phases, 8/8 integration seams, and 4/4 end-to-end flows. Verdict `tech_debt`: no blocking gaps; Phase 198.2 field UAT and documented warnings carry forward.
 
 ### Pending Todos
 
@@ -199,7 +201,12 @@ Last activity: 2026-09-01 -- Phase 198.3 planning complete
 - [x] Phase 198: Put the Thrown-Away Data Back on Screen — complete 2026-08-29 (9/9 plans)
 - [x] Phase 198.1: Feed the Memory — complete 2026-08-30 (6/6 plans)
 - [x] Phase 198.2: Memory Reaches Every Helper — complete 2026-08-31 (8/8 plans; one real-world UAT carried as debt)
-- [ ] Discuss and plan Phase 198.3: Overnight Stamina ← **current**
+- [x] Phase 198.3: Overnight Stamina — 22/22 formal plans plus six final trust-boundary repairs; verified complete 2026-09-02
+- [x] Audit v1.27 at Phase 198.3 — complete 2026-09-02 (`tech_debt`, no blockers)
+- [x] Close and archive v1.27 with the audited debt acknowledged — complete 2026-09-02
+- [ ] Initialize v1.28 Classic Colony Restoration from the comprehensive Dreams report ← **current**
+- [ ] Map the 72-row capability ledger during v1.28 roadmapping without re-interviewing the owner on already-recorded intent
+- [ ] Run owner-watched proof only after v1.28 restoration is usable
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
@@ -211,6 +218,8 @@ Last activity: 2026-09-01 -- Phase 198.3 planning complete
 
 ### Blockers/Concerns
 
+- ⛔ [Classic preservation] No historical capability may be deleted merely because current code has no caller. The report and 72-row ledger must inform v1.28 requirements and phase traceability.
+- 🧭 [Owner intent] Do not repeat the Golden Era discovery interview. Ask only genuinely unresolved choices not answered by the comprehensive report.
 - ℹ️ [Phase 198.2 verification] One real-world memory-pack UAT remains untested because the owner has not yet used the finished behavior on another project. It is acknowledged debt; review with `$gsd-audit-uat` and rerun with `$gsd-verify-work 198.2` after field use.
 - ℹ️ [Phase 198.2 transition] `phase.complete` returned Phase 198.3 correctly but again left the roadmap checkbox and STATE `current_phase` frontmatter stale; both were corrected inline. The transition mutation still needs a later runtime fix.
 - ℹ️ [Phase 198.2 side finding] This repo's local wisdom file contains backticks rejected by the current safety filter, so that local wisdom is withheld from helper prompts. This predates Phase 198.2 and was not changed here.
@@ -269,8 +278,24 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 | deferred_items | 190/deferred-items.md: Stale ceremony-adapter snapshot fixtures (pre-existing, unrelated to hive_sectio | acknowledged | 2026-08-22 | v1.26 |
 | deferred_items | 191.1/deferred-items.md: 191.1-01: `TestPackedNPMReleaseCandidateContract` fails on a pre-existing versio | acknowledged | 2026-08-22 | v1.26 |
 
+Acknowledged at the v1.27 close (2026-09-02). These five artifacts are carried
+forward explicitly; none is a failed v1.27 automated requirement or integration
+flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-------------|
+| todos | 2026-08-01-ts-host-preflight-hardcoded-timeout.md | pending | 2026-09-02 | v1.27 |
+| todos | 2026-08-20-spec-builder-feature.md | pending | 2026-09-02 | v1.27 |
+| todos | 2026-08-27-worker-turnaround-is-too-slow.md | pending (high) | 2026-09-02 | v1.27 |
+| uat_gaps | 198.2/198.2-UAT.md | partial | 2026-09-02 | v1.27 |
+| verification_gaps | 198.2/198.2-VERIFICATION.md | human_needed | 2026-09-02 | v1.27 |
+
 ## Session Continuity
 
-Last session: 2026-08-31T12:41:53.626Z
-Stopped at: Phase 198.3 context gathered
-Resume file: .planning/phases/198.3-overnight-stamina/198.3-CONTEXT.md
+Last session: 2026-09-01T23:18:06Z
+Stopped at: v1.27 archived with audited debt; initializing v1.28 Classic Colony Restoration
+Resume file: none — the Phase 198.3 continuation handoff was consumed and closed
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
