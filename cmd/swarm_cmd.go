@@ -165,6 +165,9 @@ func runSwarmCompatibility(root, target string, watch, planOnly bool) (map[strin
 		return nil, err
 	}
 	if history.StrikeCount >= 3 {
+		if err := ensureSwarmEscalationForHistory(store, target, history); err != nil {
+			return nil, err
+		}
 		return swarmArchitecturalConcernResult(target, history), nil
 	}
 	if history.LatestRecovery != nil {
@@ -328,7 +331,10 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	allRuns := append(append([]swarmWorkerExecution{}, investigationRuns...), builderRuns...)
 	allRuns = append(allRuns, watcherRuns...)
 
-	status, recommendation, rootCause, solution, blockers := summarizeSwarmOutcome(allRuns)
+	status, recommendation, rootCause, solution, blockers, err := summarizeSwarmOutcome(allRuns)
+	if err != nil {
+		return nil, err
+	}
 	runStatus = summarizeRunStatus(status)
 	filesTouched, testsWritten := collectSwarmTouchedFiles(allRuns)
 	next := swarmNextCommand(state, status)
@@ -438,7 +444,7 @@ func buildSwarmManifest(root, target, dispatchMode string, now time.Time) swarmM
 			"state_authority":        "runtime finalizer writes swarm artifacts and spawn-tree status",
 			"wrapper_write_policy":   "workers report structured terminal results to the wrapper; wrappers do not hand-edit .aether/data",
 			"run_timeout_seconds":    int(defaultSwarmRunTimeout / time.Second),
-			"worker_status_values":   []string{"completed", "passed", "code_written", "blocked", "failed", "timeout"},
+			"worker_status_values":   swarmTerminalWorkerStatusValues(),
 			"required_result_fields": []string{"name", "caste", "role", "task", "status", "summary"},
 		},
 		Dispatches:       dispatches,
@@ -659,6 +665,14 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	if err := validateFinalizerManifestFreshness("swarm_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
 		return nil, err
 	}
+	runs, err := mergeExternalSwarmResults(*manifest, completion.workerResults())
+	if err != nil {
+		return nil, err
+	}
+	status, recommendation, rootCause, solution, blockers, err := summarizeSwarmOutcome(runs)
+	if err != nil {
+		return nil, err
+	}
 
 	state, _ := loadColonyState()
 	startedAt := time.Now().UTC()
@@ -672,22 +686,19 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	}()
 
 	swarmID := strings.TrimSpace(manifest.SwarmID)
-	if swarmID == "" {
-		swarmID = newSwarmRunID(startedAt)
-	}
 	if err := initializeSwarmRun(swarmID); err != nil {
 		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
 	}
 
-	runs, err := mergeExternalSwarmResults(*manifest, completion.workerResults())
-	if err != nil {
-		return nil, err
+	for _, run := range runs {
+		if run.Status == "failed" || run.Status == "timeout" {
+			recordSwarmWorkerFailureToMidden(manifest.SwarmID, manifest.Target, run)
+		}
 	}
 	if err := recordExternalSwarmRun(swarmID, runs); err != nil {
 		return nil, err
 	}
 
-	status, recommendation, rootCause, solution, blockers := summarizeSwarmOutcome(runs)
 	runStatus = summarizeRunStatus(status)
 	filesTouched, testsWritten := collectSwarmTouchedFiles(runs)
 	next := swarmNextCommand(state, status)
@@ -733,29 +744,81 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 }
 
 func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExecution) ([]swarmWorkerExecution, error) {
+	if strings.TrimSpace(manifest.Workflow) != "swarm" {
+		return nil, fmt.Errorf("swarm_manifest workflow must be swarm")
+	}
+	if strings.TrimSpace(manifest.SwarmID) == "" {
+		return nil, fmt.Errorf("swarm_manifest swarm_id is required")
+	}
+	if strings.TrimSpace(manifest.Target) == "" {
+		return nil, fmt.Errorf("swarm_manifest target is required")
+	}
+	if manifest.WorkerCount != len(manifest.Dispatches) {
+		return nil, fmt.Errorf("swarm_manifest worker_count %d does not match %d dispatches", manifest.WorkerCount, len(manifest.Dispatches))
+	}
+	if len(results) != len(manifest.Dispatches) {
+		return nil, fmt.Errorf("external swarm result count %d does not match %d manifest dispatches", len(results), len(manifest.Dispatches))
+	}
+
+	planByName := make(map[string]swarmWorkerPlan, len(manifest.Dispatches))
+	manifestRoles := make(map[string]string, len(manifest.Dispatches))
+	for _, plan := range manifest.Dispatches {
+		name := strings.TrimSpace(plan.Name)
+		role := strings.TrimSpace(plan.Role)
+		if name == "" {
+			return nil, fmt.Errorf("swarm_manifest dispatch name is required")
+		}
+		if role == "" {
+			return nil, fmt.Errorf("swarm_manifest dispatch %s role is required", name)
+		}
+		if _, duplicate := planByName[name]; duplicate {
+			return nil, fmt.Errorf("swarm_manifest contains duplicate dispatch name %s", name)
+		}
+		if prior, duplicate := manifestRoles[role]; duplicate {
+			return nil, fmt.Errorf("swarm_manifest contains duplicate dispatch role %s for %s and %s", role, prior, name)
+		}
+		planByName[name] = plan
+		manifestRoles[role] = name
+	}
+
 	resultByName := make(map[string]swarmWorkerExecution, len(results))
-	resultByRole := make(map[string]swarmWorkerExecution, len(results))
 	for _, result := range results {
-		if name := strings.TrimSpace(result.Name); name != "" {
-			resultByName[name] = result
+		name := strings.TrimSpace(result.Name)
+		if name == "" {
+			return nil, fmt.Errorf("external swarm worker result name is required")
 		}
-		if role := strings.TrimSpace(result.Role); role != "" {
-			resultByRole[role] = result
+		plan, ok := planByName[name]
+		if !ok {
+			return nil, fmt.Errorf("external swarm worker result %s is not in the manifest", name)
 		}
-		if result.Response.Role != "" {
-			resultByRole[result.Response.Role] = result
+		if _, duplicate := resultByName[name]; duplicate {
+			return nil, fmt.Errorf("duplicate external swarm worker result for %s", name)
 		}
+		if err := validateExternalSwarmIdentity(name, "caste", result.Caste, plan.Caste); err != nil {
+			return nil, err
+		}
+		if err := validateExternalSwarmIdentity(name, "role", result.Role, plan.Role); err != nil {
+			return nil, err
+		}
+		if err := validateExternalSwarmIdentity(name, "task", result.Task, plan.Task); err != nil {
+			return nil, err
+		}
+		if err := validateExternalSwarmIdentity(name, "response.role", result.Response.Role, plan.Role); err != nil {
+			return nil, err
+		}
+		status := strings.ToLower(strings.TrimSpace(result.Status))
+		if !isSwarmTerminalWorkerStatus(status) {
+			return nil, fmt.Errorf("external swarm worker result %s has non-terminal status %q", name, result.Status)
+		}
+		result.Status = status
+		resultByName[name] = result
 	}
 
 	merged := make([]swarmWorkerExecution, 0, len(manifest.Dispatches))
 	for _, plan := range manifest.Dispatches {
-		result, ok := resultByName[strings.TrimSpace(plan.Name)]
-		if !ok {
-			result, ok = resultByRole[strings.TrimSpace(plan.Role)]
-		}
-		if !ok {
-			return nil, fmt.Errorf("missing external swarm worker result for %s", plan.Name)
-		}
+		result := resultByName[strings.TrimSpace(plan.Name)]
+		response := result.Response
+		response.Role = plan.Role
 
 		execution := swarmWorkerExecution{
 			Name:         plan.Name,
@@ -768,26 +831,8 @@ func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExec
 			Files:        append([]string{}, result.Files...),
 			Tests:        append([]string{}, result.Tests...),
 			Blockers:     append([]string{}, result.Blockers...),
-			Response:     result.Response,
+			Response:     response,
 			ResponsePath: result.ResponsePath,
-		}
-		if strings.TrimSpace(result.Name) != "" {
-			execution.Name = strings.TrimSpace(result.Name)
-		}
-		if strings.TrimSpace(result.Caste) != "" {
-			execution.Caste = strings.TrimSpace(result.Caste)
-		}
-		if strings.TrimSpace(result.Role) != "" {
-			execution.Role = strings.TrimSpace(result.Role)
-		}
-		if strings.TrimSpace(result.Task) != "" {
-			execution.Task = strings.TrimSpace(result.Task)
-		}
-		if execution.Response.Role == "" {
-			execution.Response.Role = execution.Role
-		}
-		if execution.Status == "" || execution.Status == "spawned" {
-			execution.Status = "completed"
 		}
 		if execution.Summary == "" && execution.Response.Summary != "" {
 			execution.Summary = execution.Response.Summary
@@ -803,16 +848,33 @@ func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExec
 		execution.Files = swarmCompactStrings(execution.Files)
 		execution.Tests = swarmCompactStrings(execution.Tests)
 		execution.Blockers = swarmCompactStrings(execution.Blockers)
-		// 198.1-02: record from the MERGED (runtime-validated) status computed
-		// above, never a raw submitted status -- a wrapper-spawned worker
-		// cannot suppress or forge a failure record by claiming a different
-		// status than what normalizeRuntimeDispatchStatus resolved.
-		if execution.Status == "failed" || execution.Status == "timeout" {
-			recordSwarmWorkerFailureToMidden(manifest.SwarmID, manifest.Target, execution)
-		}
 		merged = append(merged, execution)
 	}
 	return merged, nil
+}
+
+func validateExternalSwarmIdentity(workerName, field, submitted, manifestValue string) error {
+	submitted = strings.TrimSpace(submitted)
+	if submitted == "" {
+		return nil
+	}
+	if submitted != strings.TrimSpace(manifestValue) {
+		return fmt.Errorf("external swarm worker result %s %s %q does not match manifest value %q", workerName, field, submitted, manifestValue)
+	}
+	return nil
+}
+
+func swarmTerminalWorkerStatusValues() []string {
+	return []string{"completed", "passed", "code_written", "blocked", "failed", "timeout"}
+}
+
+func isSwarmTerminalWorkerStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "passed", "code_written", "blocked", "failed", "timeout":
+		return true
+	default:
+		return false
+	}
 }
 
 func recordExternalSwarmRun(swarmID string, runs []swarmWorkerExecution) error {
@@ -1267,7 +1329,7 @@ func renderSwarmFindingSummary(runs []swarmWorkerExecution) string {
 	return strings.Join(lines, "\n")
 }
 
-func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation, rootCause, solution string, blockers []string) {
+func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation, rootCause, solution string, blockers []string, err error) {
 	status = "completed"
 	for _, run := range runs {
 		if run.Response.RootCause != "" && rootCause == "" {
@@ -1283,12 +1345,15 @@ func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation,
 			blockers = append(blockers, run.Blockers...)
 		}
 		switch strings.ToLower(strings.TrimSpace(run.Status)) {
+		case "completed", "passed", "code_written":
 		case "blocked":
 			if status != "failed" {
 				status = "blocked"
 			}
 		case "failed", "timeout":
 			status = "failed"
+		default:
+			return "", "", "", "", nil, fmt.Errorf("summarize swarm outcome: worker %s has non-terminal status %q", run.Name, run.Status)
 		}
 	}
 	if recommendation == "" {
@@ -1310,7 +1375,7 @@ func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation,
 		}
 	}
 	blockers = swarmCompactStrings(blockers)
-	return status, recommendation, rootCause, solution, blockers
+	return status, recommendation, rootCause, solution, blockers, nil
 }
 
 func collectSwarmTouchedFiles(runs []swarmWorkerExecution) ([]string, []string) {

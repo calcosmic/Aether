@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -307,31 +308,147 @@ func TestSwarmPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 }
 
 func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	t.Setenv("AETHER_OUTPUT_MODE", "json")
-
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withWorkingDir(t, root)
-
-	goal := "Finalize visible swarm workers"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version: "3.0",
-		Goal:    &goal,
-		State:   colony.StateREADY,
-	})
-
-	planResult, err := runSwarmPlanOnly(root, "Auth panic when session is missing")
-	if err != nil {
-		t.Fatalf("runSwarmPlanOnly: %v", err)
+	tests := []struct {
+		status      string
+		wantOutcome string
+	}{
+		{status: "completed", wantOutcome: "completed"},
+		{status: "passed", wantOutcome: "completed"},
+		{status: "code_written", wantOutcome: "completed"},
+		{status: "blocked", wantOutcome: "blocked"},
+		{status: "failed", wantOutcome: "failed"},
+		{status: "timeout", wantOutcome: "failed"},
 	}
-	manifest := planResult["swarm_manifest"].(swarmManifest)
-	dispatches := make([]swarmWorkerExecution, 0, len(manifest.Dispatches))
+
+	for _, tc := range tests {
+		t.Run(tc.status, func(t *testing.T) {
+			saveGlobals(t)
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			withWorkingDir(t, root)
+			goal := "Finalize visible swarm workers"
+			createTestColonyState(t, dataDir, colony.ColonyState{
+				Version: "3.0",
+				Goal:    &goal,
+				State:   colony.StateREADY,
+			})
+
+			manifest := buildSwarmManifest(root, "Auth panic when session is missing", "plan-only", time.Now().UTC())
+			dispatches := validExternalSwarmResults(manifest, tc.status)
+			result, err := runSwarmFinalize(root, externalSwarmCompletion{
+				SwarmManifest: &manifest,
+				Dispatches:    dispatches,
+			})
+			if err != nil {
+				t.Fatalf("runSwarmFinalize(%s): %v", tc.status, err)
+			}
+			if got := result["dispatch_mode"]; got != "external-task" {
+				t.Fatalf("dispatch_mode = %v, want external-task", got)
+			}
+			if got := result["status"]; got != tc.wantOutcome {
+				t.Fatalf("status = %v, want %s", got, tc.wantOutcome)
+			}
+			workers := result["workers"].([]map[string]interface{})
+			if len(workers) != len(manifest.Dispatches) {
+				t.Fatalf("workers = %d, want %d", len(workers), len(manifest.Dispatches))
+			}
+			for i, plan := range manifest.Dispatches {
+				for field, want := range map[string]string{
+					"name": plan.Name, "caste": plan.Caste, "role": plan.Role, "task": plan.Task,
+				} {
+					if got := strings.TrimSpace(stringValue(workers[i][field])); got != strings.TrimSpace(want) {
+						t.Errorf("worker %d %s = %q, want manifest value %q", i, field, got, want)
+					}
+				}
+			}
+			if _, err := os.Stat(filepath.Join(dataDir, "swarms", manifest.SwarmID, "result.json")); err != nil {
+				t.Fatalf("expected swarm result artifact: %v", err)
+			}
+		})
+	}
+}
+
+func TestSwarmFinalizeRejectsUnboundOrNonTerminalEvidenceWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*swarmManifest, *[]swarmWorkerExecution)
+	}{
+		{name: "duplicate name", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			(*results)[1].Name = (*results)[0].Name
+		}},
+		{name: "duplicate role mapping", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			(*results)[1].Role = (*results)[0].Role
+		}},
+		{name: "surplus worker", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			extra := (*results)[0]
+			extra.Name = "surplus-worker"
+			extra.Role = "surplus-role"
+			extra.Response.Role = "surplus-role"
+			*results = append(*results, extra)
+		}},
+		{name: "missing worker", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			*results = (*results)[:len(*results)-1]
+		}},
+		{name: "forged caste", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			(*results)[0].Caste = "forged-caste"
+		}},
+		{name: "forged role", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			(*results)[0].Role = "forged-role"
+		}},
+		{name: "forged task", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			(*results)[0].Task = "forged task"
+		}},
+		{name: "forged name", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			(*results)[0].Name = "forged-worker"
+		}},
+		{name: "nested role mismatch", mutate: func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+			(*results)[0].Response.Role = "forged-response-role"
+		}},
+		{name: "blank status", mutate: setExternalSwarmResultStatus("")},
+		{name: "planned status", mutate: setExternalSwarmResultStatus("planned")},
+		{name: "spawned status", mutate: setExternalSwarmResultStatus("spawned")},
+		{name: "running status", mutate: setExternalSwarmResultStatus("running")},
+		{name: "unknown status", mutate: setExternalSwarmResultStatus("mysterious")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobals(t)
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			withWorkingDir(t, root)
+			goal := "Reject untrusted external swarm evidence"
+			createTestColonyState(t, dataDir, colony.ColonyState{
+				Version: "3.0",
+				Goal:    &goal,
+				State:   colony.StateREADY,
+			})
+
+			manifest := buildSwarmManifest(root, "Auth panic when session is missing", "plan-only", time.Now().UTC())
+			results := validExternalSwarmResults(manifest, "completed")
+			tc.mutate(&manifest, &results)
+			before := snapshotProjectDataTree(t, dataDir)
+			_, err := runSwarmFinalize(root, externalSwarmCompletion{
+				SwarmManifest: &manifest,
+				Dispatches:    results,
+			})
+			if err == nil {
+				t.Errorf("runSwarmFinalize accepted %s", tc.name)
+			}
+			after := snapshotProjectDataTree(t, dataDir)
+			if !reflect.DeepEqual(before, after) {
+				t.Errorf("rejected %s mutated .aether/data\nbefore: %#v\nafter:  %#v", tc.name, before, after)
+			}
+		})
+	}
+}
+
+func validExternalSwarmResults(manifest swarmManifest, status string) []swarmWorkerExecution {
+	results := make([]swarmWorkerExecution, 0, len(manifest.Dispatches))
 	for _, plan := range manifest.Dispatches {
 		response := swarmWorkerResponse{
 			Role:           plan.Role,
-			Status:         "completed",
+			Status:         status,
 			Summary:        plan.Role + " completed externally.",
 			Recommendation: "Continue with the active colony lifecycle.",
 			Verification:   []string{"go test ./..."},
@@ -344,59 +461,21 @@ func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
 			response.FilesTouched = []string{"pkg/auth/handler.go"}
 			response.TestsWritten = []string{"pkg/auth/handler_test.go"}
 		}
-		dispatches = append(dispatches, swarmWorkerExecution{
-			Name:     plan.Name,
-			Caste:    plan.Caste,
-			Role:     plan.Role,
-			Task:     plan.Task,
-			Status:   "completed",
-			Summary:  response.Summary,
+		results = append(results, swarmWorkerExecution{
+			Name: plan.Name, Caste: plan.Caste, Role: plan.Role, Task: plan.Task,
+			Status: status, Summary: response.Summary,
 			Files:    append([]string{}, response.FilesTouched...),
 			Tests:    append([]string{}, response.TestsWritten...),
 			Response: response,
 		})
 	}
+	return results
+}
 
-	completionPath := filepath.Join(t.TempDir(), "swarm-completion.json")
-	data, err := json.Marshal(map[string]interface{}{
-		"swarm_manifest": manifest,
-		"dispatches":     dispatches,
-	})
-	if err != nil {
-		t.Fatalf("marshal completion: %v", err)
-	}
-	if err := os.WriteFile(completionPath, data, 0644); err != nil {
-		t.Fatalf("write completion: %v", err)
-	}
-
-	resetRootCmd(t)
-	t.Setenv("AETHER_OUTPUT_MODE", "json")
-	stdout = &bytes.Buffer{}
-	rootCmd.SetArgs([]string{"swarm-finalize", "--completion-file", completionPath})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("swarm-finalize returned error: %v", err)
-	}
-
-	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
-	result := env["result"].(map[string]interface{})
-	if got := result["dispatch_mode"]; got != "external-task" {
-		t.Fatalf("dispatch_mode = %v, want external-task", got)
-	}
-	if got := result["status"]; got != "completed" {
-		t.Fatalf("status = %v, want completed", got)
-	}
-	resultPath := filepath.Join(dataDir, "swarms", manifest.SwarmID, "result.json")
-	if _, err := os.Stat(resultPath); err != nil {
-		t.Fatalf("expected swarm result artifact: %v", err)
-	}
-	spawnTreeData, err := os.ReadFile(filepath.Join(dataDir, "spawn-tree.txt"))
-	if err != nil {
-		t.Fatalf("read spawn-tree: %v", err)
-	}
-	for _, caste := range []string{"tracker", "builder", "watcher"} {
-		if !strings.Contains(string(spawnTreeData), "|Swarm|"+caste+"|") {
-			t.Fatalf("spawn tree missing %s entry:\n%s", caste, string(spawnTreeData))
-		}
+func setExternalSwarmResultStatus(status string) func(*swarmManifest, *[]swarmWorkerExecution) {
+	return func(_ *swarmManifest, results *[]swarmWorkerExecution) {
+		(*results)[0].Status = status
+		(*results)[0].Response.Status = status
 	}
 }
 
@@ -669,6 +748,116 @@ func TestSwarmRecoveryPersistenceFailurePublicIsNonMutating(t *testing.T) {
 	if _, err := runSwarmCompatibility(root, target, false, false); err != nil {
 		t.Fatalf("unchanged refused retry: %v", err)
 	}
+}
+
+func TestSwarmPartialEscalationRepairPublicFlow(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Repair a partially persisted escalation through the public flow"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Existing stabilization work",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{},
+		}}},
+	})
+
+	target := "Auth panic when session is missing"
+	invoker := &swarmTestInvoker{blockedCaste: "watcher"}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	history, pendingPath := seedPartialSwarmEscalationFailure(
+		t,
+		store,
+		target,
+		time.Now().UTC().Add(-3*time.Minute),
+	)
+	if _, err := runSwarmCompatibility(root, target, false, false); err == nil {
+		t.Error("public same-target command succeeded while the flag store was still failing")
+	}
+	if got := len(invoker.configs); got != 0 {
+		t.Fatalf("failed public repair invoked %d workers, want zero", got)
+	}
+	if err := os.Remove(pendingPath); err != nil {
+		t.Fatalf("restore pending-decision storage: %v", err)
+	}
+
+	refusal, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("public repair retry: %v", err)
+	}
+	if got := refusal["status"]; got != "architectural_concern" {
+		t.Fatalf("public repair status = %v, want architectural_concern", got)
+	}
+	wantNext := swarmInsertPhaseCommand(target)
+	if got := refusal["next"]; got != wantNext {
+		t.Fatalf("public repair next = %q, want %q", got, wantNext)
+	}
+	if got := len(invoker.configs); got != 0 {
+		t.Fatalf("successful public repair invoked %d workers before recovery, want zero", got)
+	}
+	stableID := swarmEscalationFlagID(history.TargetFingerprint)
+	if flags := activeSwarmEscalationFlags(store); len(flags) != 1 || flags[0].ID != stableID {
+		t.Fatalf("public repair flags = %+v, want one active stable flag %q", flags, stableID)
+	}
+
+	// Execute the exact corrective command emitted by the repaired concern.
+	// It must authenticate against that stable same-target blocker and append a
+	// typed recovery epoch before the target can dispatch again.
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"insert-phase", target})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute emitted recovery command %q: %v", wantNext, err)
+	}
+	insertEnvelope := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	insertResult := insertEnvelope["result"].(map[string]interface{})
+	if inserted, _ := insertResult["inserted"].(bool); !inserted {
+		t.Fatalf("emitted recovery command did not insert a phase: %v", insertResult)
+	}
+	recovered, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		t.Fatalf("evaluate repaired recovery epoch: %v", err)
+	}
+	if recovered.StrikeCount != 0 || recovered.LatestRecovery == nil {
+		t.Fatalf("repaired recovery history = %+v, want zero strikes with recovery evidence", recovered)
+	}
+
+	retry, err := runSwarmCompatibility(root, "  AUTH PANIC WHEN SESSION IS MISSING!!!  ", false, false)
+	if err != nil {
+		t.Fatalf("exact-target retry after repaired recovery: %v", err)
+	}
+	if got := retry["status"]; got != "blocked" {
+		t.Fatalf("recovered exact-target retry status = %v, want blocked test outcome", got)
+	}
+	if got := len(invoker.configs); got == 0 {
+		t.Fatal("recovered exact-target retry did not become dispatchable")
+	}
+	flagsFile, ok := loadFlagsFile(store)
+	if !ok {
+		t.Fatal("load repaired escalation after recovery retry")
+	}
+	for _, flag := range flagsFile.Decisions {
+		if flag.ID == stableID {
+			if !flag.Resolved {
+				t.Fatalf("repaired stable escalation was not resolved before dispatch: %+v", flag)
+			}
+			return
+		}
+	}
+	t.Fatalf("repaired stable escalation %q disappeared after recovery retry", stableID)
 }
 
 func TestSwarmRecoveryReconciliationFailurePublicDispatchesNobody(t *testing.T) {
