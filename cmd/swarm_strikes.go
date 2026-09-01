@@ -24,6 +24,7 @@ type swarmResultRecord struct {
 	Target            string                 `json:"target"`
 	TargetFingerprint string                 `json:"target_fingerprint"`
 	Status            string                 `json:"status"`
+	Recovery          *swarmRecoveryMetadata `json:"recovery,omitempty"`
 	RootCause         string                 `json:"root_cause,omitempty"`
 	Solution          string                 `json:"solution,omitempty"`
 	Recommendation    string                 `json:"recommendation,omitempty"`
@@ -35,6 +36,31 @@ type swarmResultRecord struct {
 	DispatchMode      string                 `json:"dispatch_mode,omitempty"`
 }
 
+const swarmRecoveryAuthorizationSource = "corrective-phase-insert"
+
+// swarmRecoveryMetadata makes a corrective phase insertion part of the same
+// append-only history as ordinary swarm outcomes. It is recovery context, not
+// a successful swarm result: no worker, file, or test evidence belongs on it.
+type swarmRecoveryMetadata struct {
+	AuthorizationSource                string `json:"authorization_source"`
+	TargetFingerprint                  string `json:"target_fingerprint"`
+	EscalationFlagID                   string `json:"escalation_flag_id"`
+	BeforePlanDefinitionHash           string `json:"before_plan_definition_hash"`
+	AfterPlanDefinitionHash            string `json:"after_plan_definition_hash"`
+	InsertedPhaseID                    int    `json:"inserted_phase_id"`
+	InsertedPhaseDefinitionFingerprint string `json:"inserted_phase_definition_fingerprint"`
+}
+
+type swarmRecoveryEvidence struct {
+	SwarmID                            string `json:"swarm_id"`
+	CompletedAt                        string `json:"completed_at"`
+	TargetFingerprint                  string `json:"target_fingerprint"`
+	EscalationFlagID                   string `json:"escalation_flag_id"`
+	AfterPlanDefinitionHash            string `json:"after_plan_definition_hash"`
+	InsertedPhaseID                    int    `json:"inserted_phase_id"`
+	InsertedPhaseDefinitionFingerprint string `json:"inserted_phase_definition_fingerprint"`
+}
+
 type swarmStrikeEvidence struct {
 	SwarmID     string `json:"swarm_id"`
 	Status      string `json:"status"`
@@ -42,10 +68,11 @@ type swarmStrikeEvidence struct {
 }
 
 type swarmStrikeHistory struct {
-	TargetFingerprint string                `json:"target_fingerprint"`
-	StrikeCount       int                   `json:"strike_count"`
-	NextAttempt       int                   `json:"next_attempt"`
-	Evidence          []swarmStrikeEvidence `json:"evidence,omitempty"`
+	TargetFingerprint string                 `json:"target_fingerprint"`
+	StrikeCount       int                    `json:"strike_count"`
+	NextAttempt       int                    `json:"next_attempt"`
+	Evidence          []swarmStrikeEvidence  `json:"evidence,omitempty"`
+	LatestRecovery    *swarmRecoveryEvidence `json:"latest_recovery,omitempty"`
 }
 
 type datedSwarmResult struct {
@@ -109,6 +136,9 @@ func saveSwarmResultRecord(s *storage.Store, record swarmResultRecord) error {
 	if record.Status == "" {
 		return fmt.Errorf("save swarm result: status is required")
 	}
+	if err := validateSwarmRecoveryRecord(record, nil); err != nil {
+		return fmt.Errorf("save swarm result: %w", err)
+	}
 	if _, err := time.Parse(time.RFC3339Nano, record.CompletedAt); err != nil {
 		return fmt.Errorf("save swarm result: invalid completed_at: %w", err)
 	}
@@ -141,6 +171,7 @@ func evaluateSwarmStrikeHistory(s *storage.Store, target string) (swarmStrikeHis
 		return history, fmt.Errorf("evaluate swarm strike history: read swarms: %w", err)
 	}
 
+	livePlan, livePlanOK := loadSwarmRecoveryLivePlan(s)
 	results := make([]datedSwarmResult, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -180,7 +211,7 @@ func evaluateSwarmStrikeHistory(s *storage.Store, target string) (swarmStrikeHis
 		if recordFingerprint != fingerprint {
 			continue
 		}
-		if record.Status != "completed" && record.Status != "failed" && record.Status != "blocked" {
+		if record.Status != "completed" && record.Status != "failed" && record.Status != "blocked" && record.Status != "recovered" {
 			continue
 		}
 		completedAt, parseErr := time.Parse(time.RFC3339Nano, record.CompletedAt)
@@ -199,6 +230,17 @@ func evaluateSwarmStrikeHistory(s *storage.Store, target string) (swarmStrikeHis
 	for _, result := range results {
 		if result.record.Status == "completed" {
 			history.Evidence = nil
+			continue
+		}
+		if result.record.Status == "recovered" {
+			if len(history.Evidence) < 3 || !livePlanOK {
+				continue
+			}
+			if err := validateSwarmRecoveryRecord(result.record, &livePlan); err != nil {
+				continue
+			}
+			history.Evidence = nil
+			history.LatestRecovery = swarmRecoveryEvidenceFromRecord(result.record)
 			continue
 		}
 		history.Evidence = append(history.Evidence, swarmStrikeEvidence{
@@ -227,6 +269,200 @@ func isValidSwarmResultID(id string) bool {
 
 func newSwarmRunID(now time.Time) string {
 	return fmt.Sprintf("swarm-%d", now.UTC().UnixNano())
+}
+
+func newSwarmRecoveryID(now time.Time) string {
+	return fmt.Sprintf("swarm-recovery-%d", now.UTC().UnixNano())
+}
+
+// buildSwarmRecoveryRecord creates the only typed reset event accepted by the
+// history evaluator. The caller must present the active stable escalation and
+// the exact before/after plans from one corrective phase insertion.
+func buildSwarmRecoveryRecord(
+	target string,
+	history swarmStrikeHistory,
+	escalation colony.FlagEntry,
+	before colony.Plan,
+	after colony.Plan,
+	inserted colony.Phase,
+	recoveredAt time.Time,
+) (swarmResultRecord, error) {
+	normalizedTarget := normalizeSwarmTarget(target)
+	targetFingerprint := swarmTargetFingerprint(normalizedTarget)
+	if targetFingerprint == "" {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: target is required")
+	}
+	if history.TargetFingerprint != targetFingerprint || history.StrikeCount < 3 || len(history.Evidence) < 3 {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: target does not have an active three-strike history")
+	}
+	expectedFlagID := swarmEscalationFlagID(targetFingerprint)
+	if escalation.ID != expectedFlagID ||
+		escalation.Type != "blocker" ||
+		escalation.Source != "escalation" ||
+		escalation.Resolved {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: matching active swarm escalation is required")
+	}
+	if recoveredAt.IsZero() {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: recovery time is required")
+	}
+	lastStrikeAt, err := time.Parse(time.RFC3339Nano, history.Evidence[len(history.Evidence)-1].CompletedAt)
+	if err != nil || !recoveredAt.After(lastStrikeAt) {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: recovery must follow the active strike evidence")
+	}
+
+	beforeHash, err := planDefinitionHash(before.Phases)
+	if err != nil {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: hash plan before insertion: %w", err)
+	}
+	afterHash, err := planDefinitionHash(after.Phases)
+	if err != nil {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: hash plan after insertion: %w", err)
+	}
+	if beforeHash == afterHash {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: corrective insertion did not change the plan definition")
+	}
+	insertedFingerprint, err := swarmPhaseDefinitionFingerprint(inserted)
+	if err != nil {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: hash inserted phase: %w", err)
+	}
+	if !swarmPlanContainsPhaseDefinition(after, inserted.ID, insertedFingerprint) {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: inserted phase is absent from the post-insert plan")
+	}
+	if swarmPlanContainsPhaseDefinition(before, inserted.ID, insertedFingerprint) {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: corrective phase already existed before insertion")
+	}
+
+	record := swarmResultRecord{
+		SwarmID:           newSwarmRecoveryID(recoveredAt),
+		Target:            normalizedTarget,
+		TargetFingerprint: targetFingerprint,
+		Status:            "recovered",
+		CompletedAt:       recoveredAt.UTC().Format(time.RFC3339Nano),
+		Recovery: &swarmRecoveryMetadata{
+			AuthorizationSource:                swarmRecoveryAuthorizationSource,
+			TargetFingerprint:                  targetFingerprint,
+			EscalationFlagID:                   expectedFlagID,
+			BeforePlanDefinitionHash:           beforeHash,
+			AfterPlanDefinitionHash:            afterHash,
+			InsertedPhaseID:                    inserted.ID,
+			InsertedPhaseDefinitionFingerprint: insertedFingerprint,
+		},
+	}
+	if err := validateSwarmRecoveryRecord(record, &after); err != nil {
+		return swarmResultRecord{}, fmt.Errorf("build swarm recovery: %w", err)
+	}
+	return record, nil
+}
+
+func validateSwarmRecoveryRecord(record swarmResultRecord, livePlan *colony.Plan) error {
+	if record.Status != "recovered" {
+		if record.Recovery != nil {
+			return fmt.Errorf("recovery metadata requires recovered status")
+		}
+		return nil
+	}
+	if record.Recovery == nil {
+		return fmt.Errorf("recovered status requires complete recovery metadata")
+	}
+	if swarmRecoveryHasOutcomeEvidence(record) {
+		return fmt.Errorf("recovery event cannot contain swarm outcome evidence")
+	}
+	recovery := record.Recovery
+	targetFingerprint := swarmTargetFingerprint(record.Target)
+	if targetFingerprint == "" ||
+		record.TargetFingerprint != targetFingerprint ||
+		recovery.TargetFingerprint != targetFingerprint {
+		return fmt.Errorf("recovery target fingerprint does not match the normalized target")
+	}
+	if recovery.AuthorizationSource != swarmRecoveryAuthorizationSource {
+		return fmt.Errorf("recovery authorization source is invalid")
+	}
+	if recovery.EscalationFlagID != swarmEscalationFlagID(targetFingerprint) {
+		return fmt.Errorf("recovery escalation identity does not match the target")
+	}
+	if !isSHA256Hex(recovery.BeforePlanDefinitionHash) ||
+		!isSHA256Hex(recovery.AfterPlanDefinitionHash) ||
+		recovery.BeforePlanDefinitionHash == recovery.AfterPlanDefinitionHash {
+		return fmt.Errorf("recovery plan definition hashes are invalid")
+	}
+	if recovery.InsertedPhaseID <= 0 || !isSHA256Hex(recovery.InsertedPhaseDefinitionFingerprint) {
+		return fmt.Errorf("recovery corrective phase identity is incomplete")
+	}
+	if livePlan == nil {
+		return nil
+	}
+	liveHash, err := planDefinitionHash(livePlan.Phases)
+	if err != nil {
+		return fmt.Errorf("hash live recovery plan: %w", err)
+	}
+	if liveHash != recovery.AfterPlanDefinitionHash {
+		return fmt.Errorf("recovery plan definition is not committed in live state")
+	}
+	if !swarmPlanContainsPhaseDefinition(*livePlan, recovery.InsertedPhaseID, recovery.InsertedPhaseDefinitionFingerprint) {
+		return fmt.Errorf("recovery corrective phase is absent from live state")
+	}
+	return nil
+}
+
+func swarmRecoveryHasOutcomeEvidence(record swarmResultRecord) bool {
+	return strings.TrimSpace(record.RootCause) != "" ||
+		strings.TrimSpace(record.Solution) != "" ||
+		strings.TrimSpace(record.Recommendation) != "" ||
+		len(record.Workers) > 0 ||
+		len(record.Files) > 0 ||
+		len(record.Tests) > 0 ||
+		len(record.Blockers) > 0 ||
+		strings.TrimSpace(record.DispatchMode) != ""
+}
+
+func isSHA256Hex(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func swarmPhaseDefinitionFingerprint(phase colony.Phase) (string, error) {
+	return planDefinitionHash([]colony.Phase{phase})
+}
+
+func swarmPlanContainsPhaseDefinition(plan colony.Plan, phaseID int, fingerprint string) bool {
+	for _, phase := range plan.Phases {
+		if phase.ID != phaseID {
+			continue
+		}
+		got, err := swarmPhaseDefinitionFingerprint(phase)
+		return err == nil && got == fingerprint
+	}
+	return false
+}
+
+func loadSwarmRecoveryLivePlan(s *storage.Store) (colony.Plan, bool) {
+	if s == nil {
+		return colony.Plan{}, false
+	}
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return colony.Plan{}, false
+	}
+	return state.Plan, true
+}
+
+func swarmRecoveryEvidenceFromRecord(record swarmResultRecord) *swarmRecoveryEvidence {
+	if record.Recovery == nil {
+		return nil
+	}
+	return &swarmRecoveryEvidence{
+		SwarmID:                            record.SwarmID,
+		CompletedAt:                        record.CompletedAt,
+		TargetFingerprint:                  record.Recovery.TargetFingerprint,
+		EscalationFlagID:                   record.Recovery.EscalationFlagID,
+		AfterPlanDefinitionHash:            record.Recovery.AfterPlanDefinitionHash,
+		InsertedPhaseID:                    record.Recovery.InsertedPhaseID,
+		InsertedPhaseDefinitionFingerprint: record.Recovery.InsertedPhaseDefinitionFingerprint,
+	}
 }
 
 // persistSwarmResultOutcome is the single completion seam for both runtime
