@@ -355,6 +355,8 @@ func TestCheckpointCapabilityIsScopedSingleUseAndCannotCrossRows(t *testing.T) {
 
 func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	s, _ := newTestStore(t)
 	store = s
 	phase := colony.Phase{ID: 1, Name: "Resolve checkpoint", Status: colony.PhaseInProgress}
@@ -367,13 +369,27 @@ func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 	if err != nil || len(refs) != 2 {
 		t.Fatalf("materialize checkpoints: refs=%#v err=%v", refs, err)
 	}
-	targetQuestion := ownerConfirmationQuestionText(phase.ID, criteria[0].TaskID, criteria[0].Criterion)
-	resolved, err := recordDecisionAnswer(targetQuestion, "confirmed", phase.ID, "owner")
-	if err != nil {
-		t.Fatalf("record checkpoint answer: %v", err)
+	capability := checkpointCapabilityFromReference(t, refs[0])
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+	answerArgs := []string{
+		"decision-answer",
+		"--question", refs[0].Question,
+		"--answer", "confirmed",
+		"--phase", "1",
+		"--checkpoint-capability", capability,
 	}
-	if resolved.ID != refs[0].ID {
-		t.Fatalf("answer appended/replaced the row instead of resolving its stable ID: got %s want %s", resolved.ID, refs[0].ID)
+	rootCmd.SetArgs(answerArgs)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("decision-answer returned Cobra error: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Fatalf("decision-answer rejected the displayed checkpoint command: %s", errBuf.String())
+	}
+	result := parseEnvelope(t, outBuf.String())["result"].(map[string]interface{})
+	if result["id"] != refs[0].ID {
+		t.Fatalf("answer appended/replaced the row instead of resolving its stable ID: got %v want %s", result["id"], refs[0].ID)
 	}
 	decisions := loadCheckpointDecisions(t)
 	if len(decisions) != 2 {
@@ -392,6 +408,25 @@ func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 	}
 	if len(replayed) != 1 || replayed[0].ID != refs[1].ID {
 		t.Fatalf("resolved checkpoint reopened or remained in signals: %#v", replayed)
+	}
+
+	// A consumed capability must remain reserved for the checkpoint path. It
+	// may not fall through to an ordinary clarification and append a new row.
+	replayBaseline := pendingDecisionBytes(t)
+	outBuf.Reset()
+	errBuf.Reset()
+	rootCmd.SetArgs(answerArgs)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("replayed decision-answer returned Cobra error: %v", err)
+	}
+	if errBuf.Len() == 0 {
+		t.Fatalf("replayed checkpoint capability was accepted: %s", outBuf.String())
+	}
+	if envelope := parseEnvelope(t, errBuf.String()); envelope["ok"] != false {
+		t.Fatalf("replay did not return an error envelope: %#v", envelope)
+	}
+	if after := pendingDecisionBytes(t); !bytes.Equal(replayBaseline, after) {
+		t.Fatalf("replayed checkpoint command mutated pending decisions:\nbefore=%s\nafter=%s", replayBaseline, after)
 	}
 }
 
