@@ -41,22 +41,9 @@ func readBlockerSnapshot(s *storage.Store) (blockerSnapshot, error) {
 		IDs:          []string{},
 		EscalatedIDs: []string{},
 	}
-	if s == nil {
-		return snapshot, fmt.Errorf("blocker truth store is unavailable")
-	}
-
-	flags, err := loadCanonicalBlockerFlags(s, "pending-decisions.json")
+	flags, _, err := readCanonicalBlockerFlags(s)
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return snapshot, err
-		}
-		flags, err = loadCanonicalBlockerFlags(s, "flags.json")
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return snapshot, nil
-			}
-			return snapshot, err
-		}
+		return snapshot, err
 	}
 
 	ids := make(map[string]struct{})
@@ -84,7 +71,28 @@ func readBlockerSnapshot(s *storage.Store) (blockerSnapshot, error) {
 	return snapshot, nil
 }
 
-func loadCanonicalBlockerFlags(s *storage.Store, relativePath string) (colony.FlagsFile, error) {
+func readCanonicalBlockerFlags(s *storage.Store) (colony.FlagsFile, bool, error) {
+	if s == nil {
+		return colony.FlagsFile{}, false, fmt.Errorf("blocker truth store is unavailable")
+	}
+	flags, err := loadBlockerFlagsPath(s, "pending-decisions.json")
+	if err == nil {
+		return flags, true, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return colony.FlagsFile{}, false, err
+	}
+	flags, err = loadBlockerFlagsPath(s, "flags.json")
+	if err == nil {
+		return flags, true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return colony.FlagsFile{}, false, nil
+	}
+	return colony.FlagsFile{}, false, err
+}
+
+func loadBlockerFlagsPath(s *storage.Store, relativePath string) (colony.FlagsFile, error) {
 	fullPath := filepath.Join(s.BasePath(), relativePath)
 	info, err := os.Stat(fullPath)
 	if err != nil {

@@ -365,10 +365,12 @@ func checkNoCriticalFlags() gateCheck {
 // /ant-flag did not actually block /ant-continue. Blockers cannot be
 // acknowledged away — only resolved. Locked by TestBlockerFlagBlocksContinue.
 func checkUnresolvedBlockerFlags() gateCheck {
-	var ff colony.FlagsFile
-	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
-		if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
-			return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}
+	ff, _, err := readCanonicalBlockerFlags(store)
+	if err != nil {
+		return gateCheck{
+			Name:   "no_unresolved_blockers",
+			Passed: false,
+			Detail: "blocker truth unavailable: " + blockerSnapshotErrorDetail(store, err),
 		}
 	}
 	blockerDescriptions := []string{}
