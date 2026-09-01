@@ -511,6 +511,22 @@ func TestSwarmThreeStrikeRecoveryExactTargetRetryReEscalates(t *testing.T) {
 		t.Fatalf("different target did not dispatch normally: configs = %d, want %d", got, wantAfterDifferentTarget)
 	}
 
+	flagsBeforeRecovery, ok := loadFlagsFile(store)
+	if !ok {
+		t.Fatal("load flags before public recovery")
+	}
+	unrelatedFlagID := swarmEscalationFlagID(swarmTargetFingerprint("Database panic after migration"))
+	flagsBeforeRecovery.Decisions = append(flagsBeforeRecovery.Decisions, colony.FlagEntry{
+		ID:          unrelatedFlagID,
+		Type:        "blocker",
+		Description: "Unrelated target must remain active.",
+		Source:      "escalation",
+		CreatedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err := store.SaveJSON("pending-decisions.json", flagsBeforeRecovery); err != nil {
+		t.Fatalf("seed unrelated escalation: %v", err)
+	}
+
 	// Execute the exact public recovery command emitted by the refusal. This
 	// is the real root-command seam; no fake completed swarm row is seeded.
 	stdout = &bytes.Buffer{}
@@ -564,13 +580,23 @@ func TestSwarmThreeStrikeRecoveryExactTargetRetryReEscalates(t *testing.T) {
 	if resolved == nil || !resolved.Resolved {
 		t.Fatalf("stable escalation flag was not resolved before retry dispatch: %+v", flagsFile.Decisions)
 	}
+	var unrelated *colony.FlagEntry
+	for i := range flagsFile.Decisions {
+		if flagsFile.Decisions[i].ID == unrelatedFlagID {
+			unrelated = &flagsFile.Decisions[i]
+			break
+		}
+	}
+	if unrelated == nil || unrelated.Resolved {
+		t.Fatalf("same-target reconciliation changed unrelated blocker: %+v", flagsFile.Decisions)
+	}
 	for _, want := range []string{recovery.SwarmID, "phase " + fmt.Sprint(recovery.InsertedPhaseID)} {
 		if !strings.Contains(strings.ToLower(resolved.Resolution), strings.ToLower(want)) {
 			t.Errorf("resolution %q missing recovery reference %q", resolved.Resolution, want)
 		}
 	}
-	if flags := activeSwarmEscalationFlags(store); len(flags) != 0 {
-		t.Fatalf("recovered retry left an active escalation: %+v", flags)
+	if flags := activeSwarmEscalationFlags(store); len(flags) != 1 || flags[0].ID != unrelatedFlagID {
+		t.Fatalf("recovered retry changed active escalation scope: %+v", flags)
 	}
 
 	// The recovered retry above is strike one in a fresh epoch. Two more real
@@ -586,8 +612,9 @@ func TestSwarmThreeStrikeRecoveryExactTargetRetryReEscalates(t *testing.T) {
 		}
 	}
 	newEpochFlags := activeSwarmEscalationFlags(store)
-	if len(newEpochFlags) != 1 || newEpochFlags[0].ID != stableID {
-		t.Fatalf("fresh three-strike epoch flags = %+v, want one stable same-target flag", newEpochFlags)
+	if len(newEpochFlags) != 2 ||
+		(newEpochFlags[0].ID != stableID && newEpochFlags[1].ID != stableID) {
+		t.Fatalf("fresh three-strike epoch flags = %+v, want stable target plus unrelated blocker", newEpochFlags)
 	}
 	beforeNewRefusal := len(invoker.configs)
 	newRefusal, err := runSwarmCompatibility(root, target, false, false)
@@ -679,6 +706,55 @@ func TestSwarmRecoveryReconciliationFailurePublicDispatchesNobody(t *testing.T) 
 	}
 	if got := len(invoker.configs); got != beforeDispatch {
 		t.Fatalf("plan-only reconciliation failure dispatched workers: configs %d -> %d", beforeDispatch, got)
+	}
+}
+
+func TestSwarmRecoveryArbitraryInsertPublicDoesNotAuthorize(t *testing.T) {
+	tests := []struct {
+		name string
+		args func(target string) []string
+	}{
+		{
+			name: "different positional target",
+			args: func(string) []string {
+				return []string{"insert-phase", "Database panic after migration"}
+			},
+		},
+		{
+			name: "explicit description without emitted positional target",
+			args: func(target string) []string {
+				return []string{
+					"phase-insert",
+					"--after", "1",
+					"--name", "General corrective work",
+					"--description", target,
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, target, _ := seedSwarmRecoveryPublicEscalation(t)
+			stdout = &bytes.Buffer{}
+			stderr = &bytes.Buffer{}
+			rootCmd.SetArgs(tc.args(target))
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("ordinary phase insertion failed: %v", err)
+			}
+			env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+			result := env["result"].(map[string]interface{})
+			if _, recovered := result["swarm_recovery_event"]; recovered {
+				t.Fatalf("ordinary insertion created swarm recovery evidence: %v", result)
+			}
+			history, err := evaluateSwarmStrikeHistory(store, target)
+			if err != nil {
+				t.Fatalf("evaluate escalated target after ordinary insertion: %v", err)
+			}
+			if history.StrikeCount != 3 || history.LatestRecovery != nil {
+				t.Fatalf("ordinary insertion changed escalated history: %+v", history)
+			}
+		})
 	}
 }
 

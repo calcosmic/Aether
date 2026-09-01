@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -161,6 +162,11 @@ var phaseInsertPromptSessionFactory = func(cmd *cobra.Command) phaseInsertPrompt
 		writer:      stderr,
 	}
 }
+
+// persistCorrectiveSwarmRecovery is the durable write seam for the typed
+// recovery event. Keeping it injectable lets command tests prove that a failed
+// history write aborts the still-locked COLONY_STATE.json mutation.
+var persistCorrectiveSwarmRecovery = saveSwarmResultRecord
 
 type phaseInsertResolveInput struct {
 	PositionalIssue     string
@@ -379,10 +385,11 @@ var phaseInsertCmd = &cobra.Command{
 		}
 
 		var (
-			state       *colony.ColonyState
-			request     resolvedPhaseInsertRequest
-			insertedID  int
-			mutationErr error
+			state           *colony.ColonyState
+			request         resolvedPhaseInsertRequest
+			insertedID      int
+			recoveryEventID string
+			mutationErr     error
 		)
 		if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
 			// A pointer target distinguishes a missing file (no bytes were
@@ -401,6 +408,33 @@ var phaseInsertCmd = &cobra.Command{
 			if request.After < 0 || request.After > len(state.Plan.Phases) {
 				mutationErr = fmt.Errorf("invalid after index %d (plan has %d phases)", request.After, len(state.Plan.Phases))
 				return mutationErr
+			}
+
+			// Only the positional issue emitted by the swarm refusal can
+			// authorize recovery. Explicit descriptions, prompt answers, and
+			// arbitrary inserts continue to insert normally but never reset
+			// swarm history.
+			beforePlan := state.Plan
+			beforePlan.Phases = clonePhases(state.Plan.Phases)
+			var (
+				recoveryHistory    *swarmStrikeHistory
+				recoveryEscalation *colony.FlagEntry
+			)
+			if recoveryTarget := strings.TrimSpace(input.PositionalIssue); recoveryTarget != "" {
+				history, historyErr := evaluateSwarmStrikeHistoryAgainstPlan(store, recoveryTarget, &beforePlan)
+				if historyErr != nil {
+					mutationErr = fmt.Errorf("verify swarm recovery eligibility: %w", historyErr)
+					return mutationErr
+				}
+				if history.StrikeCount >= 3 && history.TargetFingerprint == swarmTargetFingerprint(recoveryTarget) {
+					escalation, ok := activeSwarmEscalationForTarget(store, recoveryTarget)
+					if !ok {
+						mutationErr = fmt.Errorf("stage swarm recovery: active same-target escalation flag is unavailable")
+						return mutationErr
+					}
+					recoveryHistory = &history
+					recoveryEscalation = &escalation
+				}
 			}
 
 			newPhase := colony.Phase{
@@ -436,14 +470,36 @@ var phaseInsertCmd = &cobra.Command{
 				state.CurrentPhase = insertedID
 				state.Plan.Phases[insertAt].Status = colony.PhaseReady
 			}
+
+			if recoveryHistory != nil && recoveryEscalation != nil {
+				record, recoveryErr := buildSwarmRecoveryRecord(
+					input.PositionalIssue,
+					*recoveryHistory,
+					*recoveryEscalation,
+					beforePlan,
+					state.Plan,
+					state.Plan.Phases[insertAt],
+					time.Now().UTC(),
+				)
+				if recoveryErr != nil {
+					mutationErr = fmt.Errorf("stage swarm recovery: %w", recoveryErr)
+					return mutationErr
+				}
+				if recoveryErr := persistCorrectiveSwarmRecovery(store, record); recoveryErr != nil {
+					mutationErr = fmt.Errorf("persist swarm recovery: %w", recoveryErr)
+					return mutationErr
+				}
+				recoveryEventID = record.SwarmID
+			}
 			return nil
 		}); err != nil {
 			if mutationErr != nil {
 				outputError(1, mutationErr.Error(), nil)
+				return renderedErrorExit(1)
 			} else {
 				outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
+				return renderedErrorExit(2)
 			}
-			return nil
 		}
 
 		result := map[string]interface{}{
@@ -453,6 +509,9 @@ var phaseInsertCmd = &cobra.Command{
 			"name":        request.Name,
 			"description": request.Description,
 			"constraints": request.Constraints,
+		}
+		if recoveryEventID != "" {
+			result["swarm_recovery_event"] = recoveryEventID
 		}
 		outputWorkflow(result, renderPhaseInsertVisual(result))
 		return nil

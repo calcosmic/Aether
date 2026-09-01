@@ -167,6 +167,11 @@ func runSwarmCompatibility(root, target string, watch, planOnly bool) (map[strin
 	if history.StrikeCount >= 3 {
 		return swarmArchitecturalConcernResult(target, history), nil
 	}
+	if history.LatestRecovery != nil {
+		if err := reconcileSwarmRecoveryEscalation(store, target, history); err != nil {
+			return nil, err
+		}
+	}
 	if planOnly || codex.ShouldUseAgentDelegatePath() {
 		return runSwarmPlanOnly(root, target)
 	}
@@ -339,7 +344,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		Files:          filesTouched,
 		Tests:          testsWritten,
 		Blockers:       blockers,
-		CompletedAt:    time.Now().UTC().Format(time.RFC3339),
+		CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
 	}); err != nil {
 		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
 	}
@@ -698,7 +703,7 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 		Files:          filesTouched,
 		Tests:          testsWritten,
 		Blockers:       blockers,
-		CompletedAt:    time.Now().UTC().Format(time.RFC3339),
+		CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
 		DispatchMode:   "external-task",
 	}); err != nil {
 		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)

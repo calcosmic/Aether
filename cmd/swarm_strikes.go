@@ -150,6 +150,18 @@ func saveSwarmResultRecord(s *storage.Store, record swarmResultRecord) error {
 }
 
 func evaluateSwarmStrikeHistory(s *storage.Store, target string) (swarmStrikeHistory, error) {
+	livePlan, livePlanOK := loadSwarmRecoveryLivePlan(s)
+	if !livePlanOK {
+		return evaluateSwarmStrikeHistoryAgainstPlan(s, target, nil)
+	}
+	return evaluateSwarmStrikeHistoryAgainstPlan(s, target, &livePlan)
+}
+
+// evaluateSwarmStrikeHistoryAgainstPlan is the lock-safe derivation seam used
+// while COLONY_STATE.json is already held for an atomic corrective insertion.
+// Supplying the freshly locked plan avoids trying to reacquire the same state
+// lock while preserving the exact live-plan validation used by ordinary reads.
+func evaluateSwarmStrikeHistoryAgainstPlan(s *storage.Store, target string, livePlan *colony.Plan) (swarmStrikeHistory, error) {
 	fingerprint := swarmTargetFingerprint(target)
 	history := swarmStrikeHistory{
 		TargetFingerprint: fingerprint,
@@ -171,7 +183,6 @@ func evaluateSwarmStrikeHistory(s *storage.Store, target string) (swarmStrikeHis
 		return history, fmt.Errorf("evaluate swarm strike history: read swarms: %w", err)
 	}
 
-	livePlan, livePlanOK := loadSwarmRecoveryLivePlan(s)
 	results := make([]datedSwarmResult, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -233,10 +244,10 @@ func evaluateSwarmStrikeHistory(s *storage.Store, target string) (swarmStrikeHis
 			continue
 		}
 		if result.record.Status == "recovered" {
-			if len(history.Evidence) < 3 || !livePlanOK {
+			if len(history.Evidence) < 3 || livePlan == nil {
 				continue
 			}
-			if err := validateSwarmRecoveryRecord(result.record, &livePlan); err != nil {
+			if err := validateSwarmRecoveryRecord(result.record, livePlan); err != nil {
 				continue
 			}
 			history.Evidence = nil
@@ -556,6 +567,101 @@ func upsertSwarmEscalationFlag(s *storage.Store, target string, history swarmStr
 		return nil
 	}); err != nil {
 		return fmt.Errorf("write pending decisions: %w", err)
+	}
+	return nil
+}
+
+// activeSwarmEscalationForTarget returns only the stable blocker created by
+// the three-strike guard for the exact normalized target. Arbitrary inserts,
+// manually described phases, and flags from another target cannot authorize a
+// recovery event.
+func activeSwarmEscalationForTarget(s *storage.Store, target string) (colony.FlagEntry, bool) {
+	fingerprint := swarmTargetFingerprint(target)
+	if fingerprint == "" {
+		return colony.FlagEntry{}, false
+	}
+	flags, ok := loadFlagsFile(s)
+	if !ok {
+		return colony.FlagEntry{}, false
+	}
+	expectedID := swarmEscalationFlagID(fingerprint)
+	for _, flag := range flags.Decisions {
+		if flag.ID == expectedID &&
+			flag.Type == "blocker" &&
+			flag.Source == "escalation" &&
+			!flag.Resolved {
+			return flag, true
+		}
+	}
+	return colony.FlagEntry{}, false
+}
+
+// reconcileSwarmRecoveryEscalation closes the one stale same-target blocker
+// after history has independently verified a committed corrective phase. It
+// runs before any swarm manifest or worker run is created; persistence failure
+// therefore fails closed without dispatch.
+func reconcileSwarmRecoveryEscalation(s *storage.Store, target string, history swarmStrikeHistory) error {
+	recovery := history.LatestRecovery
+	if recovery == nil {
+		return nil
+	}
+	fingerprint := swarmTargetFingerprint(target)
+	if fingerprint == "" ||
+		history.TargetFingerprint != fingerprint ||
+		recovery.TargetFingerprint != fingerprint {
+		return fmt.Errorf("reconcile swarm recovery: recovery target does not match retry target")
+	}
+	expectedID := swarmEscalationFlagID(fingerprint)
+	if recovery.EscalationFlagID != expectedID {
+		return fmt.Errorf("reconcile swarm recovery: recovery escalation identity does not match retry target")
+	}
+
+	flags, ok := loadFlagsFile(s)
+	if !ok {
+		return fmt.Errorf("reconcile swarm recovery: pending escalation flags are unavailable")
+	}
+	resolvedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	resolution := fmt.Sprintf(
+		"verified by swarm recovery %s after corrective phase %d",
+		recovery.SwarmID,
+		recovery.InsertedPhaseID,
+	)
+	if err := s.UpdateJSONAtomically("pending-decisions.json", &flags, func() error {
+		matched := false
+		for i := range flags.Decisions {
+			flag := &flags.Decisions[i]
+			if flag.ID != expectedID {
+				continue
+			}
+			if flag.Type != "blocker" || flag.Source != "escalation" {
+				return fmt.Errorf("stable same-target flag has invalid blocker provenance")
+			}
+			matched = true
+			if !flag.Resolved {
+				flag.Resolved = true
+				flag.ResolvedAt = resolvedAt
+				flag.Resolution = resolution
+				continue
+			}
+			// Re-entry is idempotent, but an earlier manual resolution still
+			// gains the recovery/phase audit link without losing its reason.
+			if !strings.Contains(flag.Resolution, recovery.SwarmID) {
+				if strings.TrimSpace(flag.Resolution) == "" {
+					flag.Resolution = resolution
+				} else {
+					flag.Resolution += "; " + resolution
+				}
+				if strings.TrimSpace(flag.ResolvedAt) == "" {
+					flag.ResolvedAt = resolvedAt
+				}
+			}
+		}
+		if !matched {
+			return fmt.Errorf("stable same-target escalation flag %s is missing", expectedID)
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("reconcile swarm recovery: %w", err)
 	}
 	return nil
 }
