@@ -203,6 +203,9 @@ func TestAutopilotReplanCadenceReconstructsAcrossRestart(t *testing.T) {
 		PlanRevisionID:        "revision-other",
 		LatestCheckpointPhase: 3,
 	}
+	unresolvedHandled := resolvedHandled
+	unresolvedHandled.Resolved = false
+	assertCadence("unresolved same-revision note handles boundary", []PendingDecision{otherRevision, unresolvedHandled}, 2, 2, 4, 0, 0)
 	assertCadence("resolved same-revision note handles boundary", []PendingDecision{otherRevision, resolvedHandled}, 2, 2, 4, 0, 0)
 }
 

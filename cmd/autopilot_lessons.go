@@ -151,6 +151,110 @@ func loadConfirmedAutopilotLessonsSincePlan(plan colony.Plan) ([]confirmedAutopi
 	return confirmedAutopilotLessonsSincePlan(plan, entries)
 }
 
+// autopilotReplanCadence is a durable projection of interval progress under
+// one accepted plan revision. CompletedSinceRevision is reconstructed from
+// plan state, while LastHandledBoundary is reconstructed from every replan
+// decision for that revision, including decisions the owner already resolved.
+// NextBoundary is the earliest interval boundary not represented by that
+// history. DueBoundary and CheckpointPhaseID are populated only after current
+// durable state has reached that boundary.
+type autopilotReplanCadence struct {
+	PlanRevisionID         string
+	CompletedSinceRevision int
+	LastHandledBoundary    int
+	NextBoundary           int
+	DueBoundary            int
+	CheckpointPhaseID      int
+}
+
+// projectAutopilotReplanCadence reconstructs replan interval progress without
+// wall-clock or invocation-local input. Modern plans compare the live phase
+// statuses with the immutable active revision snapshot, so accepting a new
+// revision is the only reset. Plans that predate revision snapshots use the
+// deterministic compatibility rule of counting every currently completed
+// phase from the beginning of the legacy plan.
+func projectAutopilotReplanCadence(plan colony.Plan, decisions []PendingDecision, interval int) (autopilotReplanCadence, error) {
+	projection := autopilotReplanCadence{PlanRevisionID: activePlanRevisionID(plan)}
+	if len(plan.Phases) == 0 {
+		if interval > 0 {
+			projection.NextBoundary = interval
+		}
+		return projection, nil
+	}
+
+	baseline := map[int]string{}
+	hasRevisionSnapshot := false
+	if revision, ok := activePlanRevision(plan); ok {
+		if len(revision.Phases) > 0 {
+			hasRevisionSnapshot = true
+			for _, phase := range revision.Phases {
+				if _, duplicate := baseline[phase.ID]; duplicate {
+					return autopilotReplanCadence{}, fmt.Errorf("active plan revision %q duplicates phase %d", revision.ID, phase.ID)
+				}
+				baseline[phase.ID] = phase.Status
+			}
+		}
+	} else if strings.TrimSpace(plan.ActiveRevisionID) != "" {
+		return autopilotReplanCadence{}, fmt.Errorf("active plan revision %q is missing from revision history", plan.ActiveRevisionID)
+	}
+
+	completionPhaseIDs := make([]int, 0, len(plan.Phases))
+	seenCurrent := make(map[int]struct{}, len(plan.Phases))
+	for _, phase := range plan.Phases {
+		if _, duplicate := seenCurrent[phase.ID]; duplicate {
+			return autopilotReplanCadence{}, fmt.Errorf("current plan duplicates phase %d", phase.ID)
+		}
+		seenCurrent[phase.ID] = struct{}{}
+		baselineStatus, existedAtAcceptance := baseline[phase.ID]
+		if hasRevisionSnapshot && !existedAtAcceptance {
+			return autopilotReplanCadence{}, fmt.Errorf("active plan revision %q has no snapshot for current phase %d", projection.PlanRevisionID, phase.ID)
+		}
+		if phase.Status != colony.PhaseCompleted {
+			continue
+		}
+		if hasRevisionSnapshot && baselineStatus == colony.PhaseCompleted {
+			continue
+		}
+		completionPhaseIDs = append(completionPhaseIDs, phase.ID)
+	}
+	projection.CompletedSinceRevision = len(completionPhaseIDs)
+
+	if interval <= 0 {
+		return projection, nil
+	}
+	completionOrdinal := make(map[int]int, len(completionPhaseIDs))
+	for index, phaseID := range completionPhaseIDs {
+		completionOrdinal[phaseID] = index + 1
+	}
+	for _, decision := range decisions {
+		if decision.Type != autopilotReplanDecisionType || strings.TrimSpace(decision.PlanRevisionID) != projection.PlanRevisionID {
+			continue
+		}
+		checkpointPhase := decision.LatestCheckpointPhase
+		if checkpointPhase <= 0 && decision.Phase != nil {
+			checkpointPhase = *decision.Phase
+		}
+		ordinal, found := completionOrdinal[checkpointPhase]
+		if !found {
+			continue
+		}
+		handledBoundary := (ordinal / interval) * interval
+		if handledBoundary > projection.LastHandledBoundary {
+			projection.LastHandledBoundary = handledBoundary
+		}
+	}
+
+	projection.NextBoundary = interval
+	if projection.LastHandledBoundary > 0 {
+		projection.NextBoundary = projection.LastHandledBoundary + interval
+	}
+	if projection.CompletedSinceRevision >= projection.NextBoundary {
+		projection.DueBoundary = projection.NextBoundary
+		projection.CheckpointPhaseID = completionPhaseIDs[projection.DueBoundary-1]
+	}
+	return projection, nil
+}
+
 func lessonAwareReplanDue(phasesCompleted, interval int, lessons []confirmedAutopilotLesson, bypass bool) bool {
 	return !bypass && interval > 0 && phasesCompleted > 0 && phasesCompleted%interval == 0 && len(lessons) > 0
 }
