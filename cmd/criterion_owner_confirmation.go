@@ -36,7 +36,7 @@ func ownerConfirmationQuestionText(phaseID int, taskID, criterion string) string
 // text against the resolved pending-decision entries the same way a worker's
 // open_decisions question is matched (answeredDecisionTexts).
 func ownerConfirmationAnswered(phaseID int, taskID, criterion string) bool {
-	answered := answeredDecisionTexts()
+	answered := answeredDecisionTexts(pendingDecisionScope{})
 	return answered[normalizeDecisionText(ownerConfirmationQuestionText(phaseID, taskID, criterion))]
 }
 
