@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,6 +33,171 @@ func reportTestState(status colony.State, current int) colony.ColonyState {
 		}
 	}
 	return colony.ColonyState{State: status, CurrentPhase: current, Plan: colony.Plan{Phases: phases}}
+}
+
+// installTerminalReportPersistenceFixture drives the real `run` command to a
+// completed one-phase result through the existing orchestration seams. The
+// failure form makes only the final autopilot report path unwritable, after
+// the loop's earlier running-state writes have already succeeded. That keeps
+// these command tests honest about the exact durability boundary under test.
+func installTerminalReportPersistenceFixture(t *testing.T, failFinalWrite bool) {
+	t.Helper()
+	installAutopilotRunTestDeps(t)
+
+	runAutopilotBuild = func(_ string, phaseNum int, _ []string, _ bool, _ codexBuildOptions) (map[string]interface{}, error) {
+		mutateRunFixtureState(t, func(state *colony.ColonyState) {
+			state.CurrentPhase = phaseNum
+			state.State = colony.StateBUILT
+			state.Plan.Phases[phaseNum-1].Status = colony.PhaseInProgress
+		})
+		return map[string]interface{}{
+			"dispatch_count": 1,
+			"dispatch_mode":  "fixture",
+			"state":          colony.StateBUILT,
+		}, nil
+	}
+	runAutopilotMaterializeVisual = func(string, int, map[string]interface{}) ([]autopilotCheckpointReference, error) {
+		return nil, nil
+	}
+	runAutopilotContinue = func(string, codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+		updated := mutateRunFixtureState(t, func(state *colony.ColonyState) {
+			state.State = colony.StateCOMPLETED
+			state.Plan.Phases[state.CurrentPhase-1].Status = colony.PhaseCompleted
+		})
+		phase := updated.Plan.Phases[updated.CurrentPhase-1]
+		if failFinalWrite {
+			reportPath := filepath.Join(store.BasePath(), autopilotStatePath)
+			if err := os.Remove(reportPath); err != nil && !os.IsNotExist(err) {
+				t.Fatalf("remove running autopilot state: %v", err)
+			}
+			if err := os.Mkdir(reportPath, 0755); err != nil {
+				t.Fatalf("make final report path unwritable: %v", err)
+			}
+		}
+		return map[string]interface{}{
+			"advanced": true,
+			"blocked":  false,
+			"state":    colony.StateCOMPLETED,
+		}, updated, phase, nil, nil, true, nil
+	}
+}
+
+func runTerminalReportCommand(t *testing.T, mode string, failFinalWrite bool) (string, string, error) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", mode)
+	_, _ = seedRunFixture(t, 1)
+	installTerminalReportPersistenceFixture(t, failFinalWrite)
+
+	var out, errOut bytes.Buffer
+	stdout = &out
+	stderr = &errOut
+	rootCmd.SetArgs([]string{"run", "--continue"})
+	err := Execute()
+	return out.String(), errOut.String(), err
+}
+
+func TestRunReportPersistenceFailureJSONCommandIsNonZero(t *testing.T) {
+	stdoutText, stderrText, commandErr := runTerminalReportCommand(t, "json", true)
+	var renderedErr renderedCommandError
+	if !errors.As(commandErr, &renderedErr) || renderedErr.code != 1 {
+		t.Fatalf("command error = %#v, want rendered exit 1\nstdout:\n%s\nstderr:\n%s", commandErr, stdoutText, stderrText)
+	}
+	if strings.TrimSpace(stdoutText) != "" {
+		t.Fatalf("failed report write emitted success output:\n%s", stdoutText)
+	}
+	envelope := parseEnvelopeCmd(t, stderrText)
+	if envelope["ok"] != false || intValue(envelope["code"]) != 1 {
+		t.Fatalf("error envelope = %+v, want ok:false code:1", envelope)
+	}
+	if !strings.Contains(strings.ToLower(stringValue(envelope["error"])), "report") ||
+		!strings.Contains(strings.ToLower(stringValue(envelope["error"])), "persist") {
+		t.Fatalf("error does not name report durability: %+v", envelope)
+	}
+	details, ok := envelope["details"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("error details = %#v, want complete run result", envelope["details"])
+	}
+	if stringValue(details["report_persist_error"]) == "" ||
+		stringValue(details["trigger_code"]) != string(autopilotTriggerColonyComplete) ||
+		stringValue(details["disposition"]) != string(autopilotDispositionNormalStop) {
+		t.Fatalf("missing persistence/trigger evidence: %+v", details)
+	}
+	report, ok := details["last_report"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("last_report = %#v, want retained report", details["last_report"])
+	}
+	if stringValue(report["outcome"]) != "completed" ||
+		stringValue(report["stop_reason"]) != string(autopilotTriggerColonyComplete) ||
+		stringValue(report["next"]) != "aether seal" {
+		t.Fatalf("retained terminal evidence = %+v", report)
+	}
+	if _, ok := report["elapsed_seconds"]; !ok {
+		t.Fatalf("retained report lost elapsed evidence: %+v", report)
+	}
+	if _, ok := report["spend"].(map[string]interface{}); !ok {
+		t.Fatalf("retained report lost spend evidence: %+v", report)
+	}
+	if phases, ok := report["phases"].([]interface{}); !ok || len(phases) != 1 {
+		t.Fatalf("retained report lost primary phase evidence: %+v", report["phases"])
+	}
+}
+
+func TestRunReportPersistenceFailureVisualIsErrorFirst(t *testing.T) {
+	stdoutText, stderrText, commandErr := runTerminalReportCommand(t, "visual", true)
+	var renderedErr renderedCommandError
+	if !errors.As(commandErr, &renderedErr) || renderedErr.code != 1 {
+		t.Fatalf("command error = %#v, want rendered exit 1\nstdout:\n%s\nstderr:\n%s", commandErr, stdoutText, stderrText)
+	}
+	upperErr := strings.ToUpper(strings.TrimSpace(stderrText))
+	if !strings.HasPrefix(upperErr, "━━━") || !strings.Contains(upperErr, "REPORT DURABILITY FAILURE") {
+		t.Fatalf("stderr did not lead with the durability failure:\n%s", stderrText)
+	}
+	wants := []string{
+		"UNSAVED IN-MEMORY EVIDENCE",
+		"Outcome:",
+		"Stop reason:",
+		"Blocker movement",
+		"Elapsed:",
+		"What The Helpers Cost",
+		"Next:",
+		"Phase evidence",
+	}
+	last := -1
+	for _, want := range wants {
+		at := strings.Index(stderrText, want)
+		if at < 0 {
+			t.Fatalf("unsaved evidence missing %q:\n%s", want, stderrText)
+		}
+		if at <= last {
+			t.Fatalf("unsaved evidence %q appeared out of order:\n%s", want, stderrText)
+		}
+		last = at
+	}
+	for _, forbidden := range []string{"Autopilot Complete", "Project Complete", "Last Autopilot Run"} {
+		if strings.Contains(stdoutText, forbidden) || strings.Contains(stderrText, forbidden) {
+			t.Fatalf("durability failure rendered terminal success %q\nstdout:\n%s\nstderr:\n%s", forbidden, stdoutText, stderrText)
+		}
+	}
+}
+
+func TestRunReportPersistenceFailureLeavesDurableSuccessUnchanged(t *testing.T) {
+	stdoutText, stderrText, commandErr := runTerminalReportCommand(t, "json", false)
+	if commandErr != nil {
+		t.Fatalf("durable terminal run returned error: %v\nstdout:\n%s\nstderr:\n%s", commandErr, stdoutText, stderrText)
+	}
+	if strings.TrimSpace(stderrText) != "" {
+		t.Fatalf("durable terminal run wrote stderr:\n%s", stderrText)
+	}
+	envelope := parseEnvelopeCmd(t, stdoutText)
+	if envelope["ok"] != true {
+		t.Fatalf("durable terminal run lost success envelope: %+v", envelope)
+	}
+	result, ok := envelope["result"].(map[string]interface{})
+	if !ok || result["last_report"] == nil || result["report_persist_error"] != nil {
+		t.Fatalf("durable terminal result changed: %+v", result)
+	}
 }
 
 func TestAutopilotReportElapsedUsesInvocationWallClock(t *testing.T) {
