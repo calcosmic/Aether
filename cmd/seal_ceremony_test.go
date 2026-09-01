@@ -184,6 +184,31 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 			t.Fatalf("directory-backed failure did not identify %s: %s", pendingDecisionsFile, errOut)
 		}
 	})
+
+	t.Run("capability binding cannot be persisted", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := setupSealTestStore(t)
+		store = s
+		criterion := codexCriterionVerification{
+			TaskID: "1.1", Criterion: "The owner experience feels correct", State: criterionStateNeedsOwnerConfirmation,
+		}
+		if refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}); err != nil || len(refs) != 1 {
+			t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
+		}
+		if err := os.Chmod(s.BasePath(), 0o555); err != nil {
+			t.Fatalf("make pending-decision directory unwritable: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(s.BasePath(), 0o755) })
+
+		_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		if restoreErr := os.Chmod(s.BasePath(), 0o755); restoreErr != nil {
+			t.Fatalf("restore pending-decision directory: %v", restoreErr)
+		}
+		requireRenderedSealExitOne(t, err)
+		if !strings.Contains(errOut, pendingDecisionsFile) || !strings.Contains(strings.ToLower(errOut), "durably updated") {
+			t.Fatalf("capability-write failure was not surfaced as owner-work durability:\n%s", errOut)
+		}
+	})
 }
 
 func TestSealPendingDecisionAbsenceAllowsLegacyFallback(t *testing.T) {

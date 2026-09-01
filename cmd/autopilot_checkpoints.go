@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 const (
@@ -503,11 +504,19 @@ func checkpointReference(decision PendingDecision) autopilotCheckpointReference 
 }
 
 func autopilotCheckpointSealBlockers(state colony.ColonyState) ([]colony.FlagEntry, error) {
-	if store == nil {
+	return autopilotCheckpointSealBlockersFromStore(store, state)
+}
+
+// autopilotCheckpointSealBlockersFromStore keeps the public loader's global
+// compatibility while allowing the shared seal gate to use the exact Store it
+// was handed. This matters for tests and for any future caller that validates
+// a store before installing it as the process-global runtime store.
+func autopilotCheckpointSealBlockersFromStore(checkpointStore *storage.Store, state colony.ColonyState) ([]colony.FlagEntry, error) {
+	if checkpointStore == nil {
 		return nil, fmt.Errorf("load checkpoint seal blockers: no store initialized")
 	}
 	var preview PendingDecisionFile
-	if err := store.LoadJSON(pendingDecisionsFile, &preview); err != nil {
+	if err := checkpointStore.LoadJSON(pendingDecisionsFile, &preview); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
@@ -530,7 +539,7 @@ func autopilotCheckpointSealBlockers(state colony.ColonyState) ([]colony.FlagEnt
 	// this in-memory copy so a failed write cannot return an authorization
 	// command whose hash never became durable.
 	var file PendingDecisionFile
-	if err := store.UpdateJSONAtomically(pendingDecisionsFile, &file, func() error {
+	if err := checkpointStore.UpdateJSONAtomically(pendingDecisionsFile, &file, func() error {
 		for i := range file.Decisions {
 			decision := &file.Decisions[i]
 			if decision.Resolved || !isAutopilotCheckpointType(decision.Type) || !pendingDecisionMatchesScope(*decision, scope) {
@@ -570,7 +579,7 @@ func autopilotCheckpointSealBlockers(state colony.ColonyState) ([]colony.FlagEnt
 		blockers = append(blockers, colony.FlagEntry{
 			ID:              decision.ID,
 			Type:            "blocker",
-			Description:     fmt.Sprintf("Phase %d checkpoint %s (%s): %s. Run: %s", phaseID, decision.ID, decision.Type, detail, command),
+			Description:     fmt.Sprintf("Phase %d checkpoint %s (%s): %s.", phaseID, decision.ID, decision.Type, detail),
 			Phase:           decision.Phase,
 			Source:          "autopilot_checkpoint",
 			CreatedAt:       decision.CreatedAt,
