@@ -285,6 +285,129 @@ func TestCheckpointCapabilityRotatesWithoutChangingIdentityOrPersistingRawTokens
 	}
 }
 
+func TestAutopilotCheckpointSealStorageErrorsFailClosed(t *testing.T) {
+	t.Run("absent pending decisions is the only empty success", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		state := checkpointTestState(t, colony.Phase{ID: 1, Name: "No owner work", Status: colony.PhaseCompleted}, colony.StateCOMPLETED)
+
+		blockers, err := autopilotCheckpointSealBlockers(state)
+		if err != nil || len(blockers) != 0 {
+			t.Fatalf("absent pending decisions returned blockers=%#v err=%v, want empty success", blockers, err)
+		}
+	})
+
+	t.Run("malformed pending decisions", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		state := checkpointTestState(t, colony.Phase{ID: 1, Name: "Corrupt owner work", Status: colony.PhaseCompleted}, colony.StateCOMPLETED)
+		if err := os.WriteFile(filepath.Join(store.BasePath(), pendingDecisionsFile), []byte("{not-json"), 0o644); err != nil {
+			t.Fatalf("seed malformed pending decisions: %v", err)
+		}
+
+		blockers, err := autopilotCheckpointSealBlockers(state)
+		if err == nil || len(blockers) != 0 {
+			t.Fatalf("malformed pending decisions returned blockers=%#v err=%v, want explicit error and no blockers", blockers, err)
+		}
+	})
+
+	t.Run("directory at pending decisions path", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		state := checkpointTestState(t, colony.Phase{ID: 1, Name: "Directory owner work", Status: colony.PhaseCompleted}, colony.StateCOMPLETED)
+		if err := os.Mkdir(filepath.Join(store.BasePath(), pendingDecisionsFile), 0o755); err != nil {
+			t.Fatalf("seed directory-backed pending decisions: %v", err)
+		}
+
+		blockers, err := autopilotCheckpointSealBlockers(state)
+		if err == nil || len(blockers) != 0 {
+			t.Fatalf("directory-backed pending decisions returned blockers=%#v err=%v, want explicit error and no blockers", blockers, err)
+		}
+	})
+
+	t.Run("capability hash cannot be persisted", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		phase := colony.Phase{ID: 1, Name: "Unwritable owner work", Status: colony.PhaseCompleted}
+		state := checkpointTestState(t, phase, colony.StateCOMPLETED)
+		refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{{
+			TaskID: "1.1", Criterion: "The owner experience feels right", State: criterionStateNeedsOwnerConfirmation,
+		}})
+		if err != nil || len(refs) != 1 {
+			t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
+		}
+		before := append([]byte(nil), pendingDecisionBytes(t)...)
+		if err := os.Chmod(store.BasePath(), 0o555); err != nil {
+			t.Fatalf("make data directory unwritable: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(store.BasePath(), 0o755) })
+
+		blockers, err := autopilotCheckpointSealBlockers(state)
+		if err == nil || len(blockers) != 0 {
+			t.Fatalf("unwritable pending decisions returned blockers=%#v err=%v, want explicit error and no authorization command", blockers, err)
+		}
+		if err := os.Chmod(store.BasePath(), 0o755); err != nil {
+			t.Fatalf("restore data directory permissions: %v", err)
+		}
+		if after := pendingDecisionBytes(t); !bytes.Equal(before, after) {
+			t.Fatalf("failed capability write changed pending decisions:\nbefore=%s\nafter=%s", before, after)
+		}
+	})
+}
+
+func TestAutopilotCheckpointSealCapabilityIsFreshStableAndTransient(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	phase := colony.Phase{ID: 6, Name: "Seal capability", Status: colony.PhaseCompleted}
+	state := checkpointTestState(t, phase, colony.StateCOMPLETED)
+	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{{
+		TaskID: "6.1", Criterion: "The final interaction feels right", State: criterionStateNeedsOwnerConfirmation,
+	}})
+	if err != nil || len(refs) != 1 {
+		t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
+	}
+	initialCapability := checkpointCapabilityFromReference(t, refs[0])
+	before := loadCheckpointDecisions(t)[0]
+
+	first, err := autopilotCheckpointSealBlockers(state)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("first seal blocker load: blockers=%#v err=%v", first, err)
+	}
+	second, err := autopilotCheckpointSealBlockers(state)
+	if err != nil || len(second) != 1 {
+		t.Fatalf("second seal blocker load: blockers=%#v err=%v", second, err)
+	}
+	firstCapability := checkpointCapabilityFromReference(t, autopilotCheckpointReference{RecoveryCommand: first[0].RecoveryCommand})
+	secondCapability := checkpointCapabilityFromReference(t, autopilotCheckpointReference{RecoveryCommand: second[0].RecoveryCommand})
+	if firstCapability == initialCapability || secondCapability == initialCapability || secondCapability == firstCapability {
+		t.Fatalf("seal did not issue a fresh capability each time: initial=%q first=%q second=%q", initialCapability, firstCapability, secondCapability)
+	}
+	after := loadCheckpointDecisions(t)[0]
+	if first[0].ID != before.ID || second[0].ID != before.ID || after.ID != before.ID || after.CheckpointKey != before.CheckpointKey {
+		t.Fatalf("seal capability rotation changed stable identity: before=%#v after=%#v first=%#v second=%#v", before, after, first[0], second[0])
+	}
+	raw := pendingDecisionBytes(t)
+	for _, capability := range []string{initialCapability, firstCapability, secondCapability} {
+		if bytes.Contains(raw, []byte(capability)) {
+			t.Fatalf("pending decisions persisted raw seal capability %q: %s", capability, raw)
+		}
+	}
+	if hashes := persistedCheckpointCapabilityHashes(after); len(hashes) != 3 {
+		t.Fatalf("seal capability rotations persisted %d hashes, want 3: %#v", len(hashes), hashes)
+	}
+	resolved, found, err := resolveAutopilotCheckpointPendingDecision(
+		checkpointDecisionQuestion(after), "owner confirmed after seal", phase.ID, secondCapability,
+	)
+	if err != nil || !found || resolved.ID != before.ID {
+		t.Fatalf("fresh seal capability was not valid: resolved=%#v found=%v err=%v", resolved, found, err)
+	}
+}
+
 func TestCheckpointCapabilityIsScopedSingleUseAndCannotCrossRows(t *testing.T) {
 	saveGlobals(t)
 	s, _ := newTestStore(t)
@@ -477,10 +600,8 @@ func TestFinalPhaseAdvancesWithOwnerCheckpointAndSealBlocks(t *testing.T) {
 	if len(blockers) != 1 || blockers[0].ID != refs[0].ID {
 		t.Fatalf("seal blockers do not name the durable checkpoint ID: %#v", blockers)
 	}
-	wantCommand := checkpointDecisionAnswerCommand(loadCheckpointDecisions(t)[0])
-	if blockers[0].RecoveryCommand != wantCommand {
-		t.Fatalf("seal recovery command = %q, want exact %q", blockers[0].RecoveryCommand, wantCommand)
-	}
+	wantCommand := blockers[0].RecoveryCommand
+	_ = checkpointCapabilityFromReference(t, autopilotCheckpointReference{RecoveryCommand: wantCommand})
 	if _, _, err := validateSealReady(false); err == nil {
 		t.Fatal("seal accepted unresolved owner checkpoint")
 	} else if !strings.Contains(err.Error(), refs[0].ID) || !strings.Contains(err.Error(), wantCommand) {
