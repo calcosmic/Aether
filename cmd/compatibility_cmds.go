@@ -51,6 +51,7 @@ type autopilotReplanEvaluation struct {
 	Decision       autopilotRunDecision
 	Lessons        []confirmedAutopilotLesson
 	PlanRevisionID string
+	Cadence        autopilotReplanCadence
 }
 
 var watchCmd = &cobra.Command{
@@ -440,25 +441,28 @@ func autopilotRunDecisionForCode(code autopilotTriggerCode, headless bool, evide
 // evaluateAutopilotReplan is the one live/preview policy decision for a replan
 // boundary. It is pure: eligibility and mode disposition are computed here,
 // while the live caller alone may persist a pending decision afterwards.
-func evaluateAutopilotReplan(plan colony.Plan, checkpointPhase, phasesCompleted int, opts runCompatibilityOptions, lessons []confirmedAutopilotLesson) (autopilotReplanEvaluation, bool, error) {
-	due := lessonAwareReplanDue(phasesCompleted, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan) ||
-		legacyInteractiveReplanDue(plan, phasesCompleted, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
-	if !due {
-		return autopilotReplanEvaluation{}, false, nil
-	}
-	revisionID, _, err := activePlanLessonBoundary(plan)
+func evaluateAutopilotReplan(plan colony.Plan, decisions []PendingDecision, opts runCompatibilityOptions, lessons []confirmedAutopilotLesson) (autopilotReplanEvaluation, bool, error) {
+	cadence, err := projectAutopilotReplanCadence(plan, decisions, opts.ReplanInterval)
 	if err != nil {
 		return autopilotReplanEvaluation{}, false, err
 	}
+	due := lessonAwareReplanDue(cadence.DueBoundary, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan) ||
+		legacyInteractiveReplanDue(plan, cadence.DueBoundary, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
+	if !due {
+		return autopilotReplanEvaluation{}, false, nil
+	}
 	evidence := map[string]interface{}{
-		"phase":            checkpointPhase,
-		"lesson_count":     len(lessons),
-		"plan_revision_id": revisionID,
+		"phase":                    cadence.CheckpointPhaseID,
+		"lesson_count":             len(lessons),
+		"plan_revision_id":         cadence.PlanRevisionID,
+		"completed_since_revision": cadence.CompletedSinceRevision,
+		"cadence_boundary":         cadence.DueBoundary,
 	}
 	return autopilotReplanEvaluation{
 		Decision:       autopilotRunDecisionForCode(autopilotTriggerReplanDue, opts.Headless, evidence),
 		Lessons:        lessons,
-		PlanRevisionID: revisionID,
+		PlanRevisionID: cadence.PlanRevisionID,
+		Cadence:        cadence,
 	}, true, nil
 }
 
@@ -713,6 +717,52 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 	finish := func(current colony.ColonyState, decision autopilotRunDecision, cause error) map[string]interface{} {
 		return finishAutopilotInvocation(&invocation, current, opts, steps, phasesCompleted, decision, cause)
 	}
+	handleReplan := func(stage string) (map[string]interface{}, bool) {
+		lessons, lessonErr := runAutopilotLoadLessons(state.Plan)
+		if lessonErr != nil {
+			decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": state.CurrentPhase, "stage": stage + "_evidence"})
+			return finish(state, decision, lessonErr), true
+		}
+		replan, due, replanErr := evaluateAutopilotReplan(state.Plan, loadPendingDecisionFile().Decisions, opts, lessons)
+		if replanErr != nil {
+			decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": state.CurrentPhase, "stage": stage + "_evidence"})
+			return finish(state, decision, replanErr), true
+		}
+		if !due {
+			return nil, false
+		}
+
+		checkpointPhase := replan.Cadence.CheckpointPhaseID
+		runDecision := replan.Decision
+		switch runDecision.Disposition {
+		case autopilotDispositionQueueAndContinue:
+			decision, persistErr := upsertAutopilotReplanDecision(state, checkpointPhase, replan.Lessons, autopilotNow())
+			if persistErr != nil {
+				failed := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": checkpointPhase, "stage": stage + "_persistence"})
+				return finish(state, failed, persistErr), true
+			}
+			invocation.recordPendingDecision(decision, checkpointPhase)
+			steps = append(steps, map[string]interface{}{
+				"event":            "decision_queued",
+				"trigger_code":     autopilotTriggerReplanDue,
+				"decision_id":      decision.ID,
+				"phase":            checkpointPhase,
+				"lesson_count":     decision.LessonCount,
+				"plan_revision_id": decision.PlanRevisionID,
+			})
+			emitVisualProgress(renderRunReplanQueued(decision))
+			return nil, false
+		case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
+			emitVisualProgress(renderRunReplanBanner(replan.Cadence.CompletedSinceRevision, opts.ReplanInterval, len(replan.Lessons)))
+			result := finish(state, runDecision, nil)
+			result["confirmed_lessons"] = replan.Lessons
+			result["lesson_count"] = len(replan.Lessons)
+			result["plan_revision_id"] = replan.PlanRevisionID
+			return result, true
+		default:
+			return nil, false
+		}
+	}
 
 	emitVisualProgress(renderRunEngageLine(state, opts))
 
@@ -739,6 +789,9 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
 				decision := autopilotRunDecisionForCode(autopilotTriggerMaxPhasesReached, opts.Headless, map[string]interface{}{"phases_completed": phasesCompleted, "max_phases": opts.MaxPhases})
 				return finish(state, decision, nil), nil
+			}
+			if result, terminal := handleReplan("replan_before_dispatch"); terminal {
+				return result, nil
 			}
 
 			phase := recoveryPhase(&state)
@@ -863,43 +916,8 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				return finish(state, decision, nil), nil
 			}
 			emitVisualProgress(renderRunPhaseAdvancement(phase, continueResult, phasesCompleted, len(state.Plan.Phases)))
-			lessons, lessonErr := runAutopilotLoadLessons(state.Plan)
-			if lessonErr != nil {
-				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_evidence"})
-				return finish(state, decision, lessonErr), nil
-			}
-			replan, due, replanErr := evaluateAutopilotReplan(state.Plan, phase.ID, phasesCompleted, opts, lessons)
-			if replanErr != nil {
-				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_evidence"})
-				return finish(state, decision, replanErr), nil
-			}
-			if due {
-				runDecision := replan.Decision
-				switch runDecision.Disposition {
-				case autopilotDispositionQueueAndContinue:
-					decision, err := upsertAutopilotReplanDecision(state, phase.ID, replan.Lessons, autopilotNow())
-					if err != nil {
-						failed := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_persistence"})
-						return finish(state, failed, err), nil
-					}
-					invocation.recordPendingDecision(decision, phase.ID)
-					steps = append(steps, map[string]interface{}{
-						"event":            "decision_queued",
-						"trigger_code":     autopilotTriggerReplanDue,
-						"decision_id":      decision.ID,
-						"phase":            phase.ID,
-						"lesson_count":     decision.LessonCount,
-						"plan_revision_id": decision.PlanRevisionID,
-					})
-					emitVisualProgress(renderRunReplanQueued(decision))
-				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
-					emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval, len(replan.Lessons)))
-					result := finish(state, runDecision, nil)
-					result["confirmed_lessons"] = replan.Lessons
-					result["lesson_count"] = len(replan.Lessons)
-					result["plan_revision_id"] = replan.PlanRevisionID
-					return result, nil
-				}
+			if result, terminal := handleReplan("replan_after_advance"); terminal {
+				return result, nil
 			}
 			if opts.MaxPhases > 0 && phasesCompleted >= opts.MaxPhases {
 				decision := autopilotRunDecisionForCode(autopilotTriggerMaxPhasesReached, opts.Headless, map[string]interface{}{"phases_completed": phasesCompleted, "max_phases": opts.MaxPhases})
@@ -926,6 +944,8 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 	steps := []map[string]interface{}{}
 	phasesPlanned := 0
 	working := state
+	working.Plan.Phases = clonePhases(state.Plan.Phases)
+	previewDecisions := append([]PendingDecision(nil), loadPendingDecisionFile().Decisions...)
 	lessons, err := runAutopilotLoadLessons(working.Plan)
 	if err != nil {
 		return nil, fmt.Errorf("preview replan evidence: %w", err)
@@ -943,6 +963,51 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 			"continue_armed":    opts.ContinueWithoutReplan,
 			"replan_interval":   opts.ReplanInterval,
 			"trigger_catalogue": autopilotTriggerSpecs(),
+		}
+	}
+	handleReplan := func() (map[string]interface{}, bool, error) {
+		replan, due, replanErr := evaluateAutopilotReplan(working.Plan, previewDecisions, opts, lessons)
+		if replanErr != nil {
+			return nil, false, fmt.Errorf("preview replan decision: %w", replanErr)
+		}
+		if !due {
+			return nil, false, nil
+		}
+
+		checkpointPhase := replan.Cadence.CheckpointPhaseID
+		switch replan.Decision.Disposition {
+		case autopilotDispositionQueueAndContinue:
+			steps = append(steps, map[string]interface{}{
+				"event":                    "preview_decision_queue",
+				"preview_only":             true,
+				"trigger_code":             replan.Decision.Code,
+				"disposition":              replan.Decision.Disposition,
+				"phase":                    checkpointPhase,
+				"lesson_count":             len(replan.Lessons),
+				"plan_revision_id":         replan.PlanRevisionID,
+				"completed_since_revision": replan.Cadence.CompletedSinceRevision,
+				"cadence_boundary":         replan.Cadence.DueBoundary,
+				"next":                     replan.Decision.Next,
+			})
+			phase := checkpointPhase
+			previewDecisions = append(previewDecisions, PendingDecision{
+				Type:                  autopilotReplanDecisionType,
+				Phase:                 &phase,
+				PlanRevisionID:        replan.PlanRevisionID,
+				FirstCheckpointPhase:  checkpointPhase,
+				LatestCheckpointPhase: checkpointPhase,
+			})
+			return nil, false, nil
+		case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
+			result := finish(string(replan.Decision.Code), replan.Decision.Next)
+			result["trigger_code"] = replan.Decision.Code
+			result["disposition"] = replan.Decision.Disposition
+			result["confirmed_lessons"] = replan.Lessons
+			result["lesson_count"] = len(replan.Lessons)
+			result["plan_revision_id"] = replan.PlanRevisionID
+			return result, true, nil
+		default:
+			return nil, false, nil
 		}
 	}
 
@@ -964,6 +1029,11 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 			if opts.MaxPhases > 0 && phasesPlanned >= opts.MaxPhases {
 				return finish("max_phases_reached", nextCommandFromState(working)), nil
 			}
+			if result, terminal, replanErr := handleReplan(); replanErr != nil {
+				return nil, replanErr
+			} else if terminal {
+				return result, nil
+			}
 
 			phase := recoveryPhase(&working)
 			if phase == nil {
@@ -975,41 +1045,26 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 				map[string]interface{}{"command": "aether continue", "phase": phase.ID, "phase_name": phase.Name},
 			)
 			phasesPlanned++
-			replan, due, replanErr := evaluateAutopilotReplan(working.Plan, phase.ID, phasesPlanned, opts, lessons)
-			if replanErr != nil {
-				return nil, fmt.Errorf("preview replan decision: %w", replanErr)
-			}
-			if due {
-				switch replan.Decision.Disposition {
-				case autopilotDispositionQueueAndContinue:
-					steps = append(steps, map[string]interface{}{
-						"event":            "preview_decision_queue",
-						"preview_only":     true,
-						"trigger_code":     replan.Decision.Code,
-						"disposition":      replan.Decision.Disposition,
-						"phase":            phase.ID,
-						"lesson_count":     len(replan.Lessons),
-						"plan_revision_id": replan.PlanRevisionID,
-						"next":             replan.Decision.Next,
-					})
-				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
-					result := finish(string(replan.Decision.Code), replan.Decision.Next)
-					result["trigger_code"] = replan.Decision.Code
-					result["disposition"] = replan.Decision.Disposition
-					result["confirmed_lessons"] = replan.Lessons
-					result["lesson_count"] = len(replan.Lessons)
-					result["plan_revision_id"] = replan.PlanRevisionID
-					return result, nil
+			phase.Status = colony.PhaseCompleted
+			var next *colony.Phase
+			for index := range working.Plan.Phases {
+				if working.Plan.Phases[index].Status != colony.PhaseCompleted {
+					next = &working.Plan.Phases[index]
+					break
 				}
 			}
-
-			if phase.ID >= len(working.Plan.Phases) {
+			if next == nil {
+				working.State = colony.StateCOMPLETED
 				return finish("completed", "aether seal"), nil
 			}
-
-			working.Plan.Phases[phase.ID-1].Status = colony.PhaseCompleted
-			working.CurrentPhase = phase.ID + 1
+			working.CurrentPhase = next.ID
+			next.Status = colony.PhaseReady
 			working.State = colony.StateREADY
+			if result, terminal, replanErr := handleReplan(); replanErr != nil {
+				return nil, replanErr
+			} else if terminal {
+				return result, nil
+			}
 
 		default:
 			return finish("not_runnable", nextCommandFromState(working)), nil

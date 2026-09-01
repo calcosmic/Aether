@@ -455,7 +455,7 @@ func TestRunReplanCadenceCatchesInterruptedBoundaryBeforeDispatch(t *testing.T) 
 		if err != nil {
 			t.Fatalf("headless restart at interrupted boundary: %v", err)
 		}
-		if !queuedBeforeBuild || result["trigger_code"] != autopilotTriggerMaxPhasesReached {
+		if !queuedBeforeBuild || result["trigger_code"] != autopilotTriggerColonyComplete {
 			t.Fatalf("headless boundary was not queued before dispatch: queued=%t result=%+v", queuedBeforeBuild, result)
 		}
 	})
