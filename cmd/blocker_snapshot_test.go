@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -11,6 +12,170 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
+
+func callBlockerSnapshot(t *testing.T, s *storage.Store) (blockerSnapshot, error) {
+	t.Helper()
+	reader := reflect.ValueOf(readBlockerSnapshot)
+	if reader.Type().NumOut() != 2 {
+		t.Fatalf("readBlockerSnapshot must return (blockerSnapshot, error), got %d results", reader.Type().NumOut())
+	}
+	results := reader.Call([]reflect.Value{reflect.ValueOf(s)})
+	snapshot := results[0].Interface().(blockerSnapshot)
+	if results[1].IsNil() {
+		return snapshot, nil
+	}
+	return snapshot, results[1].Interface().(error)
+}
+
+func TestBlockerSnapshotReportsStorageAvailability(t *testing.T) {
+	t.Run("both files absent is an available empty snapshot", func(t *testing.T) {
+		s, _ := newTestStore(t)
+		got, err := callBlockerSnapshot(t, s)
+		if err != nil {
+			t.Fatalf("read empty snapshot: %v", err)
+		}
+		want := blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("snapshot = %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("nil store is unavailable", func(t *testing.T) {
+		_, err := callBlockerSnapshot(t, nil)
+		if err == nil {
+			t.Fatal("nil store reported available blocker truth")
+		}
+	})
+
+	t.Run("malformed current file never falls back", func(t *testing.T) {
+		s, root := newTestStore(t)
+		if err := s.SaveJSON("pending-decisions.json", colony.FlagsFile{Version: "1.0", Decisions: []colony.FlagEntry{{ID: "legacy", Type: "blocker"}}}); err != nil {
+			t.Fatalf("write current fixture: %v", err)
+		}
+		if err := os.Rename(filepath.Join(root, ".aether/data/pending-decisions.json"), filepath.Join(root, ".aether/data/flags.json")); err != nil {
+			t.Fatalf("move fixture to legacy path: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(root, ".aether/data/pending-decisions.json"), []byte("{"), 0o600); err != nil {
+			t.Fatalf("write malformed current file: %v", err)
+		}
+		_, err := callBlockerSnapshot(t, s)
+		if err == nil {
+			t.Fatal("malformed current blocker truth was hidden by legacy fallback")
+		}
+		if !strings.Contains(err.Error(), "pending-decisions.json") {
+			t.Fatalf("error lacks data-relative context: %v", err)
+		}
+	})
+
+	t.Run("missing current uses valid legacy file", func(t *testing.T) {
+		s, root := newTestStore(t)
+		if err := s.SaveJSON("pending-decisions.json", colony.FlagsFile{Version: "1.0", Decisions: []colony.FlagEntry{{ID: "legacy", Type: "blocker"}}}); err != nil {
+			t.Fatalf("write current fixture: %v", err)
+		}
+		if err := os.Rename(filepath.Join(root, ".aether/data/pending-decisions.json"), filepath.Join(root, ".aether/data/flags.json")); err != nil {
+			t.Fatalf("move fixture to legacy path: %v", err)
+		}
+		got, err := callBlockerSnapshot(t, s)
+		if err != nil {
+			t.Fatalf("read legacy snapshot: %v", err)
+		}
+		if got.Count != 1 || !reflect.DeepEqual(got.IDs, []string{"legacy"}) {
+			t.Fatalf("legacy snapshot = %+v", got)
+		}
+	})
+
+	t.Run("missing current with malformed legacy is unavailable", func(t *testing.T) {
+		s, root := newTestStore(t)
+		if err := os.WriteFile(filepath.Join(root, ".aether/data/flags.json"), []byte("{"), 0o600); err != nil {
+			t.Fatalf("write malformed legacy file: %v", err)
+		}
+		_, err := callBlockerSnapshot(t, s)
+		if err == nil {
+			t.Fatal("malformed legacy blocker truth reported empty")
+		}
+		if !strings.Contains(err.Error(), "flags.json") {
+			t.Fatalf("error lacks legacy data-relative context: %v", err)
+		}
+	})
+
+	t.Run("non-regular current file is unavailable", func(t *testing.T) {
+		s, root := newTestStore(t)
+		if err := os.Mkdir(filepath.Join(root, ".aether/data/pending-decisions.json"), 0o700); err != nil {
+			t.Fatalf("create non-regular current path: %v", err)
+		}
+		_, err := callBlockerSnapshot(t, s)
+		if err == nil {
+			t.Fatal("non-regular blocker truth reported empty")
+		}
+	})
+}
+
+func TestStatusReportsUnavailableBlockerTruth(t *testing.T) {
+	saveGlobals(t)
+	s, root := setupTestStore(t)
+	store = s
+	path := filepath.Join(root, ".aether/data/pending-decisions.json")
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatalf("write malformed blocker truth: %v", err)
+	}
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	result := buildStatusResult(state, s)
+	if result["blocker_snapshot_available"] != false {
+		t.Fatalf("availability = %#v, want false", result["blocker_snapshot_available"])
+	}
+	if result["blockers"] != nil || result["blocker_ids"] != nil || result["escalated_blockers"] != nil {
+		t.Fatalf("status invented blocker facts: %#v", result)
+	}
+	detail, _ := result["blocker_snapshot_error"].(string)
+	if detail == "" || !strings.Contains(detail, "pending-decisions.json") || strings.Contains(detail, root) {
+		t.Fatalf("unsafe or unhelpful diagnostic %q", detail)
+	}
+	visual := renderDashboard(state, s, result)
+	if !strings.Contains(visual, "Blocker truth: unavailable") {
+		t.Fatalf("visual status hides unavailable truth:\n%s", visual)
+	}
+	if strings.Contains(visual, "Flags: 0 blockers") || strings.Contains(visual, "Existing blocker work: 0 active") {
+		t.Fatalf("visual status converted unavailable truth to zero:\n%s", visual)
+	}
+}
+
+func TestFlagCheckBlockersFailsWhenTruthUnavailable(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	s, root := setupTestStore(t)
+	t.Setenv("AETHER_ROOT", root)
+	store = s
+	if err := os.WriteFile(filepath.Join(root, ".aether/data/pending-decisions.json"), []byte("{"), 0o600); err != nil {
+		t.Fatalf("write malformed blocker truth: %v", err)
+	}
+	var out, errOut bytes.Buffer
+	stdout, stderr = &out, &errOut
+	renderedCommandExitCode.Store(0)
+	rootCmd.SetArgs([]string{"flag-check-blockers"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute diagnostic: %v", err)
+	}
+	if code := renderedCommandExitCode.Load(); code == 0 {
+		t.Fatalf("diagnostic succeeded with unavailable truth: stdout=%s stderr=%s", out.String(), errOut.String())
+	}
+	envelope := parseEnvelope(t, errOut.String())
+	if envelope["ok"] != false {
+		t.Fatalf("error envelope = %#v", envelope)
+	}
+	details, _ := envelope["details"].(map[string]interface{})
+	if details["blocker_snapshot_available"] != false {
+		t.Fatalf("availability details = %#v", details)
+	}
+	for _, forbidden := range []string{"has_blockers", "blockers", "issues", "notes"} {
+		if _, exists := details[forbidden]; exists {
+			t.Errorf("unavailable diagnostic invented %s: %#v", forbidden, details)
+		}
+	}
+}
 
 func TestBlockerSnapshot(t *testing.T) {
 	saveGlobals(t)
