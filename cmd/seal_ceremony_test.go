@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,6 +96,220 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 	rootCmd.Execute()
 
 	return outBuf.String(), errBuf.String()
+}
+
+// executeSealAtPublicRoot exercises the same Execute boundary used by main.
+// Recovery menus render their own error payload, so callers must inspect both
+// stderr and the renderedCommandError returned after Cobra completes.
+func executeSealAtPublicRoot(t *testing.T, s *storage.Store, tmpDir, mode string) (string, string, error) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("COLONY_DATA_DIR", filepath.Join(tmpDir, ".aether", "data"))
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(tmpDir, ".hub"))
+	t.Setenv("AETHER_OUTPUT_MODE", mode)
+	store = s
+	outBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	stdout = outBuf
+	stderr = errBuf
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(errBuf)
+	rootCmd.SetArgs([]string{"seal"})
+	err := Execute()
+	return outBuf.String(), errBuf.String(), err
+}
+
+func requireRenderedSealExitOne(t *testing.T, err error) {
+	t.Helper()
+	var rendered renderedCommandError
+	if !errors.As(err, &rendered) || rendered.code != 1 {
+		t.Fatalf("seal error = %v, want rendered exit code 1", err)
+	}
+}
+
+func checkpointCapabilitiesInSealOutput(output string) []string {
+	const marker = "--checkpoint-capability '"
+	capabilities := []string{}
+	for {
+		start := strings.Index(output, marker)
+		if start < 0 {
+			return capabilities
+		}
+		output = output[start+len(marker):]
+		end := strings.IndexByte(output, '\'')
+		if end < 0 {
+			return capabilities
+		}
+		capabilities = append(capabilities, output[:end])
+		output = output[end+1:]
+	}
+}
+
+func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
+	t.Run("malformed file overrides valid legacy fallback", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		if err := s.SaveJSON("flags.json", colony.FlagsFile{Version: "1", Decisions: []colony.FlagEntry{}}); err != nil {
+			t.Fatalf("seed legacy flags: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(s.BasePath(), pendingDecisionsFile), []byte("{not-json"), 0o644); err != nil {
+			t.Fatalf("seed malformed pending decisions: %v", err)
+		}
+
+		for _, mode := range []string{"json", "visual"} {
+			_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, mode)
+			requireRenderedSealExitOne(t, err)
+			if !strings.Contains(errOut, pendingDecisionsFile) || !strings.Contains(strings.ToLower(errOut), "unmarshal") {
+				t.Fatalf("%s seal did not identify pending-decision corruption:\n%s", mode, errOut)
+			}
+		}
+
+		var state colony.ColonyState
+		if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatalf("load state after refused seal: %v", err)
+		}
+		if state.State == colony.StateCOMPLETED {
+			t.Fatal("corrupt pending decisions were hidden by flags.json and seal completed")
+		}
+	})
+
+	t.Run("directory-backed file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		if err := os.Mkdir(filepath.Join(s.BasePath(), pendingDecisionsFile), 0o755); err != nil {
+			t.Fatalf("seed directory-backed pending decisions: %v", err)
+		}
+		_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		requireRenderedSealExitOne(t, err)
+		if !strings.Contains(errOut, pendingDecisionsFile) {
+			t.Fatalf("directory-backed failure did not identify %s: %s", pendingDecisionsFile, errOut)
+		}
+	})
+
+	t.Run("capability binding cannot be persisted", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := setupSealTestStore(t)
+		store = s
+		criterion := codexCriterionVerification{
+			TaskID: "1.1", Criterion: "The owner experience feels correct", State: criterionStateNeedsOwnerConfirmation,
+		}
+		if refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}); err != nil || len(refs) != 1 {
+			t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
+		}
+		if err := os.Chmod(s.BasePath(), 0o555); err != nil {
+			t.Fatalf("make pending-decision directory unwritable: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(s.BasePath(), 0o755) })
+
+		_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		if restoreErr := os.Chmod(s.BasePath(), 0o755); restoreErr != nil {
+			t.Fatalf("restore pending-decision directory: %v", restoreErr)
+		}
+		requireRenderedSealExitOne(t, err)
+		if !strings.Contains(errOut, pendingDecisionsFile) || !strings.Contains(strings.ToLower(errOut), "durably updated") {
+			t.Fatalf("capability-write failure was not surfaced as owner-work durability:\n%s", errOut)
+		}
+	})
+}
+
+func TestSealPendingDecisionAbsenceAllowsLegacyFallback(t *testing.T) {
+	s, _ := setupSealTestStore(t)
+	legacy := colony.FlagEntry{ID: "legacy-blocker", Type: "blocker", Description: "legacy blocker", Resolved: false}
+	if err := s.SaveJSON("flags.json", colony.FlagsFile{Version: "1", Decisions: []colony.FlagEntry{legacy}}); err != nil {
+		t.Fatalf("seed legacy flags: %v", err)
+	}
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	blockers, _ := checkSealBlockers(s, state)
+	if len(blockers) != 1 || blockers[0].ID != legacy.ID {
+		t.Fatalf("absent pending decisions did not allow legacy fallback: %#v", blockers)
+	}
+}
+
+func TestSealCheckpointCapabilityDeduplicatesAndStaysTransient(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := setupSealTestStore(t)
+	store = s
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	session := "seal-capability-dedup"
+	state.SessionID = &session
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("scope seal fixture: %v", err)
+	}
+	criterion := codexCriterionVerification{
+		TaskID: "1.1", Criterion: "The final owner interaction feels correct", State: criterionStateNeedsOwnerConfirmation,
+	}
+	refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion})
+	if err != nil || len(refs) != 1 {
+		t.Fatalf("materialize checkpoint: refs=%#v err=%v", refs, err)
+	}
+	initialCapability := checkpointCapabilityFromReference(t, refs[0])
+	report := codexContinueVerificationReport{
+		Phase: 1, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Criteria: []codexCriterionVerification{criterion},
+	}
+	if err := s.SaveJSON(continuePlanArtifactsPath(1, "verification.json"), report); err != nil {
+		t.Fatalf("seed legacy verification projection: %v", err)
+	}
+
+	legacy := ownerConfirmationSealBlockers(state)
+	if len(legacy) != 1 || legacy[0].ID != refs[0].ID {
+		t.Fatalf("legacy projection identity = %#v, want durable checkpoint ID %s", legacy, refs[0].ID)
+	}
+	blockers, _ := checkSealBlockers(s, state)
+	if len(blockers) != 1 || blockers[0].ID != refs[0].ID {
+		t.Fatalf("durable and legacy checkpoint projections were not deduplicated by identity: %#v", blockers)
+	}
+	if got := checkpointCapabilitiesInSealOutput(blockers[0].RecoveryCommand); len(got) != 1 || got[0] == initialCapability {
+		t.Fatalf("deduplicated blocker command has no fresh capability: %#v", blockers[0])
+	}
+
+	_, jsonErr, jsonExecErr := executeSealAtPublicRoot(t, s, tmpDir, "json")
+	requireRenderedSealExitOne(t, jsonExecErr)
+	jsonCaps := checkpointCapabilitiesInSealOutput(jsonErr)
+	if len(jsonCaps) != 1 {
+		t.Fatalf("JSON seal rendered %d capability commands, want exactly one:\n%s", len(jsonCaps), jsonErr)
+	}
+	if !strings.Contains(jsonErr, refs[0].ID) || !strings.Contains(jsonErr, `"ok":false`) {
+		t.Fatalf("JSON refusal omitted checkpoint identity or error envelope:\n%s", jsonErr)
+	}
+
+	visualOut, visualErr, visualExecErr := executeSealAtPublicRoot(t, s, tmpDir, "visual")
+	requireRenderedSealExitOne(t, visualExecErr)
+	if visualOut != "" {
+		t.Fatalf("visual seal refusal leaked to stdout:\n%s", visualOut)
+	}
+	visualCaps := checkpointCapabilitiesInSealOutput(visualErr)
+	if len(visualCaps) != 1 {
+		t.Fatalf("visual seal rendered %d capability commands, want exactly one:\n%s", len(visualCaps), visualErr)
+	}
+	if visualCaps[0] == jsonCaps[0] {
+		t.Fatal("visual seal reused the JSON invocation's raw capability")
+	}
+
+	pendingRaw := pendingDecisionBytes(t)
+	eventRaw, err := os.ReadFile(filepath.Join(s.BasePath(), "event-bus.jsonl"))
+	if err != nil {
+		t.Fatalf("read lifecycle events: %v", err)
+	}
+	for _, capability := range []string{initialCapability, jsonCaps[0], visualCaps[0]} {
+		if bytes.Contains(pendingRaw, []byte(capability)) || bytes.Contains(eventRaw, []byte(capability)) {
+			t.Fatalf("raw capability %q reached a durable sink", capability)
+		}
+		digest := sha256.Sum256([]byte(capability))
+		if !bytes.Contains(pendingRaw, []byte(hex.EncodeToString(digest[:]))) {
+			t.Fatalf("pending decisions omitted SHA-256 binding for emitted capability %q", capability)
+		}
+	}
+	if bytes.Contains(eventRaw, []byte("--checkpoint-capability")) {
+		t.Fatalf("lifecycle telemetry persisted the raw blocker summary:\n%s", eventRaw)
+	}
+	if !bytes.Contains(eventRaw, []byte(refs[0].ID)) {
+		t.Fatalf("lifecycle telemetry omitted safe checkpoint identity %s:\n%s", refs[0].ID, eventRaw)
+	}
 }
 
 // TestSealBlockerCheck verifies that seal blocks when blocker flags exist.

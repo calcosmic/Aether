@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -1273,43 +1274,87 @@ func collectOpenReviewBacklog(s *storage.Store, limit int) []colony.ReviewLedger
 // their live compatibility blocker when no matching durable checkpoint was
 // materialized by the newer continue runtime.
 func checkSealBlockers(s *storage.Store, state colony.ColonyState) (blockers []colony.FlagEntry, issues []colony.FlagEntry) {
-	var ff colony.FlagsFile
-	if err := s.LoadJSON("pending-decisions.json", &ff); err == nil {
-		for _, f := range ff.Decisions {
-			if f.Resolved {
-				continue
-			}
-			switch f.Type {
-			case "blocker":
-				blockers = append(blockers, f)
-			case "issue":
-				issues = append(issues, f)
-			}
-		}
-	} else if err2 := s.LoadJSON("flags.json", &ff); err2 == nil {
-		for _, f := range ff.Decisions {
-			if f.Resolved {
-				continue
-			}
-			switch f.Type {
-			case "blocker":
-				blockers = append(blockers, f)
-			case "issue":
-				issues = append(issues, f)
-			}
-		}
-	}
-	checkpointBlockers := autopilotCheckpointSealBlockers(state)
-	blockers = append(blockers, checkpointBlockers...)
-	checkpointCommands := map[string]bool{}
-	for _, blocker := range checkpointBlockers {
-		checkpointCommands[blocker.RecoveryCommand] = true
-	}
-	for _, blocker := range ownerConfirmationSealBlockers(state) {
-		if checkpointCommands[blocker.RecoveryCommand] {
-			continue
+	const durabilityBlockerID = "pending-decisions-storage-unavailable"
+	seenBlockers := map[string]bool{}
+	durabilityFailureAdded := false
+	appendBlocker := func(blocker colony.FlagEntry) {
+		if blocker.ID != "" && seenBlockers[blocker.ID] {
+			return
 		}
 		blockers = append(blockers, blocker)
+		if blocker.ID != "" {
+			seenBlockers[blocker.ID] = true
+		}
+	}
+	appendPendingDecisionFailure := func(err error) {
+		if err == nil || durabilityFailureAdded {
+			return
+		}
+		failure := colony.FlagEntry{
+			ID:              durabilityBlockerID,
+			Type:            "blocker",
+			Description:     fmt.Sprintf("Seal cannot trust %s because its required owner-work state could not be read, decoded, or durably updated: %v. Safe recovery command: aether patrol", pendingDecisionsFile, err),
+			Source:          "pending_decision_storage",
+			RecoveryCommand: "aether patrol",
+		}
+		// The durability ID is runtime-reserved. If an ordinary flag reused it,
+		// replace that projection so it cannot hide the actual storage failure.
+		for i := range blockers {
+			if blockers[i].ID == durabilityBlockerID {
+				blockers[i] = failure
+				durabilityFailureAdded = true
+				return
+			}
+		}
+		appendBlocker(failure)
+		durabilityFailureAdded = true
+	}
+	appendFlags := func(file colony.FlagsFile) {
+		for _, f := range file.Decisions {
+			if f.Resolved {
+				continue
+			}
+			switch f.Type {
+			case "blocker":
+				appendBlocker(f)
+			case "issue":
+				issues = append(issues, f)
+			}
+		}
+	}
+
+	if s == nil {
+		appendPendingDecisionFailure(fmt.Errorf("no store initialized"))
+		return blockers, issues
+	}
+	var ff colony.FlagsFile
+	pendingErr := s.LoadJSON(pendingDecisionsFile, &ff)
+	switch {
+	case pendingErr == nil:
+		appendFlags(ff)
+	case errors.Is(pendingErr, os.ErrNotExist):
+		ff = colony.FlagsFile{}
+		if legacyErr := s.LoadJSON("flags.json", &ff); legacyErr == nil {
+			appendFlags(ff)
+		}
+	default:
+		appendPendingDecisionFailure(pendingErr)
+	}
+
+	checkpointBlockers, checkpointErr := autopilotCheckpointSealBlockersFromStore(s, state)
+	if checkpointErr != nil {
+		appendPendingDecisionFailure(checkpointErr)
+	}
+	checkpointIDs := map[string]bool{}
+	for _, blocker := range checkpointBlockers {
+		appendBlocker(blocker)
+		checkpointIDs[blocker.ID] = true
+	}
+	for _, blocker := range ownerConfirmationSealBlockers(state) {
+		if checkpointIDs[blocker.ID] {
+			continue
+		}
+		appendBlocker(blocker)
 	}
 	return blockers, issues
 }

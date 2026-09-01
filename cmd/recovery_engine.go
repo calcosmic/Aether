@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+var stableCheckpointIdentityPattern = regexp.MustCompile(`\bcp_[0-9a-f]{20}\b`)
 
 // RecoveryOption represents a single recovery suggestion shown to the user
 // when a lifecycle command fails.
@@ -50,8 +54,11 @@ func classifyError(errMsg string) string {
 	case strings.Contains(lower, "no colony initialized"):
 		return "no_colony"
 	case strings.Contains(lower, "failed to load colony state"),
-		strings.Contains(lower, "json:"):
+		strings.Contains(lower, "json:"),
+		strings.Contains(lower, pendingDecisionsFile):
 		return "state_corruption"
+	case strings.Contains(lower, "checkpoint"):
+		return "owner_checkpoint"
 	case strings.Contains(lower, "no project plan"),
 		strings.Contains(lower, "not been sealed"),
 		strings.Contains(lower, "crowned-anthill.md not found"):
@@ -211,12 +218,15 @@ func renderRecoveryMenu(failedCmd string, errMsg string, details interface{}) st
 	options := recoveryOptionsForCommand(failedCmd, errMsg)
 
 	emitLoopBreakEvent("lifecycle_recovery",
-		fmt.Sprintf("command %s failed: %s", failedCmd, errMsg),
+		recoveryTelemetrySignal(failedCmd, errMsg),
 		fmt.Sprintf("recovery menu displayed with %d option(s)", len(options)),
 		"aether-lifecycle")
 
 	if shouldRenderVisualOutput(stderr) {
-		return buildVisualRecoveryMenu(failedCmd, errMsg, options)
+		menu := buildVisualRecoveryMenu(failedCmd, errMsg, options)
+		visualFprint(stderr, menu)
+		markRenderedCommandError(1)
+		return menu
 	}
 
 	// JSON mode: output error envelope with recovery_options
@@ -234,6 +244,31 @@ func renderRecoveryMenu(failedCmd string, errMsg string, details interface{}) st
 	// scripts by exiting 0.
 	markRenderedCommandError(1)
 	return ""
+}
+
+// recoveryTelemetrySignal deliberately records only a class, digest, and
+// stable checkpoint identities. errMsg is owner-facing and may contain a raw
+// single-use capability, so it must never be copied into lifecycle events.
+func recoveryTelemetrySignal(failedCmd, errMsg string) string {
+	digest := sha256.Sum256([]byte(errMsg))
+	parts := []string{
+		"command=" + normalizeBaseCommand(failedCmd),
+		"error_class=" + classifyError(errMsg),
+		fmt.Sprintf("error_sha256=%x", digest),
+	}
+	identities := stableCheckpointIdentityPattern.FindAllString(errMsg, -1)
+	if len(identities) > 0 {
+		unique := make([]string, 0, len(identities))
+		seen := map[string]bool{}
+		for _, identity := range identities {
+			if !seen[identity] {
+				seen[identity] = true
+				unique = append(unique, identity)
+			}
+		}
+		parts = append(parts, "checkpoint_ids="+strings.Join(unique, ","))
+	}
+	return strings.Join(parts, " ")
 }
 
 // buildVisualRecoveryMenu renders the visual (terminal) recovery menu.

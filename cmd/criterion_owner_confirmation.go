@@ -126,10 +126,16 @@ func ownerConfirmationSealBlockers(state colony.ColonyState) []colony.FlagEntry 
 		phaseID := phase.ID
 		for _, c := range outstandingOwnerConfirmations(phase.ID, report.Criteria) {
 			command := ownerConfirmationCommand(phase.ID, c.TaskID, c.Criterion)
+			checkpointKey := stableAutopilotCheckpointKey(
+				autopilotCheckpointTypeRuntimeVerification,
+				phase.ID,
+				strings.Join([]string{c.TaskID, c.Criterion}, "\x00"),
+				pendingDecisionScopeFromState(state),
+			)
 			blockers = append(blockers, colony.FlagEntry{
-				ID:          fmt.Sprintf("owner-confirm-%d-%s", phase.ID, handoffDecisionID(ownerConfirmationQuestionText(phase.ID, c.TaskID, c.Criterion))),
+				ID:          stableAutopilotCheckpointID(checkpointKey),
 				Type:        "blocker",
-				Description: fmt.Sprintf("Phase %d: %q needs your confirmation -- no program check or reviewer could verify it. Run: %s", phase.ID, c.Criterion, command),
+				Description: fmt.Sprintf("Phase %d: %q needs your confirmation -- no program check or reviewer could verify it.", phase.ID, c.Criterion),
 				Phase:       &phaseID,
 				Source:      "owner_confirmation",
 				CreatedAt:   report.GeneratedAt,
