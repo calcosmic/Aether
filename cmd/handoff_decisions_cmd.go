@@ -105,39 +105,12 @@ func recordDecisionAnswer(question, answer string, phase int, source string) (Pe
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	scope := loadCurrentPendingDecisionScope()
-	target := normalizeDecisionText(question)
 	var file PendingDecisionFile
 	var decision PendingDecision
-	feedbackNeeded := false
 	if err := store.UpdateJSONAtomically(pendingDecisionsFile, &file, func() error {
 		if file.Decisions == nil {
 			file.Decisions = []PendingDecision{}
 		}
-		// Checkpoints are already durable open rows. Resolve the exact row in
-		// place so its stable ID and evidence survive as the audit record;
-		// never append a second resolved clarification and leave the work open.
-		for i := range file.Decisions {
-			existing := &file.Decisions[i]
-			if !isAutopilotCheckpointType(existing.Type) || !pendingDecisionMatchesScope(*existing, scope) {
-				continue
-			}
-			if phase > 0 && (existing.Phase == nil || *existing.Phase != phase) {
-				continue
-			}
-			if normalizeDecisionText(checkpointDecisionQuestion(*existing)) != target {
-				continue
-			}
-			if !existing.Resolved {
-				existing.Resolved = true
-				existing.Resolution = answer
-				existing.ResolvedAt = now
-				stampPendingDecisionScope(existing, scope)
-				feedbackNeeded = true
-			}
-			decision = *existing
-			return nil
-		}
-
 		decision = PendingDecision{
 			ID:          fmt.Sprintf("pd_%d", time.Now().UnixNano()),
 			Type:        clarificationDecisionType,
@@ -154,7 +127,6 @@ func recordDecisionAnswer(question, answer string, phase int, source string) (Pe
 		}
 		stampPendingDecisionScope(&decision, scope)
 		file.Decisions = append(file.Decisions, decision)
-		feedbackNeeded = true
 		return nil
 	}); err != nil {
 		return PendingDecision{}, fmt.Errorf("failed to save decision answer: %w", err)
@@ -170,7 +142,7 @@ func recordDecisionAnswer(question, answer string, phase int, source string) (Pe
 	// excluded here to keep the FEEDBACK stream scoped to genuine
 	// clarifications. Best-effort: a signal-write failure never fails the
 	// decision answer itself.
-	if feedbackNeeded && !strings.HasPrefix(source, "seal-") {
+	if !strings.HasPrefix(source, "seal-") {
 		emitDecisionFeedback(question, answer, phase)
 	}
 
@@ -233,6 +205,34 @@ var decisionAnswerCmd = &cobra.Command{
 		phase, _ := cmd.Flags().GetInt("phase")
 		source, _ := cmd.Flags().GetString("source")
 		waiverCapability, _ := cmd.Flags().GetString("waiver-capability")
+		checkpointCapability, _ := cmd.Flags().GetString("checkpoint-capability")
+
+		// Exact current-scope checkpoint questions are a protected namespace.
+		// Route them before any generic clarification logic, including when the
+		// row is already resolved, so a missing, invalid, or replayed capability
+		// cannot append a shadow clarification.
+		isCheckpoint, err := hasCurrentAutopilotCheckpointQuestion(question)
+		if err != nil {
+			outputError(2, err.Error(), nil)
+			return nil
+		}
+		if isCheckpoint {
+			resolved, found, err := resolveAutopilotCheckpointPendingDecision(question, answer, phase, checkpointCapability)
+			if err != nil {
+				outputError(2, err.Error(), nil)
+				return nil
+			}
+			if !found {
+				outputError(1, "checkpoint answer rejected: use the exact decision-answer command currently displayed by build or continue", nil)
+				return nil
+			}
+			outputOK(map[string]interface{}{
+				"id":             resolved.ID,
+				"recorded":       true,
+				"prompt_section": renderClarifiedIntentSection(),
+			})
+			return nil
+		}
 
 		// CR-01 (194-REVIEW.md): a --question shaped like a forced-reviewer
 		// decline (forcedReviewerWaiverQuestionText) may ONLY resolve a
@@ -292,6 +292,7 @@ func init() {
 	decisionAnswerCmd.Flags().Int("phase", 0, "Phase the decision belongs to")
 	decisionAnswerCmd.Flags().String("source", "worker-handoff", "Where the question came from")
 	decisionAnswerCmd.Flags().String("waiver-capability", "", "Single-use capability from the owner-facing reviewer decline card")
+	decisionAnswerCmd.Flags().String("checkpoint-capability", "", "Single-use capability from the owner-facing checkpoint command")
 
 	rootCmd.AddCommand(handoffDecisionsCmd)
 	rootCmd.AddCommand(decisionAnswerCmd)

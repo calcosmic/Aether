@@ -169,6 +169,14 @@ var pendingDecisionListCmd = &cobra.Command{
 				d.WaiverCapabilitySHA256 = ""
 				d.WaiverCapabilitySHA256s = nil
 			}
+			// Checkpoint identity and evidence remain observable, but capability
+			// hashes are verifier material, not generic-list output. Raw
+			// capabilities are already transient (json:"-").
+			if isAutopilotCheckpointType(d.Type) {
+				d.CheckpointCapability = ""
+				d.CheckpointCapabilitySHA256 = ""
+				d.CheckpointCapabilitySHA256s = nil
+			}
 			filtered = append(filtered, d)
 		}
 
@@ -229,6 +237,10 @@ var pendingDecisionResolveCmd = &cobra.Command{
 				// decision-answer path is the only resolver for this source.
 				if file.Decisions[i].Source == "forced-reviewer-waiver" {
 					outputError(1, "forced reviewer decisions must be answered with decision-answer and the displayed capability", nil)
+					return nil
+				}
+				if isAutopilotCheckpointType(file.Decisions[i].Type) {
+					outputError(1, "owner checkpoints must be answered with decision-answer and the displayed checkpoint capability", nil)
 					return nil
 				}
 				file.Decisions[i].Resolved = true

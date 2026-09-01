@@ -432,6 +432,8 @@ func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 
 func TestFinalPhaseAdvancesWithOwnerCheckpointAndSealBlocks(t *testing.T) {
 	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	s, _ := newTestStore(t)
 	store = s
 	phase := colony.Phase{ID: 1, Name: "Final owner boundary", Status: colony.PhaseInProgress}
@@ -485,9 +487,21 @@ func TestFinalPhaseAdvancesWithOwnerCheckpointAndSealBlocks(t *testing.T) {
 		t.Fatalf("seal refusal omitted stable ID or exact answer command: %v", err)
 	}
 
-	question, _ := parseClarificationDescription(loadCheckpointDecisions(t)[0].Description)
-	if _, err := recordDecisionAnswer(question, "confirmed", phase.ID, "owner"); err != nil {
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+	rootCmd.SetArgs([]string{
+		"decision-answer",
+		"--question", refs[0].Question,
+		"--answer", "confirmed",
+		"--phase", "1",
+		"--checkpoint-capability", checkpointCapabilityFromReference(t, refs[0]),
+	})
+	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resolve final checkpoint: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Fatalf("public checkpoint answer failed: %s", errBuf.String())
 	}
 	if _, _, err := validateSealReady(false); err != nil {
 		t.Fatalf("seal remained blocked after exact answer: %v", err)

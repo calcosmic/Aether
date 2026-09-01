@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -402,6 +404,37 @@ func resolveAutopilotCheckpointPendingDecision(question, answer string, phaseID 
 		return PendingDecision{}, false, fmt.Errorf("resolve checkpoint decision: %w", err)
 	}
 	return resolved, found, nil
+}
+
+// hasCurrentAutopilotCheckpointQuestion reserves persisted, current-scope
+// checkpoint questions for the capability-aware resolver. The public command
+// uses this read-only check before ordinary clarification handling so an
+// authorization failure cannot fall through and append a shadow answer.
+func hasCurrentAutopilotCheckpointQuestion(question string) (bool, error) {
+	if store == nil {
+		return false, fmt.Errorf("no store initialized")
+	}
+	target := normalizeDecisionText(question)
+	if target == "" {
+		return false, nil
+	}
+	var file PendingDecisionFile
+	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("load checkpoint decisions: %w", err)
+	}
+	scope := loadCurrentPendingDecisionScope()
+	for _, decision := range file.Decisions {
+		if !isAutopilotCheckpointType(decision.Type) ||
+			!pendingDecisionMatchesScope(decision, scope) ||
+			normalizeDecisionText(checkpointDecisionQuestion(decision)) != target {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func stableAutopilotCheckpointKey(decisionType string, phaseID int, subject string, scope pendingDecisionScope) string {
