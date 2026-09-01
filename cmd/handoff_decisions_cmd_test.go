@@ -185,7 +185,7 @@ func TestDecisionAnswerRejectsCheckpointAuthorizationFailures(t *testing.T) {
 				{TaskID: "8.1", Criterion: "The primary flow feels right", State: criterionStateNeedsOwnerConfirmation},
 				{TaskID: "8.2", Criterion: "The fallback flow feels right", State: criterionStateNeedsOwnerConfirmation},
 			}
-			refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria)
+			refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria, checkpointTestGeneration(t, "handoff-authorization", "handoff-authorization-evidence"))
 			if err != nil || len(refs) != 2 {
 				t.Fatalf("materialize checkpoints: refs=%#v err=%v", refs, err)
 			}
@@ -231,7 +231,7 @@ func TestRecordDecisionAnswerDoesNotResolveCheckpoint(t *testing.T) {
 		Type:        autopilotCheckpointTypeVisual,
 		Description: formatClarificationDescription("Phase 10: inspect the owner-facing layout", nil),
 		Source:      "generic-helper-test",
-	}, phase.ID, "visual-boundary")
+	}, phase.ID, "visual-boundary", checkpointTestGeneration(t, "handoff-generic", "handoff-generic-evidence"))
 	if err != nil {
 		t.Fatalf("seed checkpoint: %v", err)
 	}

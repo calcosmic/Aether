@@ -368,7 +368,7 @@ func TestPendingDecisionResolveRejectsProtectedCheckpoint(t *testing.T) {
 				Type:        checkpointType,
 				Description: formatClarificationDescription("Phase 3: owner confirmation required", nil),
 				Source:      "checkpoint-resolver-test",
-			}, phase.ID, checkpointType)
+			}, phase.ID, checkpointType, checkpointTestGeneration(t, "pending-"+checkpointType, "pending-protected-evidence"))
 			if err != nil {
 				t.Fatalf("seed %s: %v", checkpointType, err)
 			}
@@ -409,7 +409,7 @@ func TestPendingDecisionListRedactsCheckpointCapabilities(t *testing.T) {
 		Description: formatClarificationDescription("Phase 6: inspect the final screen", nil),
 		Source:      "checkpoint-list-test",
 		Evidence:    []string{"trusted UI claim"},
-	}, phase.ID, "redaction")
+	}, phase.ID, "redaction", checkpointTestGeneration(t, "pending-redaction", "pending-redaction-evidence"))
 	if err != nil {
 		t.Fatalf("seed checkpoint: %v", err)
 	}

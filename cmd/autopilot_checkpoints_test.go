@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,6 +42,24 @@ func checkpointTestGeneration(t *testing.T, suffix, evidence string) autopilotCh
 		t.Fatalf("create checkpoint generation fixture: %v", err)
 	}
 	return generation
+}
+
+func checkpointRuntimeManifest(t *testing.T, phaseID int, suffix string) codexBuildManifest {
+	t.Helper()
+	binding := checkpointTestExecutionBinding(suffix)
+	manifest := codexBuildManifest{
+		Phase:            phaseID,
+		AttemptID:        binding.AttemptID,
+		ExecutionOwner:   binding.ExecutionOwner,
+		ExecutionBinding: &binding,
+	}
+	digest, err := buildManifestSHA256(manifest)
+	if err != nil {
+		t.Fatalf("hash runtime checkpoint manifest fixture: %v", err)
+	}
+	binding.ManifestSHA256 = digest
+	manifest.ExecutionBinding = &binding
+	return manifest
 }
 
 type visualCheckpointTestFixture struct {
@@ -433,6 +452,151 @@ func TestRuntimeVerificationDecisionIsIdempotent(t *testing.T) {
 	}
 	if !runtimeActive {
 		t.Fatal("runtime-verification decisions did not activate the typed autopilot signal")
+	}
+}
+
+func TestRuntimeCheckpointWorkGenerationRequiresFreshApproval(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	phase := colony.Phase{ID: 2, Name: "Runtime generation freshness", Status: colony.PhaseInProgress}
+	checkpointTestState(t, phase, colony.StateBUILT)
+	criteria := []codexCriterionVerification{{
+		TaskID: "2.1", Criterion: "The playback feels natural", State: criterionStateNeedsOwnerConfirmation,
+		Policy: criterionEvidencePolicyBoundV1, Enforced: true, Passed: true,
+		Evidence:          []string{"owner must judge pacing", "automated checks passed"},
+		RequiredArtifacts: []string{"ui/player.tsx", "ui/timeline.tsx"},
+		Summary:           "No deterministic check can judge the final feel.",
+	}}
+	manifestA := checkpointRuntimeManifest(t, phase.ID, "runtime-generation-a")
+	generationA, err := runtimeCheckpointGenerationFromManifest(manifestA, criteria)
+	if err != nil {
+		t.Fatalf("derive generation A: %v", err)
+	}
+	first, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria, generationA)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("materialize generation A: refs=%#v err=%v", first, err)
+	}
+	capabilityA := checkpointCapabilityFromReference(t, first[0])
+	if _, found, resolveErr := resolveAutopilotCheckpointPendingDecision(first[0].Question, "confirmed", phase.ID, capabilityA); resolveErr != nil || !found {
+		t.Fatalf("resolve generation A: found=%v err=%v", found, resolveErr)
+	}
+
+	reordered := append([]codexCriterionVerification(nil), criteria...)
+	reordered[0].Evidence = []string{"automated checks passed", "owner must judge pacing", "automated checks passed"}
+	reordered[0].RequiredArtifacts = []string{"ui/timeline.tsx", "ui/player.tsx", "ui/player.tsx"}
+	replayGeneration, err := runtimeCheckpointGenerationFromManifest(manifestA, reordered)
+	if err != nil {
+		t.Fatalf("derive exact replay generation: %v", err)
+	}
+	if replayGeneration.WorkGeneration != generationA.WorkGeneration {
+		t.Fatalf("set/order-only changes altered generation: first=%s replay=%s", generationA.WorkGeneration, replayGeneration.WorkGeneration)
+	}
+	replayed, err := materializeRuntimeVerificationCheckpoints(phase.ID, reordered, replayGeneration)
+	if err != nil || len(replayed) != 0 {
+		t.Fatalf("resolved exact replay reopened owner work: refs=%#v err=%v", replayed, err)
+	}
+
+	manifestB := checkpointRuntimeManifest(t, phase.ID, "runtime-generation-b")
+	generationB, err := runtimeCheckpointGenerationFromManifest(manifestB, criteria)
+	if err != nil {
+		t.Fatalf("derive changed-attempt generation: %v", err)
+	}
+	second, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria, generationB)
+	if err != nil || len(second) != 1 || second[0].ID == first[0].ID {
+		t.Fatalf("changed attempt did not create fresh owner work: first=%#v second=%#v err=%v", first, second, err)
+	}
+
+	changedEvidence := append([]codexCriterionVerification(nil), criteria...)
+	changedEvidence[0].Evidence = append(append([]string(nil), criteria[0].Evidence...), "owner observed a timing regression")
+	changedGeneration, err := runtimeCheckpointGenerationFromManifest(manifestA, changedEvidence)
+	if err != nil {
+		t.Fatalf("derive changed-evidence generation: %v", err)
+	}
+	third, err := materializeRuntimeVerificationCheckpoints(phase.ID, changedEvidence, changedGeneration)
+	if err != nil || len(third) != 1 || third[0].ID == first[0].ID || third[0].ID == second[0].ID {
+		t.Fatalf("changed verification evidence did not create fresh owner work: first=%#v second=%#v third=%#v err=%v", first, second, third, err)
+	}
+	decisions := loadCheckpointDecisions(t)
+	if len(decisions) != 3 || !decisions[0].Resolved || decisions[1].Resolved || decisions[2].Resolved {
+		t.Fatalf("runtime generations did not preserve resolved history plus fresh unresolved rows: %#v", decisions)
+	}
+}
+
+func TestRuntimeCheckpointGenerationDirectExternalParity(t *testing.T) {
+	manifest := checkpointRuntimeManifest(t, 7, "runtime-parity")
+	directCriteria := []codexCriterionVerification{
+		{
+			TaskID: "7.2", Criterion: "The fallback feels understandable", State: criterionStateNeedsOwnerConfirmation,
+			Policy: criterionEvidencePolicyBoundV1, Enforced: true, Passed: true,
+			RequiredArtifacts: []string{"ui/fallback.tsx", "ui/shared.tsx"}, RequiredChecks: []string{"watcher", "tests"},
+			Evidence: []string{"manual judgment remains", "tests passed"}, BlockingIssues: []string{"reviewer unavailable"}, Summary: "Owner review is required.",
+		},
+		{
+			TaskID: "7.1", Criterion: "The primary flow passes", Policy: criterionEvidencePolicyBoundV1,
+			Enforced: true, Passed: true, RequiredArtifacts: []string{"ui/primary.tsx"}, Evidence: []string{"go test passed"}, Summary: "Deterministic proof recorded.",
+		},
+	}
+	direct, err := runtimeCheckpointGenerationFromManifest(manifest, directCriteria)
+	if err != nil {
+		t.Fatalf("derive direct generation: %v", err)
+	}
+
+	manifestBytes, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal external manifest fixture: %v", err)
+	}
+	criteriaBytes, err := json.Marshal(directCriteria)
+	if err != nil {
+		t.Fatalf("marshal external criteria fixture: %v", err)
+	}
+	var externalManifest codexBuildManifest
+	var externalCriteria []codexCriterionVerification
+	if err := json.Unmarshal(manifestBytes, &externalManifest); err != nil {
+		t.Fatalf("decode external manifest fixture: %v", err)
+	}
+	if err := json.Unmarshal(criteriaBytes, &externalCriteria); err != nil {
+		t.Fatalf("decode external criteria fixture: %v", err)
+	}
+	externalCriteria[0], externalCriteria[1] = externalCriteria[1], externalCriteria[0]
+	externalCriteria[1].Evidence = []string{"tests passed", "manual judgment remains", "tests passed"}
+	externalCriteria[1].RequiredArtifacts = []string{"ui/shared.tsx", "ui/fallback.tsx"}
+	externalCriteria[1].RequiredChecks = []string{"tests", "watcher"}
+	external, err := runtimeCheckpointGenerationFromManifest(externalManifest, externalCriteria)
+	if err != nil {
+		t.Fatalf("derive external generation: %v", err)
+	}
+	if external.WorkGeneration != direct.WorkGeneration || external.EvidenceSHA256 != direct.EvidenceSHA256 {
+		t.Fatalf("direct/external generation drifted: direct=%#v external=%#v", direct, external)
+	}
+
+	mutations := []struct {
+		name   string
+		mutate func([]codexCriterionVerification)
+	}{
+		{name: "status", mutate: func(criteria []codexCriterionVerification) { criteria[0].State = "reviewed" }},
+		{name: "result", mutate: func(criteria []codexCriterionVerification) { criteria[0].Passed = false }},
+		{name: "evidence", mutate: func(criteria []codexCriterionVerification) {
+			criteria[0].Evidence = append(criteria[0].Evidence, "new observation")
+		}},
+		{name: "source paths", mutate: func(criteria []codexCriterionVerification) {
+			criteria[0].RequiredArtifacts = append(criteria[0].RequiredArtifacts, "ui/new.tsx")
+		}},
+	}
+	for _, tt := range mutations {
+		t.Run(tt.name, func(t *testing.T) {
+			changed := append([]codexCriterionVerification(nil), directCriteria...)
+			changed[0].Evidence = append([]string(nil), directCriteria[0].Evidence...)
+			changed[0].RequiredArtifacts = append([]string(nil), directCriteria[0].RequiredArtifacts...)
+			tt.mutate(changed)
+			generation, generationErr := runtimeCheckpointGenerationFromManifest(manifest, changed)
+			if generationErr != nil {
+				t.Fatalf("derive changed generation: %v", generationErr)
+			}
+			if generation.EvidenceSHA256 == direct.EvidenceSHA256 || generation.WorkGeneration == direct.WorkGeneration {
+				t.Fatalf("%s change did not alter runtime generation", tt.name)
+			}
+		})
 	}
 }
 
