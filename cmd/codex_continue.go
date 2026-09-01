@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -1644,6 +1645,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 			result := results[i]
 			step.Name = result.WorkerName
 			step.Status = normalizeRuntimeDispatchStatus(result.Status)
+			var reviewArtifacts map[string]json.RawMessage
 			if result.WorkerResult != nil {
 				if len(result.WorkerResult.Blockers) > 0 {
 					step.Summary = strings.Join(result.WorkerResult.Blockers, "; ")
@@ -1662,8 +1664,9 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				// What this reviewer's own tool reported it cost, carried from
 				// the dispatch boundary so the direct check can file it.
 				step.Usage = result.WorkerResult.Usage
-				step = normalizeContinueReviewEvidence(step, result.WorkerResult.Artifacts)
+				reviewArtifacts = result.WorkerResult.Artifacts
 			}
+			step = normalizeContinueReviewEvidence(step, reviewArtifacts)
 			if step.Summary == "" && result.Error != nil {
 				step.Summary = codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())
 			}
@@ -1674,6 +1677,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				step.Status = watcherStatusEnvironmentBlocked
 				step.Summary = environmentBlockedLaunchSummary(step.Summary)
 			}
+			blockers = append(blockers, continueReviewEvidenceBlockingIssues(step)...)
 			if continueReviewStepBlocks(step, verification) {
 				for _, blocker := range step.Blockers {
 					if strings.TrimSpace(blocker) != "" {

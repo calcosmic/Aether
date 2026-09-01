@@ -877,6 +877,24 @@ func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts
 	return step
 }
 
+func continueReviewEvidenceBlockingIssues(step codexContinueWorkerFlowStep) []string {
+	caste := strings.TrimSpace(step.Caste)
+	if caste == "" {
+		caste = "reviewer"
+	}
+	name := strings.TrimSpace(step.Name)
+	if name == "" {
+		name = "unnamed"
+	}
+	blockers := make([]string, 0, len(step.EvidenceErrors))
+	for _, evidenceError := range step.EvidenceErrors {
+		if reason := strings.TrimSpace(evidenceError); reason != "" {
+			blockers = append(blockers, fmt.Sprintf("%s %s review evidence is invalid: %s", caste, name, reason))
+		}
+	}
+	return uniqueSortedStrings(blockers)
+}
+
 func validReviewArtifactSeverity(severity string) bool {
 	switch severity {
 	case "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO":
@@ -1172,6 +1190,10 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			continue
 		}
 		report.Workers = append(report.Workers, step)
+		if evidenceBlockers := continueReviewEvidenceBlockingIssues(step); len(evidenceBlockers) > 0 {
+			report.Passed = false
+			blockers = append(blockers, evidenceBlockers...)
+		}
 		if isSuccessfulExternalBuildStatus(status) {
 			// Severity is authoritative. Only CRITICAL structured findings
 			// stop the line; the legacy worker-supplied blocking bit remains
