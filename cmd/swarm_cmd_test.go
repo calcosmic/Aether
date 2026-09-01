@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 type swarmTestInvoker struct {
@@ -397,7 +400,7 @@ func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
 	}
 }
 
-func TestSwarmThreeStrikeEscalatesOnceAndFourthAttemptRefuses(t *testing.T) {
+func TestSwarmThreeStrikeRecoveryExactTargetRetryReEscalates(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -406,9 +409,16 @@ func TestSwarmThreeStrikeEscalatesOnceAndFourthAttemptRefuses(t *testing.T) {
 	withWorkingDir(t, root)
 	goal := "Stop retrying an architectural auth failure"
 	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version: "3.0",
-		Goal:    &goal,
-		State:   colony.StateREADY,
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Existing stabilization work",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{},
+		}}},
 	})
 
 	invoker := &swarmTestInvoker{blockedCaste: "watcher"}
@@ -501,21 +511,295 @@ func TestSwarmThreeStrikeEscalatesOnceAndFourthAttemptRefuses(t *testing.T) {
 		t.Fatalf("different target did not dispatch normally: configs = %d, want %d", got, wantAfterDifferentTarget)
 	}
 
-	if err := saveSwarmResultRecord(store, swarmResultRecord{
-		SwarmID:     "swarm-reset-success",
-		Target:      target,
-		Status:      "completed",
-		CompletedAt: time.Now().UTC().Add(time.Second).Format(time.RFC3339Nano),
-	}); err != nil {
-		t.Fatalf("seed reset result: %v", err)
+	flagsBeforeRecovery, ok := loadFlagsFile(store)
+	if !ok {
+		t.Fatal("load flags before public recovery")
 	}
-	beforeResetAttempt := len(invoker.configs)
+	unrelatedFlagID := swarmEscalationFlagID(swarmTargetFingerprint("Database panic after migration"))
+	flagsBeforeRecovery.Decisions = append(flagsBeforeRecovery.Decisions, colony.FlagEntry{
+		ID:          unrelatedFlagID,
+		Type:        "blocker",
+		Description: "Unrelated target must remain active.",
+		Source:      "escalation",
+		CreatedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err := store.SaveJSON("pending-decisions.json", flagsBeforeRecovery); err != nil {
+		t.Fatalf("seed unrelated escalation: %v", err)
+	}
+
+	// Execute the exact public recovery command emitted by the refusal. This
+	// is the real root-command seam; no fake completed swarm row is seeded.
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"insert-phase", target})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute emitted recovery command %q: %v", wantNext, err)
+	}
+	insertEnvelope := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	insertResult := insertEnvelope["result"].(map[string]interface{})
+	if inserted, _ := insertResult["inserted"].(bool); !inserted {
+		t.Fatalf("emitted recovery command did not insert a phase: %v", insertResult)
+	}
+
+	recoveredHistory, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		t.Fatalf("evaluate recovered history: %v", err)
+	}
+	if recoveredHistory.StrikeCount != 0 || recoveredHistory.LatestRecovery == nil {
+		t.Fatalf("history after public recovery = %+v, want zero strikes with recovery evidence", recoveredHistory)
+	}
+	recovery := recoveredHistory.LatestRecovery
+
+	// Normalization differences do not create a different scope. The very
+	// next retry must resolve the old flag before it dispatches real workers.
+	retryTarget := "  AUTH PANIC WHEN SESSION IS MISSING!!!  "
+	beforeRetry := len(invoker.configs)
+	retry, err := runSwarmCompatibility(root, retryTarget, false, false)
+	if err != nil {
+		t.Fatalf("exact normalized target retry: %v", err)
+	}
+	if got := retry["status"]; got != "blocked" {
+		t.Fatalf("recovered retry status = %v, want blocked from the test watcher", got)
+	}
+	if got := len(invoker.configs); got != beforeRetry+configsPerAttempt {
+		t.Fatalf("recovered retry dispatched %d configs, want %d", got-beforeRetry, configsPerAttempt)
+	}
+
+	flagsFile, ok := loadFlagsFile(store)
+	if !ok {
+		t.Fatal("load escalation flags after recovered retry")
+	}
+	stableID := swarmEscalationFlagID(swarmTargetFingerprint(target))
+	var resolved *colony.FlagEntry
+	for i := range flagsFile.Decisions {
+		if flagsFile.Decisions[i].ID == stableID {
+			resolved = &flagsFile.Decisions[i]
+			break
+		}
+	}
+	if resolved == nil || !resolved.Resolved {
+		t.Fatalf("stable escalation flag was not resolved before retry dispatch: %+v", flagsFile.Decisions)
+	}
+	var unrelated *colony.FlagEntry
+	for i := range flagsFile.Decisions {
+		if flagsFile.Decisions[i].ID == unrelatedFlagID {
+			unrelated = &flagsFile.Decisions[i]
+			break
+		}
+	}
+	if unrelated == nil || unrelated.Resolved {
+		t.Fatalf("same-target reconciliation changed unrelated blocker: %+v", flagsFile.Decisions)
+	}
+	for _, want := range []string{recovery.SwarmID, "phase " + fmt.Sprint(recovery.InsertedPhaseID)} {
+		if !strings.Contains(strings.ToLower(resolved.Resolution), strings.ToLower(want)) {
+			t.Errorf("resolution %q missing recovery reference %q", resolved.Resolution, want)
+		}
+	}
+	if flags := activeSwarmEscalationFlags(store); len(flags) != 1 || flags[0].ID != unrelatedFlagID {
+		t.Fatalf("recovered retry changed active escalation scope: %+v", flags)
+	}
+
+	// The recovered retry above is strike one in a fresh epoch. Two more real
+	// failures must recreate the same stable blocker, and the next attempt
+	// must refuse without dispatching anything.
+	for attempt := 2; attempt <= 3; attempt++ {
+		result, err := runSwarmCompatibility(root, target, false, false)
+		if err != nil {
+			t.Fatalf("new epoch attempt %d: %v", attempt, err)
+		}
+		if got := result["status"]; got != "blocked" {
+			t.Fatalf("new epoch attempt %d status = %v, want blocked", attempt, got)
+		}
+	}
+	newEpochFlags := activeSwarmEscalationFlags(store)
+	if len(newEpochFlags) != 2 ||
+		(newEpochFlags[0].ID != stableID && newEpochFlags[1].ID != stableID) {
+		t.Fatalf("fresh three-strike epoch flags = %+v, want stable target plus unrelated blocker", newEpochFlags)
+	}
+	beforeNewRefusal := len(invoker.configs)
+	newRefusal, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("new epoch refusal: %v", err)
+	}
+	if got := newRefusal["status"]; got != "architectural_concern" {
+		t.Fatalf("new epoch fourth status = %v, want architectural_concern", got)
+	}
+	if got := len(invoker.configs); got != beforeNewRefusal {
+		t.Fatalf("new epoch refusal dispatched workers: configs %d -> %d", beforeNewRefusal, got)
+	}
+}
+
+func TestSwarmRecoveryPersistenceFailurePublicIsNonMutating(t *testing.T) {
+	dataDir, root, target, invoker := seedSwarmRecoveryPublicEscalation(t)
+	beforeState, err := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err != nil {
+		t.Fatalf("read state before recovery failure: %v", err)
+	}
+	beforeDispatch := len(invoker.configs)
+
+	originalPersist := persistCorrectiveSwarmRecovery
+	persistCorrectiveSwarmRecovery = func(*storage.Store, swarmResultRecord) error {
+		return errors.New("forced recovery persistence failure")
+	}
+	t.Cleanup(func() { persistCorrectiveSwarmRecovery = originalPersist })
+
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"insert-phase", target})
+	if err := rootCmd.Execute(); err == nil {
+		t.Fatal("recovery persistence failure returned success")
+	}
+	if got := len(invoker.configs); got != beforeDispatch {
+		t.Fatalf("failed recovery insertion dispatched workers: configs %d -> %d", beforeDispatch, got)
+	}
+	afterState, err := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err != nil {
+		t.Fatalf("read state after recovery failure: %v", err)
+	}
+	if !bytes.Equal(beforeState, afterState) {
+		t.Fatal("failed recovery persistence still committed the corrective phase")
+	}
+	history, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		t.Fatalf("evaluate history after recovery failure: %v", err)
+	}
+	if history.StrikeCount != 3 || history.LatestRecovery != nil {
+		t.Fatalf("failed recovery persistence changed history: %+v", history)
+	}
 	if _, err := runSwarmCompatibility(root, target, false, false); err != nil {
-		t.Fatalf("post-success attempt: %v", err)
+		t.Fatalf("unchanged refused retry: %v", err)
 	}
-	if got := len(invoker.configs); got != beforeResetAttempt+configsPerAttempt {
-		t.Fatalf("completed result did not reset dispatch guard: configs = %d, want %d", got, beforeResetAttempt+configsPerAttempt)
+}
+
+func TestSwarmRecoveryReconciliationFailurePublicDispatchesNobody(t *testing.T) {
+	dataDir, root, target, invoker := seedSwarmRecoveryPublicEscalation(t)
+
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"insert-phase", target})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute public recovery command: %v", err)
 	}
+	history, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		t.Fatalf("evaluate public recovery: %v", err)
+	}
+	if history.LatestRecovery == nil {
+		t.Fatal("public recovery command did not create verified recovery evidence")
+	}
+
+	// Corrupt only the blocker persistence seam after the recovery is valid.
+	// History evaluation remains read-only and succeeds; reconciliation must
+	// fail before either the direct or plan-only lane creates work.
+	if err := os.WriteFile(filepath.Join(dataDir, "pending-decisions.json"), []byte("{"), 0644); err != nil {
+		t.Fatalf("corrupt pending decisions fixture: %v", err)
+	}
+	beforeDispatch := len(invoker.configs)
+	if _, err := runSwarmCompatibility(root, target, false, false); err == nil {
+		t.Fatal("recovery retry succeeded despite blocker reconciliation failure")
+	}
+	if got := len(invoker.configs); got != beforeDispatch {
+		t.Fatalf("reconciliation failure dispatched workers: configs %d -> %d", beforeDispatch, got)
+	}
+	if _, err := runSwarmCompatibility(root, target, false, true); err == nil {
+		t.Fatal("plan-only recovery retry succeeded despite blocker reconciliation failure")
+	}
+	if got := len(invoker.configs); got != beforeDispatch {
+		t.Fatalf("plan-only reconciliation failure dispatched workers: configs %d -> %d", beforeDispatch, got)
+	}
+}
+
+func TestSwarmRecoveryArbitraryInsertPublicDoesNotAuthorize(t *testing.T) {
+	tests := []struct {
+		name string
+		args func(target string) []string
+	}{
+		{
+			name: "different positional target",
+			args: func(string) []string {
+				return []string{"insert-phase", "Database panic after migration"}
+			},
+		},
+		{
+			name: "explicit description without emitted positional target",
+			args: func(target string) []string {
+				return []string{
+					"phase-insert",
+					"--after", "1",
+					"--name", "General corrective work",
+					"--description", target,
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, target, _ := seedSwarmRecoveryPublicEscalation(t)
+			stdout = &bytes.Buffer{}
+			stderr = &bytes.Buffer{}
+			rootCmd.SetArgs(tc.args(target))
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("ordinary phase insertion failed: %v", err)
+			}
+			env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+			result := env["result"].(map[string]interface{})
+			if _, recovered := result["swarm_recovery_event"]; recovered {
+				t.Fatalf("ordinary insertion created swarm recovery evidence: %v", result)
+			}
+			history, err := evaluateSwarmStrikeHistory(store, target)
+			if err != nil {
+				t.Fatalf("evaluate escalated target after ordinary insertion: %v", err)
+			}
+			if history.StrikeCount != 3 || history.LatestRecovery != nil {
+				t.Fatalf("ordinary insertion changed escalated history: %+v", history)
+			}
+		})
+	}
+}
+
+func seedSwarmRecoveryPublicEscalation(t *testing.T) (dataDir, root, target string, invoker *swarmTestInvoker) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir = setupBuildFlowTest(t)
+	root = filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Recover a repeatedly failing swarm through the public command"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Existing work",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{},
+		}}},
+	})
+
+	target = "Auth panic when session is missing"
+	invoker = &swarmTestInvoker{blockedCaste: "watcher"}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		result, err := runSwarmCompatibility(root, target, false, false)
+		if err != nil {
+			t.Fatalf("seed attempt %d: %v", attempt, err)
+		}
+		if got := result["status"]; got != "blocked" {
+			t.Fatalf("seed attempt %d status = %v, want blocked", attempt, got)
+		}
+	}
+	if flags := activeSwarmEscalationFlags(store); len(flags) != 1 {
+		t.Fatalf("seed escalation flags = %+v, want one", flags)
+	}
+	return dataDir, root, target, invoker
 }
 
 func TestSwarmFourthAttemptShellQuotesTarget(t *testing.T) {
