@@ -165,6 +165,9 @@ func runSwarmCompatibility(root, target string, watch, planOnly bool) (map[strin
 		return nil, err
 	}
 	if history.StrikeCount >= 3 {
+		if err := ensureSwarmEscalationForHistory(store, target, history); err != nil {
+			return nil, err
+		}
 		return swarmArchitecturalConcernResult(target, history), nil
 	}
 	if history.LatestRecovery != nil {

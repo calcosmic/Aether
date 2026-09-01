@@ -489,11 +489,44 @@ func persistSwarmResultOutcome(s *storage.Store, record swarmResultRecord) (swar
 	}
 	status := strings.ToLower(strings.TrimSpace(record.Status))
 	if (status == "failed" || status == "blocked") && history.StrikeCount >= 3 {
-		if err := upsertSwarmEscalationFlag(s, record.Target, history); err != nil {
+		if err := ensureSwarmEscalationForHistory(s, record.Target, history); err != nil {
 			return history, err
 		}
 	}
 	return history, nil
+}
+
+// ensureSwarmEscalationForHistory closes the result-plus-flag partial-write
+// window. The result history is the source of truth, so a later same-target
+// command can recreate the stable escalation without appending another result.
+// The final read makes a successful return mean the exact target-bound blocker
+// is durably available to authenticate the corrective-phase flow.
+func ensureSwarmEscalationForHistory(s *storage.Store, target string, history swarmStrikeHistory) error {
+	fingerprint := swarmTargetFingerprint(target)
+	if fingerprint == "" {
+		return fmt.Errorf("ensure swarm escalation: target fingerprint is empty")
+	}
+	if history.TargetFingerprint != fingerprint {
+		return fmt.Errorf("ensure swarm escalation: strike history does not match target")
+	}
+	if history.StrikeCount < 3 || len(history.Evidence) < 3 {
+		return fmt.Errorf("ensure swarm escalation: incomplete three-strike history")
+	}
+
+	expectedID := swarmEscalationFlagID(fingerprint)
+	if _, ok := activeSwarmEscalationForTarget(s, target); !ok {
+		if err := upsertSwarmEscalationFlag(s, target, history); err != nil {
+			return fmt.Errorf("ensure swarm escalation %s: %w", expectedID, err)
+		}
+	}
+	flag, ok := activeSwarmEscalationForTarget(s, target)
+	if !ok {
+		return fmt.Errorf("ensure swarm escalation: active stable flag %s is unavailable after upsert", expectedID)
+	}
+	if flag.ID != expectedID {
+		return fmt.Errorf("ensure swarm escalation: active flag %s does not match stable identity %s", flag.ID, expectedID)
+	}
+	return nil
 }
 
 func upsertSwarmEscalationFlag(s *storage.Store, target string, history swarmStrikeHistory) error {
