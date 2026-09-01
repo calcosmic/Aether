@@ -365,32 +365,31 @@ func checkNoCriticalFlags() gateCheck {
 // /ant-flag did not actually block /ant-continue. Blockers cannot be
 // acknowledged away — only resolved. Locked by TestBlockerFlagBlocksContinue.
 func checkUnresolvedBlockerFlags() gateCheck {
-	var ff colony.FlagsFile
-	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
-		if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
-			return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}
+	snapshot, descriptions, err := readBlockerSnapshotEvidence(store)
+	return checkUnresolvedBlockerSnapshot(snapshot, descriptions, err)
+}
+
+func checkUnresolvedBlockerSnapshot(snapshot blockerSnapshot, blockerDescriptions []string, err error) gateCheck {
+	if err != nil {
+		return gateCheck{
+			Name:   "no_unresolved_blockers",
+			Passed: false,
+			Detail: "blocker truth unavailable: " + blockerSnapshotErrorDetail(store, err),
 		}
 	}
-	blockerDescriptions := []string{}
-	for _, flag := range ff.Decisions {
-		if flag.Resolved || !strings.EqualFold(strings.TrimSpace(flag.Type), "blocker") {
-			continue
-		}
-		desc := strings.TrimSpace(flag.Description)
-		if desc == "" {
-			desc = flag.ID
-		}
-		blockerDescriptions = append(blockerDescriptions, desc)
-	}
-	if len(blockerDescriptions) > 0 {
+	if snapshot.Count > 0 {
 		shown := blockerDescriptions
 		if len(shown) > 3 {
 			shown = shown[:3]
 		}
+		detail := fmt.Sprintf("%d unresolved blocker flag(s)", snapshot.Count)
+		if len(shown) > 0 {
+			detail += ": " + strings.Join(shown, "; ")
+		}
 		return gateCheck{
 			Name:   "no_unresolved_blockers",
 			Passed: false,
-			Detail: fmt.Sprintf("%d unresolved blocker flag(s): %s", len(blockerDescriptions), strings.Join(shown, "; ")),
+			Detail: detail,
 		}
 	}
 	return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}

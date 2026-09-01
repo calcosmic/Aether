@@ -226,7 +226,15 @@ var flagCheckBlockersCmd = &cobra.Command{
 			return nil
 		}
 
-		snapshot := readBlockerSnapshot(store)
+		snapshot, err := readBlockerSnapshot(store)
+		if err != nil {
+			detail := blockerSnapshotErrorDetail(store, err)
+			outputError(2, "blocker truth unavailable", map[string]interface{}{
+				"blocker_snapshot_available": false,
+				"blocker_snapshot_error":     detail,
+			})
+			return nil
+		}
 		issues := 0
 		notes := 0
 		if ff, ok := loadFlagsFile(store); ok {
@@ -246,9 +254,10 @@ var flagCheckBlockersCmd = &cobra.Command{
 		}
 
 		result := map[string]interface{}{
-			"issues":       issues,
-			"notes":        notes,
-			"has_blockers": snapshot.Count > 0,
+			"issues":                     issues,
+			"notes":                      notes,
+			"has_blockers":               snapshot.Count > 0,
+			"blocker_snapshot_available": true,
 		}
 		addBlockerSnapshotFields(result, snapshot)
 		outputOK(result)

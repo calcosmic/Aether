@@ -173,7 +173,7 @@ func seedOrdinaryOvernightBlocker(t *testing.T) {
 	if code := int(renderedCommandExitCode.Load()); code != 0 {
 		t.Fatalf("flag-add exited %d: %s", code, stdout.(*bytes.Buffer).String())
 	}
-	if snapshot := readBlockerSnapshot(store); snapshot.Count != 1 || snapshot.EscalatedCount != 0 {
+	if snapshot, err := readBlockerSnapshot(store); err != nil || snapshot.Count != 1 || snapshot.EscalatedCount != 0 {
 		t.Fatalf("ordinary blocker fixture = %+v, want one non-escalated baseline", snapshot)
 	}
 	stdout.(*bytes.Buffer).Reset()
@@ -283,7 +283,7 @@ func TestOvernightRunCompletesSixPhases(t *testing.T) {
 	if report.ElapsedSeconds <= 0 || len(report.Phases) != 6 || report.PhasesCompleted != 6 {
 		t.Errorf("final report elapsed/phases = %d/%d/%d", report.ElapsedSeconds, len(report.Phases), report.PhasesCompleted)
 	}
-	if report.BlockersBefore.Count != 1 || !reflect.DeepEqual(report.BlockersBefore, report.BlockersAfter) {
+	if report.BlockersBefore.Snapshot == nil || report.BlockersBefore.Snapshot.Count != 1 || !reflect.DeepEqual(report.BlockersBefore, report.BlockersAfter) {
 		t.Errorf("blocker movement = before %+v after %+v, want one unchanged ordinary blocker", report.BlockersBefore, report.BlockersAfter)
 	}
 	if report.Spend.MeasuredTokens == nil || report.Spend.MeasuredRows == 0 || report.Spend.UnreportedRows == 0 {
@@ -415,7 +415,10 @@ func TestOvernightRunBlockerBaselineExceptionIsNarrow(t *testing.T) {
 			s, _ := newTestStore(t)
 			store = s
 			writeTestFlags(t, tt.before...)
-			baseline := readBlockerSnapshot(store)
+			baseline, err := readBlockerSnapshot(store)
+			if err != nil {
+				t.Fatalf("read blocker baseline: %v", err)
+			}
 			writeTestFlags(t, tt.after...)
 			flagsBeforeGate := append([]colony.FlagEntry{}, readTestFlags(t)...)
 
@@ -461,6 +464,103 @@ func TestOvernightRunBlockerBaselineExceptionIsNarrow(t *testing.T) {
 				t.Errorf("blocker gate rewrote live flags:\nbefore=%+v\nafter=%+v", flagsBeforeGate, got)
 			}
 		})
+	}
+}
+
+func TestContinueAdvancementFailsClosedWhenBlockerTruthUnavailable(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	if err := os.WriteFile(filepath.Join(root, ".aether/data/pending-decisions.json"), []byte("{"), 0o600); err != nil {
+		t.Fatalf("write malformed blocker truth: %v", err)
+	}
+
+	report := runCodexContinueGates(
+		colony.Phase{ID: 1, Name: "fail-closed blocker truth"},
+		codexContinueManifest{Present: true},
+		codexContinueVerificationReport{ChecksPassed: true},
+		codexContinueAssessment{PositiveEvidence: true},
+		time.Now().UTC(),
+		nil,
+	)
+	for _, gate := range report.Checks {
+		if gate.Name != "no_unresolved_blockers" {
+			continue
+		}
+		if gate.Passed {
+			t.Fatalf("unavailable blocker truth authorized advancement: %+v", gate)
+		}
+		if !strings.Contains(strings.ToLower(gate.Detail), "unavailable") {
+			t.Fatalf("gate failure hid storage availability: %+v", gate)
+		}
+		return
+	}
+	t.Fatal("continue gates omitted no_unresolved_blockers")
+}
+
+func TestRunFailsClosedWhenBlockerTruthUnavailable(t *testing.T) {
+	saveGlobals(t)
+	_, root := seedRunFixture(t, 1)
+	installAutopilotRunTestDeps(t)
+	if err := os.WriteFile(filepath.Join(store.BasePath(), "pending-decisions.json"), []byte("{"), 0o600); err != nil {
+		t.Fatalf("write malformed blocker truth: %v", err)
+	}
+
+	buildCalls := 0
+	runAutopilotBuild = func(string, int, []string, bool, codexBuildOptions) (map[string]interface{}, error) {
+		buildCalls++
+		return nil, fmt.Errorf("worker dispatch must not run with unavailable blocker truth")
+	}
+	result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{Headless: true, Context: context.Background()})
+	if err != nil {
+		t.Fatalf("run should finalize its typed stop: %v", err)
+	}
+	if buildCalls != 0 {
+		t.Fatalf("run dispatched %d build(s) with unavailable invocation truth", buildCalls)
+	}
+	if result["trigger_code"] != autopilotTriggerColonyNotRunnable {
+		t.Fatalf("trigger = %#v, want colony_not_runnable: %+v", result["trigger_code"], result)
+	}
+	report, ok := result["last_report"].(*autopilotInvocationReport)
+	if !ok || report.BlockersBefore.Available || report.BlockersBefore.Snapshot != nil {
+		t.Fatalf("final report lost unavailable invocation evidence: %#v", result["last_report"])
+	}
+}
+
+func TestRunFailsClosedWhenBlockerTruthBecomesUnavailable(t *testing.T) {
+	saveGlobals(t)
+	_, root := seedRunFixture(t, 1)
+	installAutopilotRunTestDeps(t)
+
+	continueCalls := 0
+	runAutopilotBuild = func(_ string, phaseNum int, _ []string, _ bool, _ codexBuildOptions) (map[string]interface{}, error) {
+		mutateRunFixtureState(t, func(state *colony.ColonyState) {
+			state.State = colony.StateBUILT
+			state.CurrentPhase = phaseNum
+			state.Plan.Phases[phaseNum-1].Status = colony.PhaseInProgress
+		})
+		if err := os.WriteFile(filepath.Join(store.BasePath(), "pending-decisions.json"), []byte("{"), 0o600); err != nil {
+			t.Fatalf("corrupt post-build blocker truth: %v", err)
+		}
+		return map[string]interface{}{"state": colony.StateBUILT, "dispatch_count": 1}, nil
+	}
+	runAutopilotMaterializeVisual = func(string, int, map[string]interface{}) ([]autopilotCheckpointReference, error) {
+		return nil, nil
+	}
+	runAutopilotContinue = func(string, codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+		continueCalls++
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("continue must not run with unavailable blocker truth")
+	}
+
+	result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{Headless: true, Context: context.Background()})
+	if err != nil {
+		t.Fatalf("run should finalize its typed stop: %v", err)
+	}
+	if continueCalls != 0 {
+		t.Fatalf("run dispatched continue %d time(s) after blocker truth became unavailable", continueCalls)
+	}
+	if result["trigger_code"] != autopilotTriggerColonyNotRunnable {
+		t.Fatalf("trigger = %#v, want colony_not_runnable: %+v", result["trigger_code"], result)
 	}
 }
 

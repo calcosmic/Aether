@@ -648,6 +648,16 @@ func legacyRunStoppedReason(code autopilotTriggerCode) string {
 }
 
 func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.ColonyState, opts runCompatibilityOptions, steps []map[string]interface{}, phasesCompleted int, decision autopilotRunDecision, cause error) map[string]interface{} {
+	blockersAfter := captureAutopilotBlockerSnapshot(store)
+	if !blockersAfter.Available {
+		if cause == nil {
+			cause = fmt.Errorf("blocker truth unavailable: %s", emptyFallback(blockersAfter.Error, "unknown storage error"))
+		}
+		decision = autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{
+			"phase": state.CurrentPhase,
+			"stage": "final_blocker_snapshot",
+		})
+	}
 	status := "paused"
 	switch decision.Disposition {
 	case autopilotDispositionNormalStop:
@@ -659,7 +669,7 @@ func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.Col
 		status = "running"
 	}
 	invocation.recordRunDecision(state, decision)
-	report := buildAutopilotInvocationReport(*invocation, state, decision, autopilotNow(), readBlockerSnapshot(store))
+	report := buildAutopilotInvocationReport(*invocation, state, decision, autopilotNow(), blockersAfter)
 	recordAutopilotRecovery(&report, decision, cause)
 	persistErr := syncRunAutopilotStateWithReport(state, opts, status, string(decision.Code), &report)
 	result := buildRunExecutionResult(state, opts, steps, phasesCompleted, legacyRunStoppedReason(decision.Code), report.Next)
@@ -716,6 +726,14 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 	phasesCompleted := 0
 	finish := func(current colony.ColonyState, decision autopilotRunDecision, cause error) map[string]interface{} {
 		return finishAutopilotInvocation(&invocation, current, opts, steps, phasesCompleted, decision, cause)
+	}
+	if !invocation.BlockersBefore.Available {
+		cause := fmt.Errorf("blocker truth unavailable: %s", emptyFallback(invocation.BlockersBefore.Error, "unknown storage error"))
+		decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{
+			"phase": state.CurrentPhase,
+			"stage": "invocation_blocker_snapshot",
+		})
+		return finish(state, decision, cause), nil
 	}
 	handleReplan := func(stage string) (map[string]interface{}, bool) {
 		lessons, lessonErr := runAutopilotLoadLessons(state.Plan)
@@ -801,7 +819,13 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			}
 			invocation.phase(*phase, "building")
 
-			baseline := readBlockerSnapshot(store)
+			baselineReport := captureAutopilotBlockerSnapshot(store)
+			if !baselineReport.Available || baselineReport.Snapshot == nil {
+				cause := fmt.Errorf("blocker truth unavailable: %s", emptyFallback(baselineReport.Error, "missing snapshot"))
+				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "before_build_blocker_snapshot"})
+				return finish(state, decision, cause), nil
+			}
+			baseline := *baselineReport.Snapshot
 			if baseline.Count > 0 {
 				emitVisualProgress(renderRunBlockerBaseline(baseline))
 			}
@@ -843,7 +867,13 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				"autopilot_signals": continueReviewAutopilotSignals(nil, visualCheckpoints),
 			}
 			invocation.recordSignals(*phase, autopilotSignalsFromRunResult(buildStageResult))
-			afterBuild := readBlockerSnapshot(store)
+			afterBuildReport := captureAutopilotBlockerSnapshot(store)
+			if !afterBuildReport.Available || afterBuildReport.Snapshot == nil {
+				cause := fmt.Errorf("blocker truth unavailable: %s", emptyFallback(afterBuildReport.Error, "missing snapshot"))
+				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "after_build_blocker_snapshot"})
+				return finish(state, decision, cause), nil
+			}
+			afterBuild := *afterBuildReport.Snapshot
 			if decision, active := evaluateAutopilotRunStage(buildStageResult, baseline, afterBuild, opts.Headless); active {
 				switch decision.Disposition {
 				case autopilotDispositionQueueAndContinue:
@@ -860,7 +890,13 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 
 		case colony.StateEXECUTING, colony.StateBUILT:
 			invocation.phase(phaseForAutopilotReport(state, state.CurrentPhase), "checking")
-			baseline := readBlockerSnapshot(store)
+			baselineReport := captureAutopilotBlockerSnapshot(store)
+			if !baselineReport.Available || baselineReport.Snapshot == nil {
+				cause := fmt.Errorf("blocker truth unavailable: %s", emptyFallback(baselineReport.Error, "missing snapshot"))
+				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": state.CurrentPhase, "stage": "before_continue_blocker_snapshot"})
+				return finish(state, decision, cause), nil
+			}
+			baseline := *baselineReport.Snapshot
 			if baseline.Count > 0 {
 				emitVisualProgress(renderRunBlockerBaseline(baseline))
 			}
@@ -890,7 +926,13 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			state = updatedState
 			invocation.recordSignals(phase, autopilotSignalsFromRunResult(continueResult))
 
-			afterContinue := readBlockerSnapshot(store)
+			afterContinueReport := captureAutopilotBlockerSnapshot(store)
+			if !afterContinueReport.Available || afterContinueReport.Snapshot == nil {
+				cause := fmt.Errorf("blocker truth unavailable: %s", emptyFallback(afterContinueReport.Error, "missing snapshot"))
+				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "after_continue_blocker_snapshot"})
+				return finish(state, decision, cause), nil
+			}
+			afterContinue := *afterContinueReport.Snapshot
 			if decision, active := evaluateAutopilotRunStage(continueResult, baseline, afterContinue, opts.Headless); active {
 				switch decision.Disposition {
 				case autopilotDispositionQueueAndContinue:
@@ -1261,9 +1303,7 @@ func renderRunReportPersistenceFailure(result map[string]interface{}) string {
 			b.WriteString("\n")
 		}
 	}
-	fmt.Fprintf(&b, "Blocker movement: %d -> %d active; %d -> %d escalated\n",
-		report.BlockersBefore.Count, report.BlockersAfter.Count,
-		report.BlockersBefore.EscalatedCount, report.BlockersAfter.EscalatedCount)
+	b.WriteString(renderAutopilotBlockerMovement(report.BlockersBefore, report.BlockersAfter))
 	if report.Recovery != nil {
 		fmt.Fprintf(&b, "Recovery: %s (%s)\n", report.Recovery.Classification, report.Recovery.FailureType)
 		if strings.TrimSpace(report.Recovery.LogError) != "" {

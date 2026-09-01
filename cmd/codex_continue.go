@@ -3812,16 +3812,16 @@ func runCodexContinueGatesWithAutopilotBaseline(phase colony.Phase, manifest cod
 	// the unresolved blocker set neither grew nor gained escalation evidence.
 	// Direct continue and every wrapper lane omit that capability and remain
 	// strict. No flag is resolved, hidden, or rewritten here.
-	blockerFlagCheck := checkUnresolvedBlockerFlags()
-	if !blockerFlagCheck.Passed && autopilotBlockerBaseline != nil {
+	currentBlockers, blockerDescriptions, blockerSnapshotErr := readBlockerSnapshotEvidence(store)
+	blockerFlagCheck := checkUnresolvedBlockerSnapshot(currentBlockers, blockerDescriptions, blockerSnapshotErr)
+	if !blockerFlagCheck.Passed && blockerSnapshotErr == nil && autopilotBlockerBaseline != nil {
 		baseline := *autopilotBlockerBaseline
-		current := readBlockerSnapshot(store)
-		movement := compareBlockerSnapshots(baseline, current)
+		movement := compareBlockerSnapshots(baseline, currentBlockers)
 		if !movement.CountIncreased && !movement.EscalationAdded {
 			blockerFlagCheck.Passed = true
 			blockerFlagCheck.Detail = fmt.Sprintf(
 				"existing blocker baseline did not increase or escalate; %d blocker(s) remain unresolved and visible for follow-up",
-				current.Count,
+				currentBlockers.Count,
 			)
 		}
 	}

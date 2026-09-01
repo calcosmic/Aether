@@ -219,7 +219,7 @@ func TestAutopilotReportElapsedUsesInvocationWallClock(t *testing.T) {
 		reportTestState(colony.StateREADY, 2),
 		autopilotRunDecisionForCode(autopilotTriggerMaxPhasesReached, false, nil),
 		finished,
-		blockerSnapshot{},
+		availableAutopilotBlockerSnapshot(blockerSnapshot{}),
 	)
 	if report.ElapsedSeconds != 12*60 {
 		t.Fatalf("elapsed = %d seconds, want 720 wall-clock seconds", report.ElapsedSeconds)
@@ -240,7 +240,7 @@ func TestAutopilotReportElapsedUsesInvocationWallClock(t *testing.T) {
 		reportTestState(colony.StateREADY, 2),
 		autopilotRunDecisionForCode(autopilotTriggerCancelled, false, nil),
 		restarted,
-		blockerSnapshot{},
+		availableAutopilotBlockerSnapshot(blockerSnapshot{}),
 	)
 	if second.ElapsedSeconds != 0 {
 		t.Fatalf("new invocation elapsed = %d, want 0", second.ElapsedSeconds)
@@ -260,7 +260,7 @@ func TestAutopilotReportRetainsHighFindingsQueuedDecisionsAndBlockers(t *testing
 		autopilotInvocation{
 			ID:             "run-evidence",
 			StartedAt:      started,
-			BlockersBefore: before,
+			BlockersBefore: availableAutopilotBlockerSnapshot(before),
 			Phases: []autopilotPhaseReport{{
 				Phase: 2, PhaseName: "Second", Outcome: "stopped",
 				HighFindings:    []codexReviewFinding{high},
@@ -270,10 +270,10 @@ func TestAutopilotReportRetainsHighFindingsQueuedDecisionsAndBlockers(t *testing
 		reportTestState(colony.StateBUILT, 2),
 		autopilotRunDecisionForCode(autopilotTriggerBlockerEscalated, false, nil),
 		started.Add(time.Minute),
-		after,
+		availableAutopilotBlockerSnapshot(after),
 	)
 
-	if !reflect.DeepEqual(report.BlockersBefore, before) || !reflect.DeepEqual(report.BlockersAfter, after) {
+	if report.BlockersBefore.Snapshot == nil || report.BlockersAfter.Snapshot == nil || !reflect.DeepEqual(*report.BlockersBefore.Snapshot, before) || !reflect.DeepEqual(*report.BlockersAfter.Snapshot, after) {
 		t.Fatalf("blocker movement was not retained: before=%+v after=%+v", report.BlockersBefore, report.BlockersAfter)
 	}
 	if len(report.QueuedDecisions) != 1 || report.QueuedDecisions[0] != queued {
@@ -441,8 +441,8 @@ func TestAutopilotReportRendererUsesRequiredOrderAndExactNext(t *testing.T) {
 		QueuedDecisions: []autopilotQueuedDecisionReport{{
 			ID: "decision-1", Type: autopilotCheckpointTypeRuntimeVerification, Phase: 1,
 		}},
-		BlockersBefore: blockerSnapshot{Count: 1},
-		BlockersAfter:  blockerSnapshot{Count: 2, EscalatedCount: 1},
+		BlockersBefore: availableAutopilotBlockerSnapshot(blockerSnapshot{Count: 1}),
+		BlockersAfter:  availableAutopilotBlockerSnapshot(blockerSnapshot{Count: 2, EscalatedCount: 1}),
 		ElapsedSeconds: 720,
 		Spend:          autopilotSpendReport{UnreportedRows: 1},
 		Next:           "aether build 2",
@@ -460,6 +460,41 @@ func TestAutopilotReportRendererUsesRequiredOrderAndExactNext(t *testing.T) {
 			t.Fatalf("%q appeared out of order:\n%s", want, rendered)
 		}
 		last = at
+	}
+}
+
+func TestAutopilotReportUnavailableBlockerTruthIsNeverZero(t *testing.T) {
+	report := autopilotInvocationReport{
+		SchemaVersion: autopilotReportSchemaVersion,
+		Outcome:       "genuine_stop",
+		StopReason:    string(autopilotTriggerColonyNotRunnable),
+		BlockersBefore: autopilotBlockerSnapshotReport{
+			Available: false,
+			Snapshot:  nil,
+			Error:     "blocker truth pending-decisions.json: unavailable",
+		},
+		BlockersAfter: availableAutopilotBlockerSnapshot(blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}}),
+		Spend:         autopilotSpendReport{Phases: []autopilotPhaseSpendReport{}},
+		Next:          "aether status",
+		Phases:        []autopilotPhaseReport{},
+	}
+	for name, rendered := range map[string]string{
+		"normal":              renderAutopilotInvocationReport(report),
+		"persistence failure": renderRunReportPersistenceFailure(map[string]interface{}{"last_report": &report, "stopped_reason": report.StopReason}),
+	} {
+		if !strings.Contains(rendered, "Blocker movement: unavailable") {
+			t.Errorf("%s renderer hid unavailable blocker truth:\n%s", name, rendered)
+		}
+		if strings.Contains(rendered, "Blocker movement: 0") {
+			t.Errorf("%s renderer converted unavailable truth to zero:\n%s", name, rendered)
+		}
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal unavailable report: %v", err)
+	}
+	if !bytes.Contains(encoded, []byte(`"available":false`)) || !bytes.Contains(encoded, []byte(`"snapshot":null`)) {
+		t.Fatalf("JSON lost explicit unavailable evidence: %s", encoded)
 	}
 }
 
@@ -578,7 +613,7 @@ func TestAutopilotReportCheckpointCapabilityIsImmediateOnly(t *testing.T) {
 	}
 	invocation := beginAutopilotInvocation(state)
 	invocation.recordRunDecision(state, decision)
-	report := buildAutopilotInvocationReport(invocation, state, decision, autopilotNow(), blockerSnapshot{})
+	report := buildAutopilotInvocationReport(invocation, state, decision, autopilotNow(), availableAutopilotBlockerSnapshot(blockerSnapshot{}))
 	if report.Next != "aether seal" {
 		t.Fatalf("seal-ready durable next = %q, want capability-free re-entry through aether seal", report.Next)
 	}
