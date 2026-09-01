@@ -228,6 +228,84 @@ func TestReviewerArtifactScoreAndSeverityValidationMatrix(t *testing.T) {
 	}
 }
 
+func TestReviewerArtifactFindingBodyValidationMatrix(t *testing.T) {
+	tests := []struct {
+		name             string
+		step             codexContinueWorkerFlowStep
+		artifacts        map[string]json.RawMessage
+		wantFinding      bool
+		wantTitle        string
+		wantDescription  string
+		wantSuggestion   string
+		wantErrorContext string
+	}{
+		{
+			name:        "title only",
+			step:        completedReviewerStep("watcher", "Review-Title"),
+			artifacts:   reviewerArtifactRaw(t, `{"findings":[{"severity":"HIGH","title":"  concrete title  ","suggestion":"keep the advice"}]}`),
+			wantFinding: true, wantTitle: "concrete title", wantDescription: "concrete title", wantSuggestion: "keep the advice",
+		},
+		{
+			name:        "description only",
+			step:        completedReviewerStep("watcher", "Review-Description"),
+			artifacts:   reviewerArtifactRaw(t, `{"findings":[{"severity":"MEDIUM","description":"  concrete description  ","suggestion":"keep the advice"}]}`),
+			wantFinding: true, wantDescription: "concrete description", wantSuggestion: "keep the advice",
+		},
+		{
+			name:        "title and description",
+			step:        completedReviewerStep("watcher", "Review-Both"),
+			artifacts:   reviewerArtifactRaw(t, `{"findings":[{"severity":"LOW","title":"  concise title  ","description":"  detailed body  ","suggestion":"  recovery advice  "}]}`),
+			wantFinding: true, wantTitle: "concise title", wantDescription: "detailed body", wantSuggestion: "recovery advice",
+		},
+		{
+			name:             "whitespace only",
+			step:             completedReviewerStep("watcher", "Review-Whitespace"),
+			artifacts:        reviewerArtifactRaw(t, `{"findings":[{"severity":"INFO","title":"  ","description":"\n\t","suggestion":"recovery advice is not evidence"}]}`),
+			wantErrorContext: "Review-Whitespace artifacts.review findings[0] must include a non-empty title or description",
+		},
+		{
+			name:             "suggestion only critical",
+			step:             completedReviewerStep("watcher", "Review-Suggestion"),
+			artifacts:        reviewerArtifactRaw(t, `{"findings":[{"severity":"CRITICAL","suggestion":"rotate the credential"}]}`),
+			wantErrorContext: "Review-Suggestion artifacts.review findings[0] must include a non-empty title or description",
+		},
+		{
+			name: "legacy top-level suggestion only critical",
+			step: codexContinueWorkerFlowStep{
+				Stage: "review", Caste: "watcher", Name: "Review-Legacy", Status: "completed",
+				Findings: []codexReviewFinding{{Severity: "CRITICAL", Suggestion: "rotate the credential"}},
+			},
+			wantErrorContext: "Review-Legacy legacy findings[0] must include a non-empty title or description",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			step := normalizeContinueReviewEvidence(tt.step, tt.artifacts)
+			if tt.wantFinding {
+				if len(step.EvidenceErrors) != 0 {
+					t.Fatalf("valid finding produced evidence errors: %v", step.EvidenceErrors)
+				}
+				if len(step.Findings) != 1 {
+					t.Fatalf("valid findings = %#v, want exactly one", step.Findings)
+				}
+				finding := step.Findings[0]
+				if finding.Title != tt.wantTitle || finding.Description != tt.wantDescription || finding.Suggestion != tt.wantSuggestion {
+					t.Fatalf("normalized finding = %#v, want title=%q description=%q suggestion=%q", finding, tt.wantTitle, tt.wantDescription, tt.wantSuggestion)
+				}
+				return
+			}
+
+			if len(step.Findings) != 0 {
+				t.Fatalf("blank-body finding survived normalization: %#v", step.Findings)
+			}
+			if got := strings.Join(step.EvidenceErrors, " "); !strings.Contains(got, tt.wantErrorContext) {
+				t.Fatalf("evidence errors %q do not contain worker/index diagnostic %q", got, tt.wantErrorContext)
+			}
+		})
+	}
+}
+
 func TestReviewerArtifactMalformedScorePreservesValidFindings(t *testing.T) {
 	step := normalizeContinueReviewEvidence(
 		completedReviewerStep("auditor", "Audit-Diagnostic"),
