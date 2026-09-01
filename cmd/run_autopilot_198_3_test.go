@@ -312,6 +312,175 @@ func TestRunHeadlessQueuesVisualRuntimeAndReplanThenCompletes(t *testing.T) {
 	}
 }
 
+func seedDurableReplanRunFixture(t *testing.T, completed int) string {
+	t.Helper()
+	_, root := seedRunFixture(t, 3)
+	snapshot := []colony.Phase{
+		{ID: 1, Name: "First", Status: colony.PhaseReady},
+		{ID: 2, Name: "Second", Status: colony.PhasePending},
+		{ID: 3, Name: "Third", Status: colony.PhasePending},
+	}
+	current := append([]colony.Phase(nil), snapshot...)
+	for index := 0; index < completed; index++ {
+		current[index].Status = colony.PhaseCompleted
+	}
+	if completed < len(current) {
+		current[completed].Status = colony.PhaseReady
+	}
+	mutateRunFixtureState(t, func(state *colony.ColonyState) {
+		state.Plan = autopilotCadencePlan("revision-durable-run", snapshot, current)
+		state.CurrentPhase = completed + 1
+		state.State = colony.StateREADY
+	})
+	return root
+}
+
+func installDurableReplanRunSteps(t *testing.T, buildHook func(int)) {
+	t.Helper()
+	runAutopilotBuild = func(_ string, phaseNum int, _ []string, _ bool, _ codexBuildOptions) (map[string]interface{}, error) {
+		if buildHook != nil {
+			buildHook(phaseNum)
+		}
+		updated := mutateRunFixtureState(t, func(state *colony.ColonyState) {
+			state.CurrentPhase = phaseNum
+			state.State = colony.StateBUILT
+			state.Plan.Phases[phaseNum-1].Status = colony.PhaseInProgress
+		})
+		return map[string]interface{}{"state": updated.State, "claims_path": "fixture-claims.json"}, nil
+	}
+	runAutopilotMaterializeVisual = func(string, int, map[string]interface{}) ([]autopilotCheckpointReference, error) {
+		return nil, nil
+	}
+	runAutopilotContinue = func(_ string, _ codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+		current, err := loadCompatibilityColonyState()
+		if err != nil {
+			t.Fatalf("load state in durable continue: %v", err)
+		}
+		phase := current.Plan.Phases[current.CurrentPhase-1]
+		final := phase.ID == len(current.Plan.Phases)
+		updated := mutateRunFixtureState(t, func(state *colony.ColonyState) {
+			state.Plan.Phases[phase.ID-1].Status = colony.PhaseCompleted
+			if final {
+				state.State = colony.StateCOMPLETED
+				return
+			}
+			state.CurrentPhase = phase.ID + 1
+			state.Plan.Phases[phase.ID].Status = colony.PhaseReady
+			state.State = colony.StateREADY
+		})
+		return map[string]interface{}{
+			"advanced": true,
+			"state":    updated.State,
+			"next":     "aether build",
+		}, updated, phase, nil, nil, final, nil
+	}
+	runAutopilotLoadLessons = func(colony.Plan) ([]confirmedAutopilotLesson, error) {
+		return []confirmedAutopilotLesson{{
+			EntryID: "lesson-durable-run", Content: "Keep cadence durable across bounded runs.", ContentHash: "hash-durable-run",
+			Phase: 1, PlanRevisionID: "revision-durable-run",
+		}}, nil
+	}
+}
+
+func TestRunReplanCadencePersistsAcrossBoundedInvocations(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+	root := seedDurableReplanRunFixture(t, 0)
+	installAutopilotRunTestDeps(t)
+	buildCalls := 0
+	installDurableReplanRunSteps(t, func(int) { buildCalls++ })
+
+	for invocation := 1; invocation <= 2; invocation++ {
+		result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{
+			Headless: true, ReplanInterval: 2, MaxPhases: 1, Context: context.Background(),
+		})
+		if err != nil {
+			t.Fatalf("bounded invocation %d: %v", invocation, err)
+		}
+		if result["trigger_code"] != autopilotTriggerMaxPhasesReached || intValue(result["phases_completed"]) != 1 {
+			t.Fatalf("bounded invocation %d result = %+v", invocation, result)
+		}
+	}
+
+	notes := []PendingDecision{}
+	for _, decision := range loadPendingDecisionFile().Decisions {
+		if decision.Type == autopilotReplanDecisionType && decision.PlanRevisionID == "revision-durable-run" {
+			notes = append(notes, decision)
+		}
+	}
+	if buildCalls != 2 || len(notes) != 1 || notes[0].LatestCheckpointPhase != 2 {
+		t.Fatalf("bounded cadence build_calls=%d notes=%+v, want two builds and one phase-2 note", buildCalls, notes)
+	}
+}
+
+func TestRunReplanCadenceCatchesInterruptedBoundaryBeforeDispatch(t *testing.T) {
+	t.Run("interactive pauses before phase three build", func(t *testing.T) {
+		t.Setenv("AETHER_OUTPUT_MODE", "json")
+		saveGlobals(t)
+		resetRootCmd(t)
+		root := seedDurableReplanRunFixture(t, 2)
+		installAutopilotRunTestDeps(t)
+		buildCalls := 0
+		installDurableReplanRunSteps(t, func(int) { buildCalls++ })
+
+		result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{ReplanInterval: 2, Context: context.Background()})
+		if err != nil {
+			t.Fatalf("restart at interrupted boundary: %v", err)
+		}
+		if buildCalls != 0 || result["trigger_code"] != autopilotTriggerReplanDue || result["disposition"] != autopilotDispositionPause {
+			t.Fatalf("interrupted boundary dispatched before pause: build_calls=%d result=%+v", buildCalls, result)
+		}
+	})
+
+	t.Run("headless persists the boundary before phase three build", func(t *testing.T) {
+		t.Setenv("AETHER_OUTPUT_MODE", "json")
+		saveGlobals(t)
+		resetRootCmd(t)
+		root := seedDurableReplanRunFixture(t, 2)
+		installAutopilotRunTestDeps(t)
+		queuedBeforeBuild := false
+		installDurableReplanRunSteps(t, func(phase int) {
+			if phase != 3 {
+				return
+			}
+			for _, decision := range loadPendingDecisionFile().Decisions {
+				if decision.Type == autopilotReplanDecisionType && decision.PlanRevisionID == "revision-durable-run" && decision.LatestCheckpointPhase == 2 {
+					queuedBeforeBuild = true
+				}
+			}
+		})
+
+		result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{Headless: true, ReplanInterval: 2, MaxPhases: 1, Context: context.Background()})
+		if err != nil {
+			t.Fatalf("headless restart at interrupted boundary: %v", err)
+		}
+		if !queuedBeforeBuild || result["trigger_code"] != autopilotTriggerColonyComplete {
+			t.Fatalf("headless boundary was not queued before dispatch: queued=%t result=%+v", queuedBeforeBuild, result)
+		}
+	})
+}
+
+func TestRunReplanCadenceDoesNotUseInvocationCounter(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate test source")
+	}
+	source, err := os.ReadFile(strings.TrimSuffix(file, "run_autopilot_198_3_test.go") + "compatibility_cmds.go")
+	if err != nil {
+		t.Fatalf("read compatibility source: %v", err)
+	}
+	body := string(source)
+	start := strings.Index(body, "func evaluateAutopilotReplan(")
+	end := strings.Index(body[start:], "\nfunc autopilotSignalsFromRunResult(")
+	if start < 0 || end < 0 {
+		t.Fatal("locate evaluateAutopilotReplan source body")
+	}
+	if strings.Contains(body[start:start+end], "phasesCompleted") {
+		t.Fatal("evaluateAutopilotReplan still decides cadence from the invocation-local phase count")
+	}
+}
+
 func TestRunInteractiveVisualCheckpointPausesBeforeContinue(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)

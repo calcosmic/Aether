@@ -150,6 +150,128 @@ func TestLessonAwareReplanMatrix(t *testing.T) {
 	}
 }
 
+func autopilotCadencePlan(revisionID string, snapshot, current []colony.Phase) colony.Plan {
+	boundary := time.Date(2026, time.September, 1, 8, 0, 0, 0, time.UTC)
+	return colony.Plan{
+		GeneratedAt:      &boundary,
+		ActiveRevisionID: revisionID,
+		Revisions: []colony.PlanRevision{{
+			SchemaVersion: 1,
+			Number:        1,
+			ID:            revisionID,
+			CreatedAt:     boundary.Format(time.RFC3339Nano),
+			Phases:        snapshot,
+		}},
+		Phases: current,
+	}
+}
+
+func TestAutopilotReplanCadenceReconstructsAcrossRestart(t *testing.T) {
+	snapshot := []colony.Phase{
+		{ID: 1, Status: colony.PhaseReady},
+		{ID: 2, Status: colony.PhasePending},
+		{ID: 3, Status: colony.PhasePending},
+	}
+	current := append([]colony.Phase(nil), snapshot...)
+	plan := autopilotCadencePlan("revision-cadence", snapshot, current)
+
+	assertCadence := func(name string, decisions []PendingDecision, completed, lastHandled, nextBoundary, dueBoundary, checkpointPhase int) {
+		t.Helper()
+		got, err := projectAutopilotReplanCadence(plan, decisions, 2)
+		if err != nil {
+			t.Fatalf("%s: project cadence: %v", name, err)
+		}
+		if got.CompletedSinceRevision != completed || got.LastHandledBoundary != lastHandled || got.NextBoundary != nextBoundary || got.DueBoundary != dueBoundary || got.CheckpointPhaseID != checkpointPhase {
+			t.Fatalf("%s: cadence = %+v, want completed=%d handled=%d next=%d due=%d phase=%d", name, got, completed, lastHandled, nextBoundary, dueBoundary, checkpointPhase)
+		}
+	}
+
+	assertCadence("accepted revision", nil, 0, 0, 2, 0, 0)
+	plan.Phases[0].Status = colony.PhaseCompleted
+	assertCadence("one durable completion", nil, 1, 0, 2, 0, 0)
+	plan.Phases[1].Status = colony.PhaseCompleted
+	assertCadence("missed persistence remains due after restart", nil, 2, 0, 2, 2, 2)
+
+	resolvedHandled := PendingDecision{
+		Type:                  autopilotReplanDecisionType,
+		PlanRevisionID:        "revision-cadence",
+		LatestCheckpointPhase: 2,
+		Resolved:              true,
+	}
+	otherRevision := PendingDecision{
+		Type:                  autopilotReplanDecisionType,
+		PlanRevisionID:        "revision-other",
+		LatestCheckpointPhase: 3,
+	}
+	unresolvedHandled := resolvedHandled
+	unresolvedHandled.Resolved = false
+	assertCadence("unresolved same-revision note handles boundary", []PendingDecision{otherRevision, unresolvedHandled}, 2, 2, 4, 0, 0)
+	assertCadence("resolved same-revision note handles boundary", []PendingDecision{otherRevision, resolvedHandled}, 2, 2, 4, 0, 0)
+}
+
+func TestAutopilotReplanCadenceResetsOnlyOnAcceptedRevision(t *testing.T) {
+	snapshot := []colony.Phase{
+		{ID: 1, Status: colony.PhaseReady},
+		{ID: 2, Status: colony.PhasePending},
+	}
+	current := []colony.Phase{
+		{ID: 1, Status: colony.PhaseCompleted},
+		{ID: 2, Status: colony.PhaseCompleted},
+	}
+	plan := autopilotCadencePlan("revision-one", snapshot, current)
+	resolved := []PendingDecision{{
+		Type:                  autopilotReplanDecisionType,
+		PlanRevisionID:        "revision-one",
+		LatestCheckpointPhase: 2,
+		Resolved:              true,
+	}}
+
+	beforeRestart, err := projectAutopilotReplanCadence(plan, resolved, 2)
+	if err != nil {
+		t.Fatalf("project before restart: %v", err)
+	}
+	afterRestart, err := projectAutopilotReplanCadence(plan, resolved, 2)
+	if err != nil {
+		t.Fatalf("project after restart: %v", err)
+	}
+	if beforeRestart != afterRestart || afterRestart.CompletedSinceRevision != 2 || afterRestart.LastHandledBoundary != 2 {
+		t.Fatalf("restart or note resolution reset cadence: before=%+v after=%+v", beforeRestart, afterRestart)
+	}
+
+	acceptedAt := time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC)
+	plan.ActiveRevisionID = "revision-two"
+	plan.Revisions = append(plan.Revisions, colony.PlanRevision{
+		SchemaVersion: 1,
+		Number:        2,
+		ID:            "revision-two",
+		ParentID:      "revision-one",
+		CreatedAt:     acceptedAt.Format(time.RFC3339Nano),
+		Phases:        append([]colony.Phase(nil), current...),
+	})
+	reset, err := projectAutopilotReplanCadence(plan, resolved, 2)
+	if err != nil {
+		t.Fatalf("project accepted revision: %v", err)
+	}
+	if reset.CompletedSinceRevision != 0 || reset.LastHandledBoundary != 0 || reset.NextBoundary != 2 || reset.DueBoundary != 0 || reset.CheckpointPhaseID != 0 {
+		t.Fatalf("new accepted revision did not reset cadence: %+v", reset)
+	}
+}
+
+func TestAutopilotReplanCadenceLegacyCompatibilityCountsCompletedPhases(t *testing.T) {
+	plan := colony.Plan{Phases: []colony.Phase{
+		{ID: 4, Status: colony.PhaseCompleted},
+		{ID: 9, Status: colony.PhaseCompleted},
+		{ID: 12, Status: colony.PhaseReady},
+	}}
+	got, err := projectAutopilotReplanCadence(plan, nil, 2)
+	if err != nil {
+		t.Fatalf("project legacy cadence: %v", err)
+	}
+	if got.CompletedSinceRevision != 2 || got.DueBoundary != 2 || got.CheckpointPhaseID != 9 {
+		t.Fatalf("legacy cadence = %+v, want two durable completions due at phase 9", got)
+	}
+}
+
 func TestReplanDecisionUpsertAccumulatesOneNotePerRevision(t *testing.T) {
 	s, tmpDir := newTestStore(t)
 	store = s
