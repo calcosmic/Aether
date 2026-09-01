@@ -42,11 +42,16 @@ type PendingDecision struct {
 	// CheckpointKey and the fields below carry durable owner-only work. They
 	// are optional so older pending-decision records remain wire-compatible.
 	// Type distinguishes queueable visual/runtime checks from blocker flags.
-	CheckpointKey string   `json:"checkpoint_key,omitempty"`
-	Criterion     string   `json:"criterion,omitempty"`
-	TaskID        string   `json:"task_id,omitempty"`
-	Evidence      []string `json:"evidence,omitempty"`
-	SourcePaths   []string `json:"source_paths,omitempty"`
+	CheckpointKey string `json:"checkpoint_key,omitempty"`
+	// CheckpointCapability is returned only to the immediate owner-facing
+	// renderer. Only SHA-256 hashes survive a JSON round trip.
+	CheckpointCapability        string   `json:"-"`
+	CheckpointCapabilitySHA256  string   `json:"checkpoint_capability_sha256,omitempty"`
+	CheckpointCapabilitySHA256s []string `json:"checkpoint_capability_sha256s,omitempty"`
+	Criterion                   string   `json:"criterion,omitempty"`
+	TaskID                      string   `json:"task_id,omitempty"`
+	Evidence                    []string `json:"evidence,omitempty"`
+	SourcePaths                 []string `json:"source_paths,omitempty"`
 	// Replan metadata binds an accumulated overnight planning note to the
 	// exact accepted plan revision that its evidence follows. These fields are
 	// optional so pre-198.3 decision files continue to decode unchanged.

@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -233,12 +235,16 @@ func upsertAutopilotCheckpoint(candidate PendingDecision, phaseID int, subject s
 	phase := phaseID
 	candidate.Phase = &phase
 	candidate.CheckpointKey = key
-	candidate.ID = "cp_" + key[len(key)-20:]
+	candidate.ID = stableAutopilotCheckpointID(key)
 	candidate.Resolved = false
 	candidate.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 	candidate.Evidence = boundedCheckpointEvidence(candidate.Evidence)
 	candidate.SourcePaths = boundedCheckpointEvidence(candidate.SourcePaths)
 	stampPendingDecisionScope(&candidate, scope)
+	capability, capabilityHash, err := newForcedReviewerWaiverCapability()
+	if err != nil {
+		return PendingDecision{}, false, fmt.Errorf("issue %s checkpoint capability: %w", candidate.Type, err)
+	}
 
 	var file PendingDecisionFile
 	result := candidate
@@ -249,7 +255,11 @@ func upsertAutopilotCheckpoint(candidate PendingDecision, phaseID int, subject s
 		}
 		for i := range file.Decisions {
 			existing := &file.Decisions[i]
-			if existing.CheckpointKey != key || existing.Type != candidate.Type || !pendingDecisionMatchesScope(*existing, scope) {
+			if existing.ID != candidate.ID ||
+				existing.CheckpointKey != key ||
+				existing.Type != candidate.Type ||
+				existing.Phase == nil || *existing.Phase != phaseID ||
+				!pendingDecisionMatchesScope(*existing, scope) {
 				continue
 			}
 			existing.Evidence = boundedCheckpointEvidence(uniqueSortedStrings(append(existing.Evidence, candidate.Evidence...)))
@@ -261,8 +271,15 @@ func upsertAutopilotCheckpoint(candidate PendingDecision, phaseID int, subject s
 				existing.TaskID = candidate.TaskID
 			}
 			result = *existing
+			if !existing.Resolved {
+				appendCheckpointCapabilityHash(existing, capabilityHash)
+				result = *existing
+				result.CheckpointCapability = capability
+			}
 			return nil
 		}
+		candidate.CheckpointCapability = capability
+		candidate.CheckpointCapabilitySHA256 = capabilityHash
 		file.Decisions = append(file.Decisions, candidate)
 		result = candidate
 		created = true
@@ -271,6 +288,120 @@ func upsertAutopilotCheckpoint(candidate PendingDecision, phaseID int, subject s
 		return PendingDecision{}, false, fmt.Errorf("persist %s checkpoint: %w", candidate.Type, err)
 	}
 	return result, created, nil
+}
+
+func stableAutopilotCheckpointID(key string) string {
+	key = strings.TrimSpace(key)
+	if len(key) <= 20 {
+		return "cp_" + key
+	}
+	return "cp_" + key[len(key)-20:]
+}
+
+func appendCheckpointCapabilityHash(decision *PendingDecision, capabilityHash string) {
+	if decision == nil {
+		return
+	}
+	capabilityHash = strings.TrimSpace(capabilityHash)
+	if capabilityHash == "" {
+		return
+	}
+	if strings.TrimSpace(decision.CheckpointCapabilitySHA256) == "" {
+		decision.CheckpointCapabilitySHA256 = capabilityHash
+		return
+	}
+	if decision.CheckpointCapabilitySHA256 == capabilityHash {
+		return
+	}
+	for _, existing := range decision.CheckpointCapabilitySHA256s {
+		if strings.TrimSpace(existing) == capabilityHash {
+			return
+		}
+	}
+	decision.CheckpointCapabilitySHA256s = append(decision.CheckpointCapabilitySHA256s, capabilityHash)
+}
+
+func checkpointCapabilityMatches(decision PendingDecision, providedHash string) bool {
+	providedHash = strings.TrimSpace(providedHash)
+	if providedHash == "" {
+		return false
+	}
+	if subtle.ConstantTimeCompare(
+		[]byte(strings.TrimSpace(decision.CheckpointCapabilitySHA256)),
+		[]byte(providedHash),
+	) == 1 {
+		return true
+	}
+	for _, candidate := range decision.CheckpointCapabilitySHA256s {
+		if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(candidate)), []byte(providedHash)) == 1 {
+			return true
+		}
+	}
+	return false
+}
+
+func autopilotCheckpointResolutionIndex(file PendingDecisionFile, target string, phaseID int, scope pendingDecisionScope, providedHash string) (int, bool) {
+	for i := range file.Decisions {
+		decision := file.Decisions[i]
+		if decision.Resolved ||
+			!isAutopilotCheckpointType(decision.Type) ||
+			decision.Phase == nil || *decision.Phase != phaseID ||
+			!pendingDecisionMatchesScope(decision, scope) ||
+			decision.CheckpointKey == "" ||
+			decision.ID != stableAutopilotCheckpointID(decision.CheckpointKey) ||
+			normalizeDecisionText(checkpointDecisionQuestion(decision)) != target ||
+			!checkpointCapabilityMatches(decision, providedHash) {
+			continue
+		}
+		return i, true
+	}
+	return -1, false
+}
+
+// resolveAutopilotCheckpointPendingDecision is the only state-changing
+// checkpoint resolver. The read pass rejects bad authorization without a file
+// write; the atomic pass repeats every binding check before consuming one row.
+func resolveAutopilotCheckpointPendingDecision(question, answer string, phaseID int, capability string) (PendingDecision, bool, error) {
+	if store == nil {
+		return PendingDecision{}, false, fmt.Errorf("no store initialized")
+	}
+	target := normalizeDecisionText(question)
+	answer = strings.TrimSpace(answer)
+	capability = strings.TrimSpace(capability)
+	if target == "" || answer == "" || phaseID <= 0 || capability == "" {
+		return PendingDecision{}, false, nil
+	}
+	scope := loadCurrentPendingDecisionScope()
+	digest := sha256.Sum256([]byte(capability))
+	providedHash := hex.EncodeToString(digest[:])
+
+	var preview PendingDecisionFile
+	if err := store.LoadJSON(pendingDecisionsFile, &preview); err != nil {
+		return PendingDecision{}, false, fmt.Errorf("load checkpoint decisions: %w", err)
+	}
+	if _, ok := autopilotCheckpointResolutionIndex(preview, target, phaseID, scope, providedHash); !ok {
+		return PendingDecision{}, false, nil
+	}
+
+	var file PendingDecisionFile
+	var resolved PendingDecision
+	found := false
+	if err := store.UpdateJSONAtomically(pendingDecisionsFile, &file, func() error {
+		index, ok := autopilotCheckpointResolutionIndex(file, target, phaseID, scope, providedHash)
+		if !ok {
+			return nil
+		}
+		decision := &file.Decisions[index]
+		decision.Resolved = true
+		decision.Resolution = answer
+		decision.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+		resolved = *decision
+		found = true
+		return nil
+	}); err != nil {
+		return PendingDecision{}, false, fmt.Errorf("resolve checkpoint decision: %w", err)
+	}
+	return resolved, found, nil
 }
 
 func stableAutopilotCheckpointKey(decisionType string, phaseID int, subject string, scope pendingDecisionScope) string {
@@ -316,7 +447,12 @@ func checkpointDecisionAnswerCommand(decision PendingDecision) string {
 	if decision.Phase != nil {
 		phaseID = *decision.Phase
 	}
-	return fmt.Sprintf("aether decision-answer --question %s --answer 'confirmed' --phase %d", shellQuote(checkpointDecisionQuestion(decision)), phaseID)
+	return fmt.Sprintf(
+		"aether decision-answer --question %s --answer 'confirmed' --phase %d --checkpoint-capability %s",
+		shellQuote(checkpointDecisionQuestion(decision)),
+		phaseID,
+		shellQuote(decision.CheckpointCapability),
+	)
 }
 
 func checkpointReference(decision PendingDecision) autopilotCheckpointReference {

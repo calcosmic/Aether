@@ -278,6 +278,11 @@ func TestCheckpointCapabilityRotatesWithoutChangingIdentityOrPersistingRawTokens
 	if bytes.Contains(raw, []byte(firstCapability)) || bytes.Contains(raw, []byte(secondCapability)) {
 		t.Fatalf("pending-decisions.json persisted a raw capability after rotation: %s", raw)
 	}
+	if resolved, found, err := resolveAutopilotCheckpointPendingDecision(
+		second[0].Question, "owner used the first displayed command", phase.ID, firstCapability,
+	); err != nil || !found || resolved.ID != firstDecision.ID {
+		t.Fatalf("rotation invalidated the first displayed capability: resolved=%#v found=%v err=%v", resolved, found, err)
+	}
 }
 
 func TestCheckpointCapabilityIsScopedSingleUseAndCannotCrossRows(t *testing.T) {
