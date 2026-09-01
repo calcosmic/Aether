@@ -14,6 +14,31 @@ import (
 
 var errNoColonyInitialized = errors.New("no colony initialized")
 
+// loadActiveColonyStateReadOnly applies compatibility and missing-plan repairs
+// in memory so callers can validate the state without authorizing a write.
+func loadActiveColonyStateReadOnly() (colony.ColonyState, error) {
+	if store == nil {
+		return colony.ColonyState{}, fmt.Errorf("no store initialized")
+	}
+
+	state, _, err := loadColonyStateWithCompatibilityRepairReadOnly()
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return colony.ColonyState{}, errNoColonyInitialized
+		}
+		return colony.ColonyState{}, fmt.Errorf("failed to load colony state: %w", err)
+	}
+	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
+		return colony.ColonyState{}, errNoColonyInitialized
+	}
+	state = normalizeLegacyColonyState(state)
+	staged, _, err := stageMissingPlanFromArtifacts(state)
+	if err != nil {
+		return colony.ColonyState{}, err
+	}
+	return staged, nil
+}
+
 func loadActiveColonyState() (colony.ColonyState, error) {
 	if store == nil {
 		return colony.ColonyState{}, fmt.Errorf("no store initialized")
@@ -38,23 +63,9 @@ func loadActiveColonyState() (colony.ColonyState, error) {
 }
 
 func loadColonyStateWithCompatibilityRepair() (colony.ColonyState, error) {
-	var state colony.ColonyState
-	loadErr := store.LoadJSON("COLONY_STATE.json", &state)
-	if loadErr == nil {
-		return state, nil
-	}
-
-	raw, rawErr := store.LoadRawJSON("COLONY_STATE.json")
-	if rawErr != nil {
-		return colony.ColonyState{}, loadErr
-	}
-
-	repairedRaw, repaired, repairErr := repairLegacyNumericStringFields(raw)
-	if repairErr != nil || !repaired {
-		return colony.ColonyState{}, loadErr
-	}
-	if err := json.Unmarshal(repairedRaw, &state); err != nil {
-		return colony.ColonyState{}, loadErr
+	state, repaired, err := loadColonyStateWithCompatibilityRepairReadOnly()
+	if err != nil || !repaired {
+		return state, err
 	}
 
 	state.Events = append(trimmedEvents(state.Events),
@@ -64,6 +75,30 @@ func loadColonyStateWithCompatibilityRepair() (colony.ColonyState, error) {
 		return colony.ColonyState{}, fmt.Errorf("failed to persist repaired colony state: %w", err)
 	}
 	return state, nil
+}
+
+// loadColonyStateWithCompatibilityRepairReadOnly decodes the one supported
+// legacy numeric-string shape without appending an event or saving the result.
+func loadColonyStateWithCompatibilityRepairReadOnly() (colony.ColonyState, bool, error) {
+	var state colony.ColonyState
+	loadErr := store.LoadJSON("COLONY_STATE.json", &state)
+	if loadErr == nil {
+		return state, false, nil
+	}
+
+	raw, rawErr := store.LoadRawJSON("COLONY_STATE.json")
+	if rawErr != nil {
+		return colony.ColonyState{}, false, loadErr
+	}
+
+	repairedRaw, repaired, repairErr := repairLegacyNumericStringFields(raw)
+	if repairErr != nil || !repaired {
+		return colony.ColonyState{}, false, loadErr
+	}
+	if err := json.Unmarshal(repairedRaw, &state); err != nil {
+		return colony.ColonyState{}, false, loadErr
+	}
+	return state, true, nil
 }
 
 func repairLegacyNumericStringFields(raw []byte) ([]byte, bool, error) {

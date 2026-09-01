@@ -4,11 +4,148 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+func TestLoadActiveColonyStateReadOnlyLeavesNormalStateUnchanged(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Inspect a normal colony without writing"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Ready phase",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Stay ready", Status: colony.TaskPending}},
+		}}},
+		Events: []string{"2026-09-01T10:00:00Z|initialized|init|Ready for work"},
+	})
+
+	before := snapshotProjectDataTree(t, store.BasePath())
+	state, err := loadActiveColonyStateReadOnly()
+	if err != nil {
+		t.Fatalf("loadActiveColonyStateReadOnly returned error: %v", err)
+	}
+	after := snapshotProjectDataTree(t, store.BasePath())
+
+	if state.CurrentPhase != 1 || len(state.Plan.Phases) != 1 {
+		t.Fatalf("read-only state = phase %d with %d plan phases, want phase 1 with one plan phase", state.CurrentPhase, len(state.Plan.Phases))
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("read-only normal load changed saved data:\nbefore: %v\nafter:  %v", before, after)
+	}
+}
+
+func TestLoadActiveColonyStateReadOnlyRepairsStringCurrentPhaseInMemory(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, _ := newTestStore(t)
+	store = s
+	raw := []byte(`{
+  "version": "3.0",
+  "goal": "Stage a legacy numeric repair",
+  "state": "READY",
+  "current_phase": "1",
+  "plan": {"phases": [{"id": 1, "name": "Legacy phase", "status": "ready", "tasks": []}]},
+  "events": ["2026-09-01T10:00:00Z|initialized|init|Legacy fixture"]
+}`)
+	if err := store.SaveRawJSON("COLONY_STATE.json", raw); err != nil {
+		t.Fatalf("failed to save raw state: %v", err)
+	}
+
+	before := snapshotProjectDataTree(t, store.BasePath())
+	state, err := loadActiveColonyStateReadOnly()
+	if err != nil {
+		t.Fatalf("loadActiveColonyStateReadOnly returned error: %v", err)
+	}
+	after := snapshotProjectDataTree(t, store.BasePath())
+
+	if state.CurrentPhase != 1 {
+		t.Fatalf("in-memory current_phase = %d, want 1", state.CurrentPhase)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("read-only compatibility repair changed saved data:\nbefore: %v\nafter:  %v", before, after)
+	}
+	persistedRaw, err := store.LoadRawJSON("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("failed to reload raw state: %v", err)
+	}
+	if !strings.Contains(string(persistedRaw), `"current_phase": "1"`) {
+		t.Fatalf("read-only compatibility repair rewrote current_phase: %s", persistedRaw)
+	}
+	if strings.Contains(string(persistedRaw), "state_repaired|load") {
+		t.Fatalf("read-only compatibility repair persisted an event: %s", persistedRaw)
+	}
+}
+
+func TestLoadActiveColonyStateReadOnlyStagesMissingPlanWithoutPersisting(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Stage a missing plan without writing"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		Plan:         colony.Plan{Phases: []colony.Phase{}},
+		Events: []string{
+			"2026-04-21T07:50:00Z phase-1-complete: Audit complete.",
+			"2026-04-21T08:20:00Z phase-2-complete: Standard designed.",
+		},
+	})
+	if err := store.SaveJSON("planning/phase-plan.json", codexWorkerPlanArtifact{
+		Confidence: codexPlanConfidence{Overall: 82},
+		Phases: []codexWorkerPlanPhase{
+			{Name: "Audit", Tasks: []codexWorkerPlanTask{{Goal: "Complete the audit"}}},
+			{Name: "Design", Tasks: []codexWorkerPlanTask{{Goal: "Design the standard"}}},
+			{Name: "Rollout", Tasks: []codexWorkerPlanTask{{Goal: "Apply the schema"}}},
+		},
+	}); err != nil {
+		t.Fatalf("failed to save planning artifact: %v", err)
+	}
+
+	before := snapshotProjectDataTree(t, store.BasePath())
+	state, err := loadActiveColonyStateReadOnly()
+	if err != nil {
+		t.Fatalf("loadActiveColonyStateReadOnly returned error: %v", err)
+	}
+	after := snapshotProjectDataTree(t, store.BasePath())
+
+	if len(state.Plan.Phases) != 3 || state.CurrentPhase != 3 {
+		t.Fatalf("in-memory recovered state = phase %d with %d plan phases, want phase 3 with three plan phases", state.CurrentPhase, len(state.Plan.Phases))
+	}
+	if len(state.Events) == 0 || !strings.Contains(state.Events[len(state.Events)-1], "plan_recovered|state|Recovered 3 phases") {
+		t.Fatalf("expected in-memory plan recovery event, got %v", state.Events)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("read-only missing-plan staging changed saved data:\nbefore: %v\nafter:  %v", before, after)
+	}
+
+	var persisted colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &persisted); err != nil {
+		t.Fatalf("failed to reload persisted state: %v", err)
+	}
+	if len(persisted.Plan.Phases) != 0 {
+		t.Fatalf("read-only missing-plan staging persisted %d phases", len(persisted.Plan.Phases))
+	}
+	if strings.Contains(strings.Join(persisted.Events, "\n"), "plan_recovered|state") {
+		t.Fatalf("read-only missing-plan staging persisted a repair event: %v", persisted.Events)
+	}
+}
 
 func TestLoadActiveColonyStateNormalizesLegacyPausedState(t *testing.T) {
 	saveGlobals(t)
