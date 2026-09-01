@@ -3,6 +3,8 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -546,5 +548,119 @@ func TestAutopilotStateWithoutLastReportStillLoads(t *testing.T) {
 	}
 	if result := buildStatusResult(state, store); result["last_report"] != nil {
 		t.Fatalf("legacy status manufactured report: %+v", result["last_report"])
+	}
+}
+
+func TestAutopilotReportCheckpointCapabilityIsImmediateOnly(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	phase := colony.Phase{ID: 1, Name: "Owner handoff", Status: colony.PhaseCompleted}
+	state := checkpointTestState(t, phase, colony.StateCOMPLETED)
+	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{{
+		TaskID: "1.1", Criterion: "The finished interaction feels correct", State: criterionStateNeedsOwnerConfirmation,
+		Evidence: []string{"automated checks cannot judge feel"},
+	}})
+	if err != nil || len(refs) != 1 {
+		t.Fatalf("materialize immediate checkpoint: refs=%#v err=%v", refs, err)
+	}
+	immediateCommand := refs[0].RecoveryCommand
+	capability := checkpointCapabilityFromReference(t, refs[0])
+	if !strings.Contains(immediateCommand, "--checkpoint-capability") {
+		t.Fatalf("immediate owner output has no capability: %s", immediateCommand)
+	}
+
+	decision := autopilotRunDecision{
+		Code:        autopilotTriggerRuntimeVerificationNeeded,
+		Disposition: autopilotDispositionPause,
+		Next:        immediateCommand,
+		Checkpoints: refs,
+	}
+	invocation := beginAutopilotInvocation(state)
+	invocation.recordRunDecision(state, decision)
+	report := buildAutopilotInvocationReport(invocation, state, decision, autopilotNow(), blockerSnapshot{})
+	if report.Next != "aether seal" {
+		t.Fatalf("seal-ready durable next = %q, want capability-free re-entry through aether seal", report.Next)
+	}
+	if len(report.QueuedDecisions) != 1 || report.QueuedDecisions[0].ID != refs[0].ID || report.QueuedDecisions[0].Question != refs[0].Question {
+		t.Fatalf("durable report lost checkpoint identity/question: %#v", report.QueuedDecisions)
+	}
+	if err := syncRunAutopilotStateWithReport(state, runCompatibilityOptions{}, "paused", string(decision.Code), &report); err != nil {
+		t.Fatalf("persist capability-safe report: %v", err)
+	}
+
+	stored := loadAutopilotLastReport(s)
+	if stored == nil || stored.Next != "aether seal" || len(stored.QueuedDecisions) != 1 {
+		t.Fatalf("stored last report lost safe re-entry or owner evidence: %#v", stored)
+	}
+	statusResult := buildStatusResult(state, s)
+	statusJSON, err := json.Marshal(statusResult)
+	if err != nil {
+		t.Fatalf("marshal status: %v", err)
+	}
+	statusVisual := renderAutopilotReportFromResult(statusResult)
+	if bytes.Contains(statusJSON, []byte(capability)) || strings.Contains(statusVisual, capability) {
+		t.Fatalf("status reopened a stale raw capability:\njson=%s\nvisual=%s", statusJSON, statusVisual)
+	}
+	if !strings.Contains(statusVisual, "Next: aether seal") || !strings.Contains(statusVisual, refs[0].ID) {
+		t.Fatalf("status omitted safe next action or queued identity:\n%s", statusVisual)
+	}
+
+	if err := filepath.Walk(s.BasePath(), func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if bytes.Contains(data, []byte(capability)) {
+			t.Fatalf("durable file %s persisted raw checkpoint capability", path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("scan durable data tree: %v", err)
+	}
+	pending := pendingDecisionBytes(t)
+	digest := sha256.Sum256([]byte(capability))
+	if !bytes.Contains(pending, []byte(hex.EncodeToString(digest[:]))) || !bytes.Contains(pending, []byte(refs[0].ID)) {
+		t.Fatalf("pending state lost capability hash or checkpoint identity: %s", pending)
+	}
+
+	nonSealReady := reportTestState(colony.StateREADY, 2)
+	wantReentry := lifecycleNextActionForState(nonSealReady, "run", "", "").Command
+	if got := resolveAutopilotReportNext(nonSealReady, decision); got != wantReentry || strings.Contains(got, "--checkpoint-capability") {
+		t.Fatalf("unfinished durable next = %q, want safe lifecycle re-entry %q", got, wantReentry)
+	}
+}
+
+func TestMorningHandoffCheckpointUsesSealEmittedCommand(t *testing.T) {
+	readme, err := os.ReadFile("../README.md")
+	if err != nil {
+		t.Fatalf("read README: %v", err)
+	}
+	text := string(readme)
+	start := strings.Index(text, "### Morning handoff")
+	end := strings.Index(text[start:], "\n## 🔌 Works With")
+	if start < 0 || end < 0 {
+		t.Fatal("locate README morning handoff section")
+	}
+	section := text[start : start+end]
+	for _, required := range []string{
+		"aether pending-decision-list --unresolved",
+		"aether seal",
+		"exact",
+		"emitted",
+		"capability",
+	} {
+		if !strings.Contains(strings.ToLower(section), strings.ToLower(required)) {
+			t.Fatalf("morning handoff omitted %q:\n%s", required, section)
+		}
+	}
+	if strings.Contains(section, "aether decision-answer --question") {
+		t.Fatalf("morning handoff documents a capability-free answer template instead of seal-emitted authorization:\n%s", section)
 	}
 }
