@@ -444,6 +444,205 @@ func assertReviewerArtifactBlockedEvidence(t *testing.T, result map[string]inter
 	}
 }
 
+func reviewerPhasePositionBytes(t *testing.T, state colony.ColonyState) []byte {
+	t.Helper()
+	position := struct {
+		CurrentPhase int `json:"current_phase"`
+		Phases       []struct {
+			ID     int    `json:"id"`
+			Status string `json:"status"`
+		} `json:"phases"`
+	}{
+		CurrentPhase: state.CurrentPhase,
+	}
+	for _, phase := range state.Plan.Phases {
+		position.Phases = append(position.Phases, struct {
+			ID     int    `json:"id"`
+			Status string `json:"status"`
+		}{ID: phase.ID, Status: phase.Status})
+	}
+	raw, err := json.Marshal(position)
+	if err != nil {
+		t.Fatalf("marshal phase position: %v", err)
+	}
+	return raw
+}
+
+func loadReviewerArtifactState(t *testing.T) colony.ColonyState {
+	t.Helper()
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load durable colony state: %v", err)
+	}
+	return state
+}
+
+func assertReviewerBoundaryResult(t *testing.T, result map[string]interface{}, state colony.ColonyState, before []byte, want string) {
+	t.Helper()
+	review, ok := result["review"].(codexContinueReviewReport)
+	if !ok {
+		t.Fatalf("continuation result omitted typed review diagnostics: %#v", result["review"])
+	}
+	blockingText := strings.ToLower(strings.Join(review.BlockingIssues, " "))
+
+	switch want {
+	case "invalid":
+		if advanced, _ := result["advanced"].(bool); advanced {
+			t.Fatalf("invalid review evidence advanced the phase: %#v", result)
+		}
+		if blocked, _ := result["blocked"].(bool); !blocked {
+			t.Fatalf("invalid review evidence did not return blocked=true: %#v", result)
+		}
+		if review.Passed || !strings.Contains(blockingText, "review evidence is invalid") || !strings.Contains(blockingText, "findings[0] must include a non-empty title or description") {
+			t.Fatalf("invalid review evidence diagnostic was not preserved: %#v", review)
+		}
+	case "critical":
+		if advanced, _ := result["advanced"].(bool); advanced {
+			t.Fatalf("valid Critical finding advanced the phase: %#v", result)
+		}
+		if blocked, _ := result["blocked"].(bool); !blocked {
+			t.Fatalf("valid Critical finding did not block: %#v", result)
+		}
+		hasCritical := false
+		for _, worker := range review.Workers {
+			for _, finding := range worker.Findings {
+				if strings.EqualFold(strings.TrimSpace(finding.Severity), "CRITICAL") {
+					hasCritical = true
+				}
+			}
+		}
+		if review.Passed || !hasCritical || strings.Contains(blockingText, "review evidence is invalid") {
+			t.Fatalf("valid Critical finding did not use the Critical-finding gate: %#v", review)
+		}
+	case "high":
+		if advanced, _ := result["advanced"].(bool); !advanced {
+			t.Fatalf("valid High finding did not advance: %#v", result)
+		}
+		if blocked, _ := result["blocked"].(bool); blocked {
+			t.Fatalf("valid High finding returned blocked=true: %#v", result)
+		}
+		if !review.Passed || strings.Contains(blockingText, "critical finding") || strings.Contains(blockingText, "review evidence is invalid") {
+			t.Fatalf("valid High finding changed D-05 severity policy: %#v", review)
+		}
+		return
+	default:
+		t.Fatalf("unknown reviewer boundary expectation %q", want)
+	}
+
+	if after := reviewerPhasePositionBytes(t, state); string(after) != string(before) {
+		t.Fatalf("returned phase position changed before rejection:\nbefore: %s\nafter:  %s", before, after)
+	}
+	durable := loadReviewerArtifactState(t)
+	if after := reviewerPhasePositionBytes(t, durable); string(after) != string(before) {
+		t.Fatalf("durable phase position changed before rejection:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+func TestSuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "suggestion-only Critical is invalid evidence",
+			raw:  `{"overall_score":60,"findings":[{"domain":"quality","severity":"CRITICAL","suggestion":"rotate the credential"}]}`,
+			want: "invalid",
+		},
+		{
+			name: "valid Critical still blocks",
+			raw:  `{"overall_score":60,"findings":[{"domain":"quality","severity":"CRITICAL","description":"credential is exposed","suggestion":"rotate the credential"}]}`,
+			want: "critical",
+		},
+		{
+			name: "valid High remains report-only",
+			raw:  `{"overall_score":60,"findings":[{"domain":"quality","severity":"HIGH","description":"credential rotation should be scheduled","suggestion":"schedule the rotation","blocking":true}]}`,
+			want: "high",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			root, _, _, _ := setupIntermediateContinueState(t, "Direct suggestion-only Critical boundary")
+			before := reviewerPhasePositionBytes(t, loadReviewerArtifactState(t))
+
+			newCodexWorkerInvoker = func() codex.WorkerInvoker {
+				return &reviewerArtifactFlowInvoker{artifacts: reviewerArtifactRaw(t, tt.raw)}
+			}
+			result, state, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{HeavyFlag: true})
+			if err != nil {
+				t.Fatalf("runCodexContinue: %v", err)
+			}
+			assertReviewerBoundaryResult(t, result, state, before, tt.want)
+		})
+	}
+}
+
+func TestSuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "suggestion-only Critical is invalid evidence",
+			raw:  `{"overall_score":60,"findings":[{"domain":"quality","severity":"CRITICAL","suggestion":"rotate the credential"}]}`,
+			want: "invalid",
+		},
+		{
+			name: "valid Critical still blocks",
+			raw:  `{"overall_score":60,"findings":[{"domain":"quality","severity":"CRITICAL","description":"credential is exposed","suggestion":"rotate the credential"}]}`,
+			want: "critical",
+		},
+		{
+			name: "valid High remains report-only",
+			raw:  `{"overall_score":60,"findings":[{"domain":"quality","severity":"HIGH","description":"credential rotation should be scheduled","suggestion":"schedule the rotation","blocking":true}]}`,
+			want: "high",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			root, _, _, _ := setupIntermediateContinueState(t, "External suggestion-only Critical boundary")
+
+			planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{HeavyFlag: true})
+			if err != nil {
+				t.Fatalf("runCodexContinuePlanOnly: %v", err)
+			}
+			plan := planResult["continue_manifest"].(codexContinuePlanManifest)
+			before := reviewerPhasePositionBytes(t, loadReviewerArtifactState(t))
+
+			results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
+			for _, dispatch := range plan.Dispatches {
+				result := codexContinueExternalDispatch{
+					Stage: dispatch.Stage, Wave: dispatch.Wave, Caste: dispatch.Caste, Name: dispatch.Name,
+					Task: dispatch.Task, TaskID: dispatch.TaskID, Status: "completed",
+					Summary: "external " + dispatch.Caste + " completed",
+					Report:  "external reviewer boundary diagnostic for " + dispatch.Name,
+					Handoff: completedReviewerHandoff(),
+				}
+				if strings.EqualFold(dispatch.Caste, "auditor") {
+					result.Artifacts = reviewerArtifactRaw(t, tt.raw)
+				}
+				results = append(results, result)
+			}
+
+			result, state, _, _, _, _, err := runCodexContinueFinalize(root, codexExternalContinueCompletion{
+				ContinueManifest: &plan,
+				Dispatches:       results,
+			}, false, 0, false)
+			if err != nil {
+				t.Fatalf("runCodexContinueFinalize: %v", err)
+			}
+			assertReviewerBoundaryResult(t, result, state, before, tt.want)
+		})
+	}
+}
+
 func TestReviewerArtifactDirectFlowFailsClosed(t *testing.T) {
 	for _, fixture := range reviewerArtifactInvalidFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {
