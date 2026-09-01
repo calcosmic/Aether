@@ -782,16 +782,19 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 			summary = strings.Join(blockers, "; ")
 		}
 		step := codexContinueWorkerFlowStep{
-			Stage:           dispatch.Stage,
-			Caste:           dispatch.Caste,
-			Name:            dispatch.Name,
-			Task:            dispatch.Task,
-			Status:          status,
-			Summary:         summary,
-			Blockers:        blockers,
-			Duration:        result.Duration,
-			Report:          strings.TrimSpace(result.Report),
-			Findings:        mergeCodexReviewFindings(result.Findings, result.Issues),
+			Stage:    dispatch.Stage,
+			Caste:    dispatch.Caste,
+			Name:     dispatch.Name,
+			Task:     dispatch.Task,
+			Status:   status,
+			Summary:  summary,
+			Blockers: blockers,
+			Duration: result.Duration,
+			Report:   strings.TrimSpace(result.Report),
+			// Keep legacy rows raw until normalizeContinueReviewEvidence has
+			// validated their human-readable body. Merging here would discard a
+			// suggestion-only row before it could produce fail-closed evidence.
+			Findings:        append(append([]codexReviewFinding{}, result.Findings...), result.Issues...),
 			Recommendations: uniqueSortedStrings(result.Recommendations),
 			WeakSpots:       uniqueSortedStrings(result.WeakSpots),
 			EdgeCases:       uniqueSortedStrings(result.EdgeCases),
@@ -814,9 +817,19 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts map[string]json.RawMessage) codexContinueWorkerFlowStep {
 	raw, explicit := artifacts["review"]
 	if !explicit {
+		validFindings := make([]codexReviewFinding, 0, len(step.Findings))
+		for index, finding := range step.Findings {
+			if strings.TrimSpace(finding.Title) == "" && strings.TrimSpace(finding.Description) == "" {
+				step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s legacy findings[%d] must include a non-empty title or description", step.Name, index))
+				continue
+			}
+			validFindings = append(validFindings, finding)
+		}
+		step.Findings = mergeCodexReviewFindings(validFindings)
 		if strings.EqualFold(strings.TrimSpace(step.Caste), "auditor") && continueWorkerFlowStatus(step.Status) == buildWorkerCompleted {
 			step.EvidenceErrors = uniqueSortedStrings(append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review is required for a completed Auditor", step.Name)))
 		}
+		step.EvidenceErrors = uniqueSortedStrings(step.EvidenceErrors)
 		return step
 	}
 
@@ -877,6 +890,10 @@ func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts
 			continue
 		}
 		finding.Severity = severity
+		if strings.TrimSpace(finding.Title) == "" && strings.TrimSpace(finding.Description) == "" {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review findings[%d] must include a non-empty title or description", step.Name, index))
+			continue
+		}
 		validFindings = append(validFindings, finding)
 	}
 	step.Findings = mergeCodexReviewFindings(validFindings)
@@ -1004,7 +1021,7 @@ func mergeCodexReviewFindings(groups ...[]codexReviewFinding) []codexReviewFindi
 			finding.File = strings.TrimSpace(finding.File)
 			finding.Category = strings.TrimSpace(finding.Category)
 			finding.Suggestion = strings.TrimSpace(finding.Suggestion)
-			if finding.Description == "" && finding.Suggestion == "" {
+			if finding.Description == "" {
 				continue
 			}
 			key := strings.Join([]string{
