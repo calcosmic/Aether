@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -22,6 +23,12 @@ func completedReviewerHandoff() codex.WorkerHandoff {
 		VerificationStatus:     "pass",
 		NextWorkerInstructions: []string{"Use the structured review artifact."},
 		Freshness:              "not-run",
+	}
+}
+
+func completedReviewerStep(caste, name string) codexContinueWorkerFlowStep {
+	return codexContinueWorkerFlowStep{
+		Stage: "review", Caste: caste, Name: name, Status: "completed",
 	}
 }
 
@@ -155,6 +162,100 @@ func TestReviewerArtifactIsAuthoritativeAndMalformedEvidenceIsExplicit(t *testin
 	malformedSignals := continueReviewAutopilotSignals([]codexContinueWorkerFlowStep{malformed})
 	if len(malformedSignals.EvidenceErrors) == 0 {
 		t.Fatal("current-result autopilot signals omitted malformed evidence errors")
+	}
+}
+
+func TestReviewerArtifactMissingAndEmptyCompletedAuditorEvidenceFailsClosed(t *testing.T) {
+	tests := []struct {
+		name      string
+		artifacts map[string]json.RawMessage
+		want      string
+	}{
+		{name: "missing artifact", artifacts: nil, want: "artifacts.review is required"},
+		{name: "empty object", artifacts: reviewerArtifactRaw(t, `{}`), want: "overall_score is required"},
+		{name: "null", artifacts: reviewerArtifactRaw(t, `null`), want: "must be a JSON object"},
+		{name: "non object", artifacts: reviewerArtifactRaw(t, `[]`), want: "must be a JSON object"},
+		{name: "malformed JSON", artifacts: reviewerArtifactRaw(t, `{"overall_score":`), want: "is malformed"},
+		{name: "missing score", artifacts: reviewerArtifactRaw(t, `{"findings":[]}`), want: "overall_score is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			step := normalizeContinueReviewEvidence(completedReviewerStep("auditor", "Audit-Missing"), tt.artifacts)
+			if len(step.EvidenceErrors) == 0 {
+				t.Fatalf("invalid completed-Auditor evidence was accepted: %#v", step)
+			}
+			if got := strings.Join(step.EvidenceErrors, " "); !strings.Contains(got, tt.want) {
+				t.Fatalf("evidence errors %q do not contain %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReviewerArtifactScoreAndSeverityValidationMatrix(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "negative score", raw: `{"overall_score":-1}`, want: "between 0 and 100"},
+		{name: "score above range", raw: `{"overall_score":101}`, want: "between 0 and 100"},
+		{name: "fractional score", raw: `{"overall_score":59.5}`, want: "must be an integer"},
+		{name: "string score", raw: `{"overall_score":"60"}`, want: "must be an integer"},
+		{name: "invalid severity", raw: `{"overall_score":60,"findings":[{"severity":"catastrophic","description":"bad enum"}]}`, want: "severity must be"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			step := normalizeContinueReviewEvidence(
+				completedReviewerStep("auditor", "Audit-Schema"),
+				reviewerArtifactRaw(t, tt.raw),
+			)
+			if got := strings.Join(step.EvidenceErrors, " "); !strings.Contains(got, tt.want) {
+				t.Fatalf("evidence errors %q do not contain %q; step=%#v", got, tt.want, step)
+			}
+		})
+	}
+}
+
+func TestReviewerArtifactMalformedScorePreservesValidFindings(t *testing.T) {
+	step := normalizeContinueReviewEvidence(
+		completedReviewerStep("auditor", "Audit-Diagnostic"),
+		reviewerArtifactRaw(t, `{
+			"overall_score":"sixty",
+			"findings":[{"severity":"HIGH","description":"retain this diagnostic"}]
+		}`),
+	)
+	if len(step.EvidenceErrors) == 0 {
+		t.Fatal("malformed score did not produce an evidence error")
+	}
+	if len(step.Findings) != 1 || step.Findings[0].Description != "retain this diagnostic" {
+		t.Fatalf("valid findings were discarded with the malformed score: %#v", step.Findings)
+	}
+}
+
+func TestReviewerArtifactScoreBoundaryAndAuditorAbsence(t *testing.T) {
+	for _, score := range []int{59, 60} {
+		t.Run(fmt.Sprintf("score %d", score), func(t *testing.T) {
+			step := normalizeContinueReviewEvidence(
+				completedReviewerStep("auditor", "Audit-Boundary"),
+				reviewerArtifactRaw(t, fmt.Sprintf(`{"overall_score":%d}`, score)),
+			)
+			if len(step.EvidenceErrors) != 0 || step.OverallScore == nil || *step.OverallScore != score {
+				t.Fatalf("valid boundary score %d was rejected: %#v", score, step)
+			}
+		})
+	}
+
+	for _, step := range []codexContinueWorkerFlowStep{
+		completedReviewerStep("watcher", "No-Auditor"),
+		{Stage: "review", Caste: "auditor", Name: "Failed-Auditor", Status: "failed"},
+		{Stage: "review", Caste: "auditor", Name: "Timed-Out-Auditor", Status: "timeout"},
+	} {
+		normalized := normalizeContinueReviewEvidence(step, nil)
+		if normalized.OverallScore != nil || len(normalized.EvidenceErrors) != 0 {
+			t.Fatalf("non-completed or non-Auditor step gained score requirements: %#v", normalized)
+		}
 	}
 }
 
