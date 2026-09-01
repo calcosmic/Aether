@@ -339,6 +339,107 @@ type codexBuildOptions struct {
 	JobProposals []coherentJobProposal
 }
 
+// directCodexBuildPreparation is the read-only result of validating and
+// planning a direct build. The same preparation runs before provider readiness
+// and again after compatibility repairs are authorized, so the two validation
+// passes cannot drift apart as the build contract evolves.
+type directCodexBuildPreparation struct {
+	State         colony.ColonyState
+	Phase         colony.Phase
+	Policy        codexQueenExecutionPolicy
+	ReviewDepth   colony.VerificationDepth
+	Dispatches    []codexBuildDispatch
+	JobDecisions  []coherentJobDecision
+	CasteDecision map[string]interface{}
+}
+
+func prepareDirectCodexBuild(root string, state colony.ColonyState, phaseNum int, selectedTaskIDs []string, options codexBuildOptions) (directCodexBuildPreparation, error) {
+	if len(state.Plan.Phases) == 0 {
+		return directCodexBuildPreparation{}, fmt.Errorf("No project plan. Run `aether plan` first.")
+	}
+	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
+		return directCodexBuildPreparation{}, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
+	}
+
+	phase := state.Plan.Phases[phaseNum-1]
+	if err := validatePhaseCriterionEvidence(phase); err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, options.Force); err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		LightFlag:         options.LightFlag,
+		HeavyFlag:         options.HeavyFlag,
+		VerificationDepth: options.VerificationDepth,
+		WorkerTimeout:     options.WorkerTimeout,
+		DispatchWorkers:   true,
+	})
+	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
+	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	dispatches, jobDecisions, err := plannedBuildDispatchesWithJobProposals(
+		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals,
+	)
+	if err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+
+	orphans := detectOrphanedWorktrees(phaseNum)
+	if len(orphans) > 0 && !options.Force {
+		orphanBranches := make([]string, 0, len(orphans))
+		for _, orphan := range orphans {
+			orphanBranches = append(orphanBranches, fmt.Sprintf("%s (phase %d)", orphan.Branch, orphan.Phase))
+		}
+		return directCodexBuildPreparation{}, fmt.Errorf("orphaned worktree branches detected: %s. Run with --force to proceed anyway, or run `aether worktree-merge-back` to recover", strings.Join(orphanBranches, ", "))
+	}
+
+	return directCodexBuildPreparation{
+		State:         state,
+		Phase:         phase,
+		Policy:        policy,
+		ReviewDepth:   reviewDepth,
+		Dispatches:    dispatches,
+		JobDecisions:  jobDecisions,
+		CasteDecision: queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons),
+	}, nil
+}
+
+func directCodexBuildReadinessDispatches(root string, phaseNum int, dispatches []codexBuildDispatch) []codex.WorkerDispatch {
+	projected := make([]codex.WorkerDispatch, 0, len(dispatches))
+	for idx, dispatch := range dispatches {
+		workerName := strings.TrimSpace(dispatch.Name)
+		if workerName == "" {
+			workerName = fmt.Sprintf("direct-build-readiness-%d", idx+1)
+		}
+		projected = append(projected, codex.WorkerDispatch{
+			ID:         fmt.Sprintf("direct-build-readiness-%d", idx+1),
+			WorkerName: workerName,
+			Caste:      dispatch.Caste,
+			TaskID:     dispatch.TaskID,
+			Root:       root,
+			Workflow:   "build",
+			Phase:      phaseNum,
+		})
+	}
+	if len(projected) == 0 {
+		projected = append(projected, codex.WorkerDispatch{
+			ID:         "direct-build-readiness",
+			WorkerName: "direct-build-readiness",
+			Root:       root,
+			Workflow:   "build",
+			Phase:      phaseNum,
+		})
+	}
+	return projected
+}
+
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	return runCodexBuildPlanOnlyWithOptions(root, phaseNum, selectedTaskIDs, codexBuildOptions{})
 }
@@ -641,61 +742,55 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, fmt.Errorf("no store initialized")
 	}
 
-	state, err := loadActiveColonyState()
+	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
+	state, err := loadActiveColonyStateReadOnly()
 	if err != nil {
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
-	if len(state.Plan.Phases) == 0 {
-		return nil, fmt.Errorf("No project plan. Run `aether plan` first.")
+	if _, err := applyPriorCompletedPhaseTaskRepairs(root, &state, phaseNum); err != nil {
+		return nil, err
 	}
-	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
-		return nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
+	rehearsal, err := prepareDirectCodexBuild(root, state, phaseNum, selectedTaskIDs, options)
+	if err != nil {
+		return nil, err
+	}
+
+	parentCtx := options.ParentContext
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	ctx, cancel := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	var buildInvoker codex.WorkerInvoker
+	if synthetic {
+		buildInvoker = &codex.FakeInvoker{}
+	} else {
+		buildInvoker = newCodexWorkerInvoker()
+	}
+	if err := preflightWorkerProvider(ctx, buildInvoker, directCodexBuildReadinessDispatches(root, phaseNum, rehearsal.Dispatches)); err != nil {
+		return nil, err
+	}
+
+	state, err = loadActiveColonyState()
+	if err != nil {
+		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 	state, _, err = reconcilePriorCompletedPhaseTasksFromTrustedManifests(root, state, phaseNum)
 	if err != nil {
 		return nil, err
 	}
-	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
-	phase := state.Plan.Phases[phaseNum-1]
-	if err := validatePhaseCriterionEvidence(phase); err != nil {
-		return nil, err
-	}
-	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
-		return nil, err
-	}
-	// Run pre-build gates (critical flags, phase buildability)
-	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
-		return nil, err
-	}
-	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, options.Force); err != nil {
-		return nil, err
-	}
-	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
-		LightFlag:         options.LightFlag,
-		HeavyFlag:         options.HeavyFlag,
-		VerificationDepth: options.VerificationDepth,
-		WorkerTimeout:     options.WorkerTimeout,
-		DispatchWorkers:   true,
-	})
-	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
-	dispatches, jobDecisions, err := plannedBuildDispatchesWithJobProposals(
-		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals,
-	)
+	prepared, err := prepareDirectCodexBuild(root, state, phaseNum, selectedTaskIDs, options)
 	if err != nil {
 		return nil, err
 	}
-	casteDecision := queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
-
-	// Detect orphaned worktrees from prior interrupted builds
-	orphans := detectOrphanedWorktrees(phaseNum)
-	if len(orphans) > 0 && !options.Force {
-		var orphanBranches []string
-		for _, o := range orphans {
-			orphanBranches = append(orphanBranches, fmt.Sprintf("%s (phase %d)", o.Branch, o.Phase))
-		}
-		return nil, fmt.Errorf("orphaned worktree branches detected: %s. Run with --force to proceed anyway, or run `aether worktree-merge-back` to recover", strings.Join(orphanBranches, ", "))
-	}
+	state = prepared.State
+	phase := prepared.Phase
+	policy := prepared.Policy
+	reviewDepth := prepared.ReviewDepth
+	dispatches := prepared.Dispatches
+	jobDecisions := prepared.JobDecisions
+	casteDecision := prepared.CasteDecision
 
 	originalState, err := cloneColonyState(state)
 	if err != nil {
@@ -739,13 +834,6 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	executionWaveCount := len(executionPlan)
 	parallelExecutionWaves := countParallelBuildExecutionPlans(executionPlan)
 	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
-
-	parentCtx := options.ParentContext
-	if parentCtx == nil {
-		parentCtx = context.Background()
-	}
-	ctx, cancel := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 
 	ceremony := newBuildCeremonyEmitter(ctx, root, phase)
 	restoreCeremony := setActiveBuildCeremony(ceremony)
@@ -850,10 +938,6 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		progress.Advance("Context")
 	}
 
-	buildInvoker := newCodexWorkerInvoker()
-	if synthetic {
-		buildInvoker = &codex.FakeInvoker{}
-	}
 	if progress != nil {
 		progress.Advance("Dispatch")
 	}
